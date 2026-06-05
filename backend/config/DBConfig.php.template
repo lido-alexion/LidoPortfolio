@@ -1,0 +1,24 @@
+<?php
+
+declare(strict_types=1);
+
+/*
+|--------------------------------------------------------------------------
+| DBConfig template — local dev (constants)
+|--------------------------------------------------------------------------
+|
+| Production on lidoalexion.com uses a shared config/DBConfig.php (class DBConfig
+| with getDBServer(), getDBUsername(), getDBPassword(), getDBName()) — same file
+| as your wallet app. Portfolio walks up directories to find it automatically.
+|
+| Copy to DBConfig.php for local-only credentials, or rely on the shared file.
+|
+*/
+
+defined('DB_HOST') || define('DB_HOST', '127.0.0.1');
+defined('DB_PORT') || define('DB_PORT', '3306');
+defined('DB_NAME') || define('DB_NAME', 'lido_db');
+defined('DB_USER') || define('DB_USER', 'root');
+defined('DB_PASS') || define('DB_PASS', '');
+
+return [];

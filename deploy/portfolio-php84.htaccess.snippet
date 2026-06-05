@@ -1,0 +1,9 @@
+# Paste at TOP of public_html/portfolio/.htaccess (try if GoDaddy dashboard cannot set PHP 8.x)
+# Remove these lines if site returns 500 — use GoDaddy Settings → PHP Version instead.
+
+<IfModule mime_module>
+  AddHandler application/x-httpd-ea-php84___lsphp .php
+</IfModule>
+
+# If 8.4 fails, try 8.3 instead (one line only):
+# AddHandler application/x-httpd-ea-php83___lsphp .php

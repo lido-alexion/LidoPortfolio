@@ -1,0 +1,19 @@
+####################################### PORTFOLIO APP (Lido Portfolio) START ###############################
+# Add this block to public_html/.htaccess (near top, after RewriteEngine On).
+# Ensures /portfolio/cpanel-*.php and /portfolio/build/* are served as real files.
+
+# Setup / diagnostic scripts — never rewrite
+RewriteCond %{REQUEST_URI} ^/portfolio/cpanel-.*\.php$ [NC]
+RewriteRule ^ - [L]
+
+# Existing files under /portfolio/ (assets, manifest, favicon, etc.)
+RewriteCond %{REQUEST_URI} ^/portfolio/ [NC]
+RewriteCond %{DOCUMENT_ROOT}%{REQUEST_URI} -f
+RewriteRule ^ - [L]
+
+# Existing directories under /portfolio/
+RewriteCond %{REQUEST_URI} ^/portfolio/ [NC]
+RewriteCond %{DOCUMENT_ROOT}%{REQUEST_URI} -d
+RewriteRule ^ - [L]
+
+####################################### PORTFOLIO APP END ###############################
