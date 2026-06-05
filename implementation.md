@@ -58,7 +58,7 @@ LidoPortfolio/
   .gitignore                ← root ignore (secrets, vendor, node_modules, build)
 ```
 
-**Git (Jun 2026):** Monorepo initialized at project root (`LidoPortfolio/`). The old nested `backend/.git` (Laravel starter clone) was removed. Secrets excluded: `backend/.env`, `backend/config/DBConfig.php`, env backups. No remote configured yet.
+**Git (Jun 2026):** Monorepo at project root (`LidoPortfolio/`). Remote: `https://github.com/lido-alexion/LidoPortfolio` (private). Branch `master` tracks `origin/master`. Secrets excluded: `backend/.env`, `backend/config/DBConfig.php`, env backups.
 
 ### First-time setup (clean machine)
 
