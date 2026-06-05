@@ -54,7 +54,11 @@ LidoPortfolio/
     .env.mysql.template     ← copy to .env
     config/DBConfig.php     ← optional MySQL constants (keep out of git if secrets)
     public/                 ← web root if using Apache
+  deploy/                   ← cPanel deploy scripts & guides (see deploy/DEPLOY.md)
+  .gitignore                ← root ignore (secrets, vendor, node_modules, build)
 ```
+
+**Git (Jun 2026):** Monorepo initialized at project root (`LidoPortfolio/`). The old nested `backend/.git` (Laravel starter clone) was removed. Secrets excluded: `backend/.env`, `backend/config/DBConfig.php`, env backups. No remote configured yet.
 
 ### First-time setup (clean machine)
 
