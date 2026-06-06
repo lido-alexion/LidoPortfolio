@@ -32,6 +32,7 @@ export default function LoginPage() {
         } catch (error) {
             setMessage(error?.response?.data?.message
                 || error?.response?.data?.errors?.email?.[0]
+                || error?.message
                 || 'Authentication failed');
         } finally {
             setSubmitting(false);

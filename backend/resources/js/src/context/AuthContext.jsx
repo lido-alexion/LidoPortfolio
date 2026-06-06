@@ -60,25 +60,55 @@ export function AuthProvider({ children }) {
 
     const login = useCallback(async ({ email, password, remember = false }) => {
         setSessionExpired(false);
-        await ensureCsrfCookie();
-        const res = await api.post('/auth/login', { email, password, remember });
-        setUser(res.data.user);
-        return res.data.user;
+
+        const attempt = async () => {
+            await ensureCsrfCookie({ force: true });
+            return api.post('/auth/login', { email, password, remember });
+        };
+
+        try {
+            const res = await attempt();
+            setUser(res.data.user);
+            return res.data.user;
+        } catch (error) {
+            if (error?.response?.status === 419) {
+                resetCsrfCookie();
+                const res = await attempt();
+                setUser(res.data.user);
+                return res.data.user;
+            }
+            throw error;
+        }
     }, []);
 
     const register = useCallback(async ({ name, email, password, password_confirmation, remember = false }) => {
         setSessionExpired(false);
-        await ensureCsrfCookie();
-        await api.post('/auth/register', {
-            name,
-            email,
-            password,
-            password_confirmation,
-            remember,
-        });
-        const res = await api.post('/auth/login', { email, password, remember });
-        setUser(res.data.user);
-        return res.data.user;
+
+        const attemptRegister = async () => {
+            await ensureCsrfCookie({ force: true });
+            await api.post('/auth/register', {
+                name,
+                email,
+                password,
+                password_confirmation,
+                remember,
+            });
+            return api.post('/auth/login', { email, password, remember });
+        };
+
+        try {
+            const res = await attemptRegister();
+            setUser(res.data.user);
+            return res.data.user;
+        } catch (error) {
+            if (error?.response?.status === 419) {
+                resetCsrfCookie();
+                const res = await attemptRegister();
+                setUser(res.data.user);
+                return res.data.user;
+            }
+            throw error;
+        }
     }, []);
 
     const logout = useCallback(async () => {

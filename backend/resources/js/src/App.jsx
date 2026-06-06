@@ -102,7 +102,6 @@ function App() {
                 )}
             </div>
         </ErrorBoundary>
-        </div>
     );
 }
 

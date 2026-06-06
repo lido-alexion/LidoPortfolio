@@ -1,10 +1,10 @@
 import axios from 'axios';
+import { getRequestCsrfToken, resetCsrfCookie } from './auth/csrf';
 import logger, { createRequestId } from './services/logger';
 import { showToast } from './toast';
 import { appUrl } from './appBase';
 
 const api = axios.create({
-    baseURL: appUrl('/api'),
     headers: {
         Accept: 'application/json',
         'X-Requested-With': 'XMLHttpRequest',
@@ -13,14 +13,12 @@ const api = axios.create({
 });
 
 function getCsrfToken() {
-    const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
-    if (!match) {
-        return null;
-    }
-    return decodeURIComponent(match[1]);
+    return getRequestCsrfToken();
 }
 
 api.interceptors.request.use((config) => {
+    config.baseURL = appUrl('/api');
+
     const csrf = getCsrfToken();
     if (csrf) {
         config.headers['X-XSRF-TOKEN'] = csrf;
@@ -63,7 +61,8 @@ api.interceptors.response.use(
         }
 
         if (status === 419) {
-            showToast('Security token expired. Please try again.', 'warning');
+            resetCsrfCookie();
+            showToast('Security token error. Please try again.', 'warning');
             return Promise.reject(error);
         }
 

@@ -76,6 +76,11 @@ try {
     echo "   Laravel bootstrap: OK\n";
     echo "   APP_ENV: ".config('app.env')."\n";
     echo "   APP_URL: ".config('app.url')."\n";
+    echo "   session.path: ".config('session.path')." (expect /portfolio on production)\n";
+    echo "   session.domain: ".(config('session.domain') ?: '(null)')."\n";
+    echo "   sanctum/csrf-cookie URL: ".url('/sanctum/csrf-cookie')."\n";
+    echo "   api/auth/login URL: ".url('/api/auth/login')."\n";
+    echo "   app-base meta (for JS): ".rtrim(parse_url(config('app.url'), PHP_URL_PATH) ?: '', '/')."\n";
     echo "   DB config file: ".(function_exists('portfolio_db_config_file') ? (portfolio_db_config_file() ?: '(not loaded)') : 'n/a')."\n";
     echo "   DB host (resolved): ".config('database.connections.mysql.host')."\n";
     echo "   DB name (resolved): ".config('database.connections.mysql.database')."\n";

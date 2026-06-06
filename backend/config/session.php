@@ -143,7 +143,22 @@ return [
     |
     */
 
-    'path' => env('SESSION_PATH', '/'),
+    /*
+     * When APP_URL includes a path (e.g. https://example.com/portfolio), default the
+     * cookie path to that prefix so session/XSRF cookies do not collide with other apps
+     * on the same domain. Override with SESSION_PATH in .env when needed.
+     */
+    'path' => (static function (): string {
+        $configured = env('SESSION_PATH');
+        if (is_string($configured) && $configured !== '') {
+            return $configured;
+        }
+
+        $appPath = parse_url((string) env('APP_URL', 'http://localhost'), PHP_URL_PATH) ?: '';
+        $appPath = rtrim($appPath, '/');
+
+        return $appPath !== '' ? $appPath : '/';
+    })(),
 
     /*
     |--------------------------------------------------------------------------

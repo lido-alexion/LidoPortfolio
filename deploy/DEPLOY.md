@@ -156,10 +156,13 @@ DB_CONFIG_PATH=/home/USER/config/DBConfig.php
 
 SESSION_DRIVER=database
 SESSION_SECURE_COOKIE=true
+SESSION_DOMAIN=.lidoalexion.com
 SANCTUM_STATEFUL_DOMAINS=lidoalexion.com,www.lidoalexion.com
 ```
 
 **No** `DB_HOST`, `DB_DATABASE`, `DB_USERNAME`, or `DB_PASSWORD` lines.
+
+`SESSION_PATH` defaults from `APP_URL` path (`/portfolio`) at `config:cache` — do not set to `/` on production unless you intend domain-wide cookies.
 
 `APP_KEY` is set by `cpanel-once-setup.php` (`key:generate`).
 
@@ -183,10 +186,19 @@ npm run build
 
 ### Upload changed files
 
-| Always upload after UI change | Always upload after PHP change |
-|------------------------------|--------------------------------|
-| `public/build/` → both `lidoportfolio/public/build/` and `portfolio/build/` | `app/`, `routes/`, `config/`, `database/migrations/`, etc. |
-| Never upload `public/hot` | `vendor/` if `composer.json` / lock changed |
+Paths below use `/home/USER/` — replace `USER` with your cPanel username (e.g. `p7xatiz6j0mk`).
+
+| Upload from (PC — repo) | Upload to (server) | When |
+|-------------------------|---------------------|------|
+| `backend/public/build/` **(entire folder)** | `/home/USER/public_html/lidoportfolio/public/build/` | After any frontend / React change |
+| `backend/public/build/` **(same folder — second copy)** | `/home/USER/public_html/portfolio/build/` | After any frontend / React change |
+| `backend/app/` | `/home/USER/public_html/lidoportfolio/app/` | PHP business logic changed |
+| `backend/routes/` | `/home/USER/public_html/lidoportfolio/routes/` | Routes changed |
+| `backend/config/` | `/home/USER/public_html/lidoportfolio/config/` | Config changed (e.g. `session.php`) |
+| `backend/database/migrations/` | `/home/USER/public_html/lidoportfolio/database/migrations/` | New migrations |
+| `backend/vendor/` | `/home/USER/public_html/lidoportfolio/vendor/` | `composer.json` / `composer.lock` changed |
+
+**Do not upload:** `backend/.env`, `backend/node_modules/`, `backend/public/hot`, `backend/config/DBConfig.php` (dev template).
 
 ### Run migrations
 
@@ -219,6 +231,7 @@ After `.env` changes: delete `bootstrap/cache/config.php` or run `config:clear` 
 | `DEPLOY.md` | This guide |
 | `cpanel-diagnose.php` | Pre-flight: PHP, DB, Vite manifests, `hot` file |
 | `cpanel-once-setup.php` | One-time: `key:generate`, `migrate`, `config:cache` |
+| `cpanel-config-cache.php` | Re-run `config:cache` after `.env` changes (no SSH) |
 | `public_html-portfolio-index.php` | Front controller for `/portfolio` |
 | `public_html-portfolio-.htaccess` | Rewrites under `/portfolio/` |
 | `public_html-lidoportfolio-.htaccess` | Deny web access to Laravel tree |
@@ -258,10 +271,144 @@ After `.env` changes: delete `bootstrap/cache/config.php` or run `config:clear` 
 - Laravel must be under `public_html/lidoportfolio/`; fix `.user.ini`  
 → [FIX-OPEN-BASEDIR.md](FIX-OPEN-BASEDIR.md)
 
-### Login loops / 419
+### Login loops / 419 (CSRF token mismatch)
 
-- Force HTTPS; `APP_URL` must match `https://lidoalexion.com/portfolio`
-- `SANCTUM_STATEFUL_DOMAINS=lidoalexion.com,www.lidoalexion.com` (no `https://`)
+Common on subdirectory deploy when session cookies used path `/` and collided with another app on the same domain (wrong `XSRF-TOKEN` read by the browser).
+
+**Step 1 — server `.env`** (`/home/USER/public_html/lidoportfolio/.env`):
+
+```env
+APP_URL=https://lidoalexion.com/portfolio
+SESSION_DOMAIN=.lidoalexion.com
+SANCTUM_STATEFUL_DOMAINS=lidoalexion.com,www.lidoalexion.com
+```
+
+**Step 2 — build on PC, then upload**
+
+On your PC (PowerShell):
+
+```powershell
+cd D:\Projects\LidoPortfolio\backend
+$env:VITE_APP_BASE='/portfolio/build/'
+npm run build
+```
+
+Upload these paths (replace `USER` with your cPanel username, e.g. `p7xatiz6j0mk`):
+
+| Upload from (PC — repo) | Upload to (server) |
+|-------------------------|---------------------|
+| `backend/config/session.php` | `/home/USER/public_html/lidoportfolio/config/session.php` |
+| `backend/app/Providers/AppServiceProvider.php` | `/home/USER/public_html/lidoportfolio/app/Providers/AppServiceProvider.php` |
+| `backend/resources/views/app.blade.php` | `/home/USER/public_html/lidoportfolio/resources/views/app.blade.php` |
+| `backend/public/build/` **(entire folder — all files inside)** | `/home/USER/public_html/lidoportfolio/public/build/` |
+| `backend/public/build/` **(same folder again — second copy)** | `/home/USER/public_html/portfolio/build/` |
+| `deploy/cpanel-diagnose.php` *(optional — verify, then delete)* | `/home/USER/public_html/portfolio/cpanel-diagnose.php` |
+
+**What changed in the frontend build** (you do not upload these `.jsx`/`.js` files separately — they are compiled into `public/build/assets/*.js`):
+
+| Source file (for reference only) | Purpose |
+|----------------------------------|---------|
+| `backend/resources/js/src/appBase.js` | Resolve `/portfolio` API URLs (fallback if meta missing) |
+| `backend/resources/js/src/auth/csrf.js` | Refresh CSRF cookie before login |
+| `backend/resources/js/src/context/AuthContext.jsx` | Retry login once on 419 |
+| `backend/resources/js/src/api.js` | Per-request base URL + CSRF header |
+| `backend/resources/js/src/pages/LoginPage.jsx` | Show client-side auth errors clearly |
+
+**Do not upload**
+
+| File / folder | Why |
+|---------------|-----|
+| `backend/.env` | Edit production `.env` in place on the server (Step 1) |
+| `backend/public/hot` | Dev-only; causes blank page if present |
+| `backend/node_modules/` | Not used on server |
+| `backend/config/DBConfig.php` | Dev template; use shared `/home/USER/config/DBConfig.php` |
+
+**Step 3 — refresh config cache**
+
+Pick **one** method below (replace `USER` with your cPanel username, e.g. `p7xatiz6j0mk`).
+
+#### Option A — Browser (no SSH) — recommended on GoDaddy
+
+1. On your PC, open `deploy/cpanel-config-cache.php` in a text editor.
+2. Change `SETUP_TOKEN` to a long random secret (e.g. `mySecret2026Xyz`).
+3. Upload to `/home/USER/public_html/portfolio/cpanel-config-cache.php`
+4. In the browser, visit:  
+   `https://lidoalexion.com/portfolio/cpanel-config-cache.php?token=mySecret2026Xyz`
+5. Expect plain text ending with `session.path: /portfolio` and `Done.`
+6. **Delete** `cpanel-config-cache.php` from the server immediately.
+
+#### Option B — cPanel Terminal (if your plan includes SSH/Terminal)
+
+1. cPanel → **Terminal** (or use an SSH client).
+2. Run:
+
+```bash
+cd /home/USER/public_html/lidoportfolio
+php artisan config:clear
+php artisan config:cache
+```
+
+#### Option C — File Manager only (clears cache; skips re-cache)
+
+If you cannot run PHP from the command line or browser script:
+
+1. cPanel → **File Manager**
+2. Open `public_html/lidoportfolio/bootstrap/cache/`
+3. Delete `config.php` if it exists
+
+Laravel will read `.env` fresh on each request (slightly slower, but config changes apply). Option A or B is preferred for production.
+
+#### Option D — Cron Job (one-time)
+
+1. cPanel → **Cron Jobs**
+2. Add a **once-per-minute** job:
+
+```cron
+* * * * * /usr/local/bin/php /home/USER/public_html/lidoportfolio/artisan config:cache >> /home/USER/config-cache.log 2>&1
+```
+
+3. Wait 1–2 minutes, check `config-cache.log`, then **remove** the cron job.
+
+**Step 4 — verify and test**
+
+1. Optional: open `https://lidoalexion.com/portfolio/cpanel-diagnose.php` — confirm:
+   - `session.path: /portfolio`
+   - `sanctum/csrf-cookie URL:` contains `/portfolio/sanctum/csrf-cookie`
+   - `app-base meta (for JS): /portfolio`
+2. Hard-refresh the login page (Ctrl+F5). In DevTools → Network, filter **Fetch/XHR** (not only “Doc”).
+3. Click Login — you should see **two** requests: `sanctum/csrf-cookie` then `auth/login`, both under `/portfolio/`.
+4. If **no requests appear**, the form error should now say *“Could not read CSRF cookie after …”* — fix `APP_URL`, run `config:cache`, re-upload `public/build/`.
+5. On the device that failed: clear site cookies (or incognito) and retry at one canonical URL (`lidoalexion.com` **or** `www`, not mixed).
+
+**Also check**
+
+- Force HTTPS; redirect `www` ↔ apex to one canonical host if possible.
+- `SESSION_PATH` is derived from `APP_URL` (`/portfolio`) when you run `config:cache` — do not set `SESSION_PATH=/` in production.
+
+### Login page blank; console `net::ERR_CERT_DATE_INVALID` on `/portfolio/build/assets/*`
+
+The React app never loads because the browser **blocks all HTTPS assets** when the domain SSL certificate is expired or has invalid dates. This is **not** a Laravel/Vite bug.
+
+**Fix on GoDaddy cPanel:**
+
+1. Log in to **cPanel** for the hosting account.
+2. Open **SSL/TLS Status** (or **Security** → **SSL/TLS Status**).
+3. Find **`lidoalexion.com`** (and **`www.lidoalexion.com`** if listed separately).
+4. Click **Run AutoSSL** / **Install** / **Renew** until status shows a valid certificate (not expired).
+5. Wait 5–15 minutes, then hard-refresh `https://lidoalexion.com/portfolio/` (Ctrl+F5).
+
+**Also check:**
+
+| Check | Action |
+|-------|--------|
+| Certificate expiry | cPanel → **SSL/TLS** → **Manage SSL sites** → view expiry date for `lidoalexion.com` |
+| Domain points to this hosting | GoDaddy DNS A record must point to this server; AutoSSL only works when DNS is correct |
+| Your PC clock | Wrong system date can cause the same error — verify date/time is correct (usually affects one device only) |
+| Mixed hosts | Use one URL: `https://lidoalexion.com/portfolio` **or** `https://www.lidoalexion.com/portfolio` after both have valid certs |
+
+**Verify:** Open `https://lidoalexion.com` in Chrome → padlock → **Connection is secure** → view certificate → **Valid** dates include today.
+
+Until SSL is fixed, the login page will stay blank (no JS loads). Session cookies also require HTTPS in production (`SESSION_SECURE_COOKIE=true`).
 
 ### Price sync / Telegram SSL (cURL 60)
 

@@ -222,7 +222,7 @@ PowerShell -ExecutionPolicy Bypass -File tests\Feature\api_smoke.ps1
 - **Alert expiration** (`portfolio_alerts.user_id`, `expired_at`, `expiration_reason`): alerts are **per user** (not global per stock). Stoploss creates one alert per holder per day (`user_id` + `stock_id` dedup). `GET /api/alerts` / dashboard filter by `user_id`. Expiration: manual clear all + acknowledge (own alerts only); hourly 100h max age; new trading day after daily sync; **full sell** expires only that user's alerts (`expireForUserStockIfUnheld`). Active = `expired_at` IS NULL.
 - Dashboard summary cards, allocation **Market Value**, and growth-chart axis/tooltips use `formatInrWhole` / `formatInrCompactWhole` (no paise; `₹ ` + amount, lakh grouping). Holdings/Explorer use `formatInr` (2 dp) via `formatTableMoney2`.
 - Dashboard **Sync prices for today** → `POST /api/sync/daily` (`force: true` from UI when re-syncing same day). Skips without `force` if already synced today (cron-safe). Button stays enabled as **Sync again today** after first success; shows muted “Synced for …” hint.
-- **Production deploy (May 2026):** Canonical steps in **`deploy/DEPLOY.md`** (first deploy + code updates). GoDaddy layout: `public_html/lidoportfolio/` + `public_html/portfolio/`; DB via `/home/USER/config/DBConfig.php`; browser setup via `cpanel-diagnose.php` / `cpanel-once-setup.php`. Obsolete: Laravel outside `public_html`, `DB_*` in production `.env`, document root = `backend/public` on main domain, `route:cache` under `/portfolio`.
+- **Production deploy (May 2026):** Canonical steps in **`deploy/DEPLOY.md`** (first deploy + code updates). GoDaddy layout: `public_html/lidoportfolio/` + `public_html/portfolio/`; DB via `/home/USER/config/DBConfig.php`; browser setup via `cpanel-diagnose.php` / `cpanel-once-setup.php` / **`cpanel-config-cache.php`** (config:cache only, after `.env` edits). Obsolete: Laravel outside `public_html`, `DB_*` in production `.env`, document root = `backend/public` on main domain, `route:cache` under `/portfolio`.
 - **Production subdirectory** (`https://lidoalexion.com/portfolio`): `APP_URL` includes path; build with `VITE_APP_BASE=/portfolio/build/` then upload `public/build/` to **`lidoportfolio/public/build/`** and **`portfolio/build/`**. **Delete `public/hot` on the server** if present. Troubleshooting: `deploy/DEPLOY.md` §7.
 - Dashboard cards: **Portfolio Value** / **Total Gain/Loss** green when portfolio &gt; invested, red when less, default text when equal; **XIRR** green/red by sign. Allocation **%** is whole numbers; &gt;15% orange (`text-allocation-elevated`), &gt;20% red.
 - Transactions UI now supports edit/update flow in addition to create/delete.
@@ -646,13 +646,16 @@ Document in this section and `portfolio-history-rebuild-report.md`.
 | `SESSION_LIFETIME` | `43200` | ~30 days sliding idle timeout |
 | `SESSION_SECURE_COOKIE` | `true` in production | HTTPS only |
 | `SESSION_SAME_SITE` | `lax` | CSRF mitigation |
+| `SESSION_PATH` | derived from `APP_URL` path | Subdirectory deploy (`/portfolio`) scopes cookies so they do not collide with other apps on the same domain |
+| `SESSION_DOMAIN` | `.your-domain.com` in production | Same login cookies on `www` and apex host |
 | `SANCTUM_STATEFUL_DOMAINS` | localhost + app host | Sanctum treats requests as SPA |
 
 ### Frontend flow
 1. `AuthProvider` mounts → `GET /api/auth/me` restores user or shows login.
 2. Login page → CSRF cookie → `POST /api/auth/login` with optional `remember`.
 3. On `401`/`419` → toast + `portfolio-unauthorized` → save path in `sessionStorage` → login.
-4. After login → redirect to saved path (`auth/redirect.js`).
+4. **Subdirectory URLs:** JS resolves API paths from `<meta name="app-base">`, `window.__LIDO_APP_BASE__`, or `/portfolio` in the URL. `api.js` sets `baseURL` on every request (not only at import time).
+5. After login → redirect to saved path (`auth/redirect.js`).
 
 ### API (session guard)
 - `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`
@@ -677,9 +680,11 @@ Document in this section and `portfolio-history-rebuild-report.md`.
 
 ### HTTPS / production cookies
 1. Force HTTPS on the domain (cPanel AutoSSL + redirect).
-2. `.env`: `APP_URL=https://your-domain`, `SESSION_SECURE_COOKIE=true`, `SANCTUM_STATEFUL_DOMAINS` = hostnames without scheme.
-3. Run `php artisan migrate` so `sessions` table exists.
-4. Serve SPA and API from the same origin (`backend/public` document root).
+2. `.env`: `APP_URL=https://your-domain/portfolio` (include subdirectory path), `SESSION_SECURE_COOKIE=true`, `SESSION_DOMAIN=.your-domain.com`, `SANCTUM_STATEFUL_DOMAINS` = hostnames without scheme.
+3. `SESSION_PATH` auto-derives from `APP_URL` (`/portfolio`); run `php artisan config:cache` after `.env` changes.
+4. Run `php artisan migrate` so `sessions` table exists.
+5. Serve SPA and API from the same origin (`backend/public` document root or `/portfolio` entry).
+6. **419 / CSRF mismatch on some devices:** often stale or colliding `XSRF-TOKEN` at cookie path `/` — fixed by scoped session path + clear site cookies once after deploy. Upload table: `deploy/DEPLOY.md` §7 “Login loops / 419”.
 
 See also `DEPLOYMENT_CPANEL.md` § HTTPS.
 

@@ -8,6 +8,7 @@
         $appBase = rtrim(parse_url(config('app.url'), PHP_URL_PATH) ?? '', '/');
     @endphp
     <meta name="app-base" content="{{ $appBase }}">
+    <script>window.__LIDO_APP_BASE__ = @json($appBase);</script>
     <title>Lido Portfolio</title>
     <script>
         (function () {
