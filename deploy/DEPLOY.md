@@ -9,7 +9,7 @@ This is the **canonical** deploy guide (verified May 2026). Use it for first dep
 |----------|---------|
 | [DEPLOYMENT_VALIDATION_PLAN.md](../DEPLOYMENT_VALIDATION_PLAN.md) | Pre/post checklists, test commands |
 | [implementation.md](../implementation.md) | Architecture, auth, logging |
-| [backend/.env.production.example](../backend/.env.production.example) | Production `.env` template |
+| [app/.env.production.example](../app/.env.production.example) | Production `.env` template |
 
 ---
 
@@ -17,7 +17,7 @@ This is the **canonical** deploy guide (verified May 2026). Use it for first dep
 
 | Layer | Detail |
 |-------|--------|
-| Backend | Laravel 13 — contents of repo `backend/` |
+| Backend | Laravel 13 — contents of repo `app/` |
 | Frontend | React + Vite — built assets under `/portfolio/build/` |
 | Database | Shared MySQL `lido_db` via `/home/USER/config/DBConfig.php` |
 | Tables | `portfolio_*` prefix (same DB as other Lido apps) |
@@ -37,7 +37,7 @@ GoDaddy **open_basedir** only allows PHP under `public_html/`, `config/`, etc. L
 │   └── DBConfig.php                 ← shared MySQL (class DBConfig or define() constants)
 └── public_html/
     ├── .htaccess                    ← add portfolio snippet (see §7)
-    ├── lidoportfolio/               ← entire repo backend/ folder (not web-accessible)
+    ├── lidoportfolio/               ← entire repo app/ folder (not web-accessible)
     │   ├── .htaccess                ← Deny from all (deploy/public_html-lidoportfolio-.htaccess)
     │   ├── app, bootstrap, config, database, public, resources, routes, storage, vendor
     │   ├── .env                     ← production only; no DB_* credentials
@@ -55,7 +55,7 @@ GoDaddy **open_basedir** only allows PHP under `public_html/`, `config/`, etc. L
 
 | Do not | Why |
 |--------|-----|
-| Document root = `backend/public` on a subdomain | Not used; app is at `/portfolio` under main domain |
+| Document root = `app/public` on a subdomain | Not used; app is at `/portfolio` under main domain |
 | Laravel at `/home/USER/lidoportfolio/` outside `public_html` | **open_basedir** blocks it |
 | `DB_HOST` / `DB_USER` in production `.env` | Use shared `config/DBConfig.php` only |
 | `npm run dev` on server | Dev server is `127.0.0.1:5173`; causes blank page |
@@ -72,7 +72,7 @@ GoDaddy **open_basedir** only allows PHP under `public_html/`, `config/`, etc. L
 From repo root, in PowerShell:
 
 ```powershell
-cd D:\Projects\LidoPortfolio\backend
+cd D:\Projects\LidoPortfolio\app
 
 composer install --no-dev --optimize-autoloader
 php artisan test
@@ -87,20 +87,20 @@ npm run build
 - `public/build/manifest.json` exists
 - `public/hot` does **not** exist (delete it if `npm run dev` created it)
 
-**Do not upload:** `.env`, `node_modules/`, `public/hot`, `backend/config/DBConfig.php` (dev template).
+**Do not upload:** `.env`, `node_modules/`, `public/hot`, `app/config/DBConfig.php` (dev template).
 
 ### B. Upload to server (File Manager or FTP)
 
 | Local | Server |
 |-------|--------|
-| `backend/*` (full tree) | `public_html/lidoportfolio/` |
+| `app/*` (full tree) | `public_html/lidoportfolio/` |
 | `deploy/public_html-lidoportfolio-.htaccess` | `public_html/lidoportfolio/.htaccess` |
 | `deploy/public_html-portfolio-index.php` | `public_html/portfolio/index.php` |
 | `deploy/public_html-portfolio-.htaccess` | `public_html/portfolio/.htaccess` |
-| `backend/public/build/` (entire folder) | `public_html/lidoportfolio/public/build/` |
+| `app/public/build/` (entire folder) | `public_html/lidoportfolio/public/build/` |
 | same `public/build/` | `public_html/portfolio/build/` |
 
-Create production `.env` on server from [backend/.env.production.example](../backend/.env.production.example). Set `APP_URL=https://lidoalexion.com/portfolio` and `DB_CONFIG_PATH=/home/USER/config/DBConfig.php`.
+Create production `.env` on server from [app/.env.production.example](../app/.env.production.example). Set `APP_URL=https://lidoalexion.com/portfolio` and `DB_CONFIG_PATH=/home/USER/config/DBConfig.php`.
 
 ### C. PHP (cPanel)
 
@@ -146,7 +146,7 @@ Use the PHP 8.4 binary path shown in cPanel if different.
 
 ## 4. Production `.env` (summary)
 
-Copy [backend/.env.production.example](../backend/.env.production.example). Key points:
+Copy [app/.env.production.example](../app/.env.production.example). Key points:
 
 ```env
 APP_ENV=production
@@ -175,7 +175,7 @@ Repeat whenever you change backend or frontend.
 ### On PC
 
 ```powershell
-cd D:\Projects\LidoPortfolio\backend
+cd D:\Projects\LidoPortfolio\app
 
 composer install --no-dev --optimize-autoloader
 php artisan test
@@ -190,15 +190,15 @@ Paths below use `/home/USER/` — replace `USER` with your cPanel username (e.g.
 
 | Upload from (PC — repo) | Upload to (server) | When |
 |-------------------------|---------------------|------|
-| `backend/public/build/` **(entire folder)** | `/home/USER/public_html/lidoportfolio/public/build/` | After any frontend / React change |
-| `backend/public/build/` **(same folder — second copy)** | `/home/USER/public_html/portfolio/build/` | After any frontend / React change |
-| `backend/app/` | `/home/USER/public_html/lidoportfolio/app/` | PHP business logic changed |
-| `backend/routes/` | `/home/USER/public_html/lidoportfolio/routes/` | Routes changed |
-| `backend/config/` | `/home/USER/public_html/lidoportfolio/config/` | Config changed (e.g. `session.php`) |
-| `backend/database/migrations/` | `/home/USER/public_html/lidoportfolio/database/migrations/` | New migrations |
-| `backend/vendor/` | `/home/USER/public_html/lidoportfolio/vendor/` | `composer.json` / `composer.lock` changed |
+| `app/public/build/` **(entire folder)** | `/home/USER/public_html/lidoportfolio/public/build/` | After any frontend / React change |
+| `app/public/build/` **(same folder — second copy)** | `/home/USER/public_html/portfolio/build/` | After any frontend / React change |
+| `app/app/` | `/home/USER/public_html/lidoportfolio/app/` | PHP business logic changed |
+| `app/routes/` | `/home/USER/public_html/lidoportfolio/routes/` | Routes changed |
+| `app/config/` | `/home/USER/public_html/lidoportfolio/config/` | Config changed (e.g. `session.php`) |
+| `app/database/migrations/` | `/home/USER/public_html/lidoportfolio/database/migrations/` | New migrations |
+| `app/vendor/` | `/home/USER/public_html/lidoportfolio/vendor/` | `composer.json` / `composer.lock` changed |
 
-**Do not upload:** `backend/.env`, `backend/node_modules/`, `backend/public/hot`, `backend/config/DBConfig.php` (dev template).
+**Do not upload:** `app/.env`, `app/node_modules/`, `app/public/hot`, `app/config/DBConfig.php` (dev template).
 
 ### Run migrations
 
@@ -288,7 +288,7 @@ SANCTUM_STATEFUL_DOMAINS=lidoalexion.com,www.lidoalexion.com
 On your PC (PowerShell):
 
 ```powershell
-cd D:\Projects\LidoPortfolio\backend
+cd D:\Projects\LidoPortfolio\app
 $env:VITE_APP_BASE='/portfolio/build/'
 npm run build
 ```
@@ -297,31 +297,31 @@ Upload these paths (replace `USER` with your cPanel username, e.g. `p7xatiz6j0mk
 
 | Upload from (PC — repo) | Upload to (server) |
 |-------------------------|---------------------|
-| `backend/config/session.php` | `/home/USER/public_html/lidoportfolio/config/session.php` |
-| `backend/app/Providers/AppServiceProvider.php` | `/home/USER/public_html/lidoportfolio/app/Providers/AppServiceProvider.php` |
-| `backend/resources/views/app.blade.php` | `/home/USER/public_html/lidoportfolio/resources/views/app.blade.php` |
-| `backend/public/build/` **(entire folder — all files inside)** | `/home/USER/public_html/lidoportfolio/public/build/` |
-| `backend/public/build/` **(same folder again — second copy)** | `/home/USER/public_html/portfolio/build/` |
+| `app/config/session.php` | `/home/USER/public_html/lidoportfolio/config/session.php` |
+| `app/app/Providers/AppServiceProvider.php` | `/home/USER/public_html/lidoportfolio/app/Providers/AppServiceProvider.php` |
+| `app/resources/views/app.blade.php` | `/home/USER/public_html/lidoportfolio/resources/views/app.blade.php` |
+| `app/public/build/` **(entire folder — all files inside)** | `/home/USER/public_html/lidoportfolio/public/build/` |
+| `app/public/build/` **(same folder again — second copy)** | `/home/USER/public_html/portfolio/build/` |
 | `deploy/cpanel-diagnose.php` *(optional — verify, then delete)* | `/home/USER/public_html/portfolio/cpanel-diagnose.php` |
 
 **What changed in the frontend build** (you do not upload these `.jsx`/`.js` files separately — they are compiled into `public/build/assets/*.js`):
 
 | Source file (for reference only) | Purpose |
 |----------------------------------|---------|
-| `backend/resources/js/src/appBase.js` | Resolve `/portfolio` API URLs (fallback if meta missing) |
-| `backend/resources/js/src/auth/csrf.js` | Refresh CSRF cookie before login |
-| `backend/resources/js/src/context/AuthContext.jsx` | Retry login once on 419 |
-| `backend/resources/js/src/api.js` | Per-request base URL + CSRF header |
-| `backend/resources/js/src/pages/LoginPage.jsx` | Show client-side auth errors clearly |
+| `app/resources/js/src/appBase.js` | Resolve `/portfolio` API URLs (fallback if meta missing) |
+| `app/resources/js/src/auth/csrf.js` | Refresh CSRF cookie before login |
+| `app/resources/js/src/context/AuthContext.jsx` | Retry login once on 419 |
+| `app/resources/js/src/api.js` | Per-request base URL + CSRF header |
+| `app/resources/js/src/pages/LoginPage.jsx` | Show client-side auth errors clearly |
 
 **Do not upload**
 
 | File / folder | Why |
 |---------------|-----|
-| `backend/.env` | Edit production `.env` in place on the server (Step 1) |
-| `backend/public/hot` | Dev-only; causes blank page if present |
-| `backend/node_modules/` | Not used on server |
-| `backend/config/DBConfig.php` | Dev template; use shared `/home/USER/config/DBConfig.php` |
+| `app/.env` | Edit production `.env` in place on the server (Step 1) |
+| `app/public/hot` | Dev-only; causes blank page if present |
+| `app/node_modules/` | Not used on server |
+| `app/config/DBConfig.php` | Dev template; use shared `/home/USER/config/DBConfig.php` |
 
 **Step 3 — refresh config cache**
 

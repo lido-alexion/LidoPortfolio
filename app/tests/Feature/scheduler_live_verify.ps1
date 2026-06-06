@@ -1,9 +1,9 @@
 $ErrorActionPreference = "Stop"
 $base = "http://127.0.0.1:8001/api"
-$backendRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+$appRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 
 function Get-ScheduleLine {
-    Push-Location $backendRoot
+    Push-Location $appRoot
     try {
         $out = php artisan schedule:list 2>&1 | Out-String
         $line = ($out -split "`n" | Where-Object { $_ -match "portfolio:daily-sync" } | Select-Object -First 1)

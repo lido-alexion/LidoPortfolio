@@ -13,7 +13,7 @@ INDEX command denied to user 'niti_nits'@'...' for table `lido_db`.`portfolio_st
 
 Upload the latest:
 
-`backend/database/migrations/2026_05_29_000001_extend_portfolio_stocks_master.php`
+`app/database/migrations/2026_05_29_000001_extend_portfolio_stocks_master.php`
 
 → `public_html/lidoportfolio/database/migrations/`
 

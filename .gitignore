@@ -5,28 +5,28 @@ Thumbs.db
 .vscode/
 .cursor/
 
-# PHP / Laravel (backend)
-backend/.env
-backend/.env.backup
-backend/.env.backup-before-mysql-template
-backend/.env.production
-backend/config/DBConfig.php
-backend/vendor/
-backend/node_modules/
-backend/public/build/
-backend/public/hot
-backend/public/storage
-backend/public/fonts-manifest.dev.json
-backend/storage/*.key
-backend/storage/pail/
-backend/.phpunit.cache/
-backend/.phpunit.result.cache
-backend/database/database.sqlite
-backend/auth.json
-backend/_ide_helper.php
-backend/Homestead.json
-backend/Homestead.yaml
+# PHP / Laravel (app)
+app/.env
+app/.env.backup
+app/.env.backup-before-mysql-template
+app/.env.production
+app/config/DBConfig.php
+app/vendor/
+app/node_modules/
+app/public/build/
+app/public/hot
+app/public/storage
+app/public/fonts-manifest.dev.json
+app/storage/*.key
+app/storage/pail/
+app/.phpunit.cache/
+app/.phpunit.result.cache
+app/database/database.sqlite
+app/auth.json
+app/_ide_helper.php
+app/Homestead.json
+app/Homestead.yaml
 
 # Composer binaries (install locally)
 composer.phar
-backend/composer.phar
+app/composer.phar

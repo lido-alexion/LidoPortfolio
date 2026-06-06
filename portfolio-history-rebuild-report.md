@@ -82,7 +82,7 @@ Snapshots are **updated in place** (`updateOrCreate`) — not append-only.
 ## Verification
 
 ```bash
-cd backend
+cd app
 php artisan test --filter=Portfolio
 php artisan test
 ```

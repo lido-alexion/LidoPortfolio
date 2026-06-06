@@ -5,7 +5,7 @@ Living reference for Lido Portfolio. **Update this file whenever code changes.**
 
 ## Agent / documentation policy (May 2026)
 - Do not use or recreate `design_doc.md` or removed phase/report/spec files.
-- **Canonical docs:** `implementation.md` (technical), `README.md` (quick start), **`deploy/DEPLOY.md`** (production deploy & updates), `DEPLOYMENT_VALIDATION_PLAN.md`, `portfolio-history-rebuild-report.md`, `backend/API_DOCUMENTATION.md`.
+- **Canonical docs:** `implementation.md` (technical), `README.md` (quick start), **`deploy/DEPLOY.md`** (production deploy & updates), `DEPLOYMENT_VALIDATION_PLAN.md`, `portfolio-history-rebuild-report.md`, `app/API_DOCUMENTATION.md`.
 - Cursor rule `.cursor/rules/Always-update-implementation-details-in-implementation-md-file.mdc` enforces: read this file first; update it after code changes.
 - Persistent instructions across sessions: project rules in `.cursor/rules/` (`alwaysApply: true`) + optional User Rules in Cursor Settings.
 
@@ -24,7 +24,7 @@ Use this section to bring the project up again on a Windows dev machine. Human-o
 | Service | Required? | Typical setup on Windows | Notes |
 |---------|-----------|--------------------------|-------|
 | **MySQL** | **Yes** | EasyPHP / XAMPP / WAMP MySQL, standalone MySQL, or Docker | App uses `portfolio_*` tables; can share an existing DB (e.g. `lido_db`). |
-| **PHP web** | **Yes** (one of) | `php artisan serve` **or** Apache/Nginx | Default dev URL: `http://127.0.0.1:8001`. Document root for Apache: `backend/public`. |
+| **PHP web** | **Yes** (one of) | `php artisan serve` **or** Apache/Nginx | Default dev URL: `http://127.0.0.1:8001`. Document root for Apache: `app/public`. |
 | **Node.js** | Dev UI hot-reload | Installed globally | Only for `npm run dev` / `npm run build`. |
 | **Apache (EasyPHP)** | **No** (if using `artisan serve`) | EasyPHP control panel | Optional. Use when you prefer vhost over built-in PHP server. |
 | **Queue worker** | Optional locally | `php artisan queue:listen` | `QUEUE_CONNECTION=database`; needed for async jobs if not using `sync`. |
@@ -37,20 +37,24 @@ Use this section to bring the project up again on a Windows dev machine. Human-o
 ### Prerequisites
 
 - **PHP 8.3+** with extensions: `mbstring`, `pdo_mysql`, `openssl`, `curl`, `json`, `tokenizer`, `xml`, `ctype` (recommended: `fileinfo`).
-- **Composer** (project uses `backend/composer.json`; `composer.phar` may exist at repo root).
-- **Node.js 18+** and npm (in `backend/`).
+- **Composer** (project uses `app/composer.json`; `composer.phar` may exist at repo root).
+- **Node.js 18+** and npm (in `app/`).
 - **MySQL 5.7+ / 8.x** listening on `127.0.0.1:3306` (or your host/port).
-- Verify PHP: `cd backend && php -v && php -m`
+- Verify PHP: `cd app && php -v && php -m`
 
 Confirm the **same** `php.exe` is used for CLI and (if applicable) Apache/EasyPHP, or extension/session issues will confuse debugging.
 
 ### Repository layout
 
+**Folder rename (Jun 2026):** The application root was renamed from `backend/` to **`app/`** — it holds the full Laravel + React stack (not “API only”). Setting keys like `backend_log_level` are unchanged (they mean server-side logging, not the old folder name).
+
 ```
 LidoPortfolio/
   README.md                 ← short quick start
   implementation.md         ← this file (read first for agents)
-  backend/                  ← Laravel app root (artisan, .env, app/, public/)
+  app/                      ← application root (Laravel + React; artisan, .env, public/)
+    app/                    ← Laravel PHP code (controllers, services, models)
+    resources/js/src/       ← React SPA source
     .env.mysql.template     ← copy to .env
     config/DBConfig.php     ← optional MySQL constants (keep out of git if secrets)
     public/                 ← web root if using Apache
@@ -58,14 +62,14 @@ LidoPortfolio/
   .gitignore                ← root ignore (secrets, vendor, node_modules, build)
 ```
 
-**Git (Jun 2026):** Monorepo at project root (`LidoPortfolio/`). Remote: `https://github.com/lido-alexion/LidoPortfolio` (private). Branch `master` tracks `origin/master`. Secrets excluded: `backend/.env`, `backend/config/DBConfig.php`, env backups.
+**Git (Jun 2026):** Monorepo at project root (`LidoPortfolio/`). Remote: `https://github.com/lido-alexion/LidoPortfolio` (private). Branch `master` tracks `origin/master`. Secrets excluded: `app/.env`, `app/config/DBConfig.php`, env backups.
 
 ### First-time setup (clean machine)
 
 From PowerShell:
 
 ```powershell
-cd D:\Projects\LidoPortfolio\backend
+cd D:\Projects\LidoPortfolio\app
 
 # 1) Environment
 copy .env.mysql.template .env
@@ -108,10 +112,10 @@ SESSION_SECURE_COOKIE=false
 ### Every time you return to the project
 
 1. Start **MySQL** (EasyPHP / XAMPP / Windows service).
-2. In `backend/`:
+2. In `app/`:
 
 ```powershell
-cd D:\Projects\LidoPortfolio\backend
+cd D:\Projects\LidoPortfolio\app
 ```
 
 3. Choose **one** dev mode:
@@ -141,16 +145,16 @@ in a separate terminal alongside `composer run dev` (only one process can bind a
 
 4. Open **`http://127.0.0.1:8001`** in the browser (not Vite’s port; Laravel serves the SPA and proxies Vite assets in dev).
 
-**React + `npm run dev`:** `resources/views/app.blade.php` must include `@viteReactRefresh` **before** `@vite` (Laravel 13 + `@vitejs/plugin-react`). Without it, the console shows `can't detect preamble` and the SPA fails to load. On Windows, if `npm run dev` exits immediately, use `npx vite` from `backend/` instead.
+**React + `npm run dev`:** `resources/views/app.blade.php` must include `@viteReactRefresh` **before** `@vite` (Laravel 13 + `@vitejs/plugin-react`). Without it, the console shows `can't detect preamble` and the SPA fails to load. On Windows, if `npm run dev` exits immediately, use `npx vite` from `app/` instead.
 
 ### Using EasyPHP / Apache instead of `artisan serve`
 
 1. Start **MySQL** from EasyPHP.
-2. Point the site **document root** to `D:\Projects\LidoPortfolio\backend\public`.
+2. Point the site **document root** to `D:\Projects\LidoPortfolio\app\public`.
 3. Set `APP_URL` in `.env` to that vhost URL (e.g. `http://localhost/lidoportfolio/public` or a virtual host).
 4. Add that host (and port if any) to `SANCTUM_STATEFUL_DOMAINS`.
 5. Run `npm run build` (no Vite dev server required).
-6. `php artisan migrate --force` still runs from CLI in `backend/`.
+6. `php artisan migrate --force` still runs from CLI in `app/`.
 
 You do **not** need a separate Node server in production-style Apache mode after `npm run build`.
 
@@ -167,7 +171,7 @@ See `DEPLOYMENT_VALIDATION_PLAN.md` § SSL.
 ### Useful commands
 
 ```powershell
-cd D:\Projects\LidoPortfolio\backend
+cd D:\Projects\LidoPortfolio\app
 
 php artisan migrate --force          # after pulling new migrations
 php artisan db:seed                  # re-seed admin + default settings
@@ -193,11 +197,11 @@ PowerShell -ExecutionPolicy Bypass -File tests\Feature\api_smoke.ps1
 | `deploy/DEPLOY.md` | Production deploy (GoDaddy `/portfolio`) |
 | `DEPLOYMENT_CPANEL.md` | Generic cPanel pointer → `deploy/DEPLOY.md` |
 | `DEPLOYMENT_VALIDATION_PLAN.md` | Pre/post deploy checks |
-| `backend/API_DOCUMENTATION.md` | REST API |
+| `app/API_DOCUMENTATION.md` | REST API |
 
 ## Technical Decisions
 - Local environment templates aligned to MySQL-based setup.
-- Added `.env` template specifically for MySQL usage in `backend/.env.mysql.template`.
+- Added `.env` template specifically for MySQL usage in `app/.env.mysql.template`.
 - **DB credentials:** `config/load_db_config.php` finds `config/DBConfig.php` by walking up directories (outermost first so `/home/USER/config/DBConfig.php` wins over `lidoportfolio/config/DBConfig.php` if a dev template was uploaded). Supports **class `DBConfig`** or **define()** constants. Optional `DB_CONFIG_PATH` in `.env`. When `DBConfig.php` is loaded, its values **take precedence over** `.env` `DB_*`. Delete `bootstrap/cache/config.php` if DB still shows `root` after fixes. `deploy/cpanel-diagnose.php` flags app-local `DBConfig.php` and cached config.
 - **GoDaddy migrate 1142:** shared MySQL user may lack `INDEX` on existing tables. `2026_05_29_000001_extend_portfolio_stocks_master` adds columns always; composite unique on `(symbol, exchange)` is skipped when error 1142 (keeps `symbol` unique). See `deploy/FIX-MYSQL-INDEX-PRIVILEGES.md`.
 - To share a single MySQL database with an existing project, this app uses isolated table names:
@@ -222,7 +226,7 @@ PowerShell -ExecutionPolicy Bypass -File tests\Feature\api_smoke.ps1
 - **Alert expiration** (`portfolio_alerts.user_id`, `expired_at`, `expiration_reason`): alerts are **per user** (not global per stock). Stoploss creates one alert per holder per day (`user_id` + `stock_id` dedup). `GET /api/alerts` / dashboard filter by `user_id`. Expiration: manual clear all + acknowledge (own alerts only); hourly 100h max age; new trading day after daily sync; **full sell** expires only that user's alerts (`expireForUserStockIfUnheld`). Active = `expired_at` IS NULL.
 - Dashboard summary cards, allocation **Market Value**, and growth-chart axis/tooltips use `formatInrWhole` / `formatInrCompactWhole` (no paise; `₹ ` + amount, lakh grouping). Holdings/Explorer use `formatInr` (2 dp) via `formatTableMoney2`.
 - Dashboard **Sync prices for today** → `POST /api/sync/daily` (`force: true` from UI when re-syncing same day). Skips without `force` if already synced today (cron-safe). Button stays enabled as **Sync again today** after first success; shows muted “Synced for …” hint.
-- **Production deploy (May 2026):** Canonical steps in **`deploy/DEPLOY.md`** (first deploy + code updates). GoDaddy layout: `public_html/lidoportfolio/` + `public_html/portfolio/`; DB via `/home/USER/config/DBConfig.php`; browser setup via `cpanel-diagnose.php` / `cpanel-once-setup.php` / **`cpanel-config-cache.php`** (config:cache only, after `.env` edits). Obsolete: Laravel outside `public_html`, `DB_*` in production `.env`, document root = `backend/public` on main domain, `route:cache` under `/portfolio`.
+- **Production deploy (May 2026):** Canonical steps in **`deploy/DEPLOY.md`** (first deploy + code updates). GoDaddy layout: `public_html/lidoportfolio/` + `public_html/portfolio/`; DB via `/home/USER/config/DBConfig.php`; browser setup via `cpanel-diagnose.php` / `cpanel-once-setup.php` / **`cpanel-config-cache.php`** (config:cache only, after `.env` edits). Obsolete: Laravel outside `public_html`, `DB_*` in production `.env`, document root = `app/public` on main domain, `route:cache` under `/portfolio`.
 - **Production subdirectory** (`https://lidoalexion.com/portfolio`): `APP_URL` includes path; build with `VITE_APP_BASE=/portfolio/build/` then upload `public/build/` to **`lidoportfolio/public/build/`** and **`portfolio/build/`**. **Delete `public/hot` on the server** if present. Troubleshooting: `deploy/DEPLOY.md` §7.
 - Dashboard cards: **Portfolio Value** / **Total Gain/Loss** green when portfolio &gt; invested, red when less, default text when equal; **XIRR** green/red by sign. Allocation **%** is whole numbers; &gt;15% orange (`text-allocation-elevated`), &gt;20% red.
 - Transactions UI now supports edit/update flow in addition to create/delete.
@@ -358,7 +362,7 @@ Env: `LOG_CHANNEL=daily`, `LOG_DAILY_DAYS=2`, `LOG_LEVEL=debug` (Monolog floor; 
 
 ### Debugging (local)
 ```bash
-cd backend
+cd app
 php artisan test
 tail -f storage/logs/laravel-$(date +%Y-%m-%d).log
 tail -f storage/logs/provider-$(date +%Y-%m-%d).log
@@ -366,7 +370,7 @@ tail -f storage/logs/provider-$(date +%Y-%m-%d).log
 Set frontend verbosity in browser: `localStorage.setItem('logLevel','debug')`.
 
 ### Debugging (cPanel)
-- File Manager or SSH → `backend/storage/logs/`.
+- File Manager or SSH → `app/storage/logs/`.
 - Open today’s `laravel-*.log`, `frontend-*.log`, `provider-*.log`, `scheduler-*.log`.
 - Search by `request_id` from browser Network tab (`X-Request-ID`) across files.
 - Ensure `storage/logs` is writable; cron output is not duplicated to DB.
@@ -375,7 +379,7 @@ Set frontend verbosity in browser: `localStorage.setItem('logLevel','debug')`.
 Document any new channel, endpoint, or retention change in this section.
 
 ### Related docs
-- API: `backend/API_DOCUMENTATION.md` → Frontend logs section
+- API: `app/API_DOCUMENTATION.md` → Frontend logs section
 
 ## Stock Validation Architecture (May 2026)
 
@@ -683,7 +687,7 @@ Document in this section and `portfolio-history-rebuild-report.md`.
 2. `.env`: `APP_URL=https://your-domain/portfolio` (include subdirectory path), `SESSION_SECURE_COOKIE=true`, `SESSION_DOMAIN=.your-domain.com`, `SANCTUM_STATEFUL_DOMAINS` = hostnames without scheme.
 3. `SESSION_PATH` auto-derives from `APP_URL` (`/portfolio`); run `php artisan config:cache` after `.env` changes.
 4. Run `php artisan migrate` so `sessions` table exists.
-5. Serve SPA and API from the same origin (`backend/public` document root or `/portfolio` entry).
+5. Serve SPA and API from the same origin (`app/public` document root or `/portfolio` entry).
 6. **419 / CSRF mismatch on some devices:** often stale or colliding `XSRF-TOKEN` at cookie path `/` — fixed by scoped session path + clear site cookies once after deploy. Upload table: `deploy/DEPLOY.md` §7 “Login loops / 419”.
 
 See also `DEPLOYMENT_CPANEL.md` § HTTPS.

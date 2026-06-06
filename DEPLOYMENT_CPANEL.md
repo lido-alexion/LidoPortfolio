@@ -10,9 +10,9 @@ This file keeps **generic** notes for other hosts where Laravel’s `public/` fo
 
 When **open_basedir** is not restricted and you control the document root:
 
-1. Upload repo `backend/` to the server.
-2. Set document root to `backend/public` (not the repo root).
-3. Copy [backend/.env.production.example](backend/.env.production.example) → `.env` and set `DB_*` or `DB_CONFIG_PATH`.
+1. Upload repo `app/` to the server.
+2. Set document root to `app/public` (not the repo root).
+3. Copy [app/.env.production.example](app/.env.production.example) → `.env` and set `DB_*` or `DB_CONFIG_PATH`.
 4. `composer install --no-dev`, `php artisan migrate --force`, `php artisan config:cache`.
 5. Build: `npm run build` (no `VITE_APP_BASE` unless using a subdirectory).
 6. Cron: `* * * * * php /path/to/artisan schedule:run`.
@@ -28,7 +28,7 @@ When **open_basedir** is not restricted and you control the document root:
 | [deploy/DEPLOY.md](deploy/DEPLOY.md) | **lidoalexion.com/portfolio** (canonical) |
 | [DEPLOYMENT_VALIDATION_PLAN.md](DEPLOYMENT_VALIDATION_PLAN.md) | Pre/post checklists |
 | [implementation.md](implementation.md) | Architecture, auth, logging |
-| [backend/API_DOCUMENTATION.md](backend/API_DOCUMENTATION.md) | REST API |
+| [app/API_DOCUMENTATION.md](app/API_DOCUMENTATION.md) | REST API |
 
 ---
 

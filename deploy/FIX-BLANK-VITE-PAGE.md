@@ -19,15 +19,15 @@ That file contains `http://127.0.0.1:5173` and forces Laravel into dev mode.
 
 ### 2. Upload production build (two copies)
 
-On your **PC**, in `backend/`:
+On your **PC**, in `app/`:
 
 ```powershell
-cd backend
+cd app
 $env:VITE_APP_BASE='/portfolio/build/'
 npm run build
 ```
 
-Upload the folder `backend/public/build/` (entire folder) to **both**:
+Upload the folder `app/public/build/` (entire folder) to **both**:
 
 | Server path | Why |
 |-------------|-----|

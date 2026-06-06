@@ -6,7 +6,7 @@ Related docs:
 
 - **Deploy steps (lidoalexion.com/portfolio):** `deploy/DEPLOY.md`
 - Generic cPanel: `DEPLOYMENT_CPANEL.md`
-- API reference: `backend/API_DOCUMENTATION.md`
+- API reference: `app/API_DOCUMENTATION.md`
 - Implementation notes: `implementation.md`
 
 ---
@@ -20,7 +20,7 @@ Run these on your machine (or a staging server that mirrors production PHP/MySQL
 **Steps**
 
 ```powershell
-cd D:\Projects\LidoPortfolio\backend
+cd D:\Projects\LidoPortfolio\app
 php -v
 php -m
 php --ini
@@ -56,7 +56,7 @@ php -r "echo file_get_contents('https://api.telegram.org');"
 
 **Steps**
 
-1. Copy `backend/.env.mysql.template` → `backend/.env` (if not already).
+1. Copy `app/.env.mysql.template` → `app/.env` (if not already).
 2. Set production-oriented values locally first to validate boot:
 
 ```env
@@ -70,7 +70,7 @@ DB_USERNAME=...
 DB_PASSWORD=...
 ```
 
-3. Confirm `backend/config/DBConfig.php` matches DB host/name/user/pass (if you use that path).
+3. Confirm `app/config/DBConfig.php` matches DB host/name/user/pass (if you use that path).
 4. **Rotate** Telegram bot token before production; set only in Settings UI or DB, not in git.
 5. Production session auth (required for SPA login):
 
@@ -92,7 +92,7 @@ LOG_DAILY_DAYS=2
 **Pass criteria**
 
 ```powershell
-cd D:\Projects\LidoPortfolio\backend
+cd D:\Projects\LidoPortfolio\app
 php artisan config:show app.env
 php artisan config:show app.debug
 ```
@@ -109,7 +109,7 @@ php artisan config:show app.debug
 **Steps**
 
 ```powershell
-cd D:\Projects\LidoPortfolio\backend
+cd D:\Projects\LidoPortfolio\app
 php artisan migrate:status
 php artisan migrate --force
 ```
@@ -132,7 +132,7 @@ SHOW TABLES LIKE 'portfolio_%';
 **Steps**
 
 ```powershell
-cd D:\Projects\LidoPortfolio\backend
+cd D:\Projects\LidoPortfolio\app
 php artisan test
 ```
 
@@ -148,7 +148,7 @@ php artisan test
 **Steps**
 
 ```powershell
-cd D:\Projects\LidoPortfolio\backend
+cd D:\Projects\LidoPortfolio\app
 npm install
 npx vite build
 ```
@@ -167,14 +167,14 @@ npx vite build
 1. Start server:
 
 ```powershell
-cd D:\Projects\LidoPortfolio\backend
+cd D:\Projects\LidoPortfolio\app
 php artisan serve --host=127.0.0.1 --port=8001
 ```
 
 2. In another terminal:
 
 ```powershell
-cd D:\Projects\LidoPortfolio\backend
+cd D:\Projects\LidoPortfolio\app
 PowerShell -ExecutionPolicy Bypass -File tests\Feature\api_smoke.ps1
 ```
 
@@ -190,7 +190,7 @@ PowerShell -ExecutionPolicy Bypass -File tests\Feature\api_smoke.ps1
 **Steps**
 
 ```powershell
-cd D:\Projects\LidoPortfolio\backend
+cd D:\Projects\LidoPortfolio\app
 PowerShell -ExecutionPolicy Bypass -File tests\Feature\scheduler_live_verify.ps1
 ```
 
@@ -216,7 +216,7 @@ php artisan schedule:list
 **Steps**
 
 ```powershell
-cd D:\Projects\LidoPortfolio\backend
+cd D:\Projects\LidoPortfolio\app
 php artisan test --filter=PriceFetchServiceTest
 ```
 
@@ -233,7 +233,7 @@ php artisan test --filter=PriceFetchServiceTest
 Use the UI (**sync** from authenticated session) or SSH:
 
 ```bash
-cd backend
+cd app
 php artisan portfolio:daily-sync
 ```
 
@@ -271,7 +271,7 @@ php artisan tinker --execute="app(\App\Services\TelegramNotificationService::cla
 | `vendor/` | `composer install --no-dev --optimize-autoloader` on server OR upload with deploy | Autoload works |
 | `public/build/` | Built via Vite | manifest present |
 | `storage/`, `bootstrap/cache/` | Writable on server | 775 or host default |
-| Document root | Points to `backend/public` | `/` loads SPA |
+| Document root | Points to `app/public` | `/` loads SPA |
 
 ---
 
@@ -282,7 +282,7 @@ Follow `DEPLOYMENT_CPANEL.md`, then complete this section on the **production ho
 ### 2.1 Upload and install
 
 ```bash
-cd /path/to/project/backend
+cd /path/to/project/app
 composer install --no-dev --optimize-autoloader
 php artisan migrate --force
 php artisan config:cache
@@ -302,7 +302,7 @@ php artisan view:cache
 **Add in cPanel → Cron Jobs (every minute):**
 
 ```cron
-* * * * * /usr/local/bin/php /home/USER/path/to/backend/artisan schedule:run >> /dev/null 2>&1
+* * * * * /usr/local/bin/php /home/USER/path/to/app/artisan schedule:run >> /dev/null 2>&1
 ```
 
 Use the exact PHP binary path from cPanel (“Select PHP version” / `which php` in SSH).
@@ -332,7 +332,7 @@ Replace `https://your-domain.example` with your live URL. API base: `https://you
 
 **Option A — adapt script**
 
-Edit first line of `backend/tests/Feature/api_smoke.ps1`:
+Edit first line of `app/tests/Feature/api_smoke.ps1`:
 
 ```powershell
 $base = "https://your-domain.example/api"
@@ -341,7 +341,7 @@ $base = "https://your-domain.example/api"
 Then run:
 
 ```powershell
-PowerShell -ExecutionPolicy Bypass -File backend\tests\Feature\api_smoke.ps1
+PowerShell -ExecutionPolicy Bypass -File app\tests\Feature\api_smoke.ps1
 ```
 
 **Option B — manual browser**
@@ -378,7 +378,7 @@ PowerShell -ExecutionPolicy Bypass -File backend\tests\Feature\api_smoke.ps1
 3. SSH to server:
 
 ```bash
-cd /path/to/backend
+cd /path/to/app
 php artisan schedule:list
 ```
 
@@ -416,7 +416,7 @@ SELECT * FROM portfolio_portfolio_snapshots ORDER BY snapshot_date DESC LIMIT 5;
 **SSH (preferred on cPanel):**
 
 ```bash
-cd /path/to/backend
+cd /path/to/app
 php artisan portfolio:daily-sync
 ```
 
