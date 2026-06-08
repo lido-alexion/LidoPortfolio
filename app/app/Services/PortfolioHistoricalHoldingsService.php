@@ -28,7 +28,7 @@ class PortfolioHistoricalHoldingsService
             $stockId = (int) $transaction->stock_id;
             $qty = (float) $transaction->quantity;
             $price = (float) $transaction->price;
-            $brokerage = (float) ($transaction->brokerage ?? 0);
+            $fees = (float) ($transaction->fees ?? 0);
 
             if (! isset($byStock[$stockId])) {
                 $byStock[$stockId] = [
@@ -41,7 +41,7 @@ class PortfolioHistoricalHoldingsService
             $state = &$byStock[$stockId];
 
             if ($transaction->type === 'buy') {
-                $cost = ($qty * $price) + $brokerage;
+                $cost = ($qty * $price) + $fees;
                 $state['invested_amount'] += $cost;
                 $state['quantity'] += $qty;
                 $state['avg_buy_price'] = $state['quantity'] > 0

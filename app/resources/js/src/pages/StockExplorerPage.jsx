@@ -148,6 +148,7 @@ function ManualRsInputCard({
                                 id="manual-stock-latest"
                                 min="0.01"
                                 step="0.01"
+                                fixedDecimals={2}
                                 placeholder="0.00"
                                 value={manualRsValues.stockLatestClose}
                                 onChange={(e) => onManualRsValuesChange({ stockLatestClose: e.target.value })}
@@ -162,6 +163,7 @@ function ManualRsInputCard({
                                 id="manual-index-latest"
                                 min="0.01"
                                 step="0.01"
+                                fixedDecimals={2}
                                 placeholder="0.00"
                                 value={manualRsValues.indexLatestClose}
                                 onChange={(e) => onManualRsValuesChange({ indexLatestClose: e.target.value })}
@@ -178,6 +180,7 @@ function ManualRsInputCard({
                                 id="manual-stock-previous"
                                 min="0.01"
                                 step="0.01"
+                                fixedDecimals={2}
                                 placeholder="0.00"
                                 value={manualRsValues.stockPreviousClose}
                                 onChange={(e) => onManualRsValuesChange({ stockPreviousClose: e.target.value })}
@@ -194,6 +197,7 @@ function ManualRsInputCard({
                                 id="manual-index-previous"
                                 min="0.01"
                                 step="0.01"
+                                fixedDecimals={2}
                                 placeholder="0.00"
                                 value={manualRsValues.indexPreviousClose}
                                 onChange={(e) => onManualRsValuesChange({ indexPreviousClose: e.target.value })}

@@ -17,14 +17,14 @@ class XirrServiceTest extends TestCase
             (object) [
                 'quantity' => 10,
                 'price' => 100,
-                'brokerage' => 0,
+                'fees' => 0,
                 'type' => 'buy',
                 'transaction_date' => '2024-01-01',
             ],
             (object) [
                 'quantity' => 5,
                 'price' => 130,
-                'brokerage' => 0,
+                'fees' => 0,
                 'type' => 'sell',
                 'transaction_date' => '2024-06-01',
             ],

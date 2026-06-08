@@ -232,6 +232,7 @@ After `.env` changes: delete `bootstrap/cache/config.php` or run `config:clear` 
 | `cpanel-diagnose.php` | Pre-flight: PHP, DB, Vite manifests, `hot` file |
 | `cpanel-once-setup.php` | One-time: `key:generate`, `migrate`, `config:cache` |
 | `cpanel-config-cache.php` | Re-run `config:cache` after `.env` changes (no SSH) |
+| `cpanel-migrate.php` | Run `migrate --force` + `config:cache` after uploading new migrations (no SSH) |
 | `public_html-portfolio-index.php` | Front controller for `/portfolio` |
 | `public_html-portfolio-.htaccess` | Rewrites under `/portfolio/` |
 | `public_html-lidoportfolio-.htaccess` | Deny web access to Laravel tree |

@@ -25,7 +25,14 @@ import {
 
 } from '../utils/stockValidationCache';
 
+import FeeBreakdownHint from '../components/FeeBreakdownHint';
+import TransactionDateInput from '../components/TransactionDateInput';
 import { formatTableInteger, formatTableMoney2 } from '../utils/tableFormat';
+import {
+    calculateTransactionFees,
+    DEFAULT_FEE_COMPONENTS,
+    normalizeFeeComponents,
+} from '../utils/feeCalculator';
 import {
     formatTransactionDateDisplay,
     getLocalTodayDateString,
@@ -53,8 +60,6 @@ const emptyForm = () => ({
     quantity: 1,
 
     price: '',
-
-    brokerage: '0.00',
 
     transaction_date: getLocalTodayDateString(),
 
@@ -142,6 +147,8 @@ export default function TransactionsPage() {
         formatTransactionDateDisplay(getLocalTodayDateString())
     ));
 
+    const [feeComponents, setFeeComponents] = useState(DEFAULT_FEE_COMPONENTS);
+
 
 
     const load = async () => {
@@ -152,9 +159,14 @@ export default function TransactionsPage() {
 
     };
 
+    const loadFeeSettings = async () => {
+        const res = await api.get('/settings');
+        setFeeComponents(normalizeFeeComponents(res.data.data?.fee_components));
+    };
 
 
-    useEffect(() => { load(); }, []);
+
+    useEffect(() => { load(); loadFeeSettings(); }, []);
 
     useEffect(() => {
         const prefill = location.state?.sellPrefill;
@@ -189,7 +201,6 @@ export default function TransactionsPage() {
             type: 'sell',
             quantity: prefill.quantity,
             price: prefill.price != null && prefill.price > 0 ? roundToTwoDecimals(prefill.price) : '',
-            brokerage: '0.00',
             transaction_date: getLocalTodayDateString(),
         });
 
@@ -352,6 +363,16 @@ export default function TransactionsPage() {
 
 
 
+    const resolvedExchange = form.exchange || selectedStock?.exchange || 'NSE';
+
+    const feeCalculation = useMemo(() => calculateTransactionFees({
+        quantity: form.quantity,
+        price: form.price,
+        type: form.type,
+        exchange: resolvedExchange,
+        feeComponents,
+    }), [form.quantity, form.price, form.type, resolvedExchange, feeComponents]);
+
     const buildPayload = () => {
 
         const base = {
@@ -362,7 +383,7 @@ export default function TransactionsPage() {
 
             price: Number(form.price),
 
-            brokerage: Number(form.brokerage || 0),
+            fees: feeCalculation.total,
 
             transaction_date: form.transaction_date,
 
@@ -431,8 +452,6 @@ export default function TransactionsPage() {
             quantity: Number(tx.quantity),
 
             price: roundToTwoDecimals(tx.price),
-
-            brokerage: roundToTwoDecimals(tx.brokerage || 0),
 
             transaction_date: tx.transaction_date,
 
@@ -700,12 +719,6 @@ export default function TransactionsPage() {
         }
 
         if (!isValidPrice(form.price)) {
-
-            return false;
-
-        }
-
-        if (!isValidMoneyField(form.brokerage)) {
 
             return false;
 
@@ -992,6 +1005,7 @@ export default function TransactionsPage() {
                                     id="tx-price"
                                     min="0.05"
                                     step="0.05"
+                                    fixedDecimals={2}
                                     placeholder="0.00"
                                     value={form.price}
                                     onChange={(e) => setForm({ ...form, price: e.target.value })}
@@ -1008,20 +1022,29 @@ export default function TransactionsPage() {
 
                             <div>
 
-                                <label className="form-label" htmlFor="tx-brokerage">Brokerage</label>
+                                <label id="tx-fees-label" className="form-label">
+                                    Fees (₹)
+                                </label>
 
-                                <NumberInput
-                                    id="tx-brokerage"
-                                    min="0"
-                                    step="0.05"
-                                    placeholder="0.00"
-                                    value={form.brokerage}
-                                    onChange={(e) => setForm({ ...form, brokerage: e.target.value })}
-                                    onBlur={(e) => setForm({
-                                        ...form,
-                                        brokerage: e.target.value === '' ? '0.00' : roundToTwoDecimals(e.target.value),
-                                    })}
-                                />
+                                <div className="d-flex align-items-center gap-1">
+                                    <div
+                                        id="tx-fees"
+                                        className="form-control lido-fees-readonly"
+                                        role="status"
+                                        aria-labelledby="tx-fees-label"
+                                        aria-describedby="tx-fees-help"
+                                    >
+                                        {roundToTwoDecimals(feeCalculation.total)}
+                                    </div>
+                                    <FeeBreakdownHint
+                                        id="tx-fees-hint"
+                                        breakdown={feeCalculation.breakdown}
+                                        total={feeCalculation.total}
+                                    />
+                                </div>
+                                <div id="tx-fees-help" className="form-text">
+                                    Auto-calculated from Settings → fee components.
+                                </div>
 
                             </div>
 
@@ -1031,74 +1054,18 @@ export default function TransactionsPage() {
 
                                 <label className="form-label" htmlFor="tx-date">Transaction date</label>
 
-                                <input
-
+                                <TransactionDateInput
                                     id="tx-date"
-
-                                    className={`form-control${transactionDateIsFuture ? ' is-invalid' : ''}`}
-
-                                    type="text"
-
-                                    inputMode="text"
-
-                                    autoComplete="off"
-
-                                    placeholder="dd-mmm-yyyy"
-
-                                    value={transactionDateInput}
-
-                                    onChange={(e) => {
-
-                                        const next = e.target.value;
-
-                                        setTransactionDateInput(next);
-
-                                        const iso = parseTransactionDateDisplay(next);
-
-                                        if (iso) {
-
-                                            setForm((prev) => ({ ...prev, transaction_date: iso }));
-
-                                        }
-
-                                    }}
-
-                                    onFocus={() => {
-
-                                        dateInputFocusedRef.current = true;
-
-                                    }}
-
-                                    onBlur={() => {
-
-                                        dateInputFocusedRef.current = false;
-
-                                        const iso = parseTransactionDateDisplay(transactionDateInput);
-
-                                        if (iso) {
-
-                                            setForm((prev) => ({ ...prev, transaction_date: iso }));
-
-                                            setTransactionDateInput(formatTransactionDateDisplay(iso));
-
-                                        } else {
-
-                                            setTransactionDateInput(
-
-                                                formatTransactionDateDisplay(form.transaction_date),
-
-                                            );
-
-                                        }
-
-                                    }}
-
+                                    displayValue={transactionDateInput}
+                                    isoValue={form.transaction_date}
+                                    fallbackIso={form.transaction_date}
+                                    invalid={transactionDateIsFuture}
+                                    describedBy={transactionDateIsFuture ? 'tx-date-error' : undefined}
                                     required
-
-                                    aria-invalid={transactionDateIsFuture}
-
-                                    aria-describedby={transactionDateIsFuture ? 'tx-date-error' : undefined}
-
+                                    onDisplayChange={setTransactionDateInput}
+                                    onIsoChange={(iso) => setForm((prev) => ({ ...prev, transaction_date: iso }))}
+                                    onFocus={() => { dateInputFocusedRef.current = true; }}
+                                    onBlur={() => { dateInputFocusedRef.current = false; }}
                                 />
 
                                 {transactionDateIsFuture && (

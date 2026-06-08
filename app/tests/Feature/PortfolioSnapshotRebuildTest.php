@@ -39,7 +39,7 @@ class PortfolioSnapshotRebuildTest extends TestCase
             'type' => 'buy',
             'quantity' => 10,
             'price' => 100,
-            'brokerage' => 10,
+            'fees' => 10,
             'transaction_date' => '2026-02-01',
         ]);
 

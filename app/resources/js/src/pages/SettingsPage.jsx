@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
+import FeeComponentsSettings from '../components/FeeComponentsSettings';
 import NumberInput from '../components/NumberInput';
 import TimeInput, { isValidCronTime } from '../components/TimeInput';
+import { normalizeFeeComponents } from '../utils/feeCalculator';
 import { showToast } from '../toast';
 
 function roundToTwoDecimals(value) {
@@ -21,6 +23,7 @@ export default function SettingsPage() {
     const [sessionsLoading, setSessionsLoading] = useState(true);
     const [cronTimeTouched, setCronTimeTouched] = useState(false);
     const [scheduleTouched, setScheduleTouched] = useState({});
+    const [feeSectionOpen, setFeeSectionOpen] = useState(false);
 
     const notificationSchedules = useMemo(
         () => (Array.isArray(settings.notification_schedules)
@@ -52,7 +55,11 @@ export default function SettingsPage() {
 
     const loadSettings = async () => {
         const res = await api.get('/settings');
-        setSettings(res.data.data || {});
+        const data = res.data.data || {};
+        setSettings({
+            ...data,
+            fee_components: normalizeFeeComponents(data.fee_components),
+        });
     };
 
     const loadSessions = async () => {
@@ -93,6 +100,7 @@ export default function SettingsPage() {
             notification_schedules: notificationSchedules
                 .map((t) => t?.trim())
                 .filter((t) => t && isValidCronTime(t)),
+            fee_components: normalizeFeeComponents(settings.fee_components),
         };
 
         await api.put('/settings', payload);
@@ -119,10 +127,42 @@ export default function SettingsPage() {
 
     return (
         <div className="d-grid gap-3">
+            <form className="d-grid gap-3" onSubmit={save}>
+            <div className="card">
+                <div className="card-header p-0">
+                    <button
+                        type="button"
+                        id="settings-fee-section-toggle"
+                        className="lido-collapsible-card-toggle"
+                        onClick={() => setFeeSectionOpen((open) => !open)}
+                        aria-expanded={feeSectionOpen}
+                        aria-controls="settings-fee-section"
+                    >
+                        <span>Transaction fees</span>
+                        <span className="lido-collapsible-card-chevron" aria-hidden="true">
+                            {feeSectionOpen ? '▾' : '▸'}
+                        </span>
+                    </button>
+                </div>
+                <div
+                    id="settings-fee-section"
+                    className={`collapse${feeSectionOpen ? ' show' : ''}`}
+                >
+                    <div className="card-body">
+                        <div className="row g-3">
+                            <FeeComponentsSettings
+                                components={settings.fee_components}
+                                onChange={(fee_components) => setSettings({ ...settings, fee_components })}
+                            />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div className="card">
                 <div className="card-header">Settings</div>
                 <div className="card-body">
-                    <form className="row g-3" onSubmit={save}>
+                    <div className="row g-3">
                         <div className="col-12 col-md-4">
                             <label className="form-label" htmlFor="settings-cron-time">
                                 Data syncing time
@@ -300,9 +340,10 @@ export default function SettingsPage() {
                             </button>
                             {status && <span className="text-success ms-3">{status}</span>}
                         </div>
-                    </form>
+                    </div>
                 </div>
             </div>
+            </form>
 
             <div className="card">
                 <div className="card-header d-flex justify-content-between align-items-center">

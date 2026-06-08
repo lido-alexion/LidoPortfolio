@@ -41,7 +41,7 @@ class XirrParityTest extends TestCase
             'type' => 'buy',
             'quantity' => 10,
             'price' => 100,
-            'brokerage' => 10,
+            'fees' => 10,
             'transaction_date' => '2024-01-15',
         ]);
 
@@ -100,7 +100,7 @@ class XirrParityTest extends TestCase
             'type' => 'buy',
             'quantity' => 5,
             'price' => 200,
-            'brokerage' => 0,
+            'fees' => 0,
             'transaction_date' => '2024-03-01',
         ]);
 
@@ -150,7 +150,7 @@ class XirrParityTest extends TestCase
             'type' => 'buy',
             'quantity' => 10,
             'price' => 200,
-            'brokerage' => 0,
+            'fees' => 0,
             'transaction_date' => '2025-05-10',
         ]);
 

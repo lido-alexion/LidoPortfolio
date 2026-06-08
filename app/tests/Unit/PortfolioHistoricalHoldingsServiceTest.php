@@ -20,7 +20,7 @@ class PortfolioHistoricalHoldingsServiceTest extends TestCase
                 'type' => 'buy',
                 'quantity' => 10,
                 'price' => 100,
-                'brokerage' => 10,
+                'fees' => 10,
                 'transaction_date' => '2026-01-10',
             ],
             (object) [
@@ -28,7 +28,7 @@ class PortfolioHistoricalHoldingsServiceTest extends TestCase
                 'type' => 'sell',
                 'quantity' => 4,
                 'price' => 120,
-                'brokerage' => 0,
+                'fees' => 0,
                 'transaction_date' => '2026-02-01',
             ],
         ]);
@@ -51,7 +51,7 @@ class PortfolioHistoricalHoldingsServiceTest extends TestCase
                 'type' => 'buy',
                 'quantity' => 5,
                 'price' => 50,
-                'brokerage' => 0,
+                'fees' => 0,
                 'transaction_date' => '2026-03-01',
             ],
         ]);

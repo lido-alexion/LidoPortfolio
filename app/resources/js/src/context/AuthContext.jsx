@@ -4,6 +4,7 @@ import React, {
     useContext,
     useEffect,
     useMemo,
+    useRef,
     useState,
 } from 'react';
 import api from '../api';
@@ -16,6 +17,11 @@ export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [sessionExpired, setSessionExpired] = useState(false);
+    const userRef = useRef(null);
+
+    useEffect(() => {
+        userRef.current = user;
+    }, [user]);
 
     const refreshUser = useCallback(async () => {
         try {
@@ -26,7 +32,6 @@ export function AuthProvider({ children }) {
         } catch (error) {
             if (error?.response?.status === 401) {
                 setUser(null);
-                setSessionExpired(true);
             }
             return null;
         }
@@ -45,9 +50,12 @@ export function AuthProvider({ children }) {
         })();
 
         const onUnauthorized = () => {
+            const wasLoggedIn = Boolean(userRef.current);
             setUser(null);
-            setSessionExpired(true);
-            saveRedirectPath(window.location.pathname);
+            if (wasLoggedIn) {
+                setSessionExpired(true);
+                saveRedirectPath(window.location.pathname);
+            }
         };
 
         window.addEventListener('portfolio-unauthorized', onUnauthorized);

@@ -8,10 +8,19 @@ export default function SegmentToggle({
     disabled = false,
     ariaLabel,
     className = '',
+    compact = false,
 }) {
     return (
-        <div className={`lido-segment-toggle${className ? ` ${className}` : ''}`}>
-            {label && <span className="form-label d-block mb-1">{label}</span>}
+        <div className={[
+            'lido-segment-toggle',
+            compact ? 'lido-segment-toggle--compact' : '',
+            className,
+        ].filter(Boolean).join(' ')}>
+            {label && (
+                <span className={`form-label d-block${compact ? ' small mb-0' : ' mb-1'}`}>
+                    {label}
+                </span>
+            )}
             <div className="lido-segment-toggle-track" role="group" aria-label={ariaLabel || label}>
                 {options.map((option) => (
                     <button

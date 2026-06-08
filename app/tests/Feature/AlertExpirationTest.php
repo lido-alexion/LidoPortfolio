@@ -155,7 +155,7 @@ class AlertExpirationTest extends TestCase
             'type' => 'buy',
             'quantity' => 10,
             'price' => 100,
-            'brokerage' => 0,
+            'fees' => 0,
             'transaction_date' => '2026-05-01',
         ]);
 
@@ -165,7 +165,7 @@ class AlertExpirationTest extends TestCase
             'type' => 'sell',
             'quantity' => 10,
             'price' => 90,
-            'brokerage' => 0,
+            'fees' => 0,
             'transaction_date' => '2026-05-10',
         ]);
 
@@ -225,7 +225,7 @@ class AlertExpirationTest extends TestCase
             'type' => 'buy',
             'quantity' => 10,
             'price' => 100,
-            'brokerage' => 0,
+            'fees' => 0,
             'transaction_date' => '2026-05-01',
         ]);
 
@@ -235,7 +235,7 @@ class AlertExpirationTest extends TestCase
             'type' => 'sell',
             'quantity' => 10,
             'price' => 90,
-            'brokerage' => 0,
+            'fees' => 0,
             'transaction_date' => '2026-05-10',
         ]);
 

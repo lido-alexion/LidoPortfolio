@@ -60,7 +60,7 @@ class XirrService
 
         foreach ($transactions as $transaction) {
             $amount = (float) $transaction->quantity * (float) $transaction->price;
-            $amount += (float) $transaction->brokerage;
+            $amount += (float) $transaction->fees;
             $flows[] = [
                 'date' => Carbon::parse($transaction->transaction_date)->startOfDay(),
                 'amount' => $transaction->type === 'buy' ? -$amount : $amount,

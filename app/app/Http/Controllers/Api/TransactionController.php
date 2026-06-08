@@ -147,7 +147,7 @@ class TransactionController extends Controller
             'type' => [$transaction ? 'sometimes' : 'required', 'in:buy,sell'],
             'quantity' => ['required', 'numeric', 'gt:0'],
             'price' => ['required', 'numeric', 'gt:0'],
-            'brokerage' => ['nullable', 'numeric', 'gte:0'],
+            'fees' => ['nullable', 'numeric', 'gte:0'],
             'transaction_date' => ['required', 'date', 'before_or_equal:today'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);

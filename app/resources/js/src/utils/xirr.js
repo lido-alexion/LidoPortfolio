@@ -47,7 +47,7 @@ function solveXirr(flows, guess = 0.1) {
  */
 export function calculateStockXirr(transactions, quantity, latestClose, asOf = new Date()) {
     const flows = transactions.map((tx) => {
-        let amount = Number(tx.quantity) * Number(tx.price) + Number(tx.brokerage || 0);
+        let amount = Number(tx.quantity) * Number(tx.price) + Number(tx.fees || 0);
         if (tx.type === 'buy') amount = -amount;
         return { date: parseDate(tx.transaction_date), amount };
     });

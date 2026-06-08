@@ -36,7 +36,7 @@ class DashboardGrowthTest extends TestCase
             'type' => 'buy',
             'quantity' => 10,
             'price' => 100,
-            'brokerage' => 0,
+            'fees' => 0,
             'transaction_date' => '2026-02-01',
         ]);
 

@@ -16,16 +16,21 @@ class SettingsService
         'alpha_vantage_api_key' => '',
         'notifications_enabled' => 'true',
         'backend_log_level' => 'info',
+        'fee_components' => '',
     ];
 
     public function all(): array
     {
         $settings = [];
         foreach (self::DEFAULTS as $key => $default) {
+            if ($key === 'fee_components') {
+                continue;
+            }
             $settings[$key] = Setting::getValue($key, $default);
         }
 
         $settings['notification_schedules'] = app(NotificationScheduleService::class)->schedules();
+        $settings['fee_components'] = app(FeeCalculatorService::class)->componentsFromSettings();
 
         return $settings;
     }
@@ -38,8 +43,15 @@ class SettingsService
             unset($data['notification_schedules']);
         }
 
+        if (array_key_exists('fee_components', $data)) {
+            $components = is_array($data['fee_components']) ? $data['fee_components'] : [];
+            $normalized = app(FeeCalculatorService::class)->normalizeComponents($components);
+            Setting::setValue('fee_components', json_encode($normalized));
+            unset($data['fee_components']);
+        }
+
         foreach ($data as $key => $value) {
-            if (! array_key_exists($key, self::DEFAULTS)) {
+            if (! array_key_exists($key, self::DEFAULTS) || $key === 'fee_components') {
                 continue;
             }
             Setting::setValue($key, $value === null ? null : (string) $value);

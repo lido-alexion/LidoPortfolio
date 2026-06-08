@@ -68,7 +68,7 @@ $txBody = (@{
     type = "buy"
     quantity = 5
     price = 100
-    brokerage = 1
+    fees = 1
     transaction_date = (Get-Date -Format "yyyy-MM-dd")
     notes = "smoke"
 } | ConvertTo-Json)

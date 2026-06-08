@@ -15,7 +15,7 @@ class Transaction extends Model
         'type',
         'quantity',
         'price',
-        'brokerage',
+        'fees',
         'transaction_date',
         'notes',
     ];
@@ -25,7 +25,7 @@ class Transaction extends Model
         return [
             'quantity' => 'decimal:4',
             'price' => 'decimal:4',
-            'brokerage' => 'decimal:4',
+            'fees' => 'decimal:4',
             'transaction_date' => 'date',
         ];
     }

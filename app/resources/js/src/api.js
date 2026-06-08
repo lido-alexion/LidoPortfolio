@@ -52,11 +52,12 @@ api.interceptors.response.use(
         const requestId = error?.config?.metadata?.requestId;
         const status = error?.response?.status;
         const url = error?.config?.url || '';
-        const isAuthRoute = url.includes('/auth/login') || url.includes('/auth/register');
+        const isPublicAuthRoute = url.includes('/auth/login')
+            || url.includes('/auth/register')
+            || url.includes('/auth/me');
 
-        if (status === 401 && !isAuthRoute) {
+        if (status === 401 && !isPublicAuthRoute) {
             window.dispatchEvent(new CustomEvent('portfolio-unauthorized'));
-            showToast('Your session has expired. Please sign in again.', 'warning');
             return Promise.reject(error);
         }
 
@@ -73,7 +74,7 @@ api.interceptors.response.use(
 
         const skipErrorToast = Boolean(error?.config?.skipErrorToast);
 
-        if (!isAuthRoute && !skipErrorToast) {
+        if (!isPublicAuthRoute && !skipErrorToast) {
             logger.error('API request failed', {
                 category: 'API',
                 requestId,

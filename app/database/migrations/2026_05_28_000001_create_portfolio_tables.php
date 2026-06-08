@@ -27,7 +27,7 @@ return new class extends Migration
             $table->enum('type', ['buy', 'sell']);
             $table->decimal('quantity', 18, 4);
             $table->decimal('price', 18, 4);
-            $table->decimal('brokerage', 18, 4)->default(0);
+            $table->decimal('fees', 18, 4)->default(0);
             $table->date('transaction_date');
             $table->text('notes')->nullable();
             $table->timestamps();

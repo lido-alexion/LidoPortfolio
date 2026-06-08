@@ -37,7 +37,7 @@ class TransactionStockResolverTest extends TestCase
             'type' => 'buy',
             'quantity' => 2,
             'price' => 50,
-            'brokerage' => 0,
+            'fees' => 0,
             'transaction_date' => now()->toDateString(),
         ]);
 
@@ -75,7 +75,7 @@ class TransactionStockResolverTest extends TestCase
             'type' => 'buy',
             'quantity' => 1,
             'price' => 10,
-            'brokerage' => 0,
+            'fees' => 0,
             'transaction_date' => now()->toDateString(),
         ]);
 

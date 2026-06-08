@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 
 function parseStep(step) {
     const n = Number(step);
@@ -10,12 +10,26 @@ function decimalPlaces(step) {
     return parts.length > 1 ? parts[1].length : 0;
 }
 
+function trimTrailingDecimalZeros(formatted) {
+    if (!formatted.includes('.')) {
+        return formatted;
+    }
+    return formatted.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+}
+
 function formatForStep(value, step) {
     const decimals = decimalPlaces(step);
     if (decimals > 0) {
-        return value.toFixed(decimals);
+        return trimTrailingDecimalZeros(value.toFixed(decimals));
     }
     return String(Math.round(value));
+}
+
+function formatValue(value, step, fixedDecimals) {
+    if (fixedDecimals != null && Number.isInteger(fixedDecimals) && fixedDecimals >= 0) {
+        return Number(value).toFixed(fixedDecimals);
+    }
+    return formatForStep(value, step);
 }
 
 function parseNumericValue(value) {
@@ -30,6 +44,7 @@ export default function NumberInput({
     value,
     onChange,
     onBlur,
+    onFocus,
     step = 1,
     min,
     max,
@@ -37,8 +52,12 @@ export default function NumberInput({
     id,
     disabled = false,
     allowDecimals = null,
+    height,
+    compact = false,
+    fixedDecimals = null,
     ...rest
 }) {
+    const [focused, setFocused] = useState(false);
     const stepNum = parseStep(step);
     const decimalsAllowed = allowDecimals ?? decimalPlaces(stepNum) > 0;
 
@@ -48,6 +67,20 @@ export default function NumberInput({
 
     const atMin = minNum != null && (numericValue === null || numericValue <= minNum);
     const atMax = maxNum != null && numericValue != null && numericValue >= maxNum;
+
+    const displayValue = useMemo(() => {
+        if (value === '' || value === null || value === undefined) {
+            return '';
+        }
+        if (focused || fixedDecimals == null) {
+            return value ?? '';
+        }
+        const num = parseNumericValue(value);
+        if (num === null) {
+            return value ?? '';
+        }
+        return formatValue(num, stepNum, fixedDecimals);
+    }, [value, focused, fixedDecimals, stepNum]);
 
     const bump = useCallback((direction) => {
         if (disabled) {
@@ -65,9 +98,11 @@ export default function NumberInput({
         }
 
         let next = raw + direction * stepNum;
-        const decimals = decimalPlaces(stepNum);
-        if (decimals > 0) {
-            const factor = 10 ** decimals;
+        const roundPrecision = fixedDecimals != null
+            ? Math.max(fixedDecimals, decimalPlaces(stepNum))
+            : decimalPlaces(stepNum);
+        if (roundPrecision > 0) {
+            const factor = 10 ** roundPrecision;
             next = Math.round(next * factor) / factor;
         }
 
@@ -80,11 +115,11 @@ export default function NumberInput({
 
         onChange?.({
             target: {
-                value: formatForStep(next, stepNum),
+                value: formatValue(next, stepNum, fixedDecimals),
                 id,
             },
         });
-    }, [disabled, id, maxNum, minNum, numericValue, onChange, stepNum]);
+    }, [disabled, fixedDecimals, id, maxNum, minNum, numericValue, onChange, stepNum]);
 
     const handleInputChange = (event) => {
         const next = event.target.value;
@@ -99,12 +134,34 @@ export default function NumberInput({
         }
     };
 
-    const wrapperClassName = className
-        ? `lido-number-input ${className}`
-        : 'lido-number-input';
+    const handleFocus = (event) => {
+        setFocused(true);
+        onFocus?.(event);
+    };
+
+    const handleBlur = (event) => {
+        setFocused(false);
+        if (numericValue !== null && !Number.isNaN(numericValue)) {
+            const normalized = formatValue(numericValue, stepNum, fixedDecimals);
+            if (normalized !== (value ?? '')) {
+                onChange?.({ target: { value: normalized, id } });
+            }
+        }
+        onBlur?.(event);
+    };
+
+    const wrapperClassName = [
+        'lido-number-input',
+        compact ? 'lido-number-input--compact' : '',
+        className,
+    ].filter(Boolean).join(' ');
+
+    const wrapperStyle = height
+        ? { height, minHeight: height }
+        : undefined;
 
     return (
-        <div className={wrapperClassName}>
+        <div className={wrapperClassName} style={wrapperStyle}>
             <button
                 type="button"
                 className="lido-number-input-btn lido-number-input-btn--minus"
@@ -120,9 +177,10 @@ export default function NumberInput({
                 inputMode={decimalsAllowed ? 'decimal' : 'numeric'}
                 id={id}
                 className="lido-number-input-field"
-                value={value ?? ''}
+                value={displayValue}
                 onChange={handleInputChange}
-                onBlur={onBlur}
+                onFocus={handleFocus}
+                onBlur={handleBlur}
                 disabled={disabled}
                 autoComplete="off"
                 {...rest}

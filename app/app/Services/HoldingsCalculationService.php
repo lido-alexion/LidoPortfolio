@@ -51,7 +51,7 @@ class HoldingsCalculationService
         foreach ($transactions as $transaction) {
             $qty = (float) $transaction->quantity;
             $price = (float) $transaction->price;
-            $brokerage = (float) $transaction->brokerage;
+            $fees = (float) $transaction->fees;
 
             if ($transaction->type === 'buy') {
                 if ($wasZero && $quantity <= 0) {
@@ -59,7 +59,7 @@ class HoldingsCalculationService
                     $wasZero = false;
                 }
 
-                $cost = ($qty * $price) + $brokerage;
+                $cost = ($qty * $price) + $fees;
                 $investedAmount += $cost;
                 $quantity += $qty;
                 $avgBuyPrice = $quantity > 0 ? $investedAmount / $quantity : 0;
@@ -68,7 +68,7 @@ class HoldingsCalculationService
                     throw new InvalidArgumentException('Cannot sell more quantity than currently owned.');
                 }
 
-                $realizedProfit += (($price - $avgBuyPrice) * $qty) - $brokerage;
+                $realizedProfit += (($price - $avgBuyPrice) * $qty) - $fees;
                 $quantity -= $qty;
                 $investedAmount = $avgBuyPrice * $quantity;
 

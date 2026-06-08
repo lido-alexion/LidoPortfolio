@@ -30,6 +30,15 @@ class SettingsController extends Controller
             'notification_schedules' => ['nullable', 'array', 'max:24'],
             'notification_schedules.*' => ['date_format:H:i'],
             'backend_log_level' => ['nullable', 'in:debug,info,warning,error'],
+            'fee_components' => ['nullable', 'array', 'min:1', 'max:32'],
+            'fee_components.*.id' => ['required', 'string', 'max:64'],
+            'fee_components.*.label' => ['required', 'string', 'max:120'],
+            'fee_components.*.value' => ['required', 'numeric', 'gte:0'],
+            'fee_components.*.mode' => ['required', 'in:percentage,fixed'],
+            'fee_components.*.applies_buy' => ['required', 'boolean'],
+            'fee_components.*.applies_sell' => ['required', 'boolean'],
+            'fee_components.*.exchange' => ['required', 'in:both,NSE,BSE'],
+            'fee_components.*.gst_percent' => ['required', 'numeric', 'gte:0', 'lte:100'],
         ]);
 
         return response()->json(['data' => $this->settings->update($validated)]);

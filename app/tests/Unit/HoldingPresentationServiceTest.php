@@ -39,7 +39,7 @@ class HoldingPresentationServiceTest extends TestCase
             'type' => 'buy',
             'quantity' => 1,
             'price' => 100,
-            'brokerage' => 0,
+            'fees' => 0,
             'transaction_date' => '2024-01-10',
         ]);
 
