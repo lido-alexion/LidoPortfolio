@@ -7,6 +7,111 @@ Self-hosted Indian stock portfolio tracker:
 - **Database:** MySQL (`portfolio_*` tables; can share an existing database)
 - **Notifications:** Telegram Bot API (optional)
 
+<details id="project-structure">
+<summary><strong>Project structure</strong> — how the repo is organized (click to expand)</summary>
+
+The folder **`app/`** is the **application root** (Laravel + React together). It is not “API only” — the React UI lives inside it by design. This is the standard **Laravel + Vite + React SPA** pattern: one deployable app, one `composer install` + `npm install` in `app/`.
+
+```
+Browser  →  Laravel (app/)  →  app.blade.php  →  React SPA  →  /api/*  →  Services / MySQL
+```
+
+#### Top-level layout (`LidoPortfolio/`)
+
+| Path | What it is |
+|------|------------|
+| **`README.md`** | Quick start and this structure guide |
+| **`implementation.md`** | Architecture, runbook, and agent reference (read for deep detail) |
+| **`app/`** | **Full application** — Laravel API, React SPA, config, tests |
+| **`deploy/`** | Production deploy scripts, `.htaccess` snippets, cPanel guides |
+| **`.cursor/`** | Cursor IDE rules for this project |
+
+There is **no separate `frontend/` folder** at the repo root.
+
+#### Inside `app/` — the main application
+
+Think of `app/` as a normal Laravel project root (`artisan`, `.env`, `composer.json`, and `package.json` all live here).
+
+**PHP / API (server-side)**
+
+| Path | Contains |
+|------|----------|
+| **`app/Http/Controllers/Api/`** | REST API controllers (holdings, transactions, dashboard, stocks, auth, …) |
+| **`app/Services/`** | Business logic (price fetch, portfolio math, XIRR, notifications, …) |
+| **`app/Models/`** | Eloquent models (`Stock`, `Holding`, `Transaction`, …) |
+| **`app/Jobs/`** | Background jobs (price backfill, daily sync, alerts) |
+| **`app/Console/Commands/`** | CLI commands (`portfolio:daily-sync`, stock master sync, …) |
+| **`routes/api.php`** | API routes (`/api/...`) |
+| **`routes/web.php`** | SPA catch-all — browser URLs return the React shell |
+| **`database/migrations/`** | MySQL schema (`portfolio_*` tables) |
+| **`database/seeders/`** | Seed data (default admin user, etc.) |
+| **`config/`** | Laravel config (DB, Sanctum, portfolio settings) |
+| **`tests/Feature/`**, **`tests/Unit/`** | PHP tests |
+
+**React frontend (client-side)**
+
+The UI is not a sibling repo — it lives in Laravel’s `resources/` tree:
+
+| Path | Contains |
+|------|----------|
+| **`resources/js/app.jsx`** | React entry point — mounts the app into `#app` |
+| **`resources/js/src/App.jsx`** | Root component + client-side routing |
+| **`resources/js/src/pages/`** | Screens (Dashboard, Holdings, Transactions, Settings, …) |
+| **`resources/js/src/components/`** | Reusable UI (header, tables, autocomplete, …) |
+| **`resources/js/src/context/`** | React context (auth, theme) |
+| **`resources/js/src/api.js`** | API client (calls `/api/...`) |
+| **`resources/js/src/styles/lido-app.css`** | App-specific styles |
+| **`resources/views/app.blade.php`** | HTML shell that loads Vite/React |
+| **`vite.config.js`** | Vite + Laravel plugin + React plugin |
+| **`package.json`** | npm scripts: `dev`, `build` |
+| **`public/build/`** | Compiled frontend assets (after `npm run build`) |
+| **`tests/js/`** | Frontend unit tests |
+
+**Infrastructure / runtime**
+
+| Path | Contains |
+|------|----------|
+| **`public/`** | Web document root (`index.php`, built assets, fonts) |
+| **`storage/`** | Logs, cache, uploaded files |
+| **`.env`** | Local secrets & DB config (not in git) |
+
+Note: Laravel’s own PHP code folder is **`app/app/`** (nested under the application root). That naming overlap is normal.
+
+#### How the pieces connect
+
+1. Browser hits Laravel (e.g. `http://127.0.0.1:8001/holdings`).
+2. `routes/web.php` returns `resources/views/app.blade.php`.
+3. That view loads React via Vite (`resources/js/app.jsx`).
+4. React Router handles `/holdings`, `/transactions`, etc. on the client.
+5. React calls `/api/*` endpoints from `routes/api.php`.
+6. Auth uses **Sanctum session cookies** (same origin, not Bearer tokens in `localStorage`).
+
+In development, run from `app/`:
+
+- `php artisan serve` — Laravel (API + SPA shell)
+- `npm run dev` — Vite hot reload for React  
+  Or `composer run dev` to run both together.
+
+#### Mental model
+
+```
+LidoPortfolio/              ← monorepo root (docs + deploy)
+└── app/                    ← application root
+    ├── app/                ← Laravel PHP (controllers, services, models)
+    ├── routes/             ← API + SPA routing
+    ├── database/           ← schema & seeds
+    ├── resources/
+    │   ├── js/src/         ← React SPA (“frontend”)
+    │   └── views/          ← Blade shell for React
+    ├── public/             ← web document root
+    ├── vite.config.js
+    └── package.json
+```
+
+**Where to edit:** UI → `app/resources/js/src/` · API / business logic → `app/app/` · Production server layout → [deploy/DEPLOY.md](deploy/DEPLOY.md) (server path is `public_html/lidoportfolio/`, not `app/`).
+
+</details>
+
 ## Prerequisites
 
 | Tool | Purpose |
@@ -89,6 +194,7 @@ PowerShell -ExecutionPolicy Bypass -File app\tests\Feature\api_smoke.ps1
 
 | File | Description |
 |------|-------------|
+| [Project structure](#project-structure) | Folder layout and how Laravel + React fit together |
 | [implementation.md](implementation.md) | Living technical reference (agents: read first) |
 | [app/API_DOCUMENTATION.md](app/API_DOCUMENTATION.md) | REST API |
 | [deploy/DEPLOY.md](deploy/DEPLOY.md) | **Production deploy** (lidoalexion.com/portfolio, updates) |

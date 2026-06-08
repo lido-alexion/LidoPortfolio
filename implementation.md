@@ -48,6 +48,8 @@ Confirm the **same** `php.exe` is used for CLI and (if applicable) Apache/EasyPH
 
 **Folder rename (Jun 2026):** The application root was renamed from `backend/` to **`app/`** — it holds the full Laravel + React stack (not “API only”). Setting keys like `backend_log_level` are unchanged (they mean server-side logging, not the old folder name).
 
+**Human-readable structure guide:** [README.md → Project structure](README.md#project-structure) (collapsible section with folder tables and data-flow notes).
+
 ```
 LidoPortfolio/
   README.md                 ← short quick start
