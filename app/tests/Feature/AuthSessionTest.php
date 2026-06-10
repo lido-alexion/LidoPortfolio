@@ -59,9 +59,29 @@ class AuthSessionTest extends TestCase
         $this->assertGuest();
     }
 
-    public function test_me_requires_authentication(): void
+    public function test_me_returns_null_user_when_guest(): void
     {
-        $this->getJson('/api/auth/me')->assertUnauthorized();
+        $this->getJson('/api/auth/me')
+            ->assertOk()
+            ->assertJson(['user' => null]);
+    }
+
+    public function test_me_returns_user_when_authenticated(): void
+    {
+        $user = User::query()->create([
+            'name' => 'Me User',
+            'email' => 'me-'.Str::random(8).'@example.com',
+            'password' => Hash::make('password123'),
+        ]);
+
+        $this->postJson('/api/auth/login', [
+            'email' => $user->email,
+            'password' => 'password123',
+        ])->assertOk();
+
+        $this->getJson('/api/auth/me')
+            ->assertOk()
+            ->assertJsonPath('user.email', $user->email);
     }
 
     public function test_logout_invalidates_session(): void

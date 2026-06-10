@@ -1,17 +1,24 @@
 ####################################### PORTFOLIO APP (Lido Portfolio) START ###############################
-# Add this block to public_html/.htaccess (near top, after RewriteEngine On).
-# Ensures /portfolio/cpanel-*.php and /portfolio/build/* are served as real files.
+# Paste into public_html/.htaccess immediately AFTER "RewriteEngine On".
+# Must be ABOVE WordPress / other catch-all rules.
 
-# Setup / diagnostic scripts — never rewrite
+# Diagnostic PHP — never rewrite away from real files
 RewriteCond %{REQUEST_URI} ^/portfolio/cpanel-.*\.php$ [NC]
 RewriteRule ^ - [L]
 
-# Existing files under /portfolio/ (assets, manifest, favicon, etc.)
+# Static diagnostics
+RewriteCond %{REQUEST_URI} ^/portfolio/mobile-debug\.html$ [NC]
+RewriteRule ^ - [L]
+
+RewriteCond %{REQUEST_URI} ^/portfolio/portfolio-OK\.txt$ [NC]
+RewriteRule ^ - [L]
+
+# Any real file under /portfolio/ (build assets, manifest, etc.)
 RewriteCond %{REQUEST_URI} ^/portfolio/ [NC]
 RewriteCond %{DOCUMENT_ROOT}%{REQUEST_URI} -f
 RewriteRule ^ - [L]
 
-# Existing directories under /portfolio/
+# Real directories under /portfolio/
 RewriteCond %{REQUEST_URI} ^/portfolio/ [NC]
 RewriteCond %{DOCUMENT_ROOT}%{REQUEST_URI} -d
 RewriteRule ^ - [L]

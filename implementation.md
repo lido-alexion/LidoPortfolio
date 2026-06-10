@@ -229,7 +229,7 @@ PowerShell -ExecutionPolicy Bypass -File tests\Feature\api_smoke.ps1
 - Dashboard summary cards, allocation **Market Value**, and growth-chart axis/tooltips use `formatInrWhole` / `formatInrCompactWhole` (no paise; `₹ ` + amount, lakh grouping). Holdings/Explorer use `formatInr` (2 dp) via `formatTableMoney2`.
 - Dashboard **Sync prices for today** → `POST /api/sync/daily` (`force: true` from UI when re-syncing same day). Skips without `force` if already synced today (cron-safe). Button stays enabled as **Sync again today** after first success; shows muted “Synced for …” hint.
 - **Production deploy (May 2026):** Canonical steps in **`deploy/DEPLOY.md`** (first deploy + code updates). GoDaddy layout: `public_html/lidoportfolio/` + `public_html/portfolio/`; DB via `/home/USER/config/DBConfig.php`; browser setup via `cpanel-diagnose.php` / `cpanel-once-setup.php` / **`cpanel-config-cache.php`** (config:cache only, after `.env` edits). Obsolete: Laravel outside `public_html`, `DB_*` in production `.env`, document root = `app/public` on main domain, `route:cache` under `/portfolio`.
-- **Production subdirectory** (`https://lidoalexion.com/portfolio`): `APP_URL` includes path; build with `VITE_APP_BASE=/portfolio/build/` then upload `public/build/` to **`lidoportfolio/public/build/`** and **`portfolio/build/`**. **Delete `public/hot` on the server** if present. Troubleshooting: `deploy/DEPLOY.md` §7.
+- **Production subdirectory** (`https://lidoalexion.com/portfolio`): `APP_URL` includes path; build with `VITE_APP_BASE=/portfolio/build/`; upload `public/build/` to **`lidoportfolio/public/build/`** and **`portfolio/build/`**. Vite tags use **root-relative** paths (`AppServiceProvider::createAssetPathsUsing`) so `www` and apex both work. Delete `public/hot` on server. Troubleshooting: `deploy/DEPLOY.md` §7, `implementation.md` → Production learnings.
 - Dashboard cards: **Portfolio Value** / **Total Gain/Loss** green when portfolio &gt; invested, red when less, default text when equal; **XIRR** green/red by sign. Allocation **%** is whole numbers; &gt;15% orange (`text-allocation-elevated`), &gt;20% red.
 - Transactions UI now supports edit/update flow in addition to create/delete.
 - Holdings UI shows highest close since buy, trailing stop, and links to OHLCV price history screen.
@@ -255,24 +255,17 @@ PowerShell -ExecutionPolicy Bypass -File tests\Feature\api_smoke.ps1
 - `AppTabs` uses `useLocation().pathname` for active tab state (NavLink `className` callback does not receive `location` in React Router v6).
 
 ## Change Requests
-- User requested: scaffold `DBConfig/.env` templates and fill secrets manually.
-- User requested reuse of existing DB with table-level compatibility checks.
-- User requested smoke checks for auth, stock/transaction, holdings, dashboard, analytics, alerts.
-- User requested continuation in execution mode for Frontend -> Tests -> Docs/Reports -> Completion matrix.
+- Track user requests in chat; this section is not a full history log.
 
 ## Deviations From Spec
 - Table names are prefixed with `portfolio_` to avoid clashes with existing tables in the same DB.
 - `throttleApi` middleware removed because the `api` limiter was not defined and caused runtime 500s.
 
 ## Bugs Fixed
-- Fixed repeated constant definition warning in `config/DBConfig.php` by guarding `define(...)`.
-- Fixed validators pointing to old table names (`users`, `stocks`) after table prefixing.
-- Fixed `HoldingController` misuse of `Collection::load`.
-- Fixed XIRR recursion/memory issue by computing terminal value directly from holdings + latest prices.
-- Fixed XIRR sign error after Carbon 3 upgrade: `solveXirr` now uses `diffInDays(..., true)` so future terminal flows are not discounted with negative elapsed time (was inflating IRR when latest close &lt; avg buy).
-- Fixed dashboard eager-loading pattern for benchmark prices.
-- Resolved PHPUnit blocker by enabling `mbstring`; generated `APP_KEY` and confirmed test suite execution.
-- Fixed failing feature test coupling to Vite manifest by moving health check test to `/up`.
+- Table prefix migration fallout (validators, `HoldingController`, XIRR/Carbon 3, dashboard eager-load, PHPUnit/mbstring, health route).
+- **Production mobile blank page (Jun 2026):** Vite emitted absolute script URLs on `lidoalexion.com` while users opened `www.lidoalexion.com` — ES modules failed cross-origin. Fix: `Vite::createAssetPathsUsing()` → root-relative `/portfolio/build/...` in `AppServiceProvider`.
+- **Boot probe noise (Jun 2026):** diagnostic “Module script” lines were saved to `sessionStorage` and shown in `BootErrorBanner` after successful load; now only real failures persist and success clears storage.
+- **`GET /api/auth/me` (Jun 2026):** moved outside `auth:sanctum` so guests get `{ user: null }` (200), not 401/500 during SPA boot.
 
 ## Known Limitations
 - `vendor:publish` for Sanctum migrations fails when `finfo` extension is unavailable.
@@ -288,8 +281,23 @@ PowerShell -ExecutionPolicy Bypass -File tests\Feature\api_smoke.ps1
 | BSE master sync | Optional | Enable `BSE_STOCK_MASTER_ENABLED=true` and `BSE_EQUITY_CSV_URL` when BSE CSV source is configured. |
 
 ## Deployment Validation
-- cPanel / shared hosting deploy steps: `deploy/DEPLOY.md`
-- Pre/post deploy checklists and exact verification commands: `DEPLOYMENT_VALIDATION_PLAN.md`
+- **Canonical deploy:** `deploy/DEPLOY.md` · checklists: `DEPLOYMENT_VALIDATION_PLAN.md`
+- **Stage uploads:** `deploy/prepare-upload.ps1` → `deploy/staging/` (gitignored)
+
+### Production learnings (Jun 2026 — `/portfolio` on GoDaddy)
+
+| Issue | Cause | Fix |
+|-------|--------|-----|
+| Mobile blank page | `www` vs apex in Vite `<script type="module">` src | Root-relative asset URLs in `AppServiceProvider`; `config:cache` after deploy |
+| “App did not start” on `mobile-debug.html` | Static file missing → Laravel SPA | Upload as `portfolio/mobile-debug.html`; fix `portfolio/.htaccess` + root snippet |
+| 404 on whole `/portfolio/` | `.htaccess` missing `index.php` rewrite | Use `deploy/public_html-portfolio-.htaccess` |
+| Red “App load problem” on login | Stale `sessionStorage.lido_boot_error` | Tap Dismiss; deploy latest `BootErrorBanner` + `app.blade.php` |
+
+**Server cleanup after troubleshooting:** delete all `cpanel-*.php`, `mobile-debug.html`, `portfolio-OK.txt`, `test-ok.php` from `public_html/portfolio/`. Keep `index.php`, `.htaccess`, `build/`.
+
+**Optional deploy diagnostics (repo only, upload temporarily):** `cpanel-ping.php`, `cpanel-mobile-debug.php`, `cpanel-api-probe.php`, `portfolio-mobile-debug.html` (upload renamed → `mobile-debug.html`). See `deploy/README.md`.
+
+**Vite build:** `$env:VITE_APP_BASE='/portfolio/build/'` before `npm run build`; copy `public/build/` to both `lidoportfolio/public/build/` and `portfolio/build/`.
 
 ## Logging & Debugging Architecture (May 2026)
 
@@ -666,8 +674,8 @@ Document in this section and `portfolio-history-rebuild-report.md`.
 
 ### API (session guard)
 - `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`
-- `GET /api/auth/me`
-- `GET /api/auth/sessions`, `POST /api/auth/sessions/logout-others`, `DELETE /api/auth/sessions/{id}`
+- `GET /api/auth/me` — **guest-safe** (returns `{ user: null }` when logged out; not behind `auth:sanctum`)
+- `GET /api/auth/sessions`, `POST /api/auth/sessions/logout-others`, `DELETE /api/auth/sessions/{id}` — auth required
 
 ### Active sessions
 - `SessionManagementService` reads `sessions` table (device label from user-agent).

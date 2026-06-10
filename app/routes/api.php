@@ -20,11 +20,13 @@ Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login');
 });
 
+// Guest-safe session probe — must not require auth:sanctum (returns { user: null } when logged out).
+Route::get('/auth/me', [AuthController::class, 'me']);
+
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logs/frontend', [FrontendLogController::class, 'store']);
 
     Route::post('/auth/logout', [AuthController::class, 'logout']);
-    Route::get('/auth/me', [AuthController::class, 'me']);
     Route::get('/auth/sessions', [AuthController::class, 'sessions']);
     Route::post('/auth/sessions/logout-others', [AuthController::class, 'logoutOtherSessions']);
     Route::delete('/auth/sessions/{sessionId}', [AuthController::class, 'logoutSession']);

@@ -28,16 +28,27 @@ function Copy-Tree($src, $dest) {
 
 Copy-Tree (Join-Path $app 'app') (Join-Path $staging 'lidoportfolio/app')
 Copy-Tree (Join-Path $app 'routes') (Join-Path $staging 'lidoportfolio/routes')
+Copy-Tree (Join-Path $app 'resources/views') (Join-Path $staging 'lidoportfolio/resources/views')
 Copy-Tree (Join-Path $app 'database/migrations') (Join-Path $staging 'lidoportfolio/database/migrations')
 Copy-Tree (Join-Path $app 'public/build') (Join-Path $staging 'lidoportfolio/public/build')
 Copy-Tree (Join-Path $app 'public/build') (Join-Path $staging 'portfolio/build')
 
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-migrate.php') (Join-Path $staging 'portfolio/cpanel-migrate.php') -Force
+Copy-Item (Join-Path $PSScriptRoot 'cpanel-mobile-debug.php') (Join-Path $staging 'portfolio/cpanel-mobile-debug.php') -Force
+Copy-Item (Join-Path $PSScriptRoot 'cpanel-ping.php') (Join-Path $staging 'portfolio/cpanel-ping.php') -Force
+Copy-Item (Join-Path $PSScriptRoot 'cpanel-api-probe.php') (Join-Path $staging 'portfolio/cpanel-api-probe.php') -Force
+Copy-Item (Join-Path $PSScriptRoot 'portfolio-OK.txt') (Join-Path $staging 'portfolio/portfolio-OK.txt') -Force
+Copy-Item (Join-Path $PSScriptRoot 'portfolio-mobile-debug.html') (Join-Path $staging 'portfolio/mobile-debug.html') -Force
+Copy-Item (Join-Path $PSScriptRoot 'public_html-portfolio-.htaccess') (Join-Path $staging 'portfolio/.htaccess') -Force
 
 Write-Host ''
 Write-Host "Staging ready: $staging"
 Write-Host 'Upload:'
 Write-Host '  staging/lidoportfolio/*  ->  public_html/lidoportfolio/  (merge)'
 Write-Host '  staging/portfolio/build  ->  public_html/portfolio/build/'
+Write-Host '  staging/portfolio/mobile-debug.html  ->  public_html/portfolio/'
+Write-Host '  staging/portfolio/cpanel-mobile-debug.php  ->  public_html/portfolio/'
 Write-Host '  staging/portfolio/cpanel-migrate.php  ->  public_html/portfolio/'
+Write-Host '  staging/portfolio/.htaccess  ->  public_html/portfolio/.htaccess  (REQUIRED — includes index.php rule)'
+Write-Host 'Key mobile fix files: resources/views/app.blade.php + both build/ folders'
 Write-Host 'Then visit cpanel-migrate.php?token=... and delete the script.'

@@ -233,6 +233,7 @@ After `.env` changes: delete `bootstrap/cache/config.php` or run `config:clear` 
 | `cpanel-once-setup.php` | One-time: `key:generate`, `migrate`, `config:cache` |
 | `cpanel-config-cache.php` | Re-run `config:cache` after `.env` changes (no SSH) |
 | `cpanel-migrate.php` | Run `migrate --force` + `config:cache` after uploading new migrations (no SSH) |
+| `portfolio-mobile-debug.html` | Upload as `public_html/portfolio/mobile-debug.html` — blank-page diagnostics on phone/tablet (delete after use) |
 | `public_html-portfolio-index.php` | Front controller for `/portfolio` |
 | `public_html-portfolio-.htaccess` | Rewrites under `/portfolio/` |
 | `public_html-lidoportfolio-.htaccess` | Deny web access to Laravel tree |
@@ -428,11 +429,13 @@ Register toggle uses class `.login-register-toggle` (`display: none` in `lido-ap
 ## 8. Security after go-live
 
 - [ ] `APP_DEBUG=false`
-- [ ] Setup/diagnose PHP files deleted from `public_html/portfolio/`
+- [ ] **Delete from `public_html/portfolio/`:** all `cpanel-*.php`, `mobile-debug.html`, `portfolio-mobile-debug.html`, `portfolio-OK.txt`, `test-ok.php`, `check-server-php.php` (keep `index.php`, `.htaccess`, `build/`)
 - [ ] `lidoportfolio/.htaccess` denies direct web access
 - [ ] `.env` not under a public URL
 - [ ] HTTPS forced
 - [ ] Strong passwords; do not use seeded dev admin on production
+
+**Mobile blank page (Jun 2026):** if assets load but React never mounts on phone, check `www` vs apex — Vite must use root-relative `/portfolio/build/...` URLs. See `implementation.md` → Production learnings.
 
 ---
 

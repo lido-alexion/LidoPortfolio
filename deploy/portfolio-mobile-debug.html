@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lido Portfolio — mobile debug</title>
+    <style>
+        :root {
+            color-scheme: dark light;
+            --bg: #0f0f0f;
+            --surface: #1a1a1a;
+            --text: #e5e7eb;
+            --muted: #9ca3af;
+            --ok: #4ade80;
+            --bad: #f87171;
+            --warn: #fbbf24;
+            --border: #333;
+        }
+        @media (prefers-color-scheme: light) {
+            :root {
+                --bg: #f3f4f6;
+                --surface: #fff;
+                --text: #111827;
+                --muted: #6b7280;
+                --border: #d1d5db;
+            }
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.45;
+            padding: 1rem;
+        }
+        h1 { font-size: 1.15rem; margin: 0 0 0.35rem; }
+        .sub { color: var(--muted); font-size: 0.875rem; margin-bottom: 1rem; }
+        section {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            padding: 0.85rem;
+            margin-bottom: 0.75rem;
+        }
+        section h2 { font-size: 0.95rem; margin: 0 0 0.5rem; }
+        .row {
+            display: flex;
+            justify-content: space-between;
+            gap: 0.75rem;
+            padding: 0.25rem 0;
+            font-size: 0.875rem;
+            border-bottom: 1px solid var(--border);
+        }
+        .row:last-child { border-bottom: none; }
+        .label { color: var(--muted); flex: 1 1 40%; }
+        .value { flex: 1 1 60%; text-align: right; word-break: break-word; }
+        .ok { color: var(--ok); }
+        .bad { color: var(--bad); }
+        .warn { color: var(--warn); }
+        pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-size: 0.75rem;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 0.35rem;
+            padding: 0.65rem;
+            max-height: 40vh;
+            overflow: auto;
+        }
+        .actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0; }
+        button, a.btn {
+            appearance: none;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text);
+            border-radius: 0.4rem;
+            padding: 0.55rem 0.85rem;
+            font-size: 0.875rem;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        button.primary { background: #1e90ff; border-color: #1e90ff; color: #fff; }
+    </style>
+</head>
+<body>
+    <h1>Lido Portfolio — debug</h1>
+    <p class="sub">Temporary diagnostics for blank-page issues on phone/tablet. Delete this file after fixing.</p>
+
+    <div class="actions">
+        <button type="button" class="primary" id="run-tests">Run tests again</button>
+        <button type="button" id="copy-report">Copy report</button>
+        <a class="btn" id="open-app" href="#">Open main app</a>
+    </div>
+
+    <section>
+        <h2>Device</h2>
+        <div id="device-rows"></div>
+    </section>
+
+    <section>
+        <h2>Asset checks</h2>
+        <div id="asset-rows"></div>
+    </section>
+
+    <section>
+        <h2>API</h2>
+        <div id="api-rows"></div>
+    </section>
+
+    <section>
+        <h2>Last app boot error (from main page)</h2>
+        <pre id="stored-boot-error">(none recorded)</pre>
+    </section>
+
+    <section>
+        <h2>Log</h2>
+        <pre id="log"></pre>
+    </section>
+
+    <script>
+        (function () {
+            var logs = [];
+
+            function log(msg) {
+                var line = new Date().toISOString() + ' ' + msg;
+                logs.push(line);
+                document.getElementById('log').textContent = logs.join('\n');
+            }
+
+            function appBase() {
+                var path = window.location.pathname || '';
+                if (path.indexOf('/portfolio') === 0) return '/portfolio';
+                var m = path.match(/^(\/[^/]+)/);
+                return m ? m[1] : '';
+            }
+
+            function buildBase() {
+                var base = appBase();
+                return (base || '') + '/build/';
+            }
+
+            function row(containerId, label, value, status) {
+                var el = document.createElement('div');
+                el.className = 'row';
+                var cls = status === 'ok' ? 'ok' : (status === 'bad' ? 'bad' : (status === 'warn' ? 'warn' : ''));
+                el.innerHTML = '<span class="label">' + label + '</span>'
+                    + '<span class="value ' + cls + '">' + value + '</span>';
+                document.getElementById(containerId).appendChild(el);
+            }
+
+            function clearSection(id) {
+                document.getElementById(id).innerHTML = '';
+            }
+
+            function storageOk(type) {
+                try {
+                    var k = '__lido_debug__';
+                    window[type].setItem(k, '1');
+                    window[type].removeItem(k);
+                    return true;
+                } catch (e) {
+                    return false;
+                }
+            }
+
+            async function probeUrl(label, url) {
+                try {
+                    var res = await fetch(url, { cache: 'no-store', credentials: 'same-origin' });
+                    var ok = res.ok;
+                    var detail = res.status + ' ' + res.statusText;
+                    if (ok && (url.endsWith('.js') || url.endsWith('.css'))) {
+                        var text = await res.text();
+                        detail += ' (' + text.length + ' bytes)';
+                    }
+                    log(label + ': ' + detail);
+                    return { ok: ok, detail: detail };
+                } catch (e) {
+                    var msg = e && e.message ? e.message : String(e);
+                    log(label + ': FAILED ' + msg);
+                    return { ok: false, detail: msg };
+                }
+            }
+
+            async function runTests() {
+                logs = [];
+                clearSection('device-rows');
+                clearSection('asset-rows');
+                clearSection('api-rows');
+
+                var base = appBase();
+                var bBuild = buildBase();
+                document.getElementById('open-app').href = base || '/';
+
+                row('device-rows', 'Page URL', location.href);
+                row('device-rows', 'App base', base || '(root)', base ? 'ok' : 'warn');
+                row('device-rows', 'Build base', bBuild, 'ok');
+                row('device-rows', 'User agent', navigator.userAgent);
+                row('device-rows', 'Viewport', window.innerWidth + ' × ' + window.innerHeight);
+                row('device-rows', 'localStorage', storageOk('localStorage') ? 'OK' : 'blocked', storageOk('localStorage') ? 'ok' : 'bad');
+                row('device-rows', 'cookies', navigator.cookieEnabled ? 'enabled' : 'disabled', navigator.cookieEnabled ? 'ok' : 'warn');
+
+                var stored = null;
+                try { stored = sessionStorage.getItem('lido_boot_error'); } catch (e) {}
+                document.getElementById('stored-boot-error').textContent = stored || '(none — open main app once, then return here)';
+
+                var manifestUrl = bBuild + 'manifest.json';
+                var manifestProbe = await probeUrl('manifest.json', manifestUrl);
+                row('asset-rows', 'manifest.json', manifestProbe.detail, manifestProbe.ok ? 'ok' : 'bad');
+
+                var mainJs = '';
+                var mainCss = [];
+                if (manifestProbe.ok) {
+                    try {
+                        var manifest = await (await fetch(manifestUrl, { cache: 'no-store' })).json();
+                        var entry = manifest['resources/js/app.jsx'];
+                        if (entry && entry.file) {
+                            mainJs = bBuild + entry.file;
+                            if (entry.css) mainCss = entry.css.map(function (f) { return bBuild + f; });
+                        }
+                    } catch (e) {
+                        log('manifest parse: ' + e.message);
+                    }
+                }
+
+                if (mainJs) {
+                    var jsProbe = await probeUrl('main JS', mainJs);
+                    row('asset-rows', 'Main JS bundle', jsProbe.detail, jsProbe.ok ? 'ok' : 'bad');
+                } else {
+                    row('asset-rows', 'Main JS bundle', 'not found in manifest', 'bad');
+                }
+
+                for (var i = 0; i < Math.min(mainCss.length, 3); i++) {
+                    var cssProbe = await probeUrl('CSS ' + (i + 1), mainCss[i]);
+                    row('asset-rows', 'CSS ' + (i + 1), cssProbe.detail, cssProbe.ok ? 'ok' : 'bad');
+                }
+
+                var apiUrl = (base || '') + '/api/auth/me';
+                var apiProbe = await probeUrl('GET /api/auth/me', apiUrl);
+                row('api-rows', '/api/auth/me', apiProbe.detail, apiProbe.ok || apiProbe.detail.indexOf('401') >= 0 ? 'ok' : 'bad');
+
+                try {
+                    var pageRes = await fetch((base || '') + '/', { cache: 'no-store', credentials: 'same-origin' });
+                    var html = pageRes.ok ? await pageRes.text() : '';
+                    var hasDevVite = html.indexOf('127.0.0.1:5173') >= 0 || html.indexOf('localhost:5173') >= 0;
+                    row('asset-rows', 'Vite dev URLs in HTML', hasDevVite ? 'found (bad on prod)' : 'none', hasDevVite ? 'bad' : 'ok');
+                } catch (e) {
+                    row('asset-rows', 'Main HTML', e.message || 'fetch failed', 'warn');
+                }
+
+                log('Done.');
+            }
+
+            document.getElementById('run-tests').addEventListener('click', runTests);
+            document.getElementById('copy-report').addEventListener('click', function () {
+                var text = logs.join('\n') + '\n\nUA: ' + navigator.userAgent;
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text).then(function () { log('Report copied.'); });
+                } else {
+                    prompt('Copy this report:', text);
+                }
+            });
+
+            runTests();
+        })();
+    </script>
+</body>
+</html>

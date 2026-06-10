@@ -5,6 +5,7 @@ import AppBottomNav from './components/AppBottomNav';
 import AppHeader from './components/AppHeader';
 import AppTabs from './components/AppTabs';
 import ErrorBoundary from './components/ErrorBoundary';
+import BootErrorBanner, { clearBootError } from './components/BootErrorBanner';
 import { useAuth } from './context/AuthContext';
 import DashboardPage from './pages/DashboardPage';
 import HoldingsPage from './pages/HoldingsPage';
@@ -26,6 +27,17 @@ function App() {
         }
         setToast(null);
     }, []);
+
+    useEffect(() => {
+        if (!loading) {
+            clearBootError();
+            window.dispatchEvent(new CustomEvent('lido-boot-cleared'));
+            if (typeof window.__lidoBootSuccess === 'function') {
+                window.__LIDO_APP_BOOTED = true;
+                window.__lidoBootSuccess();
+            }
+        }
+    }, [loading]);
 
     useEffect(() => {
         const handler = (event) => {
@@ -52,6 +64,7 @@ function App() {
     if (loading) {
         return (
             <div className="contentPane">
+                <BootErrorBanner />
                 <AppHeader user={null} />
                 <div className="container py-5 text-center">
                     <div className="spinner-border text-info" role="status" />
@@ -64,6 +77,7 @@ function App() {
     return (
         <ErrorBoundary>
             <div className="contentPane">
+                <BootErrorBanner />
                 <AppHeader user={isAuthenticated ? user : null} />
 
                 {toast && (

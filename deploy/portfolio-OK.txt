@@ -1,0 +1,2 @@
+Portfolio folder OK — if you see this text, /portfolio/ static files work.
+Upload path: public_html/portfolio/portfolio-OK.txt

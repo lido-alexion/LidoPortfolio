@@ -12,14 +12,42 @@ import { getAppBase } from './src/appBase';
 
 const routerBasename = getAppBase() || undefined;
 
-createRoot(document.getElementById('app')).render(
-    <React.StrictMode>
-        <BrowserRouter basename={routerBasename}>
-            <ThemeProvider>
-                <AuthProvider>
-                    <App />
-                </AuthProvider>
-            </ThemeProvider>
-        </BrowserRouter>
-    </React.StrictMode>,
-);
+function showBootFailure(message, error) {
+    const lines = [
+        message,
+        error?.stack || error?.message || String(error),
+        `URL: ${window.location.href}`,
+        `UA: ${navigator.userAgent}`,
+    ].filter(Boolean);
+    if (typeof window.__lidoBootFail === 'function') {
+        window.__lidoBootFail('App failed to start', lines.join('\n'));
+    } else if (typeof window.__lidoBootLog === 'function') {
+        lines.forEach((line) => window.__lidoBootLog(line));
+    }
+    const root = document.getElementById('app');
+    if (root) {
+        root.innerHTML = `
+            <div style="padding:1rem;font-family:system-ui,sans-serif;max-width:640px;margin:0 auto;color:#e5e7eb;background:#1a1a1a;min-height:100vh">
+                <h1 style="font-size:1.1rem">App failed to start</h1>
+                <pre style="white-space:pre-wrap;word-break:break-word;font-size:.75rem">${lines.join('\n')}</pre>
+                <p style="font-size:.85rem"><a href="mobile-debug.html" style="color:#7ec8ff">mobile-debug.html</a></p>
+            </div>`;
+    }
+}
+
+try {
+    const rootEl = document.getElementById('app');
+    createRoot(rootEl).render(
+        <React.StrictMode>
+            <BrowserRouter basename={routerBasename}>
+                <ThemeProvider>
+                    <AuthProvider>
+                        <App />
+                    </AuthProvider>
+                </ThemeProvider>
+            </BrowserRouter>
+        </React.StrictMode>,
+    );
+} catch (error) {
+    showBootFailure('React mount failed', error);
+}

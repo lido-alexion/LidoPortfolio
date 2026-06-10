@@ -205,3 +205,4 @@ PowerShell -ExecutionPolicy Bypass -File app\tests\Feature\api_smoke.ps1
 
 - Table names are prefixed with `portfolio_` so the app can coexist with other projects in the same MySQL database.
 - Production DB: shared `/home/USER/config/DBConfig.php` (see `deploy/DEPLOY.md`). Local dev may use `app/config/DBConfig.php`.
+- **Production `/portfolio`:** build with `VITE_APP_BASE=/portfolio/build/`; use root-relative Vite URLs (see [implementation.md → Production learnings](implementation.md#deployment-validation)). Delete temporary `cpanel-*.php` and debug HTML from the server after troubleshooting (`deploy/README.md`).

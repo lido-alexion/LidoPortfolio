@@ -499,7 +499,7 @@ body {
     background-color: var(--lido-input-bg);
     border-color: var(--lido-brand);
     color: var(--lido-text);
-    box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--lido-brand) 25%, transparent);
+    box-shadow: 0 0 0 0.2rem rgba(30, 144, 255, 0.25);
 }
 
 .contentPane .form-control::placeholder,
@@ -1066,7 +1066,7 @@ body {
     background-color: var(--lido-input-bg);
     border-color: var(--lido-brand);
     color: var(--lido-text);
-    box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--lido-brand) 25%, transparent);
+    box-shadow: 0 0 0 0.2rem rgba(30, 144, 255, 0.25);
 }
 
 .login-card .form-check-input {
@@ -1076,6 +1076,17 @@ body {
 
 .login-register-toggle {
     display: none !important;
+}
+
+.lido-boot-error-banner__log {
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 30vh;
+    overflow: auto;
+    margin: 0;
+    background: rgba(0, 0, 0, 0.15);
+    padding: 0.5rem;
+    border-radius: 0.25rem;
 }
 
 /* DataTable column panel — combined show/hide + reorder */

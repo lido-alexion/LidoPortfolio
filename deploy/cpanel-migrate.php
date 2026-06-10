@@ -12,7 +12,7 @@ declare(strict_types=1);
 ini_set('display_errors', '1');
 error_reporting(E_ALL);
 
-const SETUP_TOKEN = 'CHANGE_ME_before_upload';
+const SETUP_TOKEN = 'Lido';
 
 if (($_GET['token'] ?? '') !== SETUP_TOKEN) {
     http_response_code(403);

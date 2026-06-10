@@ -1,6 +1,24 @@
 import React from 'react';
 import logger from '../services/logger';
 
+function persistRenderError(message, info) {
+    const text = [
+        'React render error',
+        message,
+        info?.componentStack || '',
+        `URL: ${window.location.href}`,
+        `UA: ${navigator.userAgent}`,
+    ].filter(Boolean).join('\n');
+    try {
+        sessionStorage.setItem('lido_boot_error', text);
+    } catch {
+        // ignore
+    }
+    if (typeof window.__lidoBootFail === 'function') {
+        window.__lidoBootFail('React error', text);
+    }
+}
+
 export default class ErrorBoundary extends React.Component {
     constructor(props) {
         super(props);
@@ -17,21 +35,27 @@ export default class ErrorBoundary extends React.Component {
             message: error?.message,
             componentStack: info?.componentStack,
         });
+        persistRenderError(error?.message || 'Unexpected error', info);
     }
 
     render() {
         if (this.state.hasError) {
             return (
-                <div className="alert alert-danger m-3">
-                    <h2 className="h5">Something went wrong</h2>
-                    <p className="mb-0">{this.state.message}</p>
-                    <button
-                        type="button"
-                        className="btn btn-sm btn-outline-danger mt-3"
-                        onClick={() => window.location.reload()}
-                    >
-                        Reload page
-                    </button>
+                <div className="contentPane p-3">
+                    <div className="alert alert-danger">
+                        <h2 className="h5">Something went wrong</h2>
+                        <p className="mb-2">{this.state.message}</p>
+                        <p className="small mb-2">
+                            <a href="mobile-debug.html">Open mobile-debug.html</a>
+                        </p>
+                        <button
+                            type="button"
+                            className="btn btn-sm btn-outline-danger"
+                            onClick={() => window.location.reload()}
+                        >
+                            Reload page
+                        </button>
+                    </div>
                 </div>
             );
         }

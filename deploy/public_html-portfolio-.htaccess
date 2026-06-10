@@ -19,10 +19,20 @@
     RewriteCond %{REQUEST_URI} (.+)/$
     RewriteRule ^ %1 [L,R=301]
 
-    # Existing PHP files must not be sent to Laravel (setup / diagnostics)
+    # Setup / diagnostic scripts — execute as real PHP files
     RewriteRule ^cpanel-.*\.php$ - [L]
 
-    # Send Requests To Front Controller...
+    # Static diagnostics page
+    RewriteRule ^mobile-debug\.html$ - [L]
+
+    # Real files and folders (build/*, favicon, etc.)
+    RewriteCond %{REQUEST_FILENAME} -f
+    RewriteRule ^ - [L]
+
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # Everything else → Laravel front controller
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
