@@ -44,6 +44,18 @@ class AppServiceProvider extends ServiceProvider
             return ($appPath !== '' ? $appPath.'/' : '/').$relative;
         });
 
+        $appHost = parse_url((string) config('app.url'), PHP_URL_HOST);
+        if (is_string($appHost) && $appHost !== '') {
+            $apex = preg_replace('/^www\./i', '', $appHost);
+            $hosts = array_values(array_unique(array_filter([
+                $appHost,
+                $apex,
+                $apex !== '' ? "www.{$apex}" : null,
+                ...array_map('trim', explode(',', (string) env('SANCTUM_STATEFUL_DOMAINS', ''))),
+            ])));
+            config(['sanctum.stateful' => $hosts]);
+        }
+
         RateLimiter::for('stock-search', function (Request $request) {
             return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
         });

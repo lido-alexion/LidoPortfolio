@@ -22,6 +22,7 @@ Route::prefix('auth')->group(function () {
 
 // Guest-safe session probe — must not require auth:sanctum (returns { user: null } when logged out).
 Route::get('/auth/me', [AuthController::class, 'me']);
+Route::get('/auth/csrf-token', [AuthController::class, 'csrfToken']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logs/frontend', [FrontendLogController::class, 'store']);

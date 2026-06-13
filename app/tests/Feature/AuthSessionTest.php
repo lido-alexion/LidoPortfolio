@@ -124,6 +124,14 @@ class AuthSessionTest extends TestCase
         $this->postJson('/api/auth/sessions/logout-others')->assertOk();
     }
 
+    public function test_csrf_token_endpoint_returns_session_token(): void
+    {
+        $response = $this->getJson('/api/auth/csrf-token');
+
+        $response->assertOk();
+        $this->assertNotEmpty($response->json('token'));
+    }
+
     public function test_csrf_cookie_endpoint_is_available(): void
     {
         $this->get('/sanctum/csrf-cookie')->assertNoContent();

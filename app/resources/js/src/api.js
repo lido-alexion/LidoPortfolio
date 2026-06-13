@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { getRequestCsrfToken, resetCsrfCookie } from './auth/csrf';
+import { getRequestCsrfToken, isPlainCsrfToken, resetCsrfCookie } from './auth/csrf';
 import logger, { createRequestId } from './services/logger';
 import { showToast } from './toast';
 import { appUrl } from './appBase';
@@ -21,7 +21,11 @@ api.interceptors.request.use((config) => {
 
     const csrf = getCsrfToken();
     if (csrf) {
-        config.headers['X-XSRF-TOKEN'] = csrf;
+        if (isPlainCsrfToken()) {
+            config.headers['X-CSRF-TOKEN'] = csrf;
+        } else {
+            config.headers['X-XSRF-TOKEN'] = csrf;
+        }
     }
 
     const requestId = createRequestId();

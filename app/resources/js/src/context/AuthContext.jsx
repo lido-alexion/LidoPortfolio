@@ -43,6 +43,11 @@ export function AuthProvider({ children }) {
         let cancelled = false;
 
         (async () => {
+            try {
+                await ensureCsrfCookie();
+            } catch {
+                // Login will retry with force=true
+            }
             await refreshUser();
             if (!cancelled) {
                 setLoading(false);

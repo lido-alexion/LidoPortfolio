@@ -99,6 +99,11 @@ class AuthController extends Controller
         return response()->json(['user' => $request->user()]);
     }
 
+    public function csrfToken(Request $request): JsonResponse
+    {
+        return response()->json(['token' => $request->session()->token()]);
+    }
+
     public function sessions(Request $request): JsonResponse
     {
         $user = $request->user();

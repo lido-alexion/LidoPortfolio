@@ -3,6 +3,8 @@ import { appUrl } from '../appBase';
 
 let csrfReady = false;
 let csrfTokenMemory = null;
+/** @type {'cookie' | 'plain' | null} */
+let csrfTokenSource = null;
 
 function readCsrfTokenFromDocument() {
     let token = null;
@@ -15,11 +17,26 @@ function readCsrfTokenFromDocument() {
     return token;
 }
 
-async function waitForCsrfToken(maxAttempts = 20, delayMs = 50) {
+function clearLegacyCsrfCookies() {
+    const base = appUrl('').replace(/\/$/, '') || '';
+    const paths = [...new Set(['/', base].filter(Boolean))];
+    const host = window.location.hostname.replace(/^www\./i, '');
+    const domainVariants = ['', host, `.${host}`, `www.${host}`];
+
+    for (const path of paths) {
+        for (const domain of domainVariants) {
+            const domainPart = domain ? `; domain=${domain}` : '';
+            document.cookie = `XSRF-TOKEN=; Max-Age=0; path=${path}${domainPart}`;
+        }
+    }
+}
+
+async function waitForCsrfToken(maxAttempts = 50, delayMs = 100) {
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         const token = readCsrfTokenFromDocument();
         if (token) {
             csrfTokenMemory = token;
+            csrfTokenSource = 'cookie';
             return token;
         }
         await new Promise((resolve) => {
@@ -29,7 +46,21 @@ async function waitForCsrfToken(maxAttempts = 20, delayMs = 50) {
     return null;
 }
 
-/** Token for X-XSRF-TOKEN header (memory first, then document.cookie). */
+async function fetchPlainCsrfToken() {
+    const response = await axios.get(appUrl('/api/auth/csrf-token'), {
+        withCredentials: true,
+        headers: { Accept: 'application/json' },
+    });
+    const token = response?.data?.token;
+    if (!token || typeof token !== 'string') {
+        throw new Error('CSRF token missing from /api/auth/csrf-token response.');
+    }
+    csrfTokenMemory = token;
+    csrfTokenSource = 'plain';
+    return token;
+}
+
+/** Token for CSRF headers (memory first, then document.cookie). */
 export function getRequestCsrfToken() {
     if (csrfTokenMemory) {
         return csrfTokenMemory;
@@ -37,8 +68,14 @@ export function getRequestCsrfToken() {
     const fromCookie = readCsrfTokenFromDocument();
     if (fromCookie) {
         csrfTokenMemory = fromCookie;
+        csrfTokenSource = 'cookie';
     }
     return fromCookie;
+}
+
+/** True when token came from API (send X-CSRF-TOKEN, not X-XSRF-TOKEN). */
+export function isPlainCsrfToken() {
+    return csrfTokenSource === 'plain';
 }
 
 /** @deprecated use getRequestCsrfToken */
@@ -57,21 +94,28 @@ export async function ensureCsrfCookie({ force = false } = {}) {
 
     csrfReady = false;
     csrfTokenMemory = null;
+    csrfTokenSource = null;
 
-    const url = appUrl('/sanctum/csrf-cookie');
+    if (force) {
+        clearLegacyCsrfCookies();
+    }
 
-    await axios.get(url, {
+    const sanctumUrl = appUrl('/sanctum/csrf-cookie');
+
+    await axios.get(sanctumUrl, {
         withCredentials: true,
         headers: { Accept: 'application/json' },
     });
 
-    const token = await waitForCsrfToken();
+    let token = await waitForCsrfToken();
     if (!token) {
-        throw new Error(
-            `Could not read CSRF cookie after ${url}. `
-            + 'Confirm APP_URL includes /portfolio, run config:cache on the server, '
-            + 'and check DevTools → Application → Cookies for XSRF-TOKEN under /portfolio.',
-        );
+        try {
+            token = await fetchPlainCsrfToken();
+        } catch (error) {
+            const hint = `Use ${window.location.origin}${appUrl('/')} consistently (www or non-www), `
+                + 'clear site cookies for lidoalexion.com, then retry.';
+            throw new Error(`Could not read CSRF cookie after ${sanctumUrl}. ${hint}`);
+        }
     }
 
     csrfReady = true;
@@ -80,4 +124,5 @@ export async function ensureCsrfCookie({ force = false } = {}) {
 export function resetCsrfCookie() {
     csrfReady = false;
     csrfTokenMemory = null;
+    csrfTokenSource = null;
 }

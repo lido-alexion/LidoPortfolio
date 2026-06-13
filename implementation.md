@@ -289,7 +289,7 @@ PowerShell -ExecutionPolicy Bypass -File tests\Feature\api_smoke.ps1
 | Issue | Cause | Fix |
 |-------|--------|-----|
 | Mobile blank page | `www` vs apex in Vite `<script type="module">` src | Root-relative asset URLs in `AppServiceProvider`; `config:cache` after deploy |
-| Header font fallback on server | `@font-face` used `/fonts/...` (domain root) | Nulshock bundled via Vite into `/portfolio/build/assets/` — rebuild + upload `public/build/` |
+| Login CSRF on some devices | Stale `XSRF-TOKEN` at path `/`, cookie not readable after `/sanctum/csrf-cookie` | Clear site cookies; deploy latest build (`/api/auth/csrf-token` fallback + `X-CSRF-TOKEN` header); `config:cache` with `SESSION_PATH=/portfolio`, `SESSION_DOMAIN=.lidoalexion.com` |
 | “App did not start” on `mobile-debug.html` | Static file missing → Laravel SPA | Upload as `portfolio/mobile-debug.html`; fix `portfolio/.htaccess` + root snippet |
 | 404 on whole `/portfolio/` | `.htaccess` missing `index.php` rewrite | Use `deploy/public_html-portfolio-.htaccess` |
 | Red “App load problem” on login | Stale `sessionStorage.lido_boot_error` | Tap Dismiss; deploy latest `BootErrorBanner` + `app.blade.php` |
@@ -648,7 +648,7 @@ Document in this section and `portfolio-history-rebuild-report.md`.
 - **Laravel Sanctum** SPA mode (`bootstrap/app.php` → `statefulApi()`)
 - **Session guard** (`web`) — not Bearer tokens in JS
 - **HTTP-only cookies** + `axios` `withCredentials: true`
-- **CSRF** — `GET /sanctum/csrf-cookie` before login; `X-XSRF-TOKEN` on mutations
+- **CSRF** — `GET /sanctum/csrf-cookie` before login; mutations send `X-XSRF-TOKEN` (cookie value) or `X-CSRF-TOKEN` (plain session token from API fallback)
 - **Remember Me** — `Auth::attempt($credentials, $remember)`
 
 ### What we removed
@@ -667,15 +667,16 @@ Document in this section and `portfolio-history-rebuild-report.md`.
 | `SANCTUM_STATEFUL_DOMAINS` | localhost + app host | Sanctum treats requests as SPA |
 
 ### Frontend flow
-1. `AuthProvider` mounts → `GET /api/auth/me` restores user or shows login.
-2. Login page → CSRF cookie → `POST /api/auth/login` with optional `remember`.
-3. On `401` while logged in → `portfolio-unauthorized` → inline “session expired” on login (no toast); save path in `sessionStorage`. Initial `/auth/me` 401 (first visit / not logged in) is silent. `419` still toasts CSRF error.
+1. `AuthProvider` mounts → `ensureCsrfCookie()` then `GET /api/auth/me` restores user or shows login.
+2. Login page → `ensureCsrfCookie({ force: true })` clears stale `XSRF-TOKEN` at `/` and `/portfolio`, hits `/sanctum/csrf-cookie`, waits up to ~5s for cookie; if still unreadable (some mobile browsers / stale cookies), falls back to `GET /api/auth/csrf-token` and sends plain token via `X-CSRF-TOKEN`.
+3. On `401` while logged in → `portfolio-unauthorized` → inline “session expired” on login (no toast); save path in `sessionStorage`. Initial `/auth/me` 401 (first visit / not logged in) is silent. `419` triggers CSRF retry once, then toast.
 4. **Subdirectory URLs:** JS resolves API paths from `<meta name="app-base">`, `window.__LIDO_APP_BASE__`, or `/portfolio` in the URL. `api.js` sets `baseURL` on every request (not only at import time).
 5. After login → redirect to saved path (`auth/redirect.js`).
 
 ### API (session guard)
 - `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`
 - `GET /api/auth/me` — **guest-safe** (returns `{ user: null }` when logged out; not behind `auth:sanctum`)
+- `GET /api/auth/csrf-token` — **guest-safe**; returns `{ token }` (session CSRF token) when cookie is not readable client-side
 - `GET /api/auth/sessions`, `POST /api/auth/sessions/logout-others`, `DELETE /api/auth/sessions/{id}` — auth required
 
 ### Active sessions
@@ -700,7 +701,7 @@ Document in this section and `portfolio-history-rebuild-report.md`.
 3. `SESSION_PATH` auto-derives from `APP_URL` (`/portfolio`); run `php artisan config:cache` after `.env` changes.
 4. Run `php artisan migrate` so `sessions` table exists.
 5. Serve SPA and API from the same origin (`app/public` document root or `/portfolio` entry).
-6. **419 / CSRF mismatch on some devices:** often stale or colliding `XSRF-TOKEN` at cookie path `/` — fixed by scoped session path + clear site cookies once after deploy. Upload table: `deploy/DEPLOY.md` §7 “Login loops / 419”.
+6. **419 / CSRF mismatch on some devices:** often stale or colliding `XSRF-TOKEN` at cookie path `/`, or mixing `www` vs apex. Deploy latest `csrf.js` + `/api/auth/csrf-token` fallback; run `config:cache`; user clears site cookies once; always open the same hostname (`https://www.lidoalexion.com/portfolio/`). SSL warning in the address bar blocks `Secure` cookies — fix AutoSSL/redirect first. Upload table: `deploy/DEPLOY.md` §7 “Login loops / 419”.
 
 See also `DEPLOYMENT_CPANEL.md` § HTTPS.
 
