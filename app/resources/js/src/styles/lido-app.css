@@ -1090,6 +1090,20 @@ body {
 }
 
 /* DataTable column panel — combined show/hide + reorder */
+.lido-table-notes {
+    display: inline-block;
+    max-width: 12rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
+}
+
+.lido-table-search {
+    min-width: 11rem;
+    max-width: 14rem;
+}
+
 .datatable-col-menu {
     position: relative;
     flex-shrink: 0;

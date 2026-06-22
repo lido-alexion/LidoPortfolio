@@ -42,6 +42,47 @@ api.interceptors.request.use((config) => {
     return config;
 });
 
+function resolveApiErrorMessage(error) {
+    const status = error?.response?.status;
+    const data = error?.response?.data ?? {};
+    let msg = null;
+
+    const validationErrors = data.errors;
+    if (validationErrors && typeof validationErrors === 'object') {
+        const first = Object.values(validationErrors).flat().find(Boolean);
+        if (first) {
+            msg = first;
+        }
+    }
+
+    if (!msg && Array.isArray(data.errors?.sync)) {
+        msg = data.errors.sync[0];
+    }
+
+    if (!msg && data.message) {
+        msg = data.message;
+    }
+
+    const trimmed = typeof msg === 'string' ? msg.trim() : '';
+    const isGenericAuth = trimmed === '' || /^unauthor/i.test(trimmed);
+
+    if (status === 403) {
+        return isGenericAuth
+            ? "You don't have permission to perform this action. Try signing out and back in if this seems wrong."
+            : trimmed;
+    }
+
+    if (status === 404) {
+        return trimmed || 'The requested item could not be found.';
+    }
+
+    if (status === 422 && trimmed) {
+        return trimmed;
+    }
+
+    return trimmed || 'Something went wrong. Please try again.';
+}
+
 api.interceptors.response.use(
     (response) => {
         logger.debug('API response', {
@@ -71,10 +112,7 @@ api.interceptors.response.use(
             return Promise.reject(error);
         }
 
-        const syncErrors = error?.response?.data?.errors?.sync;
-        const msg = (Array.isArray(syncErrors) ? syncErrors[0] : null)
-            || error?.response?.data?.message
-            || 'Request failed';
+        const msg = resolveApiErrorMessage(error);
 
         const skipErrorToast = Boolean(error?.config?.skipErrorToast);
 

@@ -191,12 +191,21 @@ PowerShell -ExecutionPolicy Bypass -File tests\Feature\api_smoke.ps1
 
 `php artisan test` uses **SQLite in-memory** (`phpunit.xml`); it does not require MySQL. Local browsing and manual testing use MySQL from `.env`.
 
+### Pending deploy (2026-06-21 batch)
+
+**One migration required:** `2026_06_21_000001_add_total_fees_to_portfolio_holdings` — adds `portfolio_holdings.total_fees` and recalculates all holdings (fee-exclusive avg buy/invested).
+
+**Deploy checklist:** `deploy/RELEASE-2026-06-21.md` (build, upload paths, `cpanel-migrate.php`, smoke tests).
+
+**No** new env vars, routes files, or `composer.json` changes in this batch.
+
 ### Related docs
 
 | Doc | Purpose |
 |-----|---------|
 | `README.md` | Short quick start |
 | `deploy/DEPLOY.md` | Production deploy (GoDaddy `/portfolio`) |
+| `deploy/RELEASE-2026-06-21.md` | Pending release: migration `total_fees`, holdings/transactions UI batch |
 | `DEPLOYMENT_CPANEL.md` | Generic cPanel pointer → `deploy/DEPLOY.md` |
 | `DEPLOYMENT_VALIDATION_PLAN.md` | Pre/post deploy checks |
 | `app/API_DOCUMENTATION.md` | REST API |
@@ -231,7 +240,7 @@ PowerShell -ExecutionPolicy Bypass -File tests\Feature\api_smoke.ps1
 - **Production deploy (May 2026):** Canonical steps in **`deploy/DEPLOY.md`** (first deploy + code updates). GoDaddy layout: `public_html/lidoportfolio/` + `public_html/portfolio/`; DB via `/home/USER/config/DBConfig.php`; browser setup via `cpanel-diagnose.php` / `cpanel-once-setup.php` / **`cpanel-config-cache.php`** (config:cache only, after `.env` edits). Obsolete: Laravel outside `public_html`, `DB_*` in production `.env`, document root = `app/public` on main domain, `route:cache` under `/portfolio`.
 - **Production subdirectory** (`https://lidoalexion.com/portfolio`): `APP_URL` includes path; build with `VITE_APP_BASE=/portfolio/build/`; upload `public/build/` to **`lidoportfolio/public/build/`** and **`portfolio/build/`**. Vite tags use **root-relative** paths (`AppServiceProvider::createAssetPathsUsing`) so `www` and apex both work. Delete `public/hot` on server. Troubleshooting: `deploy/DEPLOY.md` §7, `implementation.md` → Production learnings.
 - Dashboard cards: **Portfolio Value** / **Total Gain/Loss** green when portfolio &gt; invested, red when less, default text when equal; **XIRR** green/red by sign. Allocation **%** is whole numbers; &gt;15% orange (`text-allocation-elevated`), &gt;20% red.
-- Transactions UI now supports edit/update flow in addition to create/delete.
+- Transactions UI now supports edit/update flow in addition to create/delete. **Fix (Jun 2026):** update/delete auth compared `user_id` with strict `!==`, so string vs int IDs from MySQL caused false 403; `Transaction` route binding now scopes to `auth()->user()->transactions()` (SQL ownership check). FE `api.js` maps generic auth errors to a full sentence. **Delete buy guard:** before deleting a buy, `HoldingsCalculationService::assertReplayValidAfterDeleting()` dry-runs the ledger replay; if orphan sells would break recalc, API returns 422 with guidance to delete sell transaction(s) first.
 - Holdings UI shows highest close since buy, trailing stop, and links to OHLCV price history screen.
 - `GET /stocks/{stock}/prices` and force sync via `POST /sync/backfill/{stock}`; buy transactions trigger synchronous backfill.
 - Price providers use `App\Support\ExternalHttp` with `CURL_CAFILE` / `config/portfolio.php` CA bundle for SSL.
@@ -241,16 +250,19 @@ PowerShell -ExecutionPolicy Bypass -File tests\Feature\api_smoke.ps1
 - Transactions table: **Qty** via `formatTableInteger`; **Price** via `formatTableMoney2` (`₹ ` + `en-IN` grouping, 2 dp).
 - Stocks SPA tab removed; `GET /api/stocks` still used by Transactions autocomplete. Stock CRUD APIs retained for future UI.
 - Holdings table shows **Latest Close** (from most recent OHLCV row since buy date, with metrics fallback).
+- Holdings **Avg Buy** and **Invested** exclude transaction fees (price × qty only). **`total_fees`** on `portfolio_holdings` sums buy + sell fees for the current open position; **Fees** column shows absolute amount and `% of invested` (1 dp). Recalc via `HoldingsCalculationService` on each `GET /holdings`.
 - Holdings **XIRR** from backend (`XirrService` via `GET /holdings`); per-holding terminal value uses `qty × latest_close` where **latest_close** is the same figure shown in the holdings row (since-buy OHLCV, else metrics fallback — not a separate global history lookup). Dashboard portfolio XIRR uses the same terminal as displayed **Portfolio Value**. Portfolio XIRR includes all historical buy/sell transactions (closed positions too), so it only equals a single holding’s XIRR when that stock is the only one ever traded.
 - Tabular UIs: **TanStack Table** via `DataTableCard` / `DataTable.jsx` (columns icon in card header; show/hide + reorder panel).
-- Transaction form: labeled fields; **NSE × BSE** toggle; integer qty; price step **0.05** (2 dp); **Fees** auto-calculated (read-only) from Settings fee components — hover **ⓘ** for line-item breakdown; symbol validate button → `POST /api/stocks/validate` with `check_only: true` (local + in-memory cache); Save disabled until valid + symbol validated. DB/API field: `fees` (renamed from `brokerage`, Jun 2026). FE is canonical calculator (`resources/js/src/utils/feeCalculator.js`); API trusts client `fees` on save. One-time migration recalculated historical rows using PHP mirror (`FeeCalculatorService`).
+- Transaction form: labeled fields; **NSE × BSE** toggle; integer qty (empty by default, like price); price step **0.05** (2 dp); **Fees** auto-calculated (read-only) from Settings fee components — hover **ⓘ** for line-item breakdown; symbol validate button → `POST /api/stocks/validate` with `check_only: true` (local + in-memory cache); Save disabled until valid + symbol validated; while save API runs, submit shows **Adding…** / **Updating…** and stays disabled. After **add**, form retains stock/symbol/qty/type/date/notes; only **price** clears (blocks accidental duplicate submit). After **update**, form resets. **Transaction date** (`TransactionDateInput.jsx`): text `dd-mmm-yyyy` + picker button with calendar icon (outline + 3×3 date dots). DB/API field: `fees` (renamed from `brokerage`, Jun 2026). FE is canonical calculator (`resources/js/src/utils/feeCalculator.js`); API trusts client `fees` on save. One-time migration recalculated historical rows using PHP mirror (`FeeCalculatorService`).
+- **Transaction history** table (**Active transactions**): `GET /transactions?scope=open` — only transactions for stocks with holding `quantity > 0` (recalculates holdings first). Client search in header. Link **Squared-off** → `/transactions/closed`. Columns include **Notes** (truncated with full text on hover; `—` when empty). **Squared-off** page: `scope=closed`, server search + pagination (25/page), edit navigates to main form, delete in place.
 - **Transaction fee settings (Jun 2026):** Settings → **Transaction fees** card (collapsible, **collapsed by default**) — configurable lines: label, **Type** (% / fixed ₹), rate, **Buy/Sell** tap toggles, **NSE/BSE/Both** exchange filter, per-line **GST %** (single row per component; theme-aware `lido-fee-component-row`; compact `NumberInput` height). Defaults match Zerodha equity delivery (brokerage 0%, STT 0.1%, NSE/BSE txn charges, SEBI 0.0001% [= ₹10/crore], stamp 0.015% buy-only). Stored as JSON in `portfolio_settings.fee_components`.
 - Shell UI: full-bleed black header (`AppHeader.jsx`, **Lido Alexion** in Nulshock via `resources/fonts/nulshock-bd.ttf`, bundled by Vite into `build/assets/`), profile menu (`ProfileMenu.jsx`, includes `ThemeToggle.jsx` 3-segment sun/monitor/moon theme switch), logged-in **Bootstrap tabs** (`AppTabs.jsx`), footer nav (`AppBottomNav.jsx`, `config/mainNav.js`). **Themes:** `light` / `dark` / `system` via `ThemeContext` + CSS variables in `lido-app.css` (`localStorage` key `lido-theme`); `app.blade.php` inline script avoids flash. Dev: `npx vite` + `@viteReactRefresh`; prod: `npm run build`.
 - Holdings bottom-nav item stays active on OHLCV sub-routes (`/holdings/:id/prices`).
 - Holdings OHLCV screen (`StockPricesPage`): `DataTableCard` with `formatTransactionDateDisplay`, `formatTableMoney2` (Open/High/Low/Close), `formatTableInteger` (Volume).
 - Holdings table **Sell** button navigates to `/transactions` with form prefilled: symbol/name/exchange, type `sell`, quantity = holding qty, price = latest close, symbol marked validated (`sellTransactionPrefill.js` + router `location.state`).
-- Holdings **Latest Close**: `₹` whole amount + rounded `(+N%)` vs avg buy in `small` plain text; green/red for gain/loss %; price still red (no bold) when below trailing stop.
+- Holdings **Latest Close**: `₹` whole amount + rounded `(+N%)` vs avg buy in `small` plain text; green/red for gain/loss %; price still red (no bold) when below trailing stop. When LTP &lt; trailing stop: **Stock** symbol uses `text-danger`; **Sell** uses solid `btn-danger` (not outline).
 - Holdings **Highest Close** 2nd line: `LTP: N%` = `((LTP − highest since buy) / highest) × 100`; green if ≥ 0, orange if below 0 but above −`stoploss_percent`, red if ≤ −`stoploss_percent` (from settings / `stoploss_summary.stoploss_percent`).
+- Holdings table default column order: Stock → Latest Close → Invested → Fees → XIRR → Highest Close → **Qty** → **Avg Buy** → Trailing Stop → Realized P/L (hidden) → OHLCV → Sell. **Realized P/L** hidden by default (`defaultColumnVisibility` on `DataTableCard`); user prefs in `localStorage` key `portfolio_datatable_holdings`.
 - SPA routing: `routes/web.php` catch-all serves `app` view for all non-API paths so browser refresh on `/holdings`, `/transactions`, etc. works (React `BrowserRouter`).
 - `AppTabs` uses `useLocation().pathname` for active tab state (NavLink `className` callback does not receive `location` in React Router v6).
 
@@ -600,7 +612,7 @@ Report: `portfolio-history-rebuild-report.md`.
 
 ### Formulas (any historical date D)
 
-1. **Holdings(D)** — all transactions ≤ D (buys add cost+qty; sells reduce qty; avg-cost invested amount).
+1. **Holdings(D)** — all transactions ≤ D (buys add price×qty cost basis + qty; sells reduce qty; avg-cost invested amount; fees excluded from cost basis).
 2. **portfolio_value(D)** — `SUM(quantity(D) × latest_close_on_or_before(D))` per open holding.
 3. **invested_value(D)** — `SUM(remaining_cost_basis(D))` for open holdings.
 4. **unrealized_pnl(D)** — `portfolio_value(D) − invested_value(D)`.

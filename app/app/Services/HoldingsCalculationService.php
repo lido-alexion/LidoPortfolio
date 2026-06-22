@@ -35,16 +35,71 @@ class HoldingsCalculationService
 
     public function recalculateForUserStock(User $user, Stock $stock): Holding
     {
-        $transactions = Transaction::query()
+        $transactions = $this->transactionsForUserStock($user, $stock);
+        $state = $this->replayTransactions($transactions, $user, $stock);
+
+        return Holding::query()->updateOrCreate(
+            ['user_id' => $user->id, 'stock_id' => $stock->id],
+            [
+                'quantity' => round($state['quantity'], 4),
+                'avg_buy_price' => round($state['avg_buy_price'], 4),
+                'invested_amount' => round($state['invested_amount'], 4),
+                'total_fees' => round($state['total_fees'], 4),
+                'realized_profit' => round($state['realized_profit'], 4),
+                'updated_at' => now(),
+            ],
+        );
+    }
+
+    /**
+     * Dry-run replay after hypothetically removing a transaction.
+     *
+     * @throws InvalidArgumentException when remaining ledger is invalid (e.g. orphan sells)
+     */
+    public function assertReplayValidAfterDeleting(User $user, Transaction $toDelete): void
+    {
+        $remaining = $this->transactionsForUserStock($user, Stock::query()->findOrFail($toDelete->stock_id))
+            ->reject(fn (Transaction $tx) => (int) $tx->id === (int) $toDelete->id)
+            ->values();
+
+        $this->replayTransactions($remaining, $user, $toDelete->stock, dryRun: true);
+    }
+
+    /**
+     * @return Collection<int, Transaction>
+     */
+    protected function transactionsForUserStock(User $user, Stock $stock): Collection
+    {
+        return Transaction::query()
             ->where('user_id', $user->id)
             ->where('stock_id', $stock->id)
             ->orderBy('transaction_date')
             ->orderBy('id')
             ->get();
+    }
 
+    /**
+     * @param  Collection<int, Transaction>  $transactions
+     * @return array{
+     *   quantity: float,
+     *   avg_buy_price: float,
+     *   invested_amount: float,
+     *   total_fees: float,
+     *   realized_profit: float
+     * }
+     *
+     * @throws InvalidArgumentException
+     */
+    public function replayTransactions(
+        Collection $transactions,
+        ?User $user = null,
+        ?Stock $stock = null,
+        bool $dryRun = false,
+    ): array {
         $quantity = 0.0;
         $avgBuyPrice = 0.0;
         $investedAmount = 0.0;
+        $totalFees = 0.0;
         $realizedProfit = 0.0;
         $wasZero = true;
 
@@ -54,13 +109,17 @@ class HoldingsCalculationService
             $fees = (float) $transaction->fees;
 
             if ($transaction->type === 'buy') {
-                if ($wasZero && $quantity <= 0) {
+                if (! $dryRun && $wasZero && $quantity <= 0 && $user !== null && $stock !== null) {
                     $this->resetMetricsForNewEntry($stock);
                     $wasZero = false;
+                    $totalFees = 0.0;
+                } elseif ($wasZero && $quantity <= 0) {
+                    $wasZero = false;
+                    $totalFees = 0.0;
                 }
 
-                $cost = ($qty * $price) + $fees;
-                $investedAmount += $cost;
+                $investedAmount += $qty * $price;
+                $totalFees += $fees;
                 $quantity += $qty;
                 $avgBuyPrice = $quantity > 0 ? $investedAmount / $quantity : 0;
             } else {
@@ -69,6 +128,7 @@ class HoldingsCalculationService
                 }
 
                 $realizedProfit += (($price - $avgBuyPrice) * $qty) - $fees;
+                $totalFees += $fees;
                 $quantity -= $qty;
                 $investedAmount = $avgBuyPrice * $quantity;
 
@@ -76,23 +136,24 @@ class HoldingsCalculationService
                     $quantity = 0;
                     $avgBuyPrice = 0;
                     $investedAmount = 0;
+                    $totalFees = 0;
                     $wasZero = true;
-                    $this->deactivateTracking($stock);
-                    app(AlertExpirationService::class)->expireForUserStockIfUnheld($user, $stock);
+
+                    if (! $dryRun && $user !== null && $stock !== null) {
+                        $this->deactivateTracking($stock);
+                        app(AlertExpirationService::class)->expireForUserStockIfUnheld($user, $stock);
+                    }
                 }
             }
         }
 
-        return Holding::query()->updateOrCreate(
-            ['user_id' => $user->id, 'stock_id' => $stock->id],
-            [
-                'quantity' => round($quantity, 4),
-                'avg_buy_price' => round($avgBuyPrice, 4),
-                'invested_amount' => round($investedAmount, 4),
-                'realized_profit' => round($realizedProfit, 4),
-                'updated_at' => now(),
-            ],
-        );
+        return [
+            'quantity' => $quantity,
+            'avg_buy_price' => $avgBuyPrice,
+            'invested_amount' => $investedAmount,
+            'total_fees' => $totalFees,
+            'realized_profit' => $realizedProfit,
+        ];
     }
 
     public function getAvailableQuantity(User $user, Stock $stock): float

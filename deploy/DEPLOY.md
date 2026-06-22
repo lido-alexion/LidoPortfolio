@@ -170,6 +170,8 @@ SANCTUM_STATEFUL_DOMAINS=lidoalexion.com,www.lidoalexion.com
 
 ## 5. Updating code (redeploy)
 
+**Release-specific steps:** see [RELEASE-2026-06-21.md](RELEASE-2026-06-21.md) for the current uncommitted batch (holdings fees column, transaction scopes, one migration).
+
 Repeat whenever you change backend or frontend.
 
 ### On PC
@@ -228,7 +230,8 @@ After `.env` changes: delete `bootstrap/cache/config.php` or run `config:clear` 
 
 | File | Use |
 |------|-----|
-| `DEPLOY.md` | This guide |
+| `deploy/README.md` | Deploy helper index |
+| `deploy/RELEASE-2026-06-21.md` | Current batch release notes |
 | `cpanel-diagnose.php` | Pre-flight: PHP, DB, Vite manifests, `hot` file |
 | `cpanel-once-setup.php` | One-time: `key:generate`, `migrate`, `config:cache` |
 | `cpanel-config-cache.php` | Re-run `config:cache` after `.env` changes (no SSH) |

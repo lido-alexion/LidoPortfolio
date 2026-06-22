@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Jobs\BackfillHistoricalDataJob;
+use App\Models\Holding;
 use App\Models\Transaction;
 use App\Services\HoldingsCalculationService;
 use App\Services\PortfolioSnapshotRebuildService;
 use App\Services\StockResolverService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use InvalidArgumentException;
 use Illuminate\Validation\ValidationException;
 
 class TransactionController extends Controller
@@ -22,12 +24,51 @@ class TransactionController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $transactions = Transaction::query()
-            ->with('stock')
+        $this->holdings->recalculateForUser($request->user());
+
+        $scope = $request->input('scope', 'open');
+        if (! in_array($scope, ['open', 'closed', 'all'], true)) {
+            $scope = 'open';
+        }
+
+        $openStockIds = Holding::query()
             ->where('user_id', $request->user()->id)
+            ->where('quantity', '>', 0)
+            ->pluck('stock_id');
+
+        $query = Transaction::query()
+            ->with('stock')
+            ->where('user_id', $request->user()->id);
+
+        if ($scope === 'open') {
+            if ($openStockIds->isEmpty()) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereIn('stock_id', $openStockIds);
+            }
+        } elseif ($scope === 'closed') {
+            if ($openStockIds->isNotEmpty()) {
+                $query->whereNotIn('stock_id', $openStockIds);
+            }
+        }
+
+        $search = trim((string) $request->input('search', ''));
+        if ($search !== '') {
+            $like = '%'.addcslashes($search, '%_\\').'%';
+            $query->whereHas('stock', function ($stockQuery) use ($like) {
+                $stockQuery->where('symbol', 'like', $like)
+                    ->orWhere('name', 'like', $like);
+            });
+        }
+
+        $defaultPerPage = $scope === 'closed' ? 25 : 500;
+        $maxPerPage = $scope === 'closed' ? 100 : 500;
+        $perPage = min((int) $request->input('per_page', $defaultPerPage), $maxPerPage);
+
+        $transactions = $query
             ->orderByDesc('transaction_date')
             ->orderByDesc('id')
-            ->paginate(min((int) $request->input('per_page', 50), 500));
+            ->paginate($perPage);
 
         return response()->json($transactions);
     }
@@ -72,15 +113,11 @@ class TransactionController extends Controller
 
     public function show(Request $request, Transaction $transaction): JsonResponse
     {
-        $this->authorizeTransaction($request, $transaction);
-
         return response()->json(['data' => $transaction->load('stock')]);
     }
 
     public function update(Request $request, Transaction $transaction): JsonResponse
     {
-        $this->authorizeTransaction($request, $transaction);
-
         $previousTransactionDate = $transaction->transaction_date;
 
         if (! $request->filled('stock_id') && ! $request->filled('symbol')) {
@@ -121,7 +158,18 @@ class TransactionController extends Controller
 
     public function destroy(Request $request, Transaction $transaction): JsonResponse
     {
-        $this->authorizeTransaction($request, $transaction);
+        if ($transaction->type === 'buy') {
+            try {
+                $this->holdings->assertReplayValidAfterDeleting($request->user(), $transaction);
+            } catch (InvalidArgumentException) {
+                throw ValidationException::withMessages([
+                    'transaction' => [
+                        'Cannot delete this buy transaction because remaining sell transactions would exceed your holding quantity. Delete the related sell transaction(s) first, then try again.',
+                    ],
+                ]);
+            }
+        }
+
         $stock = $transaction->stock;
         $deletedDate = $transaction->transaction_date;
         $transaction->delete();
@@ -151,12 +199,5 @@ class TransactionController extends Controller
             'transaction_date' => ['required', 'date', 'before_or_equal:today'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
-    }
-
-    protected function authorizeTransaction(Request $request, Transaction $transaction): void
-    {
-        if ($transaction->user_id !== $request->user()->id) {
-            abort(403, 'Unauthorized');
-        }
     }
 }

@@ -16,6 +16,7 @@ class Holding extends Model
         'quantity',
         'avg_buy_price',
         'invested_amount',
+        'total_fees',
         'realized_profit',
         'updated_at',
     ];
@@ -26,6 +27,7 @@ class Holding extends Model
             'quantity' => 'decimal:4',
             'avg_buy_price' => 'decimal:4',
             'invested_amount' => 'decimal:4',
+            'total_fees' => 'decimal:4',
             'realized_profit' => 'decimal:4',
             'updated_at' => 'datetime',
         ];

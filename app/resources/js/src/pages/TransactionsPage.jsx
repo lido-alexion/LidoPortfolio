@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import api from '../api';
 
@@ -27,7 +27,6 @@ import {
 
 import FeeBreakdownHint from '../components/FeeBreakdownHint';
 import TransactionDateInput from '../components/TransactionDateInput';
-import { formatTableInteger, formatTableMoney2 } from '../utils/tableFormat';
 import {
     calculateTransactionFees,
     DEFAULT_FEE_COMPONENTS,
@@ -40,6 +39,7 @@ import {
     isValidTransactionDate,
     parseTransactionDateDisplay,
 } from '../utils/transactionDate';
+import { buildTransactionTableColumns } from '../utils/transactionTableColumns';
 
 
 
@@ -57,7 +57,7 @@ const emptyForm = () => ({
 
     type: 'buy',
 
-    quantity: 1,
+    quantity: '',
 
     price: '',
 
@@ -139,6 +139,8 @@ export default function TransactionsPage() {
 
     const [validatingSymbol, setValidatingSymbol] = useState(false);
 
+    const [submitting, setSubmitting] = useState(false);
+
     const validationTokenRef = useRef(0);
 
     const dateInputFocusedRef = useRef(false);
@@ -149,15 +151,14 @@ export default function TransactionsPage() {
 
     const [feeComponents, setFeeComponents] = useState(DEFAULT_FEE_COMPONENTS);
 
+    const [stockSearch, setStockSearch] = useState('');
 
 
-    const load = async () => {
 
-        const txRes = await api.get('/transactions', { params: { per_page: 500 } });
-
+    const load = useCallback(async () => {
+        const txRes = await api.get('/transactions', { params: { scope: 'open', per_page: 500 } });
         setTransactions(txRes.data.data || []);
-
-    };
+    }, []);
 
     const loadFeeSettings = async () => {
         const res = await api.get('/settings');
@@ -166,7 +167,7 @@ export default function TransactionsPage() {
 
 
 
-    useEffect(() => { load(); loadFeeSettings(); }, []);
+    useEffect(() => { load(); loadFeeSettings(); }, [load]);
 
     useEffect(() => {
         const prefill = location.state?.sellPrefill;
@@ -333,31 +334,41 @@ export default function TransactionsPage() {
 
         }
 
+        setSubmitting(true);
 
+        try {
 
-        if (form.id) {
+            if (form.id) {
 
-            await api.put(`/transactions/${form.id}`, payload);
+                await api.put(`/transactions/${form.id}`, payload);
 
-            showToast('Transaction updated');
+                showToast('Transaction updated');
 
-        } else {
+                setForm(emptyForm());
 
-            await api.post('/transactions', payload);
+                setSelectedStock(null);
 
-            showToast('Transaction saved');
+                setSymbolValidation(null);
+
+            } else {
+
+                await api.post('/transactions', payload);
+
+                showToast('Transaction saved');
+
+                setForm((prev) => ({ ...prev, price: '' }));
+
+            }
+
+            await load();
+
+            notifyPortfolioDashboardRefresh();
+
+        } finally {
+
+            setSubmitting(false);
 
         }
-
-        setForm(emptyForm());
-
-        setSelectedStock(null);
-
-        setSymbolValidation(null);
-
-        await load();
-
-        notifyPortfolioDashboardRefresh();
 
     };
 
@@ -467,6 +478,23 @@ export default function TransactionsPage() {
 
 
 
+    useEffect(() => {
+        const tx = location.state?.editTransaction;
+        if (!tx) {
+            return;
+        }
+        editTx(tx);
+        navigate('/transactions', { replace: true, state: {} });
+        requestAnimationFrame(() => {
+            document.getElementById('transaction-form-card')?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start',
+            });
+        });
+    }, [location.state, editTx, navigate]);
+
+
+
     const deleteTx = useCallback(async (id) => {
 
         if (!window.confirm('Delete this transaction?')) {
@@ -483,7 +511,7 @@ export default function TransactionsPage() {
 
         notifyPortfolioDashboardRefresh();
 
-    }, []);
+    }, [load]);
 
 
 
@@ -734,89 +762,34 @@ export default function TransactionsPage() {
 
     }, [form, isSymbolValidated, resolvedTransactionDate]);
 
+    const filteredTransactions = useMemo(() => {
+        const query = stockSearch.trim().toLowerCase();
+        if (!query) {
+            return transactions;
+        }
+        return transactions.filter((tx) => {
+            const symbol = (tx.stock?.symbol || '').toLowerCase();
+            const name = (tx.stock?.name || '').toLowerCase();
+            return symbol.includes(query) || name.includes(query);
+        });
+    }, [transactions, stockSearch]);
+
+    const transactionTableEmptyMessage = useMemo(() => {
+        if (transactions.length === 0) {
+            return 'No transactions for open holdings.';
+        }
+        if (stockSearch.trim() && filteredTransactions.length === 0) {
+            return 'No transactions match this search.';
+        }
+        return 'No transactions for open holdings.';
+    }, [transactions.length, stockSearch, filteredTransactions.length]);
 
 
-    const columns = useMemo(() => [
 
-        {
-            accessorKey: 'transaction_date',
-            header: 'Date',
-            cell: ({ getValue }) => formatTransactionDateDisplay(getValue()),
-        },
-
-        {
-
-            id: 'stock',
-
-            header: 'Stock',
-
-            accessorFn: (row) => row.stock?.symbol,
-
-        },
-
-        { accessorKey: 'type', header: 'Type' },
-
-        {
-            accessorKey: 'quantity',
-            header: 'Qty',
-            cell: ({ getValue }) => formatTableInteger(getValue()),
-        },
-
-        {
-            accessorKey: 'price',
-            header: 'Price',
-            cell: ({ getValue }) => formatTableMoney2(getValue()),
-        },
-
-        {
-
-            id: 'actions',
-
-            header: 'Actions',
-
-            enableSorting: false,
-
-            enableHiding: false,
-
-            cell: ({ row }) => (
-
-                <>
-
-                    <button
-
-                        type="button"
-
-                        className="btn btn-sm btn-outline-primary me-2"
-
-                        onClick={() => editTx(row.original)}
-
-                    >
-
-                        Edit
-
-                    </button>
-
-                    <button
-
-                        type="button"
-
-                        className="btn btn-sm btn-outline-danger"
-
-                        onClick={() => deleteTx(row.original.id)}
-
-                    >
-
-                        Delete
-
-                    </button>
-
-                </>
-
-            ),
-
-        },
-
-    ], [editTx, deleteTx]);
+    const columns = useMemo(
+        () => buildTransactionTableColumns({ onEdit: editTx, onDelete: deleteTx }),
+        [editTx, deleteTx],
+    );
 
 
 
@@ -1104,9 +1077,11 @@ export default function TransactionsPage() {
 
 
 
-                            <button className="btn btn-primary" type="submit" disabled={!canSubmit}>
+                            <button className="btn btn-primary" type="submit" disabled={!canSubmit || submitting}>
 
-                                {form.id ? 'Update Transaction' : 'Save Transaction'}
+                                {submitting
+                                    ? (form.id ? 'Updating...' : 'Adding...')
+                                    : (form.id ? 'Update Transaction' : 'Save Transaction')}
 
                             </button>
 
@@ -1148,15 +1123,34 @@ export default function TransactionsPage() {
 
                 <DataTableCard
 
-                    title="Transaction History"
+                    title="Active transactions"
 
                     columns={columns}
 
-                    data={transactions}
+                    data={filteredTransactions}
 
                     storageKey="transactions"
 
-                    emptyMessage="No transactions yet."
+                    emptyMessage={transactionTableEmptyMessage}
+
+                    headerExtra={(
+                        <div className="d-flex align-items-center gap-2">
+                            <input
+                                type="search"
+                                className="form-control form-control-sm lido-table-search"
+                                placeholder="Search symbol or name"
+                                value={stockSearch}
+                                onChange={(event) => setStockSearch(event.target.value)}
+                                aria-label="Search transactions by stock symbol or name"
+                            />
+                            <Link
+                                className="btn btn-sm btn-outline-secondary text-nowrap"
+                                to="/transactions/closed"
+                            >
+                                Squared-off
+                            </Link>
+                        </div>
+                    )}
 
                 />
 

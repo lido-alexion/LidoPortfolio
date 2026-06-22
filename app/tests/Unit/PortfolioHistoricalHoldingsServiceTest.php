@@ -35,11 +35,11 @@ class PortfolioHistoricalHoldingsServiceTest extends TestCase
 
         $beforeSell = $service->holdingsAsOf($transactions, Carbon::parse('2026-01-20'));
         $this->assertEqualsWithDelta(10, $beforeSell[$stockId]['quantity'], 0.0001);
-        $this->assertEqualsWithDelta(1010, $beforeSell[$stockId]['invested_amount'], 0.0001);
+        $this->assertEqualsWithDelta(1000, $beforeSell[$stockId]['invested_amount'], 0.0001);
 
         $afterSell = $service->holdingsAsOf($transactions, Carbon::parse('2026-02-15'));
         $this->assertEqualsWithDelta(6, $afterSell[$stockId]['quantity'], 0.0001);
-        $this->assertEqualsWithDelta(606, $afterSell[$stockId]['invested_amount'], 0.0001);
+        $this->assertEqualsWithDelta(600, $afterSell[$stockId]['invested_amount'], 0.0001);
     }
 
     public function test_future_transactions_are_excluded(): void

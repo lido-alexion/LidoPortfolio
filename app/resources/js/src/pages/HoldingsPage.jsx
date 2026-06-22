@@ -16,19 +16,41 @@ import {
     percentGainLossFromAvgBuy,
 } from '../utils/tableFormat';
 
+function isBelowTrailingStop(summary) {
+    const latestCloseNum = Number(summary?.latest_close);
+    const trailingStopNum = Number(summary?.trailing_stop_price);
+    return !Number.isNaN(latestCloseNum)
+        && !Number.isNaN(trailingStopNum)
+        && latestCloseNum < trailingStopNum;
+}
+
+function feesPercentOfInvested(fees, invested) {
+    const feeNum = Number(fees);
+    const investedNum = Number(invested);
+    if (Number.isNaN(feeNum) || Number.isNaN(investedNum) || investedNum <= 0) {
+        return null;
+    }
+    return Math.round((feeNum / investedNum) * 1000) / 10;
+}
+
 const HOLDINGS_COLUMN_ORDER = [
     'stock',
-    'quantity',
-    'avg_buy_price',
     'latest_close',
     'invested_amount',
+    'fees',
     'xirr',
     'highest_close',
+    'quantity',
+    'avg_buy_price',
     'trailing_stop',
     'realized_profit',
     'prices',
     'sell',
 ];
+
+const HOLDINGS_DEFAULT_COLUMN_VISIBILITY = {
+    realized_profit: false,
+};
 
 export default function HoldingsPage() {
     const navigate = useNavigate();
@@ -62,9 +84,12 @@ export default function HoldingsPage() {
             cell: ({ row }) => {
                 const s = row.original.summary;
                 const since = formatTransactionDateDisplay(s.first_buy_date);
+                const belowTrailingStop = isBelowTrailingStop(s);
                 return (
                     <>
-                        <strong>{row.original.stock?.symbol}</strong>
+                        <strong className={belowTrailingStop ? 'text-danger' : undefined}>
+                            {row.original.stock?.symbol}
+                        </strong>
                         {since && (
                             <div className="text-muted small">Since {since}</div>
                         )}
@@ -91,11 +116,7 @@ export default function HoldingsPage() {
                 const close = formatInrWhole(s.latest_close);
                 const date = formatTransactionDateDisplay(s.latest_price_date);
                 const pct = percentGainLossFromAvgBuy(s.latest_close, row.original.avg_buy_price);
-                const latestCloseNum = Number(s.latest_close);
-                const trailingStopNum = Number(s.trailing_stop_price);
-                const belowTrailingStop = !Number.isNaN(latestCloseNum)
-                    && !Number.isNaN(trailingStopNum)
-                    && latestCloseNum < trailingStopNum;
+                const belowTrailingStop = isBelowTrailingStop(s);
                 return (
                     <>
                         {close === '—' ? (
@@ -126,6 +147,26 @@ export default function HoldingsPage() {
             accessorKey: 'invested_amount',
             header: 'Invested',
             cell: ({ getValue }) => formatTableMoney2(getValue()),
+        },
+        {
+            id: 'fees',
+            header: 'Fees',
+            accessorFn: (row) => row.total_fees,
+            cell: ({ row }) => {
+                const fees = formatTableMoney2(row.original.total_fees);
+                const pct = feesPercentOfInvested(row.original.total_fees, row.original.invested_amount);
+                if (fees === '—') {
+                    return <span className="text-muted">—</span>;
+                }
+                return (
+                    <>
+                        {fees}
+                        {pct != null && (
+                            <div className="text-muted small">{pct}% of invested</div>
+                        )}
+                    </>
+                );
+            },
         },
         {
             id: 'xirr',
@@ -214,15 +255,18 @@ export default function HoldingsPage() {
             enableSorting: false,
             enableHiding: false,
             meta: { columnMenuLabel: 'Sell' },
-            cell: ({ row }) => (
-                <button
-                    type="button"
-                    className="btn btn-sm btn-outline-danger"
-                    onClick={() => handleSell(row.original)}
-                >
-                    Sell
-                </button>
-            ),
+            cell: ({ row }) => {
+                const belowTrailingStop = isBelowTrailingStop(row.original.summary);
+                return (
+                    <button
+                        type="button"
+                        className={`btn btn-sm ${belowTrailingStop ? 'btn-danger' : 'btn-outline-danger'}`}
+                        onClick={() => handleSell(row.original)}
+                    >
+                        Sell
+                    </button>
+                );
+            },
         },
     ], [handleSell]);
 
@@ -233,6 +277,7 @@ export default function HoldingsPage() {
             data={tableData}
             storageKey="holdings"
             defaultColumnOrder={HOLDINGS_COLUMN_ORDER}
+            defaultColumnVisibility={HOLDINGS_DEFAULT_COLUMN_VISIBILITY}
             emptyMessage="No open holdings. Add a buy transaction first."
         />
     );

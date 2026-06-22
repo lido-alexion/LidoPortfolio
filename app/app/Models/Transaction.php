@@ -23,11 +23,29 @@ class Transaction extends Model
     protected function casts(): array
     {
         return [
+            'user_id' => 'integer',
+            'stock_id' => 'integer',
             'quantity' => 'decimal:4',
             'price' => 'decimal:4',
             'fees' => 'decimal:4',
             'transaction_date' => 'date',
         ];
+    }
+
+    /**
+     * Only resolve transactions owned by the authenticated user (API update/delete/show).
+     */
+    public function resolveRouteBinding($value, $field = null)
+    {
+        $user = auth()->user();
+
+        if ($user === null) {
+            return null;
+        }
+
+        return $user->transactions()
+            ->where($field ?? $this->getRouteKeyName(), $value)
+            ->first();
     }
 
     public function user(): BelongsTo

@@ -82,6 +82,7 @@ function useDataTableController({
     enableColumnReorder = true,
     storageKey = null,
     defaultColumnOrder: defaultColumnOrderOverride = null,
+    defaultColumnVisibility: defaultColumnVisibilityOverride = null,
     tableClassName = 'table table-sm mb-0',
     striped = false,
 }) {
@@ -95,13 +96,18 @@ function useDataTableController({
         return [...preferred, ...missing];
     }, [columns, defaultColumnOrderOverride]);
 
+    const defaultColumnVisibility = useMemo(
+        () => defaultColumnVisibilityOverride ?? {},
+        [defaultColumnVisibilityOverride],
+    );
+
     const savedPrefs = useMemo(
         () => loadTableColumnPrefs(storageKey, defaultColumnOrder),
         [storageKey, defaultColumnOrder],
     );
 
     const [columnVisibility, setColumnVisibility] = useState(
-        () => savedPrefs?.columnVisibility ?? {},
+        () => savedPrefs?.columnVisibility ?? defaultColumnVisibility,
     );
     const [columnOrder, setColumnOrder] = useState(() => {
         const saved = savedPrefs?.columnOrder;
@@ -153,12 +159,12 @@ function useDataTableController({
     }, [table, columnOrder]);
 
     const resetColumns = useCallback(() => {
-        setColumnVisibility({});
+        setColumnVisibility(defaultColumnVisibility);
         setColumnOrder(defaultColumnOrder);
         if (storageKey) {
             localStorage.removeItem(`portfolio_datatable_${storageKey}`);
         }
-    }, [defaultColumnOrder, storageKey]);
+    }, [defaultColumnOrder, defaultColumnVisibility, storageKey]);
 
     const moveColumn = useCallback((columnId, direction) => {
         setColumnOrder((old) => {

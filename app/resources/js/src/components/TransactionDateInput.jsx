@@ -6,16 +6,36 @@ import {
 } from '../utils/transactionDate';
 
 function CalendarIcon() {
+    const dotCols = [8, 12, 16];
+    const dotRows = [13.5, 16.5, 19.5];
+
     return (
         <svg
             xmlns="http://www.w3.org/2000/svg"
             width="16"
             height="16"
-            fill="currentColor"
-            viewBox="0 0 16 16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.75"
+            strokeLinecap="round"
+            strokeLinejoin="round"
             aria-hidden="true"
         >
-            <path d="M3.5 0a.5.5 0 0 1 .5.5V1h8V.5a.5.5 0 0 1 1 0V1h1a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h1V.5a.5.5 0 0 1 .5-.5M1 4v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4z" />
+            <rect x="3" y="4" width="18" height="18" rx="2" />
+            <line x1="3" y1="10" x2="21" y2="10" />
+            <line x1="8" y1="2" x2="8" y2="6" />
+            <line x1="16" y1="2" x2="16" y2="6" />
+            {dotRows.flatMap((y) => dotCols.map((x) => (
+                <circle
+                    key={`${x}-${y}`}
+                    cx={x}
+                    cy={y}
+                    r="1.1"
+                    fill="currentColor"
+                    stroke="none"
+                />
+            )))}
         </svg>
     );
 }

@@ -82,7 +82,7 @@ class PortfolioSnapshotRebuildTest extends TestCase
             $index,
         );
 
-        $this->assertEqualsWithDelta(1010, $state['invested_value'], 0.01);
+        $this->assertEqualsWithDelta(1000, $state['invested_value'], 0.01);
         $this->assertEqualsWithDelta(1020, $state['portfolio_value'], 0.01);
     }
 
@@ -102,7 +102,7 @@ class PortfolioSnapshotRebuildTest extends TestCase
             ->first();
         $this->assertNotNull($feb1);
         $this->assertEqualsWithDelta(1010, (float) $feb1->portfolio_value, 0.01);
-        $this->assertEqualsWithDelta(1010, (float) $feb1->invested_value, 0.01);
+        $this->assertEqualsWithDelta(1000, (float) $feb1->invested_value, 0.01);
 
         $feb2 = PortfolioSnapshot::query()
             ->where('user_id', $user->id)
