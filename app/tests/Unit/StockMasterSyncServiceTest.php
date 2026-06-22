@@ -3,8 +3,8 @@
 namespace Tests\Unit;
 
 use App\Models\Stock;
-use App\Services\PortfolioLoggerService;
 use App\Services\ProviderResolverService;
+use App\Services\SyncLogService;
 use App\Services\StockMasterSyncService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
@@ -76,10 +76,11 @@ class StockMasterSyncServiceTest extends TestCase
 
     protected function makeService(): StockMasterSyncService
     {
-        $logger = Mockery::mock(PortfolioLoggerService::class);
-        $logger->shouldReceive('scheduler')->andReturnNull();
-        $logger->shouldReceive('validation')->andReturnNull();
+        $syncLog = Mockery::mock(SyncLogService::class);
+        $syncLog->shouldReceive('beginRun')->andReturn(null);
+        $syncLog->shouldReceive('log')->andReturnNull();
+        $syncLog->shouldReceive('completeRun')->andReturnNull();
 
-        return new StockMasterSyncService(new ProviderResolverService, $logger);
+        return new StockMasterSyncService(new ProviderResolverService, $syncLog);
     }
 }

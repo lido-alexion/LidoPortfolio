@@ -262,7 +262,7 @@ PowerShell -ExecutionPolicy Bypass -File tests\Feature\api_smoke.ps1
 - Holdings table **Sell** button navigates to `/transactions` with form prefilled: symbol/name/exchange, type `sell`, quantity = holding qty, price = latest close, symbol marked validated (`sellTransactionPrefill.js` + router `location.state`).
 - Holdings **Latest Close**: `₹` whole amount + rounded `(+N%)` vs avg buy in `small` plain text; green/red for gain/loss %; price still red (no bold) when below trailing stop. When LTP &lt; trailing stop: **Stock** symbol uses `text-danger`; **Sell** uses solid `btn-danger` (not outline).
 - Holdings **Highest Close** 2nd line: `LTP: N%` = `((LTP − highest since buy) / highest) × 100`; green if ≥ 0, orange if below 0 but above −`stoploss_percent`, red if ≤ −`stoploss_percent` (from settings / `stoploss_summary.stoploss_percent`).
-- Holdings table default column order: Stock → Latest Close → Invested → Fees → XIRR → Highest Close → **Qty** → **Avg Buy** → Trailing Stop → Realized P/L (hidden) → OHLCV → Sell. **Realized P/L** hidden by default (`defaultColumnVisibility` on `DataTableCard`); user prefs in `localStorage` key `portfolio_datatable_holdings`.
+- Holdings table default column order: Stock → Latest Close → Invested → Fees → XIRR → Highest Close → **Qty** → **Avg Buy** → Trailing Stop → Realized P/L → OHLCV → Sell. **Fees** and **Realized P/L** hidden by default (`defaultColumnVisibility` on `DataTableCard`); user prefs in `localStorage` key `portfolio_datatable_holdings`.
 - SPA routing: `routes/web.php` catch-all serves `app` view for all non-API paths so browser refresh on `/holdings`, `/transactions`, etc. works (React `BrowserRouter`).
 - `AppTabs` uses `useLocation().pathname` for active tab state (NavLink `className` callback does not receive `location` in React Router v6).
 
@@ -366,7 +366,8 @@ Env: `LOG_CHANNEL=daily`, `LOG_DAILY_DAYS=2`, `LOG_LEVEL=debug` (Monolog floor; 
 
 ### Provider & scheduler logging
 - `PriceFetchService`: logs failures, zero-row responses, fallback activation to `provider` channel with symbol, provider name, attempt, request time, failure reason.
-- `DailyMarketDataJob`: start/end, processed/failed/skipped counts, per-stock failures.
+- `DailyMarketDataJob`: start/end, processed/failed/skipped counts, per-stock failures; portfolio snapshot count (aggregate, not per-user rows).
+- **In-app sync logs (Jun 2026):** `portfolio_sync_runs` + `portfolio_sync_logs` tables; `SyncLogService` writes DB rows when `sync_log_retention_days` &gt; 0 (default **7**, max 90; **0** disables DB writes and prunes existing rows). File logs via `PortfolioLoggerService::scheduler()` unchanged. Jobs: `daily-market-data` (`DailyMarketDataJob` / `POST /api/sync/daily`) and `stock-master` (`stocks:sync`). Prune on each run start + hourly `sync-log-prune` schedule. Settings: retention field + latest run summaries on `GET /api/settings`. UI: **Settings → View sync logs** → `/settings/sync-logs` with level/job/date/search filters, pagination, CSV export (`GET /api/sync-logs`, `/api/sync-logs/export`, `/api/sync-logs/runs`). Migration: `2026_06_21_000002_create_portfolio_sync_logs_tables.php`.
 
 ### Error handling policy
 - Never silent failures on API (Axios interceptor + toast + `logger.error`).
@@ -383,6 +384,7 @@ Env: `LOG_CHANNEL=daily`, `LOG_DAILY_DAYS=2`, `LOG_LEVEL=debug` (Monolog floor; 
 - `tests/Feature/FrontendLogControllerTest.php` — validation, auth, accept path.
 - `tests/Unit/PriceFetchServiceTest.php` — provider logging mock.
 - `tests/Feature/DailyMarketDataJobTest.php` — scheduler logging mock.
+- `tests/Feature/SyncLogTest.php` — retention, disabled writes, API filters, CSV export, settings summaries.
 
 ### Debugging (local)
 ```bash

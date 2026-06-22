@@ -4,11 +4,12 @@ namespace App\Services;
 
 use App\Models\Stock;
 use App\Support\ExternalHttp;
+
 class StockMasterSyncService
 {
     public function __construct(
         protected ProviderResolverService $resolver,
-        protected PortfolioLoggerService $portfolioLogger,
+        protected SyncLogService $syncLog,
     ) {}
 
     /**
@@ -16,6 +17,9 @@ class StockMasterSyncService
      */
     public function syncStockMaster(): array
     {
+        $jobName = SyncLogService::JOB_STOCK_MASTER;
+        $runId = $this->syncLog->beginRun($jobName);
+
         $stats = [
             'added' => 0,
             'updated' => 0,
@@ -24,10 +28,46 @@ class StockMasterSyncService
             'source' => 'nse',
         ];
 
-        $this->portfolioLogger->scheduler('info', 'Stock master sync started', [
+        $this->syncLog->log($runId, $jobName, 'info', 'Stock master sync started', [
             'start_time' => now()->toIso8601String(),
         ]);
 
+        try {
+            $stats = $this->runStockMasterSync($runId, $jobName, $stats);
+
+            $summary = sprintf(
+                'Stock master sync complete (%s): added=%d updated=%d deactivated=%d skipped=%d',
+                $stats['source'],
+                $stats['added'],
+                $stats['updated'],
+                $stats['deactivated'],
+                $stats['skipped'],
+            );
+
+            $this->syncLog->log($runId, $jobName, 'info', 'Stock master sync completed', array_merge($stats, [
+                'end_time' => now()->toIso8601String(),
+            ]));
+            $this->syncLog->completeRun($runId, 'success', [
+                'processed' => $stats['added'] + $stats['updated'],
+                'skipped' => $stats['skipped'],
+            ], $summary);
+
+            return $stats;
+        } catch (\Throwable $e) {
+            $this->syncLog->log($runId, $jobName, 'error', 'Stock master sync failed', [
+                'failure_reason' => $e->getMessage(),
+            ]);
+            $this->syncLog->completeRun($runId, 'failed', [], $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
+     * @param  array{added: int, updated: int, deactivated: int, skipped: int, source: string}  $stats
+     * @return array{added: int, updated: int, deactivated: int, skipped: int, source: string}
+     */
+    protected function runStockMasterSync(?string $runId, string $jobName, array $stats): array
+    {
         $rows = $this->fetchNseEquityRows();
         $seen = [];
 
@@ -41,7 +81,7 @@ class StockMasterSyncService
 
             $key = $normalized['symbol'].'|'.$normalized['exchange'];
             if (isset($seen[$key])) {
-                $this->portfolioLogger->validation('warning', 'Duplicate symbol conflict during stock master sync', [
+                $this->syncLog->log($runId, $jobName, 'warning', 'Duplicate symbol conflict during stock master sync', [
                     'symbol' => $normalized['symbol'],
                     'exchange' => $normalized['exchange'],
                 ]);
@@ -65,7 +105,7 @@ class StockMasterSyncService
         $stats['deactivated'] = $this->deactivateMissing(array_keys($seen), 'NSE');
 
         if (config('portfolio.stock_master.bse_enabled')) {
-            $bseStats = $this->syncBseMaster();
+            $bseStats = $this->syncBseMaster($runId, $jobName);
             $stats['added'] += $bseStats['added'];
             $stats['updated'] += $bseStats['updated'];
             $stats['deactivated'] += $bseStats['deactivated'];
@@ -73,25 +113,22 @@ class StockMasterSyncService
             $stats['source'] = 'nse+bse';
         }
 
-        $this->portfolioLogger->scheduler('info', 'Stock master sync completed', [
-            'end_time' => now()->toIso8601String(),
-            'added' => $stats['added'],
-            'updated' => $stats['updated'],
-            'deactivated' => $stats['deactivated'],
-            'skipped' => $stats['skipped'],
-        ]);
-
         return $stats;
     }
 
     /**
      * @return array{added: int, updated: int, deactivated: int, skipped: int}
      */
-    public function syncBseMaster(): array
+    public function syncBseMaster(?string $runId = null, ?string $jobName = null): array
     {
         $url = config('portfolio.stock_master.bse_equity_csv_url');
         if (! $url) {
-            $this->portfolioLogger->scheduler('info', 'BSE stock master sync skipped (not configured)');
+            $this->syncLog->log(
+                $runId,
+                $jobName ?? SyncLogService::JOB_STOCK_MASTER,
+                'info',
+                'BSE stock master sync skipped (not configured)',
+            );
 
             return ['added' => 0, 'updated' => 0, 'deactivated' => 0, 'skipped' => 0];
         }

@@ -7,7 +7,7 @@ use App\Services\AlertExpirationService;
 use App\Services\DailyMarketSyncService;
 use App\Services\MetricsUpdateService;
 use App\Services\PriceFetchService;
-use App\Services\PortfolioLoggerService;
+use App\Services\SyncLogService;
 use App\Services\SystemLogService;
 use App\Services\TelegramNotificationService;
 use Mockery;
@@ -28,7 +28,7 @@ class DailyMarketDataJobTest extends TestCase
         $portfolio = Mockery::mock(\App\Services\PortfolioCalculationService::class);
         $telegram = Mockery::mock(TelegramNotificationService::class);
         $logger = Mockery::mock(SystemLogService::class);
-        $portfolioLogger = Mockery::mock(PortfolioLoggerService::class);
+        $syncLog = Mockery::mock(SyncLogService::class);
         $dailySyncStatus = Mockery::mock(DailyMarketSyncService::class);
         $dailySyncStatus->shouldNotReceive('markSuccessful');
         $dailySyncStatus->shouldReceive('clearInProgress')->once();
@@ -38,10 +38,12 @@ class DailyMarketDataJobTest extends TestCase
         $priceFetch->shouldReceive('syncBenchmark')->once()->andThrow(new \RuntimeException('sync failed'));
         $telegram->shouldReceive('sendSyncFailureAlert')->once();
         $logger->shouldReceive('log')->once();
-        $portfolioLogger->shouldReceive('scheduler')->atLeast()->once();
+        $syncLog->shouldReceive('beginRun')->once()->andReturn('run-test');
+        $syncLog->shouldReceive('log')->atLeast()->once();
+        $syncLog->shouldReceive('completeRun')->once();
 
         $job = new DailyMarketDataJob();
         $this->expectException(\RuntimeException::class);
-        $job->handle($priceFetch, $metrics, $portfolio, $telegram, $logger, $portfolioLogger, $dailySyncStatus, $alertExpiration);
+        $job->handle($priceFetch, $metrics, $portfolio, $telegram, $logger, $syncLog, $dailySyncStatus, $alertExpiration);
     }
 }

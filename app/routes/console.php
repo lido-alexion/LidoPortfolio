@@ -87,3 +87,9 @@ Schedule::command('portfolio:expire-alerts')
     ->hourly()
     ->timezone($timezone)
     ->name('alert-max-age-cleanup');
+
+Schedule::call(function () {
+    if (\Illuminate\Support\Facades\Schema::hasTable('portfolio_sync_runs')) {
+        app(\App\Services\SyncLogService::class)->prune();
+    }
+})->hourly()->timezone($timezone)->name('sync-log-prune');

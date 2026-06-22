@@ -16,6 +16,7 @@ class SettingsService
         'alpha_vantage_api_key' => '',
         'notifications_enabled' => 'true',
         'backend_log_level' => 'info',
+        'sync_log_retention_days' => '7',
         'fee_components' => '',
     ];
 
@@ -31,6 +32,12 @@ class SettingsService
 
         $settings['notification_schedules'] = app(NotificationScheduleService::class)->schedules();
         $settings['fee_components'] = app(FeeCalculatorService::class)->componentsFromSettings();
+
+        $syncLogService = app(SyncLogService::class);
+        $settings['sync_log_latest_runs'] = [
+            'daily_market_data' => $syncLogService->latestRunSummary(SyncLogService::JOB_DAILY_MARKET_DATA),
+            'stock_master' => $syncLogService->latestRunSummary(SyncLogService::JOB_STOCK_MASTER),
+        ];
 
         return $settings;
     }

@@ -9,9 +9,9 @@ use App\Services\AlertExpirationService;
 use App\Services\DailyMarketSyncService;
 use App\Services\MetricsUpdateService;
 use App\Services\PortfolioCalculationService;
-use App\Services\PortfolioLoggerService;
 use App\Services\PriceFetchService;
 use App\Services\PriceSyncNotificationContext;
+use App\Services\SyncLogService;
 use App\Services\SystemLogService;
 use App\Services\TelegramNotificationService;
 use Carbon\Carbon;
@@ -30,17 +30,19 @@ class DailyMarketDataJob implements ShouldQueue
         PortfolioCalculationService $portfolioCalculation,
         TelegramNotificationService $telegram,
         SystemLogService $logger,
-        PortfolioLoggerService $portfolioLogger,
+        SyncLogService $syncLog,
         DailyMarketSyncService $dailySyncStatus,
         AlertExpirationService $alertExpiration,
     ): void {
+        $jobName = SyncLogService::JOB_DAILY_MARKET_DATA;
+        $runId = $syncLog->beginRun($jobName);
         $startedAt = now();
         $processed = 0;
         $failed = 0;
         $skipped = 0;
         $priceDateBefore = $alertExpiration->latestPortfolioPriceDate();
 
-        $portfolioLogger->scheduler('info', 'Daily market data job started', [
+        $syncLog->log($runId, $jobName, 'info', 'Daily market data job started', [
             'start_time' => $startedAt->toIso8601String(),
         ]);
 
@@ -50,10 +52,12 @@ class DailyMarketDataJob implements ShouldQueue
                 $metricsUpdate,
                 $portfolioCalculation,
                 $telegram,
-                $portfolioLogger,
+                $syncLog,
                 $dailySyncStatus,
                 $alertExpiration,
                 $startedAt,
+                $runId,
+                $jobName,
                 &$processed,
                 &$failed,
                 &$skipped,
@@ -75,10 +79,7 @@ class DailyMarketDataJob implements ShouldQueue
                 foreach ($stocks as $stock) {
                     if (! $stock->is_active) {
                         $skipped++;
-                        $portfolioLogger->scheduler('debug', 'Skipped inactive stock', [
-                            'stock_id' => $stock->id,
-                            'symbol' => $stock->symbol,
-                        ]);
+
                         continue;
                     }
 
@@ -87,14 +88,14 @@ class DailyMarketDataJob implements ShouldQueue
                         $processed++;
                         if (! $sync['success']) {
                             $failed++;
-                            $portfolioLogger->scheduler('warning', 'Stock sync returned no rows', [
+                            $syncLog->log($runId, $jobName, 'warning', 'Stock sync returned no rows', [
                                 'symbol' => $stock->symbol,
                                 'errors' => $sync['errors'] ?? [],
                             ]);
                         }
                     } catch (\Throwable $e) {
                         $failed++;
-                        $portfolioLogger->scheduler('error', 'Stock sync failed', [
+                        $syncLog->log($runId, $jobName, 'error', 'Stock sync failed', [
                             'symbol' => $stock->symbol,
                             'failure_reason' => $e->getMessage(),
                         ]);
@@ -103,45 +104,58 @@ class DailyMarketDataJob implements ShouldQueue
 
                 $metricsUpdate->updateAllTrackedStocks();
 
+                $userCount = User::query()->count();
                 User::query()->each(function (User $user) use ($portfolioCalculation) {
                     $portfolioCalculation->storeSnapshot($user);
                 });
+                $syncLog->log($runId, $jobName, 'info', 'Portfolio snapshots stored', [
+                    'user_count' => $userCount,
+                ]);
 
-                $portfolioLogger->scheduler('info', 'Daily market data job completed', [
-                    'start_time' => $startedAt->toIso8601String(),
-                    'end_time' => now()->toIso8601String(),
+                $stats = [
                     'stocks_processed' => $processed,
                     'failures' => $failed,
                     'skipped' => $skipped,
-                ]);
+                ];
+
+                $syncLog->log($runId, $jobName, 'info', 'Daily market data job completed', array_merge($stats, [
+                    'start_time' => $startedAt->toIso8601String(),
+                    'end_time' => now()->toIso8601String(),
+                ]));
 
                 if ($failed === 0) {
                     $dailySyncStatus->markSuccessful();
+                    $syncLog->completeRun($runId, 'success', $stats);
 
                     $priceDateAfter = $alertExpiration->latestPortfolioPriceDate();
                     if ($priceDateAfter && (! $priceDateBefore || $priceDateAfter > $priceDateBefore)) {
                         $expiredOnRefresh = $alertExpiration->expireBeforeTradingDay(
                             Carbon::parse($priceDateAfter)->startOfDay(),
                         );
-                        $portfolioLogger->scheduler('info', 'Alerts expired after new trading day prices', [
+                        $syncLog->log($runId, $jobName, 'info', 'Alerts expired after new trading day prices', [
                             'trading_day' => $priceDateAfter,
                             'expired_count' => $expiredOnRefresh,
                         ]);
                     }
                 } else {
                     $dailySyncStatus->markIncomplete($processed, $failed);
-                    $telegram->sendSyncFailureAlert(
-                        "Daily sync finished with {$failed} failure(s) out of {$processed} held stock(s).",
-                    );
+                    $summary = "Daily sync finished with {$failed} failure(s) out of {$processed} held stock(s).";
+                    $syncLog->completeRun($runId, 'partial', $stats, $summary);
+                    $telegram->sendSyncFailureAlert($summary);
                 }
             });
         } catch (\Throwable $e) {
             $logger->log('scheduler', 'Daily market data job failed: '.$e->getMessage());
-            $portfolioLogger->scheduler('error', 'Daily market data job failed', [
+            $syncLog->log($runId, $jobName, 'error', 'Daily market data job failed', [
                 'start_time' => $startedAt->toIso8601String(),
                 'end_time' => now()->toIso8601String(),
                 'failure_reason' => $e->getMessage(),
             ]);
+            $syncLog->completeRun($runId, 'failed', [
+                'stocks_processed' => $processed,
+                'failures' => $failed,
+                'skipped' => $skipped,
+            ], $e->getMessage());
             $telegram->sendSyncFailureAlert($e->getMessage());
             throw $e;
         } finally {

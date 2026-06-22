@@ -49,6 +49,7 @@ const HOLDINGS_COLUMN_ORDER = [
 ];
 
 const HOLDINGS_DEFAULT_COLUMN_VISIBILITY = {
+    fees: false,
     realized_profit: false,
 };
 

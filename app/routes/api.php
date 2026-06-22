@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\StockController;
 use App\Http\Controllers\Api\StockPriceController;
 use App\Http\Controllers\Api\SyncController;
+use App\Http\Controllers\Api\SyncLogController;
 use App\Http\Controllers\Api\TransactionController;
 use Illuminate\Support\Facades\Route;
 
@@ -57,4 +58,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/sync/daily', [SyncController::class, 'daily']);
     Route::post('/sync/backfill/{stock}', [SyncController::class, 'backfill']);
+
+    Route::get('/sync-logs', [SyncLogController::class, 'index']);
+    Route::get('/sync-logs/runs', [SyncLogController::class, 'runs']);
+    Route::get('/sync-logs/export', [SyncLogController::class, 'export']);
 });

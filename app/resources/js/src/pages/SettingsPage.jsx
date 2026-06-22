@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import FeeComponentsSettings from '../components/FeeComponentsSettings';
@@ -13,6 +14,25 @@ function roundToTwoDecimals(value) {
         return '';
     }
     return (Math.round(num * 100) / 100).toFixed(2);
+}
+
+function formatSyncRunLabel(run) {
+    if (!run) {
+        return 'No runs recorded yet';
+    }
+    const status = run.status || 'unknown';
+    const when = run.finished_at || run.started_at;
+    const whenLabel = when ? new Date(when).toLocaleString() : '';
+    const parts = [status];
+    if (whenLabel) {
+        parts.push(whenLabel);
+    }
+    if (run.summary) {
+        parts.push(run.summary);
+    } else if (run.stocks_processed != null) {
+        parts.push(`processed=${run.stocks_processed}, failures=${run.failures ?? 0}`);
+    }
+    return parts.join(' · ');
 }
 
 export default function SettingsPage() {
@@ -182,6 +202,17 @@ export default function SettingsPage() {
                                     Use 24-hour time between 00:00 and 23:59 (e.g. 18:30).
                                 </div>
                             )}
+                            <p className="text-muted small mt-2 mb-0">
+                                <Link to="/settings/sync-logs">View sync logs</Link>
+                                {' · '}
+                                Daily:
+                                {' '}
+                                {formatSyncRunLabel(settings.sync_log_latest_runs?.daily_market_data)}
+                                {' · '}
+                                Stock master:
+                                {' '}
+                                {formatSyncRunLabel(settings.sync_log_latest_runs?.stock_master)}
+                            </p>
                         </div>
                         <div className="col-12">
                             <label className="form-label d-block">Telegram notification times</label>
@@ -311,6 +342,26 @@ export default function SettingsPage() {
                                 <option value="warning">warning</option>
                                 <option value="error">error</option>
                             </select>
+                        </div>
+                        <div className="col-12 col-md-4">
+                            <label className="form-label" htmlFor="settings-sync-log-retention">
+                                Sync log retention (days)
+                            </label>
+                            <NumberInput
+                                id="settings-sync-log-retention"
+                                min="0"
+                                max="90"
+                                step="1"
+                                allowDecimals={false}
+                                value={settings.sync_log_retention_days ?? ''}
+                                onChange={(e) => setSettings({
+                                    ...settings,
+                                    sync_log_retention_days: e.target.value,
+                                })}
+                            />
+                            <p className="text-muted small mb-0 mt-1">
+                                In-app sync logs only. Set to 0 to disable. File logs are unchanged.
+                            </p>
                         </div>
                         <div className="col-12">
                             <p className="text-muted small mb-0">
