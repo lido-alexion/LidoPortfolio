@@ -446,6 +446,45 @@ body {
     --bs-table-border-color: var(--lido-border-strong);
 }
 
+.contentPane .table-striped {
+    --bs-table-striped-bg: var(--lido-bg-elevated);
+    --bs-table-striped-color: var(--lido-text);
+}
+
+.contentPane .table-striped > tbody > tr:nth-of-type(odd) > * {
+    color: var(--lido-text);
+}
+
+.contentPane .pagination {
+    --bs-pagination-bg: var(--lido-bg-elevated);
+    --bs-pagination-border-color: var(--lido-border-strong);
+    --bs-pagination-color: var(--lido-text);
+    --bs-pagination-hover-bg: var(--lido-hover-overlay);
+    --bs-pagination-hover-color: var(--lido-text);
+    --bs-pagination-hover-border-color: var(--lido-border-strong);
+    --bs-pagination-focus-bg: var(--lido-bg-elevated);
+    --bs-pagination-focus-color: var(--lido-text);
+    --bs-pagination-focus-box-shadow: 0 0 0 0.2rem rgba(30, 144, 255, 0.25);
+    --bs-pagination-disabled-bg: var(--lido-bg-surface);
+    --bs-pagination-disabled-color: var(--lido-text-muted);
+    --bs-pagination-disabled-border-color: var(--lido-border);
+    --bs-pagination-active-bg: var(--lido-brand);
+    --bs-pagination-active-border-color: var(--lido-brand);
+    --bs-pagination-active-color: #fff;
+}
+
+.contentPane .pagination .page-link {
+    background-color: var(--bs-pagination-bg);
+    border-color: var(--bs-pagination-border-color);
+    color: var(--bs-pagination-color);
+}
+
+.contentPane .pagination .page-item.disabled .page-link {
+    background-color: var(--bs-pagination-disabled-bg);
+    border-color: var(--bs-pagination-disabled-border-color);
+    color: var(--bs-pagination-disabled-color);
+}
+
 .contentPane .table .text-danger {
     color: var(--lido-text-danger) !important;
 }

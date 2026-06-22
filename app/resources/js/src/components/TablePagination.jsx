@@ -1,7 +1,7 @@
 import React from 'react';
 
 export default function TablePagination({ meta, onPageChange }) {
-    if (!meta || meta.last_page <= 1) {
+    if (!meta || !meta.total || meta.last_page <= 1) {
         return null;
     }
 

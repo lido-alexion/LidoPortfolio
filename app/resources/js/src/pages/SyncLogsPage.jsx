@@ -173,7 +173,7 @@ export default function SyncLogsPage() {
                                 {exporting ? 'Exporting…' : 'Export CSV'}
                             </button>
                             <Link className="btn btn-sm btn-outline-secondary" to="/settings">
-                                Back to settings
+                                ← Back to settings
                             </Link>
                         </div>
                     </div>
@@ -319,7 +319,10 @@ export default function SyncLogsPage() {
                             </table>
                         </div>
 
-                        <TablePagination meta={pagination} onPageChange={setPage} />
+                        <TablePagination
+                            meta={!loading && logs.length > 0 ? pagination : null}
+                            onPageChange={setPage}
+                        />
                     </div>
                 </div>
             </div>
