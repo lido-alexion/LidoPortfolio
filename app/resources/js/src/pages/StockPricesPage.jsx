@@ -84,11 +84,7 @@ export default function StockPricesPage() {
         { accessorKey: 'data_source', header: 'Source' },
     ], []);
 
-    if (loading) {
-        return <div className="text-muted">Loading price history...</div>;
-    }
-
-    if (error && !payload) {
+    if (error && !payload && !loading) {
         return <div className="alert alert-danger">{error}</div>;
     }
 
@@ -101,14 +97,14 @@ export default function StockPricesPage() {
                 <div>
                     <Link to="/holdings" className="btn btn-sm btn-outline-secondary me-2">← Holdings</Link>
                     <span className="h5 m-0">
-                        {stock?.symbol} — Price History
+                        {loading && !stock ? 'Loading…' : `${stock?.symbol || 'Stock'} — Price History`}
                     </span>
                 </div>
                 <button
                     type="button"
                     className="btn btn-primary btn-sm"
                     onClick={forceSync}
-                    disabled={syncing}
+                    disabled={syncing || loading}
                 >
                     {syncing ? 'Syncing…' : 'Force sync historical prices'}
                 </button>
@@ -149,6 +145,7 @@ export default function StockPricesPage() {
                 columns={columns}
                 data={rows}
                 storageKey={`stock-prices-${stockId}`}
+                loading={loading}
                 striped
                 emptyMessage='No historical prices yet. Click "Force sync historical prices" to fetch from buy date.'
             />

@@ -402,7 +402,24 @@ export function DataTableColumnMenu({ controller }) {
     );
 }
 
-export function DataTableView({ controller, emptyMessage = 'No data.' }) {
+export function TableLoadingRow({ colSpan, label = 'Loading…' }) {
+    return (
+        <tr className="datatable-loading-row">
+            <td colSpan={colSpan} className="text-center py-4">
+                <div className="d-inline-flex align-items-center gap-2 text-muted">
+                    <span
+                        className="spinner-border spinner-border-sm"
+                        role="status"
+                        aria-hidden="true"
+                    />
+                    <span>{label}</span>
+                </div>
+            </td>
+        </tr>
+    );
+}
+
+export function DataTableView({ controller, emptyMessage = 'No data.', loading = false }) {
     const {
         table,
         dragColumnId,
@@ -463,7 +480,9 @@ export function DataTableView({ controller, emptyMessage = 'No data.' }) {
                 ))}
                 </thead>
                 <tbody>
-                {table.getRowModel().rows.length === 0 ? (
+                {loading && table.getRowModel().rows.length === 0 ? (
+                    <TableLoadingRow colSpan={visibleColumnCount} />
+                ) : table.getRowModel().rows.length === 0 ? (
                     <tr>
                         <td colSpan={visibleColumnCount} className="text-muted">
                             {emptyMessage}
@@ -494,6 +513,8 @@ export function DataTableCard({
     className = '',
     bodyClassName = '',
     headerExtra = null,
+    loading = false,
+    emptyMessage,
     ...tableProps
 }) {
     const controller = useDataTableController(tableProps);
@@ -508,22 +529,30 @@ export function DataTableCard({
                 </div>
             </div>
             <div className={`card-body ${bodyClassName}`.trim()}>
-                <DataTableView controller={controller} emptyMessage={tableProps.emptyMessage} />
+                <DataTableView
+                    controller={controller}
+                    emptyMessage={emptyMessage}
+                    loading={loading}
+                />
             </div>
         </div>
     );
 }
 
 /** @deprecated Use DataTableCard for tables inside cards. */
-export default function DataTable(props) {
-    const controller = useDataTableController(props);
+export default function DataTable({ loading = false, emptyMessage, ...tableProps }) {
+    const controller = useDataTableController(tableProps);
 
     return (
         <div>
             <div className="d-flex justify-content-end mb-2">
                 <DataTableColumnMenu controller={controller} />
             </div>
-            <DataTableView controller={controller} emptyMessage={props.emptyMessage} />
+            <DataTableView
+                controller={controller}
+                emptyMessage={emptyMessage}
+                loading={loading}
+            />
         </div>
     );
 }

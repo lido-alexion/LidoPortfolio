@@ -56,6 +56,7 @@ const HOLDINGS_DEFAULT_COLUMN_VISIBILITY = {
 export default function HoldingsPage() {
     const navigate = useNavigate();
     const [holdings, setHoldings] = useState([]);
+    const [loading, setLoading] = useState(true);
 
     const handleSell = useCallback((holding) => {
         const prefill = buildSellPrefillFromHolding(holding);
@@ -66,8 +67,13 @@ export default function HoldingsPage() {
     }, [navigate]);
 
     const load = async () => {
-        const holdingsRes = await api.get('/holdings');
-        setHoldings(holdingsRes.data.data || []);
+        setLoading(true);
+        try {
+            const holdingsRes = await api.get('/holdings');
+            setHoldings(holdingsRes.data.data || []);
+        } finally {
+            setLoading(false);
+        }
     };
 
     useEffect(() => { load(); }, []);
@@ -277,6 +283,7 @@ export default function HoldingsPage() {
             columns={columns}
             data={tableData}
             storageKey="holdings"
+            loading={loading}
             defaultColumnOrder={HOLDINGS_COLUMN_ORDER}
             defaultColumnVisibility={HOLDINGS_DEFAULT_COLUMN_VISIBILITY}
             emptyMessage="No open holdings. Add a buy transaction first."

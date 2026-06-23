@@ -131,6 +131,8 @@ export default function TransactionsPage() {
 
     const [transactions, setTransactions] = useState([]);
 
+    const [loading, setLoading] = useState(true);
+
     const [form, setForm] = useState(emptyForm());
 
     const [selectedStock, setSelectedStock] = useState(null);
@@ -156,8 +158,13 @@ export default function TransactionsPage() {
 
 
     const load = useCallback(async () => {
-        const txRes = await api.get('/transactions', { params: { scope: 'open', per_page: 500 } });
-        setTransactions(txRes.data.data || []);
+        setLoading(true);
+        try {
+            const txRes = await api.get('/transactions', { params: { scope: 'open', per_page: 500 } });
+            setTransactions(txRes.data.data || []);
+        } finally {
+            setLoading(false);
+        }
     }, []);
 
     const loadFeeSettings = async () => {
@@ -775,14 +782,11 @@ export default function TransactionsPage() {
     }, [transactions, stockSearch]);
 
     const transactionTableEmptyMessage = useMemo(() => {
-        if (transactions.length === 0) {
-            return 'No transactions for open holdings.';
-        }
         if (stockSearch.trim() && filteredTransactions.length === 0) {
             return 'No transactions match this search.';
         }
         return 'No transactions for open holdings.';
-    }, [transactions.length, stockSearch, filteredTransactions.length]);
+    }, [stockSearch, filteredTransactions.length]);
 
 
 
@@ -1130,6 +1134,8 @@ export default function TransactionsPage() {
                     data={filteredTransactions}
 
                     storageKey="transactions"
+
+                    loading={loading}
 
                     emptyMessage={transactionTableEmptyMessage}
 

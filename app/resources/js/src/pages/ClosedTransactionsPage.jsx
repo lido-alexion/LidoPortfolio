@@ -85,7 +85,8 @@ export default function ClosedTransactionsPage() {
                     columns={columns}
                     data={transactions}
                     storageKey="transactions-closed"
-                    emptyMessage={loading ? 'Loading…' : emptyMessage}
+                    loading={loading}
+                    emptyMessage={emptyMessage}
                     headerExtra={(
                         <div className="d-flex align-items-center gap-2">
                             <input

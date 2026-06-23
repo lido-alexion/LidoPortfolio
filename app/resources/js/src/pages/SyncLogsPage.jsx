@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
+import { TableLoadingRow } from '../components/DataTable';
 import TablePagination from '../components/TablePagination';
 import { showToast } from '../toast';
 
@@ -333,7 +334,7 @@ export default function SyncLogsPage() {
                             are kept separately.
                         </p>
 
-                        {runs.length > 0 ? (
+                        {(runs.length > 0 || loading) ? (
                             <div className="mb-4">
                                 <h2 className="h6 mb-2">Recent runs</h2>
                                 {runsWithoutLogLines && logs.length === 0 && !loading ? (
@@ -358,7 +359,10 @@ export default function SyncLogsPage() {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {runs.map((run) => (
+                                            {loading && runs.length === 0 ? (
+                                                <TableLoadingRow colSpan={6} />
+                                            ) : (
+                                                runs.map((run) => (
                                                 <tr key={run.run_id}>
                                                     <td className="text-nowrap small">
                                                         {formatTimestamp(run.started_at)}
@@ -375,7 +379,8 @@ export default function SyncLogsPage() {
                                                     <td className="small">{formatRunStats(run)}</td>
                                                     <td className="small">{run.log_lines ?? 0}</td>
                                                 </tr>
-                                            ))}
+                                                ))
+                                            )}
                                         </tbody>
                                     </table>
                                 </div>
@@ -396,12 +401,8 @@ export default function SyncLogsPage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {loading ? (
-                                        <tr>
-                                            <td colSpan={5} className="text-muted text-center py-4">
-                                                Loading…
-                                            </td>
-                                        </tr>
+                                    {loading && logs.length === 0 ? (
+                                        <TableLoadingRow colSpan={5} />
                                     ) : logs.length === 0 ? (
                                         <tr>
                                             <td colSpan={5} className="text-muted text-center py-4">
