@@ -30,7 +30,9 @@ class SyncLogService
 
     public function isEnabled(): bool
     {
-        return $this->retentionDays() > 0 && Schema::hasTable('portfolio_sync_runs');
+        return $this->retentionDays() > 0
+            && Schema::hasTable('portfolio_sync_runs')
+            && Schema::hasTable('portfolio_sync_logs');
     }
 
     public function prune(): int
@@ -150,6 +152,9 @@ class SyncLogService
             'failures' => $run->failures,
             'skipped' => $run->skipped,
             'summary' => $run->summary,
+            'log_lines' => Schema::hasTable('portfolio_sync_logs')
+                ? $run->logs()->count()
+                : 0,
         ];
     }
 

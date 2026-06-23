@@ -55,12 +55,37 @@ function formatContext(context) {
     }
 }
 
+function formatRunStats(run) {
+    if (run.summary) {
+        return run.summary;
+    }
+    if (run.stocks_processed == null) {
+        return '—';
+    }
+    return `processed=${run.stocks_processed}, failures=${run.failures ?? 0}`;
+}
+
+function statusBadgeClass(status) {
+    switch (status) {
+        case 'success':
+            return 'bg-success';
+        case 'partial':
+            return 'bg-warning text-dark';
+        case 'failed':
+            return 'bg-danger';
+        default:
+            return 'bg-secondary';
+    }
+}
+
 export default function SyncLogsPage() {
     const [logs, setLogs] = useState([]);
+    const [runs, setRuns] = useState([]);
     const [pagination, setPagination] = useState(null);
     const [page, setPage] = useState(1);
     const [loading, setLoading] = useState(true);
     const [exporting, setExporting] = useState(false);
+    const [loadError, setLoadError] = useState('');
     const [level, setLevel] = useState('');
     const [jobName, setJobName] = useState('');
     const [searchInput, setSearchInput] = useState('');
@@ -78,22 +103,51 @@ export default function SyncLogsPage() {
 
     const load = useCallback(async (pageNum, activeFilters) => {
         setLoading(true);
+        setLoadError('');
         try {
-            const res = await api.get('/sync-logs', {
-                params: {
-                    page: pageNum,
-                    per_page: PER_PAGE,
-                    ...activeFilters,
-                },
-            });
-            setLogs(res.data.data || []);
+            const [logsRes, runsRes] = await Promise.all([
+                api.get('/sync-logs', {
+                    params: {
+                        page: pageNum,
+                        per_page: PER_PAGE,
+                        ...activeFilters,
+                    },
+                }),
+                api.get('/sync-logs/runs', {
+                    params: {
+                        limit: 20,
+                        job_name: activeFilters.job_name || undefined,
+                    },
+                }),
+            ]);
+
+            const logRows = logsRes.data?.data;
+            const runRows = runsRes.data?.data;
+
+            if (!Array.isArray(logRows)) {
+                throw new Error('Sync logs API returned an unexpected response. Re-upload routes/api.php and SyncLogController.php.');
+            }
+            if (!Array.isArray(runRows)) {
+                throw new Error('Sync runs API returned an unexpected response. Re-upload routes/api.php and SyncLogController.php.');
+            }
+
+            setLogs(logRows);
+            setRuns(runRows);
             setPagination({
-                current_page: res.data.current_page,
-                last_page: res.data.last_page,
-                from: res.data.from,
-                to: res.data.to,
-                total: res.data.total,
+                current_page: logsRes.data.current_page,
+                last_page: logsRes.data.last_page,
+                from: logsRes.data.from,
+                to: logsRes.data.to,
+                total: logsRes.data.total,
             });
+        } catch (err) {
+            setLogs([]);
+            setRuns([]);
+            setPagination(null);
+            const msg = err?.response?.data?.message
+                || err?.message
+                || 'Failed to load sync logs';
+            setLoadError(msg);
         } finally {
             setLoading(false);
         }
@@ -146,9 +200,13 @@ export default function SyncLogsPage() {
         }
     };
 
-    const emptyMessage = search
+    const emptyMessage = search || level || dateFrom || dateTo
         ? 'No sync log entries match your filters.'
-        : 'No sync logs recorded yet. Logs appear after daily or stock-master sync runs.';
+        : runs.length > 0
+            ? 'No detailed log lines recorded for these runs. If this persists after the next sync, confirm migration 2026_06_21_000002 is applied on the server.'
+            : 'No sync logs recorded yet. Logs appear after daily or stock-master sync runs.';
+
+    const runsWithoutLogLines = runs.some((run) => (run.log_lines ?? 0) === 0);
 
     return (
         <div className="row g-3">
@@ -178,6 +236,9 @@ export default function SyncLogsPage() {
                         </div>
                     </div>
                     <div className="card-body">
+                        {loadError ? (
+                            <div className="alert alert-danger py-2 small">{loadError}</div>
+                        ) : null}
                         <div className="row g-2 mb-3">
                             <div className="col-12 col-md-3">
                                 <label className="form-label small mb-1" htmlFor="sync-log-level">
@@ -271,6 +332,57 @@ export default function SyncLogsPage() {
                             {' '}
                             are kept separately.
                         </p>
+
+                        {runs.length > 0 ? (
+                            <div className="mb-4">
+                                <h2 className="h6 mb-2">Recent runs</h2>
+                                {runsWithoutLogLines && logs.length === 0 && !loading ? (
+                                    <p className="alert alert-warning py-2 small mb-2">
+                                        Run summaries exist but detailed log lines are missing. Apply migration
+                                        {' '}
+                                        <code>2026_06_21_000002</code>
+                                        {' '}
+                                        if needed, then run another daily or stock-master sync.
+                                    </p>
+                                ) : null}
+                                <div className="table-responsive">
+                                    <table className="table table-sm table-hover align-middle mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>Started</th>
+                                                <th>Finished</th>
+                                                <th>Status</th>
+                                                <th>Job</th>
+                                                <th>Result</th>
+                                                <th>Log lines</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {runs.map((run) => (
+                                                <tr key={run.run_id}>
+                                                    <td className="text-nowrap small">
+                                                        {formatTimestamp(run.started_at)}
+                                                    </td>
+                                                    <td className="text-nowrap small">
+                                                        {formatTimestamp(run.finished_at)}
+                                                    </td>
+                                                    <td>
+                                                        <span className={`badge ${statusBadgeClass(run.status)}`}>
+                                                            {run.status}
+                                                        </span>
+                                                    </td>
+                                                    <td className="small text-nowrap">{run.job_name}</td>
+                                                    <td className="small">{formatRunStats(run)}</td>
+                                                    <td className="small">{run.log_lines ?? 0}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        ) : null}
+
+                        <h2 className="h6 mb-2">Log entries</h2>
 
                         <div className="table-responsive">
                             <table className="table table-sm table-hover align-middle mb-0">

@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\SyncLogService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -83,6 +84,52 @@ class SyncLogTest extends TestCase
 
         $this->assertDatabaseCount('portfolio_sync_runs', 0);
         $this->assertDatabaseCount('portfolio_sync_logs', 0);
+    }
+
+    public function test_begin_run_requires_logs_table(): void
+    {
+        Setting::setValue('sync_log_retention_days', '7');
+        Schema::dropIfExists('portfolio_sync_logs');
+
+        $service = app(SyncLogService::class);
+        $runId = $service->beginRun(SyncLogService::JOB_DAILY_MARKET_DATA);
+
+        $this->assertNull($runId);
+        $this->assertDatabaseCount('portfolio_sync_runs', 0);
+    }
+
+    public function test_runs_api_includes_log_line_counts(): void
+    {
+        $user = User::query()->create([
+            'name' => 'Runs User',
+            'email' => 'runs-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+
+        $run = SyncRun::query()->create([
+            'id' => (string) Str::uuid(),
+            'job_name' => SyncLogService::JOB_DAILY_MARKET_DATA,
+            'status' => 'success',
+            'started_at' => now(),
+            'finished_at' => now(),
+            'stocks_processed' => 13,
+            'failures' => 0,
+        ]);
+
+        SyncLog::query()->create([
+            'run_id' => $run->id,
+            'job_name' => $run->job_name,
+            'level' => 'info',
+            'message' => 'Daily market data job completed',
+            'logged_at' => now(),
+        ]);
+
+        $response = $this->actingAs($user)->getJson('/api/sync-logs/runs');
+
+        $response->assertOk()
+            ->assertJsonPath('data.0.run_id', $run->id)
+            ->assertJsonPath('data.0.log_lines', 1)
+            ->assertJsonPath('data.0.stocks_processed', 13);
     }
 
     public function test_sync_logs_api_filters_by_level_and_search(): void
