@@ -7,8 +7,8 @@ use App\Models\Holding;
 use App\Models\Stock;
 use App\Models\StockMetric;
 use App\Models\StockPrice;
+use App\Models\Transaction;
 use App\Models\User;
-use App\Services\SettingsService;
 use App\Services\StoplossService;
 use Illuminate\Support\Str;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -20,8 +20,7 @@ class StoplossServiceTest extends TestCase
 
     public function test_stoploss_service_can_be_constructed(): void
     {
-        $settings = $this->createMock(SettingsService::class);
-        $service = new StoplossService($settings);
+        $service = app(StoplossService::class);
         $this->assertInstanceOf(StoplossService::class, $service);
     }
 
@@ -51,6 +50,16 @@ class StoplossServiceTest extends TestCase
             'updated_at' => now(),
         ]);
 
+        Transaction::query()->create([
+            'user_id' => $user->id,
+            'stock_id' => $stock->id,
+            'type' => 'buy',
+            'quantity' => 5,
+            'price' => 100,
+            'fees' => 0,
+            'transaction_date' => now()->subMonths(2)->toDateString(),
+        ]);
+
         StockMetric::query()->create([
             'stock_id' => $stock->id,
             'highest_close' => 120,
@@ -59,6 +68,18 @@ class StoplossServiceTest extends TestCase
             'trailing_stop_price' => 108,
             'tracking_active' => true,
             'updated_at' => now(),
+        ]);
+
+        StockPrice::query()->create([
+            'stock_id' => $stock->id,
+            'price_date' => now()->subMonth()->toDateString(),
+            'open_price' => 118,
+            'high_price' => 121,
+            'low_price' => 117,
+            'close_price' => 120,
+            'volume' => 1000,
+            'data_source' => 'test',
+            'created_at' => now(),
         ]);
 
         StockPrice::query()->create([
@@ -73,9 +94,13 @@ class StoplossServiceTest extends TestCase
             'created_at' => now(),
         ]);
 
-        $settings = $this->createMock(SettingsService::class);
-        $service = new StoplossService($settings);
+        $service = app(StoplossService::class);
         $service->updateMetricsForStock($stock);
+
+        $alert = Alert::query()->where('user_id', $user->id)->where('stock_id', $stock->id)->first();
+        $this->assertNotNull($alert);
+        $this->assertStringContainsString('10% below highest close 120.00', $alert->message);
+        $this->assertStringContainsString('Trailing stop: 108.00', $alert->message);
 
         $this->assertDatabaseHas('portfolio_alerts', [
             'user_id' => $user->id,
@@ -117,6 +142,16 @@ class StoplossServiceTest extends TestCase
                 'realized_profit' => 0,
                 'updated_at' => now(),
             ]);
+
+            Transaction::query()->create([
+                'user_id' => $user->id,
+                'stock_id' => $stock->id,
+                'type' => 'buy',
+                'quantity' => 5,
+                'price' => 100,
+                'fees' => 0,
+                'transaction_date' => now()->subMonths(2)->toDateString(),
+            ]);
         }
 
         StockMetric::query()->create([
@@ -131,6 +166,18 @@ class StoplossServiceTest extends TestCase
 
         StockPrice::query()->create([
             'stock_id' => $stock->id,
+            'price_date' => now()->subMonth()->toDateString(),
+            'open_price' => 118,
+            'high_price' => 121,
+            'low_price' => 117,
+            'close_price' => 120,
+            'volume' => 1000,
+            'data_source' => 'test',
+            'created_at' => now(),
+        ]);
+
+        StockPrice::query()->create([
+            'stock_id' => $stock->id,
             'price_date' => now()->toDateString(),
             'open_price' => 104,
             'high_price' => 105,
@@ -141,8 +188,7 @@ class StoplossServiceTest extends TestCase
             'created_at' => now(),
         ]);
 
-        $settings = $this->createMock(SettingsService::class);
-        $service = new StoplossService($settings);
+        $service = app(StoplossService::class);
         $service->updateMetricsForStock($stock);
 
         $this->assertSame(2, Alert::query()->where('stock_id', $stock->id)->count());

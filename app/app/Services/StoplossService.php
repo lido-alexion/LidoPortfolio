@@ -8,11 +8,13 @@ use App\Models\Stock;
 use App\Models\StockMetric;
 use App\Models\StockPrice;
 use App\Models\User;
+use Carbon\Carbon;
 
 class StoplossService
 {
     public function __construct(
         protected SettingsService $settings,
+        protected HoldingPresentationService $holdingPresentation,
     ) {}
 
     public function updateMetricsForStock(Stock $stock): StockMetric
@@ -70,7 +72,7 @@ class StoplossService
         ]);
 
         if ($latestClose <= $trailingStop) {
-            $this->triggerStoplossAlert($stock, $metric, $latestClose);
+            $this->triggerStoplossAlert($stock, $latestClose);
         }
 
         return $metric->fresh();
@@ -91,28 +93,26 @@ class StoplossService
         }
     }
 
-    protected function triggerStoplossAlert(Stock $stock, StockMetric $metric, float $latestClose): void
+    protected function triggerStoplossAlert(Stock $stock, float $latestClose): void
     {
-        $userIds = Holding::query()
+        $holdings = Holding::query()
+            ->with('stock')
             ->where('stock_id', $stock->id)
             ->where('quantity', '>', 0)
-            ->pluck('user_id');
+            ->get();
 
-        if ($userIds->isEmpty()) {
+        if ($holdings->isEmpty()) {
             return;
         }
 
-        $message = sprintf(
-            'Stoploss triggered for %s (%s). Latest close: %.2f, Trailing stop: %.2f',
-            $stock->name,
-            $stock->symbol,
-            $latestClose,
-            (float) $metric->trailing_stop_price,
-        );
+        foreach ($holdings as $holding) {
+            $user = User::query()->find($holding->user_id);
+            if (! $user) {
+                continue;
+            }
 
-        foreach ($userIds as $userId) {
             $exists = Alert::query()
-                ->where('user_id', $userId)
+                ->where('user_id', $user->id)
                 ->where('stock_id', $stock->id)
                 ->where('alert_type', 'stoploss_triggered')
                 ->whereDate('created_at', now()->toDateString())
@@ -122,8 +122,11 @@ class StoplossService
                 continue;
             }
 
+            $summary = $this->holdingPresentation->enrichHolding($user, $holding)['stoploss_summary'] ?? [];
+            $message = $this->buildStoplossAlertMessage($stock, $summary, $latestClose);
+
             Alert::query()->create([
-                'user_id' => $userId,
+                'user_id' => $user->id,
                 'stock_id' => $stock->id,
                 'alert_type' => 'stoploss_triggered',
                 'message' => $message,
@@ -131,6 +134,57 @@ class StoplossService
                 'created_at' => now(),
             ]);
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $summary
+     */
+    public function buildStoplossAlertMessage(Stock $stock, array $summary, float $latestClose): string
+    {
+        $stopPercent = $summary['stoploss_percent'] ?? null;
+        $highest = $summary['highest_close_since_buy'] ?? null;
+        $highestDate = $summary['highest_close_since_buy_date'] ?? null;
+        $latestDate = $summary['latest_price_date'] ?? null;
+        $trailing = $summary['trailing_stop_price'] ?? null;
+        $displayLatest = $summary['latest_close'] ?? $latestClose;
+
+        $latestPart = sprintf('Latest close: %.2f', (float) $displayLatest);
+        if ($latestDate) {
+            $latestPart .= ' ('.$this->formatAlertDate((string) $latestDate).')';
+        }
+
+        $trailingDetail = '';
+        if ($stopPercent !== null && $highest !== null && (float) $highest > 0) {
+            $trailingDetail = sprintf(
+                ' (%s%% below highest close %.2f%s)',
+                $this->formatStopPercent((float) $stopPercent),
+                (float) $highest,
+                $highestDate ? ' on '.$this->formatAlertDate((string) $highestDate) : ''
+            );
+        }
+
+        return sprintf(
+            'Stoploss triggered for %s (%s). %s. Trailing stop: %.2f%s',
+            $stock->name,
+            $stock->symbol,
+            $latestPart,
+            (float) ($trailing ?? 0),
+            $trailingDetail
+        );
+    }
+
+    protected function formatAlertDate(string $date): string
+    {
+        return Carbon::parse($date)->format('d-M-Y');
+    }
+
+    protected function formatStopPercent(float $percent): string
+    {
+        $rounded = round($percent, 2);
+
+        return abs($rounded - round($rounded)) < 0.001
+            ? (string) (int) round($rounded)
+            : rtrim(rtrim(number_format($rounded, 2, '.', ''), '0'), '.');
     }
 
     public function getActiveAlertsForUser(User $user): array

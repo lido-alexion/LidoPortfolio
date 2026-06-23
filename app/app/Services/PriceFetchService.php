@@ -8,6 +8,7 @@ use App\Models\StockPrice;
 use App\Services\PriceProviders\AlphaVantagePriceProvider;
 use App\Services\PriceProviders\NsePriceProvider;
 use App\Services\PriceProviders\YahooPriceProvider;
+use App\Support\TradingCalendar;
 use Carbon\Carbon;
 
 class PriceFetchService
@@ -114,6 +115,11 @@ class PriceFetchService
         $stored = 0;
 
         foreach ($rows as $row) {
+            $priceDate = Carbon::parse($row['price_date'])->startOfDay();
+            if (! TradingCalendar::isEquitySessionDate($priceDate)) {
+                continue;
+            }
+
             StockPrice::query()->updateOrCreate(
                 [
                     'stock_id' => $stock->id,

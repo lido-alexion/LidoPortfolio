@@ -233,13 +233,13 @@ PowerShell -ExecutionPolicy Bypass -File tests\Feature\api_smoke.ps1
 - Scheduler now resolves `cron_time` and `cron_timezone` from `portfolio_settings` with safe env fallback.
 - **Telegram notifications** are separate from **data syncing time** (`cron_time`). `notification_schedules` (JSON array of `HH:mm`) drives `portfolio:send-notifications` at each time in `cron_timezone`. Job uses `AlertNotificationService` → same alerts as `GET /api/alerts`; **silent skip** when none. Stoploss triggers only **persist** alerts (no immediate Telegram). Removed daily summary Telegram from `DailyMarketDataJob`. Settings UI: add/remove notification times.
 - Improved provider resilience with per-provider retries, backoff, and structured attempt-level failure logging.
-- Dashboard UI expanded with top gainer/loser, **Alerts** card (stoploss today; extensible), and relative-strength trend widgets (vs **NIFTY50** benchmark: stock period return % − index return %; cached in `portfolio_stock_metrics`).
-- **Alert expiration** (`portfolio_alerts.user_id`, `expired_at`, `expiration_reason`): alerts are **per user** (not global per stock). Stoploss creates one alert per holder per day (`user_id` + `stock_id` dedup). `GET /api/alerts` / dashboard filter by `user_id`. Expiration: manual clear all + acknowledge (own alerts only); hourly 100h max age; new trading day after daily sync; **full sell** expires only that user's alerts (`expireForUserStockIfUnheld`). Active = `expired_at` IS NULL.
+- Dashboard UI expanded with top gainer/loser, **Alerts** card (stoploss today; extensible), and relative-strength trend widgets (vs **NIFTY50** benchmark: stock period return % − index return %; cached in `portfolio_stock_metrics`). Relative Strength table: **Avg. strength** = mean of available 1M/3M/6M values (whole %); default sort descending on that column.
+- **Alert expiration** (`portfolio_alerts.user_id`, `expired_at`, `expiration_reason`): alerts are **per user** (not global per stock). Stoploss creates one alert per holder per day (`user_id` + `stock_id` dedup). Message includes latest close (with price date), trailing stop, stop %, highest close since buy, and peak date (per-user via `HoldingPresentationService`). Dashboard alerts table shows **Date** (`created_at`). `GET /api/alerts` / dashboard filter by `user_id`. Expiration: manual clear all + acknowledge (own alerts only); hourly 100h max age; new trading day after daily sync; **full sell** expires only that user's alerts (`expireForUserStockIfUnheld`). Active = `expired_at` IS NULL.
 - Dashboard summary cards, allocation **Market Value**, and growth-chart axis/tooltips use `formatInrWhole` / `formatInrCompactWhole` (no paise; `₹ ` + amount, lakh grouping). Holdings/Explorer use `formatInr` (2 dp) via `formatTableMoney2`.
 - Dashboard **Sync prices for today** → `POST /api/sync/daily` (`force: true` from UI when re-syncing same day). Skips without `force` if already synced today (cron-safe). Button stays enabled as **Sync again today** after first success; shows muted “Synced for …” hint.
 - **Production deploy (May 2026):** Canonical steps in **`deploy/DEPLOY.md`** (first deploy + code updates). GoDaddy layout: `public_html/lidoportfolio/` + `public_html/portfolio/`; DB via `/home/USER/config/DBConfig.php`; browser setup via `cpanel-diagnose.php` / `cpanel-once-setup.php` / **`cpanel-config-cache.php`** (config:cache only, after `.env` edits). Obsolete: Laravel outside `public_html`, `DB_*` in production `.env`, document root = `app/public` on main domain, `route:cache` under `/portfolio`.
 - **Production subdirectory** (`https://lidoalexion.com/portfolio`): `APP_URL` includes path; build with `VITE_APP_BASE=/portfolio/build/`; upload `public/build/` to **`lidoportfolio/public/build/`** and **`portfolio/build/`**. Vite tags use **root-relative** paths (`AppServiceProvider::createAssetPathsUsing`) so `www` and apex both work. Delete `public/hot` on server. Troubleshooting: `deploy/DEPLOY.md` §7, `implementation.md` → Production learnings.
-- Dashboard cards: **Portfolio Value** / **Total Gain/Loss** green when portfolio &gt; invested, red when less, default text when equal; **XIRR** green/red by sign. Allocation **%** is whole numbers; &gt;15% orange (`text-allocation-elevated`), &gt;20% red.
+- Dashboard cards: **Portfolio Value** / **Total Gain/Loss** green when portfolio &gt; invested, red when less, default text when equal; **XIRR** green/red by sign. Allocation table: **Market %** (holding market value ÷ portfolio value) and **Invested %** (holding invested ÷ total invested); whole numbers; &gt;15% orange (`text-allocation-elevated`), &gt;20% red.
 - Transactions UI now supports edit/update flow in addition to create/delete. **Fix (Jun 2026):** update/delete auth compared `user_id` with strict `!==`, so string vs int IDs from MySQL caused false 403; `Transaction` route binding now scopes to `auth()->user()->transactions()` (SQL ownership check). FE `api.js` maps generic auth errors to a full sentence. **Delete buy guard:** before deleting a buy, `HoldingsCalculationService::assertReplayValidAfterDeleting()` dry-runs the ledger replay; if orphan sells would break recalc, API returns 422 with guidance to delete sell transaction(s) first.
 - Holdings UI shows highest close since buy, trailing stop, and links to OHLCV price history screen.
 - `GET /stocks/{stock}/prices` and force sync via `POST /sync/backfill/{stock}`; buy transactions trigger synchronous backfill.
@@ -619,7 +619,9 @@ Report: `portfolio-history-rebuild-report.md`.
 3. **invested_value(D)** — `SUM(remaining_cost_basis(D))` for open holdings.
 4. **unrealized_pnl(D)** — `portfolio_value(D) − invested_value(D)`.
 
-Nearest trading day: `WHERE price_date <= D ORDER BY price_date DESC LIMIT 1` (weekends/holidays use prior session close).
+Nearest trading day: `WHERE price_date <= end_of_day(D) ORDER BY price_date DESC LIMIT 1` (weekends/holidays use prior session close). Weekend `price_date` rows from providers are ignored on ingest and when resolving closes (`TradingCalendar`). Upper-bound `price_date` filters use `endOfDay()` so same-day rows stored with a time component are not excluded (fixes flat/wrong “today” closes in snapshots).
+
+**Portfolio growth chart dips (Jun 2026):** Yahoo sometimes stores Saturday/Sunday `price_date` rows; rebuild used those as trading days → bogus weekend snapshots with stale/wrong closes (both notional and invested could dip). Fix: skip weekends in `resolveTradingDates` / `closeFromIndex`, purge weekend snapshots on rebuild, skip weekend rows on price ingest, and use inclusive end-of-day date bounds in price queries.
 
 ### Rebuild triggers (mandatory)
 
@@ -633,8 +635,8 @@ Daily cron (`portfolio:daily-sync`) still refreshes **today** via `storeSnapshot
 
 1. Load ordered user transactions.
 2. For each symbol, `fetchMissingHistory` from `min(first_tx, range_start)` → today (no silent skip).
-3. Build trading-day list = distinct `price_date` in range for held symbols + today.
-4. For each trading day: compute state → `updateOrCreate` snapshot.
+3. Build trading-day list = distinct weekday `price_date` in range for held symbols + today (weekends excluded).
+4. For each trading day: compute state → `updateOrCreate` snapshot; purge legacy weekend snapshots in range.
 5. Log start/end, counts, missing closes, duration (`SnapshotRebuild` category).
 
 ### API
@@ -645,7 +647,7 @@ Daily cron (`portfolio:daily-sync`) still refreshes **today** via `storeSnapshot
 
 ### Frontend
 
-After transaction save/delete, `notifyPortfolioDashboardRefresh()` → Dashboard reloads `portfolio_growth` (latest 365 days, ascending). If snapshots are empty but transactions exist, `GET /dashboard` triggers a one-time lazy rebuild. Empty chart UI offers **Rebuild portfolio history** (`POST /portfolio/rebuild-history`).
+After transaction save/delete, `notifyPortfolioDashboardRefresh()` → Dashboard reloads `portfolio_growth` (latest 365 days, ascending). If snapshots are empty but transactions exist, `GET /dashboard` triggers a one-time lazy rebuild. **Portfolio Growth** card header always shows **Rebuild history** (browser `confirm` before `POST /portfolio/rebuild-history`).
 
 ### Tests
 

@@ -94,6 +94,15 @@ export function formatTablePercent2(value) {
     return Number.isNaN(num) ? '—' : `${num.toFixed(2)}%`;
 }
 
+/** Percentage rounded to whole number (e.g. 12%). */
+export function formatTablePercent0(value) {
+    if (value == null || value === '') {
+        return '—';
+    }
+    const num = Number(value);
+    return Number.isNaN(num) ? '—' : `${Math.round(num)}%`;
+}
+
 /** Rounded % change of latest close vs avg buy; null when not computable. */
 export function percentGainLossFromAvgBuy(latestClose, avgBuyPrice) {
     const latest = Number(latestClose);

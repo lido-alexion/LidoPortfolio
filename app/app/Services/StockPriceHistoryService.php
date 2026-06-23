@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Stock;
 use App\Models\StockPrice;
+use App\Support\TradingCalendar;
 use Carbon\Carbon;
 class StockPriceHistoryService
 {
@@ -205,19 +206,25 @@ class StockPriceHistoryService
 
     public function getCloseOnOrBeforeDate(Stock $stock, Carbon $targetDate): ?float
     {
-        $price = StockPrice::query()
+        $prices = StockPrice::query()
             ->where('stock_id', $stock->id)
-            ->where('price_date', '<=', $targetDate->toDateString())
+            ->where('price_date', '<=', $targetDate->copy()->endOfDay())
             ->orderByDesc('price_date')
-            ->first();
+            ->limit(14)
+            ->get(['price_date', 'close_price', 'adjusted_close_price']);
 
-        if (! $price) {
-            return null;
+        foreach ($prices as $price) {
+            $sessionDate = Carbon::parse($price->price_date)->startOfDay();
+            if (! TradingCalendar::isEquitySessionDate($sessionDate)) {
+                continue;
+            }
+
+            $close = $price->adjusted_close_price ?? $price->close_price;
+
+            return $close !== null ? (float) $close : null;
         }
 
-        $close = $price->adjusted_close_price ?? $price->close_price;
-
-        return $close !== null ? (float) $close : null;
+        return null;
     }
 
     public function getGrowthPercentage(Stock $stock, int $months, ?Carbon $asOf = null): ?float
@@ -255,7 +262,8 @@ class StockPriceHistoryService
         $maxGapDays = (int) config('portfolio.history.max_internal_gap_days', 7);
         $dates = StockPrice::query()
             ->where('stock_id', $stock->id)
-            ->whereBetween('price_date', [$from->toDateString(), $to->toDateString()])
+            ->where('price_date', '>=', $from->copy()->startOfDay())
+            ->where('price_date', '<=', $to->copy()->endOfDay())
             ->orderBy('price_date')
             ->pluck('price_date')
             ->map(fn ($d) => Carbon::parse($d)->startOfDay());

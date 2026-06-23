@@ -51,7 +51,8 @@ class DashboardController extends Controller
             'top_loser' => $topLoser,
             'allocation' => collect($holdings)->map(fn ($h) => [
                 'symbol' => $h['symbol'],
-                'allocation_percent' => $h['allocation_percent'],
+                'allocation_market_percent' => $h['allocation_market_percent'],
+                'allocation_invested_percent' => $h['allocation_invested_percent'],
                 'market_value' => $h['market_value'],
             ])->values(),
             'stoploss_alerts' => $this->stoploss->getActiveAlertsForUser($user),

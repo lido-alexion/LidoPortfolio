@@ -84,6 +84,7 @@ class HoldingPresentationServiceTest extends TestCase
         $summary = $enriched['stoploss_summary'];
 
         $this->assertSame(125.0, (float) $summary['highest_close_since_buy']);
+        $this->assertSame('2024-01-15', $summary['highest_close_since_buy_date']);
         $this->assertSame(112.5, (float) $summary['trailing_stop_price']);
         $this->assertTrue($summary['has_price_history']);
     }

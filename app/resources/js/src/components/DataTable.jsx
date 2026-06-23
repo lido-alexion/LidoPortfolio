@@ -83,6 +83,7 @@ function useDataTableController({
     storageKey = null,
     defaultColumnOrder: defaultColumnOrderOverride = null,
     defaultColumnVisibility: defaultColumnVisibilityOverride = null,
+    initialSorting = [],
     tableClassName = 'table table-sm mb-0',
     striped = false,
 }) {
@@ -142,6 +143,9 @@ function useDataTableController({
         state: {
             columnVisibility,
             columnOrder,
+        },
+        initialState: {
+            sorting: initialSorting,
         },
         onColumnVisibilityChange: setColumnVisibility,
         onColumnOrderChange: setColumnOrder,

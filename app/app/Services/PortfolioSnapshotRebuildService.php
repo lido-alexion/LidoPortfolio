@@ -7,6 +7,7 @@ use App\Models\Stock;
 use App\Models\StockPrice;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Support\TradingCalendar;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
@@ -74,6 +75,8 @@ class PortfolioSnapshotRebuildService
         $stockIds = $transactions->pluck('stock_id')->unique()->map(fn ($id) => (int) $id)->values()->all();
 
         $pricesFetched = $this->ensureHistoricalPrices($user, $transactions, $from, $to, $stockIds);
+
+        $this->purgeWeekendSnapshots($user, $from, $to);
 
         $tradingDates = $this->resolveTradingDates($stockIds, $from, $to);
         $priceIndex = $this->buildPriceIndex($stockIds, $from->copy()->subMonths(3), $to);
@@ -265,7 +268,8 @@ class PortfolioSnapshotRebuildService
 
         $dates = StockPrice::query()
             ->whereIn('stock_id', $stockIds)
-            ->whereBetween('price_date', [$from->toDateString(), $to->toDateString()])
+            ->where('price_date', '>=', $from->copy()->startOfDay())
+            ->where('price_date', '<=', $to->copy()->endOfDay())
             ->distinct()
             ->orderBy('price_date')
             ->pluck('price_date')
@@ -273,10 +277,15 @@ class PortfolioSnapshotRebuildService
 
         $unique = [];
         foreach ($dates as $date) {
+            if (! TradingCalendar::isEquitySessionDate($date)) {
+                continue;
+            }
             $unique[$date->toDateString()] = $date;
         }
 
-        $unique[$to->toDateString()] = $to->copy();
+        if (TradingCalendar::isEquitySessionDate($to)) {
+            $unique[$to->toDateString()] = $to->copy();
+        }
 
         ksort($unique);
 
@@ -295,8 +304,8 @@ class PortfolioSnapshotRebuildService
 
         $rows = StockPrice::query()
             ->whereIn('stock_id', $stockIds)
-            ->where('price_date', '>=', $from->toDateString())
-            ->where('price_date', '<=', $to->toDateString())
+            ->where('price_date', '>=', $from->copy()->startOfDay())
+            ->where('price_date', '<=', $to->copy()->endOfDay())
             ->orderBy('price_date')
             ->get(['stock_id', 'price_date', 'close_price', 'adjusted_close_price']);
 
@@ -333,6 +342,9 @@ class PortfolioSnapshotRebuildService
         $last = null;
 
         foreach ($series as $point) {
+            if (! TradingCalendar::isEquitySessionDate(Carbon::parse($point['date']))) {
+                continue;
+            }
             if ($point['date'] <= $target) {
                 $last = $point['close'];
             } else {
@@ -359,5 +371,19 @@ class PortfolioSnapshotRebuildService
                 'created_at' => now(),
             ],
         );
+    }
+
+    protected function purgeWeekendSnapshots(User $user, Carbon $from, Carbon $to): void
+    {
+        PortfolioSnapshot::query()
+            ->where('user_id', $user->id)
+            ->whereBetween('snapshot_date', [$from->toDateString(), $to->toDateString()])
+            ->orderBy('snapshot_date')
+            ->get(['id', 'snapshot_date'])
+            ->each(function (PortfolioSnapshot $snapshot) {
+                if (! TradingCalendar::isEquitySessionDate(Carbon::parse($snapshot->snapshot_date))) {
+                    $snapshot->delete();
+                }
+            });
     }
 }

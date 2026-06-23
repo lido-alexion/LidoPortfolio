@@ -47,13 +47,17 @@ class PortfolioCalculationService
                 'invested_amount' => round($invested, 4),
                 'unrealized_profit' => round($unrealized, 4),
                 'realized_profit' => (float) $holding->realized_profit,
-                'allocation_percent' => 0,
+                'allocation_market_percent' => 0,
+                'allocation_invested_percent' => 0,
             ];
         }
 
         foreach ($items as &$item) {
-            $item['allocation_percent'] = $portfolioValue > 0
+            $item['allocation_market_percent'] = $portfolioValue > 0
                 ? round(($item['market_value'] / $portfolioValue) * 100, 2)
+                : 0;
+            $item['allocation_invested_percent'] = $investedValue > 0
+                ? round(($item['invested_amount'] / $investedValue) * 100, 2)
                 : 0;
         }
         unset($item);

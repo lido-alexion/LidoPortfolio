@@ -15,7 +15,7 @@ class StockQuoteService
         $query = StockPrice::query()->where('stock_id', $stockId);
 
         if ($asOf) {
-            $query->where('price_date', '<=', $asOf->toDateString());
+            $query->where('price_date', '<=', $asOf->copy()->endOfDay());
         }
 
         return (float) ($query->orderByDesc('price_date')->value('close_price') ?? 0);
@@ -31,7 +31,7 @@ class StockQuoteService
             ->where('price_date', '>=', $since->toDateString());
 
         if ($asOf) {
-            $query->where('price_date', '<=', $asOf->toDateString());
+            $query->where('price_date', '<=', $asOf->copy()->endOfDay());
         }
 
         $close = $query->orderByDesc('price_date')->value('close_price');

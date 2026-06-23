@@ -58,6 +58,7 @@ class HoldingPresentationService
         $metric = $stock?->metrics;
 
         $highestCloseSinceBuy = null;
+        $highestCloseSinceBuyDate = null;
         $latestClose = null;
         $priceRowCount = 0;
         $latestPriceDate = null;
@@ -69,6 +70,12 @@ class HoldingPresentationService
 
             $priceRowCount = (clone $priceQuery)->count();
             $highestCloseSinceBuy = (clone $priceQuery)->max('close_price');
+            if ($highestCloseSinceBuy !== null) {
+                $highestCloseSinceBuyDate = (clone $priceQuery)
+                    ->where('close_price', $highestCloseSinceBuy)
+                    ->orderByDesc('price_date')
+                    ->value('price_date');
+            }
             $latestPriceDate = (clone $priceQuery)->max('price_date');
             $latestClose = $this->quotes->latestCloseSince($stock->id, $firstBuyDate);
         }
@@ -100,6 +107,9 @@ class HoldingPresentationService
         $payload['stoploss_summary'] = [
             'first_buy_date' => $firstBuyDate?->toDateString(),
             'highest_close_since_buy' => $highestCloseSinceBuy !== null ? round((float) $highestCloseSinceBuy, 4) : null,
+            'highest_close_since_buy_date' => $highestCloseSinceBuyDate
+                ? Carbon::parse($highestCloseSinceBuyDate)->toDateString()
+                : null,
             'trailing_stop_price' => $trailingStop,
             'stoploss_percent' => $stoplossPercent,
             'latest_close' => $latestClose !== null ? round((float) $latestClose, 4) : null,

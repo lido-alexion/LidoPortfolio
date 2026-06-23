@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../api';
 import { DataTableCard } from '../components/DataTable';
 import { showToast } from '../toast';
-import { formatInrCompactWhole, formatInrWhole, formatTablePercent2 } from '../utils/tableFormat';
+import { formatInrCompactWhole, formatInrWhole, formatTablePercent0 } from '../utils/tableFormat';
 import { formatChartAxisDate, formatTransactionDateDisplay } from '../utils/transactionDate';
 import {
     notifyPortfolioDashboardRefresh,
@@ -78,13 +78,44 @@ function allocationPercentClass(percent) {
     return '';
 }
 
+function allocationPercentCell(getValue) {
+    const v = getValue();
+    if (v == null || v === '') {
+        return '—';
+    }
+    const n = Number(v);
+    if (Number.isNaN(n)) {
+        return '—';
+    }
+    const label = `${Math.round(n)}%`;
+    const colorClass = allocationPercentClass(n);
+    return colorClass ? <span className={colorClass}>{label}</span> : label;
+}
+
 function relativeStrengthCell(getValue) {
     const value = getValue();
-    const formatted = formatTablePercent2(value);
+    const formatted = formatTablePercent0(value);
     if (formatted === '—') {
         return <span className="text-muted">N/A</span>;
     }
     return <span className={signedMetricClass(value)}>{formatted}</span>;
+}
+
+function averageRelativeStrength(metrics) {
+    if (!metrics) {
+        return null;
+    }
+    const values = [
+        metrics.relative_strength_1m,
+        metrics.relative_strength_3m,
+        metrics.relative_strength_6m,
+    ]
+        .map((value) => (value == null || value === '' ? null : Number(value)))
+        .filter((value) => value != null && !Number.isNaN(value));
+    if (values.length === 0) {
+        return null;
+    }
+    return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
 export default function DashboardPage() {
@@ -121,11 +152,27 @@ export default function DashboardPage() {
             .finally(() => setSyncingPrices(false));
     }, [load]);
 
-    const rebuildPortfolioHistory = useCallback(() => {
+    const requestRebuildPortfolioHistory = useCallback(() => {
+        const confirmed = window.confirm(
+            'Rebuild portfolio history from your first transaction through today?\n\n'
+            + 'This refetches missing stock prices and recalculates every trading day. '
+            + 'It can take a minute or longer for large portfolios.',
+        );
+        if (!confirmed) {
+            return;
+        }
+
         setRebuildingHistory(true);
         setLoadError('');
         api.post('/portfolio/rebuild-history')
-            .then(() => load())
+            .then((res) => {
+                const written = res.data?.rebuild?.snapshots_written;
+                const msg = written != null
+                    ? `Portfolio history rebuilt (${written} snapshots).`
+                    : (res.data?.message || 'Portfolio history rebuilt.');
+                showToast(msg);
+                return load();
+            })
             .catch(() => setLoadError('Failed to rebuild portfolio history'))
             .finally(() => setRebuildingHistory(false));
     }, [load]);
@@ -162,21 +209,16 @@ export default function DashboardPage() {
     const allocationColumns = useMemo(() => [
         { accessorKey: 'symbol', header: 'Symbol' },
         {
-            accessorKey: 'allocation_percent',
-            header: 'Allocation %',
-            cell: ({ getValue }) => {
-                const v = getValue();
-                if (v == null || v === '') {
-                    return '—';
-                }
-                const n = Number(v);
-                if (Number.isNaN(n)) {
-                    return '—';
-                }
-                const label = `${Math.round(n)}%`;
-                const colorClass = allocationPercentClass(n);
-                return colorClass ? <span className={colorClass}>{label}</span> : label;
-            },
+            accessorKey: 'allocation_market_percent',
+            header: 'Market %',
+            meta: { columnMenuLabel: 'Allocation (market value)' },
+            cell: ({ getValue }) => allocationPercentCell(getValue),
+        },
+        {
+            accessorKey: 'allocation_invested_percent',
+            header: 'Invested %',
+            meta: { columnMenuLabel: 'Allocation (invested)' },
+            cell: ({ getValue }) => allocationPercentCell(getValue),
         },
         {
             accessorKey: 'market_value',
@@ -187,6 +229,13 @@ export default function DashboardPage() {
 
     const rsColumns = useMemo(() => [
         { accessorKey: 'symbol', header: 'Symbol' },
+        {
+            id: 'rsAvg',
+            header: 'Avg. strength',
+            accessorFn: (row) => averageRelativeStrength(row.metrics),
+            cell: ({ getValue }) => relativeStrengthCell(getValue),
+            sortUndefined: 'last',
+        },
         {
             id: 'rs1m',
             header: '1M',
@@ -212,6 +261,12 @@ export default function DashboardPage() {
             id: 'symbol',
             header: 'Symbol',
             accessorFn: (row) => row.stock?.symbol,
+        },
+        {
+            id: 'created_at',
+            header: 'Date',
+            accessorKey: 'created_at',
+            cell: ({ getValue }) => formatTransactionDateDisplay(getValue()) || '—',
         },
         { accessorKey: 'message', header: 'Message' },
         {
@@ -344,7 +399,7 @@ export default function DashboardPage() {
                     title="Alerts"
                     columns={alertColumns}
                     data={alerts}
-                    storageKey="dashboard-alerts"
+                    storageKey="dashboard-alerts-v2"
                     emptyMessage="No active alerts"
                     headerExtra={alerts.length > 0 ? (
                         <button
@@ -371,7 +426,8 @@ export default function DashboardPage() {
                     )}
                     columns={rsColumns}
                     data={data.relative_strength_trends || []}
-                    storageKey="dashboard-rs"
+                    storageKey="dashboard-rs-v2"
+                    initialSorting={[{ id: 'rsAvg', desc: true }]}
                     bodyClassName="pt-2"
                     emptyMessage={`No relative strength data. Values need ${rsBenchmarkSymbol} and stock OHLCV (run daily price sync).`}
                 />
@@ -381,28 +437,32 @@ export default function DashboardPage() {
                     title="Allocation"
                     columns={allocationColumns}
                     data={data.allocation || []}
-                    storageKey="dashboard-allocation"
+                    storageKey="dashboard-allocation-v2"
                     emptyMessage="No allocation data"
                 />
             </div>
             <div className="col-12">
                 <div className="card">
-                    <div className="card-header">Portfolio Growth (transaction-aware history)</div>
+                    <div className="card-header d-flex justify-content-between align-items-center gap-2">
+                        <span>Portfolio Growth (transaction-aware history)</span>
+                        <button
+                            type="button"
+                            className="btn btn-sm btn-outline-secondary"
+                            onClick={requestRebuildPortfolioHistory}
+                            disabled={rebuildingHistory}
+                            title="Recalculate daily portfolio snapshots from transactions and price history"
+                        >
+                            {rebuildingHistory ? 'Rebuilding…' : 'Rebuild history'}
+                        </button>
+                    </div>
                     <div className="card-body">
                         {growthData.length === 0 ? (
                             <div className="text-center py-4">
-                                <p className="text-muted mb-3">
+                                <p className="text-muted mb-0">
                                     No portfolio history yet. History is built from your transactions and
-                                    stock price data. Rebuild to populate the chart.
+                                    stock price data. Use <strong>Rebuild history</strong> above to populate
+                                    the chart.
                                 </p>
-                                <button
-                                    type="button"
-                                    className="btn btn-primary btn-sm"
-                                    onClick={rebuildPortfolioHistory}
-                                    disabled={rebuildingHistory}
-                                >
-                                    {rebuildingHistory ? 'Rebuilding…' : 'Rebuild portfolio history'}
-                                </button>
                             </div>
                         ) : (
                             <div style={{ width: '100%', height: 280, minHeight: 280 }}>
