@@ -6,7 +6,6 @@ use App\Models\Alert;
 use App\Models\Holding;
 use App\Models\Stock;
 use App\Models\StockMetric;
-use App\Models\StockPrice;
 use App\Models\User;
 use Carbon\Carbon;
 
@@ -15,6 +14,7 @@ class StoplossService
     public function __construct(
         protected SettingsService $settings,
         protected HoldingPresentationService $holdingPresentation,
+        protected StockQuoteService $quotes,
     ) {}
 
     public function updateMetricsForStock(Stock $stock): StockMetric
@@ -47,20 +47,16 @@ class StoplossService
             return $metric;
         }
 
-        $latestPrice = StockPrice::query()
-            ->where('stock_id', $stock->id)
-            ->orderByDesc('price_date')
-            ->first();
+        $latestClose = $this->quotes->latestClose((int) $stock->id);
 
-        if (! $latestPrice) {
+        if ($latestClose <= 0) {
             return $metric;
         }
 
-        $latestClose = (float) $latestPrice->close_price;
-        $peakClose = (float) (StockPrice::query()
-            ->where('stock_id', $stock->id)
-            ->max('close_price') ?? 0);
-        $highestClose = max((float) ($metric->highest_close ?? 0), $latestClose, $peakClose);
+        $highestSinceBuy = $this->maxHighestCloseSinceBuy($stock);
+        $highestClose = $highestSinceBuy !== null
+            ? max($latestClose, $highestSinceBuy)
+            : $latestClose;
         $stopPercent = (float) $metric->stoploss_percent;
         $trailingStop = $highestClose * (1 - ($stopPercent / 100));
 
@@ -71,9 +67,7 @@ class StoplossService
             'updated_at' => now(),
         ]);
 
-        if ($latestClose <= $trailingStop) {
-            $this->triggerStoplossAlert($stock, $latestClose);
-        }
+        $this->evaluateStoplossAlerts($stock);
 
         return $metric->fresh();
     }
@@ -93,7 +87,7 @@ class StoplossService
         }
     }
 
-    protected function triggerStoplossAlert(Stock $stock, float $latestClose): void
+    protected function evaluateStoplossAlerts(Stock $stock): void
     {
         $holdings = Holding::query()
             ->with('stock')
@@ -101,13 +95,21 @@ class StoplossService
             ->where('quantity', '>', 0)
             ->get();
 
-        if ($holdings->isEmpty()) {
-            return;
-        }
-
         foreach ($holdings as $holding) {
             $user = User::query()->find($holding->user_id);
             if (! $user) {
+                continue;
+            }
+
+            $summary = $this->holdingPresentation->enrichHolding($user, $holding)['stoploss_summary'] ?? [];
+            $latestClose = $summary['latest_close'] ?? null;
+            $trailingStop = $summary['trailing_stop_price'] ?? null;
+
+            if ($latestClose === null || $trailingStop === null) {
+                continue;
+            }
+
+            if ((float) $latestClose > (float) $trailingStop) {
                 continue;
             }
 
@@ -122,8 +124,7 @@ class StoplossService
                 continue;
             }
 
-            $summary = $this->holdingPresentation->enrichHolding($user, $holding)['stoploss_summary'] ?? [];
-            $message = $this->buildStoplossAlertMessage($stock, $summary, $latestClose);
+            $message = $this->buildStoplossAlertMessage($stock, $summary, (float) $latestClose);
 
             Alert::query()->create([
                 'user_id' => $user->id,
@@ -134,6 +135,34 @@ class StoplossService
                 'created_at' => now(),
             ]);
         }
+    }
+
+    protected function maxHighestCloseSinceBuy(Stock $stock): ?float
+    {
+        $holdings = Holding::query()
+            ->where('stock_id', $stock->id)
+            ->where('quantity', '>', 0)
+            ->get();
+
+        $max = null;
+
+        foreach ($holdings as $holding) {
+            $user = User::query()->find($holding->user_id);
+            if (! $user) {
+                continue;
+            }
+
+            $summary = $this->holdingPresentation->enrichHolding($user, $holding)['stoploss_summary'] ?? [];
+            $highest = $summary['highest_close_since_buy'] ?? null;
+
+            if ($highest === null) {
+                continue;
+            }
+
+            $max = $max === null ? (float) $highest : max($max, (float) $highest);
+        }
+
+        return $max;
     }
 
     /**

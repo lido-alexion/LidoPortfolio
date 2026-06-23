@@ -88,4 +88,56 @@ class HoldingPresentationServiceTest extends TestCase
         $this->assertSame(112.5, (float) $summary['trailing_stop_price']);
         $this->assertTrue($summary['has_price_history']);
     }
+
+    public function test_first_buy_date_resets_after_full_exit_and_rebuy(): void
+    {
+        $service = app(HoldingPresentationService::class);
+
+        $user = User::query()->create([
+            'name' => 'Rebuy User',
+            'email' => 'rebuy-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+
+        $stock = Stock::query()->create([
+            'symbol' => 'R'.strtoupper(Str::random(4)),
+            'exchange' => 'NSE',
+            'name' => 'Rebuy Test',
+            'is_active' => true,
+            'is_benchmark' => false,
+        ]);
+
+        Transaction::query()->create([
+            'user_id' => $user->id,
+            'stock_id' => $stock->id,
+            'type' => 'buy',
+            'quantity' => 1,
+            'price' => 900,
+            'fees' => 0,
+            'transaction_date' => '2024-01-05',
+        ]);
+
+        Transaction::query()->create([
+            'user_id' => $user->id,
+            'stock_id' => $stock->id,
+            'type' => 'sell',
+            'quantity' => 1,
+            'price' => 1000,
+            'fees' => 0,
+            'transaction_date' => '2024-03-01',
+        ]);
+
+        Transaction::query()->create([
+            'user_id' => $user->id,
+            'stock_id' => $stock->id,
+            'type' => 'buy',
+            'quantity' => 1,
+            'price' => 500,
+            'fees' => 0,
+            'transaction_date' => '2025-06-01',
+        ]);
+
+        $firstBuy = $service->firstBuyDateForCurrentPosition($user, $stock);
+        $this->assertEquals('2025-06-01', $firstBuy->toDateString());
+    }
 }
