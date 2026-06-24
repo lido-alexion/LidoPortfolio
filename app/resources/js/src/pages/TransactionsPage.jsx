@@ -223,6 +223,23 @@ export default function TransactionsPage() {
     }, [location.state, navigate]);
 
     useEffect(() => {
+        const search = location.state?.transactionSearch;
+        if (typeof search !== 'string' || !search.trim()) {
+            return;
+        }
+
+        setStockSearch(search.trim());
+        navigate('/transactions', { replace: true, state: {} });
+
+        requestAnimationFrame(() => {
+            document.getElementById('active-transactions-table')?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start',
+            });
+        });
+    }, [location.state, navigate]);
+
+    useEffect(() => {
 
         if (dateInputFocusedRef.current) {
 
@@ -1123,7 +1140,7 @@ export default function TransactionsPage() {
 
             </div>
 
-            <div className="col-12 col-lg-7">
+            <div className="col-12 col-lg-7" id="active-transactions-table">
 
                 <DataTableCard
 

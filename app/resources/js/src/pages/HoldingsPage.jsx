@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../api';
-import { DataTableCard } from '../components/DataTable';
+import { DataTableColumnMenu, DataTableView, useDataTableController } from '../components/DataTable';
+import SegmentToggle from '../components/SegmentToggle';
 import { formatTransactionDateDisplay } from '../utils/transactionDate';
 import { buildSellPrefillFromHolding } from '../utils/sellTransactionPrefill';
 import {
@@ -16,22 +17,12 @@ import {
     percentGainLossFromAvgBuy,
 } from '../utils/tableFormat';
 
-function isBelowTrailingStop(summary) {
-    const latestCloseNum = Number(summary?.latest_close);
-    const trailingStopNum = Number(summary?.trailing_stop_price);
-    return !Number.isNaN(latestCloseNum)
-        && !Number.isNaN(trailingStopNum)
-        && latestCloseNum < trailingStopNum;
-}
+const HOLDINGS_VIEW_KEY = 'portfolio_holdings_view';
 
-function feesPercentOfInvested(fees, invested) {
-    const feeNum = Number(fees);
-    const investedNum = Number(invested);
-    if (Number.isNaN(feeNum) || Number.isNaN(investedNum) || investedNum <= 0) {
-        return null;
-    }
-    return Math.round((feeNum / investedNum) * 1000) / 10;
-}
+const HOLDINGS_VIEW_OPTIONS = [
+    { value: 'simple', label: 'Simple' },
+    { value: 'complex', label: 'Complex' },
+];
 
 const HOLDINGS_COLUMN_ORDER = [
     'stock',
@@ -53,37 +44,55 @@ const HOLDINGS_DEFAULT_COLUMN_VISIBILITY = {
     realized_profit: false,
 };
 
-export default function HoldingsPage() {
-    const navigate = useNavigate();
-    const [holdings, setHoldings] = useState([]);
-    const [loading, setLoading] = useState(true);
+function loadHoldingsViewMode() {
+    try {
+        return localStorage.getItem(HOLDINGS_VIEW_KEY) === 'simple' ? 'simple' : 'complex';
+    } catch {
+        return 'complex';
+    }
+}
 
-    const handleSell = useCallback((holding) => {
-        const prefill = buildSellPrefillFromHolding(holding);
-        if (!prefill) {
-            return;
-        }
-        navigate('/transactions', { state: { sellPrefill: prefill } });
-    }, [navigate]);
+function saveHoldingsViewMode(mode) {
+    try {
+        localStorage.setItem(HOLDINGS_VIEW_KEY, mode);
+    } catch {
+        // Quota or private mode — ignore.
+    }
+}
 
-    const load = async () => {
-        setLoading(true);
-        try {
-            const holdingsRes = await api.get('/holdings');
-            setHoldings(holdingsRes.data.data || []);
-        } finally {
-            setLoading(false);
-        }
-    };
+function isBelowTrailingStop(summary) {
+    const latestCloseNum = Number(summary?.latest_close);
+    const trailingStopNum = Number(summary?.trailing_stop_price);
+    return !Number.isNaN(latestCloseNum)
+        && !Number.isNaN(trailingStopNum)
+        && latestCloseNum < trailingStopNum;
+}
 
-    useEffect(() => { load(); }, []);
+function feesPercentOfInvested(fees, invested) {
+    const feeNum = Number(fees);
+    const investedNum = Number(invested);
+    if (Number.isNaN(feeNum) || Number.isNaN(investedNum) || investedNum <= 0) {
+        return null;
+    }
+    return Math.round((feeNum / investedNum) * 1000) / 10;
+}
 
-    const tableData = useMemo(() => holdings.map((h) => ({
-        ...h,
-        summary: h.stoploss_summary || {},
-    })), [holdings]);
+function InvestedTransactionsIcon() {
+    return (
+        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
+            <path
+                d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+            />
+        </svg>
+    );
+}
 
-    const columns = useMemo(() => [
+function buildHoldingsColumns(complex, handleSell) {
+    return [
         {
             id: 'stock',
             accessorKey: 'stock.symbol',
@@ -97,7 +106,7 @@ export default function HoldingsPage() {
                         <strong className={belowTrailingStop ? 'text-danger' : undefined}>
                             {row.original.stock?.symbol}
                         </strong>
-                        {since && (
+                        {complex && since && (
                             <div className="text-muted small">Since {since}</div>
                         )}
                     </>
@@ -143,7 +152,7 @@ export default function HoldingsPage() {
                                 )}
                             </div>
                         )}
-                        {date && (
+                        {complex && date && (
                             <div className="text-muted small">{date}</div>
                         )}
                     </>
@@ -153,7 +162,28 @@ export default function HoldingsPage() {
         {
             accessorKey: 'invested_amount',
             header: 'Invested',
-            cell: ({ getValue }) => formatTableMoney2(getValue()),
+            cell: ({ row, getValue }) => {
+                const amount = formatTableMoney2(getValue());
+                const stock = row.original.stock;
+                const searchTerm = stock?.symbol || stock?.name || '';
+
+                return (
+                    <span className="lido-invested-cell d-inline-flex align-items-center gap-1">
+                        <span>{amount}</span>
+                        {searchTerm ? (
+                            <Link
+                                to="/transactions"
+                                state={{ transactionSearch: searchTerm }}
+                                className="lido-invested-tx-link"
+                                title="View transactions"
+                                aria-label="View transactions"
+                            >
+                                <InvestedTransactionsIcon />
+                            </Link>
+                        ) : null}
+                    </span>
+                );
+            },
         },
         {
             id: 'fees',
@@ -168,7 +198,7 @@ export default function HoldingsPage() {
                 return (
                     <>
                         {fees}
-                        {pct != null && (
+                        {complex && pct != null && (
                             <div className="text-muted small">{pct}% of invested</div>
                         )}
                     </>
@@ -189,12 +219,14 @@ export default function HoldingsPage() {
         },
         {
             id: 'highest_close',
-            header: () => (
-                <div className="lido-col-header-stack">
-                    <span>Highest Close</span>
-                    <span className="lido-col-header-sub">(since buy)</span>
-                </div>
-            ),
+            header: complex
+                ? () => (
+                    <div className="lido-col-header-stack">
+                        <span>Highest Close</span>
+                        <span className="lido-col-header-sub">(since buy)</span>
+                    </div>
+                )
+                : 'Highest Close',
             meta: { columnMenuLabel: 'Highest Close' },
             accessorFn: (row) => row.summary.highest_close_since_buy,
             cell: ({ row }) => {
@@ -204,12 +236,12 @@ export default function HoldingsPage() {
                 return (
                     <>
                         {value === '—' ? <span className="text-muted">—</span> : value}
-                        {ltpPct != null && (
+                        {complex && ltpPct != null && (
                             <div className={`small fw-normal ${ltpDrawdownColorClass(ltpPct, s.stoploss_percent)}`}>
                                 {formatLtpDrawdownLabel(ltpPct)}
                             </div>
                         )}
-                        {s.has_price_history === false && (
+                        {complex && s.has_price_history === false && (
                             <div className="text-warning small">No price data</div>
                         )}
                     </>
@@ -226,7 +258,7 @@ export default function HoldingsPage() {
                 return (
                     <>
                         {price === '—' ? <span className="text-muted">—</span> : price}
-                        {s.stoploss_percent != null && (
+                        {complex && s.stoploss_percent != null && (
                             <div className="text-muted small">{s.stoploss_percent}% stop</div>
                         )}
                     </>
@@ -245,7 +277,7 @@ export default function HoldingsPage() {
             enableHiding: false,
             cell: ({ row }) => {
                 const s = row.original.summary;
-                const count = s.price_row_count > 0 ? ` (${s.price_row_count})` : '';
+                const count = complex && s.price_row_count > 0 ? ` (${s.price_row_count})` : '';
                 return (
                     <Link
                         className="lido-table-link"
@@ -275,18 +307,106 @@ export default function HoldingsPage() {
                 );
             },
         },
-    ], [handleSell]);
+    ];
+}
+
+export default function HoldingsPage() {
+    const navigate = useNavigate();
+    const [holdings, setHoldings] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [viewMode, setViewMode] = useState(loadHoldingsViewMode);
+
+    const handleSell = useCallback((holding) => {
+        const prefill = buildSellPrefillFromHolding(holding);
+        if (!prefill) {
+            return;
+        }
+        navigate('/transactions', { state: { sellPrefill: prefill } });
+    }, [navigate]);
+
+    const handleViewModeChange = useCallback((mode) => {
+        setViewMode(mode);
+        saveHoldingsViewMode(mode);
+    }, []);
+
+    const load = async () => {
+        setLoading(true);
+        try {
+            const holdingsRes = await api.get('/holdings');
+            setHoldings(holdingsRes.data.data || []);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { load(); }, []);
+
+    const tableData = useMemo(() => holdings.map((h) => ({
+        ...h,
+        summary: h.stoploss_summary || {},
+    })), [holdings]);
+
+    const complexColumns = useMemo(
+        () => buildHoldingsColumns(true, handleSell),
+        [handleSell],
+    );
+    const simpleColumns = useMemo(
+        () => buildHoldingsColumns(false, handleSell),
+        [handleSell],
+    );
+
+    const sharedTableProps = useMemo(() => ({
+        data: tableData,
+        defaultColumnOrder: HOLDINGS_COLUMN_ORDER,
+        defaultColumnVisibility: HOLDINGS_DEFAULT_COLUMN_VISIBILITY,
+    }), [tableData]);
+
+    const complexController = useDataTableController({
+        ...sharedTableProps,
+        columns: complexColumns,
+        storageKey: 'holdings',
+    });
+
+    const simpleController = useDataTableController({
+        ...sharedTableProps,
+        columns: simpleColumns,
+        storageKey: 'holdings-simple',
+    });
+
+    const activeController = viewMode === 'simple' ? simpleController : complexController;
+    const emptyMessage = 'No open holdings. Add a buy transaction first.';
 
     return (
-        <DataTableCard
-            title="Holdings"
-            columns={columns}
-            data={tableData}
-            storageKey="holdings"
-            loading={loading}
-            defaultColumnOrder={HOLDINGS_COLUMN_ORDER}
-            defaultColumnVisibility={HOLDINGS_DEFAULT_COLUMN_VISIBILITY}
-            emptyMessage="No open holdings. Add a buy transaction first."
-        />
+        <div className="card">
+            <div className="card-header d-flex justify-content-between align-items-center gap-2">
+                <div className="mb-0">Holdings</div>
+                <div className="d-flex align-items-center gap-2 ms-auto">
+                    <SegmentToggle
+                        compact
+                        value={viewMode}
+                        onChange={handleViewModeChange}
+                        options={HOLDINGS_VIEW_OPTIONS}
+                        ariaLabel="Holdings table view"
+                    />
+                    <DataTableColumnMenu controller={activeController} />
+                </div>
+            </div>
+            <div className="card-body">
+                <div className={viewMode === 'complex' ? '' : 'd-none'} aria-hidden={viewMode !== 'complex'}>
+                    <DataTableView
+                        controller={complexController}
+                        loading={loading}
+                        emptyMessage={emptyMessage}
+                    />
+                </div>
+                <div className={viewMode === 'simple' ? '' : 'd-none'} aria-hidden={viewMode !== 'simple'}>
+                    <DataTableView
+                        controller={simpleController}
+                        loading={loading}
+                        emptyMessage={emptyMessage}
+                    />
+                </div>
+            </div>
+        </div>
     );
 }

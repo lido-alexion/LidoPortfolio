@@ -772,6 +772,37 @@ body {
     text-decoration: underline;
 }
 
+.lido-invested-tx-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: var(--lido-text-muted);
+    line-height: 1;
+    text-decoration: none;
+    opacity: 0;
+    pointer-events: none;
+    transition: color 0.15s ease, opacity 0.15s ease;
+}
+
+td:has(.lido-invested-cell):hover .lido-invested-tx-link,
+td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
+    opacity: 0.75;
+    pointer-events: auto;
+}
+
+.lido-invested-tx-link:hover {
+    color: var(--lido-brand);
+    opacity: 1;
+}
+
+@media (hover: none) {
+    td:has(.lido-invested-cell) .lido-invested-tx-link {
+        opacity: 0.75;
+        pointer-events: auto;
+    }
+}
+
 .lido-segment-toggle-track {
     display: inline-flex;
     align-items: center;
