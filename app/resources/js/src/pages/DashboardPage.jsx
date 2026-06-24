@@ -384,7 +384,7 @@ export default function DashboardPage() {
                 </button>
             </div>
             {cards.map(({ title, value, valueClassName }) => (
-                <div className="col-12 col-md-6 col-xl-3" key={title}>
+                <div className="col-12 col-md-6 col-lg-4" key={title}>
                     <div className="card h-100">
                         <div className="card-body">
                             <div className="text-muted small">{title}</div>
@@ -393,25 +393,36 @@ export default function DashboardPage() {
                     </div>
                 </div>
             ))}
-            <div className="col-12 col-lg-6">
-                <DataTableCard
-                    className="h-100"
-                    title="Alerts"
-                    columns={alertColumns}
-                    data={alerts}
-                    storageKey="dashboard-alerts-v2"
-                    emptyMessage="No active alerts"
-                    headerExtra={alerts.length > 0 ? (
-                        <button
-                            type="button"
-                            className="btn btn-sm btn-outline-danger"
-                            onClick={clearAllAlerts}
-                            disabled={clearingAlerts}
-                        >
-                            {clearingAlerts ? 'Clearing…' : 'Clear all'}
-                        </button>
-                    ) : null}
-                />
+            <div className="col-12">
+                {alerts.length > 0 ? (
+                    <DataTableCard
+                        className="h-100"
+                        title="Alerts"
+                        columns={alertColumns}
+                        data={alerts}
+                        storageKey="dashboard-alerts-v2"
+                        emptyMessage="No active alerts"
+                        headerExtra={(
+                            <button
+                                type="button"
+                                className="btn btn-sm btn-outline-danger"
+                                onClick={clearAllAlerts}
+                                disabled={clearingAlerts}
+                            >
+                                {clearingAlerts ? 'Clearing…' : 'Clear all'}
+                            </button>
+                        )}
+                    />
+                ) : (
+                    <div className="card h-100">
+                        <div className="card-header">
+                            <div className="mb-0">Alerts</div>
+                        </div>
+                        <div className="card-body text-muted">
+                            No active alerts
+                        </div>
+                    </div>
+                )}
             </div>
             <div className="col-12 col-lg-6">
                 <DataTableCard
@@ -432,8 +443,9 @@ export default function DashboardPage() {
                     emptyMessage={`No relative strength data. Values need ${rsBenchmarkSymbol} and stock OHLCV (run daily price sync).`}
                 />
             </div>
-            <div className="col-12">
+            <div className="col-12 col-lg-6">
                 <DataTableCard
+                    className="h-100"
                     title="Allocation"
                     columns={allocationColumns}
                     data={data.allocation || []}

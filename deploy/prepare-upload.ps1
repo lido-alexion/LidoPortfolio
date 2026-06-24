@@ -33,6 +33,7 @@ Copy-Tree (Join-Path $app 'database/migrations') (Join-Path $staging 'lidoportfo
 Copy-Tree (Join-Path $app 'public/build') (Join-Path $staging 'lidoportfolio/public/build')
 Copy-Tree (Join-Path $app 'public/build') (Join-Path $staging 'portfolio/build')
 
+Copy-Item (Join-Path $app 'public/favicon.ico') (Join-Path $staging 'portfolio/favicon.ico') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-migrate.php') (Join-Path $staging 'portfolio/cpanel-migrate.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-mobile-debug.php') (Join-Path $staging 'portfolio/cpanel-mobile-debug.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-ping.php') (Join-Path $staging 'portfolio/cpanel-ping.php') -Force
@@ -46,6 +47,7 @@ Write-Host "Staging ready: $staging"
 Write-Host 'Upload:'
 Write-Host '  staging/lidoportfolio/*  ->  public_html/lidoportfolio/  (merge)'
 Write-Host '  staging/portfolio/build  ->  public_html/portfolio/build/'
+Write-Host '  staging/portfolio/favicon.ico  ->  public_html/portfolio/favicon.ico'
 Write-Host '  staging/portfolio/mobile-debug.html  ->  public_html/portfolio/'
 Write-Host '  staging/portfolio/cpanel-mobile-debug.php  ->  public_html/portfolio/'
 Write-Host '  staging/portfolio/cpanel-migrate.php  ->  public_html/portfolio/'

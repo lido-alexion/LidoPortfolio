@@ -142,7 +142,7 @@ function buildHoldingsColumns(complex, handleSell) {
                                 <span className={belowTrailingStop ? 'text-danger' : undefined}>
                                     {close}
                                 </span>
-                                {pct != null && (
+                                {complex && pct != null && (
                                     <>
                                         {' '}
                                         <span className={percentChangeColorClass(pct)}>
@@ -379,7 +379,12 @@ export default function HoldingsPage() {
     return (
         <div className="card">
             <div className="card-header d-flex justify-content-between align-items-center gap-2">
-                <div className="mb-0">Holdings</div>
+                <div className="mb-0">
+                    Holdings
+                    {!loading ? (
+                        <span className="lido-card-title-count">({tableData.length})</span>
+                    ) : null}
+                </div>
                 <div className="d-flex align-items-center gap-2 ms-auto">
                     <SegmentToggle
                         compact

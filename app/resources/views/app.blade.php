@@ -10,6 +10,7 @@
     <meta name="app-base" content="{{ $appBase }}">
     <script>window.__LIDO_APP_BASE__ = @json($appBase);</script>
     <title>Lido Portfolio</title>
+    <link rel="icon" href="{{ ($appBase !== '' ? $appBase : '') }}/favicon.ico" type="image/x-icon" sizes="any">
     <script>
         (function () {
             var key = 'lido-theme';

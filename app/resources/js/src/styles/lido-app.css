@@ -1,5 +1,5 @@
 @font-face {
-    font-family: myFirstFont;
+    font-family: Nulshock;
     src: url('../../../fonts/nulshock-bd.ttf') format('truetype');
     font-weight: normal;
     font-style: normal;
@@ -173,7 +173,7 @@ body {
     margin: 0;
     font-size: 1.75rem;
     font-weight: normal;
-    font-family: myFirstFont, ui-sans-serif, system-ui, sans-serif;
+    font-family: Nulshock, ui-sans-serif, system-ui, sans-serif;
     letter-spacing: 0.02em;
     line-height: 1.2;
     white-space: nowrap;
@@ -185,6 +185,13 @@ body {
 
 .lido-header-title-link:hover .lido-header-title {
     color: var(--lido-brand-hover);
+}
+
+.lido-card-title-count {
+    margin-left: 0.35rem;
+    font-size: 0.8em;
+    font-weight: 400;
+    color: var(--lido-text-muted);
 }
 
 .lido-profile-toggle {
