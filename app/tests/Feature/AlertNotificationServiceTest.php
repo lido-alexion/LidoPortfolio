@@ -18,11 +18,24 @@ class AlertNotificationServiceTest extends TestCase
 
     public function test_scheduled_notifications_skip_silently_when_no_alerts(): void
     {
+        $user = User::query()->create([
+            'name' => 'Alert Notify',
+            'email' => 'alert-empty-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+
+        app(\App\Services\NotificationScheduleService::class)->persistForUser($user, ['10:00']);
+        app(\App\Services\UserSettingsService::class)->update($user, [
+            'notifications_enabled' => 'true',
+            'telegram_bot_token' => 'token',
+            'telegram_chat_id' => 'chat',
+        ]);
+
         $telegram = $this->createMock(TelegramNotificationService::class);
-        $telegram->expects($this->never())->method('sendMessage');
+        $telegram->expects($this->never())->method('sendMessageForUser');
         $this->app->instance(TelegramNotificationService::class, $telegram);
 
-        $result = app(AlertNotificationService::class)->sendScheduledNotifications();
+        $result = app(AlertNotificationService::class)->sendScheduledNotificationsAt('10:00');
 
         $this->assertTrue($result['skipped']);
         $this->assertSame(0, $result['alert_count']);
@@ -66,12 +79,22 @@ class AlertNotificationServiceTest extends TestCase
 
         $telegram = $this->createMock(TelegramNotificationService::class);
         $telegram->expects($this->once())
-            ->method('sendMessage')
-            ->with($this->stringContains('ALERT'))
+            ->method('sendMessageForUser')
+            ->with(
+                $this->callback(fn ($u) => $u->id === $user->id),
+                $this->stringContains('ALERT'),
+            )
             ->willReturn(true);
         $this->app->instance(TelegramNotificationService::class, $telegram);
 
-        $result = app(AlertNotificationService::class)->sendScheduledNotifications();
+        app(\App\Services\NotificationScheduleService::class)->persistForUser($user, ['10:00']);
+        app(\App\Services\UserSettingsService::class)->update($user, [
+            'notifications_enabled' => 'true',
+            'telegram_bot_token' => 'token',
+            'telegram_chat_id' => 'chat',
+        ]);
+
+        $result = app(AlertNotificationService::class)->sendScheduledNotificationsAt('10:00');
 
         $this->assertFalse($result['skipped']);
         $this->assertSame(1, $result['alert_count']);

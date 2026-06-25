@@ -242,9 +242,8 @@ export default function SettingsPage() {
                         <div className="col-12">
                             <label className="form-label d-block">Telegram notification times</label>
                             <p className="text-muted small mb-2">
-                                Separate from data syncing. At each time, the app sends Telegram
-                                messages for active portfolio alerts (same as the dashboard Alerts
-                                card). Uses timezone from{' '}
+                                Your personal notification schedule (saved per account). Separate from data syncing. At each time, the app sends Telegram
+                                messages for your active portfolio alerts. Uses timezone from{' '}
                                 <code>{settings.cron_timezone || 'Asia/Kolkata'}</code>
                                 . If there are no alerts, nothing is sent.
                             </p>
@@ -337,6 +336,9 @@ export default function SettingsPage() {
                                         : roundToTwoDecimals(e.target.value),
                                 })}
                             />
+                            <p className="text-muted small mb-0 mt-1">
+                                Applies to your holdings only (saved per account).
+                            </p>
                         </div>
                         <div className="col-12 col-md-4">
                             <label className="form-label" htmlFor="settings-nse-retry">
@@ -409,6 +411,9 @@ export default function SettingsPage() {
                                 value={settings.telegram_chat_id || ''}
                                 onChange={(e) => setSettings({ ...settings, telegram_chat_id: e.target.value })}
                             />
+                            <p className="text-muted small mb-0 mt-1">
+                                Telegram bot and chat ID are saved per account.
+                            </p>
                         </div>
                         {telegramConfigured && (
                             <div className="col-12">

@@ -15,9 +15,9 @@ class SettingsController extends Controller
         protected AlertNotificationService $alertNotifications,
     ) {}
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        return response()->json(['data' => $this->settings->all()]);
+        return response()->json(['data' => $this->settings->allForUser($request->user())]);
     }
 
     public function update(Request $request): JsonResponse
@@ -46,7 +46,9 @@ class SettingsController extends Controller
             'fee_components.*.gst_percent' => ['required', 'numeric', 'gte:0', 'lte:100'],
         ]);
 
-        return response()->json(['data' => $this->settings->update($validated)]);
+        return response()->json([
+            'data' => $this->settings->updateForUser($request->user(), $validated),
+        ]);
     }
 
     public function testTelegram(Request $request): JsonResponse
@@ -57,6 +59,7 @@ class SettingsController extends Controller
         ]);
 
         $result = $this->alertNotifications->sendTestNotification(
+            $request->user(),
             $validated['telegram_bot_token'],
             $validated['telegram_chat_id'],
         );

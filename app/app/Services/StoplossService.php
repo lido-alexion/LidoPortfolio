@@ -13,6 +13,7 @@ class StoplossService
 {
     public function __construct(
         protected SettingsService $settings,
+        protected UserSettingsService $userSettings,
         protected HoldingPresentationService $holdingPresentation,
         protected StockQuoteService $quotes,
     ) {}
@@ -22,7 +23,7 @@ class StoplossService
         $metric = StockMetric::query()->firstOrCreate(
             ['stock_id' => $stock->id],
             [
-                'stoploss_percent' => (float) $this->settings->get('default_stoploss_percent', '10'),
+                'stoploss_percent' => $this->defaultStoplossPercentForStock($stock),
                 'tracking_active' => true,
                 'updated_at' => now(),
             ],
@@ -214,6 +215,25 @@ class StoplossService
         return abs($rounded - round($rounded)) < 0.001
             ? (string) (int) round($rounded)
             : rtrim(rtrim(number_format($rounded, 2, '.', ''), '0'), '.');
+    }
+
+    protected function defaultStoplossPercentForStock(Stock $stock): float
+    {
+        $userId = Holding::query()
+            ->where('stock_id', $stock->id)
+            ->where('quantity', '>', 0)
+            ->orderBy('id')
+            ->value('user_id');
+
+        if (! $userId) {
+            return 10.0;
+        }
+
+        $user = User::query()->find($userId);
+
+        return $user
+            ? (float) $this->userSettings->get($user, 'default_stoploss_percent', '10')
+            : 10.0;
     }
 
     public function getActiveAlertsForUser(User $user): array

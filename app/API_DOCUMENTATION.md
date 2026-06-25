@@ -81,7 +81,7 @@ Automatic expiration (`AlertExpirationService`):
 
 - `GET /settings` (auth)
 - `PUT /settings` (auth) — includes `backend_log_level` (`debug` | `info` | `warning` | `error`)
-- `POST /settings/test-telegram` (auth) — body: `telegram_bot_token`, `telegram_chat_id`; sends active alerts digest (same as scheduled job) or `No active alerts at this time`; does not require `notifications_enabled`
+- `POST /settings/test-telegram` (auth) — body: `telegram_bot_token`, `telegram_chat_id`; sends **requesting user's** active alerts digest or `No active alerts at this time`; does not require `notifications_enabled`
 
 ## Frontend Logs
 
@@ -107,7 +107,7 @@ Request body:
 ## Sync
 
 - `POST /sync/daily` (auth) — body/query `force` (boolean): when false and today already synced successfully, returns `skipped: true`. Dashboard sends `force: true` for **Sync again today**.
-- Settings `notification_schedules` — array of `HH:mm` times (24h), separate from `cron_time` (data sync). Persisted as JSON in `portfolio_settings`.
+- Settings `notification_schedules` — per-user array of `HH:mm` times (24h), separate from global `cron_time` (data sync). Persisted as JSON in `portfolio_user_settings`.
 - `portfolio:send-notifications` — scheduled per notification time; loads active alerts (same as `GET /alerts`) and sends one Telegram digest; **no message if zero alerts**.
 - `POST /sync/backfill/{stock}` (auth) — force fetch from user's buy date, returns price history payload
 

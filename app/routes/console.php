@@ -17,8 +17,15 @@ Artisan::command('portfolio:daily-sync', function () {
     $this->info('Daily portfolio sync completed.');
 })->purpose('Run daily market data sync manually');
 
-Artisan::command('portfolio:send-notifications', function () {
-    $result = app(\App\Services\AlertNotificationService::class)->sendScheduledNotifications();
+Artisan::command('portfolio:send-notifications {--at= : HH:mm schedule slot in cron timezone}', function () {
+    $at = $this->option('at');
+    if (! is_string($at) || $at === '') {
+        $at = now()
+            ->timezone(app(NotificationScheduleService::class)->timezone())
+            ->format('H:i');
+    }
+
+    $result = app(\App\Services\AlertNotificationService::class)->sendScheduledNotificationsAt($at);
 
     if (($result['skipped'] ?? false) && ($result['alert_count'] ?? 0) === 0) {
         $this->info('No alerts to send.');
@@ -27,7 +34,8 @@ Artisan::command('portfolio:send-notifications', function () {
     }
 
     if ($result['sent'] ?? false) {
-        $this->info('Sent '.$result['alert_count'].' alert(s) to Telegram.');
+        $users = $result['users_notified'] ?? 0;
+        $this->info('Sent '.$result['alert_count'].' alert(s) to Telegram for '.$users.' user(s).');
 
         return 0;
     }
@@ -64,15 +72,15 @@ Schedule::command('portfolio:daily-sync')
 
 $notificationSchedules = [];
 try {
-    if (\Illuminate\Support\Facades\Schema::hasTable('portfolio_settings')) {
-        $notificationSchedules = app(NotificationScheduleService::class)->schedules();
+    if (\Illuminate\Support\Facades\Schema::hasTable('portfolio_user_settings')) {
+        $notificationSchedules = app(NotificationScheduleService::class)->distinctSchedulesAcrossUsers();
     }
 } catch (\Throwable) {
     // Fall back to no notification schedules if DB is unavailable during bootstrap.
 }
 
 foreach ($notificationSchedules as $notificationTime) {
-    Schedule::command('portfolio:send-notifications')
+    Schedule::command('portfolio:send-notifications', ['--at' => $notificationTime])
         ->dailyAt($notificationTime)
         ->timezone($timezone)
         ->name('alert-notifications-'.str_replace(':', '', $notificationTime));

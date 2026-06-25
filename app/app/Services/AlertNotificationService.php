@@ -7,64 +7,94 @@ use App\Models\User;
 class AlertNotificationService
 {
     public function __construct(
-        protected SettingsService $settings,
+        protected UserSettingsService $userSettings,
         protected StoplossService $stoploss,
         protected TelegramNotificationService $telegram,
         protected PortfolioLoggerService $logger,
     ) {}
 
     /**
-     * @return array{sent: bool, skipped: bool, alert_count: int, message?: string}
+     * Dispatch notifications for users whose schedule includes the given time (HH:mm, cron timezone).
+     *
+     * @return array{sent: bool, skipped: bool, alert_count: int, users_notified: int, message?: string}
      */
-    public function sendScheduledNotifications(): array
+    public function sendScheduledNotificationsAt(string $atTime): array
     {
-        if ($this->settings->get('notifications_enabled', 'true') !== 'true') {
-            return [
-                'sent' => false,
-                'skipped' => true,
-                'alert_count' => 0,
-                'message' => 'Notifications disabled',
-            ];
+        $scheduleService = app(NotificationScheduleService::class);
+        $usersNotified = 0;
+        $totalAlerts = 0;
+        $anySent = false;
+        $anyEligible = false;
+
+        foreach (User::query()->orderBy('id')->get() as $user) {
+            $schedules = $scheduleService->schedulesForUser($user);
+            if (! in_array($atTime, $schedules, true)) {
+                continue;
+            }
+
+            $result = $this->sendNotificationsForUser($user);
+            if ($result['skipped'] && ($result['alert_count'] ?? 0) === 0) {
+                continue;
+            }
+
+            $anyEligible = true;
+            $totalAlerts += $result['alert_count'];
+            if ($result['sent']) {
+                $anySent = true;
+                $usersNotified++;
+            }
         }
 
-        $alerts = $this->collectActiveAlerts();
-
-        if ($alerts === []) {
-            $this->logger->scheduler('debug', 'Scheduled alert notification skipped — no alerts', [
+        if (! $anyEligible) {
+            $this->logger->scheduler('debug', 'Scheduled alert notification skipped — no users at time', [
                 'category' => 'AlertNotification',
+                'at' => $atTime,
             ]);
 
             return [
                 'sent' => false,
                 'skipped' => true,
                 'alert_count' => 0,
+                'users_notified' => 0,
             ];
         }
 
-        $text = $this->formatAlertsMessage($alerts);
-        $sent = $this->telegram->sendMessage($text);
-
-        $this->logger->scheduler($sent ? 'info' : 'warning', 'Scheduled alert notification processed', [
+        $this->logger->scheduler($anySent ? 'info' : 'warning', 'Scheduled alert notification processed', [
             'category' => 'AlertNotification',
-            'alert_count' => count($alerts),
-            'sent' => $sent,
+            'at' => $atTime,
+            'alert_count' => $totalAlerts,
+            'users_notified' => $usersNotified,
+            'sent' => $anySent,
         ]);
 
         return [
-            'sent' => $sent,
+            'sent' => $anySent,
             'skipped' => false,
-            'alert_count' => count($alerts),
+            'alert_count' => $totalAlerts,
+            'users_notified' => $usersNotified,
         ];
     }
 
     /**
-     * Manual test from Settings — always sends (bypasses notifications_enabled).
+     * @return array{sent: bool, skipped: bool, alert_count: int, users_notified: int, message?: string}
+     */
+    public function sendScheduledNotifications(): array
+    {
+        $atTime = now()
+            ->timezone(app(NotificationScheduleService::class)->timezone())
+            ->format('H:i');
+
+        return $this->sendScheduledNotificationsAt($atTime);
+    }
+
+    /**
+     * Manual test from Settings — sends only the requesting user's alerts.
      *
      * @return array{sent: bool, alert_count: int, message: string}
      */
-    public function sendTestNotification(string $token, string $chatId): array
+    public function sendTestNotification(User $user, string $token, string $chatId): array
     {
-        $alerts = $this->collectActiveAlerts();
+        $alerts = $this->stoploss->getActiveAlertsForUser($user);
         $text = $alerts === []
             ? 'No active alerts at this time'
             : $this->formatAlertsMessage($alerts);
@@ -73,6 +103,7 @@ class AlertNotificationService
 
         $this->logger->scheduler($sent ? 'info' : 'warning', 'Telegram test notification processed', [
             'category' => 'AlertNotification',
+            'user_id' => $user->id,
             'alert_count' => count($alerts),
             'sent' => $sent,
             'test' => true,
@@ -86,21 +117,36 @@ class AlertNotificationService
     }
 
     /**
-     * Same data as GET /api/alerts for each user with open holdings.
-     *
-     * @return array<int, array<string, mixed>>
+     * @return array{sent: bool, skipped: bool, alert_count: int}
      */
-    public function collectActiveAlerts(): array
+    protected function sendNotificationsForUser(User $user): array
     {
-        $alerts = [];
-
-        foreach (User::query()->orderBy('id')->get() as $user) {
-            foreach ($this->stoploss->getActiveAlertsForUser($user) as $alert) {
-                $alerts[] = $alert;
-            }
+        if ($this->userSettings->get($user, 'notifications_enabled', 'true') !== 'true') {
+            return [
+                'sent' => false,
+                'skipped' => true,
+                'alert_count' => 0,
+            ];
         }
 
-        return $alerts;
+        $alerts = $this->stoploss->getActiveAlertsForUser($user);
+
+        if ($alerts === []) {
+            return [
+                'sent' => false,
+                'skipped' => true,
+                'alert_count' => 0,
+            ];
+        }
+
+        $text = $this->formatAlertsMessage($alerts);
+        $sent = $this->telegram->sendMessageForUser($user, $text);
+
+        return [
+            'sent' => $sent,
+            'skipped' => false,
+            'alert_count' => count($alerts),
+        ];
     }
 
     /**

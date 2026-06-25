@@ -2,7 +2,8 @@
 
 namespace App\Services;
 
-use App\Models\Setting;
+use App\Models\User;
+use App\Models\UserSetting;
 
 class NotificationScheduleService
 {
@@ -16,11 +17,15 @@ class NotificationScheduleService
     }
 
     /**
-     * @return array<int, string> Unique HH:mm times (24-hour).
+     * @return array<int, string> Unique HH:mm times (24-hour) for the user.
      */
-    public function schedules(): array
+    public function schedulesForUser(User $user): array
     {
-        $raw = $this->settings->get('notification_schedules', '[]');
+        $raw = UserSetting::getValue(
+            $user->id,
+            'notification_schedules',
+            UserSettingsService::DEFAULTS['notification_schedules'],
+        );
         $decoded = json_decode($raw ?? '[]', true);
 
         if (! is_array($decoded)) {
@@ -28,6 +33,31 @@ class NotificationScheduleService
         }
 
         return $this->normalize($decoded);
+    }
+
+    /**
+     * Union of all users' notification times (for Laravel scheduler registration).
+     *
+     * @return array<int, string>
+     */
+    public function distinctSchedulesAcrossUsers(): array
+    {
+        $times = [];
+
+        foreach (User::query()->orderBy('id')->pluck('id') as $userId) {
+            $user = User::query()->find($userId);
+            if (! $user) {
+                continue;
+            }
+            foreach ($this->schedulesForUser($user) as $time) {
+                $times[$time] = $time;
+            }
+        }
+
+        $list = array_values($times);
+        sort($list);
+
+        return $list;
     }
 
     /**
@@ -62,10 +92,10 @@ class NotificationScheduleService
     /**
      * @param  array<int, string>  $times
      */
-    public function persist(array $times): array
+    public function persistForUser(User $user, array $times): array
     {
         $normalized = $this->normalize($times);
-        Setting::setValue('notification_schedules', json_encode($normalized));
+        UserSetting::setValue($user->id, 'notification_schedules', json_encode($normalized));
 
         return $normalized;
     }

@@ -12,6 +12,9 @@ use InvalidArgumentException;
 
 class HoldingsCalculationService
 {
+    public function __construct(
+        protected UserSettingsService $userSettings,
+    ) {}
     public function recalculateForUser(User $user): Collection
     {
         $stockIds = Transaction::query()
@@ -110,7 +113,7 @@ class HoldingsCalculationService
 
             if ($transaction->type === 'buy') {
                 if (! $dryRun && $wasZero && $quantity <= 0 && $user !== null && $stock !== null) {
-                    $this->resetMetricsForNewEntry($stock);
+                    $this->resetMetricsForNewEntry($user, $stock);
                     $wasZero = false;
                     $totalFees = 0.0;
                 } elseif ($wasZero && $quantity <= 0) {
@@ -174,9 +177,9 @@ class HoldingsCalculationService
         );
     }
 
-    protected function resetMetricsForNewEntry(Stock $stock): void
+    protected function resetMetricsForNewEntry(User $user, Stock $stock): void
     {
-        $defaultStoploss = (float) app(SettingsService::class)->get('default_stoploss_percent', '10');
+        $defaultStoploss = (float) $this->userSettings->get($user, 'default_stoploss_percent', '10');
 
         StockMetric::query()->updateOrCreate(
             ['stock_id' => $stock->id],

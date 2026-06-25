@@ -2,26 +2,29 @@
 
 namespace App\Services;
 
+use App\Models\User;
 use Illuminate\Support\Facades\Http;
 
 class TelegramNotificationService
 {
     public function __construct(
-        protected SettingsService $settings,
+        protected UserSettingsService $userSettings,
         protected SystemLogService $logger,
     ) {}
 
-    public function sendMessage(string $message): bool
+    public function sendMessageForUser(User $user, string $message): bool
     {
-        if ($this->settings->get('notifications_enabled', 'true') !== 'true') {
+        if ($this->userSettings->get($user, 'notifications_enabled', 'true') !== 'true') {
             return false;
         }
 
-        $token = $this->settings->get('telegram_bot_token');
-        $chatId = $this->settings->get('telegram_chat_id');
+        $token = $this->userSettings->get($user, 'telegram_bot_token');
+        $chatId = $this->userSettings->get($user, 'telegram_chat_id');
 
         if (! $token || ! $chatId) {
-            $this->logger->log('telegram', 'Telegram credentials not configured', [], 'warning');
+            $this->logger->log('telegram', 'Telegram credentials not configured for user', [
+                'user_id' => $user->id,
+            ], 'warning');
 
             return false;
         }
@@ -65,6 +68,15 @@ class TelegramNotificationService
 
     public function sendSyncFailureAlert(string $details): bool
     {
-        return $this->sendMessage('Portfolio sync failure: '.$details);
+        $message = 'Portfolio sync failure: '.$details;
+        $sent = false;
+
+        foreach (User::query()->orderBy('id')->get() as $user) {
+            if ($this->sendMessageForUser($user, $message)) {
+                $sent = true;
+            }
+        }
+
+        return $sent;
     }
 }

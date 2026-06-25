@@ -2,7 +2,8 @@
 
 namespace App\Services;
 
-use App\Models\Setting;
+use App\Models\User;
+use App\Services\SyncLogService;
 
 class SettingsService
 {
@@ -10,27 +11,31 @@ class SettingsService
         'cron_time' => '18:30',
         'cron_timezone' => 'Asia/Kolkata',
         'nse_retry_count' => '3',
-        'default_stoploss_percent' => '10',
-        'telegram_bot_token' => '',
-        'telegram_chat_id' => '',
         'alpha_vantage_api_key' => '',
-        'notifications_enabled' => 'true',
         'backend_log_level' => 'info',
         'sync_log_retention_days' => '7',
         'fee_components' => '',
     ];
 
-    public function all(): array
+    public function __construct(
+        protected UserSettingsService $userSettings,
+    ) {}
+
+    /**
+     * Global + authenticated user's personal settings merged for the Settings UI.
+     *
+     * @return array<string, mixed>
+     */
+    public function allForUser(User $user): array
     {
         $settings = [];
         foreach (self::DEFAULTS as $key => $default) {
             if ($key === 'fee_components') {
                 continue;
             }
-            $settings[$key] = Setting::getValue($key, $default);
+            $settings[$key] = $this->get($key, $default);
         }
 
-        $settings['notification_schedules'] = app(NotificationScheduleService::class)->schedules();
         $settings['fee_components'] = app(FeeCalculatorService::class)->componentsFromSettings();
 
         $syncLogService = app(SyncLogService::class);
@@ -39,21 +44,45 @@ class SettingsService
             'stock_master' => $syncLogService->latestRunSummary(SyncLogService::JOB_STOCK_MASTER),
         ];
 
-        return $settings;
+        return array_merge($settings, $this->userSettings->all($user));
     }
 
-    public function update(array $data): array
+    /**
+     * @return array<string, mixed>
+     */
+    public function updateForUser(User $user, array $data): array
     {
-        if (array_key_exists('notification_schedules', $data)) {
-            $times = is_array($data['notification_schedules']) ? $data['notification_schedules'] : [];
-            app(NotificationScheduleService::class)->persist($times);
-            unset($data['notification_schedules']);
+        $userData = [];
+        $globalData = [];
+
+        foreach ($data as $key => $value) {
+            if ($this->userSettings->isManagedKey($key)) {
+                $userData[$key] = $value;
+            } elseif (array_key_exists($key, self::DEFAULTS) || $key === 'fee_components') {
+                $globalData[$key] = $value;
+            }
         }
 
+        if ($globalData !== []) {
+            $this->updateGlobal($globalData);
+        }
+
+        if ($userData !== []) {
+            $this->userSettings->update($user, $userData);
+        }
+
+        return $this->allForUser($user);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function updateGlobal(array $data): array
+    {
         if (array_key_exists('fee_components', $data)) {
             $components = is_array($data['fee_components']) ? $data['fee_components'] : [];
             $normalized = app(FeeCalculatorService::class)->normalizeComponents($components);
-            Setting::setValue('fee_components', json_encode($normalized));
+            \App\Models\Setting::setValue('fee_components', json_encode($normalized));
             unset($data['fee_components']);
         }
 
@@ -61,14 +90,30 @@ class SettingsService
             if (! array_key_exists($key, self::DEFAULTS) || $key === 'fee_components') {
                 continue;
             }
-            Setting::setValue($key, $value === null ? null : (string) $value);
+            \App\Models\Setting::setValue($key, $value === null ? null : (string) $value);
         }
 
-        return $this->all();
+        return $this->globalOnly();
+    }
+
+    /**
+     * @return array<string, string|null>
+     */
+    public function globalOnly(): array
+    {
+        $settings = [];
+        foreach (self::DEFAULTS as $key => $default) {
+            if ($key === 'fee_components') {
+                continue;
+            }
+            $settings[$key] = $this->get($key, $default);
+        }
+
+        return $settings;
     }
 
     public function get(string $key, ?string $default = null): ?string
     {
-        return Setting::getValue($key, $default ?? (self::DEFAULTS[$key] ?? null));
+        return \App\Models\Setting::getValue($key, $default ?? (self::DEFAULTS[$key] ?? null));
     }
 }

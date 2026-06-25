@@ -14,6 +14,7 @@ class HoldingPresentationService
 {
     public function __construct(
         protected SettingsService $settings,
+        protected UserSettingsService $userSettings,
         protected PriceFetchService $priceFetch,
         protected StockQuoteService $quotes,
         protected XirrService $xirr,
@@ -84,7 +85,7 @@ class HoldingPresentationService
             $latestClose = (float) $metric->latest_close;
         }
 
-        $stoplossPercent = (float) ($metric?->stoploss_percent ?? $this->settings->get('default_stoploss_percent', '10'));
+        $stoplossPercent = (float) $this->userSettings->get($user, 'default_stoploss_percent', '10');
         $trailingStop = null;
 
         if ($highestCloseSinceBuy !== null && (float) $highestCloseSinceBuy > 0) {
