@@ -94,34 +94,8 @@ export function AuthProvider({ children }) {
         }
     }, []);
 
-    const register = useCallback(async ({ name, email, password, password_confirmation, remember = false }) => {
-        setSessionExpired(false);
-
-        const attemptRegister = async () => {
-            await ensureCsrfCookie({ force: true });
-            await api.post('/auth/register', {
-                name,
-                email,
-                password,
-                password_confirmation,
-                remember,
-            });
-            return api.post('/auth/login', { email, password, remember });
-        };
-
-        try {
-            const res = await attemptRegister();
-            setUser(res.data.user);
-            return res.data.user;
-        } catch (error) {
-            if (error?.response?.status === 419) {
-                resetCsrfCookie();
-                const res = await attemptRegister();
-                setUser(res.data.user);
-                return res.data.user;
-            }
-            throw error;
-        }
+    const register = useCallback(async () => {
+        throw new Error('Registration is invite-only. Use the link from your administrator.');
     }, []);
 
     const logout = useCallback(async () => {

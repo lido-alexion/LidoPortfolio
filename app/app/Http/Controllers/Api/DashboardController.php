@@ -57,7 +57,7 @@ class DashboardController extends Controller
             ])->values(),
             'stoploss_alerts' => $this->stoploss->getActiveAlertsForUser($user),
             'portfolio_growth' => $growth,
-            'daily_market_sync' => $this->dailySync->status(),
+            ...($user->is_admin ? ['daily_market_sync' => $this->dailySync->status()] : []),
             'nifty_comparison' => [
                 'benchmark' => $benchmark->only(['id', 'symbol', 'name']),
                 'prices' => $benchmark->prices()->orderByDesc('price_date')->limit(90)->get(),

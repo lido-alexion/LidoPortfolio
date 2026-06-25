@@ -98,8 +98,8 @@ api.interceptors.response.use(
         const status = error?.response?.status;
         const url = error?.config?.url || '';
         const isPublicAuthRoute = url.includes('/auth/login')
-            || url.includes('/auth/register')
-            || url.includes('/auth/me');
+            || url.includes('/auth/me')
+            || url.includes('/invites/');
 
         if (status === 401 && !isPublicAuthRoute) {
             window.dispatchEvent(new CustomEvent('portfolio-unauthorized'));

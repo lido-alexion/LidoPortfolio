@@ -32,6 +32,8 @@ class DailyMarketSyncTest extends TestCase
             'email' => 'sync-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $user->is_admin = true;
+        $user->save();
 
         app(DailyMarketSyncService::class)->markSuccessful();
 
@@ -49,6 +51,8 @@ class DailyMarketSyncTest extends TestCase
             'email' => 'force-sync-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $user->is_admin = true;
+        $user->save();
 
         app(DailyMarketSyncService::class)->markSuccessful();
 
@@ -58,13 +62,15 @@ class DailyMarketSyncTest extends TestCase
             ->assertJsonPath('skipped', false);
     }
 
-    public function test_dashboard_includes_daily_market_sync_status(): void
+    public function test_dashboard_includes_daily_market_sync_status_for_admin(): void
     {
         $user = User::query()->create([
             'name' => 'Dash Sync',
             'email' => 'dash-sync-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $user->is_admin = true;
+        $user->save();
 
         $response = $this->actingAs($user)->getJson('/api/dashboard');
 
@@ -79,5 +85,19 @@ class DailyMarketSyncTest extends TestCase
                     'in_progress',
                 ],
             ]);
+    }
+
+    public function test_dashboard_omits_daily_market_sync_for_non_admin(): void
+    {
+        $user = User::query()->create([
+            'name' => 'Dash User',
+            'email' => 'dash-user-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+
+        $this->actingAs($user)
+            ->getJson('/api/dashboard')
+            ->assertOk()
+            ->assertJsonMissingPath('daily_market_sync');
     }
 }

@@ -15,8 +15,11 @@ import ClosedTransactionsPage from './pages/ClosedTransactionsPage';
 import SettingsPage from './pages/SettingsPage';
 import ProfilePage from './pages/ProfilePage';
 import SyncLogsPage from './pages/SyncLogsPage';
+import UserManagementPage from './pages/UserManagementPage';
+import AdminRoute from './components/AdminRoute';
 import StockExplorerPage from './pages/StockExplorerPage';
 import LoginPage from './pages/LoginPage';
+import AcceptInvitePage from './pages/AcceptInvitePage';
 
 function App() {
     const { user, isAuthenticated, loading } = useAuth();
@@ -100,7 +103,10 @@ function App() {
                 )}
 
                 {!isAuthenticated ? (
-                    <LoginPage />
+                    <Routes>
+                        <Route path="/invite/:token" element={<AcceptInvitePage />} />
+                        <Route path="*" element={<LoginPage />} />
+                    </Routes>
                 ) : (
                     <>
                         <div className="lido-main">
@@ -114,7 +120,19 @@ function App() {
                                 <Route path="/explorer" element={<StockExplorerPage />} />
                                 <Route path="/profile" element={<ProfilePage />} />
                                 <Route path="/settings" element={<SettingsPage />} />
-                                <Route path="/settings/sync-logs" element={<SyncLogsPage />} />
+                                <Route path="/settings/sync-logs" element={(
+                                    <AdminRoute>
+                                        <SyncLogsPage />
+                                    </AdminRoute>
+                                )} />
+                                <Route
+                                    path="/settings/users"
+                                    element={(
+                                        <AdminRoute>
+                                            <UserManagementPage />
+                                        </AdminRoute>
+                                    )}
+                                />
                             </Routes>
                         </div>
                         <AppBottomNav />

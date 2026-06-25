@@ -26,5 +26,9 @@ class DatabaseSeeder extends Seeder
                 'password' => Hash::make('password123'),
             ],
         );
+
+        User::query()
+            ->where('email', 'admin@lidoportfolio.local')
+            ->update(['is_admin' => true]);
     }
 }

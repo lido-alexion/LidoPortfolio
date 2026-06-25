@@ -30,6 +30,19 @@ class Alert extends Model
         ];
     }
 
+    public function resolveRouteBinding($value, $field = null)
+    {
+        $user = auth()->user();
+
+        if ($user === null) {
+            return null;
+        }
+
+        return $user->alerts()
+            ->where($field ?? $this->getRouteKeyName(), $value)
+            ->first();
+    }
+
     public function scopeActive($query)
     {
         return $query->whereNull('expired_at');

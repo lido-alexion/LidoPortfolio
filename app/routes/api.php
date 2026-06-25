@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\ExplorerAnalyticsController;
 use App\Http\Controllers\Api\FrontendLogController;
 use App\Http\Controllers\Api\HoldingController;
+use App\Http\Controllers\Api\InviteAcceptController;
 use App\Http\Controllers\Api\PortfolioHistoryController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\SettingsController;
@@ -15,12 +16,18 @@ use App\Http\Controllers\Api\StockPriceController;
 use App\Http\Controllers\Api\SyncController;
 use App\Http\Controllers\Api\SyncLogController;
 use App\Http\Controllers\Api\TransactionController;
+use App\Http\Controllers\Api\UserInviteController;
+use App\Http\Controllers\Api\UserManagementController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
-    Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:login');
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login');
 });
+
+Route::get('/invites/{token}', [InviteAcceptController::class, 'show'])
+    ->middleware('throttle:login');
+Route::post('/invites/accept', [InviteAcceptController::class, 'accept'])
+    ->middleware('throttle:login');
 
 // Guest-safe session probe — must not require auth:sanctum (returns { user: null } when logged out).
 Route::get('/auth/me', [AuthController::class, 'me']);
@@ -45,7 +52,8 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('throttle:stock-search');
     Route::post('/stocks/validate', [StockController::class, 'validateSymbol'])
         ->middleware('throttle:stock-validate');
-    Route::apiResource('stocks', StockController::class)->except(['destroy']);
+    Route::get('/stocks', [StockController::class, 'index']);
+    Route::get('/stocks/{stock}', [StockController::class, 'show']);
     Route::apiResource('transactions', TransactionController::class);
 
     Route::get('/holdings', [HoldingController::class, 'index']);
@@ -65,10 +73,23 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/settings', [SettingsController::class, 'update']);
     Route::post('/settings/test-telegram', [SettingsController::class, 'testTelegram']);
 
-    Route::post('/sync/daily', [SyncController::class, 'daily']);
-    Route::post('/sync/backfill/{stock}', [SyncController::class, 'backfill']);
+    Route::middleware('admin')->group(function () {
+        Route::post('/stocks', [StockController::class, 'store']);
+        Route::put('/stocks/{stock}', [StockController::class, 'update']);
 
-    Route::get('/sync-logs', [SyncLogController::class, 'index']);
-    Route::get('/sync-logs/runs', [SyncLogController::class, 'runs']);
-    Route::get('/sync-logs/export', [SyncLogController::class, 'export']);
+        Route::post('/sync/daily', [SyncController::class, 'daily']);
+        Route::post('/sync/backfill/{stock}', [SyncController::class, 'backfill']);
+
+        Route::get('/sync-logs', [SyncLogController::class, 'index']);
+        Route::get('/sync-logs/runs', [SyncLogController::class, 'runs']);
+        Route::get('/sync-logs/export', [SyncLogController::class, 'export']);
+
+        Route::get('/users', [UserManagementController::class, 'index']);
+        Route::put('/users/{user}/admin', [UserManagementController::class, 'updateAdmin']);
+
+        Route::get('/invites', [UserInviteController::class, 'index']);
+        Route::post('/invites', [UserInviteController::class, 'store']);
+        Route::post('/invites/{invite}/regenerate', [UserInviteController::class, 'regenerate']);
+        Route::delete('/invites/{invite}', [UserInviteController::class, 'destroy']);
+    });
 });

@@ -1,12 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import api from '../api';
+import { useAuth } from '../context/AuthContext';
 import { DataTableCard } from '../components/DataTable';
 import { showToast } from '../toast';
 import { formatTableInteger, formatTableMoney2 } from '../utils/tableFormat';
 import { formatTransactionDateDisplay } from '../utils/transactionDate';
 
 export default function StockPricesPage() {
+    const { user } = useAuth();
+    const isAdmin = Boolean(user?.is_admin);
     const { stockId } = useParams();
     const [loading, setLoading] = useState(true);
     const [syncing, setSyncing] = useState(false);
@@ -100,6 +103,7 @@ export default function StockPricesPage() {
                         {loading && !stock ? 'Loading…' : `${stock?.symbol || 'Stock'} — Price History`}
                     </span>
                 </div>
+                {isAdmin ? (
                 <button
                     type="button"
                     className="btn btn-primary btn-sm"
@@ -108,6 +112,7 @@ export default function StockPricesPage() {
                 >
                     {syncing ? 'Syncing…' : 'Force sync historical prices'}
                 </button>
+                ) : null}
             </div>
 
             {error && (

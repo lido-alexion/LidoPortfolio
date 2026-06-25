@@ -23,12 +23,23 @@ class SettingsService
 
     /**
      * Global + authenticated user's personal settings merged for the Settings UI.
+     * Non-admins receive only per-user keys plus read-only {@see cron_timezone} for notification labels.
      *
      * @return array<string, mixed>
      */
     public function allForUser(User $user): array
     {
-        $settings = [];
+        $settings = $this->userSettings->all($user);
+
+        if (! $user->is_admin) {
+            $settings['cron_timezone'] = $this->get(
+                'cron_timezone',
+                self::DEFAULTS['cron_timezone'],
+            );
+
+            return $settings;
+        }
+
         foreach (self::DEFAULTS as $key => $default) {
             if ($key === 'fee_components') {
                 continue;
@@ -44,7 +55,7 @@ class SettingsService
             'stock_master' => $syncLogService->latestRunSummary(SyncLogService::JOB_STOCK_MASTER),
         ];
 
-        return array_merge($settings, $this->userSettings->all($user));
+        return $settings;
     }
 
     /**
@@ -61,6 +72,10 @@ class SettingsService
             } elseif (array_key_exists($key, self::DEFAULTS) || $key === 'fee_components') {
                 $globalData[$key] = $value;
             }
+        }
+
+        if ($globalData !== [] && ! $user->is_admin) {
+            abort(403, 'Admin access required to change application settings.');
         }
 
         if ($globalData !== []) {

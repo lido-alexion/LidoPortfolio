@@ -36,7 +36,8 @@ function formatSyncRunLabel(run) {
 }
 
 export default function SettingsPage() {
-    const { logout } = useAuth();
+    const { logout, user } = useAuth();
+    const isAdmin = Boolean(user?.is_admin);
     const [settings, setSettings] = useState({});
     const [sessions, setSessions] = useState([]);
     const [status, setStatus] = useState('');
@@ -72,7 +73,9 @@ export default function SettingsPage() {
         [notificationSchedules, scheduleTouched],
     );
 
-    const canSave = !cronTimeInvalid && !notificationSchedulesInvalid;
+    const canSave = isAdmin
+        ? !cronTimeInvalid && !notificationSchedulesInvalid
+        : !notificationSchedulesInvalid;
 
     const telegramConfigured = useMemo(
         () => Boolean(
@@ -108,11 +111,13 @@ export default function SettingsPage() {
 
     const save = async (e) => {
         e.preventDefault();
-        setCronTimeTouched(true);
+        if (isAdmin) {
+            setCronTimeTouched(true);
 
-        if (!isValidCronTime(settings.cron_time)) {
-            showToast('Enter a valid data syncing time (24-hour HH:MM, e.g. 18:30)', 'danger');
-            return;
+            if (!isValidCronTime(settings.cron_time)) {
+                showToast('Enter a valid data syncing time (24-hour HH:MM, e.g. 18:30)', 'danger');
+                return;
+            }
         }
 
         const invalidSchedule = notificationSchedules.find((time) => {
@@ -124,13 +129,22 @@ export default function SettingsPage() {
             return;
         }
 
-        const payload = {
-            ...settings,
-            notification_schedules: notificationSchedules
-                .map((t) => t?.trim())
-                .filter((t) => t && isValidCronTime(t)),
-            fee_components: normalizeFeeComponents(settings.fee_components),
-        };
+        const notificationPayload = notificationSchedules
+            .map((t) => t?.trim())
+            .filter((t) => t && isValidCronTime(t));
+
+        const payload = isAdmin
+            ? {
+                ...settings,
+                notification_schedules: notificationPayload,
+                fee_components: normalizeFeeComponents(settings.fee_components),
+            }
+            : {
+                default_stoploss_percent: settings.default_stoploss_percent,
+                telegram_bot_token: settings.telegram_bot_token,
+                telegram_chat_id: settings.telegram_chat_id,
+                notification_schedules: notificationPayload,
+            };
 
         await api.put('/settings', payload);
         setStatus('Settings saved');
@@ -173,6 +187,7 @@ export default function SettingsPage() {
     return (
         <div className="d-grid gap-3">
             <form className="d-grid gap-3" onSubmit={save}>
+            {isAdmin && (
             <div className="card">
                 <div className="card-header p-0">
                     <button
@@ -203,9 +218,11 @@ export default function SettingsPage() {
                     </div>
                 </div>
             </div>
+            )}
 
+            {isAdmin && (
             <div className="card">
-                <div className="card-header">Settings</div>
+                <div className="card-header">Application settings</div>
                 <div className="card-body">
                     <div className="row g-3">
                         <div className="col-12 col-md-4">
@@ -230,6 +247,8 @@ export default function SettingsPage() {
                             <p className="text-muted small mt-2 mb-0">
                                 <Link to="/settings/sync-logs">View sync logs</Link>
                                 {' · '}
+                                <Link to="/settings/users">Manage users</Link>
+                                {' · '}
                                 Daily:
                                 {' '}
                                 {formatSyncRunLabel(settings.sync_log_latest_runs?.daily_market_data)}
@@ -239,6 +258,71 @@ export default function SettingsPage() {
                                 {formatSyncRunLabel(settings.sync_log_latest_runs?.stock_master)}
                             </p>
                         </div>
+                        <div className="col-12 col-md-4">
+                            <label className="form-label" htmlFor="settings-nse-retry">
+                                NSE Retry Count
+                            </label>
+                            <NumberInput
+                                id="settings-nse-retry"
+                                min="1"
+                                max="10"
+                                step="1"
+                                allowDecimals={false}
+                                value={settings.nse_retry_count ?? ''}
+                                onChange={(e) => setSettings({
+                                    ...settings,
+                                    nse_retry_count: e.target.value,
+                                })}
+                            />
+                        </div>
+                        <div className="col-12 col-md-4">
+                            <label className="form-label">Backend log level</label>
+                            <select
+                                className="form-select"
+                                value={settings.backend_log_level || 'info'}
+                                onChange={(e) => setSettings({ ...settings, backend_log_level: e.target.value })}
+                            >
+                                <option value="debug">debug</option>
+                                <option value="info">info</option>
+                                <option value="warning">warning</option>
+                                <option value="error">error</option>
+                            </select>
+                        </div>
+                        <div className="col-12 col-md-4">
+                            <label className="form-label" htmlFor="settings-sync-log-retention">
+                                Sync log retention (days)
+                            </label>
+                            <NumberInput
+                                id="settings-sync-log-retention"
+                                min="0"
+                                max="90"
+                                step="1"
+                                allowDecimals={false}
+                                value={settings.sync_log_retention_days ?? ''}
+                                onChange={(e) => setSettings({
+                                    ...settings,
+                                    sync_log_retention_days: e.target.value,
+                                })}
+                            />
+                            <p className="text-muted small mb-0 mt-1">
+                                In-app sync logs only. Set to 0 to disable. File logs are unchanged.
+                            </p>
+                        </div>
+                        <div className="col-12">
+                            <p className="text-muted small mb-0">
+                                Frontend log level (browser only): set in devtools —
+                                <code>localStorage.setItem(&quot;logLevel&quot;, &quot;debug&quot;)</code>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            )}
+
+            <div className="card">
+                <div className="card-header">{isAdmin ? 'Your account settings' : 'Settings'}</div>
+                <div className="card-body">
+                    <div className="row g-3">
                         <div className="col-12">
                             <label className="form-label d-block">Telegram notification times</label>
                             <p className="text-muted small mb-2">
@@ -338,62 +422,6 @@ export default function SettingsPage() {
                             />
                             <p className="text-muted small mb-0 mt-1">
                                 Applies to your holdings only (saved per account).
-                            </p>
-                        </div>
-                        <div className="col-12 col-md-4">
-                            <label className="form-label" htmlFor="settings-nse-retry">
-                                NSE Retry Count
-                            </label>
-                            <NumberInput
-                                id="settings-nse-retry"
-                                min="1"
-                                max="10"
-                                step="1"
-                                allowDecimals={false}
-                                value={settings.nse_retry_count ?? ''}
-                                onChange={(e) => setSettings({
-                                    ...settings,
-                                    nse_retry_count: e.target.value,
-                                })}
-                            />
-                        </div>
-                        <div className="col-12 col-md-4">
-                            <label className="form-label">Backend log level</label>
-                            <select
-                                className="form-select"
-                                value={settings.backend_log_level || 'info'}
-                                onChange={(e) => setSettings({ ...settings, backend_log_level: e.target.value })}
-                            >
-                                <option value="debug">debug</option>
-                                <option value="info">info</option>
-                                <option value="warning">warning</option>
-                                <option value="error">error</option>
-                            </select>
-                        </div>
-                        <div className="col-12 col-md-4">
-                            <label className="form-label" htmlFor="settings-sync-log-retention">
-                                Sync log retention (days)
-                            </label>
-                            <NumberInput
-                                id="settings-sync-log-retention"
-                                min="0"
-                                max="90"
-                                step="1"
-                                allowDecimals={false}
-                                value={settings.sync_log_retention_days ?? ''}
-                                onChange={(e) => setSettings({
-                                    ...settings,
-                                    sync_log_retention_days: e.target.value,
-                                })}
-                            />
-                            <p className="text-muted small mb-0 mt-1">
-                                In-app sync logs only. Set to 0 to disable. File logs are unchanged.
-                            </p>
-                        </div>
-                        <div className="col-12">
-                            <p className="text-muted small mb-0">
-                                Frontend log level (browser only): set in devtools —
-                                <code>localStorage.setItem(&quot;logLevel&quot;, &quot;debug&quot;)</code>
                             </p>
                         </div>
                         <div className="col-12">

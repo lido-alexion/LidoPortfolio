@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../api';
+import { useAuth } from '../context/AuthContext';
 import { DataTableCard } from '../components/DataTable';
 import { showToast } from '../toast';
 import { formatInrCompactWhole, formatInrWhole, formatTablePercent0 } from '../utils/tableFormat';
@@ -119,6 +120,8 @@ function averageRelativeStrength(metrics) {
 }
 
 export default function DashboardPage() {
+    const { user } = useAuth();
+    const isAdmin = Boolean(user?.is_admin);
     const [data, setData] = useState(null);
     const [loadError, setLoadError] = useState('');
     const [rebuildingHistory, setRebuildingHistory] = useState(false);
@@ -358,11 +361,12 @@ export default function DashboardPage() {
                 </div>
             ) : null}
             <div className="col-12 d-flex flex-wrap justify-content-end align-items-center gap-2">
-                {pricesSyncedToday && !syncInProgress ? (
+                {isAdmin && pricesSyncedToday && !syncInProgress ? (
                     <span className="text-muted small">
                         Synced for {dailySync.today || 'today'}
                     </span>
                 ) : null}
+                {isAdmin ? (
                 <button
                     type="button"
                     className="btn btn-outline-primary btn-sm"
@@ -382,6 +386,7 @@ export default function DashboardPage() {
                             ? 'Sync again today'
                             : 'Sync prices for today'}
                 </button>
+                ) : null}
             </div>
             {cards.map(({ title, value, valueClassName }) => (
                 <div className="col-12 col-md-6 col-lg-4" key={title}>

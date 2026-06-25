@@ -105,6 +105,8 @@ class SyncLogTest extends TestCase
             'email' => 'runs-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $user->is_admin = true;
+        $user->save();
 
         $run = SyncRun::query()->create([
             'id' => (string) Str::uuid(),
@@ -139,6 +141,8 @@ class SyncLogTest extends TestCase
             'email' => 'logs-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $user->is_admin = true;
+        $user->save();
 
         $run = SyncRun::query()->create([
             'id' => (string) Str::uuid(),
@@ -179,6 +183,8 @@ class SyncLogTest extends TestCase
             'email' => 'export-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $user->is_admin = true;
+        $user->save();
 
         $run = SyncRun::query()->create([
             'id' => (string) Str::uuid(),
@@ -219,6 +225,8 @@ class SyncLogTest extends TestCase
             'email' => 'settings-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $user->is_admin = true;
+        $user->save();
 
         SyncRun::query()->create([
             'id' => (string) Str::uuid(),

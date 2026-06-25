@@ -6,10 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\AuthAuditService;
 use App\Services\SessionManagementService;
+use App\Services\UserInviteService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -17,34 +17,8 @@ class AuthController extends Controller
     public function __construct(
         protected AuthAuditService $authAudit,
         protected SessionManagementService $sessions,
+        protected UserInviteService $invites,
     ) {}
-
-    public function register(Request $request): JsonResponse
-    {
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', 'unique:portfolio_users,email'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
-            'remember' => ['sometimes', 'boolean'],
-        ]);
-
-        $user = User::query()->create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password' => $validated['password'],
-        ]);
-
-        $remember = $request->boolean('remember');
-        Auth::login($user, $remember);
-        $request->session()->put('logged_in_at', now()->timestamp);
-        $request->session()->regenerate();
-
-        $this->authAudit->logLoginSuccess($user, $request);
-
-        return response()->json([
-            'user' => $user,
-        ], 201);
-    }
 
     public function login(Request $request): JsonResponse
     {
@@ -53,6 +27,15 @@ class AuthController extends Controller
             'password' => ['required', 'string'],
             'remember' => ['sometimes', 'boolean'],
         ]);
+
+        $pendingInvite = $this->invites->pendingForEmail($validated['email']);
+        if ($pendingInvite !== null) {
+            return response()->json([
+                'message' => 'Use your invite link to set your password before signing in.',
+                'invite_setup_required' => true,
+                'invite_token' => $pendingInvite->token,
+            ], 422);
+        }
 
         $remember = $request->boolean('remember');
 
