@@ -58,6 +58,34 @@ class AlertNotificationService
     }
 
     /**
+     * Manual test from Settings — always sends (bypasses notifications_enabled).
+     *
+     * @return array{sent: bool, alert_count: int, message: string}
+     */
+    public function sendTestNotification(string $token, string $chatId): array
+    {
+        $alerts = $this->collectActiveAlerts();
+        $text = $alerts === []
+            ? 'No active alerts at this time'
+            : $this->formatAlertsMessage($alerts);
+
+        $sent = $this->telegram->sendMessageWithCredentials($text, $token, $chatId);
+
+        $this->logger->scheduler($sent ? 'info' : 'warning', 'Telegram test notification processed', [
+            'category' => 'AlertNotification',
+            'alert_count' => count($alerts),
+            'sent' => $sent,
+            'test' => true,
+        ]);
+
+        return [
+            'sent' => $sent,
+            'alert_count' => count($alerts),
+            'message' => $text,
+        ];
+    }
+
+    /**
      * Same data as GET /api/alerts for each user with open holdings.
      *
      * @return array<int, array<string, mixed>>

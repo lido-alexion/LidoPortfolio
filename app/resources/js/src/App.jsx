@@ -13,6 +13,7 @@ import StockPricesPage from './pages/StockPricesPage';
 import TransactionsPage from './pages/TransactionsPage';
 import ClosedTransactionsPage from './pages/ClosedTransactionsPage';
 import SettingsPage from './pages/SettingsPage';
+import ProfilePage from './pages/ProfilePage';
 import SyncLogsPage from './pages/SyncLogsPage';
 import StockExplorerPage from './pages/StockExplorerPage';
 import LoginPage from './pages/LoginPage';
@@ -111,6 +112,7 @@ function App() {
                                 <Route path="/holdings" element={<HoldingsPage />} />
                                 <Route path="/holdings/:stockId/prices" element={<StockPricesPage />} />
                                 <Route path="/explorer" element={<StockExplorerPage />} />
+                                <Route path="/profile" element={<ProfilePage />} />
                                 <Route path="/settings" element={<SettingsPage />} />
                                 <Route path="/settings/sync-logs" element={<SyncLogsPage />} />
                             </Routes>

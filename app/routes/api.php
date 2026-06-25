@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\ExplorerAnalyticsController;
 use App\Http\Controllers\Api\FrontendLogController;
 use App\Http\Controllers\Api\HoldingController;
 use App\Http\Controllers\Api\PortfolioHistoryController;
+use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\StockController;
 use App\Http\Controllers\Api\StockPriceController;
@@ -33,6 +34,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/sessions/logout-others', [AuthController::class, 'logoutOtherSessions']);
     Route::delete('/auth/sessions/{sessionId}', [AuthController::class, 'logoutSession']);
 
+    Route::get('/profile', [ProfileController::class, 'show']);
+    Route::put('/profile', [ProfileController::class, 'update']);
+    Route::put('/profile/password', [ProfileController::class, 'updatePassword']);
+    Route::get('/profile/photo', [ProfileController::class, 'photo']);
+    Route::post('/profile/photo', [ProfileController::class, 'uploadPhoto']);
+    Route::delete('/profile/photo', [ProfileController::class, 'deletePhoto']);
+
     Route::get('/stocks/search', [StockController::class, 'search'])
         ->middleware('throttle:stock-search');
     Route::post('/stocks/validate', [StockController::class, 'validateSymbol'])
@@ -55,6 +63,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/settings', [SettingsController::class, 'index']);
     Route::put('/settings', [SettingsController::class, 'update']);
+    Route::post('/settings/test-telegram', [SettingsController::class, 'testTelegram']);
 
     Route::post('/sync/daily', [SyncController::class, 'daily']);
     Route::post('/sync/backfill/{stock}', [SyncController::class, 'backfill']);

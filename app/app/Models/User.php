@@ -12,12 +12,16 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['name', 'email', 'password'])]
-#[Hidden(['password', 'remember_token'])]
+#[Fillable(['name', 'email', 'password', 'profile_photo_path'])]
+#[Hidden(['password', 'remember_token', 'profile_photo_path'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
+
+    protected $appends = [
+        'profile_photo_url',
+    ];
     
     protected $table = 'portfolio_users';
 
@@ -39,6 +43,17 @@ class User extends Authenticatable
     public function alerts(): HasMany
     {
         return $this->hasMany(Alert::class);
+    }
+
+    public function getProfilePhotoUrlAttribute(): ?string
+    {
+        if (! $this->profile_photo_path) {
+            return null;
+        }
+
+        $version = $this->updated_at?->timestamp ?? time();
+
+        return url('/api/profile/photo').'?v='.$version;
     }
 
     /**

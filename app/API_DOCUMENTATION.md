@@ -81,6 +81,7 @@ Automatic expiration (`AlertExpirationService`):
 
 - `GET /settings` (auth)
 - `PUT /settings` (auth) — includes `backend_log_level` (`debug` | `info` | `warning` | `error`)
+- `POST /settings/test-telegram` (auth) — body: `telegram_bot_token`, `telegram_chat_id`; sends active alerts digest (same as scheduled job) or `No active alerts at this time`; does not require `notifications_enabled`
 
 ## Frontend Logs
 

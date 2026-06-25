@@ -26,6 +26,20 @@ class TelegramNotificationService
             return false;
         }
 
+        return $this->sendMessageWithCredentials($message, $token, $chatId);
+    }
+
+    public function sendMessageWithCredentials(string $message, string $token, string $chatId): bool
+    {
+        $token = trim($token);
+        $chatId = trim($chatId);
+
+        if ($token === '' || $chatId === '') {
+            $this->logger->log('telegram', 'Telegram credentials not configured', [], 'warning');
+
+            return false;
+        }
+
         try {
             $response = Http::timeout(15)->post("https://api.telegram.org/bot{$token}/sendMessage", [
                 'chat_id' => $chatId,

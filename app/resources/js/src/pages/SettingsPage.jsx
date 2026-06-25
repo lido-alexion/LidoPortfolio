@@ -44,6 +44,7 @@ export default function SettingsPage() {
     const [cronTimeTouched, setCronTimeTouched] = useState(false);
     const [scheduleTouched, setScheduleTouched] = useState({});
     const [feeSectionOpen, setFeeSectionOpen] = useState(false);
+    const [telegramTesting, setTelegramTesting] = useState(false);
 
     const notificationSchedules = useMemo(
         () => (Array.isArray(settings.notification_schedules)
@@ -72,6 +73,14 @@ export default function SettingsPage() {
     );
 
     const canSave = !cronTimeInvalid && !notificationSchedulesInvalid;
+
+    const telegramConfigured = useMemo(
+        () => Boolean(
+            settings.telegram_bot_token?.trim()
+            && settings.telegram_chat_id?.trim(),
+        ),
+        [settings.telegram_bot_token, settings.telegram_chat_id],
+    );
 
     const loadSettings = async () => {
         const res = await api.get('/settings');
@@ -132,6 +141,22 @@ export default function SettingsPage() {
         await api.post('/auth/sessions/logout-others');
         showToast('Other devices logged out');
         await loadSessions();
+    };
+
+    const testTelegram = async () => {
+        setTelegramTesting(true);
+        try {
+            const res = await api.post('/settings/test-telegram', {
+                telegram_bot_token: settings.telegram_bot_token.trim(),
+                telegram_chat_id: settings.telegram_chat_id.trim(),
+            });
+            showToast(res.data.message || 'Test message sent to Telegram');
+        } catch (error) {
+            const msg = error?.response?.data?.message || 'Telegram test failed';
+            showToast(msg, 'danger');
+        } finally {
+            setTelegramTesting(false);
+        }
     };
 
     const revokeSession = async (sessionId, isCurrent) => {
@@ -385,6 +410,21 @@ export default function SettingsPage() {
                                 onChange={(e) => setSettings({ ...settings, telegram_chat_id: e.target.value })}
                             />
                         </div>
+                        {telegramConfigured && (
+                            <div className="col-12">
+                                <button
+                                    type="button"
+                                    className="btn btn-outline-secondary btn-sm"
+                                    onClick={testTelegram}
+                                    disabled={telegramTesting}
+                                >
+                                    {telegramTesting ? 'Sending…' : 'Test telegram integration'}
+                                </button>
+                                <p className="text-muted small mb-0 mt-1">
+                                    Sends active alerts now, or &quot;No active alerts at this time&quot; if none.
+                                </p>
+                            </div>
+                        )}
                         <div className="col-12">
                             <button className="btn btn-primary" type="submit" disabled={!canSave}>
                                 Save Settings

@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { userDisplayName } from '../utils/userDisplay';
+import ProfileAvatar from './ProfileAvatar';
 import ThemeToggle from './ThemeToggle';
 
 export default function ProfileMenu({ user }) {
     const { logout } = useAuth();
     const [isOpen, setIsOpen] = useState(false);
 
-    const displayName = user?.name || user?.email || '?';
-    const initial = displayName.charAt(0).toUpperCase();
+    const displayName = userDisplayName(user);
+    const hasName = Boolean(user?.name?.trim());
 
     const handleLogout = async () => {
         setIsOpen(false);
@@ -28,9 +30,7 @@ export default function ProfileMenu({ user }) {
                 aria-expanded={isOpen}
                 aria-haspopup="true"
             >
-                <span className="lido-profile-avatar" aria-hidden="true">
-                    {initial}
-                </span>
+                <ProfileAvatar user={user} size={28} />
                 <span className="lido-profile-name">{displayName}</span>
             </button>
 
@@ -61,17 +61,20 @@ export default function ProfileMenu({ user }) {
                         }}
                     >
                         <div className="d-flex align-items-center mb-2 border-bottom border-secondary">
-                            <div
-                                className="lido-profile-menu-avatar rounded-circle d-flex align-items-center justify-content-center ms-3"
-                                aria-hidden="true"
-                            >
-                                {initial}
+                            <div className="ms-3">
+                                <ProfileAvatar user={user} size={40} menu />
                             </div>
                             <div className="px-3 py-2 opacity-75">
-                                {user?.name && (
-                                    <div className="small fw-bold text-white mb-0">{user.name}</div>
+                                <Link
+                                    to="/profile"
+                                    className="small fw-bold text-white mb-0 d-block text-decoration-none lido-profile-account-link"
+                                    onClick={() => setIsOpen(false)}
+                                >
+                                    {displayName}
+                                </Link>
+                                {hasName && (
+                                    <div className="small text-white-50 mb-0">{user.email}</div>
                                 )}
-                                <div className="small text-white mb-0">{user.email}</div>
                             </div>
                         </div>
                         <ThemeToggle />
