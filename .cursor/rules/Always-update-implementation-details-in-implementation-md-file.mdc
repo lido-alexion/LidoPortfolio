@@ -1,0 +1,25 @@
+---
+description: 
+alwaysApply: true
+---
+
+# Lido Portfolio — agent instructions
+
+## Source of truth
+
+- Use **`implementation.md`** (project root) as the primary reference for architecture, decisions, and current behavior.
+- Use **the user's messages in chat** for requirements, priorities, and changes — not `design_doc.md` (removed).
+- Read `implementation.md` before searching the codebase when context is needed.
+
+## On every code change
+
+After any meaningful code change, **update `implementation.md`** in the same session so it stays in sync. Record:
+- What changed and why (brief)
+- New endpoints, env vars, or UI flows
+- Bugs fixed or known limitations touched
+
+## Project reminders
+
+- Stack: Laravel API + React/Bootstrap SPA (Vite), MySQL with `portfolio_*` tables.
+- Price fetch: NSE → Yahoo → Alpha Vantage fallback; set `CURL_CAFILE` for SSL.
+- Holdings: transactions are source of truth; OHLCV via `/stocks/{id}/prices` and force sync via `/sync/backfill/{stock}`.

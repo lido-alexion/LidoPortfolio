@@ -3,7 +3,6 @@
 Thumbs.db
 .idea/
 .vscode/
-.cursor/
 
 # PHP / Laravel (app)
 app/.env

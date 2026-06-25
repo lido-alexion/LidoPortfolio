@@ -1,0 +1,39 @@
+---
+description: Deployment prep — run builds proactively, then show upload tables with full source and target paths
+alwaysApply: true
+---
+
+# Deployment upload tables
+
+Whenever the user asks to deploy, prepare for deployment, or what to upload after a release:
+
+## Proactive build (required)
+
+**Never ask the user to run `npm run build` or `prepare-upload.ps1`.** Run the build yourself.
+
+1. If the release includes frontend changes (`resources/js/`, `resources/css/`, `resources/views/app.blade.php`, Vite config, or anything that affects `public/build/`), run from repo root:
+   ```powershell
+   cd D:\Projects\LidoPortfolio\deploy; powershell -ExecutionPolicy Bypass -File .\prepare-upload.ps1
+   ```
+2. When the upload list includes `public/build/` (any frontend-related release), always run `prepare-upload.ps1` before presenting the table — do not skip and do not delegate to the user.
+3. After the build completes, **tell the user** you ran it and cite the main bundle name from output (e.g. `app-DlreZ99B.js`) so they can verify on the server after upload.
+4. Do not say “run build first” or “you need to build before uploading” — build, then present the table.
+
+## Upload table
+
+1. Present a **markdown table** with columns: **Source (full path)** | **Target (full path)** | **Notes**.
+2. Use these path conventions:
+   - **Source (PC):** `D:\Projects\LidoPortfolio\...` (repo root on the dev machine).
+   - **Target (server):** `/home/USER/public_html/...` — tell the user to replace `USER` with their cPanel username (e.g. `p7xatiz6j0mk`).
+3. Group rows: backend PHP, migrations, frontend `build/` (both copies), optional scripts, post-deploy steps.
+4. Exclude from upload table: `app/tests/`, `implementation.md`, `node_modules/`, `.env`, `app/config/DBConfig.php`, `public/hot`.
+5. For `build/` folders, say **replace entire directory** and list both targets (`lidoportfolio/public/build/` and `portfolio/build/`).
+6. If a migration is required, include a post-deploy row or separate **After upload** section with `cpanel-migrate.php` URL.
+
+Example:
+
+| Source (full path) | Target (full path) | Notes |
+|--------------------|--------------------|-------|
+| `D:\Projects\LidoPortfolio\app\app\Services\FooService.php` | `/home/USER/public_html/lidoportfolio/app/Services/FooService.php` | Merge |
+
+Do not use abbreviated paths like `staging/lidoportfolio/app/` without also giving the full `D:\Projects\LidoPortfolio\...` source when staging exists.
