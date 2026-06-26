@@ -257,23 +257,6 @@ body {
     margin-left: 10px;
 }
 
-.lido-btn-set-default {
-    color: var(--lido-brand);
-    border: 1px solid var(--lido-brand);
-    background-color: transparent;
-}
-
-.lido-btn-set-default:hover:not(:disabled),
-.lido-btn-set-default:focus-visible:not(:disabled) {
-    color: #fff;
-    background-color: var(--lido-brand);
-    border-color: var(--lido-brand);
-}
-
-.lido-btn-set-default:disabled {
-    opacity: 0.65;
-}
-
 .lido-settings-scope-tabs {
     border-bottom-color: var(--lido-border);
 }
@@ -642,6 +625,12 @@ body {
 .contentPane .card-header {
     background-color: var(--lido-bg-elevated);
     border-bottom-color: var(--lido-border);
+    color: var(--lido-text);
+}
+
+.contentPane .list-group-item {
+    background-color: var(--lido-bg-surface);
+    border-color: var(--lido-border);
     color: var(--lido-text);
 }
 

@@ -124,7 +124,7 @@ export default function PortfoliosPage() {
                 </p>
             </div>
 
-            <div className="card bg-dark border-secondary mb-4">
+            <div className="card mb-4">
                 <div className="card-body">
                     <h3 className="h6 mb-3">Create portfolio</h3>
                     <form className="row g-2 align-items-end" onSubmit={createPortfolio}>
@@ -157,7 +157,7 @@ export default function PortfoliosPage() {
                 </div>
             </div>
 
-            <div className="card bg-dark border-secondary">
+            <div className="card">
                 <div className="card-body p-0">
                     <ul className="list-group list-group-flush">
                         {portfolios.map((portfolio) => {
@@ -166,7 +166,7 @@ export default function PortfoliosPage() {
                             return (
                                 <li
                                     key={portfolio.id}
-                                    className="list-group-item bg-dark border-secondary text-white"
+                                    className="list-group-item"
                                 >
                                     <div className="d-flex flex-wrap align-items-center justify-content-between gap-2">
                                         <div className="flex-grow-1">
@@ -228,7 +228,7 @@ export default function PortfoliosPage() {
                                                 )}
                                                 <button
                                                     type="button"
-                                                    className="btn btn-outline-light btn-sm"
+                                                    className="btn btn-outline-secondary btn-sm"
                                                     onClick={() => startRename(portfolio)}
                                                 >
                                                     Rename
@@ -236,7 +236,7 @@ export default function PortfoliosPage() {
                                                 {!portfolio.is_default && (
                                                     <button
                                                         type="button"
-                                                        className="btn btn-sm lido-btn-set-default"
+                                                        className="btn btn-outline-primary btn-sm"
                                                         disabled={defaultingId === portfolio.id}
                                                         onClick={() => setDefault(portfolio.id)}
                                                     >
@@ -250,7 +250,7 @@ export default function PortfoliosPage() {
                             );
                         })}
                         {!portfolios.length && (
-                            <li className="list-group-item bg-dark border-secondary text-muted">
+                            <li className="list-group-item text-muted">
                                 No portfolios yet.
                             </li>
                         )}
