@@ -105,6 +105,18 @@ Automatic expiration (`AlertExpirationService`):
 | `data_refresh` | Successful daily sync when latest portfolio price date advances (new trading day) |
 | `holding_closed` | Profile fully sells — no open holding left for that profile/stock |
 
+Policy-generated alerts (`alert_type=policy`) include `condition_display`, `action_suggested`, `context_json`, and `instance_key` (`user_id-profile_id-stock_id-policy_id`) for deduplication.
+
+## Alert policies (active portfolio)
+
+- `GET /alert-policies/meta` (auth) — column list, operators, compare types, action types
+- `GET /alert-policies` (auth) — list policies for active portfolio
+- `POST /alert-policies` (auth) — create (`name` unique per portfolio)
+- `GET /alert-policies/{id}` (auth)
+- `PUT /alert-policies/{id}` (auth)
+- `DELETE /alert-policies/{id}` (auth)
+- `POST /alert-policies/evaluate` (auth) — run enabled policies against holdings (also after daily sync)
+
 ## Settings
 
 - `GET /settings` (auth) — admins receive merged global + active portfolio settings; non-admins receive active portfolio settings plus read-only `cron_timezone`

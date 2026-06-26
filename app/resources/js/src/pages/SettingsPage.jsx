@@ -372,7 +372,16 @@ export default function SettingsPage() {
             )}
 
             {activeScope === 'portfolio' && (
-                <form className="d-grid gap-3" onSubmit={savePortfolioSettings}>
+                <>
+                    <div className="card">
+                        <div className="card-header">Alerts</div>
+                        <div className="card-body d-flex flex-wrap gap-2">
+                            <Link to="/settings/alert-policies" className="btn btn-primary">
+                                Manage alert policies
+                            </Link>
+                        </div>
+                    </div>
+                    <form className="d-grid gap-3" onSubmit={savePortfolioSettings}>
                     <div className="card">
                         <div className="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
                             <span>Portfolio settings</span>
@@ -540,6 +549,7 @@ export default function SettingsPage() {
                         </div>
                     </div>
                 </form>
+                </>
             )}
 
             {activeScope === 'account' && (

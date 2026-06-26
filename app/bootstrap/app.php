@@ -4,10 +4,13 @@ require_once dirname(__DIR__).'/app/Support/helpers.php';
 
 use App\Http\Middleware\AssignRequestId;
 use App\Services\PortfolioLoggerService;
+use App\Support\ApiErrorMessage;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -43,5 +46,28 @@ return Application::configure(basePath: dirname(__DIR__))
                     'line' => $e->getLine(),
                 ]);
             }
+        });
+
+        $exceptions->render(function (\Throwable $e, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            if ($e instanceof ValidationException) {
+                return null;
+            }
+
+            if ($e instanceof \Illuminate\Http\Exceptions\HttpResponseException) {
+                return $e->getResponse();
+            }
+
+            $requestId = $request->headers->get('X-Request-ID');
+            $status = $e instanceof HttpExceptionInterface ? $e->getStatusCode() : 500;
+            $message = ApiErrorMessage::for($e);
+
+            return response()->json([
+                'message' => $message,
+                'request_id' => $requestId,
+            ], $status)->header('X-Request-ID', (string) $requestId);
         });
     })->create();

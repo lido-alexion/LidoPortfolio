@@ -777,6 +777,23 @@ body {
     color: var(--lido-text-danger);
 }
 
+.contentPane .column-tag-picker {
+    background-color: color-mix(in srgb, var(--lido-brand) 14%, var(--lido-input-bg));
+    border-color: var(--lido-brand);
+    color: var(--lido-text);
+    font-weight: 500;
+}
+
+.contentPane .column-tag-picker:focus {
+    background-color: color-mix(in srgb, var(--lido-brand) 18%, var(--lido-input-bg));
+    border-color: var(--lido-brand);
+    box-shadow: 0 0 0 0.2rem rgba(30, 144, 255, 0.25);
+}
+
+.contentPane .column-tag-picker:disabled {
+    opacity: 0.65;
+}
+
 .contentPane input[type='date'].form-control,
 .contentPane input[type='datetime-local'].form-control,
 .contentPane input[type='time'].form-control {

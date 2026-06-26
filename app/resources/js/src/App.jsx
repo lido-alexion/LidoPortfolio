@@ -21,6 +21,7 @@ import StockExplorerPage from './pages/StockExplorerPage';
 import LoginPage from './pages/LoginPage';
 import AcceptInvitePage from './pages/AcceptInvitePage';
 import PortfoliosPage from './pages/PortfoliosPage';
+import AlertPoliciesPage from './pages/AlertPoliciesPage';
 
 function App() {
     const { user, isAuthenticated, loading } = useAuth();
@@ -122,6 +123,7 @@ function App() {
                                 <Route path="/profile" element={<ProfilePage />} />
                                 <Route path="/portfolios" element={<PortfoliosPage />} />
                                 <Route path="/settings" element={<SettingsPage />} />
+                                <Route path="/settings/alert-policies" element={<AlertPoliciesPage />} />
                                 <Route path="/settings/sync-logs" element={(
                                     <AdminRoute>
                                         <SyncLogsPage />

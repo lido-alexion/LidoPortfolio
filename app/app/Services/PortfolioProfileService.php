@@ -107,6 +107,7 @@ class PortfolioProfileService
             $profile->holdings()->delete();
             $profile->portfolioSnapshots()->delete();
             $profile->alerts()->delete();
+            $profile->alertPolicies()->delete();
             $profile->settings()->delete();
 
             $profile->delete();

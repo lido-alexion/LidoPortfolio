@@ -6,6 +6,7 @@ use App\Models\Holding;
 use App\Models\PortfolioProfile;
 use App\Models\Stock;
 use App\Services\AlertExpirationService;
+use App\Services\Alerts\AlertPolicyEvaluationService;
 use App\Services\DailyMarketSyncService;
 use App\Services\MetricsUpdateService;
 use App\Services\PortfolioCalculationService;
@@ -33,6 +34,7 @@ class DailyMarketDataJob implements ShouldQueue
         SyncLogService $syncLog,
         DailyMarketSyncService $dailySyncStatus,
         AlertExpirationService $alertExpiration,
+        AlertPolicyEvaluationService $alertPolicyEvaluation,
     ): void {
         $jobName = SyncLogService::JOB_DAILY_MARKET_DATA;
         $runId = $syncLog->beginRun($jobName);
@@ -55,6 +57,7 @@ class DailyMarketDataJob implements ShouldQueue
                 $syncLog,
                 $dailySyncStatus,
                 $alertExpiration,
+                $alertPolicyEvaluation,
                 $startedAt,
                 $runId,
                 $jobName,
@@ -103,6 +106,9 @@ class DailyMarketDataJob implements ShouldQueue
                 }
 
                 $metricsUpdate->updateAllTrackedStocks();
+
+                $policyResult = $alertPolicyEvaluation->evaluateAllProfiles();
+                $syncLog->log($runId, $jobName, 'info', 'Alert policies evaluated', $policyResult);
 
                 $profileCount = PortfolioProfile::query()->count();
                 PortfolioProfile::query()->each(function (PortfolioProfile $profile) use ($portfolioCalculation) {

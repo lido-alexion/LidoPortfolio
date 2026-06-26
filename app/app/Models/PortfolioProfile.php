@@ -67,6 +67,11 @@ class PortfolioProfile extends Model
         return $this->hasMany(Alert::class, 'profile_id');
     }
 
+    public function alertPolicies(): HasMany
+    {
+        return $this->hasMany(AlertPolicy::class, 'profile_id');
+    }
+
     public function settings(): HasMany
     {
         return $this->hasMany(ProfileSetting::class, 'profile_id');

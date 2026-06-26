@@ -102,6 +102,17 @@ function resolveApiErrorMessage(error) {
         return trimmed;
     }
 
+    if (status >= 500) {
+        const requestId = error?.response?.data?.request_id
+            || error?.response?.headers?.['x-request-id'];
+        if (trimmed && trimmed !== 'Server Error') {
+            return requestId ? `${trimmed} (request ${requestId})` : trimmed;
+        }
+        return requestId
+            ? `Server error (request ${requestId}). Check server logs or run migrations.`
+            : 'Server error. Check server logs or run migrations.';
+    }
+
     return trimmed || 'Something went wrong. Please try again.';
 }
 

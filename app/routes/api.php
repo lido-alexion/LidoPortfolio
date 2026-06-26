@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AlertController;
+use App\Http\Controllers\Api\AlertPolicyController;
 use App\Http\Controllers\Api\AnalyticsController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DashboardController;
@@ -76,6 +77,10 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::get('/alerts', [AlertController::class, 'index']);
     Route::post('/alerts/expire-all', [AlertController::class, 'expireAll']);
     Route::post('/alerts/{alert}/acknowledge', [AlertController::class, 'acknowledge']);
+
+    Route::get('/alert-policies/meta', [AlertPolicyController::class, 'meta']);
+    Route::post('/alert-policies/evaluate', [AlertPolicyController::class, 'evaluate']);
+    Route::apiResource('alert-policies', AlertPolicyController::class);
 
     Route::get('/settings', [SettingsController::class, 'index']);
     Route::put('/settings', [SettingsController::class, 'update']);

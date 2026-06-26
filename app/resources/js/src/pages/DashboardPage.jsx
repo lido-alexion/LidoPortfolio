@@ -102,6 +102,24 @@ function relativeStrengthCell(getValue) {
     return <span className={signedMetricClass(value)}>{formatted}</span>;
 }
 
+function alertContextCell(contextJson) {
+    if (!Array.isArray(contextJson) || contextJson.length === 0) {
+        return <span className="text-muted">—</span>;
+    }
+
+    return (
+        <div className="small lh-sm">
+            {contextJson.map((item) => (
+                <div key={item.key || item.label}>
+                    <span className="text-muted">{item.label || item.key}:</span>
+                    {' '}
+                    {item.value ?? '—'}
+                </div>
+            ))}
+        </div>
+    );
+}
+
 function averageRelativeStrength(metrics) {
     if (!metrics) {
         return null;
@@ -271,13 +289,36 @@ export default function DashboardPage() {
             accessorKey: 'created_at',
             cell: ({ getValue }) => formatTransactionDateDisplay(getValue()) || '—',
         },
-        { accessorKey: 'message', header: 'Message' },
+        {
+            id: 'message',
+            header: 'Message',
+            accessorKey: 'message',
+            cell: ({ getValue }) => getValue() || '—',
+        },
+        {
+            id: 'condition_display',
+            header: 'Condition',
+            accessorKey: 'condition_display',
+            cell: ({ getValue }) => getValue() || '—',
+        },
+        {
+            id: 'action_suggested',
+            header: 'Action',
+            accessorKey: 'action_suggested',
+            cell: ({ getValue }) => getValue() || '—',
+        },
+        {
+            id: 'context',
+            header: 'Context',
+            accessorKey: 'context_json',
+            enableSorting: false,
+            cell: ({ getValue }) => alertContextCell(getValue()),
+        },
         {
             id: 'acknowledge',
-            header: '',
+            header: 'Acknowledge',
             enableSorting: false,
             enableHiding: false,
-            meta: { columnMenuLabel: 'Acknowledge' },
             cell: ({ row }) => (
                 <button
                     type="button"
@@ -405,7 +446,16 @@ export default function DashboardPage() {
                         title="Alerts"
                         columns={alertColumns}
                         data={alerts}
-                        storageKey="dashboard-alerts-v2"
+                        storageKey="dashboard-alerts-v3"
+                        defaultColumnOrder={[
+                            'symbol',
+                            'created_at',
+                            'message',
+                            'condition_display',
+                            'action_suggested',
+                            'context',
+                            'acknowledge',
+                        ]}
                         emptyMessage="No active alerts"
                         headerExtra={(
                             <button

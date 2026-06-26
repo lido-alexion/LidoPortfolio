@@ -13,8 +13,13 @@ class Alert extends Model
     protected $fillable = [
         'profile_id',
         'stock_id',
+        'alert_policy_id',
         'alert_type',
+        'instance_key',
         'message',
+        'condition_display',
+        'action_suggested',
+        'context_json',
         'is_sent',
         'created_at',
         'expired_at',
@@ -27,6 +32,8 @@ class Alert extends Model
             'is_sent' => 'boolean',
             'created_at' => 'datetime',
             'expired_at' => 'datetime',
+            'context_json' => 'array',
+            'alert_policy_id' => 'integer',
         ];
     }
 
@@ -61,5 +68,10 @@ class Alert extends Model
     public function stock(): BelongsTo
     {
         return $this->belongsTo(Stock::class);
+    }
+
+    public function policy(): BelongsTo
+    {
+        return $this->belongsTo(AlertPolicy::class, 'alert_policy_id');
     }
 }

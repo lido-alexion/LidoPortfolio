@@ -82,6 +82,11 @@ class PortfolioLoggerService
         $this->log(self::CHANNEL_APP, 'Security', $level, $message, $context);
     }
 
+    public function alertPolicy(string $level, string $message, array $context = []): void
+    {
+        $this->log(self::CHANNEL_APP, 'AlertPolicy', $level, $message, $context);
+    }
+
     public function logFrontendPayload(array $payload): void
     {
         $level = $this->normalizeLevel((string) ($payload['level'] ?? 'error'));
