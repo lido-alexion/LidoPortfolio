@@ -51,6 +51,127 @@ GoDaddy **open_basedir** only allows PHP under `public_html/`, `config/`, etc. L
         └── cpanel-*.php             ← temporary; delete after setup
 ```
 
+### 2.1 Build folders explained (PC vs server)
+
+This project has **one** frontend build on your PC, but **two** matching copies on the server. The names are easy to confuse.
+
+#### On your PC (repo)
+
+| Path | What it is |
+|------|------------|
+| `LidoPortfolio/app/` | Laravel project root — run `npm run build` **here** |
+| `LidoPortfolio/app/public/build/` | **The real build output** — `manifest.json`, `assets/app-*.js`, CSS, fonts. This is the only folder Vite creates. |
+| `LidoPortfolio/app/app/` | Laravel **PHP** code (controllers, models). **Not** related to the Vite build — there is no `public/build` here. |
+| `LidoPortfolio/deploy/staging/` | Optional packaging folder from `deploy/prepare-upload.ps1`. It **copies** `app/public/build/` into staging — it is not a second build. |
+
+**Workflow:**
+
+1. `npm run build` in `app/` → updates `app/public/build/`.
+2. Either upload **`app/public/build/`** directly to the server, **or** run `prepare-upload.ps1` and upload from `deploy/staging/.../build/` (same files, pre-arranged paths).
+
+```
+npm run build  →  app/public/build/     ← source of truth
+                      │
+                      ├─ copy ─→ deploy/staging/lidoportfolio/public/build/   (optional)
+                      └─ copy ─→ deploy/staging/portfolio/build/            (optional)
+```
+
+#### On the server (two copies of the same build)
+
+| Server path | Role |
+|-------------|------|
+| `public_html/lidoportfolio/public/build/` | **Laravel reads** `manifest.json` here when rendering HTML (`@vite` in `app.blade.php`). Not usually opened directly in the browser. |
+| `public_html/portfolio/build/` | **The browser downloads** JS, CSS, and fonts from here (`https://lidoalexion.com/portfolio/build/assets/...`). |
+
+#### Why two copies?
+
+GoDaddy layout separates:
+
+- **`lidoportfolio/`** — full Laravel app (blocked from direct web access by `.htaccess`).
+- **`portfolio/`** — public web entry (`index.php` → boots Laravel) and static files under `/portfolio/...`.
+
+Laravel’s `public_path()` points at `lidoportfolio/public/`, so the Vite manifest must live at `lidoportfolio/public/build/manifest.json`.
+
+The browser cannot load assets from inside `lidoportfolio/` (denied). Built files must also exist under `portfolio/build/` so URLs like `/portfolio/build/assets/app-xxxxx.js` resolve.
+
+`prepare-upload.ps1` copies the **same** `app/public/build/` tree to both server destinations so you do not have to remember two different sources.
+
+#### Which files does the user actually get?
+
+When someone opens `https://lidoalexion.com/portfolio/`:
+
+1. `portfolio/index.php` runs Laravel in `lidoportfolio/`.
+2. Laravel renders HTML and reads **`lidoportfolio/public/build/manifest.json`** to decide which hashed filenames to reference (e.g. `app-BqLqchoj.js`).
+3. The HTML contains tags pointing to **`/portfolio/build/assets/app-BqLqchoj.js`** (root-relative paths from `AppServiceProvider`).
+4. The **browser fetches those files from `portfolio/build/`** — that is what runs the React app.
+
+So: **manifest** = Laravel copy; **JS/CSS/fonts** = browser copy. They must describe and contain the **same release**.
+
+#### What if the two server folders are out of sync?
+
+Always upload **the entire** `public/build/` folder to **both** locations in the same deploy.
+
+| Mismatch | Typical symptom |
+|----------|-----------------|
+| New manifest in `lidoportfolio/public/build/`, old files in `portfolio/build/` | HTML references new hashed JS (e.g. `app-NEW.js`) → **404** on script → blank page or boot error banner |
+| New files in `portfolio/build/`, old manifest in `lidoportfolio/public/build/` | HTML still points at old hashes → may load **stale** UI, or **404** if you deleted old files from `portfolio/build/` |
+| Only one location updated | Unpredictable mix of old and new — hard-to-debug errors, cached-looking UI |
+
+**Rule:** After any frontend change, replace **both** `lidoportfolio/public/build/` and `portfolio/build/` with the same `app/public/build/` output from one `npm run build`. Then hard-refresh the browser (Ctrl+Shift+R).
+
+`cpanel-diagnose.php` checks that both manifests exist; it does not compare file hashes — keeping them in sync is a deploy discipline.
+
+### 2.2 Alternative: one `portfolio/` folder only (wishlist — deferred)
+
+**Status (Jun 2026):** Not planned for near-term deploy. Owner decision: keep the two-folder layout until production **secrets handling** is improved (`.env` under a consolidated web tree is a higher exposure risk). Tracked in `implementation.md` → **Wishlist**.
+
+**Question:** Can Laravel live inside `public_html/portfolio/` and drop the sibling `lidoportfolio/` folder?
+
+**Yes — it is feasible** and would remove the duplicate `build/` upload. Today we use two siblings for historical reasons (simple “deny all” on Laravel, separate web entry). That is not a hard platform requirement.
+
+**Proposed layout:**
+
+```
+public_html/portfolio/
+├── index.php              ← front controller (unchanged URL)
+├── .htaccess              ← allow build/, block laravel/
+├── build/                 ← single copy (browser + manifest)
+├── favicon.ico
+└── laravel/               ← full Laravel tree (today’s lidoportfolio/ contents)
+    ├── .htaccess          ← Deny from all (belt-and-suspenders)
+    ├── app/, bootstrap/, config/, …
+    ├── .env
+    └── artisan
+```
+
+**How it would work:**
+
+1. `index.php` sets `LARAVEL_ROOT` to `__DIR__.'/laravel'` (instead of `../lidoportfolio`).
+2. Laravel is told the public directory is `portfolio/` itself (`usePublicPath(__DIR__)` from `index.php`, or equivalent), so `manifest.json` lives at `portfolio/build/manifest.json` — **one build folder**.
+3. `.htaccess` must block direct HTTP access to `laravel/`, `.env`, `storage/`, etc., while still serving `build/*` and routing API/HTML through `index.php`.
+
+**What you gain:**
+
+| Benefit | |
+|---------|---|
+| One upload target for frontend | `portfolio/build/` only |
+| One Laravel root on server | `portfolio/laravel/` |
+| Simpler mental model | Everything for this app under `/portfolio/` |
+
+**What you must get right:**
+
+| Risk | Mitigation |
+|------|------------|
+| `.env` or `storage/` reachable via URL | `laravel/.htaccess` Deny all + parent rules blocking `laravel/` |
+| Cron / cpanel scripts still point at old path | Update paths to `.../portfolio/laravel/artisan` |
+| One-time production move | Copy `lidoportfolio/*` → `portfolio/laravel/`, verify, delete old folder |
+
+**What does *not* block this:** GoDaddy **open_basedir** — Laravel still stays under `public_html/`. We only avoid Laravel *outside* `public_html` (e.g. `/home/USER/lidoportfolio/` with no `public_html` prefix).
+
+**Effort:** Medium one-time migration — `deploy/index.php`, all `cpanel-*.php` root detection, `prepare-upload.ps1`, cron in cPanel, production file move, docs. No change to `APP_URL` or user-facing URLs.
+
+Until that migration is done, keep using the two-folder layout in §2.1. Prerequisites before attempting: secrets handling (see `implementation.md` Wishlist) and hardened rules blocking `laravel/.env` from HTTP.
+
 ### Obsolete approaches (do not use)
 
 | Do not | Why |
@@ -189,6 +310,8 @@ npm run build
 ### Upload changed files
 
 Paths below use `/home/USER/` — replace `USER` with your cPanel username (e.g. `p7xatiz6j0mk`).
+
+**Frontend build:** see [§2.1 Build folders explained](#21-build-folders-explained-pc-vs-server). Upload the **same** `app/public/build/` output to both server `build/` folders (or use the two copies under `deploy/staging/` after `prepare-upload.ps1`).
 
 | Upload from (PC — repo) | Upload to (server) | When |
 |-------------------------|---------------------|------|

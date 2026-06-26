@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\PortfolioProfile;
 use App\Models\Stock;
-use App\Models\User;
 use Carbon\Carbon;
 
 class ExploratoryAnalyticsService
@@ -20,7 +20,7 @@ class ExploratoryAnalyticsService
      * @return array<string, mixed>
      */
     public function analyze(
-        User $user,
+        PortfolioProfile $profile,
         string $symbol,
         string $exchange = 'NSE',
         ?string $benchmarkSymbol = 'NIFTY50',
@@ -83,8 +83,8 @@ class ExploratoryAnalyticsService
                 'latest_close' => $benchmarkClose,
             ],
             'tracking' => [
-                'is_portfolio_tracked' => $this->tracking->isPortfolioTracked($stock, $user),
-                'is_exploratory' => $this->tracking->isExploratory($stock, $user),
+                'is_portfolio_tracked' => $this->tracking->isPortfolioTracked($stock, $profile),
+                'is_exploratory' => $this->tracking->isExploratory($stock, $profile),
             ],
             'latest_close' => $latestClose,
             'as_of' => $asOf->toDateString(),

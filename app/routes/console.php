@@ -34,8 +34,8 @@ Artisan::command('portfolio:send-notifications {--at= : HH:mm schedule slot in c
     }
 
     if ($result['sent'] ?? false) {
-        $users = $result['users_notified'] ?? 0;
-        $this->info('Sent '.$result['alert_count'].' alert(s) to Telegram for '.$users.' user(s).');
+        $profiles = $result['profiles_notified'] ?? 0;
+        $this->info('Sent '.$result['alert_count'].' alert(s) to Telegram for '.$profiles.' profile(s).');
 
         return 0;
     }
@@ -72,8 +72,8 @@ Schedule::command('portfolio:daily-sync')
 
 $notificationSchedules = [];
 try {
-    if (\Illuminate\Support\Facades\Schema::hasTable('portfolio_user_settings')) {
-        $notificationSchedules = app(NotificationScheduleService::class)->distinctSchedulesAcrossUsers();
+    if (\Illuminate\Support\Facades\Schema::hasTable('portfolio_profile_settings')) {
+        $notificationSchedules = app(NotificationScheduleService::class)->distinctSchedulesAcrossProfiles();
     }
 } catch (\Throwable) {
     // Fall back to no notification schedules if DB is unavailable during bootstrap.

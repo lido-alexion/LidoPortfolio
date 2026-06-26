@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\ExplorerAnalyticsController;
 use App\Http\Controllers\Api\FrontendLogController;
 use App\Http\Controllers\Api\HoldingController;
 use App\Http\Controllers\Api\InviteAcceptController;
+use App\Http\Controllers\Api\PortfolioController;
 use App\Http\Controllers\Api\PortfolioHistoryController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\SettingsController;
@@ -33,8 +34,15 @@ Route::post('/invites/accept', [InviteAcceptController::class, 'accept'])
 Route::get('/auth/me', [AuthController::class, 'me']);
 Route::get('/auth/csrf-token', [AuthController::class, 'csrfToken']);
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::post('/logs/frontend', [FrontendLogController::class, 'store']);
+
+    Route::get('/portfolios', [PortfolioController::class, 'index']);
+    Route::post('/portfolios', [PortfolioController::class, 'store']);
+    Route::get('/portfolios/{portfolio}', [PortfolioController::class, 'show']);
+    Route::put('/portfolios/{portfolio}', [PortfolioController::class, 'update']);
+    Route::delete('/portfolios/{portfolio}', [PortfolioController::class, 'destroy']);
+    Route::post('/portfolios/{portfolio}/set-default', [PortfolioController::class, 'setDefault']);
 
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/sessions', [AuthController::class, 'sessions']);

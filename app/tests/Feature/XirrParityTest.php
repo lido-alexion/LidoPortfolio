@@ -26,6 +26,7 @@ class XirrParityTest extends TestCase
             'email' => 'xirr-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $profile = $this->defaultPortfolioFor($user);
 
         $stock = Stock::query()->create([
             'symbol' => 'XIRR1',
@@ -36,7 +37,7 @@ class XirrParityTest extends TestCase
         ]);
 
         Transaction::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'type' => 'buy',
             'quantity' => 10,
@@ -57,11 +58,11 @@ class XirrParityTest extends TestCase
             'provider_source' => 'test',
         ]);
 
-        app(HoldingsCalculationService::class)->recalculateForUser($user);
+        app(HoldingsCalculationService::class)->recalculateForProfile($profile);
 
-        $summary = app(PortfolioCalculationService::class)->calculateForUser($user);
-        $holding = $user->holdings()->with('stock.metrics')->first();
-        $enriched = app(HoldingPresentationService::class)->enrichHolding($user, $holding);
+        $summary = app(PortfolioCalculationService::class)->calculateForProfile($profile);
+        $holding = $profile->holdings()->with('stock.metrics')->first();
+        $enriched = app(HoldingPresentationService::class)->enrichHolding($profile, $holding);
 
         $this->assertNotNull($summary['xirr']);
         $this->assertNotNull($enriched['xirr']);
@@ -85,6 +86,7 @@ class XirrParityTest extends TestCase
             'email' => 'terminal-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $profile = $this->defaultPortfolioFor($user);
 
         $stock = Stock::query()->create([
             'symbol' => 'XIRR2',
@@ -95,7 +97,7 @@ class XirrParityTest extends TestCase
         ]);
 
         Transaction::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'type' => 'buy',
             'quantity' => 5,
@@ -116,11 +118,11 @@ class XirrParityTest extends TestCase
             'provider_source' => 'test',
         ]);
 
-        app(HoldingsCalculationService::class)->recalculateForUser($user);
+        app(HoldingsCalculationService::class)->recalculateForProfile($profile);
 
-        $summary = app(PortfolioCalculationService::class)->calculateForUser($user);
+        $summary = app(PortfolioCalculationService::class)->calculateForProfile($profile);
         $xirr = app(XirrService::class)->calculateFromTransactions(
-            Transaction::query()->where('user_id', $user->id)->orderBy('transaction_date')->get(),
+            Transaction::query()->where('profile_id', $profile->id)->orderBy('transaction_date')->get(),
             $summary['portfolio_value'],
             now()->startOfDay(),
         );
@@ -135,6 +137,7 @@ class XirrParityTest extends TestCase
             'email' => 'holding-xirr-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $profile = $this->defaultPortfolioFor($user);
 
         $stock = Stock::query()->create([
             'symbol' => 'MISMATCH',
@@ -145,7 +148,7 @@ class XirrParityTest extends TestCase
         ]);
 
         Transaction::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'type' => 'buy',
             'quantity' => 10,
@@ -154,7 +157,7 @@ class XirrParityTest extends TestCase
             'transaction_date' => '2025-05-10',
         ]);
 
-        // OHLCV since buy (180) plus older row before buy (250) — XIRR must not use the pre-buy close.
+        // OHLCV since buy (180) plus older row before buy (250) Ã¢â‚¬â€ XIRR must not use the pre-buy close.
         StockPrice::query()->create([
             'stock_id' => $stock->id,
             'price_date' => '2025-05-05',
@@ -179,10 +182,10 @@ class XirrParityTest extends TestCase
             'provider_source' => 'test',
         ]);
 
-        app(HoldingsCalculationService::class)->recalculateForUser($user);
+        app(HoldingsCalculationService::class)->recalculateForProfile($profile);
 
-        $holding = $user->holdings()->with('stock.metrics')->first();
-        $enriched = app(HoldingPresentationService::class)->enrichHolding($user, $holding);
+        $holding = $profile->holdings()->with('stock.metrics')->first();
+        $enriched = app(HoldingPresentationService::class)->enrichHolding($profile, $holding);
 
         $this->assertEqualsWithDelta(180, $enriched['stoploss_summary']['latest_close'], 0.0001);
         $this->assertLessThan((float) $holding->avg_buy_price, 180.0);
@@ -190,8 +193,7 @@ class XirrParityTest extends TestCase
         $this->assertLessThan(0, $enriched['xirr'], 'XIRR should be negative when latest close is below avg buy (single buy).');
 
         $terminalValue = (float) $holding->quantity * 180;
-        $xirrAtDisplayedClose = app(XirrService::class)->calculateStockXirr(
-            $user,
+        $xirrAtDisplayedClose = app(XirrService::class)->calculateStockXirr($profile,
             (int) $stock->id,
             now()->startOfDay(),
             $terminalValue,
@@ -200,3 +202,5 @@ class XirrParityTest extends TestCase
         $this->assertLessThan(0, $xirrAtDisplayedClose);
     }
 }
+
+

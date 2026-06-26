@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\PortfolioProfile;
 use App\Models\User;
 use App\Services\SyncLogService;
 
@@ -18,18 +19,18 @@ class SettingsService
     ];
 
     public function __construct(
-        protected UserSettingsService $userSettings,
+        protected ProfileSettingsService $profileSettings,
     ) {}
 
     /**
-     * Global + authenticated user's personal settings merged for the Settings UI.
-     * Non-admins receive only per-user keys plus read-only {@see cron_timezone} for notification labels.
+     * Global + active profile settings merged for the Settings UI.
+     * Non-admins receive only per-profile keys plus read-only {@see cron_timezone} for notification labels.
      *
      * @return array<string, mixed>
      */
-    public function allForUser(User $user): array
+    public function allForProfile(PortfolioProfile $profile, User $user): array
     {
-        $settings = $this->userSettings->all($user);
+        $settings = $this->profileSettings->all($profile);
 
         if (! $user->is_admin) {
             $settings['cron_timezone'] = $this->get(
@@ -61,14 +62,14 @@ class SettingsService
     /**
      * @return array<string, mixed>
      */
-    public function updateForUser(User $user, array $data): array
+    public function updateForProfile(PortfolioProfile $profile, User $user, array $data): array
     {
-        $userData = [];
+        $profileData = [];
         $globalData = [];
 
         foreach ($data as $key => $value) {
-            if ($this->userSettings->isManagedKey($key)) {
-                $userData[$key] = $value;
+            if ($this->profileSettings->isManagedKey($key)) {
+                $profileData[$key] = $value;
             } elseif (array_key_exists($key, self::DEFAULTS) || $key === 'fee_components') {
                 $globalData[$key] = $value;
             }
@@ -82,11 +83,11 @@ class SettingsService
             $this->updateGlobal($globalData);
         }
 
-        if ($userData !== []) {
-            $this->userSettings->update($user, $userData);
+        if ($profileData !== []) {
+            $this->profileSettings->update($profile, $profileData);
         }
 
-        return $this->allForUser($user);
+        return $this->allForProfile($profile, $user);
     }
 
     /**

@@ -3,9 +3,9 @@
 namespace App\Services;
 
 use App\Models\Holding;
+use App\Models\PortfolioProfile;
 use App\Models\PortfolioSnapshot;
 use App\Models\Transaction;
-use App\Models\User;
 use Carbon\Carbon;
 
 class PortfolioCalculationService
@@ -15,11 +15,11 @@ class PortfolioCalculationService
         protected StockQuoteService $quotes,
     ) {}
 
-    public function calculateForUser(User $user, ?Carbon $asOf = null): array
+    public function calculateForProfile(PortfolioProfile $profile, ?Carbon $asOf = null): array
     {
         $holdings = Holding::query()
             ->with('stock.metrics')
-            ->where('user_id', $user->id)
+            ->where('profile_id', $profile->id)
             ->where('quantity', '>', 0)
             ->get();
 
@@ -69,7 +69,7 @@ class PortfolioCalculationService
         $asOfDate = ($asOf ?? now())->copy()->startOfDay();
 
         $transactions = Transaction::query()
-            ->where('user_id', $user->id)
+            ->where('profile_id', $profile->id)
             ->orderBy('transaction_date')
             ->get();
 
@@ -88,30 +88,30 @@ class PortfolioCalculationService
         ];
     }
 
-    public function storeSnapshot(User $user, ?Carbon $date = null): PortfolioSnapshot
+    public function storeSnapshot(PortfolioProfile $profile, ?Carbon $date = null): PortfolioSnapshot
     {
         $date = ($date ?? now())->copy()->startOfDay();
 
-        app(PortfolioSnapshotRebuildService::class)->rebuildDateRange($user, $date, $date);
+        app(PortfolioSnapshotRebuildService::class)->rebuildDateRange($profile, $date, $date);
 
         return PortfolioSnapshot::query()->firstOrNew([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'snapshot_date' => $date->toDateString(),
         ]);
     }
 
-    public function dailyChange(User $user): ?array
+    public function dailyChange(PortfolioProfile $profile): ?array
     {
         $today = now()->toDateString();
         $yesterday = now()->subDay()->toDateString();
 
         $todaySnapshot = PortfolioSnapshot::query()
-            ->where('user_id', $user->id)
+            ->where('profile_id', $profile->id)
             ->where('snapshot_date', $today)
             ->first();
 
         $yesterdaySnapshot = PortfolioSnapshot::query()
-            ->where('user_id', $user->id)
+            ->where('profile_id', $profile->id)
             ->where('snapshot_date', $yesterday)
             ->first();
 

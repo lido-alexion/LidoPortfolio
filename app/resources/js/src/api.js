@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { getRequestCsrfToken, isPlainCsrfToken, resetCsrfCookie } from './auth/csrf';
+import { getActivePortfolioId } from './portfolio/activePortfolioStorage';
 import logger, { createRequestId } from './services/logger';
 import { showToast } from './toast';
 import { appUrl } from './appBase';
@@ -31,6 +32,11 @@ api.interceptors.request.use((config) => {
     const requestId = createRequestId();
     config.headers['X-Request-ID'] = requestId;
     config.metadata = { requestId };
+
+    const portfolioId = getActivePortfolioId();
+    if (portfolioId) {
+        config.headers['X-Profile-Id'] = portfolioId;
+    }
 
     logger.debug('API request', {
         category: 'API',

@@ -27,6 +27,12 @@ class SyncController extends Controller
 
     public function backfill(Request $request, Stock $stock): JsonResponse
     {
-        return response()->json($this->presentation->syncHistoricalPrices($request->user(), $stock));
+        $profile = \activePortfolio();
+
+        if (! $this->presentation->firstBuyDateForCurrentPosition($profile, $stock)) {
+            abort(403, 'Stock is not held in the active portfolio.');
+        }
+
+        return response()->json($this->presentation->syncHistoricalPrices($profile, $stock));
     }
 }

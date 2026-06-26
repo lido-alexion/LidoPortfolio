@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\PortfolioProfile;
 use App\Models\Transaction;
-use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
@@ -13,28 +13,28 @@ class XirrService
         protected StockQuoteService $quotes,
     ) {}
 
-    public function calculatePortfolioXirr(User $user, ?Carbon $asOf = null, ?float $terminalValue = null): ?float
+    public function calculatePortfolioXirr(PortfolioProfile $profile, ?Carbon $asOf = null, ?float $terminalValue = null): ?float
     {
         $asOf = ($asOf ?? now())->copy()->startOfDay();
 
         $transactions = Transaction::query()
-            ->where('user_id', $user->id)
+            ->where('profile_id', $profile->id)
             ->orderBy('transaction_date')
             ->get();
 
         if ($terminalValue === null) {
-            $terminalValue = $this->terminalValueForOpenHoldings($user, $asOf);
+            $terminalValue = $this->terminalValueForOpenHoldings($profile, $asOf);
         }
 
         return $this->calculateFromTransactions($transactions, $terminalValue, $asOf);
     }
 
-    public function calculateStockXirr(User $user, int $stockId, ?Carbon $asOf = null, ?float $terminalValue = null): ?float
+    public function calculateStockXirr(PortfolioProfile $profile, int $stockId, ?Carbon $asOf = null, ?float $terminalValue = null): ?float
     {
         $asOf = ($asOf ?? now())->copy()->startOfDay();
 
         $transactions = Transaction::query()
-            ->where('user_id', $user->id)
+            ->where('profile_id', $profile->id)
             ->where('stock_id', $stockId)
             ->orderBy('transaction_date')
             ->get();
@@ -85,9 +85,9 @@ class XirrService
         return $this->solveXirr($flows);
     }
 
-    protected function terminalValueForOpenHoldings(User $user, Carbon $asOf): float
+    protected function terminalValueForOpenHoldings(PortfolioProfile $profile, Carbon $asOf): float
     {
-        $holdings = $user->holdings()
+        $holdings = $profile->holdings()
             ->where('quantity', '>', 0)
             ->get(['stock_id', 'quantity']);
 

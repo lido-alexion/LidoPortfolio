@@ -24,7 +24,8 @@ class TransactionController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $this->holdings->recalculateForUser($request->user());
+        $profile = \activePortfolio();
+        $this->holdings->recalculateForProfile($profile);
 
         $scope = $request->input('scope', 'open');
         if (! in_array($scope, ['open', 'closed', 'all'], true)) {
@@ -32,13 +33,13 @@ class TransactionController extends Controller
         }
 
         $openStockIds = Holding::query()
-            ->where('user_id', $request->user()->id)
+            ->where('profile_id', $profile->id)
             ->where('quantity', '>', 0)
             ->pluck('stock_id');
 
         $query = Transaction::query()
             ->with('stock')
-            ->where('user_id', $request->user()->id);
+            ->where('profile_id', $profile->id);
 
         if ($scope === 'open') {
             if ($openStockIds->isEmpty()) {
@@ -75,12 +76,13 @@ class TransactionController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        $profile = \activePortfolio();
         $stock = $this->stocks->resolve($request);
         $validated = $this->validateTransaction($request);
         $validated['stock_id'] = $stock->id;
 
         if ($validated['type'] === 'sell') {
-            $available = $this->holdings->getAvailableQuantity($request->user(), $stock);
+            $available = $this->holdings->getAvailableQuantity($profile, $stock);
             if ($validated['quantity'] > $available + 0.00001) {
                 throw ValidationException::withMessages([
                     'quantity' => ['Sell quantity cannot exceed current holding quantity.'],
@@ -90,10 +92,10 @@ class TransactionController extends Controller
 
         $transaction = Transaction::query()->create([
             ...$validated,
-            'user_id' => $request->user()->id,
+            'profile_id' => $profile->id,
         ]);
 
-        $this->holdings->recalculateForUserStock($request->user(), $stock);
+        $this->holdings->recalculateForProfileStock($profile, $stock);
         if ($validated['type'] === 'buy') {
             try {
                 BackfillHistoricalDataJob::dispatchSync($stock->id, $validated['transaction_date']);
@@ -103,7 +105,7 @@ class TransactionController extends Controller
         }
 
         $this->snapshotRebuild->rebuildAfterTransactionChange(
-            $request->user(),
+            $profile,
             null,
             $validated['transaction_date'],
         );
@@ -118,6 +120,7 @@ class TransactionController extends Controller
 
     public function update(Request $request, Transaction $transaction): JsonResponse
     {
+        $profile = \activePortfolio();
         $previousTransactionDate = $transaction->transaction_date;
 
         if (! $request->filled('stock_id') && ! $request->filled('symbol')) {
@@ -129,7 +132,7 @@ class TransactionController extends Controller
         $validated['stock_id'] = $stock->id;
 
         if ($validated['type'] === 'sell') {
-            $tempAvailable = $this->holdings->getAvailableQuantity($request->user(), $stock);
+            $tempAvailable = $this->holdings->getAvailableQuantity($profile, $stock);
             $currentQty = (float) $transaction->quantity;
             $available = $transaction->type === 'sell'
                 ? $tempAvailable + $currentQty
@@ -144,11 +147,11 @@ class TransactionController extends Controller
 
         $transaction->update($validated);
         $stock = $transaction->stock;
-        $this->holdings->recalculateForUserStock($request->user(), $stock);
+        $this->holdings->recalculateForProfileStock($profile, $stock);
         BackfillHistoricalDataJob::dispatchSync($stock->id, $validated['transaction_date']);
 
         $this->snapshotRebuild->rebuildAfterTransactionChange(
-            $request->user(),
+            $profile,
             $previousTransactionDate,
             $validated['transaction_date'],
         );
@@ -158,9 +161,11 @@ class TransactionController extends Controller
 
     public function destroy(Request $request, Transaction $transaction): JsonResponse
     {
+        $profile = \activePortfolio();
+
         if ($transaction->type === 'buy') {
             try {
-                $this->holdings->assertReplayValidAfterDeleting($request->user(), $transaction);
+                $this->holdings->assertReplayValidAfterDeleting($profile, $transaction);
             } catch (InvalidArgumentException) {
                 throw ValidationException::withMessages([
                     'transaction' => [
@@ -173,10 +178,10 @@ class TransactionController extends Controller
         $stock = $transaction->stock;
         $deletedDate = $transaction->transaction_date;
         $transaction->delete();
-        $this->holdings->recalculateForUserStock($request->user(), $stock);
+        $this->holdings->recalculateForProfileStock($profile, $stock);
 
         $this->snapshotRebuild->rebuildAfterTransactionChange(
-            $request->user(),
+            $profile,
             $deletedDate,
             null,
         );

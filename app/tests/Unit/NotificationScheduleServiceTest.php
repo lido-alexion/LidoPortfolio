@@ -4,7 +4,7 @@ namespace Tests\Unit;
 
 use App\Models\User;
 use App\Services\NotificationScheduleService;
-use App\Services\UserSettingsService;
+use App\Services\ProfileSettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -23,35 +23,39 @@ class NotificationScheduleServiceTest extends TestCase
         ]);
     }
 
-    public function test_normalizes_and_persists_schedules_for_user(): void
+    public function test_normalizes_and_persists_schedules_for_profile(): void
     {
         $user = $this->makeUser();
+        $profile = $this->defaultPortfolioFor($user);
         $service = app(NotificationScheduleService::class);
 
-        $saved = $service->persistForUser($user, ['18:30', '9:00', 'invalid', '25:99']);
+        $saved = $service->persistForProfile($profile, ['18:30', '9:00', 'invalid', '25:99']);
 
         $this->assertSame(['09:00', '18:30'], $saved);
-        $this->assertSame(['09:00', '18:30'], $service->schedulesForUser($user));
+        $this->assertSame(['09:00', '18:30'], $service->schedulesForProfile($profile));
     }
 
-    public function test_distinct_schedules_across_users(): void
+    public function test_distinct_schedules_across_profiles(): void
     {
         $userA = $this->makeUser();
+        $profileA = $this->defaultPortfolioFor($userA);
         $userB = $this->makeUser();
+        $profileB = $this->defaultPortfolioFor($userB);
         $service = app(NotificationScheduleService::class);
 
-        $service->persistForUser($userA, ['09:00', '18:00']);
-        $service->persistForUser($userB, ['18:00', '21:30']);
+        $service->persistForProfile($profileA, ['09:00', '18:00']);
+        $service->persistForProfile($profileB, ['18:00', '21:30']);
 
-        $this->assertSame(['09:00', '18:00', '21:30'], $service->distinctSchedulesAcrossUsers());
+        $this->assertSame(['09:00', '18:00', '21:30'], $service->distinctSchedulesAcrossProfiles());
     }
 
-    public function test_settings_api_returns_user_notification_schedules(): void
+    public function test_settings_service_returns_profile_notification_schedules(): void
     {
         $user = $this->makeUser();
-        app(NotificationScheduleService::class)->persistForUser($user, ['10:15', '20:00']);
+        $profile = $this->defaultPortfolioFor($user);
+        app(NotificationScheduleService::class)->persistForProfile($profile, ['10:15', '20:00']);
 
-        $settings = app(UserSettingsService::class)->all($user);
+        $settings = app(ProfileSettingsService::class)->all($profile);
 
         $this->assertSame(['10:15', '20:00'], $settings['notification_schedules']);
     }

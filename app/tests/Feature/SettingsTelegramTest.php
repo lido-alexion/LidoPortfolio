@@ -33,6 +33,7 @@ class SettingsTelegramTest extends TestCase
             'email' => 'settings-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $profile = $this->defaultPortfolioFor($user);
 
         $this->postJson('/api/auth/login', [
             'email' => $user->email,
@@ -74,6 +75,7 @@ class SettingsTelegramTest extends TestCase
     public function test_test_telegram_sends_active_alerts(): void
     {
         $user = $this->actingAsPortfolioUser();
+        $profile = $this->defaultPortfolioFor($user);
 
         $stock = Stock::query()->create([
             'symbol' => 'TGTEST',
@@ -84,7 +86,7 @@ class SettingsTelegramTest extends TestCase
         ]);
 
         Holding::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'quantity' => 1,
             'avg_buy_price' => 100,
@@ -94,7 +96,7 @@ class SettingsTelegramTest extends TestCase
         ]);
 
         Alert::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'alert_type' => 'stoploss_triggered',
             'message' => 'Stoploss triggered for Telegram Test (TGTEST).',
@@ -150,3 +152,4 @@ class SettingsTelegramTest extends TestCase
         ])->assertOk();
     }
 }
+

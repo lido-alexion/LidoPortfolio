@@ -3,12 +3,12 @@
 namespace Tests\Feature;
 
 use App\Models\User;
-use App\Services\UserSettingsService;
+use App\Services\ProfileSettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
-class UserSettingsTest extends TestCase
+class ProfileSettingsTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -29,6 +29,7 @@ class UserSettingsTest extends TestCase
             'email' => 'settings-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $this->defaultPortfolioFor($user);
 
         $this->postJson('/api/auth/login', [
             'email' => $user->email,
@@ -38,40 +39,42 @@ class UserSettingsTest extends TestCase
         return $user;
     }
 
-    public function test_user_settings_are_isolated_between_users(): void
+    public function test_profile_settings_are_isolated_between_profiles(): void
     {
         $userA = User::query()->create([
             'name' => 'User A',
             'email' => 'user-a-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $profileA = $this->defaultPortfolioFor($userA);
         $userB = User::query()->create([
             'name' => 'User B',
             'email' => 'user-b-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $profileB = $this->defaultPortfolioFor($userB);
 
-        $userSettings = app(UserSettingsService::class);
-        $userSettings->update($userA, [
+        $settings = app(ProfileSettingsService::class);
+        $settings->update($profileA, [
             'default_stoploss_percent' => '12',
             'telegram_bot_token' => 'token-a',
             'telegram_chat_id' => '111',
             'notification_schedules' => ['08:00'],
         ]);
-        $userSettings->update($userB, [
+        $settings->update($profileB, [
             'default_stoploss_percent' => '15',
             'telegram_bot_token' => 'token-b',
             'telegram_chat_id' => '222',
             'notification_schedules' => ['20:00'],
         ]);
 
-        $this->assertSame('12', $userSettings->get($userA, 'default_stoploss_percent'));
-        $this->assertSame('15', $userSettings->get($userB, 'default_stoploss_percent'));
-        $this->assertSame(['08:00'], $userSettings->all($userA)['notification_schedules']);
-        $this->assertSame(['20:00'], $userSettings->all($userB)['notification_schedules']);
+        $this->assertSame('12', $settings->get($profileA, 'default_stoploss_percent'));
+        $this->assertSame('15', $settings->get($profileB, 'default_stoploss_percent'));
+        $this->assertSame(['08:00'], $settings->all($profileA)['notification_schedules']);
+        $this->assertSame(['20:00'], $settings->all($profileB)['notification_schedules']);
     }
 
-    public function test_settings_api_persists_user_scoped_fields(): void
+    public function test_settings_api_persists_profile_scoped_fields(): void
     {
         $user = $this->actingAsPortfolioUser();
 
@@ -90,8 +93,9 @@ class UserSettingsTest extends TestCase
             'email' => 'other-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $otherProfile = $this->defaultPortfolioFor($other);
 
-        $this->assertSame('10', app(UserSettingsService::class)->get($other, 'default_stoploss_percent'));
+        $this->assertSame('10', app(ProfileSettingsService::class)->get($otherProfile, 'default_stoploss_percent'));
         $this->assertNotNull($user);
     }
 }

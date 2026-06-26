@@ -79,6 +79,14 @@ export default function ProfileMenu({ user }) {
                         </div>
                         <ThemeToggle />
                         <Link
+                            to="/portfolios"
+                            className="dropdown-item text-white py-2 small d-flex align-items-center"
+                            onClick={() => setIsOpen(false)}
+                        >
+                            <span className="me-2">📁</span>
+                            Portfolios
+                        </Link>
+                        <Link
                             to="/settings"
                             className="dropdown-item text-white py-2 small d-flex align-items-center"
                             onClick={() => setIsOpen(false)}

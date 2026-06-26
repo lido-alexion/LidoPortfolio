@@ -14,6 +14,7 @@ import StockAutocomplete from '../components/StockAutocomplete';
 import { showToast } from '../toast';
 
 import { notifyPortfolioDashboardRefresh } from '../utils/portfolioEvents';
+import usePortfolioChanged from '../hooks/usePortfolioChanged';
 
 import {
 
@@ -175,6 +176,11 @@ export default function TransactionsPage() {
 
 
     useEffect(() => { load(); loadFeeSettings(); }, [load]);
+
+    usePortfolioChanged(() => {
+        load();
+        loadFeeSettings();
+    });
 
     useEffect(() => {
         const prefill = location.state?.sellPrefill;

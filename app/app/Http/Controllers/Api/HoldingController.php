@@ -17,16 +17,17 @@ class HoldingController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $this->holdings->recalculateForUser($request->user());
+        $profile = \activePortfolio();
+        $this->holdings->recalculateForProfile($profile);
 
-        $holdings = $request->user()
+        $holdings = $profile
             ->holdings()
             ->with('stock.metrics')
             ->where('quantity', '>', 0)
             ->get();
 
         $data = $holdings->map(
-            fn ($holding) => $this->presentation->enrichHolding($request->user(), $holding),
+            fn ($holding) => $this->presentation->enrichHolding($profile, $holding),
         )->values();
 
         return response()->json(['data' => $data]);

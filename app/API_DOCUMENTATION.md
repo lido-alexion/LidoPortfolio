@@ -8,7 +8,29 @@ Uses Laravel Sanctum SPA mode. Browser must send cookies (`credentials: include`
 
 - `POST /auth/login` — body: `email`, `password`, optional `remember`. If email has a pending invite, returns `422` with `invite_setup_required: true` and `invite_token` (redirect user to `/invite/{token}`).
 - `POST /auth/logout` (session)
-- `GET /auth/me` (session) — includes `user.is_admin` (boolean)
+- `GET /auth/me` (session) — includes `user.is_admin` (boolean) and `user.default_portfolio_id`
+
+## Active portfolio (multi-portfolio)
+
+Portfolio-scoped endpoints (transactions, holdings, dashboard, alerts, settings personal keys, analytics, rebuild-history) operate on the **active portfolio** resolved by middleware:
+
+- Header **`X-Profile-Id`**: portfolio id (integer). Also accepts legacy `X-Portfolio-Id`.
+- Query `portfolio_id` (optional alternative)
+- If omitted, the user's **default** portfolio is used (`portfolio_profiles.is_default`)
+
+Active portfolio is **per browser tab** on the SPA (`sessionStorage` key `portfolio_active_id`); Laravel session cookies are shared across tabs, so the server does not store active portfolio in session.
+
+### Portfolios (user-scoped)
+
+- `GET /portfolios` (auth) — list user's portfolios (`id`, `name`, `is_default`)
+- `POST /portfolios` (auth) — body: `name`
+- `GET /portfolios/{portfolio}` (auth)
+- `PUT /portfolios/{portfolio}` (auth) — rename
+- `DELETE /portfolios/{portfolio}` (auth) — not allowed if only portfolio
+- `POST /portfolios/{portfolio}/set-default` (auth)
+
+Account routes (`/profile`, auth sessions, admin users/invites) ignore portfolio header.
+
 - `GET /auth/sessions` (session) — active devices
 - `POST /auth/sessions/logout-others` (session)
 - `DELETE /auth/sessions/{sessionId}` (session)
@@ -69,9 +91,9 @@ Returns growth %, relative strength vs benchmark, chart series, cache/fetch meta
 
 ## Alerts
 
-- `GET /alerts` (auth) — active alerts for the authenticated user (`user_id`, `expired_at` is null).
-- `POST /alerts/expire-all` (auth) — expire all active alerts for that user (`expiration_reason`: `manual_all`).
-- `POST /alerts/{id}/acknowledge` (auth) — expire one alert owned by the user (`acknowledged`).
+- `GET /alerts` (auth) — active alerts for the active portfolio (`profile_id`, `expired_at` is null).
+- `POST /alerts/expire-all` (auth) — expire all active alerts for the active portfolio (`expiration_reason`: `manual_all`).
+- `POST /alerts/{id}/acknowledge` (auth) — expire one alert owned by the active portfolio (`acknowledged`).
 
 Automatic expiration (`AlertExpirationService`):
 
@@ -81,13 +103,13 @@ Automatic expiration (`AlertExpirationService`):
 | `acknowledged` | Per-row **Acknowledge** |
 | `max_age_100h` | Hourly `portfolio:expire-alerts` |
 | `data_refresh` | Successful daily sync when latest portfolio price date advances (new trading day) |
-| `holding_closed` | User fully sells — no open holding left for that user/stock |
+| `holding_closed` | Profile fully sells — no open holding left for that profile/stock |
 
 ## Settings
 
-- `GET /settings` (auth) — admins receive merged global + personal settings; non-admins receive personal settings only plus read-only `cron_timezone`
-- `PUT /settings` (auth) — personal keys (stoploss %, Telegram, notification times) for any user; global keys (cron, fees, NSE retry, Alpha Vantage key, log level, sync log retention) **admin only** (403 if non-admin sends global fields)
-- `POST /settings/test-telegram` (auth) — body: `telegram_bot_token`, `telegram_chat_id`; sends **requesting user's** active alerts digest or `No active alerts at this time`; does not require `notifications_enabled`
+- `GET /settings` (auth) — admins receive merged global + active portfolio settings; non-admins receive active portfolio settings plus read-only `cron_timezone`
+- `PUT /settings` (auth) — personal keys (stoploss %, Telegram, notification times) for the active portfolio; global keys (cron, fees, NSE retry, Alpha Vantage key, log level, sync log retention) **admin only** (403 if non-admin sends global fields)
+- `POST /settings/test-telegram` (auth) — body: `telegram_bot_token`, `telegram_chat_id`; sends **active portfolio's** alerts digest or `No active alerts at this time`; does not require `notifications_enabled`
 
 ## Users (admin only)
 
@@ -124,8 +146,8 @@ Request body:
 - `POST /sync/daily` (auth, **admin**) — body/query `force` (boolean)
 - `POST /sync/backfill/{stock}` (auth, **admin**) — force fetch from user's buy date
 - `GET /sync-logs`, `GET /sync-logs/runs`, `GET /sync-logs/export` (auth, **admin**)
-- Settings `notification_schedules` — per-user; global `cron_time` is admin-only
-- `portfolio:send-notifications` — per-user Telegram digests at scheduled times
+- Settings `notification_schedules` — per active portfolio; global `cron_time` is admin-only
+- `portfolio:send-notifications` — per-profile Telegram digests at scheduled times
 
 ## Response Rules
 

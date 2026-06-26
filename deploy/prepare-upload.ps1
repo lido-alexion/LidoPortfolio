@@ -30,6 +30,9 @@ Copy-Tree (Join-Path $app 'app') (Join-Path $staging 'lidoportfolio/app')
 Copy-Tree (Join-Path $app 'routes') (Join-Path $staging 'lidoportfolio/routes')
 Copy-Tree (Join-Path $app 'resources/views') (Join-Path $staging 'lidoportfolio/resources/views')
 Copy-Tree (Join-Path $app 'database/migrations') (Join-Path $staging 'lidoportfolio/database/migrations')
+New-Item -ItemType Directory -Path (Join-Path $staging 'lidoportfolio/bootstrap') -Force | Out-Null
+Copy-Item (Join-Path $app 'bootstrap/app.php') (Join-Path $staging 'lidoportfolio/bootstrap/app.php') -Force
+Copy-Item (Join-Path $app 'composer.json') (Join-Path $staging 'lidoportfolio/composer.json') -Force
 Copy-Tree (Join-Path $app 'public/build') (Join-Path $staging 'lidoportfolio/public/build')
 Copy-Tree (Join-Path $app 'public/build') (Join-Path $staging 'portfolio/build')
 

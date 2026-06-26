@@ -23,16 +23,17 @@ class AlertNotificationServiceTest extends TestCase
             'email' => 'alert-empty-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $profile = $this->defaultPortfolioFor($user);
 
-        app(\App\Services\NotificationScheduleService::class)->persistForUser($user, ['10:00']);
-        app(\App\Services\UserSettingsService::class)->update($user, [
+        app(\App\Services\NotificationScheduleService::class)->persistForProfile($profile, ['10:00']);
+        app(\App\Services\ProfileSettingsService::class)->update($profile, [
             'notifications_enabled' => 'true',
             'telegram_bot_token' => 'token',
             'telegram_chat_id' => 'chat',
         ]);
 
         $telegram = $this->createMock(TelegramNotificationService::class);
-        $telegram->expects($this->never())->method('sendMessageForUser');
+        $telegram->expects($this->never())->method('sendMessageForProfile');
         $this->app->instance(TelegramNotificationService::class, $telegram);
 
         $result = app(AlertNotificationService::class)->sendScheduledNotificationsAt('10:00');
@@ -49,6 +50,7 @@ class AlertNotificationServiceTest extends TestCase
             'email' => 'alert-notify-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $profile = $this->defaultPortfolioFor($user);
 
         $stock = Stock::query()->create([
             'symbol' => 'ALERT',
@@ -59,7 +61,7 @@ class AlertNotificationServiceTest extends TestCase
         ]);
 
         Holding::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'quantity' => 1,
             'avg_buy_price' => 100,
@@ -69,7 +71,7 @@ class AlertNotificationServiceTest extends TestCase
         ]);
 
         Alert::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'alert_type' => 'stoploss_triggered',
             'message' => 'Stoploss triggered for Alert Stock (ALERT). Latest close: 90.00',
@@ -79,16 +81,16 @@ class AlertNotificationServiceTest extends TestCase
 
         $telegram = $this->createMock(TelegramNotificationService::class);
         $telegram->expects($this->once())
-            ->method('sendMessageForUser')
+            ->method('sendMessageForProfile')
             ->with(
-                $this->callback(fn ($u) => $u->id === $user->id),
+                $this->callback(fn ($p) => $p->id === $profile->id),
                 $this->stringContains('ALERT'),
             )
             ->willReturn(true);
         $this->app->instance(TelegramNotificationService::class, $telegram);
 
-        app(\App\Services\NotificationScheduleService::class)->persistForUser($user, ['10:00']);
-        app(\App\Services\UserSettingsService::class)->update($user, [
+        app(\App\Services\NotificationScheduleService::class)->persistForProfile($profile, ['10:00']);
+        app(\App\Services\ProfileSettingsService::class)->update($profile, [
             'notifications_enabled' => 'true',
             'telegram_bot_token' => 'token',
             'telegram_chat_id' => 'chat',
@@ -101,3 +103,6 @@ class AlertNotificationServiceTest extends TestCase
         $this->assertTrue($result['sent']);
     }
 }
+
+
+

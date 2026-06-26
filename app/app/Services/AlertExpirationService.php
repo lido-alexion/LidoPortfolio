@@ -4,9 +4,9 @@ namespace App\Services;
 
 use App\Models\Alert;
 use App\Models\Holding;
+use App\Models\PortfolioProfile;
 use App\Models\Stock;
 use App\Models\StockPrice;
-use App\Models\User;
 use Carbon\Carbon;
 
 class AlertExpirationService
@@ -35,10 +35,10 @@ class AlertExpirationService
         return true;
     }
 
-    public function expireAllForUser(User $user): int
+    public function expireAllForProfile(PortfolioProfile $profile): int
     {
         return Alert::query()
-            ->where('user_id', $user->id)
+            ->where('profile_id', $profile->id)
             ->whereNull('expired_at')
             ->update([
                 'expired_at' => now(),
@@ -46,13 +46,13 @@ class AlertExpirationService
             ]);
     }
 
-    public function acknowledgeForUser(User $user, Alert $alert): bool
+    public function acknowledgeForProfile(PortfolioProfile $profile, Alert $alert): bool
     {
-        if ((int) $alert->user_id !== (int) $user->id) {
+        if ((int) $alert->profile_id !== (int) $profile->id) {
             return false;
         }
 
-        if (! $this->userHoldsStock($user, (int) $alert->stock_id)) {
+        if (! $this->profileHoldsStock($profile, (int) $alert->stock_id)) {
             return false;
         }
 
@@ -89,12 +89,12 @@ class AlertExpirationService
     }
 
     /**
-     * When a user no longer holds a stock, expire their alerts for it.
+     * When a profile no longer holds a stock, expire its alerts for it.
      */
-    public function expireForUserStockIfUnheld(User $user, Stock $stock): int
+    public function expireForProfileStockIfUnheld(PortfolioProfile $profile, Stock $stock): int
     {
         $stillHeld = Holding::query()
-            ->where('user_id', $user->id)
+            ->where('profile_id', $profile->id)
             ->where('stock_id', $stock->id)
             ->where('quantity', '>', 0)
             ->exists();
@@ -104,7 +104,7 @@ class AlertExpirationService
         }
 
         return Alert::query()
-            ->where('user_id', $user->id)
+            ->where('profile_id', $profile->id)
             ->where('stock_id', $stock->id)
             ->whereNull('expired_at')
             ->update([
@@ -113,10 +113,10 @@ class AlertExpirationService
             ]);
     }
 
-    public function userHoldsStock(User $user, int $stockId): bool
+    public function profileHoldsStock(PortfolioProfile $profile, int $stockId): bool
     {
         return Holding::query()
-            ->where('user_id', $user->id)
+            ->where('profile_id', $profile->id)
             ->where('stock_id', $stockId)
             ->where('quantity', '>', 0)
             ->exists();

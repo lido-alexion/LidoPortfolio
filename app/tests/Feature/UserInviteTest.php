@@ -175,3 +175,4 @@ class UserInviteTest extends TestCase
         $this->assertDatabaseMissing('portfolio_user_invites', ['id' => $created['id']]);
     }
 }
+

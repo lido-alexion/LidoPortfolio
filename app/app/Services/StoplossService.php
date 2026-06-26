@@ -4,16 +4,16 @@ namespace App\Services;
 
 use App\Models\Alert;
 use App\Models\Holding;
+use App\Models\PortfolioProfile;
 use App\Models\Stock;
 use App\Models\StockMetric;
-use App\Models\User;
 use Carbon\Carbon;
 
 class StoplossService
 {
     public function __construct(
         protected SettingsService $settings,
-        protected UserSettingsService $userSettings,
+        protected ProfileSettingsService $profileSettings,
         protected HoldingPresentationService $holdingPresentation,
         protected StockQuoteService $quotes,
     ) {}
@@ -91,18 +91,18 @@ class StoplossService
     protected function evaluateStoplossAlerts(Stock $stock): void
     {
         $holdings = Holding::query()
-            ->with('stock')
+            ->with(['stock', 'profile'])
             ->where('stock_id', $stock->id)
             ->where('quantity', '>', 0)
             ->get();
 
         foreach ($holdings as $holding) {
-            $user = User::query()->find($holding->user_id);
-            if (! $user) {
+            $profile = $holding->profile;
+            if (! $profile) {
                 continue;
             }
 
-            $summary = $this->holdingPresentation->enrichHolding($user, $holding)['stoploss_summary'] ?? [];
+            $summary = $this->holdingPresentation->enrichHolding($profile, $holding)['stoploss_summary'] ?? [];
             $latestClose = $summary['latest_close'] ?? null;
             $trailingStop = $summary['trailing_stop_price'] ?? null;
 
@@ -115,7 +115,7 @@ class StoplossService
             }
 
             $exists = Alert::query()
-                ->where('user_id', $user->id)
+                ->where('profile_id', $profile->id)
                 ->where('stock_id', $stock->id)
                 ->where('alert_type', 'stoploss_triggered')
                 ->whereDate('created_at', now()->toDateString())
@@ -128,7 +128,7 @@ class StoplossService
             $message = $this->buildStoplossAlertMessage($stock, $summary, (float) $latestClose);
 
             Alert::query()->create([
-                'user_id' => $user->id,
+                'profile_id' => $profile->id,
                 'stock_id' => $stock->id,
                 'alert_type' => 'stoploss_triggered',
                 'message' => $message,
@@ -141,6 +141,7 @@ class StoplossService
     protected function maxHighestCloseSinceBuy(Stock $stock): ?float
     {
         $holdings = Holding::query()
+            ->with('profile')
             ->where('stock_id', $stock->id)
             ->where('quantity', '>', 0)
             ->get();
@@ -148,12 +149,12 @@ class StoplossService
         $max = null;
 
         foreach ($holdings as $holding) {
-            $user = User::query()->find($holding->user_id);
-            if (! $user) {
+            $profile = $holding->profile;
+            if (! $profile) {
                 continue;
             }
 
-            $summary = $this->holdingPresentation->enrichHolding($user, $holding)['stoploss_summary'] ?? [];
+            $summary = $this->holdingPresentation->enrichHolding($profile, $holding)['stoploss_summary'] ?? [];
             $highest = $summary['highest_close_since_buy'] ?? null;
 
             if ($highest === null) {
@@ -219,29 +220,29 @@ class StoplossService
 
     protected function defaultStoplossPercentForStock(Stock $stock): float
     {
-        $userId = Holding::query()
+        $profileId = Holding::query()
             ->where('stock_id', $stock->id)
             ->where('quantity', '>', 0)
             ->orderBy('id')
-            ->value('user_id');
+            ->value('profile_id');
 
-        if (! $userId) {
+        if (! $profileId) {
             return 10.0;
         }
 
-        $user = User::query()->find($userId);
+        $profile = PortfolioProfile::query()->find($profileId);
 
-        return $user
-            ? (float) $this->userSettings->get($user, 'default_stoploss_percent', '10')
+        return $profile
+            ? (float) $this->profileSettings->get($profile, 'default_stoploss_percent', '10')
             : 10.0;
     }
 
-    public function getActiveAlertsForUser(User $user): array
+    public function getActiveAlertsForProfile(PortfolioProfile $profile): array
     {
         return Alert::query()
             ->active()
             ->with('stock')
-            ->where('user_id', $user->id)
+            ->where('profile_id', $profile->id)
             ->orderByDesc('created_at')
             ->limit(50)
             ->get()

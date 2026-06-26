@@ -14,6 +14,6 @@ class StockPriceController extends Controller
 
     public function index(Request $request, Stock $stock): JsonResponse
     {
-        return response()->json($this->presentation->priceHistoryForHolding($request->user(), $stock));
+        return response()->json($this->presentation->priceHistoryForHolding(\activePortfolio(), $stock));
     }
 }

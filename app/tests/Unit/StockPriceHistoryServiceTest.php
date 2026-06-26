@@ -40,7 +40,11 @@ class StockPriceHistoryServiceTest extends TestCase
     public function test_no_missing_range_when_local_covers_required_period(): void
     {
         $stock = $this->makeStock('FULL');
-        $this->seedPrices($stock, ['2024-01-01', '2024-02-01', '2024-03-01', '2024-04-01']);
+$dates = [];
+        for ($d = Carbon::parse('2024-01-01'); $d->lte(Carbon::parse('2024-04-01')); $d->addDay()) {
+            $dates[] = $d->toDateString();
+        }
+        $this->seedPrices($stock, $dates);
 
         $service = $this->makeService();
         $ranges = $service->getMissingHistoryRanges(

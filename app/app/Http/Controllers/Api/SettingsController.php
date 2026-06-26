@@ -17,7 +17,9 @@ class SettingsController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        return response()->json(['data' => $this->settings->allForUser($request->user())]);
+        $profile = \activePortfolio();
+
+        return response()->json(['data' => $this->settings->allForProfile($profile, $request->user())]);
     }
 
     public function update(Request $request): JsonResponse
@@ -46,8 +48,10 @@ class SettingsController extends Controller
             'fee_components.*.gst_percent' => ['required', 'numeric', 'gte:0', 'lte:100'],
         ]);
 
+        $profile = \activePortfolio();
+
         return response()->json([
-            'data' => $this->settings->updateForUser($request->user(), $validated),
+            'data' => $this->settings->updateForProfile($profile, $request->user(), $validated),
         ]);
     }
 
@@ -59,7 +63,7 @@ class SettingsController extends Controller
         ]);
 
         $result = $this->alertNotifications->sendTestNotification(
-            $request->user(),
+            \activePortfolio(),
             $validated['telegram_bot_token'],
             $validated['telegram_chat_id'],
         );

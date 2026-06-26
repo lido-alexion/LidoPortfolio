@@ -3,46 +3,47 @@
 namespace App\Services;
 
 use App\Models\Holding;
+use App\Models\PortfolioProfile;
 use App\Models\Stock;
 use App\Models\StockMetric;
 use App\Models\Transaction;
-use App\Models\User;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
 
 class HoldingsCalculationService
 {
     public function __construct(
-        protected UserSettingsService $userSettings,
+        protected ProfileSettingsService $profileSettings,
     ) {}
-    public function recalculateForUser(User $user): Collection
+
+    public function recalculateForProfile(PortfolioProfile $profile): Collection
     {
         $stockIds = Transaction::query()
-            ->where('user_id', $user->id)
+            ->where('profile_id', $profile->id)
             ->distinct()
             ->pluck('stock_id');
 
         $holdings = collect();
 
         foreach ($stockIds as $stockId) {
-            $holdings->push($this->recalculateForUserStock($user, Stock::query()->findOrFail($stockId)));
+            $holdings->push($this->recalculateForProfileStock($profile, Stock::query()->findOrFail($stockId)));
         }
 
         Holding::query()
-            ->where('user_id', $user->id)
+            ->where('profile_id', $profile->id)
             ->whereNotIn('stock_id', $stockIds)
             ->delete();
 
         return $holdings;
     }
 
-    public function recalculateForUserStock(User $user, Stock $stock): Holding
+    public function recalculateForProfileStock(PortfolioProfile $profile, Stock $stock): Holding
     {
-        $transactions = $this->transactionsForUserStock($user, $stock);
-        $state = $this->replayTransactions($transactions, $user, $stock);
+        $transactions = $this->transactionsForProfileStock($profile, $stock);
+        $state = $this->replayTransactions($transactions, $profile, $stock);
 
         return Holding::query()->updateOrCreate(
-            ['user_id' => $user->id, 'stock_id' => $stock->id],
+            ['profile_id' => $profile->id, 'stock_id' => $stock->id],
             [
                 'quantity' => round($state['quantity'], 4),
                 'avg_buy_price' => round($state['avg_buy_price'], 4),
@@ -59,22 +60,22 @@ class HoldingsCalculationService
      *
      * @throws InvalidArgumentException when remaining ledger is invalid (e.g. orphan sells)
      */
-    public function assertReplayValidAfterDeleting(User $user, Transaction $toDelete): void
+    public function assertReplayValidAfterDeleting(PortfolioProfile $profile, Transaction $toDelete): void
     {
-        $remaining = $this->transactionsForUserStock($user, Stock::query()->findOrFail($toDelete->stock_id))
+        $remaining = $this->transactionsForProfileStock($profile, Stock::query()->findOrFail($toDelete->stock_id))
             ->reject(fn (Transaction $tx) => (int) $tx->id === (int) $toDelete->id)
             ->values();
 
-        $this->replayTransactions($remaining, $user, $toDelete->stock, dryRun: true);
+        $this->replayTransactions($remaining, $profile, $toDelete->stock, dryRun: true);
     }
 
     /**
      * @return Collection<int, Transaction>
      */
-    protected function transactionsForUserStock(User $user, Stock $stock): Collection
+    protected function transactionsForProfileStock(PortfolioProfile $profile, Stock $stock): Collection
     {
         return Transaction::query()
-            ->where('user_id', $user->id)
+            ->where('profile_id', $profile->id)
             ->where('stock_id', $stock->id)
             ->orderBy('transaction_date')
             ->orderBy('id')
@@ -95,7 +96,7 @@ class HoldingsCalculationService
      */
     public function replayTransactions(
         Collection $transactions,
-        ?User $user = null,
+        ?PortfolioProfile $profile = null,
         ?Stock $stock = null,
         bool $dryRun = false,
     ): array {
@@ -112,8 +113,8 @@ class HoldingsCalculationService
             $fees = (float) $transaction->fees;
 
             if ($transaction->type === 'buy') {
-                if (! $dryRun && $wasZero && $quantity <= 0 && $user !== null && $stock !== null) {
-                    $this->resetMetricsForNewEntry($user, $stock);
+                if (! $dryRun && $wasZero && $quantity <= 0 && $profile !== null && $stock !== null) {
+                    $this->resetMetricsForNewEntry($profile, $stock);
                     $wasZero = false;
                     $totalFees = 0.0;
                 } elseif ($wasZero && $quantity <= 0) {
@@ -142,9 +143,9 @@ class HoldingsCalculationService
                     $totalFees = 0;
                     $wasZero = true;
 
-                    if (! $dryRun && $user !== null && $stock !== null) {
+                    if (! $dryRun && $profile !== null && $stock !== null) {
                         $this->deactivateTracking($stock);
-                        app(AlertExpirationService::class)->expireForUserStockIfUnheld($user, $stock);
+                        app(AlertExpirationService::class)->expireForProfileStockIfUnheld($profile, $stock);
                     }
                 }
             }
@@ -159,10 +160,10 @@ class HoldingsCalculationService
         ];
     }
 
-    public function getAvailableQuantity(User $user, Stock $stock): float
+    public function getAvailableQuantity(PortfolioProfile $profile, Stock $stock): float
     {
         $holding = Holding::query()
-            ->where('user_id', $user->id)
+            ->where('profile_id', $profile->id)
             ->where('stock_id', $stock->id)
             ->first();
 
@@ -177,9 +178,9 @@ class HoldingsCalculationService
         );
     }
 
-    protected function resetMetricsForNewEntry(User $user, Stock $stock): void
+    protected function resetMetricsForNewEntry(PortfolioProfile $profile, Stock $stock): void
     {
-        $defaultStoploss = (float) $this->userSettings->get($user, 'default_stoploss_percent', '10');
+        $defaultStoploss = (float) $this->profileSettings->get($profile, 'default_stoploss_percent', '10');
 
         StockMetric::query()->updateOrCreate(
             ['stock_id' => $stock->id],

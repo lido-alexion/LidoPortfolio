@@ -21,6 +21,7 @@ class HoldingsCalculationServiceTest extends TestCase
             'email' => 'fees-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $profile = $this->defaultPortfolioFor($user);
 
         $stock = Stock::query()->create([
             'symbol' => 'FEES',
@@ -31,7 +32,7 @@ class HoldingsCalculationServiceTest extends TestCase
         ]);
 
         Transaction::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'type' => 'buy',
             'quantity' => 10,
@@ -41,7 +42,7 @@ class HoldingsCalculationServiceTest extends TestCase
         ]);
 
         Transaction::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'type' => 'sell',
             'quantity' => 4,
@@ -50,7 +51,7 @@ class HoldingsCalculationServiceTest extends TestCase
             'transaction_date' => '2026-02-01',
         ]);
 
-        $holding = app(HoldingsCalculationService::class)->recalculateForUserStock($user, $stock);
+        $holding = app(HoldingsCalculationService::class)->recalculateForProfileStock($profile, $stock);
 
         $this->assertEqualsWithDelta(6, (float) $holding->quantity, 0.0001);
         $this->assertEqualsWithDelta(100, (float) $holding->avg_buy_price, 0.0001);

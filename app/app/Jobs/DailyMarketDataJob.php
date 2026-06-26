@@ -3,8 +3,8 @@
 namespace App\Jobs;
 
 use App\Models\Holding;
+use App\Models\PortfolioProfile;
 use App\Models\Stock;
-use App\Models\User;
 use App\Services\AlertExpirationService;
 use App\Services\DailyMarketSyncService;
 use App\Services\MetricsUpdateService;
@@ -104,12 +104,12 @@ class DailyMarketDataJob implements ShouldQueue
 
                 $metricsUpdate->updateAllTrackedStocks();
 
-                $userCount = User::query()->count();
-                User::query()->each(function (User $user) use ($portfolioCalculation) {
-                    $portfolioCalculation->storeSnapshot($user);
+                $profileCount = PortfolioProfile::query()->count();
+                PortfolioProfile::query()->each(function (PortfolioProfile $profile) use ($portfolioCalculation) {
+                    $portfolioCalculation->storeSnapshot($profile);
                 });
                 $syncLog->log($runId, $jobName, 'info', 'Portfolio snapshots stored', [
-                    'user_count' => $userCount,
+                    'profile_count' => $profileCount,
                 ]);
 
                 $stats = [

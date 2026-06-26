@@ -11,7 +11,7 @@ class PortfolioSnapshot extends Model
     protected $table = 'portfolio_portfolio_snapshots';
 
     protected $fillable = [
-        'user_id',
+        'profile_id',
         'snapshot_date',
         'portfolio_value',
         'invested_value',
@@ -28,8 +28,8 @@ class PortfolioSnapshot extends Model
         ];
     }
 
-    public function user(): BelongsTo
+    public function profile(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(PortfolioProfile::class, 'profile_id');
     }
 }

@@ -20,6 +20,7 @@ import AdminRoute from './components/AdminRoute';
 import StockExplorerPage from './pages/StockExplorerPage';
 import LoginPage from './pages/LoginPage';
 import AcceptInvitePage from './pages/AcceptInvitePage';
+import PortfoliosPage from './pages/PortfoliosPage';
 
 function App() {
     const { user, isAuthenticated, loading } = useAuth();
@@ -119,6 +120,7 @@ function App() {
                                 <Route path="/holdings/:stockId/prices" element={<StockPricesPage />} />
                                 <Route path="/explorer" element={<StockExplorerPage />} />
                                 <Route path="/profile" element={<ProfilePage />} />
+                                <Route path="/portfolios" element={<PortfoliosPage />} />
                                 <Route path="/settings" element={<SettingsPage />} />
                                 <Route path="/settings/sync-logs" element={(
                                     <AdminRoute>

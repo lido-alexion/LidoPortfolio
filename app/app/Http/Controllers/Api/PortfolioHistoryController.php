@@ -21,20 +21,20 @@ class PortfolioHistoryController extends Controller
             'to_date' => ['nullable', 'date', 'before_or_equal:today'],
         ]);
 
-        $user = $request->user();
+        $profile = \activePortfolio();
         $to = isset($validated['to_date'])
             ? Carbon::parse($validated['to_date'])->startOfDay()
             : now()->startOfDay();
 
         if (isset($validated['from_date'])) {
             $from = Carbon::parse($validated['from_date'])->startOfDay();
-            $result = $this->rebuild->rebuildDateRange($user, $from, $to);
+            $result = $this->rebuild->rebuildDateRange($profile, $from, $to);
         } else {
-            $earliest = $user->transactions()->min('transaction_date');
+            $earliest = $profile->transactions()->min('transaction_date');
             $from = $earliest
                 ? Carbon::parse($earliest)->startOfDay()
                 : $to->copy();
-            $result = $this->rebuild->rebuildFromDate($user, $from);
+            $result = $this->rebuild->rebuildFromDate($profile, $from);
         }
 
         return response()->json([

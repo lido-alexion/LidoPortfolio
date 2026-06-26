@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\User;
 use App\Models\UserInvite;
+use App\Services\PortfolioProfileService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -12,6 +13,10 @@ use Illuminate\Validation\ValidationException;
 class UserInviteService
 {
     public const EXPIRY_HOURS = 72;
+
+    public function __construct(
+        protected PortfolioProfileService $portfolios,
+    ) {}
 
     public function purgeExpired(): int
     {
@@ -145,6 +150,8 @@ class UserInviteService
             'email' => $invite->email,
             'password' => Hash::make($password),
         ]);
+
+        $this->portfolios->createDefaultForUser($user);
 
         $invite->accepted_at = now();
         $invite->user_id = $user->id;

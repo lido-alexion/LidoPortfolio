@@ -21,6 +21,7 @@ class TransactionIndexScopeTest extends TestCase
             'email' => 'scope-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $profile = $this->defaultPortfolioFor($user);
 
         $openStock = Stock::query()->create([
             'symbol' => 'OPEN1',
@@ -39,7 +40,7 @@ class TransactionIndexScopeTest extends TestCase
         ]);
 
         $openTx = Transaction::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $openStock->id,
             'type' => 'buy',
             'quantity' => 5,
@@ -49,7 +50,7 @@ class TransactionIndexScopeTest extends TestCase
         ]);
 
         $closedTxBuy = Transaction::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $closedStock->id,
             'type' => 'buy',
             'quantity' => 3,
@@ -59,7 +60,7 @@ class TransactionIndexScopeTest extends TestCase
         ]);
 
         $closedTxSell = Transaction::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $closedStock->id,
             'type' => 'sell',
             'quantity' => 3,
@@ -69,7 +70,7 @@ class TransactionIndexScopeTest extends TestCase
         ]);
 
         Holding::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $openStock->id,
             'quantity' => 5,
             'avg_buy_price' => 100,
@@ -80,7 +81,7 @@ class TransactionIndexScopeTest extends TestCase
         ]);
 
         Holding::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $closedStock->id,
             'quantity' => 0,
             'avg_buy_price' => 0,
@@ -106,3 +107,5 @@ class TransactionIndexScopeTest extends TestCase
         );
     }
 }
+
+

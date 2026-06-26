@@ -6,6 +6,7 @@ import { DataTableCard } from '../components/DataTable';
 import { showToast } from '../toast';
 import { formatTableInteger, formatTableMoney2 } from '../utils/tableFormat';
 import { formatTransactionDateDisplay } from '../utils/transactionDate';
+import usePortfolioChanged from '../hooks/usePortfolioChanged';
 
 export default function StockPricesPage() {
     const { user } = useAuth();
@@ -31,6 +32,7 @@ export default function StockPricesPage() {
     }, [stockId]);
 
     useEffect(() => { load(); }, [load]);
+    usePortfolioChanged(load);
 
     const forceSync = async () => {
         setSyncing(true);

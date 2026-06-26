@@ -2,37 +2,38 @@
 
 namespace App\Services;
 
+use App\Models\PortfolioProfile;
 use App\Models\User;
 
 class AlertNotificationService
 {
     public function __construct(
-        protected UserSettingsService $userSettings,
+        protected ProfileSettingsService $profileSettings,
         protected StoplossService $stoploss,
         protected TelegramNotificationService $telegram,
         protected PortfolioLoggerService $logger,
     ) {}
 
     /**
-     * Dispatch notifications for users whose schedule includes the given time (HH:mm, cron timezone).
+     * Dispatch notifications for profiles whose schedule includes the given time (HH:mm, cron timezone).
      *
-     * @return array{sent: bool, skipped: bool, alert_count: int, users_notified: int, message?: string}
+     * @return array{sent: bool, skipped: bool, alert_count: int, profiles_notified: int, message?: string}
      */
     public function sendScheduledNotificationsAt(string $atTime): array
     {
         $scheduleService = app(NotificationScheduleService::class);
-        $usersNotified = 0;
+        $profilesNotified = 0;
         $totalAlerts = 0;
         $anySent = false;
         $anyEligible = false;
 
-        foreach (User::query()->orderBy('id')->get() as $user) {
-            $schedules = $scheduleService->schedulesForUser($user);
+        foreach (PortfolioProfile::query()->orderBy('id')->get() as $profile) {
+            $schedules = $scheduleService->schedulesForProfile($profile);
             if (! in_array($atTime, $schedules, true)) {
                 continue;
             }
 
-            $result = $this->sendNotificationsForUser($user);
+            $result = $this->sendNotificationsForProfile($profile);
             if ($result['skipped'] && ($result['alert_count'] ?? 0) === 0) {
                 continue;
             }
@@ -41,12 +42,12 @@ class AlertNotificationService
             $totalAlerts += $result['alert_count'];
             if ($result['sent']) {
                 $anySent = true;
-                $usersNotified++;
+                $profilesNotified++;
             }
         }
 
         if (! $anyEligible) {
-            $this->logger->scheduler('debug', 'Scheduled alert notification skipped — no users at time', [
+            $this->logger->scheduler('debug', 'Scheduled alert notification skipped — no profiles at time', [
                 'category' => 'AlertNotification',
                 'at' => $atTime,
             ]);
@@ -55,7 +56,7 @@ class AlertNotificationService
                 'sent' => false,
                 'skipped' => true,
                 'alert_count' => 0,
-                'users_notified' => 0,
+                'profiles_notified' => 0,
             ];
         }
 
@@ -63,7 +64,7 @@ class AlertNotificationService
             'category' => 'AlertNotification',
             'at' => $atTime,
             'alert_count' => $totalAlerts,
-            'users_notified' => $usersNotified,
+            'profiles_notified' => $profilesNotified,
             'sent' => $anySent,
         ]);
 
@@ -71,12 +72,12 @@ class AlertNotificationService
             'sent' => $anySent,
             'skipped' => false,
             'alert_count' => $totalAlerts,
-            'users_notified' => $usersNotified,
+            'profiles_notified' => $profilesNotified,
         ];
     }
 
     /**
-     * @return array{sent: bool, skipped: bool, alert_count: int, users_notified: int, message?: string}
+     * @return array{sent: bool, skipped: bool, alert_count: int, profiles_notified: int, message?: string}
      */
     public function sendScheduledNotifications(): array
     {
@@ -88,13 +89,13 @@ class AlertNotificationService
     }
 
     /**
-     * Manual test from Settings — sends only the requesting user's alerts.
+     * Manual test from Settings — sends only the active profile's alerts.
      *
      * @return array{sent: bool, alert_count: int, message: string}
      */
-    public function sendTestNotification(User $user, string $token, string $chatId): array
+    public function sendTestNotification(PortfolioProfile $profile, string $token, string $chatId): array
     {
-        $alerts = $this->stoploss->getActiveAlertsForUser($user);
+        $alerts = $this->stoploss->getActiveAlertsForProfile($profile);
         $text = $alerts === []
             ? 'No active alerts at this time'
             : $this->formatAlertsMessage($alerts);
@@ -103,7 +104,7 @@ class AlertNotificationService
 
         $this->logger->scheduler($sent ? 'info' : 'warning', 'Telegram test notification processed', [
             'category' => 'AlertNotification',
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'alert_count' => count($alerts),
             'sent' => $sent,
             'test' => true,
@@ -119,9 +120,9 @@ class AlertNotificationService
     /**
      * @return array{sent: bool, skipped: bool, alert_count: int}
      */
-    protected function sendNotificationsForUser(User $user): array
+    protected function sendNotificationsForProfile(PortfolioProfile $profile): array
     {
-        if ($this->userSettings->get($user, 'notifications_enabled', 'true') !== 'true') {
+        if ($this->profileSettings->get($profile, 'notifications_enabled', 'true') !== 'true') {
             return [
                 'sent' => false,
                 'skipped' => true,
@@ -129,7 +130,7 @@ class AlertNotificationService
             ];
         }
 
-        $alerts = $this->stoploss->getActiveAlertsForUser($user);
+        $alerts = $this->stoploss->getActiveAlertsForProfile($profile);
 
         if ($alerts === []) {
             return [
@@ -140,7 +141,7 @@ class AlertNotificationService
         }
 
         $text = $this->formatAlertsMessage($alerts);
-        $sent = $this->telegram->sendMessageForUser($user, $text);
+        $sent = $this->telegram->sendMessageForProfile($profile, $text);
 
         return [
             'sent' => $sent,

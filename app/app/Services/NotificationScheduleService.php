@@ -2,8 +2,9 @@
 
 namespace App\Services;
 
+use App\Models\PortfolioProfile;
+use App\Models\ProfileSetting;
 use App\Models\User;
-use App\Models\UserSetting;
 
 class NotificationScheduleService
 {
@@ -17,14 +18,14 @@ class NotificationScheduleService
     }
 
     /**
-     * @return array<int, string> Unique HH:mm times (24-hour) for the user.
+     * @return array<int, string> Unique HH:mm times (24-hour) for the profile.
      */
-    public function schedulesForUser(User $user): array
+    public function schedulesForProfile(PortfolioProfile $profile): array
     {
-        $raw = UserSetting::getValue(
-            $user->id,
+        $raw = ProfileSetting::getValue(
+            $profile->id,
             'notification_schedules',
-            UserSettingsService::DEFAULTS['notification_schedules'],
+            ProfileSettingsService::DEFAULTS['notification_schedules'],
         );
         $decoded = json_decode($raw ?? '[]', true);
 
@@ -36,20 +37,20 @@ class NotificationScheduleService
     }
 
     /**
-     * Union of all users' notification times (for Laravel scheduler registration).
+     * Union of all profiles' notification times (for Laravel scheduler registration).
      *
      * @return array<int, string>
      */
-    public function distinctSchedulesAcrossUsers(): array
+    public function distinctSchedulesAcrossProfiles(): array
     {
         $times = [];
 
-        foreach (User::query()->orderBy('id')->pluck('id') as $userId) {
-            $user = User::query()->find($userId);
-            if (! $user) {
+        foreach (PortfolioProfile::query()->orderBy('id')->pluck('id') as $profileId) {
+            $profile = PortfolioProfile::query()->find($profileId);
+            if (! $profile) {
                 continue;
             }
-            foreach ($this->schedulesForUser($user) as $time) {
+            foreach ($this->schedulesForProfile($profile) as $time) {
                 $times[$time] = $time;
             }
         }
@@ -92,10 +93,10 @@ class NotificationScheduleService
     /**
      * @param  array<int, string>  $times
      */
-    public function persistForUser(User $user, array $times): array
+    public function persistForProfile(PortfolioProfile $profile, array $times): array
     {
         $normalized = $this->normalize($times);
-        UserSetting::setValue($user->id, 'notification_schedules', json_encode($normalized));
+        ProfileSetting::setValue($profile->id, 'notification_schedules', json_encode($normalized));
 
         return $normalized;
     }

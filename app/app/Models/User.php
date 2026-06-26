@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -25,24 +26,29 @@ class User extends Authenticatable
     
     protected $table = 'portfolio_users';
 
-    public function transactions(): HasMany
+    public function portfolios(): HasMany
     {
-        return $this->hasMany(Transaction::class);
+        return $this->hasMany(PortfolioProfile::class);
     }
 
-    public function holdings(): HasMany
+    public function transactions(): HasManyThrough
     {
-        return $this->hasMany(Holding::class);
+        return $this->hasManyThrough(Transaction::class, PortfolioProfile::class, 'user_id', 'profile_id');
     }
 
-    public function portfolioSnapshots(): HasMany
+    public function holdings(): HasManyThrough
     {
-        return $this->hasMany(PortfolioSnapshot::class);
+        return $this->hasManyThrough(Holding::class, PortfolioProfile::class, 'user_id', 'profile_id');
     }
 
-    public function alerts(): HasMany
+    public function portfolioSnapshots(): HasManyThrough
     {
-        return $this->hasMany(Alert::class);
+        return $this->hasManyThrough(PortfolioSnapshot::class, PortfolioProfile::class, 'user_id', 'profile_id');
+    }
+
+    public function alerts(): HasManyThrough
+    {
+        return $this->hasManyThrough(Alert::class, PortfolioProfile::class, 'user_id', 'profile_id');
     }
 
     public function getProfilePhotoUrlAttribute(): ?string

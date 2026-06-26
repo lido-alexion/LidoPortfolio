@@ -20,6 +20,7 @@ class TransactionUpdateTest extends TestCase
             'email' => 'update-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $profile = $this->defaultPortfolioFor($user);
 
         $stock = Stock::query()->create([
             'symbol' => 'UPD1',
@@ -30,7 +31,7 @@ class TransactionUpdateTest extends TestCase
         ]);
 
         $transaction = Transaction::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'type' => 'buy',
             'quantity' => 5,
@@ -64,6 +65,7 @@ class TransactionUpdateTest extends TestCase
             'email' => 'delete-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $profile = $this->defaultPortfolioFor($user);
 
         $stock = Stock::query()->create([
             'symbol' => 'DEL1',
@@ -74,7 +76,7 @@ class TransactionUpdateTest extends TestCase
         ]);
 
         $transaction = Transaction::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'type' => 'buy',
             'quantity' => 2,
@@ -100,6 +102,7 @@ class TransactionUpdateTest extends TestCase
             'email' => 'block-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $profile = $this->defaultPortfolioFor($user);
 
         $stock = Stock::query()->create([
             'symbol' => 'BLK1',
@@ -110,7 +113,7 @@ class TransactionUpdateTest extends TestCase
         ]);
 
         $buy = Transaction::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'type' => 'buy',
             'quantity' => 10,
@@ -120,7 +123,7 @@ class TransactionUpdateTest extends TestCase
         ]);
 
         Transaction::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'type' => 'sell',
             'quantity' => 4,
@@ -146,11 +149,13 @@ class TransactionUpdateTest extends TestCase
             'password' => 'password123',
         ]);
 
+        $ownerProfile = $this->defaultPortfolioFor($owner);
         $other = User::query()->create([
             'name' => 'Other',
             'email' => 'other-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $otherProfile = $this->defaultPortfolioFor($other);
 
         $stock = Stock::query()->create([
             'symbol' => 'DEL2',
@@ -161,7 +166,7 @@ class TransactionUpdateTest extends TestCase
         ]);
 
         $transaction = Transaction::query()->create([
-            'user_id' => $owner->id,
+            'profile_id' => $ownerProfile->id,
             'stock_id' => $stock->id,
             'type' => 'buy',
             'quantity' => 1,
@@ -176,3 +181,5 @@ class TransactionUpdateTest extends TestCase
         $this->assertDatabaseHas('portfolio_transactions', ['id' => $transaction->id]);
     }
 }
+
+

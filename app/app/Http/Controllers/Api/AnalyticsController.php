@@ -20,20 +20,21 @@ class AnalyticsController extends Controller
 
     public function portfolio(Request $request): JsonResponse
     {
-        return response()->json($this->portfolio->calculateForUser($request->user()));
+        return response()->json($this->portfolio->calculateForProfile(\activePortfolio()));
     }
 
     public function stock(Request $request, Stock $stock): JsonResponse
     {
-        $holding = $request->user()->holdings()->where('stock_id', $stock->id)->first();
-        $summary = $this->portfolio->calculateForUser($request->user());
+        $profile = \activePortfolio();
+        $holding = $profile->holdings()->where('stock_id', $stock->id)->first();
+        $summary = $this->portfolio->calculateForProfile($profile);
         $stockItem = collect($summary['holdings'])->firstWhere('stock_id', $stock->id);
 
         return response()->json([
             'stock' => $stock->load('metrics'),
             'holding' => $holding,
             'analytics' => $stockItem,
-            'xirr' => $this->xirr->calculateStockXirr($request->user(), $stock->id),
+            'xirr' => $this->xirr->calculateStockXirr($profile, $stock->id),
             'relative_strength' => $this->relativeStrength->calculateForStock($stock),
         ]);
     }

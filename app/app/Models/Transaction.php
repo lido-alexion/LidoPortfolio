@@ -10,7 +10,7 @@ class Transaction extends Model
     protected $table = 'portfolio_transactions';
 
     protected $fillable = [
-        'user_id',
+        'profile_id',
         'stock_id',
         'type',
         'quantity',
@@ -23,7 +23,7 @@ class Transaction extends Model
     protected function casts(): array
     {
         return [
-            'user_id' => 'integer',
+            'profile_id' => 'integer',
             'stock_id' => 'integer',
             'quantity' => 'decimal:4',
             'price' => 'decimal:4',
@@ -33,24 +33,24 @@ class Transaction extends Model
     }
 
     /**
-     * Only resolve transactions owned by the authenticated user (API update/delete/show).
+     * Only resolve transactions owned by the active portfolio (API update/delete/show).
      */
     public function resolveRouteBinding($value, $field = null)
     {
-        $user = auth()->user();
+        $profile = \activePortfolio();
 
-        if ($user === null) {
+        if ($profile === null) {
             return null;
         }
 
-        return $user->transactions()
+        return $profile->transactions()
             ->where($field ?? $this->getRouteKeyName(), $value)
             ->first();
     }
 
-    public function user(): BelongsTo
+    public function profile(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(PortfolioProfile::class, 'profile_id');
     }
 
     public function stock(): BelongsTo

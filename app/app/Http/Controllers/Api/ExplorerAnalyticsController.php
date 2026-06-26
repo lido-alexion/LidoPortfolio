@@ -27,7 +27,7 @@ class ExplorerAnalyticsController extends Controller
         sort($periods);
 
         $result = $this->explorer->analyze(
-            $request->user(),
+            \activePortfolio(),
             $validated['symbol'],
             $validated['exchange'] ?? 'NSE',
             $validated['benchmark_symbol'] ?? 'NIFTY50',

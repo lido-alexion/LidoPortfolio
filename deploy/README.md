@@ -3,6 +3,7 @@
 | File | Purpose |
 |------|---------|
 | **[DEPLOY.md](DEPLOY.md)** | **Start here** — full deploy & update guide |
+| **[DEPLOY.md §2.1](DEPLOY.md#21-build-folders-explained-pc-vs-server)** | **Build folders** — `app/public/build/` vs `deploy/staging/`, why two server copies |
 | **`prepare-upload.ps1`** | Builds frontend + stages `deploy/staging/` (gitignored) for cPanel upload |
 | **`index.php`** | Copy → `public_html/portfolio/index.php` (Laravel front controller) |
 | **`public_html-portfolio-.htaccess`** | Copy → `public_html/portfolio/.htaccess` |

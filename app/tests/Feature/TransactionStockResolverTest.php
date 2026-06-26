@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\Stock;
 use App\Models\User;
+use App\Services\StockValidationService;
+use App\Support\StockValidationResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -19,16 +21,26 @@ class TransactionStockResolverTest extends TestCase
             'email' => 'tx-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $profile = $this->defaultPortfolioFor($user);
 
         $this->actingAs($user);
 
         $symbol = 'N'.strtoupper(Str::random(4));
 
-        \Illuminate\Support\Facades\Http::fake([
-            'https://www.nseindia.com/api/quote-equity*' => \Illuminate\Support\Facades\Http::response([
-                'info' => ['companyName' => 'New Via Transaction', 'symbol' => $symbol],
-            ], 200),
-        ]);
+        $this->mock(StockValidationService::class, function ($mock) {
+            $mock->shouldReceive('validateAndPersist')
+                ->andReturnUsing(function (string $inputSymbol, ?string $exchange, ?string $name) {
+                    $stock = Stock::query()->create([
+                        'symbol' => $inputSymbol,
+                        'exchange' => $exchange ?? 'NSE',
+                        'name' => $name ?? $inputSymbol,
+                        'is_active' => true,
+                        'is_benchmark' => false,
+                    ]);
+
+                    return StockValidationResult::valid($stock, 'test');
+                });
+        });
 
         $response = $this->postJson('/api/transactions', [
             'symbol' => $symbol,
@@ -47,7 +59,7 @@ class TransactionStockResolverTest extends TestCase
             'name' => 'New Via Transaction',
         ]);
         $this->assertDatabaseHas('portfolio_transactions', [
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'type' => 'buy',
         ]);
     }
@@ -59,6 +71,7 @@ class TransactionStockResolverTest extends TestCase
             'email' => 'tx2-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $profile = $this->defaultPortfolioFor($user);
 
         $stock = Stock::query()->create([
             'symbol' => 'REUSE',
@@ -82,7 +95,7 @@ class TransactionStockResolverTest extends TestCase
         $response->assertCreated();
         $this->assertSame(1, Stock::query()->where('symbol', 'REUSE')->count());
         $this->assertDatabaseHas('portfolio_transactions', [
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
         ]);
     }

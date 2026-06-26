@@ -11,7 +11,7 @@ class Alert extends Model
     protected $table = 'portfolio_alerts';
 
     protected $fillable = [
-        'user_id',
+        'profile_id',
         'stock_id',
         'alert_type',
         'message',
@@ -32,13 +32,13 @@ class Alert extends Model
 
     public function resolveRouteBinding($value, $field = null)
     {
-        $user = auth()->user();
+        $profile = \activePortfolio();
 
-        if ($user === null) {
+        if ($profile === null) {
             return null;
         }
 
-        return $user->alerts()
+        return $profile->alerts()
             ->where($field ?? $this->getRouteKeyName(), $value)
             ->first();
     }
@@ -53,9 +53,9 @@ class Alert extends Model
         return $this->expired_at === null;
     }
 
-    public function user(): BelongsTo
+    public function profile(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(PortfolioProfile::class, 'profile_id');
     }
 
     public function stock(): BelongsTo

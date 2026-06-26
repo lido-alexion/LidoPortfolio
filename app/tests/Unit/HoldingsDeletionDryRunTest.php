@@ -22,6 +22,7 @@ class HoldingsDeletionDryRunTest extends TestCase
             'email' => 'dry-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $profile = $this->defaultPortfolioFor($user);
 
         $stock = Stock::query()->create([
             'symbol' => 'DRY1',
@@ -32,7 +33,7 @@ class HoldingsDeletionDryRunTest extends TestCase
         ]);
 
         $buy = Transaction::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'type' => 'buy',
             'quantity' => 10,
@@ -42,7 +43,7 @@ class HoldingsDeletionDryRunTest extends TestCase
         ]);
 
         $service = app(HoldingsCalculationService::class);
-        $service->assertReplayValidAfterDeleting($user, $buy);
+        $service->assertReplayValidAfterDeleting($profile, $buy);
 
         $this->assertTrue(true);
     }
@@ -54,6 +55,7 @@ class HoldingsDeletionDryRunTest extends TestCase
             'email' => 'dry2-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $profile = $this->defaultPortfolioFor($user);
 
         $stock = Stock::query()->create([
             'symbol' => 'DRY2',
@@ -64,7 +66,7 @@ class HoldingsDeletionDryRunTest extends TestCase
         ]);
 
         $buy = Transaction::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'type' => 'buy',
             'quantity' => 10,
@@ -74,7 +76,7 @@ class HoldingsDeletionDryRunTest extends TestCase
         ]);
 
         Transaction::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'type' => 'sell',
             'quantity' => 4,
@@ -86,7 +88,7 @@ class HoldingsDeletionDryRunTest extends TestCase
         $service = app(HoldingsCalculationService::class);
 
         $this->expectException(InvalidArgumentException::class);
-        $service->assertReplayValidAfterDeleting($user, $buy);
+        $service->assertReplayValidAfterDeleting($profile, $buy);
     }
 
     public function test_dry_run_passes_when_deleting_one_of_multiple_buys(): void
@@ -96,6 +98,7 @@ class HoldingsDeletionDryRunTest extends TestCase
             'email' => 'dry3-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $profile = $this->defaultPortfolioFor($user);
 
         $stock = Stock::query()->create([
             'symbol' => 'DRY3',
@@ -106,7 +109,7 @@ class HoldingsDeletionDryRunTest extends TestCase
         ]);
 
         $firstBuy = Transaction::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'type' => 'buy',
             'quantity' => 10,
@@ -116,7 +119,7 @@ class HoldingsDeletionDryRunTest extends TestCase
         ]);
 
         Transaction::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'type' => 'buy',
             'quantity' => 5,
@@ -125,8 +128,10 @@ class HoldingsDeletionDryRunTest extends TestCase
             'transaction_date' => '2026-01-20',
         ]);
 
-        app(HoldingsCalculationService::class)->assertReplayValidAfterDeleting($user, $firstBuy);
+        app(HoldingsCalculationService::class)->assertReplayValidAfterDeleting($profile, $firstBuy);
 
         $this->assertTrue(true);
     }
 }
+
+

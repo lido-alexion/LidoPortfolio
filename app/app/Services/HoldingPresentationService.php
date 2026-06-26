@@ -3,10 +3,10 @@
 namespace App\Services;
 
 use App\Models\Holding;
+use App\Models\PortfolioProfile;
 use App\Models\Stock;
 use App\Models\StockPrice;
 use App\Models\Transaction;
-use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Validation\ValidationException;
 
@@ -14,16 +14,16 @@ class HoldingPresentationService
 {
     public function __construct(
         protected SettingsService $settings,
-        protected UserSettingsService $userSettings,
+        protected ProfileSettingsService $profileSettings,
         protected PriceFetchService $priceFetch,
         protected StockQuoteService $quotes,
         protected XirrService $xirr,
     ) {}
 
-    public function firstBuyDateForCurrentPosition(User $user, Stock $stock): ?Carbon
+    public function firstBuyDateForCurrentPosition(PortfolioProfile $profile, Stock $stock): ?Carbon
     {
         $transactions = Transaction::query()
-            ->where('user_id', $user->id)
+            ->where('profile_id', $profile->id)
             ->where('stock_id', $stock->id)
             ->orderBy('transaction_date')
             ->orderBy('id')
@@ -52,10 +52,10 @@ class HoldingPresentationService
         return $quantity > 0.00001 ? $firstBuyDate : null;
     }
 
-    public function enrichHolding(User $user, Holding $holding): array
+    public function enrichHolding(PortfolioProfile $profile, Holding $holding): array
     {
         $stock = $holding->stock;
-        $firstBuyDate = $this->firstBuyDateForCurrentPosition($user, $stock);
+        $firstBuyDate = $this->firstBuyDateForCurrentPosition($profile, $stock);
         $metric = $stock?->metrics;
 
         $highestCloseSinceBuy = null;
@@ -85,7 +85,7 @@ class HoldingPresentationService
             $latestClose = (float) $metric->latest_close;
         }
 
-        $stoplossPercent = (float) $this->userSettings->get($user, 'default_stoploss_percent', '10');
+        $stoplossPercent = (float) $this->profileSettings->get($profile, 'default_stoploss_percent', '10');
         $trailingStop = null;
 
         if ($highestCloseSinceBuy !== null && (float) $highestCloseSinceBuy > 0) {
@@ -100,7 +100,7 @@ class HoldingPresentationService
 
         $payload = $holding->toArray();
         $payload['xirr'] = $this->xirr->calculateStockXirr(
-            $user,
+            $profile,
             (int) $stock->id,
             null,
             $marketValue,
@@ -122,9 +122,9 @@ class HoldingPresentationService
         return $payload;
     }
 
-    public function priceHistoryForHolding(User $user, Stock $stock): array
+    public function priceHistoryForHolding(PortfolioProfile $profile, Stock $stock): array
     {
-        $firstBuyDate = $this->firstBuyDateForCurrentPosition($user, $stock);
+        $firstBuyDate = $this->firstBuyDateForCurrentPosition($profile, $stock);
 
         if (! $firstBuyDate) {
             abort(404, 'No active holding found for this stock.');
@@ -145,9 +145,9 @@ class HoldingPresentationService
         ];
     }
 
-    public function syncHistoricalPrices(User $user, Stock $stock): array
+    public function syncHistoricalPrices(PortfolioProfile $profile, Stock $stock): array
     {
-        $firstBuyDate = $this->firstBuyDateForCurrentPosition($user, $stock);
+        $firstBuyDate = $this->firstBuyDateForCurrentPosition($profile, $stock);
 
         if (! $firstBuyDate) {
             abort(404, 'No active holding found for this stock.');
@@ -163,7 +163,7 @@ class HoldingPresentationService
 
         app(MetricsUpdateService::class)->updateStock($stock);
 
-        $history = $this->priceHistoryForHolding($user, $stock);
+        $history = $this->priceHistoryForHolding($profile, $stock);
 
         return [
             'message' => "Stored {$sync['stored_rows']} price rows for {$stock->symbol} via {$sync['provider']}",

@@ -5,6 +5,7 @@ import { DataTableCard } from '../components/DataTable';
 import TablePagination from '../components/TablePagination';
 import { showToast } from '../toast';
 import { notifyPortfolioDashboardRefresh } from '../utils/portfolioEvents';
+import usePortfolioChanged from '../hooks/usePortfolioChanged';
 import { buildTransactionTableColumns } from '../utils/transactionTableColumns';
 
 const PER_PAGE = 25;
@@ -45,6 +46,10 @@ export default function ClosedTransactionsPage() {
     useEffect(() => {
         load(page, stockSearch);
     }, [load, page, stockSearch]);
+
+    usePortfolioChanged(() => {
+        load(page, stockSearch);
+    });
 
     useEffect(() => {
         const timer = window.setTimeout(() => {

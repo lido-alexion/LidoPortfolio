@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\AuthAuditService;
+use App\Services\PortfolioProfileService;
 use App\Services\SessionManagementService;
 use App\Services\UserInviteService;
 use Illuminate\Http\JsonResponse;
@@ -18,6 +19,7 @@ class AuthController extends Controller
         protected AuthAuditService $authAudit,
         protected SessionManagementService $sessions,
         protected UserInviteService $invites,
+        protected PortfolioProfileService $portfolios,
     ) {}
 
     public function login(Request $request): JsonResponse
@@ -57,7 +59,7 @@ class AuthController extends Controller
         $this->authAudit->logLoginSuccess($user, $request);
 
         return response()->json([
-            'user' => $user,
+            'user' => $this->userPayload($user),
         ]);
     }
 
@@ -79,7 +81,22 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
-        return response()->json(['user' => $request->user()]);
+        $user = $request->user();
+
+        return response()->json([
+            'user' => $user ? $this->userPayload($user) : null,
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function userPayload(User $user): array
+    {
+        $payload = $user->toArray();
+        $payload['default_portfolio_id'] = $this->portfolios->defaultForUser($user)?->id;
+
+        return $payload;
     }
 
     public function csrfToken(Request $request): JsonResponse

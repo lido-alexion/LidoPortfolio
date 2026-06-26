@@ -7,6 +7,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './src/App';
 import { AuthProvider } from './src/context/AuthContext';
+import { PortfolioProvider } from './src/context/PortfolioContext';
 import { ThemeProvider } from './src/context/ThemeContext';
 import { getAppBase } from './src/appBase';
 
@@ -42,7 +43,9 @@ try {
             <BrowserRouter basename={routerBasename}>
                 <ThemeProvider>
                     <AuthProvider>
-                        <App />
+                        <PortfolioProvider>
+                            <App />
+                        </PortfolioProvider>
                     </AuthProvider>
                 </ThemeProvider>
             </BrowserRouter>

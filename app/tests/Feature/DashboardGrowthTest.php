@@ -21,6 +21,7 @@ class DashboardGrowthTest extends TestCase
             'email' => 'dash-growth-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $profile = $this->defaultPortfolioFor($user);
 
         $stock = Stock::query()->create([
             'symbol' => 'DG'.strtoupper(Str::random(3)),
@@ -31,7 +32,7 @@ class DashboardGrowthTest extends TestCase
         ]);
 
         Transaction::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'type' => 'buy',
             'quantity' => 10,
@@ -64,3 +65,5 @@ class DashboardGrowthTest extends TestCase
         $this->assertGreaterThan(0, (float) $growth[array_key_last($growth)]['portfolio_value']);
     }
 }
+
+

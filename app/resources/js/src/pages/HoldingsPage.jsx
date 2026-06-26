@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import usePortfolioChanged from '../hooks/usePortfolioChanged';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../api';
 import { DataTableColumnMenu, DataTableView, useDataTableController } from '../components/DataTable';
@@ -329,7 +330,7 @@ export default function HoldingsPage() {
         saveHoldingsViewMode(mode);
     }, []);
 
-    const load = async () => {
+    const load = useCallback(async () => {
         setLoading(true);
         try {
             const holdingsRes = await api.get('/holdings');
@@ -337,9 +338,10 @@ export default function HoldingsPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
-    useEffect(() => { load(); }, []);
+    useEffect(() => { load(); }, [load]);
+    usePortfolioChanged(load);
 
     const tableData = useMemo(() => holdings.map((h) => ({
         ...h,

@@ -24,6 +24,7 @@ class HoldingPresentationServiceTest extends TestCase
             'email' => 'price-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $profile = $this->defaultPortfolioFor($user);
 
         $stock = Stock::query()->create([
             'symbol' => 'P'.strtoupper(Str::random(4)),
@@ -34,7 +35,7 @@ class HoldingPresentationServiceTest extends TestCase
         ]);
 
         Transaction::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'type' => 'buy',
             'quantity' => 1,
@@ -67,10 +68,10 @@ class HoldingPresentationServiceTest extends TestCase
             'created_at' => now(),
         ]);
 
-        $firstBuy = $service->firstBuyDateForCurrentPosition($user, $stock);
+        $firstBuy = $service->firstBuyDateForCurrentPosition($profile, $stock);
         $this->assertEquals('2024-01-10', $firstBuy->toDateString());
 
-        $holding = $user->holdings()->create([
+        $holding = $profile->holdings()->create([
             'stock_id' => $stock->id,
             'quantity' => 1,
             'avg_buy_price' => 100,
@@ -80,7 +81,7 @@ class HoldingPresentationServiceTest extends TestCase
         ]);
         $holding->setRelation('stock', $stock);
 
-        $enriched = $service->enrichHolding($user, $holding);
+        $enriched = $service->enrichHolding($profile, $holding);
         $summary = $enriched['stoploss_summary'];
 
         $this->assertSame(125.0, (float) $summary['highest_close_since_buy']);
@@ -98,6 +99,7 @@ class HoldingPresentationServiceTest extends TestCase
             'email' => 'rebuy-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $profile = $this->defaultPortfolioFor($user);
 
         $stock = Stock::query()->create([
             'symbol' => 'R'.strtoupper(Str::random(4)),
@@ -108,7 +110,7 @@ class HoldingPresentationServiceTest extends TestCase
         ]);
 
         Transaction::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'type' => 'buy',
             'quantity' => 1,
@@ -118,7 +120,7 @@ class HoldingPresentationServiceTest extends TestCase
         ]);
 
         Transaction::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'type' => 'sell',
             'quantity' => 1,
@@ -128,7 +130,7 @@ class HoldingPresentationServiceTest extends TestCase
         ]);
 
         Transaction::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'type' => 'buy',
             'quantity' => 1,
@@ -137,7 +139,9 @@ class HoldingPresentationServiceTest extends TestCase
             'transaction_date' => '2025-06-01',
         ]);
 
-        $firstBuy = $service->firstBuyDateForCurrentPosition($user, $stock);
+        $firstBuy = $service->firstBuyDateForCurrentPosition($profile, $stock);
         $this->assertEquals('2025-06-01', $firstBuy->toDateString());
     }
 }
+
+

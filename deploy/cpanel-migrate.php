@@ -289,9 +289,20 @@ $requiredTables = [
     'portfolio_settings',
     'portfolio_sync_runs',
     'portfolio_sync_logs',
+    'portfolio_profiles',
+    'portfolio_profile_settings',
+    'portfolio_alerts',
+];
+
+$postMigrateOnlyTables = [
+    'portfolio_profiles',
+    'portfolio_profile_settings',
 ];
 
 foreach ($requiredTables as $table) {
+    if (in_array($table, $postMigrateOnlyTables, true)) {
+        continue;
+    }
     $exists = Illuminate\Support\Facades\Schema::hasTable($table);
     check_line("   {$table}", $exists);
 }
@@ -300,6 +311,13 @@ $requiredColumns = [
     'portfolio_holdings' => ['total_fees'],
     'portfolio_stock_prices' => ['adjusted_close_price', 'provider_source'],
     'portfolio_transactions' => ['fees'],
+];
+
+$postMigrateColumns = [
+    'portfolio_transactions' => ['profile_id'],
+    'portfolio_holdings' => ['profile_id'],
+    'portfolio_portfolio_snapshots' => ['profile_id'],
+    'portfolio_alerts' => ['profile_id'],
 ];
 
 echo "\n   Column checks:\n";
@@ -357,6 +375,26 @@ foreach ($requiredColumns as $table => $columns) {
             record_failure($failures, "Column still missing: {$table}.{$column}");
         }
     }
+}
+
+foreach ($postMigrateColumns as $table => $columns) {
+    if (! Illuminate\Support\Facades\Schema::hasTable($table)) {
+        continue;
+    }
+    foreach ($columns as $column) {
+        $exists = Illuminate\Support\Facades\Schema::hasColumn($table, $column);
+        $result = check_line("   {$table}.{$column}", $exists);
+        if (! $exists) {
+            record_failure($failures, "Column still missing: {$table}.{$column}");
+        }
+    }
+}
+
+if (Illuminate\Support\Facades\Schema::hasTable('portfolio_user_settings')) {
+    record_failure($failures, 'portfolio_user_settings should be dropped after multi-portfolio migration');
+    check_line('   portfolio_user_settings dropped', false, 'run migrate 2026_06_29_000001');
+} else {
+    check_line('   portfolio_user_settings dropped', true);
 }
 
 $syncLogReady = false;

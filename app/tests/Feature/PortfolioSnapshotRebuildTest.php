@@ -25,6 +25,7 @@ class PortfolioSnapshotRebuildTest extends TestCase
             'email' => 'rebuild-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $profile = $this->defaultPortfolioFor($user);
 
         $stock = Stock::query()->create([
             'symbol' => 'RB'.strtoupper(Str::random(3)),
@@ -35,7 +36,7 @@ class PortfolioSnapshotRebuildTest extends TestCase
         ]);
 
         Transaction::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'type' => 'buy',
             'quantity' => 10,
@@ -58,12 +59,12 @@ class PortfolioSnapshotRebuildTest extends TestCase
             ]);
         }
 
-        return [$user, $stock];
+        return [$user, $profile, $stock];
     }
 
     public function test_calculate_portfolio_state_for_historical_date(): void
     {
-        [$user, $stock] = $this->createUserWithBuy();
+        [$user, $profile, $stock] = $this->createUserWithBuy();
         $service = app(PortfolioSnapshotRebuildService::class);
 
         $priceIndex = (new \ReflectionClass($service))
@@ -76,8 +77,7 @@ class PortfolioSnapshotRebuildTest extends TestCase
             Carbon::parse('2026-02-04'),
         );
 
-        $state = $service->calculatePortfolioStateForDate(
-            $user,
+        $state = $service->calculatePortfolioStateForDate($profile,
             Carbon::parse('2026-02-02'),
             null,
             $index,
@@ -91,14 +91,14 @@ class PortfolioSnapshotRebuildTest extends TestCase
     {
         Carbon::setTestNow('2026-02-04 12:00:00');
 
-        [$user] = $this->createUserWithBuy();
+        [$user, $profile] = $this->createUserWithBuy();
         $service = app(PortfolioSnapshotRebuildService::class);
 
-        $result = $service->rebuildFromDate($user, Carbon::parse('2026-02-02'));
+        $result = $service->rebuildFromDate($profile, Carbon::parse('2026-02-02'));
 
         $this->assertGreaterThanOrEqual(3, $result['snapshots_written']);
         $feb2 = PortfolioSnapshot::query()
-            ->where('user_id', $user->id)
+            ->where('profile_id', $profile->id)
             ->whereDate('snapshot_date', '2026-02-02')
             ->first();
         $this->assertNotNull($feb2);
@@ -106,7 +106,7 @@ class PortfolioSnapshotRebuildTest extends TestCase
         $this->assertEqualsWithDelta(1000, (float) $feb2->invested_value, 0.01);
 
         $feb3 = PortfolioSnapshot::query()
-            ->where('user_id', $user->id)
+            ->where('profile_id', $profile->id)
             ->whereDate('snapshot_date', '2026-02-03')
             ->first();
         $this->assertNotNull($feb3);
@@ -119,7 +119,7 @@ class PortfolioSnapshotRebuildTest extends TestCase
     {
         Carbon::setTestNow('2026-03-15 12:00:00');
 
-        [$user, $stock] = $this->createUserWithBuy();
+        [$user, $profile, $stock] = $this->createUserWithBuy();
 
         StockPrice::query()->create([
             'stock_id' => $stock->id,
@@ -133,18 +133,17 @@ class PortfolioSnapshotRebuildTest extends TestCase
             'provider_source' => 'test',
         ]);
 
-        Transaction::query()->where('user_id', $user->id)->update([
+        Transaction::query()->where('profile_id', $profile->id)->update([
             'transaction_date' => '2026-01-15',
         ]);
 
-        app(PortfolioSnapshotRebuildService::class)->rebuildAfterTransactionChange(
-            $user,
+        app(PortfolioSnapshotRebuildService::class)->rebuildAfterTransactionChange($profile,
             '2026-02-01',
             '2026-01-15',
         );
 
         $snapshot = PortfolioSnapshot::query()
-            ->where('user_id', $user->id)
+            ->where('profile_id', $profile->id)
             ->whereDate('snapshot_date', '2026-01-15')
             ->first();
 
@@ -156,7 +155,7 @@ class PortfolioSnapshotRebuildTest extends TestCase
 
     public function test_weekend_uses_nearest_previous_close(): void
     {
-        [$user, $stock] = $this->createUserWithBuy();
+        [$user, $profile, $stock] = $this->createUserWithBuy();
 
         StockPrice::query()->create([
             'stock_id' => $stock->id,
@@ -171,7 +170,7 @@ class PortfolioSnapshotRebuildTest extends TestCase
         ]);
 
         $service = app(PortfolioSnapshotRebuildService::class);
-        $state = $service->calculatePortfolioStateForDate($user, Carbon::parse('2026-02-07'));
+        $state = $service->calculatePortfolioStateForDate($profile, Carbon::parse('2026-02-07'));
 
         $this->assertEqualsWithDelta(1100, $state['portfolio_value'], 0.01);
     }
@@ -185,6 +184,7 @@ class PortfolioSnapshotRebuildTest extends TestCase
             'email' => 'weekend-rebuild-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $profile = $this->defaultPortfolioFor($user);
 
         $stock = Stock::query()->create([
             'symbol' => 'WK'.strtoupper(Str::random(3)),
@@ -195,7 +195,7 @@ class PortfolioSnapshotRebuildTest extends TestCase
         ]);
 
         Transaction::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'type' => 'buy',
             'quantity' => 10,
@@ -227,7 +227,7 @@ class PortfolioSnapshotRebuildTest extends TestCase
         }
 
         PortfolioSnapshot::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'snapshot_date' => '2024-07-06',
             'portfolio_value' => 500,
             'invested_value' => 500,
@@ -235,21 +235,21 @@ class PortfolioSnapshotRebuildTest extends TestCase
         ]);
 
         $service = app(PortfolioSnapshotRebuildService::class);
-        $service->rebuildFromDate($user, Carbon::parse('2024-07-01'));
+        $service->rebuildFromDate($profile, Carbon::parse('2024-07-01'));
 
         $this->assertNull(
             PortfolioSnapshot::query()
-                ->where('user_id', $user->id)
+                ->where('profile_id', $profile->id)
                 ->whereDate('snapshot_date', '2024-07-06')
                 ->first(),
         );
 
         $friday = PortfolioSnapshot::query()
-            ->where('user_id', $user->id)
+            ->where('profile_id', $profile->id)
             ->whereDate('snapshot_date', '2024-07-05')
             ->first();
         $monday = PortfolioSnapshot::query()
-            ->where('user_id', $user->id)
+            ->where('profile_id', $profile->id)
             ->whereDate('snapshot_date', '2024-07-08')
             ->first();
 
@@ -310,7 +310,7 @@ class PortfolioSnapshotRebuildTest extends TestCase
     public function test_rebuild_history_api_for_authenticated_user(): void
     {
         Carbon::setTestNow('2026-02-04 12:00:00');
-        [$user] = $this->createUserWithBuy();
+        [$user, $profile] = $this->createUserWithBuy();
 
         $response = $this->actingAs($user)->postJson('/api/portfolio/rebuild-history', [
             'from_date' => '2026-02-01',
@@ -322,3 +322,5 @@ class PortfolioSnapshotRebuildTest extends TestCase
         Carbon::setTestNow();
     }
 }
+
+

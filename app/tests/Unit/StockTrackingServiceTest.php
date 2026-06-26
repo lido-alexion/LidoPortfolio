@@ -22,6 +22,7 @@ class StockTrackingServiceTest extends TestCase
             'email' => 'trk-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $profile = $this->defaultPortfolioFor($user);
 
         $stock = Stock::query()->create([
             'symbol' => 'TRK',
@@ -32,7 +33,7 @@ class StockTrackingServiceTest extends TestCase
         ]);
 
         Holding::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'quantity' => 5,
             'avg_buy_price' => 10,
@@ -41,8 +42,8 @@ class StockTrackingServiceTest extends TestCase
         ]);
 
         $service = new StockTrackingService;
-        $this->assertTrue($service->isPortfolioTracked($stock, $user));
-        $this->assertFalse($service->isExploratory($stock, $user));
+        $this->assertTrue($service->isPortfolioTracked($stock, $profile));
+        $this->assertFalse($service->isExploratory($stock, $profile));
     }
 
     public function test_stoploss_alert_marks_stock_portfolio_tracked_without_user_id_on_alerts(): void
@@ -52,6 +53,7 @@ class StockTrackingServiceTest extends TestCase
             'email' => 'alt-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $profile = $this->defaultPortfolioFor($user);
 
         $stock = Stock::query()->create([
             'symbol' => 'ALT',
@@ -62,7 +64,7 @@ class StockTrackingServiceTest extends TestCase
         ]);
 
         Alert::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'alert_type' => 'stoploss_triggered',
             'message' => 'Test alert',
@@ -71,7 +73,7 @@ class StockTrackingServiceTest extends TestCase
         ]);
 
         $service = new StockTrackingService;
-        $this->assertTrue($service->isPortfolioTracked($stock, $user));
+        $this->assertTrue($service->isPortfolioTracked($stock, $profile));
     }
 
     public function test_stock_without_holdings_is_exploratory(): void
@@ -89,3 +91,5 @@ class StockTrackingServiceTest extends TestCase
         $this->assertTrue($service->isExploratory($stock));
     }
 }
+
+

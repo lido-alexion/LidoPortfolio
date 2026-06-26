@@ -1,5 +1,7 @@
 <?php
 
+require_once dirname(__DIR__).'/app/Support/helpers.php';
+
 use App\Http\Middleware\AssignRequestId;
 use App\Services\PortfolioLoggerService;
 use Illuminate\Foundation\Application;
@@ -20,6 +22,12 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->appendToGroup('web', AssignRequestId::class);
         $middleware->alias([
             'admin' => \App\Http\Middleware\EnsureUserIsAdmin::class,
+            'active.portfolio' => \App\Http\Middleware\ResolveActivePortfolio::class,
+        ]);
+        $middleware->appendToGroup('api', \App\Http\Middleware\ResolveActivePortfolio::class);
+        $middleware->priority([
+            \App\Http\Middleware\ResolveActivePortfolio::class,
+            \Illuminate\Routing\Middleware\SubstituteBindings::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

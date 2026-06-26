@@ -2,10 +2,10 @@
 
 namespace App\Services;
 
-use App\Models\User;
-use App\Models\UserSetting;
+use App\Models\PortfolioProfile;
+use App\Models\ProfileSetting;
 
-class UserSettingsService
+class ProfileSettingsService
 {
     public const DEFAULTS = [
         'default_stoploss_percent' => '10',
@@ -15,24 +15,24 @@ class UserSettingsService
         'notification_schedules' => '[]',
     ];
 
-    public function get(User $user, string $key, ?string $default = null): ?string
+    public function get(PortfolioProfile $profile, string $key, ?string $default = null): ?string
     {
-        return UserSetting::getValue(
-            $user->id,
+        return ProfileSetting::getValue(
+            $profile->id,
             $key,
             $default ?? (self::DEFAULTS[$key] ?? null),
         );
     }
 
-    public function set(User $user, string $key, ?string $value): void
+    public function set(PortfolioProfile $profile, string $key, ?string $value): void
     {
-        UserSetting::setValue($user->id, $key, $value);
+        ProfileSetting::setValue($profile->id, $key, $value);
     }
 
     /**
      * @return array<string, mixed>
      */
-    public function all(User $user): array
+    public function all(PortfolioProfile $profile): array
     {
         $settings = [];
 
@@ -40,11 +40,11 @@ class UserSettingsService
             if ($key === 'notification_schedules') {
                 continue;
             }
-            $settings[$key] = $this->get($user, $key, $default);
+            $settings[$key] = $this->get($profile, $key, $default);
         }
 
         $settings['notification_schedules'] = app(NotificationScheduleService::class)
-            ->schedulesForUser($user);
+            ->schedulesForProfile($profile);
 
         return $settings;
     }
@@ -52,11 +52,11 @@ class UserSettingsService
     /**
      * @return array<string, mixed>
      */
-    public function update(User $user, array $data): array
+    public function update(PortfolioProfile $profile, array $data): array
     {
         if (array_key_exists('notification_schedules', $data)) {
             $times = is_array($data['notification_schedules']) ? $data['notification_schedules'] : [];
-            app(NotificationScheduleService::class)->persistForUser($user, $times);
+            app(NotificationScheduleService::class)->persistForProfile($profile, $times);
             unset($data['notification_schedules']);
         }
 
@@ -64,10 +64,10 @@ class UserSettingsService
             if (! array_key_exists($key, self::DEFAULTS) || $key === 'notification_schedules') {
                 continue;
             }
-            $this->set($user, $key, $value === null ? null : (string) $value);
+            $this->set($profile, $key, $value === null ? null : (string) $value);
         }
 
-        return $this->all($user);
+        return $this->all($profile);
     }
 
     public function isManagedKey(string $key): bool

@@ -11,7 +11,7 @@ class Holding extends Model
     protected $table = 'portfolio_holdings';
 
     protected $fillable = [
-        'user_id',
+        'profile_id',
         'stock_id',
         'quantity',
         'avg_buy_price',
@@ -33,9 +33,9 @@ class Holding extends Model
         ];
     }
 
-    public function user(): BelongsTo
+    public function profile(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(PortfolioProfile::class, 'profile_id');
     }
 
     public function stock(): BelongsTo

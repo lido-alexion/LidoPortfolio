@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import ProfileMenu from './ProfileMenu';
+import PortfolioSwitcher from './PortfolioSwitcher';
 
 export default function AppHeader({ user }) {
     const [isHeaderVisible, setIsHeaderVisible] = useState(true);
@@ -22,7 +23,9 @@ export default function AppHeader({ user }) {
     return (
         <header className={`lido-header${isHeaderVisible ? '' : ' covered'}`}>
             <div className="lido-header-bar">
-                <div className="lido-header-side" aria-hidden="true" />
+                <div className="lido-header-side">
+                    {user && <PortfolioSwitcher />}
+                </div>
                 <div className="lido-header-center">
                     <Link to="/" className="lido-header-title-link">
                         <h1 className="lido-header-title">Lido Alexion</h1>

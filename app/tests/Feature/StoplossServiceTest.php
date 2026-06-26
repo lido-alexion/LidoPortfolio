@@ -9,6 +9,7 @@ use App\Models\StockMetric;
 use App\Models\StockPrice;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\ProfileSettingsService;
 use App\Services\StoplossService;
 use Illuminate\Support\Str;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -31,6 +32,7 @@ class StoplossServiceTest extends TestCase
             'email' => 'stoploss-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $profile = $this->defaultPortfolioFor($user);
 
         $stock = Stock::query()->create([
             'symbol' => 'SL'.strtoupper(Str::random(4)),
@@ -41,7 +43,7 @@ class StoplossServiceTest extends TestCase
         ]);
 
         Holding::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'quantity' => 5,
             'avg_buy_price' => 100,
@@ -51,7 +53,7 @@ class StoplossServiceTest extends TestCase
         ]);
 
         Transaction::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'type' => 'buy',
             'quantity' => 5,
@@ -97,13 +99,13 @@ class StoplossServiceTest extends TestCase
         $service = app(StoplossService::class);
         $service->updateMetricsForStock($stock);
 
-        $alert = Alert::query()->where('user_id', $user->id)->where('stock_id', $stock->id)->first();
+        $alert = Alert::query()->where('profile_id', $profile->id)->where('stock_id', $stock->id)->first();
         $this->assertNotNull($alert);
         $this->assertStringContainsString('10% below highest close 120.00', $alert->message);
         $this->assertStringContainsString('Trailing stop: 108.00', $alert->message);
 
         $this->assertDatabaseHas('portfolio_alerts', [
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'alert_type' => 'stoploss_triggered',
             'is_sent' => 0,
@@ -117,12 +119,14 @@ class StoplossServiceTest extends TestCase
             'email' => 'user-a-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $profileA = $this->defaultPortfolioFor($userA);
 
         $userB = User::query()->create([
             'name' => 'User B',
             'email' => 'user-b-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $profileB = $this->defaultPortfolioFor($userB);
 
         $stock = Stock::query()->create([
             'symbol' => 'SL'.strtoupper(Str::random(4)),
@@ -132,9 +136,9 @@ class StoplossServiceTest extends TestCase
             'is_benchmark' => false,
         ]);
 
-        foreach ([$userA, $userB] as $user) {
+        foreach ([[$userA, $profileA], [$userB, $profileB]] as [$user, $profile]) {
             Holding::query()->create([
-                'user_id' => $user->id,
+                'profile_id' => $profile->id,
                 'stock_id' => $stock->id,
                 'quantity' => 5,
                 'avg_buy_price' => 100,
@@ -144,7 +148,7 @@ class StoplossServiceTest extends TestCase
             ]);
 
             Transaction::query()->create([
-                'user_id' => $user->id,
+                'profile_id' => $profile->id,
                 'stock_id' => $stock->id,
                 'type' => 'buy',
                 'quantity' => 5,
@@ -192,8 +196,8 @@ class StoplossServiceTest extends TestCase
         $service->updateMetricsForStock($stock);
 
         $this->assertSame(2, Alert::query()->where('stock_id', $stock->id)->count());
-        $this->assertDatabaseHas('portfolio_alerts', ['user_id' => $userA->id, 'stock_id' => $stock->id]);
-        $this->assertDatabaseHas('portfolio_alerts', ['user_id' => $userB->id, 'stock_id' => $stock->id]);
+        $this->assertDatabaseHas('portfolio_alerts', ['profile_id' => $profileA->id, 'stock_id' => $stock->id]);
+        $this->assertDatabaseHas('portfolio_alerts', ['profile_id' => $profileB->id, 'stock_id' => $stock->id]);
     }
 
     public function test_stoploss_does_not_trigger_when_above_since_buy_trailing_despite_pre_buy_peak(): void
@@ -203,6 +207,7 @@ class StoplossServiceTest extends TestCase
             'email' => 'since-buy-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $profile = $this->defaultPortfolioFor($user);
 
         $stock = Stock::query()->create([
             'symbol' => 'SL'.strtoupper(Str::random(4)),
@@ -215,7 +220,7 @@ class StoplossServiceTest extends TestCase
         $buyDate = now()->subYear()->toDateString();
 
         Holding::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'quantity' => 10,
             'avg_buy_price' => 700,
@@ -225,7 +230,7 @@ class StoplossServiceTest extends TestCase
         ]);
 
         Transaction::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'type' => 'buy',
             'quantity' => 10,
@@ -284,7 +289,7 @@ class StoplossServiceTest extends TestCase
         $service->updateMetricsForStock($stock);
 
         $this->assertNull(
-            Alert::query()->where('user_id', $user->id)->where('stock_id', $stock->id)->first()
+            Alert::query()->where('profile_id', $profile->id)->where('stock_id', $stock->id)->first()
         );
     }
 
@@ -295,6 +300,8 @@ class StoplossServiceTest extends TestCase
             'email' => 'rebuy-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $profile = $this->defaultPortfolioFor($user);
+        app(ProfileSettingsService::class)->set($profile, 'default_stoploss_percent', '15');
 
         $stock = Stock::query()->create([
             'symbol' => 'CAMS',
@@ -311,7 +318,7 @@ class StoplossServiceTest extends TestCase
         $latestDate = '2025-06-10';
 
         Transaction::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'type' => 'buy',
             'quantity' => 1,
@@ -321,7 +328,7 @@ class StoplossServiceTest extends TestCase
         ]);
 
         Transaction::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'type' => 'sell',
             'quantity' => 1,
@@ -331,7 +338,7 @@ class StoplossServiceTest extends TestCase
         ]);
 
         Transaction::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'type' => 'buy',
             'quantity' => 1,
@@ -341,7 +348,7 @@ class StoplossServiceTest extends TestCase
         ]);
 
         Holding::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'quantity' => 1,
             'avg_buy_price' => 500,
@@ -385,15 +392,15 @@ class StoplossServiceTest extends TestCase
         $metric = $service->updateMetricsForStock($stock);
 
         $this->assertNull(
-            Alert::query()->where('user_id', $user->id)->where('stock_id', $stock->id)->first()
+            Alert::query()->where('profile_id', $profile->id)->where('stock_id', $stock->id)->first()
         );
         $this->assertSame(600.0, (float) $metric->highest_close);
         $this->assertSame(510.0, (float) $metric->trailing_stop_price);
 
         $presentation = app(\App\Services\HoldingPresentationService::class);
-        $holding = Holding::query()->where('user_id', $user->id)->where('stock_id', $stock->id)->first();
+        $holding = Holding::query()->where('profile_id', $profile->id)->where('stock_id', $stock->id)->first();
         $holding->setRelation('stock', $stock);
-        $summary = $presentation->enrichHolding($user, $holding)['stoploss_summary'];
+        $summary = $presentation->enrichHolding($profile, $holding)['stoploss_summary'];
 
         $this->assertSame($rebuyDate, $summary['first_buy_date']);
         $this->assertSame(600.0, (float) $summary['highest_close_since_buy']);
@@ -401,3 +408,7 @@ class StoplossServiceTest extends TestCase
         $this->assertSame(600.0, (float) $summary['latest_close']);
     }
 }
+
+
+
+

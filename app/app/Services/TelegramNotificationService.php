@@ -2,28 +2,27 @@
 
 namespace App\Services;
 
-use App\Models\User;
-use Illuminate\Support\Facades\Http;
+use App\Models\PortfolioProfile;
 
 class TelegramNotificationService
 {
     public function __construct(
-        protected UserSettingsService $userSettings,
+        protected ProfileSettingsService $profileSettings,
         protected SystemLogService $logger,
     ) {}
 
-    public function sendMessageForUser(User $user, string $message): bool
+    public function sendMessageForProfile(PortfolioProfile $profile, string $message): bool
     {
-        if ($this->userSettings->get($user, 'notifications_enabled', 'true') !== 'true') {
+        if ($this->profileSettings->get($profile, 'notifications_enabled', 'true') !== 'true') {
             return false;
         }
 
-        $token = $this->userSettings->get($user, 'telegram_bot_token');
-        $chatId = $this->userSettings->get($user, 'telegram_chat_id');
+        $token = $this->profileSettings->get($profile, 'telegram_bot_token');
+        $chatId = $this->profileSettings->get($profile, 'telegram_chat_id');
 
         if (! $token || ! $chatId) {
-            $this->logger->log('telegram', 'Telegram credentials not configured for user', [
-                'user_id' => $user->id,
+            $this->logger->log('telegram', 'Telegram credentials not configured for profile', [
+                'profile_id' => $profile->id,
             ], 'warning');
 
             return false;
@@ -44,7 +43,7 @@ class TelegramNotificationService
         }
 
         try {
-            $response = Http::timeout(15)->post("https://api.telegram.org/bot{$token}/sendMessage", [
+            $response = \Illuminate\Support\Facades\Http::timeout(15)->post("https://api.telegram.org/bot{$token}/sendMessage", [
                 'chat_id' => $chatId,
                 'text' => $message,
             ]);
@@ -71,8 +70,8 @@ class TelegramNotificationService
         $message = 'Portfolio sync failure: '.$details;
         $sent = false;
 
-        foreach (User::query()->orderBy('id')->get() as $user) {
-            if ($this->sendMessageForUser($user, $message)) {
+        foreach (PortfolioProfile::query()->orderBy('id')->get() as $profile) {
+            if ($this->sendMessageForProfile($profile, $message)) {
                 $sent = true;
             }
         }

@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\User;
+use App\Services\PortfolioProfileService;
 use App\Services\RelativeStrengthService;
 use App\Services\SettingsService;
 use Illuminate\Database\Seeder;
@@ -19,7 +20,7 @@ class DatabaseSeeder extends Seeder
 
         app(RelativeStrengthService::class)->benchmarkStock();
 
-        User::query()->updateOrCreate(
+        $admin = User::query()->updateOrCreate(
             ['email' => 'admin@lidoportfolio.local'],
             [
                 'name' => 'Portfolio Admin',
@@ -30,5 +31,9 @@ class DatabaseSeeder extends Seeder
         User::query()
             ->where('email', 'admin@lidoportfolio.local')
             ->update(['is_admin' => true]);
+
+        if ($admin->portfolios()->doesntExist()) {
+            app(PortfolioProfileService::class)->createDefaultForUser($admin);
+        }
     }
 }

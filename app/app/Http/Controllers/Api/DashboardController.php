@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\PortfolioProfile;
 use App\Models\PortfolioSnapshot;
-use App\Models\User;
 use App\Services\DailyMarketSyncService;
 use App\Services\PortfolioCalculationService;
 use App\Services\PortfolioSnapshotRebuildService;
@@ -29,13 +29,14 @@ class DashboardController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
-        $summary = $this->portfolio->calculateForUser($user);
+        $profile = \activePortfolio();
+        $summary = $this->portfolio->calculateForProfile($profile);
         $holdings = $summary['holdings'];
 
         $topGainer = collect($holdings)->sortByDesc('unrealized_profit')->first();
         $topLoser = collect($holdings)->sortBy('unrealized_profit')->first();
 
-        $growth = $this->portfolioGrowthSeries($user);
+        $growth = $this->portfolioGrowthSeries($profile);
 
         $benchmark = $this->relativeStrength->benchmarkStock();
 
@@ -46,7 +47,7 @@ class DashboardController extends Controller
             'unrealized_profit' => $summary['unrealized_profit'],
             'realized_profit' => $summary['realized_profit'],
             'xirr' => $summary['xirr'],
-            'daily_change' => $this->portfolio->dailyChange($user),
+            'daily_change' => $this->portfolio->dailyChange($profile),
             'top_gainer' => $topGainer,
             'top_loser' => $topLoser,
             'allocation' => collect($holdings)->map(fn ($h) => [
@@ -55,7 +56,7 @@ class DashboardController extends Controller
                 'allocation_invested_percent' => $h['allocation_invested_percent'],
                 'market_value' => $h['market_value'],
             ])->values(),
-            'stoploss_alerts' => $this->stoploss->getActiveAlertsForUser($user),
+            'stoploss_alerts' => $this->stoploss->getActiveAlertsForProfile($profile),
             'portfolio_growth' => $growth,
             ...($user->is_admin ? ['daily_market_sync' => $this->dailySync->status()] : []),
             'nifty_comparison' => [
@@ -77,22 +78,22 @@ class DashboardController extends Controller
 
     /**
      * Latest 365 snapshot days (ascending) for the growth chart.
-     * Rebuilds once when empty but the user has transactions (e.g. pre-rebuild data).
+     * Rebuilds once when empty but the profile has transactions (e.g. pre-rebuild data).
      */
-    protected function portfolioGrowthSeries(User $user): Collection
+    protected function portfolioGrowthSeries(PortfolioProfile $profile): Collection
     {
-        $growth = $this->fetchRecentGrowthSnapshots($user);
+        $growth = $this->fetchRecentGrowthSnapshots($profile);
 
-        if ($growth->isNotEmpty() || ! $user->transactions()->exists()) {
+        if ($growth->isNotEmpty() || ! $profile->transactions()->exists()) {
             return $growth;
         }
 
         try {
-            $earliest = $user->transactions()->min('transaction_date');
+            $earliest = $profile->transactions()->min('transaction_date');
             if ($earliest) {
-                $this->snapshotRebuild->rebuildFromDate($user, Carbon::parse($earliest)->startOfDay());
+                $this->snapshotRebuild->rebuildFromDate($profile, Carbon::parse($earliest)->startOfDay());
             }
-            $growth = $this->fetchRecentGrowthSnapshots($user);
+            $growth = $this->fetchRecentGrowthSnapshots($profile);
         } catch (Throwable $e) {
             report($e);
         }
@@ -100,10 +101,10 @@ class DashboardController extends Controller
         return $growth;
     }
 
-    protected function fetchRecentGrowthSnapshots(User $user): Collection
+    protected function fetchRecentGrowthSnapshots(PortfolioProfile $profile): Collection
     {
         return PortfolioSnapshot::query()
-            ->where('user_id', $user->id)
+            ->where('profile_id', $profile->id)
             ->orderByDesc('snapshot_date')
             ->limit(365)
             ->get(['snapshot_date', 'portfolio_value', 'invested_value'])

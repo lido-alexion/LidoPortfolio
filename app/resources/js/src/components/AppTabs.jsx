@@ -1,13 +1,13 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { MAIN_NAV_ITEMS } from '../config/mainNav';
+import { MAIN_TAB_ITEMS } from '../config/mainNav';
 
 export default function AppTabs() {
     const { pathname } = useLocation();
 
     return (
         <ul className="nav nav-tabs mb-4" role="tablist">
-            {MAIN_NAV_ITEMS.map((tab) => {
+            {MAIN_TAB_ITEMS.map((tab) => {
                 const isActive = tab.match(pathname);
                 return (
                     <li className="nav-item" key={tab.to} role="presentation">

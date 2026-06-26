@@ -2,11 +2,11 @@
 
 namespace App\Services;
 
+use App\Models\PortfolioProfile;
 use App\Models\PortfolioSnapshot;
 use App\Models\Stock;
 use App\Models\StockPrice;
 use App\Models\Transaction;
-use App\Models\User;
 use App\Support\TradingCalendar;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -31,7 +31,7 @@ class PortfolioSnapshotRebuildService
      *   duration_ms: int
      * }
      */
-    public function rebuildFromDate(User $user, Carbon $fromDate): array
+    public function rebuildFromDate(PortfolioProfile $profile, Carbon $fromDate): array
     {
         $from = $fromDate->copy()->startOfDay();
         $to = now()->startOfDay();
@@ -40,7 +40,7 @@ class PortfolioSnapshotRebuildService
             $from = $to->copy();
         }
 
-        return $this->rebuildDateRange($user, $from, $to);
+        return $this->rebuildDateRange($profile, $from, $to);
     }
 
     /**
@@ -54,7 +54,7 @@ class PortfolioSnapshotRebuildService
      *   duration_ms: int
      * }
      */
-    public function rebuildDateRange(User $user, Carbon $fromDate, Carbon $toDate): array
+    public function rebuildDateRange(PortfolioProfile $profile, Carbon $fromDate, Carbon $toDate): array
     {
         $started = microtime(true);
         $from = $fromDate->copy()->startOfDay();
@@ -66,17 +66,17 @@ class PortfolioSnapshotRebuildService
 
         $this->logger->api('info', 'Portfolio snapshot rebuild started', [
             'category' => 'SnapshotRebuild',
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'from_date' => $from->toDateString(),
             'to_date' => $to->toDateString(),
         ]);
 
-        $transactions = $this->loadUserTransactions($user);
+        $transactions = $this->loadProfileTransactions($profile);
         $stockIds = $transactions->pluck('stock_id')->unique()->map(fn ($id) => (int) $id)->values()->all();
 
-        $pricesFetched = $this->ensureHistoricalPrices($user, $transactions, $from, $to, $stockIds);
+        $pricesFetched = $this->ensureHistoricalPrices($profile, $transactions, $from, $to, $stockIds);
 
-        $this->purgeWeekendSnapshots($user, $from, $to);
+        $this->purgeWeekendSnapshots($profile, $from, $to);
 
         $tradingDates = $this->resolveTradingDates($stockIds, $from, $to);
         $priceIndex = $this->buildPriceIndex($stockIds, $from->copy()->subMonths(3), $to);
@@ -85,10 +85,10 @@ class PortfolioSnapshotRebuildService
         $missingPriceWarnings = 0;
 
         foreach ($tradingDates as $date) {
-            $state = $this->calculatePortfolioStateForDate($user, $date, $transactions, $priceIndex);
+            $state = $this->calculatePortfolioStateForDate($profile, $date, $transactions, $priceIndex);
             $missingPriceWarnings += (int) ($state['missing_price_count'] ?? 0);
             unset($state['missing_price_count']);
-            $this->persistSnapshot($user, $date, $state);
+            $this->persistSnapshot($profile, $date, $state);
             $snapshotsWritten++;
         }
 
@@ -106,7 +106,7 @@ class PortfolioSnapshotRebuildService
 
         $this->logger->api('info', 'Portfolio snapshot rebuild completed', [
             'category' => 'SnapshotRebuild',
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             ...$result,
         ]);
 
@@ -122,13 +122,13 @@ class PortfolioSnapshotRebuildService
      * }
      */
     public function calculatePortfolioStateForDate(
-        User $user,
+        PortfolioProfile $profile,
         Carbon $date,
         ?Collection $transactions = null,
         ?array $priceIndex = null,
     ): array {
         $date = $date->copy()->startOfDay();
-        $transactions ??= $this->loadUserTransactions($user);
+        $transactions ??= $this->loadProfileTransactions($profile);
         $holdings = $this->historicalHoldings->holdingsAsOf($transactions, $date);
 
         $portfolioValue = 0.0;
@@ -149,7 +149,7 @@ class PortfolioSnapshotRebuildService
                 $missingPriceCount++;
                 $this->logger->api('warning', 'Missing historical close for snapshot date', [
                     'category' => 'SnapshotRebuild',
-                    'user_id' => $user->id,
+                    'profile_id' => $profile->id,
                     'stock_id' => $stockId,
                     'snapshot_date' => $date->toDateString(),
                 ]);
@@ -181,25 +181,25 @@ class PortfolioSnapshotRebuildService
      * @return array<string, mixed>
      */
     public function rebuildAfterTransactionChange(
-        User $user,
+        PortfolioProfile $profile,
         ?string $previousTransactionDate = null,
         ?string $newTransactionDate = null,
     ): array {
         $dates = array_filter([$previousTransactionDate, $newTransactionDate]);
 
         if ($dates === []) {
-            return $this->rebuildFromDate($user, now()->startOfDay());
+            return $this->rebuildFromDate($profile, now()->startOfDay());
         }
 
         $from = Carbon::parse(min($dates))->startOfDay();
 
-        return $this->rebuildFromDate($user, $from);
+        return $this->rebuildFromDate($profile, $from);
     }
 
-    protected function loadUserTransactions(User $user): Collection
+    protected function loadProfileTransactions(PortfolioProfile $profile): Collection
     {
         return Transaction::query()
-            ->where('user_id', $user->id)
+            ->where('profile_id', $profile->id)
             ->orderBy('transaction_date')
             ->orderBy('id')
             ->get();
@@ -209,7 +209,7 @@ class PortfolioSnapshotRebuildService
      * @param  array<int>  $stockIds
      */
     protected function ensureHistoricalPrices(
-        User $user,
+        PortfolioProfile $profile,
         Collection $transactions,
         Carbon $from,
         Carbon $to,
@@ -242,7 +242,7 @@ class PortfolioSnapshotRebuildService
             if (! ($result['success'] ?? false) && ($result['errors'] ?? []) !== []) {
                 $this->logger->provider('warning', 'OHLCV gap fill incomplete during snapshot rebuild', [
                     'category' => 'SnapshotRebuild',
-                    'user_id' => $user->id,
+                    'profile_id' => $profile->id,
                     'symbol' => $stock->symbol,
                     'from' => $requiredFrom->toDateString(),
                     'to' => $to->toDateString(),
@@ -358,11 +358,11 @@ class PortfolioSnapshotRebuildService
     /**
      * @param  array{portfolio_value: float, invested_value: float}  $state
      */
-    protected function persistSnapshot(User $user, Carbon $date, array $state): void
+    protected function persistSnapshot(PortfolioProfile $profile, Carbon $date, array $state): void
     {
         PortfolioSnapshot::query()->updateOrCreate(
             [
-                'user_id' => $user->id,
+                'profile_id' => $profile->id,
                 'snapshot_date' => $date->toDateString(),
             ],
             [
@@ -373,10 +373,10 @@ class PortfolioSnapshotRebuildService
         );
     }
 
-    protected function purgeWeekendSnapshots(User $user, Carbon $from, Carbon $to): void
+    protected function purgeWeekendSnapshots(PortfolioProfile $profile, Carbon $from, Carbon $to): void
     {
         PortfolioSnapshot::query()
-            ->where('user_id', $user->id)
+            ->where('profile_id', $profile->id)
             ->whereBetween('snapshot_date', [$from->toDateString(), $to->toDateString()])
             ->orderBy('snapshot_date')
             ->get(['id', 'snapshot_date'])

@@ -21,10 +21,10 @@ class AlertExpirationTest extends TestCase
 
     protected function createUserWithHolding(): array
     {
-        [$user, $stock] = $this->createUserAndStock();
+        [$user, $profile, $stock] = $this->createUserAndStock();
 
         Holding::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'quantity' => 5,
             'avg_buy_price' => 100,
@@ -33,13 +33,15 @@ class AlertExpirationTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        return [$user, $stock];
+        return [$user, $profile, $stock];
     }
 
     protected function createAlert(User $user, Stock $stock, array $overrides = []): Alert
     {
+        $profile = $this->defaultPortfolioFor($user);
+
         return Alert::query()->create(array_merge([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'alert_type' => 'stoploss_triggered',
             'message' => 'Test alert',
@@ -55,6 +57,7 @@ class AlertExpirationTest extends TestCase
             'email' => 'alert-expire-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $profile = $this->defaultPortfolioFor($user);
 
         $stock = Stock::query()->create([
             'symbol' => 'ALRT',
@@ -64,12 +67,12 @@ class AlertExpirationTest extends TestCase
             'is_benchmark' => false,
         ]);
 
-        return [$user, $stock];
+        return [$user, $profile, $stock];
     }
 
     public function test_expire_all_endpoint_clears_active_alerts_for_held_stocks(): void
     {
-        [$user, $stock] = $this->createUserWithHolding();
+        [$user, $profile, $stock] = $this->createUserWithHolding();
 
         $this->createAlert($user, $stock);
 
@@ -81,7 +84,7 @@ class AlertExpirationTest extends TestCase
 
     public function test_acknowledge_endpoint_expires_single_alert(): void
     {
-        [$user, $stock] = $this->createUserWithHolding();
+        [$user, $profile, $stock] = $this->createUserWithHolding();
 
         $alert = $this->createAlert($user, $stock);
 
@@ -93,7 +96,7 @@ class AlertExpirationTest extends TestCase
 
     public function test_expire_older_than_100_hours(): void
     {
-        [$user, $stock] = $this->createUserWithHolding();
+        [$user, $profile, $stock] = $this->createUserWithHolding();
 
         $this->createAlert($user, $stock, [
             'message' => 'Old alert',
@@ -107,7 +110,7 @@ class AlertExpirationTest extends TestCase
 
     public function test_expire_on_new_trading_day_data(): void
     {
-        [$user, $stock] = $this->createUserWithHolding();
+        [$user, $profile, $stock] = $this->createUserWithHolding();
 
         $this->createAlert($user, $stock, [
             'message' => 'Prior day alert',
@@ -140,6 +143,7 @@ class AlertExpirationTest extends TestCase
             'email' => 'sell-alert-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $profile = $this->defaultPortfolioFor($user);
 
         $stock = Stock::query()->create([
             'symbol' => 'SELL',
@@ -150,7 +154,7 @@ class AlertExpirationTest extends TestCase
         ]);
 
         Transaction::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'type' => 'buy',
             'quantity' => 10,
@@ -160,7 +164,7 @@ class AlertExpirationTest extends TestCase
         ]);
 
         Transaction::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'type' => 'sell',
             'quantity' => 10,
@@ -173,7 +177,7 @@ class AlertExpirationTest extends TestCase
             'message' => 'Should expire on full sell',
         ]);
 
-        app(HoldingsCalculationService::class)->recalculateForUser($user);
+        app(HoldingsCalculationService::class)->recalculateForProfile($profile);
 
         $this->assertNotNull(Alert::query()->first()->expired_at);
         $this->assertSame('holding_closed', Alert::query()->first()->expiration_reason);
@@ -181,13 +185,14 @@ class AlertExpirationTest extends TestCase
 
     public function test_acknowledge_rejects_another_users_alert(): void
     {
-        [$user, $stock] = $this->createUserWithHolding();
+        [$user, $profile, $stock] = $this->createUserWithHolding();
 
         $otherUser = User::query()->create([
             'name' => 'Other User',
             'email' => 'other-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $otherProfile = $this->defaultPortfolioFor($otherUser);
 
         $alert = $this->createAlert($otherUser, $stock);
 
@@ -204,12 +209,14 @@ class AlertExpirationTest extends TestCase
             'email' => 'seller-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $sellerProfile = $this->defaultPortfolioFor($seller);
 
         $holder = User::query()->create([
             'name' => 'Holder',
             'email' => 'holder-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
+        $holderProfile = $this->defaultPortfolioFor($holder);
 
         $stock = Stock::query()->create([
             'symbol' => 'MULTI',
@@ -220,7 +227,7 @@ class AlertExpirationTest extends TestCase
         ]);
 
         Transaction::query()->create([
-            'user_id' => $seller->id,
+            'profile_id' => $sellerProfile->id,
             'stock_id' => $stock->id,
             'type' => 'buy',
             'quantity' => 10,
@@ -230,7 +237,7 @@ class AlertExpirationTest extends TestCase
         ]);
 
         Transaction::query()->create([
-            'user_id' => $seller->id,
+            'profile_id' => $sellerProfile->id,
             'stock_id' => $stock->id,
             'type' => 'sell',
             'quantity' => 10,
@@ -240,7 +247,7 @@ class AlertExpirationTest extends TestCase
         ]);
 
         Holding::query()->create([
-            'user_id' => $holder->id,
+            'profile_id' => $holderProfile->id,
             'stock_id' => $stock->id,
             'quantity' => 5,
             'avg_buy_price' => 100,
@@ -252,9 +259,12 @@ class AlertExpirationTest extends TestCase
         $sellerAlert = $this->createAlert($seller, $stock, ['message' => 'Seller alert']);
         $holderAlert = $this->createAlert($holder, $stock, ['message' => 'Holder alert']);
 
-        app(HoldingsCalculationService::class)->recalculateForUser($seller);
+        app(HoldingsCalculationService::class)->recalculateForProfile($sellerProfile);
 
         $this->assertNotNull($sellerAlert->fresh()->expired_at);
         $this->assertNull($holderAlert->fresh()->expired_at);
     }
 }
+
+
+

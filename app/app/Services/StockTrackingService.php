@@ -4,24 +4,24 @@ namespace App\Services;
 
 use App\Models\Alert;
 use App\Models\Holding;
+use App\Models\PortfolioProfile;
 use App\Models\Stock;
 use App\Models\StockMetric;
-use App\Models\User;
 
 class StockTrackingService
 {
     /**
      * Portfolio / tracked stocks: owned, watchlist-style metrics, alerts, or stoploss monitoring.
      */
-    public function isPortfolioTracked(Stock $stock, ?User $user = null): bool
+    public function isPortfolioTracked(Stock $stock, ?PortfolioProfile $profile = null): bool
     {
         if ($stock->is_benchmark) {
             return true;
         }
 
         $holdingQuery = Holding::query()->where('stock_id', $stock->id);
-        if ($user) {
-            $holdingQuery->where('user_id', $user->id);
+        if ($profile) {
+            $holdingQuery->where('profile_id', $profile->id);
         }
 
         if ($holdingQuery->where('quantity', '>', 0)->exists()) {
@@ -35,9 +35,9 @@ class StockTrackingService
             return true;
         }
 
-        if ($user) {
+        if ($profile) {
             if (Alert::query()
-                ->where('user_id', $user->id)
+                ->where('profile_id', $profile->id)
                 ->where('stock_id', $stock->id)
                 ->exists()) {
                 return true;
@@ -47,8 +47,8 @@ class StockTrackingService
         }
 
         $transactionQuery = $stock->transactions();
-        if ($user) {
-            $transactionQuery->where('user_id', $user->id);
+        if ($profile) {
+            $transactionQuery->where('profile_id', $profile->id);
         }
 
         if ($transactionQuery->exists()) {
@@ -58,8 +58,8 @@ class StockTrackingService
         return false;
     }
 
-    public function isExploratory(Stock $stock, ?User $user = null): bool
+    public function isExploratory(Stock $stock, ?PortfolioProfile $profile = null): bool
     {
-        return ! $this->isPortfolioTracked($stock, $user);
+        return ! $this->isPortfolioTracked($stock, $profile);
     }
 }
