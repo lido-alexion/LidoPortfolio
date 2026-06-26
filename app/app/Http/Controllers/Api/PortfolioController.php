@@ -7,7 +7,6 @@ use App\Models\PortfolioProfile;
 use App\Services\PortfolioProfileService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\ValidationException;
 
 class PortfolioController extends Controller
 {
@@ -59,25 +58,10 @@ class PortfolioController extends Controller
 
     public function destroy(Request $request, PortfolioProfile $portfolio): JsonResponse
     {
-        $user = $request->user();
-        $count = PortfolioProfile::query()->where('user_id', $user->id)->count();
+        $headerId = $request->header('X-Profile-Id') ?? $request->header('X-Portfolio-Id');
+        $activeProfileId = ($headerId !== null && $headerId !== '') ? (int) $headerId : null;
 
-        if ($count <= 1) {
-            throw ValidationException::withMessages([
-                'portfolio' => ['Cannot delete your only portfolio.'],
-            ]);
-        }
-
-        if ($portfolio->is_default) {
-            PortfolioProfile::query()
-                ->where('user_id', $user->id)
-                ->where('id', '!=', $portfolio->id)
-                ->orderBy('id')
-                ->first()
-                ?->update(['is_default' => true]);
-        }
-
-        $portfolio->delete();
+        $this->portfolios->deleteForUser($request->user(), $portfolio, $activeProfileId);
 
         return response()->json(['message' => 'Portfolio deleted']);
     }

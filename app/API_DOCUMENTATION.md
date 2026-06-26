@@ -26,7 +26,7 @@ Active portfolio is **per browser tab** on the SPA (`sessionStorage` key `portfo
 - `POST /portfolios` (auth) — body: `name`
 - `GET /portfolios/{portfolio}` (auth)
 - `PUT /portfolios/{portfolio}` (auth) — rename
-- `DELETE /portfolios/{portfolio}` (auth) — not allowed if only portfolio
+- `DELETE /portfolios/{portfolio}` (auth) — soft-deletes portfolio (`deleted_at`); purges related transactions, holdings, snapshots, alerts, and profile settings. Not allowed for the **default** portfolio, if it is the user's only portfolio, or if `X-Profile-Id` matches the portfolio being deleted (active in the requesting tab). No restore API — deleted data is not recoverable via the app. Creating a portfolio with the same name as a deleted one inserts a **new** row (new id); it does not link to the soft-deleted profile or its data. **SPA stale tab:** other tabs with a deleted portfolio id recover automatically (cross-tab `BroadcastChannel`, API 404 retry, tab focus refresh).
 - `POST /portfolios/{portfolio}/set-default` (auth)
 
 Account routes (`/profile`, auth sessions, admin users/invites) ignore portfolio header.

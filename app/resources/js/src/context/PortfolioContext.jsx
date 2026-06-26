@@ -13,7 +13,11 @@ import {
     getActivePortfolioId,
     setActivePortfolioId,
 } from '../portfolio/activePortfolioStorage';
-import { notifyPortfolioChanged } from '../utils/portfolioEvents';
+import {
+    notifyPortfolioChanged,
+    subscribePortfolioCrossTab,
+} from '../utils/portfolioEvents';
+import { registerPortfolioRecovery } from '../portfolio/portfolioRecovery';
 
 const PortfolioContext = createContext(null);
 
@@ -49,15 +53,21 @@ export function PortfolioProvider({ children }) {
             const stored = getActivePortfolioId();
             const fallback = user?.default_portfolio_id ?? null;
             const nextId = resolveActiveId(list, stored ?? fallback);
+            const storedWasStale = stored != null && stored !== '' && stored !== nextId;
             if (nextId) {
                 setActivePortfolioId(nextId);
                 setActivePortfolioIdState(nextId);
+                if (storedWasStale) {
+                    notifyPortfolioChanged(nextId);
+                }
             } else {
                 clearActivePortfolioId();
                 setActivePortfolioIdState(null);
             }
+            return nextId;
         } catch {
             setPortfolios([]);
+            return null;
         } finally {
             setLoading(false);
         }
@@ -72,6 +82,35 @@ export function PortfolioProvider({ children }) {
         }
         bootstrap();
     }, [isAuthenticated, user?.id, bootstrap]);
+
+    useEffect(() => {
+        registerPortfolioRecovery(bootstrap);
+        return () => registerPortfolioRecovery(null);
+    }, [bootstrap]);
+
+    useEffect(() => {
+        if (!isAuthenticated) {
+            return undefined;
+        }
+        return subscribePortfolioCrossTab((message) => {
+            if (message?.type === 'deleted') {
+                bootstrap();
+            }
+        });
+    }, [isAuthenticated, bootstrap]);
+
+    useEffect(() => {
+        if (!isAuthenticated) {
+            return undefined;
+        }
+        const onVisible = () => {
+            if (document.visibilityState === 'visible') {
+                bootstrap();
+            }
+        };
+        document.addEventListener('visibilitychange', onVisible);
+        return () => document.removeEventListener('visibilitychange', onVisible);
+    }, [isAuthenticated, bootstrap]);
 
     const setActivePortfolio = useCallback((portfolioId) => {
         const id = portfolioId == null ? null : String(portfolioId);

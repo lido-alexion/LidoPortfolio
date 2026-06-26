@@ -1,6 +1,10 @@
 import axios from 'axios';
 import { getRequestCsrfToken, isPlainCsrfToken, resetCsrfCookie } from './auth/csrf';
 import { getActivePortfolioId } from './portfolio/activePortfolioStorage';
+import {
+    isPortfolioNotFoundError,
+    recoverStaleActivePortfolio,
+} from './portfolio/portfolioRecovery';
 import logger, { createRequestId } from './services/logger';
 import { showToast } from './toast';
 import { appUrl } from './appBase';
@@ -15,6 +19,18 @@ const api = axios.create({
 
 function getCsrfToken() {
     return getRequestCsrfToken();
+}
+
+function shouldAttachProfileHeader(url, method) {
+    if (!url) {
+        return true;
+    }
+    const path = url.split('?')[0];
+    const verb = (method || 'get').toLowerCase();
+    if (path === '/portfolios' && (verb === 'get' || verb === 'post')) {
+        return false;
+    }
+    return true;
 }
 
 api.interceptors.request.use((config) => {
@@ -34,7 +50,7 @@ api.interceptors.request.use((config) => {
     config.metadata = { requestId };
 
     const portfolioId = getActivePortfolioId();
-    if (portfolioId) {
+    if (portfolioId && shouldAttachProfileHeader(config.url, config.method)) {
         config.headers['X-Profile-Id'] = portfolioId;
     }
 
@@ -99,13 +115,26 @@ api.interceptors.response.use(
         });
         return response;
     },
-    (error) => {
+    async (error) => {
         const requestId = error?.config?.metadata?.requestId;
         const status = error?.response?.status;
         const url = error?.config?.url || '';
         const isPublicAuthRoute = url.includes('/auth/login')
             || url.includes('/auth/me')
             || url.includes('/invites/');
+
+        if (
+            isPortfolioNotFoundError(error)
+            && error?.config
+            && !error.config._portfolioRecoveryAttempted
+            && shouldAttachProfileHeader(url, error.config.method)
+        ) {
+            error.config._portfolioRecoveryAttempted = true;
+            const recovered = await recoverStaleActivePortfolio();
+            if (recovered) {
+                return api.request(error.config);
+            }
+        }
 
         if (status === 401 && !isPublicAuthRoute) {
             window.dispatchEvent(new CustomEvent('portfolio-unauthorized'));

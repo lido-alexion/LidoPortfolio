@@ -3,6 +3,7 @@ import api from '../api';
 import { usePortfolio } from '../context/PortfolioContext';
 import { showToast } from '../toast';
 import { validatePortfolioName } from '../utils/portfolioName';
+import { notifyPortfolioDeleted } from '../utils/portfolioEvents';
 
 function validationMessage(error) {
     const errors = error?.response?.data?.errors;
@@ -31,6 +32,7 @@ export default function PortfoliosPage() {
     const [renameTouched, setRenameTouched] = useState(false);
     const [savingRename, setSavingRename] = useState(false);
     const [defaultingId, setDefaultingId] = useState(null);
+    const [deletingId, setDeletingId] = useState(null);
 
     const newNameError = newNameTouched ? validatePortfolioName(newName) : null;
     const renameNameError = renameTouched ? validatePortfolioName(renameName) : null;
@@ -111,6 +113,28 @@ export default function PortfoliosPage() {
             showToast(validationMessage(error), 'danger');
         } finally {
             setDefaultingId(null);
+        }
+    };
+
+    const deletePortfolio = async (portfolio) => {
+        const confirmed = window.confirm(
+            `Delete portfolio "${portfolio.name}"?\n\n`
+            + 'This permanently removes all its transactions, holdings, alerts, snapshots, and settings. '
+            + 'This cannot be undone.',
+        );
+        if (!confirmed) {
+            return;
+        }
+        setDeletingId(portfolio.id);
+        try {
+            await api.delete(`/portfolios/${portfolio.id}`);
+            notifyPortfolioDeleted(portfolio.id);
+            await bootstrap();
+            showToast('Portfolio deleted');
+        } catch (error) {
+            showToast(validationMessage(error), 'danger');
+        } finally {
+            setDeletingId(null);
         }
     };
 
@@ -241,6 +265,16 @@ export default function PortfoliosPage() {
                                                         onClick={() => setDefault(portfolio.id)}
                                                     >
                                                         {defaultingId === portfolio.id ? 'Saving…' : 'Set default'}
+                                                    </button>
+                                                )}
+                                                {portfolios.length > 1 && !portfolio.is_default && !isActive && (
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-outline-danger btn-sm"
+                                                        disabled={deletingId === portfolio.id}
+                                                        onClick={() => deletePortfolio(portfolio)}
+                                                    >
+                                                        {deletingId === portfolio.id ? 'Deleting…' : 'Delete'}
                                                     </button>
                                                 )}
                                             </div>
