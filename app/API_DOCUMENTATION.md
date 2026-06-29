@@ -73,10 +73,10 @@ Universe OHLCV sync (CLI): `php artisan portfolio:sync-universe-prices` — `--m
 
 ```json
 {
-  "symbol": "INFY",
-  "exchange": "NSE",
-  "benchmark_symbol": "NIFTY50",
-  "periods": [1, 3]
+    "symbol": "INFY",
+    "exchange": "NSE",
+    "benchmark_symbol": "NIFTY50",
+    "periods": [1, 3]
 }
 ```
 
@@ -85,8 +85,8 @@ Returns growth %, relative strength vs benchmark, chart series, cache/fetch meta
 ## Holdings + Dashboard + Analytics
 
 - `GET /holdings` (auth) — each item includes `stoploss_summary`:
-  - `first_buy_date`, `highest_close_since_buy`, `highest_close_since_buy_date`, `trailing_stop_price`, `stoploss_percent`
-  - `price_row_count`, `has_price_history`, `latest_price_date`
+    - `first_buy_date`, `highest_close_since_buy`, `highest_close_since_buy_date`, `trailing_stop_price`, `stoploss_percent`
+    - `price_row_count`, `has_price_history`, `latest_price_date`
 - `GET /stocks/{stock}/prices` (auth) — OHLCV rows from current position buy date
 - `GET /dashboard` (auth) — `portfolio_growth` uses transaction-aware rebuilt snapshots (up to 365 trading days); `alerts` = active alerts for the portfolio (policy-generated and any legacy rows)
 - `POST /portfolio/rebuild-history` (auth) — manual snapshot rebuild; body `{ "from_date": "YYYY-MM-DD", "to_date": "YYYY-MM-DD" }` (both optional)
@@ -101,13 +101,13 @@ Returns growth %, relative strength vs benchmark, chart series, cache/fetch meta
 
 Automatic expiration (`AlertExpirationService`):
 
-| Reason | Trigger |
-|--------|---------|
-| `manual_all` | Dashboard **Clear all** |
-| `acknowledged` | Per-row **Acknowledge** |
-| `max_age_100h` | Hourly `portfolio:expire-alerts` |
-| `data_refresh` | Successful daily sync when latest portfolio price date advances (new trading day) |
-| `holding_closed` | Profile fully sells — no open holding left for that profile/stock |
+| Reason           | Trigger                                                                           |
+| ---------------- | --------------------------------------------------------------------------------- |
+| `manual_all`     | Dashboard **Clear all**                                                           |
+| `acknowledged`   | Per-row **Acknowledge**                                                           |
+| `max_age_100h`   | Hourly `portfolio:expire-alerts`                                                  |
+| `data_refresh`   | Successful daily sync when latest portfolio price date advances (new trading day) |
+| `holding_closed` | Profile fully sells — no open holding left for that profile/stock                 |
 
 Policy-generated alerts (`alert_type=policy`) include `condition_display`, `action_suggested`, `context_json`, and `instance_key` (`user_id-profile_id-stock_id-policy_id`) for deduplication.
 
@@ -148,13 +148,13 @@ Request body:
 
 ```json
 {
-  "level": "error",
-  "message": "Failed to fetch holdings",
-  "url": "/dashboard",
-  "userAgent": "Mozilla/5.0 ...",
-  "timestamp": "2026-05-28T12:00:00.000Z",
-  "requestId": "uuid-from-x-request-id",
-  "extra": { "category": "API", "api": "/api/holdings" }
+    "level": "error",
+    "message": "Failed to fetch holdings",
+    "url": "/dashboard",
+    "userAgent": "Mozilla/5.0 ...",
+    "timestamp": "2026-05-28T12:00:00.000Z",
+    "requestId": "uuid-from-x-request-id",
+    "extra": { "category": "API", "api": "/api/holdings" }
 }
 ```
 
