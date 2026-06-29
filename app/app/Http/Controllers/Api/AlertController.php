@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Alert;
 use App\Services\AlertExpirationService;
-use App\Services\StoplossService;
+use App\Services\AlertService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -13,13 +13,13 @@ use Symfony\Component\HttpFoundation\Response;
 class AlertController extends Controller
 {
     public function __construct(
-        protected StoplossService $stoploss,
+        protected AlertService $alerts,
         protected AlertExpirationService $expiration,
     ) {}
 
     public function index(Request $request): JsonResponse
     {
-        return response()->json(['data' => $this->stoploss->getActiveAlertsForProfile(\activePortfolio())]);
+        return response()->json(['data' => $this->alerts->getActiveForProfile(\activePortfolio())]);
     }
 
     public function expireAll(Request $request): JsonResponse

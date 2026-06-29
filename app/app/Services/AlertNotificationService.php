@@ -9,7 +9,7 @@ class AlertNotificationService
 {
     public function __construct(
         protected ProfileSettingsService $profileSettings,
-        protected StoplossService $stoploss,
+        protected AlertService $alerts,
         protected TelegramNotificationService $telegram,
         protected PortfolioLoggerService $logger,
     ) {}
@@ -95,7 +95,7 @@ class AlertNotificationService
      */
     public function sendTestNotification(PortfolioProfile $profile, string $token, string $chatId): array
     {
-        $alerts = $this->stoploss->getActiveAlertsForProfile($profile);
+        $alerts = $this->alerts->getActiveForProfile($profile);
         $text = $alerts === []
             ? 'No active alerts at this time'
             : $this->formatAlertsMessage($alerts);
@@ -130,7 +130,7 @@ class AlertNotificationService
             ];
         }
 
-        $alerts = $this->stoploss->getActiveAlertsForProfile($profile);
+        $alerts = $this->alerts->getActiveForProfile($profile);
 
         if ($alerts === []) {
             return [

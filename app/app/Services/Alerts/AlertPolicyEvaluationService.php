@@ -296,7 +296,7 @@ class AlertPolicyEvaluationService
                 $displayValues,
             );
             $conditionDisplay = $this->buildConditionDisplay($policy, $flat, $left, $right);
-            $context = $this->buildContext($policy->context_columns ?? [], $flat, $displayValues);
+            $context = $this->buildContextForPolicy($policy, $numericVariables, $displayValues);
 
             Alert::query()->create([
                 'profile_id' => $profile->id,
@@ -404,10 +404,28 @@ class AlertPolicyEvaluationService
     }
 
     /**
+     * @return array{text?: string}|list<array{key: string, label: string, value: string}>
+     */
+    protected function buildContextForPolicy(
+        AlertPolicy $policy,
+        array $numericVariables,
+        array $displayValues,
+    ): array {
+        $template = trim((string) ($policy->context_template ?? ''));
+        if ($template !== '') {
+            $text = $this->messageRenderer->render($template, $numericVariables, $displayValues);
+
+            return $text !== '' ? ['text' => $text] : [];
+        }
+
+        return $this->buildLegacyContext($policy->context_columns ?? [], $displayValues);
+    }
+
+    /**
      * @param  list<string>  $contextColumns
      * @return list<array{key: string, label: string, value: string}>
      */
-    protected function buildContext(array $contextColumns, array $flat, array $displayValues): array
+    protected function buildLegacyContext(array $contextColumns, array $displayValues): array
     {
         $labels = $this->fields->columnLabels();
         $context = [];
@@ -419,7 +437,7 @@ class AlertPolicyEvaluationService
             $context[] = [
                 'key' => $key,
                 'label' => $labels[$key] ?? $key,
-                'value' => $displayValues[$key] ?? $this->fields->formatValueForDisplay($key, $flat[$key] ?? null),
+                'value' => $displayValues[$key] ?? '—',
             ];
         }
 

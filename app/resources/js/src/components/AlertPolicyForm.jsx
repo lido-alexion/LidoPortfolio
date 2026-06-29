@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import ColumnTagEditor, { ContextColumnList } from './ColumnTagEditor';
+import ColumnTagEditor, { MESSAGE_FORMAT_HINT } from './ColumnTagEditor';
 import NumberInput from './NumberInput';
 
 const EMPTY_FORM = {
@@ -13,9 +13,9 @@ const EMPTY_FORM = {
     compare_formula: '',
     compare_constant: '',
     message_template: '',
+    context_template: '',
     action_type: 'sell',
     action_custom: '',
-    context_columns: [],
     is_enabled: true,
 };
 
@@ -36,9 +36,9 @@ export function policyToForm(policy) {
             ? Number(policy.compare_constant).toFixed(2)
             : '',
         message_template: policy.message_template || '',
+        context_template: policy.context_template || '',
         action_type: policy.action_type || 'sell',
         action_custom: policy.action_custom || '',
-        context_columns: Array.isArray(policy.context_columns) ? policy.context_columns : [],
         is_enabled: policy.is_enabled !== false,
     };
 }
@@ -243,39 +243,24 @@ export default function AlertPolicyForm({
                 placeholder="e.g. {{symbol}}: latest close [[{{latest_close}}]] (stop <<{{latest_close}} * 0.9>>)"
                 invalid={Boolean(firstError('message_template'))}
                 errorMessage={firstError('message_template')}
-                hint={(
-                    <>
-                        <strong>Formatting tips:</strong>
-                        {' '}
-                        <code>{'{{column}}'}</code>
-                        {' '}
-                        inserts the column value.
-                        {' '}
-                        <code>{'[[ ... ]]'}</code>
-                        {' '}
-                        formats a number with thousands separators and exactly 2 decimals (e.g.
-                        {' '}
-                        <code>{'[[{{latest_close}}]]'}</code>
-                        {' '}
-                        → 10,000.00).
-                        {' '}
-                        <code>{'<< ... >>'}</code>
-                        {' '}
-                        evaluates math using column values (e.g.
-                        {' '}
-                        <code>{'<<{{latest_close}} * 0.9>>'}</code>
-                        {' '}
-                        or
-                        {' '}
-                        <code>{'<<latest_close * 0.9>>'}</code>
-                        → 9000).
-                        Nest them:
-                        {' '}
-                        <code>{'[[<<latest_close * 0.9>>]]'}</code>
-                        {' '}
-                        → 9,000.00.
-                    </>
-                )}
+                hint={MESSAGE_FORMAT_HINT}
+            />
+
+            <ColumnTagEditor
+                id="alert-context-template"
+                label="Context details"
+                value={form.context_template}
+                onChange={(context_template) => update({ context_template })}
+                columns={columns}
+                showColumnPicker
+                multiline
+                rows={4}
+                columnInsertFormat="labeled"
+                insertSeparator="\n"
+                placeholder={'e.g.\nQuantity: {{quantity}}\nLatest close: [[{{latest_close}}]]'}
+                invalid={Boolean(firstError('context_template'))}
+                errorMessage={firstError('context_template')}
+                hint={MESSAGE_FORMAT_HINT}
             />
 
             <div className="row g-3">
@@ -307,12 +292,6 @@ export default function AlertPolicyForm({
                     </div>
                 )}
             </div>
-
-            <ContextColumnList
-                columns={columns}
-                selected={form.context_columns}
-                onChange={(context_columns) => update({ context_columns })}
-            />
 
             <div className="form-check">
                 <input

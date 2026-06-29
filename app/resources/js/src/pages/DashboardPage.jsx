@@ -103,6 +103,14 @@ function relativeStrengthCell(getValue) {
 }
 
 function alertContextCell(contextJson) {
+    if (contextJson && typeof contextJson === 'object' && !Array.isArray(contextJson) && contextJson.text) {
+        return (
+            <div className="small lh-sm" style={{ whiteSpace: 'pre-line' }}>
+                {contextJson.text}
+            </div>
+        );
+    }
+
     if (!Array.isArray(contextJson) || contextJson.length === 0) {
         return <span className="text-muted">—</span>;
     }
@@ -388,7 +396,7 @@ export default function DashboardPage() {
     const growthChartManyPoints = growthData.length > 24;
     const growthChartBottomMargin = growthChartManyPoints ? 52 : 28;
 
-    const alerts = (data.stoploss_alerts || []).slice(0, 10);
+    const alerts = (data.alerts || []).slice(0, 10);
     const dailySync = data.daily_market_sync || {};
     const pricesSyncedToday = Boolean(dailySync.synced_today);
     const syncInProgress = Boolean(dailySync.in_progress) || syncingPrices;

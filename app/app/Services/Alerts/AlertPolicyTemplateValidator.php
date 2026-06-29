@@ -31,6 +31,15 @@ class AlertPolicyTemplateValidator
             $errors['message_template'][] = $e->getMessage();
         }
 
+        $contextTemplate = trim((string) ($validated['context_template'] ?? ''));
+        if ($contextTemplate !== '') {
+            try {
+                $this->validateOptionalTemplate($contextTemplate, $allowedKeys, 'context');
+            } catch (InvalidArgumentException $e) {
+                $errors['context_template'][] = $e->getMessage();
+            }
+        }
+
         if (($validated['compare_type'] ?? '') === 'derived') {
             try {
                 $this->validateDerivedFormula($validated['compare_formula'] ?? '', $allowedKeys);
@@ -70,6 +79,18 @@ class AlertPolicyTemplateValidator
             }
         }
 
+        if ($contextTemplate !== '' && ! isset($errors['context_template'])) {
+            try {
+                $this->messageRenderer->assertResolvable(
+                    $contextTemplate,
+                    $sample['numeric'],
+                    $sample['display'],
+                );
+            } catch (InvalidArgumentException $e) {
+                $errors['context_template'][] = $prefix.$e->getMessage();
+            }
+        }
+
         if ($errors !== []) {
             throw ValidationException::withMessages($errors);
         }
@@ -83,6 +104,19 @@ class AlertPolicyTemplateValidator
         $template = trim($template);
         if ($template === '') {
             throw new InvalidArgumentException('Alert message is required.');
+        }
+
+        $this->validateOptionalTemplate($template, $allowedKeys, 'message');
+    }
+
+    /**
+     * @param  list<string>  $allowedKeys
+     */
+    public function validateOptionalTemplate(string $template, array $allowedKeys, string $context): void
+    {
+        $template = trim($template);
+        if ($template === '') {
+            return;
         }
 
         $this->assertBalancedDelimiters($template, '{{', '}}', 'column tag');
@@ -99,7 +133,7 @@ class AlertPolicyTemplateValidator
             throw new InvalidArgumentException('Empty math block <<>> is not allowed.');
         }
 
-        $this->assertKnownColumnTags($template, $allowedKeys, 'message');
+        $this->assertKnownColumnTags($template, $allowedKeys, $context);
     }
 
     /**

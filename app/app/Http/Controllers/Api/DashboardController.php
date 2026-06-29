@@ -9,7 +9,7 @@ use App\Services\DailyMarketSyncService;
 use App\Services\PortfolioCalculationService;
 use App\Services\PortfolioSnapshotRebuildService;
 use App\Services\RelativeStrengthService;
-use App\Services\StoplossService;
+use App\Services\AlertService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,7 +20,7 @@ class DashboardController extends Controller
 {
     public function __construct(
         protected PortfolioCalculationService $portfolio,
-        protected StoplossService $stoploss,
+        protected AlertService $alerts,
         protected RelativeStrengthService $relativeStrength,
         protected PortfolioSnapshotRebuildService $snapshotRebuild,
         protected DailyMarketSyncService $dailySync,
@@ -56,7 +56,7 @@ class DashboardController extends Controller
                 'allocation_invested_percent' => $h['allocation_invested_percent'],
                 'market_value' => $h['market_value'],
             ])->values(),
-            'stoploss_alerts' => $this->stoploss->getActiveAlertsForProfile($profile),
+            'alerts' => $this->alerts->getActiveForProfile($profile),
             'portfolio_growth' => $growth,
             ...($user->is_admin ? ['daily_market_sync' => $this->dailySync->status()] : []),
             'nifty_comparison' => [

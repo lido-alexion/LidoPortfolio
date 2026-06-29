@@ -22,6 +22,7 @@ class AlertPolicy extends Model
         'compare_formula',
         'compare_constant',
         'message_template',
+        'context_template',
         'action_type',
         'action_custom',
         'context_columns',

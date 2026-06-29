@@ -36,8 +36,45 @@ export function removeColumnTagAt(text, occurrenceIndex) {
     }
     const before = text.slice(0, target.index);
     const after = text.slice(target.index + target.length);
-    return (before + after).replace(/\s{2,}/g, ' ').trim();
+    return (before + after)
+        .replace(/[ \t]{2,}/g, ' ')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
 }
+
+export const MESSAGE_FORMAT_HINT = (
+    <>
+        <strong>Formatting tips:</strong>
+        {' '}
+        <code>{'{{column}}'}</code>
+        {' '}
+        inserts the column value.
+        {' '}
+        <code>{'[[ ... ]]'}</code>
+        {' '}
+        formats a number with thousands separators and exactly 2 decimals (e.g.
+        {' '}
+        <code>{'[[{{latest_close}}]]'}</code>
+        {' '}
+        → 10,000.00).
+        {' '}
+        <code>{'<< ... >>'}</code>
+        {' '}
+        evaluates math using column values (e.g.
+        {' '}
+        <code>{'<<{{latest_close}} * 0.9>>'}</code>
+        {' '}
+        or
+        {' '}
+        <code>{'<<latest_close * 0.9>>'}</code>
+        → 9000).
+        Nest them:
+        {' '}
+        <code>{'[[<<latest_close * 0.9>>]]'}</code>
+        {' '}
+        → 9,000.00.
+    </>
+);
 
 export default function ColumnTagEditor({
     id,
@@ -53,6 +90,8 @@ export default function ColumnTagEditor({
     invalid = false,
     errorMessage = '',
     hint = null,
+    columnInsertFormat = 'tag',
+    insertSeparator = ' ',
 }) {
     const columnMap = useMemo(() => {
         const map = new Map();
@@ -66,9 +105,23 @@ export default function ColumnTagEditor({
         if (!columnKey) {
             return;
         }
-        const token = `{{${columnKey}}}`;
-        const next = value?.trim() ? `${value.trim()} ${token}` : token;
-        onChange(next);
+        const labelText = columnMap.get(columnKey) || columnKey;
+        const token = columnInsertFormat === 'labeled'
+            ? `${labelText}: {{${columnKey}}}`
+            : `{{${columnKey}}}`;
+
+        if (!value?.trim()) {
+            onChange(token);
+            return;
+        }
+
+        if (insertSeparator === '\n') {
+            const base = value.replace(/\n$/, '');
+            onChange(`${base}\n${token}`);
+            return;
+        }
+
+        onChange(`${value.trimEnd()} ${token}`);
     };
 
     const InputComponent = multiline ? 'textarea' : 'input';
@@ -131,68 +184,6 @@ export default function ColumnTagEditor({
                     </select>
                 </div>
             )}
-        </div>
-    );
-}
-
-export function ContextColumnList({ columns, selected, onChange, disabled = false }) {
-    const columnMap = useMemo(() => {
-        const map = new Map();
-        columns.forEach((col) => map.set(col.key, col.label));
-        return map;
-    }, [columns]);
-
-    const addColumn = (columnKey) => {
-        if (!columnKey) {
-            return;
-        }
-        onChange([...selected, columnKey]);
-    };
-
-    return (
-        <div>
-            <label className="form-label">Context information</label>
-            <p className="text-muted small mb-2">
-                Columns included as key-value context when an alert is generated.
-            </p>
-            {selected.length > 0 && (
-                <div className="d-flex flex-wrap gap-1 mb-2">
-                    {selected.map((key, index) => (
-                        <span
-                            key={`${key}-${index}`}
-                            className="badge text-bg-info d-inline-flex align-items-center gap-1"
-                        >
-                            {columnMap.get(key) || key}
-                            {!disabled && (
-                                <button
-                                    type="button"
-                                    className="btn-close"
-                                    style={{ fontSize: '0.55rem' }}
-                                    aria-label={`Remove ${key}`}
-                                    onClick={() => onChange(selected.filter((_, i) => i !== index))}
-                                />
-                            )}
-                        </span>
-                    ))}
-                </div>
-            )}
-            <div className="d-flex flex-wrap gap-2">
-                <select
-                    className="form-select form-select-sm column-tag-picker"
-                    style={{ maxWidth: 220 }}
-                    defaultValue=""
-                    disabled={disabled}
-                    onChange={(e) => {
-                        addColumn(e.target.value);
-                        e.target.value = '';
-                    }}
-                >
-                    <option value="">Select column…</option>
-                    {columns.map((col) => (
-                        <option key={col.key} value={col.key}>{col.label}</option>
-                    ))}
-                </select>
-            </div>
         </div>
     );
 }

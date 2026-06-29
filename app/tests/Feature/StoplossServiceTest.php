@@ -25,7 +25,7 @@ class StoplossServiceTest extends TestCase
         $this->assertInstanceOf(StoplossService::class, $service);
     }
 
-    public function test_stoploss_persists_alert_when_threshold_is_breached(): void
+    public function test_stoploss_updates_metrics_when_price_breaches_trailing_stop(): void
     {
         $user = User::query()->create([
             'name' => 'Stoploss User',
@@ -97,22 +97,17 @@ class StoplossServiceTest extends TestCase
         ]);
 
         $service = app(StoplossService::class);
-        $service->updateMetricsForStock($stock);
+        $metric = $service->updateMetricsForStock($stock);
 
-        $alert = Alert::query()->where('profile_id', $profile->id)->where('stock_id', $stock->id)->first();
-        $this->assertNotNull($alert);
-        $this->assertStringContainsString('10% below highest close 120.00', $alert->message);
-        $this->assertStringContainsString('Trailing stop: 108.00', $alert->message);
-
-        $this->assertDatabaseHas('portfolio_alerts', [
-            'profile_id' => $profile->id,
-            'stock_id' => $stock->id,
-            'alert_type' => 'stoploss_triggered',
-            'is_sent' => 0,
-        ]);
+        $this->assertNull(
+            Alert::query()->where('profile_id', $profile->id)->where('stock_id', $stock->id)->first()
+        );
+        $this->assertSame(100.0, (float) $metric->latest_close);
+        $this->assertSame(120.0, (float) $metric->highest_close);
+        $this->assertSame(108.0, (float) $metric->trailing_stop_price);
     }
 
-    public function test_stoploss_creates_per_user_alerts_when_multiple_users_hold_stock(): void
+    public function test_stoploss_updates_shared_stock_metrics_without_creating_alerts(): void
     {
         $userA = User::query()->create([
             'name' => 'User A',
@@ -193,11 +188,11 @@ class StoplossServiceTest extends TestCase
         ]);
 
         $service = app(StoplossService::class);
-        $service->updateMetricsForStock($stock);
+        $metric = $service->updateMetricsForStock($stock);
 
-        $this->assertSame(2, Alert::query()->where('stock_id', $stock->id)->count());
-        $this->assertDatabaseHas('portfolio_alerts', ['profile_id' => $profileA->id, 'stock_id' => $stock->id]);
-        $this->assertDatabaseHas('portfolio_alerts', ['profile_id' => $profileB->id, 'stock_id' => $stock->id]);
+        $this->assertSame(0, Alert::query()->where('stock_id', $stock->id)->count());
+        $this->assertSame(100.0, (float) $metric->latest_close);
+        $this->assertSame(108.0, (float) $metric->trailing_stop_price);
     }
 
     public function test_stoploss_does_not_trigger_when_above_since_buy_trailing_despite_pre_buy_peak(): void

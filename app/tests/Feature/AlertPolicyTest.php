@@ -58,7 +58,7 @@ class AlertPolicyTest extends TestCase
                 'compare_constant' => 50,
                 'message_template' => '{{symbol}} avg buy is {{avg_buy_price}}',
                 'action_type' => 'track',
-                'context_columns' => ['quantity', 'invested_amount'],
+                'context_template' => "Quantity: {{quantity}}\nInvested: [[{{invested_amount}}]]",
                 'is_enabled' => true,
             ])
             ->assertCreated();
@@ -76,6 +76,10 @@ class AlertPolicyTest extends TestCase
         $this->assertStringContainsString('POL1', $alert->message);
         $this->assertSame('Track', $alert->action_suggested);
         $this->assertNotNull($alert->condition_display);
+        $this->assertIsArray($alert->context_json);
+        $this->assertArrayHasKey('text', $alert->context_json);
+        $this->assertStringContainsString('Quantity:', (string) $alert->context_json['text']);
+        $this->assertStringContainsString('Invested:', (string) $alert->context_json['text']);
 
         $duplicate = app(AlertPolicyEvaluationService::class)->evaluateProfile($profile);
         $this->assertSame(0, $duplicate['generated']);

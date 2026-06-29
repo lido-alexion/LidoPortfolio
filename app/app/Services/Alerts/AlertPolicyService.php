@@ -177,6 +177,12 @@ class AlertPolicyService
             throw ValidationException::withMessages(['message_template' => ['Alert message is required.']]);
         }
 
+        $contextTemplate = trim((string) ($data['context_template'] ?? ''));
+        $contextTemplate = $contextTemplate !== '' ? $contextTemplate : null;
+        if ($contextTemplate !== null && strlen($contextTemplate) > 4000) {
+            throw ValidationException::withMessages(['context_template' => ['Context details must be 4000 characters or fewer.']]);
+        }
+
         $actionType = (string) ($data['action_type'] ?? '');
         if (! in_array($actionType, ['sell', 'buy', 'top_up', 'downsize', 'track', 'custom'], true)) {
             throw ValidationException::withMessages(['action_type' => ['Invalid action type.']]);
@@ -192,7 +198,7 @@ class AlertPolicyService
 
         $contextColumns = $data['context_columns'] ?? [];
         if (! is_array($contextColumns)) {
-            throw ValidationException::withMessages(['context_columns' => ['Context columns must be a list.']]);
+            $contextColumns = [];
         }
         $contextColumns = array_values(array_unique(array_filter($contextColumns, fn ($key) => in_array($key, $allowedKeys, true))));
 
@@ -207,6 +213,7 @@ class AlertPolicyService
             'compare_formula' => $compareFormula,
             'compare_constant' => $compareConstant,
             'message_template' => $messageTemplate,
+            'context_template' => $contextTemplate,
             'action_type' => $actionType,
             'action_custom' => $actionCustom,
             'context_columns' => $contextColumns,
