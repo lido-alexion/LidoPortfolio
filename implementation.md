@@ -201,6 +201,14 @@ Per-portfolio rules in `portfolio_alert_policies`; evaluated after daily price s
 
 **Evaluation logging & report (Jul 2026):** `AlertPolicyEvaluationService` logs to app channel category `AlertPolicy` via `PortfolioLoggerService::alertPolicy()` — profile start/finish (info), each holding (debug) with outcome. `POST /api/alert-policies/evaluate` returns `data.details[]` (up to 100 rows): `policy_name`, `stock_symbol`, `outcome` (`generated`, `condition_not_met`, `missing_left`, `missing_right`, `duplicate_active`, `formula_error`, `error`), `left`/`right` numeric operands, `summary` text. Alert policies page shows **Last evaluation** table after **Run policies now**. **Bug fix:** `FormulaEvaluator` used `/` as `preg_match` delimiter while `/` also appeared in the allowed-character class, causing `preg_match(): Unknown modifier '('` on every derived-formula evaluation — fixed with `#` delimiters. **Alert policy form UX:** `ColumnTagEditor` removes one tag occurrence at a time (not all duplicates); **Add column…** picker uses highlighted `.column-tag-picker` style; constant compare uses 2-decimal `NumberInput`; message template always shows column picker. **Alert message formatting:** `AlertMessageRenderer` resolves innermost `[[...]]` / `<<...>>` blocks first (no infinite loop on failure). `[[expr]]` supports math expressions (2-decimal thousands format). `<<expr>>` evaluates math (compact number; commas stripped if nested after `[[ ]]`). Plain `{{column}}` display tags last. Tips under message field in policy form. **Save validation:** `AlertPolicyTemplateValidator` checks delimiter balance, known columns, then dry-runs message (and derived formula when applicable) against the first open holding; API returns `message_template` / `compare_formula` field errors; form highlights invalid fields. **Context details:** optional multiline `context_template` (labeled column picker adds `Label: {{column}}` per line); rendered to `context_json.text` on alerts; dashboard Context column uses `white-space: pre-line`.
 
+### Pending deploy (2026-06-21 — toast crash fix on universe price sync)
+
+**Fix:** `UniversePriceSyncPage` `showToast(message, variant)` — was passing object and crashing React on batch complete.
+
+**Upload:** replace **both** `build/` folders from `deploy/staging/` (JS **`app-BEYJcvch.js`**). No migration.
+
+**Smoke:** Settings → Universe price sync → Run backfill batch → green toast, no React error overlay.
+
 ### Pending deploy (2026-06-21 — UI: footer, bulk CSV, transactions layout)
 
 **Includes:** Auto-hide footer (show at scroll bottom or cursor near bottom edge); transactions form stacked above table; **Bulk (CSV)** import on Transactions page.
