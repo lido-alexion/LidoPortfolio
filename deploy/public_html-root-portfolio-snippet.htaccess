@@ -2,6 +2,10 @@
 # Paste into public_html/.htaccess immediately AFTER "RewriteEngine On".
 # Must be ABOVE WordPress / other catch-all rules.
 
+# Apex → www (SSL + session cookies; use one canonical host)
+RewriteCond %{HTTP_HOST} ^lidoalexion\.com$ [NC]
+RewriteRule ^ https://www.lidoalexion.com%{REQUEST_URI} [R=301,L]
+
 # Diagnostic PHP — never rewrite away from real files
 RewriteCond %{REQUEST_URI} ^/portfolio/cpanel-.*\.php$ [NC]
 RewriteRule ^ - [L]

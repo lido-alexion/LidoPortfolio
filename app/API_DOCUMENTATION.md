@@ -41,6 +41,8 @@ Account routes (`/profile`, auth sessions, admin users/invites) ignore portfolio
 
 - `GET /invites/{token}` — validate invite; `410` if expired (row deleted); `409` if already accepted
 - `POST /invites/accept` — body: `token`, `password`, `password_confirmation`, optional `name`, `remember`; creates user, marks invite accepted, establishes session
+- `GET /reset-password/{token}` — validate admin-issued password reset link; `410` if expired (row deleted); `409` if already used
+- `POST /reset-password/accept` — body: `token`, `password`, `password_confirmation`, optional `remember`; updates password, marks link used, establishes session
 
 Responses return `user` only (no `token` field).
 
@@ -54,6 +56,8 @@ Responses return `user` only (no `token` field).
 - `PUT /stocks/{stock}` (auth, **admin**)
 
 Stock master sync (CLI): `php artisan stocks:sync` (weekly scheduled)
+
+Universe OHLCV sync (CLI): `php artisan portfolio:sync-universe-prices` — `--mode=backfill|daily`, `--scope=all_nse|nifty500`, `--all` for full-universe backfill. Scheduled every 15 min 19:00–23:45 when enabled. See `implementation.md` → Universe price sync.
 
 ## Transactions
 
@@ -131,6 +135,10 @@ Policy-generated alerts (`alert_type=policy`) include `condition_display`, `acti
 - `POST /invites` (auth, admin) — body: `email`; creates 72h invite
 - `POST /invites/{invite}/regenerate` (auth, admin) — new token and 72h expiry
 - `DELETE /invites/{invite}` (auth, admin) — revoke pending invite
+- `GET /password-reset-links` (auth, admin) — list reset links with status, expiry, `reset_url`, `reset_message`
+- `POST /password-reset-links` (auth, admin) — body: `user_id`; creates 72h link for existing user (one pending per user)
+- `POST /password-reset-links/{id}/regenerate` (auth, admin) — new token and 72h expiry
+- `DELETE /password-reset-links/{id}` (auth, admin) — revoke pending reset link
 
 ## Frontend Logs
 
@@ -157,6 +165,9 @@ Request body:
 
 - `POST /sync/daily` (auth, **admin**) — body/query `force` (boolean)
 - `POST /sync/backfill/{stock}` (auth, **admin**) — force fetch from user's buy date
+- `GET /universe-price-sync/status` (auth, **admin**) — query `scope` (`all_nse`|`nifty500`); progress, coverage, cursor, `rate_limits.likely_rate_limited`, `rate_limits.recent_issues`
+- `POST /universe-price-sync/run` (auth, **admin**, throttle 12/min) — body: `mode` (`daily`|`backfill`), `scope`, `batch` (1–200), `reset_cursor`, `process_all` (avoid on cPanel — may timeout)
+- `POST /universe-price-sync/stock-master` (auth, **admin**, throttle 12/min) — NSE equity master CSV import
 - `GET /sync-logs`, `GET /sync-logs/runs`, `GET /sync-logs/export` (auth, **admin**)
 - Settings `notification_schedules` — per active portfolio; global `cron_time` is admin-only
 - `portfolio:send-notifications` — per-profile Telegram digests at scheduled times

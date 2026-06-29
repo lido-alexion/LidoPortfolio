@@ -31,7 +31,7 @@ function clearLegacyCsrfCookies() {
     }
 }
 
-async function waitForCsrfToken(maxAttempts = 50, delayMs = 100) {
+async function waitForCsrfToken(maxAttempts = 20, delayMs = 50) {
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         const token = readCsrfTokenFromDocument();
         if (token) {
@@ -88,7 +88,7 @@ export function readCsrfToken() {
  * @param {{ force?: boolean }} options - force=true always refetches (use before login/register).
  */
 export async function ensureCsrfCookie({ force = false } = {}) {
-    if (!force && csrfReady && getRequestCsrfToken()) {
+    if (!force && csrfReady && csrfTokenMemory && csrfTokenSource === 'plain') {
         return;
     }
 
@@ -107,14 +107,16 @@ export async function ensureCsrfCookie({ force = false } = {}) {
         headers: { Accept: 'application/json' },
     });
 
-    let token = await waitForCsrfToken();
-    if (!token) {
-        try {
-            token = await fetchPlainCsrfToken();
-        } catch (error) {
+    // Always read the session token from the API after sanctum. Mobile browsers can
+    // still expose a stale XSRF-TOKEN at path / alongside the fresh /portfolio cookie.
+    try {
+        await fetchPlainCsrfToken();
+    } catch (error) {
+        const token = await waitForCsrfToken();
+        if (!token) {
             const hint = `Use ${window.location.origin}${appUrl('/')} consistently (www or non-www), `
                 + 'clear site cookies for lidoalexion.com, then retry.';
-            throw new Error(`Could not read CSRF cookie after ${sanctumUrl}. ${hint}`);
+            throw new Error(`Could not read CSRF token after ${sanctumUrl}. ${hint}`);
         }
     }
 

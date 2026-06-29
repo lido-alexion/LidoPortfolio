@@ -346,10 +346,19 @@ export default function SettingsPage() {
                                         Stock master:
                                         {' '}
                                         {formatSyncRunLabel(settings.sync_log_latest_runs?.stock_master)}
+                                        {' · '}
+                                        Universe prices:
+                                        {' '}
+                                        {formatSyncRunLabel(settings.sync_log_latest_runs?.universe_price_sync)}
                                     </p>
+                                    <div className="d-flex flex-wrap gap-2">
                                     <Link to="/settings/sync-logs" className="btn btn-outline-secondary btn-sm">
                                         View sync logs
                                     </Link>
+                                    <Link to="/settings/universe-price-sync" className="btn btn-outline-secondary btn-sm">
+                                        Universe price sync
+                                    </Link>
+                                    </div>
                                 </div>
                                 <div className="col-12">
                                     <p className="text-muted small mb-0">

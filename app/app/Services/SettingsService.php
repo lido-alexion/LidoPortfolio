@@ -54,6 +54,7 @@ class SettingsService
         $settings['sync_log_latest_runs'] = [
             'daily_market_data' => $syncLogService->latestRunSummary(SyncLogService::JOB_DAILY_MARKET_DATA),
             'stock_master' => $syncLogService->latestRunSummary(SyncLogService::JOB_STOCK_MASTER),
+            'universe_price_sync' => $syncLogService->latestRunSummary(SyncLogService::JOB_UNIVERSE_PRICE_SYNC),
         ];
 
         return $settings;

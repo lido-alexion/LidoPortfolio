@@ -28,7 +28,7 @@ Use this section to bring the project up again on a Windows dev machine. Human-o
 | **Node.js** | Dev UI hot-reload | Installed globally | Only for `npm run dev` / `npm run build`. |
 | **Apache (EasyPHP)** | **No** (if using `artisan serve`) | EasyPHP control panel | Optional. Use when you prefer vhost over built-in PHP server. |
 | **Queue worker** | Optional locally | `php artisan queue:listen` | `QUEUE_CONNECTION=database`; needed for async jobs if not using `sync`. |
-| **Scheduler** | Optional locally | `php artisan schedule:work` or OS cron | `portfolio:daily-sync` (prices/snapshots); `portfolio:send-notifications` per `notification_schedules`. |
+| **Scheduler** | Optional locally | `php artisan schedule:work` or OS cron | `portfolio:daily-sync` (holdings prices); `portfolio:sync-universe-prices` (NSE universe OHLCV batches); `portfolio:send-notifications` per `notification_schedules`. |
 | **Redis** | No | — | Not used by default (`CACHE_STORE=database`). |
 | **Vite dev server** | Optional | `npm run dev` | Hot reload for React; omit if you ran `npm run build` and only use `artisan serve`. |
 
@@ -177,8 +177,10 @@ cd D:\Projects\LidoPortfolio\app
 
 php artisan migrate --force          # after pulling new migrations
 php artisan db:seed                  # re-seed admin + default settings
-php artisan portfolio:daily-sync     # manual daily prices + portfolio snapshots
+php artisan portfolio:daily-sync     # manual daily prices + portfolio snapshots (holdings)
 php artisan stocks:sync              # NSE equity master CSV import
+php artisan portfolio:sync-universe-prices --mode=backfill --all   # one-time ~1y OHLCV for full NSE universe
+php artisan portfolio:sync-universe-prices --mode=daily            # one batch of universe incremental sync
 php artisan test                     # PHPUnit (uses sqlite in-memory)
 npm run test:js                      # frontend unit tests
 npm run build                        # production JS/CSS bundle
@@ -196,6 +198,26 @@ PowerShell -ExecutionPolicy Bypass -File tests\Feature\api_smoke.ps1
 Per-portfolio rules in `portfolio_alert_policies`; evaluated after daily price sync and via **Run policies now** (`POST /api/alert-policies/evaluate`). Optional `alert_definition` text (human-readable summary shown in policy list). Universe: **Holdings** only (extensible). Conditions use enriched holding fields vs column / derived formula (`{{column}}` tags + `+ - * / ( )`) / constant. Generated alerts: `alert_type=policy`, `instance_key` = `{user_id}-{profile_id}-{stock_id}-{policy_id}`, `condition_display`, `action_suggested`, `context_json` (`{ text }` rendered from optional `context_template` with same `[[ ]]`, `<< >>`, `{{column}}` syntax as message; legacy `context_columns` array still supported). Dedup on active `instance_key`. UI: Settings → Portfolio → **Manage alert policies** (`/settings/alert-policies`). **Built-in stoploss alert generation removed (Jul 2026):** `StoplossService` updates trailing-stop metrics only; alerts come from policies (or manual fixtures in tests). `GET /api/dashboard` returns active alerts under `alerts` (was `stoploss_alerts`). `AlertService::getActiveForProfile()` backs dashboard + `GET /api/alerts`. **API errors:** production JSON 500/503 responses include actionable `message` + `request_id` (not generic "Server Error"); evaluate checks schema before running.
 
 **Evaluation logging & report (Jul 2026):** `AlertPolicyEvaluationService` logs to app channel category `AlertPolicy` via `PortfolioLoggerService::alertPolicy()` — profile start/finish (info), each holding (debug) with outcome. `POST /api/alert-policies/evaluate` returns `data.details[]` (up to 100 rows): `policy_name`, `stock_symbol`, `outcome` (`generated`, `condition_not_met`, `missing_left`, `missing_right`, `duplicate_active`, `formula_error`, `error`), `left`/`right` numeric operands, `summary` text. Alert policies page shows **Last evaluation** table after **Run policies now**. **Bug fix:** `FormulaEvaluator` used `/` as `preg_match` delimiter while `/` also appeared in the allowed-character class, causing `preg_match(): Unknown modifier '('` on every derived-formula evaluation — fixed with `#` delimiters. **Alert policy form UX:** `ColumnTagEditor` removes one tag occurrence at a time (not all duplicates); **Add column…** picker uses highlighted `.column-tag-picker` style; constant compare uses 2-decimal `NumberInput`; message template always shows column picker. **Alert message formatting:** `AlertMessageRenderer` resolves innermost `[[...]]` / `<<...>>` blocks first (no infinite loop on failure). `[[expr]]` supports math expressions (2-decimal thousands format). `<<expr>>` evaluates math (compact number; commas stripped if nested after `[[ ]]`). Plain `{{column}}` display tags last. Tips under message field in policy form. **Save validation:** `AlertPolicyTemplateValidator` checks delimiter balance, known columns, then dry-runs message (and derived formula when applicable) against the first open holding; API returns `message_template` / `compare_formula` field errors; form highlights invalid fields. **Context details:** optional multiline `context_template` (labeled column picker adds `Label: {{column}}` per line); rendered to `context_json.text` on alerts; dashboard Context column uses `white-space: pre-line`.
+
+### Pending deploy (2026-06-21 — universe sync, CSRF, password reset, htaccess)
+
+**Includes:** NSE universe OHLCV sync (CLI + admin API + `/settings/universe-price-sync`); mobile CSRF fix (`csrf-token` + 419 retry); apex→www `.htaccess`; admin password-reset links + guest `/reset-password/:token`; user-mgmt UX fixes; boot panel / viewport CSS mitigations.
+
+**Migration required:** `2026_07_03_000001` (`portfolio_password_reset_links`).
+
+**Upload:** `deploy/prepare-upload.ps1` → `deploy/staging/` (JS **`app-B3HlGFOg.js`**). Merge `staging/lidoportfolio/` → `public_html/lidoportfolio/`; replace **both** `build/` folders; upload `portfolio/.htaccess` and root portfolio snippet if not already applied.
+
+**Migrate:** `https://www.lidoalexion.com/portfolio/cpanel-migrate.php?token=Lido` — delete script after success.
+
+**Smoke:** Login on mobile (use `www` URL); Settings → **Universe price sync** → Sync stock master → Run backfill batch; Settings → **Manage users** → password reset link; guest reset page.
+
+### Pending deploy (2026-07-02 — mobile CSRF login fix) — superseded by 2026-06-21 bundle above
+
+**Fix:** After `/sanctum/csrf-cookie`, always load token from `GET /api/auth/csrf-token` and send `X-CSRF-TOKEN` (stops stale `XSRF-TOKEN` at path `/` on mobile). API auto-retries once on `419` after forced CSRF refresh.
+
+**Upload:** `deploy/staging/` (JS **`app-avmKe_to.js`**). Replace **both** `build/` folders only (no migration).
+
+**On affected device:** Clear site data for `lidoalexion.com` once, then hard refresh and login.
 
 ### Pending deploy (2026-07-02 — alert policies polish + remove built-in stoploss alerts)
 
@@ -285,6 +307,7 @@ Per-portfolio rules in `portfolio_alert_policies`; evaluated after daily price s
 - **Multi-portfolio UI (Jun 2026):** Header switcher shown only when user has 2+ portfolios (10px left margin); profile menu links to `/portfolios`. Settings removed from top tabs (footer nav only). Settings page scope tabs: **Global** (admin), **Portfolio**, **Account** (sessions + prominent management links). Portfolio names: letters, numbers, spaces, hyphen, underscore only (client + API validation). **Manage Portfolios** (`/portfolios`) uses theme-aware `.contentPane .card` / `.list-group-item` (no hardcoded `bg-dark`); **Set default** uses `btn-outline-primary` so label is visible in light and dark themes. **Delete portfolio** (`DELETE /api/portfolios/{id}`): confirm dialog in UI; portfolio row soft-deleted (`deleted_at` migration `2026_06_30_000001`); related profile data (transactions, holdings, snapshots, alerts, profile settings) **hard-deleted** in the same transaction — **no restore** in app (soft delete is audit-only on `portfolio_profiles`). Reusing a deleted portfolio **name** creates a new profile id with empty data. **Default** and **active-in-tab** portfolios cannot be deleted (UI + API when `X-Profile-Id` matches). **Stale tab recovery:** `GET/POST /portfolios` omit `X-Profile-Id`; on `404 Portfolio not found` for data APIs, `portfolioRecovery.js` re-bootstraps active portfolio and retries once; `BroadcastChannel` + `visibilitychange` refresh portfolio list when another tab deletes a portfolio.
 - **Admin roles (Jun 2026):** `portfolio_users.is_admin` (boolean, default `false`). Migration `2026_06_27_000001` sets `is_admin = true` for all accounts that already exist at migrate time. `GET /api/auth/me` includes `is_admin`. Admins only: user management, invites, global settings write, stock master `POST/PUT`, daily sync, backfill, sync logs. Settings → **Manage users** (`/settings/users`).
 - **Invite-only registration (Jun 2026):** Open `POST /api/auth/register` removed. Admins create invites (`portfolio_user_invites`, 72h expiry) via `POST /api/invites`; UI provides **Copy link** and **Copy message** (full email text). Guest routes: `GET /api/invites/{token}`, `POST /api/invites/accept` → `/invite/:token` SPA page sets password and signs in. Expired tokens deleted on access with contact-admin message. Login with pending invite returns `invite_setup_required` + `invite_token` → redirect to invite page. Admin can regenerate (new token/expiry) or revoke (delete).
+- **Admin password reset links (Jul 2026):** For forgotten passwords on existing accounts. `portfolio_password_reset_links` (`user_id`, 72h token, `used_at`). Admin: Settings → **Manage users** → **Password reset links** card (user picker + table) or **Reset password** per user row; copy link/message, regenerate, revoke (same UX as invites). Guest: `GET /api/reset-password/{token}`, `POST /api/reset-password/accept` → `/reset-password/:token` SPA (new password only, no current password); signs in on success. One pending link per user.
 - **Admin-only application settings:** Global keys in `portfolio_settings` (cron, fees, NSE retry, Alpha Vantage key, backend log level, sync log retention) — read/write via `GET/PUT /api/settings` for admins only. Non-admins get per-user settings + read-only `cron_timezone`. `daily_market_sync` omitted from dashboard API for non-admins. `Alert` route binding scoped to owner. Stock catalog `POST/PUT /api/stocks` admin-only (`POST /stocks/validate` persist still allowed for transaction flow).
 - Improved provider resilience with per-provider retries, backoff, and structured attempt-level failure logging.
 - Dashboard UI expanded with top gainer/loser, **Alerts** card (full width; when empty, card body shows “No active alerts” only — no table headers), **Relative Strength** and **Allocation** tables side by side (`col-lg-6` each) on wide viewports and stacked full width on narrow, relative-strength trend widgets (vs **NIFTY50** benchmark: stock period return % − index return %; cached in `portfolio_stock_metrics`). Relative Strength table: **Avg. strength** = mean of available 1M/3M/6M values (whole %); default sort descending on that column. Dashboard **Alerts** table: **Context** column shows `context_json` label/value pairs from policy alerts; **Acknowledge** is a separate last column (always visible, not hideable); message column is text only.
@@ -363,10 +386,12 @@ Per-portfolio rules in `portfolio_alert_policies`; evaluated after daily price s
 | Issue | Cause | Fix |
 |-------|--------|-----|
 | Mobile blank page | `www` vs apex in Vite `<script type="module">` src | Root-relative asset URLs in `AppServiceProvider`; `config:cache` after deploy |
-| Login CSRF on some devices | Stale `XSRF-TOKEN` at path `/`, cookie not readable after `/sanctum/csrf-cookie` | Clear site cookies; deploy latest build (`/api/auth/csrf-token` fallback + `X-CSRF-TOKEN` header); `config:cache` with `SESSION_PATH=/portfolio`, `SESSION_DOMAIN=.lidoalexion.com` |
+| Login CSRF on some devices | Stale `XSRF-TOKEN` at path `/` read from `document.cookie` after `/sanctum/csrf-cookie` | Deploy latest build (`csrf.js` always uses `/api/auth/csrf-token` + `X-CSRF-TOKEN`); clear site cookies once; `config:cache` with `SESSION_PATH=/portfolio`, `SESSION_DOMAIN=.lidoalexion.com` |
+| **CSRF 419 even after clear / incognito** | **Wrong host** (`lidoalexion.com` apex vs `www.lidoalexion.com`) — apex may have expired/missing SSL or different cookie/TLS behavior | **Always use `https://www.lidoalexion.com/portfolio/`**; deploy `.htaccess` apex→www redirect (`deploy/public_html-portfolio-.htaccess` + root snippet); `APP_URL=https://www.lidoalexion.com/portfolio` |
 | “App did not start” on `mobile-debug.html` | Static file missing → Laravel SPA | Upload as `portfolio/mobile-debug.html`; fix `portfolio/.htaccess` + root snippet |
 | 404 on whole `/portfolio/` | `.htaccess` missing `index.php` rewrite | Use `deploy/public_html-portfolio-.htaccess` |
 | Red “App load problem” on login | Stale `sessionStorage.lido_boot_error` | Tap Dismiss; deploy latest `BootErrorBanner` + `app.blade.php` |
+| Intermittent blank page typing in forms (e.g. user mgmt email) | Mobile keyboard / `100vw` header overflow / `backdrop-filter` repaint bug — devtools resize “fixes” it | Deploy Jun 2026 fix: drop `100vw` header breakout, `overflow-x: hidden`, `100dvh`, `interactive-widget=resizes-content`, solid footer nav, `scroll-margin` on inputs, `autoComplete="off"` on invite email |
 
 **Server cleanup after troubleshooting:** delete all `cpanel-*.php`, `mobile-debug.html`, `portfolio-OK.txt`, `test-ok.php` from `public_html/portfolio/`. Keep `index.php`, `.htaccess`, `build/`.
 
@@ -429,7 +454,7 @@ Env: `LOG_CHANNEL=daily`, `LOG_DAILY_DAYS=2`, `LOG_LEVEL=debug` (Monolog floor; 
 ### Provider & scheduler logging
 - `PriceFetchService`: logs failures, zero-row responses, fallback activation to `provider` channel with symbol, provider name, attempt, request time, failure reason.
 - `DailyMarketDataJob`: start/end, processed/failed/skipped counts, per-stock failures; portfolio snapshot count (aggregate, not per-user rows).
-- **In-app sync logs (Jun 2026):** `portfolio_sync_runs` + `portfolio_sync_logs` tables; `SyncLogService` writes DB rows when `sync_log_retention_days` &gt; 0 (default **7**, max 90; **0** disables DB writes and prunes existing rows) **and both tables exist**. File logs via `PortfolioLoggerService::scheduler()` unchanged. Jobs: `daily-market-data` (`DailyMarketDataJob` / `POST /api/sync/daily`) and `stock-master` (`stocks:sync`). Prune on each run start + hourly `sync-log-prune` schedule. Settings: retention field + latest run summaries on `GET /api/settings`. UI: **Settings → View sync logs** → `/settings/sync-logs` shows **Recent runs** (`GET /api/sync-logs/runs`) plus paginated log lines, filters, CSV export. If runs appear but log lines are empty, apply migration `2026_06_21_000002` and re-run a sync. **cPanel:** `deploy/cpanel-migrate.php` runs `migrate --force`, repairs orphaned state (`portfolio_sync_runs` without `portfolio_sync_logs`), verifies required tables/columns, and reports `SyncLogService` readiness. Migration: `2026_06_21_000002_create_portfolio_sync_logs_tables.php`.
+- **In-app sync logs (Jun 2026):** `portfolio_sync_runs` + `portfolio_sync_logs` tables; `SyncLogService` writes DB rows when `sync_log_retention_days` &gt; 0 (default **7**, max 90; **0** disables DB writes and prunes existing rows) **and both tables exist**. File logs via `PortfolioLoggerService::scheduler()` unchanged. Jobs: `daily-market-data` (`DailyMarketDataJob` / `POST /api/sync/daily`), `stock-master` (`stocks:sync`), and `universe-price-sync` (`portfolio:sync-universe-prices`). Prune on each run start + hourly `sync-log-prune` schedule. Settings: retention field + latest run summaries on `GET /api/settings`. UI: **Settings → View sync logs** → `/settings/sync-logs` shows **Recent runs** (`GET /api/sync-logs/runs`) plus paginated log lines, filters, CSV export. If runs appear but log lines are empty, apply migration `2026_06_21_000002` and re-run a sync. **cPanel:** `deploy/cpanel-migrate.php` runs `migrate --force`, repairs orphaned state (`portfolio_sync_runs` without `portfolio_sync_logs`), verifies required tables/columns, and reports `SyncLogService` readiness. Migration: `2026_06_21_000002_create_portfolio_sync_logs_tables.php`.
 
 ### Error handling policy
 - Never silent failures on API (Axios interceptor + toast + `logger.error`).
@@ -527,6 +552,36 @@ User input → normalize → local DB hit? → return valid
 - Schedule: weekly Sunday 02:00 (timezone from settings / env)
 - Source URL: `config('portfolio.stock_master.nse_equity_csv_url')` default NSE archive CSV
 - EQ series only; duplicates logged and skipped; removed symbols set `is_active=false` (IDs preserved)
+
+### Universe price sync (Jun 2026)
+
+Bulk OHLCV for the **NSE equity universe** (independent of holdings). Reuses `portfolio_stock_prices`, `StockPriceHistoryService` gap-fill, and `PriceFetchService` provider chain (NSE → Yahoo → Alpha Vantage). No screener metrics or buy alerts in this phase.
+
+**Prerequisite:** stock master populated — `stocks:sync` CLI or **Settings → Universe price sync → Sync stock master** (or `POST /api/universe-price-sync/stock-master`).
+
+| Command / API | Purpose |
+|---------|---------|
+| `portfolio:sync-universe-prices --mode=backfill --all` | Initial ~1 year history for entire scope (long run; rate-limited) |
+| `portfolio:sync-universe-prices --mode=backfill` | Same window, one batch (repeat until cycle completes) |
+| `portfolio:sync-universe-prices --mode=daily` | Incremental sync (default lookback 10 days) for one batch |
+| `POST /api/universe-price-sync/run` | Same as CLI batch (cPanel-friendly; one HTTP request per batch) |
+| `GET /api/universe-price-sync/status` | Progress, coverage, cursor, rate-limit signals, recent provider issues |
+| `POST /api/universe-price-sync/stock-master` | NSE equity master CSV import |
+
+**Admin UI:** Settings → **Universe price sync** (`/settings/universe-price-sync`) — status cards, run daily/backfill batch buttons, stock master sync, auto-refresh, recent provider issues table.
+
+**Scope** (`UNIVERSE_PRICE_SYNC_SCOPE`, default `all_nse`):
+
+- `all_nse` — every `is_active` NSE EQ row from stock master (~all listed equities)
+- `nifty500` — intersection with NIFTY 500 constituents (fetched from NSE `equity-stockIndices`, cached in `portfolio_settings` for 7 days)
+
+**Rate limiting:** configurable delay between symbols (`UNIVERSE_PRICE_SYNC_DELAY_MS`, default 400ms); batches default 75 stocks/run. API throttled 12/min per admin. `rate_limit_hits` and `likely_rate_limited` on status when errors match 403/429/throttle patterns. Telegram suppressed during batch (`PriceSyncNotificationContext::withoutTelegram`).
+
+**Schedule:** `portfolio:sync-universe-prices --mode=daily` every **15 minutes** between **19:00–23:45** (cron timezone from settings), when `UNIVERSE_PRICE_SYNC_ENABLED=true`. Cursor `universe_price_sync_cursor_stock_id` resumes where the last batch stopped; resets when the full universe cycle completes.
+
+**Services:** `UniverseStockResolverService`, `Nifty500ConstituentService`, `UniversePriceSyncService`. Sync log job name: `universe-price-sync` (visible in Settings → sync logs summaries).
+
+**Env (optional):** `UNIVERSE_PRICE_SYNC_ENABLED`, `UNIVERSE_PRICE_SYNC_SCOPE`, `UNIVERSE_PRICE_SYNC_HISTORY_DAYS` (default 365), `UNIVERSE_PRICE_SYNC_DAILY_LOOKBACK_DAYS` (default 10), `UNIVERSE_PRICE_SYNC_DELAY_MS`, `UNIVERSE_PRICE_SYNC_BATCH_SIZE`.
 
 ### API endpoints (auth required)
 
@@ -726,7 +781,7 @@ Document in this section and `portfolio-history-rebuild-report.md`.
 - **Laravel Sanctum** SPA mode (`bootstrap/app.php` → `statefulApi()`)
 - **Session guard** (`web`) — not Bearer tokens in JS
 - **HTTP-only cookies** + `axios` `withCredentials: true`
-- **CSRF** — `GET /sanctum/csrf-cookie` before login; mutations send `X-XSRF-TOKEN` (cookie value) or `X-CSRF-TOKEN` (plain session token from API fallback)
+- **CSRF** — `GET /sanctum/csrf-cookie` then `GET /api/auth/csrf-token`; mutations send `X-CSRF-TOKEN` (plain session token). Cookie `X-XSRF-TOKEN` is still set but not trusted client-side on subdirectory deploy (stale path `/` cookies on some mobile browsers).
 - **Remember Me** — `Auth::attempt($credentials, $remember)`
 
 ### What we removed
@@ -746,8 +801,8 @@ Document in this section and `portfolio-history-rebuild-report.md`.
 
 ### Frontend flow
 1. `AuthProvider` mounts → `ensureCsrfCookie()` then `GET /api/auth/me` restores user or shows login.
-2. Login page → `ensureCsrfCookie({ force: true })` clears stale `XSRF-TOKEN` at `/` and `/portfolio`, hits `/sanctum/csrf-cookie`, waits up to ~5s for cookie; if still unreadable (some mobile browsers / stale cookies), falls back to `GET /api/auth/csrf-token` and sends plain token via `X-CSRF-TOKEN`.
-3. On `401` while logged in → `portfolio-unauthorized` → inline “session expired” on login (no toast); save path in `sessionStorage`. Initial `/auth/me` 401 (first visit / not logged in) is silent. `419` triggers CSRF retry once, then toast.
+2. Login page → `ensureCsrfCookie({ force: true })` clears stale `XSRF-TOKEN` at `/` and `/portfolio`, hits `/sanctum/csrf-cookie`, then **always** loads the session token from `GET /api/auth/csrf-token` and sends `X-CSRF-TOKEN` (avoids reading a wrong cookie from `document.cookie` on mobile).
+3. On `401` while logged in → `portfolio-unauthorized` → inline “session expired” on login (no toast); save path in `sessionStorage`. Initial `/auth/me` 401 (first visit / not logged in) is silent. `419` on API mutations retries once after forced CSRF refresh; login/invite accept skip the warning toast (AuthContext also retries login once).
 4. **Subdirectory URLs:** JS resolves API paths from `<meta name="app-base">`, `window.__LIDO_APP_BASE__`, or `/portfolio` in the URL. `api.js` sets `baseURL` on every request (not only at import time).
 5. After login → redirect to saved path (`auth/redirect.js`).
 

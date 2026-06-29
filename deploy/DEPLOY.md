@@ -1,6 +1,6 @@
 # Lido Portfolio — production deploy (GoDaddy / cPanel)
 
-**Live URL:** `https://lidoalexion.com/portfolio`  
+**Live URL:** `https://www.lidoalexion.com/portfolio` (apex `lidoalexion.com` redirects to www via `.htaccess`)  
 **Account example:** `/home/p7xatiz6j0mk/` (replace with your cPanel username)
 
 This is the **canonical** deploy guide (verified May 2026). Use it for first deploy and for code updates.
@@ -231,7 +231,7 @@ Create production `.env` on server from [app/.env.production.example](../app/.en
 
 ### D. Root `.htaccess` snippet
 
-In `public_html/.htaccess`, after `RewriteEngine On`, paste [public_html-root-portfolio-snippet.htaccess](public_html-root-portfolio-snippet.htaccess) so `/portfolio/build/*` and `cpanel-*.php` are served as real files (not swallowed by other app rules).
+In `public_html/.htaccess`, after `RewriteEngine On`, paste [public_html-root-portfolio-snippet.htaccess](public_html-root-portfolio-snippet.htaccess) so `/portfolio/build/*` and `cpanel-*.php` are served as real files (not swallowed by other app rules). The snippet includes **apex → www** redirect (`lidoalexion.com` → `www.lidoalexion.com`) — required for consistent SSL and login cookies.
 
 ### E. Diagnose (browser)
 
@@ -510,7 +510,7 @@ Laravel will read `.env` fresh on each request (slightly slower, but config chan
 
 **Also check**
 
-- Force HTTPS; redirect `www` ↔ apex to one canonical host if possible.
+- Force HTTPS; **apex → www** redirect in `public_html/.htaccess` and `portfolio/.htaccess` (deploy templates); set `APP_URL=https://www.lidoalexion.com/portfolio`.
 - `SESSION_PATH` is derived from `APP_URL` (`/portfolio`) when you run `config:cache` — do not set `SESSION_PATH=/` in production.
 
 ### Login page blank; console `net::ERR_CERT_DATE_INVALID` on `/portfolio/build/assets/*`

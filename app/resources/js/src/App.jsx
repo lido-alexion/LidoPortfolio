@@ -6,6 +6,7 @@ import AppHeader from './components/AppHeader';
 import AppTabs from './components/AppTabs';
 import ErrorBoundary from './components/ErrorBoundary';
 import BootErrorBanner, { clearBootError } from './components/BootErrorBanner';
+import { hideBootPanel } from './utils/bootPanel';
 import { useAuth } from './context/AuthContext';
 import DashboardPage from './pages/DashboardPage';
 import HoldingsPage from './pages/HoldingsPage';
@@ -15,11 +16,13 @@ import ClosedTransactionsPage from './pages/ClosedTransactionsPage';
 import SettingsPage from './pages/SettingsPage';
 import ProfilePage from './pages/ProfilePage';
 import SyncLogsPage from './pages/SyncLogsPage';
+import UniversePriceSyncPage from './pages/UniversePriceSyncPage';
 import UserManagementPage from './pages/UserManagementPage';
 import AdminRoute from './components/AdminRoute';
 import StockExplorerPage from './pages/StockExplorerPage';
 import LoginPage from './pages/LoginPage';
 import AcceptInvitePage from './pages/AcceptInvitePage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import PortfoliosPage from './pages/PortfoliosPage';
 import AlertPoliciesPage from './pages/AlertPoliciesPage';
 
@@ -39,6 +42,7 @@ function App() {
     useEffect(() => {
         if (!loading) {
             clearBootError();
+            hideBootPanel();
             window.dispatchEvent(new CustomEvent('lido-boot-cleared'));
             if (typeof window.__lidoBootSuccess === 'function') {
                 window.__LIDO_APP_BOOTED = true;
@@ -107,6 +111,7 @@ function App() {
                 {!isAuthenticated ? (
                     <Routes>
                         <Route path="/invite/:token" element={<AcceptInvitePage />} />
+                        <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
                         <Route path="*" element={<LoginPage />} />
                     </Routes>
                 ) : (
@@ -127,6 +132,11 @@ function App() {
                                 <Route path="/settings/sync-logs" element={(
                                     <AdminRoute>
                                         <SyncLogsPage />
+                                    </AdminRoute>
+                                )} />
+                                <Route path="/settings/universe-price-sync" element={(
+                                    <AdminRoute>
+                                        <UniversePriceSyncPage />
                                     </AdminRoute>
                                 )} />
                                 <Route

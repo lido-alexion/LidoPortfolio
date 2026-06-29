@@ -6,6 +6,10 @@
     RewriteEngine On
     RewriteBase /portfolio/
 
+    # Apex → www (canonical host for SSL + Sanctum cookies)
+    RewriteCond %{HTTP_HOST} ^lidoalexion\.com$ [NC]
+    RewriteRule ^ https://www.lidoalexion.com%{REQUEST_URI} [R=301,L]
+
     # Handle Authorization Header
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]

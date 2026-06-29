@@ -71,5 +71,9 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('login', function (Request $request) {
             return Limit::perMinute(10)->by($request->ip());
         });
+
+        RateLimiter::for('universe-price-sync', function (Request $request) {
+            return Limit::perMinute(12)->by($request->user()?->id ?: $request->ip());
+        });
     }
 }

@@ -15,6 +15,8 @@ class SyncLogService
 
     public const JOB_STOCK_MASTER = 'stock-master';
 
+    public const JOB_UNIVERSE_PRICE_SYNC = 'universe-price-sync';
+
     public function __construct(
         protected SettingsService $settings,
         protected PortfolioLoggerService $portfolioLogger,

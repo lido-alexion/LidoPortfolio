@@ -91,6 +91,14 @@ Schedule::command('stocks:sync')
     ->timezone($timezone)
     ->name('stock-master-sync');
 
+if (config('portfolio.universe_price_sync.enabled')) {
+    Schedule::command('portfolio:sync-universe-prices', ['--mode' => 'daily'])
+        ->everyFifteenMinutes()
+        ->between('19:00', '23:45')
+        ->timezone($timezone)
+        ->name('universe-price-sync-daily');
+}
+
 Schedule::command('portfolio:expire-alerts')
     ->hourly()
     ->timezone($timezone)

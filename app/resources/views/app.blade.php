@@ -2,7 +2,7 @@
 <html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
     <meta name="theme-color" content="#000000">
     @php
         $appBase = rtrim(parse_url(config('app.url'), PHP_URL_PATH) ?? '', '/');
@@ -161,6 +161,15 @@
                 bootLog('UA: ' + navigator.userAgent);
                 persistFailure();
             }, 25000);
+
+            // If React mounted but the boot overlay was shown earlier, hide it on input (keyboard / repaint).
+            document.addEventListener('focusin', function () {
+                if (!window.__LIDO_APP_BOOTED) return;
+                var panel = document.getElementById('lido-boot-panel');
+                if (panel && !panel.hidden) {
+                    panel.hidden = true;
+                }
+            }, true);
         })();
     </script>
 </head>

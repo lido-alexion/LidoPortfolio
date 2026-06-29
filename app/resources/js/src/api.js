@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { getRequestCsrfToken, isPlainCsrfToken, resetCsrfCookie } from './auth/csrf';
+import { ensureCsrfCookie, getRequestCsrfToken, isPlainCsrfToken, resetCsrfCookie } from './auth/csrf';
 import { getActivePortfolioId } from './portfolio/activePortfolioStorage';
 import {
     isPortfolioNotFoundError,
@@ -132,7 +132,8 @@ api.interceptors.response.use(
         const url = error?.config?.url || '';
         const isPublicAuthRoute = url.includes('/auth/login')
             || url.includes('/auth/me')
-            || url.includes('/invites/');
+            || url.includes('/invites/')
+            || url.includes('/reset-password/');
 
         if (
             isPortfolioNotFoundError(error)
@@ -153,8 +154,26 @@ api.interceptors.response.use(
         }
 
         if (status === 419) {
+            if (error?.config && !error.config._csrfRetried) {
+                error.config._csrfRetried = true;
+                resetCsrfCookie();
+                try {
+                    await ensureCsrfCookie({ force: true });
+                    return api.request(error.config);
+                } catch {
+                    // Fall through to user-visible handling below.
+                }
+            }
+
+            const isAuthMutation = url.includes('/auth/login')
+                || url.includes('/auth/logout')
+                || url.includes('/invites/accept')
+                || url.includes('/reset-password/accept');
+
             resetCsrfCookie();
-            showToast('Security token error. Please try again.', 'warning');
+            if (!isAuthMutation) {
+                showToast('Security token error. Please try again.', 'warning');
+            }
             return Promise.reject(error);
         }
 

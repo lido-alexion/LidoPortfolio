@@ -10,7 +10,8 @@ use App\Http\Controllers\Api\FrontendLogController;
 use App\Http\Controllers\Api\HoldingController;
 use App\Http\Controllers\Api\InviteAcceptController;
 use App\Http\Controllers\Api\PortfolioController;
-use App\Http\Controllers\Api\PortfolioHistoryController;
+use App\Http\Controllers\Api\PasswordResetAcceptController;
+use App\Http\Controllers\Api\PasswordResetLinkController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\StockController;
@@ -18,6 +19,7 @@ use App\Http\Controllers\Api\StockPriceController;
 use App\Http\Controllers\Api\SyncController;
 use App\Http\Controllers\Api\SyncLogController;
 use App\Http\Controllers\Api\TransactionController;
+use App\Http\Controllers\Api\UniversePriceSyncController;
 use App\Http\Controllers\Api\UserInviteController;
 use App\Http\Controllers\Api\UserManagementController;
 use Illuminate\Support\Facades\Route;
@@ -31,7 +33,12 @@ Route::get('/invites/{token}', [InviteAcceptController::class, 'show'])
 Route::post('/invites/accept', [InviteAcceptController::class, 'accept'])
     ->middleware('throttle:login');
 
-// Guest-safe session probe — must not require auth:sanctum (returns { user: null } when logged out).
+Route::get('/reset-password/{token}', [PasswordResetAcceptController::class, 'show'])
+    ->middleware('throttle:login');
+Route::post('/reset-password/accept', [PasswordResetAcceptController::class, 'accept'])
+    ->middleware('throttle:login');
+
+// Guest-safe session probe
 Route::get('/auth/me', [AuthController::class, 'me']);
 Route::get('/auth/csrf-token', [AuthController::class, 'csrfToken']);
 
@@ -93,6 +100,12 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
         Route::post('/sync/daily', [SyncController::class, 'daily']);
         Route::post('/sync/backfill/{stock}', [SyncController::class, 'backfill']);
 
+        Route::get('/universe-price-sync/status', [UniversePriceSyncController::class, 'status']);
+        Route::post('/universe-price-sync/run', [UniversePriceSyncController::class, 'run'])
+            ->middleware('throttle:universe-price-sync');
+        Route::post('/universe-price-sync/stock-master', [UniversePriceSyncController::class, 'syncStockMaster'])
+            ->middleware('throttle:universe-price-sync');
+
         Route::get('/sync-logs', [SyncLogController::class, 'index']);
         Route::get('/sync-logs/runs', [SyncLogController::class, 'runs']);
         Route::get('/sync-logs/export', [SyncLogController::class, 'export']);
@@ -104,5 +117,10 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
         Route::post('/invites', [UserInviteController::class, 'store']);
         Route::post('/invites/{invite}/regenerate', [UserInviteController::class, 'regenerate']);
         Route::delete('/invites/{invite}', [UserInviteController::class, 'destroy']);
+
+        Route::get('/password-reset-links', [PasswordResetLinkController::class, 'index']);
+        Route::post('/password-reset-links', [PasswordResetLinkController::class, 'store']);
+        Route::post('/password-reset-links/{passwordResetLink}/regenerate', [PasswordResetLinkController::class, 'regenerate']);
+        Route::delete('/password-reset-links/{passwordResetLink}', [PasswordResetLinkController::class, 'destroy']);
     });
 });

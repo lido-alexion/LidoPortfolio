@@ -11,6 +11,7 @@ const JOB_OPTIONS = [
     { value: '', label: 'All jobs' },
     { value: 'daily-market-data', label: 'Daily market data' },
     { value: 'stock-master', label: 'Stock master' },
+    { value: 'universe-price-sync', label: 'Universe price sync' },
 ];
 
 const LEVEL_OPTIONS = [
