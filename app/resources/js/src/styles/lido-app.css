@@ -586,6 +586,16 @@ body {
     border-top: 1px solid var(--lido-footer-border);
     gap: 8px 24px;
     flex-wrap: wrap;
+    transform: translateY(100%);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.22s ease, opacity 0.22s ease;
+}
+
+.lido-bottom-nav.lido-bottom-nav--visible {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: auto;
 }
 
 .lido-bottom-nav .nav-link {
@@ -607,13 +617,18 @@ body {
 }
 
 .lido-main {
-    padding-bottom: 5rem;
+    padding-bottom: 1.25rem;
     margin-top: 1rem;
     max-width: 1200px;
     margin-left: auto;
     margin-right: auto;
     padding-left: 12px;
     padding-right: 12px;
+    transition: padding-bottom 0.22s ease;
+}
+
+html.lido-footer-visible .lido-main {
+    padding-bottom: 5rem;
 }
 
 .contentPane .card {
@@ -943,6 +958,31 @@ body {
 
 .lido-transaction-toggles-row .lido-transaction-type-toggle {
     margin-left: auto;
+}
+
+.lido-bulk-import-table th {
+    white-space: nowrap;
+    font-size: 0.8rem;
+}
+
+.lido-bulk-import-table .lido-bulk-import-narrow {
+    min-width: 5.5rem;
+    max-width: 7rem;
+}
+
+.lido-bulk-import-table .lido-bulk-import-date {
+    min-width: 11rem;
+}
+
+.lido-bulk-import-table .lido-date-input-field {
+    min-width: 6.5rem;
+    font-size: 0.85rem;
+    padding: 0.25rem 0.4rem;
+}
+
+.lido-bulk-import-table .lido-segment-toggle--compact .lido-segment-toggle-btn {
+    padding: 0.2rem 0.45rem;
+    font-size: 0.75rem;
 }
 
 .lido-toast .btn-close {

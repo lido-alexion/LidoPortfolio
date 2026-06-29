@@ -27,6 +27,7 @@ import {
 } from '../utils/stockValidationCache';
 
 import FeeBreakdownHint from '../components/FeeBreakdownHint';
+import BulkTransactionImport from '../components/BulkTransactionImport';
 import TransactionDateInput from '../components/TransactionDateInput';
 import {
     calculateTransactionFees,
@@ -156,6 +157,8 @@ export default function TransactionsPage() {
 
     const [stockSearch, setStockSearch] = useState('');
 
+    const [entryMode, setEntryMode] = useState('single');
+
 
 
     const load = useCallback(async () => {
@@ -191,6 +194,7 @@ export default function TransactionsPage() {
         const stock = prefill.stock;
         const exchange = stock.exchange || 'NSE';
 
+        setEntryMode('single');
         setCachedStockValidation(exchange, stock.symbol, {
             valid: true,
             stock,
@@ -513,6 +517,7 @@ export default function TransactionsPage() {
         if (!tx) {
             return;
         }
+        setEntryMode('single');
         editTx(tx);
         navigate('/transactions', { replace: true, state: {} });
         requestAnimationFrame(() => {
@@ -824,8 +829,23 @@ export default function TransactionsPage() {
 
         <div className="row g-3">
 
-            <div className="col-12 col-lg-5">
+            <div className="col-12">
+                <SegmentToggle
+                    label="Add transactions"
+                    ariaLabel="Transaction entry mode"
+                    value={entryMode}
+                    onChange={setEntryMode}
+                    options={[
+                        { value: 'single', label: 'Single' },
+                        { value: 'bulk', label: 'Bulk (CSV)' },
+                    ]}
+                />
+            </div>
 
+            <div className="col-12">
+                {entryMode === 'bulk' ? (
+                    <BulkTransactionImport feeComponents={feeComponents} onSaved={load} />
+                ) : (
                 <div className="card" id="transaction-form-card">
 
                     <div className="card-header">{form.id ? 'Edit Transaction' : 'Add Transaction'}</div>
@@ -1143,10 +1163,10 @@ export default function TransactionsPage() {
                     </div>
 
                 </div>
-
+                )}
             </div>
 
-            <div className="col-12 col-lg-7" id="active-transactions-table">
+            <div className="col-12" id="active-transactions-table">
 
                 <DataTableCard
 
