@@ -4,12 +4,14 @@ Living reference for Lido Portfolio. **Update this file whenever code changes.**
 `design_doc.md` was removed (May 2026); requirements come from user chat + this file.
 
 ## Agent / documentation policy (May 2026)
+
 - Do not use or recreate `design_doc.md` or removed phase/report/spec files.
 - **Canonical docs:** `implementation.md` (technical), `README.md` (quick start), **`deploy/DEPLOY.md`** (production deploy & updates), `DEPLOYMENT_VALIDATION_PLAN.md`, `portfolio-history-rebuild-report.md`, `app/API_DOCUMENTATION.md`.
 - Cursor rule `.cursor/rules/Always-update-implementation-details-in-implementation-md-file.mdc` enforces: read this file first; update it after code changes.
 - Persistent instructions across sessions: project rules in `.cursor/rules/` (`alwaysApply: true`) + optional User Rules in Cursor Settings.
 
 ## Architecture Notes
+
 - Backend scaffold is Laravel (PHP) with API-first structure and service-layer business logic.
 - Frontend: React + Bootstrap (Vite build served by Laravel).
 - Web app runs as a React SPA mounted from Laravel view `resources/views/app.blade.php`. Favicon: `public/favicon.ico` with `<link rel="icon" href="{APP_PATH}/favicon.ico">` in `app.blade.php`; production copy at `public_html/portfolio/favicon.ico` (included in `prepare-upload.ps1` staging).
@@ -21,16 +23,16 @@ Use this section to bring the project up again on a Windows dev machine. Human-o
 
 ### What must run separately
 
-| Service | Required? | Typical setup on Windows | Notes |
-|---------|-----------|--------------------------|-------|
-| **MySQL** | **Yes** | EasyPHP / XAMPP / WAMP MySQL, standalone MySQL, or Docker | App uses `portfolio_*` tables; can share an existing DB (e.g. `lido_db`). |
-| **PHP web** | **Yes** (one of) | `php artisan serve` **or** Apache/Nginx | Default dev URL: `http://127.0.0.1:8001`. Document root for Apache: `app/public`. |
-| **Node.js** | Dev UI hot-reload | Installed globally | Only for `npm run dev` / `npm run build`. |
-| **Apache (EasyPHP)** | **No** (if using `artisan serve`) | EasyPHP control panel | Optional. Use when you prefer vhost over built-in PHP server. |
-| **Queue worker** | Optional locally | `php artisan queue:listen` | `QUEUE_CONNECTION=database`; needed for async jobs if not using `sync`. |
-| **Scheduler** | Optional locally | `php artisan schedule:work` or OS cron | `portfolio:daily-sync` (holdings prices); `portfolio:sync-universe-prices` (NSE universe OHLCV batches); `portfolio:send-notifications` per `notification_schedules`. |
-| **Redis** | No | — | Not used by default (`CACHE_STORE=database`). |
-| **Vite dev server** | Optional | `npm run dev` | Hot reload for React; omit if you ran `npm run build` and only use `artisan serve`. |
+| Service              | Required?                         | Typical setup on Windows                                  | Notes                                                                                                                                                                 |
+| -------------------- | --------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MySQL**            | **Yes**                           | EasyPHP / XAMPP / WAMP MySQL, standalone MySQL, or Docker | App uses `portfolio_*` tables; can share an existing DB (e.g. `lido_db`).                                                                                             |
+| **PHP web**          | **Yes** (one of)                  | `php artisan serve` **or** Apache/Nginx                   | Default dev URL: `http://127.0.0.1:8001`. Document root for Apache: `app/public`.                                                                                     |
+| **Node.js**          | Dev UI hot-reload                 | Installed globally                                        | Only for `npm run dev` / `npm run build`.                                                                                                                             |
+| **Apache (EasyPHP)** | **No** (if using `artisan serve`) | EasyPHP control panel                                     | Optional. Use when you prefer vhost over built-in PHP server.                                                                                                         |
+| **Queue worker**     | Optional locally                  | `php artisan queue:listen`                                | `QUEUE_CONNECTION=database`; needed for async jobs if not using `sync`.                                                                                               |
+| **Scheduler**        | Optional locally                  | `php artisan schedule:work` or OS cron                    | `portfolio:daily-sync` (holdings prices); `portfolio:sync-universe-prices` (NSE universe OHLCV batches); `portfolio:send-notifications` per `notification_schedules`. |
+| **Redis**            | No                                | —                                                         | Not used by default (`CACHE_STORE=database`).                                                                                                                         |
+| **Vite dev server**  | Optional                          | `npm run dev`                                             | Hot reload for React; omit if you ran `npm run build` and only use `artisan serve`.                                                                                   |
 
 **Minimum to use the app:** MySQL running + Laravel reachable (usually `php artisan serve`) + frontend assets (`npm run dev` **or** `npm run build`).
 
@@ -138,12 +140,12 @@ in a separate terminal alongside `composer run dev` (only one process can bind a
 
 **Option B — manual terminals (matches port 8001):**
 
-| Terminal | Command |
-|----------|---------|
-| 1 | `php artisan serve --host=127.0.0.1 --port=8001` |
-| 2 | `npm run dev` |
-| 3 (optional) | `php artisan queue:listen` |
-| 4 (optional) | `php artisan schedule:work` |
+| Terminal     | Command                                          |
+| ------------ | ------------------------------------------------ |
+| 1            | `php artisan serve --host=127.0.0.1 --port=8001` |
+| 2            | `npm run dev`                                    |
+| 3 (optional) | `php artisan queue:listen`                       |
+| 4 (optional) | `php artisan schedule:work`                      |
 
 4. Open **`http://127.0.0.1:8001`** in the browser (not Vite’s port; Laravel serves the SPA and proxies Vite assets in dev).
 
@@ -279,16 +281,17 @@ Per-portfolio rules in `portfolio_alert_policies`; evaluated after daily price s
 
 ### Related docs
 
-| Doc | Purpose |
-|-----|---------|
-| `README.md` | Short quick start |
-| `deploy/DEPLOY.md` | Production deploy (GoDaddy `/portfolio`) |
-| `deploy/RELEASE-2026-06-21.md` | Pending release: migration `total_fees`, holdings/transactions UI batch |
-| `DEPLOYMENT_CPANEL.md` | Generic cPanel pointer → `deploy/DEPLOY.md` |
-| `DEPLOYMENT_VALIDATION_PLAN.md` | Pre/post deploy checks |
-| `app/API_DOCUMENTATION.md` | REST API |
+| Doc                             | Purpose                                                                 |
+| ------------------------------- | ----------------------------------------------------------------------- |
+| `README.md`                     | Short quick start                                                       |
+| `deploy/DEPLOY.md`              | Production deploy (GoDaddy `/portfolio`)                                |
+| `deploy/RELEASE-2026-06-21.md`  | Pending release: migration `total_fees`, holdings/transactions UI batch |
+| `DEPLOYMENT_CPANEL.md`          | Generic cPanel pointer → `deploy/DEPLOY.md`                             |
+| `DEPLOYMENT_VALIDATION_PLAN.md` | Pre/post deploy checks                                                  |
+| `app/API_DOCUMENTATION.md`      | REST API                                                                |
 
 ## Technical Decisions
+
 - Local environment templates aligned to MySQL-based setup.
 - Added `.env` template specifically for MySQL usage in `app/.env.mysql.template`.
 - **DB credentials:** `config/load_db_config.php` finds `config/DBConfig.php` by walking up directories (outermost first so `/home/USER/config/DBConfig.php` wins over `lidoportfolio/config/DBConfig.php` if a dev template was uploaded). Supports **class `DBConfig`** or **define()** constants. Optional `DB_CONFIG_PATH` in `.env`. When `DBConfig.php` is loaded, its values **take precedence over** `.env` `DB_*`. Delete `bootstrap/cache/config.php` if DB still shows `root` after fixes. `deploy/cpanel-diagnose.php` flags app-local `DBConfig.php` and cached config.
@@ -353,13 +356,16 @@ Per-portfolio rules in `portfolio_alert_policies`; evaluated after daily price s
 - `AppTabs` uses `useLocation().pathname` for active tab state (NavLink `className` callback does not receive `location` in React Router v6).
 
 ## Change Requests
+
 - Track user requests in chat; this section is not a full history log.
 
 ## Deviations From Spec
+
 - Table names are prefixed with `portfolio_` to avoid clashes with existing tables in the same DB.
 - `throttleApi` middleware removed because the `api` limiter was not defined and caused runtime 500s.
 
 ## Bugs Fixed
+
 - Table prefix migration fallout (validators, `HoldingController`, XIRR/Carbon 3, dashboard eager-load, PHPUnit/mbstring, health route).
 - **Production mobile blank page (Jun 2026):** Vite emitted absolute script URLs on `lidoalexion.com` while users opened `www.lidoalexion.com` — ES modules failed cross-origin. Fix: `Vite::createAssetPathsUsing()` → root-relative `/portfolio/build/...` in `AppServiceProvider`.
 - **Boot probe noise (Jun 2026):** diagnostic “Module script” lines were saved to `sessionStorage` and shown in `BootErrorBanner` after successful load; now only real failures persist and success clears storage.
@@ -367,39 +373,44 @@ Per-portfolio rules in `portfolio_alert_policies`; evaluated after daily price s
 - **Dark mode disabled inputs (Jun 2026):** Bootstrap’s disabled `form-control` used a light background; profile username (read-only) was unreadable. `lido-app.css` now themes `:disabled` / `[readonly]` inputs with `--lido-input-bg` and muted text.
 
 ## Known Limitations
+
 - `vendor:publish` for Sanctum migrations fails when `finfo` extension is unavailable.
 
 ## Pending Improvements
+
 - Add CI workflow for backend tests and frontend build checks.
 - **Stocks admin UI (open):** Stocks tab removed from SPA (May 2026). Backend `GET/POST/PUT /api/stocks` and `portfolio_stocks` table remain. Reintroduce a Stocks screen later if master-data management is needed outside Transactions.
 
 ## Wishlist (deferred — no implementation yet)
+
 - **Single-folder deploy (`portfolio/` only):** Collapse `lidoportfolio/` into `public_html/portfolio/laravel/` so one `build/` upload suffices. Design in `deploy/DEPLOY.md` §2.2. **Deferred** — consolidating Laravel under the web-visible `portfolio/` tree increases `.env` exposure risk unless `.htaccess` and secrets handling are bulletproof; current two-folder layout (`lidoportfolio/` with Deny all + `portfolio/` web entry) is kept intentionally.
 - **Production secrets handling:** Before or as part of single-folder deploy, replace or supplement on-server `.env` (e.g. env vars outside web root, cPanel secrets, or shared `config/` only — DB already uses `/home/USER/config/DBConfig.php`). Goal: no sensitive values in a path that could become web-reachable after a layout change.
 
 ## Open Items
-| Item | Status | Notes |
-|------|--------|-------|
-| Stocks tab / master UI | Deferred | Master data via `stocks:sync` + Transactions autocomplete; no dedicated Stocks admin SPA tab. |
-| BSE master sync | Optional | Enable `BSE_STOCK_MASTER_ENABLED=true` and `BSE_EQUITY_CSV_URL` when BSE CSV source is configured. |
-| Single-folder deploy | Wishlist | See § Wishlist; depends on secrets handling; keep `lidoportfolio/` + `portfolio/` for now. |
-| Production secrets / `.env` | Wishlist | Harden before nested Laravel under `portfolio/`; see `deploy/DEPLOY.md` §2.2. |
+
+| Item                        | Status   | Notes                                                                                              |
+| --------------------------- | -------- | -------------------------------------------------------------------------------------------------- |
+| Stocks tab / master UI      | Deferred | Master data via `stocks:sync` + Transactions autocomplete; no dedicated Stocks admin SPA tab.      |
+| BSE master sync             | Optional | Enable `BSE_STOCK_MASTER_ENABLED=true` and `BSE_EQUITY_CSV_URL` when BSE CSV source is configured. |
+| Single-folder deploy        | Wishlist | See § Wishlist; depends on secrets handling; keep `lidoportfolio/` + `portfolio/` for now.         |
+| Production secrets / `.env` | Wishlist | Harden before nested Laravel under `portfolio/`; see `deploy/DEPLOY.md` §2.2.                      |
 
 ## Deployment Validation
+
 - **Canonical deploy:** `deploy/DEPLOY.md` · checklists: `DEPLOYMENT_VALIDATION_PLAN.md`
 - **Stage uploads:** `deploy/prepare-upload.ps1` → `deploy/staging/` (gitignored)
 
 ### Production learnings (Jun 2026 — `/portfolio` on GoDaddy)
 
-| Issue | Cause | Fix |
-|-------|--------|-----|
-| Mobile blank page | `www` vs apex in Vite `<script type="module">` src | Root-relative asset URLs in `AppServiceProvider`; `config:cache` after deploy |
-| Login CSRF on some devices | Stale `XSRF-TOKEN` at path `/` read from `document.cookie` after `/sanctum/csrf-cookie` | Deploy latest build (`csrf.js` always uses `/api/auth/csrf-token` + `X-CSRF-TOKEN`); clear site cookies once; `config:cache` with `SESSION_PATH=/portfolio`, `SESSION_DOMAIN=.lidoalexion.com` |
-| **CSRF 419 even after clear / incognito** | **Wrong host** (`lidoalexion.com` apex vs `www.lidoalexion.com`) — apex may have expired/missing SSL or different cookie/TLS behavior | **Always use `https://www.lidoalexion.com/portfolio/`**; deploy `.htaccess` apex→www redirect (`deploy/public_html-portfolio-.htaccess` + root snippet); `APP_URL=https://www.lidoalexion.com/portfolio` |
-| “App did not start” on `mobile-debug.html` | Static file missing → Laravel SPA | Upload as `portfolio/mobile-debug.html`; fix `portfolio/.htaccess` + root snippet |
-| 404 on whole `/portfolio/` | `.htaccess` missing `index.php` rewrite | Use `deploy/public_html-portfolio-.htaccess` |
-| Red “App load problem” on login | Stale `sessionStorage.lido_boot_error` | Tap Dismiss; deploy latest `BootErrorBanner` + `app.blade.php` |
-| Intermittent blank page typing in forms (e.g. user mgmt email) | Mobile keyboard / `100vw` header overflow / `backdrop-filter` repaint bug — devtools resize “fixes” it | Deploy Jun 2026 fix: drop `100vw` header breakout, `overflow-x: hidden`, `100dvh`, `interactive-widget=resizes-content`, solid footer nav, `scroll-margin` on inputs, `autoComplete="off"` on invite email |
+| Issue                                                          | Cause                                                                                                                                 | Fix                                                                                                                                                                                                        |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mobile blank page                                              | `www` vs apex in Vite `<script type="module">` src                                                                                    | Root-relative asset URLs in `AppServiceProvider`; `config:cache` after deploy                                                                                                                              |
+| Login CSRF on some devices                                     | Stale `XSRF-TOKEN` at path `/` read from `document.cookie` after `/sanctum/csrf-cookie`                                               | Deploy latest build (`csrf.js` always uses `/api/auth/csrf-token` + `X-CSRF-TOKEN`); clear site cookies once; `config:cache` with `SESSION_PATH=/portfolio`, `SESSION_DOMAIN=.lidoalexion.com`             |
+| **CSRF 419 even after clear / incognito**                      | **Wrong host** (`lidoalexion.com` apex vs `www.lidoalexion.com`) — apex may have expired/missing SSL or different cookie/TLS behavior | **Always use `https://www.lidoalexion.com/portfolio/`**; deploy `.htaccess` apex→www redirect (`deploy/public_html-portfolio-.htaccess` + root snippet); `APP_URL=https://www.lidoalexion.com/portfolio`   |
+| “App did not start” on `mobile-debug.html`                     | Static file missing → Laravel SPA                                                                                                     | Upload as `portfolio/mobile-debug.html`; fix `portfolio/.htaccess` + root snippet                                                                                                                          |
+| 404 on whole `/portfolio/`                                     | `.htaccess` missing `index.php` rewrite                                                                                               | Use `deploy/public_html-portfolio-.htaccess`                                                                                                                                                               |
+| Red “App load problem” on login                                | Stale `sessionStorage.lido_boot_error`                                                                                                | Tap Dismiss; deploy latest `BootErrorBanner` + `app.blade.php`                                                                                                                                             |
+| Intermittent blank page typing in forms (e.g. user mgmt email) | Mobile keyboard / `100vw` header overflow / `backdrop-filter` repaint bug — devtools resize “fixes” it                                | Deploy Jun 2026 fix: drop `100vw` header breakout, `overflow-x: hidden`, `100dvh`, `interactive-widget=resizes-content`, solid footer nav, `scroll-margin` on inputs, `autoComplete="off"` on invite email |
 
 **Server cleanup after troubleshooting:** delete all `cpanel-*.php`, `mobile-debug.html`, `portfolio-OK.txt`, `test-ok.php` from `public_html/portfolio/`. Keep `index.php`, `.htaccess`, `build/`.
 
@@ -412,26 +423,30 @@ Per-portfolio rules in `portfolio_alert_policies`; evaluated after daily price s
 Mandatory lightweight logging for same-day / 1–2 day debugging. **File-based only** — no log rows written to `portfolio_system_logs` (table retained for legacy; new path uses Monolog daily files).
 
 ### Goals
+
 - Quick debugging, recent log inspection, error tracing, frontend↔backend correlation via `X-Request-ID`.
 - No long-term retention; `LOG_DAILY_DAYS=2` rotates and deletes older files.
 
 ### Backend channels (`config/logging.php`)
-| Channel | File pattern | Purpose |
-|---------|----------------|---------|
-| `daily` (default) | `storage/logs/laravel-YYYY-MM-DD.log` | Application / API / validation / security / telegram |
-| `frontend` | `storage/logs/frontend-YYYY-MM-DD.log` | Logs from SPA via API |
-| `provider` | `storage/logs/provider-YYYY-MM-DD.log` | NSE / Yahoo / Alpha Vantage failures & fallbacks |
-| `scheduler` | `storage/logs/scheduler-YYYY-MM-DD.log` | Cron / `DailyMarketDataJob` |
+
+| Channel           | File pattern                            | Purpose                                              |
+| ----------------- | --------------------------------------- | ---------------------------------------------------- |
+| `daily` (default) | `storage/logs/laravel-YYYY-MM-DD.log`   | Application / API / validation / security / telegram |
+| `frontend`        | `storage/logs/frontend-YYYY-MM-DD.log`  | Logs from SPA via API                                |
+| `provider`        | `storage/logs/provider-YYYY-MM-DD.log`  | NSE / Yahoo / Alpha Vantage failures & fallbacks     |
+| `scheduler`       | `storage/logs/scheduler-YYYY-MM-DD.log` | Cron / `DailyMarketDataJob`                          |
 
 Env: `LOG_CHANNEL=daily`, `LOG_DAILY_DAYS=2`, `LOG_LEVEL=debug` (Monolog floor; app-level filter is separate).
 
 ### Dynamic backend log level
+
 - Setting key: `backend_log_level` in `portfolio_settings` (`debug` | `info` | `warning` | `error`).
 - Default: `info` (`SettingsService`).
 - Editable in Settings UI and `PUT /api/settings`.
 - `PortfolioLoggerService::shouldLog()` filters before writing; Monolog always receives normalized level when allowed.
 
 ### Backend services
+
 - `App\Services\PortfolioLoggerService` — categories: API, Scheduler, Provider, Telegram, Validation, Security; methods `api()`, `scheduler()`, `provider()`, `frontend()`, `telegram()`, `validation()`, `security()`, `logFrontendPayload()`.
 - `App\Services\SystemLogService` — backward-compatible facade; maps legacy categories to channels; **no DB writes**.
 - `App\Support\RequestContext` — holds current request ID.
@@ -439,41 +454,49 @@ Env: `LOG_CHANNEL=daily`, `LOG_DAILY_DAYS=2`, `LOG_LEVEL=debug` (Monolog floor; 
 - Uncaught exceptions: `bootstrap/app.php` `report()` callback logs via `PortfolioLoggerService::api()`.
 
 ### Request correlation flow
+
 1. Frontend `api.js` interceptor: `createRequestId()` → header `X-Request-ID` on every Axios call; stored on `config.metadata.requestId`.
 2. Middleware preserves client ID or assigns UUID.
 3. All `PortfolioLoggerService` entries include `request_id` in context.
 4. Frontend errors shipped to backend include `requestId` (and use same header on log POST).
 
 ### Frontend logger (`resources/js/src/services/logger.js`)
+
 - Methods: `logger.debug|info|warn|error`, `setLevel` / `getLevel` via `localStorage.logLevel`.
 - Local console output respects level; **only `warn` and `error`** are queued to `POST /api/logs/frontend` (async, batched, non-blocking).
 - Redacts password/token/secret patterns before ship.
 - Do **not** use `console.log` in app code — use `logger`.
 
 ### Frontend error boundary
+
 - `resources/js/src/components/ErrorBoundary.jsx` wraps authenticated app in `App.jsx`.
 - Catches render errors, user-friendly fallback + reload; logs via `logger.error` → backend.
 
 ### Frontend logging API
+
 - `POST /api/logs/frontend` (Sanctum auth required).
 - Controller: `FrontendLogController` — max body 8KB, field validation, extra JSON cap 4KB, sanitization via `PortfolioLoggerService`.
 - Payload: `level`, `message`, `url`, `userAgent`, `timestamp`, `requestId`, `extra` (e.g. `category`: API | UI | Validation | Navigation).
 
 ### Provider & scheduler logging
+
 - `PriceFetchService`: logs failures, zero-row responses, fallback activation to `provider` channel with symbol, provider name, attempt, request time, failure reason.
 - `DailyMarketDataJob`: start/end, processed/failed/skipped counts, per-stock failures; portfolio snapshot count (aggregate, not per-user rows).
 - **In-app sync logs (Jun 2026):** `portfolio_sync_runs` + `portfolio_sync_logs` tables; `SyncLogService` writes DB rows when `sync_log_retention_days` &gt; 0 (default **7**, max 90; **0** disables DB writes and prunes existing rows) **and both tables exist**. File logs via `PortfolioLoggerService::scheduler()` unchanged. Jobs: `daily-market-data` (`DailyMarketDataJob` / `POST /api/sync/daily`), `stock-master` (`stocks:sync`), and `universe-price-sync` (`portfolio:sync-universe-prices`). Prune on each run start + hourly `sync-log-prune` schedule. Settings: retention field + latest run summaries on `GET /api/settings`. UI: **Settings → View sync logs** → `/settings/sync-logs` shows **Recent runs** (`GET /api/sync-logs/runs`) plus paginated log lines, filters, CSV export. If runs appear but log lines are empty, apply migration `2026_06_21_000002` and re-run a sync. **cPanel:** `deploy/cpanel-migrate.php` runs `migrate --force`, repairs orphaned state (`portfolio_sync_runs` without `portfolio_sync_logs`), verifies required tables/columns, and reports `SyncLogService` readiness. Migration: `2026_06_21_000002_create_portfolio_sync_logs_tables.php`.
 
 ### Error handling policy
+
 - Never silent failures on API (Axios interceptor + toast + `logger.error`).
 - Important failures always logged server- or client-side.
 - Retries remain in price providers / HTTP layer where already implemented.
 
 ### Security
+
 - Strip tags / newlines from messages; redact secrets in context JSON.
 - No passwords, tokens, cookies, or API keys in logs.
 
 ### Tests
+
 - `tests/Unit/PortfolioLoggerServiceTest.php` — level filter, request_id, sanitization.
 - `tests/Feature/RequestCorrelationTest.php` — `X-Request-ID` header.
 - `tests/Feature/FrontendLogControllerTest.php` — validation, auth, accept path.
@@ -482,65 +505,73 @@ Env: `LOG_CHANNEL=daily`, `LOG_DAILY_DAYS=2`, `LOG_LEVEL=debug` (Monolog floor; 
 - `tests/Feature/SyncLogTest.php` — retention, disabled writes, API filters, CSV export, settings summaries.
 
 ### Debugging (local)
+
 ```bash
 cd app
 php artisan test
 tail -f storage/logs/laravel-$(date +%Y-%m-%d).log
 tail -f storage/logs/provider-$(date +%Y-%m-%d).log
 ```
+
 Set frontend verbosity in browser: `localStorage.setItem('logLevel','debug')`.
 
 ### Debugging (cPanel)
+
 - File Manager or SSH → `app/storage/logs/`.
 - Open today’s `laravel-*.log`, `frontend-*.log`, `provider-*.log`, `scheduler-*.log`.
 - Search by `request_id` from browser Network tab (`X-Request-ID`) across files.
 - Ensure `storage/logs` is writable; cron output is not duplicated to DB.
 
 ### Future logging changes
+
 Document any new channel, endpoint, or retention change in this section.
 
 ### Related docs
+
 - API: `app/API_DOCUMENTATION.md` → Frontend logs section
 
 ## Stock Validation Architecture (May 2026)
 
 ### Design principle
+
 All validation is **local-first**. Live providers (NSE → Yahoo → Alpha Vantage) run only when the symbol is missing from `portfolio_stocks`. This minimizes API usage and improves UX.
 
 ### Schema (`portfolio_stocks`)
 
 Migration `2026_05_29_000001_extend_portfolio_stocks_master.php` adds provider symbol fields and replaces unique(`symbol`) with unique(`symbol`, `exchange`).
 
-| Column | Purpose |
-|--------|---------|
-| `symbol` | Normalized ticker only (e.g. `INFY`) — not `INFY.NS` |
-| `exchange` | `NSE` or `BSE` |
-| `name`, `isin`, `sector` | Display / metadata |
-| `yahoo_symbol`, `alpha_vantage_symbol` | Provider-specific symbols |
-| `is_active`, `is_benchmark` | Listing / NIFTY row |
-| `last_verified_at` | Last provider or sync verification |
+| Column                                 | Purpose                                              |
+| -------------------------------------- | ---------------------------------------------------- |
+| `symbol`                               | Normalized ticker only (e.g. `INFY`) — not `INFY.NS` |
+| `exchange`                             | `NSE` or `BSE`                                       |
+| `name`, `isin`, `sector`               | Display / metadata                                   |
+| `yahoo_symbol`, `alpha_vantage_symbol` | Provider-specific symbols                            |
+| `is_active`, `is_benchmark`            | Listing / NIFTY row                                  |
+| `last_verified_at`                     | Last provider or sync verification                   |
 
 **Unique:** `(symbol, exchange)` — same ticker may exist on NSE and BSE separately.
 
 ### Symbol normalization
 
-| Input | Stored |
-|-------|--------|
-| `INFY` | symbol=`INFY`, exchange=`NSE` (default) |
-| `INFY.NS` | symbol=`INFY`, exchange=`NSE` |
-| `INFY.BO` | symbol=`INFY`, exchange=`BSE` |
+| Input     | Stored                                  |
+| --------- | --------------------------------------- |
+| `INFY`    | symbol=`INFY`, exchange=`NSE` (default) |
+| `INFY.NS` | symbol=`INFY`, exchange=`NSE`           |
+| `INFY.BO` | symbol=`INFY`, exchange=`BSE`           |
 
 Provider suffixes are resolved by `ProviderResolverService`, not stored in `symbol`.
 
 ### Services
-| Service | Responsibility |
-|---------|----------------|
+
+| Service                   | Responsibility                                                                                          |
+| ------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `ProviderResolverService` | `normalizeSymbol()`, `yahooSymbol()`, `alphaVantageSymbol()`, `isMalformed()`, `applyProviderSymbols()` |
-| `StockValidationService` | Stage 1 local lookup; stage 2 provider chain; `validateAndPersist()` upserts + backfill |
-| `StockMasterSyncService` | NSE CSV import via `stocks:sync`; optional BSE; deactivate missing symbols |
-| `StockResolverService` | Used by transactions — delegates to validation (no blind `Stock::create`) |
+| `StockValidationService`  | Stage 1 local lookup; stage 2 provider chain; `validateAndPersist()` upserts + backfill                 |
+| `StockMasterSyncService`  | NSE CSV import via `stocks:sync`; optional BSE; deactivate missing symbols                              |
+| `StockResolverService`    | Used by transactions — delegates to validation (no blind `Stock::create`)                               |
 
 ### Provider fallback flow
+
 ```
 User input → normalize → local DB hit? → return valid
                       → miss → NSE (retry nse_retry_count)
@@ -550,12 +581,14 @@ User input → normalize → local DB hit? → return valid
 ```
 
 ### Provider-specific symbol mapping
+
 - NSE API uses normalized `symbol`
 - Yahoo uses `yahoo_symbol` on stock row or `{SYMBOL}.NS` / `.BO`
 - Alpha Vantage uses `alpha_vantage_symbol` or Yahoo-style symbol
 - `PriceFetchService` passes per-provider symbols from `ProviderResolverService::providerSymbolsForStock()`
 
 ### Stock master sync
+
 - Command: `php artisan stocks:sync` (`SyncStockMasterCommand`)
 - Schedule: weekly Sunday 02:00 (timezone from settings / env)
 - Source URL: `config('portfolio.stock_master.nse_equity_csv_url')` default NSE archive CSV
@@ -567,16 +600,16 @@ Bulk OHLCV for the **NSE equity universe** (independent of holdings). Reuses `po
 
 **Prerequisite:** stock master populated — `stocks:sync` CLI or **Settings → Universe price sync → Sync stock master** (or `POST /api/universe-price-sync/stock-master`).
 
-| Command / API | Purpose |
-|---------|---------|
-| `portfolio:sync-universe-prices --mode=backfill --all` | Initial ~1 year history for entire scope (long run; rate-limited) |
-| `portfolio:sync-universe-prices --mode=backfill` | Same window, one batch (repeat until cycle completes) |
-| `portfolio:sync-universe-prices --mode=daily` | Incremental sync (default lookback 10 days) for one batch |
-| `POST /api/universe-price-sync/run` | Same as CLI batch (cPanel-friendly; one HTTP request per batch) |
-| `GET /api/universe-price-sync/status` | Progress, coverage, cursor, rate-limit signals, recent provider issues |
-| `POST /api/universe-price-sync/stock-master` | NSE equity master CSV import |
+| Command / API                                          | Purpose                                                                |
+| ------------------------------------------------------ | ---------------------------------------------------------------------- |
+| `portfolio:sync-universe-prices --mode=backfill --all` | Initial ~1 year history for entire scope (long run; rate-limited)      |
+| `portfolio:sync-universe-prices --mode=backfill`       | Same window, one batch (repeat until cycle completes)                  |
+| `portfolio:sync-universe-prices --mode=daily`          | Incremental sync (default lookback 10 days) for one batch              |
+| `POST /api/universe-price-sync/run`                    | Same as CLI batch (cPanel-friendly; one HTTP request per batch)        |
+| `GET /api/universe-price-sync/status`                  | Progress, coverage, cursor, rate-limit signals, recent provider issues |
+| `POST /api/universe-price-sync/stock-master`           | NSE equity master CSV import                                           |
 
-**Admin UI:** Settings → **Universe price sync** (`/settings/universe-price-sync`) — status cards, run daily/backfill batch buttons, stock master sync, auto-refresh, recent provider issues table.
+**Admin UI:** Settings → **Universe price sync** (`/settings/universe-price-sync`) — status cards, run daily/backfill batch buttons, stock master sync, auto-refresh, recent provider issues table. Toasts use `showToast(message, variant)` (not object payloads).
 
 **Scope** (`UNIVERSE_PRICE_SYNC_SCOPE`, default `all_nse`):
 
@@ -593,39 +626,45 @@ Bulk OHLCV for the **NSE equity universe** (independent of holdings). Reuses `po
 
 ### API endpoints (auth required)
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/api/stocks/search?q=&exchange=&limit=` | Local master autocomplete (min 2 chars) |
-| POST | `/api/stocks/validate` | Explicit validation + persist |
-| GET/POST/PUT | `/api/stocks` | List / create (validated) / update |
+| Method       | Path                                     | Purpose                                 |
+| ------------ | ---------------------------------------- | --------------------------------------- |
+| GET          | `/api/stocks/search?q=&exchange=&limit=` | Local master autocomplete (min 2 chars) |
+| POST         | `/api/stocks/validate`                   | Explicit validation + persist           |
+| GET/POST/PUT | `/api/stocks`                            | List / create (validated) / update      |
 
 ### Autocomplete UX
+
 - `StockAutocomplete.jsx` — debounced search (300ms), min 2 chars, loading + empty states
 - `TransactionsPage.jsx` — requires selection or validated symbol; no datalist free-text
 - Unknown symbol on save triggers backend provider validation
 
 ### Rate limits & security
+
 - `stock-search`: 60/min per user
 - `stock-validate`: 15/min per user
 - No provider calls on page load — only search (local DB), validate, add, and scheduled sync
 - Input sanitization and malformed-symbol rejection via `ProviderResolverService::isMalformed()`
 
 ### Validation retry logic
+
 - NSE: `nse_retry_count` from settings (default 3) with incremental backoff (`usleep`)
 - Yahoo/Alpha: single attempt each after NSE exhaustion
 - All failures logged to `provider` channel via `PortfolioLoggerService`
 
 ### Revalidation
+
 - `last_verified_at` set on provider upsert and master sync
 - `STOCK_REVALIDATION_DAYS` (default 7) in `config/portfolio.php` for future explicit revalidation job
 - Standard `validate()` does **not** re-call providers when local row exists (performance)
 
 ### Known provider limitations
+
 - NSE endpoints may block datacenter IPs; Yahoo/Alpha used as fallback
 - Alpha Vantage rate limits (`Note` / `Information` responses treated as failure)
 - BSE CSV sync disabled by default until `BSE_STOCK_MASTER_ENABLED` and URL configured
 
 ### Tests
+
 - `tests/Unit/ProviderResolverServiceTest.php`
 - `tests/Unit/StockValidationServiceTest.php` (Http::fake)
 - `tests/Unit/StockMasterSyncServiceTest.php`
@@ -633,16 +672,17 @@ Bulk OHLCV for the **NSE equity universe** (independent of holdings). Reuses `po
 - `tests/js/debounce.test.mjs` (`npm run test:js`)
 
 ### Future stock validation changes
+
 Document provider, schema, or UX changes in this section.
 
 ## Historical Data & Exploratory Analytics (May 2026)
 
 ### Hybrid history architecture
 
-| Type | Detection (`StockTrackingService`) | Fetch behavior |
-|------|-----------------------------------|----------------|
+| Type                | Detection (`StockTrackingService`)                                        | Fetch behavior                                                                        |
+| ------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | Portfolio / tracked | Holdings qty &gt; 0, alerts, `tracking_active` metrics, past transactions | `ensurePortfolioHistory(buyDate)` → **buy − 3 months** → today; incremental gaps only |
-| Exploratory | Not tracked | `ensureAnalyticsHistory(months)` → ~60d (1M) / ~150d (3M) buffer; cached permanently |
+| Exploratory         | Not tracked                                                               | `ensureAnalyticsHistory(months)` → ~60d (1M) / ~150d (3M) buffer; cached permanently  |
 
 **Never delete** OHLCV when buy date changes or stock is sold. Wider local history is acceptable; gaps are not.
 
@@ -726,16 +766,16 @@ Report: `portfolio-history-rebuild-report.md`.
 
 ### Philosophy
 
-`portfolio_portfolio_snapshots` rows are **materialized, rebuildable cache** — not append-only cron logs. The dashboard growth chart answers: *“What was my portfolio worth on date D given all transactions known today?”*
+`portfolio_portfolio_snapshots` rows are **materialized, rebuildable cache** — not append-only cron logs. The dashboard growth chart answers: _“What was my portfolio worth on date D given all transactions known today?”_
 
 ### Services
 
-| Service | Role |
-|---------|------|
-| `PortfolioHistoricalHoldingsService` | Replay transactions with `transaction_date <= D` → open qty + cost basis per stock |
-| `PortfolioSnapshotRebuildService` | `calculatePortfolioStateForDate()`, `rebuildDateRange()`, `rebuildFromDate()`, `rebuildAfterTransactionChange()` |
-| `StockPriceHistoryService` | Gap-fill OHLCV before rebuild (`fetchMissingHistory`) |
-| `StockQuoteService` | `latestClose(stock, asOf)` — close on or before D |
+| Service                              | Role                                                                                                             |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `PortfolioHistoricalHoldingsService` | Replay transactions with `transaction_date <= D` → open qty + cost basis per stock                               |
+| `PortfolioSnapshotRebuildService`    | `calculatePortfolioStateForDate()`, `rebuildDateRange()`, `rebuildFromDate()`, `rebuildAfterTransactionChange()` |
+| `StockPriceHistoryService`           | Gap-fill OHLCV before rebuild (`fetchMissingHistory`)                                                            |
+| `StockQuoteService`                  | `latestClose(stock, asOf)` — close on or before D                                                                |
 
 ### Formulas (any historical date D)
 
@@ -766,9 +806,9 @@ Daily cron (`portfolio:daily-sync`) still refreshes **today** via `storeSnapshot
 
 ### API
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| POST | `/api/portfolio/rebuild-history` | Manual full/partial rebuild (`from_date`, optional `to_date`) |
+| Method | Path                             | Purpose                                                       |
+| ------ | -------------------------------- | ------------------------------------------------------------- |
+| POST   | `/api/portfolio/rebuild-history` | Manual full/partial rebuild (`from_date`, optional `to_date`) |
 
 ### Frontend
 
@@ -786,6 +826,7 @@ Document in this section and `portfolio-history-rebuild-report.md`.
 ## Authentication Architecture (May 2026)
 
 ### Stack (mandatory)
+
 - **Laravel Sanctum** SPA mode (`bootstrap/app.php` → `statefulApi()`)
 - **Session guard** (`web`) — not Bearer tokens in JS
 - **HTTP-only cookies** + `axios` `withCredentials: true`
@@ -793,21 +834,24 @@ Document in this section and `portfolio-history-rebuild-report.md`.
 - **Remember Me** — `Auth::attempt($credentials, $remember)`
 
 ### What we removed
+
 - `localStorage.portfolio_token` and `Authorization: Bearer` headers
 - API token returned from login/register responses
 
 ### Session configuration
-| Setting | Default | Purpose |
-|---------|---------|---------|
-| `SESSION_DRIVER` | `database` | Multi-server friendly on cPanel |
-| `SESSION_LIFETIME` | `43200` | ~30 days sliding idle timeout |
-| `SESSION_SECURE_COOKIE` | `true` in production | HTTPS only |
-| `SESSION_SAME_SITE` | `lax` | CSRF mitigation |
-| `SESSION_PATH` | derived from `APP_URL` path | Subdirectory deploy (`/portfolio`) scopes cookies so they do not collide with other apps on the same domain |
-| `SESSION_DOMAIN` | `.your-domain.com` in production | Same login cookies on `www` and apex host |
-| `SANCTUM_STATEFUL_DOMAINS` | localhost + app host | Sanctum treats requests as SPA |
+
+| Setting                    | Default                          | Purpose                                                                                                     |
+| -------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `SESSION_DRIVER`           | `database`                       | Multi-server friendly on cPanel                                                                             |
+| `SESSION_LIFETIME`         | `43200`                          | ~30 days sliding idle timeout                                                                               |
+| `SESSION_SECURE_COOKIE`    | `true` in production             | HTTPS only                                                                                                  |
+| `SESSION_SAME_SITE`        | `lax`                            | CSRF mitigation                                                                                             |
+| `SESSION_PATH`             | derived from `APP_URL` path      | Subdirectory deploy (`/portfolio`) scopes cookies so they do not collide with other apps on the same domain |
+| `SESSION_DOMAIN`           | `.your-domain.com` in production | Same login cookies on `www` and apex host                                                                   |
+| `SANCTUM_STATEFUL_DOMAINS` | localhost + app host             | Sanctum treats requests as SPA                                                                              |
 
 ### Frontend flow
+
 1. `AuthProvider` mounts → `ensureCsrfCookie()` then `GET /api/auth/me` restores user or shows login.
 2. Login page → `ensureCsrfCookie({ force: true })` clears stale `XSRF-TOKEN` at `/` and `/portfolio`, hits `/sanctum/csrf-cookie`, then **always** loads the session token from `GET /api/auth/csrf-token` and sends `X-CSRF-TOKEN` (avoids reading a wrong cookie from `document.cookie` on mobile).
 3. On `401` while logged in → `portfolio-unauthorized` → inline “session expired” on login (no toast); save path in `sessionStorage`. Initial `/auth/me` 401 (first visit / not logged in) is silent. `419` on API mutations retries once after forced CSRF refresh; login/invite accept skip the warning toast (AuthContext also retries login once).
@@ -815,28 +859,33 @@ Document in this section and `portfolio-history-rebuild-report.md`.
 5. After login → redirect to saved path (`auth/redirect.js`).
 
 ### API (session guard)
+
 - `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`
 - `GET /api/auth/me` — **guest-safe** (returns `{ user: null }` when logged out; not behind `auth:sanctum`)
 - `GET /api/auth/csrf-token` — **guest-safe**; returns `{ token }` (session CSRF token) when cookie is not readable client-side
 - `GET /api/auth/sessions`, `POST /api/auth/sessions/logout-others`, `DELETE /api/auth/sessions/{id}` — auth required
 
 ### Active sessions
+
 - `SessionManagementService` reads `sessions` table (device label from user-agent).
 - Settings UI: list sessions, revoke one, log out all other devices.
 - `DELETE /api/auth/sessions/{id}` — cannot revoke another user's session.
 - Multi-device simultaneous sessions allowed; `personal_access_tokens` table retained for legacy but login does not issue API tokens.
 
 ### Security
+
 - Login/register: `throttle:login` (10/min/IP).
 - `AuthAuditService` logs success/failure with masked email (no passwords/cookies).
 - Compatible with future PIN/biometric/2FA (not implemented).
 
 ### Tests
+
 - `tests/Feature/AuthSessionTest.php`
 - `tests/js/auth-redirect.test.mjs`
 - All feature tests use `$this->actingAs($user)` instead of `Sanctum::actingAs`.
 
 ### HTTPS / production cookies
+
 1. Force HTTPS on the domain (cPanel AutoSSL + redirect).
 2. `.env`: `APP_URL=https://your-domain/portfolio` (include subdirectory path), `SESSION_SECURE_COOKIE=true`, `SESSION_DOMAIN=.your-domain.com`, `SANCTUM_STATEFUL_DOMAINS` = hostnames without scheme.
 3. `SESSION_PATH` auto-derives from `APP_URL` (`/portfolio`); run `php artisan config:cache` after `.env` changes.
@@ -847,9 +896,11 @@ Document in this section and `portfolio-history-rebuild-report.md`.
 See also `DEPLOYMENT_CPANEL.md` § HTTPS.
 
 ### Future authentication changes
+
 Document in this section (PIN / 2FA not implemented; architecture allows future guards).
 
 ### Tests (multi-portfolio, Jun 2026)
+
 - PHPUnit suite uses `CreatesPortfolioProfiles` (defaultPortfolioFor, createPortfolioProfile, withProfileHeader). Portfolio rows in tests use `profile_id`; settings tests use `ProfileSettingsService` (`ProfileSettingsTest` replaces `UserSettingsTest`).
 - `PortfolioMiddlewareTest`: default portfolio when `X-Profile-Id` omitted, header scoping, foreign profile 404, parallel profiles return different transaction counts.
 - `bootstrap/app.php` requires `app/Support/helpers.php` (until `composer dump-autoload` picks up the file autoload entry) and sets middleware **priority** so `ResolveActivePortfolio` runs before `SubstituteBindings` (route model binding for transactions/alerts needs `activePortfolio()`).

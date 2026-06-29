@@ -68,16 +68,13 @@ export default function UniversePriceSyncPage() {
                 ...payload,
             });
             setStatus(data.data?.status ?? data.data);
-            showToast({
-                variant: 'success',
-                title: 'Batch completed',
-                message: data.data?.run?.cycle_completed
-                    ? 'Full universe cycle completed.'
-                    : `Processed ${data.data?.run?.processed ?? 0} stock(s).`,
-            });
+            const detail = data.data?.run?.cycle_completed
+                ? 'Full universe cycle completed.'
+                : `Processed ${data.data?.run?.processed ?? 0} stock(s).`;
+            showToast(`Batch completed: ${detail}`, 'success');
         } catch (error) {
             const message = error?.response?.data?.message || 'Sync request failed.';
-            showToast({ variant: 'danger', title: 'Sync failed', message });
+            showToast(message, 'danger');
             if (error?.response?.data?.data) {
                 setStatus(error.response.data.data);
             }
@@ -91,18 +88,16 @@ export default function UniversePriceSyncPage() {
         setRunning(true);
         try {
             const { data } = await api.post('/universe-price-sync/stock-master');
-            showToast({
-                variant: 'success',
-                title: 'Stock master synced',
-                message: `Added ${data.data?.added ?? 0}, updated ${data.data?.updated ?? 0}.`,
-            });
+            showToast(
+                `Stock master synced: added ${data.data?.added ?? 0}, updated ${data.data?.updated ?? 0}.`,
+                'success',
+            );
             await loadStatus(scope);
         } catch (error) {
-            showToast({
-                variant: 'danger',
-                title: 'Stock master failed',
-                message: error?.response?.data?.message || 'Request failed.',
-            });
+            showToast(
+                error?.response?.data?.message || 'Stock master sync failed.',
+                'danger',
+            );
         } finally {
             setRunning(false);
         }
