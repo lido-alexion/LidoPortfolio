@@ -2,6 +2,7 @@ export const MAIN_TAB_ITEMS = [
     { to: '/', label: 'Dashboard', end: true, match: (p) => p === '/' },
     { to: '/transactions', label: 'Transactions', match: (p) => p.startsWith('/transactions') },
     { to: '/holdings', label: 'Holdings', match: (p) => p.startsWith('/holdings') },
+    { to: '/watchlist', label: 'Watchlist', match: (p) => p.startsWith('/watchlist') },
     { to: '/explorer', label: 'Explorer', match: (p) => p.startsWith('/explorer') },
 ];
 

@@ -20,6 +20,7 @@ import UniversePriceSyncPage from './pages/UniversePriceSyncPage';
 import UserManagementPage from './pages/UserManagementPage';
 import AdminRoute from './components/AdminRoute';
 import StockExplorerPage from './pages/StockExplorerPage';
+import WatchlistPage from './pages/WatchlistPage';
 import LoginPage from './pages/LoginPage';
 import AcceptInvitePage from './pages/AcceptInvitePage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
@@ -124,6 +125,7 @@ function App() {
                                 <Route path="/transactions/closed" element={<ClosedTransactionsPage />} />
                                 <Route path="/holdings" element={<HoldingsPage />} />
                                 <Route path="/holdings/:stockId/prices" element={<StockPricesPage />} />
+                                <Route path="/watchlist" element={<WatchlistPage />} />
                                 <Route path="/explorer" element={<StockExplorerPage />} />
                                 <Route path="/profile" element={<ProfilePage />} />
                                 <Route path="/portfolios" element={<PortfoliosPage />} />

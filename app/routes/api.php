@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\TransactionController;
 use App\Http\Controllers\Api\UniversePriceSyncController;
 use App\Http\Controllers\Api\UserInviteController;
 use App\Http\Controllers\Api\UserManagementController;
+use App\Http\Controllers\Api\WatchlistController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
@@ -73,7 +74,12 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::apiResource('transactions', TransactionController::class);
 
     Route::get('/holdings', [HoldingController::class, 'index']);
+    Route::get('/watchlist', [WatchlistController::class, 'index']);
+    Route::post('/watchlist', [WatchlistController::class, 'store']);
+    Route::put('/watchlist/{watchlistItem}', [WatchlistController::class, 'update']);
+    Route::delete('/watchlist/{watchlistItem}', [WatchlistController::class, 'destroy']);
     Route::get('/stocks/{stock}/prices', [StockPriceController::class, 'index']);
+    Route::get('/stocks/{stock}/market-prices', [StockPriceController::class, 'market']);
     Route::get('/dashboard', [DashboardController::class, 'index']);
     Route::post('/portfolio/rebuild-history', [PortfolioHistoryController::class, 'rebuild']);
     Route::get('/analytics/portfolio', [AnalyticsController::class, 'portfolio']);

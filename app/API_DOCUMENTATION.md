@@ -88,7 +88,18 @@ Returns growth %, relative strength vs benchmark, chart series, cache/fetch meta
     - `first_buy_date`, `highest_close_since_buy`, `highest_close_since_buy_date`, `trailing_stop_price`, `stoploss_percent`
     - `price_row_count`, `has_price_history`, `latest_price_date`
 - `GET /stocks/{stock}/prices` (auth) — OHLCV rows from current position buy date
+- `GET /stocks/{stock}/market-prices` (auth) — all cached OHLCV rows from `portfolio_stock_prices` (no holding required; used by Watchlist)
 - `GET /dashboard` (auth) — `portfolio_growth` uses transaction-aware rebuilt snapshots (up to 365 trading days); `alerts` = active alerts for the portfolio (policy-generated and any legacy rows)
+
+## Watchlist (active portfolio)
+
+- `GET /watchlist` (auth) — list items with `stock`, optional `note`, `latest_close`, `price_count`, `has_price_history`
+- `POST /watchlist` (auth) — body `{ "stock_id": int, "note"?: string }` (max 100 items per profile)
+- `PUT /watchlist/{id}` (auth) — update `note`
+- `DELETE /watchlist/{id}` (auth) — remove item
+
+## Dashboard + Analytics (continued)
+
 - `POST /portfolio/rebuild-history` (auth) — manual snapshot rebuild; body `{ "from_date": "YYYY-MM-DD", "to_date": "YYYY-MM-DD" }` (both optional)
 - `GET /analytics/portfolio` (auth)
 - `GET /analytics/stocks/{stock}` (auth)

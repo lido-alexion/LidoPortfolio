@@ -76,4 +76,9 @@ class PortfolioProfile extends Model
     {
         return $this->hasMany(ProfileSetting::class, 'profile_id');
     }
+
+    public function watchlistItems(): HasMany
+    {
+        return $this->hasMany(\App\Models\WatchlistItem::class, 'profile_id');
+    }
 }
