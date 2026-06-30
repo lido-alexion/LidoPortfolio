@@ -1610,6 +1610,19 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     }
 }
 
+.lido-price-volume-chart-canvas {
+    min-height: 240px;
+}
+
+.lido-price-volume-chart-controls .lido-segment-toggle {
+    min-width: 0;
+}
+
+.lido-price-volume-chart .card-footer {
+    padding-left: 1rem;
+    padding-right: 1rem;
+}
+
 .explorer-growth-chart-body {
     height: 280px;
 }

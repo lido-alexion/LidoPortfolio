@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import { DataTableCard } from '../components/DataTable';
+import PriceVolumeChart from '../components/charts/PriceVolumeChart';
 import { showToast } from '../toast';
 import { formatTableInteger, formatTableMoney2 } from '../utils/tableFormat';
 import { formatTransactionDateDisplay } from '../utils/transactionDate';
@@ -146,6 +147,12 @@ export default function StockPricesPage() {
                     </div>
                 </div>
             </div>
+
+            <PriceVolumeChart
+                rows={rows}
+                loading={loading}
+                emptyMessage='No historical prices to chart yet. Sync or load OHLCV data first.'
+            />
 
             <DataTableCard
                 title="OHLCV (since buy date)"
