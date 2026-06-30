@@ -85,6 +85,28 @@ export function formatTableMoney2(value) {
     return formatInr(value);
 }
 
+/** Signed INR with 2 dp and explicit +/− prefix (e.g. +₹ 1,234.56, −₹ 500.00). */
+export function formatSignedTableMoney2(value) {
+    if (value == null || value === '') {
+        return '—';
+    }
+    const num = Number(value);
+    if (Number.isNaN(num)) {
+        return '—';
+    }
+    const formatted = formatInr(Math.abs(num));
+    if (formatted === '—') {
+        return '—';
+    }
+    if (num > 0) {
+        return `+${formatted}`;
+    }
+    if (num < 0) {
+        return `−${formatted}`;
+    }
+    return formatted;
+}
+
 /** Percentage with 2 decimal places (e.g. 12.34%). */
 export function formatTablePercent2(value) {
     if (value == null || value === '') {
@@ -111,6 +133,22 @@ export function percentGainLossFromAvgBuy(latestClose, avgBuyPrice) {
         return null;
     }
     return Math.round(((latest - avg) / avg) * 100);
+}
+
+/** e.g. +10.25% or -5.00% (two decimals). */
+export function formatSignedPercent2(percent) {
+    const n = Number(percent);
+    if (Number.isNaN(n)) {
+        return '';
+    }
+    const formatted = Math.abs(n).toFixed(2);
+    if (n > 0) {
+        return `+${formatted}%`;
+    }
+    if (n < 0) {
+        return `-${formatted}%`;
+    }
+    return '0.00%';
 }
 
 /** e.g. +10% or -5% (no decimals). */

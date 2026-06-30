@@ -97,8 +97,39 @@ class HoldingPresentationService
             ? (float) $latestClose
             : $this->quotes->latestClose((int) $stock->id);
         $marketValue = (float) $holding->quantity * $terminalClose;
+        $investedAmount = (float) $holding->invested_amount;
+        $unrealizedProfit = $terminalClose > 0
+            ? round($marketValue - $investedAmount, 4)
+            : null;
+        $unrealizedGainPercent = ($unrealizedProfit !== null && $investedAmount > 0)
+            ? round(($unrealizedProfit / $investedAmount) * 100, 2)
+            : null;
+
+        $dailyChangePercent = null;
+        $previousPriceDate = null;
+
+        if ($stock) {
+            $recentPrices = StockPrice::query()
+                ->where('stock_id', $stock->id)
+                ->orderByDesc('price_date')
+                ->limit(2)
+                ->get(['price_date', 'close_price']);
+
+            if ($recentPrices->count() >= 2) {
+                $previousClose = (float) $recentPrices[1]->close_price;
+                if ($previousClose > 0) {
+                    $dailyChangePercent = round(
+                        (((float) $recentPrices[0]->close_price - $previousClose) / $previousClose) * 100,
+                        2,
+                    );
+                }
+                $previousPriceDate = Carbon::parse($recentPrices[1]->price_date)->toDateString();
+            }
+        }
 
         $payload = $holding->toArray();
+        $payload['unrealized_profit'] = $unrealizedProfit;
+        $payload['unrealized_gain_percent'] = $unrealizedGainPercent;
         $payload['xirr'] = $this->xirr->calculateStockXirr(
             $profile,
             (int) $stock->id,
@@ -116,6 +147,8 @@ class HoldingPresentationService
             'latest_close' => $latestClose !== null ? round((float) $latestClose, 4) : null,
             'price_row_count' => $priceRowCount,
             'latest_price_date' => $latestPriceDate,
+            'previous_price_date' => $previousPriceDate,
+            'daily_change_percent' => $dailyChangePercent,
             'has_price_history' => $priceRowCount > 0,
         ];
 

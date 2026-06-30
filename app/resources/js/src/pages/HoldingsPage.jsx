@@ -9,13 +9,13 @@ import { buildSellPrefillFromHolding } from '../utils/sellTransactionPrefill';
 import {
     formatInrWhole,
     formatLtpDrawdownLabel,
-    formatSignedPercentRounded,
+    formatSignedPercent2,
+    formatSignedTableMoney2,
     formatTableInteger,
     formatTableMoney2,
     ltpDrawdownColorClass,
     ltpDrawdownFromHighPercent,
     percentChangeColorClass,
-    percentGainLossFromAvgBuy,
 } from '../utils/tableFormat';
 
 const HOLDINGS_VIEW_KEY = 'portfolio_holdings_view';
@@ -28,6 +28,7 @@ const HOLDINGS_VIEW_OPTIONS = [
 const HOLDINGS_COLUMN_ORDER = [
     'stock',
     'latest_close',
+    'unrealized_profit',
     'invested_amount',
     'fees',
     'xirr',
@@ -132,7 +133,7 @@ function buildHoldingsColumns(complex, handleSell) {
                 const s = row.original.summary;
                 const close = formatInrWhole(s.latest_close);
                 const date = formatTransactionDateDisplay(s.latest_price_date);
-                const pct = percentGainLossFromAvgBuy(s.latest_close, row.original.avg_buy_price);
+                const dailyPct = s.daily_change_percent;
                 const belowTrailingStop = isBelowTrailingStop(s);
                 return (
                     <>
@@ -143,11 +144,11 @@ function buildHoldingsColumns(complex, handleSell) {
                                 <span className={belowTrailingStop ? 'text-danger' : undefined}>
                                     {close}
                                 </span>
-                                {complex && pct != null && (
+                                {complex && dailyPct != null && !Number.isNaN(Number(dailyPct)) && (
                                     <>
                                         {' '}
-                                        <span className={percentChangeColorClass(pct)}>
-                                            ({formatSignedPercentRounded(pct)})
+                                        <span className={percentChangeColorClass(dailyPct)}>
+                                            ({formatSignedPercent2(dailyPct)})
                                         </span>
                                     </>
                                 )}
@@ -155,6 +156,33 @@ function buildHoldingsColumns(complex, handleSell) {
                         )}
                         {complex && date && (
                             <div className="text-muted small">{date}</div>
+                        )}
+                    </>
+                );
+            },
+        },
+        {
+            id: 'unrealized_profit',
+            header: 'Unrealized P/L',
+            accessorFn: (row) => row.unrealized_profit,
+            cell: ({ row }) => {
+                const unrealized = row.original.unrealized_profit;
+                const gainPct = row.original.unrealized_gain_percent;
+                const formatted = formatSignedTableMoney2(unrealized);
+
+                if (formatted === '—') {
+                    return <span className="text-muted">—</span>;
+                }
+
+                return (
+                    <>
+                        <span className={percentChangeColorClass(unrealized)}>
+                            {formatted}
+                        </span>
+                        {complex && gainPct != null && !Number.isNaN(Number(gainPct)) && (
+                            <div className={`small fw-normal ${percentChangeColorClass(gainPct)}`}>
+                                ({formatSignedPercent2(gainPct)})
+                            </div>
                         )}
                     </>
                 );

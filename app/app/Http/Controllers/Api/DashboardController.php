@@ -32,9 +32,7 @@ class DashboardController extends Controller
         $profile = \activePortfolio();
         $summary = $this->portfolio->calculateForProfile($profile);
         $holdings = $summary['holdings'];
-
-        $topGainer = collect($holdings)->sortByDesc('unrealized_profit')->first();
-        $topLoser = collect($holdings)->sortBy('unrealized_profit')->first();
+        $topMovers = $this->portfolio->topMovers($holdings);
 
         $growth = $this->portfolioGrowthSeries($profile);
 
@@ -48,8 +46,9 @@ class DashboardController extends Controller
             'realized_profit' => $summary['realized_profit'],
             'xirr' => $summary['xirr'],
             'daily_change' => $this->portfolio->dailyChange($profile),
-            'top_gainer' => $topGainer,
-            'top_loser' => $topLoser,
+            'top_movers' => $topMovers,
+            'top_gainer' => $topMovers['all_time']['gainer'],
+            'top_loser' => $topMovers['all_time']['loser'],
             'allocation' => collect($holdings)->map(fn ($h) => [
                 'symbol' => $h['symbol'],
                 'allocation_market_percent' => $h['allocation_market_percent'],

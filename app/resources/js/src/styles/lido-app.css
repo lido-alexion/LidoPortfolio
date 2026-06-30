@@ -1097,6 +1097,26 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     cursor: not-allowed;
 }
 
+.lido-top-mover-period-toggle {
+    flex-shrink: 0;
+    padding: 0.1rem;
+}
+
+.lido-top-mover-period-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0;
+    line-height: 1;
+}
+
+.lido-dashboard-top-mover-pct {
+    font-size: 0.8125rem;
+    font-weight: 400;
+}
+
 .lido-number-input--compact {
     min-height: calc(1.5em + 0.5rem + 2px);
 }

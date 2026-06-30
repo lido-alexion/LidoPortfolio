@@ -90,6 +90,127 @@ class HoldingPresentationServiceTest extends TestCase
         $this->assertTrue($summary['has_price_history']);
     }
 
+    public function test_enrich_holding_includes_unrealized_and_daily_change_percent(): void
+    {
+        $service = app(HoldingPresentationService::class);
+
+        $user = User::query()->create([
+            'name' => 'Unrealized User',
+            'email' => 'unreal-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+        $profile = $this->defaultPortfolioFor($user);
+
+        $stock = Stock::query()->create([
+            'symbol' => 'U'.strtoupper(Str::random(4)),
+            'exchange' => 'NSE',
+            'name' => 'Unrealized Test',
+            'is_active' => true,
+            'is_benchmark' => false,
+        ]);
+
+        Transaction::query()->create([
+            'profile_id' => $profile->id,
+            'stock_id' => $stock->id,
+            'type' => 'buy',
+            'quantity' => 10,
+            'price' => 100,
+            'fees' => 0,
+            'transaction_date' => '2024-01-10',
+        ]);
+
+        foreach ([
+            ['2024-01-14', 100],
+            ['2024-01-15', 110],
+        ] as [$date, $close]) {
+            StockPrice::query()->create([
+                'stock_id' => $stock->id,
+                'price_date' => $date,
+                'open_price' => $close,
+                'high_price' => $close,
+                'low_price' => $close,
+                'close_price' => $close,
+                'volume' => 100,
+                'data_source' => 'test',
+                'created_at' => now(),
+            ]);
+        }
+
+        $holding = $profile->holdings()->create([
+            'stock_id' => $stock->id,
+            'quantity' => 10,
+            'avg_buy_price' => 100,
+            'invested_amount' => 1000,
+            'realized_profit' => 0,
+            'updated_at' => now(),
+        ]);
+        $holding->setRelation('stock', $stock);
+
+        $enriched = $service->enrichHolding($profile, $holding);
+
+        $this->assertEqualsWithDelta(100.0, (float) $enriched['unrealized_profit'], 0.001);
+        $this->assertEqualsWithDelta(10.0, (float) $enriched['unrealized_gain_percent'], 0.001);
+        $this->assertEqualsWithDelta(10.0, (float) $enriched['stoploss_summary']['daily_change_percent'], 0.001);
+        $this->assertSame('2024-01-14', $enriched['stoploss_summary']['previous_price_date']);
+    }
+
+    public function test_daily_change_percent_null_with_single_price_row(): void
+    {
+        $service = app(HoldingPresentationService::class);
+
+        $user = User::query()->create([
+            'name' => 'Single Price User',
+            'email' => 'single-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+        $profile = $this->defaultPortfolioFor($user);
+
+        $stock = Stock::query()->create([
+            'symbol' => 'S'.strtoupper(Str::random(4)),
+            'exchange' => 'NSE',
+            'name' => 'Single Price',
+            'is_active' => true,
+            'is_benchmark' => false,
+        ]);
+
+        Transaction::query()->create([
+            'profile_id' => $profile->id,
+            'stock_id' => $stock->id,
+            'type' => 'buy',
+            'quantity' => 1,
+            'price' => 100,
+            'fees' => 0,
+            'transaction_date' => '2024-01-10',
+        ]);
+
+        StockPrice::query()->create([
+            'stock_id' => $stock->id,
+            'price_date' => '2024-01-15',
+            'open_price' => 100,
+            'high_price' => 100,
+            'low_price' => 100,
+            'close_price' => 100,
+            'volume' => 100,
+            'data_source' => 'test',
+            'created_at' => now(),
+        ]);
+
+        $holding = $profile->holdings()->create([
+            'stock_id' => $stock->id,
+            'quantity' => 1,
+            'avg_buy_price' => 100,
+            'invested_amount' => 100,
+            'realized_profit' => 0,
+            'updated_at' => now(),
+        ]);
+        $holding->setRelation('stock', $stock);
+
+        $enriched = $service->enrichHolding($profile, $holding);
+
+        $this->assertNull($enriched['stoploss_summary']['daily_change_percent']);
+        $this->assertNull($enriched['stoploss_summary']['previous_price_date']);
+    }
+
     public function test_first_buy_date_resets_after_full_exit_and_rebuy(): void
     {
         $service = app(HoldingPresentationService::class);

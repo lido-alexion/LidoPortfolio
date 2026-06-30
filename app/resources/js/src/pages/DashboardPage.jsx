@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import { DataTableCard } from '../components/DataTable';
+import DashboardTopMoverCard from '../components/DashboardTopMoverCard';
 import { showToast } from '../toast';
 import { formatInrCompactWhole, formatInrWhole, formatTablePercent0 } from '../utils/tableFormat';
 import { formatChartAxisDate, formatTransactionDateDisplay } from '../utils/transactionDate';
@@ -19,6 +20,24 @@ import {
     XAxis,
     YAxis,
 } from 'recharts';
+
+const TOP_MOVER_PERIOD_KEY = 'portfolio_dashboard_top_mover_period';
+
+function loadTopMoverPeriod() {
+    try {
+        return localStorage.getItem(TOP_MOVER_PERIOD_KEY) === 'latest_day' ? 'latest_day' : 'all_time';
+    } catch {
+        return 'all_time';
+    }
+}
+
+function saveTopMoverPeriod(period) {
+    try {
+        localStorage.setItem(TOP_MOVER_PERIOD_KEY, period);
+    } catch {
+        // Quota or private mode — ignore.
+    }
+}
 
 const growthChartTooltipStyle = {
     backgroundColor: 'var(--lido-chart-tooltip-bg)',
@@ -150,10 +169,16 @@ export default function DashboardPage() {
     const isAdmin = Boolean(user?.is_admin);
     const [data, setData] = useState(null);
     const [loadError, setLoadError] = useState('');
+    const [topMoverPeriod, setTopMoverPeriod] = useState(loadTopMoverPeriod);
     const [rebuildingHistory, setRebuildingHistory] = useState(false);
     const [syncingPrices, setSyncingPrices] = useState(false);
     const [clearingAlerts, setClearingAlerts] = useState(false);
     const [acknowledgingId, setAcknowledgingId] = useState(null);
+
+    const handleTopMoverPeriodChange = useCallback((period) => {
+        setTopMoverPeriod(period);
+        saveTopMoverPeriod(period);
+    }, []);
 
     const load = useCallback(() => {
         setLoadError('');
@@ -369,17 +394,11 @@ export default function DashboardPage() {
             value: data.xirr != null ? `${Number(data.xirr).toFixed(2)}%` : 'N/A',
             valueClassName: signedMetricClass(data.xirr),
         },
-        {
-            title: 'Top Gainer',
-            value: data.top_gainer?.symbol || 'N/A',
-            valueClassName: '',
-        },
-        {
-            title: 'Top Loser',
-            value: data.top_loser?.symbol || 'N/A',
-            valueClassName: '',
-        },
     ];
+
+    const topMoversForPeriod = data.top_movers?.[topMoverPeriod] || {};
+    const topGainer = topMoversForPeriod.gainer ?? data.top_gainer;
+    const topLoser = topMoversForPeriod.loser ?? data.top_loser;
 
     const growthData = (data.portfolio_growth || []).map((point) => {
         const rawDate = point.snapshot_date;
@@ -447,6 +466,18 @@ export default function DashboardPage() {
                     </div>
                 </div>
             ))}
+            <DashboardTopMoverCard
+                title="Top Gainer"
+                mover={topGainer}
+                period={topMoverPeriod}
+                onPeriodChange={handleTopMoverPeriodChange}
+            />
+            <DashboardTopMoverCard
+                title="Top Loser"
+                mover={topLoser}
+                period={topMoverPeriod}
+                onPeriodChange={handleTopMoverPeriodChange}
+            />
             <div className="col-12">
                 {alerts.length > 0 ? (
                     <DataTableCard
