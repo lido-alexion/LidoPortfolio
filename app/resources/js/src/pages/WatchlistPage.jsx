@@ -1,9 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../api';
 import StockAutocomplete from '../components/StockAutocomplete';
 import PriceVolumeChart from '../components/charts/PriceVolumeChart';
+import { DataTableCard } from '../components/DataTable';
 import usePortfolioChanged from '../hooks/usePortfolioChanged';
 import { showToast } from '../toast';
+import { categoryClassName, categoryLabel } from '../utils/patternDetection';
 import { formatInrWhole } from '../utils/tableFormat';
 import { formatTransactionDateDisplay } from '../utils/transactionDate';
 
@@ -133,6 +136,9 @@ export default function WatchlistPage() {
     const [priceMeta, setPriceMeta] = useState(null);
     const [pricesLoading, setPricesLoading] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [scanRows, setScanRows] = useState([]);
+    const [scanning, setScanning] = useState(false);
+    const [scanDone, setScanDone] = useState(false);
 
     const loadWatchlist = useCallback(async () => {
         setLoading(true);
@@ -193,6 +199,85 @@ export default function WatchlistPage() {
     const selectStock = useCallback((stock) => {
         setSelectedStock(stock);
         setSearchSymbol(stock.symbol);
+    }, []);
+
+    const scanColumns = useMemo(() => [
+        {
+            id: 'symbol',
+            header: 'Symbol',
+            accessorKey: 'symbol',
+            cell: ({ row }) => (
+                <button
+                    type="button"
+                    className="btn btn-link btn-sm p-0 align-baseline"
+                    onClick={() => selectStock({
+                        id: row.original.stock_id,
+                        symbol: row.original.symbol,
+                        name: row.original.name,
+                        exchange: row.original.exchange,
+                    })}
+                >
+                    {row.original.symbol}
+                </button>
+            ),
+        },
+        {
+            id: 'pattern_name',
+            header: 'Pattern',
+            accessorKey: 'pattern_name',
+        },
+        {
+            id: 'category',
+            header: 'Signal',
+            accessorKey: 'category',
+            cell: ({ getValue }) => (
+                <span className={categoryClassName(getValue())}>
+                    {categoryLabel(getValue())}
+                </span>
+            ),
+        },
+        {
+            id: 'bar_date',
+            header: 'As of',
+            accessorKey: 'bar_date',
+            cell: ({ getValue }) => formatTransactionDateDisplay(getValue()) || '—',
+        },
+    ], [selectStock]);
+
+    const runWatchlistScan = useCallback(async () => {
+        setScanning(true);
+        setScanDone(false);
+        try {
+            const res = await api.get('/patterns/scan', {
+                params: { scope: 'watchlist', actionable_only: false },
+            });
+            const flat = [];
+            for (const stock of res.data.results || []) {
+                for (const match of stock.matches || []) {
+                    flat.push({
+                        stock_id: stock.stock_id,
+                        symbol: stock.symbol,
+                        name: stock.name,
+                        exchange: stock.exchange,
+                        pattern_name: match.name,
+                        category: match.category,
+                        bar_date: match.bar_date,
+                    });
+                }
+            }
+            setScanRows(flat);
+            setScanDone(true);
+            if (flat.length === 0) {
+                showToast('Scan complete — no patterns matched on the latest bar.');
+            } else {
+                showToast(`Scan found ${flat.length} pattern match${flat.length === 1 ? '' : 'es'}.`);
+            }
+        } catch {
+            showToast('Pattern scan failed.', 'danger');
+            setScanRows([]);
+        } finally {
+            setScanning(false);
+        }
     }, []);
 
     const handleSearchSelect = useCallback((stock) => {
@@ -260,13 +345,22 @@ export default function WatchlistPage() {
     return (
         <div className="d-grid gap-3">
             <div className="card">
-                <div className="card-header d-flex justify-content-between align-items-center gap-2">
+                <div className="card-header d-flex justify-content-between align-items-center gap-2 flex-wrap">
                     <div className="mb-0">
                         Watchlist
                         {!loading ? (
                             <span className="lido-card-title-count">({watchlist.length})</span>
                         ) : null}
                     </div>
+                    <button
+                        type="button"
+                        className="btn btn-sm btn-outline-primary"
+                        onClick={runWatchlistScan}
+                        disabled={scanning || loading || watchlist.length === 0}
+                        title="Run OHLCV pattern rules on cached prices for every watchlist symbol"
+                    >
+                        {scanning ? 'Scanning…' : 'Scan my watchlist'}
+                    </button>
                 </div>
                 <div className="card-body">
                     <StockAutocomplete
@@ -357,6 +451,21 @@ export default function WatchlistPage() {
                     )}
                 </div>
             </div>
+
+            {scanDone ? (
+                <DataTableCard
+                    title="Watchlist pattern scan"
+                    columns={scanColumns}
+                    data={scanRows}
+                    storageKey="watchlist-pattern-scan-v1"
+                    emptyMessage="No patterns detected on the latest bar for any watchlist symbol."
+                    headerExtra={(
+                        <Link to="/patterns" className="btn btn-sm btn-outline-secondary">
+                            Pattern guide
+                        </Link>
+                    )}
+                />
+            ) : null}
         </div>
     );
 }

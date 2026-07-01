@@ -21,6 +21,7 @@ import UserManagementPage from './pages/UserManagementPage';
 import AdminRoute from './components/AdminRoute';
 import StockExplorerPage from './pages/StockExplorerPage';
 import WatchlistPage from './pages/WatchlistPage';
+import PatternGuidePage from './pages/PatternGuidePage';
 import LoginPage from './pages/LoginPage';
 import AcceptInvitePage from './pages/AcceptInvitePage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
@@ -127,6 +128,7 @@ function App() {
                                 <Route path="/holdings/:stockId/prices" element={<StockPricesPage />} />
                                 <Route path="/watchlist" element={<WatchlistPage />} />
                                 <Route path="/explorer" element={<StockExplorerPage />} />
+                                <Route path="/patterns" element={<PatternGuidePage />} />
                                 <Route path="/profile" element={<ProfilePage />} />
                                 <Route path="/portfolios" element={<PortfoliosPage />} />
                                 <Route path="/settings" element={<SettingsPage />} />

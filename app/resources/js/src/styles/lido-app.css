@@ -1623,6 +1623,52 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     padding-right: 1rem;
 }
 
+.lido-pattern-guide-card .card-header {
+    cursor: pointer;
+}
+
+.lido-pattern-guide-anchor {
+    scroll-margin-top: 5rem;
+}
+
+.lido-pattern-guide-card .card-header:hover {
+    background-color: var(--lido-bg-elevated);
+}
+
+.lido-pattern-math-list code {
+    font-size: 0.8125rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.lido-pattern-sketch {
+    width: 4.5rem;
+    height: 2.75rem;
+    flex-shrink: 0;
+    color: var(--lido-text-muted);
+    border: 1px solid var(--lido-border);
+    border-radius: 4px;
+    background: var(--lido-bg-elevated);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.lido-pattern-sketch--placeholder {
+    min-width: 4.5rem;
+}
+
+.lido-pattern-sketch-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.lido-pattern-matches {
+    padding-top: 0.25rem;
+}
+
 .explorer-growth-chart-body {
     height: 280px;
 }

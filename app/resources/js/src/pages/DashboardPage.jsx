@@ -1,9 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import { DataTableCard } from '../components/DataTable';
 import DashboardTopMoverCard from '../components/DashboardTopMoverCard';
 import { showToast } from '../toast';
+import { categoryClassName, categoryLabel } from '../utils/patternDetection';
+import { patternGuideLink } from '../utils/patternGuideLinks';
 import { formatInrCompactWhole, formatInrWhole, formatTablePercent0 } from '../utils/tableFormat';
 import { formatChartAxisDate, formatTransactionDateDisplay } from '../utils/transactionDate';
 import {
@@ -174,6 +177,8 @@ export default function DashboardPage() {
     const [syncingPrices, setSyncingPrices] = useState(false);
     const [clearingAlerts, setClearingAlerts] = useState(false);
     const [acknowledgingId, setAcknowledgingId] = useState(null);
+    const [patternRows, setPatternRows] = useState([]);
+    const [patternLoading, setPatternLoading] = useState(true);
 
     const handleTopMoverPeriodChange = useCallback((period) => {
         setTopMoverPeriod(period);
@@ -187,6 +192,30 @@ export default function DashboardPage() {
             .catch(() => setLoadError('Failed to load dashboard'));
     }, []);
 
+    const loadPatternScan = useCallback(() => {
+        setPatternLoading(true);
+        return api.get('/patterns/scan', { params: { scope: 'holdings', actionable_only: true } })
+            .then((res) => {
+                const flat = [];
+                for (const stock of res.data.results || []) {
+                    for (const match of stock.matches || []) {
+                        flat.push({
+                            stock_id: stock.stock_id,
+                            symbol: stock.symbol,
+                            pattern_id: match.id,
+                            pattern_name: match.name,
+                            category: match.category,
+                            bar_date: match.bar_date,
+                            variant: match.variant,
+                        });
+                    }
+                }
+                setPatternRows(flat);
+            })
+            .catch(() => setPatternRows([]))
+            .finally(() => setPatternLoading(false));
+    }, []);
+
     const runDailyPriceSync = useCallback((force = false) => {
         setSyncingPrices(true);
         api.post('/sync/daily', { force })
@@ -197,6 +226,7 @@ export default function DashboardPage() {
                     if (!body.skipped) {
                         notifyPortfolioDashboardRefresh();
                     }
+                    return loadPatternScan();
                 });
             })
             .catch((err) => {
@@ -204,7 +234,7 @@ export default function DashboardPage() {
                 showToast(msg, 'danger');
             })
             .finally(() => setSyncingPrices(false));
-    }, [load]);
+    }, [load, loadPatternScan]);
 
     const requestRebuildPortfolioHistory = useCallback(() => {
         const confirmed = window.confirm(
@@ -252,13 +282,17 @@ export default function DashboardPage() {
 
     useEffect(() => {
         load();
-    }, [load]);
+        loadPatternScan();
+    }, [load, loadPatternScan]);
 
     useEffect(() => {
-        const onRefresh = () => load();
+        const onRefresh = () => {
+            load();
+            loadPatternScan();
+        };
         window.addEventListener(PORTFOLIO_DASHBOARD_REFRESH, onRefresh);
         return () => window.removeEventListener(PORTFOLIO_DASHBOARD_REFRESH, onRefresh);
-    }, [load]);
+    }, [load, loadPatternScan]);
 
     const allocationColumns = useMemo(() => [
         { accessorKey: 'symbol', header: 'Symbol' },
@@ -364,6 +398,55 @@ export default function DashboardPage() {
             ),
         },
     ], [acknowledgeAlert, acknowledgingId]);
+
+    const patternColumns = useMemo(() => [
+        {
+            id: 'symbol',
+            header: 'Symbol',
+            accessorKey: 'symbol',
+            cell: ({ row }) => (
+                <Link to={`/stocks/${row.original.stock_id}/prices`}>
+                    {row.original.symbol}
+                </Link>
+            ),
+        },
+        {
+            id: 'pattern_name',
+            header: 'Pattern',
+            accessorKey: 'pattern_name',
+            cell: ({ row }) => (
+                row.original.pattern_id ? (
+                    <Link to={patternGuideLink(row.original.pattern_id)}>
+                        {row.original.pattern_name}
+                    </Link>
+                ) : (
+                    row.original.pattern_name
+                )
+            ),
+        },
+        {
+            id: 'category',
+            header: 'Signal',
+            accessorKey: 'category',
+            cell: ({ getValue }) => (
+                <span className={categoryClassName(getValue())}>
+                    {categoryLabel(getValue())}
+                </span>
+            ),
+        },
+        {
+            id: 'bar_date',
+            header: 'As of',
+            accessorKey: 'bar_date',
+            cell: ({ getValue }) => formatTransactionDateDisplay(getValue()) || '—',
+        },
+        {
+            id: 'variant',
+            header: 'Type',
+            accessorKey: 'variant',
+            cell: ({ getValue }) => (getValue() === 'chart' ? 'Chart' : 'Candle'),
+        },
+    ], []);
 
     if (!data && loadError) return <div className="alert alert-danger">{loadError}</div>;
     if (!data) return <div className="text-muted">Loading dashboard...</div>;
@@ -517,6 +600,29 @@ export default function DashboardPage() {
                         </div>
                     </div>
                 )}
+            </div>
+            <div className="col-12">
+                <DataTableCard
+                    className="h-100"
+                    title={(
+                        <div className="lido-col-header-stack">
+                            <span>Pattern signals (holdings)</span>
+                            <span className="lido-col-header-sub">
+                                Actionable candle &amp; chart patterns on cached OHLCV (latest bar)
+                            </span>
+                        </div>
+                    )}
+                    columns={patternColumns}
+                    data={patternRows}
+                    storageKey="dashboard-pattern-signals-v1"
+                    loading={patternLoading}
+                    emptyMessage="No actionable patterns on your holdings right now. Patterns need sufficient OHLCV history."
+                    headerExtra={(
+                        <Link to="/patterns" className="btn btn-sm btn-outline-secondary">
+                            Pattern guide
+                        </Link>
+                    )}
+                />
             </div>
             <div className="col-12 col-lg-6">
                 <DataTableCard

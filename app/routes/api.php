@@ -11,7 +11,7 @@ use App\Http\Controllers\Api\HoldingController;
 use App\Http\Controllers\Api\InviteAcceptController;
 use App\Http\Controllers\Api\PortfolioController;
 use App\Http\Controllers\Api\PasswordResetAcceptController;
-use App\Http\Controllers\Api\PasswordResetLinkController;
+use App\Http\Controllers\Api\PatternScanController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\StockController;
@@ -81,6 +81,7 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::get('/stocks/{stock}/prices', [StockPriceController::class, 'index']);
     Route::get('/stocks/{stock}/market-prices', [StockPriceController::class, 'market']);
     Route::get('/dashboard', [DashboardController::class, 'index']);
+    Route::get('/patterns/scan', [PatternScanController::class, 'index']);
     Route::post('/portfolio/rebuild-history', [PortfolioHistoryController::class, 'rebuild']);
     Route::get('/analytics/portfolio', [AnalyticsController::class, 'portfolio']);
     Route::get('/analytics/stocks/{stock}', [AnalyticsController::class, 'stock']);

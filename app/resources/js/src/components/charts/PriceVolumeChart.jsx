@@ -10,6 +10,7 @@ import {
     XAxis,
     YAxis,
 } from 'recharts';
+import PatternMatchesList from '../PatternMatchesList';
 import {
     formatInrCompactWhole,
     formatInrWhole,
@@ -19,9 +20,12 @@ import {
 import { formatChartAxisDate, formatTransactionDateDisplay } from '../../utils/transactionDate';
 import {
     buildPriceVolumeChartData,
+    filterByTimeRange,
     formatChartRangeClampHint,
+    normalizeOhlcvRows,
     xAxisTickInterval,
 } from '../../utils/ohlcvChartData';
+import { scanOhlcv } from '../../utils/patternDetection';
 import {
     DEFAULT_SAMPLING,
     DEFAULT_TIME_RANGE,
@@ -73,6 +77,15 @@ export default function PriceVolumeChart({
         () => buildPriceVolumeChartData(rows, { timeRange, sampling }),
         [rows, timeRange, sampling],
     );
+
+    const windowPatternMatches = useMemo(() => {
+        if (loading || !rows?.length) {
+            return [];
+        }
+        const normalized = normalizeOhlcvRows(rows);
+        const { filtered } = filterByTimeRange(normalized, timeRange);
+        return scanOhlcv(filtered, { actionableOnly: false });
+    }, [rows, timeRange, loading]);
 
     const clampHint = formatChartRangeClampHint(meta);
     const manyPoints = series.length > 60;
@@ -179,6 +192,15 @@ export default function PriceVolumeChart({
                     <p className="text-muted small mb-0 mt-1">
                         {meta.pointCount} points · {meta.samplingStep}-row buckets · volume summed per bucket
                     </p>
+                ) : null}
+                {!loading && series.length > 0 ? (
+                    <div className="mt-3 pt-2 border-top">
+                        <PatternMatchesList
+                            matches={windowPatternMatches}
+                            title="Possible patterns on this window"
+                            emptyMessage="No patterns detected on the latest bar in this range."
+                        />
+                    </div>
                 ) : null}
             </div>
             {showControls ? (
