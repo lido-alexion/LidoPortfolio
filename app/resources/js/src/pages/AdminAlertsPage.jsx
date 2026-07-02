@@ -32,6 +32,8 @@ export default function AdminAlertsPage() {
     const [loading, setLoading] = useState(true);
     const [clearingKey, setClearingKey] = useState('');
     const [clearingAll, setClearingAll] = useState(false);
+    const [clearingOffKey, setClearingOffKey] = useState('');
+    const [clearingDismissedAll, setClearingDismissedAll] = useState(false);
     const [loadError, setLoadError] = useState('');
 
     const applyPayload = useCallback((payload) => {
@@ -85,6 +87,38 @@ export default function AdminAlertsPage() {
             showToast(error?.response?.data?.message || 'Could not dismiss alerts.', 'danger');
         } finally {
             setClearingAll(false);
+        }
+    };
+
+    const clearOffAlert = async (alertKey) => {
+        setClearingOffKey(alertKey);
+        try {
+            const { data } = await api.post('/operational-alerts/clear', { key: alertKey });
+            applyPayload(data.data);
+            showToast('Alert cleared. It stays hidden while the issue persists.', 'success');
+        } catch (error) {
+            showToast(error?.response?.data?.message || 'Could not clear alert.', 'danger');
+        } finally {
+            setClearingOffKey('');
+        }
+    };
+
+    const clearOffAllDismissed = async () => {
+        setClearingDismissedAll(true);
+        try {
+            const { data } = await api.post('/operational-alerts/clear-dismissed');
+            applyPayload(data.data);
+            const cleared = data.data?.cleared_count ?? 0;
+            showToast(
+                cleared > 0
+                    ? `Cleared ${cleared} dismissed alert${cleared === 1 ? '' : 's'}.`
+                    : 'No dismissed alerts to clear.',
+                cleared > 0 ? 'success' : 'info',
+            );
+        } catch (error) {
+            showToast(error?.response?.data?.message || 'Could not clear dismissed alerts.', 'danger');
+        } finally {
+            setClearingDismissedAll(false);
         }
     };
 
@@ -146,11 +180,21 @@ export default function AdminAlertsPage() {
                         <button
                             type="button"
                             className="btn btn-warning btn-sm"
-                            disabled={loading || clearingAll || unacknowledgedCount === 0}
+                            disabled={loading || clearingAll || clearingDismissedAll || unacknowledgedCount === 0}
                             onClick={dismissAll}
                         >
                             {clearingAll ? 'Dismissing…' : 'Dismiss all'}
                         </button>
+                        {dismissedAlerts.length > 0 && (
+                            <button
+                                type="button"
+                                className="btn btn-outline-danger btn-sm"
+                                disabled={loading || clearingAll || clearingDismissedAll}
+                                onClick={clearOffAllDismissed}
+                            >
+                                {clearingDismissedAll ? 'Clearing…' : 'Clear all dismissed'}
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>
@@ -183,14 +227,24 @@ export default function AdminAlertsPage() {
                                                         {formatTimestamp(alert.last_triggered_at)}
                                                     </p>
                                                 </div>
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-sm btn-outline-secondary"
-                                                    disabled={clearingKey === alert.key}
-                                                    onClick={() => dismissAlert(alert.key)}
-                                                >
-                                                    {clearingKey === alert.key ? 'Dismissing…' : 'Dismiss'}
-                                                </button>
+                                                <div className="d-flex flex-wrap gap-2">
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-sm btn-outline-secondary"
+                                                        disabled={clearingKey === alert.key || clearingOffKey === alert.key}
+                                                        onClick={() => dismissAlert(alert.key)}
+                                                    >
+                                                        {clearingKey === alert.key ? 'Dismissing…' : 'Dismiss'}
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-sm btn-outline-danger"
+                                                        disabled={clearingKey === alert.key || clearingOffKey === alert.key}
+                                                        onClick={() => clearOffAlert(alert.key)}
+                                                    >
+                                                        {clearingOffKey === alert.key ? 'Clearing…' : 'Clear off'}
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -219,6 +273,16 @@ export default function AdminAlertsPage() {
                                                         {formatTimestamp(alert.acknowledged_at)}
                                                     </p>
                                                 </div>
+                                                <div className="d-flex flex-wrap gap-2">
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-sm btn-outline-danger"
+                                                        disabled={clearingOffKey === alert.key}
+                                                        onClick={() => clearOffAlert(alert.key)}
+                                                    >
+                                                        {clearingOffKey === alert.key ? 'Clearing…' : 'Clear off'}
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -230,7 +294,13 @@ export default function AdminAlertsPage() {
             )}
 
             <p className="text-muted small mt-4 mb-0">
-                Dismissing hides an alert until it clears and re-triggers, or you log in again after a new issue.
+                <strong>Dismiss</strong>
+                {' '}
+                moves an alert out of “Needs attention” while the underlying issue is still tracked.
+                {' '}
+                <strong>Clear off</strong>
+                {' '}
+                removes it from this list even if the issue persists (manual override). Alerts return only after the issue is fixed and then happens again.
                 {' '}
                 <Link to="/settings/universe-price-sync">Universe price sync</Link>
                 {' '}

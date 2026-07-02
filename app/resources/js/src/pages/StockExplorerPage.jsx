@@ -14,6 +14,7 @@ import api from '../api';
 import NumberInput from '../components/NumberInput';
 import SegmentToggle from '../components/SegmentToggle';
 import StockAutocomplete from '../components/StockAutocomplete';
+import { stockExchangeLabel } from '../utils/exchangeDisplay';
 import { formatTableMoney2 } from '../utils/tableFormat';
 import { formatTransactionDateDisplay } from '../utils/transactionDate';
 import { showToast } from '../toast';
@@ -471,9 +472,15 @@ export default function StockExplorerPage() {
                                 onSelect={(stock) => {
                                     setSelectedStock(stock);
                                     setSymbol(stock.symbol);
-                                    setExchange(stock.exchange || 'NSE');
                                 }}
                             />
+                            {selectedStock && (
+                                <div className="form-text text-muted mb-0">
+                                    {selectedStock.symbol}
+                                    {' · '}
+                                    {stockExchangeLabel(selectedStock)}
+                                </div>
+                            )}
                             <div>
                                 <label className="form-label">Benchmark</label>
                                 <select

@@ -44,6 +44,32 @@ class OperationalAlertController extends Controller
         ]);
     }
 
+    public function clear(Request $request, AdminOperationalAlertService $alerts): JsonResponse
+    {
+        $validated = $request->validate([
+            'key' => ['required', 'string', 'max:64'],
+        ]);
+
+        if (! $alerts->clearManually($validated['key'])) {
+            return response()->json(['message' => 'Alert not found or already cleared.'], 404);
+        }
+
+        return response()->json([
+            'data' => $this->payload($alerts),
+        ]);
+    }
+
+    public function clearDismissed(AdminOperationalAlertService $alerts): JsonResponse
+    {
+        $cleared = $alerts->clearDismissedManually();
+
+        return response()->json([
+            'data' => array_merge($this->payload($alerts), [
+                'cleared_count' => $cleared,
+            ]),
+        ]);
+    }
+
     /**
      * @return array<string, mixed>
      */

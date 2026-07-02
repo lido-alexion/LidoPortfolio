@@ -4,7 +4,7 @@ import api from '../api';
 import { showToast } from '../toast';
 
 const SCOPE_OPTIONS = [
-    { value: 'all_nse', label: 'All NSE equities' },
+    { value: 'all_equities', label: 'All equities (NSE + BSE-only)' },
 ];
 const MAX_BACKFILL_CHAIN_BATCHES = 500;
 const MAX_GAP_CHAIN_BATCHES = 500;
@@ -26,7 +26,7 @@ function statusBadgeClass(ok) {
 
 export default function UniversePriceSyncPage() {
     const [status, setStatus] = useState(null);
-    const [scope, setScope] = useState('all_nse');
+    const [scope, setScope] = useState('all_equities');
     const [batchSize, setBatchSize] = useState('');
     const [loading, setLoading] = useState(true);
     const [running, setRunning] = useState(false);
@@ -144,8 +144,12 @@ export default function UniversePriceSyncPage() {
         setRunning(true);
         try {
             const { data } = await api.post('/universe-price-sync/stock-master');
+            const stats = data.data ?? {};
+            const backfillNote = stats.backfill_skipped
+                ? ' Price backfill skipped — use universe backfill for new symbols.'
+                : '';
             showToast(
-                `Stock master synced: added ${data.data?.added ?? 0}, updated ${data.data?.updated ?? 0}.`,
+                `Stock master synced: added ${stats.added ?? 0}, updated ${stats.updated ?? 0}.${backfillNote}`,
                 'success',
             );
             await loadStatus(scope);

@@ -4,6 +4,7 @@ namespace Tests\Unit;
 
 use App\Models\Setting;
 use App\Models\Stock;
+use App\Services\EquityUniverseService;
 use App\Services\Nifty500ConstituentService;
 use App\Services\UniverseStockResolverService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -20,12 +21,13 @@ class UniverseStockResolverServiceTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_all_nse_scope_includes_active_nse_equities_only(): void
+    public function test_all_equities_scope_includes_nse_and_bse_only(): void
     {
         Stock::query()->create([
             'symbol' => 'INFY',
             'exchange' => 'NSE',
             'name' => 'Infosys',
+            'isin' => 'INE009A01021',
             'is_active' => true,
             'is_benchmark' => false,
         ]);
@@ -44,17 +46,44 @@ class UniverseStockResolverServiceTest extends TestCase
             'is_benchmark' => true,
         ]);
         Stock::query()->create([
-            'symbol' => 'TCS',
+            'symbol' => 'BSEONLY',
             'exchange' => 'BSE',
-            'name' => 'TCS BSE',
+            'name' => 'BSE Only',
+            'isin' => 'INE000B01001',
+            'is_active' => true,
+            'is_benchmark' => false,
+        ]);
+        Stock::query()->create([
+            'symbol' => 'INFY',
+            'exchange' => 'BSE',
+            'name' => 'Infosys BSE dup',
+            'isin' => 'INE009A01021',
             'is_active' => true,
             'is_benchmark' => false,
         ]);
 
         $service = app(UniverseStockResolverService::class);
-        $symbols = $service->stockQuery(UniverseStockResolverService::SCOPE_ALL_NSE)->pluck('symbol')->all();
+        $symbols = $service->stockQuery(UniverseStockResolverService::SCOPE_ALL_EQUITIES)->pluck('symbol')->all();
 
-        $this->assertSame(['INFY'], $symbols);
+        sort($symbols);
+        $this->assertSame(['BSEONLY', 'INFY'], $symbols);
+    }
+
+    public function test_deprecated_all_nse_scope_alias_includes_bse_only(): void
+    {
+        Stock::query()->create([
+            'symbol' => 'ONLYBSE',
+            'exchange' => 'BSE',
+            'name' => 'Only BSE',
+            'isin' => 'INE111B01011',
+            'is_active' => true,
+            'is_benchmark' => false,
+        ]);
+
+        $service = app(UniverseStockResolverService::class);
+        $symbols = $service->stockQuery('all_nse')->pluck('symbol')->all();
+
+        $this->assertSame(['ONLYBSE'], $symbols);
     }
 
     public function test_nifty500_scope_filters_to_cached_constituents(): void

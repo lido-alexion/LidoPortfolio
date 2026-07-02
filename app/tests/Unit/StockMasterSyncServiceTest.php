@@ -6,6 +6,7 @@ use App\Models\Stock;
 use App\Services\ProviderResolverService;
 use App\Services\SyncLogService;
 use App\Services\StockMasterSyncService;
+use App\Services\BseEquityMasterService;
 use App\Services\PriceFetchService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
@@ -82,7 +83,8 @@ class StockMasterSyncServiceTest extends TestCase
         $syncLog->shouldReceive('log')->andReturnNull();
         $syncLog->shouldReceive('completeRun')->andReturnNull();
         $priceFetch = Mockery::mock(PriceFetchService::class);
+        $bseMaster = Mockery::mock(BseEquityMasterService::class);
 
-        return new StockMasterSyncService(new ProviderResolverService, $syncLog, $priceFetch);
+        return new StockMasterSyncService(new ProviderResolverService, $syncLog, $priceFetch, $bseMaster);
     }
 }

@@ -11,7 +11,7 @@ class SyncUniversePricesCommand extends Command
 {
     protected $signature = 'portfolio:sync-universe-prices
         {--mode=daily : daily (incremental) or backfill (full history window)}
-        {--scope= : all_nse or nifty500 (default from config)}
+        {--scope= : all_equities, all_nse (deprecated), or nifty500 (default from config)}
         {--batch= : Stocks per run when not using --all}
         {--all : Process entire universe in one run (for initial backfill)}
         {--reset-cursor : Start from the first stock in the universe}';

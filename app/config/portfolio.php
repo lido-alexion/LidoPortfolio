@@ -34,9 +34,16 @@ return [
             'NSE_EQUITY_CSV_URL',
             'https://archives.nseindia.com/content/equities/EQUITY_L.csv',
         ),
-        'bse_enabled' => filter_var(env('BSE_STOCK_MASTER_ENABLED', false), FILTER_VALIDATE_BOOL),
+        'bse_enabled' => filter_var(env('BSE_STOCK_MASTER_ENABLED', true), FILTER_VALIDATE_BOOL),
         'bse_equity_csv_url' => env('BSE_EQUITY_CSV_URL', ''),
+        'bse_list_api_url' => env(
+            'BSE_EQUITY_LIST_API_URL',
+            'https://api.bseindia.com/BseIndiaAPI/api/ListofScripData/w?Group=&Scripcode=&industry=&segment=Equity&status=Active',
+        ),
         'revalidation_days' => (int) env('STOCK_REVALIDATION_DAYS', 7),
+        // UI stock-master sync skips price backfill (too slow for HTTP); CLI `stocks:sync` backfills by default.
+        'backfill_new_symbols_on_cli_sync' => filter_var(env('STOCK_MASTER_BACKFILL_ON_SYNC', true), FILTER_VALIDATE_BOOL),
+        'max_backfill_per_sync' => max(0, (int) env('STOCK_MASTER_MAX_BACKFILL_PER_SYNC', 25)),
     ],
 
     /*
@@ -47,8 +54,8 @@ return [
     */
     'universe_price_sync' => [
         'enabled' => filter_var(env('UNIVERSE_PRICE_SYNC_ENABLED', true), FILTER_VALIDATE_BOOL),
-        // all_nse = every active NSE EQ row from stock master; nifty500 = NSE index constituents only
-        'scope' => env('UNIVERSE_PRICE_SYNC_SCOPE', 'all_nse'),
+        // all_equities = active NSE + BSE-only (ISIN deduped); nifty500 = NSE index constituents only
+        'scope' => env('UNIVERSE_PRICE_SYNC_SCOPE', 'all_equities'),
         'history_days' => max(30, (int) env('UNIVERSE_PRICE_SYNC_HISTORY_DAYS', 365)),
         'daily_lookback_days' => max(3, (int) env('UNIVERSE_PRICE_SYNC_DAILY_LOOKBACK_DAYS', 10)),
         'delay_ms_between_stocks' => max(0, (int) env('UNIVERSE_PRICE_SYNC_DELAY_MS', 400)),

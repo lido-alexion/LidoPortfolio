@@ -62,7 +62,7 @@ This project has **one** frontend build on your PC, but **two** matching copies 
 | `LidoPortfolio/app/` | Laravel project root — run `npm run build` **here** |
 | `LidoPortfolio/app/public/build/` | **The real build output** — `manifest.json`, `assets/app-*.js`, CSS, fonts. This is the only folder Vite creates. |
 | `LidoPortfolio/app/app/` | Laravel **PHP** code (controllers, models). **Not** related to the Vite build — there is no `public/build` here. |
-| `LidoPortfolio/deploy/staging/` | Optional packaging folder from `deploy/prepare-upload.ps1`. It **copies** `app/public/build/` into staging — it is not a second build. |
+| `LidoPortfolio/deploy/staging/` | Packaging folder from `deploy/prepare-upload.ps1`. Copies PHP app code, **config** (except `DBConfig.php`), routes, views, migrations, and **both** `build/` trees — it is not a second build. |
 
 **Workflow:**
 
@@ -319,7 +319,7 @@ Paths below use `/home/USER/` — replace `USER` with your cPanel username (e.g.
 | `app/public/build/` **(same folder — second copy)** | `/home/USER/public_html/portfolio/build/` | After any frontend / React change |
 | `app/app/` | `/home/USER/public_html/lidoportfolio/app/` | PHP business logic changed |
 | `app/routes/` | `/home/USER/public_html/lidoportfolio/routes/` | Routes changed |
-| `app/config/` | `/home/USER/public_html/lidoportfolio/config/` | Config changed (e.g. `session.php`) |
+| `app/config/` | `/home/USER/public_html/lidoportfolio/config/` | Config changed (e.g. `portfolio.php`, `session.php`). Included in `deploy/staging/lidoportfolio/config/` by `prepare-upload.ps1` (excludes `DBConfig.php`). |
 | `app/database/migrations/` | `/home/USER/public_html/lidoportfolio/database/migrations/` | New migrations |
 | `app/vendor/` | `/home/USER/public_html/lidoportfolio/vendor/` | `composer.json` / `composer.lock` changed |
 

@@ -7,21 +7,12 @@ use App\Support\ExternalHttp;
 
 class StockMasterSyncService
 {
-    protected ProviderResolverService $resolver;
-
-    protected SyncLogService $syncLog;
-
-    protected PriceFetchService $priceFetch;
-
     public function __construct(
-        ProviderResolverService $resolver,
-        SyncLogService $syncLog,
-        PriceFetchService $priceFetch
-    ) {
-        $this->resolver = $resolver;
-        $this->syncLog = $syncLog;
-        $this->priceFetch = $priceFetch;
-    }
+        protected ProviderResolverService $resolver,
+        protected SyncLogService $syncLog,
+        protected PriceFetchService $priceFetch,
+        protected BseEquityMasterService $bseMaster,
+    ) {}
 
     /**
      * @return array{
@@ -32,10 +23,12 @@ class StockMasterSyncService
      *   source: string,
      *   backfill_new_stocks: int,
      *   backfill_new_rows: int,
-     *   backfill_new_failures: int
+     *   backfill_new_failures: int,
+     *   bse_skipped_isin_dup: int,
+     *   backfill_skipped: bool
      * }
      */
-    public function syncStockMaster(): array
+    public function syncStockMaster(bool $backfillNewSymbols = true): array
     {
         $jobName = SyncLogService::JOB_STOCK_MASTER;
         $runId = $this->syncLog->beginRun($jobName);
@@ -49,14 +42,17 @@ class StockMasterSyncService
             'backfill_new_stocks' => 0,
             'backfill_new_rows' => 0,
             'backfill_new_failures' => 0,
+            'bse_skipped_isin_dup' => 0,
+            'backfill_skipped' => false,
         ];
 
         $this->syncLog->log($runId, $jobName, 'info', 'Stock master sync started', [
             'start_time' => now()->toIso8601String(),
+            'backfill_new_symbols' => $backfillNewSymbols,
         ]);
 
         try {
-            $stats = $this->runStockMasterSync($runId, $jobName, $stats);
+            $stats = $this->runStockMasterSync($runId, $jobName, $stats, $backfillNewSymbols);
 
             $summary = sprintf(
                 'Stock master sync complete (%s): added=%d updated=%d deactivated=%d skipped=%d new_backfill_stocks=%d new_backfill_rows=%d new_backfill_failures=%d',
@@ -97,24 +93,21 @@ class StockMasterSyncService
      *   source: string,
      *   backfill_new_stocks: int,
      *   backfill_new_rows: int,
-     *   backfill_new_failures: int
-     * }  $stats
-     * @return array{
-     *   added: int,
-     *   updated: int,
-     *   deactivated: int,
-     *   skipped: int,
-     *   source: string,
-     *   backfill_new_stocks: int,
-     *   backfill_new_rows: int,
-     *   backfill_new_failures: int
+     *   backfill_new_failures: int,
+     *   bse_skipped_isin_dup: int,
+     *   backfill_skipped: bool
      * }
      */
-    protected function runStockMasterSync(?string $runId, string $jobName, array $stats): array
-    {
+    protected function runStockMasterSync(
+        ?string $runId,
+        string $jobName,
+        array $stats,
+        bool $backfillNewSymbols = true,
+    ): array {
         $rows = $this->fetchNseEquityRows();
         $seen = [];
         $newNseStockIds = [];
+        $nseIsins = [];
 
         foreach ($rows as $row) {
             try {
@@ -145,52 +138,94 @@ class StockMasterSyncService
             );
 
             $stats[$result['action']]++;
+            if (! empty($row['isin'])) {
+                $nseIsins[strtoupper($row['isin'])] = true;
+            }
             if ($result['action'] === 'added' && $normalized['exchange'] === 'NSE') {
                 $newNseStockIds[] = $result['stock']->id;
             }
         }
 
-        $stats['deactivated'] = $this->deactivateMissing(array_keys($seen), 'NSE');
+        $stats['deactivated'] += $this->deactivateMissing(array_keys($seen), 'NSE');
 
+        $newBseStockIds = [];
+        $dualListedIsins = [];
         if (config('portfolio.stock_master.bse_enabled')) {
-            $bseStats = $this->syncBseMaster($runId, $jobName);
+            $bseStats = $this->syncBseMaster($runId, $jobName, $nseIsins, $newBseStockIds, $dualListedIsins);
             $stats['added'] += $bseStats['added'];
             $stats['updated'] += $bseStats['updated'];
             $stats['deactivated'] += $bseStats['deactivated'];
             $stats['skipped'] += $bseStats['skipped'];
+            $stats['bse_skipped_isin_dup'] = $bseStats['skipped_isin_dup'];
             $stats['source'] = 'nse+bse';
         }
 
-        if ($newNseStockIds !== []) {
-            $backfill = $this->backfillNewlyAddedStocks(array_values(array_unique($newNseStockIds)));
+        $this->reconcileDualListedFlags($dualListedIsins);
+
+        $newStockIds = array_values(array_unique(array_merge($newNseStockIds, $newBseStockIds)));
+        if ($backfillNewSymbols && $newStockIds !== []) {
+            $maxBackfill = (int) config('portfolio.stock_master.max_backfill_per_sync', 25);
+            $idsToBackfill = $maxBackfill > 0
+                ? array_slice($newStockIds, 0, $maxBackfill)
+                : $newStockIds;
+
+            if ($maxBackfill > 0 && count($newStockIds) > $maxBackfill) {
+                $stats['backfill_skipped'] = true;
+                $this->syncLog->log($runId, $jobName, 'info', 'Stock master backfill capped for this run', [
+                    'new_symbols' => count($newStockIds),
+                    'backfill_limit' => $maxBackfill,
+                ]);
+            }
+
+            $backfill = $this->backfillNewlyAddedStocks($idsToBackfill);
             $stats['backfill_new_stocks'] = $backfill['processed'];
             $stats['backfill_new_rows'] = $backfill['stored_rows'];
             $stats['backfill_new_failures'] = $backfill['failed'];
-            $this->syncLog->log($runId, $jobName, 'info', 'Backfill for newly added NSE symbols completed', $backfill);
+            $this->syncLog->log($runId, $jobName, 'info', 'Backfill for newly added symbols completed', $backfill);
+        } elseif (! $backfillNewSymbols && $newStockIds !== []) {
+            $stats['backfill_skipped'] = true;
+            $this->syncLog->log($runId, $jobName, 'info', 'Skipped price backfill for newly added symbols (UI/short request)', [
+                'new_symbols' => count($newStockIds),
+            ]);
         }
 
         return $stats;
     }
 
     /**
-     * @return array{added: int, updated: int, deactivated: int, skipped: int}
+     * @param  array<string, true>  $nseIsins
+     * @param  array<int, int>  $newBseStockIds
+     * @return array{added: int, updated: int, deactivated: int, skipped: int, skipped_isin_dup: int}
      */
-    public function syncBseMaster(?string $runId = null, ?string $jobName = null): array
-    {
-        $url = config('portfolio.stock_master.bse_equity_csv_url');
-        if (! $url) {
+    public function syncBseMaster(
+        ?string $runId = null,
+        ?string $jobName = null,
+        array $nseIsins = [],
+        array &$newBseStockIds = [],
+        array &$dualListedIsins = [],
+    ): array {
+        $jobName ??= SyncLogService::JOB_STOCK_MASTER;
+
+        try {
+            $rows = $this->bseMaster->fetchEquityRows();
+        } catch (\Throwable $e) {
             $this->syncLog->log(
                 $runId,
-                $jobName ?? SyncLogService::JOB_STOCK_MASTER,
-                'info',
-                'BSE stock master sync skipped (not configured)',
+                $jobName,
+                'error',
+                'BSE stock master fetch failed: '.$e->getMessage(),
             );
 
-            return ['added' => 0, 'updated' => 0, 'deactivated' => 0, 'skipped' => 0];
+            throw $e;
         }
 
-        $stats = ['added' => 0, 'updated' => 0, 'deactivated' => 0, 'skipped' => 0];
-        $rows = $this->downloadCsvRows($url);
+        if ($rows === []) {
+            $this->syncLog->log($runId, $jobName, 'warning', 'BSE stock master returned no rows');
+
+            return ['added' => 0, 'updated' => 0, 'deactivated' => 0, 'skipped' => 0, 'skipped_isin_dup' => 0];
+        }
+
+        $stats = ['added' => 0, 'updated' => 0, 'deactivated' => 0, 'skipped' => 0, 'skipped_isin_dup' => 0];
         $seen = [];
 
         foreach ($rows as $row) {
@@ -200,15 +235,86 @@ class StockMasterSyncService
                 continue;
             }
 
-            $key = $symbol.'|BSE';
+            $isin = isset($row['isin']) ? strtoupper(trim((string) $row['isin'])) : '';
+            if ($isin !== '' && isset($nseIsins[$isin])) {
+                $stats['skipped_isin_dup']++;
+                $dualListedIsins[$isin] = true;
+                continue;
+            }
+
+            try {
+                $normalized = $this->resolver->normalizeSymbol($symbol, 'BSE');
+            } catch (\InvalidArgumentException) {
+                $stats['skipped']++;
+                continue;
+            }
+
+            $key = $normalized['symbol'].'|BSE';
+            if (isset($seen[$key])) {
+                $stats['skipped']++;
+                continue;
+            }
             $seen[$key] = true;
-            $result = $this->upsertMasterRow($symbol, 'BSE', $row['name'] ?? $symbol, $row['isin'] ?? null, null);
-            $stats[$result]++;
+
+            $result = $this->upsertMasterRow(
+                $normalized['symbol'],
+                $normalized['exchange'],
+                $row['name'] ?? $symbol,
+                $isin !== '' ? $isin : null,
+                null,
+            );
+            $stats[$result['action']]++;
+            if ($result['action'] === 'added') {
+                $newBseStockIds[] = $result['stock']->id;
+            }
         }
 
         $stats['deactivated'] = $this->deactivateMissing(array_keys($seen), 'BSE');
+        $stats['deactivated'] += $this->deactivateBseDuplicatesOfNse(array_keys($nseIsins));
 
         return $stats;
+    }
+
+    /**
+     * @param  array<string, true>  $dualListedIsins
+     */
+    protected function reconcileDualListedFlags(array $dualListedIsins): void
+    {
+        if (! \Illuminate\Support\Facades\Schema::hasColumn('portfolio_stocks', 'is_dual_listed')) {
+            return;
+        }
+
+        Stock::query()
+            ->where('exchange', 'NSE')
+            ->where('is_benchmark', false)
+            ->update(['is_dual_listed' => false]);
+
+        if ($dualListedIsins === []) {
+            return;
+        }
+
+        Stock::query()
+            ->where('exchange', 'NSE')
+            ->where('is_benchmark', false)
+            ->whereIn('isin', array_keys($dualListedIsins))
+            ->update(['is_dual_listed' => true]);
+    }
+
+    /**
+     * @param  array<int, string>  $nseIsins
+     */
+    protected function deactivateBseDuplicatesOfNse(array $nseIsins): int
+    {
+        if ($nseIsins === []) {
+            return 0;
+        }
+
+        return Stock::query()
+            ->where('exchange', 'BSE')
+            ->where('is_benchmark', false)
+            ->where('is_active', true)
+            ->whereIn('isin', $nseIsins)
+            ->update(['is_active' => false]);
     }
 
     /**
@@ -290,6 +396,9 @@ class StockMasterSyncService
         $stock->name = $name;
         $stock->isin = $isin ?: $stock->isin;
         $stock->is_active = true;
+        if ($exchange === 'BSE' && \Illuminate\Support\Facades\Schema::hasColumn('portfolio_stocks', 'is_dual_listed')) {
+            $stock->is_dual_listed = false;
+        }
         $this->resolver->applyProviderSymbols($stock);
 
         if (! $stock->last_verified_at) {
@@ -312,7 +421,6 @@ class StockMasterSyncService
     {
         $stocks = Stock::query()
             ->whereIn('id', $stockIds)
-            ->where('exchange', 'NSE')
             ->where('is_benchmark', false)
             ->orderBy('id')
             ->get();

@@ -9,6 +9,7 @@ import { showToast } from '../toast';
 import { categoryClassName, categoryLabel } from '../utils/patternDetection';
 import { formatInrWhole } from '../utils/tableFormat';
 import { formatTransactionDateDisplay } from '../utils/transactionDate';
+import { stockExchangeLabel } from '../utils/exchangeDisplay';
 
 function WatchlistStockPanel({
     stock,
@@ -44,7 +45,7 @@ function WatchlistStockPanel({
                         <div>
                             <div className="h5 mb-1">{stock.symbol}</div>
                             <div className="text-muted small">{stock.name}</div>
-                            <div className="text-muted small">{stock.exchange}</div>
+                            <div className="text-muted small">{stockExchangeLabel(stock)}</div>
                         </div>
                         {priceMeta?.latest_close != null ? (
                             <div className="text-end">

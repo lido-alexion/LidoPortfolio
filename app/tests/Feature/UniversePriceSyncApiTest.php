@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Stock;
 use App\Models\User;
+use App\Services\AdminOperationalAlertService;
 use App\Services\PriceFetchService;
 use App\Services\StockMasterSyncService;
 use App\Services\UniversePriceSyncService;
@@ -43,10 +44,10 @@ class UniversePriceSyncApiTest extends TestCase
         ]);
 
         $response = $this->actingAs($admin)
-            ->getJson('/api/universe-price-sync/status?scope=all_nse')
+            ->getJson('/api/universe-price-sync/status?scope=all_equities')
             ->assertOk();
 
-        $response->assertJsonPath('data.scope', 'all_nse');
+        $response->assertJsonPath('data.scope', 'all_equities');
         $response->assertJsonPath('data.universe_count', 1);
         $response->assertJsonStructure([
             'data' => [
@@ -63,6 +64,11 @@ class UniversePriceSyncApiTest extends TestCase
     public function test_admin_can_trigger_daily_batch(): void
     {
         config(['portfolio.universe_price_sync.delay_ms_between_stocks' => 0]);
+
+        \App\Models\Setting::setValue(
+            \App\Services\BenchmarkPriceSyncService::KEY_LAST_SYNC_DATE,
+            now()->toDateString(),
+        );
 
         $admin = User::factory()->create(['is_admin' => true]);
 
@@ -88,7 +94,7 @@ class UniversePriceSyncApiTest extends TestCase
         $response = $this->actingAs($admin)
             ->postJson('/api/universe-price-sync/run', [
                 'mode' => 'daily',
-                'scope' => 'all_nse',
+                'scope' => 'all_equities',
             ])
             ->assertOk();
 
@@ -111,7 +117,10 @@ class UniversePriceSyncApiTest extends TestCase
         $admin = User::factory()->create(['is_admin' => true]);
 
         $master = Mockery::mock(StockMasterSyncService::class);
-        $master->shouldReceive('syncStockMaster')->once()->andReturn([
+        $master->shouldReceive('syncStockMaster')
+            ->once()
+            ->with(false)
+            ->andReturn([
             'added' => 1,
             'updated' => 0,
             'deactivated' => 0,
@@ -120,10 +129,42 @@ class UniversePriceSyncApiTest extends TestCase
         ]);
         $this->app->instance(StockMasterSyncService::class, $master);
 
+        $opsAlerts = Mockery::mock(AdminOperationalAlertService::class);
+        $opsAlerts->shouldReceive('syncAndNotify')->once()->andReturn([
+            'active' => [],
+            'notified' => [],
+            'resolved' => [],
+        ]);
+        $this->app->instance(AdminOperationalAlertService::class, $opsAlerts);
+
         $this->actingAs($admin)
             ->postJson('/api/universe-price-sync/stock-master')
             ->assertOk()
             ->assertJsonPath('data.added', 1);
+    }
+
+    public function test_ui_stock_master_failure_triggers_operational_alert_telegram_sync(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+
+        $master = Mockery::mock(StockMasterSyncService::class);
+        $master->shouldReceive('syncStockMaster')
+            ->once()
+            ->andThrow(new \RuntimeException('BSE URL missing'));
+        $this->app->instance(StockMasterSyncService::class, $master);
+
+        $opsAlerts = Mockery::mock(AdminOperationalAlertService::class);
+        $opsAlerts->shouldReceive('syncAndNotify')->once()->andReturn([
+            'active' => [],
+            'notified' => ['stock_master_failed'],
+            'resolved' => [],
+        ]);
+        $this->app->instance(AdminOperationalAlertService::class, $opsAlerts);
+
+        $this->actingAs($admin)
+            ->postJson('/api/universe-price-sync/stock-master')
+            ->assertStatus(500)
+            ->assertJsonFragment(['message' => 'Stock master sync failed: BSE URL missing']);
     }
 
     public function test_rate_limit_detection_flags_403_errors(): void

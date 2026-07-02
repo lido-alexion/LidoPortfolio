@@ -106,7 +106,7 @@ class AdminOperationalAlertTest extends TestCase
         ]);
 
         $response = $this->actingAs($admin)
-            ->getJson('/api/universe-price-sync/status?scope=all_nse')
+            ->getJson('/api/universe-price-sync/status?scope=all_equities')
             ->assertOk();
 
         $keys = collect($response->json('data.operational_alerts.active'))->pluck('key')->all();
@@ -194,5 +194,103 @@ class AdminOperationalAlertTest extends TestCase
     {
         $this->artisan('portfolio:check-operational-alerts')
             ->assertExitCode(0);
+    }
+
+    public function test_admin_can_clear_dismissed_alert_manually(): void
+    {
+        config(['portfolio.universe_price_sync.enabled' => false]);
+
+        $admin = User::factory()->create(['is_admin' => true]);
+        $this->defaultPortfolioFor($admin);
+
+        OperationalAlert::query()->create([
+            'alert_key' => AdminOperationalAlertService::KEY_STOCK_MASTER_FAILED,
+            'severity' => 'critical',
+            'title' => 'Stock master sync failed',
+            'message' => 'Test message',
+            'context' => null,
+            'first_triggered_at' => now(),
+            'last_triggered_at' => now(),
+            'acknowledged_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson('/api/operational-alerts/clear', [
+                'key' => AdminOperationalAlertService::KEY_STOCK_MASTER_FAILED,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.active', []);
+
+        $row = OperationalAlert::query()->find(AdminOperationalAlertService::KEY_STOCK_MASTER_FAILED);
+        $this->assertNotNull($row->resolved_at);
+        $this->assertNotNull($row->manually_cleared_at);
+    }
+
+    public function test_manually_cleared_alert_stays_hidden_while_condition_persists(): void
+    {
+        config(['portfolio.universe_price_sync.enabled' => false]);
+
+        $admin = User::factory()->create(['is_admin' => true]);
+        $this->defaultPortfolioFor($admin);
+
+        SyncRun::query()->create([
+            'id' => (string) Str::uuid(),
+            'job_name' => SyncLogService::JOB_STOCK_MASTER,
+            'status' => 'failed',
+            'started_at' => now()->subHour(),
+            'finished_at' => now()->subHour(),
+            'summary' => 'CSV download failed',
+        ]);
+        SyncRun::query()->create([
+            'id' => (string) Str::uuid(),
+            'job_name' => SyncLogService::JOB_DAILY_MARKET_DATA,
+            'status' => 'success',
+            'started_at' => now()->subHours(2),
+            'finished_at' => now()->subHours(2),
+        ]);
+
+        $service = app(AdminOperationalAlertService::class);
+        $service->syncActiveAlerts(false);
+        $service->clearManually(AdminOperationalAlertService::KEY_STOCK_MASTER_FAILED);
+
+        $service->syncActiveAlerts(false);
+
+        $keys = collect($service->getActiveAlertsForApi())->pluck('key')->all();
+        $this->assertNotContains(AdminOperationalAlertService::KEY_STOCK_MASTER_FAILED, $keys);
+    }
+
+    public function test_admin_can_clear_all_dismissed_alerts(): void
+    {
+        config(['portfolio.universe_price_sync.enabled' => false]);
+
+        $admin = User::factory()->create(['is_admin' => true]);
+        $this->defaultPortfolioFor($admin);
+
+        OperationalAlert::query()->create([
+            'alert_key' => AdminOperationalAlertService::KEY_DAILY_SYNC_OVERDUE,
+            'severity' => 'warning',
+            'title' => 'Daily market sync overdue',
+            'message' => 'Test message',
+            'context' => null,
+            'first_triggered_at' => now(),
+            'last_triggered_at' => now(),
+            'acknowledged_at' => now(),
+        ]);
+        OperationalAlert::query()->create([
+            'alert_key' => AdminOperationalAlertService::KEY_STOCK_MASTER_FAILED,
+            'severity' => 'critical',
+            'title' => 'Stock master sync failed',
+            'message' => 'Test message',
+            'context' => null,
+            'first_triggered_at' => now(),
+            'last_triggered_at' => now(),
+            'acknowledged_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson('/api/operational-alerts/clear-dismissed')
+            ->assertOk()
+            ->assertJsonPath('data.cleared_count', 2)
+            ->assertJsonPath('data.active', []);
     }
 }

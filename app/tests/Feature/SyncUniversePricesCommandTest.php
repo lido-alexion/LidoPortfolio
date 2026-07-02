@@ -25,6 +25,11 @@ class SyncUniversePricesCommandTest extends TestCase
             'portfolio.universe_price_sync.delay_ms_between_stocks' => 0,
         ]);
 
+        \App\Models\Setting::setValue(
+            \App\Services\BenchmarkPriceSyncService::KEY_LAST_SYNC_DATE,
+            now()->toDateString(),
+        );
+
         Stock::query()->create([
             'symbol' => 'INFY',
             'exchange' => 'NSE',

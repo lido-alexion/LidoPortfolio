@@ -5,19 +5,21 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Support\StockValidationUserMessage;
 use App\Models\Stock;
+use App\Services\EquityUniverseService;
 use App\Services\StockValidationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class StockController extends Controller
 {
-    public function __construct(protected StockValidationService $validation) {}
+    public function __construct(
+        protected StockValidationService $validation,
+        protected EquityUniverseService $equityUniverse,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
-        $query = Stock::query()
-            ->where('is_benchmark', false)
-            ->where('is_active', true);
+        $query = $this->equityUniverse->searchQuery(null);
 
         if ($request->filled('q')) {
             $term = '%'.strtoupper(trim((string) $request->input('q'))).'%';
@@ -30,7 +32,9 @@ class StockController extends Controller
         $stocks = $query
             ->orderBy('symbol')
             ->limit(min((int) $request->input('limit', 50), 100))
-            ->get();
+            ->get()
+            ->map(fn (Stock $stock) => $this->equityUniverse->formatStockForApi($stock))
+            ->values();
 
         return response()->json(['data' => $stocks]);
     }
@@ -46,23 +50,19 @@ class StockController extends Controller
         $term = strtoupper(trim($validated['q']));
         $like = '%'.$term.'%';
 
-        $query = Stock::query()
-            ->where('is_benchmark', false)
-            ->where('is_active', true)
+        $query = $this->equityUniverse->searchQuery($validated['exchange'] ?? null)
             ->where(function ($builder) use ($like) {
                 $builder->where('symbol', 'like', $like)
                     ->orWhere('name', 'like', $like);
             });
 
-        if (! empty($validated['exchange'])) {
-            $query->where('exchange', $validated['exchange']);
-        }
-
         $stocks = $query
             ->orderByRaw('CASE WHEN symbol LIKE ? THEN 0 ELSE 1 END', [$term.'%'])
             ->orderBy('symbol')
             ->limit($validated['limit'] ?? 20)
-            ->get(['id', 'symbol', 'exchange', 'name']);
+            ->get(['id', 'symbol', 'exchange', 'name', 'is_dual_listed'])
+            ->map(fn (Stock $stock) => $this->equityUniverse->formatStockForApi($stock))
+            ->values();
 
         return response()->json(['data' => $stocks]);
     }
@@ -102,7 +102,7 @@ class StockController extends Controller
         return response()->json([
             'valid' => true,
             'source' => $result->source,
-            'data' => $result->stock,
+            'data' => $result->stock ? $this->equityUniverse->formatStockForApi($result->stock) : null,
             'meta' => $result->meta,
         ]);
     }
@@ -132,12 +132,12 @@ class StockController extends Controller
             ], 422);
         }
 
-        return response()->json(['data' => $result->stock], 201);
+        return response()->json(['data' => $this->equityUniverse->formatStockForApi($result->stock)], 201);
     }
 
     public function show(Stock $stock): JsonResponse
     {
-        return response()->json(['data' => $stock->load('metrics')]);
+        return response()->json(['data' => $this->equityUniverse->formatStockForApi($stock->load('metrics'))]);
     }
 
     public function update(Request $request, Stock $stock): JsonResponse

@@ -57,7 +57,7 @@ Responses return `user` only (no `token` field).
 
 Stock master sync (CLI): `php artisan stocks:sync` (weekly scheduled)
 
-Universe OHLCV sync (CLI): `php artisan portfolio:sync-universe-prices` — `--mode=backfill|daily`, `--scope=all_nse|nifty500`, `--all` for full-universe backfill. Scheduled every 15 min 19:00–23:45 when enabled. See `implementation.md` → Universe price sync.
+Universe OHLCV sync (CLI): `php artisan portfolio:sync-universe-prices` — `--mode=backfill|daily`, `--scope=all_equities|nifty500` (`all_nse` deprecated alias), `--all` for full-universe backfill.
 
 ## Transactions
 
@@ -200,7 +200,7 @@ Request body:
 
 - `POST /sync/daily` (auth, **admin**) — body/query `force` (boolean)
 - `POST /sync/backfill/{stock}` (auth, **admin**) — force fetch from user's buy date
-- `GET /universe-price-sync/status` (auth, **admin**) — query `scope` (`all_nse`|`nifty500`); progress, coverage, cursor, `rate_limits.likely_rate_limited`, `rate_limits.recent_issues`
+- `GET /universe-price-sync/status` (auth, **admin**) — query `scope` (`all_equities`|`all_nse` deprecated|`nifty500`); progress, coverage, cursor, `rate_limits.likely_rate_limited`, `rate_limits.recent_issues`
 - `POST /universe-price-sync/run` (auth, **admin**, throttle 12/min) — body: `mode` (`daily`|`backfill`), `scope`, `batch` (1–200), `reset_cursor`, `process_all` (avoid on cPanel — may timeout)
 - `POST /universe-price-sync/stock-master` (auth, **admin**, throttle 12/min) — NSE equity master CSV import
 - `GET /sync-logs`, `GET /sync-logs/runs`, `GET /sync-logs/export` (auth, **admin**)

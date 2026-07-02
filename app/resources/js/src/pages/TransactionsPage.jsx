@@ -25,6 +25,7 @@ import {
     stockValidationCacheKey,
 
 } from '../utils/stockValidationCache';
+import { stockExchangeLabel } from '../utils/exchangeDisplay';
 
 import FeeBreakdownHint from '../components/FeeBreakdownHint';
 import BulkTransactionImport from '../components/BulkTransactionImport';
@@ -307,41 +308,47 @@ export default function TransactionsPage() {
 
 
 
-    const applyValidatedStock = useCallback((stock, source, cached = false) => {
+    const applyValidatedStock = useCallback((stock, source, cached = false, requestedExchange = null) => {
 
         setSelectedStock(stock);
 
-        setForm((prev) => ({
+        setForm((prev) => {
 
-            ...prev,
+            const exchange = requestedExchange ?? prev.exchange;
 
-            stock_id: String(stock.id),
+            setSymbolValidation({
 
-            symbol: stock.symbol,
+                valid: true,
 
-            name: stock.name,
+                symbol: stock.symbol,
 
-            exchange: stock.exchange || prev.exchange,
+                exchange,
 
-        }));
+                source,
 
-        setSymbolValidation({
+                cached,
 
-            valid: true,
+                message: cached ? 'Found in local master.' : `Validated via ${source}.`,
 
-            symbol: stock.symbol,
+            });
 
-            exchange: stock.exchange || 'NSE',
+            return {
 
-            source,
+                ...prev,
 
-            cached,
+                stock_id: String(stock.id),
 
-            message: cached ? 'Found in local master.' : `Validated via ${source}.`,
+                symbol: stock.symbol,
+
+                name: stock.name,
+
+                exchange,
+
+            };
 
         });
 
-    }, [form.exchange]);
+    }, []);
 
 
 
@@ -551,7 +558,9 @@ export default function TransactionsPage() {
 
 
     const handleStockSelect = (stock) => {
-        setCachedStockValidation(stock.exchange || form.exchange, stock.symbol, {
+        const exchange = form.exchange || 'NSE';
+
+        setCachedStockValidation(exchange, stock.symbol, {
 
             valid: true,
 
@@ -563,7 +572,7 @@ export default function TransactionsPage() {
 
         });
 
-        applyValidatedStock(stock, 'local', true);
+        applyValidatedStock(stock, 'local', true, exchange);
 
     };
 
@@ -693,7 +702,7 @@ export default function TransactionsPage() {
 
             setCachedStockValidation(exchange, symbol, entry);
 
-            applyValidatedStock(stock, res.data.source, entry.cached);
+            applyValidatedStock(stock, res.data.source, entry.cached, exchange);
 
         } catch (err) {
 
@@ -960,6 +969,20 @@ export default function TransactionsPage() {
                                             <div className="form-text text-danger">
 
                                                 {symbolValidation.message}
+
+                                            </div>
+
+                                        )}
+
+                                        {symbolValidation?.valid && selectedStock && (
+
+                                            <div className="form-text text-success">
+
+                                                {symbolValidation.message}
+
+                                                {' '}
+
+                                                ({stockExchangeLabel(selectedStock)})
 
                                             </div>
 

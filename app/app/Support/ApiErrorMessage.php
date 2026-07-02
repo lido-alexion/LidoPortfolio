@@ -35,6 +35,14 @@ class ApiErrorMessage
     {
         $sqlMessage = $e->getMessage();
 
+        if (str_contains($sqlMessage, 'portfolio_operational_alerts')) {
+            if (str_contains($sqlMessage, 'manually_cleared_at')) {
+                return 'Admin alerts database is missing the manual clear column. Run the latest migrations on the server (cpanel-migrate.php), then try again.';
+            }
+
+            return 'Admin alerts database tables are missing or incomplete. Run the latest migrations on the server (cpanel-migrate.php), then try again.';
+        }
+
         if (str_contains($sqlMessage, 'portfolio_alert_policies')) {
             return 'Alert policies database tables are missing or incomplete. Run the latest migrations on the server (cpanel-migrate.php), then try again.';
         }

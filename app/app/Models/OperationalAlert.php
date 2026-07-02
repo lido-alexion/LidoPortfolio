@@ -27,6 +27,7 @@ class OperationalAlert extends Model
         'resolved_at',
         'last_telegram_at',
         'acknowledged_at',
+        'manually_cleared_at',
     ];
 
     protected function casts(): array
@@ -38,6 +39,7 @@ class OperationalAlert extends Model
             'resolved_at' => 'datetime',
             'last_telegram_at' => 'datetime',
             'acknowledged_at' => 'datetime',
+            'manually_cleared_at' => 'datetime',
         ];
     }
 

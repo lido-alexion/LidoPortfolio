@@ -448,7 +448,7 @@ Per-portfolio rules in `portfolio_alert_policies`; evaluated after daily price s
 ## Deployment Validation
 
 - **Canonical deploy:** `deploy/DEPLOY.md` · checklists: `DEPLOYMENT_VALIDATION_PLAN.md`
-- **Stage uploads:** `deploy/prepare-upload.ps1` → `deploy/staging/` (gitignored)
+- **Stage uploads:** `deploy/prepare-upload.ps1` → `deploy/staging/` (gitignored). Staging includes `lidoportfolio/config/*.php` (all app config except dev `DBConfig.php`); run `cpanel-config-cache.php` after upload when config changes.
 
 ### Production learnings (Jun 2026 — `/portfolio` on GoDaddy)
 
@@ -596,7 +596,7 @@ Migration `2026_05_29_000001_extend_portfolio_stocks_master.php` adds provider s
 | `exchange`                             | `NSE` or `BSE`                                       |
 | `name`, `isin`, `sector`               | Display / metadata                                   |
 | `yahoo_symbol`, `alpha_vantage_symbol` | Provider-specific symbols                            |
-| `is_active`, `is_benchmark`            | Listing / NIFTY row                                  |
+| `is_active`, `is_benchmark`, `is_dual_listed` | Listing / NIFTY row / also on BSE (same ISIN) |
 | `last_verified_at`                     | Last provider or sync verification                   |
 
 **Unique:** `(symbol, exchange)` — same ticker may exist on NSE and BSE separately.
@@ -617,7 +617,9 @@ Provider suffixes are resolved by `ProviderResolverService`, not stored in `symb
 | ------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `ProviderResolverService` | `normalizeSymbol()`, `yahooSymbol()`, `alphaVantageSymbol()`, `isMalformed()`, `applyProviderSymbols()` |
 | `StockValidationService`  | Stage 1 local lookup; stage 2 provider chain; `validateAndPersist()` upserts + backfill                 |
-| `StockMasterSyncService`  | NSE CSV import via `stocks:sync`; optional BSE; deactivate missing symbols                              |
+| `StockMasterSyncService`  | NSE + BSE master import via `stocks:sync`; ISIN dedup (NSE preferred); `is_dual_listed` flag |
+| `BseEquityMasterService`  | BSE equity list via API (`BSE_EQUITY_LIST_API_URL`) or optional `BSE_EQUITY_CSV_URL` |
+| `EquityUniverseService`   | Universe/search queries, ISIN dedup, `exchange_label` (`NSE+`), canonical stock resolution |
 | `StockResolverService`    | Used by transactions — delegates to validation (no blind `Stock::create`)                               |
 
 ### Provider fallback flow
@@ -641,13 +643,15 @@ User input → normalize → local DB hit? → return valid
 
 - Command: `php artisan stocks:sync` (`SyncStockMasterCommand`)
 - Schedule: weekly Sunday 02:00 (timezone from settings / env)
-- Source URL: `config('portfolio.stock_master.nse_equity_csv_url')` default NSE archive CSV
-- EQ series only; duplicates logged and skipped; removed symbols set `is_active=false` (IDs preserved)
-- **Immediate new-symbol price fill:** when stock master adds new NSE symbols, the sync now runs immediate backfill for those new symbols only (history window = `UNIVERSE_PRICE_SYNC_HISTORY_DAYS`, provider calls gap-aware via `syncStock`) with per-symbol delay; this avoids waiting for later universe cycles to price newly listed names.
+- **NSE:** `config('portfolio.stock_master.nse_equity_csv_url')` default NSE `EQUITY_L.csv`; EQ series only
+- **BSE (Jul 2026):** enabled by default (`BSE_STOCK_MASTER_ENABLED=true`). **`BseEquityMasterService`** fetches BSE equity list from `BSE_EQUITY_LIST_API_URL` (BSE `ListofScripData` API) or optional `BSE_EQUITY_CSV_URL` override. **Deploy:** upload `config/portfolio.php` and run `config:cache` — stale cache without `bse_list_api_url` caused null URL errors; service now falls back to built-in default API URL if config is missing.
+- **ISIN dedup:** when the same ISIN exists on NSE and BSE, only the **NSE** row is kept; BSE duplicate rows are skipped/deactivated. NSE rows get `is_dual_listed=true` and display as **`NSE+`** (`exchange_label` in API). BSE-only listings remain `exchange=BSE`
+- Duplicates within same exchange logged and skipped; removed symbols set `is_active=false` (IDs preserved)
+- **Immediate new-symbol price fill:** when stock master adds new NSE or BSE-only symbols, CLI `stocks:sync` may backfill those ids (`STOCK_MASTER_BACKFILL_ON_SYNC`, capped by `STOCK_MASTER_MAX_BACKFILL_PER_SYNC`). **UI** `POST /universe-price-sync/stock-master` imports master only (no price backfill) to avoid HTTP timeouts on shared hosting.
 
 ### Universe price sync (Jun 2026)
 
-Bulk OHLCV for the **NSE equity universe** (independent of holdings). Reuses `portfolio_stock_prices`, `StockPriceHistoryService` gap-fill, and `PriceFetchService` provider chain (NSE → Yahoo → Alpha Vantage). No screener metrics or buy alerts in this phase.
+Bulk OHLCV for the **equity universe** (NSE + BSE-only; ISIN deduped). Reuses `portfolio_stock_prices`, `StockPriceHistoryService` gap-fill, and `PriceFetchService` provider chain (NSE → Yahoo → Alpha Vantage). No screener metrics or buy alerts in this phase.
 
 **NIFTY50 benchmark (Explorer / RS):** Universe sync excludes `is_benchmark` rows. **`BenchmarkPriceSyncService`** keeps NIFTY50 OHLCV current: full ~12-month backfill when cache is insufficient for 6M analytics, otherwise incremental (last ~14 days). Runs automatically via (1) **`portfolio:sync-benchmark-prices`** scheduled daily at the same time as daily market sync, (2) **`portfolio:daily-sync`** (force each run), (3) first universe batch each calendar day (`syncIfNeeded` skips if already synced today). Manual: `php artisan portfolio:sync-benchmark-prices`.
 
@@ -670,22 +674,23 @@ Bulk OHLCV for the **NSE equity universe** (independent of holdings). Reuses `po
 | `portfolio:check-operational-alerts`                   | Evaluate sync health; Telegram admins; update operational alert flags  |
 | `POST /api/universe-price-sync/run`                    | Same as CLI batch (cPanel-friendly; one HTTP request per batch)        |
 | `GET /api/universe-price-sync/status`                  | Progress, coverage, cursor, rate-limit signals, recent provider issues |
-| `POST /api/universe-price-sync/stock-master`           | NSE equity master CSV import                                           |
+| `POST /api/universe-price-sync/stock-master`           | NSE + BSE equity master import                                         |
 
-**Admin UI:** Settings → **Universe price sync** (`/settings/universe-price-sync`) — status cards, run daily/backfill batch buttons, stock master sync, auto-refresh, recent provider issues table. Scope selector now exposes **All NSE equities** only (NIFTY 500 option removed from UI since full-universe mode is the standard). Added **Run full backfill cycle** button: chains one backfill API batch at a time until `cycle_completed=true` (with brief waits between calls; safety cap to avoid endless loops), so admins can backfill full universe with one click. Toasts use `showToast(message, variant)` (not object payloads).
+**Admin UI:** Settings → **Universe price sync** (`/settings/universe-price-sync`) — scope **All equities (NSE + BSE-only)** (`all_equities`). Other behavior unchanged (backfill chain, gap checker, stock master sync, toasts).
 
-**Scope** (`UNIVERSE_PRICE_SYNC_SCOPE`, default `all_nse`):
+**Scope** (`UNIVERSE_PRICE_SYNC_SCOPE`, default `all_equities`):
 
-- `all_nse` — every `is_active` NSE EQ row from stock master (~all listed equities)
-- `nifty500` — intersection with NIFTY 500 constituents (fetched from NSE `equity-stockIndices`, cached in `portfolio_settings` for 7 days)
+- `all_equities` — active NSE rows + active BSE-only rows (BSE rows whose ISIN already exists on NSE are excluded)
+- `all_nse` — **deprecated** alias for `all_equities` (accepted in API/CLI for backward compatibility)
+- `nifty500` — intersection with NIFTY 500 NSE constituents (cached in `portfolio_settings` for 7 days)
 
 **Rate limiting:** configurable delay between symbols (`UNIVERSE_PRICE_SYNC_DELAY_MS`, default 400ms); batches default 75 stocks/run. API throttled 12/min per admin. `rate_limit_hits` and `likely_rate_limited` on status when errors match 403/429/throttle patterns. Telegram suppressed during batch (`PriceSyncNotificationContext::withoutTelegram`).
 
 **Schedule:** `portfolio:run-universe-maintenance` every **15 minutes** between **19:00–23:45** (cron timezone from settings), when `UNIVERSE_PRICE_SYNC_ENABLED=true`. It runs one daily batch and automatically triggers gap fill retries on failures. Cursor `universe_price_sync_cursor_stock_id` resumes where the last batch stopped; resets when the full universe cycle completes.
 
-**Admin operational alerts (Jul 2026):** **`AdminOperationalAlertService`** monitors sync health and persists active issues in `portfolio_operational_alerts`. Detects: provider rate limits, universe sync overdue/failed, daily market sync overdue/failed, stock master weekly sync overdue/failed, and scheduler inactivity (no sync runs). Telegram notifications go to **all admin users** with Telegram configured on any portfolio (deduped by bot token + chat id); re-notify at most every **6 hours** per alert while still active (`ADMIN_OPS_ALERT_TELEGRAM_COOLDOWN_HOURS`). Command: `portfolio:check-operational-alerts` (hourly schedule). Also runs after daily sync, universe maintenance, and stock master sync. **Admin UI:** Settings → **Admin alerts** (`/settings/admin-alerts`) lists active alerts with dismiss one / dismiss all. **Warning toast:** when an admin loads the dashboard from the **server** (cache miss, **Refresh dashboard**, or post-mutation refetch — not when serving `localStorage` cache), `showAdminOperationalAlertsToastIfAny()` calls `GET /api/operational-alerts` and shows a warning toast if `unacknowledged_count > 0`. **Universe price sync** page still shows a compact operational alerts card with link to admin alerts. API: `GET /api/operational-alerts`, `POST /api/operational-alerts/acknowledge`, `POST /api/operational-alerts/acknowledge-all`; universe status still includes `operational_alerts`. Migration: `2026_07_06_000001_create_portfolio_operational_alerts_table.php`. Env thresholds: `ADMIN_OPS_DAILY_SYNC_STALE_HOURS` (36), `ADMIN_OPS_UNIVERSE_SYNC_STALE_HOURS` (26), `ADMIN_OPS_UNIVERSE_SYNC_STALE_MINUTES` (45 during 19:00–23:45), `ADMIN_OPS_STOCK_MASTER_STALE_DAYS` (8), `ADMIN_OPS_SCHEDULER_DEAD_HOURS` (48). Dismiss sets `acknowledged_at` until the condition clears or re-triggers.
+**Admin operational alerts (Jul 2026):** **`AdminOperationalAlertService`** monitors sync health and persists active issues in `portfolio_operational_alerts`. Detects: provider rate limits, universe sync overdue/failed, daily market sync overdue/failed, stock master weekly sync overdue/failed, and scheduler inactivity (no sync runs). Telegram notifications go to **all admin users** with Telegram configured on any portfolio (deduped by bot token + chat id); re-notify at most every **6 hours** per alert while still active (`ADMIN_OPS_ALERT_TELEGRAM_COOLDOWN_HOURS`). Command: `portfolio:check-operational-alerts` (hourly schedule). Also runs after daily sync, universe maintenance, stock master sync (**CLI and UI** `POST /universe-price-sync/stock-master`). **Admin UI:** Settings → **Admin alerts** (`/settings/admin-alerts`) — **Dismiss** acknowledges (hides from “Needs attention” while issue persists); **Clear off** manually resolves with `manually_cleared_at` suppression so the alert stays hidden until the underlying issue is fixed and then recurs. API: `POST /operational-alerts/clear`, `POST /operational-alerts/clear-dismissed`. **Warning toast:** when an admin loads the dashboard from the **server** (cache miss, **Refresh dashboard**, or post-mutation refetch — not when serving `localStorage` cache), `showAdminOperationalAlertsToastIfAny()` calls `GET /api/operational-alerts` and shows a warning toast if `unacknowledged_count > 0`. **Universe price sync** page still shows a compact operational alerts card with link to admin alerts. API: `GET /api/operational-alerts`, `POST /api/operational-alerts/acknowledge`, `POST /api/operational-alerts/acknowledge-all`; universe status still includes `operational_alerts`. Migration: `2026_07_06_000001_create_portfolio_operational_alerts_table.php`. Env thresholds: `ADMIN_OPS_DAILY_SYNC_STALE_HOURS` (36), `ADMIN_OPS_UNIVERSE_SYNC_STALE_HOURS` (26), `ADMIN_OPS_UNIVERSE_SYNC_STALE_MINUTES` (45 during 19:00–23:45), `ADMIN_OPS_STOCK_MASTER_STALE_DAYS` (8), `ADMIN_OPS_SCHEDULER_DEAD_HOURS` (48). Dismiss sets `acknowledged_at` until the condition clears or re-triggers.
 
-**Services:** `UniverseStockResolverService`, `Nifty500ConstituentService`, `UniversePriceSyncService`. Sync log job name: `universe-price-sync` (visible in Settings → sync logs summaries).
+**Services:** `EquityUniverseService`, `UniverseStockResolverService` (wrapper), `Nifty500ConstituentService`, `UniversePriceSyncService`, `BseEquityMasterService`. Sync log job name: `universe-price-sync`.
 
 **Env (optional):** `UNIVERSE_PRICE_SYNC_ENABLED`, `UNIVERSE_PRICE_SYNC_SCOPE`, `UNIVERSE_PRICE_SYNC_HISTORY_DAYS` (default 365), `UNIVERSE_PRICE_SYNC_DAILY_LOOKBACK_DAYS` (default 10), `UNIVERSE_PRICE_SYNC_DELAY_MS`, `UNIVERSE_PRICE_SYNC_BATCH_SIZE`.
 
@@ -699,8 +704,11 @@ Bulk OHLCV for the **NSE equity universe** (independent of holdings). Reuses `po
 
 ### Autocomplete UX
 
-- `StockAutocomplete.jsx` — debounced search (300ms), min 2 chars, loading + empty states
-- `TransactionsPage.jsx` — requires selection or validated symbol; no datalist free-text
+- `StockAutocomplete.jsx` — debounced search; shows `exchange_label` (`NSE+` for dual-listed)
+- `TransactionsPage.jsx` — requires selection or validated symbol; no datalist free-text; **NSE/BSE toggle preserved** for fee calculation when dual-listed stock resolves to canonical NSE `stock_id`; validation success shows `exchange_label`
+- `StockExplorerPage.jsx` — exchange toggle + selected stock label (`NSE+` when dual-listed)
+- `WatchlistPage.jsx` — shows `exchange_label` instead of raw `exchange`
+- `BulkTransactionImport.jsx` — per-row NSE/BSE toggle on review step
 - Unknown symbol on save triggers backend provider validation
 
 ### Rate limits & security
@@ -726,13 +734,13 @@ Bulk OHLCV for the **NSE equity universe** (independent of holdings). Reuses `po
 
 - NSE endpoints may block datacenter IPs; Yahoo/Alpha used as fallback
 - Alpha Vantage rate limits (`Note` / `Information` responses treated as failure)
-- BSE CSV sync disabled by default until `BSE_STOCK_MASTER_ENABLED` and URL configured
+- BSE master uses BSE API by default; optional `BSE_EQUITY_CSV_URL`. Rows without a text trading symbol (scrip-code only) are skipped
 
 ### Tests
 
 - `tests/Unit/ProviderResolverServiceTest.php`
 - `tests/Unit/StockValidationServiceTest.php` (Http::fake)
-- `tests/Unit/StockMasterSyncServiceTest.php`
+- `tests/Unit/EquityUniverseServiceTest.php`, `tests/Unit/BseEquityMasterServiceTest.php`, `tests/Unit/StockMasterBseDedupTest.php`
 - `tests/Feature/StockSearchTest.php`
 - `tests/js/debounce.test.mjs` (`npm run test:js`)
 

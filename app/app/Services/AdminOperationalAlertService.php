@@ -250,11 +250,22 @@ class AdminOperationalAlertService
                 $resolved[] = $row->alert_key;
             });
 
+        if ($this->supportsManualClearColumn()) {
+            OperationalAlert::query()
+                ->whereNotIn('alert_key', $activeKeys)
+                ->whereNotNull('manually_cleared_at')
+                ->update(['manually_cleared_at' => null]);
+        }
+
         $cooldownHours = (int) config('portfolio.operational_alerts.telegram_cooldown_hours', 6);
         $cooldownCutoff = now()->subHours($cooldownHours);
 
         foreach ($evaluated as $key => $definition) {
             $row = OperationalAlert::query()->find($key);
+            if ($this->supportsManualClearColumn() && $row?->manually_cleared_at !== null) {
+                continue;
+            }
+
             $isNew = $row === null;
             $wasResolved = $row !== null && $row->resolved_at !== null;
 
@@ -358,6 +369,58 @@ class AdminOperationalAlertService
             ->whereNull('resolved_at')
             ->whereNull('acknowledged_at')
             ->update(['acknowledged_at' => now()]);
+    }
+
+    public function clearManually(string $alertKey): bool
+    {
+        if (! Schema::hasTable('portfolio_operational_alerts')) {
+            return false;
+        }
+
+        $row = OperationalAlert::query()
+            ->where('alert_key', $alertKey)
+            ->whereNull('resolved_at')
+            ->first();
+
+        if ($row === null) {
+            return false;
+        }
+
+        $now = now();
+        $row->resolved_at = $now;
+        if ($this->supportsManualClearColumn()) {
+            $row->manually_cleared_at = $now;
+        }
+        if ($row->acknowledged_at === null) {
+            $row->acknowledged_at = $now;
+        }
+        $row->save();
+
+        return true;
+    }
+
+    public function clearDismissedManually(): int
+    {
+        if (! Schema::hasTable('portfolio_operational_alerts')) {
+            return 0;
+        }
+
+        $now = now();
+        $payload = ['resolved_at' => $now];
+        if ($this->supportsManualClearColumn()) {
+            $payload['manually_cleared_at'] = $now;
+        }
+
+        return OperationalAlert::query()
+            ->whereNull('resolved_at')
+            ->whereNotNull('acknowledged_at')
+            ->update($payload);
+    }
+
+    protected function supportsManualClearColumn(): bool
+    {
+        return Schema::hasTable('portfolio_operational_alerts')
+            && Schema::hasColumn('portfolio_operational_alerts', 'manually_cleared_at');
     }
 
     public function adminTelegramRecipientCount(): int

@@ -15,7 +15,8 @@ class SyncStockMasterCommand extends Command
     public function handle(StockMasterSyncService $sync): int
     {
         try {
-            $stats = $sync->syncStockMaster();
+            $backfill = (bool) config('portfolio.stock_master.backfill_new_symbols_on_cli_sync', true);
+            $stats = $sync->syncStockMaster(backfillNewSymbols: $backfill);
         } catch (\Throwable $e) {
             $this->error('Stock master sync failed: '.$e->getMessage());
             app(AdminOperationalAlertService::class)->syncAndNotify();

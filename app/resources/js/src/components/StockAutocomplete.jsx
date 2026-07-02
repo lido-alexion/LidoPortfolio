@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../api';
 import { debounce } from '../utils/debounce';
+import { stockExchangeLabel } from '../utils/exchangeDisplay';
 import logger from '../services/logger';
 
 const MIN_CHARS = 2;
@@ -131,7 +132,7 @@ export default function StockAutocomplete({
                                 onClick={() => pick(stock)}
                             >
                                 <strong>{stock.symbol}</strong>
-                                <span className="text-muted ms-2">{stock.exchange}</span>
+                                <span className="text-muted ms-2">{stockExchangeLabel(stock)}</span>
                                 <div className="small text-muted">{stock.name}</div>
                             </button>
                         </li>

@@ -4,59 +4,36 @@ namespace App\Services;
 
 use App\Models\Stock;
 use Illuminate\Database\Eloquent\Builder;
-use InvalidArgumentException;
 
+/**
+ * @deprecated Prefer EquityUniverseService — kept as a thin wrapper for existing callers.
+ */
 class UniverseStockResolverService
 {
-    public const SCOPE_ALL_NSE = 'all_nse';
+    public const SCOPE_ALL_EQUITIES = EquityUniverseService::SCOPE_ALL_EQUITIES;
 
-    public const SCOPE_NIFTY500 = 'nifty500';
+    /** @deprecated Use SCOPE_ALL_EQUITIES */
+    public const SCOPE_ALL_NSE = EquityUniverseService::SCOPE_ALL_NSE;
+
+    public const SCOPE_NIFTY500 = EquityUniverseService::SCOPE_NIFTY500;
 
     public function __construct(
-        protected Nifty500ConstituentService $nifty500,
+        protected EquityUniverseService $equityUniverse,
     ) {}
 
     public function defaultScope(): string
     {
-        $scope = config('portfolio.universe_price_sync.scope', self::SCOPE_ALL_NSE);
-
-        return $this->normalizeScope($scope);
+        return $this->equityUniverse->defaultScope();
     }
 
     public function normalizeScope(?string $scope): string
     {
-        $scope = strtolower(trim((string) $scope));
-
-        if (! in_array($scope, [self::SCOPE_ALL_NSE, self::SCOPE_NIFTY500], true)) {
-            throw new InvalidArgumentException('Unsupported universe scope: '.$scope);
-        }
-
-        return $scope;
+        return $this->equityUniverse->normalizeScope($scope);
     }
 
-    /**
-     * Active NSE equities in the configured universe (excludes benchmarks).
-     */
     public function stockQuery(?string $scope = null): Builder
     {
-        $scope = $this->normalizeScope($scope ?? $this->defaultScope());
-
-        $query = Stock::query()
-            ->where('is_active', true)
-            ->where('is_benchmark', false)
-            ->where('exchange', 'NSE')
-            ->orderBy('id');
-
-        if ($scope === self::SCOPE_NIFTY500) {
-            $symbols = $this->nifty500->symbols();
-            if ($symbols === []) {
-                return $query->whereRaw('1 = 0');
-            }
-
-            $query->whereIn('symbol', $symbols);
-        }
-
-        return $query;
+        return $this->equityUniverse->universeStockQuery($scope);
     }
 
     public function count(?string $scope = null): int

@@ -17,7 +17,7 @@ class UniversePriceSyncController extends Controller
     public function status(Request $request, UniversePriceSyncService $sync): JsonResponse
     {
         $validated = $request->validate([
-            'scope' => ['nullable', 'in:all_nse,nifty500'],
+            'scope' => ['nullable', 'in:all_equities,all_nse,nifty500'],
         ]);
 
         try {
@@ -84,7 +84,7 @@ class UniversePriceSyncController extends Controller
 
         $validated = $request->validate([
             'mode' => ['nullable', 'in:daily,backfill'],
-            'scope' => ['nullable', 'in:all_nse,nifty500'],
+            'scope' => ['nullable', 'in:all_equities,all_nse,nifty500'],
             'batch' => ['nullable', 'integer', 'min:1', 'max:200'],
             'process_all' => ['nullable', 'boolean'],
             'reset_cursor' => ['nullable', 'boolean'],
@@ -124,23 +124,38 @@ class UniversePriceSyncController extends Controller
         }
     }
 
-    public function syncStockMaster(StockMasterSyncService $master): JsonResponse
+    public function syncStockMaster(StockMasterSyncService $master, AdminOperationalAlertService $alerts): JsonResponse
     {
+        @set_time_limit(0);
+
         try {
-            $stats = $master->syncStockMaster();
+            $stats = $master->syncStockMaster(backfillNewSymbols: false);
         } catch (\Throwable $e) {
+            $this->safeSyncOperationalAlerts($alerts);
+
             return response()->json([
                 'message' => 'Stock master sync failed: '.$e->getMessage(),
             ], 500);
         }
 
+        $this->safeSyncOperationalAlerts($alerts);
+
         return response()->json(['data' => $stats]);
+    }
+
+    protected function safeSyncOperationalAlerts(AdminOperationalAlertService $alerts): void
+    {
+        try {
+            $alerts->syncAndNotify();
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     public function gapStatus(Request $request, PriceHistoryGapService $gaps): JsonResponse
     {
         $validated = $request->validate([
-            'scope' => ['nullable', 'in:all_nse,nifty500'],
+            'scope' => ['nullable', 'in:all_equities,all_nse,nifty500'],
         ]);
 
         try {
@@ -165,7 +180,7 @@ class UniversePriceSyncController extends Controller
         }
 
         $validated = $request->validate([
-            'scope' => ['nullable', 'in:all_nse,nifty500'],
+            'scope' => ['nullable', 'in:all_equities,all_nse,nifty500'],
             'batch' => ['nullable', 'integer', 'min:1', 'max:200'],
             'reset_cursor' => ['nullable', 'boolean'],
         ]);
@@ -205,7 +220,7 @@ class UniversePriceSyncController extends Controller
         }
 
         $validated = $request->validate([
-            'scope' => ['nullable', 'in:all_nse,nifty500'],
+            'scope' => ['nullable', 'in:all_equities,all_nse,nifty500'],
             'batch' => ['nullable', 'integer', 'min:1', 'max:200'],
             'reset_cursor' => ['nullable', 'boolean'],
         ]);

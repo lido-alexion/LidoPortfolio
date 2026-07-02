@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\FrontendLogController;
 use App\Http\Controllers\Api\HoldingController;
 use App\Http\Controllers\Api\InviteAcceptController;
 use App\Http\Controllers\Api\PortfolioController;
+use App\Http\Controllers\Api\PortfolioHistoryController;
 use App\Http\Controllers\Api\OperationalAlertController;
 use App\Http\Controllers\Api\PasswordResetAcceptController;
 use App\Http\Controllers\Api\PasswordResetLinkController;
@@ -131,6 +132,8 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
         Route::get('/operational-alerts', [OperationalAlertController::class, 'index']);
         Route::post('/operational-alerts/acknowledge', [OperationalAlertController::class, 'acknowledge']);
         Route::post('/operational-alerts/acknowledge-all', [OperationalAlertController::class, 'acknowledgeAll']);
+        Route::post('/operational-alerts/clear', [OperationalAlertController::class, 'clear']);
+        Route::post('/operational-alerts/clear-dismissed', [OperationalAlertController::class, 'clearDismissed']);
 
         Route::get('/universe-price-sync/status', [UniversePriceSyncController::class, 'status']);
         Route::post('/universe-price-sync/operational-alerts/acknowledge', [UniversePriceSyncController::class, 'acknowledgeOperationalAlert']);

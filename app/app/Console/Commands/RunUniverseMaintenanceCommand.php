@@ -12,7 +12,7 @@ use InvalidArgumentException;
 class RunUniverseMaintenanceCommand extends Command
 {
     protected $signature = 'portfolio:run-universe-maintenance
-        {--scope= : all_nse or nifty500 (default from config)}
+        {--scope= : all_equities, all_nse (deprecated), or nifty500 (default from config)}
         {--batch= : Stocks per run}
         {--reset-cursor : Start from first stock in universe}
         {--gap-retries=2 : Number of gap-fill retries when daily batch has failures}

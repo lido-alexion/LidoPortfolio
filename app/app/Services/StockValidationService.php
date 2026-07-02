@@ -16,6 +16,7 @@ class StockValidationService
     protected ProviderResolverService $resolver,
     protected PortfolioLoggerService $portfolioLogger,
     protected SettingsService $settings,
+    protected EquityUniverseService $equityUniverse,
   ) {}
 
   public function validate(string $inputSymbol, ?string $exchange = 'NSE', bool $allowProvider = true): StockValidationResult
@@ -35,7 +36,7 @@ class StockValidationService
       return StockValidationResult::invalid([$e->getMessage()]);
     }
 
-    $local = $this->findLocal($normalized['symbol'], $normalized['exchange']);
+    $local = $this->equityUniverse->resolveCanonicalStock($normalized['symbol'], $normalized['exchange']);
     if ($local) {
         return StockValidationResult::valid($local, 'local', ['cached' => true]);
     }
@@ -284,16 +285,6 @@ class StockValidationService
     $errors = array_merge($errors, $alpha->errors);
 
     return StockValidationResult::invalid(array_values(array_unique($errors)));
-  }
-
-  protected function findLocal(string $symbol, string $exchange): ?Stock
-  {
-    return Stock::query()
-      ->where('symbol', $symbol)
-      ->where('exchange', $exchange)
-      ->where('is_benchmark', false)
-      ->where('is_active', true)
-      ->first();
   }
 
   protected function isRecentlyVerified(Stock $stock): bool

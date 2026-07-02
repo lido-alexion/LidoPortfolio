@@ -20,6 +20,7 @@ class Stock extends Model
         'alpha_vantage_symbol',
         'is_active',
         'is_benchmark',
+        'is_dual_listed',
         'last_verified_at',
     ];
 
@@ -28,6 +29,7 @@ class Stock extends Model
         return [
             'is_active' => 'boolean',
             'is_benchmark' => 'boolean',
+            'is_dual_listed' => 'boolean',
             'last_verified_at' => 'datetime',
         ];
     }

@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Models\Stock;
+use App\Services\EquityUniverseService;
 use App\Services\PortfolioLoggerService;
 use App\Services\ProviderResolverService;
 use App\Services\SettingsService;
@@ -112,6 +113,7 @@ class StockValidationServiceTest extends TestCase
             new ProviderResolverService,
             $logger,
             $settings,
+            app(EquityUniverseService::class),
         );
     }
 }

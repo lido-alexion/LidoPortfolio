@@ -11,7 +11,7 @@ class FillPriceHistoryGapsCommand extends Command
 {
     protected $signature = 'portfolio:fill-price-history-gaps
         {--scan-only : Detect gaps without calling providers}
-        {--scope= : all_nse or nifty500 (default from config)}
+        {--scope= : all_equities, all_nse (deprecated), or nifty500 (default from config)}
         {--batch= : Stocks per run}
         {--reset-cursor : Start from the first stock in the universe}';
 
