@@ -4,6 +4,7 @@ namespace Tests\Unit;
 
 use App\Models\Setting;
 use App\Models\Stock;
+use App\Services\BenchmarkPriceSyncService;
 use App\Services\PortfolioLoggerService;
 use App\Services\PriceFetchService;
 use App\Services\SyncLogService;
@@ -65,6 +66,11 @@ class UniversePriceSyncServiceTest extends TestCase
                 'errors' => [],
             ]);
 
+        $benchmarkSync = Mockery::mock(BenchmarkPriceSyncService::class);
+        $benchmarkSync->shouldReceive('syncIfNeeded')
+            ->once()
+            ->andReturn(['skipped' => true, 'success' => true]);
+
         $syncLog = Mockery::mock(SyncLogService::class);
         $syncLog->shouldReceive('beginRun')->once()->andReturn('run-1');
         $syncLog->shouldReceive('log')->atLeast()->once();
@@ -76,6 +82,7 @@ class UniversePriceSyncServiceTest extends TestCase
         $service = new UniversePriceSyncService(
             app(UniverseStockResolverService::class),
             $priceFetch,
+            $benchmarkSync,
             $syncLog,
             $logger,
         );
@@ -121,6 +128,11 @@ class UniversePriceSyncServiceTest extends TestCase
                 'errors' => [],
             ]);
 
+        $benchmarkSync = Mockery::mock(BenchmarkPriceSyncService::class);
+        $benchmarkSync->shouldReceive('syncIfNeeded')
+            ->once()
+            ->andReturn(['skipped' => true, 'success' => true]);
+
         $syncLog = Mockery::mock(SyncLogService::class);
         $syncLog->shouldReceive('beginRun')->once()->andReturn('run-2');
         $syncLog->shouldReceive('log')->atLeast()->once();
@@ -132,6 +144,7 @@ class UniversePriceSyncServiceTest extends TestCase
         $service = new UniversePriceSyncService(
             app(UniverseStockResolverService::class),
             $priceFetch,
+            $benchmarkSync,
             $syncLog,
             $logger,
         );
@@ -141,5 +154,60 @@ class UniversePriceSyncServiceTest extends TestCase
         $this->assertTrue($result['cycle_completed']);
         $this->assertSame('0', Setting::getValue(UniversePriceSyncService::KEY_CURSOR_STOCK_ID));
         $this->assertNotNull(Setting::getValue(UniversePriceSyncService::KEY_LAST_CYCLE_COMPLETED_AT));
+    }
+
+    public function test_daily_sync_uses_fixed_daily_lookback_config(): void
+    {
+        config([
+            'portfolio.universe_price_sync.enabled' => true,
+            'portfolio.universe_price_sync.batch_size' => 1,
+            'portfolio.universe_price_sync.delay_ms_between_stocks' => 0,
+            'portfolio.universe_price_sync.daily_lookback_days' => 10,
+        ]);
+
+        $stock = Stock::query()->create([
+            'symbol' => 'BBB',
+            'exchange' => 'NSE',
+            'name' => 'BBB',
+            'is_active' => true,
+            'is_benchmark' => false,
+        ]);
+
+        $priceFetch = Mockery::mock(PriceFetchService::class);
+        $priceFetch->shouldReceive('syncStock')
+            ->once()
+            ->withArgs(function ($s, Carbon $from, Carbon $to) use ($stock) {
+                return $s->id === $stock->id
+                    && $from->lte(now()->subDays(10))
+                    && $from->gte(now()->subDays(11))
+                    && $to->isToday();
+            })
+            ->andReturn([
+                'success' => true,
+                'stored_rows' => 1,
+                'cache_hit' => false,
+                'errors' => [],
+            ]);
+
+        $benchmarkSync = Mockery::mock(BenchmarkPriceSyncService::class);
+        $benchmarkSync->shouldReceive('syncIfNeeded')->once()->andReturn(['skipped' => true, 'success' => true]);
+
+        $syncLog = Mockery::mock(SyncLogService::class);
+        $syncLog->shouldReceive('beginRun')->once()->andReturn('run-3');
+        $syncLog->shouldReceive('log')->atLeast()->once();
+        $syncLog->shouldReceive('completeRun')->once();
+
+        $logger = Mockery::mock(PortfolioLoggerService::class);
+        $logger->shouldReceive('scheduler')->atLeast()->once();
+
+        $service = new UniversePriceSyncService(
+            app(UniverseStockResolverService::class),
+            $priceFetch,
+            $benchmarkSync,
+            $syncLog,
+            $logger,
+        );
+
+        $service->sync(mode: 'daily', processAll: false, batchSize: 1);
     }
 }

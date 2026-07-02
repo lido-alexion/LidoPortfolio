@@ -10,7 +10,11 @@ use App\Http\Controllers\Api\FrontendLogController;
 use App\Http\Controllers\Api\HoldingController;
 use App\Http\Controllers\Api\InviteAcceptController;
 use App\Http\Controllers\Api\PortfolioController;
+use App\Http\Controllers\Api\OperationalAlertController;
 use App\Http\Controllers\Api\PasswordResetAcceptController;
+use App\Http\Controllers\Api\PasswordResetLinkController;
+use App\Http\Controllers\Api\KnowledgeBoardNoteController;
+use App\Http\Controllers\Api\KnowledgeBoardTagController;
 use App\Http\Controllers\Api\PatternScanController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\SettingsController;
@@ -82,6 +86,23 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::get('/stocks/{stock}/market-prices', [StockPriceController::class, 'market']);
     Route::get('/dashboard', [DashboardController::class, 'index']);
     Route::get('/patterns/scan', [PatternScanController::class, 'index']);
+
+    Route::prefix('knowledge-board')->group(function () {
+        Route::get('/notes', [KnowledgeBoardNoteController::class, 'index']);
+        Route::post('/notes/bulk', [KnowledgeBoardNoteController::class, 'bulk']);
+        Route::post('/notes', [KnowledgeBoardNoteController::class, 'store']);
+        Route::get('/notes/{knowledgeNote}', [KnowledgeBoardNoteController::class, 'show']);
+        Route::put('/notes/{knowledgeNote}', [KnowledgeBoardNoteController::class, 'update']);
+        Route::delete('/notes/{knowledgeNote}', [KnowledgeBoardNoteController::class, 'destroy']);
+        Route::post('/notes/{knowledgeNote}/duplicate', [KnowledgeBoardNoteController::class, 'duplicate']);
+
+        Route::get('/tags', [KnowledgeBoardTagController::class, 'index']);
+        Route::post('/tags/merge', [KnowledgeBoardTagController::class, 'merge']);
+        Route::post('/tags', [KnowledgeBoardTagController::class, 'store']);
+        Route::put('/tags/{knowledgeTag}', [KnowledgeBoardTagController::class, 'update']);
+        Route::delete('/tags/{knowledgeTag}', [KnowledgeBoardTagController::class, 'destroy']);
+    });
+
     Route::post('/portfolio/rebuild-history', [PortfolioHistoryController::class, 'rebuild']);
     Route::get('/analytics/portfolio', [AnalyticsController::class, 'portfolio']);
     Route::get('/analytics/stocks/{stock}', [AnalyticsController::class, 'stock']);
@@ -107,10 +128,21 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
         Route::post('/sync/daily', [SyncController::class, 'daily']);
         Route::post('/sync/backfill/{stock}', [SyncController::class, 'backfill']);
 
+        Route::get('/operational-alerts', [OperationalAlertController::class, 'index']);
+        Route::post('/operational-alerts/acknowledge', [OperationalAlertController::class, 'acknowledge']);
+        Route::post('/operational-alerts/acknowledge-all', [OperationalAlertController::class, 'acknowledgeAll']);
+
         Route::get('/universe-price-sync/status', [UniversePriceSyncController::class, 'status']);
+        Route::post('/universe-price-sync/operational-alerts/acknowledge', [UniversePriceSyncController::class, 'acknowledgeOperationalAlert']);
         Route::post('/universe-price-sync/run', [UniversePriceSyncController::class, 'run'])
             ->middleware('throttle:universe-price-sync');
         Route::post('/universe-price-sync/stock-master', [UniversePriceSyncController::class, 'syncStockMaster'])
+            ->middleware('throttle:universe-price-sync');
+
+        Route::get('/universe-price-sync/gaps/status', [UniversePriceSyncController::class, 'gapStatus']);
+        Route::post('/universe-price-sync/gaps/scan', [UniversePriceSyncController::class, 'scanGaps'])
+            ->middleware('throttle:universe-price-sync');
+        Route::post('/universe-price-sync/gaps/fill', [UniversePriceSyncController::class, 'fillGaps'])
             ->middleware('throttle:universe-price-sync');
 
         Route::get('/sync-logs', [SyncLogController::class, 'index']);

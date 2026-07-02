@@ -104,6 +104,7 @@ class ProfileTest extends TestCase
 
         $user->refresh();
         $this->assertNotNull($user->profile_photo_path);
+        $this->assertStringContainsString('/api/profile/photo?v=', (string) $user->profile_photo_url);
 
         $this->get('/api/profile/photo')
             ->assertOk();

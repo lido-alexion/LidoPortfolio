@@ -24,6 +24,7 @@ class UniversePriceSyncService
     public function __construct(
         protected UniverseStockResolverService $resolver,
         protected PriceFetchService $priceFetch,
+        protected BenchmarkPriceSyncService $benchmarkSync,
         protected SyncLogService $syncLog,
         protected PortfolioLoggerService $logger,
     ) {}
@@ -188,6 +189,19 @@ class UniversePriceSyncService
      * @param  array<string, mixed>|null  $lastRun
      * @param  list<array<string, mixed>>  $recentIssues
      */
+    /**
+     * @param  array<string, mixed>|null  $lastRun
+     * @param  list<array<string, mixed>>  $recentIssues
+     */
+    public function isLikelyRateLimitedPublic(?array $lastRun, array $recentIssues): bool
+    {
+        return $this->isLikelyRateLimited($lastRun, $recentIssues);
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $lastRun
+     * @param  list<array<string, mixed>>  $recentIssues
+     */
     protected function isLikelyRateLimited(?array $lastRun, array $recentIssues): bool
     {
         if (($lastRun['rate_limit_hits'] ?? 0) > 0) {
@@ -255,6 +269,14 @@ class UniversePriceSyncService
 
         $from = $this->rangeFrom($mode);
         $to = now()->startOfDay();
+
+        $benchmarkResult = $this->benchmarkSync->syncIfNeeded();
+        if (! $benchmarkResult['skipped']) {
+            $this->logger->scheduler('info', 'NIFTY50 benchmark synced before universe batch', [
+                'category' => 'UniversePriceSync',
+                'benchmark' => $benchmarkResult,
+            ]);
+        }
 
         $universeCount = $this->resolver->count($scope);
         if ($universeCount === 0) {

@@ -60,27 +60,27 @@ export default function ProfileMenu({ user }) {
                             minWidth: 220,
                         }}
                     >
-                        <div className="d-flex align-items-center mb-2 border-bottom border-secondary">
+                        <div className="d-flex align-items-center mb-2 border-bottom lido-profile-menu-header">
                             <div className="ms-3">
                                 <ProfileAvatar user={user} size={40} menu />
                             </div>
-                            <div className="px-3 py-2 opacity-75">
+                            <div className="px-3 py-2">
                                 <Link
                                     to="/profile"
-                                    className="small fw-bold text-white mb-0 d-block text-decoration-none lido-profile-account-link"
+                                    className="small fw-bold mb-0 d-block text-decoration-none lido-profile-account-link"
                                     onClick={() => setIsOpen(false)}
                                 >
                                     {displayName}
                                 </Link>
                                 {hasName && (
-                                    <div className="small text-white-50 mb-0">{user.email}</div>
+                                    <div className="small mb-0 lido-profile-account-email">{user.email}</div>
                                 )}
                             </div>
                         </div>
                         <ThemeToggle />
                         <Link
                             to="/portfolios"
-                            className="dropdown-item text-white py-2 small d-flex align-items-center"
+                            className="dropdown-item py-2 small d-flex align-items-center"
                             onClick={() => setIsOpen(false)}
                         >
                             <span className="me-2">📁</span>
@@ -88,7 +88,7 @@ export default function ProfileMenu({ user }) {
                         </Link>
                         <Link
                             to="/settings"
-                            className="dropdown-item text-white py-2 small d-flex align-items-center"
+                            className="dropdown-item py-2 small d-flex align-items-center"
                             onClick={() => setIsOpen(false)}
                         >
                             <span className="me-2">⚙️</span>

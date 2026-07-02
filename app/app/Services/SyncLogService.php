@@ -17,6 +17,8 @@ class SyncLogService
 
     public const JOB_UNIVERSE_PRICE_SYNC = 'universe-price-sync';
 
+    public const JOB_PRICE_HISTORY_GAP_FILL = 'price-history-gap-fill';
+
     public function __construct(
         protected SettingsService $settings,
         protected PortfolioLoggerService $portfolioLogger,
@@ -115,6 +117,54 @@ class SyncLogService
             'skipped' => $stats['skipped'] ?? null,
             'summary' => $summary,
         ]);
+    }
+
+    public function latestRun(?string $jobName = null): ?SyncRun
+    {
+        if (! Schema::hasTable('portfolio_sync_runs')) {
+            return null;
+        }
+
+        $query = SyncRun::query()->orderByDesc('started_at');
+        if ($jobName) {
+            $query->where('job_name', $jobName);
+        }
+
+        return $query->first();
+    }
+
+    public function latestSuccessfulFinishedAt(?string $jobName = null): ?Carbon
+    {
+        if (! Schema::hasTable('portfolio_sync_runs')) {
+            return null;
+        }
+
+        $query = SyncRun::query()
+            ->where('status', 'success')
+            ->whereNotNull('finished_at')
+            ->orderByDesc('finished_at');
+
+        if ($jobName) {
+            $query->where('job_name', $jobName);
+        }
+
+        $run = $query->first();
+
+        return $run?->finished_at;
+    }
+
+    public function latestActivityAt(): ?Carbon
+    {
+        if (! Schema::hasTable('portfolio_sync_runs')) {
+            return null;
+        }
+
+        $run = SyncRun::query()->orderByDesc('started_at')->first();
+        if ($run === null) {
+            return null;
+        }
+
+        return $run->finished_at ?? $run->started_at;
     }
 
     /**

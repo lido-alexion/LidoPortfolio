@@ -178,11 +178,14 @@ class PriceFetchService
         ];
     }
 
+    /**
+     * @deprecated Use BenchmarkPriceSyncService::syncIfNeeded()
+     */
     public function syncBenchmark(): int
     {
-        $benchmark = app(RelativeStrengthService::class)->benchmarkStock();
+        $result = app(BenchmarkPriceSyncService::class)->syncIfNeeded(force: true);
 
-        return $this->syncStock($benchmark, now()->subMonths(12), now())['stored_rows'];
+        return (int) ($result['stored_rows'] ?? 0);
     }
 
     protected function determineBackfillStart(Stock $stock): Carbon

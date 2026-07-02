@@ -18,11 +18,20 @@ import { formatTableMoney2 } from '../utils/tableFormat';
 import { formatTransactionDateDisplay } from '../utils/transactionDate';
 import { showToast } from '../toast';
 
+const ANALYSIS_PERIODS = [1, 3, 6];
+
 const PERIOD_OPTIONS = [
     { value: '1', label: '1 month' },
     { value: '3', label: '3 months' },
     { value: '6', label: '6 months' },
 ];
+
+function rsColorClass(value) {
+    if (value === null || value === undefined) {
+        return '';
+    }
+    return Number(value) >= 0 ? 'text-success' : 'text-danger';
+}
 
 function formatPct(value) {
     if (value === null || value === undefined) {
@@ -232,7 +241,6 @@ export default function StockExplorerPage() {
     const [selectedStock, setSelectedStock] = useState(null);
     const [symbol, setSymbol] = useState('');
     const [exchange, setExchange] = useState('NSE');
-    const [periodMonths, setPeriodMonths] = useState('3');
     const [benchmark, setBenchmark] = useState('NIFTY50');
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState(null);
@@ -255,7 +263,7 @@ export default function StockExplorerPage() {
             return;
         }
 
-        const months = Number(periodMonths);
+        const months = ANALYSIS_PERIODS;
         setLastRequestedSymbol(targetSymbol);
 
         setLoading(true);
@@ -268,7 +276,7 @@ export default function StockExplorerPage() {
                 symbol: targetSymbol,
                 exchange: selectedStock?.exchange || exchange,
                 benchmark_symbol: benchmark,
-                periods: [months],
+                periods: months,
             }, { skipErrorToast: true });
             setResult(res.data.data);
         } catch (err) {
@@ -294,8 +302,9 @@ export default function StockExplorerPage() {
     };
 
     const chartData = result?.chart || [];
-    const periodKey = `${periodMonths}m`;
-    const periodLabel = PERIOD_OPTIONS.find((p) => p.value === periodMonths)?.label ?? `${periodMonths} month`;
+    const manualPeriodMonths = 6;
+    const periodKey = `${manualPeriodMonths}m`;
+    const periodLabel = PERIOD_OPTIONS.find((p) => p.value === String(manualPeriodMonths))?.label ?? '6 months';
     const periodClose = result?.period_closes?.[periodKey];
     const benchmarkSymbol = result?.benchmark?.symbol ?? benchmark;
     const stockSymbol = result?.stock?.symbol ?? lastRequestedSymbol ?? symbol;
@@ -305,14 +314,34 @@ export default function StockExplorerPage() {
         stockPreviousClose: periodClose?.stock_start_close ?? null,
         indexPreviousClose: periodClose?.benchmark_start_close ?? null,
     }), [periodClose, result]);
-    const hasMissingRsInput = Object.values(fetchedRsInputs).some((v) => v === null || v === undefined);
-    const showManualRsForm = hasMissingRsInput || manualFallbackVisible;
-    const displayedRelativeStrength = manualRsResult ?? result?.relative_strength?.[periodKey];
+    const hasMissingRsInput = ANALYSIS_PERIODS.some((months) => {
+        const key = `${months}m`;
+        const closes = result?.period_closes?.[key];
+        return (
+            result?.latest_close == null
+            || result?.benchmark?.latest_close == null
+            || closes?.stock_start_close == null
+            || closes?.benchmark_start_close == null
+        );
+    });
+    const displayedRelativeStrengthByPeriod = useMemo(() => {
+        const map = {};
+        ANALYSIS_PERIODS.forEach((months) => {
+            const key = `${months}m`;
+            if (months === manualPeriodMonths && manualRsResult !== null) {
+                map[key] = manualRsResult;
+            } else {
+                map[key] = result?.relative_strength?.[key];
+            }
+        });
+        return map;
+    }, [manualRsResult, result]);
     const hasSymbolInput = Boolean((selectedStock?.symbol || symbol).trim());
     const periodAgoDate = useMemo(
-        () => periodAgoDateDisplay(Number(periodMonths), periodClose?.start_date),
-        [periodClose?.start_date, periodMonths],
+        () => periodAgoDateDisplay(manualPeriodMonths, periodClose?.start_date),
+        [periodClose?.start_date],
     );
+    const showManualRsForm = hasMissingRsInput || manualFallbackVisible;
 
     useEffect(() => {
         if (!result) {
@@ -364,11 +393,23 @@ export default function StockExplorerPage() {
         ? ((manualIndexLatest - manualIndexPrevious) / manualIndexPrevious) * 100
         : null;
     const manualChartData = manualCanRenderMetrics
-        ? [{
-            period: periodKey.toUpperCase(),
-            growth_percent: manualStockGrowth,
-            benchmark_growth_percent: manualIndexGrowth,
-        }]
+        ? ANALYSIS_PERIODS.map((months) => {
+            const key = `${months}m`;
+            if (months === manualPeriodMonths) {
+                return {
+                    period: key.toUpperCase(),
+                    growth_percent: manualStockGrowth,
+                    benchmark_growth_percent: manualIndexGrowth,
+                    relative_strength: manualRsResult,
+                };
+            }
+            return {
+                period: key.toUpperCase(),
+                growth_percent: result?.growth_percent?.[key] ?? null,
+                benchmark_growth_percent: result?.benchmark_growth_percent?.[key] ?? null,
+                relative_strength: result?.relative_strength?.[key] ?? null,
+            };
+        })
         : [];
 
     const updateManualRsValues = (patch) => {
@@ -376,8 +417,8 @@ export default function StockExplorerPage() {
     };
 
     const manualRsDescription = manualFallbackVisible && !result
-        ? 'Analysis data is unavailable for this symbol. Enter all four close values to calculate RS temporarily.'
-        : 'Fill the four required close values to calculate RS temporarily. Available values from local cache/providers are prefilled when present.';
+        ? 'Analysis data is unavailable for this symbol. Enter all four close values to calculate RS temporarily (6-month period).'
+        : 'Fill the four required close values to calculate RS temporarily for the 6-month period. Available values from universe price cache are prefilled when present.';
 
     const manualRsCard = showManualRsForm ? (
         <ManualRsInputCard
@@ -402,9 +443,9 @@ export default function StockExplorerPage() {
                     <div className="card-header">Calculate relative strength</div>
                     <div className="card-body">
                         <p className="text-muted small mb-3">
-                            Analyze any NSE/BSE symbol. History is cached locally after first fetch.
-                            {' '}
-                            Search a stock and run analysis to see growth % and relative strength vs NIFTY50.
+                            Analyze any symbol in the local stock master. Price history comes from universe
+                            price sync (no on-demand provider fetch). Search a stock and run analysis to see
+                            relative strength vs NIFTY50 for 1, 3, and 6 months.
                         </p>
                         <form className="d-grid gap-3" onSubmit={runAnalysis}>
                             <SegmentToggle
@@ -433,13 +474,6 @@ export default function StockExplorerPage() {
                                     setExchange(stock.exchange || 'NSE');
                                 }}
                             />
-                            <SegmentToggle
-                                label="Strength period"
-                                ariaLabel="Relative strength period"
-                                value={periodMonths}
-                                onChange={setPeriodMonths}
-                                options={PERIOD_OPTIONS}
-                            />
                             <div>
                                 <label className="form-label">Benchmark</label>
                                 <select
@@ -465,7 +499,7 @@ export default function StockExplorerPage() {
                     <>
                         {manualRsCard}
                         <div className="row g-3 mb-3">
-                            <div className="col-6 col-md-4">
+                            <div className="col-6 col-md-6">
                                 <div className="card text-center h-100">
                                     <div className="card-body">
                                         <div className="text-muted small">Latest close</div>
@@ -474,18 +508,7 @@ export default function StockExplorerPage() {
                                     </div>
                                 </div>
                             </div>
-                            <div className="col-6 col-md-4">
-                                <div className="card text-center h-100">
-                                    <div className="card-body">
-                                        <div className="text-muted small">Close {periodLabel} ago</div>
-                                        <div className="h4 mb-0">
-                                            {formatTableMoney2(periodClose?.stock_start_close)}
-                                        </div>
-                                        <div className="small text-muted">{stockSymbol}</div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="col-6 col-md-4">
+                            <div className="col-6 col-md-6">
                                 <div className="card text-center h-100">
                                     <div className="card-body">
                                         <div className="text-muted small">{benchmarkSymbol} latest</div>
@@ -496,59 +519,38 @@ export default function StockExplorerPage() {
                                     </div>
                                 </div>
                             </div>
-                            <div className="col-6 col-md-4">
-                                <div className="card text-center h-100">
-                                    <div className="card-body">
-                                        <div className="text-muted small">{benchmarkSymbol} close {periodLabel} ago</div>
-                                        <div className="h4 mb-0">
-                                            {formatTableMoney2(periodClose?.benchmark_start_close)}
-                                        </div>
-                                        <div className="small text-muted">{benchmarkSymbol}</div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="col-6 col-md-4">
-                                <div className="card text-center h-100">
-                                    <div className="card-body">
-                                        <div className="text-muted small">{stockSymbol} growth ({periodLabel})</div>
-                                        <div className="h4 mb-0">{formatPct(result.growth_percent?.[periodKey])}</div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="col-6 col-md-4">
-                                <div className="card text-center h-100">
-                                    <div className="card-body">
-                                        <div className="text-muted small">{benchmarkSymbol} growth ({periodLabel})</div>
-                                        <div className="h4 mb-0">
-                                            {formatPct(result.benchmark_growth_percent?.[periodKey])}
+                            {ANALYSIS_PERIODS.map((months) => {
+                                const key = `${months}m`;
+                                const label = PERIOD_OPTIONS.find((p) => p.value === String(months))?.label ?? `${months} month`;
+                                const rs = displayedRelativeStrengthByPeriod[key];
+                                return (
+                                    <div className="col-12 col-md-4" key={key}>
+                                        <div className="card text-center h-100">
+                                            <div className="card-body">
+                                                <div className="text-muted small">Relative strength ({label})</div>
+                                                <div className={`h4 mb-0 ${rsColorClass(rs)}`}>{formatPct(rs)}</div>
+                                                <div className="small text-muted">vs {benchmarkSymbol}</div>
+                                                {months === manualPeriodMonths && manualRsResult !== null && (
+                                                    <div className="small text-success mt-1">From manual inputs</div>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            </div>
+                                );
+                            })}
                         </div>
-                        <div className="card mb-3">
-                            <div className="card-body py-3">
-                                <div className="text-muted small">Relative strength vs {benchmarkSymbol} ({periodLabel})</div>
-                                <div className="h3 mb-0">{formatPct(displayedRelativeStrength)}</div>
-                                <div className="small text-muted">
-                                    Stock return minus {benchmarkSymbol} return over the same period.
-                                </div>
-                                {manualRsResult !== null && (
-                                    <div className="small text-success mt-1">
-                                        Calculated from manual inputs.
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                        {result.history?.benchmark_fetch && !result.history.benchmark_fetch.cache_hit
-                            && (result.history.benchmark_fetch.errors?.length > 0
-                                || result.history.benchmark_fetch.stored_rows === 0) && (
+                        {result.history?.benchmark_fetch && !result.history.benchmark_fetch.cache_hit && (
                             <div className="alert alert-warning small">
-                                NIFTY50 price history may be incomplete. Relative strength needs benchmark data in the selected period.
+                                NIFTY50 price history may be incomplete in universe cache. Relative strength needs benchmark data for all periods.
+                            </div>
+                        )}
+                        {result.history?.stock_fetch && !result.history.stock_fetch.cache_hit && (
+                            <div className="alert alert-warning small">
+                                Price history for {stockSymbol} may be incomplete. Run universe price sync in Settings if needed.
                             </div>
                         )}
                         <div className="card mb-3">
-                            <div className="card-header">Growth % Comparison</div>
+                            <div className="card-header">Growth % comparison (1M / 3M / 6M)</div>
                             <div className="card-body explorer-growth-chart-body">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart data={chartData} maxBarSize={32}>
@@ -563,9 +565,9 @@ export default function StockExplorerPage() {
                                 </ResponsiveContainer>
                             </div>
                         </div>
-                        {result.history?.stock_fetch?.cache_hit && (
+                        {result.history?.stock_fetch?.cache_hit && result.history?.benchmark_fetch?.cache_hit && (
                             <p className="text-muted small mt-2 mb-0">
-                                Price history served from local cache (no provider fetch required).
+                                Price history served from universe cache (no provider fetch).
                             </p>
                         )}
                     </>
@@ -576,7 +578,7 @@ export default function StockExplorerPage() {
                         {manualCanRenderMetrics && (
                             <>
                                 <div className="row g-3 mb-3">
-                                    <div className="col-6 col-md-4">
+                                    <div className="col-6 col-md-6">
                                         <div className="card text-center h-100">
                                             <div className="card-body">
                                                 <div className="text-muted small">Latest close</div>
@@ -585,16 +587,7 @@ export default function StockExplorerPage() {
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="col-6 col-md-4">
-                                        <div className="card text-center h-100">
-                                            <div className="card-body">
-                                                <div className="text-muted small">Close {periodLabel} ago</div>
-                                                <div className="h4 mb-0">{formatTableMoney2(manualStockPrevious)}</div>
-                                                <div className="small text-muted">{stockSymbol}</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="col-6 col-md-4">
+                                    <div className="col-6 col-md-6">
                                         <div className="card text-center h-100">
                                             <div className="card-body">
                                                 <div className="text-muted small">{benchmarkSymbol} latest</div>
@@ -603,44 +596,28 @@ export default function StockExplorerPage() {
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="col-6 col-md-4">
-                                        <div className="card text-center h-100">
-                                            <div className="card-body">
-                                                <div className="text-muted small">{benchmarkSymbol} close {periodLabel} ago</div>
-                                                <div className="h4 mb-0">{formatTableMoney2(manualIndexPrevious)}</div>
-                                                <div className="small text-muted">{benchmarkSymbol}</div>
+                                    {ANALYSIS_PERIODS.map((months) => {
+                                        const key = `${months}m`;
+                                        const label = PERIOD_OPTIONS.find((p) => p.value === String(months))?.label ?? `${months} month`;
+                                        const rs = months === manualPeriodMonths ? manualRsResult : null;
+                                        return (
+                                            <div className="col-12 col-md-4" key={key}>
+                                                <div className="card text-center h-100">
+                                                    <div className="card-body">
+                                                        <div className="text-muted small">Relative strength ({label})</div>
+                                                        <div className={`h4 mb-0 ${rsColorClass(rs)}`}>{formatPct(rs)}</div>
+                                                        <div className="small text-muted">vs {benchmarkSymbol}</div>
+                                                        {months === manualPeriodMonths && (
+                                                            <div className="small text-success mt-1">From manual inputs</div>
+                                                        )}
+                                                    </div>
+                                                </div>
                                             </div>
-                                        </div>
-                                    </div>
-                                    <div className="col-6 col-md-4">
-                                        <div className="card text-center h-100">
-                                            <div className="card-body">
-                                                <div className="text-muted small">{stockSymbol} growth ({periodLabel})</div>
-                                                <div className="h4 mb-0">{formatPct(manualStockGrowth)}</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="col-6 col-md-4">
-                                        <div className="card text-center h-100">
-                                            <div className="card-body">
-                                                <div className="text-muted small">{benchmarkSymbol} growth ({periodLabel})</div>
-                                                <div className="h4 mb-0">{formatPct(manualIndexGrowth)}</div>
-                                            </div>
-                                        </div>
-                                    </div>
+                                        );
+                                    })}
                                 </div>
                                 <div className="card mb-3">
-                                    <div className="card-body py-3">
-                                        <div className="text-muted small">Relative strength vs {benchmarkSymbol} ({periodLabel})</div>
-                                        <div className="h3 mb-0">{formatPct(manualRsResult)}</div>
-                                        <div className="small text-muted">
-                                            Stock return minus {benchmarkSymbol} return over the same period.
-                                        </div>
-                                        <div className="small text-success mt-1">Calculated from manual inputs.</div>
-                                    </div>
-                                </div>
-                                <div className="card mb-3">
-                                    <div className="card-header">Growth % Comparison</div>
+                                    <div className="card-header">Growth % comparison (1M / 3M / 6M)</div>
                                     <div className="card-body explorer-growth-chart-body">
                                         <ResponsiveContainer width="100%" height="100%">
                                             <BarChart data={manualChartData} maxBarSize={32}>

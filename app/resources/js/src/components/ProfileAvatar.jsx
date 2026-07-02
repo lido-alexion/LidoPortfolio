@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { userInitial } from '../utils/userDisplay';
+import { profilePhotoUrl } from '../utils/profilePhotoUrl';
 
 export default function ProfileAvatar({
     user,
@@ -7,10 +8,15 @@ export default function ProfileAvatar({
     size = 28,
     menu = false,
 }) {
-    const photoUrl = user?.profile_photo_url;
+    const [imgError, setImgError] = useState(false);
+    const photoUrl = profilePhotoUrl(user);
     const initial = userInitial(user);
 
-    if (photoUrl) {
+    useEffect(() => {
+        setImgError(false);
+    }, [photoUrl, user?.id]);
+
+    if (photoUrl && !imgError) {
         const imgClass = menu
             ? `lido-profile-menu-avatar rounded-circle ${className}`.trim()
             : `lido-profile-avatar rounded-circle ${className}`.trim();
@@ -23,6 +29,7 @@ export default function ProfileAvatar({
                 width={size}
                 height={size}
                 style={{ objectFit: 'cover' }}
+                onError={() => setImgError(true)}
                 aria-hidden="true"
             />
         );

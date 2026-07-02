@@ -3,6 +3,7 @@ import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import { showToast } from '../toast';
 import { userDisplayName, userInitial } from '../utils/userDisplay';
+import { profilePhotoUrl } from '../utils/profilePhotoUrl';
 
 const PROFILE_PHOTO_SIZE_PX = 360;
 
@@ -114,7 +115,8 @@ export default function ProfilePage() {
         }
     };
 
-    const hasPhoto = Boolean(user?.profile_photo_url);
+    const photoSrc = profilePhotoUrl(user);
+    const hasPhoto = Boolean(photoSrc);
     const photoActionLabel = hasPhoto ? 'Change profile picture' : 'Upload profile picture';
     const initial = userInitial(user);
 
@@ -143,7 +145,7 @@ export default function ProfilePage() {
                         >
                             {hasPhoto ? (
                                 <img
-                                    src={user.profile_photo_url}
+                                    src={photoSrc}
                                     alt=""
                                     className="lido-profile-page-avatar rounded-circle"
                                     width={PROFILE_PHOTO_SIZE_PX}

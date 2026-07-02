@@ -53,7 +53,22 @@ return [
         'daily_lookback_days' => max(3, (int) env('UNIVERSE_PRICE_SYNC_DAILY_LOOKBACK_DAYS', 10)),
         'delay_ms_between_stocks' => max(0, (int) env('UNIVERSE_PRICE_SYNC_DELAY_MS', 400)),
         'batch_size' => max(1, (int) env('UNIVERSE_PRICE_SYNC_BATCH_SIZE', 75)),
+        'maintenance_gap_fill_retries' => max(0, (int) env('UNIVERSE_MAINTENANCE_GAP_FILL_RETRIES', 2)),
+        'gap_fill_wait_seconds' => max(0, (int) env('UNIVERSE_GAP_FILL_WAIT_SECONDS', 20)),
         'nifty500_index_name' => env('UNIVERSE_NIFTY500_INDEX_NAME', 'NIFTY 500'),
         'nifty500_cache_days' => max(1, (int) env('UNIVERSE_NIFTY500_CACHE_DAYS', 7)),
+    ],
+
+    /*
+    | Admin operational alerts (rate limits, scheduler downtime, job failures).
+    | Telegram goes to all admin users with Telegram configured on any portfolio.
+    */
+    'operational_alerts' => [
+        'telegram_cooldown_hours' => max(1, (int) env('ADMIN_OPS_ALERT_TELEGRAM_COOLDOWN_HOURS', 6)),
+        'daily_sync_stale_hours' => max(12, (int) env('ADMIN_OPS_DAILY_SYNC_STALE_HOURS', 36)),
+        'universe_sync_stale_hours' => max(6, (int) env('ADMIN_OPS_UNIVERSE_SYNC_STALE_HOURS', 26)),
+        'universe_sync_stale_minutes_maintenance' => max(15, (int) env('ADMIN_OPS_UNIVERSE_SYNC_STALE_MINUTES', 45)),
+        'stock_master_stale_days' => max(2, (int) env('ADMIN_OPS_STOCK_MASTER_STALE_DAYS', 8)),
+        'scheduler_dead_hours' => max(12, (int) env('ADMIN_OPS_SCHEDULER_DEAD_HOURS', 48)),
     ],
 ];

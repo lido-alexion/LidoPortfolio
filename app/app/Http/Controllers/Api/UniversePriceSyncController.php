@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Services\AdminOperationalAlertService;
+use App\Services\PriceHistoryGapService;
 use App\Services\StockMasterSyncService;
 use App\Services\UniversePriceSyncService;
 use App\Services\UniverseStockResolverService;
@@ -26,8 +28,41 @@ class UniversePriceSyncController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
+        $alerts = app(AdminOperationalAlertService::class);
+        $alerts->syncActiveAlerts(false);
+        $activeAlerts = $alerts->getActiveAlertsForApi();
+        $unacknowledged = $alerts->getActiveAlertsForApi(false);
+
         return response()->json([
-            'data' => $sync->status($scope),
+            'data' => array_merge($sync->status($scope), [
+                'operational_alerts' => [
+                    'active' => $activeAlerts,
+                    'unacknowledged_count' => count($unacknowledged),
+                    'admin_telegram_recipients' => $alerts->adminTelegramRecipientCount(),
+                ],
+            ]),
+        ]);
+    }
+
+    public function acknowledgeOperationalAlert(
+        Request $request,
+        AdminOperationalAlertService $alerts,
+    ): JsonResponse {
+        $validated = $request->validate([
+            'key' => ['required', 'string', 'max:64'],
+        ]);
+
+        if (! $alerts->acknowledge($validated['key'])) {
+            return response()->json(['message' => 'Alert not found or already resolved.'], 404);
+        }
+
+        return response()->json([
+            'data' => [
+                'operational_alerts' => [
+                    'active' => $alerts->getActiveAlertsForApi(),
+                    'unacknowledged_count' => count($alerts->getActiveAlertsForApi(false)),
+                ],
+            ],
         ]);
     }
 
@@ -100,5 +135,104 @@ class UniversePriceSyncController extends Controller
         }
 
         return response()->json(['data' => $stats]);
+    }
+
+    public function gapStatus(Request $request, PriceHistoryGapService $gaps): JsonResponse
+    {
+        $validated = $request->validate([
+            'scope' => ['nullable', 'in:all_nse,nifty500'],
+        ]);
+
+        try {
+            $scope = isset($validated['scope'])
+                ? app(UniverseStockResolverService::class)->normalizeScope($validated['scope'])
+                : null;
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'data' => $gaps->status($scope),
+        ]);
+    }
+
+    public function scanGaps(Request $request, PriceHistoryGapService $gaps): JsonResponse
+    {
+        if (! $gaps->isEnabled()) {
+            return response()->json([
+                'message' => 'Universe price sync is disabled in application config.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'scope' => ['nullable', 'in:all_nse,nifty500'],
+            'batch' => ['nullable', 'integer', 'min:1', 'max:200'],
+            'reset_cursor' => ['nullable', 'boolean'],
+        ]);
+
+        $resolver = app(UniverseStockResolverService::class);
+
+        try {
+            $scope = isset($validated['scope'])
+                ? $resolver->normalizeScope($validated['scope'])
+                : null;
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        @set_time_limit(0);
+
+        $result = $gaps->scanBatch(
+            scope: $scope,
+            batchSize: isset($validated['batch']) ? (int) $validated['batch'] : null,
+            resetCursor: (bool) ($validated['reset_cursor'] ?? false),
+        );
+
+        return response()->json([
+            'data' => [
+                'run' => $result,
+                'status' => $gaps->status($scope ?? $resolver->defaultScope()),
+            ],
+        ]);
+    }
+
+    public function fillGaps(Request $request, PriceHistoryGapService $gaps): JsonResponse
+    {
+        if (! $gaps->isEnabled()) {
+            return response()->json([
+                'message' => 'Universe price sync is disabled in application config.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'scope' => ['nullable', 'in:all_nse,nifty500'],
+            'batch' => ['nullable', 'integer', 'min:1', 'max:200'],
+            'reset_cursor' => ['nullable', 'boolean'],
+        ]);
+
+        $resolver = app(UniverseStockResolverService::class);
+
+        try {
+            $scope = isset($validated['scope'])
+                ? $resolver->normalizeScope($validated['scope'])
+                : null;
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        @set_time_limit(0);
+
+        $result = $gaps->fillBatch(
+            scope: $scope,
+            batchSize: isset($validated['batch']) ? (int) $validated['batch'] : null,
+            resetCursor: (bool) ($validated['reset_cursor'] ?? false),
+        );
+
+        return response()->json([
+            'data' => [
+                'run' => $result,
+                'status' => $gaps->status($scope ?? $resolver->defaultScope()),
+            ],
+        ]);
     }
 }

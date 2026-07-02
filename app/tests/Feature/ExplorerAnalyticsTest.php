@@ -41,18 +41,21 @@ class ExplorerAnalyticsTest extends TestCase
             'yahoo_symbol' => '^NSEI',
         ]);
 
+        $sixMonthsAgo = now()->subMonths(6)->subDays(2)->toDateString();
         $threeMonthsAgo = now()->subMonths(3)->subDays(2)->toDateString();
 
         foreach ([$stock, $benchmark] as $s) {
-            StockPrice::query()->create([
-                'stock_id' => $s->id,
-                'price_date' => $threeMonthsAgo,
-                'close_price' => 100,
-                'adjusted_close_price' => 100,
-                'provider_source' => 'test',
-                'data_source' => 'test',
-                'created_at' => now(),
-            ]);
+            foreach ([$sixMonthsAgo, $threeMonthsAgo] as $date) {
+                StockPrice::query()->create([
+                    'stock_id' => $s->id,
+                    'price_date' => $date,
+                    'close_price' => 100,
+                    'adjusted_close_price' => 100,
+                    'provider_source' => 'test',
+                    'data_source' => 'test',
+                    'created_at' => now(),
+                ]);
+            }
             StockPrice::query()->create([
                 'stock_id' => $s->id,
                 'price_date' => now()->subDay()->toDateString(),
@@ -71,24 +74,26 @@ class ExplorerAnalyticsTest extends TestCase
         $response = $this->postJson('/api/analytics/explore', [
             'symbol' => 'CACHED',
             'exchange' => 'NSE',
-            'periods' => [1, 3],
         ]);
 
         $response->assertOk();
         $response->assertJsonPath('data.valid', true);
         $response->assertJsonStructure([
             'data' => [
-                'growth_percent' => ['1m', '3m'],
-                'benchmark_growth_percent' => ['1m', '3m'],
-                'relative_strength' => ['1m', '3m'],
+                'growth_percent' => ['1m', '3m', '6m'],
+                'benchmark_growth_percent' => ['1m', '3m', '6m'],
+                'relative_strength' => ['1m', '3m', '6m'],
                 'period_closes' => [
                     '1m',
                     '3m',
+                    '6m',
                 ],
                 'chart',
             ],
         ]);
         $response->assertJsonPath('data.benchmark.latest_close', 110);
         $response->assertJsonPath('data.relative_strength.3m', 10);
+        $response->assertJsonCount(3, 'data.chart');
+        Http::assertNothingSent();
     }
 }

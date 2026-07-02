@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\PortfolioProfile;
+use App\Models\User;
 
 class TelegramNotificationService
 {
@@ -77,5 +78,58 @@ class TelegramNotificationService
         }
 
         return $sent;
+    }
+
+    /**
+     * @return array{sent: bool, recipients: int}
+     */
+    public function sendAdminOperationalAlert(string $message): array
+    {
+        $sentKeys = [];
+
+        foreach (User::query()->where('is_admin', true)->orderBy('id')->get() as $admin) {
+            foreach ($admin->portfolios()->orderByDesc('is_default')->orderBy('id')->get() as $profile) {
+                if ($this->profileSettings->get($profile, 'notifications_enabled', 'true') !== 'true') {
+                    continue;
+                }
+
+                $token = trim((string) $this->profileSettings->get($profile, 'telegram_bot_token'));
+                $chatId = trim((string) $this->profileSettings->get($profile, 'telegram_chat_id'));
+                if ($token === '' || $chatId === '') {
+                    continue;
+                }
+
+                $dedupeKey = $token.'|'.$chatId;
+                if (isset($sentKeys[$dedupeKey])) {
+                    continue;
+                }
+
+                if ($this->sendMessageWithCredentials($message, $token, $chatId)) {
+                    $sentKeys[$dedupeKey] = true;
+                }
+            }
+        }
+
+        return [
+            'sent' => $sentKeys !== [],
+            'recipients' => count($sentKeys),
+        ];
+    }
+
+    public function countAdminTelegramRecipients(): int
+    {
+        $keys = [];
+
+        foreach (User::query()->where('is_admin', true)->get() as $admin) {
+            foreach ($admin->portfolios as $profile) {
+                $token = trim((string) $this->profileSettings->get($profile, 'telegram_bot_token'));
+                $chatId = trim((string) $this->profileSettings->get($profile, 'telegram_chat_id'));
+                if ($token !== '' && $chatId !== '') {
+                    $keys[$token.'|'.$chatId] = true;
+                }
+            }
+        }
+
+        return count($keys);
     }
 }

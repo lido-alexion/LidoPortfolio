@@ -1,6 +1,7 @@
 <?php
 
 use App\Jobs\DailyMarketDataJob;
+use App\Services\BenchmarkPriceSyncService;
 use App\Services\NotificationScheduleService;
 use App\Services\SettingsService;
 use Illuminate\Foundation\Inspiring;
@@ -16,6 +17,28 @@ Artisan::command('portfolio:daily-sync', function () {
     DailyMarketDataJob::dispatchSync();
     $this->info('Daily portfolio sync completed.');
 })->purpose('Run daily market data sync manually');
+
+Artisan::command('portfolio:sync-benchmark-prices', function () {
+    @set_time_limit(0);
+    $result = app(BenchmarkPriceSyncService::class)->syncIfNeeded(force: true);
+    if ($result['skipped'] ?? false) {
+        $this->info('NIFTY50 benchmark prices already synced today.');
+
+        return 0;
+    }
+    if ($result['success'] ?? false) {
+        $this->info(sprintf(
+            'NIFTY50 benchmark sync OK (%s rows stored, %s history).',
+            $result['stored_rows'] ?? 0,
+            ($result['full_history'] ?? false) ? 'full' : 'incremental',
+        ));
+
+        return 0;
+    }
+    $this->error('NIFTY50 benchmark sync failed: '.implode('; ', $result['errors'] ?? ['unknown']));
+
+    return 1;
+})->purpose('Sync NIFTY50 index prices for relative strength / Explorer');
 
 Artisan::command('portfolio:send-notifications {--at= : HH:mm schedule slot in cron timezone}', function () {
     $at = $this->option('at');
@@ -70,6 +93,11 @@ Schedule::command('portfolio:daily-sync')
     ->timezone($timezone)
     ->name('daily-market-data');
 
+Schedule::command('portfolio:sync-benchmark-prices')
+    ->dailyAt($cronTime)
+    ->timezone($timezone)
+    ->name('benchmark-price-sync');
+
 $notificationSchedules = [];
 try {
     if (\Illuminate\Support\Facades\Schema::hasTable('portfolio_profile_settings')) {
@@ -92,17 +120,22 @@ Schedule::command('stocks:sync')
     ->name('stock-master-sync');
 
 if (config('portfolio.universe_price_sync.enabled')) {
-    Schedule::command('portfolio:sync-universe-prices', ['--mode' => 'daily'])
+    Schedule::command('portfolio:run-universe-maintenance')
         ->everyFifteenMinutes()
         ->between('19:00', '23:45')
         ->timezone($timezone)
-        ->name('universe-price-sync-daily');
+        ->name('universe-maintenance');
 }
 
 Schedule::command('portfolio:expire-alerts')
     ->hourly()
     ->timezone($timezone)
     ->name('alert-max-age-cleanup');
+
+Schedule::command('portfolio:check-operational-alerts')
+    ->hourly()
+    ->timezone($timezone)
+    ->name('operational-alerts');
 
 Schedule::call(function () {
     if (\Illuminate\Support\Facades\Schema::hasTable('portfolio_sync_runs')) {

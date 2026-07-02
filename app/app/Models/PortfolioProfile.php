@@ -81,4 +81,14 @@ class PortfolioProfile extends Model
     {
         return $this->hasMany(\App\Models\WatchlistItem::class, 'profile_id');
     }
+
+    public function knowledgeNotes(): HasMany
+    {
+        return $this->hasMany(KnowledgeNote::class, 'profile_id');
+    }
+
+    public function knowledgeTags(): HasMany
+    {
+        return $this->hasMany(KnowledgeTag::class, 'profile_id');
+    }
 }

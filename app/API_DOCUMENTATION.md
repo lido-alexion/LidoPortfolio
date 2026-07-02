@@ -98,6 +98,30 @@ Returns growth %, relative strength vs benchmark, chart series, cache/fetch meta
 - `PUT /watchlist/{id}` (auth) — update `note`
 - `DELETE /watchlist/{id}` (auth) — remove item
 
+## Knowledge Board (active portfolio)
+
+Stock-market notes, tags, and relationships — scoped per active portfolio (`profile_id`).
+
+### Notes
+
+- `GET /knowledge-board/notes` (auth) — query: `q` (title/content/tag name), `archived` (bool, default false), `tag_ids[]`, `tag_match` (`any`|`all`|`exclude`), `sort` (`updated_at`|`created_at`|`title`|`pinned_first`)
+- `POST /knowledge-board/notes` (auth) — body: `title` (required), `content_json`, `content_html`, optional `tag_ids`, `is_pinned`, `is_favorite`, `is_archived`
+- `GET /knowledge-board/notes/{id}` (auth)
+- `PUT /knowledge-board/notes/{id}` (auth) — partial update of note fields and `tag_ids`
+- `DELETE /knowledge-board/notes/{id}` (auth)
+- `POST /knowledge-board/notes/{id}/duplicate` (auth)
+- `POST /knowledge-board/notes/bulk` (auth) — body: `action` (`archive`|`delete`), `note_ids` (array of ints)
+
+Manual card order is **client-only** (`localStorage`); not stored via API.
+
+### Tags
+
+- `GET /knowledge-board/tags` (auth)
+- `POST /knowledge-board/tags` (auth) — body: `name`, optional `color`
+- `PUT /knowledge-board/tags/{id}` (auth) — rename / recolor
+- `DELETE /knowledge-board/tags/{id}` (auth)
+- `POST /knowledge-board/tags/merge` (auth) — body: `source_id`, `target_id` (moves note links, deletes source)
+
 ## Dashboard + Analytics (continued)
 
 - `POST /portfolio/rebuild-history` (auth) — manual snapshot rebuild; body `{ "from_date": "YYYY-MM-DD", "to_date": "YYYY-MM-DD" }` (both optional)

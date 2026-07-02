@@ -352,6 +352,9 @@ export default function SettingsPage() {
                                         {formatSyncRunLabel(settings.sync_log_latest_runs?.universe_price_sync)}
                                     </p>
                                     <div className="d-flex flex-wrap gap-2">
+                                    <Link to="/settings/admin-alerts" className="btn btn-outline-warning btn-sm">
+                                        Admin alerts
+                                    </Link>
                                     <Link to="/settings/sync-logs" className="btn btn-outline-secondary btn-sm">
                                         View sync logs
                                     </Link>

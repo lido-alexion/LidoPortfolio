@@ -7,13 +7,33 @@ use App\Support\ExternalHttp;
 
 class StockMasterSyncService
 {
+    protected ProviderResolverService $resolver;
+
+    protected SyncLogService $syncLog;
+
+    protected PriceFetchService $priceFetch;
+
     public function __construct(
-        protected ProviderResolverService $resolver,
-        protected SyncLogService $syncLog,
-    ) {}
+        ProviderResolverService $resolver,
+        SyncLogService $syncLog,
+        PriceFetchService $priceFetch
+    ) {
+        $this->resolver = $resolver;
+        $this->syncLog = $syncLog;
+        $this->priceFetch = $priceFetch;
+    }
 
     /**
-     * @return array{added: int, updated: int, deactivated: int, skipped: int, source: string}
+     * @return array{
+     *   added: int,
+     *   updated: int,
+     *   deactivated: int,
+     *   skipped: int,
+     *   source: string,
+     *   backfill_new_stocks: int,
+     *   backfill_new_rows: int,
+     *   backfill_new_failures: int
+     * }
      */
     public function syncStockMaster(): array
     {
@@ -26,6 +46,9 @@ class StockMasterSyncService
             'deactivated' => 0,
             'skipped' => 0,
             'source' => 'nse',
+            'backfill_new_stocks' => 0,
+            'backfill_new_rows' => 0,
+            'backfill_new_failures' => 0,
         ];
 
         $this->syncLog->log($runId, $jobName, 'info', 'Stock master sync started', [
@@ -36,12 +59,15 @@ class StockMasterSyncService
             $stats = $this->runStockMasterSync($runId, $jobName, $stats);
 
             $summary = sprintf(
-                'Stock master sync complete (%s): added=%d updated=%d deactivated=%d skipped=%d',
+                'Stock master sync complete (%s): added=%d updated=%d deactivated=%d skipped=%d new_backfill_stocks=%d new_backfill_rows=%d new_backfill_failures=%d',
                 $stats['source'],
                 $stats['added'],
                 $stats['updated'],
                 $stats['deactivated'],
                 $stats['skipped'],
+                $stats['backfill_new_stocks'],
+                $stats['backfill_new_rows'],
+                $stats['backfill_new_failures'],
             );
 
             $this->syncLog->log($runId, $jobName, 'info', 'Stock master sync completed', array_merge($stats, [
@@ -63,13 +89,32 @@ class StockMasterSyncService
     }
 
     /**
-     * @param  array{added: int, updated: int, deactivated: int, skipped: int, source: string}  $stats
-     * @return array{added: int, updated: int, deactivated: int, skipped: int, source: string}
+     * @param  array{
+     *   added: int,
+     *   updated: int,
+     *   deactivated: int,
+     *   skipped: int,
+     *   source: string,
+     *   backfill_new_stocks: int,
+     *   backfill_new_rows: int,
+     *   backfill_new_failures: int
+     * }  $stats
+     * @return array{
+     *   added: int,
+     *   updated: int,
+     *   deactivated: int,
+     *   skipped: int,
+     *   source: string,
+     *   backfill_new_stocks: int,
+     *   backfill_new_rows: int,
+     *   backfill_new_failures: int
+     * }
      */
     protected function runStockMasterSync(?string $runId, string $jobName, array $stats): array
     {
         $rows = $this->fetchNseEquityRows();
         $seen = [];
+        $newNseStockIds = [];
 
         foreach ($rows as $row) {
             try {
@@ -99,7 +144,10 @@ class StockMasterSyncService
                 $row['series'] ?? null,
             );
 
-            $stats[$result]++;
+            $stats[$result['action']]++;
+            if ($result['action'] === 'added' && $normalized['exchange'] === 'NSE') {
+                $newNseStockIds[] = $result['stock']->id;
+            }
         }
 
         $stats['deactivated'] = $this->deactivateMissing(array_keys($seen), 'NSE');
@@ -111,6 +159,14 @@ class StockMasterSyncService
             $stats['deactivated'] += $bseStats['deactivated'];
             $stats['skipped'] += $bseStats['skipped'];
             $stats['source'] = 'nse+bse';
+        }
+
+        if ($newNseStockIds !== []) {
+            $backfill = $this->backfillNewlyAddedStocks(array_values(array_unique($newNseStockIds)));
+            $stats['backfill_new_stocks'] = $backfill['processed'];
+            $stats['backfill_new_rows'] = $backfill['stored_rows'];
+            $stats['backfill_new_failures'] = $backfill['failed'];
+            $this->syncLog->log($runId, $jobName, 'info', 'Backfill for newly added NSE symbols completed', $backfill);
         }
 
         return $stats;
@@ -214,13 +270,16 @@ class StockMasterSyncService
         return $rows;
     }
 
+    /**
+     * @return array{action: 'added'|'updated', stock: Stock}
+     */
     protected function upsertMasterRow(
         string $symbol,
         string $exchange,
         string $name,
         ?string $isin,
         ?string $series,
-    ): string {
+    ): array {
         $stock = Stock::query()->firstOrNew([
             'symbol' => $symbol,
             'exchange' => $exchange,
@@ -239,7 +298,67 @@ class StockMasterSyncService
 
         $stock->save();
 
-        return $isNew ? 'added' : 'updated';
+        return [
+            'action' => $isNew ? 'added' : 'updated',
+            'stock' => $stock->fresh(),
+        ];
+    }
+
+    /**
+     * @param  array<int, int>  $stockIds
+     * @return array{processed: int, stored_rows: int, failed: int, errors: array<int, string>}
+     */
+    protected function backfillNewlyAddedStocks(array $stockIds): array
+    {
+        $stocks = Stock::query()
+            ->whereIn('id', $stockIds)
+            ->where('exchange', 'NSE')
+            ->where('is_benchmark', false)
+            ->orderBy('id')
+            ->get();
+
+        $from = now()->subDays((int) config('portfolio.universe_price_sync.history_days', 365))->startOfDay();
+        $to = now()->startOfDay();
+        $delayMs = (int) config('portfolio.universe_price_sync.delay_ms_between_stocks', 400);
+
+        $stats = [
+            'processed' => 0,
+            'stored_rows' => 0,
+            'failed' => 0,
+            'errors' => [],
+        ];
+
+        PriceSyncNotificationContext::withoutTelegram(function () use ($stocks, $from, $to, $delayMs, &$stats) {
+            foreach ($stocks as $index => $stock) {
+                $stats['processed']++;
+                try {
+                    $result = $this->priceFetch->syncStock(
+                        $stock,
+                        $from,
+                        $to,
+                        notifyTelegramOnFailure: false,
+                    );
+                    $stats['stored_rows'] += (int) ($result['stored_rows'] ?? 0);
+                    if (! ($result['success'] ?? false)) {
+                        $stats['failed']++;
+                        if (count($stats['errors']) < 20) {
+                            $stats['errors'][] = $stock->symbol.': '.implode('; ', $result['errors'] ?? ['sync failed']);
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    $stats['failed']++;
+                    if (count($stats['errors']) < 20) {
+                        $stats['errors'][] = $stock->symbol.': '.$e->getMessage();
+                    }
+                }
+
+                if ($delayMs > 0 && $index < $stocks->count() - 1) {
+                    usleep($delayMs * 1000);
+                }
+            }
+        });
+
+        return $stats;
     }
 
     /**

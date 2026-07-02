@@ -5,8 +5,10 @@ namespace App\Jobs;
 use App\Models\Holding;
 use App\Models\PortfolioProfile;
 use App\Models\Stock;
+use App\Services\AdminOperationalAlertService;
 use App\Services\AlertExpirationService;
 use App\Services\Alerts\AlertPolicyEvaluationService;
+use App\Services\BenchmarkPriceSyncService;
 use App\Services\DailyMarketSyncService;
 use App\Services\MetricsUpdateService;
 use App\Services\PortfolioCalculationService;
@@ -35,6 +37,7 @@ class DailyMarketDataJob implements ShouldQueue
         DailyMarketSyncService $dailySyncStatus,
         AlertExpirationService $alertExpiration,
         AlertPolicyEvaluationService $alertPolicyEvaluation,
+        BenchmarkPriceSyncService $benchmarkSync,
     ): void {
         $jobName = SyncLogService::JOB_DAILY_MARKET_DATA;
         $runId = $syncLog->beginRun($jobName);
@@ -58,6 +61,7 @@ class DailyMarketDataJob implements ShouldQueue
                 $dailySyncStatus,
                 $alertExpiration,
                 $alertPolicyEvaluation,
+                $benchmarkSync,
                 $startedAt,
                 $runId,
                 $jobName,
@@ -66,7 +70,7 @@ class DailyMarketDataJob implements ShouldQueue
                 &$skipped,
                 $priceDateBefore,
             ) {
-                $priceFetch->syncBenchmark();
+                $benchmarkSync->syncIfNeeded(force: true);
 
                 $heldStockIds = Holding::query()
                     ->where('quantity', '>', 0)
@@ -166,6 +170,7 @@ class DailyMarketDataJob implements ShouldQueue
             throw $e;
         } finally {
             $dailySyncStatus->clearInProgress();
+            app(AdminOperationalAlertService::class)->syncAndNotify();
         }
     }
 }

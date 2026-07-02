@@ -197,6 +197,50 @@ class StockPriceHistoryService
         return $this->fetchMissingHistory($stock, $requiredFrom, $requiredTo);
     }
 
+    /**
+     * Read-only cache status for analytics (no provider fetch). Used by Explorer, which
+     * relies on universe price sync populating portfolio_stock_prices.
+     *
+     * @return array{
+     *   success: bool,
+     *   cache_hit: bool,
+     *   stored_rows: int,
+     *   fetched_rows: int,
+     *   ranges_fetched: array<int, array{from: string, to: string, provider: string}>,
+     *   errors: array<int, string>
+     * }
+     */
+    public function getCachedAnalyticsHistoryStatus(Stock $stock, int $maxMonths = 6): array
+    {
+        $bufferKey = $maxMonths.'m';
+        $bufferDays = config('portfolio.history.analytics_buffer_days.'.$bufferKey)
+            ?? ($maxMonths >= 6 ? 210 : ($maxMonths >= 3 ? 150 : 60));
+
+        $requiredFrom = now()->subDays((int) $bufferDays)->startOfDay();
+        $requiredTo = now()->startOfDay();
+        $missingRanges = $this->getMissingHistoryRanges($stock, $requiredFrom, $requiredTo);
+
+        if ($missingRanges === []) {
+            return [
+                'success' => true,
+                'cache_hit' => true,
+                'stored_rows' => 0,
+                'fetched_rows' => 0,
+                'ranges_fetched' => [],
+                'errors' => [],
+            ];
+        }
+
+        return [
+            'success' => false,
+            'cache_hit' => false,
+            'stored_rows' => 0,
+            'fetched_rows' => 0,
+            'ranges_fetched' => [],
+            'errors' => ['Insufficient cached price history. Universe price sync may not have covered this symbol yet.'],
+        ];
+    }
+
     public function getLatestClose(Stock $stock, ?Carbon $asOf = null): ?float
     {
         $asOf = ($asOf ?? now())->copy()->startOfDay();

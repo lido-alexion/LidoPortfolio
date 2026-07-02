@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Jobs\DailyMarketDataJob;
 use App\Services\AlertExpirationService;
+use App\Services\Alerts\AlertPolicyEvaluationService;
+use App\Services\BenchmarkPriceSyncService;
 use App\Services\DailyMarketSyncService;
 use App\Services\MetricsUpdateService;
 use App\Services\PriceFetchService;
@@ -34,8 +36,13 @@ class DailyMarketDataJobTest extends TestCase
         $dailySyncStatus->shouldReceive('clearInProgress')->once();
         $alertExpiration = Mockery::mock(AlertExpirationService::class);
         $alertExpiration->shouldReceive('latestPortfolioPriceDate')->andReturn('2026-01-01');
+        $alertPolicyEvaluation = Mockery::mock(AlertPolicyEvaluationService::class);
+        $benchmarkSync = Mockery::mock(BenchmarkPriceSyncService::class);
 
-        $priceFetch->shouldReceive('syncBenchmark')->once()->andThrow(new \RuntimeException('sync failed'));
+        $benchmarkSync->shouldReceive('syncIfNeeded')
+            ->once()
+            ->with(true)
+            ->andThrow(new \RuntimeException('sync failed'));
         $telegram->shouldReceive('sendSyncFailureAlert')->once();
         $logger->shouldReceive('log')->once();
         $syncLog->shouldReceive('beginRun')->once()->andReturn('run-test');
@@ -44,6 +51,17 @@ class DailyMarketDataJobTest extends TestCase
 
         $job = new DailyMarketDataJob();
         $this->expectException(\RuntimeException::class);
-        $job->handle($priceFetch, $metrics, $portfolio, $telegram, $logger, $syncLog, $dailySyncStatus, $alertExpiration);
+        $job->handle(
+            $priceFetch,
+            $metrics,
+            $portfolio,
+            $telegram,
+            $logger,
+            $syncLog,
+            $dailySyncStatus,
+            $alertExpiration,
+            $alertPolicyEvaluation,
+            $benchmarkSync,
+        );
     }
 }

@@ -18,10 +18,14 @@ import ProfilePage from './pages/ProfilePage';
 import SyncLogsPage from './pages/SyncLogsPage';
 import UniversePriceSyncPage from './pages/UniversePriceSyncPage';
 import UserManagementPage from './pages/UserManagementPage';
+import AdminAlertsPage from './pages/AdminAlertsPage';
+import AdminAlertsLoginNotifier from './components/AdminAlertsLoginNotifier';
 import AdminRoute from './components/AdminRoute';
 import StockExplorerPage from './pages/StockExplorerPage';
 import WatchlistPage from './pages/WatchlistPage';
 import PatternGuidePage from './pages/PatternGuidePage';
+import KnowledgeBoardPage from './pages/KnowledgeBoardPage';
+import KnowledgeBoardTagsPage from './pages/KnowledgeBoardTagsPage';
 import LoginPage from './pages/LoginPage';
 import AcceptInvitePage from './pages/AcceptInvitePage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
@@ -118,6 +122,7 @@ function App() {
                     </Routes>
                 ) : (
                     <>
+                        <AdminAlertsLoginNotifier user={user} loading={loading} />
                         <div className="lido-main">
                             <AppTabs />
                             <Routes>
@@ -129,6 +134,8 @@ function App() {
                                 <Route path="/watchlist" element={<WatchlistPage />} />
                                 <Route path="/explorer" element={<StockExplorerPage />} />
                                 <Route path="/patterns" element={<PatternGuidePage />} />
+                                <Route path="/knowledge-board" element={<KnowledgeBoardPage />} />
+                                <Route path="/knowledge-board/tags" element={<KnowledgeBoardTagsPage />} />
                                 <Route path="/profile" element={<ProfilePage />} />
                                 <Route path="/portfolios" element={<PortfoliosPage />} />
                                 <Route path="/settings" element={<SettingsPage />} />
@@ -136,6 +143,11 @@ function App() {
                                 <Route path="/settings/sync-logs" element={(
                                     <AdminRoute>
                                         <SyncLogsPage />
+                                    </AdminRoute>
+                                )} />
+                                <Route path="/settings/admin-alerts" element={(
+                                    <AdminRoute>
+                                        <AdminAlertsPage />
                                     </AdminRoute>
                                 )} />
                                 <Route path="/settings/universe-price-sync" element={(

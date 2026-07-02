@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Services\AdminOperationalAlertService;
 use App\Services\StockMasterSyncService;
 use Illuminate\Console\Command;
 
@@ -17,9 +18,12 @@ class SyncStockMasterCommand extends Command
             $stats = $sync->syncStockMaster();
         } catch (\Throwable $e) {
             $this->error('Stock master sync failed: '.$e->getMessage());
+            app(AdminOperationalAlertService::class)->syncAndNotify();
 
             return self::FAILURE;
         }
+
+        app(AdminOperationalAlertService::class)->syncAndNotify();
 
         $this->info(sprintf(
             'Stock master sync complete (%s): added=%d updated=%d deactivated=%d skipped=%d',

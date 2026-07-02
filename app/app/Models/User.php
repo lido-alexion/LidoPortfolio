@@ -58,8 +58,9 @@ class User extends Authenticatable
         }
 
         $version = $this->updated_at?->timestamp ?? time();
+        $appPath = parse_url((string) config('app.url'), PHP_URL_PATH) ?: '';
 
-        return url('/api/profile/photo').'?v='.$version;
+        return rtrim($appPath, '/').'/api/profile/photo?v='.$version;
     }
 
     /**

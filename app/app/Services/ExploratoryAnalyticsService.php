@@ -24,9 +24,9 @@ class ExploratoryAnalyticsService
         string $symbol,
         string $exchange = 'NSE',
         ?string $benchmarkSymbol = 'NIFTY50',
-        array $periodMonths = [1, 3],
+        array $periodMonths = [1, 3, 6],
     ): array {
-        $result = $this->validation->validateAndPersist($symbol, $exchange);
+        $result = $this->validation->validate($symbol, $exchange, false);
         if (! $result->valid || ! $result->stock) {
             return [
                 'valid' => false,
@@ -37,15 +37,16 @@ class ExploratoryAnalyticsService
         $stock = $result->stock;
         $benchmark = $this->relativeStrength->benchmarkStock();
         if ($benchmarkSymbol && $benchmarkSymbol !== 'NIFTY50') {
-            $benchResult = $this->validation->validate($benchmarkSymbol, 'NSE');
+            $benchResult = $this->validation->validate($benchmarkSymbol, 'NSE', false);
             if ($benchResult->valid && $benchResult->stock) {
                 $benchmark = $benchResult->stock;
             }
         }
 
-        $maxMonths = max($periodMonths ?: [1, 3]);
-        $stockFetch = $this->history->ensureAnalyticsHistory($stock, $maxMonths);
-        $benchmarkFetch = $this->history->ensureAnalyticsHistory($benchmark, $maxMonths);
+        $periodMonths = $periodMonths ?: [1, 3, 6];
+        $maxMonths = max($periodMonths);
+        $stockFetch = $this->history->getCachedAnalyticsHistoryStatus($stock, $maxMonths);
+        $benchmarkFetch = $this->history->getCachedAnalyticsHistoryStatus($benchmark, $maxMonths);
 
         $asOf = now()->startOfDay();
         $growth = [];
