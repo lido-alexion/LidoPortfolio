@@ -2,17 +2,22 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
+import { usePortfolio } from '../context/PortfolioContext';
 import { DataTableCard } from '../components/DataTable';
 import DashboardTopMoverCard from '../components/DashboardTopMoverCard';
 import { showToast } from '../toast';
 import { categoryClassName, categoryLabel } from '../utils/patternDetection';
+import {
+    clearDashboardCache,
+    flattenPatternScanResults,
+    formatDashboardCacheLabel,
+    readDashboardCache,
+    writeDashboardCache,
+} from '../utils/dashboardCache';
+import { showAdminOperationalAlertsToastIfAny } from '../utils/adminOperationalAlertsToast';
 import { patternGuideLink } from '../utils/patternGuideLinks';
 import { formatInrCompactWhole, formatInrWhole, formatTablePercent0 } from '../utils/tableFormat';
 import { formatChartAxisDate, formatTransactionDateDisplay } from '../utils/transactionDate';
-import {
-    notifyPortfolioDashboardRefresh,
-    PORTFOLIO_DASHBOARD_REFRESH,
-} from '../utils/portfolioEvents';
 import {
     CartesianGrid,
     Line,
@@ -169,52 +174,81 @@ function averageRelativeStrength(metrics) {
 
 export default function DashboardPage() {
     const { user } = useAuth();
+    const { activePortfolio } = usePortfolio();
+    const userId = user?.id;
+    const profileId = activePortfolio?.id;
     const isAdmin = Boolean(user?.is_admin);
     const [data, setData] = useState(null);
     const [loadError, setLoadError] = useState('');
     const [topMoverPeriod, setTopMoverPeriod] = useState(loadTopMoverPeriod);
     const [rebuildingHistory, setRebuildingHistory] = useState(false);
     const [syncingPrices, setSyncingPrices] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
     const [clearingAlerts, setClearingAlerts] = useState(false);
     const [acknowledgingId, setAcknowledgingId] = useState(null);
     const [patternRows, setPatternRows] = useState([]);
     const [patternLoading, setPatternLoading] = useState(true);
+    const [servedFromCache, setServedFromCache] = useState(false);
+    const [cachedAt, setCachedAt] = useState(null);
 
     const handleTopMoverPeriodChange = useCallback((period) => {
         setTopMoverPeriod(period);
         saveTopMoverPeriod(period);
     }, []);
 
-    const load = useCallback(() => {
-        setLoadError('');
-        return api.get('/dashboard')
-            .then((res) => setData(res.data))
-            .catch(() => setLoadError('Failed to load dashboard'));
-    }, []);
+    const fetchDashboard = useCallback(({ force = false } = {}) => {
+        if (!userId || !profileId) {
+            return Promise.resolve();
+        }
 
-    const loadPatternScan = useCallback(() => {
+        if (!force) {
+            const cached = readDashboardCache(userId, profileId);
+            if (cached) {
+                setData(cached.dashboard);
+                setPatternRows(cached.patternRows);
+                setPatternLoading(false);
+                setCachedAt(cached.cachedAt);
+                setServedFromCache(true);
+                setLoadError('');
+                return Promise.resolve();
+            }
+        }
+
+        setServedFromCache(false);
         setPatternLoading(true);
-        return api.get('/patterns/scan', { params: { scope: 'holdings', actionable_only: true } })
-            .then((res) => {
-                const flat = [];
-                for (const stock of res.data.results || []) {
-                    for (const match of stock.matches || []) {
-                        flat.push({
-                            stock_id: stock.stock_id,
-                            symbol: stock.symbol,
-                            pattern_id: match.id,
-                            pattern_name: match.name,
-                            category: match.category,
-                            bar_date: match.bar_date,
-                            variant: match.variant,
-                        });
-                    }
-                }
+        setLoadError('');
+
+        return Promise.all([
+            api.get('/dashboard'),
+            api.get('/patterns/scan', { params: { scope: 'holdings', actionable_only: true } }),
+        ])
+            .then(([dashboardRes, patternRes]) => {
+                const dashboard = dashboardRes.data;
+                const flat = flattenPatternScanResults(patternRes.data);
+                setData(dashboard);
                 setPatternRows(flat);
+                writeDashboardCache(userId, profileId, { dashboard, patternRows: flat });
+                setCachedAt(new Date().toISOString());
+                setServedFromCache(false);
+                if (isAdmin) {
+                    showAdminOperationalAlertsToastIfAny();
+                }
             })
-            .catch(() => setPatternRows([]))
+            .catch(() => {
+                setLoadError('Failed to load dashboard');
+                setPatternRows([]);
+            })
             .finally(() => setPatternLoading(false));
-    }, []);
+    }, [userId, profileId, isAdmin]);
+
+    const handleRefreshDashboard = useCallback(() => {
+        if (!userId || !profileId) {
+            return;
+        }
+        setRefreshing(true);
+        clearDashboardCache(userId, profileId);
+        fetchDashboard({ force: true }).finally(() => setRefreshing(false));
+    }, [userId, profileId, fetchDashboard]);
 
     const runDailyPriceSync = useCallback((force = false) => {
         setSyncingPrices(true);
@@ -222,19 +256,17 @@ export default function DashboardPage() {
             .then((res) => {
                 const body = res.data || {};
                 showToast(body.message || 'Daily price sync finished.');
-                return load().then(() => {
-                    if (!body.skipped) {
-                        notifyPortfolioDashboardRefresh();
-                    }
-                    return loadPatternScan();
-                });
+                if (!body.skipped) {
+                    clearDashboardCache(userId, profileId);
+                }
+                return fetchDashboard({ force: true });
             })
             .catch((err) => {
                 const msg = err?.response?.data?.message || 'Failed to run daily price sync.';
                 showToast(msg, 'danger');
             })
             .finally(() => setSyncingPrices(false));
-    }, [load, loadPatternScan]);
+    }, [userId, profileId, fetchDashboard]);
 
     const requestRebuildPortfolioHistory = useCallback(() => {
         const confirmed = window.confirm(
@@ -255,44 +287,50 @@ export default function DashboardPage() {
                     ? `Portfolio history rebuilt (${written} snapshots).`
                     : (res.data?.message || 'Portfolio history rebuilt.');
                 showToast(msg);
-                return load();
+                clearDashboardCache(userId, profileId);
+                return fetchDashboard({ force: true });
             })
             .catch(() => setLoadError('Failed to rebuild portfolio history'))
             .finally(() => setRebuildingHistory(false));
-    }, [load]);
+    }, [userId, profileId, fetchDashboard]);
 
     const clearAllAlerts = useCallback(() => {
         setClearingAlerts(true);
         api.post('/alerts/expire-all')
             .then((res) => {
                 showToast(res.data?.message || 'Alerts cleared.');
-                return load();
+                clearDashboardCache(userId, profileId);
+                return fetchDashboard({ force: true });
             })
             .catch(() => showToast('Failed to clear alerts.', 'danger'))
             .finally(() => setClearingAlerts(false));
-    }, [load]);
+    }, [userId, profileId, fetchDashboard]);
 
     const acknowledgeAlert = useCallback((alertId) => {
         setAcknowledgingId(alertId);
         api.post(`/alerts/${alertId}/acknowledge`)
-            .then(() => load())
+            .then(() => {
+                clearDashboardCache(userId, profileId);
+                return fetchDashboard({ force: true });
+            })
             .catch(() => showToast('Failed to acknowledge alert.', 'danger'))
             .finally(() => setAcknowledgingId(null));
-    }, [load]);
+    }, [userId, profileId, fetchDashboard]);
 
     useEffect(() => {
-        load();
-        loadPatternScan();
-    }, [load, loadPatternScan]);
-
-    useEffect(() => {
-        const onRefresh = () => {
-            load();
-            loadPatternScan();
-        };
-        window.addEventListener(PORTFOLIO_DASHBOARD_REFRESH, onRefresh);
-        return () => window.removeEventListener(PORTFOLIO_DASHBOARD_REFRESH, onRefresh);
-    }, [load, loadPatternScan]);
+        if (!userId || !profileId) {
+            setData(null);
+            setPatternRows([]);
+            setPatternLoading(true);
+            setServedFromCache(false);
+            setCachedAt(null);
+            return;
+        }
+        setData(null);
+        setPatternRows([]);
+        setLoadError('');
+        fetchDashboard({ force: false });
+    }, [userId, profileId, fetchDashboard]);
 
     const allocationColumns = useMemo(() => [
         { accessorKey: 'symbol', header: 'Symbol' },
@@ -512,6 +550,20 @@ export default function DashboardPage() {
                 </div>
             ) : null}
             <div className="col-12 d-flex flex-wrap justify-content-end align-items-center gap-2">
+                {servedFromCache && cachedAt ? (
+                    <span className="text-muted small" title="Dashboard data is cached locally for faster navigation">
+                        Cached {formatDashboardCacheLabel(cachedAt)}
+                    </span>
+                ) : null}
+                <button
+                    type="button"
+                    className="btn btn-outline-secondary btn-sm"
+                    onClick={handleRefreshDashboard}
+                    disabled={refreshing || !userId || !profileId}
+                    title="Clear local cache and reload dashboard from the server"
+                >
+                    {refreshing ? 'Refreshing…' : 'Refresh dashboard'}
+                </button>
                 {isAdmin && pricesSyncedToday && !syncInProgress ? (
                     <span className="text-muted small">
                         Synced for {dailySync.today || 'today'}

@@ -19,7 +19,6 @@ import SyncLogsPage from './pages/SyncLogsPage';
 import UniversePriceSyncPage from './pages/UniversePriceSyncPage';
 import UserManagementPage from './pages/UserManagementPage';
 import AdminAlertsPage from './pages/AdminAlertsPage';
-import AdminAlertsLoginNotifier from './components/AdminAlertsLoginNotifier';
 import AdminRoute from './components/AdminRoute';
 import StockExplorerPage from './pages/StockExplorerPage';
 import WatchlistPage from './pages/WatchlistPage';
@@ -122,7 +121,6 @@ function App() {
                     </Routes>
                 ) : (
                     <>
-                        <AdminAlertsLoginNotifier user={user} loading={loading} />
                         <div className="lido-main">
                             <AppTabs />
                             <Routes>

@@ -10,6 +10,7 @@ import React, {
 import api from '../api';
 import { ensureCsrfCookie, resetCsrfCookie } from '../auth/csrf';
 import { consumeRedirectPath, saveRedirectPath } from '../auth/redirect';
+import { clearAllDashboardCaches } from '../utils/dashboardCache';
 
 const AuthContext = createContext(null);
 
@@ -105,6 +106,7 @@ export function AuthProvider({ children }) {
             // Session may already be invalid.
         }
         resetCsrfCookie();
+        clearAllDashboardCaches();
         setUser(null);
         setSessionExpired(false);
     }, []);

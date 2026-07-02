@@ -1,3 +1,5 @@
+import { clearAllDashboardCaches } from './dashboardCache';
+
 export const PORTFOLIO_DASHBOARD_REFRESH = 'portfolio-dashboard-refresh';
 export const PORTFOLIO_CHANGED = 'portfolio-changed';
 
@@ -16,6 +18,7 @@ function getCrossTabChannel() {
 }
 
 export function notifyPortfolioDashboardRefresh() {
+    clearAllDashboardCaches();
     window.dispatchEvent(new CustomEvent(PORTFOLIO_DASHBOARD_REFRESH));
 }
 
