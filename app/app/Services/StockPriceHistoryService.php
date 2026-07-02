@@ -299,6 +299,86 @@ class StockPriceHistoryService
     }
 
     /**
+     * Daily % gain vs the close at the start of the lookback window (same anchor as period growth).
+     *
+     * @return list<array{
+     *   date: string,
+     *   stock_gain_percent: float,
+     *   benchmark_gain_percent: float|null
+     * }>
+     */
+    public function getNormalizedGainSeries(
+        Stock $stock,
+        Stock $benchmark,
+        int $months = 12,
+        ?Carbon $asOf = null,
+    ): array {
+        $asOf = ($asOf ?? now())->copy()->startOfDay();
+        $startTarget = $asOf->copy()->subMonths($months);
+
+        $stockBase = $this->getCloseOnOrBeforeDate($stock, $startTarget);
+        $benchmarkBase = $this->getCloseOnOrBeforeDate($benchmark, $startTarget);
+
+        if ($stockBase === null || abs($stockBase) < 0.000001) {
+            return [];
+        }
+
+        $stockRows = StockPrice::query()
+            ->where('stock_id', $stock->id)
+            ->where('price_date', '>=', $startTarget->toDateString())
+            ->where('price_date', '<=', $asOf->toDateString())
+            ->orderBy('price_date')
+            ->get(['price_date', 'close_price', 'adjusted_close_price']);
+
+        $benchmarkByDate = StockPrice::query()
+            ->where('stock_id', $benchmark->id)
+            ->where('price_date', '>=', $startTarget->toDateString())
+            ->where('price_date', '<=', $asOf->toDateString())
+            ->orderBy('price_date')
+            ->get(['price_date', 'close_price', 'adjusted_close_price'])
+            ->keyBy(fn ($row) => Carbon::parse($row->price_date)->toDateString());
+
+        $series = [];
+
+        foreach ($stockRows as $row) {
+            $sessionDate = Carbon::parse($row->price_date)->startOfDay();
+            if (! TradingCalendar::isEquitySessionDate($sessionDate)) {
+                continue;
+            }
+
+            $dateKey = $sessionDate->toDateString();
+            $stockClose = $row->adjusted_close_price ?? $row->close_price;
+            if ($stockClose === null) {
+                continue;
+            }
+
+            $stockClose = (float) $stockClose;
+            $point = [
+                'date' => $dateKey,
+                'stock_gain_percent' => round((($stockClose - $stockBase) / $stockBase) * 100, 4),
+                'benchmark_gain_percent' => null,
+            ];
+
+            if ($benchmarkBase !== null && abs($benchmarkBase) >= 0.000001) {
+                $benchRow = $benchmarkByDate->get($dateKey);
+                if ($benchRow !== null) {
+                    $benchClose = $benchRow->adjusted_close_price ?? $benchRow->close_price;
+                    if ($benchClose !== null) {
+                        $point['benchmark_gain_percent'] = round(
+                            (((float) $benchClose - $benchmarkBase) / $benchmarkBase) * 100,
+                            4,
+                        );
+                    }
+                }
+            }
+
+            $series[] = $point;
+        }
+
+        return $series;
+    }
+
+    /**
      * @return array<int, array{from: Carbon, to: Carbon}>
      */
     protected function detectInternalGaps(Stock $stock, Carbon $from, Carbon $to): array

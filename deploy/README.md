@@ -16,6 +16,7 @@
 |------|------|
 | `cpanel-once-setup.php` | First deploy: key, migrate, config:cache |
 | `cpanel-migrate.php` | After uploading new migrations |
+| `cpanel-backfill-sell-realizations.php` | After migration `2026_07_09_000001` — backfill sell P/L columns (optional `?profile=`) |
 | `cpanel-config-cache.php` | After `.env` or config changes |
 | `cpanel-diagnose.php` | Pre-flight checks |
 

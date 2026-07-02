@@ -16,6 +16,8 @@ class Transaction extends Model
         'quantity',
         'price',
         'fees',
+        'realized_pl',
+        'squared_off_fees',
         'transaction_date',
         'notes',
     ];
@@ -28,6 +30,8 @@ class Transaction extends Model
             'quantity' => 'decimal:4',
             'price' => 'decimal:4',
             'fees' => 'decimal:4',
+            'realized_pl' => 'decimal:4',
+            'squared_off_fees' => 'decimal:4',
             'transaction_date' => 'date',
         ];
     }

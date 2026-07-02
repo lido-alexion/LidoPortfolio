@@ -315,23 +315,43 @@ export default function KnowledgeBoardPage() {
                 'card lido-knowledge-toolbar-card',
                 filtersExpanded ? 'lido-knowledge-toolbar-card--expanded' : 'lido-knowledge-toolbar-card--collapsed',
             ].join(' ')}>
-                <button
-                    type="button"
-                    className="lido-knowledge-toolbar-toggle"
-                    onClick={() => setFiltersExpanded((open) => !open)}
-                    aria-expanded={filtersExpanded}
-                    aria-controls="kb-toolbar-panel"
-                    aria-label={filtersExpanded ? 'Collapse Knowledge Board filters' : 'Expand Knowledge Board filters'}
-                >
-                    <span className="lido-knowledge-toolbar-toggle-label">Knowledge Board</span>
-                    <span className="lido-knowledge-toolbar-expand-icon" aria-hidden="true">
-                        <IconChevronDown />
-                    </span>
-                    <span className="lido-collapsible-card-chevron lido-knowledge-toolbar-chevron-expanded" aria-hidden="true">▾</span>
-                </button>
+                {!filtersExpanded ? (
+                    <div className="lido-knowledge-toolbar-collapsed">
+                        <button
+                            type="button"
+                            className="btn btn-sm btn-primary lido-knowledge-toolbar-new-collapsed"
+                            onClick={openNewNote}
+                        >
+                            + New
+                        </button>
+                        <button
+                            type="button"
+                            className="lido-knowledge-toolbar-toggle"
+                            onClick={() => setFiltersExpanded(true)}
+                            aria-expanded={false}
+                            aria-controls="kb-toolbar-panel"
+                            aria-label="Expand Knowledge Board filters"
+                        >
+                            <span className="lido-knowledge-toolbar-expand-icon" aria-hidden="true">
+                                <IconChevronDown />
+                            </span>
+                        </button>
+                    </div>
+                ) : (
+                    <>
+                        <button
+                            type="button"
+                            className="lido-knowledge-toolbar-toggle"
+                            onClick={() => setFiltersExpanded(false)}
+                            aria-expanded
+                            aria-controls="kb-toolbar-panel"
+                            aria-label="Collapse Knowledge Board filters"
+                        >
+                            <span className="lido-knowledge-toolbar-toggle-label">Knowledge Board</span>
+                            <span className="lido-collapsible-card-chevron lido-knowledge-toolbar-chevron-expanded" aria-hidden="true">▾</span>
+                        </button>
 
-                {filtersExpanded ? (
-                    <div id="kb-toolbar-panel" className="card-body pt-0 pb-2 px-2 px-md-3">
+                        <div id="kb-toolbar-panel" className="card-body pt-0 pb-2 px-2 px-md-3">
                         <div className="d-flex flex-wrap gap-1 mb-2">
                             <button type="button" className="btn btn-sm btn-primary" onClick={openNewNote}>New Note</button>
                             <button type="button" className="btn btn-sm btn-outline-secondary" onClick={selectAllVisible}>Select All</button>
@@ -414,8 +434,9 @@ export default function KnowledgeBoardPage() {
                                 })}
                             </div>
                         ) : null}
-                    </div>
-                ) : null}
+                        </div>
+                    </>
+                )}
             </div>
 
             {loading ? (

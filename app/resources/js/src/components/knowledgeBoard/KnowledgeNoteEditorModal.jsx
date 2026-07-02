@@ -2,11 +2,14 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import SegmentToggle from '../SegmentToggle';
 import KnowledgeEditor from './KnowledgeEditor';
+import KnowledgeMarkdownEditor from './KnowledgeMarkdownEditor';
 import KnowledgeSimpleEditor from './KnowledgeSimpleEditor';
 import TagInput from './TagInput';
 import {
     deriveNoteTitle,
+    htmlToMarkdownLite,
     htmlToPlainText,
+    markdownToHtml,
     plainTextToHtml,
     plainTextToJson,
 } from '../../utils/knowledgeBoardPreview';
@@ -27,6 +30,7 @@ export default function KnowledgeNoteEditorModal({
     const [contentJson, setContentJson] = useState(EMPTY_DOC);
     const [contentHtml, setContentHtml] = useState('');
     const [plainText, setPlainText] = useState('');
+    const [markdownText, setMarkdownText] = useState('');
     const [editorMode, setEditorMode] = useState('simple');
     const [dirty, setDirty] = useState(false);
     const autosaveTimer = useRef(null);
@@ -36,8 +40,9 @@ export default function KnowledgeNoteEditorModal({
         tags: tags.map((tag) => tag.id).sort(),
         contentJson,
         plainText,
+        markdownText,
         editorMode,
-    }), [tags, contentJson, plainText, editorMode]);
+    }), [tags, contentJson, plainText, markdownText, editorMode]);
 
     useEffect(() => {
         if (!open) {
@@ -47,41 +52,53 @@ export default function KnowledgeNoteEditorModal({
         const initialJson = note?.content_json || EMPTY_DOC;
         const initialHtml = note?.content_html || '';
         const initialPlain = htmlToPlainText(initialHtml);
+        const initialMarkdown = htmlToMarkdownLite(initialHtml);
         setTags(initialTags);
         setContentJson(initialJson);
         setContentHtml(initialHtml);
         setPlainText(initialPlain);
+        setMarkdownText(initialMarkdown);
         setEditorMode('simple');
         setDirty(false);
         lastSavedSnapshot.current = JSON.stringify({
             tags: initialTags.map((tag) => tag.id).sort(),
             contentJson: initialJson,
             plainText: initialPlain,
+            markdownText: initialMarkdown,
             editorMode: 'simple',
         });
     }, [open, sessionKey]);
 
     const buildPayload = useCallback(() => {
-        const html = editorMode === 'simple'
-            ? plainTextToHtml(plainText)
-            : contentHtml;
-        const json = editorMode === 'simple'
-            ? plainTextToJson(plainText)
-            : contentJson;
+        let html;
+        let json;
+        if (editorMode === 'simple') {
+            html = plainTextToHtml(plainText);
+            json = plainTextToJson(plainText);
+        } else if (editorMode === 'markdown') {
+            html = markdownToHtml(markdownText);
+            json = plainTextToJson(htmlToPlainText(html));
+        } else {
+            html = contentHtml;
+            json = contentJson;
+        }
         return {
             title: deriveNoteTitle(html) || 'Untitled note',
             content_json: json,
             content_html: html,
             tag_ids: tags.map((tag) => tag.id),
         };
-    }, [editorMode, plainText, contentHtml, contentJson, tags]);
+    }, [editorMode, plainText, markdownText, contentHtml, contentJson, tags]);
 
     const hasContent = useCallback(() => {
         if (editorMode === 'simple') {
             return plainText.trim().length > 0;
         }
+        if (editorMode === 'markdown') {
+            return markdownText.trim().length > 0;
+        }
         return htmlToPlainText(contentHtml).trim().length > 0;
-    }, [editorMode, plainText, contentHtml]);
+    }, [editorMode, plainText, markdownText, contentHtml]);
 
     const save = useCallback(async (isAutosave = false) => {
         if (!hasContent()) {
@@ -121,18 +138,34 @@ export default function KnowledgeNoteEditorModal({
                 clearTimeout(autosaveTimer.current);
             }
         };
-    }, [open, snapshot, save, hasContent, tags, contentJson, contentHtml, plainText, editorMode]);
+    }, [open, snapshot, save, hasContent, tags, contentJson, contentHtml, plainText, markdownText, editorMode]);
 
     const handleModeChange = (nextMode) => {
         if (nextMode === editorMode) {
             return;
         }
-        if (nextMode === 'simple') {
-            setPlainText(htmlToPlainText(contentHtml));
-        } else {
+        if (editorMode === 'simple') {
             const html = plainTextToHtml(plainText);
-            setContentHtml(html);
-            setContentJson(plainTextToJson(plainText));
+            if (nextMode === 'formatted') {
+                setContentHtml(html);
+                setContentJson(plainTextToJson(plainText));
+            } else if (nextMode === 'markdown') {
+                setMarkdownText(htmlToMarkdownLite(html));
+            }
+        } else if (editorMode === 'formatted') {
+            if (nextMode === 'simple') {
+                setPlainText(htmlToPlainText(contentHtml));
+            } else if (nextMode === 'markdown') {
+                setMarkdownText(htmlToMarkdownLite(contentHtml));
+            }
+        } else if (editorMode === 'markdown') {
+            const html = markdownToHtml(markdownText);
+            if (nextMode === 'simple') {
+                setPlainText(htmlToPlainText(html));
+            } else if (nextMode === 'formatted') {
+                setContentHtml(html);
+                setContentJson(plainTextToJson(htmlToPlainText(html)));
+            }
         }
         setEditorMode(nextMode);
     };
@@ -161,6 +194,11 @@ export default function KnowledgeNoteEditorModal({
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
     }, [open, save, handleClose]);
+
+    const saveStatusClass = [
+        'small lido-knowledge-editor-save-status',
+        saving ? 'is-saving' : dirty ? 'is-unsaved' : 'is-saved',
+    ].join(' ');
 
     if (!open) {
         return null;
@@ -191,6 +229,12 @@ export default function KnowledgeNoteEditorModal({
                                 value={plainText}
                                 onChange={setPlainText}
                             />
+                        ) : editorMode === 'markdown' ? (
+                            <KnowledgeMarkdownEditor
+                                key={`${sessionKey}-markdown`}
+                                value={markdownText}
+                                onChange={setMarkdownText}
+                            />
                         ) : (
                             <KnowledgeEditor
                                 key={`${sessionKey}-formatted`}
@@ -214,9 +258,10 @@ export default function KnowledgeNoteEditorModal({
                                 options={[
                                     { value: 'simple', label: 'Simple' },
                                     { value: 'formatted', label: 'Formatted' },
+                                    { value: 'markdown', label: 'Markdown' },
                                 ]}
                             />
-                            <span className="small text-muted">
+                            <span className={saveStatusClass}>
                                 {saving ? 'Saving…' : dirty ? 'Unsaved' : 'Saved'}
                             </span>
                         </div>
@@ -233,7 +278,7 @@ export default function KnowledgeNoteEditorModal({
                         <div className="lido-knowledge-editor-footer-sep" aria-hidden="true" />
                         <div className="lido-knowledge-editor-footer-group lido-knowledge-editor-footer-group--actions">
                             <button type="button" className="btn btn-sm btn-outline-secondary" onClick={handleClose}>Close</button>
-                            <button type="button" className="btn btn-sm btn-primary" onClick={() => save(false)} disabled={saving}>Save</button>
+                            <button type="button" className="btn btn-sm btn-primary" onClick={() => save(false)} disabled={saving}>Save (Ctrl/Cmd + S)</button>
                         </div>
                     </div>
                 </div>

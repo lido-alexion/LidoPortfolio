@@ -134,6 +134,7 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
         Route::post('/operational-alerts/acknowledge-all', [OperationalAlertController::class, 'acknowledgeAll']);
         Route::post('/operational-alerts/clear', [OperationalAlertController::class, 'clear']);
         Route::post('/operational-alerts/clear-dismissed', [OperationalAlertController::class, 'clearDismissed']);
+        Route::post('/operational-alerts/run-check', [OperationalAlertController::class, 'runCheck']);
 
         Route::get('/universe-price-sync/status', [UniversePriceSyncController::class, 'status']);
         Route::post('/universe-price-sync/operational-alerts/acknowledge', [UniversePriceSyncController::class, 'acknowledgeOperationalAlert']);

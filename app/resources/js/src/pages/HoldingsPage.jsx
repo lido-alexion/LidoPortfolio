@@ -128,7 +128,12 @@ function buildHoldingsColumns(complex, handleSell) {
         {
             id: 'latest_close',
             header: 'Latest Close',
-            accessorFn: (row) => row.summary.latest_close,
+            accessorFn: (row) => (
+                complex
+                    ? row.summary.daily_change_percent
+                    : row.summary.latest_close
+            ),
+            sortUndefined: 'last',
             cell: ({ row }) => {
                 const s = row.original.summary;
                 const close = formatInrWhole(s.latest_close);
@@ -164,7 +169,12 @@ function buildHoldingsColumns(complex, handleSell) {
         {
             id: 'unrealized_profit',
             header: 'Unrealized P/L',
-            accessorFn: (row) => row.unrealized_profit,
+            accessorFn: (row) => (
+                complex
+                    ? row.unrealized_gain_percent
+                    : row.unrealized_profit
+            ),
+            sortUndefined: 'last',
             cell: ({ row }) => {
                 const unrealized = row.original.unrealized_profit;
                 const gainPct = row.original.unrealized_gain_percent;
@@ -248,16 +258,17 @@ function buildHoldingsColumns(complex, handleSell) {
         },
         {
             id: 'highest_close',
-            header: complex
-                ? () => (
-                    <div className="lido-col-header-stack">
-                        <span>Highest Close</span>
-                        <span className="lido-col-header-sub">(since buy)</span>
-                    </div>
-                )
-                : 'Highest Close',
+            header: 'Highest Close',
             meta: { columnMenuLabel: 'Highest Close' },
-            accessorFn: (row) => row.summary.highest_close_since_buy,
+            accessorFn: (row) => (
+                complex
+                    ? ltpDrawdownFromHighPercent(
+                        row.summary.latest_close,
+                        row.summary.highest_close_since_buy,
+                    )
+                    : row.summary.highest_close_since_buy
+            ),
+            sortUndefined: 'last',
             cell: ({ row }) => {
                 const s = row.original.summary;
                 const value = formatTableMoney2(s.highest_close_since_buy);

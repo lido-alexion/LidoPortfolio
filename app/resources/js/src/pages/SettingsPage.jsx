@@ -56,6 +56,7 @@ export default function SettingsPage() {
     const [scheduleTouched, setScheduleTouched] = useState({});
     const [feeSectionOpen, setFeeSectionOpen] = useState(false);
     const [telegramTesting, setTelegramTesting] = useState(false);
+    const [opsCheckRunning, setOpsCheckRunning] = useState(false);
     const [activeScope, setActiveScope] = useState('portfolio');
 
     const notificationSchedules = useMemo(
@@ -137,6 +138,7 @@ export default function SettingsPage() {
             nse_retry_count: settings.nse_retry_count,
             backend_log_level: settings.backend_log_level,
             sync_log_retention_days: settings.sync_log_retention_days,
+            admin_ops_telegram_ping_when_clear: settings.admin_ops_telegram_ping_when_clear ?? 'false',
             fee_components: normalizeFeeComponents(settings.fee_components),
         });
         setStatus('Global settings saved');
@@ -188,6 +190,30 @@ export default function SettingsPage() {
             showToast(msg, 'danger');
         } finally {
             setTelegramTesting(false);
+        }
+    };
+
+    const runOpsAlertCheck = async () => {
+        setOpsCheckRunning(true);
+        try {
+            const res = await api.post('/operational-alerts/run-check');
+            const data = res.data.data || {};
+            const activeCount = data.active?.length ?? 0;
+            const notified = data.notified || [];
+            if (activeCount === 0 && notified.includes('_all_clear')) {
+                showToast('No active operational alerts — confirmation sent to Telegram');
+            } else if (activeCount === 0) {
+                showToast('No active operational alerts. Enable “Ping Telegram when clear” and save to get a confirmation message.');
+            } else if (notified.length > 0) {
+                showToast(`Operational check complete — Telegram sent for ${notified.length} alert(s)`);
+            } else {
+                showToast(`Operational check complete — ${activeCount} active alert(s), no new Telegram notifications`);
+            }
+        } catch (error) {
+            const msg = error?.response?.data?.message || 'Operational alert check failed';
+            showToast(msg, 'danger');
+        } finally {
+            setOpsCheckRunning(false);
         }
     };
 
@@ -338,6 +364,41 @@ export default function SettingsPage() {
                                     </p>
                                 </div>
                                 <div className="col-12">
+                                    <div className="form-check">
+                                        <input
+                                            id="settings-ops-clear-ping"
+                                            className="form-check-input"
+                                            type="checkbox"
+                                            checked={settings.admin_ops_telegram_ping_when_clear === 'true'}
+                                            onChange={(e) => setSettings({
+                                                ...settings,
+                                                admin_ops_telegram_ping_when_clear: e.target.checked ? 'true' : 'false',
+                                            })}
+                                        />
+                                        <label className="form-check-label" htmlFor="settings-ops-clear-ping">
+                                            Ping Telegram when there are no alerts (testing)
+                                        </label>
+                                    </div>
+                                    <p className="text-muted small mb-2 mt-1">
+                                        When enabled: at each portfolio <strong>notification schedule</strong> time,
+                                        Telegram still sends a “no active alerts” confirmation if the portfolio has
+                                        none (proves <code>portfolio:send-notifications</code> cron ran). Use
+                                        {' '}
+                                        <strong>Run operational alert check</strong>
+                                        {' '}
+                                        below to test admin sync-health Telegram the same way. Disable when done
+                                        testing — you will get a message at every scheduled time while this is on.
+                                    </p>
+                                    <button
+                                        type="button"
+                                        className="btn btn-outline-warning btn-sm"
+                                        onClick={runOpsAlertCheck}
+                                        disabled={opsCheckRunning}
+                                    >
+                                        {opsCheckRunning ? 'Checking…' : 'Run operational alert check'}
+                                    </button>
+                                </div>
+                                <div className="col-12">
                                     <p className="text-muted small mb-2">
                                         Daily sync:
                                         {' '}
@@ -420,7 +481,11 @@ export default function SettingsPage() {
                                         Your notification schedule for this portfolio. Separate from data syncing. At each time, the app sends Telegram
                                         messages for your active portfolio alerts. Uses timezone from{' '}
                                         <code>{settings.cron_timezone || 'Asia/Kolkata'}</code>
-                                        . If there are no alerts, nothing is sent.
+                                        . If there are no alerts, nothing is sent unless
+                                        {' '}
+                                        <strong>Ping Telegram when clear</strong>
+                                        {' '}
+                                        is enabled under Global settings (testing).
                                     </p>
                                     {notificationSchedules.length === 0 ? (
                                         <p className="text-muted small mb-2">No notification times configured.</p>

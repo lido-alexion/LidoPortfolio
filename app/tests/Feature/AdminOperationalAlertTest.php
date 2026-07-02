@@ -293,4 +293,89 @@ class AdminOperationalAlertTest extends TestCase
             ->assertJsonPath('data.cleared_count', 2)
             ->assertJsonPath('data.active', []);
     }
+
+    public function test_clear_ping_not_sent_when_flag_disabled(): void
+    {
+        $this->seedHealthySyncState();
+        Setting::setValue('admin_ops_telegram_ping_when_clear', 'false');
+
+        $admin = User::factory()->create(['is_admin' => true]);
+        $this->defaultPortfolioFor($admin);
+
+        $telegram = $this->createMock(TelegramNotificationService::class);
+        $telegram->expects($this->never())->method('sendAdminOperationalAlert');
+        $this->app->instance(TelegramNotificationService::class, $telegram);
+
+        $this->actingAs($admin)
+            ->postJson('/api/operational-alerts/run-check')
+            ->assertOk()
+            ->assertJsonPath('data.active', []);
+    }
+
+    public function test_clear_ping_sent_when_flag_enabled_and_no_alerts(): void
+    {
+        $this->seedHealthySyncState();
+        Setting::setValue('admin_ops_telegram_ping_when_clear', 'true');
+
+        $admin = User::factory()->create(['is_admin' => true]);
+        $profile = $this->defaultPortfolioFor($admin);
+        app(ProfileSettingsService::class)->update($profile, [
+            'notifications_enabled' => 'true',
+            'telegram_bot_token' => 'admin-token',
+            'telegram_chat_id' => 'admin-chat',
+        ]);
+
+        $telegram = $this->createMock(TelegramNotificationService::class);
+        $telegram->expects($this->once())
+            ->method('sendAdminOperationalAlert')
+            ->with($this->callback(fn (string $message) => str_contains(strtolower($message), 'no active operational alerts')))
+            ->willReturn(['sent' => true, 'recipients' => 1]);
+        $this->app->instance(TelegramNotificationService::class, $telegram);
+
+        $this->actingAs($admin)
+            ->postJson('/api/operational-alerts/run-check')
+            ->assertOk()
+            ->assertJsonPath('data.active', [])
+            ->assertJsonFragment(['_all_clear']);
+    }
+
+    public function test_automatic_sync_and_notify_does_not_send_clear_ping_even_with_flag_on(): void
+    {
+        $this->seedHealthySyncState();
+        Setting::setValue('admin_ops_telegram_ping_when_clear', 'true');
+
+        $telegram = $this->createMock(TelegramNotificationService::class);
+        $telegram->expects($this->never())->method('sendAdminOperationalAlert');
+        $this->app->instance(TelegramNotificationService::class, $telegram);
+
+        $result = app(AdminOperationalAlertService::class)->syncAndNotify();
+        $this->assertSame([], $result['active']);
+        $this->assertNotContains('_all_clear', $result['notified']);
+    }
+
+    public function test_non_admin_cannot_run_operational_alert_check(): void
+    {
+        $user = User::factory()->create(['is_admin' => false]);
+        $this->defaultPortfolioFor($user);
+
+        $this->actingAs($user)
+            ->postJson('/api/operational-alerts/run-check')
+            ->assertForbidden();
+    }
+
+    protected function seedHealthySyncState(): void
+    {
+        config(['portfolio.universe_price_sync.enabled' => false]);
+
+        $finishedAt = now()->subHour();
+        foreach ([SyncLogService::JOB_DAILY_MARKET_DATA, SyncLogService::JOB_STOCK_MASTER] as $job) {
+            SyncRun::query()->create([
+                'id' => (string) Str::uuid(),
+                'job_name' => $job,
+                'status' => 'success',
+                'started_at' => $finishedAt->copy()->subMinutes(5),
+                'finished_at' => $finishedAt,
+            ]);
+        }
+    }
 }

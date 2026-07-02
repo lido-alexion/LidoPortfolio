@@ -43,9 +43,10 @@ class ExplorerAnalyticsTest extends TestCase
 
         $sixMonthsAgo = now()->subMonths(6)->subDays(2)->toDateString();
         $threeMonthsAgo = now()->subMonths(3)->subDays(2)->toDateString();
+        $twelveMonthsAgo = now()->subMonths(12)->subDays(2)->toDateString();
 
         foreach ([$stock, $benchmark] as $s) {
-            foreach ([$sixMonthsAgo, $threeMonthsAgo] as $date) {
+            foreach ([$twelveMonthsAgo, $sixMonthsAgo, $threeMonthsAgo] as $date) {
                 StockPrice::query()->create([
                     'stock_id' => $s->id,
                     'price_date' => $date,
@@ -80,20 +81,23 @@ class ExplorerAnalyticsTest extends TestCase
         $response->assertJsonPath('data.valid', true);
         $response->assertJsonStructure([
             'data' => [
-                'growth_percent' => ['1m', '3m', '6m'],
-                'benchmark_growth_percent' => ['1m', '3m', '6m'],
-                'relative_strength' => ['1m', '3m', '6m'],
+                'growth_percent' => ['1m', '3m', '6m', '12m'],
+                'benchmark_growth_percent' => ['1m', '3m', '6m', '12m'],
+                'relative_strength' => ['1m', '3m', '6m', '12m'],
                 'period_closes' => [
                     '1m',
                     '3m',
                     '6m',
+                    '12m',
                 ],
                 'chart',
+                'normalized_gain_chart',
             ],
         ]);
         $response->assertJsonPath('data.benchmark.latest_close', 110);
         $response->assertJsonPath('data.relative_strength.3m', 10);
-        $response->assertJsonCount(3, 'data.chart');
+        $response->assertJsonCount(4, 'data.chart');
+        $this->assertNotEmpty($response->json('data.normalized_gain_chart'));
         Http::assertNothingSent();
     }
 }

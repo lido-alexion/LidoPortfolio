@@ -37,6 +37,7 @@ class SettingsController extends Controller
             'notification_schedules.*' => ['date_format:H:i'],
             'backend_log_level' => ['nullable', 'in:debug,info,warning,error'],
             'sync_log_retention_days' => ['nullable', 'integer', 'min:0', 'max:90'],
+            'admin_ops_telegram_ping_when_clear' => ['nullable', 'in:true,false'],
             'fee_components' => ['nullable', 'array', 'min:1', 'max:32'],
             'fee_components.*.id' => ['required', 'string', 'max:64'],
             'fee_components.*.label' => ['required', 'string', 'max:120'],

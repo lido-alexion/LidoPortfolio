@@ -104,6 +104,20 @@ class AdminGlobalSettingsTest extends TestCase
             ->assertJsonPath('data.nse_retry_count', '4');
     }
 
+    public function test_admin_can_toggle_ops_clear_ping_setting(): void
+    {
+        $user = $this->makeUser(true);
+
+        $this->actingAsUser($user)
+            ->putJson('/api/settings', [
+                'admin_ops_telegram_ping_when_clear' => 'true',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.admin_ops_telegram_ping_when_clear', 'true');
+
+        $this->assertSame('true', Setting::getValue('admin_ops_telegram_ping_when_clear'));
+    }
+
     public function test_non_admin_cannot_run_daily_sync(): void
     {
         $user = $this->makeUser(false);

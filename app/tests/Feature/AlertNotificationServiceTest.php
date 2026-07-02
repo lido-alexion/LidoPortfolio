@@ -16,6 +16,43 @@ class AlertNotificationServiceTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_scheduled_notifications_send_clear_ping_when_flag_enabled_and_no_alerts(): void
+    {
+        \App\Models\Setting::setValue('admin_ops_telegram_ping_when_clear', 'true');
+
+        $user = User::query()->create([
+            'name' => 'Alert Notify',
+            'email' => 'alert-clear-ping-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+        $profile = $this->defaultPortfolioFor($user);
+
+        app(\App\Services\NotificationScheduleService::class)->persistForProfile($profile, ['10:00']);
+        app(\App\Services\ProfileSettingsService::class)->update($profile, [
+            'notifications_enabled' => 'true',
+            'telegram_bot_token' => 'token',
+            'telegram_chat_id' => 'chat',
+        ]);
+
+        $telegram = $this->createMock(TelegramNotificationService::class);
+        $telegram->expects($this->once())
+            ->method('sendMessageForProfile')
+            ->with(
+                $this->callback(fn ($p) => $p->id === $profile->id),
+                $this->callback(fn (string $message) => str_contains(strtolower($message), 'no active alerts')
+                    && str_contains($message, '10:00')),
+            )
+            ->willReturn(true);
+        $this->app->instance(TelegramNotificationService::class, $telegram);
+
+        $result = app(AlertNotificationService::class)->sendScheduledNotificationsAt('10:00');
+
+        $this->assertFalse($result['skipped']);
+        $this->assertSame(0, $result['alert_count']);
+        $this->assertTrue($result['sent']);
+        $this->assertSame(1, $result['profiles_notified']);
+    }
+
     public function test_scheduled_notifications_skip_silently_when_no_alerts(): void
     {
         $user = User::query()->create([

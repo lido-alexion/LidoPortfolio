@@ -1674,10 +1674,43 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     min-width: 4.5rem;
 }
 
+.lido-pattern-sketch--table {
+    width: 3.25rem;
+    height: 2rem;
+    min-width: 3.25rem;
+}
+
+.lido-pattern-sketch--guide {
+    width: 8rem;
+    height: 5rem;
+    min-width: 8rem;
+}
+
 .lido-pattern-sketch-svg {
     width: 100%;
     height: 100%;
     display: block;
+}
+
+.lido-allocation-donut {
+    display: flex;
+    flex-direction: column;
+    min-height: 16rem;
+}
+
+.lido-allocation-donut__title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--lido-text-muted);
+    text-align: center;
+    margin-bottom: 0.25rem;
+}
+
+.lido-allocation-donut__chart {
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 14rem;
+    height: 14rem;
 }
 
 .lido-pattern-matches {
@@ -1714,7 +1747,25 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
 }
 
 .lido-knowledge-toolbar-card--collapsed {
-    min-height: 15px;
+    width: fit-content;
+    max-width: 100%;
+}
+
+.lido-knowledge-toolbar-collapsed {
+    display: flex;
+    align-items: stretch;
+    overflow: hidden;
+}
+
+.lido-knowledge-toolbar-new-collapsed {
+    border: none;
+    border-radius: 0;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .lido-knowledge-toolbar-card--collapsed .lido-knowledge-toolbar-toggle {
@@ -1722,11 +1773,15 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 15px;
-    height: 15px;
+    width: 2.25rem;
+    min-width: 2.25rem;
+    min-height: 2rem;
+    height: auto;
     padding: 0;
     line-height: 1;
     cursor: pointer;
+    flex-shrink: 0;
+    border-left: 1px solid var(--lido-border);
 }
 
 .lido-knowledge-toolbar-card--collapsed .lido-knowledge-toolbar-toggle-label,
@@ -2134,6 +2189,111 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     resize: vertical;
 }
 
+.lido-knowledge-markdown-editor {
+    border: 1px solid var(--lido-border);
+    border-radius: 0.375rem;
+    overflow: hidden;
+    background-color: var(--lido-input-bg);
+}
+
+.lido-knowledge-markdown-editor-bar {
+    padding: 0.35rem 0.5rem;
+    border-bottom: 1px solid var(--lido-border);
+    background-color: var(--lido-bg-elevated);
+}
+
+.lido-knowledge-markdown-editor-input {
+    min-height: 14rem;
+    font-size: 0.9rem;
+    line-height: 1.45;
+    resize: vertical;
+    border: none;
+    border-radius: 0;
+    background-color: var(--lido-input-bg);
+    color: var(--lido-text);
+}
+
+.lido-knowledge-markdown-editor-input:focus {
+    box-shadow: none;
+    border-color: transparent;
+}
+
+.lido-knowledge-markdown-preview {
+    min-height: 14rem;
+    max-height: 50vh;
+    overflow: auto;
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: var(--lido-text);
+}
+
+.lido-knowledge-markdown-preview-empty {
+    margin: 0;
+    color: var(--lido-text-muted);
+}
+
+.lido-knowledge-markdown-preview h1,
+.lido-knowledge-markdown-preview h2,
+.lido-knowledge-markdown-preview h3 {
+    margin: 0 0 0.5rem;
+    font-weight: 600;
+    line-height: 1.25;
+}
+
+.lido-knowledge-markdown-preview h1 { font-size: 1.35rem; }
+.lido-knowledge-markdown-preview h2 { font-size: 1.15rem; }
+.lido-knowledge-markdown-preview h3 { font-size: 1rem; }
+
+.lido-knowledge-markdown-preview p {
+    margin: 0 0 0.75rem;
+}
+
+.lido-knowledge-markdown-preview ul,
+.lido-knowledge-markdown-preview ol {
+    margin: 0 0 0.75rem;
+    padding-left: 1.25rem;
+}
+
+.lido-knowledge-markdown-preview blockquote {
+    margin: 0 0 0.75rem;
+    padding-left: 0.75rem;
+    border-left: 3px solid var(--lido-border-strong);
+    color: var(--lido-text-muted);
+}
+
+.lido-knowledge-markdown-preview pre {
+    margin: 0 0 0.75rem;
+    padding: 0.65rem 0.75rem;
+    border-radius: 0.375rem;
+    background-color: var(--lido-bg-elevated);
+    overflow-x: auto;
+}
+
+.lido-knowledge-markdown-preview code {
+    font-size: 0.85em;
+    background-color: color-mix(in srgb, var(--lido-text) 8%, transparent);
+    padding: 0.1rem 0.25rem;
+    border-radius: 0.2rem;
+}
+
+.lido-knowledge-markdown-preview pre code {
+    padding: 0;
+    background: transparent;
+}
+
+.lido-knowledge-editor-save-status {
+    color: var(--lido-text-muted);
+}
+
+.lido-knowledge-editor-save-status.is-saved {
+    color: var(--lido-text);
+}
+
+.lido-knowledge-editor-save-status.is-unsaved {
+    color: var(--lido-warning, #f59e0b);
+}
+
 .lido-knowledge-view-tags {
     display: flex;
     flex-wrap: wrap;
@@ -2202,6 +2362,91 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     float: left;
     height: 0;
     pointer-events: none;
+}
+
+.lido-knowledge-editor-content .ProseMirror ul:not([data-type="taskList"]),
+.lido-knowledge-view-body .lido-knowledge-editor-content .ProseMirror ul:not([data-type="taskList"]) {
+    list-style-type: disc;
+    padding-left: 1.5rem;
+    margin: 0.5rem 0;
+}
+
+.lido-knowledge-editor-content .ProseMirror ol,
+.lido-knowledge-view-body .lido-knowledge-editor-content .ProseMirror ol {
+    list-style-type: decimal;
+    padding-left: 1.5rem;
+    margin: 0.5rem 0;
+}
+
+.lido-knowledge-editor-content .ProseMirror ul:not([data-type="taskList"]) ul,
+.lido-knowledge-view-body .lido-knowledge-editor-content .ProseMirror ul:not([data-type="taskList"]) ul {
+    list-style-type: circle;
+}
+
+.lido-knowledge-editor-content .ProseMirror ul:not([data-type="taskList"]) > li,
+.lido-knowledge-editor-content .ProseMirror ol > li,
+.lido-knowledge-view-body .lido-knowledge-editor-content .ProseMirror ul:not([data-type="taskList"]) > li,
+.lido-knowledge-view-body .lido-knowledge-editor-content .ProseMirror ol > li {
+    display: list-item;
+}
+
+.lido-knowledge-editor-content .ProseMirror li > p,
+.lido-knowledge-view-body .lido-knowledge-editor-content .ProseMirror li > p {
+    margin: 0.15rem 0;
+}
+
+.lido-knowledge-editor-content .ProseMirror blockquote,
+.lido-knowledge-view-body .lido-knowledge-editor-content .ProseMirror blockquote {
+    margin: 0.5rem 0;
+    padding: 0.25rem 0 0.25rem 0.85rem;
+    border-left: 3px solid var(--lido-border-strong);
+    color: var(--lido-text-muted);
+}
+
+.lido-knowledge-editor-content .ProseMirror ul[data-type="taskList"],
+.lido-knowledge-view-body .lido-knowledge-editor-content .ProseMirror ul[data-type="taskList"] {
+    list-style: none;
+    padding-left: 0;
+    margin: 0.5rem 0;
+}
+
+.lido-knowledge-editor-content .ProseMirror ul[data-type="taskList"] > li,
+.lido-knowledge-view-body .lido-knowledge-editor-content .ProseMirror ul[data-type="taskList"] > li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    list-style: none;
+    margin: 0.15rem 0;
+}
+
+.lido-knowledge-editor-content .ProseMirror ul[data-type="taskList"] li > label,
+.lido-knowledge-view-body .lido-knowledge-editor-content .ProseMirror ul[data-type="taskList"] li > label {
+    flex: 0 0 auto;
+    margin: 0;
+    padding-top: 0.2rem;
+    user-select: none;
+}
+
+.lido-knowledge-editor-content .ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"],
+.lido-knowledge-view-body .lido-knowledge-editor-content .ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"] {
+    margin: 0;
+    accent-color: var(--lido-brand);
+}
+
+.lido-knowledge-editor-content .ProseMirror ul[data-type="taskList"] li > label > span,
+.lido-knowledge-view-body .lido-knowledge-editor-content .ProseMirror ul[data-type="taskList"] li > label > span {
+    display: none;
+}
+
+.lido-knowledge-editor-content .ProseMirror ul[data-type="taskList"] li > div,
+.lido-knowledge-view-body .lido-knowledge-editor-content .ProseMirror ul[data-type="taskList"] li > div {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.lido-knowledge-editor-content .ProseMirror ul[data-type="taskList"] li > div > p,
+.lido-knowledge-view-body .lido-knowledge-editor-content .ProseMirror ul[data-type="taskList"] li > div > p {
+    margin: 0;
 }
 
 .lido-knowledge-modal-root {
@@ -2309,6 +2554,10 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
 .lido-knowledge-export-modal .modal-header,
 .lido-knowledge-export-modal .modal-footer {
     border-color: var(--lido-border);
+}
+
+.lido-knowledge-export-modal-footer {
+    gap: 0.75rem;
 }
 
 .lido-tag-suggestions {

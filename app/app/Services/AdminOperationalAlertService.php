@@ -221,9 +221,38 @@ class AdminOperationalAlertService
      *   resolved: list<string>
      * }
      */
-    public function syncAndNotify(): array
+    public function syncAndNotify(bool $allowClearPing = false): array
     {
-        return $this->syncActiveAlerts(true);
+        $result = $this->syncActiveAlerts(true);
+
+        if ($allowClearPing && $this->isClearPingEnabled() && $result['active'] === []) {
+            if ($this->notifyAllClear()) {
+                $result['notified'][] = '_all_clear';
+            }
+        }
+
+        return $result;
+    }
+
+    public function isClearPingEnabled(): bool
+    {
+        return $this->settings->isTelegramPingWhenClearEnabled();
+    }
+
+    protected function notifyAllClear(): bool
+    {
+        $message = "✅ Lido Portfolio: No active operational alerts.\n\n"
+            .'Confirmation ping (admin ops “ping when clear” is enabled). Turn it off in Settings → Global when done testing.';
+
+        $sent = $this->telegram->sendAdminOperationalAlert($message);
+        if ($sent['sent']) {
+            $this->logger->scheduler('info', 'Operational alerts all-clear Telegram sent', [
+                'category' => 'OperationalAlert',
+                'recipients' => $sent['recipients'],
+            ]);
+        }
+
+        return $sent['sent'];
     }
 
     /**

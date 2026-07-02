@@ -5,6 +5,8 @@ import { useAuth } from '../context/AuthContext';
 import { usePortfolio } from '../context/PortfolioContext';
 import { DataTableCard } from '../components/DataTable';
 import DashboardTopMoverCard from '../components/DashboardTopMoverCard';
+import DashboardAllocationCard from '../components/DashboardAllocationCard';
+import PatternSketch from '../components/PatternSketch';
 import { showToast } from '../toast';
 import { categoryClassName, categoryLabel } from '../utils/patternDetection';
 import {
@@ -22,6 +24,7 @@ import {
     CartesianGrid,
     Line,
     LineChart,
+    ReferenceLine,
     ResponsiveContainer,
     Legend,
     Tooltip,
@@ -452,15 +455,22 @@ export default function DashboardPage() {
             id: 'pattern_name',
             header: 'Pattern',
             accessorKey: 'pattern_name',
-            cell: ({ row }) => (
-                row.original.pattern_id ? (
-                    <Link to={patternGuideLink(row.original.pattern_id)}>
-                        {row.original.pattern_name}
-                    </Link>
-                ) : (
-                    row.original.pattern_name
-                )
-            ),
+            cell: ({ row }) => {
+                const name = row.original.pattern_name;
+                const patternId = row.original.pattern_id;
+                const nameLabel = patternId ? (
+                    <Link to={patternGuideLink(patternId)}>{name}</Link>
+                ) : name;
+
+                return (
+                    <div className="d-inline-flex align-items-center gap-2">
+                        {patternId ? (
+                            <PatternSketch patternId={patternId} className="lido-pattern-sketch--table" />
+                        ) : null}
+                        {nameLabel}
+                    </div>
+                );
+            },
         },
         {
             id: 'category',
@@ -530,6 +540,7 @@ export default function DashboardPage() {
             date,
             portfolio_value: Number(point.portfolio_value || 0),
             invested_value: Number(point.invested_value || 0),
+            unrealized_pl: Number(point.portfolio_value || 0) - Number(point.invested_value || 0),
         };
     });
     const showGrowthDots = growthData.length > 0 && growthData.length <= 5;
@@ -696,11 +707,11 @@ export default function DashboardPage() {
                 />
             </div>
             <div className="col-12 col-lg-6">
-                <DataTableCard
+                <DashboardAllocationCard
                     className="h-100"
-                    title="Allocation"
+                    allocation={data.allocation || []}
+                    investedValue={data.invested_value}
                     columns={allocationColumns}
-                    data={data.allocation || []}
                     storageKey="dashboard-allocation-v2"
                     emptyMessage="No allocation data"
                 />
@@ -772,6 +783,67 @@ export default function DashboardPage() {
                                             dataKey="invested_value"
                                             name="Invested Value"
                                             stroke="#198754"
+                                            dot={showGrowthDots}
+                                            strokeWidth={2}
+                                        />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+            <div className="col-12">
+                <div className="card">
+                    <div className="card-header">
+                        Unrealized P/L (portfolio value − invested)
+                    </div>
+                    <div className="card-body">
+                        {growthData.length === 0 ? (
+                            <div className="text-center py-4">
+                                <p className="text-muted mb-0">
+                                    No portfolio history yet. Rebuild history on the chart above to populate
+                                    this graph.
+                                </p>
+                            </div>
+                        ) : (
+                            <div style={{ width: '100%', height: 280, minHeight: 280 }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart
+                                        data={growthData}
+                                        margin={{ top: 8, right: 16, left: 4, bottom: growthChartBottomMargin }}
+                                    >
+                                        <CartesianGrid strokeDasharray="3 3" />
+                                        <XAxis
+                                            dataKey="date"
+                                            tickFormatter={(v) => formatChartAxisDate(v) || v}
+                                            tick={{ fontSize: 11, fill: 'var(--lido-text-muted)' }}
+                                            stroke="var(--lido-border-strong)"
+                                            minTickGap={36}
+                                            interval="preserveStartEnd"
+                                            angle={growthChartManyPoints ? -40 : 0}
+                                            textAnchor={growthChartManyPoints ? 'end' : 'middle'}
+                                            height={growthChartManyPoints ? 48 : 28}
+                                        />
+                                        <YAxis tickFormatter={(v) => formatInrCompactWhole(v)} width={80} />
+                                        <Tooltip
+                                            contentStyle={growthChartTooltipStyle}
+                                            labelStyle={growthChartTooltipLabelStyle}
+                                            itemStyle={{ color: 'var(--lido-chart-tooltip-text)' }}
+                                            formatter={(value) => [formatInrWhole(value), 'Unrealized P/L']}
+                                            labelFormatter={(label) => formatTransactionDateDisplay(label) || label}
+                                        />
+                                        <ReferenceLine
+                                            y={0}
+                                            stroke="var(--lido-border-strong)"
+                                            strokeDasharray="4 4"
+                                        />
+                                        <Legend />
+                                        <Line
+                                            type="monotone"
+                                            dataKey="unrealized_pl"
+                                            name="Unrealized P/L"
+                                            stroke="#6610f2"
                                             dot={showGrowthDots}
                                             strokeWidth={2}
                                         />

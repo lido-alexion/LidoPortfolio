@@ -1,9 +1,26 @@
 import React from 'react';
-import { formatTableInteger, formatTableMoney2 } from './tableFormat';
+import { formatTableInteger, formatTableMoney2, percentChangeColorClass } from './tableFormat';
 import { formatTransactionDateDisplay } from './transactionDate';
 
-export function buildTransactionTableColumns({ onEdit, onDelete }) {
-    return [
+function sellOnlyMoneyCell(getValue, row) {
+    if (row.original.type !== 'sell') {
+        return <span className="text-muted">—</span>;
+    }
+
+    const value = getValue();
+    if (value == null || value === '') {
+        return <span className="text-muted">—</span>;
+    }
+
+    return (
+        <span className={percentChangeColorClass(value)}>
+            {formatTableMoney2(value)}
+        </span>
+    );
+}
+
+export function buildTransactionTableColumns({ onEdit, onDelete, showRealization = false }) {
+    const columns = [
         {
             accessorKey: 'transaction_date',
             header: 'Date',
@@ -25,6 +42,35 @@ export function buildTransactionTableColumns({ onEdit, onDelete }) {
             header: 'Price',
             cell: ({ getValue }) => formatTableMoney2(getValue()),
         },
+    ];
+
+    if (showRealization) {
+        columns.push(
+            {
+                accessorKey: 'realized_pl',
+                header: 'Realized P/L',
+                meta: { columnMenuLabel: 'Realized profit/loss (FIFO, sells only)' },
+                cell: ({ row, getValue }) => sellOnlyMoneyCell(getValue, row),
+            },
+            {
+                accessorKey: 'squared_off_fees',
+                header: 'Fees',
+                meta: { columnMenuLabel: 'Squared-off fees (sell + matched buys)' },
+                cell: ({ row, getValue }) => {
+                    if (row.original.type !== 'sell') {
+                        return <span className="text-muted">—</span>;
+                    }
+                    const value = getValue();
+                    if (value == null || value === '') {
+                        return <span className="text-muted">—</span>;
+                    }
+                    return formatTableMoney2(value);
+                },
+            },
+        );
+    }
+
+    columns.push(
         {
             accessorKey: 'notes',
             header: 'Notes',
@@ -64,5 +110,7 @@ export function buildTransactionTableColumns({ onEdit, onDelete }) {
                 </>
             ),
         },
-    ];
+    );
+
+    return columns;
 }

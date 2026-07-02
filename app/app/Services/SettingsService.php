@@ -15,6 +15,7 @@ class SettingsService
         'alpha_vantage_api_key' => '',
         'backend_log_level' => 'info',
         'sync_log_retention_days' => '7',
+        'admin_ops_telegram_ping_when_clear' => 'false',
         'fee_components' => '',
     ];
 
@@ -132,5 +133,10 @@ class SettingsService
     public function get(string $key, ?string $default = null): ?string
     {
         return \App\Models\Setting::getValue($key, $default ?? (self::DEFAULTS[$key] ?? null));
+    }
+
+    public function isTelegramPingWhenClearEnabled(): bool
+    {
+        return $this->get('admin_ops_telegram_ping_when_clear', 'false') === 'true';
     }
 }

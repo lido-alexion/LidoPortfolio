@@ -9,6 +9,7 @@ use App\Models\Transaction;
 use App\Services\HoldingsCalculationService;
 use App\Services\PortfolioSnapshotRebuildService;
 use App\Services\StockResolverService;
+use App\Services\TransactionRealizationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use InvalidArgumentException;
@@ -20,6 +21,7 @@ class TransactionController extends Controller
         protected HoldingsCalculationService $holdings,
         protected StockResolverService $stocks,
         protected PortfolioSnapshotRebuildService $snapshotRebuild,
+        protected TransactionRealizationService $realizations,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -96,6 +98,7 @@ class TransactionController extends Controller
         ]);
 
         $this->holdings->recalculateForProfileStock($profile, $stock);
+        $this->realizations->recalculateForProfileStock($profile, $stock);
         if ($validated['type'] === 'buy') {
             try {
                 BackfillHistoricalDataJob::dispatchSync($stock->id, $validated['transaction_date']);
@@ -148,6 +151,7 @@ class TransactionController extends Controller
         $transaction->update($validated);
         $stock = $transaction->stock;
         $this->holdings->recalculateForProfileStock($profile, $stock);
+        $this->realizations->recalculateForProfileStock($profile, $stock);
         BackfillHistoricalDataJob::dispatchSync($stock->id, $validated['transaction_date']);
 
         $this->snapshotRebuild->rebuildAfterTransactionChange(
@@ -179,6 +183,7 @@ class TransactionController extends Controller
         $deletedDate = $transaction->transaction_date;
         $transaction->delete();
         $this->holdings->recalculateForProfileStock($profile, $stock);
+        $this->realizations->recalculateForProfileStock($profile, $stock);
 
         $this->snapshotRebuild->rebuildAfterTransactionChange(
             $profile,

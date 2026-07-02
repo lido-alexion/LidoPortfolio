@@ -22,7 +22,7 @@ class ExplorerAnalyticsController extends Controller
             'periods.*' => ['integer', 'in:1,3,6,12'],
         ]);
 
-        $periods = $validated['periods'] ?? [1, 3, 6];
+        $periods = $validated['periods'] ?? [1, 3, 6, 12];
         $periods = array_values(array_unique(array_map('intval', $periods)));
         sort($periods);
 

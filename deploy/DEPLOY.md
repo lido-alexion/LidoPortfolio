@@ -359,6 +359,7 @@ After `.env` changes: delete `bootstrap/cache/config.php` or run `config:clear` 
 | `cpanel-once-setup.php` | One-time: `key:generate`, `migrate`, `config:cache` |
 | `cpanel-config-cache.php` | Re-run `config:cache` after `.env` changes (no SSH) |
 | `cpanel-migrate.php` | Run `migrate --force`, repair orphaned `portfolio_sync_logs` table, verify DB tables/columns + sync-log readiness, then `config:cache` (no SSH) |
+| `cpanel-backfill-sell-realizations.php` | One-time: backfill FIFO `realized_pl` / `squared_off_fees` on sells after migration `2026_07_09_000001` (no SSH; optional `?profile=` ) |
 | `portfolio-mobile-debug.html` | Upload as `public_html/portfolio/mobile-debug.html` — blank-page diagnostics on phone/tablet (delete after use) |
 | `public_html-portfolio-index.php` | Front controller for `/portfolio` |
 | `public_html-portfolio-.htaccess` | Rewrites under `/portfolio/` |

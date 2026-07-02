@@ -70,6 +70,18 @@ class OperationalAlertController extends Controller
         ]);
     }
 
+    public function runCheck(AdminOperationalAlertService $alerts): JsonResponse
+    {
+        $result = $alerts->syncAndNotify(true);
+
+        return response()->json([
+            'data' => array_merge($this->payload($alerts), [
+                'notified' => $result['notified'],
+                'resolved' => $result['resolved'],
+            ]),
+        ]);
+    }
+
     /**
      * @return array<string, mixed>
      */

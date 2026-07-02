@@ -4,6 +4,8 @@ const STROKE = 'currentColor';
 const BULL = '#198754';
 const BEAR = '#dc3545';
 const MUTED = 'var(--lido-text-muted, #6c757d)';
+const LINE_STROKE = '3';
+const CANDLE_WICK_STROKE = '3';
 
 function Candle({ x, o, h, l, c, w = 10 }) {
     const top = Math.min(o, c);
@@ -12,7 +14,7 @@ function Candle({ x, o, h, l, c, w = 10 }) {
     const bodyH = Math.max(bottom - top, 1.5);
     return (
         <g>
-            <line x1={x} y1={h} x2={x} y2={l} stroke={color} strokeWidth="1.2" />
+            <line x1={x} y1={h} x2={x} y2={l} stroke={color} strokeWidth={CANDLE_WICK_STROKE} />
             <rect x={x - w / 2} y={top} width={w} height={bodyH} fill={color} rx="0.5" />
         </g>
     );
@@ -24,7 +26,7 @@ function LinePath({ d, color = STROKE, dash }) {
             d={d}
             fill="none"
             stroke={color}
-            strokeWidth="1.5"
+            strokeWidth={LINE_STROKE}
             strokeDasharray={dash || undefined}
         />
     );
@@ -49,13 +51,13 @@ const SKETCHES = {
     ),
     hanging_man: (
         <svg viewBox="0 0 80 48" className="lido-pattern-sketch-svg" aria-hidden>
-            <line x1="8" y1="38" x2="72" y2="18" stroke={MUTED} strokeWidth="1" strokeDasharray="3 2" />
+            <line x1="8" y1="38" x2="72" y2="18" stroke={MUTED} strokeWidth={LINE_STROKE} strokeDasharray="3 2" />
             <Candle x={40} o={14} h={12} l={40} c={16} />
         </svg>
     ),
     shooting_star: (
         <svg viewBox="0 0 80 48" className="lido-pattern-sketch-svg" aria-hidden>
-            <line x1="8" y1="38" x2="72" y2="18" stroke={MUTED} strokeWidth="1" strokeDasharray="3 2" />
+            <line x1="8" y1="38" x2="72" y2="18" stroke={MUTED} strokeWidth={LINE_STROKE} strokeDasharray="3 2" />
             <Candle x={40} o={32} h={10} l={34} c={30} />
         </svg>
     ),
@@ -102,14 +104,14 @@ const SKETCHES = {
         <svg viewBox="0 0 80 48" className="lido-pattern-sketch-svg" aria-hidden>
             <Candle x={28} o={14} h={12} l={28} c={30} w={9} />
             <Candle x={52} o={32} h={14} l={18} c={20} w={9} />
-            <line x1="18" y1="22" x2="62" y2="22" stroke={MUTED} strokeWidth="1" strokeDasharray="2 2" />
+            <line x1="18" y1="22" x2="62" y2="22" stroke={MUTED} strokeWidth={LINE_STROKE} strokeDasharray="2 2" />
         </svg>
     ),
     dark_cloud_cover: (
         <svg viewBox="0 0 80 48" className="lido-pattern-sketch-svg" aria-hidden>
             <Candle x={28} o={30} h={12} l={28} c={14} w={9} />
             <Candle x={52} o={12} h={14} l={24} c={26} w={9} />
-            <line x1="18" y1="22" x2="62" y2="22" stroke={MUTED} strokeWidth="1" strokeDasharray="2 2" />
+            <line x1="18" y1="22" x2="62" y2="22" stroke={MUTED} strokeWidth={LINE_STROKE} strokeDasharray="2 2" />
         </svg>
     ),
     morning_star: (
@@ -172,48 +174,48 @@ const SKETCHES = {
     ),
     ascending_triangle: (
         <svg viewBox="0 0 80 48" className="lido-pattern-sketch-svg" aria-hidden>
-            <line x1="8" y1="14" x2="72" y2="14" stroke={STROKE} strokeWidth="1.5" />
-            <line x1="8" y1="36" x2="72" y2="18" stroke={STROKE} strokeWidth="1.5" />
+            <line x1="8" y1="14" x2="72" y2="14" stroke={STROKE} strokeWidth={LINE_STROKE} />
+            <line x1="8" y1="36" x2="72" y2="18" stroke={STROKE} strokeWidth={LINE_STROKE} />
             <LinePath d="M12 32 L28 26 L44 22 L60 18" color={BULL} />
         </svg>
     ),
     descending_triangle: (
         <svg viewBox="0 0 80 48" className="lido-pattern-sketch-svg" aria-hidden>
-            <line x1="8" y1="34" x2="72" y2="34" stroke={STROKE} strokeWidth="1.5" />
-            <line x1="8" y1="12" x2="72" y2="28" stroke={STROKE} strokeWidth="1.5" />
+            <line x1="8" y1="34" x2="72" y2="34" stroke={STROKE} strokeWidth={LINE_STROKE} />
+            <line x1="8" y1="12" x2="72" y2="28" stroke={STROKE} strokeWidth={LINE_STROKE} />
             <LinePath d="M12 16 L28 22 L44 26 L60 30" color={BEAR} />
         </svg>
     ),
     symmetrical_triangle: (
         <svg viewBox="0 0 80 48" className="lido-pattern-sketch-svg" aria-hidden>
-            <line x1="8" y1="12" x2="72" y2="28" stroke={STROKE} strokeWidth="1.5" />
-            <line x1="8" y1="36" x2="72" y2="20" stroke={STROKE} strokeWidth="1.5" />
+            <line x1="8" y1="12" x2="72" y2="28" stroke={STROKE} strokeWidth={LINE_STROKE} />
+            <line x1="8" y1="36" x2="72" y2="20" stroke={STROKE} strokeWidth={LINE_STROKE} />
         </svg>
     ),
     bull_flag: (
         <svg viewBox="0 0 80 48" className="lido-pattern-sketch-svg" aria-hidden>
             <LinePath d="M8 40 L20 14" color={BULL} />
             <LinePath d="M24 18 L72 30" />
-            <line x1="24" y1="14" x2="72" y2="26" stroke={STROKE} strokeWidth="1" strokeDasharray="2 2" />
+            <line x1="24" y1="14" x2="72" y2="26" stroke={STROKE} strokeWidth={LINE_STROKE} strokeDasharray="2 2" />
         </svg>
     ),
     bear_flag: (
         <svg viewBox="0 0 80 48" className="lido-pattern-sketch-svg" aria-hidden>
             <LinePath d="M8 8 L20 34" color={BEAR} />
             <LinePath d="M24 30 L72 18" />
-            <line x1="24" y1="34" x2="72" y2="22" stroke={STROKE} strokeWidth="1" strokeDasharray="2 2" />
+            <line x1="24" y1="34" x2="72" y2="22" stroke={STROKE} strokeWidth={LINE_STROKE} strokeDasharray="2 2" />
         </svg>
     ),
     rising_wedge: (
         <svg viewBox="0 0 80 48" className="lido-pattern-sketch-svg" aria-hidden>
-            <line x1="8" y1="36" x2="72" y2="16" stroke={STROKE} strokeWidth="1.5" />
-            <line x1="8" y1="28" x2="72" y2="8" stroke={STROKE} strokeWidth="1.5" />
+            <line x1="8" y1="36" x2="72" y2="16" stroke={STROKE} strokeWidth={LINE_STROKE} />
+            <line x1="8" y1="28" x2="72" y2="8" stroke={STROKE} strokeWidth={LINE_STROKE} />
         </svg>
     ),
     falling_wedge: (
         <svg viewBox="0 0 80 48" className="lido-pattern-sketch-svg" aria-hidden>
-            <line x1="8" y1="12" x2="72" y2="32" stroke={STROKE} strokeWidth="1.5" />
-            <line x1="8" y1="20" x2="72" y2="40" stroke={STROKE} strokeWidth="1.5" />
+            <line x1="8" y1="12" x2="72" y2="32" stroke={STROKE} strokeWidth={LINE_STROKE} />
+            <line x1="8" y1="20" x2="72" y2="40" stroke={STROKE} strokeWidth={LINE_STROKE} />
         </svg>
     ),
 };

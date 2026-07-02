@@ -5,6 +5,8 @@ import {
     BarChart,
     CartesianGrid,
     Legend,
+    Line,
+    LineChart,
     ResponsiveContainer,
     Tooltip,
     XAxis,
@@ -16,16 +18,67 @@ import SegmentToggle from '../components/SegmentToggle';
 import StockAutocomplete from '../components/StockAutocomplete';
 import { stockExchangeLabel } from '../utils/exchangeDisplay';
 import { formatTableMoney2 } from '../utils/tableFormat';
-import { formatTransactionDateDisplay } from '../utils/transactionDate';
+import { formatTransactionDateDisplay, formatChartAxisDate } from '../utils/transactionDate';
 import { showToast } from '../toast';
 
-const ANALYSIS_PERIODS = [1, 3, 6];
+const ANALYSIS_PERIODS = [1, 3, 6, 12];
 
 const PERIOD_OPTIONS = [
     { value: '1', label: '1 month' },
     { value: '3', label: '3 months' },
     { value: '6', label: '6 months' },
+    { value: '12', label: '1 year' },
 ];
+
+const explorerChartTooltipStyle = {
+    backgroundColor: 'var(--lido-chart-tooltip-bg)',
+    border: '1px solid var(--lido-chart-tooltip-border)',
+    borderRadius: '6px',
+    color: 'var(--lido-chart-tooltip-text)',
+};
+
+const explorerChartTooltipLabelStyle = {
+    color: 'var(--lido-chart-tooltip-label)',
+    fontWeight: 600,
+    marginBottom: 4,
+};
+
+function periodLabelForMonths(months) {
+    return PERIOD_OPTIONS.find((p) => p.value === String(months))?.label ?? `${months} month`;
+}
+
+function PeriodHistoricalPricesCard({
+    title,
+    symbol,
+    periodCloses,
+    valueKey,
+}) {
+    return (
+        <div className="card h-100">
+            <div className="card-header py-2">{title}</div>
+            <div className="card-body p-0">
+                <table className="table table-sm mb-0 align-middle">
+                    <tbody>
+                        {ANALYSIS_PERIODS.map((months) => {
+                            const key = `${months}m`;
+                            const closes = periodCloses?.[key];
+                            const price = closes?.[valueKey];
+                            const dateLabel = formatTransactionDateDisplay(closes?.start_date);
+                            return (
+                                <tr key={key}>
+                                    <td className="text-muted ps-3">{periodLabelForMonths(months)} ago</td>
+                                    <td className="text-end fw-medium">{formatTableMoney2(price)}</td>
+                                    <td className="text-muted small text-end pe-3">{dateLabel || '—'}</td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+                <div className="text-muted small px-3 py-2 border-top">{symbol}</div>
+            </div>
+        </div>
+    );
+}
 
 function rsColorClass(value) {
     if (value === null || value === undefined) {
@@ -303,6 +356,8 @@ export default function StockExplorerPage() {
     };
 
     const chartData = result?.chart || [];
+    const normalizedGainData = result?.normalized_gain_chart || [];
+    const normalizedGainManyPoints = normalizedGainData.length > 24;
     const manualPeriodMonths = 6;
     const periodKey = `${manualPeriodMonths}m`;
     const periodLabel = PERIOD_OPTIONS.find((p) => p.value === String(manualPeriodMonths))?.label ?? '6 months';
@@ -398,14 +453,14 @@ export default function StockExplorerPage() {
             const key = `${months}m`;
             if (months === manualPeriodMonths) {
                 return {
-                    period: key.toUpperCase(),
+                    period: months === 12 ? '1Y' : key.toUpperCase(),
                     growth_percent: manualStockGrowth,
                     benchmark_growth_percent: manualIndexGrowth,
                     relative_strength: manualRsResult,
                 };
             }
             return {
-                period: key.toUpperCase(),
+                period: months === 12 ? '1Y' : key.toUpperCase(),
                 growth_percent: result?.growth_percent?.[key] ?? null,
                 benchmark_growth_percent: result?.benchmark_growth_percent?.[key] ?? null,
                 relative_strength: result?.relative_strength?.[key] ?? null,
@@ -446,7 +501,7 @@ export default function StockExplorerPage() {
                         <p className="text-muted small mb-3">
                             Analyze any symbol in the local stock master. Price history comes from universe
                             price sync (no on-demand provider fetch). Search a stock and run analysis to see
-                            relative strength vs NIFTY50 for 1, 3, and 6 months.
+                            relative strength vs NIFTY50 for 1, 3, 6, and 12 months.
                         </p>
                         <form className="d-grid gap-3" onSubmit={runAnalysis}>
                             <SegmentToggle
@@ -492,7 +547,7 @@ export default function StockExplorerPage() {
                                 </select>
                             </div>
                             <button className="btn btn-primary" type="submit" disabled={loading || !hasSymbolInput}>
-                                {loading ? 'Analyzing…' : 'Run Analysis'}
+                                {loading ? 'Calculating…' : 'Calculate relative strength'}
                             </button>
                         </form>
                     </div>
@@ -526,12 +581,28 @@ export default function StockExplorerPage() {
                                     </div>
                                 </div>
                             </div>
+                            <div className="col-12 col-md-6">
+                                <PeriodHistoricalPricesCard
+                                    title="Stock prices (period start)"
+                                    symbol={stockSymbol}
+                                    periodCloses={result.period_closes}
+                                    valueKey="stock_start_close"
+                                />
+                            </div>
+                            <div className="col-12 col-md-6">
+                                <PeriodHistoricalPricesCard
+                                    title={`${benchmarkSymbol} prices (period start)`}
+                                    symbol={benchmarkSymbol}
+                                    periodCloses={result.period_closes}
+                                    valueKey="benchmark_start_close"
+                                />
+                            </div>
                             {ANALYSIS_PERIODS.map((months) => {
                                 const key = `${months}m`;
-                                const label = PERIOD_OPTIONS.find((p) => p.value === String(months))?.label ?? `${months} month`;
+                                const label = periodLabelForMonths(months);
                                 const rs = displayedRelativeStrengthByPeriod[key];
                                 return (
-                                    <div className="col-12 col-md-4" key={key}>
+                                    <div className="col-6 col-md-3" key={key}>
                                         <div className="card text-center h-100">
                                             <div className="card-body">
                                                 <div className="text-muted small">Relative strength ({label})</div>
@@ -557,21 +628,79 @@ export default function StockExplorerPage() {
                             </div>
                         )}
                         <div className="card mb-3">
-                            <div className="card-header">Growth % comparison (1M / 3M / 6M)</div>
+                            <div className="card-header">Growth % comparison (1M / 3M / 6M / 1Y)</div>
                             <div className="card-body explorer-growth-chart-body">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart data={chartData} maxBarSize={32}>
                                         <CartesianGrid strokeDasharray="3 3" />
                                         <XAxis dataKey="period" />
-                                        <YAxis />
+                                        <YAxis tickFormatter={(v) => `${Number(v).toFixed(0)}%`} />
                                         <Tooltip formatter={(v) => `${Number(v).toFixed(2)}%`} />
                                         <Legend />
                                         <Bar dataKey="growth_percent" name="Stock growth %" fill="#0d6efd" />
-                                        <Bar dataKey="benchmark_growth_percent" name="NIFTY growth %" fill="#6c757d" />
+                                        <Bar dataKey="benchmark_growth_percent" name={`${benchmarkSymbol} growth %`} fill="#6c757d" />
                                     </BarChart>
                                 </ResponsiveContainer>
                             </div>
                         </div>
+                        {normalizedGainData.length > 0 ? (
+                            <div className="card mb-3">
+                                <div className="card-header">
+                                    1-year % gain from period start ({stockSymbol} vs {benchmarkSymbol})
+                                </div>
+                                <div className="card-body explorer-growth-chart-body">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <LineChart
+                                            data={normalizedGainData}
+                                            margin={{
+                                                top: 8,
+                                                right: 16,
+                                                left: 4,
+                                                bottom: normalizedGainManyPoints ? 52 : 28,
+                                            }}
+                                        >
+                                            <CartesianGrid strokeDasharray="3 3" />
+                                            <XAxis
+                                                dataKey="date"
+                                                tickFormatter={(v) => formatChartAxisDate(v) || v}
+                                                tick={{ fontSize: 11, fill: 'var(--lido-text-muted)' }}
+                                                stroke="var(--lido-border-strong)"
+                                                minTickGap={36}
+                                                interval="preserveStartEnd"
+                                                angle={normalizedGainManyPoints ? -40 : 0}
+                                                textAnchor={normalizedGainManyPoints ? 'end' : 'middle'}
+                                                height={normalizedGainManyPoints ? 48 : 28}
+                                            />
+                                            <YAxis tickFormatter={(v) => `${Number(v).toFixed(0)}%`} width={56} />
+                                            <Tooltip
+                                                contentStyle={explorerChartTooltipStyle}
+                                                labelStyle={explorerChartTooltipLabelStyle}
+                                                itemStyle={{ color: 'var(--lido-chart-tooltip-text)' }}
+                                                formatter={(value) => [`${Number(value).toFixed(2)}%`]}
+                                                labelFormatter={(label) => formatTransactionDateDisplay(label) || label}
+                                            />
+                                            <Legend />
+                                            <Line
+                                                type="monotone"
+                                                dataKey="stock_gain_percent"
+                                                name={`${stockSymbol} % gain`}
+                                                stroke="#0d6efd"
+                                                dot={false}
+                                                strokeWidth={2}
+                                            />
+                                            <Line
+                                                type="monotone"
+                                                dataKey="benchmark_gain_percent"
+                                                name={`${benchmarkSymbol} % gain`}
+                                                stroke="#6c757d"
+                                                dot={false}
+                                                strokeWidth={2}
+                                            />
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+                        ) : null}
                         {result.history?.stock_fetch?.cache_hit && result.history?.benchmark_fetch?.cache_hit && (
                             <p className="text-muted small mt-2 mb-0">
                                 Price history served from universe cache (no provider fetch).
@@ -605,10 +734,10 @@ export default function StockExplorerPage() {
                                     </div>
                                     {ANALYSIS_PERIODS.map((months) => {
                                         const key = `${months}m`;
-                                        const label = PERIOD_OPTIONS.find((p) => p.value === String(months))?.label ?? `${months} month`;
+                                        const label = periodLabelForMonths(months);
                                         const rs = months === manualPeriodMonths ? manualRsResult : null;
                                         return (
-                                            <div className="col-12 col-md-4" key={key}>
+                                            <div className="col-6 col-md-3" key={key}>
                                                 <div className="card text-center h-100">
                                                     <div className="card-body">
                                                         <div className="text-muted small">Relative strength ({label})</div>
@@ -624,7 +753,7 @@ export default function StockExplorerPage() {
                                     })}
                                 </div>
                                 <div className="card mb-3">
-                                    <div className="card-header">Growth % comparison (1M / 3M / 6M)</div>
+                                    <div className="card-header">Growth % comparison (1M / 3M / 6M / 1Y)</div>
                                     <div className="card-body explorer-growth-chart-body">
                                         <ResponsiveContainer width="100%" height="100%">
                                             <BarChart data={manualChartData} maxBarSize={32}>

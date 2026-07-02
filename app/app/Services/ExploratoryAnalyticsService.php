@@ -43,7 +43,7 @@ class ExploratoryAnalyticsService
             }
         }
 
-        $periodMonths = $periodMonths ?: [1, 3, 6];
+        $periodMonths = $periodMonths ?: [1, 3, 6, 12];
         $maxMonths = max($periodMonths);
         $stockFetch = $this->history->getCachedAnalyticsHistoryStatus($stock, $maxMonths);
         $benchmarkFetch = $this->history->getCachedAnalyticsHistoryStatus($benchmark, $maxMonths);
@@ -100,6 +100,7 @@ class ExploratoryAnalyticsService
                 'benchmark_fetch' => $benchmarkFetch,
             ],
             'chart' => $this->buildComparisonChart($growth, $benchmarkGrowth, $relativeStrength, $periodMonths),
+            'normalized_gain_chart' => $this->history->getNormalizedGainSeries($stock, $benchmark, 12, $asOf),
         ];
     }
 
@@ -120,7 +121,7 @@ class ExploratoryAnalyticsService
         foreach ($periodMonths as $months) {
             $key = "{$months}m";
             $rows[] = [
-                'period' => strtoupper($key),
+                'period' => $months === 12 ? '1Y' : strtoupper($key),
                 'growth_percent' => $growth[$key] ?? 0,
                 'benchmark_growth_percent' => $benchmarkGrowth[$key] ?? 0,
                 'relative_strength' => $relativeStrength[$key] ?? 0,

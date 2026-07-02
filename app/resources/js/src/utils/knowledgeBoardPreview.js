@@ -1,3 +1,7 @@
+import { marked } from 'marked';
+
+marked.use({ breaks: true, gfm: true });
+
 /**
  * Strip HTML to plain text for card previews and exports.
  * @param {string} [html]
@@ -88,4 +92,42 @@ export function plainTextToJson(plain) {
             content: [{ type: 'text', text: block }],
         })),
     };
+}
+
+/**
+ * @param {string} [html]
+ */
+export function htmlToMarkdownLite(html) {
+    if (!html) {
+        return '';
+    }
+    let text = html;
+    text = text.replace(/<h1[^>]*>(.*?)<\/h1>/gi, '# $1\n\n');
+    text = text.replace(/<h2[^>]*>(.*?)<\/h2>/gi, '## $1\n\n');
+    text = text.replace(/<h3[^>]*>(.*?)<\/h3>/gi, '### $1\n\n');
+    text = text.replace(/<strong[^>]*>(.*?)<\/strong>/gi, '**$1**');
+    text = text.replace(/<b[^>]*>(.*?)<\/b>/gi, '**$1**');
+    text = text.replace(/<em[^>]*>(.*?)<\/em>/gi, '*$1*');
+    text = text.replace(/<i[^>]*>(.*?)<\/i>/gi, '*$1*');
+    text = text.replace(/<u[^>]*>(.*?)<\/u>/gi, '$1');
+    text = text.replace(/<s[^>]*>(.*?)<\/s>/gi, '~~$1~~');
+    text = text.replace(/<li[^>]*>(.*?)<\/li>/gi, '- $1\n');
+    text = text.replace(/<blockquote[^>]*>(.*?)<\/blockquote>/gi, '> $1\n\n');
+    text = text.replace(/<pre[^>]*><code[^>]*>(.*?)<\/code><\/pre>/gis, '```\n$1\n```\n\n');
+    text = text.replace(/<code[^>]*>(.*?)<\/code>/gi, '`$1`');
+    text = text.replace(/<br\s*\/?>/gi, '\n');
+    text = text.replace(/<\/p>/gi, '\n\n');
+    text = text.replace(/<[^>]+>/g, '');
+    return text.replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/**
+ * @param {string} [markdown]
+ */
+export function markdownToHtml(markdown) {
+    const trimmed = (markdown || '').trim();
+    if (!trimmed) {
+        return '';
+    }
+    return marked.parse(trimmed, { async: false });
 }

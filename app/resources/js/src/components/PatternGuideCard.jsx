@@ -54,7 +54,7 @@ export default function PatternGuideCard({
                 aria-controls={`${pattern.id}-details`}
             >
                 <span className="d-flex align-items-center gap-2 min-w-0">
-                    <PatternSketch patternId={pattern.id} className="flex-shrink-0" />
+                    <PatternSketch patternId={pattern.id} className="flex-shrink-0 lido-pattern-sketch--guide" />
                     <span className="min-w-0">
                         <span className="fw-semibold">{pattern.name}</span>
                         {' '}

@@ -126,6 +126,67 @@ $dates = [];
         $this->assertSame(5.0, $rs);
     }
 
+    public function test_normalized_gain_series_uses_one_year_anchor(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-02 12:00:00', 'Asia/Kolkata'));
+
+        $stock = $this->makeStock('NORM');
+        $benchmark = $this->makeStock('NIFTY50', true);
+
+        StockPrice::query()->create([
+            'stock_id' => $stock->id,
+            'price_date' => '2025-07-02',
+            'close_price' => 100,
+            'adjusted_close_price' => 100,
+            'provider_source' => 'test',
+            'data_source' => 'test',
+            'created_at' => now(),
+        ]);
+        StockPrice::query()->create([
+            'stock_id' => $stock->id,
+            'price_date' => '2026-07-01',
+            'close_price' => 200,
+            'adjusted_close_price' => 200,
+            'provider_source' => 'test',
+            'data_source' => 'test',
+            'created_at' => now(),
+        ]);
+        StockPrice::query()->create([
+            'stock_id' => $benchmark->id,
+            'price_date' => '2025-07-02',
+            'close_price' => 1000,
+            'adjusted_close_price' => 1000,
+            'provider_source' => 'test',
+            'data_source' => 'test',
+            'created_at' => now(),
+        ]);
+        StockPrice::query()->create([
+            'stock_id' => $benchmark->id,
+            'price_date' => '2026-07-01',
+            'close_price' => 1500,
+            'adjusted_close_price' => 1500,
+            'provider_source' => 'test',
+            'data_source' => 'test',
+            'created_at' => now(),
+        ]);
+
+        $service = $this->makeService();
+        $series = $service->getNormalizedGainSeries(
+            $stock,
+            $benchmark,
+            12,
+            Carbon::parse('2026-07-02'),
+        );
+
+        Carbon::setTestNow();
+
+        $this->assertCount(2, $series);
+        $this->assertSame(0.0, $series[0]['stock_gain_percent']);
+        $this->assertSame(0.0, $series[0]['benchmark_gain_percent']);
+        $this->assertSame(100.0, $series[1]['stock_gain_percent']);
+        $this->assertSame(50.0, $series[1]['benchmark_gain_percent']);
+    }
+
     protected function makeStock(string $symbol, bool $benchmark = false): Stock
     {
         return Stock::query()->create([

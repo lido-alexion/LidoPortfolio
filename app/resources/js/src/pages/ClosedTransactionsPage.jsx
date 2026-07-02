@@ -74,7 +74,11 @@ export default function ClosedTransactionsPage() {
     }, [load, page, stockSearch]);
 
     const columns = useMemo(
-        () => buildTransactionTableColumns({ onEdit: handleEdit, onDelete: handleDelete }),
+        () => buildTransactionTableColumns({
+            onEdit: handleEdit,
+            onDelete: handleDelete,
+            showRealization: true,
+        }),
         [handleEdit, handleDelete],
     );
 
