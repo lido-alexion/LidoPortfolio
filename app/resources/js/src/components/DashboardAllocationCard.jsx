@@ -14,8 +14,12 @@ import {
 } from './DataTable';
 import SegmentToggle from './SegmentToggle';
 import { formatInrWhole } from '../utils/tableFormat';
-
-const ALLOCATION_VIEW_KEY = 'portfolio_dashboard_allocation_view';
+import {
+    loadAllocationMobileMetricPreference,
+    loadAllocationViewPreference,
+    saveAllocationMobileMetricPreference,
+    saveAllocationViewPreference,
+} from '../utils/dashboardPrefs';
 
 const DONUT_COLORS = [
     '#0d6efd',
@@ -40,22 +44,6 @@ const chartTooltipStyle = {
     padding: '8px 10px',
     fontSize: '0.8125rem',
 };
-
-function loadAllocationView() {
-    try {
-        return localStorage.getItem(ALLOCATION_VIEW_KEY) === 'visual' ? 'visual' : 'table';
-    } catch {
-        return 'table';
-    }
-}
-
-function saveAllocationView(mode) {
-    try {
-        localStorage.setItem(ALLOCATION_VIEW_KEY, mode);
-    } catch {
-        // Quota or private mode — ignore.
-    }
-}
 
 export function buildAllocationDonutData(rows, metric, totalInvested) {
     return (rows || [])
@@ -152,8 +140,8 @@ export default function DashboardAllocationCard({
     storageKey,
     emptyMessage = 'No allocation data',
 }) {
-    const [viewMode, setViewMode] = useState(loadAllocationView);
-    const [mobileMetric, setMobileMetric] = useState('market');
+    const [viewMode, setViewMode] = useState(() => loadAllocationViewPreference());
+    const [mobileMetric, setMobileMetric] = useState(() => loadAllocationMobileMetricPreference());
 
     const controller = useDataTableController({
         columns,
@@ -172,7 +160,12 @@ export default function DashboardAllocationCard({
 
     const handleViewModeChange = (mode) => {
         setViewMode(mode);
-        saveAllocationView(mode);
+        saveAllocationViewPreference(mode);
+    };
+
+    const handleMobileMetricChange = (metric) => {
+        setMobileMetric(metric);
+        saveAllocationMobileMetricPreference(metric);
     };
 
     const visualEmptyMessage = allocation.length === 0
@@ -227,7 +220,7 @@ export default function DashboardAllocationCard({
                             <div className="d-flex justify-content-center mb-3">
                                 <SegmentToggle
                                     value={mobileMetric}
-                                    onChange={setMobileMetric}
+                                    onChange={handleMobileMetricChange}
                                     ariaLabel="Allocation measure"
                                     compact
                                     options={[

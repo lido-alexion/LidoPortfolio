@@ -67,8 +67,8 @@ export default function KnowledgeExportDialog({ notes, onClose }) {
                         <label className="form-label small" htmlFor="kb-export-preview">Preview</label>
                         <textarea
                             id="kb-export-preview"
-                            className="form-control font-monospace small"
-                            rows={14}
+                            className="form-control font-monospace small lido-knowledge-export-preview"
+                            rows={1}
                             readOnly
                             value={preview}
                         />

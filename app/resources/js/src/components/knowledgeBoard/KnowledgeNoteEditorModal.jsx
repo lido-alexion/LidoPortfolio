@@ -13,6 +13,7 @@ import {
     plainTextToHtml,
     plainTextToJson,
 } from '../../utils/knowledgeBoardPreview';
+import { IconDelete } from './KnowledgeCardIcons';
 
 const EMPTY_DOC = { type: 'doc', content: [{ type: 'paragraph' }] };
 
@@ -24,6 +25,7 @@ export default function KnowledgeNoteEditorModal({
     saving = false,
     onClose,
     onSave,
+    onDelete,
     onCreateTag,
 }) {
     const [tags, setTags] = useState([]);
@@ -277,6 +279,18 @@ export default function KnowledgeNoteEditorModal({
                         </div>
                         <div className="lido-knowledge-editor-footer-sep" aria-hidden="true" />
                         <div className="lido-knowledge-editor-footer-group lido-knowledge-editor-footer-group--actions">
+                            {note?.id && onDelete ? (
+                                <button
+                                    type="button"
+                                    className="btn btn-sm btn-outline-danger lido-knowledge-editor-footer-icon-btn"
+                                    aria-label="Delete note"
+                                    title="Delete note"
+                                    onClick={() => onDelete(note)}
+                                    disabled={saving}
+                                >
+                                    <IconDelete />
+                                </button>
+                            ) : null}
                             <button type="button" className="btn btn-sm btn-outline-secondary" onClick={handleClose}>Close</button>
                             <button type="button" className="btn btn-sm btn-primary" onClick={() => save(false)} disabled={saving}>Save (Ctrl/Cmd + S)</button>
                         </div>

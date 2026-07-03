@@ -560,46 +560,50 @@ export default function DashboardPage() {
                     <div className="alert alert-warning mb-0">{loadError}</div>
                 </div>
             ) : null}
-            <div className="col-12 d-flex flex-wrap justify-content-end align-items-center gap-2">
-                {servedFromCache && cachedAt ? (
-                    <span className="text-muted small" title="Dashboard data is cached locally for faster navigation">
-                        Cached {formatDashboardCacheLabel(cachedAt)}
-                    </span>
-                ) : null}
-                <button
-                    type="button"
-                    className="btn btn-outline-secondary btn-sm"
-                    onClick={handleRefreshDashboard}
-                    disabled={refreshing || !userId || !profileId}
-                    title="Clear local cache and reload dashboard from the server"
-                >
-                    {refreshing ? 'Refreshing…' : 'Refresh dashboard'}
-                </button>
-                {isAdmin && pricesSyncedToday && !syncInProgress ? (
-                    <span className="text-muted small">
-                        Synced for {dailySync.today || 'today'}
-                    </span>
-                ) : null}
+            <div className="col-12 d-flex flex-wrap align-items-center gap-2">
+                <div className="d-flex flex-wrap align-items-center gap-2">
+                    <button
+                        type="button"
+                        className="btn btn-outline-secondary btn-sm"
+                        onClick={handleRefreshDashboard}
+                        disabled={refreshing || !userId || !profileId}
+                        title="Clear local cache and reload dashboard from the server"
+                    >
+                        {refreshing ? 'Refreshing…' : 'Refresh dashboard'}
+                    </button>
+                    {servedFromCache && cachedAt ? (
+                        <span className="text-muted small" title="Dashboard data was loaded from local cache for faster navigation">
+                            Last refreshed {formatDashboardCacheLabel(cachedAt)}
+                        </span>
+                    ) : null}
+                </div>
                 {isAdmin ? (
-                <button
-                    type="button"
-                    className="btn btn-outline-primary btn-sm"
-                    onClick={() => runDailyPriceSync(pricesSyncedToday)}
-                    disabled={syncInProgress}
-                    title={
-                        syncInProgress
-                            ? 'Price sync is running'
-                            : pricesSyncedToday
-                                ? 'Fetch latest prices again for held stocks'
-                                : 'Fetch latest prices for held stocks'
-                    }
-                >
-                    {syncInProgress
-                        ? 'Syncing prices…'
-                        : pricesSyncedToday
-                            ? 'Sync again today'
-                            : 'Sync prices for today'}
-                </button>
+                    <div className="d-flex flex-wrap align-items-center gap-2 ms-auto">
+                        {pricesSyncedToday && !syncInProgress ? (
+                            <span className="text-muted small">
+                                Synced for {dailySync.today || 'today'}
+                            </span>
+                        ) : null}
+                        <button
+                            type="button"
+                            className="btn btn-outline-primary btn-sm"
+                            onClick={() => runDailyPriceSync(pricesSyncedToday)}
+                            disabled={syncInProgress}
+                            title={
+                                syncInProgress
+                                    ? 'Price sync is running'
+                                    : pricesSyncedToday
+                                        ? 'Fetch latest prices again for held stocks'
+                                        : 'Fetch latest prices for held stocks'
+                            }
+                        >
+                            {syncInProgress
+                                ? 'Syncing prices…'
+                                : pricesSyncedToday
+                                    ? 'Sync again today'
+                                    : 'Sync prices for today'}
+                        </button>
+                    </div>
                 ) : null}
             </div>
             {cards.map(({ title, value, valueClassName }) => (
@@ -682,7 +686,7 @@ export default function DashboardPage() {
                     emptyMessage="No actionable patterns on your holdings right now. Patterns need sufficient OHLCV history."
                     headerExtra={(
                         <Link to="/patterns" className="btn btn-sm btn-outline-secondary">
-                            Pattern guide
+                            Patterns guide {'>'}
                         </Link>
                     )}
                 />

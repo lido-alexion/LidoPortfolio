@@ -315,18 +315,14 @@ function buildHoldingsColumns(complex, handleSell) {
             header: 'Prices',
             enableSorting: false,
             enableHiding: false,
-            cell: ({ row }) => {
-                const s = row.original.summary;
-                const count = complex && s.price_row_count > 0 ? ` (${s.price_row_count})` : '';
-                return (
-                    <Link
-                        className="lido-table-link"
-                        to={`/holdings/${row.original.stock_id}/prices`}
-                    >
-                        OHLCV{count}
-                    </Link>
-                );
-            },
+            cell: ({ row }) => (
+                <Link
+                    className="lido-table-link"
+                    to={`/holdings/${row.original.stock_id}/prices`}
+                >
+                    {complex ? 'OHLCV' : 'OHLCV >'}
+                </Link>
+            ),
         },
         {
             id: 'sell',

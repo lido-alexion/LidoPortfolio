@@ -462,7 +462,7 @@ export default function WatchlistPage() {
                     emptyMessage="No patterns detected on the latest bar for any watchlist symbol."
                     headerExtra={(
                         <Link to="/patterns" className="btn btn-sm btn-outline-secondary">
-                            Pattern guide
+                            Patterns guide {'>'}
                         </Link>
                     )}
                 />

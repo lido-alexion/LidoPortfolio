@@ -28,7 +28,7 @@ export default function PatternMatchesList({
                     <span className="small fw-semibold">{title}</span>
                     {linkToGuide ? (
                         <Link to="/patterns" className="small">
-                            Pattern guide
+                            Patterns guide {'>'}
                         </Link>
                     ) : null}
                 </div>

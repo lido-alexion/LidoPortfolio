@@ -63,12 +63,10 @@ function PeriodHistoricalPricesCard({
                             const key = `${months}m`;
                             const closes = periodCloses?.[key];
                             const price = closes?.[valueKey];
-                            const dateLabel = formatTransactionDateDisplay(closes?.start_date);
                             return (
                                 <tr key={key}>
                                     <td className="text-muted ps-3">{periodLabelForMonths(months)} ago</td>
-                                    <td className="text-end fw-medium">{formatTableMoney2(price)}</td>
-                                    <td className="text-muted small text-end pe-3">{dateLabel || '—'}</td>
+                                    <td className="text-end fw-medium pe-3">{formatTableMoney2(price)}</td>
                                 </tr>
                             );
                         })}
@@ -546,7 +544,7 @@ export default function StockExplorerPage() {
                                     <option value="NIFTY50">NIFTY50</option>
                                 </select>
                             </div>
-                            <button className="btn btn-primary" type="submit" disabled={loading || !hasSymbolInput}>
+                            <button className="btn btn-primary mb-3" type="submit" disabled={loading || !hasSymbolInput}>
                                 {loading ? 'Calculating…' : 'Calculate relative strength'}
                             </button>
                         </form>

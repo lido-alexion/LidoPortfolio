@@ -64,7 +64,11 @@ export function buildTransactionTableColumns({ onEdit, onDelete, showRealization
                     if (value == null || value === '') {
                         return <span className="text-muted">—</span>;
                     }
-                    return formatTableMoney2(value);
+                    return (
+                        <span className="text-danger">
+                            {formatTableMoney2(value)}
+                        </span>
+                    );
                 },
             },
         );

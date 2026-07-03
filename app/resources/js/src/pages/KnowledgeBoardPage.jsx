@@ -236,7 +236,7 @@ export default function KnowledgeBoardPage() {
         showToast('Note archived.');
     };
 
-    const deleteNote = async (note) => {
+    const deleteNote = async (note, { closeEditor = false } = {}) => {
         const label = notePreviewText(note.content_html, 60) || 'this note';
         if (!window.confirm(`Delete "${label}"? This cannot be undone.`)) {
             return;
@@ -249,6 +249,10 @@ export default function KnowledgeBoardPage() {
                 next.delete(String(note.id));
                 return next;
             });
+            if (closeEditor) {
+                setEditorOpen(false);
+                setEditingNote(null);
+            }
             showToast('Note deleted.');
         } catch {
             showToast('Could not delete note.', 'danger');
@@ -311,19 +315,16 @@ export default function KnowledgeBoardPage() {
 
     return (
         <div className="d-grid gap-2 lido-knowledge-board-page">
-            <div className={[
-                'card lido-knowledge-toolbar-card',
-                filtersExpanded ? 'lido-knowledge-toolbar-card--expanded' : 'lido-knowledge-toolbar-card--collapsed',
-            ].join(' ')}>
-                {!filtersExpanded ? (
-                    <div className="lido-knowledge-toolbar-collapsed">
-                        <button
-                            type="button"
-                            className="btn btn-sm btn-primary lido-knowledge-toolbar-new-collapsed"
-                            onClick={openNewNote}
-                        >
-                            + New
-                        </button>
+            {!filtersExpanded ? (
+                <div className="lido-knowledge-toolbar-collapsed-row">
+                    <button
+                        type="button"
+                        className="btn btn-sm btn-primary lido-knowledge-toolbar-new-collapsed"
+                        onClick={openNewNote}
+                    >
+                        + New
+                    </button>
+                    <div className="card lido-knowledge-toolbar-card lido-knowledge-toolbar-card--collapsed">
                         <button
                             type="button"
                             className="lido-knowledge-toolbar-toggle"
@@ -337,7 +338,9 @@ export default function KnowledgeBoardPage() {
                             </span>
                         </button>
                     </div>
-                ) : (
+                </div>
+            ) : (
+            <div className="card lido-knowledge-toolbar-card lido-knowledge-toolbar-card--expanded">
                     <>
                         <button
                             type="button"
@@ -352,7 +355,7 @@ export default function KnowledgeBoardPage() {
                         </button>
 
                         <div id="kb-toolbar-panel" className="card-body pt-0 pb-2 px-2 px-md-3">
-                        <div className="d-flex flex-wrap gap-1 mb-2">
+                        <div className="d-flex flex-wrap lido-knowledge-toolbar-actions mb-2">
                             <button type="button" className="btn btn-sm btn-primary" onClick={openNewNote}>New Note</button>
                             <button type="button" className="btn btn-sm btn-outline-secondary" onClick={selectAllVisible}>Select All</button>
                             <button type="button" className="btn btn-sm btn-outline-secondary" onClick={clearSelection} disabled={!selectedIds.size}>Clear</button>
@@ -436,8 +439,8 @@ export default function KnowledgeBoardPage() {
                         ) : null}
                         </div>
                     </>
-                )}
             </div>
+            )}
 
             {loading ? (
                 <div className="text-muted small px-1">Loading notes…</div>
@@ -470,6 +473,7 @@ export default function KnowledgeBoardPage() {
                 saving={saving}
                 onClose={() => setEditorOpen(false)}
                 onSave={saveNote}
+                onDelete={(note) => deleteNote(note, { closeEditor: true })}
                 onCreateTag={createTag}
             />
 

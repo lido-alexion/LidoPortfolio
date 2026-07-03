@@ -855,7 +855,7 @@ export default function TransactionsPage() {
                 {entryMode === 'bulk' ? (
                     <BulkTransactionImport feeComponents={feeComponents} onSaved={load} />
                 ) : (
-                <div className="card" id="transaction-form-card">
+                <div className="card lido-transaction-form-card" id="transaction-form-card">
 
                     <div className="card-header">{form.id ? 'Edit Transaction' : 'Add Transaction'}</div>
 
