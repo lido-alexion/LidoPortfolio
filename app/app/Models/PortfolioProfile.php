@@ -91,4 +91,9 @@ class PortfolioProfile extends Model
     {
         return $this->hasMany(KnowledgeTag::class, 'profile_id');
     }
+
+    public function corporateActions(): HasMany
+    {
+        return $this->hasMany(CorporateAction::class, 'profile_id');
+    }
 }

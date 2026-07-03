@@ -1217,6 +1217,20 @@ export default function TransactionsPage() {
                             />
                             <Link
                                 className="btn btn-sm btn-outline-secondary text-nowrap"
+                                to="/corporate-action"
+                                state={form.symbol ? {
+                                    corporateActionStock: {
+                                        stock_id: form.stock_id,
+                                        symbol: form.symbol,
+                                        name: form.name,
+                                        exchange: form.exchange,
+                                    },
+                                } : undefined}
+                            >
+                                Corporate action
+                            </Link>
+                            <Link
+                                className="btn btn-sm btn-outline-secondary text-nowrap"
                                 to="/transactions/closed"
                             >
                                 Squared-off

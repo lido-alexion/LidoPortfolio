@@ -196,6 +196,8 @@ class TransactionController extends Controller
 
     protected function validateTransaction(Request $request, ?Transaction $transaction = null): array
     {
+        $allowZeroPrice = $transaction?->corporate_action_id !== null;
+
         return $request->validate([
             'stock_id' => ['nullable', 'exists:portfolio_stocks,id'],
             'symbol' => ['nullable', 'string', 'max:20'],
@@ -204,7 +206,7 @@ class TransactionController extends Controller
             'sector' => ['nullable', 'string', 'max:100'],
             'type' => [$transaction ? 'sometimes' : 'required', 'in:buy,sell'],
             'quantity' => ['required', 'numeric', 'gt:0'],
-            'price' => ['required', 'numeric', 'gt:0'],
+            'price' => ['required', 'numeric', $allowZeroPrice ? 'gte:0' : 'gt:0'],
             'fees' => ['nullable', 'numeric', 'gte:0'],
             'transaction_date' => ['required', 'date', 'before_or_equal:today'],
             'notes' => ['nullable', 'string', 'max:1000'],

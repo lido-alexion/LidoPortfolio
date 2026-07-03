@@ -70,19 +70,6 @@ class HoldingsCalculationService
     }
 
     /**
-     * @return Collection<int, Transaction>
-     */
-    protected function transactionsForProfileStock(PortfolioProfile $profile, Stock $stock): Collection
-    {
-        return Transaction::query()
-            ->where('profile_id', $profile->id)
-            ->where('stock_id', $stock->id)
-            ->orderBy('transaction_date')
-            ->orderBy('id')
-            ->get();
-    }
-
-    /**
      * @param  Collection<int, Transaction>  $transactions
      * @return array{
      *   quantity: float,
@@ -168,6 +155,33 @@ class HoldingsCalculationService
             ->first();
 
         return $holding ? (float) $holding->quantity : 0.0;
+    }
+
+    /**
+     * Open quantity after replaying all transactions on or before the given date (inclusive).
+     */
+    public function quantityAsOfDate(PortfolioProfile $profile, Stock $stock, string $asOfDate): float
+    {
+        $transactions = $this->transactionsForProfileStock($profile, $stock)
+            ->filter(fn (Transaction $tx) => $tx->transaction_date->format('Y-m-d') <= $asOfDate)
+            ->values();
+
+        $state = $this->replayTransactions($transactions, dryRun: true);
+
+        return $state['quantity'];
+    }
+
+    /**
+     * @return Collection<int, Transaction>
+     */
+    public function transactionsForProfileStock(PortfolioProfile $profile, Stock $stock): Collection
+    {
+        return Transaction::query()
+            ->where('profile_id', $profile->id)
+            ->where('stock_id', $stock->id)
+            ->orderBy('transaction_date')
+            ->orderBy('id')
+            ->get();
     }
 
     protected function deactivateTracking(Stock $stock): void

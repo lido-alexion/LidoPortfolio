@@ -16,13 +16,6 @@ class TransactionRealizationService
      */
     public function recalculateForProfileStock(PortfolioProfile $profile, Stock $stock): void
     {
-        $transactions = Transaction::query()
-            ->where('profile_id', $profile->id)
-            ->where('stock_id', $stock->id)
-            ->orderBy('transaction_date')
-            ->orderBy('id')
-            ->get();
-
         Transaction::query()
             ->where('profile_id', $profile->id)
             ->where('stock_id', $stock->id)
@@ -31,6 +24,13 @@ class TransactionRealizationService
                 'realized_pl' => null,
                 'squared_off_fees' => null,
             ]);
+
+        $transactions = Transaction::query()
+            ->where('profile_id', $profile->id)
+            ->where('stock_id', $stock->id)
+            ->orderBy('transaction_date')
+            ->orderBy('id')
+            ->get();
 
         $this->applyFifoRealizations($transactions);
     }

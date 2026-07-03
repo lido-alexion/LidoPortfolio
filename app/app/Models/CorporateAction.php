@@ -4,23 +4,23 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class Transaction extends Model
+class CorporateAction extends Model
 {
-    protected $table = 'portfolio_transactions';
+    protected $table = 'portfolio_corporate_actions';
 
     protected $fillable = [
         'profile_id',
         'stock_id',
-        'type',
-        'quantity',
-        'price',
-        'fees',
-        'realized_pl',
-        'squared_off_fees',
-        'transaction_date',
+        'action_type',
+        'ratio_from',
+        'ratio_to',
+        'ex_date',
         'notes',
-        'corporate_action_id',
+        'applied_at',
+        'created_by',
+        'metadata',
     ];
 
     protected function casts(): array
@@ -28,19 +28,15 @@ class Transaction extends Model
         return [
             'profile_id' => 'integer',
             'stock_id' => 'integer',
-            'quantity' => 'decimal:4',
-            'price' => 'decimal:4',
-            'fees' => 'decimal:4',
-            'realized_pl' => 'decimal:4',
-            'squared_off_fees' => 'decimal:4',
-            'transaction_date' => 'date',
-            'corporate_action_id' => 'integer',
+            'ratio_from' => 'integer',
+            'ratio_to' => 'integer',
+            'ex_date' => 'date',
+            'applied_at' => 'datetime',
+            'created_by' => 'integer',
+            'metadata' => 'array',
         ];
     }
 
-    /**
-     * Only resolve transactions owned by the active portfolio (API update/delete/show).
-     */
     public function resolveRouteBinding($value, $field = null)
     {
         $profile = \activePortfolio();
@@ -49,7 +45,7 @@ class Transaction extends Model
             return null;
         }
 
-        return $profile->transactions()
+        return $profile->corporateActions()
             ->where($field ?? $this->getRouteKeyName(), $value)
             ->first();
     }
@@ -64,8 +60,13 @@ class Transaction extends Model
         return $this->belongsTo(Stock::class);
     }
 
-    public function corporateAction(): BelongsTo
+    public function creator(): BelongsTo
     {
-        return $this->belongsTo(CorporateAction::class, 'corporate_action_id');
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function transactions(): HasMany
+    {
+        return $this->hasMany(Transaction::class, 'corporate_action_id');
     }
 }

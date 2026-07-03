@@ -12,6 +12,7 @@ import DashboardPage from './pages/DashboardPage';
 import HoldingsPage from './pages/HoldingsPage';
 import StockPricesPage from './pages/StockPricesPage';
 import TransactionsPage from './pages/TransactionsPage';
+import CorporateActionPage from './pages/CorporateActionPage';
 import ClosedTransactionsPage from './pages/ClosedTransactionsPage';
 import SettingsPage from './pages/SettingsPage';
 import ProfilePage from './pages/ProfilePage';
@@ -126,6 +127,7 @@ function App() {
                             <Routes>
                                 <Route path="/" element={<DashboardPage />} />
                                 <Route path="/transactions" element={<TransactionsPage />} />
+                                <Route path="/corporate-action" element={<CorporateActionPage />} />
                                 <Route path="/transactions/closed" element={<ClosedTransactionsPage />} />
                                 <Route path="/holdings" element={<HoldingsPage />} />
                                 <Route path="/holdings/:stockId/prices" element={<StockPricesPage />} />

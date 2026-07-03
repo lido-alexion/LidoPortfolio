@@ -23,6 +23,7 @@ use App\Http\Controllers\Api\StockController;
 use App\Http\Controllers\Api\StockPriceController;
 use App\Http\Controllers\Api\SyncController;
 use App\Http\Controllers\Api\SyncLogController;
+use App\Http\Controllers\Api\CorporateActionController;
 use App\Http\Controllers\Api\TransactionController;
 use App\Http\Controllers\Api\UniversePriceSyncController;
 use App\Http\Controllers\Api\UserInviteController;
@@ -77,6 +78,10 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::get('/stocks', [StockController::class, 'index']);
     Route::get('/stocks/{stock}', [StockController::class, 'show']);
     Route::apiResource('transactions', TransactionController::class);
+
+    Route::get('/corporate-actions', [CorporateActionController::class, 'index']);
+    Route::post('/corporate-actions/preview', [CorporateActionController::class, 'preview']);
+    Route::post('/corporate-actions', [CorporateActionController::class, 'store']);
 
     Route::get('/holdings', [HoldingController::class, 'index']);
     Route::get('/watchlist', [WatchlistController::class, 'index']);

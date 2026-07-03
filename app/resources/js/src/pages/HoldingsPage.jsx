@@ -93,7 +93,7 @@ function InvestedTransactionsIcon() {
     );
 }
 
-function buildHoldingsColumns(complex, handleSell) {
+function buildHoldingsColumns(complex, handleSell, handleCorporateAction) {
     return [
         {
             id: 'stock',
@@ -333,13 +333,22 @@ function buildHoldingsColumns(complex, handleSell) {
             cell: ({ row }) => {
                 const belowTrailingStop = isBelowTrailingStop(row.original.summary);
                 return (
-                    <button
-                        type="button"
-                        className={`btn btn-sm ${belowTrailingStop ? 'btn-danger' : 'btn-outline-danger'}`}
-                        onClick={() => handleSell(row.original)}
-                    >
-                        Sell
-                    </button>
+                    <div className="d-flex flex-wrap gap-1 justify-content-end">
+                        <button
+                            type="button"
+                            className="btn btn-sm btn-outline-secondary"
+                            onClick={() => handleCorporateAction(row.original)}
+                        >
+                            Split/Bonus
+                        </button>
+                        <button
+                            type="button"
+                            className={`btn btn-sm ${belowTrailingStop ? 'btn-danger' : 'btn-outline-danger'}`}
+                            onClick={() => handleSell(row.original)}
+                        >
+                            Sell
+                        </button>
+                    </div>
                 );
             },
         },
@@ -351,6 +360,20 @@ export default function HoldingsPage() {
     const [holdings, setHoldings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [viewMode, setViewMode] = useState(loadHoldingsViewMode);
+
+    const handleCorporateAction = useCallback((holding) => {
+        const stockRow = holding.stock || {};
+        navigate('/corporate-action', {
+            state: {
+                corporateActionStock: {
+                    stock_id: holding.stock_id,
+                    symbol: stockRow.symbol || '',
+                    name: stockRow.name || '',
+                    exchange: stockRow.exchange || 'NSE',
+                },
+            },
+        });
+    }, [navigate]);
 
     const handleSell = useCallback((holding) => {
         const prefill = buildSellPrefillFromHolding(holding);
@@ -384,12 +407,12 @@ export default function HoldingsPage() {
     })), [holdings]);
 
     const complexColumns = useMemo(
-        () => buildHoldingsColumns(true, handleSell),
-        [handleSell],
+        () => buildHoldingsColumns(true, handleSell, handleCorporateAction),
+        [handleSell, handleCorporateAction],
     );
     const simpleColumns = useMemo(
-        () => buildHoldingsColumns(false, handleSell),
-        [handleSell],
+        () => buildHoldingsColumns(false, handleSell, handleCorporateAction),
+        [handleSell, handleCorporateAction],
     );
 
     const sharedTableProps = useMemo(() => ({
