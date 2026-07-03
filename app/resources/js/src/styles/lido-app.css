@@ -1036,6 +1036,59 @@ html.lido-footer-visible .lido-main {
     margin-top: 0.15rem;
 }
 
+.datatable-table.datatable-resizable {
+    table-layout: fixed;
+}
+
+.datatable-table.datatable-resizable thead th {
+    position: relative;
+    overflow: hidden;
+}
+
+.datatable-table.datatable-resizable tbody td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.datatable-col-resizer {
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 2;
+    width: 6px;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: col-resize;
+    touch-action: none;
+    user-select: none;
+}
+
+.datatable-col-resizer::after {
+    content: '';
+    position: absolute;
+    top: 20%;
+    bottom: 20%;
+    right: 2px;
+    width: 2px;
+    border-radius: 1px;
+    background: transparent;
+    transition: background-color 0.15s ease;
+}
+
+.datatable-table.datatable-resizable thead th:hover .datatable-col-resizer::after,
+.datatable-col-resizer.is-active::after {
+    background: rgba(var(--bs-secondary-rgb), 0.45);
+}
+
+.datatable-is-resizing,
+.datatable-is-resizing * {
+    cursor: col-resize !important;
+    user-select: none !important;
+}
+
 .lido-col-header-stack {
     display: flex;
     flex-direction: column;

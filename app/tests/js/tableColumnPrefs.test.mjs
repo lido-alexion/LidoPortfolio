@@ -23,8 +23,9 @@ test('save and load column preferences', () => {
         removeItem(k) { delete store[k]; },
     };
 
-    saveTableColumnPrefs('holdings', ['symbol', 'qty'], { qty: false });
+    saveTableColumnPrefs('holdings', ['symbol', 'qty'], { qty: false }, { symbol: 180, qty: 96 });
     const loaded = loadTableColumnPrefs('holdings', ['symbol', 'qty', 'xirr']);
     assert.deepEqual(loaded.columnOrder, ['symbol', 'qty']);
     assert.deepEqual(loaded.columnVisibility, { qty: false });
+    assert.deepEqual(loaded.columnSizing, { symbol: 180, qty: 96 });
 });

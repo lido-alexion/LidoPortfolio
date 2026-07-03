@@ -80,11 +80,12 @@ function useDataTableController({
     enableColumnControls = true,
     enableColumnHiding = true,
     enableColumnReorder = true,
+    enableColumnResizing = true,
     storageKey = null,
     defaultColumnOrder: defaultColumnOrderOverride = null,
     defaultColumnVisibility: defaultColumnVisibilityOverride = null,
     initialSorting = [],
-    tableClassName = 'table table-sm mb-0',
+    tableClassName = 'table table-sm mb-0 datatable-table',
     striped = false,
 }) {
     const defaultColumnOrder = useMemo(() => {
@@ -118,6 +119,9 @@ function useDataTableController({
         }
         return defaultColumnOrder;
     });
+    const [columnSizing, setColumnSizing] = useState(
+        () => savedPrefs?.columnSizing ?? {},
+    );
     const [dragColumnId, setDragColumnId] = useState(null);
     const [panelOpen, setPanelOpen] = useState(false);
 
@@ -133,22 +137,31 @@ function useDataTableController({
 
     useEffect(() => {
         if (storageKey) {
-            saveTableColumnPrefs(storageKey, columnOrder, columnVisibility);
+            saveTableColumnPrefs(storageKey, columnOrder, columnVisibility, columnSizing);
         }
-    }, [storageKey, columnOrder, columnVisibility]);
+    }, [storageKey, columnOrder, columnVisibility, columnSizing]);
 
     const table = useReactTable({
         data,
         columns,
+        defaultColumn: {
+            size: 140,
+            minSize: 56,
+            maxSize: 720,
+        },
+        enableColumnResizing,
+        columnResizeMode: 'onChange',
         state: {
             columnVisibility,
             columnOrder,
+            columnSizing,
         },
         initialState: {
             sorting: initialSorting,
         },
         onColumnVisibilityChange: setColumnVisibility,
         onColumnOrderChange: setColumnOrder,
+        onColumnSizingChange: setColumnSizing,
         getCoreRowModel: getCoreRowModel(),
         getSortedRowModel: enableSorting ? getSortedRowModel() : undefined,
     });
@@ -165,10 +178,12 @@ function useDataTableController({
     const resetColumns = useCallback(() => {
         setColumnVisibility(defaultColumnVisibility);
         setColumnOrder(defaultColumnOrder);
+        setColumnSizing({});
+        table.resetColumnSizing(true);
         if (storageKey) {
             localStorage.removeItem(`portfolio_datatable_${storageKey}`);
         }
-    }, [defaultColumnOrder, defaultColumnVisibility, storageKey]);
+    }, [defaultColumnOrder, defaultColumnVisibility, storageKey, table]);
 
     const moveColumn = useCallback((columnId, direction) => {
         setColumnOrder((old) => {
@@ -229,6 +244,7 @@ function useDataTableController({
         enableSorting,
         enableColumnHiding,
         enableColumnReorder,
+        enableColumnResizing,
         orderedColumns,
         resetColumns,
         moveColumn,
@@ -290,7 +306,7 @@ export function DataTableColumnMenu({ controller }) {
                     >
                         <div className="small text-muted mb-2">
                             {enableColumnHiding && enableColumnReorder && (
-                                'Show or hide columns. Drag the grip to reorder.'
+                                'Show or hide columns. Drag the grip to reorder. Drag a column edge to resize.'
                             )}
                             {enableColumnHiding && !enableColumnReorder && 'Show or hide columns.'}
                             {!enableColumnHiding && enableColumnReorder && (
@@ -422,43 +438,38 @@ export function TableLoadingRow({ colSpan, label = 'Loading…' }) {
 export function DataTableView({ controller, emptyMessage = 'No data.', loading = false }) {
     const {
         table,
-        dragColumnId,
-        setDragColumnId,
-        showControls,
         enableSorting,
-        enableColumnReorder,
-        handleDragStart,
-        handleDragOver,
-        handleDrop,
+        enableColumnResizing,
         tableClasses,
         visibleColumnCount,
     } = controller;
 
+    const isResizingColumn = Boolean(table.getState().columnSizingInfo?.isResizingColumn);
+
     return (
-        <div className="table-responsive">
-            <table className={tableClasses}>
+        <div className={`table-responsive${isResizingColumn ? ' datatable-is-resizing' : ''}`}>
+            <table
+                className={`${tableClasses}${enableColumnResizing ? ' datatable-resizable' : ''}`.trim()}
+                style={enableColumnResizing ? { width: table.getCenterTotalSize() } : undefined}
+            >
                 <thead>
                 {table.getHeaderGroups().map((headerGroup) => (
                     <tr key={headerGroup.id}>
                         {headerGroup.headers.map((header) => {
                             const canSort = enableSorting && header.column.getCanSort();
-                            const canDrag = enableColumnReorder && showControls;
-                            const isDragTarget = dragColumnId === header.column.id;
+                            const canResize = enableColumnResizing && header.column.getCanResize();
+                            const headerSize = header.getSize();
                             return (
                                 <th
                                     key={header.id}
-                                    draggable={canDrag}
-                                    onDragStart={canDrag ? () => handleDragStart(header.column.id) : undefined}
-                                    onDragOver={canDrag ? handleDragOver : undefined}
-                                    onDrop={canDrag ? () => handleDrop(header.column.id) : undefined}
-                                    onDragEnd={canDrag ? () => setDragColumnId(null) : undefined}
                                     onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
                                     style={{
-                                        cursor: canDrag ? 'grab' : (canSort ? 'pointer' : undefined),
+                                        width: headerSize,
+                                        minWidth: headerSize,
+                                        maxWidth: headerSize,
+                                        cursor: canSort ? 'pointer' : undefined,
                                         userSelect: canSort ? 'none' : undefined,
-                                        opacity: isDragTarget ? 0.5 : 1,
                                     }}
-                                    title={canDrag ? 'Drag to reorder column' : undefined}
                                 >
                                     <div className="datatable-th-inner">
                                         <div className="datatable-th-label">
@@ -473,6 +484,24 @@ export function DataTableView({ controller, emptyMessage = 'No data.', loading =
                                             </span>
                                         )}
                                     </div>
+                                    {canResize ? (
+                                        <div
+                                            role="separator"
+                                            aria-orientation="vertical"
+                                            aria-label={`Resize ${columnLabel(header.column)} column`}
+                                            className={[
+                                                'datatable-col-resizer',
+                                                header.column.getIsResizing() ? 'is-active' : '',
+                                            ].filter(Boolean).join(' ')}
+                                            onMouseDown={header.getResizeHandler()}
+                                            onTouchStart={header.getResizeHandler()}
+                                            onClick={(event) => event.stopPropagation()}
+                                            onDoubleClick={(event) => {
+                                                event.stopPropagation();
+                                                header.column.resetSize();
+                                            }}
+                                        />
+                                    ) : null}
                                 </th>
                             );
                         })}
@@ -491,11 +520,21 @@ export function DataTableView({ controller, emptyMessage = 'No data.', loading =
                 ) : (
                     table.getRowModel().rows.map((row) => (
                         <tr key={row.id}>
-                            {row.getVisibleCells().map((cell) => (
-                                <td key={cell.id}>
-                                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                </td>
-                            ))}
+                            {row.getVisibleCells().map((cell) => {
+                                const cellSize = cell.column.getSize();
+                                return (
+                                    <td
+                                        key={cell.id}
+                                        style={enableColumnResizing ? {
+                                            width: cellSize,
+                                            minWidth: cellSize,
+                                            maxWidth: cellSize,
+                                        } : undefined}
+                                    >
+                                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                    </td>
+                                );
+                            })}
                         </tr>
                     ))
                 )}

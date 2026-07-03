@@ -1,5 +1,26 @@
 const PREFIX = 'portfolio_datatable_';
 
+function sanitizeColumnSizing(columnSizing, columnIds) {
+    if (!columnSizing || typeof columnSizing !== 'object') {
+        return {};
+    }
+
+    const allowed = new Set(columnIds);
+    const next = {};
+
+    Object.entries(columnSizing).forEach(([columnId, width]) => {
+        if (!allowed.has(columnId)) {
+            return;
+        }
+        const numeric = Number(width);
+        if (Number.isFinite(numeric) && numeric > 0) {
+            next[columnId] = numeric;
+        }
+    });
+
+    return next;
+}
+
 export function loadTableColumnPrefs(storageKey, columnIds) {
     if (!storageKey) {
         return null;
@@ -19,14 +40,15 @@ export function loadTableColumnPrefs(storageKey, columnIds) {
         const visibility = parsed.columnVisibility && typeof parsed.columnVisibility === 'object'
             ? parsed.columnVisibility
             : null;
+        const columnSizing = sanitizeColumnSizing(parsed.columnSizing, columnIds);
 
-        return { columnOrder: order, columnVisibility: visibility };
+        return { columnOrder: order, columnVisibility: visibility, columnSizing };
     } catch {
         return null;
     }
 }
 
-export function saveTableColumnPrefs(storageKey, columnOrder, columnVisibility) {
+export function saveTableColumnPrefs(storageKey, columnOrder, columnVisibility, columnSizing = {}) {
     if (!storageKey) {
         return;
     }
@@ -34,6 +56,7 @@ export function saveTableColumnPrefs(storageKey, columnOrder, columnVisibility) 
         localStorage.setItem(`${PREFIX}${storageKey}`, JSON.stringify({
             columnOrder,
             columnVisibility,
+            columnSizing,
         }));
     } catch {
         // Quota or private mode — ignore.
