@@ -132,6 +132,11 @@ Schedule::command('portfolio:expire-alerts')
     ->timezone($timezone)
     ->name('alert-max-age-cleanup');
 
+Schedule::command('portfolio:send-calendar-reminders')
+    ->dailyAt('07:00')
+    ->timezone($timezone)
+    ->name('calendar-reminders');
+
 Schedule::command('portfolio:check-operational-alerts')
     ->hourly()
     ->timezone($timezone)

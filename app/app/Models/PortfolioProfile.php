@@ -96,4 +96,9 @@ class PortfolioProfile extends Model
     {
         return $this->hasMany(CorporateAction::class, 'profile_id');
     }
+
+    public function calendarEvents(): HasMany
+    {
+        return $this->hasMany(CalendarEvent::class, 'profile_id');
+    }
 }

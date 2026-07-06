@@ -1682,6 +1682,128 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     }
 }
 
+/* Stocks calendar */
+.calendar-page .calendar-year-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+}
+
+.calendar-month-card .card-header {
+    background: var(--lido-surface-muted, rgba(0, 0, 0, 0.03));
+}
+
+.calendar-month-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.calendar-month-weekdays,
+.calendar-month-days {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 0.2rem;
+}
+
+.calendar-weekday-label {
+    text-align: center;
+    font-size: 0.7rem;
+    color: var(--bs-secondary-color);
+    font-weight: 600;
+}
+
+.calendar-day-cell {
+    position: relative;
+    border: 0;
+    background: transparent;
+    border-radius: 999px;
+    aspect-ratio: 1;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: inherit;
+}
+
+.calendar-day-cell.is-empty {
+    pointer-events: none;
+}
+
+.calendar-day-cell:not(.is-empty):hover {
+    background: rgba(var(--bs-primary-rgb), 0.08);
+}
+
+.calendar-day-cell.is-today .calendar-day-number {
+    font-weight: 700;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.calendar-day-number-wrap {
+    position: relative;
+    width: 2rem;
+    height: 2rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.calendar-day-marker {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    opacity: 0.92;
+}
+
+.calendar-day-marker--behind {
+    z-index: 0;
+}
+
+.calendar-day-number {
+    position: relative;
+    z-index: 1;
+    font-size: 0.82rem;
+    line-height: 1;
+}
+
+.calendar-day-cell.has-events .calendar-day-number {
+    color: #fff;
+    text-shadow: 0 0 2px rgba(0, 0, 0, 0.45);
+    font-weight: 600;
+}
+
+.calendar-color-swatch {
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    padding: 0;
+}
+
+.calendar-color-swatch.is-selected {
+    border-color: var(--lido-brand);
+    box-shadow: 0 0 0 2px rgba(var(--bs-primary-rgb), 0.25);
+}
+
+.calendar-color-input {
+    width: 2.5rem;
+    height: 2rem;
+    padding: 0.1rem;
+}
+
+.calendar-event-dot {
+    width: 0.65rem;
+    height: 0.65rem;
+    border-radius: 50%;
+    margin-top: 0.35rem;
+}
+
+.calendar-day-events-list .list-group-item {
+    border-left: 0;
+    border-right: 0;
+}
+
 .lido-price-volume-chart-canvas {
     min-height: 240px;
 }

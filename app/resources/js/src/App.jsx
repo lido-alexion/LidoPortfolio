@@ -26,6 +26,7 @@ import WatchlistPage from './pages/WatchlistPage';
 import PatternGuidePage from './pages/PatternGuidePage';
 import KnowledgeBoardPage from './pages/KnowledgeBoardPage';
 import KnowledgeBoardTagsPage from './pages/KnowledgeBoardTagsPage';
+import CalendarPage from './pages/CalendarPage';
 import LoginPage from './pages/LoginPage';
 import AcceptInvitePage from './pages/AcceptInvitePage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
@@ -136,6 +137,7 @@ function App() {
                                 <Route path="/patterns" element={<PatternGuidePage />} />
                                 <Route path="/knowledge-board" element={<KnowledgeBoardPage />} />
                                 <Route path="/knowledge-board/tags" element={<KnowledgeBoardTagsPage />} />
+                                <Route path="/calendar" element={<CalendarPage />} />
                                 <Route path="/profile" element={<ProfilePage />} />
                                 <Route path="/portfolios" element={<PortfoliosPage />} />
                                 <Route path="/settings" element={<SettingsPage />} />

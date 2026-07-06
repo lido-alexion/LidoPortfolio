@@ -23,6 +23,7 @@ use App\Http\Controllers\Api\StockController;
 use App\Http\Controllers\Api\StockPriceController;
 use App\Http\Controllers\Api\SyncController;
 use App\Http\Controllers\Api\SyncLogController;
+use App\Http\Controllers\Api\CalendarEventController;
 use App\Http\Controllers\Api\CorporateActionController;
 use App\Http\Controllers\Api\TransactionController;
 use App\Http\Controllers\Api\UniversePriceSyncController;
@@ -92,6 +93,15 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::get('/stocks/{stock}/market-prices', [StockPriceController::class, 'market']);
     Route::get('/dashboard', [DashboardController::class, 'index']);
     Route::get('/patterns/scan', [PatternScanController::class, 'index']);
+
+    Route::prefix('calendar')->group(function () {
+        Route::get('/events', [CalendarEventController::class, 'index']);
+        Route::get('/occurrences', [CalendarEventController::class, 'occurrences']);
+        Route::get('/upcoming', [CalendarEventController::class, 'upcoming']);
+        Route::post('/events', [CalendarEventController::class, 'store']);
+        Route::put('/events/{calendarEvent}', [CalendarEventController::class, 'update']);
+        Route::delete('/events/{calendarEvent}', [CalendarEventController::class, 'destroy']);
+    });
 
     Route::prefix('knowledge-board')->group(function () {
         Route::get('/notes', [KnowledgeBoardNoteController::class, 'index']);

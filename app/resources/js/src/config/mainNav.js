@@ -5,6 +5,7 @@ export const MAIN_TAB_ITEMS = [
     { to: '/watchlist', label: 'Watchlist', match: (p) => p.startsWith('/watchlist') },
     { to: '/explorer', label: 'Explorer', match: (p) => p.startsWith('/explorer') },
     { to: '/patterns', label: 'Patterns', match: (p) => p.startsWith('/patterns') },
+    { to: '/calendar', label: 'Calendar', match: (p) => p.startsWith('/calendar') },
     { to: '/knowledge-board', label: 'Knowledge', match: (p) => p.startsWith('/knowledge-board') },
 ];
 

@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import { usePortfolio } from '../context/PortfolioContext';
 import { DataTableCard } from '../components/DataTable';
 import DashboardTopMoverCard from '../components/DashboardTopMoverCard';
 import DashboardAllocationCard from '../components/DashboardAllocationCard';
+import { DashboardCalendarCard } from '../components/calendar/CalendarDayEventsDialog';
 import PatternSketch from '../components/PatternSketch';
 import { showToast } from '../toast';
 import { categoryClassName, categoryLabel } from '../utils/patternDetection';
@@ -176,6 +177,7 @@ function averageRelativeStrength(metrics) {
 }
 
 export default function DashboardPage() {
+    const navigate = useNavigate();
     const { user } = useAuth();
     const { activePortfolio } = usePortfolio();
     const userId = user?.id;
@@ -191,6 +193,8 @@ export default function DashboardPage() {
     const [acknowledgingId, setAcknowledgingId] = useState(null);
     const [patternRows, setPatternRows] = useState([]);
     const [patternLoading, setPatternLoading] = useState(true);
+    const [calendarEvents, setCalendarEvents] = useState([]);
+    const [calendarLoading, setCalendarLoading] = useState(true);
     const [servedFromCache, setServedFromCache] = useState(false);
     const [cachedAt, setCachedAt] = useState(null);
 
@@ -198,6 +202,17 @@ export default function DashboardPage() {
         setTopMoverPeriod(period);
         saveTopMoverPeriod(period);
     }, []);
+
+    const fetchCalendarUpcoming = useCallback(() => {
+        if (!profileId) {
+            return Promise.resolve();
+        }
+        setCalendarLoading(true);
+        return api.get('/calendar/upcoming')
+            .then((res) => setCalendarEvents(res.data?.data ?? []))
+            .catch(() => setCalendarEvents([]))
+            .finally(() => setCalendarLoading(false));
+    }, [profileId]);
 
     const fetchDashboard = useCallback(({ force = false } = {}) => {
         if (!userId || !profileId) {
@@ -213,12 +228,14 @@ export default function DashboardPage() {
                 setCachedAt(cached.cachedAt);
                 setServedFromCache(true);
                 setLoadError('');
+                fetchCalendarUpcoming();
                 return Promise.resolve();
             }
         }
 
         setServedFromCache(false);
         setPatternLoading(true);
+        setCalendarLoading(true);
         setLoadError('');
 
         return Promise.all([
@@ -230,6 +247,7 @@ export default function DashboardPage() {
                 const flat = flattenPatternScanResults(patternRes.data);
                 setData(dashboard);
                 setPatternRows(flat);
+                fetchCalendarUpcoming();
                 writeDashboardCache(userId, profileId, { dashboard, patternRows: flat });
                 setCachedAt(new Date().toISOString());
                 setServedFromCache(false);
@@ -240,9 +258,10 @@ export default function DashboardPage() {
             .catch(() => {
                 setLoadError('Failed to load dashboard');
                 setPatternRows([]);
+                setCalendarEvents([]);
             })
             .finally(() => setPatternLoading(false));
-    }, [userId, profileId, isAdmin]);
+    }, [userId, profileId, isAdmin, fetchCalendarUpcoming]);
 
     const handleRefreshDashboard = useCallback(() => {
         if (!userId || !profileId) {
@@ -667,6 +686,13 @@ export default function DashboardPage() {
                         </div>
                     </div>
                 )}
+            </div>
+            <div className="col-12 col-lg-6">
+                <DashboardCalendarCard
+                    events={calendarEvents}
+                    loading={calendarLoading}
+                    onOpenCalendar={() => navigate('/calendar')}
+                />
             </div>
             <div className="col-12">
                 <DataTableCard
