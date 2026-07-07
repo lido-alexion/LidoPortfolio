@@ -33,13 +33,13 @@ return [
     'stock_master' => [
         'nse_equity_csv_url' => env(
             'NSE_EQUITY_CSV_URL',
-            'https://archives.nseindia.com/content/equities/EQUITY_L.csv',
+            'https://archives.nseindia.com/content/equities/EQUITY_L.csv'
         ),
         'bse_enabled' => filter_var(env('BSE_STOCK_MASTER_ENABLED', true), FILTER_VALIDATE_BOOL),
         'bse_equity_csv_url' => env('BSE_EQUITY_CSV_URL', ''),
         'bse_list_api_url' => env(
             'BSE_EQUITY_LIST_API_URL',
-            'https://api.bseindia.com/BseIndiaAPI/api/ListofScripData/w?Group=&Scripcode=&industry=&segment=Equity&status=Active',
+            'https://api.bseindia.com/BseIndiaAPI/api/ListofScripData/w?Group=&Scripcode=&industry=&segment=Equity&status=Active'
         ),
         'revalidation_days' => (int) env('STOCK_REVALIDATION_DAYS', 7),
         // UI stock-master sync skips price backfill (too slow for HTTP); CLI `stocks:sync` backfills by default.
