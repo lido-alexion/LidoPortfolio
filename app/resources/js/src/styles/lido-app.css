@@ -1050,6 +1050,12 @@ html.lido-footer-visible .lido-main {
     text-overflow: ellipsis;
 }
 
+.lido-combo-button-menu {
+    display: block;
+    min-width: 10rem;
+    margin: 0;
+}
+
 .datatable-col-resizer {
     position: absolute;
     top: 0;

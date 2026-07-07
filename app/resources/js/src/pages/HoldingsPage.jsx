@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import usePortfolioChanged from '../hooks/usePortfolioChanged';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../api';
+import ComboButton from '../components/ComboButton';
 import { DataTableColumnMenu, DataTableView, useDataTableController } from '../components/DataTable';
 import SegmentToggle from '../components/SegmentToggle';
 import { formatTransactionDateDisplay } from '../utils/transactionDate';
@@ -37,7 +38,6 @@ const HOLDINGS_COLUMN_ORDER = [
     'avg_buy_price',
     'trailing_stop',
     'realized_profit',
-    'prices',
     'sell',
 ];
 
@@ -105,9 +105,14 @@ function buildHoldingsColumns(complex, handleSell, handleCorporateAction) {
                 const belowTrailingStop = isBelowTrailingStop(s);
                 return (
                     <>
-                        <strong className={belowTrailingStop ? 'text-danger' : undefined}>
-                            {row.original.stock?.symbol}
-                        </strong>
+                        <Link
+                            className="lido-table-link"
+                            to={`/holdings/${row.original.stock_id}/prices`}
+                        >
+                            <strong className={belowTrailingStop ? 'text-danger' : undefined}>
+                                {row.original.stock?.symbol}
+                            </strong>
+                        </Link>
                         {complex && since && (
                             <div className="text-muted small">Since {since}</div>
                         )}
@@ -311,20 +316,6 @@ function buildHoldingsColumns(complex, handleSell, handleCorporateAction) {
             cell: ({ getValue }) => formatTableMoney2(getValue()),
         },
         {
-            id: 'prices',
-            header: 'Prices',
-            enableSorting: false,
-            enableHiding: false,
-            cell: ({ row }) => (
-                <Link
-                    className="lido-table-link"
-                    to={`/holdings/${row.original.stock_id}/prices`}
-                >
-                    {complex ? 'OHLCV' : 'OHLCV >'}
-                </Link>
-            ),
-        },
-        {
             id: 'sell',
             header: '',
             enableSorting: false,
@@ -333,22 +324,17 @@ function buildHoldingsColumns(complex, handleSell, handleCorporateAction) {
             cell: ({ row }) => {
                 const belowTrailingStop = isBelowTrailingStop(row.original.summary);
                 return (
-                    <div className="d-flex flex-wrap gap-1 justify-content-end">
-                        <button
-                            type="button"
-                            className="btn btn-sm btn-outline-secondary"
-                            onClick={() => handleCorporateAction(row.original)}
-                        >
-                            Split/Bonus
-                        </button>
-                        <button
-                            type="button"
-                            className={`btn btn-sm ${belowTrailingStop ? 'btn-danger' : 'btn-outline-danger'}`}
-                            onClick={() => handleSell(row.original)}
-                        >
-                            Sell
-                        </button>
-                    </div>
+                    <ComboButton
+                        label="Sell"
+                        variant={belowTrailingStop ? 'danger' : 'outline-danger'}
+                        onPrimaryClick={() => handleSell(row.original)}
+                        menuItems={[
+                            {
+                                label: 'Split/Bonus',
+                                onClick: () => handleCorporateAction(row.original),
+                            },
+                        ]}
+                    />
                 );
             },
         },
@@ -425,12 +411,14 @@ export default function HoldingsPage() {
         ...sharedTableProps,
         columns: complexColumns,
         storageKey: 'holdings',
+        tableClassName: 'table table-sm mb-0 datatable-table',
     });
 
     const simpleController = useDataTableController({
         ...sharedTableProps,
         columns: simpleColumns,
         storageKey: 'holdings-simple',
+        tableClassName: 'table table-sm mb-0 datatable-table',
     });
 
     const activeController = viewMode === 'simple' ? simpleController : complexController;
