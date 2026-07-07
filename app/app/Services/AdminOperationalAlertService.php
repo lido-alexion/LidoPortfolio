@@ -97,27 +97,41 @@ class AdminOperationalAlertService
                 );
             }
 
-            $overdueMinutes = $this->isUniverseMaintenanceWindow($now)
+            $inMaintenanceWindow = $this->isUniverseMaintenanceWindow($now);
+            $overdueMinutes = $inMaintenanceWindow
                 ? (int) config('portfolio.operational_alerts.universe_sync_stale_minutes_maintenance', 45)
                 : ((int) config('portfolio.operational_alerts.universe_sync_stale_hours', 26) * 60);
 
+            $maintenanceWindowStart = $inMaintenanceWindow
+                ? $now->copy()->setTime(19, 0, 0)
+                : null;
             $lastUniverseAt = $this->latestUniverseActivityAt($universeRun, $lastRun);
-            if ($lastUniverseAt === null || $lastUniverseAt->lt($now->copy()->subMinutes($overdueMinutes))) {
+            $lastUniverseInWindow = $maintenanceWindowStart !== null
+                ? $this->latestUniverseActivityAt($universeRun, $lastRun, $maintenanceWindowStart)
+                : null;
+            $stalenessReferenceAt = $inMaintenanceWindow
+                ? ($lastUniverseInWindow ?? $maintenanceWindowStart)
+                : $lastUniverseAt;
+
+            if ($stalenessReferenceAt === null || $stalenessReferenceAt->lt($now->copy()->subMinutes($overdueMinutes))) {
                 $alerts[] = $this->alert(
                     self::KEY_UNIVERSE_SYNC_OVERDUE,
                     'warning',
                     'Universe sync overdue',
-                    $lastUniverseAt === null
-                        ? 'No universe price sync run has been recorded yet.'
-                        : sprintf(
-                            'Last universe sync activity was %s (%s).',
-                            $lastUniverseAt->timezone($timezone)->diffForHumans(),
-                            $lastUniverseAt->timezone($timezone)->toDateTimeString(),
-                        ),
+                    $this->formatUniverseOverdueMessage(
+                        $timezone,
+                        $now,
+                        $lastUniverseAt,
+                        $lastUniverseInWindow,
+                        $maintenanceWindowStart,
+                        $inMaintenanceWindow,
+                    ),
                     [
                         'last_activity_at' => $lastUniverseAt?->toIso8601String(),
+                        'last_activity_in_window_at' => $lastUniverseInWindow?->toIso8601String(),
+                        'maintenance_window_start_at' => $maintenanceWindowStart?->toIso8601String(),
                         'threshold_minutes' => $overdueMinutes,
-                        'maintenance_window' => $this->isUniverseMaintenanceWindow($now),
+                        'maintenance_window' => $inMaintenanceWindow,
                     ],
                 );
             }
@@ -510,8 +524,11 @@ class AdminOperationalAlertService
     /**
      * @param  array<string, mixed>|null  $lastRun
      */
-    protected function latestUniverseActivityAt(?SyncRun $universeRun, ?array $lastRun): ?Carbon
-    {
+    protected function latestUniverseActivityAt(
+        ?SyncRun $universeRun,
+        ?array $lastRun,
+        ?Carbon $since = null,
+    ): ?Carbon {
         $candidates = [];
 
         if ($universeRun?->started_at) {
@@ -526,11 +543,54 @@ class AdminOperationalAlertService
             $candidates[] = Carbon::parse($completedAt);
         }
 
+        if ($since !== null) {
+            $candidates = array_values(array_filter(
+                $candidates,
+                fn (Carbon $candidate) => $candidate->gte($since),
+            ));
+        }
+
         if ($candidates === []) {
             return null;
         }
 
         return collect($candidates)->sortDesc()->first();
+    }
+
+    protected function formatUniverseOverdueMessage(
+        string $timezone,
+        Carbon $now,
+        ?Carbon $lastUniverseAt,
+        ?Carbon $lastUniverseInWindow,
+        ?Carbon $maintenanceWindowStart,
+        bool $inMaintenanceWindow,
+    ): string {
+        if ($lastUniverseAt === null) {
+            return 'No universe price sync run has been recorded yet.';
+        }
+
+        if ($inMaintenanceWindow && $maintenanceWindowStart !== null) {
+            if ($lastUniverseInWindow !== null) {
+                return sprintf(
+                    'Last universe sync in today\'s maintenance window was %s (%s).',
+                    $lastUniverseInWindow->timezone($timezone)->diffForHumans($now),
+                    $lastUniverseInWindow->timezone($timezone)->toDateTimeString(),
+                );
+            }
+
+            return sprintf(
+                'No universe price sync run since today\'s maintenance window opened at %s (last activity overall was %s, %s).',
+                $maintenanceWindowStart->timezone($timezone)->format('H:i'),
+                $lastUniverseAt->timezone($timezone)->diffForHumans($now),
+                $lastUniverseAt->timezone($timezone)->toDateTimeString(),
+            );
+        }
+
+        return sprintf(
+            'Last universe sync activity was %s (%s).',
+            $lastUniverseAt->timezone($timezone)->diffForHumans($now),
+            $lastUniverseAt->timezone($timezone)->toDateTimeString(),
+        );
     }
 
     protected function formatRunFailureMessage(string $label, SyncRun $run): string

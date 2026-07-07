@@ -49,6 +49,7 @@ Copy-Tree (Join-Path $app 'public/build') (Join-Path $staging 'portfolio/build')
 Copy-Item (Join-Path $app 'public/favicon.ico') (Join-Path $staging 'portfolio/favicon.ico') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-migrate.php') (Join-Path $staging 'portfolio/cpanel-migrate.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-backfill-sell-realizations.php') (Join-Path $staging 'portfolio/cpanel-backfill-sell-realizations.php') -Force
+Copy-Item (Join-Path $PSScriptRoot 'cpanel-repair-corporate-action-prices.php') (Join-Path $staging 'portfolio/cpanel-repair-corporate-action-prices.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-mobile-debug.php') (Join-Path $staging 'portfolio/cpanel-mobile-debug.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-ping.php') (Join-Path $staging 'portfolio/cpanel-ping.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-api-probe.php') (Join-Path $staging 'portfolio/cpanel-api-probe.php') -Force

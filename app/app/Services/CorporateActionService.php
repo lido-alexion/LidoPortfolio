@@ -17,6 +17,8 @@ class CorporateActionService
         protected TransactionRealizationService $realizations,
         protected PortfolioSnapshotRebuildService $snapshotRebuild,
         protected StockResolverService $stocks,
+        protected CorporateActionPriceAdjustmentService $priceAdjustment,
+        protected MetricsUpdateService $metricsUpdate,
     ) {}
 
     /**
@@ -70,8 +72,23 @@ class CorporateActionService
             return $action;
         });
 
+        $priceAdjustment = $this->priceAdjustment->adjustHistoricalPrices(
+            $stock,
+            $payload['ex_date'],
+            $payload['action_type'],
+            $payload['ratio_from'],
+            $payload['ratio_to'],
+        );
+
+        $action->update([
+            'metadata' => array_merge($action->metadata ?? [], [
+                'price_adjustment' => $priceAdjustment,
+            ]),
+        ]);
+
         $holding = $this->holdings->recalculateForProfileStock($profile, $stock);
         $this->realizations->recalculateForProfileStock($profile, $stock);
+        $this->metricsUpdate->updateStock($stock);
         $this->snapshotRebuild->rebuildAfterTransactionChange(
             $profile,
             $payload['ex_date'],
@@ -81,6 +98,7 @@ class CorporateActionService
         return [
             'corporate_action' => $action->fresh()->load('stock'),
             'holding' => $holding->load('stock'),
+            'price_adjustment' => $priceAdjustment,
         ];
     }
 
@@ -173,6 +191,13 @@ class CorporateActionService
         })->values()->all();
 
         $simulated = $this->simulatePostState($profile, $stock, $adjustments, $payload);
+        $pricePreview = $this->priceAdjustment->previewAdjustment(
+            $stock,
+            $payload['ex_date'],
+            $payload['action_type'],
+            $payload['ratio_from'],
+            $payload['ratio_to'],
+        );
 
         return [
             'action_type' => 'split',
@@ -185,6 +210,7 @@ class CorporateActionService
             'warnings' => $warnings,
             'blocking_errors' => $blockingErrors,
             'post_state' => $simulated,
+            'price_adjustment' => $pricePreview,
             'metadata' => [
                 'factor' => $factor,
                 'split_scope' => $payload['split_scope'],
@@ -229,6 +255,13 @@ class CorporateActionService
         $postQty = round($postState['quantity'] + $bonusQty, 4);
         $postInvested = round($postState['invested_amount'], 4);
         $postAvg = $postQty > 0 ? round($postInvested / $postQty, 4) : 0;
+        $pricePreview = $this->priceAdjustment->previewAdjustment(
+            $stock,
+            $payload['ex_date'],
+            $payload['action_type'],
+            $payload['ratio_from'],
+            $payload['ratio_to'],
+        );
 
         return [
             'action_type' => 'bonus',
@@ -245,6 +278,7 @@ class CorporateActionService
                 'avg_buy_price' => $postAvg,
                 'invested_amount' => $postInvested,
             ],
+            'price_adjustment' => $pricePreview,
             'metadata' => [
                 'eligible_quantity' => round($eligibleQty, 4),
                 'bonus_quantity' => $bonusQty,
@@ -290,7 +324,25 @@ class CorporateActionService
             $warnings[] = 'A '.$payload['action_type'].' for this stock on the same ex-date was already applied.';
         }
 
-        $warnings[] = 'Market OHLCV history from NSE/Yahoo may already be split-adjusted. This tool only updates your transaction ledger.';
+        $pricePreview = $this->priceAdjustment->previewAdjustment(
+            $stock,
+            $payload['ex_date'],
+            $payload['action_type'],
+            $payload['ratio_from'],
+            $payload['ratio_to'],
+        );
+
+        if (($pricePreview['rows_to_adjust'] ?? 0) > 0) {
+            $warnings[] = sprintf(
+                '%d cached OHLCV row(s) before %s will be restated (÷%.4g price, ×%.4g volume) so charts stay continuous.',
+                $pricePreview['rows_to_adjust'],
+                $payload['ex_date'],
+                $pricePreview['price_divisor'],
+                $pricePreview['volume_multiplier'],
+            );
+        } else {
+            $warnings[] = 'No cached OHLCV rows exist before the ex-date; only the transaction ledger will change.';
+        }
 
         return $warnings;
     }

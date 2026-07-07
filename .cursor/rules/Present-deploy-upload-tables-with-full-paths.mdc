@@ -29,6 +29,8 @@ Whenever the user asks to deploy, prepare for deployment, or what to upload afte
 4. Exclude from upload table: `app/tests/`, `implementation.md`, `node_modules/`, `.env`, `app/config/DBConfig.php`, `public/hot`.
 5. For `build/` folders, say **replace entire directory** and list both targets (`lidoportfolio/public/build/` and `portfolio/build/`).
 6. If a migration is required, include a post-deploy row or separate **After upload** section with `cpanel-migrate.php` URL.
+7. **Never instruct SSH or `php artisan` on production.** One-off maintenance must use `deploy/cpanel-*.php` scripts (see `.cursor/rules/No-SSH-use-cpanel-web-scripts.mdc`). Include upload + browser URL (`?token=...`, optional `&apply=1`) in **After upload**.
+8. Add new `deploy/cpanel-*.php` files to `prepare-upload.ps1` Copy-Item list when created.
 
 Example:
 

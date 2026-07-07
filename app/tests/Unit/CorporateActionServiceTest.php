@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Models\Stock;
+use App\Models\StockPrice;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\CorporateActionService;
@@ -81,6 +82,88 @@ class CorporateActionServiceTest extends TestCase
         $this->assertEquals(6, (float) $updatedSell->quantity);
         $this->assertEquals(60, (float) $updatedSell->price);
         $this->assertEquals(60, (float) $updatedSell->realized_pl);
+    }
+
+    public function test_split_restates_prices_and_highest_close_since_buy(): void
+    {
+        $user = User::query()->create([
+            'name' => 'Split Prices',
+            'email' => 'split-prices-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+        $profile = $this->defaultPortfolioFor($user);
+        $stock = Stock::query()->create([
+            'symbol' => 'SPLP',
+            'exchange' => 'NSE',
+            'name' => 'Split Prices Stock',
+            'is_active' => true,
+            'is_benchmark' => false,
+        ]);
+
+        Transaction::query()->create([
+            'profile_id' => $profile->id,
+            'stock_id' => $stock->id,
+            'type' => 'buy',
+            'quantity' => 10,
+            'price' => 100,
+            'fees' => 0,
+            'transaction_date' => '2026-01-01',
+        ]);
+
+        StockPrice::query()->create([
+            'stock_id' => $stock->id,
+            'price_date' => '2026-01-15',
+            'open_price' => 100,
+            'high_price' => 100,
+            'low_price' => 100,
+            'close_price' => 100,
+            'adjusted_close_price' => 100,
+            'volume' => 1000,
+            'provider_source' => 'test',
+            'data_source' => 'test',
+            'created_at' => now(),
+        ]);
+        StockPrice::query()->create([
+            'stock_id' => $stock->id,
+            'price_date' => '2026-02-15',
+            'open_price' => 120,
+            'high_price' => 120,
+            'low_price' => 120,
+            'close_price' => 120,
+            'adjusted_close_price' => 120,
+            'volume' => 1000,
+            'provider_source' => 'test',
+            'data_source' => 'test',
+            'created_at' => now(),
+        ]);
+        StockPrice::query()->create([
+            'stock_id' => $stock->id,
+            'price_date' => '2026-03-01',
+            'open_price' => 58,
+            'high_price' => 58,
+            'low_price' => 58,
+            'close_price' => 58,
+            'adjusted_close_price' => 58,
+            'volume' => 2000,
+            'provider_source' => 'test',
+            'data_source' => 'test',
+            'created_at' => now(),
+        ]);
+
+        app(CorporateActionService::class)->apply($profile, $stock, [
+            'action_type' => 'split',
+            'ratio_from' => 1,
+            'ratio_to' => 2,
+            'ex_date' => '2026-03-01',
+        ]);
+
+        $holding = app(HoldingsCalculationService::class)->recalculateForProfileStock($profile, $stock);
+        $summary = app(\App\Services\HoldingPresentationService::class)
+            ->enrichHolding($profile, $holding)['stoploss_summary'];
+
+        $this->assertEquals(60.0, (float) $summary['highest_close_since_buy']);
+        $this->assertEquals(54.0, (float) $summary['trailing_stop_price']);
+        $this->assertEquals(58.0, (float) $summary['latest_close']);
     }
 
     public function test_bonus_uses_eligible_quantity_after_partial_sell_and_fifo_prefers_priced_lot(): void

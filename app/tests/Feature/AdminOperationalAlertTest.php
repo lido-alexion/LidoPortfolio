@@ -363,6 +363,42 @@ class AdminOperationalAlertTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_universe_sync_not_overdue_at_maintenance_window_open_with_earlier_run(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-06 19:05:00', 'Asia/Kolkata'));
+        $this->seedUniverseSyncState(finishedAt: now()->copy()->setTime(5, 1, 23));
+
+        $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())
+            ->pluck('key')
+            ->all();
+
+        $this->assertNotContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_OVERDUE, $keys);
+    }
+
+    public function test_universe_sync_overdue_when_maintenance_window_has_no_recent_run(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-06 19:46:00', 'Asia/Kolkata'));
+        $this->seedUniverseSyncState(finishedAt: now()->copy()->setTime(5, 1, 23));
+
+        $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())
+            ->pluck('key')
+            ->all();
+
+        $this->assertContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_OVERDUE, $keys);
+    }
+
+    public function test_universe_sync_not_overdue_when_run_exists_in_maintenance_window(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-06 20:30:00', 'Asia/Kolkata'));
+        $this->seedUniverseSyncState(finishedAt: now()->copy()->setTime(20, 15, 0));
+
+        $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())
+            ->pluck('key')
+            ->all();
+
+        $this->assertNotContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_OVERDUE, $keys);
+    }
+
     protected function seedHealthySyncState(): void
     {
         config(['portfolio.universe_price_sync.enabled' => false]);
@@ -377,5 +413,28 @@ class AdminOperationalAlertTest extends TestCase
                 'finished_at' => $finishedAt,
             ]);
         }
+    }
+
+    protected function seedUniverseSyncState(Carbon $finishedAt): void
+    {
+        config(['portfolio.universe_price_sync.enabled' => true]);
+
+        foreach ([SyncLogService::JOB_DAILY_MARKET_DATA, SyncLogService::JOB_STOCK_MASTER] as $job) {
+            SyncRun::query()->create([
+                'id' => (string) Str::uuid(),
+                'job_name' => $job,
+                'status' => 'success',
+                'started_at' => $finishedAt->copy()->subMinutes(5),
+                'finished_at' => $finishedAt,
+            ]);
+        }
+
+        SyncRun::query()->create([
+            'id' => (string) Str::uuid(),
+            'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+            'status' => 'success',
+            'started_at' => $finishedAt->copy()->subMinutes(10),
+            'finished_at' => $finishedAt,
+        ]);
     }
 }

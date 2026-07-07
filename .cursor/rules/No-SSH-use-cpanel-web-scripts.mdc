@@ -1,0 +1,48 @@
+---
+description: Production has no SSH — use deploy/cpanel-*.php web scripts for migrations and one-off maintenance
+alwaysApply: true
+---
+
+# cPanel web scripts (no SSH)
+
+Production (GoDaddy/cPanel) **cannot run `php artisan` via SSH**. Any operation the user must run on the server after deploy must be exposed as a **token-guarded PHP script** under `deploy/`, copied to `public_html/portfolio/` by `prepare-upload.ps1`.
+
+## When to create a script
+
+Create or extend a `deploy/cpanel-*.php` script whenever you add:
+
+- A new **Artisan command** meant for production maintenance (`portfolio:*`, backfills, repairs)
+- A **one-off migration repair** or data fix
+- Any post-deploy step you would otherwise document as “run on server”
+
+Do **not** tell the user to SSH or run `php artisan` on production. Provide the browser URL instead.
+
+## Script conventions
+
+Follow existing files: `deploy/cpanel-migrate.php`, `deploy/cpanel-backfill-sell-realizations.php`.
+
+1. **Location:** `deploy/cpanel-<short-name>.php`
+2. **Auth:** `const SETUP_TOKEN = 'Lido';` — visit `?token=YOUR_TOKEN` (user sets token in file before upload)
+3. **Bootstrap:** Resolve Laravel root via `lidoportfolio/vendor/autoload.php` (same candidates as other cpanel scripts)
+4. **Output:** `text/plain`, clear section headers, `DELETE this file after success`
+5. **Destructive actions:** default to **scan/dry-run**; require explicit query flag (e.g. `&apply=1`) to write
+6. **Service layer:** call existing `App\Services\*` classes — do not duplicate business logic in the deploy script
+7. **Staging:** add `Copy-Item` line in `deploy/prepare-upload.ps1` so the script is included in staging
+8. **Deploy table:** include upload row `deploy/cpanel-*.php` → `/home/USER/public_html/portfolio/cpanel-*.php`
+9. **Docs:** update `implementation.md` with URL, query params, and delete-after-use note
+
+## Prefer separate scripts over bloating migrate
+
+- **`cpanel-migrate.php`** — migrations, schema verification, config cache
+- **Dedicated scripts** — one-off backfills/repairs (e.g. `cpanel-repair-corporate-action-prices.php`)
+
+Link new maintenance scripts in deploy upload tables; do not assume migrate will run them automatically unless the user explicitly asks to fold a step into migrate.
+
+## Agent deploy checklist
+
+When presenting deploy instructions:
+
+1. Run `prepare-upload.ps1` if frontend changed
+2. Upload table includes backend + any new `cpanel-*.php`
+3. **After upload** section uses **browser URLs**, not artisan commands
+4. Remind user to **delete** one-off scripts after success
