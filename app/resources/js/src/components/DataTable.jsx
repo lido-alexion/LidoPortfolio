@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     flexRender,
     getCoreRowModel,
@@ -7,6 +7,7 @@ import {
 } from '@tanstack/react-table';
 import {
     buildDefaultColumnOrder,
+    distributeColumnWidths,
     loadTableColumnPrefs,
     saveTableColumnPrefs,
 } from '../utils/tableColumnPrefs';
@@ -30,6 +31,21 @@ function ColumnsMenuIcon() {
             <rect x="3" y="5" width="5" height="14" rx="1" fill="currentColor" />
             <rect x="10" y="5" width="5" height="14" rx="1" fill="currentColor" opacity="0.75" />
             <rect x="17" y="5" width="4" height="14" rx="1" fill="currentColor" opacity="0.5" />
+        </svg>
+    );
+}
+
+function FitColumnsIcon() {
+    return (
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+            <path
+                d="M4 12h5M4 12l2.5-2.5M4 12l2.5 2.5M20 12h-5M20 12l-2.5-2.5M20 12l-2.5 2.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+            />
         </svg>
     );
 }
@@ -124,6 +140,7 @@ function useDataTableController({
     );
     const [dragColumnId, setDragColumnId] = useState(null);
     const [panelOpen, setPanelOpen] = useState(false);
+    const tableContainerRef = useRef(null);
 
     useEffect(() => {
         setColumnOrder((prev) => {
@@ -184,6 +201,25 @@ function useDataTableController({
             localStorage.removeItem(`portfolio_datatable_${storageKey}`);
         }
     }, [defaultColumnOrder, defaultColumnVisibility, storageKey, table]);
+
+    const fitColumnsToWidth = useCallback(() => {
+        if (!enableColumnResizing) {
+            return;
+        }
+
+        const container = tableContainerRef.current;
+        if (!container) {
+            return;
+        }
+
+        const visibleColumns = table.getVisibleLeafColumns();
+        const nextSizing = distributeColumnWidths(visibleColumns, container.clientWidth);
+        if (Object.keys(nextSizing).length === 0) {
+            return;
+        }
+
+        setColumnSizing(nextSizing);
+    }, [enableColumnResizing, table]);
 
     const moveColumn = useCallback((columnId, direction) => {
         setColumnOrder((old) => {
@@ -247,6 +283,8 @@ function useDataTableController({
         enableColumnResizing,
         orderedColumns,
         resetColumns,
+        fitColumnsToWidth,
+        tableContainerRef,
         moveColumn,
         handleDragStart,
         handleDragOver,
@@ -267,19 +305,34 @@ export function DataTableColumnMenu({ controller }) {
         showControls,
         enableColumnHiding,
         enableColumnReorder,
+        enableColumnResizing,
         orderedColumns,
         resetColumns,
+        fitColumnsToWidth,
         moveColumn,
         handleDragStart,
         handleDragOver,
         handleDrop,
     } = controller;
 
-    if (!showControls) {
+    if (!showControls && !enableColumnResizing) {
         return null;
     }
 
     return (
+        <div className="d-flex align-items-center gap-1 datatable-toolbar">
+            {enableColumnResizing ? (
+                <button
+                    type="button"
+                    className="btn btn-sm btn-outline-secondary datatable-col-menu-btn"
+                    onClick={fitColumnsToWidth}
+                    aria-label="Fit columns to table width"
+                    title="Fit columns to table width"
+                >
+                    <FitColumnsIcon />
+                </button>
+            ) : null}
+            {showControls ? (
         <div className="dropdown datatable-col-menu">
             <button
                 type="button"
@@ -415,6 +468,8 @@ export function DataTableColumnMenu({ controller }) {
                 </>
             )}
         </div>
+            ) : null}
+        </div>
     );
 }
 
@@ -442,12 +497,16 @@ export function DataTableView({ controller, emptyMessage = 'No data.', loading =
         enableColumnResizing,
         tableClasses,
         visibleColumnCount,
+        tableContainerRef,
     } = controller;
 
     const isResizingColumn = Boolean(table.getState().columnSizingInfo?.isResizingColumn);
 
     return (
-        <div className={`table-responsive${isResizingColumn ? ' datatable-is-resizing' : ''}`}>
+        <div
+            ref={tableContainerRef}
+            className={`table-responsive${isResizingColumn ? ' datatable-is-resizing' : ''}`}
+        >
             <table
                 className={`${tableClasses}${enableColumnResizing ? ' datatable-resizable' : ''}`.trim()}
                 style={enableColumnResizing ? { width: table.getCenterTotalSize() } : undefined}

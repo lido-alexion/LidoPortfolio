@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
     buildDefaultColumnOrder,
+    distributeColumnWidths,
     loadTableColumnPrefs,
     saveTableColumnPrefs,
 } from '../../resources/js/src/utils/tableColumnPrefs.js';
@@ -28,4 +29,33 @@ test('save and load column preferences', () => {
     assert.deepEqual(loaded.columnOrder, ['symbol', 'qty']);
     assert.deepEqual(loaded.columnVisibility, { qty: false });
     assert.deepEqual(loaded.columnSizing, { symbol: 180, qty: 96 });
+});
+
+test('distributeColumnWidths scales visible columns to target width', () => {
+    const columns = [
+        { id: 'symbol', getSize: () => 200, columnDef: {} },
+        { id: 'qty', getSize: () => 100, columnDef: {} },
+        { id: 'price', getSize: () => 100, columnDef: {} },
+    ];
+
+    const sizing = distributeColumnWidths(columns, 400);
+    const total = Object.values(sizing).reduce((sum, width) => sum + width, 0);
+
+    assert.equal(total, 400);
+    assert.equal(sizing.symbol, 200);
+    assert.equal(sizing.qty, 100);
+    assert.equal(sizing.price, 100);
+});
+
+test('distributeColumnWidths respects column min and max sizes', () => {
+    const columns = [
+        { id: 'narrow', getSize: () => 40, columnDef: { minSize: 56, maxSize: 120 } },
+        { id: 'wide', getSize: () => 300, columnDef: { minSize: 80, maxSize: 720 } },
+    ];
+
+    const sizing = distributeColumnWidths(columns, 500);
+
+    assert.ok(sizing.narrow >= 56);
+    assert.ok(sizing.wide <= 720);
+    assert.equal(sizing.narrow + sizing.wide, 500);
 });
