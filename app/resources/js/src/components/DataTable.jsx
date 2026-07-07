@@ -213,7 +213,10 @@ function useDataTableController({
         }
 
         const visibleColumns = table.getVisibleLeafColumns();
-        const nextSizing = distributeColumnWidths(visibleColumns, container.clientWidth);
+        const nextSizing = distributeColumnWidths(
+            visibleColumns,
+            Math.max(0, container.clientWidth - 1),
+        );
         if (Object.keys(nextSizing).length === 0) {
             return;
         }
