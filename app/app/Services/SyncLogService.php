@@ -249,4 +249,29 @@ class SyncLogService
 
         return $query;
     }
+
+    /**
+     * @param  Builder<\App\Models\SyncRun>  $query
+     * @param  array<string, mixed>  $filters
+     */
+    public function applyRunFilters(Builder $query, array $filters): Builder
+    {
+        if (! empty($filters['job_name'])) {
+            $query->where('job_name', (string) $filters['job_name']);
+        }
+
+        $timezone = $this->settings->get('cron_timezone', 'Asia/Kolkata') ?? 'Asia/Kolkata';
+
+        if (! empty($filters['date_from'])) {
+            $from = Carbon::parse((string) $filters['date_from'], $timezone)->startOfDay()->utc();
+            $query->where('started_at', '>=', $from);
+        }
+
+        if (! empty($filters['date_to'])) {
+            $to = Carbon::parse((string) $filters['date_to'], $timezone)->endOfDay()->utc();
+            $query->where('started_at', '<=', $to);
+        }
+
+        return $query;
+    }
 }

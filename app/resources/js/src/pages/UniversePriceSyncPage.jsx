@@ -440,8 +440,46 @@ export default function UniversePriceSyncPage() {
                                     </dd>
                                     <dt className="col-5">Last cycle</dt>
                                     <dd className="col-7">{formatTimestamp(status?.last_cycle_completed_at)}</dd>
+                                    <dt className="col-5">Nightly window</dt>
+                                    <dd className="col-7">{status?.maintenance?.window_label ?? '—'}</dd>
+                                    <dt className="col-5">Nightly capacity</dt>
+                                    <dd className="col-7">
+                                        {status?.maintenance
+                                            ? `${status.maintenance.nightly_stock_capacity} stocks (${status.maintenance.runs_per_night} runs × ${status.maintenance.batch_size})`
+                                            : '—'}
+                                    </dd>
                                 </dl>
                             )}
+                            {status?.maintenance
+                                && status?.universe_count > status.maintenance.nightly_stock_capacity ? (
+                                <p className="alert alert-warning py-2 small mb-0 mt-2">
+                                    Universe has
+                                    {' '}
+                                    {status.universe_count}
+                                    {' '}
+                                    stocks but nightly maintenance can process about
+                                    {' '}
+                                    {status.maintenance.nightly_stock_capacity}
+                                    .
+                                    {' '}
+                                    A full cursor cycle needs ~
+                                    {status.maintenance.nights_for_full_cycle}
+                                    {' '}
+                                    night(s). Increase
+                                    {' '}
+                                    <code>UNIVERSE_PRICE_SYNC_BATCH_SIZE</code>
+                                    {' '}
+                                    or
+                                    {' '}
+                                    <code>UNIVERSE_MAINTENANCE_INTERVAL_MINUTES</code>
+                                    {' '}
+                                    in production
+                                    {' '}
+                                    <code>.env</code>
+                                    {' '}
+                                    if prices fall behind.
+                                </p>
+                            ) : null}
                         </div>
                     </div>
                 </div>
@@ -632,7 +670,27 @@ export default function UniversePriceSyncPage() {
                         {gapStatus?.history_window_days ?? '—'}
                         {' '}
                         days. Fills gaps via providers for universe stocks and NIFTY50.
-                        Scheduled automatically every 30 minutes after market close.
+                        {' '}
+                        <strong>Automated:</strong>
+                        {' '}
+                        each nightly maintenance tick (every
+                        {' '}
+                        {status?.maintenance?.interval_minutes ?? 5}
+                        {' '}
+                        min,
+                        {' '}
+                        {status?.maintenance?.window_label ?? '19:00–23:45'}
+                        )
+                        runs one gap-fill batch; the cursor chains across the evening (~
+                        {status?.maintenance?.runs_per_night ?? '—'}
+                        {' '}
+                        batches/night, same as price sync).
+                        {' '}
+                        Use
+                        {' '}
+                        <strong>Fill all gaps</strong>
+                        {' '}
+                        below to chain immediately in the browser.
                     </p>
                     <dl className="row small mb-3">
                         <dt className="col-sm-4">NIFTY50 gaps</dt>

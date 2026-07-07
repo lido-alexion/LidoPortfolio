@@ -129,4 +129,52 @@ class PriceHistoryGapServiceTest extends TestCase
 
         Carbon::setTestNow();
     }
+
+    public function test_fill_cycle_chains_batches_until_cycle_complete(): void
+    {
+        Carbon::setTestNow('2026-06-21 12:00:00');
+        config([
+            'portfolio.universe_price_sync.enabled' => true,
+            'portfolio.universe_price_sync.batch_size' => 1,
+            'portfolio.universe_price_sync.delay_ms_between_stocks' => 0,
+        ]);
+
+        foreach (['AAA', 'BBB', 'CCC'] as $symbol) {
+            Stock::query()->create([
+                'symbol' => $symbol,
+                'exchange' => 'NSE',
+                'name' => $symbol,
+                'is_active' => true,
+                'is_benchmark' => false,
+            ]);
+        }
+
+        $history = Mockery::mock(StockPriceHistoryService::class);
+        $history->shouldReceive('getMissingHistoryRanges')->andReturn([]);
+        $history->shouldReceive('fetchMissingHistory')->never();
+
+        $syncLog = Mockery::mock(SyncLogService::class);
+        $syncLog->shouldReceive('beginRun')->times(3)->andReturn('gap-run');
+        $syncLog->shouldReceive('log')->atLeast()->once();
+        $syncLog->shouldReceive('completeRun')->times(3);
+
+        $logger = Mockery::mock(PortfolioLoggerService::class);
+        $logger->shouldReceive('scheduler')->times(3);
+
+        $service = new PriceHistoryGapService(
+            app(UniverseStockResolverService::class),
+            $history,
+            app(RelativeStrengthService::class),
+            $syncLog,
+            $logger,
+        );
+
+        $result = $service->fillCycle(resetCursor: true, maxBatches: 10);
+
+        $this->assertTrue($result['cycle_completed']);
+        $this->assertSame(3, $result['batches_run']);
+        $this->assertSame('cycle_completed', $result['stopped_reason']);
+
+        Carbon::setTestNow();
+    }
 }

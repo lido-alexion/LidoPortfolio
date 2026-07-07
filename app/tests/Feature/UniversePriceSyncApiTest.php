@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Stock;
 use App\Models\User;
 use App\Services\AdminOperationalAlertService;
+use App\Services\BenchmarkPriceSyncService;
 use App\Services\PriceFetchService;
 use App\Services\StockMasterSyncService;
 use App\Services\UniversePriceSyncService;
@@ -90,6 +91,12 @@ class UniversePriceSyncApiTest extends TestCase
                 'errors' => [],
             ]);
         $this->app->instance(PriceFetchService::class, $priceFetch);
+
+        $benchmark = Mockery::mock(BenchmarkPriceSyncService::class);
+        $benchmark->shouldReceive('syncIfNeeded')
+            ->once()
+            ->andReturn(['skipped' => true, 'success' => true]);
+        $this->app->instance(BenchmarkPriceSyncService::class, $benchmark);
 
         $response = $this->actingAs($admin)
             ->postJson('/api/universe-price-sync/run', [

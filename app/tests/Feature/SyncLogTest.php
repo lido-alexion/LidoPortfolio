@@ -131,7 +131,61 @@ class SyncLogTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('data.0.run_id', $run->id)
             ->assertJsonPath('data.0.log_lines', 1)
-            ->assertJsonPath('data.0.stocks_processed', 13);
+            ->assertJsonPath('data.0.stocks_processed', 13)
+            ->assertJsonPath('meta.cron_timezone', 'Asia/Kolkata');
+    }
+
+    public function test_runs_api_supports_pagination_and_date_filters(): void
+    {
+        Setting::setValue('cron_timezone', 'Asia/Kolkata');
+
+        $user = User::query()->create([
+            'name' => 'Runs User',
+            'email' => 'runs-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+        $user->is_admin = true;
+        $user->save();
+
+        for ($i = 0; $i < 25; $i++) {
+            SyncRun::query()->create([
+                'id' => (string) Str::uuid(),
+                'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+                'status' => 'success',
+                'started_at' => now()->subHours($i),
+                'finished_at' => now()->subHours($i),
+            ]);
+        }
+
+        $this->actingAs($user)
+            ->getJson('/api/sync-logs/runs?per_page=20&page=1')
+            ->assertOk()
+            ->assertJsonPath('total', 25)
+            ->assertJsonPath('last_page', 2)
+            ->assertJsonCount(20, 'data');
+
+        $this->actingAs($user)
+            ->getJson('/api/sync-logs/runs?per_page=20&page=2')
+            ->assertOk()
+            ->assertJsonCount(5, 'data');
+    }
+
+    public function test_sync_logs_api_includes_scheduler_timezone_meta(): void
+    {
+        Setting::setValue('cron_timezone', 'UTC');
+
+        $user = User::query()->create([
+            'name' => 'Logs User',
+            'email' => 'logs-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+        $user->is_admin = true;
+        $user->save();
+
+        $this->actingAs($user)
+            ->getJson('/api/sync-logs?per_page=1')
+            ->assertOk()
+            ->assertJsonPath('meta.cron_timezone', 'UTC');
     }
 
     public function test_sync_logs_api_filters_by_level_and_search(): void

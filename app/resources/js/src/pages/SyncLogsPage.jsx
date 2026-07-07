@@ -3,15 +3,18 @@ import { Link } from 'react-router-dom';
 import api from '../api';
 import { TableLoadingRow } from '../components/DataTable';
 import TablePagination from '../components/TablePagination';
+import { formatSchedulerTimestamp } from '../utils/schedulerTimestamp';
 import { showToast } from '../toast';
 
 const PER_PAGE = 50;
+const RUNS_PER_PAGE = 20;
 
 const JOB_OPTIONS = [
     { value: '', label: 'All jobs' },
     { value: 'daily-market-data', label: 'Daily market data' },
     { value: 'stock-master', label: 'Stock master' },
     { value: 'universe-price-sync', label: 'Universe price sync' },
+    { value: 'price-history-gap-fill', label: 'Price history gap fill' },
 ];
 
 const LEVEL_OPTIONS = [
@@ -32,17 +35,6 @@ function levelBadgeClass(level) {
             return 'bg-secondary';
         default:
             return 'bg-info text-dark';
-    }
-}
-
-function formatTimestamp(value) {
-    if (!value) {
-        return '—';
-    }
-    try {
-        return new Date(value).toLocaleString();
-    } catch {
-        return value;
     }
 }
 
@@ -83,8 +75,11 @@ function statusBadgeClass(status) {
 export default function SyncLogsPage() {
     const [logs, setLogs] = useState([]);
     const [runs, setRuns] = useState([]);
+    const [cronTimezone, setCronTimezone] = useState('Asia/Kolkata');
     const [pagination, setPagination] = useState(null);
+    const [runsPagination, setRunsPagination] = useState(null);
     const [page, setPage] = useState(1);
+    const [runsPage, setRunsPage] = useState(1);
     const [loading, setLoading] = useState(true);
     const [exporting, setExporting] = useState(false);
     const [loadError, setLoadError] = useState('');
@@ -103,7 +98,12 @@ export default function SyncLogsPage() {
         date_to: dateTo || undefined,
     }), [level, jobName, search, dateFrom, dateTo]);
 
-    const load = useCallback(async (pageNum, activeFilters) => {
+    const formatTimestamp = useCallback(
+        (value) => formatSchedulerTimestamp(value, cronTimezone),
+        [cronTimezone],
+    );
+
+    const load = useCallback(async (pageNum, runsPageNum, activeFilters) => {
         setLoading(true);
         setLoadError('');
         try {
@@ -117,8 +117,11 @@ export default function SyncLogsPage() {
                 }),
                 api.get('/sync-logs/runs', {
                     params: {
-                        limit: 20,
+                        page: runsPageNum,
+                        per_page: RUNS_PER_PAGE,
                         job_name: activeFilters.job_name || undefined,
+                        date_from: activeFilters.date_from || undefined,
+                        date_to: activeFilters.date_to || undefined,
                     },
                 }),
             ]);
@@ -135,6 +138,11 @@ export default function SyncLogsPage() {
 
             setLogs(logRows);
             setRuns(runRows);
+            const timezone = runsRes.data?.meta?.cron_timezone
+                || logsRes.data?.meta?.cron_timezone;
+            if (timezone) {
+                setCronTimezone(timezone);
+            }
             setPagination({
                 current_page: logsRes.data.current_page,
                 last_page: logsRes.data.last_page,
@@ -142,10 +150,18 @@ export default function SyncLogsPage() {
                 to: logsRes.data.to,
                 total: logsRes.data.total,
             });
+            setRunsPagination({
+                current_page: runsRes.data.current_page,
+                last_page: runsRes.data.last_page,
+                from: runsRes.data.from,
+                to: runsRes.data.to,
+                total: runsRes.data.total,
+            });
         } catch (err) {
             setLogs([]);
             setRuns([]);
             setPagination(null);
+            setRunsPagination(null);
             const msg = err?.response?.data?.message
                 || err?.message
                 || 'Failed to load sync logs';
@@ -156,13 +172,14 @@ export default function SyncLogsPage() {
     }, []);
 
     useEffect(() => {
-        load(page, filters);
-    }, [load, page, filters]);
+        load(page, runsPage, filters);
+    }, [load, page, runsPage, filters]);
 
     useEffect(() => {
         const timer = window.setTimeout(() => {
             setSearch(searchInput.trim());
             setPage(1);
+            setRunsPage(1);
         }, 300);
         return () => window.clearTimeout(timer);
     }, [searchInput]);
@@ -175,6 +192,7 @@ export default function SyncLogsPage() {
         setDateFrom('');
         setDateTo('');
         setPage(1);
+        setRunsPage(1);
     };
 
     const exportCsv = async () => {
@@ -253,6 +271,7 @@ export default function SyncLogsPage() {
                                     onChange={(e) => {
                                         setLevel(e.target.value);
                                         setPage(1);
+                                        setRunsPage(1);
                                     }}
                                 >
                                     {LEVEL_OPTIONS.map((opt) => (
@@ -273,6 +292,7 @@ export default function SyncLogsPage() {
                                     onChange={(e) => {
                                         setJobName(e.target.value);
                                         setPage(1);
+                                        setRunsPage(1);
                                     }}
                                 >
                                     {JOB_OPTIONS.map((opt) => (
@@ -294,6 +314,7 @@ export default function SyncLogsPage() {
                                     onChange={(e) => {
                                         setDateFrom(e.target.value);
                                         setPage(1);
+                                        setRunsPage(1);
                                     }}
                                 />
                             </div>
@@ -309,6 +330,7 @@ export default function SyncLogsPage() {
                                     onChange={(e) => {
                                         setDateTo(e.target.value);
                                         setPage(1);
+                                        setRunsPage(1);
                                     }}
                                 />
                             </div>
@@ -328,16 +350,21 @@ export default function SyncLogsPage() {
                         </div>
 
                         <p className="text-muted small">
-                            Dates use your configured cron timezone. File logs in
+                            Timestamps are shown in scheduler timezone
+                            {' '}
+                            <code>{cronTimezone}</code>
+                            {' '}
+                            (Settings → Global). Compare universe runs with the 19:00–23:45
+                            maintenance window in that timezone. File logs in
                             {' '}
                             <code>storage/logs/scheduler-*.log</code>
                             {' '}
                             are kept separately.
                         </p>
 
-                        {(runs.length > 0 || loading) ? (
+                        {(runs.length > 0 || runsPagination?.total > 0 || loading) ? (
                             <div className="mb-4">
-                                <h2 className="h6 mb-2">Recent runs</h2>
+                                <h2 className="h6 mb-2">Sync runs</h2>
                                 {runsWithoutLogLines && logs.length === 0 && !loading ? (
                                     <p className="alert alert-warning py-2 small mb-2">
                                         Run summaries exist but detailed log lines are missing. Apply migration
@@ -385,6 +412,10 @@ export default function SyncLogsPage() {
                                         </tbody>
                                     </table>
                                 </div>
+                                <TablePagination
+                                    meta={!loading && runs.length > 0 ? runsPagination : null}
+                                    onPageChange={setRunsPage}
+                                />
                             </div>
                         ) : null}
 

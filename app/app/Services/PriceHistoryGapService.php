@@ -124,7 +124,7 @@ class PriceHistoryGapService
         }
 
         $scope = $this->resolver->normalizeScope($scope ?? $this->resolver->defaultScope());
-        $batchSize = $batchSize ?? (int) config('portfolio.universe_price_sync.batch_size', 75);
+        $batchSize = $batchSize ?? (int) config('portfolio.universe_price_sync.batch_size', 125);
 
         if ($resetCursor) {
             $this->setCursor(0);
@@ -174,7 +174,7 @@ class PriceHistoryGapService
         }
 
         $scope = $this->resolver->normalizeScope($scope ?? $this->resolver->defaultScope());
-        $batchSize = $batchSize ?? (int) config('portfolio.universe_price_sync.batch_size', 75);
+        $batchSize = $batchSize ?? (int) config('portfolio.universe_price_sync.batch_size', 125);
         $delayMs = (int) config('portfolio.universe_price_sync.delay_ms_between_stocks', 400);
         ['from' => $from, 'to' => $to] = $this->requiredWindow();
 
@@ -321,6 +321,90 @@ class PriceHistoryGapService
         $this->logger->scheduler('info', $summary, array_merge(['category' => 'PriceHistoryGap'], $final));
 
         return $final;
+    }
+
+    /**
+     * Chain fillBatch until the universe cursor cycle completes or limits are hit.
+     *
+     * @return array<string, mixed>
+     */
+    public function fillCycle(
+        ?string $scope = null,
+        ?int $batchSize = null,
+        bool $resetCursor = false,
+        int $maxBatches = 500,
+        ?int $maxSeconds = null,
+    ): array {
+        if (! $this->isEnabled()) {
+            return $this->emptyResult($scope ?? $this->resolver->defaultScope(), skipped: 1);
+        }
+
+        $scope = $this->resolver->normalizeScope($scope ?? $this->resolver->defaultScope());
+        $batchSize = $batchSize ?? (int) config('portfolio.universe_price_sync.batch_size', 125);
+        $maxBatches = max(1, $maxBatches);
+        $startedAt = microtime(true);
+
+        $summary = [
+            'scope' => $scope,
+            'mode' => 'fill_cycle',
+            'batch_size' => $batchSize,
+            'batches_run' => 0,
+            'scanned' => 0,
+            'with_gaps' => 0,
+            'filled' => 0,
+            'failed' => 0,
+            'stored_rows' => 0,
+            'cycle_completed' => false,
+            'stopped_reason' => null,
+            'cursor_stock_id' => (int) Setting::getValue(self::KEY_CURSOR_STOCK_ID, '0'),
+            'errors' => [],
+        ];
+
+        if ($resetCursor) {
+            $this->setCursor(0);
+        }
+
+        for ($batch = 1; $batch <= $maxBatches; $batch++) {
+            if ($maxSeconds !== null && (microtime(true) - $startedAt) >= $maxSeconds) {
+                $summary['stopped_reason'] = 'max_seconds';
+                break;
+            }
+
+            $result = $this->fillBatch($scope, $batchSize, resetCursor: false);
+            if (($result['skipped'] ?? 0) > 0) {
+                $summary['stopped_reason'] = 'disabled';
+                break;
+            }
+
+            $summary['batches_run'] = $batch;
+            $summary['scanned'] += (int) ($result['scanned'] ?? 0);
+            $summary['with_gaps'] += (int) ($result['with_gaps'] ?? 0);
+            $summary['filled'] += (int) ($result['filled'] ?? 0);
+            $summary['failed'] += (int) ($result['failed'] ?? 0);
+            $summary['stored_rows'] += (int) ($result['stored_rows'] ?? 0);
+            $summary['cursor_stock_id'] = (int) ($result['cursor_stock_id'] ?? $summary['cursor_stock_id']);
+            $summary['cycle_completed'] = (bool) ($result['cycle_completed'] ?? false);
+
+            foreach ($result['errors'] ?? [] as $error) {
+                if (count($summary['errors']) < 20) {
+                    $summary['errors'][] = $error;
+                }
+            }
+
+            if ($summary['cycle_completed']) {
+                $summary['stopped_reason'] = 'cycle_completed';
+                break;
+            }
+        }
+
+        if ($summary['stopped_reason'] === null) {
+            $summary['stopped_reason'] = 'max_batches';
+        }
+
+        $summary['completed_at'] = now()->toIso8601String();
+        Setting::setValue(self::KEY_LAST_FILL_JSON, json_encode($summary));
+
+        return $summary;
     }
 
     /**

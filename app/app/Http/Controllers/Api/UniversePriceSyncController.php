@@ -100,8 +100,6 @@ class UniversePriceSyncController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        $sync->markInProgress();
-
         try {
             @set_time_limit(0);
 
@@ -113,14 +111,23 @@ class UniversePriceSyncController extends Controller
                 resetCursor: (bool) ($validated['reset_cursor'] ?? false),
             );
 
+            if (($result['skipped'] ?? 0) > 0 && ($result['processed'] ?? 0) === 0) {
+                return response()->json([
+                    'message' => 'Universe price sync is already running. Wait for the current batch to finish.',
+                    'data' => $sync->status($scope ?? $resolver->defaultScope()),
+                ], 409);
+            }
+
             return response()->json([
                 'data' => [
                     'run' => $result,
                     'status' => $sync->status($scope ?? $resolver->defaultScope()),
                 ],
             ]);
-        } finally {
-            $sync->clearInProgress();
+        } catch (\Throwable $e) {
+            return response()->json([
+                'message' => 'Universe price sync failed: '.$e->getMessage(),
+            ], 500);
         }
     }
 

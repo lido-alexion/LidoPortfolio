@@ -11,6 +11,9 @@ class FillPriceHistoryGapsCommand extends Command
 {
     protected $signature = 'portfolio:fill-price-history-gaps
         {--scan-only : Detect gaps without calling providers}
+        {--chain : Run fill batches until the universe cycle completes}
+        {--max-batches=500 : Max batches when using --chain}
+        {--max-seconds= : Optional time limit when using --chain}
         {--scope= : all_equities, all_nse (deprecated), or nifty500 (default from config)}
         {--batch= : Stocks per run}
         {--reset-cursor : Start from the first stock in the universe}';
@@ -45,14 +48,31 @@ class FillPriceHistoryGapsCommand extends Command
 
         $this->info(sprintf(
             'Price history gap %s: scope=%s window=%d days',
-            $scanOnly ? 'scan' : 'fill',
+            $scanOnly ? 'scan' : ($this->option('chain') ? 'fill cycle' : 'fill'),
             $scope,
             $gaps->historyWindowDays(),
         ));
 
-        $stats = $scanOnly
-            ? $gaps->scanBatch($scope, $batchSize, $resetCursor)
-            : $gaps->fillBatch($scope, $batchSize, $resetCursor);
+        if ($this->option('chain') && ! $scanOnly) {
+            $maxSecondsOption = $this->option('max-seconds');
+            $maxSeconds = is_numeric($maxSecondsOption) ? max(1, (int) $maxSecondsOption) : null;
+            $maxBatchesOption = $this->option('max-batches');
+            $maxBatches = is_numeric($maxBatchesOption)
+                ? max(1, (int) $maxBatchesOption)
+                : (int) config('portfolio.universe_price_sync.maintenance_gap_fill_chain_max_batches', 500);
+
+            $stats = $gaps->fillCycle(
+                $scope,
+                $batchSize,
+                $resetCursor,
+                $maxBatches,
+                $maxSeconds,
+            );
+        } else {
+            $stats = $scanOnly
+                ? $gaps->scanBatch($scope, $batchSize, $resetCursor)
+                : $gaps->fillBatch($scope, $batchSize, $resetCursor);
+        }
 
         $rows = [
             ['Scanned', $stats['scanned'] ?? 0],
@@ -63,6 +83,11 @@ class FillPriceHistoryGapsCommand extends Command
             $rows[] = ['Filled', $stats['filled'] ?? 0];
             $rows[] = ['Failed', $stats['failed'] ?? 0];
             $rows[] = ['Rows stored', $stats['stored_rows'] ?? 0];
+        }
+
+        if (! empty($stats['batches_run'])) {
+            $rows[] = ['Batches run', $stats['batches_run']];
+            $rows[] = ['Stopped reason', $stats['stopped_reason'] ?? '—'];
         }
 
         $rows[] = ['Cursor stock id', $stats['cursor_stock_id'] ?? 0];

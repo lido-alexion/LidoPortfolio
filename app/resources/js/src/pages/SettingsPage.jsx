@@ -135,6 +135,7 @@ export default function SettingsPage() {
 
         await api.put('/settings', {
             cron_time: settings.cron_time,
+            cron_timezone: settings.cron_timezone || 'Asia/Kolkata',
             nse_retry_count: settings.nse_retry_count,
             backend_log_level: settings.backend_log_level,
             sync_log_retention_days: settings.sync_log_retention_days,
@@ -312,6 +313,24 @@ export default function SettingsPage() {
                                             Use 24-hour time between 00:00 and 23:59 (e.g. 18:30).
                                         </div>
                                     )}
+                                </div>
+                                <div className="col-12 col-md-4">
+                                    <label className="form-label" htmlFor="settings-cron-timezone">
+                                        Scheduler timezone
+                                    </label>
+                                    <select
+                                        id="settings-cron-timezone"
+                                        className="form-select"
+                                        value={settings.cron_timezone || 'Asia/Kolkata'}
+                                        onChange={(e) => setSettings({ ...settings, cron_timezone: e.target.value })}
+                                    >
+                                        <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
+                                        <option value="UTC">UTC</option>
+                                    </select>
+                                    <p className="text-muted small mb-0 mt-1">
+                                        Daily sync, notification schedules, and universe price maintenance
+                                        (19:00–23:45 in this timezone). Use IST for India.
+                                    </p>
                                 </div>
                                 <div className="col-12 col-md-4">
                                     <label className="form-label" htmlFor="settings-nse-retry">

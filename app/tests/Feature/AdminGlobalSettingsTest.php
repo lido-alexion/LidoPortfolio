@@ -97,11 +97,15 @@ class AdminGlobalSettingsTest extends TestCase
         $this->actingAsUser($user)
             ->putJson('/api/settings', [
                 'cron_time' => '06:15',
+                'cron_timezone' => 'UTC',
                 'nse_retry_count' => '4',
             ])
             ->assertOk()
             ->assertJsonPath('data.cron_time', '06:15')
+            ->assertJsonPath('data.cron_timezone', 'UTC')
             ->assertJsonPath('data.nse_retry_count', '4');
+
+        $this->assertSame('UTC', Setting::getValue('cron_timezone'));
     }
 
     public function test_admin_can_toggle_ops_clear_ping_setting(): void

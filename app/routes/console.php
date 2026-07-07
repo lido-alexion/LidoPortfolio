@@ -88,6 +88,10 @@ try {
     // Fall back to env defaults if DB is unavailable during bootstrap.
 }
 
+if (! is_string($timezone) || trim($timezone) === '') {
+    $timezone = 'Asia/Kolkata';
+}
+
 Schedule::command('portfolio:daily-sync')
     ->dailyAt($cronTime)
     ->timezone($timezone)
@@ -121,9 +125,10 @@ Schedule::command('stocks:sync')
 
 if (config('portfolio.universe_price_sync.enabled')) {
     Schedule::command('portfolio:run-universe-maintenance')
-        ->everyFifteenMinutes()
-        ->between('19:00', '23:45')
         ->timezone($timezone)
+        ->everyMinute()
+        ->when(fn () => app(\App\Services\UniversePriceSyncService::class)->isMaintenanceWindowDue())
+        ->withoutOverlapping(25)
         ->name('universe-maintenance');
 }
 

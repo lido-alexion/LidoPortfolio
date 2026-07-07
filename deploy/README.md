@@ -19,6 +19,7 @@
 | `cpanel-backfill-sell-realizations.php` | After migration `2026_07_09_000001` — backfill sell P/L columns (optional `?profile=`) |
 | `cpanel-config-cache.php` | After `.env` or config changes |
 | `cpanel-diagnose.php` | Pre-flight checks |
+| `cpanel-schedule-diagnostic.php` | Scheduler timezone, due events, recent sync runs (read-only) |
 
 ### Troubleshooting only (upload → use → **delete from server**)
 

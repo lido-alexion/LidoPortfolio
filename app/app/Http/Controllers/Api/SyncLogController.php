@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\SyncLog;
 use App\Models\SyncRun;
+use App\Services\SettingsService;
 use App\Services\SyncLogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -12,7 +13,10 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SyncLogController extends Controller
 {
-    public function __construct(protected SyncLogService $syncLogs) {}
+    public function __construct(
+        protected SyncLogService $syncLogs,
+        protected SettingsService $settings,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -39,6 +43,7 @@ class SyncLogController extends Controller
 
         return response()->json([
             'data' => $paginator->items(),
+            'meta' => $this->syncLogMeta(),
             'current_page' => $paginator->currentPage(),
             'last_page' => $paginator->lastPage(),
             'per_page' => $paginator->perPage(),
@@ -52,21 +57,42 @@ class SyncLogController extends Controller
     {
         $validated = $request->validate([
             'job_name' => ['nullable', 'string', 'max:64'],
-            'limit' => ['nullable', 'integer', 'min:1', 'max:50'],
+            'date_from' => ['nullable', 'date'],
+            'date_to' => ['nullable', 'date'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
-        $limit = (int) ($validated['limit'] ?? 20);
+        $perPage = (int) ($validated['per_page'] ?? $validated['limit'] ?? 20);
 
         $query = SyncRun::query()->orderByDesc('started_at');
-        if (! empty($validated['job_name'])) {
-            $query->where('job_name', $validated['job_name']);
-        }
+        $this->syncLogs->applyRunFilters($query, $validated);
 
-        $runs = $query->limit($limit)->get()
-            ->map(fn (SyncRun $run) => $this->syncLogs->formatRun($run))
-            ->values();
+        $paginator = $query->paginate($perPage);
 
-        return response()->json(['data' => $runs]);
+        return response()->json([
+            'data' => collect($paginator->items())
+                ->map(fn (SyncRun $run) => $this->syncLogs->formatRun($run))
+                ->values(),
+            'meta' => $this->syncLogMeta(),
+            'current_page' => $paginator->currentPage(),
+            'last_page' => $paginator->lastPage(),
+            'per_page' => $paginator->perPage(),
+            'total' => $paginator->total(),
+            'from' => $paginator->firstItem(),
+            'to' => $paginator->lastItem(),
+        ]);
+    }
+
+    /**
+     * @return array{cron_timezone: string}
+     */
+    protected function syncLogMeta(): array
+    {
+        return [
+            'cron_timezone' => $this->settings->get('cron_timezone', 'Asia/Kolkata') ?? 'Asia/Kolkata',
+        ];
     }
 
     public function export(Request $request): StreamedResponse

@@ -62,6 +62,118 @@ class UniversePriceSyncService
         Setting::setValue(self::KEY_IN_PROGRESS_AT, null);
     }
 
+    public function maintenanceIntervalMinutes(): int
+    {
+        return max(1, min(60, (int) config('portfolio.universe_price_sync.maintenance_interval_minutes', 5)));
+    }
+
+    public function maintenanceStartHour(): int
+    {
+        return max(0, min(23, (int) config('portfolio.universe_price_sync.maintenance_start_hour', 19)));
+    }
+
+    public function maintenanceEndHour(): int
+    {
+        return max(0, min(23, (int) config('portfolio.universe_price_sync.maintenance_end_hour', 23)));
+    }
+
+    public function maintenanceEndMinute(): int
+    {
+        return max(0, min(59, (int) config('portfolio.universe_price_sync.maintenance_end_minute', 45)));
+    }
+
+    public function isMaintenanceWindowDue(?Carbon $at = null): bool
+    {
+        $timezone = app(SettingsService::class)->get('cron_timezone', 'Asia/Kolkata') ?? 'Asia/Kolkata';
+        $now = ($at ?? now())->timezone($timezone);
+        $hour = (int) $now->format('G');
+        $minute = (int) $now->format('i');
+
+        if ($hour < $this->maintenanceStartHour() || $hour > $this->maintenanceEndHour()) {
+            return false;
+        }
+
+        if ($hour === $this->maintenanceEndHour() && $minute > $this->maintenanceEndMinute()) {
+            return false;
+        }
+
+        return $minute % $this->maintenanceIntervalMinutes() === 0;
+    }
+
+    public function isMaintenanceWindowStart(?Carbon $at = null): bool
+    {
+        if (! $this->isMaintenanceWindowDue($at)) {
+            return false;
+        }
+
+        $timezone = app(SettingsService::class)->get('cron_timezone', 'Asia/Kolkata') ?? 'Asia/Kolkata';
+        $now = ($at ?? now())->timezone($timezone);
+
+        return (int) $now->format('G') === $this->maintenanceStartHour()
+            && (int) $now->format('i') === 0;
+    }
+
+    public function maintenanceRunsPerNight(): int
+    {
+        $interval = $this->maintenanceIntervalMinutes();
+        $count = 0;
+
+        for ($hour = $this->maintenanceStartHour(); $hour <= $this->maintenanceEndHour(); $hour++) {
+            $minuteLimit = $hour === $this->maintenanceEndHour()
+                ? $this->maintenanceEndMinute()
+                : 59;
+
+            for ($minute = 0; $minute <= $minuteLimit; $minute += $interval) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
+    public function maintenanceNightlyCapacity(?int $batchSize = null): int
+    {
+        $batchSize ??= (int) config('portfolio.universe_price_sync.batch_size', 125);
+
+        return $this->maintenanceRunsPerNight() * max(1, $batchSize);
+    }
+
+    /**
+     * @return array{
+     *   window_label: string,
+     *   interval_minutes: int,
+     *   runs_per_night: int,
+     *   batch_size: int,
+     *   nightly_stock_capacity: int,
+     *   nights_for_full_cycle: int
+     * }
+     */
+    public function maintenanceThroughput(int $universeCount): array
+    {
+        $batchSize = (int) config('portfolio.universe_price_sync.batch_size', 125);
+        $runsPerNight = $this->maintenanceRunsPerNight();
+        $nightlyCapacity = $runsPerNight * $batchSize;
+        $timezone = app(SettingsService::class)->get('cron_timezone', 'Asia/Kolkata') ?? 'Asia/Kolkata';
+
+        return [
+            'timezone' => $timezone,
+            'window_label' => sprintf(
+                '%02d:00–%02d:%02d %s',
+                $this->maintenanceStartHour(),
+                $this->maintenanceEndHour(),
+                $this->maintenanceEndMinute(),
+                $timezone,
+            ),
+            'interval_minutes' => $this->maintenanceIntervalMinutes(),
+            'runs_per_night' => $runsPerNight,
+            'batch_size' => $batchSize,
+            'nightly_stock_capacity' => $nightlyCapacity,
+            'nights_for_full_cycle' => $universeCount > 0
+                ? (int) ceil($universeCount / max(1, $nightlyCapacity))
+                : 0,
+        ];
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -91,9 +203,10 @@ class UniversePriceSyncService
                 'history_days' => (int) config('portfolio.universe_price_sync.history_days', 365),
                 'daily_lookback_days' => (int) config('portfolio.universe_price_sync.daily_lookback_days', 10),
                 'delay_ms_between_stocks' => (int) config('portfolio.universe_price_sync.delay_ms_between_stocks', 400),
-                'batch_size' => (int) config('portfolio.universe_price_sync.batch_size', 75),
+                'batch_size' => (int) config('portfolio.universe_price_sync.batch_size', 125),
                 'default_scope' => $this->resolver->defaultScope(),
             ],
+            'maintenance' => $this->maintenanceThroughput($universeCount),
             'universe_count' => $universeCount,
             'stocks_with_prices' => $this->countStocksWithPrices($scope),
             'cursor_stock_id' => $cursorId,
@@ -263,8 +376,45 @@ class UniversePriceSyncService
             return $this->emptyResult($scope ?? $this->resolver->defaultScope(), $mode, skipped: 1);
         }
 
+        if ($this->isSyncInProgress()) {
+            return $this->emptyResult($scope ?? $this->resolver->defaultScope(), $mode, skipped: 1);
+        }
+
+        $this->markInProgress();
+
+        try {
+            return $this->runSync($mode, $scope, $batchSize, $processAll, $resetCursor);
+        } finally {
+            $this->clearInProgress();
+        }
+    }
+
+    /**
+     * @return array{
+     *   scope: string,
+     *   mode: string,
+     *   universe_count: int,
+     *   processed: int,
+     *   succeeded: int,
+     *   failed: int,
+     *   skipped: int,
+     *   stored_rows: int,
+     *   cache_hits: int,
+     *   rate_limit_hits: int,
+     *   cycle_completed: bool,
+     *   cursor_stock_id: int,
+     *   errors: list<string>
+     * }
+     */
+    protected function runSync(
+        string $mode = 'daily',
+        ?string $scope = null,
+        ?int $batchSize = null,
+        bool $processAll = false,
+        bool $resetCursor = false,
+    ): array {
         $scope = $this->resolver->normalizeScope($scope ?? $this->resolver->defaultScope());
-        $batchSize = $batchSize ?? (int) config('portfolio.universe_price_sync.batch_size', 75);
+        $batchSize = $batchSize ?? (int) config('portfolio.universe_price_sync.batch_size', 125);
         $delayMs = (int) config('portfolio.universe_price_sync.delay_ms_between_stocks', 400);
 
         $from = $this->rangeFrom($mode);

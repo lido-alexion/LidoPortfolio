@@ -53,6 +53,7 @@ Copy-Item (Join-Path $PSScriptRoot 'cpanel-repair-corporate-action-prices.php') 
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-mobile-debug.php') (Join-Path $staging 'portfolio/cpanel-mobile-debug.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-ping.php') (Join-Path $staging 'portfolio/cpanel-ping.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-api-probe.php') (Join-Path $staging 'portfolio/cpanel-api-probe.php') -Force
+Copy-Item (Join-Path $PSScriptRoot 'cpanel-schedule-diagnostic.php') (Join-Path $staging 'portfolio/cpanel-schedule-diagnostic.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'portfolio-OK.txt') (Join-Path $staging 'portfolio/portfolio-OK.txt') -Force
 Copy-Item (Join-Path $PSScriptRoot 'portfolio-mobile-debug.html') (Join-Path $staging 'portfolio/mobile-debug.html') -Force
 Copy-Item (Join-Path $PSScriptRoot 'public_html-portfolio-.htaccess') (Join-Path $staging 'portfolio/.htaccess') -Force
