@@ -8,7 +8,6 @@ const SCOPE_OPTIONS = [
     { value: 'all_equities', label: 'All equities (NSE + BSE-only)' },
 ];
 const MAX_BACKFILL_CHAIN_BATCHES = 500;
-const MAX_GAP_CHAIN_BATCHES = 500;
 
 function formatUniverseTimestamp(value, timezone = 'Asia/Kolkata') {
     return formatSchedulerTimestamp(value, timezone);
@@ -28,8 +27,7 @@ export default function UniversePriceSyncPage() {
     const [autoRefresh, setAutoRefresh] = useState(true);
     const [loadError, setLoadError] = useState('');
     const [gapStatus, setGapStatus] = useState(null);
-    const [gapRunning, setGapRunning] = useState(false);
-    const [gapCycleSymbols, setGapCycleSymbols] = useState([]);
+    const [gapPending, setGapPending] = useState(false);
 
     const loadStatus = useCallback(async (activeScope) => {
         setLoadError('');
@@ -52,14 +50,15 @@ export default function UniversePriceSyncPage() {
     }, [loadStatus, scope]);
 
     useEffect(() => {
-        if (!autoRefresh) {
+        if (!autoRefresh && !gapStatus?.in_progress) {
             return undefined;
         }
+        const intervalMs = gapStatus?.in_progress ? 3000 : 15000;
         const timer = setInterval(() => {
             loadStatus(scope);
-        }, 15000);
+        }, intervalMs);
         return () => clearInterval(timer);
-    }, [autoRefresh, loadStatus, scope]);
+    }, [autoRefresh, gapStatus?.in_progress, loadStatus, scope]);
 
     const runSync = async (payload) => {
         setRunning(true);
@@ -157,103 +156,51 @@ export default function UniversePriceSyncPage() {
         }
     };
 
-    const runGapAction = async (endpoint, successLabel, extra = {}) => {
-        setGapRunning(true);
-        try {
-            const { data } = await api.post(endpoint, {
-                scope,
-                batch: batchSize ? Number(batchSize) : undefined,
-                ...extra,
-            });
-            setGapStatus(data.data?.status ?? data.data);
-            const run = data.data?.run ?? {};
-            showToast(
-                `${successLabel}: scanned ${run.scanned ?? 0}, with gaps ${run.with_gaps ?? 0}${
-                    run.filled !== undefined ? `, filled ${run.filled}` : ''
-                }.`,
-                'success',
-            );
-        } catch (error) {
-            showToast(error?.response?.data?.message || 'Gap task failed.', 'danger');
-            if (error?.response?.data?.data?.status) {
-                setGapStatus(error.response.data.data.status);
-            }
-        } finally {
-            setGapRunning(false);
-            loadStatus(scope);
-        }
-    };
-
-    const runFullGapCycle = async (mode) => {
-        setGapRunning(true);
-        setGapCycleSymbols([]);
-        const chosenBatchSize = batchSize ? Number(batchSize) : undefined;
-        // Gap endpoints are throttled; keep a safe interval between requests.
-        const delayMs = mode === 'scan' ? 5500 : 6000;
+    const runGapAll = async (mode) => {
+        setGapPending(true);
         const endpoint = mode === 'scan'
             ? '/universe-price-sync/gaps/scan'
             : '/universe-price-sync/gaps/fill';
         try {
-            let completed = false;
-            let batchNo = 0;
-
-            while (!completed && batchNo < MAX_GAP_CHAIN_BATCHES) {
-                batchNo += 1;
-                const { data } = await api.post(endpoint, {
-                    scope,
-                    batch: chosenBatchSize,
-                });
-                setGapStatus(data.data?.status ?? data.data);
-                const run = data.data?.run ?? {};
-                const batchSymbols = Array.isArray(run.symbols_with_gaps) ? run.symbols_with_gaps : [];
-                if (batchSymbols.length > 0) {
-                    setGapCycleSymbols((prev) => {
-                        const map = new Map(prev.map((row) => [row.symbol, row]));
-                        batchSymbols.forEach((row) => {
-                            if (row?.symbol) {
-                                map.set(row.symbol, row);
-                            }
-                        });
-                        return Array.from(map.values()).slice(0, 100);
-                    });
-                }
-                completed = Boolean(run.cycle_completed);
-
-                if (completed) {
-                    showToast(
-                        mode === 'scan'
-                            ? `Gap scan completed across universe in ${batchNo} batch(es).`
-                            : `Gap fill completed across universe in ${batchNo} batch(es).`,
-                        'success',
-                    );
-                    break;
-                }
-
-                if (batchNo % 5 === 0) {
-                    showToast(
-                        mode === 'scan'
-                            ? `Gap scan chaining: ${batchNo} batch(es) done…`
-                            : `Gap fill chaining: ${batchNo} batch(es) done…`,
-                        'info',
-                    );
-                }
-
-                await new Promise((resolve) => setTimeout(resolve, delayMs));
+            const { data } = await api.post(endpoint, {
+                scope,
+                all: true,
+            });
+            setGapStatus(data.data?.status ?? data.data);
+            const run = data.data?.run ?? {};
+            if ((run.skipped ?? 0) > 0 && run.reason === 'in_progress') {
+                showToast('Gap task already running on the server.', 'info');
+                return;
             }
-
-            if (!completed) {
+            if (mode === 'scan') {
                 showToast(
-                    `Stopped after ${MAX_GAP_CHAIN_BATCHES} batches for safety. Click again to continue.`,
-                    'warning',
+                    `Gap scan completed: ${run.with_gaps ?? 0} with gaps / ${run.scanned ?? 0} scanned.`,
+                    'success',
+                );
+            } else {
+                showToast(
+                    `Gap fill completed: filled ${run.filled ?? 0}, failed ${run.failed ?? 0}, `
+                    + `${run.with_gaps ?? 0} still with gaps / ${run.scanned ?? 0} scanned.`,
+                    run.failed > 0 ? 'warning' : 'success',
                 );
             }
         } catch (error) {
-            showToast(
-                error?.response?.data?.message || `Gap ${mode} cycle failed.`,
-                'danger',
-            );
+            if (error?.response?.status === 409) {
+                showToast(
+                    error?.response?.data?.message || 'Gap task already running on the server.',
+                    'info',
+                );
+                if (error?.response?.data?.data?.status) {
+                    setGapStatus(error.response.data.data.status);
+                }
+            } else {
+                showToast(error?.response?.data?.message || 'Gap task failed.', 'danger');
+                if (error?.response?.data?.data?.status) {
+                    setGapStatus(error.response.data.data.status);
+                }
+            }
         } finally {
-            setGapRunning(false);
+            setGapPending(false);
             loadStatus(scope);
         }
     };
@@ -305,6 +252,22 @@ export default function UniversePriceSyncPage() {
         }
         return Math.round((withPrices / total) * 1000) / 10;
     }, [status]);
+    const gapRunning = Boolean(gapPending || gapStatus?.in_progress);
+    const gapSymbols = gapStatus?.last_scan?.scan_completed
+        ? (gapStatus.last_scan.symbols_with_gaps ?? [])
+        : [];
+    const lastScanLabel = useMemo(() => {
+        if (!gapStatus?.last_scan) {
+            return '—';
+        }
+        const scanned = gapStatus.last_scan.scanned ?? 0;
+        const total = gapStatus.last_scan.universe_count ?? gapStatus.universe_count ?? scanned;
+        const withGaps = gapStatus.last_scan.with_gaps ?? 0;
+        if (gapStatus.last_scan.scan_completed) {
+            return `${withGaps} with gaps / ${scanned} scanned (full universe)`;
+        }
+        return `${withGaps} with gaps / ${scanned} scanned (partial — run Scan all gaps)`;
+    }, [gapStatus]);
 
     return (
         <div className="contentPane">
@@ -689,27 +652,35 @@ export default function UniversePriceSyncPage() {
                         {' '}
                         days. Fills gaps via providers for universe stocks and NIFTY50.
                         {' '}
+                        <strong>Scan all gaps</strong>
+                        {' '}
+                        runs one fast DB-only pass over the entire universe and lists every symbol with gaps.
+                        {' '}
+                        <strong>Fill all gaps</strong>
+                        {' '}
+                        rescans, fills only those symbols on the server (continues even if you leave this page), then rescans to refresh the list.
+                        {' '}
                         <strong>Automated:</strong>
                         {' '}
-                        each nightly maintenance tick (every
-                        {' '}
+                        nightly maintenance still runs one cursor-based gap-fill batch per tick (
                         {status?.maintenance?.interval_minutes ?? 5}
                         {' '}
                         min,
                         {' '}
                         {status?.maintenance?.window_label ?? '19:00–23:45'}
-                        )
-                        runs one gap-fill batch; the cursor chains across the evening (~
-                        {status?.maintenance?.runs_per_night ?? '—'}
-                        {' '}
-                        batches/night, same as price sync).
-                        {' '}
-                        Use
-                        {' '}
-                        <strong>Fill all gaps</strong>
-                        {' '}
-                        below to chain immediately in the browser.
+                        ).
                     </p>
+                    {gapStatus?.in_progress && (
+                        <div className="alert alert-info py-2 small" role="status">
+                            {gapStatus.in_progress_mode === 'fill' ? 'Gap fill' : 'Gap scan'}
+                            {' '}
+                            in progress on the server
+                            {gapStatus.scan_progress?.progress_percent != null
+                                ? ` — ${gapStatus.scan_progress.progress_percent}% scanned`
+                                : ''}
+                            …
+                        </div>
+                    )}
                     <dl className="row small mb-3">
                         <dt className="col-sm-4">NIFTY50 gaps</dt>
                         <dd className="col-sm-8">
@@ -718,26 +689,24 @@ export default function UniversePriceSyncPage() {
                                     ? `${gapStatus.benchmark.gap_count} range(s)`
                                     : 'none'}
                             </span>
+                            <span className="text-muted ms-1">(live check)</span>
                         </dd>
                         <dt className="col-sm-4">Last scan</dt>
-                        <dd className="col-sm-8">
-                            {gapStatus?.last_scan
-                                ? `${gapStatus.last_scan.with_gaps ?? 0} with gaps / ${gapStatus.last_scan.scanned ?? 0} scanned`
-                                : '—'}
-                        </dd>
+                        <dd className="col-sm-8">{lastScanLabel}</dd>
                         <dt className="col-sm-4">Last fill</dt>
                         <dd className="col-sm-8">
                             {gapStatus?.last_fill
                                 ? `filled ${gapStatus.last_fill.filled ?? 0}, failed ${gapStatus.last_fill.failed ?? 0}, stored ${gapStatus.last_fill.stored_rows ?? 0}`
                                 : '—'}
                         </dd>
-                        <dt className="col-sm-4">Gap cursor</dt>
+                        <dt className="col-sm-4">Nightly gap cursor</dt>
                         <dd className="col-sm-8">
                             {gapStatus?.cursor_symbol || '—'}
                             {gapStatus?.cursor_stock_id ? ` (#${gapStatus.cursor_stock_id})` : ''}
                             {' · '}
                             {gapStatus?.progress_percent ?? 0}
                             %
+                            <span className="text-muted ms-1">(maintenance batches)</span>
                         </dd>
                     </dl>
                     <div className="d-flex flex-wrap gap-2">
@@ -745,8 +714,8 @@ export default function UniversePriceSyncPage() {
                             type="button"
                             className="btn btn-outline-secondary btn-sm"
                             disabled={running || gapRunning || !status?.enabled}
-                            title="Scan all universe batches for gaps (no provider fetch), in one chained run."
-                            onClick={() => runFullGapCycle('scan')}
+                            title="Scan the entire universe for gaps (DB-only, one server request)."
+                            onClick={() => runGapAll('scan')}
                         >
                             {gapRunning ? 'Running…' : 'Scan all gaps'}
                         </button>
@@ -754,27 +723,37 @@ export default function UniversePriceSyncPage() {
                             type="button"
                             className="btn btn-outline-primary btn-sm"
                             disabled={running || gapRunning || !status?.enabled}
-                            title="Scan and fill gaps across all universe batches in one chained run."
-                            onClick={() => runFullGapCycle('fill')}
+                            title="Rescan, fill only gapped symbols on the server, then rescan."
+                            onClick={() => runGapAll('fill')}
                         >
                             {gapRunning ? 'Running…' : 'Fill all gaps'}
                         </button>
                     </div>
-                    {(gapRunning ? gapCycleSymbols.length > 0 : gapStatus?.last_scan?.symbols_with_gaps?.length > 0) && (
-                        <ul className="small text-muted mt-3 mb-0">
-                            {(gapRunning ? gapCycleSymbols : gapStatus.last_scan.symbols_with_gaps).slice(0, 12).map((row) => (
-                                <li key={row.symbol}>
-                                    {row.symbol}
-                                    {' '}
-                                    (
-                                    {row.gap_count}
-                                    {' '}
-                                    range
-                                    {row.gap_count === 1 ? '' : 's'}
-                                    )
-                                </li>
-                            ))}
-                        </ul>
+                    {gapSymbols.length > 0 && !gapStatus?.in_progress && (
+                        <div
+                            className="small text-muted mt-3 mb-0 border rounded p-2"
+                            style={{ maxHeight: '240px', overflowY: 'auto' }}
+                        >
+                            <div className="fw-semibold mb-1">
+                                Symbols with gaps (
+                                {gapSymbols.length}
+                                )
+                            </div>
+                            <ul className="mb-0 ps-3">
+                                {gapSymbols.map((row) => (
+                                    <li key={row.symbol}>
+                                        {row.symbol}
+                                        {' '}
+                                        (
+                                        {row.gap_count}
+                                        {' '}
+                                        range
+                                        {row.gap_count === 1 ? '' : 's'}
+                                        )
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
                     )}
                 </div>
             </div>

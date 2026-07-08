@@ -17,6 +17,16 @@ class PriceHistoryGapService
 
     public const KEY_LAST_CYCLE_COMPLETED_AT = 'price_history_gap_last_cycle_completed_at';
 
+    public const KEY_IN_PROGRESS = 'price_history_gap_in_progress';
+
+    public const KEY_IN_PROGRESS_AT = 'price_history_gap_in_progress_at';
+
+    public const KEY_IN_PROGRESS_MODE = 'price_history_gap_in_progress_mode';
+
+    public const KEY_GAP_INVENTORY_JSON = 'price_history_gap_inventory_json';
+
+    public const KEY_SCAN_PROGRESS_JSON = 'price_history_gap_scan_progress_json';
+
     public function __construct(
         protected UniverseStockResolverService $resolver,
         protected StockPriceHistoryService $history,
@@ -28,6 +38,43 @@ class PriceHistoryGapService
     public function isEnabled(): bool
     {
         return (bool) config('portfolio.universe_price_sync.enabled', true);
+    }
+
+    public function isInProgress(): bool
+    {
+        if (Setting::getValue(self::KEY_IN_PROGRESS, '0') !== '1') {
+            return false;
+        }
+
+        $startedAt = Setting::getValue(self::KEY_IN_PROGRESS_AT);
+        if (is_string($startedAt) && $startedAt !== '') {
+            try {
+                if (Carbon::parse($startedAt)->lt(now()->subHours(2))) {
+                    $this->clearInProgress();
+
+                    return false;
+                }
+            } catch (\Throwable) {
+                // Keep in-progress if timestamp is malformed.
+            }
+        }
+
+        return true;
+    }
+
+    protected function setInProgress(string $mode): void
+    {
+        Setting::setValue(self::KEY_IN_PROGRESS, '1');
+        Setting::setValue(self::KEY_IN_PROGRESS_AT, now()->toIso8601String());
+        Setting::setValue(self::KEY_IN_PROGRESS_MODE, $mode);
+    }
+
+    protected function clearInProgress(): void
+    {
+        Setting::setValue(self::KEY_IN_PROGRESS, '0');
+        Setting::setValue(self::KEY_IN_PROGRESS_AT, null);
+        Setting::setValue(self::KEY_IN_PROGRESS_MODE, null);
+        Setting::setValue(self::KEY_SCAN_PROGRESS_JSON, null);
     }
 
     public function historyWindowDays(): int
@@ -87,8 +134,15 @@ class PriceHistoryGapService
             ? $this->resolver->stockQuery($scope)->where('id', '<=', $cursorId)->count()
             : 0;
 
+        $lastScan = $this->decodeSettingJson(self::KEY_LAST_SCAN_JSON);
+        $inventory = $this->decodeSettingJson(self::KEY_GAP_INVENTORY_JSON);
+        $scanProgress = $this->decodeSettingJson(self::KEY_SCAN_PROGRESS_JSON);
+
         return [
             'enabled' => $this->isEnabled(),
+            'in_progress' => $this->isInProgress(),
+            'in_progress_mode' => Setting::getValue(self::KEY_IN_PROGRESS_MODE),
+            'in_progress_at' => Setting::getValue(self::KEY_IN_PROGRESS_AT),
             'scope' => $scope,
             'history_window_days' => $this->historyWindowDays(),
             'max_internal_gap_days' => (int) config('portfolio.history.max_internal_gap_days', 7),
@@ -103,10 +157,308 @@ class PriceHistoryGapService
                 ['symbol' => $benchmark->symbol, 'stock_id' => $benchmark->id],
                 $this->gapsForStock($benchmark),
             ),
-            'last_scan' => $this->decodeSettingJson(self::KEY_LAST_SCAN_JSON),
+            'last_scan' => $lastScan,
+            'inventory_stock_count' => is_array($inventory['stock_ids'] ?? null)
+                ? count($inventory['stock_ids'])
+                : 0,
+            'scan_progress' => $scanProgress,
             'last_fill' => $this->decodeSettingJson(self::KEY_LAST_FILL_JSON),
             'latest_sync_run' => $this->syncLog->latestRunSummary(SyncLogService::JOB_PRICE_HISTORY_GAP_FILL),
         ];
+    }
+
+    /**
+     * Scan the entire universe for OHLCV gaps (DB-only, no provider fetch).
+     *
+     * @return array<string, mixed>
+     */
+    public function scanAll(?string $scope = null): array
+    {
+        if (! $this->isEnabled()) {
+            return $this->emptyResult($scope ?? $this->resolver->defaultScope(), skipped: 1);
+        }
+
+        if ($this->isInProgress()) {
+            return [
+                'scope' => $this->resolver->normalizeScope($scope ?? $this->resolver->defaultScope()),
+                'mode' => 'scan_all',
+                'skipped' => 1,
+                'reason' => 'in_progress',
+            ];
+        }
+
+        $this->setInProgress('scan');
+
+        try {
+            return $this->scanAllInternal($scope);
+        } finally {
+            $this->clearInProgress();
+        }
+    }
+
+    /**
+     * Scan, then fill only stocks with gaps via providers (single backend run).
+     *
+     * @return array<string, mixed>
+     */
+    public function fillAll(?string $scope = null, bool $rescanFirst = true): array
+    {
+        if (! $this->isEnabled()) {
+            return $this->emptyResult($scope ?? $this->resolver->defaultScope(), skipped: 1);
+        }
+
+        if ($this->isInProgress()) {
+            return [
+                'scope' => $this->resolver->normalizeScope($scope ?? $this->resolver->defaultScope()),
+                'mode' => 'fill_all',
+                'skipped' => 1,
+                'reason' => 'in_progress',
+            ];
+        }
+
+        $scope = $this->resolver->normalizeScope($scope ?? $this->resolver->defaultScope());
+        $delayMs = (int) config('portfolio.universe_price_sync.delay_ms_between_stocks', 400);
+        ['from' => $from, 'to' => $to] = $this->requiredWindow();
+
+        $this->setInProgress('fill');
+
+        $summary = [
+            'scope' => $scope,
+            'mode' => 'fill_all',
+            'rescan_first' => $rescanFirst,
+            'scanned' => 0,
+            'with_gaps' => 0,
+            'filled' => 0,
+            'failed' => 0,
+            'stored_rows' => 0,
+            'errors' => [],
+            'completed_at' => null,
+        ];
+
+        try {
+            if ($rescanFirst) {
+                $scan = $this->scanAllInternal($scope);
+                $summary['scanned'] = (int) ($scan['scanned'] ?? 0);
+                $summary['with_gaps'] = (int) ($scan['with_gaps'] ?? 0);
+            } else {
+                $scan = $this->decodeSettingJson(self::KEY_LAST_SCAN_JSON) ?? [];
+                $summary['scanned'] = (int) ($scan['scanned'] ?? 0);
+                $summary['with_gaps'] = (int) ($scan['with_gaps'] ?? 0);
+            }
+
+            $inventory = $this->decodeSettingJson(self::KEY_GAP_INVENTORY_JSON) ?? [];
+            $stockIds = is_array($inventory['stock_ids'] ?? null) ? $inventory['stock_ids'] : [];
+
+            $benchmark = $this->relativeStrength->benchmarkStock();
+            $benchmarkGaps = $this->gapsForStock($benchmark);
+            $summary['benchmark_has_gaps'] = $benchmarkGaps['has_gaps'];
+            $summary['benchmark_gap_count'] = $benchmarkGaps['gap_count'];
+
+            if ($benchmarkGaps['has_gaps']) {
+                $benchmarkResult = $this->history->fetchMissingHistory(
+                    $benchmark,
+                    $from,
+                    $to,
+                    notifyTelegramOnFailure: false,
+                );
+                $summary['benchmark_filled'] = (bool) ($benchmarkResult['success'] ?? false);
+                $summary['stored_rows'] += (int) ($benchmarkResult['stored_rows'] ?? 0);
+                if (! ($benchmarkResult['success'] ?? false) && count($summary['errors']) < 20) {
+                    $summary['errors'][] = $benchmark->symbol.': '.implode('; ', $benchmarkResult['errors'] ?? ['gap fill failed']);
+                }
+            }
+
+            if ($stockIds === []) {
+                $summary['stopped_reason'] = 'no_gaps';
+                $summary['completed_at'] = now()->toIso8601String();
+                Setting::setValue(self::KEY_LAST_FILL_JSON, json_encode($summary));
+
+                return $summary;
+            }
+
+            $jobName = SyncLogService::JOB_PRICE_HISTORY_GAP_FILL;
+            $runId = $this->syncLog->beginRun($jobName);
+
+            $this->syncLog->log($runId, $jobName, 'info', 'Price history gap fill-all started', [
+                'scope' => $scope,
+                'gap_stock_count' => count($stockIds),
+                'from_date' => $from->toDateString(),
+                'to_date' => $to->toDateString(),
+            ]);
+
+            try {
+                PriceSyncNotificationContext::withoutTelegram(function () use (
+                    $stockIds,
+                    $from,
+                    $to,
+                    $delayMs,
+                    $runId,
+                    $jobName,
+                    &$summary,
+                ) {
+                    foreach ($stockIds as $index => $stockId) {
+                        $stock = Stock::query()->find((int) $stockId);
+                        if ($stock === null) {
+                            continue;
+                        }
+
+                        try {
+                            $result = $this->history->fetchMissingHistory(
+                                $stock,
+                                $from,
+                                $to,
+                                notifyTelegramOnFailure: false,
+                            );
+
+                            if ($result['success'] ?? false) {
+                                $summary['filled']++;
+                                $summary['stored_rows'] += (int) ($result['stored_rows'] ?? 0);
+                            } else {
+                                $summary['failed']++;
+                                if (count($summary['errors']) < 20) {
+                                    $summary['errors'][] = $stock->symbol.': '.implode('; ', $result['errors'] ?? ['gap fill failed']);
+                                }
+                                $this->syncLog->log($runId, $jobName, 'warning', 'Gap fill returned no rows', [
+                                    'symbol' => $stock->symbol,
+                                    'errors' => $result['errors'] ?? [],
+                                ]);
+                            }
+                        } catch (\Throwable $e) {
+                            $summary['failed']++;
+                            if (count($summary['errors']) < 20) {
+                                $summary['errors'][] = $stock->symbol.': '.$e->getMessage();
+                            }
+                            $this->syncLog->log($runId, $jobName, 'error', 'Gap fill failed', [
+                                'symbol' => $stock->symbol,
+                                'failure_reason' => $e->getMessage(),
+                            ]);
+                        }
+
+                        if ($delayMs > 0 && $index < count($stockIds) - 1) {
+                            usleep($delayMs * 1000);
+                        }
+                    }
+                });
+            } catch (\Throwable $e) {
+                $this->syncLog->completeRun($runId, 'failed', [
+                    'processed' => count($stockIds),
+                    'failures' => $summary['failed'],
+                ], $e->getMessage());
+                throw $e;
+            }
+
+            $status = $summary['failed'] === 0 ? 'success' : ($summary['filled'] > 0 ? 'partial' : 'failed');
+            $runSummary = sprintf(
+                'Price history gap fill-all (%s): with_gaps=%d filled=%d failed=%d stored=%d',
+                $scope,
+                count($stockIds),
+                $summary['filled'],
+                $summary['failed'],
+                $summary['stored_rows'],
+            );
+
+            $this->syncLog->log($runId, $jobName, 'info', 'Price history gap fill-all completed', $summary);
+            $this->syncLog->completeRun($runId, $status, [
+                'processed' => count($stockIds),
+                'failures' => $summary['failed'],
+                'stored_rows' => $summary['stored_rows'],
+            ], $runSummary);
+
+            $refreshed = $this->scanAllInternal($scope);
+            $summary['post_fill_scan'] = [
+                'scanned' => $refreshed['scanned'] ?? 0,
+                'with_gaps' => $refreshed['with_gaps'] ?? 0,
+            ];
+            $summary['scanned'] = (int) ($refreshed['scanned'] ?? $summary['scanned']);
+            $summary['with_gaps'] = (int) ($refreshed['with_gaps'] ?? $summary['with_gaps']);
+            $summary['stopped_reason'] = ($refreshed['with_gaps'] ?? 0) === 0 ? 'no_gaps_remaining' : 'completed';
+            $summary['completed_at'] = now()->toIso8601String();
+            Setting::setValue(self::KEY_LAST_FILL_JSON, json_encode($summary));
+
+            $this->logger->scheduler('info', $runSummary, array_merge([
+                'category' => 'PriceHistoryGap',
+                'event' => 'gap_fill_all_finish',
+            ], $summary));
+
+            return $summary;
+        } finally {
+            $this->clearInProgress();
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function scanAllInternal(?string $scope = null): array
+    {
+        $scope = $this->resolver->normalizeScope($scope ?? $this->resolver->defaultScope());
+        $universeCount = $this->resolver->count($scope);
+        $benchmark = $this->relativeStrength->benchmarkStock();
+        $benchmarkGaps = $this->gapsForStock($benchmark);
+
+        $stats = [
+            'scope' => $scope,
+            'mode' => 'scan_all',
+            'universe_count' => $universeCount,
+            'scanned' => 0,
+            'with_gaps' => 0,
+            'symbols_with_gaps' => [],
+            'gap_stock_ids' => [],
+            'benchmark_has_gaps' => $benchmarkGaps['has_gaps'],
+            'benchmark_gap_count' => $benchmarkGaps['gap_count'],
+            'scan_completed' => false,
+            'completed_at' => null,
+        ];
+
+        $progressEvery = max(50, (int) config('portfolio.universe_price_sync.gap_scan_progress_every', 250));
+
+        foreach ($this->resolver->stockQuery($scope)->orderBy('id')->cursor() as $stock) {
+            $stats['scanned']++;
+            $gaps = $this->gapsForStock($stock);
+
+            if ($gaps['has_gaps']) {
+                $stats['with_gaps']++;
+                $stats['symbols_with_gaps'][] = [
+                    'symbol' => $stock->symbol,
+                    'stock_id' => $stock->id,
+                    'gap_count' => $gaps['gap_count'],
+                    'ranges' => $gaps['ranges'],
+                ];
+                $stats['gap_stock_ids'][] = $stock->id;
+            }
+
+            if ($stats['scanned'] % $progressEvery === 0 || $stats['scanned'] === $universeCount) {
+                $this->publishScanProgress($stats['scanned'], $universeCount, $stats['with_gaps']);
+            }
+        }
+
+        $stats['scan_completed'] = true;
+        $stats['completed_at'] = now()->toIso8601String();
+
+        Setting::setValue(self::KEY_LAST_SCAN_JSON, json_encode($stats));
+        Setting::setValue(self::KEY_GAP_INVENTORY_JSON, json_encode([
+            'scope' => $scope,
+            'stock_ids' => $stats['gap_stock_ids'],
+            'symbols_with_gaps' => $stats['symbols_with_gaps'],
+            'scanned_at' => $stats['completed_at'],
+            'universe_count' => $universeCount,
+            'with_gaps' => $stats['with_gaps'],
+        ]));
+
+        return $stats;
+    }
+
+    protected function publishScanProgress(int $scanned, int $universeCount, int $withGaps): void
+    {
+        Setting::setValue(self::KEY_SCAN_PROGRESS_JSON, json_encode([
+            'scanned' => $scanned,
+            'universe_count' => $universeCount,
+            'with_gaps' => $withGaps,
+            'progress_percent' => $universeCount > 0
+                ? round(min(100, ($scanned / $universeCount) * 100), 1)
+                : 0.0,
+            'updated_at' => now()->toIso8601String(),
+        ]));
     }
 
     /**
@@ -146,13 +498,11 @@ class PriceHistoryGapService
 
             if ($gaps['has_gaps']) {
                 $stats['with_gaps']++;
-                if (count($stats['symbols_with_gaps']) < 25) {
-                    $stats['symbols_with_gaps'][] = [
-                        'symbol' => $stock->symbol,
-                        'gap_count' => $gaps['gap_count'],
-                        'ranges' => $gaps['ranges'],
-                    ];
-                }
+                $stats['symbols_with_gaps'][] = [
+                    'symbol' => $stock->symbol,
+                    'gap_count' => $gaps['gap_count'],
+                    'ranges' => $gaps['ranges'],
+                ];
             }
         }
 
@@ -255,13 +605,11 @@ class PriceHistoryGapService
                     }
 
                     $stats['with_gaps']++;
-                    if (count($stats['symbols_with_gaps']) < 25) {
-                        $stats['symbols_with_gaps'][] = [
-                            'symbol' => $stock->symbol,
-                            'gap_count' => $gaps['gap_count'],
-                            'ranges' => $gaps['ranges'],
-                        ];
-                    }
+                    $stats['symbols_with_gaps'][] = [
+                        'symbol' => $stock->symbol,
+                        'gap_count' => $gaps['gap_count'],
+                        'ranges' => $gaps['ranges'],
+                    ];
 
                     try {
                         $result = $this->history->fetchMissingHistory(

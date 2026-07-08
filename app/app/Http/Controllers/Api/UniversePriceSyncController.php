@@ -190,6 +190,7 @@ class UniversePriceSyncController extends Controller
             'scope' => ['nullable', 'in:all_equities,all_nse,nifty500'],
             'batch' => ['nullable', 'integer', 'min:1', 'max:200'],
             'reset_cursor' => ['nullable', 'boolean'],
+            'all' => ['nullable', 'boolean'],
         ]);
 
         $resolver = app(UniverseStockResolverService::class);
@@ -202,13 +203,27 @@ class UniversePriceSyncController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        @set_time_limit(0);
+        if ($gaps->isInProgress()) {
+            return response()->json([
+                'message' => 'A gap scan or fill is already running on the server.',
+                'data' => [
+                    'status' => $gaps->status($scope ?? $resolver->defaultScope()),
+                ],
+            ], 409);
+        }
 
-        $result = $gaps->scanBatch(
-            scope: $scope,
-            batchSize: isset($validated['batch']) ? (int) $validated['batch'] : null,
-            resetCursor: (bool) ($validated['reset_cursor'] ?? false),
-        );
+        @set_time_limit(0);
+        @ignore_user_abort(true);
+
+        $runAll = (bool) ($validated['all'] ?? true);
+
+        $result = $runAll
+            ? $gaps->scanAll(scope: $scope)
+            : $gaps->scanBatch(
+                scope: $scope,
+                batchSize: isset($validated['batch']) ? (int) $validated['batch'] : null,
+                resetCursor: (bool) ($validated['reset_cursor'] ?? false),
+            );
 
         return response()->json([
             'data' => [
@@ -230,6 +245,8 @@ class UniversePriceSyncController extends Controller
             'scope' => ['nullable', 'in:all_equities,all_nse,nifty500'],
             'batch' => ['nullable', 'integer', 'min:1', 'max:200'],
             'reset_cursor' => ['nullable', 'boolean'],
+            'all' => ['nullable', 'boolean'],
+            'rescan_first' => ['nullable', 'boolean'],
         ]);
 
         $resolver = app(UniverseStockResolverService::class);
@@ -242,13 +259,30 @@ class UniversePriceSyncController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        @set_time_limit(0);
+        if ($gaps->isInProgress()) {
+            return response()->json([
+                'message' => 'A gap scan or fill is already running on the server.',
+                'data' => [
+                    'status' => $gaps->status($scope ?? $resolver->defaultScope()),
+                ],
+            ], 409);
+        }
 
-        $result = $gaps->fillBatch(
-            scope: $scope,
-            batchSize: isset($validated['batch']) ? (int) $validated['batch'] : null,
-            resetCursor: (bool) ($validated['reset_cursor'] ?? false),
-        );
+        @set_time_limit(0);
+        @ignore_user_abort(true);
+
+        $runAll = (bool) ($validated['all'] ?? true);
+
+        $result = $runAll
+            ? $gaps->fillAll(
+                scope: $scope,
+                rescanFirst: (bool) ($validated['rescan_first'] ?? true),
+            )
+            : $gaps->fillBatch(
+                scope: $scope,
+                batchSize: isset($validated['batch']) ? (int) $validated['batch'] : null,
+                resetCursor: (bool) ($validated['reset_cursor'] ?? false),
+            );
 
         return response()->json([
             'data' => [

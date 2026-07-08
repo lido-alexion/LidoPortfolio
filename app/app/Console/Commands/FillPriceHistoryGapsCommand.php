@@ -11,7 +11,8 @@ class FillPriceHistoryGapsCommand extends Command
 {
     protected $signature = 'portfolio:fill-price-history-gaps
         {--scan-only : Detect gaps without calling providers}
-        {--chain : Run fill batches until the universe cycle completes}
+        {--all : Scan or fill the entire universe in one backend run (default for UI)}
+        {--chain : Run fill batches until the universe cycle completes (legacy cursor batches)}
         {--max-batches=500 : Max batches when using --chain}
         {--max-seconds= : Optional time limit when using --chain}
         {--scope= : all_equities, all_nse (deprecated), or nifty500 (default from config)}
@@ -68,6 +69,10 @@ class FillPriceHistoryGapsCommand extends Command
                 $maxBatches,
                 $maxSeconds,
             );
+        } elseif ($this->option('all') || $scanOnly) {
+            $stats = $scanOnly
+                ? $gaps->scanAll($scope)
+                : $gaps->fillAll($scope, rescanFirst: true);
         } else {
             $stats = $scanOnly
                 ? $gaps->scanBatch($scope, $batchSize, $resetCursor)
