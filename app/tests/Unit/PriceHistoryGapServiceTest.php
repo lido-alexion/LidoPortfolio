@@ -111,7 +111,7 @@ class PriceHistoryGapServiceTest extends TestCase
         $syncLog->shouldReceive('completeRun')->once();
 
         $logger = Mockery::mock(PortfolioLoggerService::class);
-        $logger->shouldReceive('scheduler')->once();
+        $logger->shouldReceive('scheduler')->atLeast()->once();
 
         $service = new PriceHistoryGapService(
             app(UniverseStockResolverService::class),
@@ -159,7 +159,7 @@ class PriceHistoryGapServiceTest extends TestCase
         $syncLog->shouldReceive('completeRun')->times(3);
 
         $logger = Mockery::mock(PortfolioLoggerService::class);
-        $logger->shouldReceive('scheduler')->times(3);
+        $logger->shouldReceive('scheduler')->atLeast()->times(3);
 
         $service = new PriceHistoryGapService(
             app(UniverseStockResolverService::class),

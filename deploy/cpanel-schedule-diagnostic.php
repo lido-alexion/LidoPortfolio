@@ -4,6 +4,11 @@
  *
  * Upload to: public_html/portfolio/cpanel-schedule-diagnostic.php
  * Visit:     https://lidoalexion.com/portfolio/cpanel-schedule-diagnostic.php?token=YOUR_TOKEN
+ *
+ * Optional:
+ *   &explain=1  — also run portfolio:universe-maintenance-probe --explain
+ *   &clear_mutex=1 — release stuck withoutOverlapping mutex (writes; use carefully)
+ *   &clear_in_progress=1 — clear universe_price_sync_in_progress flag
  */
 declare(strict_types=1);
 
@@ -51,6 +56,8 @@ $app = require_once $laravelRoot.'/bootstrap/app.php';
 $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
 $kernel->bootstrap();
 
+use App\Console\Commands\UniverseMaintenanceProbeCommand;
+use App\Models\Setting;
 use App\Models\SyncRun;
 use App\Services\SettingsService;
 use App\Services\SyncLogService;
@@ -59,6 +66,7 @@ use Carbon\Carbon;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 
 function section(string $title): void
@@ -83,6 +91,7 @@ function formatCarbon(?Carbon $at, string $timezone): string
 
 try {
     $settings = app(SettingsService::class);
+    $sync = app(UniversePriceSyncService::class);
     $cronTime = $settings->get('cron_time', env('PORTFOLIO_CRON_TIME', '18:30')) ?? '18:30';
     $cronTimezone = $settings->get('cron_timezone', env('PORTFOLIO_CRON_TIMEZONE', 'Asia/Kolkata')) ?? 'Asia/Kolkata';
     $nowCron = now()->timezone($cronTimezone);
@@ -99,34 +108,118 @@ try {
     line('cron_timezone', $cronTimezone.' (all scheduled jobs)');
 
     $universeEnabled = (bool) config('portfolio.universe_price_sync.enabled');
+    $interval = $sync->maintenanceIntervalMinutes();
+    $startHour = $sync->maintenanceStartHour();
+    $endHour = $sync->maintenanceEndHour();
+    $endMinute = $sync->maintenanceEndMinute();
+    $windowLabel = sprintf('%02d:00–%02d:%02d', $startHour, $endHour, $endMinute);
+
     section('Universe price sync');
     line('UNIVERSE_PRICE_SYNC_ENABLED', $universeEnabled);
     line('scope', (string) config('portfolio.universe_price_sync.scope'));
     line('batch_size', (int) config('portfolio.universe_price_sync.batch_size'));
-    line('scheduled window', 'every 15 min, 19:00–23:45 in cron_timezone (hardcoded in routes/console.php)');
+    line('scheduled window', "every {$interval} min, {$windowLabel} in cron_timezone (PHP when() + isMaintenanceWindowDue)");
     line('NOT tied to cron_time', true);
+    line('isMaintenanceWindowDue() now', $sync->isMaintenanceWindowDue());
+    line('isMaintenanceWindowStart() now', $sync->isMaintenanceWindowStart());
+    line('in_progress flag', $sync->isSyncInProgress());
+    line('in_progress_at', Setting::getValue(UniversePriceSyncService::KEY_IN_PROGRESS_AT) ?? '—');
 
-    $inMaintenanceWindow = $nowCron->format('H:i') >= '19:00' && $nowCron->format('H:i') <= '23:45';
-    line('in universe maintenance window now', $inMaintenanceWindow);
+    $heartbeatRaw = Setting::getValue(UniverseMaintenanceProbeCommand::KEY_SCHEDULE_HEARTBEAT_AT);
+    $heartbeatAge = '—';
+    if ($heartbeatRaw) {
+        try {
+            $hb = Carbon::parse($heartbeatRaw);
+            $heartbeatAge = $hb->diffForHumans(now(), true).' ago';
+        } catch (Throwable) {
+            $heartbeatAge = 'parse error';
+        }
+    }
+    line('schedule_run_heartbeat_at', $heartbeatRaw ? formatCarbon(Carbon::parse($heartbeatRaw), $cronTimezone) : '— (missing: cron may not be calling schedule:run every minute, or probe not deployed)');
+    line('heartbeat age', $heartbeatAge);
+
+    $probeJson = Setting::getValue(UniverseMaintenanceProbeCommand::KEY_MAINTENANCE_PROBE_JSON);
+    if ($probeJson) {
+        section('Last maintenance probe JSON');
+        echo '  '.$probeJson."\n";
+    }
 
     if ($cronTimezone !== 'Asia/Kolkata') {
-        $windowStartIst = Carbon::today($cronTimezone)->setTime(19, 0)->timezone('Asia/Kolkata');
-        $windowEndIst = Carbon::today($cronTimezone)->setTime(23, 45)->timezone('Asia/Kolkata');
-        line('19:00–23:45 in cron_tz as IST', $windowStartIst->format('H:i').' – '.$windowEndIst->format('H:i').' IST (same calendar day start)');
+        $windowStartIst = Carbon::today($cronTimezone)->setTime($startHour, 0)->timezone('Asia/Kolkata');
+        $windowEndIst = Carbon::today($cronTimezone)->setTime($endHour, $endMinute)->timezone('Asia/Kolkata');
+        line('window in cron_tz as IST', $windowStartIst->format('H:i').' – '.$windowEndIst->format('H:i').' IST');
     }
 
     if ($universeEnabled) {
         try {
-            $status = app(UniversePriceSyncService::class)->status();
+            $status = $sync->status();
             $lastRun = $status['last_run'] ?? null;
             if (is_array($lastRun)) {
                 line('last_run.completed_at (settings JSON)', $lastRun['completed_at'] ?? '—');
                 line('last_run.processed', (int) ($lastRun['processed'] ?? 0));
                 line('last_run.failed', (int) ($lastRun['failed'] ?? 0));
             }
+            $maint = $status['maintenance'] ?? null;
+            if (is_array($maint)) {
+                line('maintenance.window_label', $maint['window_label'] ?? '—');
+                line('maintenance.runs_per_night', (int) ($maint['runs_per_night'] ?? 0));
+                line('maintenance.nightly_stock_capacity', (int) ($maint['nightly_stock_capacity'] ?? 0));
+            }
         } catch (Throwable $e) {
             line('universe status', 'FAILED: '.$e->getMessage());
         }
+    }
+
+    section('Schedule mutex (withoutOverlapping)');
+    /** @var Schedule $schedule */
+    $schedule = app(Schedule::class);
+    $maintenanceEvent = null;
+    foreach ($schedule->events() as $event) {
+        if (str_contains((string) $event->command, 'portfolio:run-universe-maintenance')) {
+            $maintenanceEvent = $event;
+            break;
+        }
+    }
+    if ($maintenanceEvent === null) {
+        echo "  universe-maintenance event NOT registered — check UNIVERSE_PRICE_SYNC_ENABLED / config:cache\n";
+    } else {
+        $mutexName = $maintenanceEvent->mutexName();
+        line('mutex name', $mutexName);
+        $mutexHeld = false;
+        try {
+            $mutexHeld = $maintenanceEvent->mutex->exists($maintenanceEvent);
+        } catch (Throwable $e) {
+            line('mutex exists() error', $e->getMessage());
+            $mutexHeld = Cache::has($mutexName);
+        }
+        line('mutex held', $mutexHeld);
+        if ($mutexHeld) {
+            echo "  *** Stuck mutex can block all further universe-maintenance runs for up to expiresAt minutes ***\n";
+            echo "  Clear with: ?token=...&clear_mutex=1\n";
+        }
+    }
+
+    if ((($_GET['clear_mutex'] ?? '') === '1') && $maintenanceEvent !== null) {
+        section('Clear mutex');
+        try {
+            $maintenanceEvent->mutex->forget($maintenanceEvent);
+            Cache::forget($maintenanceEvent->mutexName());
+            line('result', 'mutex forgotten');
+        } catch (Throwable $e) {
+            line('result', 'FAILED: '.$e->getMessage());
+        }
+    }
+
+    if (($_GET['clear_in_progress'] ?? '') === '1') {
+        section('Clear in-progress flag');
+        $sync->clearInProgress();
+        line('result', 'cleared');
+    }
+
+    if (($_GET['explain'] ?? '') === '1') {
+        section('Probe --explain');
+        Artisan::call('portfolio:universe-maintenance-probe', ['--explain' => true]);
+        echo Artisan::output();
     }
 
     section('Registered schedule (schedule:list)');
@@ -134,8 +227,6 @@ try {
     echo Artisan::output();
 
     section('Due events if schedule:run ran right now');
-    /** @var Schedule $schedule */
-    $schedule = app(Schedule::class);
     $dueEvents = [];
     foreach ($schedule->events() as $event) {
         if ($event->isDue($app)) {
@@ -144,6 +235,9 @@ try {
     }
     if ($dueEvents === []) {
         echo "  (none due at {$nowCron->format('Y-m-d H:i:s T')})\n";
+        if ($sync->isMaintenanceWindowDue()) {
+            echo "  *** isMaintenanceWindowDue=yes but no events due — check schedule registration / filters ***\n";
+        }
     } else {
         foreach ($dueEvents as $event) {
             echo '  DUE: '.trim($event->getSummaryForDisplay())."\n";
@@ -151,18 +245,17 @@ try {
     }
 
     section('Next run — key jobs');
-    /** @var Event $event */
     foreach ($schedule->events() as $event) {
         $summary = $event->getSummaryForDisplay();
         $interesting = false;
-        foreach (['universe-maintenance', 'daily-market-data', 'benchmark-price-sync', 'operational-alerts', 'stock-master-sync'] as $needle) {
+        foreach (['universe-maintenance', 'universe-schedule-heartbeat', 'universe-maintenance-probe', 'daily-market-data', 'benchmark-price-sync', 'operational-alerts', 'stock-master-sync'] as $needle) {
             if (stripos($summary, $needle) !== false || stripos((string) $event->command, $needle) !== false) {
                 $interesting = true;
                 break;
             }
         }
         if (! $interesting) {
-            foreach (['portfolio:run-universe-maintenance', 'portfolio:daily-sync', 'portfolio:check-operational-alerts', 'stocks:sync'] as $cmd) {
+            foreach (['portfolio:run-universe-maintenance', 'portfolio:universe-maintenance-probe', 'portfolio:daily-sync', 'portfolio:check-operational-alerts', 'stocks:sync'] as $cmd) {
                 if (stripos((string) $event->command, $cmd) !== false) {
                     $interesting = true;
                     break;
@@ -213,6 +306,9 @@ try {
         $printRuns('Latest universe-price-sync', SyncRun::query()
             ->where('job_name', SyncLogService::JOB_UNIVERSE_PRICE_SYNC)
             ->orderByDesc('started_at'));
+        $printRuns('Latest price-history-gap-fill', SyncRun::query()
+            ->where('job_name', SyncLogService::JOB_PRICE_HISTORY_GAP_FILL)
+            ->orderByDesc('started_at'));
         $printRuns('Latest daily-market-data', SyncRun::query()
             ->where('job_name', SyncLogService::JOB_DAILY_MARKET_DATA)
             ->orderByDesc('started_at'));
@@ -240,23 +336,30 @@ try {
             foreach ($buckets as $hour => $count) {
                 echo "  {$hour}: {$count} run(s)\n";
             }
-            echo "\n  Tip: evening maintenance should show many runs between 19:00–23:45.\n";
-            echo "  A single cluster around 05:00 often means cPanel cron runs once daily\n";
-            echo "  and/or cron_timezone is UTC (19:00–23:45 UTC ≈ 00:30–05:15 IST).\n";
+            echo "\n  Tip: after the IST-window fix, evening maintenance should cluster at {$windowLabel} local.\n";
+            echo "  Clusters only around ~05:00 IST usually mean cPanel cron is still once-daily,\n";
+            echo "  OR cron_timezone was UTC when those runs happened.\n";
         }
 
-        if ($universeEnabled && $inMaintenanceWindow) {
+        $windowStartTonight = $nowCron->copy()->setTime($startHour, 0, 0);
+        if ($nowCron->greaterThanOrEqualTo($windowStartTonight) && $universeEnabled) {
             section('Tonight maintenance window check');
-            $windowStart = $nowCron->copy()->setTime(19, 0, 0);
             $runsTonight = SyncRun::query()
                 ->where('job_name', SyncLogService::JOB_UNIVERSE_PRICE_SYNC)
-                ->where('started_at', '>=', $windowStart->copy()->utc())
+                ->where('started_at', '>=', $windowStartTonight->copy()->utc())
                 ->orderByDesc('started_at')
-                ->limit(5)
+                ->limit(8)
                 ->get();
-            line('window opened at', $windowStart->format('Y-m-d H:i:s T'));
+            line('window opened at', $windowStartTonight->format('Y-m-d H:i:s T'));
             if ($runsTonight->isEmpty()) {
-                echo "  *** No universe runs since 19:00 tonight — ops alert expected ***\n";
+                echo "  *** No universe runs since window open tonight ***\n";
+                if (! $heartbeatRaw) {
+                    echo "  Heartbeat missing → cPanel likely is NOT running schedule:run every minute.\n";
+                } elseif (Carbon::parse($heartbeatRaw)->lt(now()->subMinutes(3))) {
+                    echo "  Heartbeat stale (>3m) → schedule:run stopped or is intermittent.\n";
+                } else {
+                    echo "  Heartbeat fresh → cron is alive; check isMaintenanceWindowDue / mutex / in_progress.\n";
+                }
             } else {
                 foreach ($runsTonight as $run) {
                     echo '  run: '.formatCarbon($run->started_at, $cronTimezone)." status={$run->status}\n";
@@ -282,10 +385,12 @@ try {
     echo "  Laravel needs schedule:run EVERY MINUTE (not once daily):\n\n";
     echo "  * * * * * cd {$laravelRoot} && php artisan schedule:run >> /dev/null 2>&1\n\n";
     echo "  Replace path if your lidoportfolio folder differs.\n";
-    echo "  If cron runs only once at ~05:00, universe maintenance gets at most one batch\n";
-    echo "  (and only if that moment falls inside 19:00–23:45 in cron_timezone).\n";
+    echo "  If cron runs only once near ~05:00 IST, evening 19:00–23:45 jobs never fire\n";
+    echo "  after the timezone fix (morning slots are outside the IST window).\n\n";
+    echo "  Force one batch now (browser):\n";
+    echo "  cpanel-run-universe-maintenance.php?token=TOKEN&apply=1\n";
 
-    echo "\n=== Done (read-only) ===\n";
+    echo "\n=== Done ===\n";
     echo "DELETE cpanel-schedule-diagnostic.php from public_html/portfolio/ after reviewing.\n";
 } catch (Throwable $e) {
     http_response_code(500);

@@ -85,6 +85,54 @@ class ScheduleRegistrationTest extends TestCase
         $this->assertSame(7250, $service->maintenanceNightlyCapacity(125));
     }
 
+    public function test_schedule_registers_heartbeat_probe(): void
+    {
+        config(['portfolio.universe_price_sync.enabled' => true]);
+
+        $this->refreshScheduleApp();
+
+        /** @var Schedule $schedule */
+        $schedule = app(Schedule::class);
+        $foundHeartbeat = false;
+        $foundProbe = false;
+
+        foreach ($schedule->events() as $event) {
+            $command = (string) $event->command;
+            if (str_contains($command, 'portfolio:universe-maintenance-probe')
+                && str_contains($command, 'write-heartbeat')) {
+                $foundHeartbeat = true;
+            }
+            if (str_contains($command, 'portfolio:universe-maintenance-probe')
+                && str_contains($command, 'explain')) {
+                $foundProbe = true;
+            }
+        }
+
+        $this->assertTrue($foundHeartbeat, 'heartbeat probe must be registered every minute');
+        $this->assertTrue($foundProbe, 'explain probe must be registered on maintenance due ticks');
+    }
+
+    public function test_universe_maintenance_probe_writes_heartbeat_and_explain(): void
+    {
+        config(['portfolio.universe_price_sync.enabled' => true]);
+
+        Setting::setValue('cron_timezone', 'Asia/Kolkata');
+        Carbon::setTestNow(Carbon::parse('2026-07-08 20:00:00', 'Asia/Kolkata'));
+
+        $this->artisan('portfolio:universe-maintenance-probe', [
+            '--write-heartbeat' => true,
+            '--explain' => true,
+        ])->assertSuccessful();
+
+        $this->assertNotNull(Setting::getValue(\App\Console\Commands\UniverseMaintenanceProbeCommand::KEY_SCHEDULE_HEARTBEAT_AT));
+        $probe = json_decode((string) Setting::getValue(\App\Console\Commands\UniverseMaintenanceProbeCommand::KEY_MAINTENANCE_PROBE_JSON), true);
+        $this->assertIsArray($probe);
+        $this->assertTrue($probe['is_maintenance_window_due']);
+        $this->assertSame('none_should_run', $probe['would_skip_reason']);
+
+        Carbon::setTestNow();
+    }
+
     protected function findUniverseMaintenanceEvent(): ?Event
     {
         /** @var Schedule $schedule */

@@ -123,11 +123,42 @@ Schedule::command('stocks:sync')
     ->timezone($timezone)
     ->name('stock-master-sync');
 
+// Heartbeat every minute so we can tell whether cPanel cron is invoking schedule:run.
+Schedule::command('portfolio:universe-maintenance-probe', ['--write-heartbeat' => true])
+    ->timezone($timezone)
+    ->everyMinute()
+    ->name('universe-schedule-heartbeat');
+
+$universeMaintenanceDue = function (): bool {
+    try {
+        return app(\App\Services\UniversePriceSyncService::class)->isMaintenanceWindowDue();
+    } catch (\Throwable $e) {
+        try {
+            app(\App\Services\PortfolioLoggerService::class)->scheduler(
+                'error',
+                'isMaintenanceWindowDue failed',
+                ['error' => $e->getMessage()],
+            );
+        } catch (\Throwable) {
+            // ignore nested logger failures
+        }
+
+        return false;
+    }
+};
+
 if (config('portfolio.universe_price_sync.enabled')) {
+    // Explain/probe once at the top of each maintenance slot (same due helper as the real job).
+    Schedule::command('portfolio:universe-maintenance-probe', ['--explain' => true])
+        ->timezone($timezone)
+        ->everyMinute()
+        ->when($universeMaintenanceDue)
+        ->name('universe-maintenance-probe');
+
     Schedule::command('portfolio:run-universe-maintenance')
         ->timezone($timezone)
         ->everyMinute()
-        ->when(fn () => app(\App\Services\UniversePriceSyncService::class)->isMaintenanceWindowDue())
+        ->when($universeMaintenanceDue)
         ->withoutOverlapping(25)
         ->name('universe-maintenance');
 }

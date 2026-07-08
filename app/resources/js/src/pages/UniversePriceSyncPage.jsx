@@ -498,10 +498,21 @@ export default function UniversePriceSyncPage() {
                                     <dd className="col-7">{status.last_run.failed}</dd>
                                     <dt className="col-5">Stored rows</dt>
                                     <dd className="col-7">{status.last_run.stored_rows}</dd>
+                                    <dt className="col-5">Cache hits</dt>
+                                    <dd className="col-7">{status.last_run.cache_hits ?? 0}</dd>
                                     <dt className="col-5">Rate limits</dt>
                                     <dd className="col-7">{status.last_run.rate_limit_hits ?? 0}</dd>
                                     <dt className="col-5">At</dt>
                                     <dd className="col-7">{formatTimestamp(status.last_run.completed_at)}</dd>
+                                    {status.latest_sync_run?.started_at ? (
+                                        <>
+                                            <dt className="col-5">Sync log</dt>
+                                            <dd className="col-7">
+                                                {formatTimestamp(status.latest_sync_run.finished_at || status.latest_sync_run.started_at)}
+                                                {status.latest_sync_run.status ? ` (${status.latest_sync_run.status})` : ''}
+                                            </dd>
+                                        </>
+                                    ) : null}
                                 </dl>
                             ) : (
                                 <p className="text-muted mb-0">No batch run recorded yet.</p>
@@ -515,14 +526,22 @@ export default function UniversePriceSyncPage() {
                         <div className="card-header">Config (env)</div>
                         <div className="card-body small">
                             <dl className="row mb-0">
+                                <dt className="col-6">Batch size</dt>
+                                <dd className="col-6">{status?.config?.batch_size ?? '—'}</dd>
+                                <dt className="col-6">Maint. interval</dt>
+                                <dd className="col-6">
+                                    {status?.config?.maintenance_interval_minutes
+                                        ?? status?.maintenance?.interval_minutes
+                                        ?? '—'}
+                                    {' '}
+                                    min
+                                </dd>
                                 <dt className="col-6">History days</dt>
                                 <dd className="col-6">{status?.config?.history_days ?? '—'}</dd>
                                 <dt className="col-6">Daily lookback</dt>
                                 <dd className="col-6">{status?.config?.daily_lookback_days ?? '—'}</dd>
                                 <dt className="col-6">Delay (ms)</dt>
                                 <dd className="col-6">{status?.config?.delay_ms_between_stocks ?? '—'}</dd>
-                                <dt className="col-6">Default batch</dt>
-                                <dd className="col-6">{status?.config?.batch_size ?? '—'}</dd>
                             </dl>
                         </div>
                     </div>

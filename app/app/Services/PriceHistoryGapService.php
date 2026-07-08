@@ -198,6 +198,16 @@ class PriceHistoryGapService
             'to_date' => $to->toDateString(),
         ]);
 
+        $this->logger->scheduler('debug', 'Price history gap fill starting', [
+            'event' => 'gap_fill_start',
+            'scope' => $scope,
+            'batch_size' => $batchSize,
+            'reset_cursor' => $resetCursor,
+            'from_date' => $from->toDateString(),
+            'to_date' => $to->toDateString(),
+            'cursor_before' => (int) Setting::getValue(self::KEY_CURSOR_STOCK_ID, '0'),
+        ]);
+
         $lastStockId = 0;
 
         try {
@@ -318,7 +328,10 @@ class PriceHistoryGapService
             'stored_rows' => $stats['stored_rows'],
         ], $summary);
 
-        $this->logger->scheduler('info', $summary, array_merge(['category' => 'PriceHistoryGap'], $final));
+        $this->logger->scheduler('info', $summary, array_merge([
+            'category' => 'PriceHistoryGap',
+            'event' => 'gap_fill_finish',
+        ], $final));
 
         return $final;
     }

@@ -8,6 +8,7 @@ use App\Models\StockPrice;
 use App\Models\SyncLog;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 
 class UniversePriceSyncService
 {
@@ -193,6 +194,7 @@ class UniversePriceSyncService
             : 0.0;
 
         $lastRun = $this->lastRunStats();
+        $latestSyncRun = $this->syncLog->latestRunSummary(SyncLogService::JOB_UNIVERSE_PRICE_SYNC);
         $recentErrors = $this->recentProviderIssues(25);
 
         return [
@@ -205,6 +207,7 @@ class UniversePriceSyncService
                 'delay_ms_between_stocks' => (int) config('portfolio.universe_price_sync.delay_ms_between_stocks', 400),
                 'batch_size' => (int) config('portfolio.universe_price_sync.batch_size', 125),
                 'default_scope' => $this->resolver->defaultScope(),
+                'maintenance_interval_minutes' => $this->maintenanceIntervalMinutes(),
             ],
             'maintenance' => $this->maintenanceThroughput($universeCount),
             'universe_count' => $universeCount,
@@ -214,7 +217,7 @@ class UniversePriceSyncService
             'progress_percent' => $progressPercent,
             'last_cycle_completed_at' => Setting::getValue(self::KEY_LAST_CYCLE_COMPLETED_AT),
             'last_run' => $lastRun,
-            'latest_sync_run' => $this->syncLog->latestRunSummary(SyncLogService::JOB_UNIVERSE_PRICE_SYNC),
+            'latest_sync_run' => $latestSyncRun,
             'rate_limits' => [
                 'last_run_hits' => (int) ($lastRun['rate_limit_hits'] ?? 0),
                 'last_run_failure_rate_percent' => $lastRun['failure_rate_percent'] ?? null,
@@ -225,10 +228,48 @@ class UniversePriceSyncService
     }
 
     /**
+     * Prefer the freshest of settings JSON vs portfolio_sync_runs (UI cards were staying on
+     * a stale settings row while Sync Logs showed newer batches).
+     *
      * @return array<string, mixed>|null
      */
     public function lastRunStats(): ?array
     {
+        $fromSettings = $this->lastRunStatsFromSettings();
+        $fromSyncRun = $this->lastRunStatsFromSyncLog();
+
+        if ($fromSettings === null) {
+            return $fromSyncRun;
+        }
+        if ($fromSyncRun === null) {
+            return $fromSettings;
+        }
+
+        $settingsAt = $this->parseTimestamp($fromSettings['completed_at'] ?? null);
+        $syncAt = $this->parseTimestamp($fromSyncRun['completed_at'] ?? null);
+
+        if ($syncAt !== null && ($settingsAt === null || $syncAt->gt($settingsAt))) {
+            // Heal settings so ops alerts / next reads stay aligned with sync logs.
+            Setting::setValue(self::KEY_LAST_RUN_JSON, json_encode($fromSyncRun));
+            $this->logger->scheduler('debug', 'Healed stale last_run settings from sync log', [
+                'event' => 'universe_last_run_healed',
+                'settings_completed_at' => $fromSettings['completed_at'] ?? null,
+                'sync_log_completed_at' => $fromSyncRun['completed_at'] ?? null,
+                'sync_run_id' => $fromSyncRun['sync_run_id'] ?? null,
+            ]);
+
+            return $fromSyncRun;
+        }
+
+        return $fromSettings;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    protected function lastRunStatsFromSettings(): ?array
+    {
+        Cache::forget('setting.'.self::KEY_LAST_RUN_JSON);
         $raw = Setting::getValue(self::KEY_LAST_RUN_JSON);
         if (! is_string($raw) || $raw === '') {
             return null;
@@ -237,6 +278,87 @@ class UniversePriceSyncService
         $decoded = json_decode($raw, true);
 
         return is_array($decoded) ? $decoded : null;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    protected function lastRunStatsFromSyncLog(): ?array
+    {
+        $run = $this->syncLog->latestRun(SyncLogService::JOB_UNIVERSE_PRICE_SYNC);
+        if ($run === null) {
+            return null;
+        }
+
+        $completedAt = $run->finished_at ?? $run->started_at;
+        $summary = (string) ($run->summary ?? '');
+        $parsed = $this->parseUniverseSummary($summary);
+
+        return [
+            'scope' => $parsed['scope'] ?? $this->resolver->defaultScope(),
+            'mode' => $parsed['mode'] ?? 'daily',
+            'universe_count' => $parsed['universe_count'] ?? null,
+            'processed' => $parsed['processed'] ?? (int) ($run->stocks_processed ?? 0),
+            'succeeded' => $parsed['succeeded'] ?? max(
+                0,
+                (int) ($run->stocks_processed ?? 0) - (int) ($run->failures ?? 0),
+            ),
+            'failed' => $parsed['failed'] ?? (int) ($run->failures ?? 0),
+            'skipped' => $parsed['skipped'] ?? (int) ($run->skipped ?? 0),
+            'stored_rows' => $parsed['stored_rows'] ?? 0,
+            'cache_hits' => $parsed['cache_hits'] ?? 0,
+            'rate_limit_hits' => $parsed['rate_limit_hits'] ?? 0,
+            'cycle_completed' => $parsed['cycle_completed'] ?? false,
+            'cursor_stock_id' => $parsed['cursor_stock_id'] ?? null,
+            'errors' => [],
+            'completed_at' => $completedAt?->toIso8601String(),
+            'failure_rate_percent' => $parsed['failure_rate_percent'] ?? null,
+            'source' => 'sync_log',
+            'sync_run_id' => $run->id,
+            'sync_run_status' => $run->status,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function parseUniverseSummary(string $summary): array
+    {
+        $out = [];
+        if (preg_match('/Universe price sync \(([^\/]+)\/([^)]+)\):/i', $summary, $m)) {
+            $out['mode'] = $m[1];
+            $out['scope'] = $m[2];
+        }
+        foreach ([
+            'processed' => 'processed',
+            'ok' => 'succeeded',
+            'fail' => 'failed',
+            'stored' => 'stored_rows',
+            'cache_hits' => 'cache_hits',
+        ] as $needle => $key) {
+            if (preg_match('/\b'.preg_quote($needle, '/').'=(\d+)/i', $summary, $m)) {
+                $out[$key] = (int) $m[1];
+            }
+        }
+
+        if (isset($out['processed'], $out['failed']) && $out['processed'] > 0) {
+            $out['failure_rate_percent'] = round(($out['failed'] / $out['processed']) * 100, 1);
+        }
+
+        return $out;
+    }
+
+    protected function parseTimestamp(mixed $value): ?Carbon
+    {
+        if (! is_string($value) || trim($value) === '') {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($value);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     public static function looksLikeRateLimit(string $message): bool
@@ -373,10 +495,23 @@ class UniversePriceSyncService
         bool $resetCursor = false,
     ): array {
         if (! $this->isEnabled()) {
+            $this->logger->scheduler('debug', 'Universe sync skipped: disabled', [
+                'event' => 'universe_sync_skip',
+                'reason' => 'universe_disabled',
+                'mode' => $mode,
+            ]);
+
             return $this->emptyResult($scope ?? $this->resolver->defaultScope(), $mode, skipped: 1);
         }
 
         if ($this->isSyncInProgress()) {
+            $this->logger->scheduler('warning', 'Universe sync skipped: already in progress', [
+                'event' => 'universe_sync_skip',
+                'reason' => 'sync_in_progress_flag',
+                'mode' => $mode,
+                'in_progress_at' => Setting::getValue(self::KEY_IN_PROGRESS_AT),
+            ]);
+
             return $this->emptyResult($scope ?? $this->resolver->defaultScope(), $mode, skipped: 1);
         }
 
@@ -419,6 +554,19 @@ class UniversePriceSyncService
 
         $from = $this->rangeFrom($mode);
         $to = now()->startOfDay();
+
+        $this->logger->scheduler('debug', 'Universe sync batch starting', [
+            'event' => 'universe_sync_start',
+            'mode' => $mode,
+            'scope' => $scope,
+            'batch_size' => $batchSize,
+            'process_all' => $processAll,
+            'reset_cursor' => $resetCursor,
+            'from_date' => $from->toDateString(),
+            'to_date' => $to->toDateString(),
+            'cursor_before' => (int) Setting::getValue(self::KEY_CURSOR_STOCK_ID, '0'),
+            'delay_ms' => $delayMs,
+        ]);
 
         $benchmarkResult = $this->benchmarkSync->syncIfNeeded();
         if (! $benchmarkResult['skipped']) {

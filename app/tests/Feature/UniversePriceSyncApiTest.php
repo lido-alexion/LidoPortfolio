@@ -62,6 +62,47 @@ class UniversePriceSyncApiTest extends TestCase
         ]);
     }
 
+    public function test_status_last_run_prefers_newer_sync_log_over_stale_settings(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+
+        \App\Models\Setting::setValue(UniversePriceSyncService::KEY_LAST_RUN_JSON, json_encode([
+            'mode' => 'daily',
+            'scope' => 'all_equities',
+            'processed' => 75,
+            'succeeded' => 75,
+            'failed' => 0,
+            'stored_rows' => 0,
+            'cache_hits' => 75,
+            'rate_limit_hits' => 0,
+            'completed_at' => '2026-07-07T04:15:18+05:30',
+        ]));
+
+        \App\Models\SyncRun::query()->create([
+            'id' => (string) \Illuminate\Support\Str::uuid(),
+            'job_name' => \App\Services\SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+            'status' => 'success',
+            'started_at' => '2026-07-08 20:30:06',
+            'finished_at' => '2026-07-08 20:30:37',
+            'stocks_processed' => 75,
+            'failures' => 0,
+            'skipped' => 0,
+            'summary' => 'Universe price sync (daily/all_equities): processed=75 ok=75 fail=0 stored=1 cache_hits=74',
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->getJson('/api/universe-price-sync/status')
+            ->assertOk();
+
+        $response->assertJsonPath('data.last_run.processed', 75);
+        $response->assertJsonPath('data.last_run.stored_rows', 1);
+        $this->assertStringContainsString(
+            '2026-07-08',
+            (string) $response->json('data.last_run.completed_at'),
+        );
+        $response->assertJsonPath('data.last_run.source', 'sync_log');
+    }
+
     public function test_admin_can_trigger_daily_batch(): void
     {
         config(['portfolio.universe_price_sync.delay_ms_between_stocks' => 0]);
