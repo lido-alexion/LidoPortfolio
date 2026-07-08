@@ -204,6 +204,14 @@ class PriceHistoryGapServiceTest extends TestCase
         );
         $this->assertFalse($service->isInProgress());
 
+        $storedScan = json_decode((string) Setting::getValue(PriceHistoryGapService::KEY_LAST_SCAN_JSON), true);
+        $inventory = json_decode((string) Setting::getValue(PriceHistoryGapService::KEY_GAP_INVENTORY_JSON), true);
+        $this->assertIsArray($storedScan);
+        $this->assertArrayNotHasKey('ranges', $storedScan['symbols_with_gaps'][0] ?? ['ranges' => true]);
+        $this->assertIsArray($inventory);
+        $this->assertArrayNotHasKey('symbols_with_gaps', $inventory);
+        $this->assertCount(1, $inventory['stock_ids'] ?? []);
+
         Carbon::setTestNow();
     }
 

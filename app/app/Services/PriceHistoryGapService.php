@@ -271,7 +271,7 @@ class PriceHistoryGapService
             if ($stockIds === []) {
                 $summary['stopped_reason'] = 'no_gaps';
                 $summary['completed_at'] = now()->toIso8601String();
-                Setting::setValue(self::KEY_LAST_FILL_JSON, json_encode($summary));
+                Setting::setValue(self::KEY_LAST_FILL_JSON, $this->encodeSettingJson($summary));
 
                 return $summary;
             }
@@ -373,7 +373,7 @@ class PriceHistoryGapService
             $summary['with_gaps'] = (int) ($refreshed['with_gaps'] ?? $summary['with_gaps']);
             $summary['stopped_reason'] = ($refreshed['with_gaps'] ?? 0) === 0 ? 'no_gaps_remaining' : 'completed';
             $summary['completed_at'] = now()->toIso8601String();
-            Setting::setValue(self::KEY_LAST_FILL_JSON, json_encode($summary));
+            Setting::setValue(self::KEY_LAST_FILL_JSON, $this->encodeSettingJson($summary));
 
             $this->logger->scheduler('info', $runSummary, array_merge([
                 'category' => 'PriceHistoryGap',
@@ -435,17 +435,46 @@ class PriceHistoryGapService
         $stats['scan_completed'] = true;
         $stats['completed_at'] = now()->toIso8601String();
 
-        Setting::setValue(self::KEY_LAST_SCAN_JSON, json_encode($stats));
-        Setting::setValue(self::KEY_GAP_INVENTORY_JSON, json_encode([
-            'scope' => $scope,
-            'stock_ids' => $stats['gap_stock_ids'],
-            'symbols_with_gaps' => $stats['symbols_with_gaps'],
-            'scanned_at' => $stats['completed_at'],
-            'universe_count' => $universeCount,
-            'with_gaps' => $stats['with_gaps'],
-        ]));
+        $this->persistFullScanResults($scope, $stats, $universeCount);
 
         return $stats;
+    }
+
+    /**
+     * @param  array<string, mixed>  $stats
+     */
+    protected function persistFullScanResults(string $scope, array $stats, int $universeCount): void
+    {
+        $stored = $stats;
+        $stored['symbols_with_gaps'] = $this->compactGapSymbolRows($stats['symbols_with_gaps'] ?? []);
+        unset($stored['gap_stock_ids']);
+
+        Setting::setValue(self::KEY_LAST_SCAN_JSON, $this->encodeSettingJson($stored));
+        Setting::setValue(self::KEY_GAP_INVENTORY_JSON, $this->encodeSettingJson([
+            'scope' => $scope,
+            'stock_ids' => $stats['gap_stock_ids'] ?? [],
+            'scanned_at' => $stats['completed_at'] ?? now()->toIso8601String(),
+            'universe_count' => $universeCount,
+            'with_gaps' => $stats['with_gaps'] ?? 0,
+        ]));
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, array<string, mixed>>
+     */
+    protected function compactGapSymbolRows(array $rows): array
+    {
+        return array_map(static fn (array $row) => array_filter([
+            'symbol' => $row['symbol'] ?? null,
+            'stock_id' => $row['stock_id'] ?? null,
+            'gap_count' => $row['gap_count'] ?? 0,
+        ], static fn ($value) => $value !== null), $rows);
+    }
+
+    protected function encodeSettingJson(array $payload): string
+    {
+        return json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
     }
 
     protected function publishScanProgress(int $scanned, int $universeCount, int $withGaps): void
@@ -763,7 +792,7 @@ class PriceHistoryGapService
         }
 
         $summary['completed_at'] = now()->toIso8601String();
-        Setting::setValue(self::KEY_LAST_FILL_JSON, json_encode($summary));
+        Setting::setValue(self::KEY_LAST_FILL_JSON, $this->encodeSettingJson($summary));
 
         return $summary;
     }
@@ -802,7 +831,13 @@ class PriceHistoryGapService
         $stats['cursor_stock_id'] = (int) Setting::getValue(self::KEY_CURSOR_STOCK_ID, '0');
         $stats['completed_at'] = now()->toIso8601String();
 
-        Setting::setValue($settingsKey, json_encode($stats));
+        if ($settingsKey === self::KEY_LAST_SCAN_JSON && isset($stats['symbols_with_gaps'])) {
+            $stored = $stats;
+            $stored['symbols_with_gaps'] = $this->compactGapSymbolRows($stats['symbols_with_gaps']);
+            Setting::setValue($settingsKey, $this->encodeSettingJson($stored));
+        } else {
+            Setting::setValue($settingsKey, $this->encodeSettingJson($stats));
+        }
 
         return $stats;
     }

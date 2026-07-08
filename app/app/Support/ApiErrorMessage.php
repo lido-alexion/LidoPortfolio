@@ -57,6 +57,14 @@ class ApiErrorMessage
             return 'Database schema is out of date for this feature. Run the latest migrations on the server, then try again.';
         }
 
+        if (
+            str_contains($sqlMessage, 'Data too long')
+            || str_contains($sqlMessage, '1406')
+            || str_contains($sqlMessage, '22001')
+        ) {
+            return 'A settings value was too large to store. Run the latest migrations on the server (widens portfolio_settings), then try Scan all gaps again.';
+        }
+
         return app()->hasDebugModeEnabled()
             ? $sqlMessage
             : 'A database error occurred while processing your request. Run migrations on the server, then try again.';
