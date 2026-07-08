@@ -171,7 +171,7 @@ export default function AlertPoliciesPage() {
                     </p>
                 </div>
                 <div className="d-flex flex-wrap gap-2">
-                    <Link to="/settings" className="btn btn-outline-secondary btn-sm">Back to settings</Link>
+                    <Link to="/settings/portfolio" className="btn btn-outline-secondary btn-sm">Back to settings</Link>
                     <button
                         type="button"
                         className="btn btn-outline-primary btn-sm"

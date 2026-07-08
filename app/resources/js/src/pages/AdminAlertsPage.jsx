@@ -140,7 +140,7 @@ export default function AdminAlertsPage() {
                         Sync health and scheduler issues detected for administrators.
                     </p>
                 </div>
-                <Link to="/settings" className="btn btn-outline-secondary btn-sm">
+                <Link to="/settings/global" className="btn btn-outline-secondary btn-sm">
                     Back to settings
                 </Link>
             </div>

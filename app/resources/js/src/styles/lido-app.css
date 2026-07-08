@@ -45,6 +45,7 @@
     --lido-text-success: #4ade80;
     --lido-text-danger: #f87171;
     --lido-text-allocation-elevated: #fb923c;
+    --lido-admin-settings-text: #9ecbff;
     --lido-number-step-bg: #1e90ff;
     --lido-number-step-disabled-bg: #6b7280;
     --lido-chart-tooltip-bg: #1a1a1a;
@@ -90,6 +91,7 @@
     --lido-text-success: #15803d;
     --lido-text-danger: #dc2626;
     --lido-text-allocation-elevated: #ea580c;
+    --lido-admin-settings-text: #7a5f00;
     --lido-number-step-bg: #1e90ff;
     --lido-number-step-disabled-bg: #9ca3af;
     --lido-chart-tooltip-bg: #ffffff;
@@ -276,6 +278,26 @@ body {
     color: var(--lido-text);
     background-color: var(--lido-bg-surface);
     border-color: var(--lido-border) var(--lido-border) var(--lido-bg-surface);
+}
+
+.lido-settings-scope-tabs .nav-link.lido-settings-admin-tab {
+    color: var(--lido-admin-settings-text);
+}
+
+.lido-settings-scope-tabs .nav-link.lido-settings-admin-tab.active {
+    color: var(--lido-admin-settings-text);
+}
+
+.lido-settings-admin-only {
+    color: var(--lido-admin-settings-text);
+}
+
+.lido-settings-admin-only .card-header,
+.lido-settings-admin-only .form-label,
+.lido-settings-admin-only .text-muted,
+.lido-settings-admin-only p,
+.lido-settings-admin-only .btn-link {
+    color: var(--lido-admin-settings-text) !important;
 }
 
 .lido-settings-admin-card {

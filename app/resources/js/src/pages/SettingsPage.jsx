@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import { usePortfolio } from '../context/PortfolioContext';
@@ -44,8 +44,26 @@ function formatDate(value) {
     return new Date(value).toLocaleString();
 }
 
+const SETTINGS_SCOPE_PATHS = {
+    global: '/settings/global',
+    portfolio: '/settings/portfolio',
+    account: '/settings/account',
+};
+
+function scopeFromPath(pathname, isAdmin) {
+    if (pathname.startsWith('/settings/global')) {
+        return isAdmin ? 'global' : 'portfolio';
+    }
+    if (pathname.startsWith('/settings/account')) {
+        return 'account';
+    }
+    return 'portfolio';
+}
+
 export default function SettingsPage() {
     const { logout, user } = useAuth();
+    const location = useLocation();
+    const navigate = useNavigate();
     const { activePortfolio } = usePortfolio();
     const isAdmin = Boolean(user?.is_admin);
     const [settings, setSettings] = useState({});
@@ -57,7 +75,7 @@ export default function SettingsPage() {
     const [feeSectionOpen, setFeeSectionOpen] = useState(false);
     const [telegramTesting, setTelegramTesting] = useState(false);
     const [opsCheckRunning, setOpsCheckRunning] = useState(false);
-    const [activeScope, setActiveScope] = useState('portfolio');
+    const [activeScope, setActiveScope] = useState(() => scopeFromPath(location.pathname, isAdmin));
 
     const notificationSchedules = useMemo(
         () => (Array.isArray(settings.notification_schedules)
@@ -123,6 +141,14 @@ export default function SettingsPage() {
     usePortfolioChanged(() => {
         loadSettings();
     });
+
+    useEffect(() => {
+        const nextScope = scopeFromPath(location.pathname, isAdmin);
+        setActiveScope(nextScope);
+        if (location.pathname === '/settings' || (!isAdmin && location.pathname.startsWith('/settings/global'))) {
+            navigate(SETTINGS_SCOPE_PATHS[nextScope], { replace: true });
+        }
+    }, [isAdmin, location.pathname, navigate]);
 
     const saveGlobal = async (e) => {
         e.preventDefault();
@@ -230,7 +256,7 @@ export default function SettingsPage() {
     };
 
     const scopeTabs = [
-        ...(isAdmin ? [{ id: 'global', label: 'Global' }] : []),
+        ...(isAdmin ? [{ id: 'global', label: 'Global', adminOnly: true }] : []),
         { id: 'portfolio', label: 'Portfolio' },
         { id: 'account', label: 'Account' },
     ];
@@ -247,10 +273,13 @@ export default function SettingsPage() {
                         <li className="nav-item" key={tab.id} role="presentation">
                             <button
                                 type="button"
-                                className={`nav-link${activeScope === tab.id ? ' active' : ''}`}
+                                className={`nav-link${activeScope === tab.id ? ' active' : ''}${tab.adminOnly ? ' lido-settings-admin-tab' : ''}`}
                                 role="tab"
                                 aria-selected={activeScope === tab.id}
-                                onClick={() => setActiveScope(tab.id)}
+                                onClick={() => {
+                                    setActiveScope(tab.id);
+                                    navigate(SETTINGS_SCOPE_PATHS[tab.id]);
+                                }}
                             >
                                 {tab.label}
                             </button>
@@ -260,7 +289,7 @@ export default function SettingsPage() {
             </div>
 
             {activeScope === 'global' && isAdmin && (
-                <form className="d-grid gap-3" onSubmit={saveGlobal}>
+                <form className="d-grid gap-3 lido-settings-admin-only" onSubmit={saveGlobal}>
                     <div className="card">
                         <div className="card-header p-0">
                             <button

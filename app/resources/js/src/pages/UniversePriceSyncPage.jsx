@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
 import { showToast } from '../toast';
+import { formatSchedulerTimestamp } from '../utils/schedulerTimestamp';
 
 const SCOPE_OPTIONS = [
     { value: 'all_equities', label: 'All equities (NSE + BSE-only)' },
@@ -9,15 +10,8 @@ const SCOPE_OPTIONS = [
 const MAX_BACKFILL_CHAIN_BATCHES = 500;
 const MAX_GAP_CHAIN_BATCHES = 500;
 
-function formatTimestamp(value) {
-    if (!value) {
-        return '—';
-    }
-    try {
-        return new Date(value).toLocaleString();
-    } catch {
-        return value;
-    }
+function formatUniverseTimestamp(value, timezone = 'Asia/Kolkata') {
+    return formatSchedulerTimestamp(value, timezone);
 }
 
 function statusBadgeClass(ok) {
@@ -298,6 +292,11 @@ export default function UniversePriceSyncPage() {
         return 'alert-warning';
     };
     const progressPercent = status?.progress_percent ?? 0;
+    const cronTimezone = status?.maintenance?.timezone ?? 'Asia/Kolkata';
+    const formatStatusTime = useCallback(
+        (value) => formatUniverseTimestamp(value, cronTimezone),
+        [cronTimezone],
+    );
     const coveragePercent = useMemo(() => {
         const total = status?.universe_count ?? 0;
         const withPrices = status?.stocks_with_prices ?? 0;
@@ -316,7 +315,7 @@ export default function UniversePriceSyncPage() {
                         Bulk OHLCV for NSE equities. Use batches on cPanel — one HTTP request per batch.
                     </p>
                 </div>
-                <Link to="/settings" className="btn btn-outline-secondary btn-sm">
+                <Link to="/settings/global" className="btn btn-outline-secondary btn-sm">
                     Back to settings
                 </Link>
             </div>
@@ -362,7 +361,7 @@ export default function UniversePriceSyncPage() {
                                                 <div className="text-muted small mt-1">
                                                     Last seen:
                                                     {' '}
-                                                    {formatTimestamp(alert.last_triggered_at)}
+                                                    {formatStatusTime(alert.last_triggered_at)}
                                                     {alert.acknowledged && ' · dismissed'}
                                                 </div>
                                             </div>
@@ -438,8 +437,8 @@ export default function UniversePriceSyncPage() {
                                         {progressPercent}
                                         %
                                     </dd>
-                                    <dt className="col-5">Last cycle</dt>
-                                    <dd className="col-7">{formatTimestamp(status?.last_cycle_completed_at)}</dd>
+                                    <dt className="col-5">Last full cycle</dt>
+                                    <dd className="col-7">{formatStatusTime(status?.last_cycle_completed_at)}</dd>
                                     <dt className="col-5">Nightly window</dt>
                                     <dd className="col-7">{status?.maintenance?.window_label ?? '—'}</dd>
                                     <dt className="col-5">Nightly capacity</dt>
@@ -503,12 +502,12 @@ export default function UniversePriceSyncPage() {
                                     <dt className="col-5">Rate limits</dt>
                                     <dd className="col-7">{status.last_run.rate_limit_hits ?? 0}</dd>
                                     <dt className="col-5">At</dt>
-                                    <dd className="col-7">{formatTimestamp(status.last_run.completed_at)}</dd>
+                                    <dd className="col-7">{formatStatusTime(status.last_run.completed_at)}</dd>
                                     {status.latest_sync_run?.started_at ? (
                                         <>
                                             <dt className="col-5">Sync log</dt>
                                             <dd className="col-7">
-                                                {formatTimestamp(status.latest_sync_run.finished_at || status.latest_sync_run.started_at)}
+                                                {formatStatusTime(status.latest_sync_run.finished_at || status.latest_sync_run.started_at)}
                                                 {status.latest_sync_run.status ? ` (${status.latest_sync_run.status})` : ''}
                                             </dd>
                                         </>
@@ -843,7 +842,7 @@ export default function UniversePriceSyncPage() {
                             ) : (
                                 rateLimits.recent_issues.map((row) => (
                                     <tr key={`${row.logged_at}-${row.message}-${row.symbol}`}>
-                                        <td>{formatTimestamp(row.logged_at)}</td>
+                                        <td>{formatStatusTime(row.logged_at)}</td>
                                         <td>{row.level}</td>
                                         <td>{row.symbol || '—'}</td>
                                         <td>{row.message}</td>

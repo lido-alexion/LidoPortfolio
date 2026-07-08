@@ -283,7 +283,7 @@ export default function UserManagementPage() {
                 <div className="card">
                     <div className="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
                         <span>Invite new users</span>
-                        <Link className="btn btn-sm btn-outline-secondary" to="/settings">
+                        <Link className="btn btn-sm btn-outline-secondary" to="/settings/account">
                             ← Back to settings
                         </Link>
                     </div>

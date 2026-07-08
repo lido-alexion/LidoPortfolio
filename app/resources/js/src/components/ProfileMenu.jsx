@@ -87,7 +87,7 @@ export default function ProfileMenu({ user }) {
                             Portfolios
                         </Link>
                         <Link
-                            to="/settings"
+                            to="/settings/portfolio"
                             className="dropdown-item py-2 small d-flex align-items-center"
                             onClick={() => setIsOpen(false)}
                         >

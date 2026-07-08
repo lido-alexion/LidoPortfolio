@@ -21,22 +21,21 @@ export function formatSchedulerTimestamp(value, timezone = DEFAULT_TIMEZONE) {
             year: 'numeric',
             month: 'short',
             day: '2-digit',
-            hour: '2-digit',
+            hour: 'numeric',
             minute: '2-digit',
-            second: '2-digit',
-            hour12: false,
-            timeZoneName: 'shortOffset',
+            hour12: true,
+            timeZoneName: 'short',
         }).formatToParts(date);
 
         const pick = (type) => parts.find((part) => part.type === type)?.value ?? '';
-        const dateTime = `${pick('day')} ${pick('month')} ${pick('year')}, ${pick('hour')}:${pick('minute')}:${pick('second')}`;
-        const offset = pick('timeZoneName');
-
-        if (offset) {
-            return `${dateTime} ${offset} (${tz})`;
+        const dayPeriod = pick('dayPeriod').toUpperCase();
+        const dateTime = `${pick('day')} ${pick('month')}, ${pick('year')}, ${pick('hour')}:${pick('minute')} ${dayPeriod}`;
+        const zoneLabel = pick('timeZoneName');
+        if (zoneLabel) {
+            return `${dateTime} ${zoneLabel}`;
         }
 
-        return `${dateTime} (${tz})`;
+        return `${dateTime} ${tz}`;
     } catch {
         return String(value);
     }

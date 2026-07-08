@@ -182,7 +182,9 @@ class UniversePriceSyncService
     {
         $scope = $this->resolver->normalizeScope($scope ?? $this->resolver->defaultScope());
         $universeCount = $this->resolver->count($scope);
-        $cursorId = (int) Setting::getValue(self::KEY_CURSOR_STOCK_ID, '0');
+
+        $lastRun = $this->lastRunStats();
+        $cursorId = $this->resolveCursorStockId($lastRun);
         $cursorStock = $cursorId > 0 ? Stock::query()->find($cursorId) : null;
 
         $processedThrough = $universeCount > 0 && $cursorId > 0
@@ -193,9 +195,12 @@ class UniversePriceSyncService
             ? round(min(100, ($processedThrough / $universeCount) * 100), 1)
             : 0.0;
 
-        $lastRun = $this->lastRunStats();
-        $latestSyncRun = $this->syncLog->latestRunSummary(SyncLogService::JOB_UNIVERSE_PRICE_SYNC);
+        $finishedRun = $this->syncLog->latestFinishedRun(SyncLogService::JOB_UNIVERSE_PRICE_SYNC);
+        $latestSyncRun = $finishedRun !== null
+            ? $this->syncLog->formatRun($finishedRun)
+            : $this->syncLog->latestRunSummary(SyncLogService::JOB_UNIVERSE_PRICE_SYNC);
         $recentErrors = $this->recentProviderIssues(25);
+        $lastCycleCompletedAt = $this->resolveLastCycleCompletedAt($lastRun);
 
         return [
             'enabled' => $this->isEnabled(),
@@ -215,7 +220,7 @@ class UniversePriceSyncService
             'cursor_stock_id' => $cursorId,
             'cursor_symbol' => $cursorStock?->symbol,
             'progress_percent' => $progressPercent,
-            'last_cycle_completed_at' => Setting::getValue(self::KEY_LAST_CYCLE_COMPLETED_AT),
+            'last_cycle_completed_at' => $lastCycleCompletedAt,
             'last_run' => $lastRun,
             'latest_sync_run' => $latestSyncRun,
             'rate_limits' => [
@@ -251,6 +256,7 @@ class UniversePriceSyncService
         if ($syncAt !== null && ($settingsAt === null || $syncAt->gt($settingsAt))) {
             // Heal settings so ops alerts / next reads stay aligned with sync logs.
             Setting::setValue(self::KEY_LAST_RUN_JSON, json_encode($fromSyncRun));
+            $this->healCursorFromLastRun($fromSyncRun);
             $this->logger->scheduler('debug', 'Healed stale last_run settings from sync log', [
                 'event' => 'universe_last_run_healed',
                 'settings_completed_at' => $fromSettings['completed_at'] ?? null,
@@ -285,7 +291,7 @@ class UniversePriceSyncService
      */
     protected function lastRunStatsFromSyncLog(): ?array
     {
-        $run = $this->syncLog->latestRun(SyncLogService::JOB_UNIVERSE_PRICE_SYNC);
+        $run = $this->syncLog->latestFinishedRun(SyncLogService::JOB_UNIVERSE_PRICE_SYNC);
         if ($run === null) {
             return null;
         }
@@ -293,8 +299,9 @@ class UniversePriceSyncService
         $completedAt = $run->finished_at ?? $run->started_at;
         $summary = (string) ($run->summary ?? '');
         $parsed = $this->parseUniverseSummary($summary);
+        $fromContext = $this->completionStatsFromSyncLog($run->id);
 
-        return [
+        $stats = [
             'scope' => $parsed['scope'] ?? $this->resolver->defaultScope(),
             'mode' => $parsed['mode'] ?? 'daily',
             'universe_count' => $parsed['universe_count'] ?? null,
@@ -317,6 +324,103 @@ class UniversePriceSyncService
             'sync_run_id' => $run->id,
             'sync_run_status' => $run->status,
         ];
+
+        if ($fromContext !== null) {
+            $stats = array_merge($stats, array_filter(
+                $fromContext,
+                static fn ($value) => $value !== null && $value !== [],
+            ));
+            if (! empty($fromContext['errors'])) {
+                $stats['errors'] = $fromContext['errors'];
+            }
+        }
+
+        return $stats;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    protected function completionStatsFromSyncLog(string $runId): ?array
+    {
+        if (! \Illuminate\Support\Facades\Schema::hasTable('portfolio_sync_logs')) {
+            return null;
+        }
+
+        $row = SyncLog::query()
+            ->where('run_id', $runId)
+            ->where('job_name', SyncLogService::JOB_UNIVERSE_PRICE_SYNC)
+            ->where('message', 'Universe price sync completed')
+            ->orderByDesc('logged_at')
+            ->first();
+
+        if ($row === null || ! is_array($row->context)) {
+            return null;
+        }
+
+        $context = $row->context;
+
+        return [
+            'scope' => $context['scope'] ?? null,
+            'mode' => $context['mode'] ?? null,
+            'universe_count' => isset($context['universe_count']) ? (int) $context['universe_count'] : null,
+            'processed' => isset($context['processed']) ? (int) $context['processed'] : null,
+            'succeeded' => isset($context['succeeded']) ? (int) $context['succeeded'] : null,
+            'failed' => isset($context['failed']) ? (int) $context['failed'] : null,
+            'skipped' => isset($context['skipped']) ? (int) $context['skipped'] : null,
+            'stored_rows' => isset($context['stored_rows']) ? (int) $context['stored_rows'] : null,
+            'cache_hits' => isset($context['cache_hits']) ? (int) $context['cache_hits'] : null,
+            'rate_limit_hits' => isset($context['rate_limit_hits']) ? (int) $context['rate_limit_hits'] : null,
+            'cycle_completed' => (bool) ($context['cycle_completed'] ?? false),
+            'cursor_stock_id' => isset($context['cursor_stock_id']) ? (int) $context['cursor_stock_id'] : null,
+            'completed_at' => is_string($context['completed_at'] ?? null) ? $context['completed_at'] : null,
+            'failure_rate_percent' => isset($context['failure_rate_percent']) ? (float) $context['failure_rate_percent'] : null,
+            'errors' => is_array($context['errors'] ?? null) ? $context['errors'] : [],
+        ];
+    }
+
+    protected function resolveCursorStockId(?array $lastRun): int
+    {
+        Cache::forget('setting.'.self::KEY_CURSOR_STOCK_ID);
+        $cursorId = (int) Setting::getValue(self::KEY_CURSOR_STOCK_ID, '0');
+
+        if ($lastRun === null || ! isset($lastRun['cursor_stock_id'])) {
+            return $cursorId;
+        }
+
+        $fromRun = (int) $lastRun['cursor_stock_id'];
+        if ($fromRun !== $cursorId) {
+            $this->healCursorFromLastRun($lastRun);
+
+            return $fromRun;
+        }
+
+        return $cursorId;
+    }
+
+    /**
+     * @param  array<string, mixed>  $lastRun
+     */
+    protected function healCursorFromLastRun(array $lastRun): void
+    {
+        if (! isset($lastRun['cursor_stock_id'])) {
+            return;
+        }
+
+        $cursorId = (int) $lastRun['cursor_stock_id'];
+        Cache::forget('setting.'.self::KEY_CURSOR_STOCK_ID);
+        $current = (int) Setting::getValue(self::KEY_CURSOR_STOCK_ID, '0');
+        if ($cursorId === $current) {
+            return;
+        }
+
+        $this->setCursor($cursorId);
+        $this->logger->scheduler('debug', 'Healed stale universe cursor from sync log', [
+            'event' => 'universe_cursor_healed',
+            'settings_cursor_stock_id' => $current,
+            'resolved_cursor_stock_id' => $cursorId,
+            'sync_run_id' => $lastRun['sync_run_id'] ?? null,
+        ]);
     }
 
     /**
@@ -359,6 +463,60 @@ class UniversePriceSyncService
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * Keep "last cycle completed at" aligned with the freshest known completion signal.
+     * We trust, in order: setting key, cycle_completed=true in last_run payload, and sync-log context.
+     */
+    protected function resolveLastCycleCompletedAt(?array $lastRun = null): ?string
+    {
+        $settingAt = $this->parseTimestamp(Setting::getValue(self::KEY_LAST_CYCLE_COMPLETED_AT));
+        $lastRunAt = null;
+        if (($lastRun['cycle_completed'] ?? false) === true) {
+            $lastRunAt = $this->parseTimestamp($lastRun['completed_at'] ?? null);
+        }
+        $syncLogAt = $this->latestCycleCompletedAtFromSyncLog();
+
+        $candidates = collect([$settingAt, $lastRunAt, $syncLogAt])->filter();
+        /** @var Carbon|null $resolved */
+        $resolved = $candidates->sortByDesc(fn (Carbon $at) => $at->getTimestamp())->first();
+        if ($resolved === null) {
+            return null;
+        }
+
+        if ($settingAt === null || $resolved->gt($settingAt)) {
+            Setting::setValue(self::KEY_LAST_CYCLE_COMPLETED_AT, $resolved->toIso8601String());
+            $this->logger->scheduler('debug', 'Healed stale last_cycle_completed_at from sync logs', [
+                'event' => 'universe_last_cycle_healed',
+                'settings_last_cycle_completed_at' => $settingAt?->toIso8601String(),
+                'resolved_last_cycle_completed_at' => $resolved->toIso8601String(),
+            ]);
+        }
+
+        return $resolved->toIso8601String();
+    }
+
+    protected function latestCycleCompletedAtFromSyncLog(): ?Carbon
+    {
+        if (! \Illuminate\Support\Facades\Schema::hasTable('portfolio_sync_logs')) {
+            return null;
+        }
+
+        $row = SyncLog::query()
+            ->where('job_name', SyncLogService::JOB_UNIVERSE_PRICE_SYNC)
+            ->whereJsonContains('context->cycle_completed', true)
+            ->orderByDesc('logged_at')
+            ->first();
+
+        if ($row === null) {
+            return null;
+        }
+
+        $context = is_array($row->context) ? $row->context : null;
+        $completedAt = $this->parseTimestamp($context['completed_at'] ?? null);
+
+        return $completedAt ?? $row->logged_at;
     }
 
     public static function looksLikeRateLimit(string $message): bool

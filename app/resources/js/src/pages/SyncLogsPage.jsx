@@ -250,7 +250,7 @@ export default function SyncLogsPage() {
                             >
                                 {exporting ? 'Exporting…' : 'Export CSV'}
                             </button>
-                            <Link className="btn btn-sm btn-outline-secondary" to="/settings">
+                            <Link className="btn btn-sm btn-outline-secondary" to="/settings/global">
                                 ← Back to settings
                             </Link>
                         </div>

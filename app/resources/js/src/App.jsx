@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { getToastAutoDismissMs } from './toast';
-import { Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import AppBottomNav from './components/AppBottomNav';
 import AppHeader from './components/AppHeader';
 import AppTabs from './components/AppTabs';
@@ -140,7 +140,10 @@ function App() {
                                 <Route path="/calendar" element={<CalendarPage />} />
                                 <Route path="/profile" element={<ProfilePage />} />
                                 <Route path="/portfolios" element={<PortfoliosPage />} />
-                                <Route path="/settings" element={<SettingsPage />} />
+                                <Route path="/settings" element={<Navigate to="/settings/portfolio" replace />} />
+                                <Route path="/settings/global" element={<SettingsPage />} />
+                                <Route path="/settings/portfolio" element={<SettingsPage />} />
+                                <Route path="/settings/account" element={<SettingsPage />} />
                                 <Route path="/settings/alert-policies" element={<AlertPoliciesPage />} />
                                 <Route path="/settings/sync-logs" element={(
                                     <AdminRoute>

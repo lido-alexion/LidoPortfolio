@@ -14,7 +14,7 @@ export default function AdminRoute({ children }) {
     }
 
     if (!user?.is_admin) {
-        return <Navigate to="/settings" replace />;
+        return <Navigate to="/settings/portfolio" replace />;
     }
 
     return children;

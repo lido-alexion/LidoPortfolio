@@ -11,5 +11,5 @@ export const MAIN_TAB_ITEMS = [
 
 export const FOOTER_NAV_ITEMS = [
     ...MAIN_TAB_ITEMS,
-    { to: '/settings', label: 'Settings', match: (p) => p.startsWith('/settings') },
+    { to: '/settings/portfolio', label: 'Settings', match: (p) => p.startsWith('/settings') },
 ];

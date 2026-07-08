@@ -133,6 +133,24 @@ class SyncLogService
         return $query->first();
     }
 
+    public function latestFinishedRun(?string $jobName = null): ?SyncRun
+    {
+        if (! Schema::hasTable('portfolio_sync_runs')) {
+            return null;
+        }
+
+        $query = SyncRun::query()
+            ->whereIn('status', ['success', 'partial', 'failed'])
+            ->whereNotNull('finished_at')
+            ->orderByDesc('finished_at');
+
+        if ($jobName) {
+            $query->where('job_name', $jobName);
+        }
+
+        return $query->first();
+    }
+
     public function latestSuccessfulFinishedAt(?string $jobName = null): ?Carbon
     {
         if (! Schema::hasTable('portfolio_sync_runs')) {
