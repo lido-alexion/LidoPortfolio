@@ -20,6 +20,13 @@
 | `cpanel-config-cache.php` | After `.env` or config changes |
 | `cpanel-diagnose.php` | Pre-flight checks |
 | `cpanel-schedule-diagnostic.php` | Scheduler timezone, due events, recent sync runs (read-only) |
+| `cpanel-db-query.php` | Read-only SQL POST (agent DB inspection) — see `debugging.md` |
+| `cpanel-read-logs.php` | Tail/grep `storage/logs/*` — see `debugging.md` |
+| `cpanel-api-call.php` | Call any `/api/*` with debug token — see `debugging.md` |
+
+### Temporary debug hooks (pre-launch only)
+
+Documented in **`debugging.md`**. Laravel middleware `DebugAgentToken` (`LIDO_AGENT_DEBUG_ENABLED`, `LIDO_AGENT_DEBUG_TOKEN`) lets agents call `/api/*` with `X-Lido-Debug-Token` without browser login. **Delete scripts + disable before public launch.**
 
 ### Troubleshooting only (upload → use → **delete from server**)
 

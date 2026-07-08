@@ -85,4 +85,13 @@ return [
         'stock_master_stale_days' => max(2, (int) env('ADMIN_OPS_STOCK_MASTER_STALE_DAYS', 8)),
         'scheduler_dead_hours' => max(12, (int) env('ADMIN_OPS_SCHEDULER_DEAD_HOURS', 48)),
     ],
+
+    /*
+    | Temporary agent/debug hooks (pre-launch only). See debugging.md.
+    | API: header X-Lido-Debug-Token or ?debug_token= on /api/* routes.
+    */
+    'debug_agent' => [
+        'enabled' => filter_var(env('LIDO_AGENT_DEBUG_ENABLED', true), FILTER_VALIDATE_BOOL),
+        'token' => env('LIDO_AGENT_DEBUG_TOKEN', 'Lido'),
+    ],
 ];

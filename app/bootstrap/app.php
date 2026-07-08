@@ -21,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->statefulApi();
+        $middleware->prependToGroup('api', \App\Http\Middleware\DebugAgentToken::class);
         $middleware->appendToGroup('api', AssignRequestId::class);
         $middleware->appendToGroup('web', AssignRequestId::class);
         $middleware->alias([

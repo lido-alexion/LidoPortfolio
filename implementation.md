@@ -6,7 +6,7 @@ Living reference for Lido Portfolio. **Update this file whenever code changes.**
 ## Agent / documentation policy (May 2026)
 
 - Do not use or recreate `design_doc.md` or removed phase/report/spec files.
-- **Canonical docs:** `implementation.md` (technical), `README.md` (quick start), **`deploy/DEPLOY.md`** (production deploy & updates), `DEPLOYMENT_VALIDATION_PLAN.md`, `portfolio-history-rebuild-report.md`, `app/API_DOCUMENTATION.md`.
+- **Canonical docs:** `implementation.md` (technical), **`debugging.md`** (production debug hooks & agent runbook), `README.md` (quick start), **`deploy/DEPLOY.md`** (production deploy & updates), `DEPLOYMENT_VALIDATION_PLAN.md`, `portfolio-history-rebuild-report.md`, `app/API_DOCUMENTATION.md`.
 - Cursor rule `.cursor/rules/Always-update-implementation-details-in-implementation-md-file.mdc` enforces: read this file first; update it after code changes.
 - Persistent instructions across sessions: project rules in `.cursor/rules/` (`alwaysApply: true`) + optional User Rules in Cursor Settings.
 
@@ -464,9 +464,9 @@ Per-portfolio rules in `portfolio_alert_policies`; evaluated after daily price s
 | Red “App load problem” on login                                | Stale `sessionStorage.lido_boot_error`                                                                                                | Tap Dismiss; deploy latest `BootErrorBanner` + `app.blade.php`                                                                                                                                             |
 | Intermittent blank page typing in forms (e.g. user mgmt email) | Mobile keyboard / `100vw` header overflow / `backdrop-filter` repaint bug — devtools resize “fixes” it                                | Deploy Jun 2026 fix: drop `100vw` header breakout, `overflow-x: hidden`, `100dvh`, `interactive-widget=resizes-content`, solid footer nav, `scroll-margin` on inputs, `autoComplete="off"` on invite email |
 
-**Server cleanup after troubleshooting:** delete all `cpanel-*.php`, `mobile-debug.html`, `portfolio-OK.txt`, `test-ok.php` from `public_html/portfolio/`. Keep `index.php`, `.htaccess`, `build/`.
+**Server cleanup after troubleshooting:** see **`debugging.md` → [Cleanup TODO (long-term)](#cleanup-todo-long-term)** — delete `cpanel-*.php` scripts, set `LIDO_AGENT_DEBUG_ENABLED=false`, run `cpanel-config-cache.php`. Also remove `mobile-debug.html`, `portfolio-OK.txt`, `test-ok.php` from `public_html/portfolio/`. Keep `index.php`, `.htaccess`, `build/`.
 
-**Optional deploy diagnostics (repo only, upload temporarily):** `cpanel-ping.php`, `cpanel-mobile-debug.php`, `cpanel-api-probe.php`, `cpanel-schedule-diagnostic.php`, `portfolio-mobile-debug.html` (upload renamed → `mobile-debug.html`). See `deploy/README.md`.
+**Optional deploy diagnostics (repo only, upload temporarily):** `cpanel-ping.php`, `cpanel-mobile-debug.php`, `cpanel-api-probe.php`, `cpanel-schedule-diagnostic.php`, **`cpanel-db-query.php`**, **`cpanel-read-logs.php`**, **`cpanel-api-call.php`**, `portfolio-mobile-debug.html` (upload renamed → `mobile-debug.html`). Full agent runbook: **`debugging.md`**. See `deploy/README.md`.
 
 **Scheduler diagnostic (Jul 2026):** `deploy/cpanel-schedule-diagnostic.php` — read-only browser script for production cron troubleshooting. Upload to `public_html/portfolio/`, visit `https://www.lidoalexion.com/portfolio/cpanel-schedule-diagnostic.php?token=Lido` (set `SETUP_TOKEN` before upload). Reports: `cron_time` / `cron_timezone`, universe enablement, **`isMaintenanceWindowDue()`**, **schedule heartbeat** (`schedule_run_heartbeat_at` — proves `schedule:run` every minute), last probe JSON, **withoutOverlapping mutex**, in-progress flag, `schedule:list`, events due now, recent sync runs, tonight's window check. Optional query flags: `&explain=1`, `&clear_mutex=1`, `&clear_in_progress=1`. **Force one batch:** `deploy/cpanel-run-universe-maintenance.php?token=...&apply=1` (optional `&clear_guards=1`, `&skip_gap_fill=1`). **Delete after use.**
 
