@@ -1,0 +1,13 @@
+---
+description: Commit/push goes straight to master via the commit-push-master skill; never open PRs or feature branches for routine saves.
+alwaysApply: true
+---
+
+# Commit and push (this repo)
+
+When the user asks to **commit**, **push**, or **commit and push**:
+
+1. Follow `.cursor/skills/commit-push-master/SKILL.md` exactly.
+2. After staging, run `.cursor/skills/commit-push-master/scripts/commit-push-master.ps1` — do not invent alternate git flows.
+3. **Never** create a feature branch or pull request for routine commits in this repository.
+4. Push only to `origin/master`.
