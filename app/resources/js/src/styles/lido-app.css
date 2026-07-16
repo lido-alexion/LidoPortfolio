@@ -707,6 +707,12 @@ html.lido-footer-visible .lido-main {
     color: var(--lido-text);
 }
 
+.contentPane .table thead th {
+    background-color: var(--lido-bg-elevated);
+    color: var(--lido-text);
+    border-bottom-color: var(--lido-border-strong);
+}
+
 .contentPane .pagination {
     --bs-pagination-bg: var(--lido-bg-elevated);
     --bs-pagination-border-color: var(--lido-border-strong);
@@ -1435,6 +1441,26 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     border-radius: 0.2rem;
 }
 
+.lido-field-hint-label {
+    cursor: help;
+    border-bottom: 1px dotted var(--lido-text-muted);
+    text-decoration: none;
+}
+
+.lido-field-hint-label:hover,
+.lido-field-hint-label:focus,
+.lido-field-hint-label:focus-visible {
+    color: var(--lido-brand);
+    border-bottom-color: var(--lido-brand);
+    outline: none;
+}
+
+.lido-field-hint-label:focus-visible {
+    box-shadow: 0 0 0 2px var(--lido-brand);
+    border-radius: 0.15rem;
+}
+
+.lido-field-hint-tooltip .tooltip-inner,
 .lido-fee-breakdown-tooltip .tooltip-inner {
     max-width: 24rem;
     text-align: left;

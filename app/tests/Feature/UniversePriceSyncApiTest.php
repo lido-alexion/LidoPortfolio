@@ -57,6 +57,8 @@ class UniversePriceSyncApiTest extends TestCase
                 'universe_count',
                 'stocks_with_prices',
                 'progress_percent',
+                'processed_through',
+                'remaining_in_cycle',
                 'rate_limits' => ['likely_rate_limited', 'recent_issues'],
             ],
         ]);
@@ -361,5 +363,39 @@ class UniversePriceSyncApiTest extends TestCase
         $this->assertFalse(
             UniversePriceSyncService::looksLikeRateLimit('symbol not found'),
         );
+    }
+
+    public function test_admin_can_view_index_status(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+
+        $response = $this->actingAs($admin)
+            ->getJson('/api/universe-price-sync/indexes/status')
+            ->assertOk();
+
+        $response->assertJsonPath('data.primary_symbol', 'NIFTY50');
+        $response->assertJsonStructure([
+            'data' => [
+                'enabled',
+                'index_count',
+                'batch_size',
+                'history_days',
+                'indexes',
+            ],
+        ]);
+        $this->assertGreaterThanOrEqual(25, $response->json('data.index_count'));
+    }
+
+    public function test_admin_can_reset_index_cursor(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        \App\Models\Setting::setValue(\App\Services\IndexPriceSyncService::KEY_CURSOR_SYMBOL, 'NIFTYBANK');
+
+        $this->actingAs($admin)
+            ->postJson('/api/universe-price-sync/indexes/reset-cursor')
+            ->assertOk()
+            ->assertJsonPath('data.cursor_symbol', null);
+
+        $this->assertSame('', (string) \App\Models\Setting::getValue(\App\Services\IndexPriceSyncService::KEY_CURSOR_SYMBOL, ''));
     }
 }

@@ -163,6 +163,21 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
             ->middleware('throttle:universe-price-sync');
         Route::post('/universe-price-sync/gaps/fill', [UniversePriceSyncController::class, 'fillGaps'])
             ->middleware('throttle:universe-price-sync');
+        Route::post('/universe-price-sync/gaps/clear', [UniversePriceSyncController::class, 'clearGapReports'])
+            ->middleware('throttle:universe-price-sync');
+        Route::get('/universe-price-sync/gaps/failures', [UniversePriceSyncController::class, 'gapFillFailures']);
+        Route::get('/universe-price-sync/gaps/ignored', [UniversePriceSyncController::class, 'listIgnoredGaps']);
+        Route::post('/universe-price-sync/gaps/ignore', [UniversePriceSyncController::class, 'ignoreGap'])
+            ->middleware('throttle:universe-price-sync');
+        Route::delete('/universe-price-sync/gaps/ignored/{id}', [UniversePriceSyncController::class, 'removeIgnoredGap']);
+
+        Route::get('/universe-price-sync/indexes/status', [UniversePriceSyncController::class, 'indexStatus']);
+        Route::post('/universe-price-sync/indexes/run', [UniversePriceSyncController::class, 'runIndexes'])
+            ->middleware('throttle:universe-price-sync');
+        Route::post('/universe-price-sync/indexes/fill-gaps', [UniversePriceSyncController::class, 'fillIndexGaps'])
+            ->middleware('throttle:universe-price-sync');
+        Route::post('/universe-price-sync/indexes/reset-cursor', [UniversePriceSyncController::class, 'resetIndexCursor'])
+            ->middleware('throttle:universe-price-sync');
 
         Route::get('/sync-logs', [SyncLogController::class, 'index']);
         Route::get('/sync-logs/runs', [SyncLogController::class, 'runs']);

@@ -3,15 +3,11 @@
 namespace Tests\Unit;
 
 use App\Models\Setting;
-use App\Models\Stock;
-use App\Models\StockPrice;
 use App\Services\BenchmarkPriceSyncService;
+use App\Services\IndexCatalogService;
+use App\Services\IndexPriceSyncService;
 use App\Services\PortfolioLoggerService;
-use App\Services\PriceFetchService;
-use App\Services\RelativeStrengthService;
 use App\Services\SettingsService;
-use App\Services\StockPriceHistoryService;
-use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use Tests\TestCase;
@@ -30,13 +26,12 @@ class BenchmarkPriceSyncServiceTest extends TestCase
     {
         Setting::setValue(BenchmarkPriceSyncService::KEY_LAST_SYNC_DATE, now()->toDateString());
 
-        $priceFetch = Mockery::mock(PriceFetchService::class);
-        $priceFetch->shouldNotReceive('syncStock');
+        $indexSync = Mockery::mock(IndexPriceSyncService::class);
+        $indexSync->shouldNotReceive('syncOneSymbol');
 
         $service = new BenchmarkPriceSyncService(
-            $priceFetch,
-            app(RelativeStrengthService::class),
-            app(StockPriceHistoryService::class),
+            $indexSync,
+            app(IndexCatalogService::class),
             app(SettingsService::class),
             Mockery::mock(PortfolioLoggerService::class),
         );
@@ -47,24 +42,19 @@ class BenchmarkPriceSyncServiceTest extends TestCase
         $this->assertTrue($result['success']);
     }
 
-    public function test_full_history_sync_when_cache_insufficient(): void
+    public function test_force_syncs_primary_via_index_service(): void
     {
-        Carbon::setTestNow('2026-06-21 12:00:00');
-
-        $benchmark = app(RelativeStrengthService::class)->benchmarkStock();
-
-        $priceFetch = Mockery::mock(PriceFetchService::class);
-        $priceFetch->shouldReceive('syncStock')
+        $indexSync = Mockery::mock(IndexPriceSyncService::class);
+        $indexSync->shouldReceive('syncOneSymbol')
             ->once()
-            ->withArgs(function (Stock $stock, Carbon $from, Carbon $to) use ($benchmark) {
-                return $stock->id === $benchmark->id
-                    && $from->lte(now()->subMonths(12))
-                    && $to->isSameDay(now());
-            })
+            ->with('NIFTY50', 'daily')
             ->andReturn([
                 'success' => true,
-                'stored_rows' => 250,
-                'fetched_rows' => 250,
+                'stored_rows' => 12,
+                'fetched_rows' => 12,
+                'full_history' => false,
+                'from_date' => now()->subDays(14)->toDateString(),
+                'to_date' => now()->toDateString(),
                 'errors' => [],
             ]);
 
@@ -72,9 +62,8 @@ class BenchmarkPriceSyncServiceTest extends TestCase
         $logger->shouldReceive('scheduler')->once();
 
         $service = new BenchmarkPriceSyncService(
-            $priceFetch,
-            app(RelativeStrengthService::class),
-            app(StockPriceHistoryService::class),
+            $indexSync,
+            app(IndexCatalogService::class),
             app(SettingsService::class),
             $logger,
         );
@@ -83,61 +72,7 @@ class BenchmarkPriceSyncServiceTest extends TestCase
 
         $this->assertFalse($result['skipped']);
         $this->assertTrue($result['success']);
-        $this->assertTrue($result['full_history']);
-        $this->assertSame('2026-06-21', Setting::getValue(BenchmarkPriceSyncService::KEY_LAST_SYNC_DATE));
-
-        Carbon::setTestNow();
-    }
-
-    public function test_incremental_sync_when_cache_sufficient(): void
-    {
-        Carbon::setTestNow('2026-06-21 12:00:00');
-        config(['portfolio.universe_price_sync.daily_lookback_days' => 10]);
-
-        $benchmark = app(RelativeStrengthService::class)->benchmarkStock();
-        $start = now()->subMonths(7)->toDateString();
-        foreach (range(0, 220) as $offset) {
-            StockPrice::query()->create([
-                'stock_id' => $benchmark->id,
-                'price_date' => Carbon::parse($start)->addDays($offset)->toDateString(),
-                'close_price' => 100 + $offset * 0.1,
-                'adjusted_close_price' => 100 + $offset * 0.1,
-                'provider_source' => 'test',
-                'data_source' => 'test',
-                'created_at' => now(),
-            ]);
-        }
-
-        $priceFetch = Mockery::mock(PriceFetchService::class);
-        $priceFetch->shouldReceive('syncStock')
-            ->once()
-            ->withArgs(function (Stock $stock, Carbon $from) use ($benchmark) {
-                return $stock->id === $benchmark->id
-                    && $from->lte(now()->subDays(14));
-            })
-            ->andReturn([
-                'success' => true,
-                'stored_rows' => 2,
-                'fetched_rows' => 2,
-                'errors' => [],
-            ]);
-
-        $logger = Mockery::mock(PortfolioLoggerService::class);
-        $logger->shouldReceive('scheduler')->once();
-
-        $service = new BenchmarkPriceSyncService(
-            $priceFetch,
-            app(RelativeStrengthService::class),
-            app(StockPriceHistoryService::class),
-            app(SettingsService::class),
-            $logger,
-        );
-
-        $result = $service->syncIfNeeded(force: true);
-
-        $this->assertFalse($result['full_history']);
-        $this->assertTrue($result['success']);
-
-        Carbon::setTestNow();
+        $this->assertSame(12, $result['stored_rows']);
+        $this->assertSame(now()->toDateString(), Setting::getValue(BenchmarkPriceSyncService::KEY_LAST_SYNC_DATE));
     }
 }

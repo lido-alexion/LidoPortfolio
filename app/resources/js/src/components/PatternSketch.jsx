@@ -8,9 +8,10 @@ const LINE_STROKE = '3';
 const CANDLE_WICK_STROKE = '3';
 
 function Candle({ x, o, h, l, c, w = 10 }) {
+    // SVG Y grows downward: smaller Y = higher price. Bullish when close is above open (c <= o).
     const top = Math.min(o, c);
     const bottom = Math.max(o, c);
-    const color = c >= o ? BULL : BEAR;
+    const color = c <= o ? BULL : BEAR;
     const bodyH = Math.max(bottom - top, 1.5);
     return (
         <g>

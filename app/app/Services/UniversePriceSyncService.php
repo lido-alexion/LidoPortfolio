@@ -220,6 +220,8 @@ class UniversePriceSyncService
             'cursor_stock_id' => $cursorId,
             'cursor_symbol' => $cursorStock?->symbol,
             'progress_percent' => $progressPercent,
+            'processed_through' => $processedThrough,
+            'remaining_in_cycle' => max(0, $universeCount - $processedThrough),
             'last_cycle_completed_at' => $lastCycleCompletedAt,
             'last_run' => $lastRun,
             'latest_sync_run' => $latestSyncRun,

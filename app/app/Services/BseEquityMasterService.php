@@ -9,7 +9,7 @@ class BseEquityMasterService
     public const DEFAULT_LIST_API_URL = 'https://api.bseindia.com/BseIndiaAPI/api/ListofScripData/w?Group=&Scripcode=&industry=&segment=Equity&status=Active';
 
     /**
-     * @return array<int, array{symbol: string, name: string, isin: ?string}>
+     * @return array<int, array{symbol: string, name: string, isin: ?string, scrip_code: ?string}>
      */
     public function fetchEquityRows(): array
     {
@@ -33,7 +33,7 @@ class BseEquityMasterService
     }
 
     /**
-     * @return array<int, array{symbol: string, name: string, isin: ?string}>
+     * @return array<int, array{symbol: string, name: string, isin: ?string, scrip_code: ?string}>
      */
     public function fetchFromApi(): array
     {
@@ -62,7 +62,7 @@ class BseEquityMasterService
 
     /**
      * @param  array<int, array<string, mixed>>  $rows
-     * @return array<int, array{symbol: string, name: string, isin: ?string}>
+     * @return array<int, array{symbol: string, name: string, isin: ?string, scrip_code: ?string}>
      */
     public function parseApiRows(array $rows): array
     {
@@ -86,7 +86,7 @@ class BseEquityMasterService
 
     /**
      * @param  array<string, mixed>  $row
-     * @return array{symbol: string, name: string, isin: ?string}|null
+     * @return array{symbol: string, name: string, isin: ?string, scrip_code: ?string}|null
      */
     protected function mapApiRow(array $row): ?array
     {
@@ -112,7 +112,23 @@ class BseEquityMasterService
             'symbol' => $symbol,
             'name' => $name,
             'isin' => $isin,
+            'scrip_code' => $this->resolveScripCode($row),
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     */
+    protected function resolveScripCode(array $row): ?string
+    {
+        foreach (['scrip_cd', 'SCRIP_CD', 'SC_CODE', 'scripcode', 'Scripcode'] as $key) {
+            $value = trim((string) ($row[$key] ?? ''));
+            if (preg_match('/^\d{5,6}$/', $value) === 1) {
+                return $value;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -151,7 +167,7 @@ class BseEquityMasterService
     }
 
     /**
-     * @return array<int, array{symbol: string, name: string, isin: ?string}>
+     * @return array<int, array{symbol: string, name: string, isin: ?string, scrip_code: ?string}>
      */
     public function parseCsvRows(string $content): array
     {
@@ -169,6 +185,7 @@ class BseEquityMasterService
         $symbolIdx = $headerMap['SECURITY ID'] ?? $headerMap['SYMBOL'] ?? $headerMap['SCRIP_ID'] ?? 0;
         $nameIdx = $headerMap['ISSUER NAME'] ?? $headerMap['SECURITY NAME'] ?? $headerMap['NAME'] ?? 1;
         $isinIdx = $headerMap['ISIN NO'] ?? $headerMap['ISIN'] ?? $headerMap['ISIN NUMBER'] ?? null;
+        $scripCodeIdx = $headerMap['SC_CODE'] ?? $headerMap['SCRIP_CD'] ?? $headerMap['SCRIP CODE'] ?? null;
 
         $rows = [];
         foreach ($lines as $line) {
@@ -188,10 +205,19 @@ class BseEquityMasterService
                 $isin = $rawIsin !== '' ? strtoupper($rawIsin) : null;
             }
 
+            $scripCode = null;
+            if ($scripCodeIdx !== null) {
+                $rawCode = trim($cols[$scripCodeIdx] ?? '');
+                if (preg_match('/^\d{5,6}$/', $rawCode) === 1) {
+                    $scripCode = $rawCode;
+                }
+            }
+
             $rows[] = [
                 'symbol' => $symbol,
                 'name' => $name,
                 'isin' => $isin,
+                'scrip_code' => $scripCode,
             ];
         }
 

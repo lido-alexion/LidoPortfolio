@@ -10,6 +10,7 @@ class StockPriceHistoryService
 {
     public function __construct(
         protected PortfolioLoggerService $portfolioLogger,
+        protected IgnoredPriceGapService $ignoredGaps,
     ) {}
 
     protected function priceFetch(): PriceFetchService
@@ -50,25 +51,27 @@ class StockPriceHistoryService
         $available = $this->getAvailableHistoryRange($stock);
 
         if ($available === null) {
-            return [['from' => $requiredFrom, 'to' => $requiredTo]];
+            return $this->ignoredGaps->filterRanges((int) $stock->id, [
+                ['from' => $requiredFrom, 'to' => $requiredTo],
+            ]);
         }
 
         $ranges = [];
 
         if ($requiredFrom->lt($available['from'])) {
-            $ranges[] = [
-                'from' => $requiredFrom,
-                'to' => $available['from']->copy()->subDay(),
-            ];
+            $prefixTo = $available['from']->copy()->subDay();
+            if (! $this->isPreListingPrefixGap($stock, $requiredFrom, $prefixTo, $available['from'])) {
+                $ranges[] = [
+                    'from' => $requiredFrom,
+                    'to' => $prefixTo,
+                ];
+            }
         }
 
-        if ($requiredTo->gt($available['to'])) {
-            $ranges[] = [
-                'from' => $available['to']->copy()->addDay(),
-                'to' => $requiredTo,
-            ];
-        }
+        // Suffix edge gaps (missing days after last stored price through required_through)
+        // are ignored — universe daily sync covers recent sessions.
 
+        $ranges = $this->filterEdgeGapsByMinSpan($ranges);
         $ranges = array_values(array_filter($ranges, fn (array $range) => $range['from']->lte($range['to'])));
 
         $internalGaps = $this->detectInternalGaps($stock, $requiredFrom, $requiredTo);
@@ -76,7 +79,9 @@ class StockPriceHistoryService
             $ranges[] = $gap;
         }
 
-        return $this->mergeAdjacentRanges($ranges);
+        $ranges = $this->mergeAdjacentRanges($ranges);
+
+        return $this->ignoredGaps->filterRanges((int) $stock->id, $ranges);
     }
 
     /**
@@ -86,6 +91,11 @@ class StockPriceHistoryService
      *   stored_rows: int,
      *   fetched_rows: int,
      *   ranges_fetched: array<int, array{from: string, to: string, provider: string}>,
+     *   gaps_remaining: int,
+     *   attempted_ranges: array<int, array{from: string, to: string}>,
+     *   remaining_ranges: array<int, array{from: string, to: string}>,
+     *   providers_tried: array<int, string>,
+     *   range_results: array<int, array{from: string, to: string, provider: string, providers_tried: array<int, string>, errors: array<int, string>, stored_rows: int}>,
      *   errors: array<int, string>
      * }
      */
@@ -116,6 +126,11 @@ class StockPriceHistoryService
                 'stored_rows' => 0,
                 'fetched_rows' => 0,
                 'ranges_fetched' => [],
+                'gaps_remaining' => 0,
+                'attempted_ranges' => [],
+                'remaining_ranges' => [],
+                'providers_tried' => [],
+                'range_results' => [],
                 'errors' => [],
             ];
         }
@@ -132,31 +147,91 @@ class StockPriceHistoryService
         $storedTotal = 0;
         $fetchedTotal = 0;
         $rangesFetched = [];
+        $rangeResults = [];
         $errors = [];
+        $providersTried = [];
+        $attemptedRanges = $this->serializeDateRanges($missingRanges);
 
         foreach ($missingRanges as $range) {
             $fetch = $this->priceFetch();
-            $result = $fetch->fetchHistoricalWithFallback(
-                $stock->symbol,
-                $range['from'],
-                $range['to'],
-                $stock,
-                $notifyTelegramOnFailure,
-            );
+            $rangeErrors = [];
+            $rangeProvidersTried = [];
+            $rangeStored = 0;
+            $rangeFetched = 0;
+            $lastProvider = 'none';
 
-            $fetchedTotal += count($result['rows'] ?? []);
-            if (! empty($result['rows'])) {
-                $stored = $fetch->storeHistoricalRows($stock, $result['rows'], $result['provider']);
-                $storedTotal += $stored;
+            foreach ($fetch->providerChainForStock($stock) as $providerName) {
+                if ($providerName === 'bse_bhavcopy' && $this->shouldSkipBseBhavcopyForRange($stock, $range['from'], $range['to'])) {
+                    $rangeErrors[] = $this->bseBhavcopySkipReason($stock, $range['from'], $range['to']);
+                    continue;
+                }
+
+                for ($attempt = 1; $attempt <= 2; $attempt++) {
+                    $attemptResult = $fetch->fetchFromProvider(
+                        $providerName,
+                        $stock->symbol,
+                        $range['from'],
+                        $range['to'],
+                        $stock,
+                    );
+
+                    if (! in_array($providerName, $rangeProvidersTried, true)) {
+                        $rangeProvidersTried[] = $providerName;
+                    }
+
+                    $rangeErrors = array_merge($rangeErrors, $attemptResult['errors'] ?? []);
+
+                    if (($attemptResult['rows'] ?? []) === []) {
+                        continue;
+                    }
+
+                    $lastProvider = $providerName;
+                    $rangeFetched += count($attemptResult['rows']);
+                    $rangeStored += $fetch->storeHistoricalRows($stock, $attemptResult['rows'], $providerName);
+                    break;
+                }
+
+                if ($this->getMissingHistoryRanges($stock, $range['from'], $range['to']) === []) {
+                    break;
+                }
+            }
+
+            $providersTried = array_values(array_unique(array_merge($providersTried, $rangeProvidersTried)));
+
+            if ($this->getMissingHistoryRanges($stock, $range['from'], $range['to']) !== []) {
+                if ($rangeErrors === [] && $rangeStored > 0) {
+                    $rangeErrors[] = $lastProvider.': stored '.$rangeStored.' rows but gap remains for '
+                        .$range['from']->toDateString().'→'.$range['to']->toDateString();
+                } elseif ($rangeErrors === []) {
+                    $rangeErrors[] = 'No provider returned usable OHLCV for '
+                        .$range['from']->toDateString().'→'.$range['to']->toDateString();
+                }
+            }
+
+            $storedTotal += $rangeStored;
+            $fetchedTotal += $rangeFetched;
+            $errors = array_merge($errors, $rangeErrors);
+
+            if ($rangeStored > 0) {
                 $rangesFetched[] = [
                     'from' => $range['from']->toDateString(),
                     'to' => $range['to']->toDateString(),
-                    'provider' => $result['provider'],
+                    'provider' => $lastProvider,
                 ];
-            } else {
-                $errors = array_merge($errors, $result['errors'] ?? []);
             }
+
+            $rangeResults[] = [
+                'from' => $range['from']->toDateString(),
+                'to' => $range['to']->toDateString(),
+                'provider' => $lastProvider,
+                'providers_tried' => $rangeProvidersTried,
+                'errors' => $rangeErrors,
+                'stored_rows' => $rangeStored,
+            ];
         }
+
+        $stillMissing = $this->getMissingHistoryRanges($stock, $requiredFrom, $requiredTo);
+        $remainingRanges = $this->serializeDateRanges($stillMissing);
 
         $this->portfolioLogger->api('info', 'Historical missing ranges fetch completed', [
             'category' => 'History',
@@ -164,17 +239,39 @@ class StockPriceHistoryService
             'stored_rows' => $storedTotal,
             'fetched_rows' => $fetchedTotal,
             'ranges_fetched' => $rangesFetched,
+            'gaps_remaining' => count($stillMissing),
             'duration_ms' => (int) ((microtime(true) - $started) * 1000),
         ]);
 
+        if ($stillMissing !== [] && $errors === [] && $storedTotal === 0 && $fetchedTotal === 0) {
+            $errors[] = 'Provider returned no OHLCV rows for the missing range(s).';
+        }
+
         return [
-            'success' => $storedTotal > 0 || $fetchedTotal === 0,
+            'success' => $stillMissing === [],
             'cache_hit' => false,
             'stored_rows' => $storedTotal,
             'fetched_rows' => $fetchedTotal,
             'ranges_fetched' => $rangesFetched,
+            'gaps_remaining' => count($stillMissing),
+            'attempted_ranges' => $attemptedRanges,
+            'remaining_ranges' => $remainingRanges,
+            'providers_tried' => $providersTried,
+            'range_results' => $rangeResults,
             'errors' => $errors,
         ];
+    }
+
+    /**
+     * @param  array<int, array{from: Carbon, to: Carbon}>  $ranges
+     * @return array<int, array{from: string, to: string}>
+     */
+    protected function serializeDateRanges(array $ranges): array
+    {
+        return array_map(static fn (array $range) => [
+            'from' => $range['from']->toDateString(),
+            'to' => $range['to']->toDateString(),
+        ], $ranges);
     }
 
     public function ensurePortfolioHistory(Stock $stock, Carbon $buyDate): array
@@ -379,6 +476,47 @@ class StockPriceHistoryService
     }
 
     /**
+     * Prefix edge before the first stored session is usually pre-listing (IPO after universe
+     * window start). Skip unless the user traded in that span or the stock master row predates
+     * first OHLCV by many months (likely incomplete backfill).
+     */
+    protected function isPreListingPrefixGap(
+        Stock $stock,
+        Carbon $gapFrom,
+        Carbon $gapTo,
+        Carbon $firstStored,
+    ): bool {
+        if (! $gapTo->copy()->addDay()->startOfDay()->equalTo($firstStored->copy()->startOfDay())) {
+            return false;
+        }
+
+        if ($stock->transactions()
+            ->where('transaction_date', '>=', $gapFrom->toDateString())
+            ->where('transaction_date', '<=', $gapTo->toDateString())
+            ->exists()) {
+            return false;
+        }
+
+        $createdAt = $stock->created_at;
+        if ($createdAt instanceof Carbon
+            && $createdAt->copy()->startOfDay()->lt($firstStored->copy()->subDays(180))) {
+            return false;
+        }
+
+        return true;
+    }
+
+    protected function filterEdgeGapsByMinSpan(array $ranges): array
+    {
+        $maxGapDays = (int) config('portfolio.history.max_internal_gap_days', 7);
+
+        return array_values(array_filter(
+            $ranges,
+            fn (array $range) => $range['from']->diffInDays($range['to']) > $maxGapDays,
+        ));
+    }
+
+    /**
      * @return array<int, array{from: Carbon, to: Carbon}>
      */
     protected function detectInternalGaps(Stock $stock, Carbon $from, Carbon $to): array
@@ -437,5 +575,31 @@ class StockPriceHistoryService
         }
 
         return $merged;
+    }
+
+    protected function shouldSkipBseBhavcopyForRange(Stock $stock, Carbon $from, Carbon $to): bool
+    {
+        if (strtoupper((string) $stock->exchange) !== 'BSE') {
+            return false;
+        }
+
+        if (! (bool) config('portfolio.universe_price_sync.bse_bhavcopy_gap_fill_enabled', false)) {
+            return true;
+        }
+
+        $maxDays = (int) config('portfolio.universe_price_sync.bse_bhavcopy_max_gap_calendar_days', 45);
+
+        return $from->copy()->startOfDay()->diffInDays($to->copy()->startOfDay()) > $maxDays;
+    }
+
+    protected function bseBhavcopySkipReason(Stock $stock, Carbon $from, Carbon $to): string
+    {
+        if (! (bool) config('portfolio.universe_price_sync.bse_bhavcopy_gap_fill_enabled', false)) {
+            return 'bse_bhavcopy: disabled for gap fill (use cpanel-bse-bhavcopy-backfill.php for BSE history)';
+        }
+
+        return 'bse_bhavcopy: skipped (range exceeds '
+            .(int) config('portfolio.universe_price_sync.bse_bhavcopy_max_gap_calendar_days', 45)
+            .' calendar days — run portfolio:backfill-bse-bhavcopy)';
     }
 }

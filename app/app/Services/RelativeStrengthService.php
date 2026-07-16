@@ -7,7 +7,10 @@ use Carbon\Carbon;
 
 class RelativeStrengthService
 {
-    public function __construct(protected StockPriceHistoryService $history) {}
+    public function __construct(
+        protected StockPriceHistoryService $history,
+        protected IndexCatalogService $indexCatalog,
+    ) {}
 
     public function calculateForStock(Stock $stock, ?Carbon $asOf = null): array
     {
@@ -29,22 +32,6 @@ class RelativeStrengthService
 
     public function benchmarkStock(): Stock
     {
-        $stock = Stock::query()->firstOrCreate(
-            ['symbol' => 'NIFTY50', 'exchange' => 'NSE'],
-            [
-                'name' => 'NIFTY 50 Index',
-                'is_active' => true,
-                'is_benchmark' => true,
-                'yahoo_symbol' => '^NSEI',
-                'alpha_vantage_symbol' => 'NSEI',
-            ],
-        );
-
-        $stock = app(ProviderResolverService::class)->applyProviderSymbols($stock);
-        if ($stock->isDirty()) {
-            $stock->save();
-        }
-
-        return $stock->fresh();
+        return $this->indexCatalog->primaryBenchmarkStock();
     }
 }

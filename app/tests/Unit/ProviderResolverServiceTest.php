@@ -56,9 +56,48 @@ class ProviderResolverServiceTest extends TestCase
         $stock = new Stock([
             'symbol' => 'TCS',
             'exchange' => 'NSE',
+            'series' => 'EQ',
         ]);
         $symbols = $this->resolver->providerSymbolsForStock($stock);
         $this->assertSame('TCS', $symbols['nse']);
         $this->assertSame('TCS.NS', $symbols['yahoo']);
+    }
+
+    public function test_nse_trade_symbol_appends_be_series_suffix(): void
+    {
+        $stock = new Stock([
+            'symbol' => 'TOKYOPLAST',
+            'exchange' => 'NSE',
+            'series' => 'BE',
+        ]);
+
+        $this->assertSame('TOKYOPLAST-BE', $this->resolver->nseTradeSymbol($stock));
+        $this->assertSame('TOKYOPLAST-BE', $this->resolver->providerSymbolsForStock($stock)['nse']);
+    }
+
+    public function test_yahoo_symbol_candidates_for_nse_includes_bo_fallback(): void
+    {
+        $stock = new Stock([
+            'symbol' => '3BBLACKBIO',
+            'exchange' => 'NSE',
+        ]);
+
+        $this->assertSame(
+            ['3BBLACKBIO.NS', '3BBLACKBIO.BO'],
+            $this->resolver->yahooSymbolCandidates($stock),
+        );
+    }
+
+    public function test_yahoo_symbol_candidates_for_bse_use_bo_only(): void
+    {
+        $stock = new Stock([
+            'symbol' => 'INFY',
+            'exchange' => 'BSE',
+        ]);
+
+        $this->assertSame(
+            ['INFY.BO'],
+            $this->resolver->yahooSymbolCandidates($stock),
+        );
     }
 }

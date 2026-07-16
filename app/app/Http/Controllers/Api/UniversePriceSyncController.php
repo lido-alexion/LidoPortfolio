@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\AdminOperationalAlertService;
+use App\Services\IgnoredPriceGapService;
+use App\Services\IndexPriceSyncService;
 use App\Services\PriceHistoryGapService;
 use App\Services\StockMasterSyncService;
 use App\Services\UniversePriceSyncService;
@@ -46,7 +48,7 @@ class UniversePriceSyncController extends Controller
 
     public function acknowledgeOperationalAlert(
         Request $request,
-        AdminOperationalAlertService $alerts,
+        AdminOperationalAlertService $alerts
     ): JsonResponse {
         $validated = $request->validate([
             'key' => ['required', 'string', 'max:64'],
@@ -277,6 +279,7 @@ class UniversePriceSyncController extends Controller
             ? $gaps->fillAll(
                 scope: $scope,
                 rescanFirst: (bool) ($validated['rescan_first'] ?? true),
+                maxStocksPerRun: isset($validated['batch']) ? (int) $validated['batch'] : null,
             )
             : $gaps->fillBatch(
                 scope: $scope,
@@ -289,6 +292,235 @@ class UniversePriceSyncController extends Controller
                 'run' => $result,
                 'status' => $gaps->status($scope ?? $resolver->defaultScope()),
             ],
+        ]);
+    }
+
+    public function clearGapReports(Request $request, PriceHistoryGapService $gaps): JsonResponse
+    {
+        $validated = $request->validate([
+            'scope' => ['nullable', 'in:all_equities,all_nse,nifty500'],
+        ]);
+
+        $resolver = app(UniverseStockResolverService::class);
+
+        try {
+            $scope = isset($validated['scope'])
+                ? $resolver->normalizeScope($validated['scope'])
+                : null;
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        if ($gaps->isInProgress()) {
+            return response()->json([
+                'message' => 'A gap scan or fill is already running on the server.',
+                'data' => [
+                    'status' => $gaps->status($scope ?? $resolver->defaultScope()),
+                ],
+            ], 409);
+        }
+
+        $result = $gaps->clearReports($scope);
+
+        return response()->json([
+            'data' => [
+                'run' => $result,
+                'status' => $gaps->status($scope ?? $resolver->defaultScope()),
+            ],
+        ]);
+    }
+
+    public function gapFillFailures(Request $request, PriceHistoryGapService $gaps): JsonResponse
+    {
+        $validated = $request->validate([
+            'scope' => ['nullable', 'in:all_equities,all_nse,nifty500'],
+        ]);
+
+        try {
+            $scope = isset($validated['scope'])
+                ? app(UniverseStockResolverService::class)->normalizeScope($validated['scope'])
+                : null;
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        $status = $gaps->status($scope);
+
+        return response()->json([
+            'data' => [
+                'last_fill' => $status['last_fill'] ?? null,
+                'last_fill_failure_report' => $status['last_fill_failure_report'] ?? null,
+            ],
+        ]);
+    }
+
+    public function listIgnoredGaps(IgnoredPriceGapService $ignored): JsonResponse
+    {
+        return response()->json([
+            'data' => $ignored->listForApi(),
+        ]);
+    }
+
+    public function ignoreGap(Request $request, IgnoredPriceGapService $ignored): JsonResponse
+    {
+        $validated = $request->validate([
+            'stock_id' => ['required', 'integer', 'min:1'],
+            'gap_from' => ['required', 'date'],
+            'gap_to' => ['required', 'date'],
+        ]);
+
+        try {
+            $row = $ignored->ignore(
+                (int) $validated['stock_id'],
+                $validated['gap_from'],
+                $validated['gap_to'],
+                $request->user()?->id,
+            );
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'data' => $ignored->formatRow($row),
+        ]);
+    }
+
+    public function removeIgnoredGap(int $id, IgnoredPriceGapService $ignored): JsonResponse
+    {
+        if (! $ignored->remove($id)) {
+            return response()->json(['message' => 'Ignored gap not found.'], 404);
+        }
+
+        return response()->json(['data' => ['removed' => true]]);
+    }
+
+    public function indexStatus(IndexPriceSyncService $indexes): JsonResponse
+    {
+        return response()->json([
+            'data' => $indexes->status(),
+        ]);
+    }
+
+    public function runIndexes(Request $request, IndexPriceSyncService $indexes): JsonResponse
+    {
+        if (! $indexes->isEnabled()) {
+            return response()->json([
+                'message' => 'Index price sync is disabled in application config.',
+                'data' => $indexes->status(),
+            ], 422);
+        }
+
+        if ($indexes->isSyncInProgress()) {
+            return response()->json([
+                'message' => 'Index price sync is already running. Wait for the current batch to finish.',
+                'data' => $indexes->status(),
+            ], 409);
+        }
+
+        $validated = $request->validate([
+            'mode' => ['nullable', 'in:daily,backfill'],
+            'batch' => ['nullable', 'integer', 'min:1', 'max:20'],
+            'process_all' => ['nullable', 'boolean'],
+            'reset_cursor' => ['nullable', 'boolean'],
+            'symbol' => ['nullable', 'string', 'max:32'],
+        ]);
+
+        try {
+            @set_time_limit(0);
+
+            $symbol = strtoupper(trim((string) ($validated['symbol'] ?? '')));
+            if ($symbol !== '') {
+                $result = $indexes->syncOneSymbol(
+                    $symbol,
+                    $validated['mode'] ?? 'daily',
+                );
+
+                return response()->json([
+                    'data' => [
+                        'run' => $result,
+                        'status' => $indexes->status(),
+                    ],
+                ]);
+            }
+
+            $result = $indexes->syncBatch(
+                mode: $validated['mode'] ?? 'daily',
+                batchSize: isset($validated['batch']) ? (int) $validated['batch'] : null,
+                resetCursor: (bool) ($validated['reset_cursor'] ?? false),
+                processAll: (bool) ($validated['process_all'] ?? false),
+            );
+
+            if (($result['skipped'] ?? 0) > 0 && ($result['processed'] ?? 0) === 0) {
+                $statusCode = ($result['reason'] ?? '') === 'in_progress' ? 409 : 422;
+
+                return response()->json([
+                    'message' => 'Index price sync skipped: '.($result['reason'] ?? 'unknown'),
+                    'data' => [
+                        'run' => $result,
+                        'status' => $indexes->status(),
+                    ],
+                ], $statusCode);
+            }
+
+            return response()->json([
+                'data' => [
+                    'run' => $result,
+                    'status' => $indexes->status(),
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'message' => 'Index price sync failed: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function fillIndexGaps(Request $request, IndexPriceSyncService $indexes): JsonResponse
+    {
+        if (! $indexes->isEnabled()) {
+            return response()->json([
+                'message' => 'Index price sync is disabled in application config.',
+            ], 422);
+        }
+
+        if ($indexes->isSyncInProgress()) {
+            return response()->json([
+                'message' => 'Index price sync is already running. Wait for the current batch to finish.',
+                'data' => ['status' => $indexes->status()],
+            ], 409);
+        }
+
+        $validated = $request->validate([
+            'batch' => ['nullable', 'integer', 'min:1', 'max:20'],
+            'reset_cursor' => ['nullable', 'boolean'],
+        ]);
+
+        try {
+            @set_time_limit(0);
+            $result = $indexes->fillGapsBatch(
+                batchSize: isset($validated['batch']) ? (int) $validated['batch'] : null,
+                resetCursor: (bool) ($validated['reset_cursor'] ?? false),
+            );
+
+            return response()->json([
+                'data' => [
+                    'run' => $result,
+                    'status' => $indexes->status(),
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'message' => 'Index gap fill failed: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function resetIndexCursor(IndexPriceSyncService $indexes): JsonResponse
+    {
+        $indexes->resetCursor();
+
+        return response()->json([
+            'data' => $indexes->status(),
         ]);
     }
 }

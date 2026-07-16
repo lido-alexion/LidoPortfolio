@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use GuzzleHttp\Cookie\CookieJar;
 use Illuminate\Http\Client\PendingRequest;
 
 class NseHttpClient
@@ -12,8 +13,10 @@ class NseHttpClient
      */
     public static function create(): PendingRequest
     {
+        $cookieJar = new CookieJar();
+
         $client = ExternalHttp::client()
-            ->withOptions(['cookies' => true])
+            ->withOptions(['cookies' => $cookieJar])
             ->withHeaders([
                 'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept' => 'application/json,text/plain,*/*',
@@ -25,6 +28,7 @@ class NseHttpClient
 
         try {
             $client->get('https://www.nseindia.com/');
+            $client->get('https://www.nseindia.com/api/marketStatus');
         } catch (\Throwable) {
             // Continue — quote/historical call may still succeed.
         }

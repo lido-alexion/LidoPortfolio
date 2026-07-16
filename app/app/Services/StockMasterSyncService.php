@@ -12,6 +12,7 @@ class StockMasterSyncService
         protected SyncLogService $syncLog,
         protected PriceFetchService $priceFetch,
         protected BseEquityMasterService $bseMaster,
+        protected DualListedNseRepairService $dualListedRepair,
     ) {}
 
     /**
@@ -25,7 +26,10 @@ class StockMasterSyncService
      *   backfill_new_rows: int,
      *   backfill_new_failures: int,
      *   bse_skipped_isin_dup: int,
-     *   backfill_skipped: bool
+     *   backfill_skipped: bool,
+     *   dual_listed_pairs_repaired: int,
+     *   dual_listed_bse_prices_deleted: int,
+     *   dual_listed_nse_backfill_rows: int
      * }
      */
     public function syncStockMaster(bool $backfillNewSymbols = true): array
@@ -44,6 +48,9 @@ class StockMasterSyncService
             'backfill_new_failures' => 0,
             'bse_skipped_isin_dup' => 0,
             'backfill_skipped' => false,
+            'dual_listed_pairs_repaired' => 0,
+            'dual_listed_bse_prices_deleted' => 0,
+            'dual_listed_nse_backfill_rows' => 0,
         ];
 
         $this->syncLog->log($runId, $jobName, 'info', 'Stock master sync started', [
@@ -95,7 +102,10 @@ class StockMasterSyncService
      *   backfill_new_rows: int,
      *   backfill_new_failures: int,
      *   bse_skipped_isin_dup: int,
-     *   backfill_skipped: bool
+     *   backfill_skipped: bool,
+     *   dual_listed_pairs_repaired: int,
+     *   dual_listed_bse_prices_deleted: int,
+     *   dual_listed_nse_backfill_rows: int
      * }
      */
     protected function runStockMasterSync(
@@ -189,6 +199,23 @@ class StockMasterSyncService
             ]);
         }
 
+        $repairBackfill = $backfillNewSymbols && (bool) config('portfolio.stock_master.dual_listed_repair_backfill', true);
+        $repairStats = $this->dualListedRepair->repair(
+            dryRun: false,
+            backfill: $repairBackfill,
+            maxBackfill: $repairBackfill
+                ? max(0, (int) config('portfolio.stock_master.dual_listed_repair_max_backfill', 50))
+                : 0,
+        );
+        $stats['dual_listed_pairs_repaired'] = $repairStats['pairs_found'];
+        $stats['dual_listed_bse_prices_deleted'] = $repairStats['bse_prices_deleted'];
+        $stats['dual_listed_nse_backfill_rows'] = $repairStats['nse_backfill_rows'];
+        if ($repairStats['errors'] !== []) {
+            $this->syncLog->log($runId, $jobName, 'warning', 'Dual-listed NSE repair completed with errors', $repairStats);
+        } elseif ($repairStats['pairs_found'] > 0) {
+            $this->syncLog->log($runId, $jobName, 'info', 'Dual-listed NSE repair completed', $repairStats);
+        }
+
         return $stats;
     }
 
@@ -239,6 +266,8 @@ class StockMasterSyncService
             if ($isin !== '' && isset($nseIsins[$isin])) {
                 $stats['skipped_isin_dup']++;
                 $dualListedIsins[$isin] = true;
+                $this->deactivateBseDuplicateForSymbol($symbol, $isin);
+
                 continue;
             }
 
@@ -262,6 +291,7 @@ class StockMasterSyncService
                 $row['name'] ?? $symbol,
                 $isin !== '' ? $isin : null,
                 null,
+                isset($row['scrip_code']) ? trim((string) $row['scrip_code']) ?: null : null,
             );
             $stats[$result['action']]++;
             if ($result['action'] === 'added') {
@@ -289,15 +319,34 @@ class StockMasterSyncService
             ->where('is_benchmark', false)
             ->update(['is_dual_listed' => false]);
 
-        if ($dualListedIsins === []) {
+        $dualListedSymbols = Stock::query()
+            ->where('exchange', 'BSE')
+            ->where('is_benchmark', false)
+            ->distinct()
+            ->pluck('symbol')
+            ->map(fn ($symbol) => strtoupper((string) $symbol))
+            ->filter()
+            ->all();
+
+        $nseQuery = Stock::query()
+            ->where('exchange', 'NSE')
+            ->where('is_benchmark', false);
+
+        $nseQuery->where(function ($query) use ($dualListedIsins, $dualListedSymbols): void {
+            if ($dualListedIsins !== []) {
+                $query->whereIn('isin', array_keys($dualListedIsins));
+            }
+            if ($dualListedSymbols !== []) {
+                $method = $dualListedIsins === [] ? 'whereIn' : 'orWhereIn';
+                $query->{$method}('symbol', $dualListedSymbols);
+            }
+        });
+
+        if ($dualListedIsins === [] && $dualListedSymbols === []) {
             return;
         }
 
-        Stock::query()
-            ->where('exchange', 'NSE')
-            ->where('is_benchmark', false)
-            ->whereIn('isin', array_keys($dualListedIsins))
-            ->update(['is_dual_listed' => true]);
+        $nseQuery->update(['is_dual_listed' => true]);
     }
 
     /**
@@ -309,12 +358,43 @@ class StockMasterSyncService
             return 0;
         }
 
-        return Stock::query()
+        $nseSymbols = Stock::query()
+            ->where('exchange', 'NSE')
+            ->where('is_benchmark', false)
+            ->where('is_active', true)
+            ->pluck('symbol')
+            ->map(fn ($symbol) => strtoupper((string) $symbol))
+            ->all();
+
+        $deactivated = Stock::query()
             ->where('exchange', 'BSE')
             ->where('is_benchmark', false)
             ->where('is_active', true)
             ->whereIn('isin', $nseIsins)
             ->update(['is_active' => false]);
+
+        if ($nseSymbols !== []) {
+            $deactivated += Stock::query()
+                ->where('exchange', 'BSE')
+                ->where('is_benchmark', false)
+                ->where('is_active', true)
+                ->whereIn('symbol', $nseSymbols)
+                ->update(['is_active' => false]);
+        }
+
+        return $deactivated;
+    }
+
+    protected function deactivateBseDuplicateForSymbol(string $symbol, string $isin): void
+    {
+        Stock::query()
+            ->where('exchange', 'BSE')
+            ->where('is_benchmark', false)
+            ->where('symbol', strtoupper(trim($symbol)))
+            ->update([
+                'isin' => strtoupper(trim($isin)),
+                'is_active' => false,
+            ]);
     }
 
     /**
@@ -338,7 +418,7 @@ class StockMasterSyncService
             return [];
         }
 
-        $header = str_getcsv(array_shift($lines));
+        $header = str_getcsv(array_shift($lines), ',', '"', '\\');
         $headerMap = [];
         foreach ($header as $index => $column) {
             $headerMap[strtoupper(trim($column))] = $index;
@@ -349,14 +429,18 @@ class StockMasterSyncService
         $seriesIdx = $headerMap['SERIES'] ?? 2;
         $isinIdx = $headerMap['ISIN NUMBER'] ?? $headerMap['ISIN'] ?? null;
 
-        $rows = [];
+        $allowedSeries = ['EQ', 'BE', 'BZ'];
+        $seriesPriority = ['EQ' => 1, 'BE' => 2, 'BZ' => 3];
+        /** @var array<string, array{symbol: string, name: string, isin: ?string, series: string, priority: int}> $candidates */
+        $candidates = [];
+
         foreach ($lines as $line) {
             if (trim($line) === '') {
                 continue;
             }
-            $cols = str_getcsv($line);
+            $cols = str_getcsv($line, ',', '"', '\\');
             $series = strtoupper(trim($cols[$seriesIdx] ?? 'EQ'));
-            if ($series !== 'EQ') {
+            if (! in_array($series, $allowedSeries, true)) {
                 continue;
             }
 
@@ -365,15 +449,35 @@ class StockMasterSyncService
                 continue;
             }
 
-            $rows[] = [
+            $isinRaw = $isinIdx !== null ? strtoupper(trim($cols[$isinIdx] ?? '')) : '';
+            $isin = $isinRaw !== '' ? $isinRaw : null;
+            $key = $isin ?? ('SYM:'.$symbol);
+            $priority = $seriesPriority[$series] ?? 99;
+            $name = trim($cols[$nameIdx] ?? $symbol);
+
+            $existing = $candidates[$key] ?? null;
+            if ($existing !== null && $existing['priority'] <= $priority) {
+                continue;
+            }
+
+            $candidates[$key] = [
                 'symbol' => $symbol,
-                'name' => trim($cols[$nameIdx] ?? $symbol),
-                'isin' => $isinIdx !== null ? trim($cols[$isinIdx] ?? '') ?: null : null,
+                'name' => $name,
+                'isin' => $isin,
                 'series' => $series,
+                'priority' => $priority,
             ];
         }
 
-        return $rows;
+        return array_values(array_map(
+            static fn (array $row) => [
+                'symbol' => $row['symbol'],
+                'name' => $row['name'],
+                'isin' => $row['isin'],
+                'series' => $row['series'],
+            ],
+            $candidates,
+        ));
     }
 
     /**
@@ -385,6 +489,7 @@ class StockMasterSyncService
         string $name,
         ?string $isin,
         ?string $series,
+        ?string $bseScripCode = null,
     ): array {
         $stock = Stock::query()->firstOrNew([
             'symbol' => $symbol,
@@ -396,8 +501,14 @@ class StockMasterSyncService
         $stock->name = $name;
         $stock->isin = $isin ?: $stock->isin;
         $stock->is_active = true;
+        if ($exchange === 'NSE' && \Illuminate\Support\Facades\Schema::hasColumn('portfolio_stocks', 'series')) {
+            $stock->series = $series ?: ($stock->series ?: 'EQ');
+        }
         if ($exchange === 'BSE' && \Illuminate\Support\Facades\Schema::hasColumn('portfolio_stocks', 'is_dual_listed')) {
             $stock->is_dual_listed = false;
+        }
+        if ($exchange === 'BSE' && $bseScripCode && \Illuminate\Support\Facades\Schema::hasColumn('portfolio_stocks', 'bse_scrip_code')) {
+            $stock->bse_scrip_code = $bseScripCode;
         }
         $this->resolver->applyProviderSymbols($stock);
 

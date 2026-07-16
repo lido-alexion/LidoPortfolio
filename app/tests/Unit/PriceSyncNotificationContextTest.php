@@ -5,6 +5,7 @@ namespace Tests\Unit;
 use App\Services\PortfolioLoggerService;
 use App\Services\PriceFetchService;
 use App\Services\PriceProviders\AlphaVantagePriceProvider;
+use App\Services\PriceProviders\BseBhavcopyPriceProvider;
 use App\Services\PriceProviders\NsePriceProvider;
 use App\Services\PriceProviders\YahooPriceProvider;
 use App\Services\PriceSyncNotificationContext;
@@ -46,7 +47,11 @@ class PriceSyncNotificationContextTest extends TestCase
         $portfolioLogger->shouldReceive('provider')->atLeast()->once();
         $telegram->shouldNotReceive('sendSyncFailureAlert');
 
-        $service = new PriceFetchService($nse, $yahoo, $alpha, $logger, $portfolioLogger, $providerResolver, $telegram);
+        $bseBhavcopy = Mockery::mock(BseBhavcopyPriceProvider::class);
+        $bseBhavcopy->shouldReceive('getName')->andReturn('bse_bhavcopy');
+        $bseBhavcopy->shouldReceive('fetchHistorical')->andReturn([]);
+
+        $service = new PriceFetchService($nse, $bseBhavcopy, $yahoo, $alpha, $logger, $portfolioLogger, $providerResolver, $telegram);
 
         PriceSyncNotificationContext::withoutTelegram(function () use ($service, $from, $to) {
             $result = $service->fetchHistoricalWithFallback('FAIL', $from, $to);

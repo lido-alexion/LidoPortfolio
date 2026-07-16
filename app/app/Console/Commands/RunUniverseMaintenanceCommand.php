@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Services\AdminOperationalAlertService;
+use App\Services\IndexPriceSyncService;
 use App\Services\PortfolioLoggerService;
 use App\Services\PriceHistoryGapService;
 use App\Services\SettingsService;
@@ -28,6 +29,7 @@ class RunUniverseMaintenanceCommand extends Command
         UniverseStockResolverService $resolver,
         SettingsService $settings,
         PortfolioLoggerService $logger,
+        IndexPriceSyncService $indexSync,
     ): int {
         if (! $sync->isEnabled()) {
             $this->warn('Universe price sync is disabled (UNIVERSE_PRICE_SYNC_ENABLED=false).');
@@ -150,6 +152,31 @@ class RunUniverseMaintenanceCommand extends Command
         $exitCode = ($daily['failed'] ?? 0) > 0 && ($daily['succeeded'] ?? 0) === 0
             ? self::FAILURE
             : self::SUCCESS;
+
+        if ($indexSync->isEnabled() && ! $indexSync->isSyncInProgress()) {
+            $indexResult = $indexSync->syncBatch(mode: 'daily', processAll: false);
+            $logger->scheduler('debug', 'Universe maintenance index sync batch', [
+                'event' => 'universe_maintenance_index_result',
+                'processed' => $indexResult['processed'] ?? 0,
+                'succeeded' => $indexResult['succeeded'] ?? 0,
+                'failed' => $indexResult['failed'] ?? 0,
+                'stored_rows' => $indexResult['stored_rows'] ?? 0,
+                'cycle_completed' => ! empty($indexResult['cycle_completed']),
+                'cursor_after' => $indexResult['cursor_after'] ?? null,
+                'reason' => $indexResult['reason'] ?? null,
+            ]);
+            $this->table(
+                ['Index batch metric', 'Value'],
+                [
+                    ['Processed', $indexResult['processed'] ?? 0],
+                    ['Succeeded', $indexResult['succeeded'] ?? 0],
+                    ['Failed', $indexResult['failed'] ?? 0],
+                    ['Rows stored', $indexResult['stored_rows'] ?? 0],
+                    ['Cursor after', $indexResult['cursor_after'] ?? '—'],
+                    ['Cycle completed', ! empty($indexResult['cycle_completed']) ? 'yes' : 'no'],
+                ],
+            );
+        }
 
         if ($this->shouldRunGapFill() && ! $this->option('skip-gap-fill')) {
             $resetGapCursor = $sync->isMaintenanceWindowStart();

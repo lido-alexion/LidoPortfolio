@@ -13,8 +13,10 @@ class Stock extends Model
     protected $fillable = [
         'symbol',
         'exchange',
+        'series',
         'name',
         'isin',
+        'bse_scrip_code',
         'sector',
         'yahoo_symbol',
         'alpha_vantage_symbol',

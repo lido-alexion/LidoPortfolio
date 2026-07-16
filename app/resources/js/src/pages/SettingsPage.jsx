@@ -163,6 +163,7 @@ export default function SettingsPage() {
             cron_time: settings.cron_time,
             cron_timezone: settings.cron_timezone || 'Asia/Kolkata',
             nse_retry_count: settings.nse_retry_count,
+            alpha_vantage_api_key: settings.alpha_vantage_api_key ?? '',
             backend_log_level: settings.backend_log_level,
             sync_log_retention_days: settings.sync_log_retention_days,
             admin_ops_telegram_ping_when_clear: settings.admin_ops_telegram_ping_when_clear ?? 'false',
@@ -377,6 +378,27 @@ export default function SettingsPage() {
                                             nse_retry_count: e.target.value,
                                         })}
                                     />
+                                </div>
+                                <div className="col-12 col-md-4">
+                                    <label className="form-label" htmlFor="settings-alpha-vantage-key">
+                                        Alpha Vantage API key
+                                    </label>
+                                    <input
+                                        id="settings-alpha-vantage-key"
+                                        type="password"
+                                        className="form-control"
+                                        autoComplete="off"
+                                        placeholder="Optional — third price fallback"
+                                        value={settings.alpha_vantage_api_key || ''}
+                                        onChange={(e) => setSettings({
+                                            ...settings,
+                                            alpha_vantage_api_key: e.target.value,
+                                        })}
+                                    />
+                                    <p className="text-muted small mb-0 mt-1">
+                                        Used after NSE and Yahoo for OHLCV gap fill and symbol validation.
+                                        Free key at alphavantage.co. Leave blank to skip Alpha Vantage.
+                                    </p>
                                 </div>
                                 <div className="col-12 col-md-4">
                                     <label className="form-label">Backend log level</label>

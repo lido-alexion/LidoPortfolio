@@ -102,6 +102,13 @@ Schedule::command('portfolio:sync-benchmark-prices')
     ->timezone($timezone)
     ->name('benchmark-price-sync');
 
+if (config('portfolio.indexes.enabled', true)) {
+    Schedule::command('portfolio:sync-index-prices', ['--mode' => 'daily'])
+        ->dailyAt($cronTime)
+        ->timezone($timezone)
+        ->name('index-price-sync');
+}
+
 $notificationSchedules = [];
 try {
     if (\Illuminate\Support\Facades\Schema::hasTable('portfolio_profile_settings')) {
@@ -124,7 +131,7 @@ Schedule::command('stocks:sync')
     ->name('stock-master-sync');
 
 // Heartbeat every minute so we can tell whether cPanel cron is invoking schedule:run.
-Schedule::command('portfolio:universe-maintenance-probe', ['--write-heartbeat' => true])
+Schedule::command('portfolio:universe-maintenance-probe --write-heartbeat')
     ->timezone($timezone)
     ->everyMinute()
     ->name('universe-schedule-heartbeat');
@@ -149,7 +156,7 @@ $universeMaintenanceDue = function (): bool {
 
 if (config('portfolio.universe_price_sync.enabled')) {
     // Explain/probe once at the top of each maintenance slot (same due helper as the real job).
-    Schedule::command('portfolio:universe-maintenance-probe', ['--explain' => true])
+    Schedule::command('portfolio:universe-maintenance-probe --explain')
         ->timezone($timezone)
         ->everyMinute()
         ->when($universeMaintenanceDue)

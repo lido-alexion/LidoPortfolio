@@ -31,7 +31,7 @@ class UniverseMaintenanceProbeCommand extends Command
         $now = now()->timezone($cronTimezone);
         $probe = $this->buildProbe($sync, $cronTimezone, $now);
 
-        if ($this->option('write-heartbeat')) {
+        if ($this->flagPassed('write-heartbeat')) {
             Setting::setValue(self::KEY_SCHEDULE_HEARTBEAT_AT, now()->toIso8601String());
             $this->line('Heartbeat written: '.$now->format('Y-m-d H:i:s T'));
 
@@ -43,7 +43,7 @@ class UniverseMaintenanceProbeCommand extends Command
             ]);
         }
 
-        if (! $this->option('explain')) {
+        if (! $this->flagPassed('explain')) {
             return self::SUCCESS;
         }
 
@@ -177,5 +177,13 @@ class UniverseMaintenanceProbeCommand extends Command
         }
 
         return false;
+    }
+
+    /**
+     * Accept --flag and legacy cPanel/Laravel schedule forms like --flag=1.
+     */
+    protected function flagPassed(string $name): bool
+    {
+        return $this->input->hasParameterOption(['--'.$name, '--'.$name.'=1'], true);
     }
 }

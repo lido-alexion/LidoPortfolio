@@ -18,6 +18,8 @@ import SettingsPage from './pages/SettingsPage';
 import ProfilePage from './pages/ProfilePage';
 import SyncLogsPage from './pages/SyncLogsPage';
 import UniversePriceSyncPage from './pages/UniversePriceSyncPage';
+import GapFillFailuresPage from './pages/GapFillFailuresPage';
+import IgnoredPriceGapsPage from './pages/IgnoredPriceGapsPage';
 import UserManagementPage from './pages/UserManagementPage';
 import AdminAlertsPage from './pages/AdminAlertsPage';
 import AdminRoute from './components/AdminRoute';
@@ -158,6 +160,16 @@ function App() {
                                 <Route path="/settings/universe-price-sync" element={(
                                     <AdminRoute>
                                         <UniversePriceSyncPage />
+                                    </AdminRoute>
+                                )} />
+                                <Route path="/settings/universe-price-sync/gap-failures" element={(
+                                    <AdminRoute>
+                                        <GapFillFailuresPage />
+                                    </AdminRoute>
+                                )} />
+                                <Route path="/settings/universe-price-sync/ignored-gaps" element={(
+                                    <AdminRoute>
+                                        <IgnoredPriceGapsPage />
                                     </AdminRoute>
                                 )} />
                                 <Route

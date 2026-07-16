@@ -27,4 +27,21 @@ class TradingCalendar
 
         return $session;
     }
+
+    /**
+     * Latest equity session date we require cached OHLCV through for gap scans.
+     * On a session day, today's EOD bar is excluded until nightly sync — avoids
+     * flagging every symbol as "missing today" during the trading day.
+     */
+    public static function lastRequiredPriceSession(?Carbon $asOf = null): Carbon
+    {
+        $asOf = ($asOf ?? now())->copy()->startOfDay();
+        $session = self::normalizeToSessionDate($asOf);
+
+        if ($session->equalTo($asOf)) {
+            return self::normalizeToSessionDate($asOf->copy()->subDay());
+        }
+
+        return $session;
+    }
 }

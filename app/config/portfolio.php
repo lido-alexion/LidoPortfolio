@@ -45,6 +45,8 @@ return [
         // UI stock-master sync skips price backfill (too slow for HTTP); CLI `stocks:sync` backfills by default.
         'backfill_new_symbols_on_cli_sync' => filter_var(env('STOCK_MASTER_BACKFILL_ON_SYNC', true), FILTER_VALIDATE_BOOL),
         'max_backfill_per_sync' => max(0, (int) env('STOCK_MASTER_MAX_BACKFILL_PER_SYNC', 25)),
+        'dual_listed_repair_backfill' => filter_var(env('STOCK_MASTER_DUAL_LISTED_REPAIR_BACKFILL', true), FILTER_VALIDATE_BOOL),
+        'dual_listed_repair_max_backfill' => max(0, (int) env('STOCK_MASTER_DUAL_LISTED_REPAIR_MAX_BACKFILL', 50)),
     ],
 
     /*
@@ -69,8 +71,55 @@ return [
         'maintenance_gap_fill_enabled' => filter_var(env('UNIVERSE_MAINTENANCE_GAP_FILL_ENABLED', true), FILTER_VALIDATE_BOOL),
         'maintenance_gap_fill_chain_max_batches' => max(1, (int) env('UNIVERSE_MAINTENANCE_GAP_FILL_CHAIN_MAX_BATCHES', 500)),
         'gap_fill_wait_seconds' => max(0, (int) env('UNIVERSE_GAP_FILL_WAIT_SECONDS', 20)),
+        // UI "Fill all gaps" chunk size — keep low for cPanel HTTP timeouts (~60–120s/request).
+        'gap_fill_all_batch_size' => max(1, min(100, (int) env('UNIVERSE_GAP_FILL_ALL_BATCH_SIZE', 5))),
+        // Per-stock gap fill skips bse_bhavcopy above this span (use bulk bhavcopy backfill instead).
+        'bse_bhavcopy_max_gap_calendar_days' => max(7, (int) env('UNIVERSE_BSE_BHAVCOPY_MAX_GAP_CALENDAR_DAYS', 45)),
+        // Per-stock gap fill should use bulk bhavcopy backfill for BSE; disable by default on cPanel.
+        'bse_bhavcopy_gap_fill_enabled' => filter_var(env('UNIVERSE_BSE_BHAVCOPY_GAP_FILL_ENABLED', false), FILTER_VALIDATE_BOOL),
         'nifty500_index_name' => env('UNIVERSE_NIFTY500_INDEX_NAME', 'NIFTY 500'),
         'nifty500_cache_days' => max(1, (int) env('UNIVERSE_NIFTY500_CACHE_DAYS', 7)),
+    ],
+
+    /*
+    | Market index OHLCV (is_benchmark rows). Tier A+B Yahoo/NSE charting sources.
+    | Primary remains NIFTY50 for relative strength / Explorer until a later task.
+    */
+    'indexes' => [
+        'enabled' => filter_var(env('INDEX_PRICE_SYNC_ENABLED', true), FILTER_VALIDATE_BOOL),
+        'primary_symbol' => env('INDEX_PRIMARY_SYMBOL', 'NIFTY50'),
+        'batch_size' => max(1, min(20, (int) env('INDEX_PRICE_SYNC_BATCH_SIZE', 3))),
+        'history_days' => max(30, (int) env('INDEX_PRICE_SYNC_HISTORY_DAYS', 365)),
+        'delay_ms_between_indexes' => max(0, (int) env('INDEX_PRICE_SYNC_DELAY_MS', 400)),
+        'definitions' => [
+            ['symbol' => 'NIFTY50', 'name' => 'Nifty 50', 'exchange' => 'NSE', 'nse_charting_name' => 'NIFTY 50', 'yahoo_symbol' => '^NSEI', 'alpha_vantage_symbol' => 'NSEI', 'enabled' => true],
+            ['symbol' => 'NIFTYBANK', 'name' => 'Nifty Bank', 'exchange' => 'NSE', 'nse_charting_name' => 'NIFTY BANK', 'yahoo_symbol' => '^NSEBANK', 'alpha_vantage_symbol' => null, 'enabled' => true],
+            ['symbol' => 'NIFTYIT', 'name' => 'Nifty IT', 'exchange' => 'NSE', 'nse_charting_name' => 'NIFTY IT', 'yahoo_symbol' => '^CNXIT', 'alpha_vantage_symbol' => null, 'enabled' => true],
+            ['symbol' => 'NIFTYNEXT50', 'name' => 'Nifty Next 50', 'exchange' => 'NSE', 'nse_charting_name' => 'NIFTY NEXT 50', 'yahoo_symbol' => '^NSMIDCP', 'alpha_vantage_symbol' => null, 'enabled' => true],
+            ['symbol' => 'NIFTY100', 'name' => 'Nifty 100', 'exchange' => 'NSE', 'nse_charting_name' => 'NIFTY 100', 'yahoo_symbol' => '^CNX100', 'alpha_vantage_symbol' => null, 'enabled' => true],
+            ['symbol' => 'NIFTY200', 'name' => 'Nifty 200', 'exchange' => 'NSE', 'nse_charting_name' => 'NIFTY 200', 'yahoo_symbol' => '^CNX200', 'alpha_vantage_symbol' => null, 'enabled' => true],
+            ['symbol' => 'NIFTY500', 'name' => 'Nifty 500', 'exchange' => 'NSE', 'nse_charting_name' => 'NIFTY 500', 'yahoo_symbol' => '^CRSLDX', 'alpha_vantage_symbol' => null, 'enabled' => true],
+            ['symbol' => 'NIFTYMIDCAP50', 'name' => 'Nifty Midcap 50', 'exchange' => 'NSE', 'nse_charting_name' => 'NIFTY MIDCAP 50', 'yahoo_symbol' => '^NSEMDCP50', 'alpha_vantage_symbol' => null, 'enabled' => true],
+            ['symbol' => 'NIFTYMIDCAP100', 'name' => 'Nifty Midcap 100', 'exchange' => 'NSE', 'nse_charting_name' => 'NIFTY MIDCAP 100', 'yahoo_symbol' => 'NIFTY_MIDCAP_100.NS', 'alpha_vantage_symbol' => null, 'enabled' => true],
+            ['symbol' => 'NIFTYMIDCAP150', 'name' => 'Nifty Midcap 150', 'exchange' => 'NSE', 'nse_charting_name' => 'NIFTY MIDCAP 150', 'yahoo_symbol' => 'NIFTYMIDCAP150.NS', 'alpha_vantage_symbol' => null, 'enabled' => true],
+            ['symbol' => 'NIFTYSMLCAP250', 'name' => 'Nifty Smallcap 250', 'exchange' => 'NSE', 'nse_charting_name' => 'NIFTY SMLCAP 250', 'yahoo_symbol' => 'NIFTYSMLCAP250.NS', 'alpha_vantage_symbol' => null, 'enabled' => true],
+            ['symbol' => 'NIFTYFINSERVICE', 'name' => 'Nifty Financial Services', 'exchange' => 'NSE', 'nse_charting_name' => 'NIFTY FIN SERVICE', 'yahoo_symbol' => 'NIFTY_FIN_SERVICE.NS', 'alpha_vantage_symbol' => null, 'enabled' => true],
+            ['symbol' => 'NIFTYPHARMA', 'name' => 'Nifty Pharma', 'exchange' => 'NSE', 'nse_charting_name' => 'NIFTY PHARMA', 'yahoo_symbol' => '^CNXPHARMA', 'alpha_vantage_symbol' => null, 'enabled' => true],
+            ['symbol' => 'NIFTYAUTO', 'name' => 'Nifty Auto', 'exchange' => 'NSE', 'nse_charting_name' => 'NIFTY AUTO', 'yahoo_symbol' => '^CNXAUTO', 'alpha_vantage_symbol' => null, 'enabled' => true],
+            ['symbol' => 'NIFTYFMCG', 'name' => 'Nifty FMCG', 'exchange' => 'NSE', 'nse_charting_name' => 'NIFTY FMCG', 'yahoo_symbol' => '^CNXFMCG', 'alpha_vantage_symbol' => null, 'enabled' => true],
+            ['symbol' => 'NIFTYMETAL', 'name' => 'Nifty Metal', 'exchange' => 'NSE', 'nse_charting_name' => 'NIFTY METAL', 'yahoo_symbol' => '^CNXMETAL', 'alpha_vantage_symbol' => null, 'enabled' => true],
+            ['symbol' => 'NIFTYREALTY', 'name' => 'Nifty Realty', 'exchange' => 'NSE', 'nse_charting_name' => 'NIFTY REALTY', 'yahoo_symbol' => '^CNXREALTY', 'alpha_vantage_symbol' => null, 'enabled' => true],
+            ['symbol' => 'NIFTYENERGY', 'name' => 'Nifty Energy', 'exchange' => 'NSE', 'nse_charting_name' => 'NIFTY ENERGY', 'yahoo_symbol' => '^CNXENERGY', 'alpha_vantage_symbol' => null, 'enabled' => true],
+            ['symbol' => 'NIFTYINFRA', 'name' => 'Nifty Infra', 'exchange' => 'NSE', 'nse_charting_name' => 'NIFTY INFRA', 'yahoo_symbol' => '^CNXINFRA', 'alpha_vantage_symbol' => null, 'enabled' => true],
+            ['symbol' => 'NIFTYPSUBANK', 'name' => 'Nifty PSU Bank', 'exchange' => 'NSE', 'nse_charting_name' => 'NIFTY PSU BANK', 'yahoo_symbol' => '^CNXPSUBANK', 'alpha_vantage_symbol' => null, 'enabled' => true],
+            ['symbol' => 'NIFTYPVTBANK', 'name' => 'Nifty Private Bank', 'exchange' => 'NSE', 'nse_charting_name' => 'NIFTY PVT BANK', 'yahoo_symbol' => 'NIFTY_PVT_BANK.NS', 'alpha_vantage_symbol' => null, 'enabled' => true],
+            ['symbol' => 'NIFTYMEDIA', 'name' => 'Nifty Media', 'exchange' => 'NSE', 'nse_charting_name' => 'NIFTY MEDIA', 'yahoo_symbol' => '^CNXMEDIA', 'alpha_vantage_symbol' => null, 'enabled' => true],
+            ['symbol' => 'INDIAVIX', 'name' => 'India VIX', 'exchange' => 'NSE', 'nse_charting_name' => 'INDIA VIX', 'yahoo_symbol' => '^INDIAVIX', 'alpha_vantage_symbol' => null, 'enabled' => true],
+            ['symbol' => 'SENSEX', 'name' => 'Sensex', 'exchange' => 'BSE', 'nse_charting_name' => null, 'yahoo_symbol' => '^BSESN', 'alpha_vantage_symbol' => null, 'enabled' => true],
+            ['symbol' => 'BSE100', 'name' => 'BSE 100', 'exchange' => 'BSE', 'nse_charting_name' => null, 'yahoo_symbol' => 'BSE-100.BO', 'alpha_vantage_symbol' => null, 'enabled' => true],
+            ['symbol' => 'BSE200', 'name' => 'BSE 200', 'exchange' => 'BSE', 'nse_charting_name' => null, 'yahoo_symbol' => 'BSE-200.BO', 'alpha_vantage_symbol' => null, 'enabled' => true],
+            ['symbol' => 'BSE500', 'name' => 'BSE 500', 'exchange' => 'BSE', 'nse_charting_name' => null, 'yahoo_symbol' => 'BSE-500.BO', 'alpha_vantage_symbol' => null, 'enabled' => true],
+        ],
     ],
 
     /*

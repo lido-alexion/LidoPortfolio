@@ -28,6 +28,25 @@ class BseEquityMasterServiceTest extends TestCase
         $this->assertCount(1, $rows);
         $this->assertSame('RELIANCE', $rows[0]['symbol']);
         $this->assertSame('INE002A01018', $rows[0]['isin']);
+        $this->assertNull($rows[0]['scrip_code']);
+    }
+
+    public function test_parse_api_rows_includes_scrip_code_when_present(): void
+    {
+        $service = app(BseEquityMasterService::class);
+        $rows = $service->parseApiRows([
+            [
+                'scrip_name' => 'Reliance Industries Ltd',
+                'scrip_id' => 'RELIANCE',
+                'scrip_cd' => '500325',
+                'ISIN' => 'INE002A01018',
+                'STATUS' => 'Active',
+            ],
+        ]);
+
+        $this->assertCount(1, $rows);
+        $this->assertSame('RELIANCE', $rows[0]['symbol']);
+        $this->assertSame('500325', $rows[0]['scrip_code']);
     }
 
     public function test_list_api_url_falls_back_when_config_missing(): void

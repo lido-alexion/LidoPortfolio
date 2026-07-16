@@ -5,20 +5,23 @@ namespace App\Services;
 use App\Models\Setting;
 use Carbon\Carbon;
 
+/**
+ * Keeps the primary index (NIFTY50) current for RS / Explorer.
+ * Multi-index batch sync lives in IndexPriceSyncService.
+ */
 class BenchmarkPriceSyncService
 {
     public const KEY_LAST_SYNC_DATE = 'benchmark_price_sync_date';
 
     public function __construct(
-        protected PriceFetchService $priceFetch,
-        protected RelativeStrengthService $relativeStrength,
-        protected StockPriceHistoryService $history,
+        protected IndexPriceSyncService $indexSync,
+        protected IndexCatalogService $catalog,
         protected SettingsService $settings,
         protected PortfolioLoggerService $logger,
     ) {}
 
     /**
-     * Sync NIFTY50 OHLCV for Explorer / relative strength. Skips if already synced today unless $force.
+     * Sync primary benchmark OHLCV. Skips if already synced today unless $force.
      *
      * @return array{
      *   success: bool,
@@ -49,14 +52,8 @@ class BenchmarkPriceSyncService
             ];
         }
 
-        $benchmark = $this->relativeStrength->benchmarkStock();
-        $needsFullHistory = ! $this->history->getCachedAnalyticsHistoryStatus($benchmark, 6)['cache_hit'];
-        $from = $needsFullHistory
-            ? now()->subMonths(12)->startOfDay()
-            : now()->subDays($this->dailyLookbackDays())->startOfDay();
-        $to = now()->startOfDay();
-
-        $result = $this->priceFetch->syncStock($benchmark, $from, $to, notifyTelegramOnFailure: false);
+        $symbol = $this->catalog->primarySymbol();
+        $result = $this->indexSync->syncOneSymbol($symbol, 'daily');
 
         if ($result['success']) {
             Setting::setValue(self::KEY_LAST_SYNC_DATE, $today);
@@ -67,16 +64,16 @@ class BenchmarkPriceSyncService
             'skipped' => false,
             'stored_rows' => (int) ($result['stored_rows'] ?? 0),
             'fetched_rows' => (int) ($result['fetched_rows'] ?? 0),
-            'full_history' => $needsFullHistory,
-            'from_date' => $from->toDateString(),
-            'to_date' => $to->toDateString(),
+            'full_history' => (bool) ($result['full_history'] ?? false),
+            'from_date' => (string) ($result['from_date'] ?? $today),
+            'to_date' => (string) ($result['to_date'] ?? $today),
             'errors' => $result['errors'] ?? [],
         ];
 
         $this->logger->scheduler(
             ($payload['success'] ? 'info' : 'warning'),
-            'NIFTY50 benchmark price sync '.($payload['success'] ? 'completed' : 'failed'),
-            array_merge(['category' => 'BenchmarkPriceSync'], $payload),
+            $symbol.' benchmark price sync '.($payload['success'] ? 'completed' : 'failed'),
+            array_merge(['category' => 'BenchmarkPriceSync', 'symbol' => $symbol], $payload),
         );
 
         return $payload;
@@ -87,10 +84,5 @@ class BenchmarkPriceSyncService
         $timezone = $this->settings->get('cron_timezone', 'Asia/Kolkata') ?? 'Asia/Kolkata';
 
         return Carbon::now($timezone)->toDateString();
-    }
-
-    protected function dailyLookbackDays(): int
-    {
-        return max(14, (int) config('portfolio.universe_price_sync.daily_lookback_days', 10));
     }
 }

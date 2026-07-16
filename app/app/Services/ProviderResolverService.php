@@ -60,9 +60,9 @@ class ProviderResolverService
   public function yahooSymbol(string $symbol, string $exchange = 'NSE'): string
   {
     $normalized = $this->normalizeSymbol($symbol, $exchange);
-
-    if ($normalized['symbol'] === 'NIFTY50') {
-      return '^NSEI';
+    $indexDef = app(IndexCatalogService::class)->definitionForSymbol($normalized['symbol']);
+    if ($indexDef !== null && ($indexDef['yahoo_symbol'] ?? '') !== '') {
+      return (string) $indexDef['yahoo_symbol'];
     }
 
     if ($normalized['exchange'] === 'BSE') {
@@ -75,9 +75,13 @@ class ProviderResolverService
   public function alphaVantageSymbol(string $symbol, string $exchange = 'NSE'): string
   {
     $normalized = $this->normalizeSymbol($symbol, $exchange);
+    $indexDef = app(IndexCatalogService::class)->definitionForSymbol($normalized['symbol']);
+    if ($indexDef !== null) {
+      if (($indexDef['alpha_vantage_symbol'] ?? null) !== null && $indexDef['alpha_vantage_symbol'] !== '') {
+        return (string) $indexDef['alpha_vantage_symbol'];
+      }
 
-    if ($normalized['symbol'] === 'NIFTY50') {
-      return 'NSEI';
+      return $this->yahooSymbol($normalized['symbol'], $normalized['exchange']);
     }
 
     return $this->yahooSymbol($normalized['symbol'], $normalized['exchange']);
@@ -85,9 +89,16 @@ class ProviderResolverService
 
   public function applyProviderSymbols(Stock $stock): Stock
   {
-    if ($stock->symbol === 'NIFTY50' && $stock->exchange === 'NSE') {
-      $stock->yahoo_symbol = '^NSEI';
-      $stock->alpha_vantage_symbol = 'NSEI';
+    $indexDef = app(IndexCatalogService::class)->definitionForSymbol((string) $stock->symbol);
+    if ($indexDef !== null) {
+      if (($indexDef['yahoo_symbol'] ?? '') !== '') {
+        $stock->yahoo_symbol = (string) $indexDef['yahoo_symbol'];
+      }
+      if (($indexDef['alpha_vantage_symbol'] ?? null) !== null && $indexDef['alpha_vantage_symbol'] !== '') {
+        $stock->alpha_vantage_symbol = (string) $indexDef['alpha_vantage_symbol'];
+      } elseif (! $stock->alpha_vantage_symbol) {
+        $stock->alpha_vantage_symbol = $stock->yahoo_symbol;
+      }
 
       return $stock;
     }
@@ -99,6 +110,41 @@ class ProviderResolverService
   }
 
   /**
+   * NSE charting / NextApi trade symbol (base symbol + series suffix when not EQ).
+   */
+  public function nseTradeSymbol(Stock $stock): string
+  {
+    $base = strtoupper(trim((string) $stock->symbol));
+    if ($base === '' || strtoupper((string) $stock->exchange) !== 'NSE') {
+      return $base;
+    }
+
+    if (app(IndexCatalogService::class)->isConfiguredIndex($base)) {
+      return $base;
+    }
+
+    $series = strtoupper(trim((string) ($stock->series ?? 'EQ')));
+    if ($series === '' || $series === 'EQ') {
+      return $base;
+    }
+
+    return $base.'-'.$series;
+  }
+
+  /**
+   * @return array{0: string, 1: string} [baseSymbol, series]
+   */
+  public function parseNseTradeSymbol(string $tradeSymbol): array
+  {
+    $upper = strtoupper(trim($tradeSymbol));
+    if (preg_match('/^([A-Z0-9][A-Z0-9\-&]*)-(EQ|BE|BZ|IV|E1|E2|SM|ST|GS|GB|MF)$/', $upper, $matches) === 1) {
+      return [$matches[1], $matches[2]];
+    }
+
+    return [$upper, 'EQ'];
+  }
+
+  /**
    * @return array<string, string>
    */
   public function providerSymbolsForStock(Stock $stock): array
@@ -106,9 +152,39 @@ class ProviderResolverService
     $stock = $this->applyProviderSymbols($stock);
 
     return [
-      'nse' => $stock->symbol,
+      'nse' => $this->nseTradeSymbol($stock),
+      'bse_bhavcopy' => trim((string) ($stock->bse_scrip_code ?? '')),
       'yahoo' => $stock->yahoo_symbol,
       'alpha_vantage' => $stock->alpha_vantage_symbol,
     ];
+  }
+
+  /**
+   * Yahoo tickers to try for Indian equities (primary exchange first, then alternate listing).
+   *
+   * @return array<int, string>
+   */
+  public function yahooSymbolCandidates(Stock $stock): array
+  {
+    $stock = $this->applyProviderSymbols($stock);
+
+    if (app(IndexCatalogService::class)->isConfiguredIndex((string) $stock->symbol)) {
+      $yahoo = $stock->yahoo_symbol ?: $this->yahooSymbol($stock->symbol, $stock->exchange);
+
+      return array_values(array_unique(array_filter([$yahoo])));
+    }
+
+    $base = strtoupper((string) $stock->symbol);
+    $ns = $base.'.NS';
+    $bo = $base.'.BO';
+    $exchange = strtoupper((string) $stock->exchange);
+
+    if ($exchange === 'BSE') {
+      $ordered = [$stock->yahoo_symbol ?: $bo, $bo];
+    } else {
+      $ordered = [$stock->yahoo_symbol ?: $ns, $ns, $bo];
+    }
+
+    return array_values(array_unique(array_filter($ordered)));
   }
 }
