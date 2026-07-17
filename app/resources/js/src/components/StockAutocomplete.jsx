@@ -14,6 +14,7 @@ export default function StockAutocomplete({
     disabled = false,
     required = false,
     hideLabel = false,
+    clearOnBlur = false,
     id = 'stock-symbol-input',
     placeholder = 'Search symbol or company (min 2 chars)',
 }) {
@@ -22,6 +23,12 @@ export default function StockAutocomplete({
     const [loading, setLoading] = useState(false);
     const [open, setOpen] = useState(false);
     const containerRef = useRef(null);
+    const pickedRef = useRef(false);
+    const onChangeRef = useRef(onChange);
+
+    useEffect(() => {
+        onChangeRef.current = onChange;
+    }, [onChange]);
 
     useEffect(() => {
         setQuery(value?.symbol || value || '');
@@ -63,18 +70,32 @@ export default function StockAutocomplete({
 
     useEffect(() => () => fetchSuggestions.cancel(), [fetchSuggestions]);
 
+    const clearTypedQuery = () => {
+        fetchSuggestions.cancel();
+        setQuery('');
+        setSuggestions([]);
+        setOpen(false);
+        setLoading(false);
+        onChangeRef.current?.('');
+    };
+
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (containerRef.current && !containerRef.current.contains(event.target)) {
                 setOpen(false);
+                if (clearOnBlur && !pickedRef.current) {
+                    clearTypedQuery();
+                }
+                pickedRef.current = false;
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+    }, [clearOnBlur, fetchSuggestions]);
 
     const handleInput = (e) => {
         const next = e.target.value.toUpperCase();
+        pickedRef.current = false;
         setQuery(next);
         onChange?.(next);
         setOpen(false);
@@ -82,6 +103,7 @@ export default function StockAutocomplete({
     };
 
     const pick = (stock) => {
+        pickedRef.current = true;
         setQuery(stock.symbol);
         setOpen(false);
         setSuggestions([]);
@@ -103,6 +125,22 @@ export default function StockAutocomplete({
                         if (query.length >= MIN_CHARS && suggestions.length > 0) {
                             setOpen(true);
                         }
+                    }}
+                    onBlur={() => {
+                        if (!clearOnBlur) {
+                            return;
+                        }
+                        // Defer so suggestion clicks can mark a pick first.
+                        window.setTimeout(() => {
+                            if (pickedRef.current) {
+                                pickedRef.current = false;
+                                return;
+                            }
+                            if (containerRef.current?.contains(document.activeElement)) {
+                                return;
+                            }
+                            clearTypedQuery();
+                        }, 120);
                     }}
                     disabled={disabled}
                     required={required}

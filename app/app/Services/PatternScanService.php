@@ -5,8 +5,12 @@ namespace App\Services;
 use App\Models\PortfolioProfile;
 use App\Models\Stock;
 use App\Models\StockPrice;
+use App\Models\Watchlist;
 use App\Models\WatchlistItem;
+use App\Models\WatchlistPatternScan;
+use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class PatternScanService
 {
@@ -18,6 +22,8 @@ class PatternScanService
      * @return array{
      *     scope: string,
      *     actionable_only: bool,
+     *     watchlist_id: ?int,
+     *     persisted: bool,
      *     results: list<array{
      *         stock_id: int,
      *         symbol: string,
@@ -27,23 +33,40 @@ class PatternScanService
      *     }>
      * }
      */
-    public function scan(PortfolioProfile $profile, string $scope, bool $actionableOnly = true): array
-    {
+    public function scan(
+        PortfolioProfile $profile,
+        string $scope,
+        bool $actionableOnly = true,
+        ?int $watchlistId = null,
+    ): array {
+        $watchlist = null;
+        if ($scope === 'watchlist' && $watchlistId !== null) {
+            $watchlist = Watchlist::query()
+                ->where('profile_id', $profile->id)
+                ->where('id', $watchlistId)
+                ->first();
+        }
+
         $stocks = match ($scope) {
-            'watchlist' => $this->stocksFromWatchlist($profile),
+            'watchlist' => $this->stocksFromWatchlist($profile, $watchlistId),
             'holdings' => $this->stocksFromHoldings($profile),
             default => collect(),
         };
 
         $results = [];
+        $scannedPayload = [];
 
         foreach ($stocks as $stock) {
             $bars = $this->loadBars($stock);
-            if ($bars === []) {
-                continue;
-            }
+            $priceAsOf = $bars === [] ? null : $bars[array_key_last($bars)]['date'];
+            $matches = $bars === [] ? [] : $this->detection->scanBars($bars, $actionableOnly);
 
-            $matches = $this->detection->scanBars($bars, $actionableOnly);
+            $scannedPayload[] = [
+                'stock' => $stock,
+                'matches' => $matches,
+                'price_as_of' => $priceAsOf,
+            ];
+
             if ($matches === []) {
                 continue;
             }
@@ -57,11 +80,154 @@ class PatternScanService
             ];
         }
 
+        $persisted = false;
+        if ($watchlist !== null) {
+            $this->persistWatchlistScan($watchlist, $scannedPayload);
+            $persisted = true;
+        }
+
         return [
             'scope' => $scope,
             'actionable_only' => $actionableOnly,
+            'watchlist_id' => $watchlist?->id,
+            'persisted' => $persisted,
             'results' => $results,
         ];
+    }
+
+    /**
+     * Valid (non-expired, price-fresh) pattern matches keyed by stock_id.
+     *
+     * @return array<int, list<array<string, mixed>>>
+     */
+    public function validMatchesByStockForWatchlist(Watchlist $watchlist): array
+    {
+        $now = now();
+
+        $scans = WatchlistPatternScan::query()
+            ->where('watchlist_id', $watchlist->id)
+            ->where('expires_at', '>', $now)
+            ->get();
+
+        if ($scans->isEmpty()) {
+            return [];
+        }
+
+        $stockIds = $scans->pluck('stock_id')->map(fn ($id) => (int) $id)->unique()->values()->all();
+        $latestByStock = $this->latestPriceDatesForStocks($stockIds);
+
+        $out = [];
+        foreach ($scans as $scan) {
+            $stockId = (int) $scan->stock_id;
+            $priceAsOf = $scan->price_as_of
+                ? Carbon::parse($scan->price_as_of)->startOfDay()
+                : null;
+            $latestRaw = $latestByStock[$stockId] ?? null;
+            $latest = $latestRaw
+                ? Carbon::parse($latestRaw)->startOfDay()
+                : null;
+
+            // Invalidate only when a strictly newer OHLCV session exists.
+            if ($priceAsOf !== null && $latest !== null && $latest->gt($priceAsOf)) {
+                continue;
+            }
+
+            $matches = $scan->matches;
+            if (is_string($matches)) {
+                $decoded = json_decode($matches, true);
+                $matches = is_array($decoded) ? $decoded : [];
+            }
+            if (! is_array($matches) || $matches === []) {
+                continue;
+            }
+
+            $out[$stockId] = array_values($matches);
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  list<array{stock: Stock, matches: list<array<string, mixed>>, price_as_of: ?string}>  $payload
+     */
+    protected function persistWatchlistScan(Watchlist $watchlist, array $payload): void
+    {
+        $now = now();
+        $stockIds = [];
+
+        DB::transaction(function () use ($watchlist, $payload, $now, &$stockIds) {
+            foreach ($payload as $row) {
+                /** @var Stock $stock */
+                $stock = $row['stock'];
+                $stockIds[] = (int) $stock->id;
+                $priceAsOf = $row['price_as_of'];
+                $expiresAt = $this->resolveExpiresAt($priceAsOf, $now);
+
+                WatchlistPatternScan::query()->updateOrCreate(
+                    [
+                        'watchlist_id' => $watchlist->id,
+                        'stock_id' => $stock->id,
+                    ],
+                    [
+                        'profile_id' => $watchlist->profile_id,
+                        'matches' => $row['matches'],
+                        'price_as_of' => $priceAsOf,
+                        'expires_at' => $expiresAt,
+                        'scanned_at' => $now,
+                    ],
+                );
+            }
+
+            // Drop scans for stocks no longer on the watchlist.
+            WatchlistPatternScan::query()
+                ->where('watchlist_id', $watchlist->id)
+                ->when($stockIds !== [], fn ($q) => $q->whereNotIn('stock_id', $stockIds))
+                ->delete();
+        });
+    }
+
+    protected function resolveExpiresAt(?string $priceAsOf, Carbon $scannedAt): Carbon
+    {
+        $tz = config('app.timezone', 'Asia/Kolkata');
+        $fromScan = $scannedAt->copy()->timezone($tz)->startOfDay()->addDays(2)->endOfDay();
+
+        if ($priceAsOf === null || $priceAsOf === '') {
+            return $fromScan;
+        }
+
+        $fromPrice = Carbon::parse($priceAsOf, $tz)->startOfDay()->addDays(2)->endOfDay();
+
+        return $fromPrice->greaterThan($fromScan) ? $fromPrice : $fromScan;
+    }
+
+    /**
+     * @param  list<int>  $stockIds
+     * @return array<int, string>
+     */
+    protected function latestPriceDatesForStocks(array $stockIds): array
+    {
+        if ($stockIds === []) {
+            return [];
+        }
+
+        $rows = StockPrice::query()
+            ->whereIn('stock_id', $stockIds)
+            ->selectRaw('stock_id, MAX(price_date) as latest_price_date')
+            ->groupBy('stock_id')
+            ->get();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $stockId = (int) $row->stock_id;
+            $raw = $row->latest_price_date;
+            if ($raw instanceof Carbon) {
+                $out[$stockId] = $raw->toDateString();
+            } else {
+                $out[$stockId] = Carbon::parse((string) $raw)->toDateString();
+            }
+        }
+
+        return $out;
     }
 
     /** @return Collection<int, Stock> */
@@ -78,12 +244,17 @@ class PatternScanService
     }
 
     /** @return Collection<int, Stock> */
-    protected function stocksFromWatchlist(PortfolioProfile $profile): Collection
+    protected function stocksFromWatchlist(PortfolioProfile $profile, ?int $watchlistId = null): Collection
     {
-        return WatchlistItem::query()
+        $query = WatchlistItem::query()
             ->where('profile_id', $profile->id)
-            ->with('stock')
-            ->get()
+            ->with('stock');
+
+        if ($watchlistId !== null) {
+            $query->where('watchlist_id', $watchlistId);
+        }
+
+        return $query->get()
             ->pluck('stock')
             ->filter()
             ->unique('id')

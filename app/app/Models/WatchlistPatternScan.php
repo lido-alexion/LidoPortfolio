@@ -5,15 +5,18 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class WatchlistItem extends Model
+class WatchlistPatternScan extends Model
 {
-    protected $table = 'portfolio_watchlist_items';
+    protected $table = 'portfolio_watchlist_pattern_scans';
 
     protected $fillable = [
         'profile_id',
         'watchlist_id',
         'stock_id',
-        'note',
+        'matches',
+        'price_as_of',
+        'expires_at',
+        'scanned_at',
     ];
 
     protected function casts(): array
@@ -22,21 +25,11 @@ class WatchlistItem extends Model
             'profile_id' => 'integer',
             'watchlist_id' => 'integer',
             'stock_id' => 'integer',
+            'matches' => 'array',
+            'price_as_of' => 'date',
+            'expires_at' => 'datetime',
+            'scanned_at' => 'datetime',
         ];
-    }
-
-    public function resolveRouteBinding($value, $field = null)
-    {
-        $profile = \activePortfolio();
-
-        if ($profile === null) {
-            return null;
-        }
-
-        return static::query()
-            ->where('profile_id', $profile->id)
-            ->where($field ?? $this->getRouteKeyName(), $value)
-            ->first();
     }
 
     public function profile(): BelongsTo

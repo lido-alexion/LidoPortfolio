@@ -14,6 +14,8 @@ class UniversePriceSyncService
 {
     public const KEY_CURSOR_STOCK_ID = 'universe_price_sync_cursor_stock_id';
 
+    public const KEY_CURSOR_PRIORITY = 'universe_price_sync_cursor_priority';
+
     public const KEY_LAST_CYCLE_COMPLETED_AT = 'universe_price_sync_last_cycle_completed_at';
 
     public const KEY_IN_PROGRESS = 'universe_price_sync_in_progress';
@@ -185,10 +187,11 @@ class UniversePriceSyncService
 
         $lastRun = $this->lastRunStats();
         $cursorId = $this->resolveCursorStockId($lastRun);
+        $cursorPriority = $this->resolveCursorPriority($cursorId);
         $cursorStock = $cursorId > 0 ? Stock::query()->find($cursorId) : null;
 
         $processedThrough = $universeCount > 0 && $cursorId > 0
-            ? $this->resolver->stockQuery($scope)->where('id', '<=', $cursorId)->count()
+            ? $this->resolver->countThroughCursor($scope, $cursorId, $cursorPriority)
             : 0;
 
         $progressPercent = $universeCount > 0
@@ -905,9 +908,13 @@ class UniversePriceSyncService
     protected function nextBatch(string $scope, int $batchSize): Collection
     {
         $cursor = (int) Setting::getValue(self::KEY_CURSOR_STOCK_ID, '0');
+        $cursorPriority = $this->resolveCursorPriority($cursor);
         $query = $this->resolver->stockQuery($scope);
 
-        $stocks = (clone $query)->where('id', '>', $cursor)->limit($batchSize)->get();
+        $stocks = $this->resolver
+            ->applyAfterCursor(clone $query, $cursor, $cursorPriority)
+            ->limit($batchSize)
+            ->get();
 
         if ($stocks->isEmpty() && $cursor > 0) {
             $stocks = $query->limit($batchSize)->get();
@@ -925,8 +932,8 @@ class UniversePriceSyncService
             return true;
         }
 
-        $maxId = (int) ($this->resolver->stockQuery($scope)->max('id') ?? 0);
-        if ($maxId > 0 && $lastProcessedId >= $maxId) {
+        $cursorPriority = $this->resolveCursorPriority($lastProcessedId);
+        if ($lastProcessedId > 0 && ! $this->resolver->hasStocksAfterCursor($scope, $lastProcessedId, $cursorPriority)) {
             $this->setCursor(0);
             Setting::setValue(self::KEY_LAST_CYCLE_COMPLETED_AT, now()->toIso8601String());
 
@@ -936,9 +943,35 @@ class UniversePriceSyncService
         return false;
     }
 
-    protected function setCursor(int $stockId): void
+    protected function setCursor(int $stockId, ?int $priority = null): void
     {
-        Setting::setValue(self::KEY_CURSOR_STOCK_ID, (string) max(0, $stockId));
+        $stockId = max(0, $stockId);
+        Setting::setValue(self::KEY_CURSOR_STOCK_ID, (string) $stockId);
+
+        if ($stockId <= 0) {
+            Setting::setValue(self::KEY_CURSOR_PRIORITY, '0');
+
+            return;
+        }
+
+        Setting::setValue(
+            self::KEY_CURSOR_PRIORITY,
+            (string) ($priority ?? $this->resolver->syncPriorityForStockId($stockId)),
+        );
+    }
+
+    protected function resolveCursorPriority(int $cursorStockId): int
+    {
+        if ($cursorStockId <= 0) {
+            return EquityUniverseService::SYNC_PRIORITY_HOLDING;
+        }
+
+        $stored = Setting::getValue(self::KEY_CURSOR_PRIORITY);
+        if ($stored !== null && $stored !== '') {
+            return (int) $stored;
+        }
+
+        return $this->resolver->syncPriorityForStockId($cursorStockId);
     }
 
     /**

@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\Stock;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
@@ -39,5 +38,25 @@ class UniverseStockResolverService
     public function count(?string $scope = null): int
     {
         return $this->stockQuery($scope)->count();
+    }
+
+    public function applyAfterCursor(Builder $query, int $cursorStockId, ?int $cursorPriority = null): Builder
+    {
+        return $this->equityUniverse->applyAfterCursor($query, $cursorStockId, $cursorPriority);
+    }
+
+    public function countThroughCursor(?string $scope, int $cursorStockId, ?int $cursorPriority = null): int
+    {
+        return $this->equityUniverse->countThroughCursor($scope, $cursorStockId, $cursorPriority);
+    }
+
+    public function hasStocksAfterCursor(?string $scope, int $cursorStockId, ?int $cursorPriority = null): bool
+    {
+        return $this->equityUniverse->hasStocksAfterCursor($scope, $cursorStockId, $cursorPriority);
+    }
+
+    public function syncPriorityForStockId(int $stockId): int
+    {
+        return $this->equityUniverse->syncPriorityForStockId($stockId);
     }
 }

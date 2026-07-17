@@ -67,6 +67,40 @@ export function buildDefaultColumnOrder(columns) {
     return columns.map((col, index) => col.id || col.accessorKey || `col_${index}`);
 }
 
+/**
+ * Merge column ids missing from a saved order into it, placing each new id at
+ * its default-order position (next to its default neighbours) instead of
+ * appending it at the end of the table.
+ */
+export function mergeMissingColumnIds(savedOrder, defaultOrder) {
+    const next = [...savedOrder];
+    defaultOrder.forEach((id, defIndex) => {
+        if (next.includes(id)) {
+            return;
+        }
+        let insertAt = -1;
+        for (let i = defIndex - 1; i >= 0; i -= 1) {
+            const idx = next.indexOf(defaultOrder[i]);
+            if (idx >= 0) {
+                insertAt = idx + 1;
+                break;
+            }
+        }
+        if (insertAt < 0) {
+            insertAt = next.length;
+            for (let i = defIndex + 1; i < defaultOrder.length; i += 1) {
+                const idx = next.indexOf(defaultOrder[i]);
+                if (idx >= 0) {
+                    insertAt = idx;
+                    break;
+                }
+            }
+        }
+        next.splice(insertAt, 0, id);
+    });
+    return next;
+}
+
 const DEFAULT_COLUMN_SIZE = 140;
 const DEFAULT_COLUMN_MIN = 56;
 const DEFAULT_COLUMN_MAX = 720;

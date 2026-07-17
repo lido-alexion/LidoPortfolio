@@ -150,7 +150,7 @@ export default function PatternGuidePage() {
                     <p className="text-muted small mb-3">
                         Reference guide for common technical patterns. Each entry includes a sketch,
                         characteristics, trading interpretation, and OHLCV math rules used by the scanners.
-                        Use Scan my watchlist on the Watchlist tab or see holdings signals on the Dashboard.
+                        Use Scan watchlist on the Watchlist tab (icons appear on matching rows) or see holdings signals on the Dashboard.
                         Each pattern has a shareable link (URL ends with #pattern_id).
                         This page is educational only — not trading advice.
                     </p>

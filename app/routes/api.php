@@ -30,6 +30,7 @@ use App\Http\Controllers\Api\UniversePriceSyncController;
 use App\Http\Controllers\Api\UserInviteController;
 use App\Http\Controllers\Api\UserManagementController;
 use App\Http\Controllers\Api\WatchlistController;
+use App\Http\Controllers\Api\WatchlistsController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
@@ -85,10 +86,15 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::post('/corporate-actions', [CorporateActionController::class, 'store']);
 
     Route::get('/holdings', [HoldingController::class, 'index']);
-    Route::get('/watchlist', [WatchlistController::class, 'index']);
-    Route::post('/watchlist', [WatchlistController::class, 'store']);
-    Route::put('/watchlist/{watchlistItem}', [WatchlistController::class, 'update']);
-    Route::delete('/watchlist/{watchlistItem}', [WatchlistController::class, 'destroy']);
+    Route::get('/watchlists', [WatchlistsController::class, 'index']);
+    Route::post('/watchlists', [WatchlistsController::class, 'store']);
+    Route::put('/watchlists/{watchlist}', [WatchlistsController::class, 'update']);
+    Route::delete('/watchlists/{watchlist}', [WatchlistsController::class, 'destroy']);
+    Route::get('/watchlists/{watchlist}/items', [WatchlistController::class, 'index']);
+    Route::post('/watchlists/{watchlist}/items', [WatchlistController::class, 'store']);
+    Route::get('/watchlist/membership', [WatchlistController::class, 'membership']);
+    Route::put('/watchlist-items/{watchlistItem}', [WatchlistController::class, 'update']);
+    Route::delete('/watchlist-items/{watchlistItem}', [WatchlistController::class, 'destroy']);
     Route::get('/stocks/{stock}/prices', [StockPriceController::class, 'index']);
     Route::get('/stocks/{stock}/market-prices', [StockPriceController::class, 'market']);
     Route::get('/dashboard', [DashboardController::class, 'index']);

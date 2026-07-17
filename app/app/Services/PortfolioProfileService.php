@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\PortfolioProfile;
 use App\Models\ProfileSetting;
 use App\Models\User;
+use App\Services\WatchlistService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -12,6 +13,8 @@ use Illuminate\Validation\ValidationException;
 
 class PortfolioProfileService
 {
+    public function __construct(protected WatchlistService $watchlists) {}
+
     public function createDefaultForUser(User $user, string $name = 'Default'): PortfolioProfile
     {
         $hasDefault = PortfolioProfile::query()
@@ -19,11 +22,15 @@ class PortfolioProfileService
             ->where('is_default', true)
             ->exists();
 
-        return PortfolioProfile::query()->create([
+        $profile = PortfolioProfile::query()->create([
             'user_id' => $user->id,
             'name' => $name,
             'is_default' => ! $hasDefault,
         ]);
+
+        $this->watchlists->ensureDefaultWatchlist($profile);
+
+        return $profile;
     }
 
     public function defaultForUser(User $user): ?PortfolioProfile
@@ -109,6 +116,7 @@ class PortfolioProfileService
             $profile->alerts()->delete();
             $profile->alertPolicies()->delete();
             $profile->settings()->delete();
+            $profile->watchlists()->delete();
 
             $profile->delete();
         });

@@ -221,7 +221,7 @@ const SKETCHES = {
     ),
 };
 
-export default function PatternSketch({ patternId, className = '' }) {
+export default function PatternSketch({ patternId, className = '', title = 'Pattern sketch' }) {
     const sketch = SKETCHES[patternId];
     if (!sketch) {
         return (
@@ -231,7 +231,7 @@ export default function PatternSketch({ patternId, className = '' }) {
         );
     }
     return (
-        <div className={['lido-pattern-sketch', className].join(' ')} title="Pattern sketch">
+        <div className={['lido-pattern-sketch', className].join(' ')} title={title || undefined}>
             {sketch}
         </div>
     );

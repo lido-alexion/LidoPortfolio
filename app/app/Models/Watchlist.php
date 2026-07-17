@@ -4,24 +4,23 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class WatchlistItem extends Model
+class Watchlist extends Model
 {
-    protected $table = 'portfolio_watchlist_items';
+    protected $table = 'portfolio_watchlists';
 
     protected $fillable = [
         'profile_id',
-        'watchlist_id',
-        'stock_id',
-        'note',
+        'name',
+        'sort_order',
     ];
 
     protected function casts(): array
     {
         return [
             'profile_id' => 'integer',
-            'watchlist_id' => 'integer',
-            'stock_id' => 'integer',
+            'sort_order' => 'integer',
         ];
     }
 
@@ -44,13 +43,13 @@ class WatchlistItem extends Model
         return $this->belongsTo(PortfolioProfile::class, 'profile_id');
     }
 
-    public function watchlist(): BelongsTo
+    public function items(): HasMany
     {
-        return $this->belongsTo(Watchlist::class, 'watchlist_id');
+        return $this->hasMany(WatchlistItem::class, 'watchlist_id');
     }
 
-    public function stock(): BelongsTo
+    public function patternScans(): HasMany
     {
-        return $this->belongsTo(Stock::class);
+        return $this->hasMany(WatchlistPatternScan::class, 'watchlist_id');
     }
 }

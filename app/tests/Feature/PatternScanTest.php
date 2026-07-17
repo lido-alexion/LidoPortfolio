@@ -7,6 +7,7 @@ use App\Models\Stock;
 use App\Models\StockPrice;
 use App\Models\User;
 use App\Models\WatchlistItem;
+use App\Services\WatchlistService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -23,6 +24,7 @@ class PatternScanTest extends TestCase
             'password' => 'password123',
         ]);
         $profile = $this->defaultPortfolioFor($user);
+        $watchlist = app(WatchlistService::class)->ensureDefaultWatchlist($profile);
 
         $stock = Stock::query()->create([
             'symbol' => 'P'.strtoupper(Str::random(4)),
@@ -34,6 +36,7 @@ class PatternScanTest extends TestCase
 
         WatchlistItem::query()->create([
             'profile_id' => $profile->id,
+            'watchlist_id' => $watchlist->id,
             'stock_id' => $stock->id,
             'note' => null,
         ]);
@@ -42,16 +45,28 @@ class PatternScanTest extends TestCase
 
         $this->actingAs($user);
 
-        $response = $this->getJson('/api/patterns/scan?scope=watchlist&actionable_only=false');
+        $response = $this->getJson('/api/patterns/scan?scope=watchlist&watchlist_id='.$watchlist->id.'&actionable_only=false');
 
         $response->assertOk();
         $response->assertJsonPath('scope', 'watchlist');
+        $response->assertJsonPath('persisted', true);
         $response->assertJsonCount(1, 'results');
         $response->assertJsonPath('results.0.symbol', $stock->symbol);
 
         $matches = $response->json('results.0.matches');
         $this->assertNotEmpty($matches);
         $this->assertContains('hammer', array_column($matches, 'id'));
+
+        $this->assertDatabaseHas('portfolio_watchlist_pattern_scans', [
+            'watchlist_id' => $watchlist->id,
+            'stock_id' => $stock->id,
+        ]);
+
+        $items = $this->getJson('/api/watchlists/'.$watchlist->id.'/items');
+        $items->assertOk();
+        $items->assertJsonPath('data.0.stock_id', $stock->id);
+        $this->assertNotEmpty($items->json('data.0.pattern_matches'));
+        $this->assertContains('hammer', array_column($items->json('data.0.pattern_matches'), 'id'));
     }
 
     public function test_holdings_scan_requires_holding(): void

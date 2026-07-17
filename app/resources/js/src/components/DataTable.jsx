@@ -9,6 +9,7 @@ import {
     buildDefaultColumnOrder,
     distributeColumnWidths,
     loadTableColumnPrefs,
+    mergeMissingColumnIds,
     saveTableColumnPrefs,
 } from '../utils/tableColumnPrefs';
 
@@ -130,8 +131,7 @@ function useDataTableController({
     const [columnOrder, setColumnOrder] = useState(() => {
         const saved = savedPrefs?.columnOrder;
         if (saved?.length) {
-            const missing = defaultColumnOrder.filter((id) => !saved.includes(id));
-            return [...saved, ...missing];
+            return mergeMissingColumnIds(saved, defaultColumnOrder);
         }
         return defaultColumnOrder;
     });
@@ -148,7 +148,7 @@ function useDataTableController({
             if (missing.length === 0) {
                 return prev;
             }
-            return [...prev, ...missing];
+            return mergeMissingColumnIds(prev, defaultColumnOrder);
         });
     }, [defaultColumnOrder]);
 

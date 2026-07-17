@@ -1913,6 +1913,12 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     min-width: 3.25rem;
 }
 
+.lido-pattern-sketch--watchlist {
+    width: 2.35rem;
+    height: 1.45rem;
+    min-width: 2.35rem;
+}
+
 .lido-pattern-sketch--guide {
     width: 8rem;
     height: 5rem;
@@ -2734,7 +2740,8 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
 
 .lido-knowledge-editor-modal .modal-content,
 .lido-knowledge-view-modal .modal-content,
-.lido-knowledge-export-modal .modal-content {
+.lido-knowledge-export-modal .modal-content,
+.lido-manage-watchlists-modal .modal-content {
     background-color: var(--lido-bg-surface);
     color: var(--lido-text);
     border: 1px solid var(--lido-border-strong);
@@ -2759,7 +2766,8 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
 
 [data-theme='light'] .lido-knowledge-editor-modal .modal-content,
 [data-theme='light'] .lido-knowledge-view-modal .modal-content,
-[data-theme='light'] .lido-knowledge-export-modal .modal-content {
+[data-theme='light'] .lido-knowledge-export-modal .modal-content,
+[data-theme='light'] .lido-manage-watchlists-modal .modal-content {
     box-shadow: 0 12px 40px rgba(17, 24, 39, 0.15);
 }
 
@@ -2807,8 +2815,43 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
 }
 
 [data-theme='dark'] .lido-knowledge-editor-modal .btn-close,
-[data-theme='dark'] .lido-knowledge-export-modal .btn-close {
+[data-theme='dark'] .lido-knowledge-export-modal .btn-close,
+[data-theme='dark'] .lido-manage-watchlists-modal .btn-close {
     filter: invert(1) grayscale(100%);
+}
+
+.lido-manage-watchlists-modal .form-label,
+.lido-manage-watchlists-modal .text-muted,
+.lido-manage-watchlists-modal .small.text-muted {
+    color: var(--lido-text-muted) !important;
+}
+
+.lido-manage-watchlists-modal .form-control {
+    background-color: var(--lido-input-bg);
+    border-color: var(--lido-input-border);
+    color: var(--lido-text);
+}
+
+.lido-manage-watchlists-modal .form-control:focus {
+    background-color: var(--lido-input-bg);
+    border-color: var(--lido-brand);
+    color: var(--lido-text);
+    box-shadow: 0 0 0 0.2rem rgba(30, 144, 255, 0.25);
+}
+
+.lido-manage-watchlists-modal .form-control::placeholder {
+    color: var(--lido-text-muted);
+    opacity: 1;
+}
+
+.lido-manage-watchlists-modal .list-group-item {
+    background-color: var(--lido-bg-elevated);
+    border-color: var(--lido-border);
+    color: var(--lido-text);
+}
+
+.lido-manage-watchlists-modal .list-group-item .small.text-muted {
+    color: var(--lido-text-muted) !important;
 }
 
 .lido-knowledge-export-modal .modal-header,
@@ -2889,3 +2932,298 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     background-color: var(--lido-bg-elevated);
     color: var(--lido-text);
 }
+
+/* Watchlist active-list toolbar + row actions */
+.lido-watchlist-toolbar {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+@media (min-width: 768px) {
+    .lido-watchlist-toolbar {
+        flex-wrap: nowrap;
+    }
+
+    .lido-watchlist-quick-add {
+        flex: 0 1 220px;
+    }
+
+    .lido-watchlist-filter {
+        min-width: 160px;
+        max-width: 220px;
+        flex: 0 1 200px;
+    }
+
+    .lido-watchlist-sort {
+        min-width: 160px;
+        max-width: 190px;
+        flex: 0 0 180px;
+    }
+}
+
+.lido-watchlist-filter,
+.lido-watchlist-sort {
+    min-width: 140px;
+    flex: 1 1 140px;
+}
+
+.lido-watchlist-quick-add {
+    position: relative;
+    z-index: 5;
+    min-width: 180px;
+    max-width: 260px;
+    flex: 1 1 180px;
+}
+
+.lido-watchlist-quick-add .form-label {
+    display: none;
+}
+
+.lido-watchlist-quick-add .form-control {
+    min-height: calc(1.5em + 0.5rem + calc(var(--bs-border-width) * 2));
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+    background-color: var(--lido-input-bg);
+    border-color: var(--lido-input-border);
+    color: var(--lido-text);
+}
+
+.lido-watchlist-quick-add .form-control:focus {
+    background-color: var(--lido-input-bg);
+    border-color: var(--lido-brand);
+    color: var(--lido-text);
+}
+
+.lido-watchlist-quick-add .form-control::placeholder {
+    color: var(--lido-text-muted);
+    opacity: 1;
+}
+
+.lido-watchlist-quick-add .lido-stock-autocomplete-list {
+    z-index: 1060;
+}
+
+.lido-watchlist-change {
+    font-size: 0.78rem;
+    line-height: 1.25;
+    margin-top: 0.1rem;
+}
+
+.lido-watchlist-change--up.lido-watchlist-change--fresh {
+    color: #22c55e;
+}
+
+.lido-watchlist-change--down.lido-watchlist-change--fresh {
+    color: #ef4444;
+}
+
+.lido-watchlist-change--up.lido-watchlist-change--stale {
+    color: color-mix(in srgb, #22c55e 45%, var(--lido-text-muted));
+}
+
+.lido-watchlist-change--down.lido-watchlist-change--stale {
+    color: color-mix(in srgb, #ef4444 45%, var(--lido-text-muted));
+}
+
+.lido-watchlist-change--flat {
+    color: var(--lido-text-muted);
+}
+
+.contentPane .lido-watchlist-row.active .lido-watchlist-change--up.lido-watchlist-change--fresh {
+    color: #bbf7d0;
+}
+
+.contentPane .lido-watchlist-row.active .lido-watchlist-change--down.lido-watchlist-change--fresh {
+    color: #fecaca;
+}
+
+.contentPane .lido-watchlist-row.active .lido-watchlist-change--up.lido-watchlist-change--stale,
+.contentPane .lido-watchlist-row.active .lido-watchlist-change--down.lido-watchlist-change--stale,
+.contentPane .lido-watchlist-row.active .lido-watchlist-change--flat {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.contentPane .lido-watchlist-row {
+    display: flex;
+    align-items: stretch;
+    gap: 0.25rem;
+    padding: 0.5rem 0.75rem;
+    background-color: var(--lido-bg-surface);
+    border-color: var(--lido-border);
+    color: var(--lido-text);
+}
+
+.contentPane .lido-watchlist-row.active {
+    background-color: var(--lido-brand);
+    border-color: var(--lido-brand);
+    color: #fff;
+}
+
+.lido-watchlist-row-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    padding: 0.25rem 0.25rem 0.25rem 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.lido-watchlist-row-main:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--lido-brand) 55%, transparent);
+    outline-offset: 2px;
+    border-radius: 0.25rem;
+}
+
+.lido-watchlist-holding {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    margin-left: 0.35rem;
+    color: var(--lido-brand);
+    vertical-align: -0.1rem;
+    cursor: help;
+}
+
+.contentPane .lido-watchlist-row.active .lido-watchlist-holding {
+    color: #fff;
+}
+
+.lido-watchlist-holding-tooltip {
+    position: absolute;
+    z-index: 1080;
+    top: calc(100% + 0.45rem);
+    left: 50%;
+    display: none;
+    width: 15.5rem;
+    padding: 0.65rem 0.75rem;
+    transform: translateX(-30%);
+    border: 1px solid var(--lido-border);
+    border-radius: 0.4rem;
+    background: var(--lido-bg-surface);
+    box-shadow: 0 0.35rem 1rem rgba(0, 0, 0, 0.22);
+    color: var(--lido-text);
+    font-size: 0.78rem;
+    font-style: normal;
+    font-weight: 400;
+    line-height: 1.35;
+    text-align: left;
+    white-space: normal;
+}
+
+.lido-watchlist-holding-tooltip > span {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding-top: 0.15rem;
+}
+
+.lido-watchlist-holding-tooltip > span > strong {
+    white-space: nowrap;
+}
+
+.lido-watchlist-holding:hover .lido-watchlist-holding-tooltip {
+    display: block;
+}
+
+.lido-watchlist-holding:hover {
+    z-index: 1081;
+}
+
+.lido-watchlist-row-patterns {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.25rem;
+    max-width: 9rem;
+    flex: 0 1 auto;
+    align-self: center;
+}
+
+.lido-watchlist-pattern-link {
+    display: inline-flex;
+    line-height: 0;
+    text-decoration: none;
+    border-radius: 4px;
+}
+
+.lido-watchlist-pattern-link:hover .lido-pattern-sketch,
+.lido-watchlist-pattern-link:focus-visible .lido-pattern-sketch {
+    border-color: var(--lido-brand);
+    color: var(--lido-text);
+}
+
+.lido-watchlist-pattern-link:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--lido-brand) 55%, transparent);
+    outline-offset: 1px;
+}
+
+.contentPane .lido-watchlist-row.active .lido-pattern-sketch {
+    border-color: rgba(255, 255, 255, 0.45);
+    background: rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.92);
+}
+
+.lido-watchlist-row-remove {
+    flex: 0 0 auto;
+    align-self: center;
+    opacity: 0;
+    pointer-events: none;
+    color: #ef4444 !important;
+    border: 0;
+    background: transparent;
+    padding: 0.2rem;
+    line-height: 1;
+    transition: opacity 0.12s ease, color 0.12s ease, transform 0.12s ease;
+}
+
+.lido-watchlist-row-remove .lido-kb-icon {
+    width: 1.15rem;
+    height: 1.15rem;
+    color: #ef4444 !important;
+    stroke: #ef4444;
+}
+
+.lido-watchlist-row:hover .lido-watchlist-row-remove,
+.lido-watchlist-row:focus-within .lido-watchlist-row-remove {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.lido-watchlist-row-remove:hover,
+.lido-watchlist-row-remove:focus-visible {
+    color: #dc2626 !important;
+    transform: scale(1.08);
+}
+
+.lido-watchlist-row-remove:hover .lido-kb-icon,
+.lido-watchlist-row-remove:focus-visible .lido-kb-icon {
+    color: #dc2626 !important;
+    stroke: #dc2626;
+}
+
+.contentPane .lido-watchlist-row.active .lido-watchlist-row-remove,
+.contentPane .lido-watchlist-row.active .lido-watchlist-row-remove:hover,
+.contentPane .lido-watchlist-row.active .lido-watchlist-row-remove:focus-visible {
+    color: #ef4444 !important;
+}
+
+.contentPane .lido-watchlist-row.active .lido-watchlist-row-remove .lido-kb-icon {
+    color: #ef4444 !important;
+    stroke: #ef4444;
+}
+
+@media (hover: none) {
+    .lido-watchlist-row-remove {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+

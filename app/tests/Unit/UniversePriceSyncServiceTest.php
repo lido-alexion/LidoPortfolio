@@ -13,10 +13,12 @@ use App\Services\UniverseStockResolverService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
+use Tests\Concerns\CreatesPortfolioProfiles;
 use Tests\TestCase;
 
 class UniversePriceSyncServiceTest extends TestCase
 {
+    use CreatesPortfolioProfiles;
     use RefreshDatabase;
 
     protected function tearDown(): void
@@ -209,5 +211,90 @@ class UniversePriceSyncServiceTest extends TestCase
         );
 
         $service->sync(mode: 'daily', processAll: false, batchSize: 1);
+    }
+
+    public function test_sync_batch_prioritizes_holdings_before_other_stocks(): void
+    {
+        config([
+            'portfolio.universe_price_sync.enabled' => true,
+            'portfolio.universe_price_sync.batch_size' => 1,
+            'portfolio.universe_price_sync.delay_ms_between_stocks' => 0,
+            'portfolio.universe_price_sync.daily_lookback_days' => 5,
+        ]);
+
+        $user = \App\Models\User::query()->create([
+            'name' => 'Sync Priority',
+            'email' => 'sync-prio-'.uniqid().'@example.com',
+            'password' => 'password123',
+        ]);
+        $profile = $this->defaultPortfolioFor($user);
+
+        $other = Stock::query()->create([
+            'symbol' => 'OTHERZ',
+            'exchange' => 'NSE',
+            'name' => 'Other',
+            'is_active' => true,
+            'is_benchmark' => false,
+        ]);
+        $holding = Stock::query()->create([
+            'symbol' => 'HOLDZ',
+            'exchange' => 'NSE',
+            'name' => 'Holding',
+            'is_active' => true,
+            'is_benchmark' => false,
+        ]);
+
+        \App\Models\Holding::query()->create([
+            'profile_id' => $profile->id,
+            'stock_id' => $holding->id,
+            'quantity' => 5,
+            'avg_buy_price' => 10,
+            'invested_amount' => 50,
+            'total_fees' => 0,
+            'realized_profit' => 0,
+            'updated_at' => now(),
+        ]);
+
+        $syncedIds = [];
+        $priceFetch = Mockery::mock(PriceFetchService::class);
+        $priceFetch->shouldReceive('syncStock')
+            ->once()
+            ->withArgs(function ($s) use (&$syncedIds) {
+                $syncedIds[] = $s->id;
+
+                return true;
+            })
+            ->andReturn([
+                'success' => true,
+                'stored_rows' => 1,
+                'cache_hit' => false,
+                'errors' => [],
+            ]);
+
+        $benchmarkSync = Mockery::mock(BenchmarkPriceSyncService::class);
+        $benchmarkSync->shouldReceive('syncIfNeeded')->once()->andReturn(['skipped' => true, 'success' => true]);
+
+        $syncLog = Mockery::mock(SyncLogService::class);
+        $syncLog->shouldReceive('beginRun')->once()->andReturn('run-prio');
+        $syncLog->shouldReceive('log')->atLeast()->once();
+        $syncLog->shouldReceive('completeRun')->once();
+
+        $logger = Mockery::mock(PortfolioLoggerService::class);
+        $logger->shouldReceive('scheduler')->atLeast()->once();
+
+        $service = new UniversePriceSyncService(
+            app(UniverseStockResolverService::class),
+            $priceFetch,
+            $benchmarkSync,
+            $syncLog,
+            $logger,
+        );
+
+        $result = $service->sync(mode: 'daily', processAll: false, batchSize: 1);
+
+        $this->assertSame([$holding->id], $syncedIds);
+        $this->assertSame($holding->id, (int) Setting::getValue(UniversePriceSyncService::KEY_CURSOR_STOCK_ID));
+        $this->assertFalse($result['cycle_completed']);
+        $this->assertNotSame($other->id, $syncedIds[0] ?? null);
     }
 }

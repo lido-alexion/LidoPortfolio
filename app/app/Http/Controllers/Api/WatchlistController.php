@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Stock;
+use App\Models\Watchlist;
 use App\Models\WatchlistItem;
 use App\Services\WatchlistService;
 use Illuminate\Http\JsonResponse;
@@ -13,28 +14,57 @@ class WatchlistController extends Controller
 {
     public function __construct(protected WatchlistService $watchlist) {}
 
-    public function index(Request $request): JsonResponse
+    public function index(Request $request, Watchlist $watchlist): JsonResponse
     {
-        $profile = \activePortfolio();
-        $items = $this->watchlist->listForProfile($profile);
+        $validated = $request->validate([
+            'search' => ['nullable', 'string', 'max:120'],
+            'sort' => ['nullable', 'string', 'max:32'],
+        ]);
+
+        $items = $this->watchlist->listItems(
+            $watchlist,
+            $validated['search'] ?? null,
+            $validated['sort'] ?? 'symbol',
+        );
 
         return response()->json([
             'data' => $items->values(),
             'count' => $items->count(),
-            'max_items' => WatchlistService::MAX_ITEMS_PER_PROFILE,
+            'watchlist' => [
+                'id' => $watchlist->id,
+                'name' => $watchlist->name,
+            ],
+            'max_items' => WatchlistService::MAX_ITEMS_PER_WATCHLIST,
         ]);
     }
 
-    public function store(Request $request): JsonResponse
+    public function membership(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'stock_id' => ['required', 'integer', 'exists:portfolio_stocks,id'],
+        ]);
+
+        $profile = \activePortfolio();
+        $watchlistIds = $this->watchlist->watchlistIdsContainingStock(
+            $profile,
+            (int) $validated['stock_id'],
+        );
+
+        return response()->json([
+            'stock_id' => (int) $validated['stock_id'],
+            'watchlist_ids' => $watchlistIds,
+        ]);
+    }
+
+    public function store(Request $request, Watchlist $watchlist): JsonResponse
     {
         $validated = $request->validate([
             'stock_id' => ['required', 'integer', 'exists:portfolio_stocks,id'],
             'note' => ['nullable', 'string', 'max:500'],
         ]);
 
-        $profile = \activePortfolio();
         $stock = Stock::query()->findOrFail($validated['stock_id']);
-        $item = $this->watchlist->add($profile, $stock, $validated['note'] ?? null);
+        $item = $this->watchlist->add($watchlist, $stock, $validated['note'] ?? null);
 
         return response()->json(['data' => $item], 201);
     }

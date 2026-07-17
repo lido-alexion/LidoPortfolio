@@ -28,6 +28,7 @@ const HOLDINGS_VIEW_OPTIONS = [
 
 const HOLDINGS_COLUMN_ORDER = [
     'stock',
+    'stock_name',
     'latest_close',
     'unrealized_profit',
     'invested_amount',
@@ -118,6 +119,18 @@ function buildHoldingsColumns(complex, handleSell, handleCorporateAction) {
                         )}
                     </>
                 );
+            },
+        },
+        {
+            id: 'stock_name',
+            header: 'Name',
+            accessorFn: (row) => row.stock?.name || '',
+            cell: ({ getValue }) => {
+                const name = getValue();
+                if (!name) {
+                    return <span className="text-muted">—</span>;
+                }
+                return <span className="small" title={name}>{name}</span>;
             },
         },
         {

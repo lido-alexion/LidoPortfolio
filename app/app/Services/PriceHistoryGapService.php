@@ -13,6 +13,8 @@ class PriceHistoryGapService
 {
     public const KEY_CURSOR_STOCK_ID = 'price_history_gap_cursor_stock_id';
 
+    public const KEY_CURSOR_PRIORITY = 'price_history_gap_cursor_priority';
+
     public const KEY_LAST_SCAN_JSON = 'price_history_gap_last_scan_json';
 
     public const KEY_LAST_FILL_JSON = 'price_history_gap_last_fill_json';
@@ -165,10 +167,11 @@ class PriceHistoryGapService
         $scope = $this->resolver->normalizeScope($scope ?? $this->resolver->defaultScope());
         $benchmark = $this->relativeStrength->benchmarkStock();
         $cursorId = (int) Setting::getValue(self::KEY_CURSOR_STOCK_ID, '0');
+        $cursorPriority = $this->resolveCursorPriority($cursorId);
         $cursorStock = $cursorId > 0 ? Stock::query()->find($cursorId) : null;
         $universeCount = $this->resolver->count($scope);
         $processedThrough = $universeCount > 0 && $cursorId > 0
-            ? $this->resolver->stockQuery($scope)->where('id', '<=', $cursorId)->count()
+            ? $this->resolver->countThroughCursor($scope, $cursorId, $cursorPriority)
             : 0;
 
         $lastScan = $this->decodeSettingJson(self::KEY_LAST_SCAN_JSON);
@@ -558,7 +561,7 @@ class PriceHistoryGapService
 
         $progressEvery = max(50, (int) config('portfolio.universe_price_sync.gap_scan_progress_every', 250));
 
-        foreach ($this->resolver->stockQuery($scope)->orderBy('id')->cursor() as $stock) {
+        foreach ($this->resolver->stockQuery($scope)->cursor() as $stock) {
             $stats['scanned']++;
             $gaps = $this->gapsForStock($stock);
 
@@ -1102,9 +1105,13 @@ class PriceHistoryGapService
     protected function nextBatch(string $scope, int $batchSize): Collection
     {
         $cursor = (int) Setting::getValue(self::KEY_CURSOR_STOCK_ID, '0');
+        $cursorPriority = $this->resolveCursorPriority($cursor);
         $query = $this->resolver->stockQuery($scope);
 
-        $stocks = (clone $query)->where('id', '>', $cursor)->limit($batchSize)->get();
+        $stocks = $this->resolver
+            ->applyAfterCursor(clone $query, $cursor, $cursorPriority)
+            ->limit($batchSize)
+            ->get();
 
         if ($stocks->isEmpty() && $cursor > 0) {
             $stocks = $query->limit($batchSize)->get();
@@ -1143,8 +1150,8 @@ class PriceHistoryGapService
 
     protected function markCycleIfComplete(string $scope, int $lastProcessedId): bool
     {
-        $maxId = (int) ($this->resolver->stockQuery($scope)->max('id') ?? 0);
-        if ($maxId > 0 && $lastProcessedId >= $maxId) {
+        $cursorPriority = $this->resolveCursorPriority($lastProcessedId);
+        if ($lastProcessedId > 0 && ! $this->resolver->hasStocksAfterCursor($scope, $lastProcessedId, $cursorPriority)) {
             $this->setCursor(0);
             Setting::setValue(self::KEY_LAST_CYCLE_COMPLETED_AT, now()->toIso8601String());
 
@@ -1154,9 +1161,35 @@ class PriceHistoryGapService
         return false;
     }
 
-    protected function setCursor(int $stockId): void
+    protected function setCursor(int $stockId, ?int $priority = null): void
     {
-        Setting::setValue(self::KEY_CURSOR_STOCK_ID, (string) max(0, $stockId));
+        $stockId = max(0, $stockId);
+        Setting::setValue(self::KEY_CURSOR_STOCK_ID, (string) $stockId);
+
+        if ($stockId <= 0) {
+            Setting::setValue(self::KEY_CURSOR_PRIORITY, '0');
+
+            return;
+        }
+
+        Setting::setValue(
+            self::KEY_CURSOR_PRIORITY,
+            (string) ($priority ?? $this->resolver->syncPriorityForStockId($stockId)),
+        );
+    }
+
+    protected function resolveCursorPriority(int $cursorStockId): int
+    {
+        if ($cursorStockId <= 0) {
+            return EquityUniverseService::SYNC_PRIORITY_HOLDING;
+        }
+
+        $stored = Setting::getValue(self::KEY_CURSOR_PRIORITY);
+        if ($stored !== null && $stored !== '') {
+            return (int) $stored;
+        }
+
+        return $this->resolver->syncPriorityForStockId($cursorStockId);
     }
 
     /**

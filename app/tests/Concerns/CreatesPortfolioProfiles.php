@@ -5,6 +5,7 @@ namespace Tests\Concerns;
 use App\Models\PortfolioProfile;
 use App\Models\User;
 use App\Services\PortfolioProfileService;
+use App\Services\WatchlistService;
 
 trait CreatesPortfolioProfiles
 {
@@ -15,11 +16,15 @@ trait CreatesPortfolioProfiles
             return $existing;
         }
 
-        return PortfolioProfile::query()->create([
+        $profile = PortfolioProfile::query()->create([
             'user_id' => $user->id,
             'name' => $name,
             'is_default' => $isDefault && $existing === null,
         ]);
+
+        app(WatchlistService::class)->ensureDefaultWatchlist($profile);
+
+        return $profile;
     }
 
     protected function defaultPortfolioFor(User $user): PortfolioProfile

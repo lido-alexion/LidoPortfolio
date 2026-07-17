@@ -1,19 +1,121 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
+import AddToWatchlistComboButton from '../components/AddToWatchlistComboButton';
+import ManageWatchlistsModal from '../components/ManageWatchlistsModal';
+import PatternSketch from '../components/PatternSketch';
 import StockAutocomplete from '../components/StockAutocomplete';
 import PriceVolumeChart from '../components/charts/PriceVolumeChart';
-import { DataTableCard } from '../components/DataTable';
+import { IconDelete } from '../components/knowledgeBoard/KnowledgeCardIcons';
+import { usePortfolio } from '../context/PortfolioContext';
 import usePortfolioChanged from '../hooks/usePortfolioChanged';
 import { showToast } from '../toast';
-import { categoryClassName, categoryLabel } from '../utils/patternDetection';
-import { formatInrWhole } from '../utils/tableFormat';
-import { formatTransactionDateDisplay } from '../utils/transactionDate';
+import {
+    clearActiveWatchlistId,
+    loadActiveWatchlistId,
+    saveActiveWatchlistId,
+} from '../utils/activeWatchlistStorage';
+import { categoryLabel } from '../utils/patternDetection';
+import { patternGuideLink } from '../utils/patternGuideLinks';
 import { stockExchangeLabel } from '../utils/exchangeDisplay';
+import { formatInr, formatInrWhole } from '../utils/tableFormat';
+import { formatTransactionDateDisplay } from '../utils/transactionDate';
+
+const SORT_OPTIONS = [
+    { value: 'symbol', label: 'Symbol A–Z' },
+    { value: '-symbol', label: 'Symbol Z–A' },
+    { value: 'name', label: 'Name A–Z' },
+    { value: '-latest_close', label: 'Price high–low' },
+    { value: 'latest_close', label: 'Price low–high' },
+    { value: '-daily_change_percent', label: 'Change % high–low' },
+    { value: 'daily_change_percent', label: 'Change % low–high' },
+    { value: '-updated_at', label: 'Recently updated' },
+];
+
+function formatSignedChange(change, percent) {
+    if (change == null || percent == null) {
+        return null;
+    }
+    const changeNum = Number(change);
+    const percentNum = Number(percent);
+    if (Number.isNaN(changeNum) || Number.isNaN(percentNum)) {
+        return null;
+    }
+    const absChange = formatInr(Math.abs(changeNum)).replace(/^₹\s*/, '');
+    const sign = changeNum > 0 ? '+' : changeNum < 0 ? '−' : '';
+    const pctSign = percentNum > 0 ? '+' : percentNum < 0 ? '−' : '';
+    return `${sign}₹ ${absChange} (${pctSign}${Math.abs(percentNum).toFixed(2)}%)`;
+}
+
+function matchCountFromResults(results) {
+    return (results || []).reduce(
+        (sum, stock) => sum + (stock.matches?.length || 0),
+        0,
+    );
+}
+
+function apiErrorMessage(error, fallback) {
+    return error?.response?.data?.message
+        || error?.response?.data?.errors?.stock_id?.[0]
+        || error?.response?.data?.errors?.name?.[0]
+        || fallback;
+}
+
+function BriefcaseIcon() {
+    return (
+        <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" focusable="false">
+            <path
+                d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7m-11 4h16m-1 8H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2Z"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+            />
+        </svg>
+    );
+}
+
+function HoldingInfo({ holding, symbol }) {
+    if (!holding) {
+        return null;
+    }
+
+    const unrealized = holding.unrealized_profit;
+    const unrealizedClass = Number(unrealized) > 0
+        ? 'text-success'
+        : Number(unrealized) < 0
+            ? 'text-danger'
+            : '';
+
+    return (
+        <span
+            className="lido-watchlist-holding"
+            aria-label={`${symbol || 'Stock'} holding details`}
+        >
+            <BriefcaseIcon />
+            <span className="lido-watchlist-holding-tooltip" role="tooltip">
+                <strong className="d-block mb-1">In your holdings</strong>
+                <span><span>Units held</span><strong>{Number(holding.quantity).toLocaleString('en-IN', { maximumFractionDigits: 4 })}</strong></span>
+                <span><span>Avg. buy price</span><strong>{formatInr(holding.avg_buy_price)}</strong></span>
+                <span><span>Total invested</span><strong>{formatInr(holding.invested_amount)}</strong></span>
+                <span>
+                    <span>Unrealized P/L</span>
+                    <strong className={unrealizedClass}>
+                        {unrealized == null ? '—' : formatInr(unrealized)}
+                    </strong>
+                </span>
+            </span>
+        </span>
+    );
+}
 
 function WatchlistStockPanel({
     stock,
-    watchlistEntry,
+    activeWatchlist,
+    activeEntry,
+    membershipIds,
+    watchlists,
     note,
     onNoteChange,
     onAdd,
@@ -34,8 +136,9 @@ function WatchlistStockPanel({
         );
     }
 
-    const isOnWatchlist = Boolean(watchlistEntry);
+    const isOnActiveWatchlist = Boolean(activeEntry);
     const title = `${stock.symbol} — ${stock.name || 'Price history'}`;
+    const otherMembershipCount = membershipIds.filter((id) => id !== activeWatchlist?.id).length;
 
     return (
         <div className="d-grid gap-3">
@@ -60,24 +163,26 @@ function WatchlistStockPanel({
                         ) : null}
                     </div>
 
-                    <div className="mb-3">
-                        <label className="form-label small text-muted mb-1" htmlFor="watchlist-note">
-                            Note (optional)
-                        </label>
-                        <textarea
-                            id="watchlist-note"
-                            className="form-control form-control-sm"
-                            rows={2}
-                            maxLength={500}
-                            value={note}
-                            onChange={(e) => onNoteChange(e.target.value)}
-                            placeholder="Why you are watching this stock…"
-                            disabled={saving}
-                        />
-                    </div>
+                    {isOnActiveWatchlist ? (
+                        <div className="mb-3">
+                            <label className="form-label small text-muted mb-1" htmlFor="watchlist-note">
+                                Note (optional)
+                            </label>
+                            <textarea
+                                id="watchlist-note"
+                                className="form-control form-control-sm"
+                                rows={2}
+                                maxLength={500}
+                                value={note}
+                                onChange={(event) => onNoteChange(event.target.value)}
+                                placeholder="Why you are watching this stock…"
+                                disabled={saving}
+                            />
+                        </div>
+                    ) : null}
 
-                    <div className="d-flex flex-wrap gap-2">
-                        {isOnWatchlist ? (
+                    <div className="d-flex flex-wrap gap-2 align-items-center">
+                        {isOnActiveWatchlist ? (
                             <>
                                 <button
                                     type="button"
@@ -93,19 +198,23 @@ function WatchlistStockPanel({
                                     onClick={onRemove}
                                     disabled={saving}
                                 >
-                                    {saving ? 'Removing…' : 'Remove from watchlist'}
+                                    {saving ? 'Removing…' : `Remove from ${activeWatchlist?.name || 'watchlist'}`}
                                 </button>
                             </>
                         ) : (
-                            <button
-                                type="button"
-                                className="btn btn-sm btn-primary"
-                                onClick={onAdd}
-                                disabled={saving}
-                            >
-                                {saving ? 'Adding…' : 'Add to watchlist'}
-                            </button>
+                            <AddToWatchlistComboButton
+                                watchlists={watchlists}
+                                activeWatchlistId={activeWatchlist?.id}
+                                membershipIds={membershipIds}
+                                onAdd={onAdd}
+                                saving={saving}
+                            />
                         )}
+                        {!isOnActiveWatchlist && otherMembershipCount > 0 ? (
+                            <span className="small text-muted">
+                                On {otherMembershipCount} other watchlist{otherMembershipCount === 1 ? '' : 's'}
+                            </span>
+                        ) : null}
                     </div>
                 </div>
             </div>
@@ -128,36 +237,117 @@ function WatchlistStockPanel({
 }
 
 export default function WatchlistPage() {
-    const [watchlist, setWatchlist] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const { activePortfolio } = usePortfolio();
+    const profileId = activePortfolio?.id ?? null;
+
+    const [watchlists, setWatchlists] = useState([]);
+    const [activeWatchlistId, setActiveWatchlistId] = useState(null);
+    const [items, setItems] = useState([]);
+    const [loadingLists, setLoadingLists] = useState(true);
+    const [loadingItems, setLoadingItems] = useState(false);
     const [selectedStock, setSelectedStock] = useState(null);
     const [searchSymbol, setSearchSymbol] = useState('');
     const [note, setNote] = useState('');
+    const [membershipIds, setMembershipIds] = useState([]);
     const [prices, setPrices] = useState([]);
     const [priceMeta, setPriceMeta] = useState(null);
     const [pricesLoading, setPricesLoading] = useState(false);
     const [saving, setSaving] = useState(false);
-    const [scanRows, setScanRows] = useState([]);
     const [scanning, setScanning] = useState(false);
-    const [scanDone, setScanDone] = useState(false);
+    const [manageOpen, setManageOpen] = useState(false);
+    const [itemSearch, setItemSearch] = useState('');
+    const [itemSort, setItemSort] = useState('symbol');
+    const [quickAddSymbol, setQuickAddSymbol] = useState('');
+    const [quickAddKey, setQuickAddKey] = useState(0);
+    const [removingItemId, setRemovingItemId] = useState(null);
 
-    const loadWatchlist = useCallback(async () => {
-        setLoading(true);
+    const activeWatchlist = useMemo(
+        () => watchlists.find((row) => row.id === activeWatchlistId) ?? null,
+        [watchlists, activeWatchlistId],
+    );
+
+    const activeEntry = useMemo(
+        () => items.find((item) => item.stock_id === selectedStock?.id) ?? null,
+        [items, selectedStock],
+    );
+
+    const loadWatchlists = useCallback(async () => {
+        setLoadingLists(true);
         try {
-            const res = await api.get('/watchlist');
-            setWatchlist(res.data.data || []);
+            const res = await api.get('/watchlists');
+            const rows = res.data.data || [];
+            setWatchlists(rows);
+
+            const storedId = loadActiveWatchlistId(profileId);
+            const validStored = rows.some((row) => row.id === storedId);
+            const nextId = validStored ? storedId : rows[0]?.id ?? null;
+            setActiveWatchlistId(nextId);
+            if (nextId && profileId) {
+                saveActiveWatchlistId(profileId, nextId);
+            }
+
+            return rows;
         } finally {
-            setLoading(false);
+            setLoadingLists(false);
+        }
+    }, [profileId]);
+
+    const loadItems = useCallback(async (watchlistId, search, sort) => {
+        if (!watchlistId) {
+            setItems([]);
+            return;
+        }
+
+        setLoadingItems(true);
+        try {
+            const res = await api.get(`/watchlists/${watchlistId}/items`, {
+                params: {
+                    search: search.trim() || undefined,
+                    sort,
+                },
+            });
+            setItems(res.data.data || []);
+        } catch {
+            setItems([]);
+            showToast('Failed to load watchlist items.', 'danger');
+        } finally {
+            setLoadingItems(false);
         }
     }, []);
 
-    useEffect(() => { loadWatchlist(); }, [loadWatchlist]);
-    usePortfolioChanged(loadWatchlist);
+    const loadMembership = useCallback(async (stockId) => {
+        if (!stockId) {
+            setMembershipIds([]);
+            return;
+        }
 
-    const activeEntry = useMemo(
-        () => watchlist.find((item) => item.stock_id === selectedStock?.id) ?? null,
-        [watchlist, selectedStock],
-    );
+        try {
+            const res = await api.get('/watchlist/membership', {
+                params: { stock_id: stockId },
+            });
+            setMembershipIds(res.data.watchlist_ids || []);
+        } catch {
+            setMembershipIds([]);
+        }
+    }, []);
+
+    useEffect(() => {
+        loadWatchlists();
+    }, [loadWatchlists]);
+
+    usePortfolioChanged(() => {
+        clearActiveWatchlistId(profileId);
+        setActiveWatchlistId(null);
+        setSelectedStock(null);
+        setSearchSymbol('');
+        loadWatchlists();
+    });
+
+    useEffect(() => {
+        if (activeWatchlistId) {
+            loadItems(activeWatchlistId, itemSearch, itemSort);
+        }
+    }, [activeWatchlistId, itemSearch, itemSort, loadItems]);
 
     const loadPrices = useCallback(async (stockId) => {
         if (!stockId) {
@@ -190,8 +380,13 @@ export default function WatchlistPage() {
     useEffect(() => {
         if (selectedStock?.id) {
             loadPrices(selectedStock.id);
+            loadMembership(selectedStock.id);
+        } else {
+            setPrices([]);
+            setPriceMeta(null);
+            setMembershipIds([]);
         }
-    }, [selectedStock?.id, loadPrices]);
+    }, [selectedStock?.id, loadPrices, loadMembership]);
 
     useEffect(() => {
         setNote(activeEntry?.note || '');
@@ -202,109 +397,128 @@ export default function WatchlistPage() {
         setSearchSymbol(stock.symbol);
     }, []);
 
-    const scanColumns = useMemo(() => [
-        {
-            id: 'symbol',
-            header: 'Symbol',
-            accessorKey: 'symbol',
-            cell: ({ row }) => (
-                <button
-                    type="button"
-                    className="btn btn-link btn-sm p-0 align-baseline"
-                    onClick={() => selectStock({
-                        id: row.original.stock_id,
-                        symbol: row.original.symbol,
-                        name: row.original.name,
-                        exchange: row.original.exchange,
-                    })}
-                >
-                    {row.original.symbol}
-                </button>
-            ),
-        },
-        {
-            id: 'pattern_name',
-            header: 'Pattern',
-            accessorKey: 'pattern_name',
-        },
-        {
-            id: 'category',
-            header: 'Signal',
-            accessorKey: 'category',
-            cell: ({ getValue }) => (
-                <span className={categoryClassName(getValue())}>
-                    {categoryLabel(getValue())}
-                </span>
-            ),
-        },
-        {
-            id: 'bar_date',
-            header: 'As of',
-            accessorKey: 'bar_date',
-            cell: ({ getValue }) => formatTransactionDateDisplay(getValue()) || '—',
-        },
-    ], [selectStock]);
+    const handleWatchlistChange = useCallback((watchlistId) => {
+        setActiveWatchlistId(watchlistId);
+        if (profileId) {
+            saveActiveWatchlistId(profileId, watchlistId);
+        }
+    }, [profileId]);
+
+    const handleManageChanged = useCallback(async ({ deletedId } = {}) => {
+        const rows = await loadWatchlists();
+        if (deletedId && deletedId === activeWatchlistId) {
+            const nextId = rows[0]?.id ?? null;
+            setActiveWatchlistId(nextId);
+            if (nextId && profileId) {
+                saveActiveWatchlistId(profileId, nextId);
+            }
+        }
+    }, [loadWatchlists, activeWatchlistId, profileId]);
 
     const runWatchlistScan = useCallback(async () => {
+        if (!activeWatchlistId) {
+            return;
+        }
+
         setScanning(true);
-        setScanDone(false);
         try {
             const res = await api.get('/patterns/scan', {
-                params: { scope: 'watchlist', actionable_only: false },
+                params: {
+                    scope: 'watchlist',
+                    watchlist_id: activeWatchlistId,
+                    actionable_only: false,
+                },
             });
-            const flat = [];
+
+            const matchesByStock = {};
             for (const stock of res.data.results || []) {
-                for (const match of stock.matches || []) {
-                    flat.push({
-                        stock_id: stock.stock_id,
-                        symbol: stock.symbol,
-                        name: stock.name,
-                        exchange: stock.exchange,
-                        pattern_name: match.name,
-                        category: match.category,
-                        bar_date: match.bar_date,
-                    });
-                }
+                matchesByStock[stock.stock_id] = stock.matches || [];
             }
-            setScanRows(flat);
-            setScanDone(true);
-            if (flat.length === 0) {
+
+            // Apply immediately from scan payload, then refresh from persisted storage.
+            setItems((prev) => prev.map((item) => ({
+                ...item,
+                pattern_matches: matchesByStock[item.stock_id] || [],
+            })));
+
+            await loadItems(activeWatchlistId, itemSearch, itemSort);
+
+            // If persistence/read-back omitted matches, keep the scan payload visible.
+            if (matchCountFromResults(res.data.results) > 0) {
+                setItems((prev) => {
+                    const hasPersisted = prev.some((item) => (item.pattern_matches || []).length > 0);
+                    if (hasPersisted) {
+                        return prev;
+                    }
+                    return prev.map((item) => ({
+                        ...item,
+                        pattern_matches: matchesByStock[item.stock_id] || [],
+                    }));
+                });
+            }
+
+            const matchCount = matchCountFromResults(res.data.results);
+            if (matchCount === 0) {
                 showToast('Scan complete — no patterns matched on the latest bar.');
             } else {
-                showToast(`Scan found ${flat.length} pattern match${flat.length === 1 ? '' : 'es'}.`);
+                showToast(`Scan found ${matchCount} pattern match${matchCount === 1 ? '' : 'es'}.`);
             }
         } catch {
             showToast('Pattern scan failed.', 'danger');
-            setScanRows([]);
         } finally {
             setScanning(false);
         }
-    }, []);
+    }, [activeWatchlistId, itemSearch, itemSort, loadItems]);
 
     const handleSearchSelect = useCallback((stock) => {
         selectStock(stock);
     }, [selectStock]);
 
-    const handleAdd = async () => {
-        if (!selectedStock?.id) {
+    const handleAdd = async (watchlistId, stockOverride = null) => {
+        const stock = stockOverride || selectedStock;
+        if (!stock?.id || !watchlistId) {
             return;
         }
+
         setSaving(true);
         try {
-            const res = await api.post('/watchlist', {
-                stock_id: selectedStock.id,
-                note: note.trim() || null,
+            const res = await api.post(`/watchlists/${watchlistId}/items`, {
+                stock_id: stock.id,
+                note: stockOverride ? null : (note.trim() || null),
             });
             const item = res.data.data;
-            setWatchlist((prev) => [item, ...prev.filter((row) => row.stock_id !== item.stock_id)]);
-            showToast(`${selectedStock.symbol} added to watchlist.`);
+            if (selectedStock?.id === stock.id) {
+                await loadMembership(stock.id);
+            }
+            if (watchlistId === activeWatchlistId) {
+                setItems((prev) => [item, ...prev.filter((row) => row.stock_id !== item.stock_id)]);
+            }
+            setWatchlists((prev) => prev.map((row) => (
+                row.id === watchlistId
+                    ? { ...row, item_count: (row.item_count || 0) + 1 }
+                    : row
+            )));
+            const targetName = watchlists.find((row) => row.id === watchlistId)?.name || 'watchlist';
+            showToast(`${stock.symbol} added to ${targetName}.`);
+            return true;
         } catch (err) {
-            const message = err?.response?.data?.message
-                || err?.response?.data?.errors?.stock_id?.[0]
-                || 'Could not add to watchlist.';
-            showToast(message, 'danger');
+            showToast(apiErrorMessage(err, 'Could not add to watchlist.'), 'danger');
+            return false;
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleQuickAdd = async (stock) => {
+        if (!activeWatchlistId || !stock?.id) {
+            return;
+        }
+
+        const added = await handleAdd(activeWatchlistId, stock);
+        if (added) {
+            setQuickAddSymbol('');
+            setQuickAddKey((key) => key + 1);
+            selectStock(stock);
         }
     };
 
@@ -312,14 +526,33 @@ export default function WatchlistPage() {
         if (!activeEntry?.id) {
             return;
         }
+
+        await handleRemoveItem(activeEntry);
+    };
+
+    const handleRemoveItem = async (item) => {
+        if (!item?.id) {
+            return;
+        }
+
+        setRemovingItemId(item.id);
         setSaving(true);
         try {
-            await api.delete(`/watchlist/${activeEntry.id}`);
-            setWatchlist((prev) => prev.filter((row) => row.id !== activeEntry.id));
-            showToast(`${selectedStock?.symbol || 'Stock'} removed from watchlist.`);
+            await api.delete(`/watchlist-items/${item.id}`);
+            setItems((prev) => prev.filter((row) => row.id !== item.id));
+            if (selectedStock?.id === item.stock_id) {
+                setMembershipIds((prev) => prev.filter((id) => id !== activeWatchlistId));
+            }
+            setWatchlists((prev) => prev.map((row) => (
+                row.id === activeWatchlistId
+                    ? { ...row, item_count: Math.max(0, (row.item_count || 0) - 1) }
+                    : row
+            )));
+            showToast(`${item.stock?.symbol || 'Stock'} removed from ${activeWatchlist?.name || 'watchlist'}.`);
         } catch {
             showToast('Could not remove from watchlist.', 'danger');
         } finally {
+            setRemovingItemId(null);
             setSaving(false);
         }
     };
@@ -328,13 +561,14 @@ export default function WatchlistPage() {
         if (!activeEntry?.id) {
             return;
         }
+
         setSaving(true);
         try {
-            const res = await api.put(`/watchlist/${activeEntry.id}`, {
+            const res = await api.put(`/watchlist-items/${activeEntry.id}`, {
                 note: note.trim() || null,
             });
             const item = res.data.data;
-            setWatchlist((prev) => prev.map((row) => (row.id === item.id ? item : row)));
+            setItems((prev) => prev.map((row) => (row.id === item.id ? item : row)));
             showToast('Note saved.');
         } catch {
             showToast('Could not save note.', 'danger');
@@ -348,36 +582,73 @@ export default function WatchlistPage() {
             <div className="card">
                 <div className="card-header d-flex justify-content-between align-items-center gap-2 flex-wrap">
                     <div className="mb-0">
-                        Watchlist
-                        {!loading ? (
-                            <span className="lido-card-title-count">({watchlist.length})</span>
+                        Watchlists
+                        {!loadingLists ? (
+                            <span className="lido-card-title-count">({watchlists.length})</span>
                         ) : null}
                     </div>
-                    <button
-                        type="button"
-                        className="btn btn-sm btn-outline-primary"
-                        onClick={runWatchlistScan}
-                        disabled={scanning || loading || watchlist.length === 0}
-                        title="Run OHLCV pattern rules on cached prices for every watchlist symbol"
-                    >
-                        {scanning ? 'Scanning…' : 'Scan my watchlist'}
-                    </button>
+                    <div className="d-flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            className="btn btn-sm btn-outline-secondary"
+                            onClick={() => setManageOpen(true)}
+                            disabled={loadingLists}
+                        >
+                            Manage
+                        </button>
+                        <button
+                            type="button"
+                            className="btn btn-sm btn-outline-primary"
+                            onClick={runWatchlistScan}
+                            disabled={scanning || loadingLists || loadingItems || !activeWatchlistId || items.length === 0}
+                            title="Run OHLCV pattern rules on cached prices for the active watchlist"
+                        >
+                            {scanning ? 'Scanning…' : 'Scan watchlist'}
+                        </button>
+                    </div>
                 </div>
-                <div className="card-body">
+                <div className="card-body d-grid gap-3">
+                    {loadingLists ? (
+                        <div className="text-muted small">Loading watchlists…</div>
+                    ) : (
+                        <div className="d-flex flex-wrap gap-2 align-items-center">
+                            <label className="small text-muted mb-0" htmlFor="active-watchlist-select">
+                                Active list
+                            </label>
+                            <select
+                                id="active-watchlist-select"
+                                className="form-select form-select-sm"
+                                style={{ maxWidth: '280px' }}
+                                value={activeWatchlistId ?? ''}
+                                onChange={(event) => handleWatchlistChange(Number.parseInt(event.target.value, 10))}
+                            >
+                                {watchlists.map((row) => (
+                                    <option key={row.id} value={row.id}>
+                                        {row.name} ({row.item_count})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
                     <StockAutocomplete
                         id="watchlist-stock-search"
                         value={searchSymbol}
                         onChange={setSearchSymbol}
                         onSelect={handleSearchSelect}
+                        exchange={null}
                         hideLabel={false}
-                        placeholder="Search NSE stocks in local database (min 2 chars)"
+                        placeholder="Search NSE & BSE stocks in local database (min 2 chars)"
                     />
                 </div>
             </div>
 
             <WatchlistStockPanel
                 stock={selectedStock}
-                watchlistEntry={activeEntry}
+                activeWatchlist={activeWatchlist}
+                activeEntry={activeEntry}
+                membershipIds={membershipIds}
+                watchlists={watchlists}
                 note={note}
                 onNoteChange={setNote}
                 onAdd={handleAdd}
@@ -390,28 +661,75 @@ export default function WatchlistPage() {
             />
 
             <div className="card">
-                <div className="card-header">
-                    <div className="mb-0">Your watchlist</div>
+                <div className="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div className="mb-0">
+                        {activeWatchlist ? activeWatchlist.name : 'Watchlist items'}
+                    </div>
+                    <div className="d-flex flex-wrap gap-2 align-items-center lido-watchlist-toolbar">
+                        <div className="lido-watchlist-quick-add">
+                            <StockAutocomplete
+                                key={quickAddKey}
+                                id="watchlist-quick-add"
+                                value={quickAddSymbol}
+                                onChange={setQuickAddSymbol}
+                                onSelect={handleQuickAdd}
+                                exchange={null}
+                                hideLabel
+                                clearOnBlur
+                                disabled={!activeWatchlistId || saving}
+                                placeholder="Search & add stock…"
+                            />
+                        </div>
+                        <input
+                            type="search"
+                            className="form-control form-control-sm lido-watchlist-filter"
+                            placeholder="Filter symbol, name, note"
+                            value={itemSearch}
+                            onChange={(event) => setItemSearch(event.target.value)}
+                            disabled={!activeWatchlistId}
+                            aria-label="Filter watchlist items"
+                        />
+                        <select
+                            className="form-select form-select-sm lido-watchlist-sort"
+                            value={itemSort}
+                            onChange={(event) => setItemSort(event.target.value)}
+                            disabled={!activeWatchlistId}
+                            aria-label="Sort watchlist items"
+                        >
+                            {SORT_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                    {option.label}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
                 </div>
                 <div className="card-body p-0">
-                    {loading ? (
-                        <div className="text-muted small p-3">Loading watchlist…</div>
-                    ) : watchlist.length === 0 ? (
+                    {loadingItems ? (
+                        <div className="text-muted small p-3">Loading items…</div>
+                    ) : items.length === 0 ? (
                         <div className="text-muted small p-3">
-                            No stocks on your watchlist yet. Search above and add one.
+                            {itemSearch.trim()
+                                ? 'No stocks match your filter.'
+                                : 'No stocks on this watchlist yet. Use Search & add above, or search in the top card.'}
                         </div>
                     ) : (
                         <ul className="list-group list-group-flush">
-                            {watchlist.map((item) => {
+                            {items.map((item) => {
                                 const isActive = selectedStock?.id === item.stock_id;
+                                const isRemoving = removingItemId === item.id;
+
                                 return (
-                                    <li key={item.id}>
+                                    <li
+                                        key={item.id}
+                                        className={[
+                                            'list-group-item lido-watchlist-row',
+                                            isActive ? 'active' : '',
+                                        ].join(' ')}
+                                    >
                                         <button
                                             type="button"
-                                            className={[
-                                                'list-group-item list-group-item-action text-start',
-                                                isActive ? 'active' : '',
-                                            ].join(' ')}
+                                            className="lido-watchlist-row-main"
                                             onClick={() => selectStock(item.stock)}
                                         >
                                             <div className="d-flex justify-content-between align-items-start gap-2">
@@ -420,6 +738,10 @@ export default function WatchlistPage() {
                                                     <span className="ms-2 small opacity-75">
                                                         {item.stock?.exchange}
                                                     </span>
+                                                    <HoldingInfo
+                                                        holding={item.holding}
+                                                        symbol={item.stock?.symbol}
+                                                    />
                                                     {item.stock?.name ? (
                                                         <div className="small opacity-75">
                                                             {item.stock.name}
@@ -437,13 +759,79 @@ export default function WatchlistPage() {
                                                     ) : (
                                                         <div className="opacity-75">No price</div>
                                                     )}
-                                                    {item.price_count > 0 ? (
-                                                        <div className="opacity-75">
-                                                            {item.price_count} rows
-                                                        </div>
-                                                    ) : null}
+                                                    {(() => {
+                                                        const changeLabel = formatSignedChange(
+                                                            item.daily_change,
+                                                            item.daily_change_percent,
+                                                        );
+                                                        if (!changeLabel) {
+                                                            return null;
+                                                        }
+                                                        const changeNum = Number(item.daily_change);
+                                                        const toneClass = changeNum > 0
+                                                            ? 'lido-watchlist-change--up'
+                                                            : changeNum < 0
+                                                                ? 'lido-watchlist-change--down'
+                                                                : 'lido-watchlist-change--flat';
+                                                        const freshnessClass = item.is_price_fresh
+                                                            ? 'lido-watchlist-change--fresh'
+                                                            : 'lido-watchlist-change--stale';
+                                                        return (
+                                                            <div
+                                                                className={`lido-watchlist-change ${toneClass} ${freshnessClass}`}
+                                                                title={item.is_price_fresh
+                                                                    ? `As of ${formatTransactionDateDisplay(item.latest_price_date) || 'today'} (fresh)`
+                                                                    : `As of ${formatTransactionDateDisplay(item.latest_price_date) || 'prior session'} (stale)`}
+                                                            >
+                                                                {changeLabel}
+                                                            </div>
+                                                        );
+                                                    })()}
                                                 </div>
                                             </div>
+                                        </button>
+                                        {(item.pattern_matches || []).length > 0 ? (
+                                            <div className="lido-watchlist-row-patterns" aria-label="Matched patterns">
+                                                {(item.pattern_matches || []).map((match) => {
+                                                    const tip = [
+                                                        match.name || match.id,
+                                                        categoryLabel(match.category),
+                                                        match.bar_date
+                                                            ? `As of ${formatTransactionDateDisplay(match.bar_date)}`
+                                                            : null,
+                                                    ].filter(Boolean).join(' · ');
+
+                                                    return (
+                                                        <Link
+                                                            key={`${item.id}-${match.id}-${match.bar_date || ''}`}
+                                                            to={patternGuideLink(match.id)}
+                                                            className="lido-watchlist-pattern-link"
+                                                            title={tip}
+                                                            aria-label={`${match.name || match.id}, ${categoryLabel(match.category)}`}
+                                                            onClick={(event) => event.stopPropagation()}
+                                                        >
+                                                            <PatternSketch
+                                                                patternId={match.id}
+                                                                className="lido-pattern-sketch--watchlist"
+                                                                title=""
+                                                            />
+                                                        </Link>
+                                                    );
+                                                })}
+                                            </div>
+                                        ) : null}
+                                        <button
+                                            type="button"
+                                            className="btn btn-sm lido-watchlist-row-remove"
+                                            title={`Remove ${item.stock?.symbol || 'stock'} from watchlist`}
+                                            aria-label={`Remove ${item.stock?.symbol || 'stock'} from watchlist`}
+                                            disabled={saving || isRemoving}
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                handleRemoveItem(item);
+                                            }}
+                                        >
+                                            <IconDelete size={18} />
                                         </button>
                                     </li>
                                 );
@@ -453,20 +841,13 @@ export default function WatchlistPage() {
                 </div>
             </div>
 
-            {scanDone ? (
-                <DataTableCard
-                    title="Watchlist pattern scan"
-                    columns={scanColumns}
-                    data={scanRows}
-                    storageKey="watchlist-pattern-scan-v1"
-                    emptyMessage="No patterns detected on the latest bar for any watchlist symbol."
-                    headerExtra={(
-                        <Link to="/patterns" className="btn btn-sm btn-outline-secondary">
-                            Patterns guide {'>'}
-                        </Link>
-                    )}
-                />
-            ) : null}
+            <ManageWatchlistsModal
+                show={manageOpen}
+                watchlists={watchlists}
+                activeWatchlistId={activeWatchlistId}
+                onClose={() => setManageOpen(false)}
+                onChanged={handleManageChanged}
+            />
         </div>
     );
 }
