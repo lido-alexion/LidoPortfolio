@@ -47,7 +47,11 @@ export default function StockAutocomplete({
             setLoading(true);
             try {
                 const res = await api.get('/stocks/search', {
-                    params: { q, exchange, limit: 20 },
+                    params: {
+                        q,
+                        limit: 20,
+                        ...(exchange ? { exchange } : {}),
+                    },
                     skipErrorToast: true,
                 });
                 const items = res.data.data || [];

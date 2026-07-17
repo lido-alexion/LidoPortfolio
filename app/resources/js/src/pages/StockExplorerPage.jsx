@@ -14,7 +14,6 @@ import {
 } from 'recharts';
 import api from '../api';
 import NumberInput from '../components/NumberInput';
-import SegmentToggle from '../components/SegmentToggle';
 import StockAutocomplete from '../components/StockAutocomplete';
 import { stockExchangeLabel } from '../utils/exchangeDisplay';
 import { formatTableMoney2 } from '../utils/tableFormat';
@@ -292,7 +291,6 @@ function ManualRsInputCard({
 export default function StockExplorerPage() {
     const [selectedStock, setSelectedStock] = useState(null);
     const [symbol, setSymbol] = useState('');
-    const [exchange, setExchange] = useState('NSE');
     const [benchmark, setBenchmark] = useState('NIFTY50');
     const [benchmarkOptions, setBenchmarkOptions] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -359,7 +357,7 @@ export default function StockExplorerPage() {
         try {
             const res = await api.post('/analytics/explore', {
                 symbol: targetSymbol,
-                exchange: selectedStock?.exchange || exchange,
+                exchange: selectedStock?.exchange || 'NSE',
                 benchmark_symbol: benchmark,
                 periods: months,
             }, { skipErrorToast: true });
@@ -535,22 +533,9 @@ export default function StockExplorerPage() {
                             and run analysis to see relative strength for 1, 3, 6, and 12 months.
                         </p>
                         <form className="d-grid gap-3" onSubmit={runAnalysis}>
-                            <SegmentToggle
-                                label="Exchange"
-                                ariaLabel="Stock exchange"
-                                value={exchange}
-                                onChange={(next) => {
-                                    setExchange(next);
-                                    setSelectedStock(null);
-                                }}
-                                options={[
-                                    { value: 'NSE', label: 'NSE' },
-                                    { value: 'BSE', label: 'BSE' },
-                                ]}
-                            />
                             <StockAutocomplete
                                 value={symbol}
-                                exchange={exchange}
+                                exchange={null}
                                 onChange={(s) => {
                                     setSymbol(s);
                                     setSelectedStock(null);

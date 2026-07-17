@@ -264,22 +264,6 @@ export default function TransactionsPage() {
 
 
 
-    const resetSymbolValidation = useCallback(() => {
-
-        validationTokenRef.current += 1;
-
-        setValidatingSymbol(false);
-
-        setSymbolValidation(null);
-
-        setSelectedStock(null);
-
-        setForm((prev) => ({ ...prev, stock_id: '', name: '' }));
-
-    }, []);
-
-
-
     useEffect(() => {
 
         if (form.id || !symbolValidation?.valid) {
@@ -290,7 +274,7 @@ export default function TransactionsPage() {
 
         const sym = form.symbol.trim().toUpperCase();
 
-        if (symbolValidation.symbol !== sym || symbolValidation.exchange !== form.exchange) {
+        if (symbolValidation.symbol !== sym) {
 
             validationTokenRef.current += 1;
 
@@ -304,17 +288,15 @@ export default function TransactionsPage() {
 
         }
 
-    }, [form.symbol, form.exchange, form.id, symbolValidation]);
+    }, [form.symbol, form.id, symbolValidation]);
 
 
 
-    const applyValidatedStock = useCallback((stock, source, cached = false, requestedExchange = null) => {
+    const applyValidatedStock = useCallback((stock, source, cached = false) => {
 
         setSelectedStock(stock);
 
         setForm((prev) => {
-
-            const exchange = requestedExchange ?? prev.exchange;
 
             setSymbolValidation({
 
@@ -322,7 +304,7 @@ export default function TransactionsPage() {
 
                 symbol: stock.symbol,
 
-                exchange,
+                exchange: stock.exchange || 'NSE',
 
                 source,
 
@@ -341,8 +323,6 @@ export default function TransactionsPage() {
                 symbol: stock.symbol,
 
                 name: stock.name,
-
-                exchange,
 
             };
 
@@ -558,9 +538,9 @@ export default function TransactionsPage() {
 
 
     const handleStockSelect = (stock) => {
-        const exchange = form.exchange || 'NSE';
+        const listingExchange = stock.exchange || 'NSE';
 
-        setCachedStockValidation(exchange, stock.symbol, {
+        setCachedStockValidation(listingExchange, stock.symbol, {
 
             valid: true,
 
@@ -572,7 +552,7 @@ export default function TransactionsPage() {
 
         });
 
-        applyValidatedStock(stock, 'local', true, exchange);
+        applyValidatedStock(stock, 'local', true);
 
     };
 
@@ -612,15 +592,11 @@ export default function TransactionsPage() {
 
     const handleExchangeChange = (exchange) => {
 
-        resetSymbolValidation();
-
         setForm((prev) => ({
 
             ...prev,
 
             exchange,
-
-            stock_id: '',
 
         }));
 
@@ -642,20 +618,6 @@ export default function TransactionsPage() {
 
 
 
-        const exchange = form.exchange || 'NSE';
-
-        const cached = getCachedStockValidation(exchange, symbol);
-
-        if (cached?.valid && cached.stock) {
-
-            applyValidatedStock(cached.stock, cached.source || 'local', true);
-
-            return;
-
-        }
-
-
-
         const token = ++validationTokenRef.current;
 
         setValidatingSymbol(true);
@@ -666,17 +628,113 @@ export default function TransactionsPage() {
 
         try {
 
-            const res = await api.post('/stocks/validate', {
+            const searchRes = await api.get('/stocks/search', {
 
-                symbol,
+                params: { q: symbol, limit: 20 },
 
-                exchange,
-
-                check_only: true,
+                skipErrorToast: true,
 
             });
 
+            if (token !== validationTokenRef.current) {
 
+                return;
+
+            }
+
+            const exactMatches = (searchRes.data?.data || []).filter(
+
+                (row) => String(row.symbol || '').toUpperCase() === symbol,
+
+            );
+
+            if (exactMatches.length > 0) {
+
+                const stock = exactMatches.find((row) => row.exchange === 'NSE') || exactMatches[0];
+
+                const listingExchange = stock.exchange || 'NSE';
+
+                setCachedStockValidation(listingExchange, symbol, {
+
+                    valid: true,
+
+                    stock,
+
+                    source: 'local',
+
+                    cached: true,
+
+                });
+
+                applyValidatedStock(stock, 'local', true);
+
+                return;
+
+            }
+
+            const feeExchange = form.exchange || 'NSE';
+
+            const exchangesToTry = feeExchange === 'BSE' ? ['BSE', 'NSE'] : ['NSE', 'BSE'];
+
+            let lastError = null;
+
+            for (const exchange of exchangesToTry) {
+
+                const cached = getCachedStockValidation(exchange, symbol);
+
+                if (cached?.valid && cached.stock) {
+
+                    applyValidatedStock(cached.stock, cached.source || 'local', true);
+
+                    return;
+
+                }
+
+                try {
+
+                    const res = await api.post('/stocks/validate', {
+
+                        symbol,
+
+                        exchange,
+
+                        check_only: true,
+
+                    });
+
+                    if (token !== validationTokenRef.current) {
+
+                        return;
+
+                    }
+
+                    const stock = res.data.data;
+
+                    const entry = {
+
+                        valid: true,
+
+                        stock,
+
+                        source: res.data.source,
+
+                        cached: Boolean(res.data.meta?.cached),
+
+                    };
+
+                    setCachedStockValidation(exchange, symbol, entry);
+
+                    applyValidatedStock(stock, res.data.source, entry.cached);
+
+                    return;
+
+                } catch (err) {
+
+                    lastError = err;
+
+                }
+
+            }
 
             if (token !== validationTokenRef.current) {
 
@@ -684,35 +742,7 @@ export default function TransactionsPage() {
 
             }
 
-
-
-            const stock = res.data.data;
-
-            const entry = {
-
-                valid: true,
-
-                stock,
-
-                source: res.data.source,
-
-                cached: Boolean(res.data.meta?.cached),
-
-            };
-
-            setCachedStockValidation(exchange, symbol, entry);
-
-            applyValidatedStock(stock, res.data.source, entry.cached, exchange);
-
-        } catch (err) {
-
-            if (token !== validationTokenRef.current) {
-
-                return;
-
-            }
-
-            const errors = err?.response?.data?.errors;
+            const errors = lastError?.response?.data?.errors;
 
             const message = Array.isArray(errors) ? errors[0] : 'Symbol validation failed';
 
@@ -722,13 +752,41 @@ export default function TransactionsPage() {
 
                 symbol,
 
-                exchange,
+                exchange: form.exchange || 'NSE',
+
+                message: typeof message === 'string' ? message : 'Symbol validation failed',
+
+            });
+
+            setSelectedStock(null);
+
+            setForm((prev) => ({ ...prev, stock_id: '', name: '' }));
+
+        } catch (err) {
+
+            if (token !== validationTokenRef.current) {
+
+                return;
+
+            }
+
+            const message = err?.response?.data?.message || 'Symbol validation failed';
+
+            setSymbolValidation({
+
+                valid: false,
+
+                symbol,
+
+                exchange: form.exchange || 'NSE',
 
                 message,
 
             });
 
-            showToast(message, 'danger');
+            setSelectedStock(null);
+
+            setForm((prev) => ({ ...prev, stock_id: '', name: '' }));
 
         } finally {
 
@@ -758,11 +816,9 @@ export default function TransactionsPage() {
 
         }
 
-        return symbolValidation.symbol === form.symbol.trim().toUpperCase()
+        return symbolValidation.symbol === form.symbol.trim().toUpperCase();
 
-            && symbolValidation.exchange === form.exchange;
-
-    }, [form.id, form.symbol, form.exchange, symbolValidation]);
+    }, [form.id, form.symbol, symbolValidation]);
 
 
 
@@ -888,11 +944,11 @@ export default function TransactionsPage() {
                                     <div className="lido-transaction-toggles-row">
                                         <SegmentToggle
                                             label="Exchange"
-                                            ariaLabel="Stock exchange"
+                                            ariaLabel="Fee exchange"
                                             value={form.exchange}
                                             onChange={handleExchangeChange}
                                             options={[
-                                                { value: 'NSE', label: 'NSE' },
+                                                { value: 'NSE', label: 'NSE+' },
                                                 { value: 'BSE', label: 'BSE' },
                                             ]}
                                         />
@@ -929,7 +985,7 @@ export default function TransactionsPage() {
 
                                                     value={form.symbol}
 
-                                                    exchange={form.exchange}
+                                                    exchange={null}
 
                                                     onChange={handleSymbolChange}
 
@@ -1086,7 +1142,7 @@ export default function TransactionsPage() {
                                     />
                                 </div>
                                 <div id="tx-fees-help" className="form-text">
-                                    Auto-calculated from Settings → fee components.
+                                    Auto-calculated from Settings → fee components using the NSE+/BSE toggle above.
                                 </div>
 
                             </div>
