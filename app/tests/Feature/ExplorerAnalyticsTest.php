@@ -100,4 +100,99 @@ class ExplorerAnalyticsTest extends TestCase
         $this->assertNotEmpty($response->json('data.normalized_gain_chart'));
         Http::assertNothingSent();
     }
+
+    public function test_explore_uses_selected_index_benchmark(): void
+    {
+        config(['portfolio.indexes.enabled' => true]);
+
+        $user = User::query()->create([
+            'name' => 'Explorer User',
+            'email' => 'exp-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+
+        $stock = Stock::query()->create([
+            'symbol' => 'CACHED',
+            'exchange' => 'NSE',
+            'name' => 'Cached Stock',
+            'is_active' => true,
+            'is_benchmark' => false,
+            'yahoo_symbol' => 'CACHED.NS',
+            'last_verified_at' => now(),
+        ]);
+
+        // NIFTYBANK is a configured index; ensureIndexStock will create the benchmark row.
+        $bankIndex = Stock::query()->create([
+            'symbol' => 'NIFTYBANK',
+            'exchange' => 'NSE',
+            'name' => 'Nifty Bank',
+            'is_active' => true,
+            'is_benchmark' => true,
+            'yahoo_symbol' => '^NSEBANK',
+        ]);
+
+        $dates = [
+            now()->subMonths(12)->subDays(2)->toDateString(),
+            now()->subMonths(6)->subDays(2)->toDateString(),
+            now()->subMonths(3)->subDays(2)->toDateString(),
+        ];
+
+        foreach ([$stock, $bankIndex] as $s) {
+            foreach ($dates as $date) {
+                StockPrice::query()->create([
+                    'stock_id' => $s->id,
+                    'price_date' => $date,
+                    'close_price' => 100,
+                    'adjusted_close_price' => 100,
+                    'provider_source' => 'test',
+                    'data_source' => 'test',
+                    'created_at' => now(),
+                ]);
+            }
+            StockPrice::query()->create([
+                'stock_id' => $s->id,
+                'price_date' => now()->subDay()->toDateString(),
+                'close_price' => $s->symbol === 'CACHED' ? 120 : 105,
+                'adjusted_close_price' => $s->symbol === 'CACHED' ? 120 : 105,
+                'provider_source' => 'test',
+                'data_source' => 'test',
+                'created_at' => now(),
+            ]);
+        }
+
+        Http::fake();
+        $this->actingAs($user);
+
+        $response = $this->postJson('/api/analytics/explore', [
+            'symbol' => 'CACHED',
+            'exchange' => 'NSE',
+            'benchmark_symbol' => 'NIFTYBANK',
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('data.benchmark.symbol', 'NIFTYBANK');
+        $response->assertJsonPath('data.benchmark.latest_close', 105);
+        Http::assertNothingSent();
+    }
+
+    public function test_indexes_endpoint_lists_enabled_indexes(): void
+    {
+        config(['portfolio.indexes.enabled' => true]);
+
+        $user = User::query()->create([
+            'name' => 'Explorer User',
+            'email' => 'exp-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+
+        $response = $this->actingAs($user)
+            ->getJson('/api/indexes')
+            ->assertOk();
+
+        $response->assertJsonPath('data.primary_symbol', 'NIFTY50');
+        $symbols = collect($response->json('data.indexes'))->pluck('symbol')->all();
+        $this->assertContains('NIFTY50', $symbols);
+        $this->assertContains('NIFTYBANK', $symbols);
+        $this->assertContains('SENSEX', $symbols);
+    }
 }

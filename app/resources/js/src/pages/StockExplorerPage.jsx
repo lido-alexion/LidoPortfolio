@@ -294,6 +294,7 @@ export default function StockExplorerPage() {
     const [symbol, setSymbol] = useState('');
     const [exchange, setExchange] = useState('NSE');
     const [benchmark, setBenchmark] = useState('NIFTY50');
+    const [benchmarkOptions, setBenchmarkOptions] = useState([]);
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState(null);
     const [lastRequestedSymbol, setLastRequestedSymbol] = useState('');
@@ -306,6 +307,38 @@ export default function StockExplorerPage() {
         indexPreviousClose: '',
     });
     const [manualRsResult, setManualRsResult] = useState(null);
+
+    useEffect(() => {
+        let active = true;
+        api.get('/indexes', { skipErrorToast: true })
+            .then((res) => {
+                if (!active) {
+                    return;
+                }
+                const list = res.data?.data?.indexes ?? [];
+                if (list.length > 0) {
+                    setBenchmarkOptions(list);
+                }
+            })
+            .catch(() => {
+                // Keep the default NIFTY50 option if the catalog cannot be loaded.
+            });
+        return () => {
+            active = false;
+        };
+    }, []);
+
+    const benchmarkGroups = useMemo(() => {
+        const source = benchmarkOptions.length > 0
+            ? benchmarkOptions
+            : [{ symbol: 'NIFTY50', name: 'Nifty 50', exchange: 'NSE', is_primary: true }];
+        const groups = {};
+        source.forEach((idx) => {
+            const key = idx.exchange || 'NSE';
+            (groups[key] = groups[key] || []).push(idx);
+        });
+        return groups;
+    }, [benchmarkOptions]);
 
     const runAnalysis = async (e) => {
         e.preventDefault();
@@ -498,8 +531,8 @@ export default function StockExplorerPage() {
                     <div className="card-body">
                         <p className="text-muted small mb-3">
                             Analyze any symbol in the local stock master. Price history comes from universe
-                            price sync (no on-demand provider fetch). Search a stock and run analysis to see
-                            relative strength vs NIFTY50 for 1, 3, 6, and 12 months.
+                            price sync (no on-demand provider fetch). Search a stock, pick a benchmark index,
+                            and run analysis to see relative strength for 1, 3, 6, and 12 months.
                         </p>
                         <form className="d-grid gap-3" onSubmit={runAnalysis}>
                             <SegmentToggle
@@ -535,13 +568,25 @@ export default function StockExplorerPage() {
                                 </div>
                             )}
                             <div>
-                                <label className="form-label">Benchmark</label>
+                                <label className="form-label">Benchmark index</label>
                                 <select
                                     className="form-select"
                                     value={benchmark}
                                     onChange={(e) => setBenchmark(e.target.value)}
                                 >
-                                    <option value="NIFTY50">NIFTY50</option>
+                                    {Object.entries(benchmarkGroups).map(([groupExchange, groupIndexes]) => (
+                                        <optgroup key={groupExchange} label={groupExchange}>
+                                            {groupIndexes.map((idx) => (
+                                                <option key={idx.symbol} value={idx.symbol}>
+                                                    {idx.name}
+                                                    {' ('}
+                                                    {idx.symbol}
+                                                    {idx.is_primary ? ', primary' : ''}
+                                                    {')'}
+                                                </option>
+                                            ))}
+                                        </optgroup>
+                                    ))}
                                 </select>
                             </div>
                             <button className="btn btn-primary mb-3" type="submit" disabled={loading || !hasSymbolInput}>
@@ -617,7 +662,9 @@ export default function StockExplorerPage() {
                         </div>
                         {result.history?.benchmark_fetch && !result.history.benchmark_fetch.cache_hit && (
                             <div className="alert alert-warning small">
-                                NIFTY50 price history may be incomplete in universe cache. Relative strength needs benchmark data for all periods.
+                                {benchmarkSymbol}
+                                {' '}
+                                price history may be incomplete in the index cache. Relative strength needs benchmark data for all periods — run the index sync in Settings if needed.
                             </div>
                         )}
                         {result.history?.stock_fetch && !result.history.stock_fetch.cache_hit && (
@@ -761,7 +808,7 @@ export default function StockExplorerPage() {
                                                 <Tooltip formatter={(v) => `${Number(v).toFixed(2)}%`} />
                                                 <Legend />
                                                 <Bar dataKey="growth_percent" name="Stock growth %" fill="#0d6efd" />
-                                                <Bar dataKey="benchmark_growth_percent" name="NIFTY growth %" fill="#6c757d" />
+                                                <Bar dataKey="benchmark_growth_percent" name={`${benchmarkSymbol} growth %`} fill="#6c757d" />
                                             </BarChart>
                                         </ResponsiveContainer>
                                     </div>

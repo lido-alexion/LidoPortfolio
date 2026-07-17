@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\ExplorerAnalyticsController;
 use App\Http\Controllers\Api\FrontendLogController;
 use App\Http\Controllers\Api\HoldingController;
+use App\Http\Controllers\Api\IndexController;
 use App\Http\Controllers\Api\InviteAcceptController;
 use App\Http\Controllers\Api\PortfolioController;
 use App\Http\Controllers\Api\PortfolioHistoryController;
@@ -130,6 +131,8 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::get('/analytics/stocks/{stock}', [AnalyticsController::class, 'stock']);
     Route::post('/analytics/explore', [ExplorerAnalyticsController::class, 'analyze'])
         ->middleware('throttle:analytics-explore');
+
+    Route::get('/indexes', [IndexController::class, 'index']);
 
     Route::get('/alerts', [AlertController::class, 'index']);
     Route::post('/alerts/expire-all', [AlertController::class, 'expireAll']);

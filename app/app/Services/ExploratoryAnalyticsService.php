@@ -13,6 +13,7 @@ class ExploratoryAnalyticsService
         protected StockValidationService $validation,
         protected RelativeStrengthService $relativeStrength,
         protected StockTrackingService $tracking,
+        protected IndexCatalogService $indexCatalog,
     ) {}
 
     /**
@@ -35,13 +36,7 @@ class ExploratoryAnalyticsService
         }
 
         $stock = $result->stock;
-        $benchmark = $this->relativeStrength->benchmarkStock();
-        if ($benchmarkSymbol && $benchmarkSymbol !== 'NIFTY50') {
-            $benchResult = $this->validation->validate($benchmarkSymbol, 'NSE', false);
-            if ($benchResult->valid && $benchResult->stock) {
-                $benchmark = $benchResult->stock;
-            }
-        }
+        $benchmark = $this->resolveBenchmark($benchmarkSymbol);
 
         $periodMonths = $periodMonths ?: [1, 3, 6, 12];
         $maxMonths = max($periodMonths);
@@ -102,6 +97,22 @@ class ExploratoryAnalyticsService
             'chart' => $this->buildComparisonChart($growth, $benchmarkGrowth, $relativeStrength, $periodMonths),
             'normalized_gain_chart' => $this->history->getNormalizedGainSeries($stock, $benchmark, 12, $asOf),
         ];
+    }
+
+    /**
+     * Resolve any configured index (NSE or BSE) by symbol; fall back to the primary benchmark.
+     */
+    protected function resolveBenchmark(?string $benchmarkSymbol): Stock
+    {
+        $symbol = strtoupper(trim((string) $benchmarkSymbol));
+        if ($symbol !== '') {
+            $def = $this->indexCatalog->definitionForSymbol($symbol);
+            if ($def !== null) {
+                return $this->indexCatalog->ensureIndexStock($def);
+            }
+        }
+
+        return $this->relativeStrength->benchmarkStock();
     }
 
     /**
