@@ -3231,3 +3231,47 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     }
 }
 
+/* AI stock analysis prompt button (puzzle piece) */
+.lido-analyse-stock-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    color: var(--lido-text-muted);
+    text-decoration: none;
+    vertical-align: middle;
+}
+
+.lido-analyse-stock-btn:hover,
+.lido-analyse-stock-btn:focus-visible {
+    color: var(--lido-brand);
+}
+
+.lido-analyse-stock-btn:disabled {
+    opacity: 0.55;
+    color: var(--lido-text-muted);
+}
+
+.contentPane .lido-watchlist-row.active .lido-analyse-stock-btn {
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.contentPane .lido-watchlist-row.active .lido-analyse-stock-btn:hover,
+.contentPane .lido-watchlist-row.active .lido-analyse-stock-btn:focus-visible {
+    color: #fff;
+}
+
+.lido-watchlist-analyse {
+    flex: 0 0 auto;
+    align-self: flex-start;
+    margin-top: 0.35rem;
+    margin-right: 0.15rem;
+}
+
+.lido-stock-symbol-with-analyse {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+}
+

@@ -4,6 +4,7 @@ import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import { usePortfolio } from '../context/PortfolioContext';
 import { DataTableCard } from '../components/DataTable';
+import AnalyseStockButton from '../components/AnalyseStockButton';
 import DashboardTopMoverCard from '../components/DashboardTopMoverCard';
 import DashboardAllocationCard from '../components/DashboardAllocationCard';
 import { DashboardCalendarCard } from '../components/calendar/CalendarDayEventsDialog';
@@ -409,6 +410,20 @@ export default function DashboardPage() {
             id: 'symbol',
             header: 'Symbol',
             accessorFn: (row) => row.stock?.symbol,
+            cell: ({ row }) => {
+                const symbol = row.original.stock?.symbol || '—';
+                const stockId = row.original.stock_id || row.original.stock?.id;
+                return (
+                    <span className="lido-stock-symbol-with-analyse">
+                        <span>{symbol}</span>
+                        <AnalyseStockButton
+                            stockId={stockId}
+                            symbol={row.original.stock?.symbol}
+                            name={row.original.stock?.name}
+                        />
+                    </span>
+                );
+            },
         },
         {
             id: 'created_at',
@@ -465,9 +480,16 @@ export default function DashboardPage() {
             header: 'Symbol',
             accessorKey: 'symbol',
             cell: ({ row }) => (
-                <Link to={`/stocks/${row.original.stock_id}/prices`}>
-                    {row.original.symbol}
-                </Link>
+                <span className="lido-stock-symbol-with-analyse">
+                    <Link to={`/stocks/${row.original.stock_id}/prices`}>
+                        {row.original.symbol}
+                    </Link>
+                    <AnalyseStockButton
+                        stockId={row.original.stock_id}
+                        symbol={row.original.symbol}
+                        name={row.original.name || row.original.stock_name}
+                    />
+                </span>
             ),
         },
         {

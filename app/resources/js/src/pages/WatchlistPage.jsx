@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
 import AddToWatchlistComboButton from '../components/AddToWatchlistComboButton';
+import AnalyseStockButton from '../components/AnalyseStockButton';
 import ManageWatchlistsModal from '../components/ManageWatchlistsModal';
 import PatternSketch from '../components/PatternSketch';
 import StockAutocomplete from '../components/StockAutocomplete';
@@ -146,7 +147,15 @@ function WatchlistStockPanel({
                 <div className="card-body">
                     <div className="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
                         <div>
-                            <div className="h5 mb-1">{stock.symbol}</div>
+                            <div className="h5 mb-1 lido-stock-symbol-with-analyse">
+                                <span>{stock.symbol}</span>
+                                <AnalyseStockButton
+                                    stockId={stock.id}
+                                    symbol={stock.symbol}
+                                    name={stock.name}
+                                    size={16}
+                                />
+                            </div>
                             <div className="text-muted small">{stock.name}</div>
                             <div className="text-muted small">{stockExchangeLabel(stock)}</div>
                         </div>
@@ -715,6 +724,12 @@ export default function WatchlistPage() {
                                             isActive ? 'active' : '',
                                         ].join(' ')}
                                     >
+                                        <AnalyseStockButton
+                                            className="lido-watchlist-analyse"
+                                            stockId={item.stock?.id || item.stock_id}
+                                            symbol={item.stock?.symbol}
+                                            name={item.stock?.name}
+                                        />
                                         <button
                                             type="button"
                                             className="lido-watchlist-row-main"

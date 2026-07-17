@@ -3,6 +3,7 @@ import usePortfolioChanged from '../hooks/usePortfolioChanged';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../api';
 import ComboButton from '../components/ComboButton';
+import AnalyseStockButton from '../components/AnalyseStockButton';
 import { DataTableColumnMenu, DataTableView, useDataTableController } from '../components/DataTable';
 import SegmentToggle from '../components/SegmentToggle';
 import { formatTransactionDateDisplay } from '../utils/transactionDate';
@@ -108,15 +109,22 @@ function buildHoldingsColumns(complex, handleSell, handleCorporateAction) {
                 const stockName = row.original.stock?.name || '';
                 return (
                     <>
-                        <Link
-                            className="lido-table-link"
-                            to={`/holdings/${row.original.stock_id}/prices`}
-                            title={stockName || undefined}
-                        >
-                            <strong className={belowTrailingStop ? 'text-danger' : undefined}>
-                                {row.original.stock?.symbol}
-                            </strong>
-                        </Link>
+                        <span className="lido-stock-symbol-with-analyse">
+                            <Link
+                                className="lido-table-link"
+                                to={`/holdings/${row.original.stock_id}/prices`}
+                                title={stockName || undefined}
+                            >
+                                <strong className={belowTrailingStop ? 'text-danger' : undefined}>
+                                    {row.original.stock?.symbol}
+                                </strong>
+                            </Link>
+                            <AnalyseStockButton
+                                stockId={row.original.stock_id || row.original.stock?.id}
+                                symbol={row.original.stock?.symbol}
+                                name={stockName}
+                            />
+                        </span>
                         {complex && since && (
                             <div className="text-muted small">Since {since}</div>
                         )}

@@ -13,6 +13,7 @@ import {
     YAxis,
 } from 'recharts';
 import api from '../api';
+import AnalyseStockButton from '../components/AnalyseStockButton';
 import NumberInput from '../components/NumberInput';
 import StockAutocomplete from '../components/StockAutocomplete';
 import { stockExchangeLabel } from '../utils/exchangeDisplay';
@@ -594,7 +595,14 @@ export default function StockExplorerPage() {
                                     <div className="card-body">
                                         <div className="text-muted small">Latest close</div>
                                         <div className="h4 mb-0">{formatTableMoney2(result.latest_close)}</div>
-                                        <div className="small text-muted">{stockSymbol}</div>
+                                        <div className="small text-muted lido-stock-symbol-with-analyse justify-content-center">
+                                            <span>{stockSymbol}</span>
+                                            <AnalyseStockButton
+                                                stockId={result.stock?.id}
+                                                symbol={result.stock?.symbol || stockSymbol}
+                                                name={result.stock?.name}
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -749,7 +757,14 @@ export default function StockExplorerPage() {
                                             <div className="card-body">
                                                 <div className="text-muted small">Latest close</div>
                                                 <div className="h4 mb-0">{formatTableMoney2(manualStockLatest)}</div>
-                                                <div className="small text-muted">{stockSymbol}</div>
+                                                <div className="small text-muted lido-stock-symbol-with-analyse justify-content-center">
+                                                    <span>{stockSymbol}</span>
+                                                    <AnalyseStockButton
+                                                        stockId={selectedStock?.id || result?.stock?.id}
+                                                        symbol={selectedStock?.symbol || stockSymbol}
+                                                        name={selectedStock?.name || result?.stock?.name}
+                                                    />
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
