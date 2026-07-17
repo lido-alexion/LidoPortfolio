@@ -2943,6 +2943,11 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     gap: 0.5rem;
 }
 
+.lido-watchlist-active-select {
+    max-width: 280px;
+    min-width: 10rem;
+}
+
 @media (min-width: 768px) {
     .lido-watchlist-toolbar {
         flex-wrap: nowrap;
@@ -3088,7 +3093,6 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     margin-left: 0.35rem;
     color: var(--lido-brand);
     vertical-align: -0.1rem;
-    cursor: help;
 }
 
 .contentPane .lido-watchlist-row.active .lido-watchlist-holding {

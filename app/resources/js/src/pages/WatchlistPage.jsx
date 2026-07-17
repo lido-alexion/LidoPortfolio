@@ -579,13 +579,58 @@ export default function WatchlistPage() {
 
     return (
         <div className="d-grid gap-3">
+            <StockAutocomplete
+                id="watchlist-stock-search"
+                value={searchSymbol}
+                onChange={setSearchSymbol}
+                onSelect={handleSearchSelect}
+                exchange={null}
+                hideLabel={false}
+                placeholder="Search stocks (min 2 chars)"
+            />
+
+            <WatchlistStockPanel
+                stock={selectedStock}
+                activeWatchlist={activeWatchlist}
+                activeEntry={activeEntry}
+                membershipIds={membershipIds}
+                watchlists={watchlists}
+                note={note}
+                onNoteChange={setNote}
+                onAdd={handleAdd}
+                onRemove={handleRemove}
+                onSaveNote={handleSaveNote}
+                saving={saving}
+                prices={prices}
+                pricesLoading={pricesLoading}
+                priceMeta={priceMeta}
+            />
+
             <div className="card">
-                <div className="card-header d-flex justify-content-between align-items-center gap-2 flex-wrap">
-                    <div className="mb-0">
-                        Watchlists
-                        {!loadingLists ? (
-                            <span className="lido-card-title-count">({watchlists.length})</span>
-                        ) : null}
+                <div className="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div className="d-flex flex-wrap gap-2 align-items-center min-w-0">
+                        {loadingLists ? (
+                            <div className="text-muted small mb-0">Loading watchlists…</div>
+                        ) : (
+                            <>
+                                <label className="visually-hidden" htmlFor="active-watchlist-select">
+                                    Active watchlist
+                                </label>
+                                <select
+                                    id="active-watchlist-select"
+                                    className="form-select form-select-sm lido-watchlist-active-select"
+                                    value={activeWatchlistId ?? ''}
+                                    onChange={(event) => handleWatchlistChange(Number.parseInt(event.target.value, 10))}
+                                    disabled={watchlists.length === 0}
+                                >
+                                    {watchlists.map((row) => (
+                                        <option key={row.id} value={row.id}>
+                                            {row.name} ({row.item_count})
+                                        </option>
+                                    ))}
+                                </select>
+                            </>
+                        )}
                     </div>
                     <div className="d-flex flex-wrap gap-2">
                         <button
@@ -607,64 +652,7 @@ export default function WatchlistPage() {
                         </button>
                     </div>
                 </div>
-                <div className="card-body d-grid gap-3">
-                    {loadingLists ? (
-                        <div className="text-muted small">Loading watchlists…</div>
-                    ) : (
-                        <div className="d-flex flex-wrap gap-2 align-items-center">
-                            <label className="small text-muted mb-0" htmlFor="active-watchlist-select">
-                                Active list
-                            </label>
-                            <select
-                                id="active-watchlist-select"
-                                className="form-select form-select-sm"
-                                style={{ maxWidth: '280px' }}
-                                value={activeWatchlistId ?? ''}
-                                onChange={(event) => handleWatchlistChange(Number.parseInt(event.target.value, 10))}
-                            >
-                                {watchlists.map((row) => (
-                                    <option key={row.id} value={row.id}>
-                                        {row.name} ({row.item_count})
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    )}
-
-                    <StockAutocomplete
-                        id="watchlist-stock-search"
-                        value={searchSymbol}
-                        onChange={setSearchSymbol}
-                        onSelect={handleSearchSelect}
-                        exchange={null}
-                        hideLabel={false}
-                        placeholder="Search NSE & BSE stocks in local database (min 2 chars)"
-                    />
-                </div>
-            </div>
-
-            <WatchlistStockPanel
-                stock={selectedStock}
-                activeWatchlist={activeWatchlist}
-                activeEntry={activeEntry}
-                membershipIds={membershipIds}
-                watchlists={watchlists}
-                note={note}
-                onNoteChange={setNote}
-                onAdd={handleAdd}
-                onRemove={handleRemove}
-                onSaveNote={handleSaveNote}
-                saving={saving}
-                prices={prices}
-                pricesLoading={pricesLoading}
-                priceMeta={priceMeta}
-            />
-
-            <div className="card">
-                <div className="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-                    <div className="mb-0">
-                        {activeWatchlist ? activeWatchlist.name : 'Watchlist items'}
-                    </div>
+                <div className="card-body border-bottom py-2">
                     <div className="d-flex flex-wrap gap-2 align-items-center lido-watchlist-toolbar">
                         <div className="lido-watchlist-quick-add">
                             <StockAutocomplete
@@ -711,7 +699,7 @@ export default function WatchlistPage() {
                         <div className="text-muted small p-3">
                             {itemSearch.trim()
                                 ? 'No stocks match your filter.'
-                                : 'No stocks on this watchlist yet. Use Search & add above, or search in the top card.'}
+                                : 'No stocks on this watchlist yet. Use Search & add above, or search at the top of the page.'}
                         </div>
                     ) : (
                         <ul className="list-group list-group-flush">

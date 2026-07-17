@@ -43,6 +43,7 @@ const HOLDINGS_COLUMN_ORDER = [
 ];
 
 const HOLDINGS_DEFAULT_COLUMN_VISIBILITY = {
+    stock_name: false,
     fees: false,
     realized_profit: false,
 };
@@ -104,11 +105,13 @@ function buildHoldingsColumns(complex, handleSell, handleCorporateAction) {
                 const s = row.original.summary;
                 const since = formatTransactionDateDisplay(s.first_buy_date);
                 const belowTrailingStop = isBelowTrailingStop(s);
+                const stockName = row.original.stock?.name || '';
                 return (
                     <>
                         <Link
                             className="lido-table-link"
                             to={`/holdings/${row.original.stock_id}/prices`}
+                            title={stockName || undefined}
                         >
                             <strong className={belowTrailingStop ? 'text-danger' : undefined}>
                                 {row.original.stock?.symbol}

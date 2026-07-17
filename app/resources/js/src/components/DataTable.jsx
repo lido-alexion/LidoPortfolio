@@ -126,7 +126,7 @@ function useDataTableController({
     );
 
     const [columnVisibility, setColumnVisibility] = useState(
-        () => savedPrefs?.columnVisibility ?? defaultColumnVisibility,
+        () => ({ ...defaultColumnVisibility, ...(savedPrefs?.columnVisibility ?? {}) }),
     );
     const [columnOrder, setColumnOrder] = useState(() => {
         const saved = savedPrefs?.columnOrder;
