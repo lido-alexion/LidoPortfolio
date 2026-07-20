@@ -64,7 +64,7 @@ $apply = (($_GET['apply'] ?? '') === '1');
 $symbol = strtoupper(trim((string) ($_GET['symbol'] ?? '')));
 
 $targets = [];
-foreach ($catalog->broadEnabledDefinitions() as $def) {
+foreach ($catalog->enabledDefinitions() as $def) {
     if (! $catalog->supportsConstituents($def)) {
         continue;
     }

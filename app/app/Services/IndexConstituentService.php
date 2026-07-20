@@ -63,16 +63,24 @@ class IndexConstituentService
     }
 
     /**
-     * Refresh caches for all NSE broad indexes that support constituents.
+     * Refresh caches for all NSE indexes that support constituents (broad + sector).
      *
      * @return array{refreshed: int, failed: int}
      */
     public function refreshBroadNseCaches(): array
     {
+        return $this->refreshSupportedCaches();
+    }
+
+    /**
+     * @return array{refreshed: int, failed: int}
+     */
+    public function refreshSupportedCaches(): array
+    {
         $refreshed = 0;
         $failed = 0;
 
-        foreach ($this->catalog->broadEnabledDefinitions() as $def) {
+        foreach ($this->catalog->enabledDefinitions() as $def) {
             if (! $this->catalog->supportsConstituents($def)) {
                 continue;
             }
@@ -200,6 +208,58 @@ class IndexConstituentService
             'NIFTYSMLCAP250' => [
                 'csv' => ['ind_niftysmallcap250list.csv', 'ind_niftysmlcap250list.csv'],
                 'api' => ['NIFTY SMALLCAP 250', 'NIFTY SMLCAP 250'],
+            ],
+            'NIFTYBANK' => [
+                'csv' => ['ind_niftybanklist.csv'],
+                'api' => ['NIFTY BANK'],
+            ],
+            'NIFTYIT' => [
+                'csv' => ['ind_niftyitlist.csv'],
+                'api' => ['NIFTY IT'],
+            ],
+            'NIFTYFINSERVICE' => [
+                'csv' => ['ind_niftyfinancelist.csv'],
+                'api' => ['NIFTY FIN SERVICE', 'NIFTY FINANCIAL SERVICES'],
+            ],
+            'NIFTYPHARMA' => [
+                'csv' => ['ind_niftypharmalist.csv'],
+                'api' => ['NIFTY PHARMA'],
+            ],
+            'NIFTYAUTO' => [
+                'csv' => ['ind_niftyautolist.csv'],
+                'api' => ['NIFTY AUTO'],
+            ],
+            'NIFTYFMCG' => [
+                'csv' => ['ind_niftyfmcglist.csv'],
+                'api' => ['NIFTY FMCG'],
+            ],
+            'NIFTYMETAL' => [
+                'csv' => ['ind_niftymetallist.csv'],
+                'api' => ['NIFTY METAL'],
+            ],
+            'NIFTYREALTY' => [
+                'csv' => ['ind_niftyrealtylist.csv'],
+                'api' => ['NIFTY REALTY'],
+            ],
+            'NIFTYENERGY' => [
+                'csv' => ['ind_niftyenergylist.csv'],
+                'api' => ['NIFTY ENERGY'],
+            ],
+            'NIFTYINFRA' => [
+                'csv' => ['ind_niftyinfralist.csv'],
+                'api' => ['NIFTY INFRA', 'NIFTY INFRASTRUCTURE'],
+            ],
+            'NIFTYPSUBANK' => [
+                'csv' => ['ind_niftypsubanklist.csv'],
+                'api' => ['NIFTY PSU BANK'],
+            ],
+            'NIFTYPVTBANK' => [
+                'csv' => ['ind_nifty_privatebanklist.csv'],
+                'api' => ['NIFTY PVT BANK', 'NIFTY PRIVATE BANK'],
+            ],
+            'NIFTYMEDIA' => [
+                'csv' => ['ind_niftymedialist.csv'],
+                'api' => ['NIFTY MEDIA'],
             ],
             default => [
                 'csv' => [],

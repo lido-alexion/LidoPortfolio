@@ -3,7 +3,7 @@ import api from '../../api';
 import NumberInput from '../NumberInput';
 
 /**
- * Per-portfolio India VIX threshold alert controls (Telegram on cross above).
+ * Per-portfolio India VIX threshold alert controls.
  */
 export default function IndiaVixAlertSettings() {
     const [enabled, setEnabled] = useState(true);
@@ -73,9 +73,9 @@ export default function IndiaVixAlertSettings() {
     };
 
     return (
-        <div className="border rounded p-3 mt-3 bg-light">
+        <div className="indices-vix-alert mt-3">
             <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
-                <h3 className="h6 mb-0">India VIX Telegram alert</h3>
+                <h3 className="h6 mb-0">India VIX alert</h3>
                 <div className="form-check form-switch mb-0">
                     <input
                         className="form-check-input"
@@ -92,27 +92,24 @@ export default function IndiaVixAlertSettings() {
                 </div>
             </div>
             <p className="small text-muted mb-3">
-                When enabled, sends a Telegram message (if Telegram is configured for this portfolio)
-                the first time India VIX closes above your threshold. Alerts re-arm after VIX falls
-                back to or below the threshold.
+                When enabled, notifies you the first time India VIX closes above your threshold
+                (if notifications are configured for this portfolio). Alerts re-arm after VIX
+                falls back to or below the threshold.
             </p>
-            <div className="row g-2 align-items-end" style={{ maxWidth: 320 }}>
-                <div className="col-auto">
-                    <label className="form-label small mb-1" htmlFor="indiavix-alert-threshold">
-                        Alert when VIX above
-                    </label>
-                    <NumberInput
-                        id="indiavix-alert-threshold"
-                        className="form-control form-control-sm"
-                        value={threshold}
-                        min={1}
-                        max={100}
-                        step={0.1}
-                        disabled={loading || saving || !enabled}
-                        onChange={(e) => setThreshold(e.target.value)}
-                        onBlur={onThresholdBlur}
-                    />
-                </div>
+            <div className="indices-vix-alert-threshold">
+                <label className="form-label small mb-1" htmlFor="indiavix-alert-threshold">
+                    Alert when VIX above
+                </label>
+                <NumberInput
+                    id="indiavix-alert-threshold"
+                    value={threshold}
+                    min={1}
+                    max={100}
+                    step={0.1}
+                    disabled={loading || saving || !enabled}
+                    onChange={(e) => setThreshold(e.target.value)}
+                    onBlur={onThresholdBlur}
+                />
             </div>
             {message ? <p className="small text-success mb-0 mt-2">{message}</p> : null}
             {error ? <p className="small text-danger mb-0 mt-2">{error}</p> : null}

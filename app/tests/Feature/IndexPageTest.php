@@ -88,6 +88,7 @@ class IndexPageTest extends TestCase
 
         $bankRow = collect($response->json('data.indexes'))->firstWhere('symbol', 'NIFTYBANK');
         $this->assertSame('sector', $bankRow['tier']);
+        $this->assertTrue($bankRow['constituents_available']);
 
         $vixRow = collect($response->json('data.indexes'))->firstWhere('symbol', 'INDIAVIX');
         $this->assertSame('volatility', $vixRow['tier']);
@@ -165,6 +166,42 @@ class IndexPageTest extends TestCase
         $response->assertJsonPath('data.available', true);
         $response->assertJsonPath('data.constituents.0.symbol', 'RELIANCE');
         $response->assertJsonPath('data.constituents.0.name', 'Reliance Industries');
+    }
+
+    public function test_sector_constituents_endpoint_returns_enriched_symbols(): void
+    {
+        config(['portfolio.indexes.enabled' => true]);
+
+        $user = User::query()->create([
+            'name' => 'Index User',
+            'email' => 'idx-sector-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+
+        Stock::query()->create([
+            'symbol' => 'HDFCBANK',
+            'exchange' => 'NSE',
+            'name' => 'HDFC Bank',
+            'is_active' => true,
+            'is_benchmark' => false,
+        ]);
+
+        Http::fake([
+            'nsearchives.nseindia.com/content/indices/ind_niftybanklist.csv' => Http::response(
+                "Company Name,Industry,Symbol,Series,ISIN Code\nHDFC Bank Ltd.,Financial Services,HDFCBANK,EQ,INE040A01034\n",
+                200,
+                ['Content-Type' => 'text/csv'],
+            ),
+            'archives.nseindia.com/*' => Http::response('', 404),
+            'www.nseindia.com/*' => Http::response(['data' => []], 200),
+        ]);
+
+        $this->actingAs($user)
+            ->getJson('/api/indexes/NIFTYBANK/constituents')
+            ->assertOk()
+            ->assertJsonPath('data.available', true)
+            ->assertJsonPath('data.constituents.0.symbol', 'HDFCBANK')
+            ->assertJsonPath('data.constituents.0.name', 'HDFC Bank');
     }
 
     public function test_bse_index_constituents_are_unavailable(): void

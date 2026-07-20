@@ -33,9 +33,11 @@ function IndexChangeChips({ changePercent }) {
     return (
         <div className="d-flex flex-wrap gap-2">
             {periods.map(([key, label]) => (
-                <span key={key} className="badge text-bg-light border">
-                    <span className="text-muted me-1">{label}</span>
-                    <span className={pctClass(changePercent?.[key])}>{formatPctChip(changePercent?.[key])}</span>
+                <span key={key} className="indices-change-chip">
+                    <span className="indices-change-chip-label">{label}</span>
+                    <span className={`indices-change-chip-value ${pctClass(changePercent?.[key])}`}>
+                        {formatPctChip(changePercent?.[key])}
+                    </span>
                 </span>
             ))}
         </div>
@@ -238,7 +240,9 @@ export default function IndexSection({ index, panelId, expanded, onToggle }) {
                         <p className="text-muted small mt-3 mb-0">
                             {index.tier === 'volatility'
                                 ? 'Constituents do not apply to India VIX.'
-                                : 'Constituent list is not available for BSE indexes.'}
+                                : (index.exchange === 'BSE'
+                                    ? 'Constituent list is not available for BSE indexes.'
+                                    : 'Constituent list is not available for this index.')}
                         </p>
                     )}
                 </div>

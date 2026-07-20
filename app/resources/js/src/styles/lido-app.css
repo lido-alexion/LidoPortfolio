@@ -3610,3 +3610,45 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     font-size: 0.95rem;
 }
 
+.indices-change-chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.35rem;
+    padding: 0.28rem 0.55rem;
+    border: 1px solid var(--lido-border);
+    border-radius: 0.4rem;
+    background-color: var(--lido-bg-elevated);
+    color: var(--lido-text);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: 1.3;
+}
+
+.indices-change-chip-label {
+    color: var(--lido-text-muted);
+    font-weight: 500;
+}
+
+.indices-change-chip-value.text-success {
+    color: var(--lido-text-success) !important;
+}
+
+.indices-change-chip-value.text-danger {
+    color: var(--lido-text-danger) !important;
+}
+
+.indices-change-chip-value.text-muted {
+    color: var(--lido-text-muted) !important;
+}
+
+.indices-vix-alert {
+    padding: 0.9rem 1rem;
+    border: 1px solid var(--lido-border);
+    border-radius: 0.5rem;
+    background-color: var(--lido-bg-elevated);
+}
+
+.indices-vix-alert-threshold {
+    max-width: 14rem;
+}
+
