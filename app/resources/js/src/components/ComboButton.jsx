@@ -15,6 +15,8 @@ export default function ComboButton({
     variant = 'outline-secondary',
     size = 'sm',
     className = '',
+    disabled = false,
+    title,
 }) {
     const menuId = useId();
     const [open, setOpen] = useState(false);
@@ -38,6 +40,9 @@ export default function ComboButton({
 
     const toggleMenu = useCallback((event) => {
         event.stopPropagation();
+        if (disabled) {
+            return;
+        }
         setOpen((current) => {
             const next = !current;
             if (next) {
@@ -47,7 +52,13 @@ export default function ComboButton({
             }
             return next;
         });
-    }, [menuId]);
+    }, [disabled, menuId]);
+
+    useEffect(() => {
+        if (disabled) {
+            setOpen(false);
+        }
+    }, [disabled]);
 
     useEffect(() => {
         if (!open || !anchorRef.current || !menuRef.current) {
@@ -109,10 +120,12 @@ export default function ComboButton({
             <div
                 ref={anchorRef}
                 className={`lido-combo-button btn-group ${className}`.trim()}
+                title={title}
             >
                 <button
                     type="button"
                     className={buttonClass}
+                    disabled={disabled}
                     onClick={onPrimaryClick}
                 >
                     {label}
@@ -121,6 +134,7 @@ export default function ComboButton({
                     <button
                         type="button"
                         className={`${buttonClass} dropdown-toggle dropdown-toggle-split`}
+                        disabled={disabled}
                         aria-expanded={open}
                         aria-haspopup="menu"
                         aria-controls={menuId}
@@ -144,7 +158,9 @@ export default function ComboButton({
                             type="button"
                             className={`dropdown-item ${item.danger ? 'text-danger' : ''}`.trim()}
                             role="menuitem"
+                            disabled={!!item.disabled}
                             onClick={() => {
+                                if (item.disabled) return;
                                 setOpen(false);
                                 item.onClick?.();
                             }}

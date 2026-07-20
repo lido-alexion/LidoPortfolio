@@ -6,6 +6,7 @@ import { showToast } from '../toast';
 import { formatRunListLabel, formatRunResultsHeading, lastRunSummaryText, operatorLabel, runStatsWarning } from '../components/screener/screenerTableHelpers';
 import ScreenerRunsCompareTable from '../components/screener/ScreenerRunsCompareTable';
 import NumberInput from '../components/NumberInput';
+import ComboButton from '../components/ComboButton';
 import { buildExplorerComparePath } from '../utils/explorerLinks';
 import { resolveExternalStockUrl } from '../utils/externalStockLinks';
 
@@ -201,13 +202,14 @@ function CollapsibleSection({
     );
 }
 
-function OperandEditor({ value, onChange, meta, side }) {
+function OperandEditor({ value, onChange, meta, side, bare = false, leading = null }) {
     const isConstant = value?.type === 'constant';
     const indicators = meta?.indicators || [];
     const selected = indicators.find((i) => i.id === value?.indicator);
 
-    return (
-        <div className="rounded p-2 lido-screener-operand">
+    const body = (
+        <>
+            {leading}
             <div className="btn-group btn-group-sm mb-2" role="group">
                 <button
                     type="button"
@@ -281,6 +283,16 @@ function OperandEditor({ value, onChange, meta, side }) {
                     )}
                 </>
             )}
+        </>
+    );
+
+    if (bare) {
+        return body;
+    }
+
+    return (
+        <div className="rounded p-2 lido-screener-operand">
+            {body}
         </div>
     );
 }
@@ -380,45 +392,45 @@ function ConditionNode({ node, onChange, onRemove, meta, depth }) {
                         ))}
                     </select>
                 </div>
-                <div className="col-auto">
-                    <div className="d-flex align-items-center gap-1">
-                        <NumberInput
-                            compact
-                            step={0.1}
-                            min={0}
-                            className="lido-screener-weight-input"
-                            value={node.weight_factor ?? 1}
-                            onChange={(e) => {
-                                const raw = e.target.value;
-                                if (raw === '') {
-                                    onChange({ ...node, weight_factor: '' });
-                                    return;
-                                }
-                                const parsed = Number(raw);
-                                onChange({
-                                    ...node,
-                                    weight_factor: Number.isFinite(parsed) ? parsed : raw,
-                                });
-                            }}
-                            onBlur={() => {
-                                const parsed = Number(node.weight_factor);
-                                onChange({
-                                    ...node,
-                                    weight_factor: Number.isFinite(parsed) ? parsed : 1,
-                                });
-                            }}
-                            aria-label="RHS weight factor"
-                            title="Multiplies the right-hand side (default 1)"
-                        />
-                        <span className="text-muted user-select-none" aria-hidden="true">×</span>
-                    </div>
-                </div>
                 <div className="col-12 col-lg">
                     <OperandEditor
                         side="right"
                         meta={meta}
                         value={node.right}
                         onChange={(right) => onChange({ ...node, right })}
+                        leading={(
+                            <div className="d-flex align-items-center gap-1 mb-2 lido-screener-rhs-weight">
+                                <NumberInput
+                                    compact
+                                    step={0.1}
+                                    min={0}
+                                    className="lido-screener-weight-input"
+                                    value={node.weight_factor ?? 1}
+                                    onChange={(e) => {
+                                        const raw = e.target.value;
+                                        if (raw === '') {
+                                            onChange({ ...node, weight_factor: '' });
+                                            return;
+                                        }
+                                        const parsed = Number(raw);
+                                        onChange({
+                                            ...node,
+                                            weight_factor: Number.isFinite(parsed) ? parsed : raw,
+                                        });
+                                    }}
+                                    onBlur={() => {
+                                        const parsed = Number(node.weight_factor);
+                                        onChange({
+                                            ...node,
+                                            weight_factor: Number.isFinite(parsed) ? parsed : 1,
+                                        });
+                                    }}
+                                    aria-label="RHS weight factor"
+                                    title="Multiplies the right-hand side (default 1)"
+                                />
+                                <span className="lido-screener-rhs-times user-select-none" aria-hidden="true">×</span>
+                            </div>
+                        )}
                     />
                 </div>
             </div>
@@ -715,7 +727,7 @@ export default function ScreenerEditorPage() {
         return latest;
     };
 
-    const runBacktest = async () => {
+    const runBacktest = async (rangeKey = backtestRange) => {
         if (isNew) return;
         setSubmitted(true);
         if (hasValidationErrors) {
@@ -728,6 +740,8 @@ export default function ScreenerEditorPage() {
             showToast('Backtest is only available for holdings and watchlist scopes.', 'danger');
             return;
         }
+        const nextRange = rangeKey || backtestRange;
+        setBacktestRange(nextRange);
         setBacktesting(true);
         setBacktestMatrix(null);
         setBacktestProgress(null);
@@ -736,7 +750,7 @@ export default function ScreenerEditorPage() {
             if (!ok) return;
             const token = getOrCreateBacktestSessionToken();
             const res = await api.post(`/screeners/${id}/backtest`, {
-                range: backtestRange,
+                range: nextRange,
                 session_token: token,
             });
             let backtest = res.data?.data;
@@ -797,6 +811,10 @@ export default function ScreenerEditorPage() {
         { id: '1m', label: '1 month' },
         { id: '15d', label: '15 days' },
     ];
+    const selectedBacktestRange = useMemo(
+        () => backtestRanges.find((r) => r.id === backtestRange) || backtestRanges[0],
+        [backtestRanges, backtestRange],
+    );
     const runResultsHeading = useMemo(() => {
         if (!runResult) return null;
         return formatRunResultsHeading(runResult, {
@@ -1326,27 +1344,28 @@ export default function ScreenerEditorPage() {
                         >
                             {running ? 'Running…' : 'Run now'}
                         </button>
-                        <select
-                            className="form-select form-select-sm lido-screener-backtest-range"
-                            value={backtestRange}
-                            onChange={(e) => setBacktestRange(e.target.value)}
-                            disabled={running || backtesting || saving || !backtestAllowed}
-                            aria-label="Backtest range"
-                            title={backtestAllowed ? 'Backtest window' : 'Backtest is only for holdings and watchlist'}
-                        >
-                            {backtestRanges.map((r) => (
-                                <option key={r.id} value={r.id}>{r.label}</option>
-                            ))}
-                        </select>
-                        <button
-                            type="button"
-                            className="btn btn-outline-secondary"
+                        <ComboButton
+                            label={backtesting
+                                ? 'Backtesting…'
+                                : `Backtest · ${selectedBacktestRange?.label || '1 year'}`}
+                            variant="outline-secondary"
                             disabled={running || backtesting || saving || hasValidationErrors || !backtestAllowed}
-                            onClick={runBacktest}
-                            title={backtestAllowed ? 'Walk weekdays as-of and stack hits' : 'Backtest is only for holdings and watchlist'}
-                        >
-                            {backtesting ? 'Backtesting…' : 'Backtest'}
-                        </button>
+                            title={backtestAllowed
+                                ? 'Walk weekdays as-of and stack hits (dropdown picks another window)'
+                                : 'Backtest is only for holdings and watchlist'}
+                            onPrimaryClick={() => {
+                                if (!running && !backtesting && !saving && !hasValidationErrors && backtestAllowed) {
+                                    runBacktest(selectedBacktestRange?.id || backtestRange);
+                                }
+                            }}
+                            menuItems={backtestRanges
+                                .filter((r) => r.id !== (selectedBacktestRange?.id || backtestRange))
+                                .map((r) => ({
+                                    key: r.id,
+                                    label: r.label,
+                                    onClick: () => runBacktest(r.id),
+                                }))}
+                        />
                     </>
                 )}
                 <button

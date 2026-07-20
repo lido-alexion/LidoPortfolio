@@ -131,16 +131,18 @@ class ScreenerBacktestService
         foreach (array_values($dates) as $i => $date) {
             $dateStr = (string) $date;
             $dateIndex[$dateStr] = $i;
+            $matched = $dayMatched[$dateStr] ?? 0;
             $when = Carbon::parse($dateStr, config('app.timezone'));
             $columns[] = [
                 'id' => $dateStr,
                 'triggered_by' => 'backtest',
                 'trigger_label' => 'Backtest',
                 'status' => 'completed',
-                'matched' => $dayMatched[$dateStr] ?? 0,
+                'matched' => $matched,
                 'started_at' => null,
                 'finished_at' => null,
-                'when_label' => $when->format('d M Y'),
+                'when_label' => $when->format('d F Y'),
+                'header_label' => $when->format('d F Y').' ('.$matched.')',
             ];
         }
 

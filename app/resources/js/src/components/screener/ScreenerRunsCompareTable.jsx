@@ -36,27 +36,33 @@ export default function ScreenerRunsCompareTable({ matrix, onSelectRun }) {
                         <th className="lido-screener-compare-sticky">Stock</th>
                         {columns.map((col) => (
                             <th key={col.id} className="lido-screener-compare-run text-center">
-                                {typeof onSelectRun === 'function' ? (
-                                    <button
-                                        type="button"
-                                        className="btn btn-link btn-sm p-0 fw-semibold"
-                                        onClick={() => onSelectRun(col.id)}
-                                    >
-                                        #{col.id}
-                                    </button>
+                                {col.header_label ? (
+                                    <div className="small fw-normal text-nowrap">{col.header_label}</div>
                                 ) : (
-                                    <div className="fw-semibold">#{col.id}</div>
+                                    <>
+                                        {typeof onSelectRun === 'function' ? (
+                                            <button
+                                                type="button"
+                                                className="btn btn-link btn-sm p-0 fw-semibold"
+                                                onClick={() => onSelectRun(col.id)}
+                                            >
+                                                #{col.id}
+                                            </button>
+                                        ) : (
+                                            <div className="fw-semibold">#{col.id}</div>
+                                        )}
+                                        <div className="small fw-normal text-muted text-nowrap">
+                                            {col.trigger_label}
+                                            {' · '}
+                                            {col.matched}
+                                            {' hit'}
+                                            {col.matched === 1 ? '' : 's'}
+                                        </div>
+                                        <div className="small fw-normal text-muted text-nowrap">
+                                            {col.when_label}
+                                        </div>
+                                    </>
                                 )}
-                                <div className="small fw-normal text-muted text-nowrap">
-                                    {col.trigger_label}
-                                    {' · '}
-                                    {col.matched}
-                                    {' hit'}
-                                    {col.matched === 1 ? '' : 's'}
-                                </div>
-                                <div className="small fw-normal text-muted text-nowrap">
-                                    {col.when_label}
-                                </div>
                             </th>
                         ))}
                     </tr>

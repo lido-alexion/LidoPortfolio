@@ -1378,6 +1378,17 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     background-color: var(--lido-screener-operand-bg);
 }
 
+.lido-screener-rhs-weight {
+    flex-wrap: wrap;
+}
+
+.lido-screener-rhs-times {
+    color: var(--lido-text-muted);
+    font-weight: 600;
+    font-size: 1rem;
+    line-height: 1;
+}
+
 /* Avoid viewport-height threshold where a few pixels of layout shift oscillates scroll height. */
 .screeners-page {
     min-height: calc(100dvh - 9rem);
@@ -1512,12 +1523,6 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
 
 .lido-screener-weight-input {
     width: 7.25rem;
-}
-
-.lido-screener-backtest-range {
-    width: auto;
-    min-width: 7.5rem;
-    max-width: 10rem;
 }
 
 .lido-fee-component-row {

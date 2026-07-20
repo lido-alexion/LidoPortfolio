@@ -141,7 +141,7 @@ export default function ScreenerGuideTab() {
 
                 <h3 className="h6 mt-4">Backtest</h3>
                 <p className="small text-muted mb-4">
-                    For <strong>holdings</strong> and <strong>watchlist</strong> scopes, pick a window (1 year / 6 months / 3 months / 1 month / 15 days) and click <strong>Backtest</strong>.
+                    For <strong>holdings</strong> and <strong>watchlist</strong> scopes, use the <strong>Backtest</strong> split button (dropdown picks 1 year / 6 months / 3 months / 1 month / 15 days).
                     The engine walks each weekday from the start date to today (weekends skipped), treating that day as “today” and using only OHLCV on or before it.
                     Results appear in a stacked matrix like stacked run results. Temp rows are session-scoped and discarded when you leave the editor.
                 </p>
