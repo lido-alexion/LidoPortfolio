@@ -170,6 +170,11 @@ if (config('portfolio.universe_price_sync.enabled')) {
         ->name('universe-maintenance');
 }
 
+Schedule::command('portfolio:run-due-screeners')
+    ->everyMinute()
+    ->timezone($timezone)
+    ->name('run-due-screeners');
+
 Schedule::command('portfolio:expire-alerts')
     ->hourly()
     ->timezone($timezone)

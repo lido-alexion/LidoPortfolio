@@ -2,88 +2,102 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { FOOTER_NAV_ITEMS } from '../config/mainNav';
 
-const BOTTOM_EDGE_PX = 32;
-const SCROLL_BOTTOM_PX = 32;
-
-function isAtPageBottom() {
-    const scrollY = window.scrollY || document.documentElement.scrollTop;
-    const viewportHeight = window.innerHeight;
-    const docHeight = document.documentElement.scrollHeight;
-
-    return scrollY + viewportHeight >= docHeight - SCROLL_BOTTOM_PX;
-}
+const HIDE_DELAY_MS = 250;
 
 export default function AppBottomNav() {
     const { pathname } = useLocation();
-    const hoveringFooter = useRef(false);
-    const lastMouseY = useRef(window.innerHeight);
-    const [visible, setVisible] = useState(() => isAtPageBottom());
+    const [pinned, setPinned] = useState(false);
+    const [hovering, setHovering] = useState(false);
+    const hideTimer = useRef(null);
 
-    const recomputeVisibility = useCallback(() => {
-        const nearBottomEdge = lastMouseY.current >= window.innerHeight - BOTTOM_EDGE_PX;
-        setVisible(isAtPageBottom() || nearBottomEdge || hoveringFooter.current);
+    const visible = pinned || hovering;
+
+    const clearHideTimer = useCallback(() => {
+        if (hideTimer.current !== null) {
+            window.clearTimeout(hideTimer.current);
+            hideTimer.current = null;
+        }
     }, []);
 
+    const show = useCallback(() => {
+        clearHideTimer();
+        setHovering(true);
+    }, [clearHideTimer]);
+
+    const scheduleHide = useCallback(() => {
+        if (pinned) {
+            return;
+        }
+        clearHideTimer();
+        hideTimer.current = window.setTimeout(() => {
+            setHovering(false);
+            hideTimer.current = null;
+        }, HIDE_DELAY_MS);
+    }, [clearHideTimer, pinned]);
+
+    const togglePin = useCallback(() => {
+        setPinned((current) => {
+            const next = !current;
+            if (next) {
+                clearHideTimer();
+                setHovering(true);
+            }
+            return next;
+        });
+    }, [clearHideTimer]);
+
     useEffect(() => {
-        const onScroll = () => recomputeVisibility();
-        const onMouseMove = (event) => {
-            lastMouseY.current = event.clientY;
-            recomputeVisibility();
-        };
-        const onResize = () => recomputeVisibility();
-
-        window.addEventListener('scroll', onScroll, { passive: true });
-        window.addEventListener('mousemove', onMouseMove, { passive: true });
-        window.addEventListener('resize', onResize);
-
-        recomputeVisibility();
-
-        return () => {
-            window.removeEventListener('scroll', onScroll);
-            window.removeEventListener('mousemove', onMouseMove);
-            window.removeEventListener('resize', onResize);
-        };
-    }, [recomputeVisibility]);
-
-    useEffect(() => {
-        document.documentElement.classList.toggle('lido-footer-visible', visible);
+        document.documentElement.classList.toggle('lido-footer-visible', pinned);
 
         return () => {
             document.documentElement.classList.remove('lido-footer-visible');
         };
-    }, [visible]);
+    }, [pinned]);
 
-    const onFooterEnter = () => {
-        hoveringFooter.current = true;
-        recomputeVisibility();
-    };
+    useEffect(() => () => clearHideTimer(), [clearHideTimer]);
 
-    const onFooterLeave = () => {
-        hoveringFooter.current = false;
-        recomputeVisibility();
-    };
+    useEffect(() => {
+        setPinned(false);
+        setHovering(false);
+        clearHideTimer();
+    }, [pathname, clearHideTimer]);
 
     return (
-        <nav
-            className={`lido-bottom-nav${visible ? ' lido-bottom-nav--visible' : ''}`}
-            aria-label="Footer navigation"
-            onMouseEnter={onFooterEnter}
-            onMouseLeave={onFooterLeave}
+        <div
+            className={`lido-bottom-nav-shell${visible ? ' lido-bottom-nav-shell--open' : ''}${pinned ? ' lido-bottom-nav-shell--pinned' : ''}`}
+            onMouseEnter={show}
+            onMouseLeave={scheduleHide}
         >
-            {FOOTER_NAV_ITEMS.map((tab) => {
-                const isActive = tab.match(pathname);
-                return (
-                    <NavLink
-                        key={tab.to}
-                        to={tab.to}
-                        end={tab.end}
-                        className={`nav-link${isActive ? ' active' : ''}`}
-                        tabIndex={visible ? 0 : -1}
-                    >
-                        {tab.label}
-                    </NavLink>
-                );
-            })}
-        </nav>
+            <nav
+                id="lido-bottom-nav"
+                className={`lido-bottom-nav${visible ? ' lido-bottom-nav--visible' : ''}`}
+                aria-label="Footer navigation"
+                aria-hidden={!visible}
+            >
+                {FOOTER_NAV_ITEMS.map((tab) => {
+                    const isActive = tab.match(pathname);
+                    return (
+                        <NavLink
+                            key={tab.to}
+                            to={tab.to}
+                            end={tab.end}
+                            className={`nav-link${isActive ? ' active' : ''}`}
+                            tabIndex={visible ? 0 : -1}
+                        >
+                            {tab.label}
+                        </NavLink>
+                    );
+                })}
+            </nav>
+            <button
+                type="button"
+                className={`lido-bottom-nav-reveal${visible ? ' lido-bottom-nav-reveal--active' : ''}${pinned ? ' lido-bottom-nav-reveal--pinned' : ''}`}
+                aria-label={pinned ? 'Unpin footer navigation' : 'Pin footer navigation open'}
+                aria-expanded={visible}
+                aria-controls="lido-bottom-nav"
+                id="lido-bottom-nav-reveal"
+                onClick={togglePin}
+            />
+        </div>
     );
 }

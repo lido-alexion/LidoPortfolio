@@ -609,9 +609,46 @@ body {
     outline-offset: 1px;
 }
 
-.lido-bottom-nav {
+.lido-bottom-nav-shell {
     position: fixed;
     bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 500;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    pointer-events: none;
+}
+
+.lido-bottom-nav-reveal {
+    position: relative;
+    width: 100%;
+    height: 10px;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-top: 1px solid transparent;
+    background: transparent;
+    cursor: pointer;
+    pointer-events: auto;
+    transition: background-color 0.18s ease, border-color 0.18s ease;
+}
+
+.lido-bottom-nav-reveal:hover,
+.lido-bottom-nav-reveal--active,
+.lido-bottom-nav-shell--open .lido-bottom-nav-reveal {
+    background: color-mix(in srgb, var(--lido-footer-bg) 55%, transparent);
+    border-top-color: color-mix(in srgb, var(--lido-footer-border) 70%, transparent);
+}
+
+.lido-bottom-nav-reveal--pinned {
+    background: color-mix(in srgb, var(--lido-brand) 22%, transparent);
+    border-top-color: color-mix(in srgb, var(--lido-brand) 45%, transparent);
+}
+
+.lido-bottom-nav {
+    position: relative;
     left: 0;
     right: 0;
     display: flex;
@@ -619,7 +656,6 @@ body {
     align-items: center;
     background-color: var(--lido-footer-bg);
     padding: 12px 16px;
-    z-index: 500;
     border-top: 1px solid var(--lido-footer-border);
     gap: 8px 24px;
     flex-wrap: wrap;
@@ -667,6 +703,8 @@ body {
 html.lido-footer-visible .lido-main {
     padding-bottom: 5rem;
 }
+
+/* Pinned footer only — avoids scroll/layout flicker from hover reveal */
 
 .contentPane .card {
     background-color: var(--lido-bg-surface);
@@ -1267,6 +1305,76 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     color: var(--lido-text-muted);
     font-size: 0.9rem;
     line-height: 1;
+}
+
+.lido-screener-operand,
+.lido-screener-condition {
+    background-color: var(--lido-bg-elevated);
+}
+
+.lido-screener-section {
+    border-color: color-mix(in srgb, var(--lido-border) 45%, var(--lido-bg-surface)) !important;
+}
+
+.lido-screener-section .border-bottom {
+    border-color: color-mix(in srgb, var(--lido-border) 35%, var(--lido-bg-surface)) !important;
+}
+
+.lido-screener-tree {
+    --lido-screener-nest-1: var(--lido-bg-elevated);
+    --lido-screener-nest-2: color-mix(in srgb, var(--lido-bg-elevated) 72%, var(--lido-bg-page));
+    --lido-screener-nest-3: color-mix(in srgb, var(--lido-bg-elevated) 52%, var(--lido-bg-page));
+    --lido-screener-nest-4: color-mix(in srgb, var(--lido-bg-elevated) 38%, var(--lido-bg-page));
+    --lido-screener-operand-bg: color-mix(in srgb, var(--lido-bg-elevated) 58%, var(--lido-bg-page));
+}
+
+.lido-screener-tree .lido-screener-group,
+.lido-screener-tree .lido-screener-leaf {
+    border: none;
+    border-radius: 0.5rem;
+    padding: 0.625rem;
+}
+
+.lido-screener-tree .lido-screener-group[data-depth='1'],
+.lido-screener-tree .lido-screener-leaf[data-depth='1'] {
+    background-color: var(--lido-screener-nest-1);
+}
+
+.lido-screener-tree .lido-screener-group[data-depth='2'],
+.lido-screener-tree .lido-screener-leaf[data-depth='2'] {
+    background-color: var(--lido-screener-nest-2);
+    margin-left: 0.5rem;
+}
+
+.lido-screener-tree .lido-screener-group[data-depth='3'],
+.lido-screener-tree .lido-screener-leaf[data-depth='3'] {
+    background-color: var(--lido-screener-nest-3);
+    margin-left: 1rem;
+}
+
+.lido-screener-tree .lido-screener-group[data-depth='4'],
+.lido-screener-tree .lido-screener-leaf[data-depth='4'] {
+    background-color: var(--lido-screener-nest-4);
+    margin-left: 1.5rem;
+}
+
+.lido-screener-tree .lido-screener-operand {
+    border: none;
+    background-color: var(--lido-screener-operand-bg);
+}
+
+.lido-screener-editor-footer {
+    background-color: var(--lido-bg);
+}
+
+.lido-screener-config-select {
+    max-width: 18rem;
+    width: 100%;
+}
+
+.lido-screener-config-time {
+    max-width: 9rem;
+    width: 100%;
 }
 
 .lido-fee-component-row {

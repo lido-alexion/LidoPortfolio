@@ -34,6 +34,8 @@ import AcceptInvitePage from './pages/AcceptInvitePage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import PortfoliosPage from './pages/PortfoliosPage';
 import AlertPoliciesPage from './pages/AlertPoliciesPage';
+import ScreenersPage from './pages/ScreenersPage';
+import ScreenerEditorPage from './pages/ScreenerEditorPage';
 
 function App() {
     const { user, isAuthenticated, loading } = useAuth();
@@ -136,6 +138,8 @@ function App() {
                                 <Route path="/holdings/:stockId/prices" element={<StockPricesPage />} />
                                 <Route path="/watchlist" element={<WatchlistPage />} />
                                 <Route path="/explorer" element={<StockExplorerPage />} />
+                                <Route path="/screeners" element={<ScreenersPage />} />
+                                <Route path="/screeners/:id" element={<ScreenerEditorPage />} />
                                 <Route path="/patterns" element={<PatternGuidePage />} />
                                 <Route path="/knowledge-board" element={<KnowledgeBoardPage />} />
                                 <Route path="/knowledge-board/tags" element={<KnowledgeBoardTagsPage />} />

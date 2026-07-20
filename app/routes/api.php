@@ -30,6 +30,8 @@ use App\Http\Controllers\Api\TransactionController;
 use App\Http\Controllers\Api\UniversePriceSyncController;
 use App\Http\Controllers\Api\UserInviteController;
 use App\Http\Controllers\Api\UserManagementController;
+use App\Http\Controllers\Api\ScreenerController;
+use App\Http\Controllers\Api\ScreenerRunController;
 use App\Http\Controllers\Api\WatchlistController;
 use App\Http\Controllers\Api\WatchlistsController;
 use Illuminate\Support\Facades\Route;
@@ -141,6 +143,20 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::get('/alert-policies/meta', [AlertPolicyController::class, 'meta']);
     Route::post('/alert-policies/evaluate', [AlertPolicyController::class, 'evaluate']);
     Route::apiResource('alert-policies', AlertPolicyController::class);
+
+    Route::get('/screeners/meta', [ScreenerController::class, 'meta']);
+    Route::get('/screeners/shared', [ScreenerController::class, 'shared']);
+    Route::post('/screeners/shared/{sourceId}/import', [ScreenerController::class, 'importShared']);
+    Route::get('/screeners', [ScreenerController::class, 'index']);
+    Route::post('/screeners', [ScreenerController::class, 'store']);
+    Route::get('/screeners/{screener}', [ScreenerController::class, 'show']);
+    Route::put('/screeners/{screener}', [ScreenerController::class, 'update']);
+    Route::delete('/screeners/{screener}', [ScreenerController::class, 'destroy']);
+    Route::post('/screeners/{screener}/run', [ScreenerController::class, 'run']);
+    Route::get('/screeners/{screener}/runs', [ScreenerController::class, 'runs']);
+    Route::delete('/screeners/{screener}/runs', [ScreenerController::class, 'clearRuns']);
+    Route::get('/screener-runs/{screenerRun}', [ScreenerRunController::class, 'show']);
+    Route::post('/screener-runs/{screenerRun}/continue', [ScreenerRunController::class, 'continue']);
 
     Route::get('/settings', [SettingsController::class, 'index']);
     Route::put('/settings', [SettingsController::class, 'update']);

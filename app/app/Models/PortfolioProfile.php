@@ -106,4 +106,9 @@ class PortfolioProfile extends Model
     {
         return $this->hasMany(CalendarEvent::class, 'profile_id');
     }
+
+    public function screeners(): HasMany
+    {
+        return $this->hasMany(Screener::class, 'profile_id');
+    }
 }
