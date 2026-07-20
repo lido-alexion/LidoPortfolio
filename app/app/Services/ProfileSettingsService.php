@@ -13,7 +13,12 @@ class ProfileSettingsService
         'telegram_chat_id' => '',
         'notifications_enabled' => 'true',
         'notification_schedules' => '[]',
+        'indiavix_alert_enabled' => 'true',
+        'indiavix_alert_threshold' => '20',
     ];
+
+    /** Internal arming flag — not exposed via settings API defaults list. */
+    public const INDIAVIX_ALERT_ARMED_KEY = 'indiavix_alert_armed';
 
     public function get(PortfolioProfile $profile, string $key, ?string $default = null): ?string
     {
@@ -60,6 +65,9 @@ class ProfileSettingsService
             unset($data['notification_schedules']);
         }
 
+        $rearmVix = array_key_exists('indiavix_alert_enabled', $data)
+            || array_key_exists('indiavix_alert_threshold', $data);
+
         foreach ($data as $key => $value) {
             if (! array_key_exists($key, self::DEFAULTS) || $key === 'notification_schedules') {
                 continue;
@@ -67,7 +75,22 @@ class ProfileSettingsService
             $this->set($profile, $key, $value === null ? null : (string) $value);
         }
 
+        if ($rearmVix) {
+            // Re-arm so a new threshold / re-enable can fire on the next evaluation.
+            $this->set($profile, self::INDIAVIX_ALERT_ARMED_KEY, 'true');
+        }
+
         return $this->all($profile);
+    }
+
+    public function isIndiaVixAlertArmed(PortfolioProfile $profile): bool
+    {
+        return $this->get($profile, self::INDIAVIX_ALERT_ARMED_KEY, 'true') !== 'false';
+    }
+
+    public function setIndiaVixAlertArmed(PortfolioProfile $profile, bool $armed): void
+    {
+        $this->set($profile, self::INDIAVIX_ALERT_ARMED_KEY, $armed ? 'true' : 'false');
     }
 
     public function isManagedKey(string $key): bool

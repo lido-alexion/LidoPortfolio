@@ -3404,3 +3404,209 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     min-width: 0;
 }
 
+/* Indices page */
+.indices-comparison-chart-canvas {
+    width: 100%;
+    height: 280px;
+    min-height: 280px;
+    position: relative;
+    z-index: 1;
+}
+
+.indices-comparison-tooltip {
+    background-color: var(--lido-chart-tooltip-bg);
+    border: 1px solid var(--lido-chart-tooltip-border);
+    border-radius: 4px;
+    color: var(--lido-chart-tooltip-text);
+    font-size: 11px;
+    line-height: 1.25;
+    padding: 4px 6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+    max-width: 220px;
+}
+
+.indices-comparison-tooltip-date {
+    color: var(--lido-chart-tooltip-label);
+    font-weight: 600;
+    font-size: 10px;
+    margin-bottom: 3px;
+}
+
+.indices-comparison-tooltip-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.indices-comparison-tooltip-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0;
+    padding: 1px 0;
+}
+
+.indices-comparison-tooltip-swatch {
+    flex: 0 0 auto;
+    width: 8px;
+    height: 8px;
+    border-radius: 1px;
+}
+
+.indices-comparison-tooltip-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.indices-comparison-tooltip-value {
+    flex: 0 0 auto;
+    font-variant-numeric: tabular-nums;
+    margin-left: 4px;
+}
+
+.indices-comparison-legend-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.indices-comparison-legend-panel {
+    background: var(--lido-surface-muted, transparent);
+}
+
+.indices-comparison-legend-group + .indices-comparison-legend-group {
+    margin-top: 0.65rem;
+}
+
+.indices-comparison-legend-group-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--lido-text-muted);
+    margin-bottom: 0.35rem;
+}
+
+.indices-comparison-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.5rem;
+}
+
+.indices-comparison-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    border: 1px solid var(--lido-border, rgba(0, 0, 0, 0.12));
+    border-radius: 999px;
+    background: transparent;
+    color: var(--lido-text);
+    font-size: 0.75rem;
+    line-height: 1.2;
+    padding: 0.15rem 0.45rem;
+    cursor: pointer;
+    margin: 0;
+}
+
+.indices-comparison-legend-check {
+    margin: 0;
+    flex: 0 0 auto;
+    cursor: pointer;
+}
+
+.indices-comparison-legend-item.is-hidden {
+    opacity: 0.45;
+}
+
+.indices-period-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.indices-period-chart-canvas {
+    width: 100%;
+}
+
+.indices-comparison-legend-swatch {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: 1.5px solid currentColor;
+    flex: 0 0 auto;
+}
+
+.indices-section-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.indices-section-toggle:hover,
+.indices-section-toggle:focus-visible {
+    background-color: var(--lido-surface-hover, rgba(0, 0, 0, 0.03));
+}
+
+.indices-section-toggle-main {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.5rem;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.indices-section-name {
+    font-weight: 600;
+}
+
+.indices-section-symbol {
+    color: var(--lido-text-muted);
+    font-size: 0.875rem;
+}
+
+.indices-section-1y {
+    flex: 0 0 auto;
+    min-width: 5.5rem;
+    text-align: right;
+    font-size: 0.875rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.indices-section-chevron {
+    flex: 0 0 auto;
+    width: 0.65rem;
+    height: 0.65rem;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg);
+    opacity: 0.55;
+    transition: transform 0.15s ease;
+    margin-bottom: 0.15rem;
+}
+
+.indices-section-toggle.is-expanded .indices-section-chevron {
+    transform: rotate(-135deg);
+    margin-bottom: 0;
+    margin-top: 0.15rem;
+}
+
+.indices-section-about {
+    margin: 0;
+    max-width: 52rem;
+    line-height: 1.45;
+    color: var(--lido-text-muted, #6c757d);
+    font-size: 0.95rem;
+}
+

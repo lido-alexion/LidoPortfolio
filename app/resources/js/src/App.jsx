@@ -24,6 +24,7 @@ import UserManagementPage from './pages/UserManagementPage';
 import AdminAlertsPage from './pages/AdminAlertsPage';
 import AdminRoute from './components/AdminRoute';
 import StockExplorerPage from './pages/StockExplorerPage';
+import IndicesPage from './pages/IndicesPage';
 import WatchlistPage from './pages/WatchlistPage';
 import PatternGuidePage from './pages/PatternGuidePage';
 import KnowledgeBoardPage from './pages/KnowledgeBoardPage';
@@ -140,6 +141,7 @@ function App() {
                                 <Route path="/holdings/:stockId/prices" element={<StockPricesPage />} />
                                 <Route path="/watchlist" element={<WatchlistPage />} />
                                 <Route path="/explorer" element={<StockExplorerPage />} />
+                                <Route path="/indices" element={<IndicesPage />} />
                                 <Route path="/screeners" element={<ScreenersPage />} />
                                 <Route path="/screeners/:id" element={<ScreenerEditorPage />} />
                                 <Route path="/patterns" element={<PatternGuidePage />} />

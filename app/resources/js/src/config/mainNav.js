@@ -4,6 +4,7 @@ export const MAIN_TAB_ITEMS = [
     { to: '/holdings', label: 'Holdings', match: (p) => p.startsWith('/holdings') },
     { to: '/watchlist', label: 'Watchlist', match: (p) => p.startsWith('/watchlist') },
     { to: '/explorer', label: 'Explorer', match: (p) => p.startsWith('/explorer') },
+    { to: '/indices', label: 'Indices', match: (p) => p.startsWith('/indices') },
     { to: '/screeners', label: 'Screener', match: (p) => p.startsWith('/screeners') },
     { to: '/patterns', label: 'Patterns', match: (p) => p.startsWith('/patterns') },
     { to: '/calendar', label: 'Calendar', match: (p) => p.startsWith('/calendar') },

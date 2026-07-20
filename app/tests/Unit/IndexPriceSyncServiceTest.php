@@ -5,6 +5,7 @@ namespace Tests\Unit;
 use App\Models\Setting;
 use App\Models\Stock;
 use App\Services\IndexCatalogService;
+use App\Services\IndiaVixAlertService;
 use App\Services\IndexPriceSyncService;
 use App\Services\PortfolioLoggerService;
 use App\Services\PriceFetchService;
@@ -48,6 +49,15 @@ class IndexPriceSyncServiceTest extends TestCase
         $gaps = Mockery::mock(PriceHistoryGapService::class);
         $logger = Mockery::mock(PortfolioLoggerService::class);
         $logger->shouldReceive('scheduler')->once();
+        $vixAlerts = Mockery::mock(IndiaVixAlertService::class);
+        $vixAlerts->shouldReceive('evaluateAndNotify')->once()->andReturn([
+            'evaluated' => false,
+            'vix' => null,
+            'price_date' => null,
+            'notified' => 0,
+            'rearmed' => 0,
+            'skipped' => 0,
+        ]);
 
         $service = new IndexPriceSyncService(
             app(IndexCatalogService::class),
@@ -56,6 +66,7 @@ class IndexPriceSyncServiceTest extends TestCase
             $gaps,
             app(SettingsService::class),
             $logger,
+            $vixAlerts,
         );
 
         $result = $service->syncBatch(mode: 'daily', resetCursor: true);
@@ -100,6 +111,7 @@ class IndexPriceSyncServiceTest extends TestCase
             $gaps,
             app(SettingsService::class),
             $logger,
+            Mockery::mock(IndiaVixAlertService::class),
         );
 
         $result = $service->syncOneSymbol('NIFTY50', 'backfill');
@@ -127,6 +139,7 @@ class IndexPriceSyncServiceTest extends TestCase
             $gaps,
             app(SettingsService::class),
             Mockery::mock(PortfolioLoggerService::class),
+            Mockery::mock(IndiaVixAlertService::class),
         );
 
         $status = $service->status();

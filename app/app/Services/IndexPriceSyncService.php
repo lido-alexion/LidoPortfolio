@@ -28,6 +28,7 @@ class IndexPriceSyncService
         protected PriceHistoryGapService $gaps,
         protected SettingsService $settings,
         protected PortfolioLoggerService $logger,
+        protected IndiaVixAlertService $indiaVixAlerts,
     ) {}
 
     public function isEnabled(): bool
@@ -246,6 +247,8 @@ class IndexPriceSyncService
                 array_merge(['category' => 'IndexPriceSync'], $stats),
             );
 
+            $stats['indiavix_alert'] = $this->indiaVixAlerts->evaluateAndNotify();
+
             return $stats;
         } finally {
             $this->clearInProgress();
@@ -290,7 +293,7 @@ class IndexPriceSyncService
 
         $result = $this->priceFetch->syncStock($stock, $from, $to, notifyTelegramOnFailure: false);
 
-        return [
+        $payload = [
             'success' => (bool) ($result['success'] ?? false),
             'stored_rows' => (int) ($result['stored_rows'] ?? 0),
             'fetched_rows' => (int) ($result['fetched_rows'] ?? 0),
@@ -299,6 +302,12 @@ class IndexPriceSyncService
             'to_date' => $to->toDateString(),
             'errors' => $result['errors'] ?? [],
         ];
+
+        if (($payload['success'] ?? false) && strtoupper($symbol) === IndiaVixAlertService::SYMBOL) {
+            $payload['indiavix_alert'] = $this->indiaVixAlerts->evaluateAndNotify();
+        }
+
+        return $payload;
     }
 
     /**
@@ -401,6 +410,8 @@ class IndexPriceSyncService
             }
 
             Setting::setValue(self::KEY_LAST_RUN_JSON, json_encode($stats, JSON_THROW_ON_ERROR));
+
+            $stats['indiavix_alert'] = $this->indiaVixAlerts->evaluateAndNotify();
 
             return $stats;
         } finally {

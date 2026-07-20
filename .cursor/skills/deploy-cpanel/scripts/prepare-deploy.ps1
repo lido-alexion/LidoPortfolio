@@ -52,15 +52,20 @@ if ($SinceCommit -eq '') {
     }
 }
 
-$changedRaw = git diff --name-only "$SinceCommit..HEAD" 2>$null
-if (-not $changedRaw) {
-    $changedRaw = git diff --name-only HEAD 2>$null
+# Include committed range + working tree (tracked mods and untracked files).
+$changedList = [System.Collections.Generic.List[string]]::new()
+$prevEap = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+$diffLines = @(git -c core.quotepath=false diff --name-only "$SinceCommit" 2>$null)
+$untrackedLines = @(git -c core.quotepath=false ls-files --others --exclude-standard 2>$null)
+$ErrorActionPreference = $prevEap
+foreach ($line in $diffLines) {
+    if ($line) { $changedList.Add(([string]$line).Trim()) }
 }
-if ($changedRaw -is [string]) {
-    $changed = @($changedRaw -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ } | Sort-Object -Unique)
-} else {
-    $changed = @($changedRaw | ForEach-Object { $_.Trim() } | Where-Object { $_ } | Sort-Object -Unique)
+foreach ($line in $untrackedLines) {
+    if ($line) { $changedList.Add(([string]$line).Trim()) }
 }
+$changed = @($changedList | Where-Object { $_ } | Sort-Object -Unique)
 Trace "changed=$($changed.Count)"
 
 # --- build + stage ---

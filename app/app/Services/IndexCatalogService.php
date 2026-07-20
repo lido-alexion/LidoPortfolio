@@ -27,6 +27,8 @@ class IndexCatalogService
      *   symbol: string,
      *   name: string,
      *   exchange: string,
+     *   tier: string,
+     *   description: string,
      *   nse_charting_name: ?string,
      *   yahoo_symbol: string,
      *   alpha_vantage_symbol: ?string,
@@ -49,6 +51,8 @@ class IndexCatalogService
                 'symbol' => strtoupper(trim((string) $row['symbol'])),
                 'name' => (string) ($row['name'] ?? $row['symbol']),
                 'exchange' => strtoupper((string) ($row['exchange'] ?? 'NSE')),
+                'tier' => strtolower((string) ($row['tier'] ?? 'broad')),
+                'description' => (string) ($row['description'] ?? ''),
                 'nse_charting_name' => isset($row['nse_charting_name']) && $row['nse_charting_name'] !== ''
                     ? (string) $row['nse_charting_name']
                     : null,
@@ -192,6 +196,32 @@ class IndexCatalogService
             ->where('is_benchmark', true)
             ->whereIn('symbol', $symbols !== [] ? $symbols : ['__none__'])
             ->orderBy('symbol');
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function broadEnabledDefinitions(): array
+    {
+        return array_values(array_filter(
+            $this->enabledDefinitions(),
+            static fn (array $row) => ($row['tier'] ?? 'broad') === 'broad',
+        ));
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function broadEnabledSymbolsOrdered(): array
+    {
+        return array_column($this->broadEnabledDefinitions(), 'symbol');
+    }
+
+    public function supportsConstituents(array $def): bool
+    {
+        return $def['exchange'] === 'NSE'
+            && ! empty($def['nse_charting_name'])
+            && ($def['tier'] ?? 'broad') !== 'volatility';
     }
 
     /**

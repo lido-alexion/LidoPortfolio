@@ -62,6 +62,7 @@ Copy-Item (Join-Path $PSScriptRoot 'cpanel-gap-fill-debug.php') (Join-Path $stag
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-repair-dual-listed-nse.php') (Join-Path $staging 'portfolio/cpanel-repair-dual-listed-nse.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-stock-master-sync.php') (Join-Path $staging 'portfolio/cpanel-stock-master-sync.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-backfill-index-prices.php') (Join-Path $staging 'portfolio/cpanel-backfill-index-prices.php') -Force
+Copy-Item (Join-Path $PSScriptRoot 'cpanel-refresh-index-constituents.php') (Join-Path $staging 'portfolio/cpanel-refresh-index-constituents.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-schedule-diagnostic.php') (Join-Path $staging 'portfolio/cpanel-schedule-diagnostic.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-run-universe-maintenance.php') (Join-Path $staging 'portfolio/cpanel-run-universe-maintenance.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-db-query.php') (Join-Path $staging 'portfolio/cpanel-db-query.php') -Force

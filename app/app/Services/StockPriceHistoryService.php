@@ -373,6 +373,19 @@ class StockPriceHistoryService
         $asOf = ($asOf ?? now())->copy()->startOfDay();
         $startTarget = $asOf->copy()->subMonths($months);
 
+        return $this->growthBetween($stock, $startTarget, $asOf);
+    }
+
+    public function getGrowthPercentageForDays(Stock $stock, int $days, ?Carbon $asOf = null): ?float
+    {
+        $asOf = ($asOf ?? now())->copy()->startOfDay();
+        $startTarget = $asOf->copy()->subDays(max(1, $days));
+
+        return $this->growthBetween($stock, $startTarget, $asOf);
+    }
+
+    protected function growthBetween(Stock $stock, Carbon $startTarget, Carbon $asOf): ?float
+    {
         $startClose = $this->getCloseOnOrBeforeDate($stock, $startTarget);
         $endClose = $this->getCloseOnOrBeforeDate($stock, $asOf);
 
@@ -470,6 +483,52 @@ class StockPriceHistoryService
             }
 
             $series[] = $point;
+        }
+
+        return $series;
+    }
+
+    /**
+     * Daily % gain vs the close at the start of the lookback window.
+     *
+     * @return list<array{date: string, gain_percent: float}>
+     */
+    public function getNormalizedGainSeriesForStock(
+        Stock $stock,
+        int $months = 12,
+        ?Carbon $asOf = null,
+    ): array {
+        $asOf = ($asOf ?? now())->copy()->startOfDay();
+        $startTarget = $asOf->copy()->subMonths($months);
+        $baseClose = $this->getCloseOnOrBeforeDate($stock, $startTarget);
+
+        if ($baseClose === null || abs($baseClose) < 0.000001) {
+            return [];
+        }
+
+        $rows = StockPrice::query()
+            ->where('stock_id', $stock->id)
+            ->where('price_date', '>=', $startTarget->toDateString())
+            ->where('price_date', '<=', $asOf->toDateString())
+            ->orderBy('price_date')
+            ->get(['price_date', 'close_price', 'adjusted_close_price']);
+
+        $series = [];
+        foreach ($rows as $row) {
+            $sessionDate = Carbon::parse($row->price_date)->startOfDay();
+            if (! TradingCalendar::isEquitySessionDate($sessionDate)) {
+                continue;
+            }
+
+            $close = $row->adjusted_close_price ?? $row->close_price;
+            if ($close === null) {
+                continue;
+            }
+
+            $series[] = [
+                'date' => $sessionDate->toDateString(),
+                'gain_percent' => round((((float) $close - $baseClose) / $baseClose) * 100, 4),
+            ];
         }
 
         return $series;

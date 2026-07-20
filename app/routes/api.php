@@ -135,6 +135,9 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
         ->middleware('throttle:analytics-explore');
 
     Route::get('/indexes', [IndexController::class, 'index']);
+    Route::get('/indexes/page', [IndexController::class, 'page']);
+    Route::get('/indexes/comparison', [IndexController::class, 'comparison']);
+    Route::get('/indexes/{symbol}/constituents', [IndexController::class, 'constituents']);
 
     Route::get('/alerts', [AlertController::class, 'index']);
     Route::post('/alerts/expire-all', [AlertController::class, 'expireAll']);

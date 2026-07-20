@@ -67,6 +67,8 @@ export default function PriceVolumeChart({
     defaultSampling = DEFAULT_SAMPLING,
     height = 300,
     showControls = true,
+    showVolume = true,
+    showPatterns = true,
     title = 'Close & Volume',
     className = '',
 }) {
@@ -79,13 +81,13 @@ export default function PriceVolumeChart({
     );
 
     const windowPatternMatches = useMemo(() => {
-        if (loading || !rows?.length) {
+        if (!showPatterns || loading || !rows?.length) {
             return [];
         }
         const normalized = normalizeOhlcvRows(rows);
         const { filtered } = filterByTimeRange(normalized, timeRange);
         return scanOhlcv(filtered, { actionableOnly: false });
-    }, [rows, timeRange, loading]);
+    }, [rows, timeRange, loading, showPatterns]);
 
     const clampHint = formatChartRangeClampHint(meta);
     const manyPoints = series.length > 60;
@@ -133,14 +135,16 @@ export default function PriceVolumeChart({
                                     tick={{ fontSize: 11, fill: 'var(--lido-text-muted)' }}
                                     stroke="var(--lido-border-strong)"
                                 />
-                                <YAxis
-                                    yAxisId="volume"
-                                    orientation="right"
-                                    tickFormatter={formatVolumeAxis}
-                                    width={48}
-                                    tick={{ fontSize: 11, fill: 'var(--lido-text-muted)' }}
-                                    stroke="var(--lido-border-strong)"
-                                />
+                                {showVolume ? (
+                                    <YAxis
+                                        yAxisId="volume"
+                                        orientation="right"
+                                        tickFormatter={formatVolumeAxis}
+                                        width={48}
+                                        tick={{ fontSize: 11, fill: 'var(--lido-text-muted)' }}
+                                        stroke="var(--lido-border-strong)"
+                                    />
+                                ) : null}
                                 <Tooltip
                                     contentStyle={chartTooltipStyle}
                                     labelStyle={chartTooltipLabelStyle}
@@ -160,17 +164,19 @@ export default function PriceVolumeChart({
                                         return [value, name];
                                     }}
                                 />
-                                <Bar
-                                    yAxisId="volume"
-                                    dataKey="volume"
-                                    name="volume"
-                                    barSize={series.length > 80 ? 4 : series.length > 40 ? 8 : 12}
-                                    isAnimationActive={series.length <= 120}
-                                >
-                                    {series.map((point) => (
-                                        <Cell key={point.date} fill={point.volumeColor} />
-                                    ))}
-                                </Bar>
+                                {showVolume ? (
+                                    <Bar
+                                        yAxisId="volume"
+                                        dataKey="volume"
+                                        name="volume"
+                                        barSize={series.length > 80 ? 4 : series.length > 40 ? 8 : 12}
+                                        isAnimationActive={series.length <= 120}
+                                    >
+                                        {series.map((point) => (
+                                            <Cell key={point.date} fill={point.volumeColor} />
+                                        ))}
+                                    </Bar>
+                                ) : null}
                                 <Line
                                     yAxisId="price"
                                     type="monotone"
@@ -193,7 +199,7 @@ export default function PriceVolumeChart({
                         {meta.pointCount} points · {meta.samplingStep}-row buckets · volume summed per bucket
                     </p>
                 ) : null}
-                {!loading && series.length > 0 ? (
+                {!loading && series.length > 0 && showPatterns ? (
                     <div className="mt-3 pt-2 border-top">
                         <PatternMatchesList
                             matches={windowPatternMatches}

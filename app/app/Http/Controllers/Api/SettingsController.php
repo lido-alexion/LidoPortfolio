@@ -33,6 +33,8 @@ class SettingsController extends Controller
             'telegram_chat_id' => ['nullable', 'string', 'max:255'],
             'alpha_vantage_api_key' => ['nullable', 'string', 'max:255'],
             'notifications_enabled' => ['nullable', 'in:true,false'],
+            'indiavix_alert_enabled' => ['nullable', 'in:true,false'],
+            'indiavix_alert_threshold' => ['nullable', 'numeric', 'min:1', 'max:100'],
             'notification_schedules' => ['nullable', 'array', 'max:24'],
             'notification_schedules.*' => ['date_format:H:i'],
             'backend_log_level' => ['nullable', 'in:debug,info,warning,error'],
