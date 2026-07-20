@@ -266,7 +266,7 @@ Portfolio-scoped OHLCV technical screens (cached `portfolio_stock_prices` only �
 
 ### Pending deploy (2026-06-21 — UI: footer, bulk CSV, transactions layout)
 
-**Includes:** Stabilized bottom footer (no scroll-position flicker; open on hover over a thin transparent reveal bar, and pin if you want it to stay open); transactions form stacked above table; **Bulk (CSV)** import on Transactions page.
+**Includes:** Stabilized bottom footer (fixed overlay — no document height changes on hover; `scrollbar-gutter: stable`; reveal bar + bottom-edge hover zone; pin adds static main padding without transition); transactions form stacked above table; **Bulk (CSV)** import on Transactions page.
 
 **Upload:** `deploy/prepare-upload.ps1` → replace **both** `build/` folders only (JS **`app-BS26khuH.js`**; no migration).
 

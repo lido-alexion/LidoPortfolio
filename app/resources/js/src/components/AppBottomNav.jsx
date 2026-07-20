@@ -2,15 +2,18 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { FOOTER_NAV_ITEMS } from '../config/mainNav';
 
-const HIDE_DELAY_MS = 250;
+const BOTTOM_ZONE_PX = 48;
+const HIDE_DELAY_MS = 350;
 
 export default function AppBottomNav() {
     const { pathname } = useLocation();
     const [pinned, setPinned] = useState(false);
-    const [hovering, setHovering] = useState(false);
+    const [hoverOpen, setHoverOpen] = useState(false);
     const hideTimer = useRef(null);
+    const hoveringNav = useRef(false);
+    const hoveringZone = useRef(false);
 
-    const visible = pinned || hovering;
+    const visible = pinned || hoverOpen;
 
     const clearHideTimer = useCallback(() => {
         if (hideTimer.current !== null) {
@@ -19,10 +22,13 @@ export default function AppBottomNav() {
         }
     }, []);
 
-    const show = useCallback(() => {
-        clearHideTimer();
-        setHovering(true);
-    }, [clearHideTimer]);
+    const recomputeOpen = useCallback(() => {
+        if (pinned) {
+            setHoverOpen(true);
+            return;
+        }
+        setHoverOpen(hoveringNav.current || hoveringZone.current);
+    }, [pinned]);
 
     const scheduleHide = useCallback(() => {
         if (pinned) {
@@ -30,21 +36,12 @@ export default function AppBottomNav() {
         }
         clearHideTimer();
         hideTimer.current = window.setTimeout(() => {
-            setHovering(false);
+            if (!hoveringNav.current && !hoveringZone.current) {
+                setHoverOpen(false);
+            }
             hideTimer.current = null;
         }, HIDE_DELAY_MS);
     }, [clearHideTimer, pinned]);
-
-    const togglePin = useCallback(() => {
-        setPinned((current) => {
-            const next = !current;
-            if (next) {
-                clearHideTimer();
-                setHovering(true);
-            }
-            return next;
-        });
-    }, [clearHideTimer]);
 
     useEffect(() => {
         document.documentElement.classList.toggle('lido-footer-visible', pinned);
@@ -54,25 +51,71 @@ export default function AppBottomNav() {
         };
     }, [pinned]);
 
+    useEffect(() => {
+        const onMouseMove = (event) => {
+            if (pinned) {
+                return;
+            }
+            const inZone = event.clientY >= window.innerHeight - BOTTOM_ZONE_PX;
+            if (inZone !== hoveringZone.current) {
+                hoveringZone.current = inZone;
+                if (inZone) {
+                    clearHideTimer();
+                    recomputeOpen();
+                } else {
+                    scheduleHide();
+                }
+            }
+        };
+
+        window.addEventListener('mousemove', onMouseMove, { passive: true });
+        return () => window.removeEventListener('mousemove', onMouseMove);
+    }, [clearHideTimer, pinned, recomputeOpen, scheduleHide]);
+
     useEffect(() => () => clearHideTimer(), [clearHideTimer]);
 
     useEffect(() => {
         setPinned(false);
-        setHovering(false);
+        setHoverOpen(false);
+        hoveringNav.current = false;
+        hoveringZone.current = false;
         clearHideTimer();
     }, [pathname, clearHideTimer]);
 
+    const onNavEnter = () => {
+        hoveringNav.current = true;
+        clearHideTimer();
+        recomputeOpen();
+    };
+
+    const onNavLeave = () => {
+        hoveringNav.current = false;
+        scheduleHide();
+        recomputeOpen();
+    };
+
+    const togglePin = () => {
+        setPinned((current) => {
+            const next = !current;
+            if (next) {
+                clearHideTimer();
+                setHoverOpen(true);
+            } else {
+                scheduleHide();
+            }
+            return next;
+        });
+    };
+
     return (
-        <div
-            className={`lido-bottom-nav-shell${visible ? ' lido-bottom-nav-shell--open' : ''}${pinned ? ' lido-bottom-nav-shell--pinned' : ''}`}
-            onMouseEnter={show}
-            onMouseLeave={scheduleHide}
-        >
+        <>
             <nav
                 id="lido-bottom-nav"
                 className={`lido-bottom-nav${visible ? ' lido-bottom-nav--visible' : ''}`}
                 aria-label="Footer navigation"
                 aria-hidden={!visible}
+                onMouseEnter={onNavEnter}
+                onMouseLeave={onNavLeave}
             >
                 {FOOTER_NAV_ITEMS.map((tab) => {
                     const isActive = tab.match(pathname);
@@ -98,6 +141,6 @@ export default function AppBottomNav() {
                 id="lido-bottom-nav-reveal"
                 onClick={togglePin}
             />
-        </div>
+        </>
     );
 }
