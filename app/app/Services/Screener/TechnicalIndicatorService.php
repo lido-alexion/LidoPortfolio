@@ -92,8 +92,8 @@ class TechnicalIndicatorService
             'change_pct' => $this->changePct((int) ($params['period'] ?? 1)),
             'high_n' => $this->highN((int) ($params['period'] ?? 20)),
             'low_n' => $this->lowN((int) ($params['period'] ?? 20)),
-            'high_52w' => $this->highN(ScreenerCatalog::TRADING_DAYS_52W),
-            'low_52w' => $this->lowN(ScreenerCatalog::TRADING_DAYS_52W),
+            'high_52w' => $this->high52w(),
+            'low_52w' => $this->low52w(),
             'range_pct' => $this->rangePct(),
             'sma' => $this->lastOf($this->sma($closes, (int) ($params['period'] ?? 20))),
             'ema' => $this->lastOf($this->ema($closes, (int) ($params['period'] ?? 20))),
@@ -237,6 +237,32 @@ class TechnicalIndicatorService
         $lows = array_map(fn ($b) => $b['low'] ?? $b['close'], $slice);
 
         return min($lows);
+    }
+
+    /**
+     * Rolling high over up to 252 sessions; uses all available bars when history is shorter.
+     */
+    private function high52w(): ?float
+    {
+        $bars = $this->validBars();
+        if ($bars === []) {
+            return null;
+        }
+
+        return $this->highN(min(count($bars), ScreenerCatalog::TRADING_DAYS_52W));
+    }
+
+    /**
+     * Rolling low over up to 252 sessions; uses all available bars when history is shorter.
+     */
+    private function low52w(): ?float
+    {
+        $bars = $this->validBars();
+        if ($bars === []) {
+            return null;
+        }
+
+        return $this->lowN(min(count($bars), ScreenerCatalog::TRADING_DAYS_52W));
     }
 
     private function rangePct(): ?float
@@ -502,7 +528,7 @@ class TechnicalIndicatorService
         $period = max(1, $period);
         $n = count($bars);
         $out = array_fill(0, $n, null);
-        if ($n < $period + 1) {
+        if ($n < $period) {
             return $out;
         }
         $trs = [];
@@ -516,10 +542,10 @@ class TechnicalIndicatorService
                 $trs[] = max($high - $low, abs($high - $prevClose), abs($low - $prevClose));
             }
         }
-        $sum = array_sum(array_slice($trs, 1, $period));
-        $out[$period] = $sum / $period;
-        $prev = $out[$period];
-        for ($i = $period + 1; $i < $n; $i++) {
+        $sum = array_sum(array_slice($trs, 0, $period));
+        $out[$period - 1] = $sum / $period;
+        $prev = $out[$period - 1];
+        for ($i = $period; $i < $n; $i++) {
             $prev = (($prev * ($period - 1)) + $trs[$i]) / $period;
             $out[$i] = $prev;
         }

@@ -5,7 +5,7 @@ const INDICATOR_GROUPS = [
     {
         title: 'Price & volume (bar fields)',
         ids: ['close', 'open', 'high', 'low', 'volume', 'change_pct', 'high_n', 'low_n', 'high_52w', 'low_52w', 'range_pct'],
-        blurb: 'Latest OHLCV values, session change %, rolling highs/lows, 52-week high/low (252 sessions), and intraday range on the latest bar.',
+        blurb: 'Latest OHLCV values, session change %, rolling highs/lows, 52-week high/low (up to 252 sessions; shorter history uses all available bars), and intraday range on the latest bar.',
     },
     {
         title: 'Moving averages & trend',
@@ -105,6 +105,7 @@ export default function ScreenerGuideTab() {
                     lookback implied by the periods in your conditions — not a fixed floor like 20.
                     Symbols with fewer cached OHLCV sessions than that lookback are skipped.
                     “EMA 50” needs 50 stored bars (sessions), not 50 calendar days.
+                    52-week high/low use up to 252 sessions when available, otherwise all available history (min 1 session).
                 </p>
 
                 <h3 className="h6 mt-4">Sharing &amp; import</h3>

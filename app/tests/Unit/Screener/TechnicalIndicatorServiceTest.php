@@ -48,7 +48,7 @@ class TechnicalIndicatorServiceTest extends TestCase
         $this->assertEqualsWithDelta(100.0, $last, 1e-6);
     }
 
-    public function test_high_52w_and_low_52w_use_252_sessions(): void
+    public function test_high_52w_and_low_52w_use_up_to_252_sessions(): void
     {
         $svc = new TechnicalIndicatorService;
         $bars = [];
@@ -69,9 +69,15 @@ class TechnicalIndicatorServiceTest extends TestCase
         $this->assertEqualsWithDelta(150.0, $high52, 1e-9);
         $this->assertEqualsWithDelta(60.0, $low52, 1e-9);
 
+        // Spike at index 0 is outside the last-252 window when 260 bars exist.
+        $bars[0]['high'] = 999.0;
+        $capped = $svc->withBars($bars)->evaluate(['indicator' => 'high_52w']);
+        $this->assertEqualsWithDelta(150.0, $capped, 1e-9);
+
+        // Shorter than 252: use all available history (not skipped).
         $short = array_slice($bars, -200);
-        $skipped = $svc->withBars($short)->evaluate(['indicator' => 'high_52w']);
-        $this->assertNull($skipped);
+        $shortHigh = $svc->withBars($short)->evaluate(['indicator' => 'high_52w']);
+        $this->assertEqualsWithDelta(150.0, $shortHigh, 1e-9);
 
         $eval = new ScreenerEvaluationService(new TechnicalIndicatorService);
         $definition = [
@@ -82,7 +88,20 @@ class TechnicalIndicatorServiceTest extends TestCase
                 'right' => ['indicator' => 'low_52w'],
             ],
         ];
-        $this->assertSame(252, $eval->maxLookback($definition));
+        $this->assertSame(1, $eval->maxLookback($definition));
+        $this->assertSame(1, ScreenerCatalog::minBars('high_52w', []));
+    }
+
+    public function test_atr_period_one_needs_one_session(): void
+    {
+        $svc = new TechnicalIndicatorService;
+        $bars = [
+            ['open' => 10.0, 'high' => 12.0, 'low' => 9.0, 'close' => 11.0, 'volume' => 100.0],
+        ];
+        $value = $svc->withBars($bars)->evaluate(['indicator' => 'atr', 'params' => ['period' => 1]]);
+        $this->assertEqualsWithDelta(3.0, $value, 1e-9);
+        $this->assertSame(1, ScreenerCatalog::minBars('atr', ['period' => 1]));
+        $this->assertSame(14, ScreenerCatalog::minBars('atr', ['period' => 14]));
     }
 
     public function test_sma_period_one_needs_one_session(): void

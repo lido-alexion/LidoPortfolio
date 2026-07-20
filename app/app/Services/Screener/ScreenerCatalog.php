@@ -54,8 +54,8 @@ class ScreenerCatalog
             self::ind('low_n', 'Lowest low (N)', [
                 self::param('period', 'Period', 20, self::PARAM_MIN_PERIOD, 400),
             ], null, minBarsFn: fn (array $p) => (int) ($p['period'] ?? 20)),
-            self::ind('high_52w', '52-week high', [], self::TRADING_DAYS_52W),
-            self::ind('low_52w', '52-week low', [], self::TRADING_DAYS_52W),
+            self::ind('high_52w', '52-week high', [], 1),
+            self::ind('low_52w', '52-week low', [], 1),
             self::ind('range_pct', 'Range % (H-L)/C', [], 1),
             self::ind('sma', 'SMA', [
                 self::param('period', 'Period', 20, self::PARAM_MIN_PERIOD, 400),
@@ -106,7 +106,7 @@ class ScreenerCatalog
             ], null, minBarsFn: fn (array $p) => max((int) ($p['fast'] ?? 12), (int) ($p['slow'] ?? 26)) + (int) ($p['signal'] ?? 9) - 1),
             self::ind('atr', 'ATR', [
                 self::param('period', 'Period', 14, self::PARAM_MIN_PERIOD, 200),
-            ], null, minBarsFn: fn (array $p) => (int) ($p['period'] ?? 14) + 1),
+            ], null, minBarsFn: fn (array $p) => (int) ($p['period'] ?? 14)),
             self::ind('bb_mid', 'Bollinger mid', [
                 self::param('period', 'Period', 20, self::PARAM_MIN_PERIOD, 400),
             ], null, minBarsFn: fn (array $p) => (int) ($p['period'] ?? 20)),
