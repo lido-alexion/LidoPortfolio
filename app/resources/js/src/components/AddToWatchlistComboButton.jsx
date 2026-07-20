@@ -36,7 +36,7 @@ export default function AddToWatchlistComboButton({
 
     return (
         <ComboButton
-            label={saving ? 'Adding…' : 'Add to watchlist'}
+            label={saving ? 'Adding…' : `Add to ${activeWatchlist.name}`}
             variant="primary"
             onPrimaryClick={() => {
                 if (!saving && !disabled) {

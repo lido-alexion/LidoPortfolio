@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Tooltip as BootstrapTooltip } from 'bootstrap';
 import {
     Bar,
@@ -17,11 +18,22 @@ import AnalyseStockButton from '../components/AnalyseStockButton';
 import NumberInput from '../components/NumberInput';
 import StockAutocomplete from '../components/StockAutocomplete';
 import { stockExchangeLabel } from '../utils/exchangeDisplay';
+import { pickPrimaryBenchmark } from '../utils/explorerLinks';
 import { formatTableMoney2 } from '../utils/tableFormat';
 import { formatTransactionDateDisplay, formatChartAxisDate } from '../utils/transactionDate';
 import { showToast } from '../toast';
 
 const ANALYSIS_PERIODS = [1, 3, 6, 12];
+const DEFAULT_BENCHMARK = 'NIFTY50';
+
+function resolveStockFromSearchRows(rows, symbol) {
+    const needle = String(symbol || '').toUpperCase();
+    const exact = (rows || []).filter((row) => String(row.symbol || '').toUpperCase() === needle);
+    if (exact.length === 0) {
+        return null;
+    }
+    return exact.find((row) => row.exchange === 'NSE') || exact[0];
+}
 
 const PERIOD_OPTIONS = [
     { value: '1', label: '1 month' },
@@ -290,10 +302,12 @@ function ManualRsInputCard({
 }
 
 export default function StockExplorerPage() {
+    const [searchParams, setSearchParams] = useSearchParams();
     const [selectedStock, setSelectedStock] = useState(null);
     const [symbol, setSymbol] = useState('');
-    const [benchmark, setBenchmark] = useState('NIFTY50');
+    const [benchmark, setBenchmark] = useState(DEFAULT_BENCHMARK);
     const [benchmarkOptions, setBenchmarkOptions] = useState([]);
+    const [primarySymbol, setPrimarySymbol] = useState(DEFAULT_BENCHMARK);
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState(null);
     const [lastRequestedSymbol, setLastRequestedSymbol] = useState('');
@@ -306,6 +320,30 @@ export default function StockExplorerPage() {
         indexPreviousClose: '',
     });
     const [manualRsResult, setManualRsResult] = useState(null);
+    const analyzedKeyRef = useRef('');
+    const inFlightKeyRef = useRef('');
+    const resolveRequestIdRef = useRef(0);
+
+    const urlSymbol = (searchParams.get('symbol') || '').trim().toUpperCase();
+    const urlBenchmark = (searchParams.get('benchmark') || '').trim().toUpperCase();
+
+    const syncExplorerParams = useCallback((nextSymbol, nextBenchmark, { replace = true } = {}) => {
+        const sym = String(nextSymbol || '').trim().toUpperCase();
+        const bench = String(nextBenchmark || '').trim().toUpperCase();
+        const next = new URLSearchParams();
+        if (sym) {
+            next.set('symbol', sym);
+        }
+        if (bench) {
+            next.set('benchmark', bench);
+        }
+        const current = searchParams.toString();
+        const upcoming = next.toString();
+        if (current === upcoming) {
+            return;
+        }
+        setSearchParams(next, { replace });
+    }, [searchParams, setSearchParams]);
 
     useEffect(() => {
         let active = true;
@@ -315,8 +353,15 @@ export default function StockExplorerPage() {
                     return;
                 }
                 const list = res.data?.data?.indexes ?? [];
+                const primary = res.data?.data?.primary_symbol
+                    || pickPrimaryBenchmark(list).symbol
+                    || DEFAULT_BENCHMARK;
+                setPrimarySymbol(primary);
                 if (list.length > 0) {
                     setBenchmarkOptions(list);
+                }
+                if (!urlBenchmark) {
+                    setBenchmark((current) => (current === DEFAULT_BENCHMARK || !current ? primary : current));
                 }
             })
             .catch(() => {
@@ -325,7 +370,7 @@ export default function StockExplorerPage() {
         return () => {
             active = false;
         };
-    }, []);
+    }, [urlBenchmark]);
 
     const benchmarkGroups = useMemo(() => {
         const source = benchmarkOptions.length > 0
@@ -339,17 +384,16 @@ export default function StockExplorerPage() {
         return groups;
     }, [benchmarkOptions]);
 
-    const runAnalysis = async (e) => {
-        e.preventDefault();
-        const targetSymbol = selectedStock?.symbol || symbol.trim();
-        if (!targetSymbol) {
+    const runAnalysisFor = useCallback(async (targetSymbol, exchange, benchmarkSymbol) => {
+        const sym = String(targetSymbol || '').trim().toUpperCase();
+        const bench = String(benchmarkSymbol || '').trim().toUpperCase() || primarySymbol || DEFAULT_BENCHMARK;
+        if (!sym) {
             showToast('Select or enter a stock symbol', 'danger');
             return;
         }
 
-        const months = ANALYSIS_PERIODS;
-        setLastRequestedSymbol(targetSymbol);
-
+        const key = `${sym}|${bench}`;
+        setLastRequestedSymbol(sym);
         setLoading(true);
         setResult(null);
         setManualFallbackVisible(false);
@@ -357,13 +401,15 @@ export default function StockExplorerPage() {
         setManualFormExpanded(true);
         try {
             const res = await api.post('/analytics/explore', {
-                symbol: targetSymbol,
-                exchange: selectedStock?.exchange || 'NSE',
-                benchmark_symbol: benchmark,
-                periods: months,
+                symbol: sym,
+                exchange: exchange || 'NSE',
+                benchmark_symbol: bench,
+                periods: ANALYSIS_PERIODS,
             }, { skipErrorToast: true });
+            analyzedKeyRef.current = key;
             setResult(res.data.data);
         } catch (err) {
+            analyzedKeyRef.current = '';
             const allErrors = err?.response?.data?.errors;
             const firstError = Array.isArray(allErrors)
                 ? allErrors[0]
@@ -383,7 +429,70 @@ export default function StockExplorerPage() {
         } finally {
             setLoading(false);
         }
+    }, [primarySymbol]);
+
+    const runAnalysis = async (e) => {
+        e.preventDefault();
+        const targetSymbol = selectedStock?.symbol || symbol.trim();
+        if (!targetSymbol) {
+            showToast('Select or enter a stock symbol', 'danger');
+            return;
+        }
+        syncExplorerParams(targetSymbol, benchmark);
+        await runAnalysisFor(targetSymbol, selectedStock?.exchange, benchmark);
     };
+
+    // Keep form fields + auto-run in sync with deep-link query params.
+    useEffect(() => {
+        const bench = urlBenchmark || primarySymbol || DEFAULT_BENCHMARK;
+        setBenchmark((current) => (current === bench ? current : bench));
+
+        if (!urlSymbol) {
+            return undefined;
+        }
+
+        setSymbol((current) => (current === urlSymbol ? current : urlSymbol));
+
+        const key = `${urlSymbol}|${bench}`;
+        if (analyzedKeyRef.current === key || inFlightKeyRef.current === key) {
+            return undefined;
+        }
+
+        let cancelled = false;
+        const requestId = ++resolveRequestIdRef.current;
+        inFlightKeyRef.current = key;
+
+        (async () => {
+            let stock = null;
+            if (urlSymbol.length >= 2) {
+                try {
+                    const res = await api.get('/stocks/search', {
+                        params: { q: urlSymbol, limit: 20 },
+                        skipErrorToast: true,
+                    });
+                    if (cancelled || requestId !== resolveRequestIdRef.current) {
+                        return;
+                    }
+                    stock = resolveStockFromSearchRows(res.data?.data || [], urlSymbol);
+                } catch {
+                    stock = null;
+                }
+            }
+            if (cancelled || requestId !== resolveRequestIdRef.current) {
+                return;
+            }
+            setSelectedStock(stock);
+            await runAnalysisFor(urlSymbol, stock?.exchange, bench);
+        })().finally(() => {
+            if (inFlightKeyRef.current === key) {
+                inFlightKeyRef.current = '';
+            }
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [urlSymbol, urlBenchmark, primarySymbol, runAnalysisFor]);
 
     const chartData = result?.chart || [];
     const normalizedGainData = result?.normalized_gain_chart || [];
@@ -544,6 +653,7 @@ export default function StockExplorerPage() {
                                 onSelect={(stock) => {
                                     setSelectedStock(stock);
                                     setSymbol(stock.symbol);
+                                    syncExplorerParams(stock.symbol, benchmark);
                                 }}
                             />
                             {selectedStock && (
@@ -558,7 +668,14 @@ export default function StockExplorerPage() {
                                 <select
                                     className="form-select"
                                     value={benchmark}
-                                    onChange={(e) => setBenchmark(e.target.value)}
+                                    onChange={(e) => {
+                                        const nextBenchmark = e.target.value;
+                                        setBenchmark(nextBenchmark);
+                                        const currentSymbol = selectedStock?.symbol || symbol.trim();
+                                        if (currentSymbol) {
+                                            syncExplorerParams(currentSymbol, nextBenchmark);
+                                        }
+                                    }}
                                 >
                                     {Object.entries(benchmarkGroups).map(([groupExchange, groupIndexes]) => (
                                         <optgroup key={groupExchange} label={groupExchange}>

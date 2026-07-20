@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import api from '../api';
 import AddToWatchlistComboButton from '../components/AddToWatchlistComboButton';
 import AnalyseStockButton from '../components/AnalyseStockButton';
+import CompareStrengthComboButton from '../components/CompareStrengthComboButton';
 import ManageWatchlistsModal from '../components/ManageWatchlistsModal';
 import PatternSketch from '../components/PatternSketch';
 import StockAutocomplete from '../components/StockAutocomplete';
@@ -127,6 +128,7 @@ function WatchlistStockPanel({
     activeEntry,
     membershipIds,
     watchlists,
+    benchmarkIndexes,
     note,
     onNoteChange,
     onAdd,
@@ -213,15 +215,25 @@ function WatchlistStockPanel({
                                 >
                                     {saving ? 'Removing…' : `Remove from ${activeWatchlist?.name || 'watchlist'}`}
                                 </button>
+                                <CompareStrengthComboButton
+                                    stockSymbol={stock.symbol}
+                                    indexes={benchmarkIndexes}
+                                />
                             </>
                         ) : (
-                            <AddToWatchlistComboButton
-                                watchlists={watchlists}
-                                activeWatchlistId={activeWatchlist?.id}
-                                membershipIds={membershipIds}
-                                onAdd={onAdd}
-                                saving={saving}
-                            />
+                            <>
+                                <AddToWatchlistComboButton
+                                    watchlists={watchlists}
+                                    activeWatchlistId={activeWatchlist?.id}
+                                    membershipIds={membershipIds}
+                                    onAdd={onAdd}
+                                    saving={saving}
+                                />
+                                <CompareStrengthComboButton
+                                    stockSymbol={stock.symbol}
+                                    indexes={benchmarkIndexes}
+                                />
+                            </>
                         )}
                         {!isOnActiveWatchlist && otherMembershipCount > 0 ? (
                             <span className="small text-muted">
@@ -276,6 +288,7 @@ export default function WatchlistPage() {
     const [quickAddSymbol, setQuickAddSymbol] = useState('');
     const [quickAddKey, setQuickAddKey] = useState(0);
     const [removingItemId, setRemovingItemId] = useState(null);
+    const [benchmarkIndexes, setBenchmarkIndexes] = useState([]);
 
     const activeWatchlist = useMemo(
         () => watchlists.find((row) => row.id === activeWatchlistId) ?? null,
@@ -307,6 +320,28 @@ export default function WatchlistPage() {
             setLoadingLists(false);
         }
     }, [profileId]);
+
+    useEffect(() => {
+        let active = true;
+        api.get('/indexes', { skipErrorToast: true })
+            .then((res) => {
+                if (!active) {
+                    return;
+                }
+                const list = res.data?.data?.indexes ?? [];
+                if (list.length > 0) {
+                    setBenchmarkIndexes(list);
+                }
+            })
+            .catch(() => {
+                setBenchmarkIndexes([
+                    { symbol: 'NIFTY50', name: 'Nifty 50', exchange: 'NSE', is_primary: true },
+                ]);
+            });
+        return () => {
+            active = false;
+        };
+    }, []);
 
     const loadItems = useCallback(async (watchlistId, search, sort) => {
         if (!watchlistId) {
@@ -679,6 +714,7 @@ export default function WatchlistPage() {
                 activeEntry={activeEntry}
                 membershipIds={membershipIds}
                 watchlists={watchlists}
+                benchmarkIndexes={benchmarkIndexes}
                 note={note}
                 onNoteChange={setNote}
                 onAdd={handleAdd}
