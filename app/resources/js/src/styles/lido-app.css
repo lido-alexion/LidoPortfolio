@@ -1398,6 +1398,15 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     width: 100%;
 }
 
+.lido-screener-run-selected {
+    background-color: color-mix(in srgb, var(--lido-brand) 18%, var(--lido-bg-elevated));
+    color: var(--lido-text);
+}
+
+[data-theme='light'] .lido-screener-run-selected {
+    background-color: color-mix(in srgb, var(--lido-brand) 12%, var(--lido-bg-elevated));
+}
+
 .lido-fee-component-row {
     --lido-fee-control-height: calc(1.5em + 0.5rem + 2px);
     background-color: var(--lido-bg-elevated);

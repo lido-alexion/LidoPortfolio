@@ -139,7 +139,7 @@ function App() {
                                 <Route path="/transactions/closed" element={<ClosedTransactionsPage />} />
                                 <Route path="/holdings" element={<HoldingsPage />} />
                                 <Route path="/holdings/:stockId/prices" element={<StockPricesPage />} />
-                                <Route path="/watchlist" element={<WatchlistPage />} />
+                                <Route path="/watchlist/:symbol?" element={<WatchlistPage />} />
                                 <Route path="/explorer" element={<StockExplorerPage />} />
                                 <Route path="/indices" element={<IndicesPage />} />
                                 <Route path="/screeners" element={<ScreenersPage />} />

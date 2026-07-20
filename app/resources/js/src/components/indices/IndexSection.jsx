@@ -117,7 +117,11 @@ export default function IndexSection({ index, panelId, expanded, onToggle }) {
             cell: ({ row }) => {
                 const item = row.original;
                 if (item.stock_id) {
-                    return <Link to="/explorer">{item.symbol}</Link>;
+                    return (
+                        <Link to={`/watchlist/${encodeURIComponent(item.symbol)}`}>
+                            {item.symbol}
+                        </Link>
+                    );
                 }
                 return item.symbol;
             },

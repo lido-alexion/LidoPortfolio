@@ -94,8 +94,17 @@ export default function ScreenerGuideTab() {
 
                 <h3 className="h6 mt-4">Lookback</h3>
                 <p className="small text-muted">
-                    Each indicator needs a minimum number of OHLCV <em>sessions</em> (rows in price history).
-                    The screener skips symbols with insufficient history. Periods like “EMA 50” mean 50 stored bars, not calendar days.
+                    Period-style parameters (SMA, EMA, RSI, and similar) allow a minimum of{' '}
+                    <strong>{meta?.param_min_period ?? 1}</strong>
+                    {' '}
+                    (for example SMA/EMA period 1 uses the latest close).
+                    Min sessions required for a stock equal the
+                    {' '}
+                    <em>maximum</em>
+                    {' '}
+                    lookback implied by the periods in your conditions — not a fixed floor like 20.
+                    Symbols with fewer cached OHLCV sessions than that lookback are skipped.
+                    “EMA 50” needs 50 stored bars (sessions), not 50 calendar days.
                 </p>
 
                 <h3 className="h6 mt-4">Sharing &amp; import</h3>
@@ -105,6 +114,10 @@ export default function ScreenerGuideTab() {
                 </p>
 
                 <h3 className="h6 mt-4">Supported indicators</h3>
+                <p className="small text-muted mb-3">
+                    “Min sessions (defaults)” is how many bars are needed when you leave parameters at their default values.
+                    Lower the period (down to {meta?.param_min_period ?? 1}) and the requirement shrinks with it.
+                </p>
                 {INDICATOR_GROUPS.map((group) => (
                     <div key={group.title} className="mb-4">
                         <h4 className="h6 mb-1">{group.title}</h4>
@@ -115,7 +128,7 @@ export default function ScreenerGuideTab() {
                                     <tr>
                                         <th>Indicator</th>
                                         <th>Parameters</th>
-                                        <th>Min sessions</th>
+                                        <th>Min sessions (defaults)</th>
                                     </tr>
                                 </thead>
                                 <tbody>

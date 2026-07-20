@@ -158,6 +158,7 @@ class ScreenerCatalog
             'max_conditions' => self::MAX_CONDITIONS,
             'chunk_size' => self::CHUNK_SIZE,
             'run_history_ui_limit' => self::RUN_HISTORY_UI_LIMIT,
+            'param_min_period' => self::PARAM_MIN_PERIOD,
         ];
     }
 

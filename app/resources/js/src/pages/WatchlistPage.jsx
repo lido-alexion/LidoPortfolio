@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import api from '../api';
 import AddToWatchlistComboButton from '../components/AddToWatchlistComboButton';
 import AnalyseStockButton from '../components/AnalyseStockButton';
@@ -22,6 +22,16 @@ import { stockExchangeLabel } from '../utils/exchangeDisplay';
 import { formatInr, formatInrWhole } from '../utils/tableFormat';
 import { formatTransactionDateDisplay } from '../utils/transactionDate';
 
+const SEARCH_PLACEHOLDER = 'Search for a stock here (min 2 characters) or pick one from your watchlist to view price history.';
+
+function resolveStockFromSearchRows(rows, symbol) {
+    const needle = String(symbol || '').toUpperCase();
+    const exact = (rows || []).filter((row) => String(row.symbol || '').toUpperCase() === needle);
+    if (exact.length === 0) {
+        return null;
+    }
+    return exact.find((row) => row.exchange === 'NSE') || exact[0];
+}
 const SORT_OPTIONS = [
     { value: 'symbol', label: 'Symbol A–Z' },
     { value: '-symbol', label: 'Symbol Z–A' },
@@ -128,13 +138,7 @@ function WatchlistStockPanel({
     priceMeta,
 }) {
     if (!stock) {
-        return (
-            <div className="card">
-                <div className="card-body text-muted small">
-                    Search for a stock above or pick one from your watchlist to view price history.
-                </div>
-            </div>
-        );
+        return null;
     }
 
     const isOnActiveWatchlist = Boolean(activeEntry);
@@ -248,6 +252,9 @@ function WatchlistStockPanel({
 export default function WatchlistPage() {
     const { activePortfolio } = usePortfolio();
     const profileId = activePortfolio?.id ?? null;
+    const navigate = useNavigate();
+    const { symbol: symbolParam } = useParams();
+    const symbolFromUrl = symbolParam ? decodeURIComponent(symbolParam).trim().toUpperCase() : '';
 
     const [watchlists, setWatchlists] = useState([]);
     const [activeWatchlistId, setActiveWatchlistId] = useState(null);
@@ -344,14 +351,16 @@ export default function WatchlistPage() {
         loadWatchlists();
     }, [loadWatchlists]);
 
-    usePortfolioChanged(() => {
+    const handlePortfolioChanged = useCallback(() => {
         clearActiveWatchlistId(profileId);
         setActiveWatchlistId(null);
         setSelectedStock(null);
         setSearchSymbol('');
+        navigate('/watchlist', { replace: true });
         loadWatchlists();
-    });
+    }, [profileId, navigate, loadWatchlists]);
 
+    usePortfolioChanged(handlePortfolioChanged);
     useEffect(() => {
         if (activeWatchlistId) {
             loadItems(activeWatchlistId, itemSearch, itemSort);
@@ -402,9 +411,75 @@ export default function WatchlistPage() {
     }, [activeEntry?.id, activeEntry?.note]);
 
     const selectStock = useCallback((stock) => {
+        if (!stock?.symbol) {
+            return;
+        }
+        const sym = String(stock.symbol).toUpperCase();
         setSelectedStock(stock);
-        setSearchSymbol(stock.symbol);
-    }, []);
+        setSearchSymbol(sym);
+        if (symbolFromUrl !== sym) {
+            navigate(`/watchlist/${encodeURIComponent(sym)}`);
+        }
+    }, [navigate, symbolFromUrl]);
+
+    useEffect(() => {
+        if (!symbolFromUrl) {
+            setSelectedStock((prev) => (prev ? null : prev));
+            setSearchSymbol((prev) => (prev ? '' : prev));
+            return undefined;
+        }
+
+        if (String(selectedStock?.symbol || '').toUpperCase() === symbolFromUrl) {
+            return undefined;
+        }
+
+        const fromItems = items.find(
+            (item) => String(item.stock?.symbol || '').toUpperCase() === symbolFromUrl,
+        )?.stock;
+        if (fromItems) {
+            setSelectedStock(fromItems);
+            setSearchSymbol(fromItems.symbol);
+            return undefined;
+        }
+
+        let cancelled = false;
+        (async () => {
+            if (symbolFromUrl.length < 2) {
+                if (!cancelled) {
+                    showToast(`Stock ${symbolFromUrl} not found.`, 'danger');
+                    navigate('/watchlist', { replace: true });
+                }
+                return;
+            }
+
+            try {
+                const res = await api.get('/stocks/search', {
+                    params: { q: symbolFromUrl, limit: 20 },
+                    skipErrorToast: true,
+                });
+                if (cancelled) {
+                    return;
+                }
+                const stock = resolveStockFromSearchRows(res.data?.data || [], symbolFromUrl);
+                if (stock) {
+                    setSelectedStock(stock);
+                    setSearchSymbol(stock.symbol);
+                } else {
+                    showToast(`Stock ${symbolFromUrl} not found.`, 'danger');
+                    navigate('/watchlist', { replace: true });
+                }
+            } catch {
+                if (!cancelled) {
+                    showToast(`Could not load stock ${symbolFromUrl}.`, 'danger');
+                    navigate('/watchlist', { replace: true });
+                }
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [symbolFromUrl, items, selectedStock?.symbol, navigate]);
 
     const handleWatchlistChange = useCallback((watchlistId) => {
         setActiveWatchlistId(watchlistId);
@@ -595,7 +670,7 @@ export default function WatchlistPage() {
                 onSelect={handleSearchSelect}
                 exchange={null}
                 hideLabel={false}
-                placeholder="Search stocks (min 2 chars)"
+                placeholder={SEARCH_PLACEHOLDER}
             />
 
             <WatchlistStockPanel

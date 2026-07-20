@@ -239,7 +239,11 @@ function OperandEditor({ value, onChange, meta, side }) {
                         ))}
                     </div>
                     {selected?.min_bars != null && (
-                        <div className="form-text">Needs ≥ {selected.min_bars} sessions</div>
+                        <div className="form-text">
+                            At default params: ≥ {selected.min_bars} sessions
+                            {' '}
+                            (period min {meta?.param_min_period ?? 1}; requirement follows the periods you set)
+                        </div>
                     )}
                 </>
             )}
@@ -873,8 +877,18 @@ export default function ScreenerEditorPage() {
                                         {(runResult.hits?.data || []).map((hit) => (
                                             <tr key={hit.id}>
                                                 <td>
-                                                    {hit.symbol}
-                                                    {hit.exchange ? ` · ${hit.exchange}` : ''}
+                                                    {hit.symbol ? (
+                                                        <Link to={`/watchlist/${encodeURIComponent(hit.symbol)}`}>
+                                                            {hit.symbol}
+                                                        </Link>
+                                                    ) : (
+                                                        '—'
+                                                    )}
+                                                    {hit.exchange ? (
+                                                        <span className="text-muted">
+                                                            {` · ${hit.exchange}`}
+                                                        </span>
+                                                    ) : null}
                                                 </td>
                                                 <td className="small">{hit.name}</td>
                                                 <td className="small">
@@ -889,12 +903,6 @@ export default function ScreenerEditorPage() {
                                                     ))}
                                                 </td>
                                                 <td className="text-nowrap">
-                                                    <Link
-                                                        to={`/explorer?symbol=${encodeURIComponent(hit.symbol)}`}
-                                                        className="btn btn-sm btn-link"
-                                                    >
-                                                        Explorer
-                                                    </Link>
                                                     <Link
                                                         to={`/holdings/${hit.stock_id}/prices`}
                                                         className="btn btn-sm btn-link"
@@ -946,7 +954,7 @@ export default function ScreenerEditorPage() {
                                     return (
                                         <li
                                             key={r.id}
-                                            className={`d-flex justify-content-between gap-2 py-1 border-bottom${isSelected ? ' bg-light rounded px-1' : ''}`}
+                                            className={`d-flex justify-content-between gap-2 py-1 border-bottom${isSelected ? ' lido-screener-run-selected rounded px-1' : ''}`}
                                         >
                                             <button
                                                 type="button"
