@@ -127,6 +127,48 @@ class TechnicalIndicatorServiceTest extends TestCase
         $this->assertTrue($result['matched']);
     }
 
+    public function test_weight_factor_scales_right_hand_side(): void
+    {
+        $eval = new ScreenerEvaluationService(new TechnicalIndicatorService);
+        $bars = [
+            ['open' => 10.0, 'high' => 11.0, 'low' => 9.0, 'close' => 10.0, 'volume' => 100.0],
+        ];
+
+        $withoutWeight = $eval->evaluateStock([
+            'root' => [
+                'type' => 'condition',
+                'left' => ['indicator' => 'close'],
+                'operator' => 'gt',
+                'right' => ['type' => 'constant', 'value' => 10],
+            ],
+        ], $bars);
+        $this->assertFalse($withoutWeight['matched']);
+
+        $withHalf = $eval->evaluateStock([
+            'root' => [
+                'type' => 'condition',
+                'left' => ['indicator' => 'close'],
+                'operator' => 'gt',
+                'weight_factor' => 0.5,
+                'right' => ['type' => 'constant', 'value' => 10],
+            ],
+        ], $bars);
+        $this->assertTrue($withHalf['matched']);
+        $this->assertSame(0.5, $withHalf['metrics'][0]['weight_factor']);
+        $this->assertEqualsWithDelta(5.0, $withHalf['metrics'][0]['right_scaled'], 1e-9);
+
+        $missingDefaultsToOne = $eval->evaluateStock([
+            'root' => [
+                'type' => 'condition',
+                'left' => ['indicator' => 'close'],
+                'operator' => 'gt',
+                'right' => ['type' => 'constant', 'value' => 9],
+            ],
+        ], $bars);
+        $this->assertTrue($missingDefaultsToOne['matched']);
+        $this->assertSame(1.0, $missingDefaultsToOne['metrics'][0]['weight_factor']);
+    }
+
     public function test_condition_tree_and_or_and_insufficient_bars(): void
     {
         $eval = new ScreenerEvaluationService(new TechnicalIndicatorService);

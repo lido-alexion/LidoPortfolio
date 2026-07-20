@@ -17,6 +17,17 @@ class ScreenerCatalog
         ['id' => 'eq', 'label' => '='],
     ];
 
+    public static function operatorLabel(string $operatorId): string
+    {
+        foreach (self::OPERATORS as $op) {
+            if ($op['id'] === $operatorId) {
+                return $op['label'];
+            }
+        }
+
+        return $operatorId !== '' ? $operatorId : '—';
+    }
+
     public const MAX_NESTING_DEPTH = 4;
 
     public const MAX_CONDITIONS = 40;

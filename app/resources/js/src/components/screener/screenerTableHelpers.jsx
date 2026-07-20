@@ -53,6 +53,20 @@ export function scopeLabel(scope) {
     return 'Holdings';
 }
 
+const OPERATOR_LABELS = {
+    gt: '>',
+    gte: '≥',
+    lt: '<',
+    lte: '≤',
+    eq: '=',
+};
+
+/** Map stored operator id (gt/gte/…) to display symbol (> / ≥ / …). */
+export function operatorLabel(operatorId) {
+    const id = String(operatorId || '');
+    return OPERATOR_LABELS[id] || id || '—';
+}
+
 export function scopeDisplay(row) {
     const base = scopeLabel(row.scope);
     if (row.scope === 'watchlist' && row.watchlist?.name) {

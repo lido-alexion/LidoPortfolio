@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'reac
 import api from '../api';
 import usePortfolioChanged from '../hooks/usePortfolioChanged';
 import { showToast } from '../toast';
-import { formatRunListLabel, formatRunResultsHeading, lastRunSummaryText, runStatsWarning } from '../components/screener/screenerTableHelpers';
+import { formatRunListLabel, formatRunResultsHeading, lastRunSummaryText, operatorLabel, runStatsWarning } from '../components/screener/screenerTableHelpers';
 import ScreenerRunsCompareTable from '../components/screener/ScreenerRunsCompareTable';
 import { buildExplorerComparePath } from '../utils/explorerLinks';
 import { resolveExternalStockUrl } from '../utils/externalStockLinks';
@@ -36,6 +36,7 @@ function defaultDefinition(meta) {
                     type: 'condition',
                     left: { indicator: 'ema', params: { period: fast } },
                     operator: 'gt',
+                    weight_factor: 1,
                     right: { indicator: 'ema', params: { period: 200 } },
                 },
             ],
@@ -68,6 +69,7 @@ function defaultCondition(meta) {
         type: 'condition',
         left: { indicator: 'ema', params: { period } },
         operator: 'gt',
+        weight_factor: 1,
         right: { type: 'constant', value: 0 },
     };
 }
@@ -341,7 +343,7 @@ function ConditionNode({ node, onChange, onRemove, meta, depth }) {
     return (
         <div className="lido-screener-leaf mb-2" data-depth={depth}>
             <div className="row g-2 align-items-start">
-                <div className="col-md-5">
+                <div className="col-12 col-lg">
                     <OperandEditor
                         side="left"
                         meta={meta}
@@ -349,18 +351,52 @@ function ConditionNode({ node, onChange, onRemove, meta, depth }) {
                         onChange={(left) => onChange({ ...node, left })}
                     />
                 </div>
-                <div className="col-md-2">
+                <div className="col-auto">
                     <select
-                        className="form-select form-select-sm"
+                        className="form-select form-select-sm lido-screener-operator-select"
                         value={node.operator || 'gt'}
                         onChange={(e) => onChange({ ...node, operator: e.target.value })}
+                        aria-label="Comparator"
                     >
                         {(meta?.operators || []).map((op) => (
                             <option key={op.id} value={op.id}>{op.label}</option>
                         ))}
                     </select>
                 </div>
-                <div className="col-md-5">
+                <div className="col-auto">
+                    <div className="d-flex align-items-center gap-1">
+                        <input
+                            type="number"
+                            step="any"
+                            inputMode="decimal"
+                            className="form-control form-control-sm lido-screener-weight-input"
+                            value={node.weight_factor ?? 1}
+                            onChange={(e) => {
+                                const raw = e.target.value;
+                                if (raw === '' || raw === '-' || raw === '.' || raw === '-.') {
+                                    onChange({ ...node, weight_factor: raw });
+                                    return;
+                                }
+                                const parsed = Number(raw);
+                                onChange({
+                                    ...node,
+                                    weight_factor: Number.isFinite(parsed) ? parsed : raw,
+                                });
+                            }}
+                            onBlur={() => {
+                                const parsed = Number(node.weight_factor);
+                                onChange({
+                                    ...node,
+                                    weight_factor: Number.isFinite(parsed) ? parsed : 1,
+                                });
+                            }}
+                            aria-label="RHS weight factor"
+                            title="Multiplies the right-hand side (default 1)"
+                        />
+                        <span className="text-muted user-select-none" aria-hidden="true">×</span>
+                    </div>
+                </div>
+                <div className="col-12 col-lg">
                     <OperandEditor
                         side="right"
                         meta={meta}
@@ -952,15 +988,20 @@ export default function ScreenerEditorPage() {
                                                 </td>
                                                 <td className="small">{hit.name}</td>
                                                 <td className="small">
-                                                    {(hit.metrics || []).slice(0, 4).map((m, i) => (
-                                                        <div key={i}>
-                                                            {m.left}={m.left_value != null ? Number(m.left_value).toFixed(2) : '?'}
-                                                            {' '}
-                                                            {m.operator}
-                                                            {' '}
-                                                            {m.right}
-                                                        </div>
-                                                    ))}
+                                                    {(hit.metrics || []).slice(0, 4).map((m, i) => {
+                                                        const weight = Number(m.weight_factor);
+                                                        const showWeight = Number.isFinite(weight) && Math.abs(weight - 1) > 1e-12;
+                                                        return (
+                                                            <div key={i}>
+                                                                {m.left}={m.left_value != null ? Number(m.left_value).toFixed(2) : '?'}
+                                                                {' '}
+                                                                {operatorLabel(m.operator)}
+                                                                {' '}
+                                                                {showWeight ? `${weight}×` : ''}
+                                                                {m.right}
+                                                            </div>
+                                                        );
+                                                    })}
                                                 </td>
                                                 <td className="text-nowrap">
                                                     {hit.symbol ? (

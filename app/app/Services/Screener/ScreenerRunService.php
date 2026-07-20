@@ -287,11 +287,17 @@ class ScreenerRunService
                 $lv = isset($m['left_value']) && is_numeric($m['left_value'])
                     ? round((float) $m['left_value'], 2)
                     : '?';
-                $op = $m['operator'] ?? '';
-                $rv = $m['right'] ?? '';
+                $op = ScreenerCatalog::operatorLabel((string) ($m['operator'] ?? ''));
+                $weight = isset($m['weight_factor']) && is_numeric($m['weight_factor'])
+                    ? (float) $m['weight_factor']
+                    : 1.0;
+                $rightLabel = (string) ($m['right'] ?? '');
+                if (abs($weight - 1.0) > 1e-12) {
+                    $rightLabel = rtrim(rtrim(sprintf('%.6F', $weight), '0'), '.').'×'.$rightLabel;
+                }
                 if (isset($m['right_value']) && is_numeric($m['right_value']) && ($m['right'] ?? '') !== (string) ($m['right_value'] ?? '')) {
                     // show both labels when comparing indicators
-                    $metricBits[] = ($m['left'] ?? '').'='.$lv.' '.$op.' '.($m['right'] ?? '');
+                    $metricBits[] = ($m['left'] ?? '').'='.$lv.' '.$op.' '.$rightLabel;
                 } else {
                     $metricBits[] = ($m['left'] ?? '').'='.$lv;
                 }

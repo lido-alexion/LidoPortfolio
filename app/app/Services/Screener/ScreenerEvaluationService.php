@@ -125,32 +125,46 @@ class ScreenerEvaluationService
         $leftExpr = is_array($node['left'] ?? null) ? $node['left'] : [];
         $rightExpr = is_array($node['right'] ?? null) ? $node['right'] : [];
         $operator = (string) ($node['operator'] ?? 'gt');
+        $weightFactor = $this->normalizeWeightFactor($node['weight_factor'] ?? 1);
 
         $left = $engine->evaluate($leftExpr);
         $right = $engine->evaluate($rightExpr);
+        $scaledRight = $right === null ? null : $right * $weightFactor;
 
         $metrics[] = [
             'left' => $this->describeExpr($leftExpr),
             'left_value' => $left,
             'operator' => $operator,
+            'weight_factor' => $weightFactor,
             'right' => $this->describeExpr($rightExpr),
             'right_value' => $right,
+            'right_scaled' => $scaledRight,
         ];
 
-        if ($left === null || $right === null) {
+        if ($left === null || $scaledRight === null) {
             // Indicator could not be produced → treat as skip at stock level only when
             // entire tree can't run; for a leaf, false (division-by-zero style).
             return false;
         }
 
         return match ($operator) {
-            'gt' => $left > $right,
-            'gte' => $left >= $right,
-            'lt' => $left < $right,
-            'lte' => $left <= $right,
-            'eq' => TechnicalIndicatorService::floatsEqual($left, $right),
+            'gt' => $left > $scaledRight,
+            'gte' => $left >= $scaledRight,
+            'lt' => $left < $scaledRight,
+            'lte' => $left <= $scaledRight,
+            'eq' => TechnicalIndicatorService::floatsEqual($left, $scaledRight),
             default => false,
         };
+    }
+
+    private function normalizeWeightFactor(mixed $weight): float
+    {
+        if ($weight === null || $weight === '' || ! is_numeric($weight)) {
+            return 1.0;
+        }
+        $w = (float) $weight;
+
+        return is_finite($w) ? $w : 1.0;
     }
 
     /**

@@ -1465,6 +1465,15 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     background-color: color-mix(in srgb, #adb5bd 35%, #fff);
 }
 
+.lido-screener-operator-select {
+    min-width: 4.5rem;
+    width: auto;
+}
+
+.lido-screener-weight-input {
+    width: 4.75rem;
+}
+
 .lido-fee-component-row {
     --lido-fee-control-height: calc(1.5em + 0.5rem + 2px);
     background-color: var(--lido-bg-elevated);

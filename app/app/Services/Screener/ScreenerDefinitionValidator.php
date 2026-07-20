@@ -65,12 +65,27 @@ class ScreenerDefinitionValidator
             if (! in_array($op, ['gt', 'gte', 'lt', 'lte', 'eq'], true)) {
                 throw new InvalidArgumentException('Invalid condition operator.');
             }
+            $this->validateWeightFactor($node['weight_factor'] ?? 1);
             $this->validateOperand($node['right'] ?? null, 'right');
 
             return;
         }
 
         throw new InvalidArgumentException('Node type must be group or condition.');
+    }
+
+    private function validateWeightFactor(mixed $weight): void
+    {
+        if ($weight === null || $weight === '') {
+            return;
+        }
+        if (! is_numeric($weight)) {
+            throw new InvalidArgumentException('Condition weight_factor must be a number.');
+        }
+        $w = (float) $weight;
+        if (! is_finite($w)) {
+            throw new InvalidArgumentException('Condition weight_factor must be a finite number.');
+        }
     }
 
     private function validateOperand(mixed $operand, string $side): void

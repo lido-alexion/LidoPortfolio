@@ -704,4 +704,53 @@ class ScreenerTest extends TestCase
         $this->assertSame([false, false, true], $bySymbol['CCC']['presence']);
         $this->assertSame('AAA', $matrix['rows'][0]['symbol']);
     }
+
+    public function test_weight_factor_persists_and_rejects_invalid(): void
+    {
+        $user = User::query()->create([
+            'name' => 'Weight Factor User',
+            'email' => 'scr-wf-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+        $this->defaultPortfolioFor($user);
+        $this->actingAs($user);
+
+        $definition = [
+            'root' => [
+                'type' => 'group',
+                'op' => 'AND',
+                'children' => [
+                    [
+                        'type' => 'condition',
+                        'left' => ['indicator' => 'close'],
+                        'operator' => 'gt',
+                        'weight_factor' => 0.5,
+                        'right' => ['type' => 'constant', 'value' => 100],
+                    ],
+                ],
+            ],
+        ];
+
+        $create = $this->postJson('/api/screeners', [
+            'name' => 'Weighted screen',
+            'scope' => 'holdings',
+            'definition_json' => $definition,
+        ])->assertCreated();
+
+        $this->assertSame(0.5, $create->json('data.definition_json.root.children.0.weight_factor'));
+
+        $this->postJson('/api/screeners', [
+            'name' => 'Bad weight',
+            'scope' => 'holdings',
+            'definition_json' => [
+                'root' => [
+                    'type' => 'condition',
+                    'left' => ['indicator' => 'close'],
+                    'operator' => 'gt',
+                    'weight_factor' => 'abc',
+                    'right' => ['type' => 'constant', 'value' => 1],
+                ],
+            ],
+        ])->assertStatus(422);
+    }
 }

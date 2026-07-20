@@ -448,6 +448,7 @@ class ScreenerService
                         'type' => 'condition',
                         'left' => ['indicator' => 'ema', 'params' => ['period' => 50]],
                         'operator' => 'gt',
+                        'weight_factor' => 1,
                         'right' => ['indicator' => 'ema', 'params' => ['period' => 200]],
                     ],
                 ],

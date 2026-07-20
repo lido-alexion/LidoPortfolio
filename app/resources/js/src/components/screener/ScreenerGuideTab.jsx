@@ -99,6 +99,15 @@ export default function ScreenerGuideTab() {
                 <h3 className="h6">Operators</h3>
                 <p className="small text-muted">
                     {(meta?.operators || []).map((op) => op.label).join(' · ')}
+                    . Next to the operator you can set a <strong>weight factor</strong> (default 1) so the comparison is
+                    {' '}
+                    <em>left</em>
+                    {' '}
+                    vs
+                    {' '}
+                    <em>weight × right</em>
+                    {' '}
+                    (for example SMA(5) &gt; 0.5 × SMA(20)).
                 </p>
 
                 <h3 className="h6 mt-4">Lookback</h3>
