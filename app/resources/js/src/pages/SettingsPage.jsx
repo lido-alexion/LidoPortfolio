@@ -5,9 +5,11 @@ import { useAuth } from '../context/AuthContext';
 import { usePortfolio } from '../context/PortfolioContext';
 import usePortfolioChanged from '../hooks/usePortfolioChanged';
 import FeeComponentsSettings from '../components/FeeComponentsSettings';
+import ExternalStockLinksSettings from '../components/ExternalStockLinksSettings';
 import NumberInput from '../components/NumberInput';
 import TimeInput, { isValidCronTime } from '../components/TimeInput';
 import { normalizeFeeComponents } from '../utils/feeCalculator';
+import { normalizeExternalStockLinks } from '../utils/externalStockLinks';
 import { showToast } from '../toast';
 
 function roundToTwoDecimals(value) {
@@ -73,6 +75,7 @@ export default function SettingsPage() {
     const [cronTimeTouched, setCronTimeTouched] = useState(false);
     const [scheduleTouched, setScheduleTouched] = useState({});
     const [feeSectionOpen, setFeeSectionOpen] = useState(false);
+    const [externalLinksSectionOpen, setExternalLinksSectionOpen] = useState(false);
     const [telegramTesting, setTelegramTesting] = useState(false);
     const [opsCheckRunning, setOpsCheckRunning] = useState(false);
     const [activeScope, setActiveScope] = useState(() => scopeFromPath(location.pathname, isAdmin));
@@ -120,6 +123,7 @@ export default function SettingsPage() {
         setSettings({
             ...data,
             fee_components: normalizeFeeComponents(data.fee_components),
+            external_stock_links: normalizeExternalStockLinks(data.external_stock_links),
         });
     };
 
@@ -168,6 +172,7 @@ export default function SettingsPage() {
             sync_log_retention_days: settings.sync_log_retention_days,
             admin_ops_telegram_ping_when_clear: settings.admin_ops_telegram_ping_when_clear ?? 'false',
             fee_components: normalizeFeeComponents(settings.fee_components),
+            external_stock_links: normalizeExternalStockLinks(settings.external_stock_links),
         });
         setStatus('Global settings saved');
         showToast('Global settings saved');
@@ -315,6 +320,38 @@ export default function SettingsPage() {
                                 <FeeComponentsSettings
                                     components={settings.fee_components}
                                     onChange={(fee_components) => setSettings({ ...settings, fee_components })}
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="card">
+                        <div className="card-header p-0">
+                            <button
+                                type="button"
+                                id="settings-external-links-section-toggle"
+                                className="lido-collapsible-card-toggle"
+                                onClick={() => setExternalLinksSectionOpen((open) => !open)}
+                                aria-expanded={externalLinksSectionOpen}
+                                aria-controls="settings-external-links-section"
+                            >
+                                <span>External stock links</span>
+                                <span className="lido-collapsible-card-chevron" aria-hidden="true">
+                                    {externalLinksSectionOpen ? '▾' : '▸'}
+                                </span>
+                            </button>
+                        </div>
+                        <div
+                            id="settings-external-links-section"
+                            className={`collapse${externalLinksSectionOpen ? ' show' : ''}`}
+                        >
+                            <div className="card-body">
+                                <ExternalStockLinksSettings
+                                    links={settings.external_stock_links}
+                                    onChange={(external_stock_links) => setSettings({
+                                        ...settings,
+                                        external_stock_links,
+                                    })}
                                 />
                             </div>
                         </div>

@@ -415,4 +415,293 @@ class ScreenerTest extends TestCase
 
         $this->assertDatabaseMissing('portfolio_screener_runs', ['screener_id' => $id]);
     }
+
+    public function test_index_scope_runs_against_constituents(): void
+    {
+        $user = User::query()->create([
+            'name' => 'Index Screener User',
+            'email' => 'scr-idx-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+        $this->defaultPortfolioFor($user);
+
+        $inIndex = Stock::query()->create([
+            'symbol' => 'IDXIN'.strtoupper(Str::random(2)),
+            'exchange' => 'NSE',
+            'name' => 'In Index',
+            'is_active' => true,
+            'is_benchmark' => false,
+        ]);
+        $outIndex = Stock::query()->create([
+            'symbol' => 'IDXOUT'.strtoupper(Str::random(2)),
+            'exchange' => 'NSE',
+            'name' => 'Out Index',
+            'is_active' => true,
+            'is_benchmark' => false,
+        ]);
+
+        \App\Models\Setting::setValue('index_constituents_nifty50_json', json_encode([$inIndex->symbol]));
+        \App\Models\Setting::setValue('index_constituents_nifty50_cached_at', now()->toIso8601String());
+
+        $base = now()->subDays(30)->startOfDay();
+        foreach ([$inIndex, $outIndex] as $stock) {
+            for ($i = 0; $i < 25; $i++) {
+                $c = 100 + $i;
+                StockPrice::query()->create([
+                    'stock_id' => $stock->id,
+                    'price_date' => $base->copy()->addDays($i)->toDateString(),
+                    'open_price' => $c,
+                    'high_price' => $c + 1,
+                    'low_price' => $c - 1,
+                    'close_price' => $c,
+                    'adjusted_close_price' => $c,
+                    'volume' => 10000,
+                    'provider_source' => 'test',
+                    'data_source' => 'test',
+                    'created_at' => now(),
+                ]);
+            }
+        }
+
+        $this->actingAs($user);
+
+        $this->getJson('/api/screeners/meta')
+            ->assertOk()
+            ->assertJsonFragment(['id' => 'index', 'label' => 'Index constituents'])
+            ->assertJsonFragment(['symbol' => 'NIFTY50']);
+
+        $definition = [
+            'root' => [
+                'type' => 'group',
+                'op' => 'AND',
+                'children' => [
+                    [
+                        'type' => 'condition',
+                        'left' => ['indicator' => 'close', 'params' => []],
+                        'operator' => 'gt',
+                        'right' => ['type' => 'constant', 'value' => 0],
+                    ],
+                ],
+            ],
+        ];
+
+        $this->postJson('/api/screeners', [
+            'name' => 'Nifty50 screen',
+            'scope' => 'index',
+            'definition_json' => $definition,
+        ])->assertStatus(422);
+
+        $this->postJson('/api/screeners', [
+            'name' => 'Nifty50 screen',
+            'scope' => 'index',
+            'index_symbol' => 'SENSEX',
+            'definition_json' => $definition,
+        ])->assertStatus(422);
+
+        $create = $this->postJson('/api/screeners', [
+            'name' => 'Nifty50 screen',
+            'scope' => 'index',
+            'index_symbol' => 'nifty50',
+            'definition_json' => $definition,
+            'telegram_enabled' => false,
+        ]);
+        $create->assertCreated();
+        $create->assertJsonPath('data.scope', 'index');
+        $create->assertJsonPath('data.index_symbol', 'NIFTY50');
+        $create->assertJsonPath('data.index.symbol', 'NIFTY50');
+        $id = $create->json('data.id');
+
+        $run = $this->postJson("/api/screeners/{$id}/run")->assertOk();
+        $run->assertJsonPath('data.stats.scanned', 1);
+        $run->assertJsonPath('data.stats.matched', 1);
+        $runId = $run->json('data.id');
+
+        $this->getJson("/api/screener-runs/{$runId}")
+            ->assertOk()
+            ->assertJsonPath('data.hits.data.0.symbol', $inIndex->symbol);
+    }
+
+    public function test_index_scope_empty_constituents_warns(): void
+    {
+        $user = User::query()->create([
+            'name' => 'Empty Index Screener',
+            'email' => 'scr-empty-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+        $this->defaultPortfolioFor($user);
+        $this->actingAs($user);
+
+        $definition = [
+            'root' => [
+                'type' => 'condition',
+                'left' => ['indicator' => 'close', 'params' => []],
+                'operator' => 'gt',
+                'right' => ['type' => 'constant', 'value' => 0],
+            ],
+        ];
+
+        $create = $this->postJson('/api/screeners', [
+            'name' => 'Empty Nifty Bank',
+            'scope' => 'index',
+            'index_symbol' => 'NIFTYBANK',
+            'definition_json' => $definition,
+            'telegram_enabled' => false,
+        ])->assertCreated();
+        $id = $create->json('data.id');
+
+        $run = $this->postJson("/api/screeners/{$id}/run")->assertOk();
+        $run->assertJsonPath('data.stats.scanned', 0);
+        $warnings = $run->json('data.stats.warnings') ?? [];
+        $this->assertNotEmpty($warnings);
+        $this->assertStringContainsString('constituents', strtolower(implode(' ', $warnings)));
+    }
+
+    public function test_compare_runs_matrix_stacks_hits(): void
+    {
+        $user = User::query()->create([
+            'name' => 'Compare Runs User',
+            'email' => 'scr-cmp-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+        $profile = $this->defaultPortfolioFor($user);
+        $this->actingAs($user);
+
+        $create = $this->postJson('/api/screeners', [
+            'name' => 'Compare screen',
+            'scope' => 'holdings',
+            'definition_json' => [
+                'root' => [
+                    'type' => 'group',
+                    'op' => 'AND',
+                    'children' => [
+                        [
+                            'type' => 'condition',
+                            'left' => ['indicator' => 'close', 'params' => []],
+                            'operator' => 'gt',
+                            'right' => ['type' => 'constant', 'value' => 0],
+                        ],
+                    ],
+                ],
+            ],
+        ])->assertCreated();
+        $screenerId = (int) $create->json('data.id');
+
+        $stockA = Stock::query()->create([
+            'symbol' => 'AAA',
+            'exchange' => 'NSE',
+            'name' => 'Alpha',
+            'is_active' => true,
+            'is_benchmark' => false,
+        ]);
+        $stockB = Stock::query()->create([
+            'symbol' => 'BBB',
+            'exchange' => 'NSE',
+            'name' => 'Beta',
+            'is_active' => true,
+            'is_benchmark' => false,
+        ]);
+        $stockC = Stock::query()->create([
+            'symbol' => 'CCC',
+            'exchange' => 'NSE',
+            'name' => 'Gamma',
+            'is_active' => true,
+            'is_benchmark' => false,
+        ]);
+
+        $empty = $this->getJson("/api/screeners/{$screenerId}/runs/compare")
+            ->assertOk()
+            ->json('data');
+        $this->assertSame(0, $empty['run_count']);
+        $this->assertSame([], $empty['columns']);
+        $this->assertSame([], $empty['rows']);
+
+        $runA = \App\Models\ScreenerRun::query()->create([
+            'screener_id' => $screenerId,
+            'triggered_by' => 'manual',
+            'status' => 'completed',
+            'started_at' => now()->subHours(3),
+            'finished_at' => now()->subHours(3)->addMinutes(1),
+            'stats_json' => ['matched' => 2],
+        ]);
+        $runB = \App\Models\ScreenerRun::query()->create([
+            'screener_id' => $screenerId,
+            'triggered_by' => 'schedule',
+            'status' => 'completed',
+            'started_at' => now()->subHours(2),
+            'finished_at' => now()->subHours(2)->addMinutes(1),
+            'stats_json' => ['matched' => 1],
+        ]);
+        $runC = \App\Models\ScreenerRun::query()->create([
+            'screener_id' => $screenerId,
+            'triggered_by' => 'manual',
+            'status' => 'completed',
+            'started_at' => now()->subHour(),
+            'finished_at' => now()->subHour()->addMinutes(1),
+            'stats_json' => ['matched' => 2],
+        ]);
+        \App\Models\ScreenerRun::query()->create([
+            'screener_id' => $screenerId,
+            'triggered_by' => 'manual',
+            'status' => 'running',
+            'started_at' => now(),
+            'finished_at' => null,
+            'stats_json' => ['matched' => 0],
+        ]);
+
+        \App\Models\ScreenerRunHit::query()->create([
+            'run_id' => $runA->id,
+            'stock_id' => $stockA->id,
+            'symbol' => 'AAA',
+            'exchange' => 'NSE',
+            'name' => 'Alpha',
+            'metrics_json' => [],
+        ]);
+        \App\Models\ScreenerRunHit::query()->create([
+            'run_id' => $runA->id,
+            'stock_id' => $stockB->id,
+            'symbol' => 'BBB',
+            'exchange' => 'NSE',
+            'name' => 'Beta',
+            'metrics_json' => [],
+        ]);
+        \App\Models\ScreenerRunHit::query()->create([
+            'run_id' => $runB->id,
+            'stock_id' => $stockA->id,
+            'symbol' => 'AAA',
+            'exchange' => 'NSE',
+            'name' => 'Alpha',
+            'metrics_json' => [],
+        ]);
+        \App\Models\ScreenerRunHit::query()->create([
+            'run_id' => $runC->id,
+            'stock_id' => $stockA->id,
+            'symbol' => 'AAA',
+            'exchange' => 'NSE',
+            'name' => 'Alpha',
+            'metrics_json' => [],
+        ]);
+        \App\Models\ScreenerRunHit::query()->create([
+            'run_id' => $runC->id,
+            'stock_id' => $stockC->id,
+            'symbol' => 'CCC',
+            'exchange' => 'NSE',
+            'name' => 'Gamma',
+            'metrics_json' => [],
+        ]);
+
+        $matrix = $this->getJson("/api/screeners/{$screenerId}/runs/compare")
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame(3, $matrix['run_count']);
+        $this->assertSame(3, $matrix['stock_count']);
+        $this->assertSame([$runA->id, $runB->id, $runC->id], array_column($matrix['columns'], 'id'));
+        $this->assertSame('Scheduled', $matrix['columns'][1]['trigger_label']);
+
+        $bySymbol = collect($matrix['rows'])->keyBy('symbol');
+        $this->assertSame([true, true, true], $bySymbol['AAA']['presence']);
+        $this->assertSame([true, false, false], $bySymbol['BBB']['presence']);
+        $this->assertSame([false, false, true], $bySymbol['CCC']['presence']);
+        $this->assertSame('AAA', $matrix['rows'][0]['symbol']);
+    }
 }

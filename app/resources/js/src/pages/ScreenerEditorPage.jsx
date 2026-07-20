@@ -4,10 +4,14 @@ import api from '../api';
 import usePortfolioChanged from '../hooks/usePortfolioChanged';
 import { showToast } from '../toast';
 import { formatRunListLabel, formatRunResultsHeading, lastRunSummaryText, runStatsWarning } from '../components/screener/screenerTableHelpers';
+import ScreenerRunsCompareTable from '../components/screener/ScreenerRunsCompareTable';
+import { buildExplorerComparePath } from '../utils/explorerLinks';
+import { resolveExternalStockUrl } from '../utils/externalStockLinks';
 
 const WIDE_LAYOUT_QUERY = '(min-width: 1400px)';
 const NAME_MAX_LENGTH = 120;
 const DESCRIPTION_MAX_LENGTH = 500;
+const DEFAULT_EXPLORER_BENCHMARK = 'NIFTY50';
 const NAME_ALLOWED_RE = /^[\p{L}\p{N}\s\-._,&()\/:+#%'"]+$/u;
 const DESCRIPTION_ALLOWED_RE = /^[\p{L}\p{N}\s\-._,&()\/:+#%'"?!]*$/u;
 
@@ -45,6 +49,7 @@ function defaultForm(meta) {
         description: '',
         scope: 'holdings',
         watchlist_id: '',
+        index_symbol: '',
         definition_json: defaultDefinition(meta),
         schedule_enabled: false,
         schedule_time: '18:30',
@@ -75,11 +80,12 @@ function defaultParams(indicatorMeta) {
     return params;
 }
 
-function validateForm(form, watchlists) {
+function validateForm(form, watchlists, indexes) {
     const errors = {};
     const name = String(form?.name ?? '').trim();
     const description = String(form?.description ?? '').trim();
     const watchlistIds = new Set((watchlists || []).map((w) => Number(w.id)));
+    const indexSymbols = new Set((indexes || []).map((i) => String(i.symbol || '').toUpperCase()));
 
     if (!name) {
         errors.name = 'Name is required.';
@@ -105,6 +111,15 @@ function validateForm(form, watchlists) {
             errors.watchlist_id = 'Watchlist missing or was deleted. Select a watchlist to run this screener.';
         } else if (!watchlistIds.has(watchlistId)) {
             errors.watchlist_id = 'Selected watchlist no longer exists. Choose another watchlist.';
+        }
+    }
+
+    if (form?.scope === 'index') {
+        const indexSymbol = String(form.index_symbol || '').trim().toUpperCase();
+        if (!indexSymbol) {
+            errors.index_symbol = 'Select an index to run this screener.';
+        } else if (indexSymbols.size > 0 && !indexSymbols.has(indexSymbol)) {
+            errors.index_symbol = 'Selected index is not supported for constituents.';
         }
     }
 
@@ -391,6 +406,7 @@ export default function ScreenerEditorPage() {
     const [history, setHistory] = useState([]);
     const [historyTotal, setHistoryTotal] = useState(0);
     const [historyLimit, setHistoryLimit] = useState(30);
+    const [compareMatrix, setCompareMatrix] = useState(null);
     const [clearingHistory, setClearingHistory] = useState(false);
     const [wideLayout, setWideLayout] = useState(() => (
         typeof window !== 'undefined' && window.matchMedia(WIDE_LAYOUT_QUERY).matches
@@ -422,13 +438,15 @@ export default function ScreenerEditorPage() {
                 setForm(defaultForm(metaData));
                 setHistory([]);
                 setHistoryTotal(0);
+                setCompareMatrix(null);
                 setRunResult(null);
                 return;
             }
 
-            const [showRes, runsRes] = await Promise.all([
+            const [showRes, runsRes, compareRes] = await Promise.all([
                 api.get(`/screeners/${id}`, { skipErrorToast: true }),
                 api.get(`/screeners/${id}/runs`, { skipErrorToast: true }),
+                api.get(`/screeners/${id}/runs/compare`, { skipErrorToast: true }),
             ]);
             const data = showRes.data?.data;
             setForm({
@@ -436,6 +454,7 @@ export default function ScreenerEditorPage() {
                 description: data.description || '',
                 scope: data.scope,
                 watchlist_id: data.watchlist_id || '',
+                index_symbol: data.index_symbol || '',
                 definition_json: data.definition_json,
                 schedule_enabled: !!data.schedule_enabled,
                 schedule_time: data.schedule_time || '18:30',
@@ -448,6 +467,7 @@ export default function ScreenerEditorPage() {
             setHistory(runsRes.data?.data ?? []);
             setHistoryTotal(runsRes.data?.total ?? runsRes.data?.data?.length ?? 0);
             setHistoryLimit(runsRes.data?.limit ?? 30);
+            setCompareMatrix(compareRes.data?.data ?? null);
 
             const runId = searchParams.get('run');
             if (runId) {
@@ -473,18 +493,23 @@ export default function ScreenerEditorPage() {
     const patch = (partial) => setForm((prev) => ({ ...prev, ...partial }));
     const markTouched = (field) => setTouched((prev) => ({ ...prev, [field]: true }));
 
-    const validationErrors = useMemo(() => validateForm(form, watchlists), [form, watchlists]);
+    const validationErrors = useMemo(
+        () => validateForm(form, watchlists, meta?.indexes),
+        [form, watchlists, meta?.indexes],
+    );
     const hasValidationErrors = Object.keys(validationErrors).length > 0;
     const showFieldError = (field) => {
         if (!validationErrors[field]) return false;
         if (submitted || touched[field]) return true;
         if (!isNew && field === 'watchlist_id' && form?.scope === 'watchlist') return true;
+        if (!isNew && field === 'index_symbol' && form?.scope === 'index') return true;
         return false;
     };
 
     const buildPayload = () => ({
         ...form,
         watchlist_id: form.scope === 'watchlist' ? Number(form.watchlist_id) || null : null,
+        index_symbol: form.scope === 'index' ? String(form.index_symbol || '').trim().toUpperCase() || null : null,
         description: form.description || null,
     });
 
@@ -510,6 +535,7 @@ export default function ScreenerEditorPage() {
                 ...res.data?.data,
                 description: res.data?.data?.description || '',
                 watchlist_id: res.data?.data?.watchlist_id || '',
+                index_symbol: res.data?.data?.index_symbol || '',
             }));
             showToast(`Screener "${res.data?.data?.name}" updated successfully.`);
             return true;
@@ -558,10 +584,14 @@ export default function ScreenerEditorPage() {
             navigate(`/screeners/${id}?run=${fullRun.id}`, { replace: true });
             const matched = fullRun?.stats?.matched ?? 0;
             showToast(`Run ID ${fullRun.id} finished with ${matched} match(es).`);
-            const runsRes = await api.get(`/screeners/${id}/runs`);
+            const [runsRes, compareRes] = await Promise.all([
+                api.get(`/screeners/${id}/runs`),
+                api.get(`/screeners/${id}/runs/compare`, { skipErrorToast: true }),
+            ]);
             setHistory(runsRes.data?.data ?? []);
             setHistoryTotal(runsRes.data?.total ?? runsRes.data?.data?.length ?? 0);
             setHistoryLimit(runsRes.data?.limit ?? 30);
+            setCompareMatrix(compareRes.data?.data ?? null);
         } catch (error) {
             showToast(validationMessage(error), 'danger');
         } finally {
@@ -589,6 +619,7 @@ export default function ScreenerEditorPage() {
             const deleted = res.data?.deleted ?? 0;
             setHistory([]);
             setHistoryTotal(0);
+            setCompareMatrix(null);
             setRunResult(null);
             navigate(`/screeners/${id}`, { replace: true });
             showToast(`Cleared ${deleted} run record(s) and their matched stocks.`);
@@ -685,6 +716,35 @@ export default function ScreenerEditorPage() {
                     {showFieldError('watchlist_id') && (
                         <div className="invalid-feedback d-block">{validationErrors.watchlist_id}</div>
                     )}
+                </div>
+            )}
+            {form.scope === 'index' && (
+                <div className="mb-3">
+                    <label className="form-label">Index</label>
+                    <select
+                        className={`form-select lido-screener-config-select${showFieldError('index_symbol') ? ' is-invalid' : ''}`}
+                        value={form.index_symbol}
+                        onChange={(e) => {
+                            markTouched('index_symbol');
+                            patch({ index_symbol: e.target.value });
+                        }}
+                    >
+                        <option value="">Select…</option>
+                        {(meta?.indexes || []).map((idx) => (
+                            <option key={idx.symbol} value={idx.symbol}>
+                                {idx.name}
+                                {' ('}
+                                {idx.symbol}
+                                {')'}
+                            </option>
+                        ))}
+                    </select>
+                    {showFieldError('index_symbol') && (
+                        <div className="invalid-feedback d-block">{validationErrors.index_symbol}</div>
+                    )}
+                    <div className="form-text">
+                        Screens NSE broad and sector index constituents from the Indices cache.
+                    </div>
                 </div>
             )}
             <div className="form-check form-switch mb-2">
@@ -903,12 +963,35 @@ export default function ScreenerEditorPage() {
                                                     ))}
                                                 </td>
                                                 <td className="text-nowrap">
-                                                    <Link
-                                                        to={`/holdings/${hit.stock_id}/prices`}
-                                                        className="btn btn-sm btn-link"
-                                                    >
-                                                        Prices
-                                                    </Link>
+                                                    {hit.symbol ? (
+                                                        <Link
+                                                            to={buildExplorerComparePath(hit.symbol, DEFAULT_EXPLORER_BENCHMARK)}
+                                                            className="btn btn-sm btn-link"
+                                                        >
+                                                            Explorer
+                                                        </Link>
+                                                    ) : null}
+                                                    {(meta?.external_stock_links || []).map((link) => {
+                                                        if (!hit.symbol || !link?.url) {
+                                                            return null;
+                                                        }
+                                                        const href = resolveExternalStockUrl(
+                                                            link.url,
+                                                            hit.symbol,
+                                                            hit.exchange,
+                                                        );
+                                                        return (
+                                                            <a
+                                                                key={link.id || link.label}
+                                                                href={href}
+                                                                className="btn btn-sm btn-link"
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                            >
+                                                                {link.label}
+                                                            </a>
+                                                        );
+                                                    })}
                                                 </td>
                                             </tr>
                                         ))}
@@ -947,7 +1030,7 @@ export default function ScreenerEditorPage() {
                                     {clearingHistory ? 'Clearing…' : 'Clear history'}
                                 </button>
                             </div>
-                            <ul className="list-unstyled mb-0 small">
+                            <ul className="list-unstyled mb-3 small">
                                 {history.map((r) => {
                                     const isSelected = runResult?.id === r.id;
                                     const isLatest = latestRunId === r.id;
@@ -988,6 +1071,16 @@ export default function ScreenerEditorPage() {
                                     );
                                 })}
                             </ul>
+                            <h3 className="h6 mb-1">Stacked run results</h3>
+                            <div className="form-text mb-2">
+                                All matched stocks across completed runs (latest {historyLimit}).
+                                Green cells mean the stock hit that run; numbers are consecutive hit streaks left→right (reset after a miss).
+                                Scroll horizontally; the stock column stays fixed.
+                            </div>
+                            <ScreenerRunsCompareTable
+                                matrix={compareMatrix}
+                                onSelectRun={loadRun}
+                            />
                         </div>
                     )}
                 </div>

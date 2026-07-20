@@ -76,14 +76,23 @@ export default function ScreenerGuideTab() {
                 <h2 className="h5 mb-3">Screener guide</h2>
                 <p className="text-muted">
                     Screeners filter stocks using cached OHLCV from your portfolio database — no live fetch during a run.
-                    Build nested <strong>AND</strong>/<strong>OR</strong> groups, pick a scope (holdings, watchlist, or all equities),
-                    and compare indicators to constants or other indicators.
+                    Build nested <strong>AND</strong>/<strong>OR</strong> groups, pick a scope (holdings, watchlist,
+                    all equities, or index constituents), and compare indicators to constants or other indicators.
                 </p>
 
                 <h3 className="h6 mt-4">Scopes</h3>
                 <ul className="small mb-4">
                     {(meta?.scopes || []).map((s) => (
-                        <li key={s.id}><strong>{s.label}</strong></li>
+                        <li key={s.id}>
+                            <strong>{s.label}</strong>
+                            {s.id === 'index' ? (
+                                <span className="text-muted">
+                                    {' '}
+                                    — NSE broad and sector indexes with a constituents cache (e.g. Nifty 50, Nifty Bank).
+                                    BSE indexes and India VIX are not available.
+                                </span>
+                            ) : null}
+                        </li>
                     ))}
                 </ul>
 
@@ -112,6 +121,13 @@ export default function ScreenerGuideTab() {
                 <p className="small text-muted mb-4">
                     Turn on <strong>Share with other portfolios</strong> when editing a screener to list it under Shared screens.
                     Import copies conditions into My screens as a private screener (schedule off; watchlist scope becomes holdings).
+                </p>
+
+                <h3 className="h6 mt-4">Stacked run results</h3>
+                <p className="small text-muted mb-4">
+                    On a screener’s editor, <strong>Stacked run results</strong> overlays completed runs (same latest-30 window as Run history).
+                    Rows are the unique matched symbols; columns are runs (oldest→newest left to right).
+                    Green = hit that run; the badge next to the symbol is how many runs hit; numbers inside green cells are consecutive-hit streaks (reset after a grey miss).
                 </p>
 
                 <h3 className="h6 mt-4">Supported indicators</h3>

@@ -49,6 +49,7 @@ export function ScreenerDescriptionCell({ text }) {
 export function scopeLabel(scope) {
     if (scope === 'watchlist') return 'Watchlist';
     if (scope === 'all_equities') return 'All equities';
+    if (scope === 'index') return 'Index';
     return 'Holdings';
 }
 
@@ -58,6 +59,15 @@ export function scopeDisplay(row) {
         return `${base} · ${row.watchlist.name}`;
     }
     if (row.scope === 'watchlist' && row.watchlist_issue) {
+        return `${base} · (missing)`;
+    }
+    if (row.scope === 'index' && row.index?.name) {
+        return `${base} · ${row.index.name}`;
+    }
+    if (row.scope === 'index' && row.index_symbol) {
+        return `${base} · ${row.index_symbol}`;
+    }
+    if (row.scope === 'index' && row.index_issue) {
         return `${base} · (missing)`;
     }
     return base;
@@ -129,6 +139,9 @@ export function lastRunWarningMessage(row) {
     if (row.watchlist_issue) {
         return row.watchlist_issue;
     }
+    if (row.index_issue) {
+        return row.index_issue;
+    }
     return null;
 }
 
@@ -136,13 +149,14 @@ export function LastRunSummaryCell({ row }) {
     const at = row.last_run_at;
     const stats = row.last_run?.stats;
     const warning = lastRunWarningMessage(row);
+    const setupIssue = row.watchlist_issue || row.index_issue;
 
     if (!at) {
-        const label = row.watchlist_issue ? `Never · ⚠ ${row.watchlist_issue}` : 'Never';
+        const label = setupIssue ? `Never · ⚠ ${setupIssue}` : 'Never';
         return (
             <span
-                className={`small datatable-cell-ellipsis${row.watchlist_issue ? ' text-danger' : ''}`}
-                title={row.watchlist_issue || undefined}
+                className={`small datatable-cell-ellipsis${setupIssue ? ' text-danger' : ''}`}
+                title={setupIssue || undefined}
             >
                 {label}
             </span>

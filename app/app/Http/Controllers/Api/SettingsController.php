@@ -49,6 +49,11 @@ class SettingsController extends Controller
             'fee_components.*.applies_sell' => ['required', 'boolean'],
             'fee_components.*.exchange' => ['required', 'in:both,NSE,BSE'],
             'fee_components.*.gst_percent' => ['required', 'numeric', 'gte:0', 'lte:100'],
+            'external_stock_links' => ['nullable', 'array', 'max:20'],
+            'external_stock_links.*.id' => ['nullable', 'string', 'max:64'],
+            'external_stock_links.*.label' => ['required', 'string', 'max:80'],
+            'external_stock_links.*.url' => ['nullable', 'string', 'max:500'],
+            'external_stock_links.*.enabled' => ['required', 'boolean'],
         ]);
 
         $profile = \activePortfolio();

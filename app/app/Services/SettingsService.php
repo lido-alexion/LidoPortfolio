@@ -17,6 +17,7 @@ class SettingsService
         'sync_log_retention_days' => '7',
         'admin_ops_telegram_ping_when_clear' => 'false',
         'fee_components' => '',
+        'external_stock_links' => '',
     ];
 
     public function __construct(
@@ -43,13 +44,14 @@ class SettingsService
         }
 
         foreach (self::DEFAULTS as $key => $default) {
-            if ($key === 'fee_components') {
+            if ($key === 'fee_components' || $key === 'external_stock_links') {
                 continue;
             }
             $settings[$key] = $this->get($key, $default);
         }
 
         $settings['fee_components'] = app(FeeCalculatorService::class)->componentsFromSettings();
+        $settings['external_stock_links'] = app(ExternalStockLinkService::class)->all();
 
         $syncLogService = app(SyncLogService::class);
         $settings['sync_log_latest_runs'] = [
@@ -72,7 +74,9 @@ class SettingsService
         foreach ($data as $key => $value) {
             if ($this->profileSettings->isManagedKey($key)) {
                 $profileData[$key] = $value;
-            } elseif (array_key_exists($key, self::DEFAULTS) || $key === 'fee_components') {
+            } elseif (array_key_exists($key, self::DEFAULTS)
+                || $key === 'fee_components'
+                || $key === 'external_stock_links') {
                 $globalData[$key] = $value;
             }
         }
@@ -104,8 +108,16 @@ class SettingsService
             unset($data['fee_components']);
         }
 
+        if (array_key_exists('external_stock_links', $data)) {
+            $rows = is_array($data['external_stock_links']) ? $data['external_stock_links'] : [];
+            app(ExternalStockLinkService::class)->persist($rows);
+            unset($data['external_stock_links']);
+        }
+
         foreach ($data as $key => $value) {
-            if (! array_key_exists($key, self::DEFAULTS) || $key === 'fee_components') {
+            if (! array_key_exists($key, self::DEFAULTS)
+                || $key === 'fee_components'
+                || $key === 'external_stock_links') {
                 continue;
             }
             \App\Models\Setting::setValue($key, $value === null ? null : (string) $value);
@@ -121,7 +133,7 @@ class SettingsService
     {
         $settings = [];
         foreach (self::DEFAULTS as $key => $default) {
-            if ($key === 'fee_components') {
+            if ($key === 'fee_components' || $key === 'external_stock_links') {
                 continue;
             }
             $settings[$key] = $this->get($key, $default);

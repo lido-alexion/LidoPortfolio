@@ -16,6 +16,7 @@ class Screener extends Model
         'description',
         'scope',
         'watchlist_id',
+        'index_symbol',
         'definition_json',
         'schedule_enabled',
         'schedule_time',

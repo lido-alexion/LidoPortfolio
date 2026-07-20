@@ -6,6 +6,8 @@ use App\Models\PortfolioProfile;
 use App\Models\Screener;
 use App\Models\ScreenerRun;
 use App\Models\Watchlist;
+use App\Services\ExternalStockLinkService;
+use App\Services\IndexCatalogService;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
@@ -18,6 +20,8 @@ class ScreenerService
 
     public function __construct(
         protected ScreenerDefinitionValidator $validator,
+        protected ExternalStockLinkService $externalStockLinks,
+        protected IndexCatalogService $indexCatalog,
     ) {}
 
     /**
@@ -25,7 +29,33 @@ class ScreenerService
      */
     public function meta(): array
     {
-        return ScreenerCatalog::meta();
+        $meta = ScreenerCatalog::meta();
+        $meta['external_stock_links'] = $this->externalStockLinks->enabledTemplates();
+        $meta['indexes'] = $this->constituentCapableIndexes();
+
+        return $meta;
+    }
+
+    /**
+     * Indexes that can be used as a screener universe (NSE broad/sector with constituents).
+     *
+     * @return list<array{symbol:string,name:string,exchange:string}>
+     */
+    public function constituentCapableIndexes(): array
+    {
+        $out = [];
+        foreach ($this->indexCatalog->enabledDefinitions() as $def) {
+            if (! $this->indexCatalog->supportsConstituents($def)) {
+                continue;
+            }
+            $out[] = [
+                'symbol' => $def['symbol'],
+                'name' => $def['name'],
+                'exchange' => $def['exchange'],
+            ];
+        }
+
+        return $out;
     }
 
     /**
@@ -73,6 +103,7 @@ class ScreenerService
 
         $scope = $source->scope === 'watchlist' ? 'holdings' : $source->scope;
         $name = $this->uniqueNameForProfile($profile, $source->name);
+        $indexSymbol = $scope === 'index' ? $source->index_symbol : null;
 
         $screener = Screener::query()->create([
             'profile_id' => $profile->id,
@@ -80,6 +111,7 @@ class ScreenerService
             'description' => $source->description,
             'scope' => $scope,
             'watchlist_id' => null,
+            'index_symbol' => $indexSymbol,
             'definition_json' => $source->definition_json,
             'schedule_enabled' => false,
             'schedule_time' => null,
@@ -144,6 +176,8 @@ class ScreenerService
             'description' => $screener->description,
             'scope' => $screener->scope,
             'watchlist_id' => $screener->watchlist_id,
+            'index_symbol' => $screener->index_symbol,
+            'index' => $this->formatIndexRef($screener),
             'watchlist' => $screener->relationLoaded('watchlist') && $screener->watchlist
                 ? ['id' => $screener->watchlist->id, 'name' => $screener->watchlist->name]
                 : null,
@@ -156,6 +190,7 @@ class ScreenerService
             'is_enabled' => (bool) $screener->is_enabled,
             'is_shared' => (bool) $screener->is_shared,
             'watchlist_issue' => $this->watchlistIssue($screener),
+            'index_issue' => $this->indexIssue($screener),
             'last_run_at' => optional($screener->last_run_at)?->toIso8601String(),
             'last_run' => $this->formatLastRunSummary(
                 $screener->relationLoaded('runs') ? $screener->runs->first() : null
@@ -180,6 +215,42 @@ class ScreenerService
         }
 
         return null;
+    }
+
+    private function indexIssue(Screener $screener): ?string
+    {
+        if ($screener->scope !== 'index') {
+            return null;
+        }
+
+        $symbol = strtoupper(trim((string) $screener->index_symbol));
+        if ($symbol === '') {
+            return 'Index missing. Select an index to run this screener.';
+        }
+
+        $def = $this->indexCatalog->definitionForSymbol($symbol);
+        if ($def === null || ! $this->indexCatalog->supportsConstituents($def)) {
+            return 'Index is not supported for constituents. Choose another index.';
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array{symbol:string,name:string}|null
+     */
+    private function formatIndexRef(Screener $screener): ?array
+    {
+        $symbol = strtoupper(trim((string) $screener->index_symbol));
+        if ($symbol === '') {
+            return null;
+        }
+        $def = $this->indexCatalog->definitionForSymbol($symbol);
+
+        return [
+            'symbol' => $symbol,
+            'name' => $def['name'] ?? $symbol,
+        ];
     }
 
     /**
@@ -285,6 +356,20 @@ class ScreenerService
             $watchlistId = null;
         }
 
+        $indexSymbol = null;
+        if ($scope === 'index') {
+            $rawIndex = $input['index_symbol'] ?? $existing?->index_symbol ?? '';
+            $indexSymbol = strtoupper(trim((string) $rawIndex));
+            if ($indexSymbol === '') {
+                throw ValidationException::withMessages(['index_symbol' => 'Index is required for index scope.']);
+            }
+            $def = $this->indexCatalog->definitionForSymbol($indexSymbol);
+            if ($def === null || ! $this->indexCatalog->supportsConstituents($def)) {
+                throw ValidationException::withMessages(['index_symbol' => 'Index does not support constituents.']);
+            }
+            $indexSymbol = $def['symbol'];
+        }
+
         $definitionInput = $input['definition_json'] ?? $existing?->definition_json ?? null;
         if (! is_array($definitionInput)) {
             throw ValidationException::withMessages(['definition_json' => 'definition_json is required.']);
@@ -336,6 +421,7 @@ class ScreenerService
             'description' => $description,
             'scope' => $scope,
             'watchlist_id' => $watchlistId,
+            'index_symbol' => $indexSymbol,
             'definition_json' => $definition,
             'schedule_enabled' => $scheduleEnabled,
             'schedule_time' => $scheduleTime,

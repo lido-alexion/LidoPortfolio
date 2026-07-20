@@ -7,7 +7,7 @@ namespace App\Services\Screener;
  */
 class ScreenerCatalog
 {
-    public const SCOPES = ['holdings', 'watchlist', 'all_equities'];
+    public const SCOPES = ['holdings', 'watchlist', 'all_equities', 'index'];
 
     public const OPERATORS = [
         ['id' => 'gt', 'label' => '>'],
@@ -153,6 +153,7 @@ class ScreenerCatalog
                 ['id' => 'holdings', 'label' => 'Holdings'],
                 ['id' => 'watchlist', 'label' => 'Watchlist'],
                 ['id' => 'all_equities', 'label' => 'All equities'],
+                ['id' => 'index', 'label' => 'Index constituents'],
             ],
             'max_nesting' => self::MAX_NESTING_DEPTH,
             'max_conditions' => self::MAX_CONDITIONS,

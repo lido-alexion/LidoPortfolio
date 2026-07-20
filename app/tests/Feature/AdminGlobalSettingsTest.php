@@ -61,6 +61,7 @@ class AdminGlobalSettingsTest extends TestCase
             ->assertJsonMissingPath('data.cron_time')
             ->assertJsonMissingPath('data.nse_retry_count')
             ->assertJsonMissingPath('data.fee_components')
+            ->assertJsonMissingPath('data.external_stock_links')
             ->assertJsonPath('data.cron_timezone', 'Asia/Kolkata');
     }
 
@@ -73,7 +74,7 @@ class AdminGlobalSettingsTest extends TestCase
             ->getJson('/api/settings')
             ->assertOk()
             ->assertJsonPath('data.cron_time', '17:00')
-            ->assertJsonStructure(['data' => ['fee_components', 'sync_log_latest_runs']]);
+            ->assertJsonStructure(['data' => ['fee_components', 'external_stock_links', 'sync_log_latest_runs']]);
     }
 
     public function test_non_admin_cannot_update_global_settings(): void

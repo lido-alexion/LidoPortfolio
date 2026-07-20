@@ -12,6 +12,8 @@ use App\Models\StockPrice;
 use App\Models\Watchlist;
 use App\Models\WatchlistItem;
 use App\Services\EquityUniverseService;
+use App\Services\IndexCatalogService;
+use App\Services\IndexConstituentService;
 use App\Services\TelegramNotificationService;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -22,6 +24,8 @@ class ScreenerRunService
         protected ScreenerEvaluationService $evaluation,
         protected EquityUniverseService $universe,
         protected TelegramNotificationService $telegram,
+        protected IndexConstituentService $indexConstituents,
+        protected IndexCatalogService $indexCatalog,
     ) {}
 
     /**
@@ -347,6 +351,30 @@ class ScreenerRunService
             return [$ids, null];
         }
 
+        if ($screener->scope === 'index') {
+            $symbol = strtoupper(trim((string) $screener->index_symbol));
+            if ($symbol === '') {
+                return [[], 'Index missing; empty set.'];
+            }
+            $def = $this->indexCatalog->definitionForSymbol($symbol);
+            if ($def === null || ! $this->indexCatalog->supportsConstituents($def)) {
+                return [[], 'Index not supported for constituents; empty set.'];
+            }
+            $rows = $this->indexConstituents->constituentsForSymbol($symbol, forceRefresh: false);
+            $ids = [];
+            foreach ($rows as $row) {
+                if (! empty($row['stock_id'])) {
+                    $ids[] = (int) $row['stock_id'];
+                }
+            }
+            $ids = array_values(array_unique($ids));
+            if ($ids === []) {
+                return [[], 'Index constituents unavailable; empty set.'];
+            }
+
+            return [$ids, null];
+        }
+
         // all_equities
         $ids = $this->universe->universeStockQuery()
             ->pluck('id')
@@ -432,6 +460,100 @@ class ScreenerRunService
         }
 
         return $data;
+    }
+
+    /**
+     * Stack completed runs (latest N, columns oldest→newest) into a stock×run presence matrix.
+     *
+     * @return array{columns:list<array<string,mixed>>,rows:list<array<string,mixed>>,run_count:int,stock_count:int}
+     */
+    public function compareMatrix(Screener $screener): array
+    {
+        $latest = ScreenerRun::query()
+            ->where('screener_id', $screener->id)
+            ->where('status', 'completed')
+            ->orderByDesc('id')
+            ->limit(ScreenerCatalog::RUN_HISTORY_UI_LIMIT)
+            ->get();
+
+        $runs = $latest->sortBy('id')->values();
+        if ($runs->isEmpty()) {
+            return [
+                'columns' => [],
+                'rows' => [],
+                'run_count' => 0,
+                'stock_count' => 0,
+            ];
+        }
+
+        $runIds = $runs->pluck('id')->all();
+        $runIndex = [];
+        foreach ($runs as $i => $run) {
+            $runIndex[(int) $run->id] = $i;
+        }
+
+        $columns = $runs->map(function (ScreenerRun $run) {
+            $stats = $run->stats_json ?? [];
+            $when = $run->finished_at ?? $run->started_at;
+
+            return [
+                'id' => $run->id,
+                'triggered_by' => $run->triggered_by,
+                'trigger_label' => $run->triggered_by === 'schedule' ? 'Scheduled' : 'Manual',
+                'status' => $run->status,
+                'matched' => (int) ($stats['matched'] ?? 0),
+                'started_at' => optional($run->started_at)?->toIso8601String(),
+                'finished_at' => optional($run->finished_at)?->toIso8601String(),
+                'when_label' => $when ? $when->timezone(config('app.timezone'))->format('d M Y, H:i') : '—',
+            ];
+        })->all();
+
+        $hits = ScreenerRunHit::query()
+            ->whereIn('run_id', $runIds)
+            ->orderBy('symbol')
+            ->get(['run_id', 'stock_id', 'symbol', 'exchange', 'name']);
+
+        /** @var array<string, array{symbol:string,name:?string,exchange:?string,stock_id:?int,presence:list<bool>}> $bySymbol */
+        $bySymbol = [];
+        $colCount = count($columns);
+
+        foreach ($hits as $hit) {
+            $symbol = strtoupper(trim((string) $hit->symbol));
+            if ($symbol === '') {
+                continue;
+            }
+            if (! isset($bySymbol[$symbol])) {
+                $bySymbol[$symbol] = [
+                    'symbol' => $symbol,
+                    'name' => $hit->name,
+                    'exchange' => $hit->exchange,
+                    'stock_id' => $hit->stock_id !== null ? (int) $hit->stock_id : null,
+                    'presence' => array_fill(0, $colCount, false),
+                ];
+            }
+            $idx = $runIndex[(int) $hit->run_id] ?? null;
+            if ($idx !== null) {
+                $bySymbol[$symbol]['presence'][$idx] = true;
+            }
+        }
+
+        $rows = array_values($bySymbol);
+        usort($rows, static function (array $a, array $b): int {
+            $countA = count(array_filter($a['presence']));
+            $countB = count(array_filter($b['presence']));
+            if ($countA !== $countB) {
+                return $countB <=> $countA;
+            }
+
+            return strcmp($a['symbol'], $b['symbol']);
+        });
+
+        return [
+            'columns' => $columns,
+            'rows' => $rows,
+            'run_count' => count($columns),
+            'stock_count' => count($rows),
+        ];
     }
 
     /**

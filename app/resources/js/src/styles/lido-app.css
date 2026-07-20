@@ -1407,6 +1407,64 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     background-color: color-mix(in srgb, var(--lido-brand) 12%, var(--lido-bg-elevated));
 }
 
+.lido-screener-compare-scroll {
+    overflow-x: auto;
+    max-width: 100%;
+    -webkit-overflow-scrolling: touch;
+}
+
+.lido-screener-compare-table {
+    border-collapse: separate;
+    border-spacing: 0;
+    width: max-content;
+    min-width: 100%;
+}
+
+.lido-screener-compare-table .lido-screener-compare-sticky {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background-color: var(--lido-bg-elevated);
+    min-width: 9.5rem;
+    max-width: 12rem;
+    box-shadow: 1px 0 0 color-mix(in srgb, var(--lido-border) 70%, transparent);
+    vertical-align: middle;
+}
+
+.lido-screener-compare-table thead .lido-screener-compare-sticky {
+    z-index: 3;
+}
+
+.lido-screener-compare-run {
+    min-width: 7.25rem;
+    vertical-align: bottom;
+    white-space: nowrap;
+}
+
+.lido-screener-compare-cell {
+    min-width: 2.75rem;
+    vertical-align: middle;
+}
+
+.lido-screener-compare-cell.is-hit {
+    background-color: color-mix(in srgb, #198754 42%, var(--lido-bg-elevated));
+    color: var(--lido-text);
+    font-weight: 600;
+}
+
+.lido-screener-compare-cell.is-miss {
+    background-color: color-mix(in srgb, var(--lido-border) 55%, var(--lido-bg-elevated));
+    color: transparent;
+}
+
+[data-theme='light'] .lido-screener-compare-cell.is-hit {
+    background-color: color-mix(in srgb, #198754 28%, #fff);
+}
+
+[data-theme='light'] .lido-screener-compare-cell.is-miss {
+    background-color: color-mix(in srgb, #adb5bd 35%, #fff);
+}
+
 .lido-fee-component-row {
     --lido-fee-control-height: calc(1.5em + 0.5rem + 2px);
     background-color: var(--lido-bg-elevated);

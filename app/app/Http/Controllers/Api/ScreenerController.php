@@ -117,6 +117,13 @@ class ScreenerController extends Controller
         ]);
     }
 
+    public function compareRuns(Screener $screener): JsonResponse
+    {
+        return response()->json([
+            'data' => $this->runs->compareMatrix($screener),
+        ]);
+    }
+
     public function clearRuns(Screener $screener): JsonResponse
     {
         $deleted = $this->runs->clearRuns($screener);
