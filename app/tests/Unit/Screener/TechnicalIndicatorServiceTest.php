@@ -2,6 +2,7 @@
 
 namespace Tests\Unit\Screener;
 
+use App\Services\Screener\ScreenerCatalog;
 use App\Services\Screener\ScreenerEvaluationService;
 use App\Services\Screener\TechnicalIndicatorService;
 use PHPUnit\Framework\TestCase;
@@ -45,6 +46,66 @@ class TechnicalIndicatorServiceTest extends TestCase
         }
         $this->assertNotNull($last);
         $this->assertEqualsWithDelta(100.0, $last, 1e-6);
+    }
+
+    public function test_high_52w_and_low_52w_use_252_sessions(): void
+    {
+        $svc = new TechnicalIndicatorService;
+        $bars = [];
+        for ($i = 0; $i < 260; $i++) {
+            $bars[] = [
+                'open' => 100.0,
+                'high' => 100.0 + ($i === 200 ? 50.0 : 1.0),
+                'low' => 100.0 - ($i === 150 ? 40.0 : 1.0),
+                'close' => 100.0,
+                'volume' => 1000.0,
+            ];
+        }
+        $engine = $svc->withBars($bars);
+
+        $high52 = $engine->evaluate(['indicator' => 'high_52w']);
+        $low52 = $engine->evaluate(['indicator' => 'low_52w']);
+
+        $this->assertEqualsWithDelta(150.0, $high52, 1e-9);
+        $this->assertEqualsWithDelta(60.0, $low52, 1e-9);
+
+        $short = array_slice($bars, -200);
+        $skipped = $svc->withBars($short)->evaluate(['indicator' => 'high_52w']);
+        $this->assertNull($skipped);
+
+        $eval = new ScreenerEvaluationService(new TechnicalIndicatorService);
+        $definition = [
+            'root' => [
+                'type' => 'condition',
+                'left' => ['indicator' => 'close'],
+                'operator' => 'gte',
+                'right' => ['indicator' => 'low_52w'],
+            ],
+        ];
+        $this->assertSame(252, $eval->maxLookback($definition));
+    }
+
+    public function test_sma_period_one_needs_one_session(): void
+    {
+        $svc = new TechnicalIndicatorService;
+        $bars = [
+            ['open' => 10.0, 'high' => 11.0, 'low' => 9.0, 'close' => 10.5, 'volume' => 100.0],
+        ];
+        $value = $svc->withBars($bars)->evaluate(['indicator' => 'sma', 'params' => ['period' => 1]]);
+        $this->assertEqualsWithDelta(10.5, $value, 1e-9);
+        $this->assertSame(1, ScreenerCatalog::minBars('sma', ['period' => 1]));
+
+        $eval = new ScreenerEvaluationService(new TechnicalIndicatorService);
+        $result = $eval->evaluateStock([
+            'root' => [
+                'type' => 'condition',
+                'left' => ['indicator' => 'sma', 'params' => ['period' => 1]],
+                'operator' => 'gt',
+                'right' => ['type' => 'constant', 'value' => 10],
+            ],
+        ], $bars);
+        $this->assertFalse($result['skipped']);
+        $this->assertTrue($result['matched']);
     }
 
     public function test_condition_tree_and_or_and_insufficient_bars(): void

@@ -37,6 +37,8 @@ import AlertPoliciesPage from './pages/AlertPoliciesPage';
 import ScreenersPage from './pages/ScreenersPage';
 import ScreenerEditorPage from './pages/ScreenerEditorPage';
 
+const FOOTER_NAV_ENABLED = true;
+
 function App() {
     const { user, isAuthenticated, loading } = useAuth();
     const [toast, setToast] = useState(null);
@@ -186,7 +188,7 @@ function App() {
                                 />
                             </Routes>
                         </div>
-                        <AppBottomNav />
+                        {FOOTER_NAV_ENABLED && <AppBottomNav />}
                     </>
                 )}
             </div>

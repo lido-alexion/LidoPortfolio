@@ -134,34 +134,37 @@ export function lastRunWarningMessage(row) {
 
 export function LastRunSummaryCell({ row }) {
     const at = row.last_run_at;
-    if (!at) {
-        return row.watchlist_issue
-            ? (
-                <div className="small">
-                    <div>Never</div>
-                    <div className="text-danger" title={row.watchlist_issue}>
-                        ⚠ {row.watchlist_issue}
-                    </div>
-                </div>
-            )
-            : 'Never';
-    }
-
     const stats = row.last_run?.stats;
     const warning = lastRunWarningMessage(row);
 
+    if (!at) {
+        const label = row.watchlist_issue ? `Never · ⚠ ${row.watchlist_issue}` : 'Never';
+        return (
+            <span
+                className={`small datatable-cell-ellipsis${row.watchlist_issue ? ' text-danger' : ''}`}
+                title={row.watchlist_issue || undefined}
+            >
+                {label}
+            </span>
+        );
+    }
+
+    const parts = [new Date(at).toLocaleString()];
+    if (stats) {
+        parts.push(lastRunSummaryText(stats));
+    }
+    if (warning) {
+        parts.push(`⚠ ${warning}`);
+    }
+    const summary = parts.join(' · ');
+
     return (
-        <div className="small">
-            <div>{new Date(at).toLocaleString()}</div>
-            {stats && (
-                <div className="text-muted">{lastRunSummaryText(stats)}</div>
-            )}
-            {warning && (
-                <div className="text-warning-emphasis" title={warning}>
-                    ⚠ {warning}
-                </div>
-            )}
-        </div>
+        <span
+            className={`small datatable-cell-ellipsis${warning ? ' text-warning-emphasis' : ''}`}
+            title={summary}
+        >
+            {summary}
+        </span>
     );
 }
 

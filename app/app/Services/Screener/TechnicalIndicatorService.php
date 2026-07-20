@@ -92,6 +92,8 @@ class TechnicalIndicatorService
             'change_pct' => $this->changePct((int) ($params['period'] ?? 1)),
             'high_n' => $this->highN((int) ($params['period'] ?? 20)),
             'low_n' => $this->lowN((int) ($params['period'] ?? 20)),
+            'high_52w' => $this->highN(ScreenerCatalog::TRADING_DAYS_52W),
+            'low_52w' => $this->lowN(ScreenerCatalog::TRADING_DAYS_52W),
             'range_pct' => $this->rangePct(),
             'sma' => $this->lastOf($this->sma($closes, (int) ($params['period'] ?? 20))),
             'ema' => $this->lastOf($this->ema($closes, (int) ($params['period'] ?? 20))),

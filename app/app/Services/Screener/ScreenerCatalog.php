@@ -28,6 +28,12 @@ class ScreenerCatalog
     /** Runs returned in editor/history API (all runs remain in DB until cleared). */
     public const RUN_HISTORY_UI_LIMIT = 30;
 
+    /** Trading sessions in a 52-week lookback (NSE/BSE convention). */
+    public const TRADING_DAYS_52W = 252;
+
+    /** Smallest allowed period-style param (SMA/EMA period 1 = latest close). */
+    public const PARAM_MIN_PERIOD = 1;
+
     /**
      * @return list<array<string,mixed>>
      */
@@ -43,86 +49,88 @@ class ScreenerCatalog
                 self::param('period', 'Period', 1, 1, 400),
             ], null, minBarsFn: fn (array $p) => (int) ($p['period'] ?? 1) + 1),
             self::ind('high_n', 'Highest high (N)', [
-                self::param('period', 'Period', 20, 2, 400),
+                self::param('period', 'Period', 20, self::PARAM_MIN_PERIOD, 400),
             ], null, minBarsFn: fn (array $p) => (int) ($p['period'] ?? 20)),
             self::ind('low_n', 'Lowest low (N)', [
-                self::param('period', 'Period', 20, 2, 400),
+                self::param('period', 'Period', 20, self::PARAM_MIN_PERIOD, 400),
             ], null, minBarsFn: fn (array $p) => (int) ($p['period'] ?? 20)),
+            self::ind('high_52w', '52-week high', [], self::TRADING_DAYS_52W),
+            self::ind('low_52w', '52-week low', [], self::TRADING_DAYS_52W),
             self::ind('range_pct', 'Range % (H-L)/C', [], 1),
             self::ind('sma', 'SMA', [
-                self::param('period', 'Period', 20, 2, 400),
+                self::param('period', 'Period', 20, self::PARAM_MIN_PERIOD, 400),
             ], null, minBarsFn: fn (array $p) => (int) ($p['period'] ?? 20)),
             self::ind('ema', 'EMA', [
-                self::param('period', 'Period', 50, 2, 400),
+                self::param('period', 'Period', 50, self::PARAM_MIN_PERIOD, 400),
             ], null, minBarsFn: fn (array $p) => (int) ($p['period'] ?? 50)),
             self::ind('price_vs_sma_pct', 'Price vs SMA %', [
-                self::param('period', 'Period', 20, 2, 400),
+                self::param('period', 'Period', 20, self::PARAM_MIN_PERIOD, 400),
             ], null, minBarsFn: fn (array $p) => (int) ($p['period'] ?? 20)),
             self::ind('price_vs_ema_pct', 'Price vs EMA %', [
-                self::param('period', 'Period', 50, 2, 400),
+                self::param('period', 'Period', 50, self::PARAM_MIN_PERIOD, 400),
             ], null, minBarsFn: fn (array $p) => (int) ($p['period'] ?? 50)),
             self::ind('sma_spread_pct', 'SMA spread %', [
-                self::param('fast', 'Fast', 20, 2, 400),
-                self::param('slow', 'Slow', 50, 2, 400),
+                self::param('fast', 'Fast', 20, self::PARAM_MIN_PERIOD, 400),
+                self::param('slow', 'Slow', 50, self::PARAM_MIN_PERIOD, 400),
             ], null, minBarsFn: fn (array $p) => max((int) ($p['fast'] ?? 20), (int) ($p['slow'] ?? 50))),
             self::ind('ema_spread_pct', 'EMA spread %', [
-                self::param('fast', 'Fast', 12, 2, 400),
-                self::param('slow', 'Slow', 26, 2, 400),
+                self::param('fast', 'Fast', 12, self::PARAM_MIN_PERIOD, 400),
+                self::param('slow', 'Slow', 26, self::PARAM_MIN_PERIOD, 400),
             ], null, minBarsFn: fn (array $p) => max((int) ($p['fast'] ?? 12), (int) ($p['slow'] ?? 26))),
             self::ind('rsi', 'RSI', [
-                self::param('period', 'Period', 14, 2, 200),
+                self::param('period', 'Period', 14, self::PARAM_MIN_PERIOD, 200),
             ], null, minBarsFn: fn (array $p) => (int) ($p['period'] ?? 14) + 1),
             self::ind('roc', 'ROC %', [
-                self::param('period', 'Period', 12, 2, 400),
+                self::param('period', 'Period', 12, self::PARAM_MIN_PERIOD, 400),
             ], null, minBarsFn: fn (array $p) => (int) ($p['period'] ?? 12) + 1),
             self::ind('stoch_k', 'Stochastic %K', [
-                self::param('period', 'Period', 14, 2, 400),
+                self::param('period', 'Period', 14, self::PARAM_MIN_PERIOD, 400),
             ], null, minBarsFn: fn (array $p) => (int) ($p['period'] ?? 14)),
             self::ind('stoch_d', 'Stochastic %D', [
-                self::param('period', 'Period', 14, 2, 400),
-                self::param('smooth', 'Smooth', 3, 1, 50),
+                self::param('period', 'Period', 14, self::PARAM_MIN_PERIOD, 400),
+                self::param('smooth', 'Smooth', 3, self::PARAM_MIN_PERIOD, 50),
             ], null, minBarsFn: fn (array $p) => (int) ($p['period'] ?? 14) + (int) ($p['smooth'] ?? 3) - 1),
             self::ind('macd', 'MACD line', [
-                self::param('fast', 'Fast', 12, 2, 400),
-                self::param('slow', 'Slow', 26, 2, 400),
-            ], null, minBarsFn: fn (array $p) => (int) ($p['slow'] ?? 26)),
+                self::param('fast', 'Fast', 12, self::PARAM_MIN_PERIOD, 400),
+                self::param('slow', 'Slow', 26, self::PARAM_MIN_PERIOD, 400),
+            ], null, minBarsFn: fn (array $p) => max((int) ($p['fast'] ?? 12), (int) ($p['slow'] ?? 26))),
             self::ind('macd_signal', 'MACD signal', [
-                self::param('fast', 'Fast', 12, 2, 400),
-                self::param('slow', 'Slow', 26, 2, 400),
-                self::param('signal', 'Signal', 9, 2, 100),
-            ], null, minBarsFn: fn (array $p) => (int) ($p['slow'] ?? 26) + (int) ($p['signal'] ?? 9)),
+                self::param('fast', 'Fast', 12, self::PARAM_MIN_PERIOD, 400),
+                self::param('slow', 'Slow', 26, self::PARAM_MIN_PERIOD, 400),
+                self::param('signal', 'Signal', 9, self::PARAM_MIN_PERIOD, 100),
+            ], null, minBarsFn: fn (array $p) => max((int) ($p['fast'] ?? 12), (int) ($p['slow'] ?? 26)) + (int) ($p['signal'] ?? 9) - 1),
             self::ind('macd_hist', 'MACD histogram', [
-                self::param('fast', 'Fast', 12, 2, 400),
-                self::param('slow', 'Slow', 26, 2, 400),
-                self::param('signal', 'Signal', 9, 2, 100),
-            ], null, minBarsFn: fn (array $p) => (int) ($p['slow'] ?? 26) + (int) ($p['signal'] ?? 9)),
+                self::param('fast', 'Fast', 12, self::PARAM_MIN_PERIOD, 400),
+                self::param('slow', 'Slow', 26, self::PARAM_MIN_PERIOD, 400),
+                self::param('signal', 'Signal', 9, self::PARAM_MIN_PERIOD, 100),
+            ], null, minBarsFn: fn (array $p) => max((int) ($p['fast'] ?? 12), (int) ($p['slow'] ?? 26)) + (int) ($p['signal'] ?? 9) - 1),
             self::ind('atr', 'ATR', [
-                self::param('period', 'Period', 14, 2, 200),
+                self::param('period', 'Period', 14, self::PARAM_MIN_PERIOD, 200),
             ], null, minBarsFn: fn (array $p) => (int) ($p['period'] ?? 14) + 1),
             self::ind('bb_mid', 'Bollinger mid', [
-                self::param('period', 'Period', 20, 2, 400),
+                self::param('period', 'Period', 20, self::PARAM_MIN_PERIOD, 400),
             ], null, minBarsFn: fn (array $p) => (int) ($p['period'] ?? 20)),
             self::ind('bb_upper', 'Bollinger upper', [
-                self::param('period', 'Period', 20, 2, 400),
+                self::param('period', 'Period', 20, self::PARAM_MIN_PERIOD, 400),
                 self::param('mult', 'Mult', 2, 0.5, 5, step: 0.1),
             ], null, minBarsFn: fn (array $p) => (int) ($p['period'] ?? 20)),
             self::ind('bb_lower', 'Bollinger lower', [
-                self::param('period', 'Period', 20, 2, 400),
+                self::param('period', 'Period', 20, self::PARAM_MIN_PERIOD, 400),
                 self::param('mult', 'Mult', 2, 0.5, 5, step: 0.1),
             ], null, minBarsFn: fn (array $p) => (int) ($p['period'] ?? 20)),
             self::ind('bb_pct_b', 'Bollinger %B', [
-                self::param('period', 'Period', 20, 2, 400),
+                self::param('period', 'Period', 20, self::PARAM_MIN_PERIOD, 400),
                 self::param('mult', 'Mult', 2, 0.5, 5, step: 0.1),
             ], null, minBarsFn: fn (array $p) => (int) ($p['period'] ?? 20)),
             self::ind('bb_width_pct', 'Bollinger width %', [
-                self::param('period', 'Period', 20, 2, 400),
+                self::param('period', 'Period', 20, self::PARAM_MIN_PERIOD, 400),
                 self::param('mult', 'Mult', 2, 0.5, 5, step: 0.1),
             ], null, minBarsFn: fn (array $p) => (int) ($p['period'] ?? 20)),
             self::ind('volume_sma', 'Volume SMA', [
-                self::param('period', 'Period', 20, 2, 400),
+                self::param('period', 'Period', 20, self::PARAM_MIN_PERIOD, 400),
             ], null, minBarsFn: fn (array $p) => (int) ($p['period'] ?? 20), needsVolume: true),
             self::ind('volume_ratio', 'Volume / Vol SMA', [
-                self::param('period', 'Period', 20, 2, 400),
+                self::param('period', 'Period', 20, self::PARAM_MIN_PERIOD, 400),
             ], null, minBarsFn: fn (array $p) => (int) ($p['period'] ?? 20), needsVolume: true),
         ];
     }

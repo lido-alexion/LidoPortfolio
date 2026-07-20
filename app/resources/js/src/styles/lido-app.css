@@ -102,6 +102,7 @@
 }
 
 html {
+    overflow-y: scroll;
     scrollbar-gutter: stable;
 }
 
@@ -613,12 +614,40 @@ body {
     outline-offset: 1px;
 }
 
-.lido-bottom-nav-reveal {
+.lido-bottom-nav {
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
-    z-index: 502;
+    z-index: 501;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    background-color: var(--lido-footer-bg);
+    border-top: 1px solid var(--lido-footer-border);
+    transform: translate3d(0, calc(100% - 12px), 0);
+    transition: transform 0.2s ease;
+    pointer-events: auto;
+}
+
+.lido-bottom-nav:hover,
+.lido-bottom-nav.is-pinned {
+    transform: translate3d(0, 0, 0);
+}
+
+.lido-bottom-nav-links {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 24px;
+    padding: 12px 16px 8px;
+    order: 1;
+}
+
+.lido-bottom-nav-reveal {
+    order: 2;
+    width: 100%;
     height: 12px;
     margin: 0;
     padding: 0;
@@ -626,48 +655,19 @@ body {
     border-top: 1px solid transparent;
     background: transparent;
     cursor: pointer;
-    pointer-events: auto;
+    flex-shrink: 0;
     transition: background-color 0.18s ease, border-color 0.18s ease;
 }
 
-.lido-bottom-nav-reveal:hover,
-.lido-bottom-nav-reveal--active {
+.lido-bottom-nav:hover .lido-bottom-nav-reveal,
+.lido-bottom-nav.is-pinned .lido-bottom-nav-reveal {
     background: color-mix(in srgb, var(--lido-footer-bg) 55%, transparent);
     border-top-color: color-mix(in srgb, var(--lido-footer-border) 70%, transparent);
 }
 
-.lido-bottom-nav-reveal--pinned {
+.lido-bottom-nav.is-pinned .lido-bottom-nav-reveal {
     background: color-mix(in srgb, var(--lido-brand) 22%, transparent);
     border-top-color: color-mix(in srgb, var(--lido-brand) 45%, transparent);
-}
-
-.lido-bottom-nav {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 12px;
-    z-index: 501;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    background-color: var(--lido-footer-bg);
-    padding: 12px 16px;
-    border-top: 1px solid var(--lido-footer-border);
-    gap: 8px 24px;
-    flex-wrap: wrap;
-    transform: translate3d(0, 100%, 0);
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-    transition: transform 0.2s ease, opacity 0.2s ease, visibility 0.2s ease;
-    will-change: transform;
-}
-
-.lido-bottom-nav.lido-bottom-nav--visible {
-    transform: translate3d(0, 0, 0);
-    opacity: 1;
-    visibility: visible;
-    pointer-events: auto;
 }
 
 .lido-bottom-nav .nav-link {
@@ -1159,6 +1159,23 @@ html.lido-footer-visible .lido-main {
     user-select: none !important;
 }
 
+.datatable-responsive-wrap {
+    max-width: 100%;
+    /* Always reserve horizontal scrollbar space so wrapper height never toggles
+       when column widths cross the overflow threshold (viewport-edge flicker). */
+    overflow-x: scroll;
+    overflow-y: visible;
+    scrollbar-gutter: stable;
+}
+
+.datatable-cell-ellipsis {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .lido-col-header-stack {
     display: flex;
     flex-direction: column;
@@ -1359,6 +1376,12 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
 .lido-screener-tree .lido-screener-operand {
     border: none;
     background-color: var(--lido-screener-operand-bg);
+}
+
+/* Avoid viewport-height threshold where a few pixels of layout shift oscillates scroll height. */
+.screeners-page {
+    min-height: calc(100dvh - 9rem);
+    padding-bottom: 2rem;
 }
 
 .lido-screener-editor-footer {

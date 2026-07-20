@@ -4,8 +4,8 @@ import api from '../../api';
 const INDICATOR_GROUPS = [
     {
         title: 'Price & volume (bar fields)',
-        ids: ['close', 'open', 'high', 'low', 'volume', 'change_pct', 'high_n', 'low_n', 'range_pct'],
-        blurb: 'Latest OHLCV values, session change %, rolling highs/lows, and intraday range on the latest bar.',
+        ids: ['close', 'open', 'high', 'low', 'volume', 'change_pct', 'high_n', 'low_n', 'high_52w', 'low_52w', 'range_pct'],
+        blurb: 'Latest OHLCV values, session change %, rolling highs/lows, 52-week high/low (252 sessions), and intraday range on the latest bar.',
     },
     {
         title: 'Moving averages & trend',

@@ -29,7 +29,7 @@ export default function ScreenersPage() {
     };
 
     return (
-        <div className="container-fluid py-3">
+        <div className="container-fluid py-3 screeners-page">
             <div className="mb-3">
                 <h1 className="h3 mb-0">Screener</h1>
                 <p className="text-muted small mb-0">

@@ -140,6 +140,7 @@ function useDataTableController({
     );
     const [dragColumnId, setDragColumnId] = useState(null);
     const [panelOpen, setPanelOpen] = useState(false);
+    const [containerWidth, setContainerWidth] = useState(0);
     const tableContainerRef = useRef(null);
 
     useEffect(() => {
@@ -192,6 +193,8 @@ function useDataTableController({
         return columnOrder.map((id) => byId[id]).filter(Boolean);
     }, [table, columnOrder]);
 
+    const visibleLeafColumnCount = table.getVisibleLeafColumns().length;
+
     const resetColumns = useCallback(() => {
         setColumnVisibility(defaultColumnVisibility);
         setColumnOrder(defaultColumnOrder);
@@ -215,7 +218,7 @@ function useDataTableController({
         const visibleColumns = table.getVisibleLeafColumns();
         const nextSizing = distributeColumnWidths(
             visibleColumns,
-            Math.max(0, container.clientWidth - 1),
+            Math.max(0, container.clientWidth - 2),
         );
         if (Object.keys(nextSizing).length === 0) {
             return;
@@ -223,6 +226,79 @@ function useDataTableController({
 
         setColumnSizing(nextSizing);
     }, [enableColumnResizing, table]);
+
+    useEffect(() => {
+        if (!enableColumnResizing) {
+            return undefined;
+        }
+
+        const container = tableContainerRef.current;
+        if (!container) {
+            return undefined;
+        }
+
+        const syncWidth = () => {
+            const nextWidth = container.clientWidth;
+            setContainerWidth((prev) => (prev === nextWidth ? prev : nextWidth));
+        };
+
+        syncWidth();
+
+        const ro = new ResizeObserver(syncWidth);
+        ro.observe(container);
+
+        return () => ro.disconnect();
+    }, [enableColumnResizing, data.length, columnOrder.length, visibleLeafColumnCount]);
+
+    useEffect(() => {
+        if (!enableColumnResizing) {
+            return undefined;
+        }
+
+        const container = tableContainerRef.current;
+        if (!container) {
+            return undefined;
+        }
+
+        let cancelled = false;
+        let attempts = 0;
+
+        const resolveOverflow = () => {
+            if (cancelled || attempts >= 4) {
+                return;
+            }
+            attempts += 1;
+            if (container.scrollWidth > container.clientWidth + 1) {
+                fitColumnsToWidth();
+                window.requestAnimationFrame(() => {
+                    window.requestAnimationFrame(resolveOverflow);
+                });
+            }
+        };
+
+        const raf = window.requestAnimationFrame(() => {
+            window.requestAnimationFrame(resolveOverflow);
+        });
+
+        const ro = new ResizeObserver(() => {
+            if (attempts < 4 && container.scrollWidth > container.clientWidth + 1) {
+                resolveOverflow();
+            }
+        });
+        ro.observe(container);
+
+        return () => {
+            cancelled = true;
+            window.cancelAnimationFrame(raf);
+            ro.disconnect();
+        };
+    }, [
+        enableColumnResizing,
+        fitColumnsToWidth,
+        data.length,
+        columnOrder.length,
+        visibleLeafColumnCount,
+    ]);
 
     const moveColumn = useCallback((columnId, direction) => {
         setColumnOrder((old) => {
@@ -294,6 +370,7 @@ function useDataTableController({
         handleDrop,
         tableClasses,
         visibleColumnCount,
+        containerWidth,
     };
 }
 
@@ -501,18 +578,23 @@ export function DataTableView({ controller, emptyMessage = 'No data.', loading =
         tableClasses,
         visibleColumnCount,
         tableContainerRef,
+        containerWidth,
     } = controller;
 
     const isResizingColumn = Boolean(table.getState().columnSizingInfo?.isResizingColumn);
+    const totalColumnWidth = Math.floor(table.getCenterTotalSize());
+    const cappedTableWidth = enableColumnResizing && containerWidth > 0
+        ? Math.min(totalColumnWidth, Math.max(0, containerWidth - 2))
+        : totalColumnWidth;
 
     return (
         <div
             ref={tableContainerRef}
-            className={`table-responsive${isResizingColumn ? ' datatable-is-resizing' : ''}`}
+            className={`table-responsive datatable-responsive-wrap${isResizingColumn ? ' datatable-is-resizing' : ''}`}
         >
             <table
                 className={`${tableClasses}${enableColumnResizing ? ' datatable-resizable' : ''}`.trim()}
-                style={enableColumnResizing ? { width: table.getCenterTotalSize() } : undefined}
+                style={enableColumnResizing ? { width: cappedTableWidth } : undefined}
             >
                 <thead>
                 {table.getHeaderGroups().map((headerGroup) => (
