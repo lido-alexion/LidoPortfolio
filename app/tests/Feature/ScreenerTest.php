@@ -753,4 +753,135 @@ class ScreenerTest extends TestCase
             ],
         ])->assertStatus(422);
     }
+
+    public function test_backtest_weekdays_matrix_and_session_discard(): void
+    {
+        \Carbon\Carbon::setTestNow(\Carbon\Carbon::parse('2026-07-21 12:00:00', config('app.timezone')));
+
+        $user = User::query()->create([
+            'name' => 'Backtest User',
+            'email' => 'scr-bt-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+        $profile = $this->defaultPortfolioFor($user);
+
+        $stock = Stock::query()->create([
+            'symbol' => 'BT'.strtoupper(Str::random(4)),
+            'exchange' => 'NSE',
+            'name' => 'Backtest Stock',
+            'is_active' => true,
+            'is_benchmark' => false,
+        ]);
+        Holding::query()->create([
+            'profile_id' => $profile->id,
+            'stock_id' => $stock->id,
+            'quantity' => 5,
+            'avg_buy_price' => 100,
+            'invested_amount' => 500,
+            'total_fees' => 0,
+            'realized_profit' => 0,
+            'updated_at' => now(),
+        ]);
+
+        $base = now()->subDays(40)->startOfDay();
+        for ($i = 0; $i < 45; $i++) {
+            $c = 100 + $i;
+            StockPrice::query()->create([
+                'stock_id' => $stock->id,
+                'price_date' => $base->copy()->addDays($i)->toDateString(),
+                'open_price' => $c,
+                'high_price' => $c + 1,
+                'low_price' => $c - 1,
+                'close_price' => $c,
+                'adjusted_close_price' => $c,
+                'volume' => 10000,
+                'provider_source' => 'test',
+                'data_source' => 'test',
+                'created_at' => now(),
+            ]);
+        }
+
+        $this->actingAs($user);
+
+        $this->getJson('/api/screeners/meta')
+            ->assertOk()
+            ->assertJsonPath('data.backtest_scopes.0', 'holdings')
+            ->assertJsonFragment(['id' => '15d', 'label' => '15 days']);
+
+        $create = $this->postJson('/api/screeners', [
+            'name' => 'Backtest screen',
+            'scope' => 'holdings',
+            'definition_json' => [
+                'root' => [
+                    'type' => 'group',
+                    'op' => 'AND',
+                    'children' => [
+                        [
+                            'type' => 'condition',
+                            'left' => ['indicator' => 'close'],
+                            'operator' => 'gt',
+                            'weight_factor' => 1,
+                            'right' => ['type' => 'constant', 'value' => 0],
+                        ],
+                    ],
+                ],
+            ],
+        ])->assertCreated();
+        $id = (int) $create->json('data.id');
+        $token = 'test-backtest-session-'.Str::random(8);
+
+        $start = $this->postJson("/api/screeners/{$id}/backtest", [
+            'range' => '15d',
+            'session_token' => $token,
+        ])->assertOk();
+
+        $backtestId = (int) $start->json('data.id');
+        $completed = (bool) $start->json('completed');
+        $guard = 0;
+        while (! $completed && $guard < 50) {
+            $guard++;
+            $cont = $this->postJson("/api/screener-backtests/{$backtestId}/continue")->assertOk();
+            $completed = (bool) $cont->json('completed');
+        }
+        $this->assertTrue($completed);
+
+        $matrix = $this->getJson("/api/screener-backtests/{$backtestId}/matrix")
+            ->assertOk()
+            ->json('data');
+
+        $this->assertNotEmpty($matrix['columns']);
+        foreach ($matrix['columns'] as $col) {
+            $dow = \Carbon\Carbon::parse($col['id'])->dayOfWeek;
+            $this->assertNotContains($dow, [\Carbon\Carbon::SATURDAY, \Carbon\Carbon::SUNDAY]);
+        }
+        $this->assertSame($stock->symbol, $matrix['rows'][0]['symbol']);
+        $this->assertTrue(in_array(true, $matrix['rows'][0]['presence'], true));
+
+        $indexCreate = $this->postJson('/api/screeners', [
+            'name' => 'Index no backtest',
+            'scope' => 'index',
+            'index_symbol' => 'NIFTY50',
+            'definition_json' => [
+                'root' => [
+                    'type' => 'condition',
+                    'left' => ['indicator' => 'close'],
+                    'operator' => 'gt',
+                    'right' => ['type' => 'constant', 'value' => 0],
+                ],
+            ],
+        ])->assertCreated();
+        $indexId = (int) $indexCreate->json('data.id');
+
+        $this->postJson("/api/screeners/{$indexId}/backtest", [
+            'range' => '15d',
+            'session_token' => $token.'-x',
+        ])->assertStatus(422);
+
+        $this->deleteJson("/api/screener-backtests/session/{$token}")
+            ->assertOk()
+            ->assertJsonPath('deleted', 1);
+        $this->assertDatabaseMissing('portfolio_screener_backtests', ['id' => $backtestId]);
+
+        \Carbon\Carbon::setTestNow();
+    }
 }

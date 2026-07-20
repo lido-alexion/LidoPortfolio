@@ -70,4 +70,9 @@ class Screener extends Model
     {
         return $this->hasMany(ScreenerRun::class, 'screener_id');
     }
+
+    public function backtests(): HasMany
+    {
+        return $this->hasMany(ScreenerBacktest::class, 'screener_id');
+    }
 }

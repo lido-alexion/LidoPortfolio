@@ -134,9 +134,16 @@ export default function ScreenerGuideTab() {
 
                 <h3 className="h6 mt-4">Stacked run results</h3>
                 <p className="small text-muted mb-4">
-                    On a screener’s editor, <strong>Stacked run results</strong> overlays completed runs (same latest-30 window as Run history).
+                    On a screener’s editor, use <strong>Show stacked results</strong> under Run history to load an on-demand overlay of completed runs (same latest-30 window).
                     Rows are the unique matched symbols; columns are runs (oldest→newest left to right).
                     Green = hit that run; the badge next to the symbol is how many runs hit; numbers inside green cells are consecutive-hit streaks (reset after a grey miss).
+                </p>
+
+                <h3 className="h6 mt-4">Backtest</h3>
+                <p className="small text-muted mb-4">
+                    For <strong>holdings</strong> and <strong>watchlist</strong> scopes, pick a window (1 year / 6 months / 3 months / 1 month / 15 days) and click <strong>Backtest</strong>.
+                    The engine walks each weekday from the start date to today (weekends skipped), treating that day as “today” and using only OHLCV on or before it.
+                    Results appear in a stacked matrix like stacked run results. Temp rows are session-scoped and discarded when you leave the editor.
                 </p>
 
                 <h3 className="h6 mt-4">Supported indicators</h3>

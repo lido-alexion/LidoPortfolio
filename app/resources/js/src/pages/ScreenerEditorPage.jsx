@@ -5,6 +5,7 @@ import usePortfolioChanged from '../hooks/usePortfolioChanged';
 import { showToast } from '../toast';
 import { formatRunListLabel, formatRunResultsHeading, lastRunSummaryText, operatorLabel, runStatsWarning } from '../components/screener/screenerTableHelpers';
 import ScreenerRunsCompareTable from '../components/screener/ScreenerRunsCompareTable';
+import NumberInput from '../components/NumberInput';
 import { buildExplorerComparePath } from '../utils/explorerLinks';
 import { resolveExternalStockUrl } from '../utils/externalStockLinks';
 
@@ -12,8 +13,24 @@ const WIDE_LAYOUT_QUERY = '(min-width: 1400px)';
 const NAME_MAX_LENGTH = 120;
 const DESCRIPTION_MAX_LENGTH = 500;
 const DEFAULT_EXPLORER_BENCHMARK = 'NIFTY50';
+const BACKTEST_SESSION_KEY = 'lido_screener_backtest_session';
 const NAME_ALLOWED_RE = /^[\p{L}\p{N}\s\-._,&()\/:+#%'"]+$/u;
 const DESCRIPTION_ALLOWED_RE = /^[\p{L}\p{N}\s\-._,&()\/:+#%'"?!]*$/u;
+
+function getOrCreateBacktestSessionToken() {
+    try {
+        let token = sessionStorage.getItem(BACKTEST_SESSION_KEY);
+        if (!token) {
+            token = (typeof crypto !== 'undefined' && crypto.randomUUID)
+                ? crypto.randomUUID()
+                : `bt-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+            sessionStorage.setItem(BACKTEST_SESSION_KEY, token);
+        }
+        return token;
+    } catch {
+        return `bt-${Date.now()}`;
+    }
+}
 
 function validationMessage(error) {
     const errors = error?.response?.data?.errors;
@@ -365,16 +382,16 @@ function ConditionNode({ node, onChange, onRemove, meta, depth }) {
                 </div>
                 <div className="col-auto">
                     <div className="d-flex align-items-center gap-1">
-                        <input
-                            type="number"
-                            step="any"
-                            inputMode="decimal"
-                            className="form-control form-control-sm lido-screener-weight-input"
+                        <NumberInput
+                            compact
+                            step={0.1}
+                            min={0}
+                            className="lido-screener-weight-input"
                             value={node.weight_factor ?? 1}
                             onChange={(e) => {
                                 const raw = e.target.value;
-                                if (raw === '' || raw === '-' || raw === '.' || raw === '-.') {
-                                    onChange({ ...node, weight_factor: raw });
+                                if (raw === '') {
+                                    onChange({ ...node, weight_factor: '' });
                                     return;
                                 }
                                 const parsed = Number(raw);
@@ -443,6 +460,12 @@ export default function ScreenerEditorPage() {
     const [historyTotal, setHistoryTotal] = useState(0);
     const [historyLimit, setHistoryLimit] = useState(30);
     const [compareMatrix, setCompareMatrix] = useState(null);
+    const [compareVisible, setCompareVisible] = useState(false);
+    const [loadingCompare, setLoadingCompare] = useState(false);
+    const [backtestRange, setBacktestRange] = useState('1y');
+    const [backtesting, setBacktesting] = useState(false);
+    const [backtestProgress, setBacktestProgress] = useState(null);
+    const [backtestMatrix, setBacktestMatrix] = useState(null);
     const [clearingHistory, setClearingHistory] = useState(false);
     const [wideLayout, setWideLayout] = useState(() => (
         typeof window !== 'undefined' && window.matchMedia(WIDE_LAYOUT_QUERY).matches
@@ -475,14 +498,16 @@ export default function ScreenerEditorPage() {
                 setHistory([]);
                 setHistoryTotal(0);
                 setCompareMatrix(null);
+                setCompareVisible(false);
+                setBacktestMatrix(null);
+                setBacktestProgress(null);
                 setRunResult(null);
                 return;
             }
 
-            const [showRes, runsRes, compareRes] = await Promise.all([
+            const [showRes, runsRes] = await Promise.all([
                 api.get(`/screeners/${id}`, { skipErrorToast: true }),
                 api.get(`/screeners/${id}/runs`, { skipErrorToast: true }),
-                api.get(`/screeners/${id}/runs/compare`, { skipErrorToast: true }),
             ]);
             const data = showRes.data?.data;
             setForm({
@@ -503,7 +528,10 @@ export default function ScreenerEditorPage() {
             setHistory(runsRes.data?.data ?? []);
             setHistoryTotal(runsRes.data?.total ?? runsRes.data?.data?.length ?? 0);
             setHistoryLimit(runsRes.data?.limit ?? 30);
-            setCompareMatrix(compareRes.data?.data ?? null);
+            setCompareMatrix(null);
+            setCompareVisible(false);
+            setBacktestMatrix(null);
+            setBacktestProgress(null);
 
             const runId = searchParams.get('run');
             if (runId) {
@@ -523,6 +551,20 @@ export default function ScreenerEditorPage() {
     useEffect(() => {
         load();
     }, [load]);
+
+    useEffect(() => {
+        return () => {
+            let token = null;
+            try {
+                token = sessionStorage.getItem(BACKTEST_SESSION_KEY);
+            } catch {
+                token = null;
+            }
+            if (!token) return;
+            api.delete(`/screener-backtests/session/${encodeURIComponent(token)}`, { skipErrorToast: true })
+                .catch(() => {});
+        };
+    }, []);
 
     usePortfolioChanged(load);
 
@@ -620,14 +662,12 @@ export default function ScreenerEditorPage() {
             navigate(`/screeners/${id}?run=${fullRun.id}`, { replace: true });
             const matched = fullRun?.stats?.matched ?? 0;
             showToast(`Run ID ${fullRun.id} finished with ${matched} match(es).`);
-            const [runsRes, compareRes] = await Promise.all([
-                api.get(`/screeners/${id}/runs`),
-                api.get(`/screeners/${id}/runs/compare`, { skipErrorToast: true }),
-            ]);
+            const runsRes = await api.get(`/screeners/${id}/runs`);
             setHistory(runsRes.data?.data ?? []);
             setHistoryTotal(runsRes.data?.total ?? runsRes.data?.data?.length ?? 0);
             setHistoryLimit(runsRes.data?.limit ?? 30);
-            setCompareMatrix(compareRes.data?.data ?? null);
+            setCompareMatrix(null);
+            setCompareVisible(false);
         } catch (error) {
             showToast(validationMessage(error), 'danger');
         } finally {
@@ -645,6 +685,83 @@ export default function ScreenerEditorPage() {
         }
     };
 
+    const loadStackedResults = async () => {
+        if (isNew || !id) return;
+        setLoadingCompare(true);
+        setCompareVisible(true);
+        try {
+            const compareRes = await api.get(`/screeners/${id}/runs/compare`, { skipErrorToast: true });
+            setCompareMatrix(compareRes.data?.data ?? null);
+        } catch (error) {
+            setCompareVisible(false);
+            setCompareMatrix(null);
+            showToast(validationMessage(error), 'danger');
+        } finally {
+            setLoadingCompare(false);
+        }
+    };
+
+    const pollBacktestContinue = async (backtestId) => {
+        let guard = 0;
+        let latest = null;
+        while (guard < 2000) {
+            guard += 1;
+            const cont = await api.post(`/screener-backtests/${backtestId}/continue`);
+            latest = cont.data?.data ?? null;
+            setBacktestProgress(latest);
+            if (cont.data?.completed) return latest;
+            if (!cont.data?.continued) return latest;
+        }
+        return latest;
+    };
+
+    const runBacktest = async () => {
+        if (isNew) return;
+        setSubmitted(true);
+        if (hasValidationErrors) {
+            const firstError = Object.values(validationErrors)[0];
+            showToast(firstError || 'Please fix validation errors before backtesting.', 'danger');
+            return;
+        }
+        const scopes = meta?.backtest_scopes || ['holdings', 'watchlist'];
+        if (!scopes.includes(form.scope)) {
+            showToast('Backtest is only available for holdings and watchlist scopes.', 'danger');
+            return;
+        }
+        setBacktesting(true);
+        setBacktestMatrix(null);
+        setBacktestProgress(null);
+        try {
+            const ok = await save();
+            if (!ok) return;
+            const token = getOrCreateBacktestSessionToken();
+            const res = await api.post(`/screeners/${id}/backtest`, {
+                range: backtestRange,
+                session_token: token,
+            });
+            let backtest = res.data?.data;
+            setBacktestProgress(backtest);
+            if (res.data?.continued && backtest?.id) {
+                backtest = await pollBacktestContinue(backtest.id);
+            }
+            if (backtest?.status === 'failed') {
+                showToast(backtest.error_message || 'Backtest failed.', 'danger');
+                return;
+            }
+            if (backtest?.status !== 'completed' || !backtest?.id) {
+                showToast('Backtest did not complete.', 'danger');
+                return;
+            }
+            const matrixRes = await api.get(`/screener-backtests/${backtest.id}/matrix`);
+            setBacktestMatrix(matrixRes.data?.data ?? null);
+            showToast(`Backtest finished (${backtest.stats?.days_done ?? 0} weekdays).`);
+        } catch (error) {
+            showToast(validationMessage(error), 'danger');
+        } finally {
+            setBacktesting(false);
+        }
+    };
+
     const clearHistory = async () => {
         if (!window.confirm('Delete all run history and matched results for this screener? This cannot be undone.')) {
             return;
@@ -656,6 +773,7 @@ export default function ScreenerEditorPage() {
             setHistory([]);
             setHistoryTotal(0);
             setCompareMatrix(null);
+            setCompareVisible(false);
             setRunResult(null);
             navigate(`/screeners/${id}`, { replace: true });
             showToast(`Cleared ${deleted} run record(s) and their matched stocks.`);
@@ -668,6 +786,17 @@ export default function ScreenerEditorPage() {
 
     const lookbackHint = useMemo(() => form?.max_lookback ?? '—', [form?.max_lookback]);
     const latestRunId = history[0]?.id ?? null;
+    const backtestAllowed = useMemo(() => {
+        const scopes = meta?.backtest_scopes || ['holdings', 'watchlist'];
+        return scopes.includes(form?.scope);
+    }, [meta?.backtest_scopes, form?.scope]);
+    const backtestRanges = meta?.backtest_ranges || [
+        { id: '1y', label: '1 year' },
+        { id: '6m', label: '6 months' },
+        { id: '3m', label: '3 months' },
+        { id: '1m', label: '1 month' },
+        { id: '15d', label: '15 days' },
+    ];
     const runResultsHeading = useMemo(() => {
         if (!runResult) return null;
         return formatRunResultsHeading(runResult, {
@@ -1112,39 +1241,118 @@ export default function ScreenerEditorPage() {
                                     );
                                 })}
                             </ul>
-                            <h3 className="h6 mb-1">Stacked run results</h3>
-                            <div className="form-text mb-2">
-                                All matched stocks across completed runs (latest {historyLimit}).
-                                Green cells mean the stock hit that run; numbers are consecutive hit streaks left→right (reset after a miss).
-                                Scroll horizontally; the stock column stays fixed.
+                            <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-3 mb-2">
+                                <h3 className="h6 mb-0">Stacked run results</h3>
+                                <button
+                                    type="button"
+                                    className="btn btn-sm btn-outline-secondary"
+                                    disabled={loadingCompare || clearingHistory || running}
+                                    onClick={loadStackedResults}
+                                >
+                                    {loadingCompare
+                                        ? 'Loading…'
+                                        : compareVisible
+                                            ? 'Refresh stacked results'
+                                            : 'Show stacked results'}
+                                </button>
                             </div>
-                            <ScreenerRunsCompareTable
-                                matrix={compareMatrix}
-                                onSelectRun={loadRun}
-                            />
+                            {!compareVisible && (
+                                <div className="form-text mb-0">
+                                    Optional overlay of matched stocks across completed runs (latest {historyLimit}).
+                                    Click the button to calculate and load it.
+                                </div>
+                            )}
+                            {compareVisible && (
+                                <>
+                                    <div className="form-text mb-2">
+                                        All matched stocks across completed runs (latest {historyLimit}).
+                                        Green cells mean the stock hit that run; numbers are consecutive hit streaks left→right (reset after a miss).
+                                        Scroll horizontally; the stock column stays fixed.
+                                    </div>
+                                    {loadingCompare && !compareMatrix ? (
+                                        <p className="small text-muted mb-0">Building stacked matrix…</p>
+                                    ) : (
+                                        <ScreenerRunsCompareTable
+                                            matrix={compareMatrix}
+                                            onSelectRun={loadRun}
+                                        />
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    )}
+
+                    {!isNew && (backtesting || backtestMatrix) && (
+                        <div className="border rounded p-3 mb-3">
+                            <h2 className="h6 mb-1">Backtest results</h2>
+                            {backtesting && (
+                                <p className="small text-muted mb-2">
+                                    Backtesting…
+                                    {' '}
+                                    {backtestProgress?.stats?.days_done ?? 0}
+                                    {' / '}
+                                    {backtestProgress?.stats?.day_total ?? '…'}
+                                    {' '}
+                                    weekdays
+                                    {backtestProgress?.stats?.progress_pct != null
+                                        ? ` (${backtestProgress.stats.progress_pct}%)`
+                                        : ''}
+                                </p>
+                            )}
+                            {!backtesting && backtestMatrix && (
+                                <>
+                                    <div className="form-text mb-2">
+                                        As-of weekday walk (weekends skipped). Green = matched that day; badge = hit count; numbers are consecutive streaks.
+                                    </div>
+                                    <ScreenerRunsCompareTable matrix={backtestMatrix} />
+                                </>
+                            )}
                         </div>
                     )}
                 </div>
             </div>
 
-            <div className="lido-screener-editor-footer d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
+            <div className="lido-screener-editor-footer d-flex flex-wrap justify-content-end align-items-center gap-2 mt-4 pt-3 border-top">
                 <Link to="/screeners" className="btn btn-outline-secondary">
                     Close
                 </Link>
                 {!isNew && (
-                    <button
-                        type="button"
-                        className="btn btn-outline-primary"
-                        disabled={running || saving || hasValidationErrors}
-                        onClick={runNow}
-                    >
-                        {running ? 'Running…' : 'Run now'}
-                    </button>
+                    <>
+                        <button
+                            type="button"
+                            className="btn btn-outline-primary"
+                            disabled={running || backtesting || saving || hasValidationErrors}
+                            onClick={runNow}
+                        >
+                            {running ? 'Running…' : 'Run now'}
+                        </button>
+                        <select
+                            className="form-select form-select-sm lido-screener-backtest-range"
+                            value={backtestRange}
+                            onChange={(e) => setBacktestRange(e.target.value)}
+                            disabled={running || backtesting || saving || !backtestAllowed}
+                            aria-label="Backtest range"
+                            title={backtestAllowed ? 'Backtest window' : 'Backtest is only for holdings and watchlist'}
+                        >
+                            {backtestRanges.map((r) => (
+                                <option key={r.id} value={r.id}>{r.label}</option>
+                            ))}
+                        </select>
+                        <button
+                            type="button"
+                            className="btn btn-outline-secondary"
+                            disabled={running || backtesting || saving || hasValidationErrors || !backtestAllowed}
+                            onClick={runBacktest}
+                            title={backtestAllowed ? 'Walk weekdays as-of and stack hits' : 'Backtest is only for holdings and watchlist'}
+                        >
+                            {backtesting ? 'Backtesting…' : 'Backtest'}
+                        </button>
+                    </>
                 )}
                 <button
                     type="button"
                     className="btn btn-primary"
-                    disabled={saving || running || hasValidationErrors}
+                    disabled={saving || running || backtesting || hasValidationErrors}
                     onClick={save}
                 >
                     {saving ? 'Saving…' : (isNew ? 'Save' : 'Save')}

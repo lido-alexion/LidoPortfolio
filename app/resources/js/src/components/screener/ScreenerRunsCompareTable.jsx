@@ -15,7 +15,7 @@ export default function ScreenerRunsCompareTable({ matrix, onSelectRun }) {
     if (columns.length === 0) {
         return (
             <p className="small text-muted mb-0">
-                No completed runs to compare yet.
+                No columns to display yet.
             </p>
         );
     }
@@ -23,7 +23,7 @@ export default function ScreenerRunsCompareTable({ matrix, onSelectRun }) {
     if (rows.length === 0) {
         return (
             <p className="small text-muted mb-0">
-                Completed runs have no matched stocks to stack.
+                No matched stocks in this set.
             </p>
         );
     }

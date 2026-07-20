@@ -39,6 +39,20 @@ class ScreenerCatalog
     /** Runs returned in editor/history API (all runs remain in DB until cleared). */
     public const RUN_HISTORY_UI_LIMIT = 30;
 
+    /** Weekdays processed per backtest continue request. */
+    public const BACKTEST_DAY_CHUNK = 5;
+
+    /** Scopes allowed for as-of backtest. */
+    public const BACKTEST_SCOPES = ['holdings', 'watchlist'];
+
+    public const BACKTEST_RANGES = [
+        ['id' => '1y', 'label' => '1 year'],
+        ['id' => '6m', 'label' => '6 months'],
+        ['id' => '3m', 'label' => '3 months'],
+        ['id' => '1m', 'label' => '1 month'],
+        ['id' => '15d', 'label' => '15 days'],
+    ];
+
     /** Trading sessions in a 52-week lookback (NSE/BSE convention). */
     public const TRADING_DAYS_52W = 252;
 
@@ -171,6 +185,9 @@ class ScreenerCatalog
             'chunk_size' => self::CHUNK_SIZE,
             'run_history_ui_limit' => self::RUN_HISTORY_UI_LIMIT,
             'param_min_period' => self::PARAM_MIN_PERIOD,
+            'backtest_scopes' => self::BACKTEST_SCOPES,
+            'backtest_ranges' => self::BACKTEST_RANGES,
+            'backtest_day_chunk' => self::BACKTEST_DAY_CHUNK,
         ];
     }
 

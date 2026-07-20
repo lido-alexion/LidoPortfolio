@@ -30,6 +30,7 @@ use App\Http\Controllers\Api\TransactionController;
 use App\Http\Controllers\Api\UniversePriceSyncController;
 use App\Http\Controllers\Api\UserInviteController;
 use App\Http\Controllers\Api\UserManagementController;
+use App\Http\Controllers\Api\ScreenerBacktestController;
 use App\Http\Controllers\Api\ScreenerController;
 use App\Http\Controllers\Api\ScreenerRunController;
 use App\Http\Controllers\Api\WatchlistController;
@@ -156,11 +157,15 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::put('/screeners/{screener}', [ScreenerController::class, 'update']);
     Route::delete('/screeners/{screener}', [ScreenerController::class, 'destroy']);
     Route::post('/screeners/{screener}/run', [ScreenerController::class, 'run']);
+    Route::post('/screeners/{screener}/backtest', [ScreenerBacktestController::class, 'start']);
     Route::get('/screeners/{screener}/runs/compare', [ScreenerController::class, 'compareRuns']);
     Route::get('/screeners/{screener}/runs', [ScreenerController::class, 'runs']);
     Route::delete('/screeners/{screener}/runs', [ScreenerController::class, 'clearRuns']);
     Route::get('/screener-runs/{screenerRun}', [ScreenerRunController::class, 'show']);
     Route::post('/screener-runs/{screenerRun}/continue', [ScreenerRunController::class, 'continue']);
+    Route::post('/screener-backtests/{screenerBacktest}/continue', [ScreenerBacktestController::class, 'continue']);
+    Route::get('/screener-backtests/{screenerBacktest}/matrix', [ScreenerBacktestController::class, 'matrix']);
+    Route::delete('/screener-backtests/session/{token}', [ScreenerBacktestController::class, 'discardSession']);
 
     Route::get('/settings', [SettingsController::class, 'index']);
     Route::put('/settings', [SettingsController::class, 'update']);
