@@ -7,17 +7,19 @@ alwaysApply: true
 
 Whenever the user asks to deploy, prepare for deployment, or what to upload after a release:
 
+**Use the project skill:** `.cursor/skills/deploy-cpanel/SKILL.md` — run `prepare-deploy.ps1` and present `deploy/deploy-table.md`. Do not manually rebuild the upload table from scratch.
+
 ## Proactive build (required)
 
-**Never ask the user to run `npm run build` or `prepare-upload.ps1`.** Run the build yourself.
+**Never ask the user to run `npm run build` or `prepare-upload.ps1`.** Run the skill script yourself.
 
-1. If the release includes frontend changes (`resources/js/`, `resources/css/`, `resources/views/app.blade.php`, Vite config, or anything that affects `public/build/`), run from repo root:
+1. From repo root:
    ```powershell
-   cd D:\Projects\LidoPortfolio\deploy; powershell -ExecutionPolicy Bypass -File .\prepare-upload.ps1
+   powershell -ExecutionPolicy Bypass -File .cursor/skills/deploy-cpanel/scripts/prepare-deploy.ps1
    ```
-2. When the upload list includes `public/build/` (any frontend-related release), always run `prepare-upload.ps1` before presenting the table — do not skip and do not delegate to the user.
-3. After the build completes, **tell the user** you ran it and cite the main bundle name from output (e.g. `app-DlreZ99B.js`) so they can verify on the server after upload.
-4. Do not say “run build first” or “you need to build before uploading” — build, then present the table.
+2. The script runs `deploy/prepare-upload.ps1` unless `-SkipBuild` is passed.
+3. After the build completes, **tell the user** you ran it and cite the **Main JS bundle** line from `deploy/deploy-table.md` (e.g. `app-D2A81yEZ.js`).
+4. Do not say "run build first" or "you need to build before uploading" — build, then present the table.
 
 ## Upload table
 
