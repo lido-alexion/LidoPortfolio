@@ -130,6 +130,12 @@ Schedule::command('stocks:sync')
     ->timezone($timezone)
     ->name('stock-master-sync');
 
+// Backup weekly pass if stock-master sync is skipped/fails before constituent refresh.
+Schedule::command('portfolio:refresh-index-constituents')
+    ->weeklyOn(0, '02:30')
+    ->timezone($timezone)
+    ->name('index-constituents-refresh');
+
 // Heartbeat every minute so we can tell whether cPanel cron is invoking schedule:run.
 Schedule::command('portfolio:universe-maintenance-probe --write-heartbeat')
     ->timezone($timezone)

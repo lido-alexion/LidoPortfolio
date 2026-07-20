@@ -2,6 +2,9 @@
 /**
  * Refresh NSE index constituent caches (CSV archives + equity-stockIndices fallback).
  *
+ * Prefer the weekly scheduler (`stocks:sync` then `portfolio:refresh-index-constituents`)
+ * for production. This script is for one-off / post-deploy refresh.
+ *
  * Upload: public_html/portfolio/cpanel-refresh-index-constituents.php
  *
  * Dry-run status: ...?token=YOUR_TOKEN
@@ -84,7 +87,7 @@ if (! $apply) {
 }
 
 if ($targets === []) {
-    echo "No matching NSE broad indexes with constituents support.\n";
+    echo "No matching NSE indexes with constituents support.\n";
     exit(0);
 }
 

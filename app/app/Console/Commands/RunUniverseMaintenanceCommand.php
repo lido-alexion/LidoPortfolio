@@ -30,7 +30,6 @@ class RunUniverseMaintenanceCommand extends Command
         SettingsService $settings,
         PortfolioLoggerService $logger,
         IndexPriceSyncService $indexSync,
-        \App\Services\IndexConstituentService $indexConstituents,
     ): int {
         if (! $sync->isEnabled()) {
             $this->warn('Universe price sync is disabled (UNIVERSE_PRICE_SYNC_ENABLED=false).');
@@ -175,22 +174,6 @@ class RunUniverseMaintenanceCommand extends Command
                     ['Rows stored', $indexResult['stored_rows'] ?? 0],
                     ['Cursor after', $indexResult['cursor_after'] ?? '—'],
                     ['Cycle completed', ! empty($indexResult['cycle_completed']) ? 'yes' : 'no'],
-                ],
-            );
-        }
-
-        if ($windowStart) {
-            $constituentResult = $indexConstituents->refreshBroadNseCaches();
-            $logger->scheduler('info', 'Universe maintenance index constituent refresh', [
-                'event' => 'universe_maintenance_index_constituents',
-                'refreshed' => $constituentResult['refreshed'],
-                'failed' => $constituentResult['failed'],
-            ]);
-            $this->table(
-                ['Index constituents', 'Value'],
-                [
-                    ['Refreshed', $constituentResult['refreshed']],
-                    ['Failed', $constituentResult['failed']],
                 ],
             );
         }
