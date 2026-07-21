@@ -73,11 +73,11 @@ class ScreenerCatalog
     /** Runs returned in editor/history API (all runs remain in DB until cleared). */
     public const RUN_HISTORY_UI_LIMIT = 30;
 
-    /** Weekdays processed per backtest continue request. */
-    public const BACKTEST_DAY_CHUNK = 5;
+    /** Stocks processed per backtest continue request (stock-major evaluation). */
+    public const BACKTEST_STOCK_CHUNK = 150;
 
-    /** Scopes allowed for as-of backtest. */
-    public const BACKTEST_SCOPES = ['holdings', 'watchlist'];
+    /** Scopes allowed for as-of backtest (stock-major engine handles full universe). */
+    public const BACKTEST_SCOPES = self::SCOPES;
 
     public const BACKTEST_RANGES = [
         ['id' => '1y', 'label' => '1 year'],
@@ -222,7 +222,7 @@ class ScreenerCatalog
             'param_min_period' => self::PARAM_MIN_PERIOD,
             'backtest_scopes' => self::BACKTEST_SCOPES,
             'backtest_ranges' => self::BACKTEST_RANGES,
-            'backtest_day_chunk' => self::BACKTEST_DAY_CHUNK,
+            'backtest_stock_chunk' => self::BACKTEST_STOCK_CHUNK,
         ];
     }
 

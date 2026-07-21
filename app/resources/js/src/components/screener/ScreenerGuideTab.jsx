@@ -238,9 +238,16 @@ export default function ScreenerGuideTab() {
 
                 <h3 className="h6 mt-4">Backtest</h3>
                 <p className="small text-muted mb-4">
-                    For <strong>holdings</strong> and <strong>watchlist</strong> scopes, use the <strong>Backtest</strong> split button (dropdown picks 1 year / 6 months / 3 months / 1 month / 15 days).
+                    Available for <strong>all scopes</strong> — holdings, watchlist, all equities and index constituents — via the <strong>Backtest</strong> split button (dropdown picks 1 year / 6 months / 3 months / 1 month / 15 days).
                     The engine walks each weekday from the start date to today (weekends skipped), treating that day as “today” and using only OHLCV on or before it.
-                    Results appear in a stacked matrix like stacked run results. Temp rows are session-scoped and discarded when you leave the editor.
+                    Under the hood it loads each stock&rsquo;s history once, computes every indicator series once, and answers all dates from those series — so even a 1-year backtest on the full equity universe stays fast.
+                    Results appear in a stacked matrix like stacked run results.
+                    {' '}
+                    <strong>Results are saved in the database per date</strong> (time of day is irrelevant — one result per screener per date):
+                    re-running a backtest reuses saved dates and only computes missing ones, and saved results reappear when you reopen the editor.
+                    Completed runs (scheduled cron or manual) also save into the same per-date results, so a screener that runs nightly
+                    builds its backtest matrix as it goes — the last completed run of a date wins.
+                    Editing the screener&rsquo;s conditions or scope invalidates saved backtest results; <strong>Clear history</strong> also deletes them.
                 </p>
 
                 <h3 className="h6 mt-4">Supported indicators</h3>

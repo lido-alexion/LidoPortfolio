@@ -89,6 +89,184 @@ class ScreenerEvaluationService
     }
 
     /**
+     * Stock-major evaluation: compute every indicator series once for the full
+     * bar range, then answer each as-of date by indexing into those series.
+     * Bars must carry a 'date' (Y-m-d) key and be sorted ascending; $asOfDates
+     * must also be ascending. Replaces per-day bar re-slicing in backtests.
+     *
+     * @param  array{root:array}  $definition
+     * @param  list<array{date:string,open:?float,high:?float,low:?float,close:?float,volume:?float,adjusted_close?:?float}>  $bars
+     * @param  list<string>  $asOfDates
+     * @param  array<string,list<array<string,mixed>>>  $entityBars  Index symbol → chronological bars (with 'date') for entity-pinned left operands.
+     * @return array<string,array{matched:bool,skipped:bool}>  Keyed by as-of date.
+     */
+    public function evaluateAcrossDates(array $definition, array $bars, array $asOfDates, array $entityBars = []): array
+    {
+        $root = $definition['root'] ?? [];
+        $stockLookback = $this->stockLookback($definition);
+
+        [$validBars, $stockDates] = $this->splitValidBars($bars);
+        $engines = ['stock' => $this->indicators->withBars($validBars)];
+        $dateLists = ['stock' => $stockDates];
+        foreach ($entityBars as $symbol => $entBars) {
+            [$entValid, $entDates] = $this->splitValidBars(is_array($entBars) ? $entBars : []);
+            $engines[$symbol] = $this->indicators->withBars($entValid);
+            $dateLists[$symbol] = $entDates;
+        }
+
+        $needsVolume = $this->treeNeedsVolume($root);
+        $volStreak = [];
+        if ($needsVolume) {
+            $streak = 0;
+            foreach ($validBars as $bar) {
+                $streak = ($bar['volume'] ?? null) === null ? 0 : $streak + 1;
+                $volStreak[] = $streak;
+            }
+        }
+
+        // Two-pointer walk: dates ascend, so each pointer only moves forward.
+        $pointers = array_fill_keys(array_keys($engines), -1);
+        $out = [];
+        foreach ($asOfDates as $asOf) {
+            $asOf = (string) $asOf;
+            foreach ($pointers as $key => $ptr) {
+                $list = $dateLists[$key];
+                $count = count($list);
+                while ($ptr + 1 < $count && $list[$ptr + 1] <= $asOf) {
+                    $ptr++;
+                }
+                $pointers[$key] = $ptr;
+            }
+
+            $stockIdx = $pointers['stock'];
+            if ($stockIdx + 1 < $stockLookback) {
+                $out[$asOf] = ['matched' => false, 'skipped' => true];
+
+                continue;
+            }
+            if ($needsVolume && ($volStreak[$stockIdx] ?? 0) < $stockLookback) {
+                $out[$asOf] = ['matched' => false, 'skipped' => true];
+
+                continue;
+            }
+
+            $out[$asOf] = [
+                'matched' => $this->evalNodeAtIndex($root, $engines, $pointers),
+                'skipped' => false,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Bars with a usable close (adjusted fallback) plus their parallel date list.
+     *
+     * @param  list<array<string,mixed>>  $bars
+     * @return array{0:list<array<string,mixed>>,1:list<string>}
+     */
+    private function splitValidBars(array $bars): array
+    {
+        $validBars = [];
+        $dates = [];
+        foreach ($bars as $bar) {
+            if (! is_array($bar)) {
+                continue;
+            }
+            $close = $bar['close'] ?? null;
+            if ($close === null && isset($bar['adjusted_close'])) {
+                $close = $bar['adjusted_close'];
+            }
+            if ($close === null) {
+                continue;
+            }
+            $validBars[] = $bar;
+            $dates[] = (string) ($bar['date'] ?? '');
+        }
+
+        return [$validBars, $dates];
+    }
+
+    /**
+     * Condition tree evaluation reading pre-computed series at fixed indexes.
+     * No metrics are collected — backtests only need the boolean outcome.
+     *
+     * @param  array<string,mixed>  $node
+     * @param  array<string,TechnicalIndicatorService>  $engines
+     * @param  array<string,int>  $indexes  Engine key → current bar index (-1 = no bar yet).
+     */
+    private function evalNodeAtIndex(array $node, array $engines, array $indexes): bool
+    {
+        $type = $node['type'] ?? null;
+        if ($type === 'group') {
+            $op = strtoupper((string) ($node['op'] ?? 'AND'));
+            $children = $node['children'] ?? [];
+            if ($children === []) {
+                return false;
+            }
+            if ($op === 'OR') {
+                foreach ($children as $child) {
+                    if (is_array($child) && $this->evalNodeAtIndex($child, $engines, $indexes)) {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+            foreach ($children as $child) {
+                if (! is_array($child) || ! $this->evalNodeAtIndex($child, $engines, $indexes)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        if ($type !== 'condition') {
+            return false;
+        }
+
+        $leftExpr = is_array($node['left'] ?? null) ? $node['left'] : [];
+        $rightExpr = is_array($node['right'] ?? null) ? $node['right'] : [];
+        $operator = (string) ($node['operator'] ?? 'gt');
+        $weightFactor = $this->normalizeWeightFactor($node['weight_factor'] ?? 1);
+
+        $left = $this->seriesValueAt($leftExpr, $this->exprEntity($leftExpr), $engines, $indexes);
+        // RHS always evaluates on the scanned stock.
+        $right = $this->seriesValueAt($rightExpr, 'stock', $engines, $indexes);
+        if ($left === null || $right === null) {
+            return false;
+        }
+        $scaledRight = $right * $weightFactor;
+
+        return match ($operator) {
+            'gt' => $left > $scaledRight,
+            'gte' => $left >= $scaledRight,
+            'lt' => $left < $scaledRight,
+            'lte' => $left <= $scaledRight,
+            'eq' => TechnicalIndicatorService::floatsEqual($left, $scaledRight),
+            default => false,
+        };
+    }
+
+    /**
+     * @param  array<string,mixed>  $expr
+     * @param  array<string,TechnicalIndicatorService>  $engines
+     * @param  array<string,int>  $indexes
+     */
+    private function seriesValueAt(array $expr, string $entity, array $engines, array $indexes): ?float
+    {
+        $engine = $engines[$entity] ?? null;
+        $idx = $indexes[$entity] ?? -1;
+        if ($engine === null || $idx < 0) {
+            return null;
+        }
+        $series = $engine->evaluateSeries($expr);
+
+        return $series[$idx] ?? null;
+    }
+
+    /**
      * @param  array<string,mixed>  $node
      * @param  string|null  $entityFilter  When 'stock', ignore left operands pinned to an index entity.
      */

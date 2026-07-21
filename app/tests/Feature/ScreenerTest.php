@@ -978,10 +978,15 @@ class ScreenerTest extends TestCase
         $this->assertSame($stock->symbol, $matrix['rows'][0]['symbol']);
         $this->assertTrue(in_array(true, $matrix['rows'][0]['presence'], true));
 
-        $indexCreate = $this->postJson('/api/screeners', [
-            'name' => 'Index no backtest',
-            'scope' => 'index',
-            'index_symbol' => 'NIFTY50',
+        // All scopes are backtestable with the stock-major engine, including the
+        // full equity universe.
+        $this->getJson('/api/screeners/meta')
+            ->assertOk()
+            ->assertJsonFragment(['backtest_scopes' => ['holdings', 'watchlist', 'all_equities', 'index']]);
+
+        $universeCreate = $this->postJson('/api/screeners', [
+            'name' => 'Universe backtest',
+            'scope' => 'all_equities',
             'definition_json' => [
                 'root' => [
                     'type' => 'condition',
@@ -991,17 +996,280 @@ class ScreenerTest extends TestCase
                 ],
             ],
         ])->assertCreated();
-        $indexId = (int) $indexCreate->json('data.id');
+        $universeId = (int) $universeCreate->json('data.id');
 
-        $this->postJson("/api/screeners/{$indexId}/backtest", [
+        $uniStart = $this->postJson("/api/screeners/{$universeId}/backtest", [
             'range' => '15d',
             'session_token' => $token.'-x',
-        ])->assertStatus(422);
+        ])->assertOk();
+        $uniBtId = (int) $uniStart->json('data.id');
+        $uniCompleted = (bool) $uniStart->json('completed');
+        $guard = 0;
+        while (! $uniCompleted && $guard < 50) {
+            $guard++;
+            $uniCompleted = (bool) $this->postJson("/api/screener-backtests/{$uniBtId}/continue")->assertOk()->json('completed');
+        }
+        $this->assertTrue($uniCompleted);
+        $uniMatrix = $this->getJson("/api/screener-backtests/{$uniBtId}/matrix")->assertOk()->json('data');
+        $this->assertNotEmpty($uniMatrix['columns']);
+        $uniSymbols = array_column($uniMatrix['rows'], 'symbol');
+        $this->assertContains($stock->symbol, $uniSymbols);
+        $this->deleteJson("/api/screener-backtests/session/{$token}-x")->assertOk();
 
         $this->deleteJson("/api/screener-backtests/session/{$token}")
             ->assertOk()
             ->assertJsonPath('deleted', 1);
         $this->assertDatabaseMissing('portfolio_screener_backtests', ['id' => $backtestId]);
+
+        // Per-date results are persistent: they survive the session discard
+        // and are served by the screener-level matrix endpoint.
+        $this->assertDatabaseHas('portfolio_screener_backtest_days', ['screener_id' => $id]);
+        $persisted = $this->getJson("/api/screeners/{$id}/backtest/matrix")
+            ->assertOk()
+            ->json('data');
+        $this->assertSame(count($matrix['columns']), count($persisted['columns']));
+        $this->assertSame($stock->symbol, $persisted['rows'][0]['symbol']);
+
+        \Carbon\Carbon::setTestNow();
+    }
+
+    public function test_completed_run_fills_backtest_day_cache_and_backtest_reuses_it(): void
+    {
+        \Carbon\Carbon::setTestNow(\Carbon\Carbon::parse('2026-07-21 18:30:00', config('app.timezone')));
+
+        $user = User::query()->create([
+            'name' => 'Run Cache User',
+            'email' => 'scr-rc-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+        $profile = $this->defaultPortfolioFor($user);
+
+        $stock = Stock::query()->create([
+            'symbol' => 'RC'.strtoupper(Str::random(4)),
+            'exchange' => 'NSE',
+            'name' => 'Run Cache Stock',
+            'is_active' => true,
+            'is_benchmark' => false,
+        ]);
+        Holding::query()->create([
+            'profile_id' => $profile->id,
+            'stock_id' => $stock->id,
+            'quantity' => 5,
+            'avg_buy_price' => 100,
+            'invested_amount' => 500,
+            'total_fees' => 0,
+            'realized_profit' => 0,
+            'updated_at' => now(),
+        ]);
+        $base = now()->subDays(40)->startOfDay();
+        for ($i = 0; $i < 45; $i++) {
+            $c = 100 + $i;
+            StockPrice::query()->create([
+                'stock_id' => $stock->id,
+                'price_date' => $base->copy()->addDays($i)->toDateString(),
+                'open_price' => $c,
+                'high_price' => $c + 1,
+                'low_price' => $c - 1,
+                'close_price' => $c,
+                'adjusted_close_price' => $c,
+                'volume' => 10000,
+                'provider_source' => 'test',
+                'data_source' => 'test',
+                'created_at' => now(),
+            ]);
+        }
+
+        $this->actingAs($user);
+
+        $create = $this->postJson('/api/screeners', [
+            'name' => 'Run cache screen',
+            'scope' => 'holdings',
+            'definition_json' => [
+                'root' => [
+                    'type' => 'condition',
+                    'left' => ['indicator' => 'close'],
+                    'operator' => 'gt',
+                    'right' => ['type' => 'constant', 'value' => 0],
+                ],
+            ],
+        ])->assertCreated();
+        $id = (int) $create->json('data.id');
+
+        // A completed run (manual here; scheduled cron runs use the same path)
+        // writes today's result into the per-date backtest cache.
+        $this->postJson("/api/screeners/{$id}/run")->assertOk();
+        $today = now()->toDateString();
+        $day = \App\Models\ScreenerBacktestDay::query()
+            ->where('screener_id', $id)
+            ->where('as_of_date', $today)
+            ->first();
+        $this->assertNotNull($day);
+        $this->assertSame(1, (int) $day->matched);
+        $this->assertSame($stock->symbol, \App\Models\ScreenerBacktestHit::query()
+            ->where('screener_id', $id)
+            ->where('as_of_date', $today)
+            ->value('symbol'));
+
+        // Running again the same day overwrites (still one row per date).
+        $this->postJson("/api/screeners/{$id}/run")->assertOk();
+        $this->assertSame(1, \App\Models\ScreenerBacktestDay::query()->where('screener_id', $id)->count());
+
+        // A 15-day backtest reuses the run-filled date and computes only the rest.
+        $start = $this->postJson("/api/screeners/{$id}/backtest", [
+            'range' => '15d',
+            'session_token' => 'rc-'.Str::random(8),
+        ])->assertOk();
+        $btId = (int) $start->json('data.id');
+        $completed = (bool) $start->json('completed');
+        $data = $start->json('data');
+        $guard = 0;
+        while (! $completed && $guard < 50) {
+            $guard++;
+            $cont = $this->postJson("/api/screener-backtests/{$btId}/continue")->assertOk();
+            $completed = (bool) $cont->json('completed');
+            $data = $cont->json('data');
+        }
+        $this->assertTrue($completed);
+        $this->assertSame(1, (int) $data['stats']['days_reused']);
+        $this->assertSame((int) $data['stats']['day_total'], \App\Models\ScreenerBacktestDay::query()->where('screener_id', $id)->count());
+
+        \Carbon\Carbon::setTestNow();
+    }
+
+    public function test_backtest_reuses_saved_dates_and_clears_on_edit_or_clear_history(): void
+    {
+        \Carbon\Carbon::setTestNow(\Carbon\Carbon::parse('2026-07-21 12:00:00', config('app.timezone')));
+
+        $user = User::query()->create([
+            'name' => 'Backtest Cache User',
+            'email' => 'scr-btc-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+        $profile = $this->defaultPortfolioFor($user);
+
+        $stock = Stock::query()->create([
+            'symbol' => 'BTC'.strtoupper(Str::random(3)),
+            'exchange' => 'NSE',
+            'name' => 'Backtest Cache Stock',
+            'is_active' => true,
+            'is_benchmark' => false,
+        ]);
+        Holding::query()->create([
+            'profile_id' => $profile->id,
+            'stock_id' => $stock->id,
+            'quantity' => 5,
+            'avg_buy_price' => 100,
+            'invested_amount' => 500,
+            'total_fees' => 0,
+            'realized_profit' => 0,
+            'updated_at' => now(),
+        ]);
+        $base = now()->subDays(40)->startOfDay();
+        for ($i = 0; $i < 45; $i++) {
+            $c = 100 + $i;
+            StockPrice::query()->create([
+                'stock_id' => $stock->id,
+                'price_date' => $base->copy()->addDays($i)->toDateString(),
+                'open_price' => $c,
+                'high_price' => $c + 1,
+                'low_price' => $c - 1,
+                'close_price' => $c,
+                'adjusted_close_price' => $c,
+                'volume' => 10000,
+                'provider_source' => 'test',
+                'data_source' => 'test',
+                'created_at' => now(),
+            ]);
+        }
+
+        $this->actingAs($user);
+
+        $definition = [
+            'root' => [
+                'type' => 'condition',
+                'left' => ['indicator' => 'close'],
+                'operator' => 'gt',
+                'right' => ['type' => 'constant', 'value' => 0],
+            ],
+        ];
+        $create = $this->postJson('/api/screeners', [
+            'name' => 'Backtest cache screen',
+            'scope' => 'holdings',
+            'definition_json' => $definition,
+        ])->assertCreated();
+        $id = (int) $create->json('data.id');
+        $token = 'bt-cache-'.Str::random(8);
+
+        $runBacktest = function (string $sessionToken) use ($id) {
+            $start = $this->postJson("/api/screeners/{$id}/backtest", [
+                'range' => '15d',
+                'session_token' => $sessionToken,
+            ])->assertOk();
+            $btId = (int) $start->json('data.id');
+            $completed = (bool) $start->json('completed');
+            $data = $start->json('data');
+            $guard = 0;
+            while (! $completed && $guard < 50) {
+                $guard++;
+                $cont = $this->postJson("/api/screener-backtests/{$btId}/continue")->assertOk();
+                $completed = (bool) $cont->json('completed');
+                $data = $cont->json('data');
+            }
+            $this->assertTrue($completed);
+
+            return $data;
+        };
+
+        // First run computes everything; nothing reused.
+        $first = $runBacktest($token.'-1');
+        $dayTotal = (int) $first['stats']['day_total'];
+        $this->assertGreaterThan(0, $dayTotal);
+        $this->assertSame(0, (int) $first['stats']['days_reused']);
+        $this->assertSame($dayTotal, \App\Models\ScreenerBacktestDay::query()->where('screener_id', $id)->count());
+
+        // Second run: every date already saved → fully reused, zero scanning.
+        // Deleting the price history proves results come from the DB, not recomputation.
+        StockPrice::query()->where('stock_id', $stock->id)->delete();
+        $second = $runBacktest($token.'-2');
+        $this->assertSame($dayTotal, (int) $second['stats']['days_reused']);
+        $this->assertSame(0, (int) $second['stats']['scanned']);
+        $matrix = $this->getJson("/api/screeners/{$id}/backtest/matrix")->assertOk()->json('data');
+        $this->assertSame($stock->symbol, $matrix['rows'][0]['symbol']);
+
+        // Saving without changing conditions keeps saved results.
+        $this->putJson("/api/screeners/{$id}", [
+            'name' => 'Backtest cache screen renamed',
+            'scope' => 'holdings',
+            'definition_json' => $definition,
+        ])->assertOk();
+        $this->assertSame($dayTotal, \App\Models\ScreenerBacktestDay::query()->where('screener_id', $id)->count());
+
+        // Changing conditions invalidates saved backtest results.
+        $this->putJson("/api/screeners/{$id}", [
+            'name' => 'Backtest cache screen renamed',
+            'scope' => 'holdings',
+            'definition_json' => [
+                'root' => [
+                    'type' => 'condition',
+                    'left' => ['indicator' => 'close'],
+                    'operator' => 'gt',
+                    'right' => ['type' => 'constant', 'value' => 5],
+                ],
+            ],
+        ])->assertOk();
+        $this->assertSame(0, \App\Models\ScreenerBacktestDay::query()->where('screener_id', $id)->count());
+        $this->assertSame(0, \App\Models\ScreenerBacktestHit::query()->where('screener_id', $id)->count());
+
+        // Rebuild results, then Clear history wipes them too.
+        $third = $runBacktest($token.'-3');
+        $this->assertSame(0, (int) $third['stats']['days_reused']);
+        $this->assertSame($dayTotal, \App\Models\ScreenerBacktestDay::query()->where('screener_id', $id)->count());
+        $this->deleteJson("/api/screeners/{$id}/runs")
+            ->assertOk()
+            ->assertJsonPath('backtest_days_cleared', $dayTotal);
+        $this->assertSame(0, \App\Models\ScreenerBacktestDay::query()->where('screener_id', $id)->count());
+        $empty = $this->getJson("/api/screeners/{$id}/backtest/matrix")->assertOk()->json('data');
+        $this->assertSame(0, $empty['run_count']);
 
         \Carbon\Carbon::setTestNow();
     }

@@ -5,6 +5,8 @@ namespace App\Services\Screener;
 use App\Models\Holding;
 use App\Models\PortfolioProfile;
 use App\Models\Screener;
+use App\Models\ScreenerBacktestDay;
+use App\Models\ScreenerBacktestHit;
 use App\Models\ScreenerRun;
 use App\Models\ScreenerRunHit;
 use App\Models\Stock;
@@ -254,6 +256,68 @@ class ScreenerRunService
 
         $run->stats_json = $stats;
         $run->save();
+
+        try {
+            $this->writeBacktestDayCache($run, $screener);
+        } catch (Throwable $e) {
+            Log::warning('Screener run backtest day-cache write failed', [
+                'run_id' => $run->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Write-through: a completed run also fills the per-date backtest cache
+     * (portfolio_screener_backtest_days + hits) for the run's date, so a later
+     * backtest over that window reuses it instead of recalculating. The last
+     * completed run of the day wins. Backtestable scopes only.
+     */
+    private function writeBacktestDayCache(ScreenerRun $run, Screener $screener): void
+    {
+        if (! in_array($screener->scope, ScreenerCatalog::BACKTEST_SCOPES, true)) {
+            return;
+        }
+
+        $asOf = ($run->finished_at ?? now())
+            ->copy()
+            ->timezone(config('app.timezone'))
+            ->toDateString();
+        $stats = $run->stats_json ?? [];
+
+        ScreenerBacktestHit::query()
+            ->where('screener_id', $screener->id)
+            ->where('as_of_date', $asOf)
+            ->delete();
+
+        $now = now();
+        $rows = ScreenerRunHit::query()
+            ->where('run_id', $run->id)
+            ->get(['stock_id', 'symbol', 'exchange', 'name'])
+            ->map(fn (ScreenerRunHit $hit) => [
+                'screener_id' => $screener->id,
+                'as_of_date' => $asOf,
+                'stock_id' => $hit->stock_id,
+                'symbol' => $hit->symbol,
+                'exchange' => $hit->exchange,
+                'name' => $hit->name,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ])
+            ->all();
+        if ($rows !== []) {
+            ScreenerBacktestHit::query()->insert($rows);
+        }
+
+        ScreenerBacktestDay::query()->updateOrCreate(
+            ['screener_id' => $screener->id, 'as_of_date' => $asOf],
+            [
+                'scanned' => (int) ($stats['scanned'] ?? 0),
+                'matched' => (int) ($stats['matched'] ?? 0),
+                'skipped_insufficient_data' => (int) ($stats['skipped_insufficient_data'] ?? 0),
+                'errors' => (int) ($stats['errors'] ?? 0),
+            ],
+        );
     }
 
     private function fail(ScreenerRun $run, string $message): void

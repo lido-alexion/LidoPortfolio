@@ -151,7 +151,13 @@ class ScreenerService
         $profile = PortfolioProfile::query()->findOrFail($screener->profile_id);
         $data = $this->normalizeInput($profile, $input, $screener);
         $screener->fill($data);
+
+        // Conditions or universe changed → persisted per-date backtest results are stale.
+        $invalidatesBacktest = $screener->isDirty(['definition_json', 'scope', 'watchlist_id', 'index_symbol']);
         $screener->save();
+        if ($invalidatesBacktest) {
+            app(ScreenerBacktestService::class)->clearResults($screener);
+        }
 
         return $this->format($screener->fresh(['watchlist:id,name']));
     }

@@ -158,6 +158,7 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::delete('/screeners/{screener}', [ScreenerController::class, 'destroy']);
     Route::post('/screeners/{screener}/run', [ScreenerController::class, 'run']);
     Route::post('/screeners/{screener}/backtest', [ScreenerBacktestController::class, 'start']);
+    Route::get('/screeners/{screener}/backtest/matrix', [ScreenerBacktestController::class, 'screenerMatrix']);
     Route::get('/screeners/{screener}/runs/compare', [ScreenerController::class, 'compareRuns']);
     Route::get('/screeners/{screener}/runs', [ScreenerController::class, 'runs']);
     Route::delete('/screeners/{screener}/runs', [ScreenerController::class, 'clearRuns']);

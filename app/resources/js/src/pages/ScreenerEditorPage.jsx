@@ -569,8 +569,16 @@ export default function ScreenerEditorPage() {
             setHistoryLimit(runsRes.data?.limit ?? 30);
             setCompareMatrix(null);
             setCompareVisible(false);
-            setBacktestMatrix(null);
             setBacktestProgress(null);
+
+            // Backtest results persist per date in DB; show them on load when present.
+            try {
+                const btRes = await api.get(`/screeners/${id}/backtest/matrix`, { skipErrorToast: true });
+                const btMatrix = btRes.data?.data ?? null;
+                setBacktestMatrix(btMatrix?.run_count > 0 ? btMatrix : null);
+            } catch {
+                setBacktestMatrix(null);
+            }
 
             const runId = searchParams.get('run');
             if (runId) {
@@ -762,9 +770,9 @@ export default function ScreenerEditorPage() {
             showToast(firstError || 'Please fix validation errors before backtesting.', 'danger');
             return;
         }
-        const scopes = meta?.backtest_scopes || ['holdings', 'watchlist'];
+        const scopes = meta?.backtest_scopes || ['holdings', 'watchlist', 'all_equities', 'index'];
         if (!scopes.includes(form.scope)) {
-            showToast('Backtest is only available for holdings and watchlist scopes.', 'danger');
+            showToast('Backtest is not available for this scope.', 'danger');
             return;
         }
         const nextRange = rangeKey || backtestRange;
@@ -793,9 +801,10 @@ export default function ScreenerEditorPage() {
                 showToast('Backtest did not complete.', 'danger');
                 return;
             }
-            const matrixRes = await api.get(`/screener-backtests/${backtest.id}/matrix`);
+            const matrixRes = await api.get(`/screeners/${id}/backtest/matrix`);
             setBacktestMatrix(matrixRes.data?.data ?? null);
-            showToast(`Backtest finished (${backtest.stats?.days_done ?? 0} weekdays).`);
+            const reused = backtest.stats?.days_reused ?? 0;
+            showToast(`Backtest finished (${backtest.stats?.days_done ?? 0} weekdays${reused > 0 ? `, ${reused} reused from saved results` : ''}).`);
         } catch (error) {
             showToast(validationMessage(error), 'danger');
         } finally {
@@ -804,20 +813,23 @@ export default function ScreenerEditorPage() {
     };
 
     const clearHistory = async () => {
-        if (!window.confirm('Delete all run history and matched results for this screener? This cannot be undone.')) {
+        if (!window.confirm('Delete all run history, matched results and saved backtest results for this screener? This cannot be undone.')) {
             return;
         }
         setClearingHistory(true);
         try {
             const res = await api.delete(`/screeners/${id}/runs`);
             const deleted = res.data?.deleted ?? 0;
+            const backtestDays = res.data?.backtest_days_cleared ?? 0;
             setHistory([]);
             setHistoryTotal(0);
             setCompareMatrix(null);
             setCompareVisible(false);
             setRunResult(null);
+            setBacktestMatrix(null);
+            setBacktestProgress(null);
             navigate(`/screeners/${id}`, { replace: true });
-            showToast(`Cleared ${deleted} run record(s) and their matched stocks.`);
+            showToast(`Cleared ${deleted} run record(s)${backtestDays > 0 ? ` and ${backtestDays} saved backtest day(s)` : ''}.`);
         } catch (error) {
             showToast(validationMessage(error), 'danger');
         } finally {
@@ -828,7 +840,7 @@ export default function ScreenerEditorPage() {
     const lookbackHint = useMemo(() => form?.max_lookback ?? '—', [form?.max_lookback]);
     const latestRunId = history[0]?.id ?? null;
     const backtestAllowed = useMemo(() => {
-        const scopes = meta?.backtest_scopes || ['holdings', 'watchlist'];
+        const scopes = meta?.backtest_scopes || ['holdings', 'watchlist', 'all_equities', 'index'];
         return scopes.includes(form?.scope);
     }, [meta?.backtest_scopes, form?.scope]);
     const backtestRanges = meta?.backtest_ranges || [
@@ -1348,6 +1360,8 @@ export default function ScreenerEditorPage() {
                                 <>
                                     <div className="form-text mb-2">
                                         As-of weekday walk (weekends skipped). Green = matched that day; badge = hit count; numbers are consecutive streaks.
+                                        Results are saved per date — re-running a backtest reuses saved days and only computes missing dates.
+                                        Editing conditions or scope, or Clear history, discards saved results.
                                     </div>
                                     <ScreenerRunsCompareTable matrix={backtestMatrix} />
                                 </>
@@ -1379,7 +1393,7 @@ export default function ScreenerEditorPage() {
                             disabled={running || backtesting || saving || hasValidationErrors || !backtestAllowed}
                             title={backtestAllowed
                                 ? 'Walk weekdays as-of and stack hits (dropdown picks another window)'
-                                : 'Backtest is only for holdings and watchlist'}
+                                : 'Backtest is not available for this scope'}
                             onPrimaryClick={() => {
                                 if (!running && !backtesting && !saving && !hasValidationErrors && backtestAllowed) {
                                     runBacktest(selectedBacktestRange?.id || backtestRange);

@@ -4,8 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * Transient backtest job row (progress/session). Results live in
+ * ScreenerBacktestDay + ScreenerBacktestHit keyed by (screener, date).
+ */
 class ScreenerBacktest extends Model
 {
     protected $table = 'portfolio_screener_backtests';
@@ -55,10 +58,5 @@ class ScreenerBacktest extends Model
     public function profile(): BelongsTo
     {
         return $this->belongsTo(PortfolioProfile::class, 'profile_id');
-    }
-
-    public function hits(): HasMany
-    {
-        return $this->hasMany(ScreenerBacktestHit::class, 'backtest_id');
     }
 }

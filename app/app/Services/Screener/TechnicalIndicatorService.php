@@ -15,6 +15,12 @@ class TechnicalIndicatorService
     /** @var array<string, float|null> */
     private array $cache = [];
 
+    /** @var array<string, list<?float>> */
+    private array $seriesCache = [];
+
+    /** @var list<array{open:?float,high:?float,low:?float,close:float,volume:?float}>|null */
+    private ?array $validBarsCache = null;
+
     /**
      * @param  list<array{open:?float,high:?float,low:?float,close:?float,volume:?float}>  $bars
      */
@@ -23,6 +29,8 @@ class TechnicalIndicatorService
         $clone = clone $this;
         $clone->bars = $bars;
         $clone->cache = [];
+        $clone->seriesCache = [];
+        $clone->validBarsCache = null;
 
         return $clone;
     }
@@ -33,6 +41,8 @@ class TechnicalIndicatorService
     public function clearCache(): void
     {
         $this->cache = [];
+        $this->seriesCache = [];
+        $this->validBarsCache = null;
     }
 
     /**
@@ -56,6 +66,92 @@ class TechnicalIndicatorService
         $this->cache[$key] = $value;
 
         return $value;
+    }
+
+    /**
+     * Full per-bar series for an expression, aligned to validBars() indexes.
+     * Every series is causal — the value at index i only uses bars 0..i — so
+     * series[i] matches what evaluate() would return on the prefix ending at i
+     * (window indicators exactly; EMA-seeded ones given the same history start).
+     * Used by the stock-major backtest to evaluate many as-of dates in one pass.
+     *
+     * @param  array{indicator?:string,params?:array<string,mixed>,type?:string,value?:mixed}  $expr
+     * @return list<?float>
+     */
+    public function evaluateSeries(array $expr): array
+    {
+        $n = count($this->validBars());
+        if (($expr['type'] ?? null) === 'constant') {
+            $v = is_numeric($expr['value'] ?? null) ? (float) $expr['value'] : null;
+
+            return $n > 0 ? array_fill(0, $n, $v) : [];
+        }
+
+        $id = (string) ($expr['indicator'] ?? '');
+        $params = is_array($expr['params'] ?? null) ? $expr['params'] : [];
+        $key = $id.'|'.json_encode($params, JSON_THROW_ON_ERROR);
+
+        if (array_key_exists($key, $this->seriesCache)) {
+            return $this->seriesCache[$key];
+        }
+
+        $series = $this->computeSeries($id, $params);
+        $this->seriesCache[$key] = $series;
+
+        return $series;
+    }
+
+    /**
+     * @param  array<string,mixed>  $params
+     * @return list<?float>
+     */
+    private function computeSeries(string $id, array $params): array
+    {
+        $closes = $this->series('close');
+
+        return match ($id) {
+            'close' => $closes,
+            'open' => $this->fieldSeries('open'),
+            'high' => $this->fieldSeries('high'),
+            'low' => $this->fieldSeries('low'),
+            'volume' => $this->fieldSeries('volume'),
+            'change_pct' => $this->changePctSeries((int) ($params['period'] ?? 1)),
+            'roc' => $this->changePctSeries((int) ($params['period'] ?? 12)),
+            'high_n' => $this->rollingExtremeSeries('high', (int) ($params['period'] ?? 20), true, false),
+            'low_n' => $this->rollingExtremeSeries('low', (int) ($params['period'] ?? 20), false, false),
+            'high_52w' => $this->rollingExtremeSeries('high', ScreenerCatalog::TRADING_DAYS_52W, true, true),
+            'low_52w' => $this->rollingExtremeSeries('low', ScreenerCatalog::TRADING_DAYS_52W, false, true),
+            'range_pct' => $this->rangePctSeries(),
+            'sma' => $this->sma($closes, (int) ($params['period'] ?? 20)),
+            'ema' => $this->ema($closes, (int) ($params['period'] ?? 20)),
+            'price_vs_sma_pct' => $this->priceVsMaPctSeries('sma', (int) ($params['period'] ?? 20)),
+            'price_vs_ema_pct' => $this->priceVsMaPctSeries('ema', (int) ($params['period'] ?? 20)),
+            'sma_spread_pct' => $this->maSpreadPctSeries('sma', (int) ($params['fast'] ?? 20), (int) ($params['slow'] ?? 50)),
+            'ema_spread_pct' => $this->maSpreadPctSeries('ema', (int) ($params['fast'] ?? 12), (int) ($params['slow'] ?? 26)),
+            'rsi' => $this->rsi($closes, (int) ($params['period'] ?? 14)),
+            'stoch_k' => $this->stochK((int) ($params['period'] ?? 14)),
+            'stoch_d' => $this->stochD((int) ($params['period'] ?? 14), (int) ($params['smooth'] ?? 3)),
+            'macd' => $this->macdLine((int) ($params['fast'] ?? 12), (int) ($params['slow'] ?? 26)),
+            'macd_signal' => $this->macdSignal(
+                (int) ($params['fast'] ?? 12),
+                (int) ($params['slow'] ?? 26),
+                (int) ($params['signal'] ?? 9),
+            ),
+            'macd_hist' => $this->macdHist(
+                (int) ($params['fast'] ?? 12),
+                (int) ($params['slow'] ?? 26),
+                (int) ($params['signal'] ?? 9),
+            ),
+            'atr' => $this->atr((int) ($params['period'] ?? 14)),
+            'bb_mid' => $this->sma($closes, (int) ($params['period'] ?? 20)),
+            'bb_upper' => $this->bbBandSeries('upper', (int) ($params['period'] ?? 20), (float) ($params['mult'] ?? 2)),
+            'bb_lower' => $this->bbBandSeries('lower', (int) ($params['period'] ?? 20), (float) ($params['mult'] ?? 2)),
+            'bb_pct_b' => $this->bbPctBSeries((int) ($params['period'] ?? 20), (float) ($params['mult'] ?? 2)),
+            'bb_width_pct' => $this->bbWidthPctSeries((int) ($params['period'] ?? 20), (float) ($params['mult'] ?? 2)),
+            'volume_sma' => $this->smaNullableSeries($this->fieldSeries('volume'), (int) ($params['period'] ?? 20)),
+            'volume_ratio' => $this->volumeRatioSeries((int) ($params['period'] ?? 20)),
+            default => array_fill(0, max(0, count($closes)), null),
+        };
     }
 
     /**
@@ -164,6 +260,10 @@ class TechnicalIndicatorService
      */
     private function validBars(): array
     {
+        if ($this->validBarsCache !== null) {
+            return $this->validBarsCache;
+        }
+
         $out = [];
         foreach ($this->bars as $bar) {
             $close = $bar['close'] ?? null;
@@ -180,6 +280,293 @@ class TechnicalIndicatorService
                 'close' => (float) $close,
                 'volume' => isset($bar['volume']) ? (float) $bar['volume'] : null,
             ];
+        }
+
+        return $this->validBarsCache = $out;
+    }
+
+    /**
+     * Field values aligned to validBars() indexes, keeping nulls in place.
+     *
+     * @return list<?float>
+     */
+    private function fieldSeries(string $field): array
+    {
+        $out = [];
+        foreach ($this->validBars() as $bar) {
+            $v = $bar[$field] ?? null;
+            $out[] = $v === null ? null : (float) $v;
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return list<?float>
+     */
+    private function changePctSeries(int $period): array
+    {
+        $closes = $this->series('close');
+        $period = max(1, $period);
+        $n = count($closes);
+        $out = array_fill(0, $n, null);
+        for ($i = $period; $i < $n; $i++) {
+            $prev = $closes[$i - $period];
+            if (abs($prev) < self::EPSILON_ABS) {
+                continue;
+            }
+            $out[$i] = (($closes[$i] - $prev) / $prev) * 100.0;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Rolling max/min via monotonic deque (O(n)). When $allowPartial the window
+     * grows from the first bar (52-week style); otherwise values before a full
+     * window stay null (high_n/low_n semantics).
+     *
+     * @return list<?float>
+     */
+    private function rollingExtremeSeries(string $field, int $window, bool $isMax, bool $allowPartial): array
+    {
+        $bars = $this->validBars();
+        $window = max(1, $window);
+        $n = count($bars);
+        $vals = [];
+        foreach ($bars as $bar) {
+            $vals[] = (float) ($bar[$field] ?? $bar['close']);
+        }
+        $out = array_fill(0, $n, null);
+        $deque = [];
+        $head = 0;
+        for ($i = 0; $i < $n; $i++) {
+            while (count($deque) > $head) {
+                $tail = $vals[$deque[count($deque) - 1]];
+                if (($isMax && $tail <= $vals[$i]) || (! $isMax && $tail >= $vals[$i])) {
+                    array_pop($deque);
+                } else {
+                    break;
+                }
+            }
+            $deque[] = $i;
+            while ($deque[$head] <= $i - $window) {
+                $head++;
+            }
+            if ($allowPartial || $i >= $window - 1) {
+                $out[$i] = $vals[$deque[$head]];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return list<?float>
+     */
+    private function rangePctSeries(): array
+    {
+        $out = [];
+        foreach ($this->validBars() as $bar) {
+            $high = $bar['high'];
+            $low = $bar['low'];
+            $close = $bar['close'];
+            $out[] = ($high === null || $low === null || abs($close) < self::EPSILON_ABS)
+                ? null
+                : (($high - $low) / $close) * 100.0;
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return list<?float>
+     */
+    private function priceVsMaPctSeries(string $kind, int $period): array
+    {
+        $closes = $this->series('close');
+        $ma = $kind === 'ema' ? $this->ema($closes, $period) : $this->sma($closes, $period);
+        $n = count($closes);
+        $out = array_fill(0, $n, null);
+        for ($i = 0; $i < $n; $i++) {
+            $m = $ma[$i];
+            if ($m === null || abs($m) < self::EPSILON_ABS) {
+                continue;
+            }
+            $out[$i] = (($closes[$i] - $m) / $m) * 100.0;
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return list<?float>
+     */
+    private function maSpreadPctSeries(string $kind, int $fast, int $slow): array
+    {
+        $closes = $this->series('close');
+        $fastSeries = $kind === 'ema' ? $this->ema($closes, $fast) : $this->sma($closes, $fast);
+        $slowSeries = $kind === 'ema' ? $this->ema($closes, $slow) : $this->sma($closes, $slow);
+        $n = count($closes);
+        $out = array_fill(0, $n, null);
+        for ($i = 0; $i < $n; $i++) {
+            $f = $fastSeries[$i];
+            $s = $slowSeries[$i];
+            if ($f === null || $s === null || abs($s) < self::EPSILON_ABS) {
+                continue;
+            }
+            $out[$i] = (($f - $s) / $s) * 100.0;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Rolling standard deviation via running sums (O(n)).
+     *
+     * @param  list<float>  $values
+     * @return list<?float>
+     */
+    private function rollingStdSeries(array $values, int $window): array
+    {
+        $window = max(1, $window);
+        $n = count($values);
+        $out = array_fill(0, $n, null);
+        $sum = 0.0;
+        $sumSq = 0.0;
+        for ($i = 0; $i < $n; $i++) {
+            $sum += $values[$i];
+            $sumSq += $values[$i] ** 2;
+            if ($i >= $window) {
+                $old = $values[$i - $window];
+                $sum -= $old;
+                $sumSq -= $old ** 2;
+            }
+            if ($i >= $window - 1) {
+                $mean = $sum / $window;
+                $out[$i] = sqrt(max(0.0, ($sumSq / $window) - ($mean * $mean)));
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return list<?float>
+     */
+    private function bbBandSeries(string $which, int $period, float $mult): array
+    {
+        $closes = $this->series('close');
+        $mid = $this->sma($closes, $period);
+        $std = $this->rollingStdSeries($closes, $period);
+        $n = count($closes);
+        $out = array_fill(0, $n, null);
+        for ($i = 0; $i < $n; $i++) {
+            if ($mid[$i] === null || $std[$i] === null) {
+                continue;
+            }
+            $out[$i] = $which === 'upper'
+                ? $mid[$i] + ($mult * $std[$i])
+                : $mid[$i] - ($mult * $std[$i]);
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return list<?float>
+     */
+    private function bbPctBSeries(int $period, float $mult): array
+    {
+        $closes = $this->series('close');
+        $upper = $this->bbBandSeries('upper', $period, $mult);
+        $lower = $this->bbBandSeries('lower', $period, $mult);
+        $n = count($closes);
+        $out = array_fill(0, $n, null);
+        for ($i = 0; $i < $n; $i++) {
+            if ($upper[$i] === null || $lower[$i] === null) {
+                continue;
+            }
+            $range = $upper[$i] - $lower[$i];
+            if (abs($range) < self::EPSILON_ABS) {
+                continue;
+            }
+            $out[$i] = ($closes[$i] - $lower[$i]) / $range;
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return list<?float>
+     */
+    private function bbWidthPctSeries(int $period, float $mult): array
+    {
+        $closes = $this->series('close');
+        $upper = $this->bbBandSeries('upper', $period, $mult);
+        $lower = $this->bbBandSeries('lower', $period, $mult);
+        $mid = $this->sma($closes, $period);
+        $n = count($closes);
+        $out = array_fill(0, $n, null);
+        for ($i = 0; $i < $n; $i++) {
+            if ($upper[$i] === null || $lower[$i] === null || $mid[$i] === null || abs($mid[$i]) < self::EPSILON_ABS) {
+                continue;
+            }
+            $out[$i] = (($upper[$i] - $lower[$i]) / $mid[$i]) * 100.0;
+        }
+
+        return $out;
+    }
+
+    /**
+     * SMA over a nullable series: any null inside the window yields null.
+     *
+     * @param  list<?float>  $values
+     * @return list<?float>
+     */
+    private function smaNullableSeries(array $values, int $window): array
+    {
+        $window = max(1, $window);
+        $n = count($values);
+        $out = array_fill(0, $n, null);
+        $sum = 0.0;
+        $nulls = 0;
+        for ($i = 0; $i < $n; $i++) {
+            if ($values[$i] === null) {
+                $nulls++;
+            } else {
+                $sum += $values[$i];
+            }
+            if ($i >= $window) {
+                $old = $values[$i - $window];
+                if ($old === null) {
+                    $nulls--;
+                } else {
+                    $sum -= $old;
+                }
+            }
+            if ($i >= $window - 1 && $nulls === 0) {
+                $out[$i] = $sum / $window;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return list<?float>
+     */
+    private function volumeRatioSeries(int $period): array
+    {
+        $volumes = $this->fieldSeries('volume');
+        $volSma = $this->smaNullableSeries($volumes, $period);
+        $n = count($volumes);
+        $out = array_fill(0, $n, null);
+        for ($i = 0; $i < $n; $i++) {
+            if ($volumes[$i] === null || $volSma[$i] === null || abs($volSma[$i]) < self::EPSILON_ABS) {
+                continue;
+            }
+            $out[$i] = $volumes[$i] / $volSma[$i];
         }
 
         return $out;

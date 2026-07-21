@@ -48,6 +48,16 @@ class ScreenerBacktestController extends Controller
         ]);
     }
 
+    /**
+     * Matrix over all persisted per-date results for a screener (editor load).
+     */
+    public function screenerMatrix(Screener $screener): JsonResponse
+    {
+        return response()->json([
+            'data' => $this->backtests->matrixForScreener($screener),
+        ]);
+    }
+
     public function discardSession(string $token): JsonResponse
     {
         $deleted = $this->backtests->discardSession($token);

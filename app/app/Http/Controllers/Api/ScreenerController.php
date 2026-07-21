@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Screener;
 use App\Models\ScreenerRun;
+use App\Services\Screener\ScreenerBacktestService;
 use App\Services\Screener\ScreenerCatalog;
 use App\Services\Screener\ScreenerRunService;
 use App\Services\Screener\ScreenerService;
@@ -16,6 +17,7 @@ class ScreenerController extends Controller
     public function __construct(
         protected ScreenerService $screeners,
         protected ScreenerRunService $runs,
+        protected ScreenerBacktestService $backtests,
     ) {}
 
     public function meta(): JsonResponse
@@ -127,10 +129,12 @@ class ScreenerController extends Controller
     public function clearRuns(Screener $screener): JsonResponse
     {
         $deleted = $this->runs->clearRuns($screener);
+        $backtestDaysCleared = $this->backtests->clearResults($screener);
 
         return response()->json([
             'message' => 'Run history cleared.',
             'deleted' => $deleted,
+            'backtest_days_cleared' => $backtestDaysCleared,
         ]);
     }
 }
