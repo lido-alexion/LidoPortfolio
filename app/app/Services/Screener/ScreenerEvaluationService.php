@@ -9,7 +9,7 @@ class ScreenerEvaluationService
     ) {}
 
     /**
-     * Max OHLCV rows required by the definition tree.
+     * Max OHLCV rows required by the definition tree (stock + entity expressions).
      *
      * @param  array{root:array}  $definition
      */
@@ -19,14 +19,39 @@ class ScreenerEvaluationService
     }
 
     /**
+     * Max OHLCV rows required by expressions evaluated on the scanned stock only
+     * (left operands pinned to an index entity are excluded).
+     *
+     * @param  array{root:array}  $definition
+     */
+    public function stockLookback(array $definition): int
+    {
+        return max(1, $this->nodeLookback($definition['root'] ?? [], entityFilter: 'stock'));
+    }
+
+    /**
+     * Index entity symbols referenced by left operands, mapped to the max lookback each needs.
+     *
+     * @param  array{root:array}  $definition
+     * @return array<string,int>
+     */
+    public function entityLookbacks(array $definition): array
+    {
+        $out = [];
+        $this->collectEntityLookbacks($definition['root'] ?? [], $out);
+
+        return $out;
+    }
+
+    /**
      * @param  array{root:array}  $definition
      * @param  list<array{open:?float,high:?float,low:?float,close:?float,volume:?float,adjusted_close?:?float}>  $bars
+     * @param  array<string,list<array<string,mixed>>>  $entityBars  Index symbol → chronological bars for entity-pinned left operands.
      * @return array{matched:bool,skipped:bool,skip_reason:?string,metrics:array<string,mixed>}
      */
-    public function evaluateStock(array $definition, array $bars): array
+    public function evaluateStock(array $definition, array $bars, array $entityBars = []): array
     {
-        $lookback = $this->maxLookback($definition);
-        $engine = $this->indicators->withBars($bars);
+        $lookback = $this->stockLookback($definition);
         $validCount = $this->countValidCloses($bars);
 
         if ($validCount < $lookback) {
@@ -47,8 +72,13 @@ class ScreenerEvaluationService
             ];
         }
 
+        $engines = ['stock' => $this->indicators->withBars($bars)];
+        foreach ($entityBars as $symbol => $entBars) {
+            $engines[$symbol] = $this->indicators->withBars(is_array($entBars) ? $entBars : []);
+        }
+
         $metrics = [];
-        $matched = $this->evalNode($definition['root'] ?? [], $engine, $metrics);
+        $matched = $this->evalNode($definition['root'] ?? [], $engines, $metrics);
 
         return [
             'matched' => $matched,
@@ -60,15 +90,16 @@ class ScreenerEvaluationService
 
     /**
      * @param  array<string,mixed>  $node
+     * @param  string|null  $entityFilter  When 'stock', ignore left operands pinned to an index entity.
      */
-    private function nodeLookback(array $node): int
+    private function nodeLookback(array $node, ?string $entityFilter = null): int
     {
         $type = $node['type'] ?? null;
         if ($type === 'group') {
             $max = 0;
             foreach ($node['children'] ?? [] as $child) {
                 if (is_array($child)) {
-                    $max = max($max, $this->nodeLookback($child));
+                    $max = max($max, $this->nodeLookback($child, $entityFilter));
                 }
             }
 
@@ -78,8 +109,12 @@ class ScreenerEvaluationService
             $left = is_array($node['left'] ?? null) ? $node['left'] : [];
             $right = is_array($node['right'] ?? null) ? $node['right'] : [];
 
+            $leftBars = ($entityFilter === 'stock' && $this->exprEntity($left) !== 'stock')
+                ? 0
+                : $this->indicators->minBarsFor($left);
+
             return max(
-                $this->indicators->minBarsFor($left),
+                $leftBars,
                 $this->indicators->minBarsFor($right),
             );
         }
@@ -89,9 +124,54 @@ class ScreenerEvaluationService
 
     /**
      * @param  array<string,mixed>  $node
+     * @param  array<string,int>  $out
+     */
+    private function collectEntityLookbacks(array $node, array &$out): void
+    {
+        $type = $node['type'] ?? null;
+        if ($type === 'group') {
+            foreach ($node['children'] ?? [] as $child) {
+                if (is_array($child)) {
+                    $this->collectEntityLookbacks($child, $out);
+                }
+            }
+
+            return;
+        }
+        if ($type !== 'condition') {
+            return;
+        }
+        $left = is_array($node['left'] ?? null) ? $node['left'] : [];
+        $entity = $this->exprEntity($left);
+        if ($entity === 'stock') {
+            return;
+        }
+        $bars = $this->indicators->minBarsFor($left);
+        $out[$entity] = max($out[$entity] ?? 0, $bars);
+    }
+
+    /**
+     * @param  array<string,mixed>  $expr
+     */
+    private function exprEntity(array $expr): string
+    {
+        if (($expr['type'] ?? null) === 'constant') {
+            return 'stock';
+        }
+        $entity = $expr['entity'] ?? null;
+        if (! is_string($entity) || $entity === '' || $entity === 'stock') {
+            return 'stock';
+        }
+
+        return $entity;
+    }
+
+    /**
+     * @param  array<string,mixed>  $node
+     * @param  array<string,TechnicalIndicatorService>  $engines  Keyed by 'stock' + index entity symbols.
      * @param  array<string,mixed>  $metrics
      */
-    private function evalNode(array $node, TechnicalIndicatorService $engine, array &$metrics): bool
+    private function evalNode(array $node, array $engines, array &$metrics): bool
     {
         $type = $node['type'] ?? null;
         if ($type === 'group') {
@@ -102,7 +182,7 @@ class ScreenerEvaluationService
             }
             if ($op === 'OR') {
                 foreach ($children as $child) {
-                    if (is_array($child) && $this->evalNode($child, $engine, $metrics)) {
+                    if (is_array($child) && $this->evalNode($child, $engines, $metrics)) {
                         return true;
                     }
                 }
@@ -110,7 +190,7 @@ class ScreenerEvaluationService
                 return false;
             }
             foreach ($children as $child) {
-                if (! is_array($child) || ! $this->evalNode($child, $engine, $metrics)) {
+                if (! is_array($child) || ! $this->evalNode($child, $engines, $metrics)) {
                     return false;
                 }
             }
@@ -127,12 +207,16 @@ class ScreenerEvaluationService
         $operator = (string) ($node['operator'] ?? 'gt');
         $weightFactor = $this->normalizeWeightFactor($node['weight_factor'] ?? 1);
 
-        $left = $engine->evaluate($leftExpr);
-        $right = $engine->evaluate($rightExpr);
+        $leftEntity = $this->exprEntity($leftExpr);
+        $leftEngine = $engines[$leftEntity] ?? null;
+        $left = $leftEngine?->evaluate($leftExpr);
+        // RHS always evaluates on the scanned stock.
+        $right = $engines['stock']->evaluate($rightExpr);
         $scaledRight = $right === null ? null : $right * $weightFactor;
 
         $metrics[] = [
             'left' => $this->describeExpr($leftExpr),
+            'left_entity' => $leftEntity,
             'left_value' => $left,
             'operator' => $operator,
             'weight_factor' => $weightFactor,
@@ -177,15 +261,20 @@ class ScreenerEvaluationService
         }
         $id = (string) ($expr['indicator'] ?? '');
         $params = is_array($expr['params'] ?? null) ? $expr['params'] : [];
+        $prefix = '';
+        $entity = $this->exprEntity($expr);
+        if ($entity !== 'stock') {
+            $prefix = ScreenerCatalog::entityLabel($entity).' ';
+        }
         if ($params === []) {
-            return $id;
+            return $prefix.$id;
         }
         $bits = [];
         foreach ($params as $k => $v) {
             $bits[] = $k.'='.$v;
         }
 
-        return $id.'('.implode(',', $bits).')';
+        return $prefix.$id.'('.implode(',', $bits).')';
     }
 
     /**
@@ -223,8 +312,11 @@ class ScreenerEvaluationService
             return false;
         }
         if ($type === 'condition') {
-            return $this->exprNeedsVolume($node['left'] ?? [])
-                || $this->exprNeedsVolume($node['right'] ?? []);
+            $left = is_array($node['left'] ?? null) ? $node['left'] : [];
+            // Volume history is checked on the scanned stock; entity-pinned lefts read index bars instead.
+            $leftNeedsVolume = $this->exprEntity($left) === 'stock' && $this->exprNeedsVolume($left);
+
+            return $leftNeedsVolume || $this->exprNeedsVolume($node['right'] ?? []);
         }
 
         return false;

@@ -206,15 +206,38 @@ function OperandEditor({ value, onChange, meta, side, bare = false, leading = nu
     const isConstant = value?.type === 'constant';
     const indicators = meta?.indicators || [];
     const selected = indicators.find((i) => i.id === value?.indicator);
+    const entities = side === 'left' ? (meta?.left_entities || []) : [];
+    const entity = value?.entity || 'stock';
 
     const body = (
         <>
             {leading}
+            {entities.length > 0 && (
+                <div className="mb-2">
+                    <select
+                        className="form-select form-select-sm"
+                        value={entity}
+                        disabled={isConstant}
+                        onChange={(e) => {
+                            const next = e.target.value;
+                            const { entity: _omit, ...rest } = value || {};
+                            onChange(next === 'stock' ? rest : { ...rest, entity: next });
+                        }}
+                        aria-label="Left side entity"
+                        title="Compute this side on the scanned stock or on an index (result set is always stocks)"
+                    >
+                        {entities.map((ent) => (
+                            <option key={ent.id} value={ent.id}>{ent.label}</option>
+                        ))}
+                    </select>
+                </div>
+            )}
             <div className="btn-group btn-group-sm mb-2" role="group">
                 <button
                     type="button"
                     className={`btn btn-outline-secondary ${!isConstant ? 'active' : ''}`}
                     onClick={() => onChange({
+                        ...(side === 'left' && value?.entity && value.entity !== 'stock' ? { entity: value.entity } : {}),
                         indicator: value?.indicator || 'close',
                         params: value?.params || {},
                     })}
@@ -244,7 +267,11 @@ function OperandEditor({ value, onChange, meta, side, bare = false, leading = nu
                         value={value?.indicator || 'close'}
                         onChange={(e) => {
                             const ind = indicators.find((i) => i.id === e.target.value);
-                            onChange({ indicator: e.target.value, params: defaultParams(ind) });
+                            onChange({
+                                ...(value?.entity && value.entity !== 'stock' ? { entity: value.entity } : {}),
+                                indicator: e.target.value,
+                                params: defaultParams(ind),
+                            });
                         }}
                     >
                         {indicators.map((ind) => (

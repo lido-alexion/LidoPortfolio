@@ -28,6 +28,40 @@ class ScreenerCatalog
         return $operatorId !== '' ? $operatorId : '—';
     }
 
+    /**
+     * Entities the LEFT side of a condition can compute on.
+     * 'stock' = the scanned stock; others are benchmark index symbols (is_benchmark Stock rows).
+     */
+    public const LEFT_ENTITIES = [
+        ['id' => 'stock', 'label' => 'Stock'],
+        ['id' => 'NIFTY50', 'label' => 'Nifty 50'],
+        ['id' => 'SENSEX', 'label' => 'Sensex'],
+        ['id' => 'NIFTY100', 'label' => 'Nifty 100'],
+        ['id' => 'NIFTY200', 'label' => 'Nifty 200'],
+        ['id' => 'NIFTY500', 'label' => 'Nifty 500'],
+        ['id' => 'NIFTYMIDCAP150', 'label' => 'Nifty Midcap 150'],
+        ['id' => 'NIFTYSMLCAP250', 'label' => 'Nifty Smallcap 250'],
+    ];
+
+    /**
+     * @return list<string>
+     */
+    public static function entityIds(): array
+    {
+        return array_column(self::LEFT_ENTITIES, 'id');
+    }
+
+    public static function entityLabel(string $entityId): string
+    {
+        foreach (self::LEFT_ENTITIES as $ent) {
+            if ($ent['id'] === $entityId) {
+                return $ent['label'];
+            }
+        }
+
+        return $entityId;
+    }
+
     public const MAX_NESTING_DEPTH = 4;
 
     public const MAX_CONDITIONS = 40;
@@ -180,6 +214,7 @@ class ScreenerCatalog
                 ['id' => 'all_equities', 'label' => 'All equities'],
                 ['id' => 'index', 'label' => 'Index constituents'],
             ],
+            'left_entities' => self::LEFT_ENTITIES,
             'max_nesting' => self::MAX_NESTING_DEPTH,
             'max_conditions' => self::MAX_CONDITIONS,
             'chunk_size' => self::CHUNK_SIZE,

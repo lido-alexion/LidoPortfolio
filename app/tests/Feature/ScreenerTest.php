@@ -754,6 +754,127 @@ class ScreenerTest extends TestCase
         ])->assertStatus(422);
     }
 
+    public function test_left_entity_runs_against_index_bars_and_validates(): void
+    {
+        $user = User::query()->create([
+            'name' => 'Entity User',
+            'email' => 'scr-ent-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+        $profile = $this->defaultPortfolioFor($user);
+
+        // Holding stock with a wide intraday range (range_pct = 20/100 = 20%).
+        $stock = Stock::query()->create([
+            'symbol' => 'ENT'.strtoupper(Str::random(3)),
+            'exchange' => 'NSE',
+            'name' => 'Entity Stock',
+            'is_active' => true,
+            'is_benchmark' => false,
+        ]);
+        Holding::query()->create([
+            'profile_id' => $profile->id,
+            'stock_id' => $stock->id,
+            'quantity' => 10,
+            'avg_buy_price' => 100,
+            'invested_amount' => 1000,
+            'total_fees' => 0,
+            'realized_profit' => 0,
+            'updated_at' => now(),
+        ]);
+        StockPrice::query()->create([
+            'stock_id' => $stock->id,
+            'price_date' => now()->subDay()->toDateString(),
+            'open_price' => 100,
+            'high_price' => 110,
+            'low_price' => 90,
+            'close_price' => 100,
+            'adjusted_close_price' => 100,
+            'volume' => 10000,
+            'provider_source' => 'test',
+            'data_source' => 'test',
+            'created_at' => now(),
+        ]);
+
+        // NIFTY50 benchmark with a narrow range (range_pct = 100/25000 = 0.4%).
+        $index = Stock::query()->create([
+            'symbol' => 'NIFTY50',
+            'exchange' => 'NSE',
+            'name' => 'Nifty 50',
+            'is_active' => true,
+            'is_benchmark' => true,
+        ]);
+        StockPrice::query()->create([
+            'stock_id' => $index->id,
+            'price_date' => now()->subDay()->toDateString(),
+            'open_price' => 25000,
+            'high_price' => 25050,
+            'low_price' => 24950,
+            'close_price' => 25000,
+            'adjusted_close_price' => 25000,
+            'volume' => null,
+            'provider_source' => 'test',
+            'data_source' => 'test',
+            'created_at' => now(),
+        ]);
+
+        $this->actingAs($user);
+
+        $definition = [
+            'root' => [
+                'type' => 'condition',
+                'left' => ['entity' => 'NIFTY50', 'indicator' => 'range_pct', 'params' => []],
+                'operator' => 'lt',
+                'right' => ['indicator' => 'range_pct', 'params' => []],
+            ],
+        ];
+
+        $create = $this->postJson('/api/screeners', [
+            'name' => 'Beats index range',
+            'scope' => 'holdings',
+            'definition_json' => $definition,
+        ])->assertCreated();
+        $this->assertSame('NIFTY50', $create->json('data.definition_json.root.left.entity'));
+        $id = $create->json('data.id');
+
+        $run = $this->postJson("/api/screeners/{$id}/run");
+        $run->assertOk();
+        $run->assertJsonPath('data.status', 'completed');
+        $this->assertSame(1, $run->json('data.stats.matched'));
+
+        $runId = $run->json('data.id');
+        $hit = $this->getJson("/api/screener-runs/{$runId}")->json('data.hits.data.0');
+        $this->assertSame('NIFTY50', $hit['metrics'][0]['left_entity']);
+        $this->assertSame('Nifty 50 range_pct', $hit['metrics'][0]['left']);
+
+        // Unknown entity on the left is rejected.
+        $this->postJson('/api/screeners', [
+            'name' => 'Bad entity',
+            'scope' => 'holdings',
+            'definition_json' => [
+                'root' => [
+                    'type' => 'condition',
+                    'left' => ['entity' => 'NIFTYBANK', 'indicator' => 'close'],
+                    'operator' => 'gt',
+                    'right' => ['type' => 'constant', 'value' => 0],
+                ],
+            ],
+        ])->assertStatus(422);
+
+        // Entity on the right side is rejected (RHS always evaluates on the stock).
+        $this->postJson('/api/screeners', [
+            'name' => 'Bad RHS entity',
+            'scope' => 'holdings',
+            'definition_json' => [
+                'root' => [
+                    'type' => 'condition',
+                    'left' => ['indicator' => 'close'],
+                    'operator' => 'gt',
+                    'right' => ['entity' => 'NIFTY50', 'indicator' => 'close'],
+                ],
+            ],
+        ])->assertStatus(422);
+    }
+
     public function test_backtest_weekdays_matrix_and_session_discard(): void
     {
         \Carbon\Carbon::setTestNow(\Carbon\Carbon::parse('2026-07-21 12:00:00', config('app.timezone')));

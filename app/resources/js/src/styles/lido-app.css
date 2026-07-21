@@ -1525,6 +1525,18 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     width: 7.25rem;
 }
 
+/* Guide tab indicator tables: Investopedia info link only visible on row hover/focus. */
+.lido-guide-indicator-table .lido-indicator-info-link {
+    visibility: hidden;
+    text-decoration: none;
+    font-size: 0.95em;
+}
+
+.lido-guide-indicator-table tr:hover .lido-indicator-info-link,
+.lido-guide-indicator-table tr:focus-within .lido-indicator-info-link {
+    visibility: visible;
+}
+
 .lido-fee-component-row {
     --lido-fee-control-height: calc(1.5em + 0.5rem + 2px);
     background-color: var(--lido-bg-elevated);

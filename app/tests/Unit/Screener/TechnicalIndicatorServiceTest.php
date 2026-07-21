@@ -169,6 +169,79 @@ class TechnicalIndicatorServiceTest extends TestCase
         $this->assertSame(1.0, $missingDefaultsToOne['metrics'][0]['weight_factor']);
     }
 
+    public function test_left_entity_evaluates_on_index_bars(): void
+    {
+        $eval = new ScreenerEvaluationService(new TechnicalIndicatorService);
+        // Stock range_pct = (12-9)/10 = 30%; index range_pct = (101-100)/100 = 1%.
+        $stockBars = [
+            ['open' => 10.0, 'high' => 12.0, 'low' => 9.0, 'close' => 10.0, 'volume' => 100.0],
+        ];
+        $indexBars = [
+            ['open' => 100.0, 'high' => 101.0, 'low' => 100.0, 'close' => 100.0, 'volume' => null],
+        ];
+        $definition = [
+            'root' => [
+                'type' => 'condition',
+                'left' => ['entity' => 'NIFTY50', 'indicator' => 'range_pct', 'params' => []],
+                'operator' => 'lt',
+                'right' => ['indicator' => 'range_pct', 'params' => []],
+            ],
+        ];
+
+        $result = $eval->evaluateStock($definition, $stockBars, ['NIFTY50' => $indexBars]);
+        $this->assertFalse($result['skipped']);
+        $this->assertTrue($result['matched']);
+        $this->assertSame('NIFTY50', $result['metrics'][0]['left_entity']);
+        $this->assertSame('Nifty 50 range_pct', $result['metrics'][0]['left']);
+        $this->assertEqualsWithDelta(1.0, $result['metrics'][0]['left_value'], 1e-9);
+        $this->assertEqualsWithDelta(30.0, $result['metrics'][0]['right_value'], 1e-9);
+
+        // Missing index bars → condition false but stock is not skipped.
+        $missing = $eval->evaluateStock($definition, $stockBars, []);
+        $this->assertFalse($missing['skipped']);
+        $this->assertFalse($missing['matched']);
+        $this->assertNull($missing['metrics'][0]['left_value']);
+    }
+
+    public function test_entity_lookbacks_and_stock_lookback_split(): void
+    {
+        $eval = new ScreenerEvaluationService(new TechnicalIndicatorService);
+        $definition = [
+            'root' => [
+                'type' => 'group',
+                'op' => 'AND',
+                'children' => [
+                    [
+                        'type' => 'condition',
+                        'left' => ['entity' => 'NIFTY50', 'indicator' => 'sma', 'params' => ['period' => 200]],
+                        'operator' => 'gt',
+                        'right' => ['type' => 'constant', 'value' => 0],
+                    ],
+                    [
+                        'type' => 'condition',
+                        'left' => ['indicator' => 'sma', 'params' => ['period' => 20]],
+                        'operator' => 'gt',
+                        'right' => ['indicator' => 'sma', 'params' => ['period' => 50]],
+                    ],
+                ],
+            ],
+        ];
+
+        $this->assertSame(200, $eval->maxLookback($definition));
+        $this->assertSame(50, $eval->stockLookback($definition));
+        $this->assertSame(['NIFTY50' => 200], $eval->entityLookbacks($definition));
+
+        // A stock with 50 bars must not be skipped just because the index side needs 200.
+        $bars = [];
+        for ($i = 0; $i < 50; $i++) {
+            $c = 100.0 + $i;
+            $bars[] = ['open' => $c, 'high' => $c + 1, 'low' => $c - 1, 'close' => $c, 'volume' => 100.0];
+        }
+        $result = $eval->evaluateStock($definition, $bars, ['NIFTY50' => []]);
+        $this->assertFalse($result['skipped']);
+        $this->assertFalse($result['matched']);
+    }
+
     public function test_condition_tree_and_or_and_insufficient_bars(): void
     {
         $eval = new ScreenerEvaluationService(new TechnicalIndicatorService);

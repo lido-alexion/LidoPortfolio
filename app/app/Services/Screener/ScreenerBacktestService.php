@@ -256,6 +256,23 @@ class ScreenerBacktestService
             $lookback = $this->evaluation->maxLookback($definition);
             $fetchLimit = $lookback + 5;
 
+            $entityLookbacks = $this->evaluation->entityLookbacks($definition);
+            $entityStockIds = [];
+            foreach ($entityLookbacks as $entitySymbol => $entityLookback) {
+                $benchmark = $this->runs->benchmarkStockForEntity((string) $entitySymbol);
+                if ($benchmark === null) {
+                    $warning = "Index {$entitySymbol} has no cached price data; conditions computed on it will not match.";
+                    $warnings = $stats['warnings'] ?? [];
+                    if (! in_array($warning, $warnings, true)) {
+                        $warnings[] = $warning;
+                        $stats['warnings'] = $warnings;
+                    }
+
+                    continue;
+                }
+                $entityStockIds[$entitySymbol] = (int) $benchmark->id;
+            }
+
             $stocks = Stock::query()
                 ->whereIn('id', $stockIds)
                 ->get()
@@ -267,6 +284,14 @@ class ScreenerBacktestService
                 $asOf = Carbon::parse((string) $dateStr, config('app.timezone'))->toDateString();
                 $dayMatched = 0;
 
+                $entityBars = [];
+                foreach ($entityLookbacks as $entitySymbol => $entityLookback) {
+                    $benchId = $entityStockIds[$entitySymbol] ?? null;
+                    $entityBars[$entitySymbol] = $benchId !== null
+                        ? $this->loadBarsAsOf($benchId, $asOf, $entityLookback + 5)
+                        : [];
+                }
+
                 foreach ($stockIds as $stockId) {
                     $stock = $stocks->get($stockId);
                     if ($stock === null) {
@@ -277,7 +302,7 @@ class ScreenerBacktestService
 
                     try {
                         $bars = $this->loadBarsAsOf((int) $stockId, $asOf, $fetchLimit);
-                        $result = $this->evaluation->evaluateStock($definition, $bars);
+                        $result = $this->evaluation->evaluateStock($definition, $bars, $entityBars);
                         $stats['scanned'] = ((int) ($stats['scanned'] ?? 0)) + 1;
 
                         if ($result['skipped']) {

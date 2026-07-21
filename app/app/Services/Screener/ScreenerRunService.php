@@ -109,6 +109,15 @@ class ScreenerRunService
             $lookback = $this->evaluation->maxLookback($definition);
             $fetchLimit = $lookback + 5;
 
+            [$entityBars, $entityWarnings] = $this->loadEntityBars($this->evaluation->entityLookbacks($definition));
+            foreach ($entityWarnings as $entityWarning) {
+                $warnings = $stats['warnings'] ?? [];
+                if (! in_array($entityWarning, $warnings, true)) {
+                    $warnings[] = $entityWarning;
+                    $stats['warnings'] = $warnings;
+                }
+            }
+
             if ($chunkIds === [] && $cursor === 0) {
                 // Empty universe
                 $stats['scanned'] = 0;
@@ -140,7 +149,7 @@ class ScreenerRunService
 
                 try {
                     $bars = $this->loadBars((int) $stockId, $fetchLimit);
-                    $result = $this->evaluation->evaluateStock($definition, $bars);
+                    $result = $this->evaluation->evaluateStock($definition, $bars, $entityBars);
                     $stats['scanned'] = ((int) ($stats['scanned'] ?? 0)) + 1;
 
                     if ($result['skipped']) {
@@ -388,6 +397,51 @@ class ScreenerRunService
             ->all();
 
         return [$ids, $warning];
+    }
+
+    /**
+     * OHLCV bars for index entities used on the left side of conditions.
+     * Keys are entity symbols (e.g. NIFTY50); missing/short history produces a warning.
+     *
+     * @param  array<string,int>  $lookbacks  entity symbol → min bars needed
+     * @return array{0:array<string,list<array<string,mixed>>>,1:list<string>}
+     */
+    public function loadEntityBars(array $lookbacks): array
+    {
+        $bars = [];
+        $warnings = [];
+        foreach ($lookbacks as $symbol => $lookback) {
+            $benchmark = $this->benchmarkStockForEntity((string) $symbol);
+            if ($benchmark === null) {
+                $bars[$symbol] = [];
+                $warnings[] = "Index {$symbol} has no cached price data; conditions computed on it will not match.";
+
+                continue;
+            }
+            $rows = $this->loadBars((int) $benchmark->id, $lookback + 5);
+            $bars[$symbol] = $rows;
+            if (count($rows) < $lookback) {
+                $warnings[] = "Index {$symbol} has fewer OHLCV sessions than the conditions need; those conditions will not match.";
+            }
+        }
+
+        return [$bars, $warnings];
+    }
+
+    /**
+     * Benchmark Stock row (index OHLCV holder) for a left-entity symbol.
+     */
+    public function benchmarkStockForEntity(string $symbol): ?Stock
+    {
+        $symbol = strtoupper(trim($symbol));
+        if ($symbol === '') {
+            return null;
+        }
+
+        return Stock::query()
+            ->where('symbol', $symbol)
+            ->where('is_benchmark', true)
+            ->first();
     }
 
     /**

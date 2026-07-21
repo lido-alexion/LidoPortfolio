@@ -93,6 +93,15 @@ class ScreenerDefinitionValidator
         if (! is_array($operand)) {
             throw new InvalidArgumentException("Condition {$side} is required.");
         }
+        $entity = $operand['entity'] ?? null;
+        if ($entity !== null && $entity !== '' && $entity !== 'stock') {
+            if ($side !== 'left') {
+                throw new InvalidArgumentException('Condition right side always evaluates on the stock; entity is not allowed.');
+            }
+            if (! in_array((string) $entity, ScreenerCatalog::entityIds(), true)) {
+                throw new InvalidArgumentException('Unknown left entity: '.$entity);
+            }
+        }
         if (($operand['type'] ?? null) === 'constant') {
             if (! is_numeric($operand['value'] ?? null)) {
                 throw new InvalidArgumentException("Condition {$side} constant must be numeric.");
