@@ -3,6 +3,8 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { formatTransactionDateDisplay } from '../../utils/transactionDate';
 import { enhanceImageHtml } from '../../utils/knowledgeImageUpload';
+import { knowledgeNotePaletteStyle } from '../../utils/knowledgeNotePalettes';
+import KnowledgeNotePalettePicker from './KnowledgeNotePalettePicker';
 import {
     IconArchive,
     IconClock,
@@ -41,6 +43,7 @@ function KnowledgeNoteCardBody({
     onDuplicate,
     onArchive,
     onDelete,
+    onChangePalette,
 }) {
     const createdLabel = formatTransactionDateDisplay(note.created_at) || '—';
     const updatedLabel = formatTransactionDateDisplay(note.updated_at) || '—';
@@ -49,6 +52,11 @@ function KnowledgeNoteCardBody({
         () => enhanceImageHtml(note.content_html || ''),
         [note.content_html],
     );
+    const paletteStyle = knowledgeNotePaletteStyle(note.color_palette);
+    const mergedStyle = {
+        ...paletteStyle,
+        ...cardStyle,
+    };
 
     const runAction = (event, action) => {
         event.stopPropagation();
@@ -68,9 +76,10 @@ function KnowledgeNoteCardBody({
     return (
         <article
             ref={cardRef}
-            style={cardStyle}
+            style={mergedStyle}
             className={[
                 'card lido-knowledge-card',
+                paletteStyle ? 'lido-knowledge-card--palette' : '',
                 showControls && dragHandleProps ? 'lido-knowledge-card--draggable' : '',
                 showControls && selected ? 'lido-knowledge-card--selected' : '',
                 showControls ? 'lido-knowledge-card--manage' : 'lido-knowledge-card--read',
@@ -89,6 +98,21 @@ function KnowledgeNoteCardBody({
                         __html: bodyHtml || '<span class="text-muted">Empty note</span>',
                     }}
                 />
+
+                {showControls ? (
+                    <div
+                        className="lido-knowledge-card-palette-row mt-2"
+                        onClick={(event) => event.stopPropagation()}
+                        onPointerDown={(event) => event.stopPropagation()}
+                    >
+                        <KnowledgeNotePalettePicker
+                            compact
+                            value={note.color_palette || 'default'}
+                            onChange={(paletteId) => onChangePalette?.(note, paletteId)}
+                            ariaLabel={`Color palette for note ${note.id}`}
+                        />
+                    </div>
+                ) : null}
 
                 {showControls ? (
                     <div className="lido-knowledge-card-overlay">

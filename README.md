@@ -82,6 +82,7 @@ Production example layout: subdirectory app under cPanel (`/portfolio`) — see 
 - Portfolio notes for market research (tags, search, pin, archive, manual order)
 - Editors: **Simple / Formatted (TipTap) / Markdown** with autosave
 - **Images** — resize for embed, full-size on click (lightbox)
+- **Color palettes** — contrasting background + text themes; set on create/edit or change from the note card
 - **Read / Manage** toggle — clean reading view vs checkboxes and action toolbar
 - Bulk select, export (plain / Markdown / AI-friendly), tag management page
 

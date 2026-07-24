@@ -120,6 +120,44 @@ class KnowledgeBoardTest extends TestCase
             'content_json' => ['type' => 'doc', 'content' => []],
         ])
             ->assertCreated()
-            ->assertJsonPath('data.title', 'Dividend compounding thesis');
+            ->assertJsonPath('data.title', 'Dividend compounding thesis')
+            ->assertJsonPath('data.color_palette', 'default');
+    }
+
+    public function test_note_color_palette_can_be_set_and_updated(): void
+    {
+        $user = User::query()->create([
+            'name' => 'KB Palette',
+            'email' => 'kb-pal-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+        $this->defaultPortfolioFor($user);
+        $this->actingAs($user);
+
+        $palettes = $this->getJson('/api/knowledge-board/palettes');
+        $palettes->assertOk();
+        $this->assertGreaterThanOrEqual(2, count($palettes->json('data')));
+
+        $create = $this->postJson('/api/knowledge-board/notes', [
+            'content_html' => '<p>Ocean note</p>',
+            'color_palette' => 'ocean',
+        ]);
+        $create->assertCreated();
+        $create->assertJsonPath('data.color_palette', 'ocean');
+        $noteId = $create->json('data.id');
+
+        $this->putJson("/api/knowledge-board/notes/{$noteId}", [
+            'color_palette' => 'forest',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.color_palette', 'forest');
+
+        $this->putJson("/api/knowledge-board/notes/{$noteId}", [
+            'color_palette' => 'not-a-real-palette',
+        ])->assertStatus(422);
+
+        $dup = $this->postJson("/api/knowledge-board/notes/{$noteId}/duplicate");
+        $dup->assertCreated();
+        $dup->assertJsonPath('data.color_palette', 'forest');
     }
 }

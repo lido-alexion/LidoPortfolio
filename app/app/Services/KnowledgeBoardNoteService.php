@@ -7,6 +7,7 @@ use App\Models\KnowledgeTag;
 use App\Models\PortfolioProfile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class KnowledgeBoardNoteService
@@ -14,6 +15,12 @@ class KnowledgeBoardNoteService
     public function __construct(
         protected KnowledgeBoardTagService $tags,
     ) {}
+
+    /** @return list<string> */
+    public function paletteRule(): array
+    {
+        return ['nullable', 'string', 'max:32', Rule::in(KnowledgeNotePaletteCatalog::ids())];
+    }
 
     /**
      * @param  array{
@@ -95,6 +102,7 @@ class KnowledgeBoardNoteService
             'is_pinned' => (bool) ($data['is_pinned'] ?? false),
             'is_favorite' => (bool) ($data['is_favorite'] ?? false),
             'is_archived' => (bool) ($data['is_archived'] ?? false),
+            'color_palette' => KnowledgeNotePaletteCatalog::normalize($data['color_palette'] ?? null),
         ]);
 
         $this->syncTags($profile, $note, $data['tag_ids'] ?? []);
@@ -128,6 +136,9 @@ class KnowledgeBoardNoteService
                 $note->{$flag} = (bool) $data[$flag];
             }
         }
+        if (array_key_exists('color_palette', $data)) {
+            $note->color_palette = KnowledgeNotePaletteCatalog::normalize($data['color_palette']);
+        }
 
         $note->save();
 
@@ -156,6 +167,7 @@ class KnowledgeBoardNoteService
             'is_pinned' => false,
             'is_favorite' => $note->is_favorite,
             'is_archived' => false,
+            'color_palette' => KnowledgeNotePaletteCatalog::normalize($note->color_palette),
         ]);
 
         $copy->tags()->sync($note->tags()->pluck('portfolio_knowledge_tags.id'));
@@ -286,6 +298,7 @@ class KnowledgeBoardNoteService
             'is_pinned' => $note->is_pinned,
             'is_favorite' => $note->is_favorite,
             'is_archived' => $note->is_archived,
+            'color_palette' => KnowledgeNotePaletteCatalog::normalize($note->color_palette),
             'created_at' => $note->created_at?->toIso8601String(),
             'updated_at' => $note->updated_at?->toIso8601String(),
             'tags' => $note->tags->map(fn (KnowledgeTag $tag) => $this->tags->formatTag($tag))->values()->all(),

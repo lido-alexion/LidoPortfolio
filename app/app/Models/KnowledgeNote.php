@@ -18,6 +18,7 @@ class KnowledgeNote extends Model
         'is_pinned',
         'is_favorite',
         'is_archived',
+        'color_palette',
     ];
 
     protected function casts(): array

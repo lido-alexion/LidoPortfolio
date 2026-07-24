@@ -16,6 +16,11 @@ import {
     plainTextToJson,
 } from '../../utils/knowledgeBoardPreview';
 import { enhanceImageHtml } from '../../utils/knowledgeImageUpload';
+import {
+    KNOWLEDGE_NOTE_DEFAULT_PALETTE,
+    knowledgeNotePaletteStyle,
+} from '../../utils/knowledgeNotePalettes';
+import KnowledgeNotePalettePicker from './KnowledgeNotePalettePicker';
 import { IconDelete } from './KnowledgeCardIcons';
 
 const EMPTY_DOC = { type: 'doc', content: [{ type: 'paragraph' }] };
@@ -37,6 +42,7 @@ export default function KnowledgeNoteEditorModal({
     const [plainText, setPlainText] = useState('');
     const [markdownText, setMarkdownText] = useState('');
     const [editorMode, setEditorMode] = useState('simple');
+    const [colorPalette, setColorPalette] = useState(KNOWLEDGE_NOTE_DEFAULT_PALETTE);
     const [dirty, setDirty] = useState(false);
     const autosaveTimer = useRef(null);
     const lastSavedSnapshot = useRef('');
@@ -47,7 +53,8 @@ export default function KnowledgeNoteEditorModal({
         plainText,
         markdownText,
         editorMode,
-    }), [tags, contentJson, plainText, markdownText, editorMode]);
+        colorPalette,
+    }), [tags, contentJson, plainText, markdownText, editorMode, colorPalette]);
 
     useEffect(() => {
         if (!open) {
@@ -58,11 +65,13 @@ export default function KnowledgeNoteEditorModal({
         const initialHtml = note?.content_html || '';
         const initialPlain = htmlToPlainText(initialHtml);
         const initialMarkdown = htmlToMarkdownLite(initialHtml);
+        const initialPalette = note?.color_palette || KNOWLEDGE_NOTE_DEFAULT_PALETTE;
         setTags(initialTags);
         setContentJson(initialJson);
         setContentHtml(initialHtml);
         setPlainText(initialPlain);
         setMarkdownText(initialMarkdown);
+        setColorPalette(initialPalette);
         setEditorMode('simple');
         setDirty(false);
         lastSavedSnapshot.current = JSON.stringify({
@@ -71,6 +80,7 @@ export default function KnowledgeNoteEditorModal({
             plainText: initialPlain,
             markdownText: initialMarkdown,
             editorMode: 'simple',
+            colorPalette: initialPalette,
         });
     }, [open, sessionKey]);
 
@@ -92,8 +102,9 @@ export default function KnowledgeNoteEditorModal({
             content_json: json,
             content_html: html,
             tag_ids: tags.map((tag) => tag.id),
+            color_palette: colorPalette || KNOWLEDGE_NOTE_DEFAULT_PALETTE,
         };
-    }, [editorMode, plainText, markdownText, contentHtml, contentJson, tags]);
+    }, [editorMode, plainText, markdownText, contentHtml, contentJson, tags, colorPalette]);
 
     const hasContent = useCallback(() => {
         if (editorMode === 'simple') {
@@ -143,7 +154,7 @@ export default function KnowledgeNoteEditorModal({
                 clearTimeout(autosaveTimer.current);
             }
         };
-    }, [open, snapshot, save, hasContent, tags, contentJson, contentHtml, plainText, markdownText, editorMode]);
+    }, [open, snapshot, save, hasContent, tags, contentJson, contentHtml, plainText, markdownText, editorMode, colorPalette]);
 
     const handleModeChange = (nextMode) => {
         if (nextMode === editorMode) {
@@ -228,7 +239,20 @@ export default function KnowledgeNoteEditorModal({
                         <h2 className="modal-title h6 mb-0" id="kb-editor-title">{note?.id ? 'Edit note' : 'New note'}</h2>
                         <button type="button" className="btn-close" aria-label="Close editor" onClick={handleClose} />
                     </div>
-                    <div className="modal-body d-grid gap-2">
+                    <div
+                        className={[
+                            'modal-body d-grid gap-2',
+                            colorPalette && colorPalette !== KNOWLEDGE_NOTE_DEFAULT_PALETTE
+                                ? 'lido-knowledge-editor-body--palette'
+                                : '',
+                        ].filter(Boolean).join(' ')}
+                        style={knowledgeNotePaletteStyle(colorPalette)}
+                    >
+                        <KnowledgeNotePalettePicker
+                            value={colorPalette}
+                            onChange={setColorPalette}
+                            disabled={saving}
+                        />
                         {editorMode === 'simple' ? (
                             <KnowledgeSimpleEditor
                                 key={`${sessionKey}-simple`}

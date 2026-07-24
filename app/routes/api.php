@@ -120,6 +120,7 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
         Route::get('/images/{knowledgeImage}', [KnowledgeBoardImageController::class, 'show']);
         Route::get('/images/{knowledgeImage}/full', [KnowledgeBoardImageController::class, 'full']);
 
+        Route::get('/palettes', [KnowledgeBoardNoteController::class, 'palettes']);
         Route::get('/notes', [KnowledgeBoardNoteController::class, 'index']);
         Route::post('/notes/bulk', [KnowledgeBoardNoteController::class, 'bulk']);
         Route::post('/notes', [KnowledgeBoardNoteController::class, 'store']);

@@ -24,6 +24,7 @@ export default function KnowledgeNoteGrid({
     onDuplicate,
     onArchive,
     onDelete,
+    onChangePalette,
 }) {
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -62,6 +63,7 @@ export default function KnowledgeNoteGrid({
                     onDuplicate={onDuplicate}
                     onArchive={onArchive}
                     onDelete={onDelete}
+                    onChangePalette={onChangePalette}
                 />
             ))}
         </div>

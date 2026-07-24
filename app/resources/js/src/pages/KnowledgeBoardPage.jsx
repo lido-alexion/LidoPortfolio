@@ -496,6 +496,7 @@ export default function KnowledgeBoardPage() {
                     onDuplicate={duplicateNote}
                     onArchive={archiveNote}
                     onDelete={deleteNote}
+                    onChangePalette={(note, paletteId) => patchNote(note, { color_palette: paletteId })}
                 />
             )}
 

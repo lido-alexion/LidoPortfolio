@@ -2576,6 +2576,109 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     gap: 0.25rem;
 }
 
+.lido-knowledge-card--palette {
+    border-color: color-mix(in srgb, var(--lido-knowledge-palette-fg, currentColor) 22%, transparent);
+}
+
+.lido-knowledge-card--palette .lido-knowledge-card-preview,
+.lido-knowledge-card--palette .lido-knowledge-card-preview .text-muted {
+    color: var(--lido-knowledge-palette-fg, var(--lido-knowledge-note-text));
+}
+
+.lido-knowledge-card--palette .lido-knowledge-card-tag {
+    color: var(--lido-knowledge-palette-fg);
+    background-color: color-mix(in srgb, var(--lido-knowledge-palette-fg) 14%, transparent);
+    border-color: color-mix(in srgb, var(--lido-knowledge-palette-fg) 28%, transparent);
+}
+
+.lido-knowledge-card--palette .lido-knowledge-card-overlay {
+    background: color-mix(in srgb, var(--lido-knowledge-palette-bg) 82%, transparent);
+}
+
+.lido-knowledge-card--palette .lido-knowledge-card-icon-btn,
+.lido-knowledge-card--palette .lido-knowledge-card-clock,
+.lido-knowledge-card--palette .lido-knowledge-card-drag-handle {
+    color: var(--lido-knowledge-palette-fg);
+}
+
+.lido-knowledge-card-palette-row {
+    position: relative;
+    z-index: 1;
+}
+
+.lido-knowledge-palette-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.lido-knowledge-palette-picker--compact {
+    gap: 0.2rem;
+}
+
+.lido-knowledge-palette-picker-label {
+    line-height: 1.2;
+}
+
+.lido-knowledge-palette-swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+}
+
+.lido-knowledge-palette-swatch {
+    width: 1.55rem;
+    height: 1.55rem;
+    padding: 0;
+    border-radius: 0.3rem;
+    border: 1px solid color-mix(in srgb, var(--lido-text, #111) 28%, transparent);
+    font-size: 0.62rem;
+    font-weight: 600;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    background: var(--lido-surface, #fff);
+    color: var(--lido-text, #111);
+}
+
+.lido-knowledge-palette-swatch--default {
+    background:
+        linear-gradient(135deg, var(--lido-surface, #fff) 50%, var(--lido-input-bg, #e5e7eb) 50%);
+    color: var(--lido-text, #111);
+}
+
+.lido-knowledge-palette-swatch.is-selected {
+    outline: 2px solid var(--lido-brand, #0d6efd);
+    outline-offset: 1px;
+}
+
+.lido-knowledge-palette-swatch:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.lido-knowledge-palette-picker--compact .lido-knowledge-palette-swatch {
+    width: 1.25rem;
+    height: 1.25rem;
+    font-size: 0.55rem;
+}
+
+.lido-knowledge-editor-body--palette .lido-knowledge-editor-content .ProseMirror,
+.lido-knowledge-editor-body--palette .lido-knowledge-simple-editor,
+.lido-knowledge-editor-body--palette .lido-knowledge-markdown-editor-input,
+.lido-knowledge-editor-body--palette .lido-knowledge-markdown-preview {
+    background-color: transparent !important;
+    color: inherit !important;
+    border-color: color-mix(in srgb, currentColor 28%, transparent);
+}
+
+.lido-knowledge-editor-body--palette .lido-knowledge-palette-picker-label {
+    color: inherit;
+    opacity: 0.8;
+}
+
 .lido-knowledge-card-tag {
     font-size: 0.65rem;
     line-height: 1.15;

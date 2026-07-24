@@ -6,12 +6,20 @@ use App\Http\Controllers\Controller;
 use App\Models\KnowledgeNote;
 use App\Models\KnowledgeTag;
 use App\Services\KnowledgeBoardNoteService;
+use App\Services\KnowledgeNotePaletteCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class KnowledgeBoardNoteController extends Controller
 {
     public function __construct(protected KnowledgeBoardNoteService $notes) {}
+
+    public function palettes(): JsonResponse
+    {
+        return response()->json([
+            'data' => KnowledgeNotePaletteCatalog::all(),
+        ]);
+    }
 
     public function index(Request $request): JsonResponse
     {
@@ -47,6 +55,7 @@ class KnowledgeBoardNoteController extends Controller
             'is_pinned' => ['sometimes', 'boolean'],
             'is_favorite' => ['sometimes', 'boolean'],
             'is_archived' => ['sometimes', 'boolean'],
+            'color_palette' => $this->notes->paletteRule(),
             'tag_ids' => ['nullable', 'array'],
             'tag_ids.*' => ['integer'],
         ]);
@@ -77,6 +86,7 @@ class KnowledgeBoardNoteController extends Controller
             'is_pinned' => ['sometimes', 'boolean'],
             'is_favorite' => ['sometimes', 'boolean'],
             'is_archived' => ['sometimes', 'boolean'],
+            'color_palette' => $this->notes->paletteRule(),
             'tag_ids' => ['nullable', 'array'],
             'tag_ids.*' => ['integer'],
         ]);
