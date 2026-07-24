@@ -6,7 +6,7 @@ Living reference for Lido Portfolio. **Update this file whenever code changes.**
 ## Agent / documentation policy (May 2026)
 
 - Do not use or recreate `design_doc.md` or removed phase/report/spec files.
-- **Canonical docs:** `implementation.md` (technical), **`debugging.md`** (production debug hooks & agent runbook), `README.md` (quick start), **`deploy/DEPLOY.md`** (production deploy & updates), **`.cursor/skills/deploy-cpanel/SKILL.md`** (agent deploy workflow), `DEPLOYMENT_VALIDATION_PLAN.md`, `portfolio-history-rebuild-report.md`, `app/API_DOCUMENTATION.md`.
+- **Canonical docs:** `implementation.md` (technical), **`debugging.md`** (production debug hooks & agent runbook), `README.md` (quick start + **Features** overview), **`deploy/DEPLOY.md`** (production deploy & updates), **`.cursor/skills/deploy-cpanel/SKILL.md`** (agent deploy workflow), `DEPLOYMENT_VALIDATION_PLAN.md`, `portfolio-history-rebuild-report.md`, `app/API_DOCUMENTATION.md`.
 - Cursor rule `.cursor/rules/Always-update-implementation-details-in-implementation-md-file.mdc` enforces: read this file first; update it after code changes.
 - Persistent instructions across sessions: project rules in `.cursor/rules/` (`alwaysApply: true`) + optional User Rules in Cursor Settings.
 

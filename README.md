@@ -1,11 +1,114 @@
 # Lido Portfolio Tracker
 
-Self-hosted Indian stock portfolio tracker:
+Self-hosted **Indian stock portfolio** tracker for personal / multi-portfolio use: ledger-true holdings, market data, screeners, patterns, research notes, and Telegram alerts.
 
 - **Backend:** Laravel (PHP 8.3+)
 - **Frontend:** React + Bootstrap (Vite, served by Laravel)
 - **Database:** MySQL (`portfolio_*` tables; can share an existing database)
 - **Notifications:** Telegram Bot API (optional)
+
+Production example layout: subdirectory app under cPanel (`/portfolio`) — see [deploy/DEPLOY.md](deploy/DEPLOY.md).
+
+---
+
+## Features
+
+### Accounts & portfolios
+
+- **Session auth** (Sanctum cookies) with Remember Me and multi-device session management
+- **Invite-only registration** — admins create invite links; guests set a password and sign in
+- **Admin password-reset links** for existing accounts (no current-password required)
+- **Multi-portfolio** — named portfolios per user, header switcher, active portfolio via `X-Profile-Id`
+- **Admin roles** — global settings, user management, sync tools restricted to admins
+- **Profile** — display name, password change, profile photo upload
+- **Themes** — light / dark / system
+
+### Dashboard
+
+- Portfolio value, invested, total gain/loss, and **portfolio XIRR**
+- **Allocation** table + visual donut charts (market % / invested %)
+- Alerts, relative strength, Nifty comparison, and **pattern signals** (holdings)
+- **Upcoming calendar events** (next 31 days)
+- Client-side **dashboard cache** (24h) with explicit refresh
+- Manual **Sync prices for today** (admin) and portfolio history rebuild hooks
+
+### Transactions & holdings
+
+- Buy/sell ledger with symbol autocomplete (NSE + BSE); new symbols create master rows on first buy
+- Auto **fees** from configurable fee components (Zerodha-style delivery defaults)
+- **Bulk CSV import** with review table before save
+- **Active** vs **Squared-off** transaction views; FIFO **realized P/L** and fees on sells
+- Holdings: qty, avg buy, invested, fees, latest close, unrealized P/L, XIRR, highest close since buy, trailing stop
+- **Simple / Complex** holdings views; resizable/reorderable tables (TanStack)
+- Sell prefill from holdings; OHLCV price history chart + table per stock
+- **Corporate actions** — guided stock split and bonus issue with OHLCV restatement
+- **Analyse** button copies an AI-ready stock prompt (with recent OHLCV) to the clipboard
+
+### Watchlists
+
+- Multiple named watchlists per portfolio (notes, sort/filter, quick add)
+- Price history panel when a stock is selected (`/watchlist/{SYMBOL}`)
+- Day change, holding badge, compare strength → Explorer
+- **Pattern scan** for the list (persisted icons) and **auto-scan** when opening a stock (reuses watchlist cache when fresh)
+
+### Explorer & Indices
+
+- **Explorer** — universe-cache analytics (1M / 3M / 6M / 1Y): price cards, relative strength, charts, normalized gain
+- **Indices** — browse index pages, constituents, and comparisons against configured benchmarks (Nifty, Sensex, mid/small caps, …)
+
+### Stock Screener
+
+- Condition builder (nested AND/OR) with technical indicators: SMA/EMA, RSI, ROC, stochastic, MACD, ATR, Bollinger, range %, 52w high/low, volume ratios, and more
+- **LHS entity** — compute the left side on the stock **or** an index (e.g. stock range % vs Nifty 50)
+- **Weight factor** on comparisons (`left` vs `weight × right`)
+- Scopes: holdings, watchlist, all equities, or **index constituents**
+- Manual runs, run history, stacked compare matrix, optional cron schedule + Telegram of results
+- **Backtest** (1y / 6m / 3m / 1m / 15d) with **per-date persistence** and stock-major series evaluation (fast reuse across runs)
+- Share screens across portfolios; Guide tab with indicator definitions and Investopedia links
+
+### Patterns
+
+- Educational **chart + candlestick** guide with SVG sketches and deep links (`/patterns#hammer`)
+- OHLCV scanners on cached daily bars (JS + PHP)
+- Dashboard holdings signals; watchlist scan + per-stock matched pattern links
+
+### Calendar
+
+- Per-portfolio market events (F&O / options expiry templates + custom recurrence)
+- Year grid with color markers; optional Telegram reminders before event day
+
+### Knowledge Board
+
+- Portfolio notes for market research (tags, search, pin, archive, manual order)
+- Editors: **Simple / Formatted (TipTap) / Markdown** with autosave
+- **Images** — resize for embed, full-size on click (lightbox)
+- **Read / Manage** toggle — clean reading view vs checkboxes and action toolbar
+- Bulk select, export (plain / Markdown / AI-friendly), tag management page
+
+### Alerts & notifications
+
+- **Alert policies** — rule builder on holdings (columns, formulas, constants); evaluate after daily sync or on demand
+- Trailing-stop metrics on holdings (policies generate alerts; not a separate built-in stoploss Telegram spam path)
+- Per-portfolio Telegram bot/chat, notification schedules, India VIX alert settings
+- Calendar reminders and scheduled screener result messages
+
+### Market data & sync
+
+- Price providers: **NSE → Yahoo → Alpha Vantage** (BSE path uses bhavcopy → Yahoo → AV)
+- Holdings daily sync, **universe OHLCV** batch sync, index/benchmark sync
+- Stock master sync (`stocks:sync`), local-first symbol validation
+- **History depth backfill** — deepens OHLCV (e.g. ~18 months) all day for longer indicator/backtest windows
+- Configurable CA bundle (`CURL_CAFILE`) for outbound HTTPS on Windows / cPanel
+
+### Ops & UX shell
+
+- Main tabs: Dashboard, Transactions, Holdings, Watchlist, Explorer, Indices, Screener, Patterns, Calendar, Knowledge
+- Collapsible bottom footer nav; branded header (**Lido Alexion**)
+- Settings: Global (admin), Portfolio, Account — fees, cron timezone, external stock links, sync logs
+- Structured logging (backend + frontend), request IDs, optional frontend log ingest
+- Production deploy via staged upload + token-guarded `cpanel-*.php` scripts (no SSH `artisan` on cPanel)
+
+Deep technical detail lives in **[implementation.md](implementation.md)** (agents: treat that as the source of truth and keep it updated).
 
 <details id="project-structure">
 <summary><strong>Project structure</strong> — how the repo is organized (click to expand)</summary>
@@ -20,11 +123,11 @@ Browser  →  Laravel (app/)  →  app.blade.php  →  React SPA  →  /api/*  �
 
 | Path | What it is |
 |------|------------|
-| **`README.md`** | Quick start and this structure guide |
+| **`README.md`** | Quick start and feature overview |
 | **`implementation.md`** | Architecture, runbook, and agent reference (read for deep detail) |
 | **`app/`** | **Full application** — Laravel API, React SPA, config, tests |
 | **`deploy/`** | Production deploy scripts, `.htaccess` snippets, cPanel guides |
-| **`.cursor/`** | Cursor IDE rules for this project |
+| **`.cursor/`** | Cursor IDE rules and skills for this project |
 
 There is **no separate `frontend/` folder** at the repo root.
 
@@ -37,10 +140,10 @@ Think of `app/` as a normal Laravel project root (`artisan`, `.env`, `composer.j
 | Path | Contains |
 |------|----------|
 | **`app/Http/Controllers/Api/`** | REST API controllers (holdings, transactions, dashboard, stocks, auth, …) |
-| **`app/Services/`** | Business logic (price fetch, portfolio math, XIRR, notifications, …) |
+| **`app/Services/`** | Business logic (price fetch, portfolio math, XIRR, screeners, notifications, …) |
 | **`app/Models/`** | Eloquent models (`Stock`, `Holding`, `Transaction`, …) |
 | **`app/Jobs/`** | Background jobs (price backfill, daily sync, alerts) |
-| **`app/Console/Commands/`** | CLI commands (`portfolio:daily-sync`, stock master sync, …) |
+| **`app/Console/Commands/`** | CLI commands (`portfolio:daily-sync`, universe sync, history depth, …) |
 | **`routes/api.php`** | API routes (`/api/...`) |
 | **`routes/web.php`** | SPA catch-all — browser URLs return the React shell |
 | **`database/migrations/`** | MySQL schema (`portfolio_*` tables) |
@@ -56,9 +159,9 @@ The UI is not a sibling repo — it lives in Laravel’s `resources/` tree:
 |------|----------|
 | **`resources/js/app.jsx`** | React entry point — mounts the app into `#app` |
 | **`resources/js/src/App.jsx`** | Root component + client-side routing |
-| **`resources/js/src/pages/`** | Screens (Dashboard, Holdings, Transactions, Settings, …) |
+| **`resources/js/src/pages/`** | Screens (Dashboard, Holdings, Transactions, Screener, …) |
 | **`resources/js/src/components/`** | Reusable UI (header, tables, autocomplete, …) |
-| **`resources/js/src/context/`** | React context (auth, theme) |
+| **`resources/js/src/context/`** | React context (auth, theme, portfolio) |
 | **`resources/js/src/api.js`** | API client (calls `/api/...`) |
 | **`resources/js/src/styles/lido-app.css`** | App-specific styles |
 | **`resources/views/app.blade.php`** | HTML shell that loads Vite/React |
@@ -72,7 +175,7 @@ The UI is not a sibling repo — it lives in Laravel’s `resources/` tree:
 | Path | Contains |
 |------|----------|
 | **`public/`** | Web document root (`index.php`, built assets, fonts) |
-| **`storage/`** | Logs, cache, uploaded files |
+| **`storage/`** | Logs, cache, uploaded files (profile photos, knowledge images) |
 | **`.env`** | Local secrets & DB config (not in git) |
 
 Note: Laravel’s own PHP code folder is **`app/app/`** (nested under the application root). That naming overlap is normal.
@@ -180,7 +283,7 @@ php artisan serve --host=127.0.0.1 --port=8001
 - [ ] **Web** — `php artisan serve` *or* Apache with document root `app/public`
 - [ ] **Vite** — `npm run dev` only during UI development (optional if `npm run build` done)
 - [ ] **Queue** — `php artisan queue:listen` (optional; included in `composer run dev`)
-- [ ] **Scheduler** — `php artisan schedule:work` or Windows Task Scheduler running `php artisan portfolio:daily-sync` (for daily prices / dashboard growth chart)
+- [ ] **Scheduler** — `php artisan schedule:work` (daily prices, universe sync, screeners, calendar reminders, history-depth backfill, notifications)
 
 ## API smoke test
 
@@ -194,10 +297,13 @@ PowerShell -ExecutionPolicy Bypass -File app\tests\Feature\api_smoke.ps1
 
 | File | Description |
 |------|-------------|
+| [Features](#features) | Product feature overview (this README) |
 | [Project structure](#project-structure) | Folder layout and how Laravel + React fit together |
 | [implementation.md](implementation.md) | Living technical reference (agents: read first) |
+| [debugging.md](debugging.md) | Production debug hooks & agent runbook |
 | [app/API_DOCUMENTATION.md](app/API_DOCUMENTATION.md) | REST API |
 | [deploy/DEPLOY.md](deploy/DEPLOY.md) | **Production deploy** (lidoalexion.com/portfolio, updates) |
+| [`.cursor/skills/deploy-cpanel/SKILL.md`](.cursor/skills/deploy-cpanel/SKILL.md) | Agent deploy workflow (build + upload table) |
 | [DEPLOYMENT_CPANEL.md](DEPLOYMENT_CPANEL.md) | Generic cPanel notes (other hosts) |
 | [DEPLOYMENT_VALIDATION_PLAN.md](DEPLOYMENT_VALIDATION_PLAN.md) | Pre/post deploy validation checklist |
 
