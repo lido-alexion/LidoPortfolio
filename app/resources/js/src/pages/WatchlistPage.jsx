@@ -122,6 +122,63 @@ function HoldingInfo({ holding, symbol }) {
     );
 }
 
+function StockPatternMatches({ scan, loading }) {
+    if (loading) {
+        return (
+            <div className="small text-muted mt-3">Scanning for patterns…</div>
+        );
+    }
+    if (!scan) {
+        return null;
+    }
+
+    const matches = scan.matches || [];
+    if (matches.length === 0) {
+        return (
+            <div className="small text-muted mt-3">
+                No patterns matched on the latest bar.
+            </div>
+        );
+    }
+
+    return (
+        <div className="mt-3" aria-label="Matched patterns">
+            <div className="small fw-semibold mb-1">
+                Matched patterns
+                {scan.price_as_of ? (
+                    <span className="text-muted fw-normal">
+                        {' '}· as of {formatTransactionDateDisplay(scan.price_as_of)}
+                    </span>
+                ) : null}
+            </div>
+            <div className="d-flex flex-wrap gap-2">
+                {matches.map((match) => (
+                    <Link
+                        key={`${match.id}-${match.bar_date || ''}`}
+                        to={patternGuideLink(match.id)}
+                        className="badge bg-light text-dark border text-decoration-none d-inline-flex align-items-center gap-1"
+                        title={[
+                            match.name || match.id,
+                            categoryLabel(match.category),
+                            match.bar_date
+                                ? `As of ${formatTransactionDateDisplay(match.bar_date)}`
+                                : null,
+                        ].filter(Boolean).join(' · ')}
+                    >
+                        <PatternSketch
+                            patternId={match.id}
+                            className="lido-pattern-sketch--watchlist"
+                            title=""
+                        />
+                        <span>{match.name || match.id}</span>
+                        <span className="text-muted">({categoryLabel(match.category)})</span>
+                    </Link>
+                ))}
+            </div>
+        </div>
+    );
+}
+
 function WatchlistStockPanel({
     stock,
     activeWatchlist,
@@ -138,6 +195,8 @@ function WatchlistStockPanel({
     prices,
     pricesLoading,
     priceMeta,
+    patternScan,
+    patternScanLoading,
 }) {
     if (!stock) {
         return null;
@@ -241,6 +300,8 @@ function WatchlistStockPanel({
                             </span>
                         ) : null}
                     </div>
+
+                    <StockPatternMatches scan={patternScan} loading={patternScanLoading} />
                 </div>
             </div>
 
@@ -289,6 +350,8 @@ export default function WatchlistPage() {
     const [quickAddKey, setQuickAddKey] = useState(0);
     const [removingItemId, setRemovingItemId] = useState(null);
     const [benchmarkIndexes, setBenchmarkIndexes] = useState([]);
+    const [patternScan, setPatternScan] = useState(null);
+    const [patternScanLoading, setPatternScanLoading] = useState(false);
 
     const activeWatchlist = useMemo(
         () => watchlists.find((row) => row.id === activeWatchlistId) ?? null,
@@ -430,16 +493,48 @@ export default function WatchlistPage() {
         }
     }, []);
 
+    const loadStockPatterns = useCallback(async (stockId) => {
+        if (!stockId) {
+            setPatternScan(null);
+            return;
+        }
+
+        setPatternScanLoading(true);
+        try {
+            const res = await api.get(`/stocks/${stockId}/pattern-scan`, {
+                skipErrorToast: true,
+            });
+            setPatternScan(res.data || null);
+
+            // A fresh scan is written back to member watchlists server-side;
+            // reflect it on the visible list rows too.
+            if (res.data?.persisted) {
+                const matches = res.data.matches || [];
+                setItems((prev) => prev.map((item) => (
+                    item.stock_id === stockId
+                        ? { ...item, pattern_matches: matches }
+                        : item
+                )));
+            }
+        } catch {
+            setPatternScan(null);
+        } finally {
+            setPatternScanLoading(false);
+        }
+    }, []);
+
     useEffect(() => {
         if (selectedStock?.id) {
             loadPrices(selectedStock.id);
             loadMembership(selectedStock.id);
+            loadStockPatterns(selectedStock.id);
         } else {
             setPrices([]);
             setPriceMeta(null);
             setMembershipIds([]);
+            setPatternScan(null);
         }
-    }, [selectedStock?.id, loadPrices, loadMembership]);
+    }, [selectedStock?.id, loadPrices, loadMembership, loadStockPatterns]);
 
     useEffect(() => {
         setNote(activeEntry?.note || '');
@@ -608,6 +703,8 @@ export default function WatchlistPage() {
             const item = res.data.data;
             if (selectedStock?.id === stock.id) {
                 await loadMembership(stock.id);
+                // Persist the scan to the newly joined watchlist so row icons show.
+                loadStockPatterns(stock.id);
             }
             if (watchlistId === activeWatchlistId) {
                 setItems((prev) => [item, ...prev.filter((row) => row.stock_id !== item.stock_id)]);
@@ -724,6 +821,8 @@ export default function WatchlistPage() {
                 prices={prices}
                 pricesLoading={pricesLoading}
                 priceMeta={priceMeta}
+                patternScan={patternScan}
+                patternScanLoading={patternScanLoading}
             />
 
             <div className="card">

@@ -104,6 +104,178 @@ class PatternScanTest extends TestCase
         $this->assertNotEmpty($response->json('results'));
     }
 
+    public function test_single_stock_scan_computes_fresh_and_persists_for_member(): void
+    {
+        $user = User::query()->create([
+            'name' => 'Single Scan',
+            'email' => 'single-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+        $profile = $this->defaultPortfolioFor($user);
+        $watchlist = app(WatchlistService::class)->ensureDefaultWatchlist($profile);
+
+        $stock = Stock::query()->create([
+            'symbol' => 'S'.strtoupper(Str::random(4)),
+            'exchange' => 'NSE',
+            'name' => 'Single Stock',
+            'is_active' => true,
+            'is_benchmark' => false,
+        ]);
+
+        WatchlistItem::query()->create([
+            'profile_id' => $profile->id,
+            'watchlist_id' => $watchlist->id,
+            'stock_id' => $stock->id,
+            'note' => null,
+        ]);
+
+        $this->seedDowntrendWithHammer($stock);
+
+        $this->actingAs($user);
+
+        $response = $this->getJson('/api/stocks/'.$stock->id.'/pattern-scan');
+
+        $response->assertOk();
+        $response->assertJsonPath('stock_id', $stock->id);
+        $response->assertJsonPath('source', 'fresh');
+        $response->assertJsonPath('persisted', true);
+        $this->assertContains('hammer', array_column($response->json('matches'), 'id'));
+
+        $this->assertDatabaseHas('portfolio_watchlist_pattern_scans', [
+            'watchlist_id' => $watchlist->id,
+            'stock_id' => $stock->id,
+        ]);
+    }
+
+    public function test_single_stock_scan_reuses_valid_watchlist_cache(): void
+    {
+        $user = User::query()->create([
+            'name' => 'Cache Scan',
+            'email' => 'cache-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+        $profile = $this->defaultPortfolioFor($user);
+        $watchlist = app(WatchlistService::class)->ensureDefaultWatchlist($profile);
+
+        $stock = Stock::query()->create([
+            'symbol' => 'C'.strtoupper(Str::random(4)),
+            'exchange' => 'NSE',
+            'name' => 'Cached Stock',
+            'is_active' => true,
+            'is_benchmark' => false,
+        ]);
+
+        WatchlistItem::query()->create([
+            'profile_id' => $profile->id,
+            'watchlist_id' => $watchlist->id,
+            'stock_id' => $stock->id,
+            'note' => null,
+        ]);
+
+        $this->seedDowntrendWithHammer($stock);
+
+        // Sentinel matches prove the cache is served instead of a recompute.
+        \App\Models\WatchlistPatternScan::query()->create([
+            'profile_id' => $profile->id,
+            'watchlist_id' => $watchlist->id,
+            'stock_id' => $stock->id,
+            'matches' => [['id' => 'doji', 'name' => 'Doji', 'category' => 'neutral', 'variant' => 'candle', 'bar_date' => now()->subDay()->toDateString()]],
+            'price_as_of' => now()->subDay()->toDateString(),
+            'expires_at' => now()->addDay(),
+            'scanned_at' => now(),
+        ]);
+
+        $this->actingAs($user);
+
+        $response = $this->getJson('/api/stocks/'.$stock->id.'/pattern-scan');
+
+        $response->assertOk();
+        $response->assertJsonPath('source', 'watchlist_cache');
+        $response->assertJsonPath('persisted', true);
+        $this->assertSame(['doji'], array_column($response->json('matches'), 'id'));
+    }
+
+    public function test_single_stock_scan_recomputes_when_newer_prices_exist(): void
+    {
+        $user = User::query()->create([
+            'name' => 'Stale Scan',
+            'email' => 'stale-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+        $profile = $this->defaultPortfolioFor($user);
+        $watchlist = app(WatchlistService::class)->ensureDefaultWatchlist($profile);
+
+        $stock = Stock::query()->create([
+            'symbol' => 'T'.strtoupper(Str::random(4)),
+            'exchange' => 'NSE',
+            'name' => 'Stale Stock',
+            'is_active' => true,
+            'is_benchmark' => false,
+        ]);
+
+        WatchlistItem::query()->create([
+            'profile_id' => $profile->id,
+            'watchlist_id' => $watchlist->id,
+            'stock_id' => $stock->id,
+            'note' => null,
+        ]);
+
+        $this->seedDowntrendWithHammer($stock);
+
+        // Cached scan is not expired, but its price_as_of is older than the
+        // latest OHLCV session — must be recomputed.
+        \App\Models\WatchlistPatternScan::query()->create([
+            'profile_id' => $profile->id,
+            'watchlist_id' => $watchlist->id,
+            'stock_id' => $stock->id,
+            'matches' => [['id' => 'doji', 'name' => 'Doji', 'category' => 'neutral', 'variant' => 'candle', 'bar_date' => now()->subDays(5)->toDateString()]],
+            'price_as_of' => now()->subDays(5)->toDateString(),
+            'expires_at' => now()->addDay(),
+            'scanned_at' => now()->subDays(4),
+        ]);
+
+        $this->actingAs($user);
+
+        $response = $this->getJson('/api/stocks/'.$stock->id.'/pattern-scan');
+
+        $response->assertOk();
+        $response->assertJsonPath('source', 'fresh');
+        $this->assertContains('hammer', array_column($response->json('matches'), 'id'));
+    }
+
+    public function test_single_stock_scan_for_non_member_is_not_persisted(): void
+    {
+        $user = User::query()->create([
+            'name' => 'Free Scan',
+            'email' => 'free-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+        $this->defaultPortfolioFor($user);
+
+        $stock = Stock::query()->create([
+            'symbol' => 'F'.strtoupper(Str::random(4)),
+            'exchange' => 'NSE',
+            'name' => 'Free Stock',
+            'is_active' => true,
+            'is_benchmark' => false,
+        ]);
+
+        $this->seedDowntrendWithHammer($stock);
+
+        $this->actingAs($user);
+
+        $response = $this->getJson('/api/stocks/'.$stock->id.'/pattern-scan');
+
+        $response->assertOk();
+        $response->assertJsonPath('source', 'fresh');
+        $response->assertJsonPath('persisted', false);
+        $this->assertContains('hammer', array_column($response->json('matches'), 'id'));
+
+        $this->assertDatabaseMissing('portfolio_watchlist_pattern_scans', [
+            'stock_id' => $stock->id,
+        ]);
+    }
+
     private function seedDowntrendWithHammer(Stock $stock): void
     {
         $start = 120.0;

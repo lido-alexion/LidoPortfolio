@@ -5,14 +5,17 @@ import KnowledgeEditor from './KnowledgeEditor';
 import KnowledgeMarkdownEditor from './KnowledgeMarkdownEditor';
 import KnowledgeSimpleEditor from './KnowledgeSimpleEditor';
 import TagInput from './TagInput';
+import KnowledgeImageLightbox from './KnowledgeImageLightbox';
 import {
     deriveNoteTitle,
+    htmlHasContent,
     htmlToMarkdownLite,
     htmlToPlainText,
     markdownToHtml,
     plainTextToHtml,
     plainTextToJson,
 } from '../../utils/knowledgeBoardPreview';
+import { enhanceImageHtml } from '../../utils/knowledgeImageUpload';
 import { IconDelete } from './KnowledgeCardIcons';
 
 const EMPTY_DOC = { type: 'doc', content: [{ type: 'paragraph' }] };
@@ -97,9 +100,9 @@ export default function KnowledgeNoteEditorModal({
             return plainText.trim().length > 0;
         }
         if (editorMode === 'markdown') {
-            return markdownText.trim().length > 0;
+            return markdownText.trim().length > 0 || /!\[[^\]]*\]\([^)]+\)/.test(markdownText);
         }
-        return htmlToPlainText(contentHtml).trim().length > 0;
+        return htmlHasContent(contentHtml);
     }, [editorMode, plainText, markdownText, contentHtml]);
 
     const save = useCallback(async (isAutosave = false) => {
@@ -161,12 +164,13 @@ export default function KnowledgeNoteEditorModal({
                 setMarkdownText(htmlToMarkdownLite(contentHtml));
             }
         } else if (editorMode === 'markdown') {
-            const html = markdownToHtml(markdownText);
+            const html = enhanceImageHtml(markdownToHtml(markdownText));
             if (nextMode === 'simple') {
                 setPlainText(htmlToPlainText(html));
             } else if (nextMode === 'formatted') {
                 setContentHtml(html);
-                setContentJson(plainTextToJson(htmlToPlainText(html)));
+                // Let TipTap parse HTML so images/structure survive the mode switch.
+                setContentJson(null);
             }
         }
         setEditorMode(nextMode);
@@ -297,6 +301,7 @@ export default function KnowledgeNoteEditorModal({
                     </div>
                 </div>
             </div>
+            <KnowledgeImageLightbox />
         </div>,
         document.body,
     );

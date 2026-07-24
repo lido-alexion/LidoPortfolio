@@ -96,6 +96,173 @@ class PatternScanService
     }
 
     /**
+     * Scan a single stock for the profile. Reuses a valid persisted watchlist
+     * scan when the stock is on any of the profile's watchlists; otherwise
+     * computes fresh and writes the result back to those watchlist rows so the
+     * next load (and the watchlist item icons) reuse it.
+     *
+     * @return array{
+     *     stock_id: int,
+     *     symbol: string,
+     *     name: ?string,
+     *     exchange: ?string,
+     *     matches: list<array<string, mixed>>,
+     *     price_as_of: ?string,
+     *     source: string,
+     *     persisted: bool
+     * }
+     */
+    public function scanStock(PortfolioProfile $profile, Stock $stock, bool $actionableOnly = false): array
+    {
+        $base = [
+            'stock_id' => (int) $stock->id,
+            'symbol' => $stock->symbol,
+            'name' => $stock->name,
+            'exchange' => $stock->exchange,
+        ];
+
+        $cached = $this->validScanForStock($profile, $stock);
+        if ($cached !== null) {
+            // Copy the cached result to member watchlists that don't have a
+            // valid row yet (e.g. stock just added to another list).
+            $this->persistStockScanToMemberWatchlists(
+                $profile,
+                $stock,
+                $cached['matches'],
+                $cached['price_as_of'],
+                onlyMissing: true,
+            );
+
+            return $base + [
+                'matches' => $cached['matches'],
+                'price_as_of' => $cached['price_as_of'],
+                'source' => 'watchlist_cache',
+                'persisted' => true,
+            ];
+        }
+
+        $bars = $this->loadBars($stock);
+        $priceAsOf = $bars === [] ? null : $bars[array_key_last($bars)]['date'];
+        $matches = $bars === [] ? [] : $this->detection->scanBars($bars, $actionableOnly);
+
+        $persisted = $this->persistStockScanToMemberWatchlists($profile, $stock, $matches, $priceAsOf);
+
+        return $base + [
+            'matches' => $matches,
+            'price_as_of' => $priceAsOf,
+            'source' => 'fresh',
+            'persisted' => $persisted,
+        ];
+    }
+
+    /**
+     * Latest valid (non-expired, price-fresh) persisted scan for a stock across
+     * all of the profile's watchlists. An empty matches array is still a valid
+     * cached result ("scanned, nothing found").
+     *
+     * @return array{matches: list<array<string, mixed>>, price_as_of: ?string}|null
+     */
+    protected function validScanForStock(PortfolioProfile $profile, Stock $stock): ?array
+    {
+        $scans = WatchlistPatternScan::query()
+            ->where('profile_id', $profile->id)
+            ->where('stock_id', $stock->id)
+            ->where('expires_at', '>', now())
+            ->orderByDesc('scanned_at')
+            ->get();
+
+        if ($scans->isEmpty()) {
+            return null;
+        }
+
+        $latestByStock = $this->latestPriceDatesForStocks([(int) $stock->id]);
+        $latestRaw = $latestByStock[(int) $stock->id] ?? null;
+        $latest = $latestRaw ? Carbon::parse($latestRaw)->startOfDay() : null;
+
+        foreach ($scans as $scan) {
+            $priceAsOf = $scan->price_as_of
+                ? Carbon::parse($scan->price_as_of)->startOfDay()
+                : null;
+
+            // Invalidate only when a strictly newer OHLCV session exists.
+            if ($priceAsOf !== null && $latest !== null && $latest->gt($priceAsOf)) {
+                continue;
+            }
+
+            $matches = $scan->matches;
+            if (is_string($matches)) {
+                $decoded = json_decode($matches, true);
+                $matches = is_array($decoded) ? $decoded : [];
+            }
+
+            return [
+                'matches' => is_array($matches) ? array_values($matches) : [],
+                'price_as_of' => $priceAsOf?->toDateString(),
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * Write a fresh single-stock result to every profile watchlist containing
+     * the stock, so watchlist icons and later loads reuse it.
+     *
+     * @param  list<array<string, mixed>>  $matches
+     */
+    protected function persistStockScanToMemberWatchlists(
+        PortfolioProfile $profile,
+        Stock $stock,
+        array $matches,
+        ?string $priceAsOf,
+        bool $onlyMissing = false,
+    ): bool {
+        $watchlistIds = WatchlistItem::query()
+            ->where('profile_id', $profile->id)
+            ->where('stock_id', $stock->id)
+            ->pluck('watchlist_id')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($watchlistIds->isEmpty()) {
+            return false;
+        }
+
+        $now = now();
+        $expiresAt = $this->resolveExpiresAt($priceAsOf, $now);
+
+        if ($onlyMissing) {
+            $existing = WatchlistPatternScan::query()
+                ->whereIn('watchlist_id', $watchlistIds)
+                ->where('stock_id', $stock->id)
+                ->where('expires_at', '>', $now)
+                ->pluck('watchlist_id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+            $watchlistIds = $watchlistIds->reject(fn ($id) => in_array($id, $existing, true))->values();
+        }
+
+        foreach ($watchlistIds as $watchlistId) {
+            WatchlistPatternScan::query()->updateOrCreate(
+                [
+                    'watchlist_id' => $watchlistId,
+                    'stock_id' => $stock->id,
+                ],
+                [
+                    'profile_id' => $profile->id,
+                    'matches' => $matches,
+                    'price_as_of' => $priceAsOf,
+                    'expires_at' => $expiresAt,
+                    'scanned_at' => $now,
+                ],
+            );
+        }
+
+        return true;
+    }
+
+    /**
      * Valid (non-expired, price-fresh) pattern matches keyed by stock_id.
      *
      * @return array<int, list<array<string, mixed>>>

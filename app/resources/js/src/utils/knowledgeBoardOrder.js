@@ -1,5 +1,6 @@
 const ORDER_KEY_PREFIX = 'portfolio_knowledge_board_order_';
 const SORT_KEY = 'portfolio_knowledge_board_sort';
+const MANAGE_MODE_KEY = 'portfolio_knowledge_board_manage_mode';
 
 const VALID_SORT_VALUES = new Set([
     'manual',
@@ -27,6 +28,30 @@ export function saveSortPreference(sort) {
     }
     try {
         localStorage.setItem(SORT_KEY, sort);
+    } catch {
+        // Quota or private mode — ignore.
+    }
+}
+
+/** When true, note cards show checkbox + action toolbar (manage mode). */
+export function loadManageModePreference() {
+    try {
+        const stored = localStorage.getItem(MANAGE_MODE_KEY);
+        if (stored === '0' || stored === 'false') {
+            return false;
+        }
+        if (stored === '1' || stored === 'true') {
+            return true;
+        }
+    } catch {
+        // private mode — ignore
+    }
+    return true;
+}
+
+export function saveManageModePreference(enabled) {
+    try {
+        localStorage.setItem(MANAGE_MODE_KEY, enabled ? '1' : '0');
     } catch {
         // Quota or private mode — ignore.
     }

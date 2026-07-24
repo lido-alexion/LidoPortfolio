@@ -19,6 +19,8 @@ class SyncLogService
 
     public const JOB_PRICE_HISTORY_GAP_FILL = 'price-history-gap-fill';
 
+    public const JOB_HISTORY_DEPTH_BACKFILL = 'history-depth-backfill';
+
     public function __construct(
         protected SettingsService $settings,
         protected PortfolioLoggerService $portfolioLogger,

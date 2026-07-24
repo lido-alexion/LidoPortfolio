@@ -6,13 +6,17 @@ import usePortfolioChanged from '../hooks/usePortfolioChanged';
 import KnowledgeNoteGrid from '../components/knowledgeBoard/KnowledgeNoteGrid';
 import KnowledgeNoteEditorModal from '../components/knowledgeBoard/KnowledgeNoteEditorModal';
 import KnowledgeExportDialog from '../components/knowledgeBoard/KnowledgeExportDialog';
+import KnowledgeImageLightbox from '../components/knowledgeBoard/KnowledgeImageLightbox';
 import { IconChevronDown } from '../components/knowledgeBoard/KnowledgeCardIcons';
+import SegmentToggle from '../components/SegmentToggle';
 import { showToast } from '../toast';
 import { notePreviewText } from '../utils/knowledgeBoardPreview';
 import {
     applyManualOrder,
+    loadManageModePreference,
     loadManualOrder,
     loadSortPreference,
+    saveManageModePreference,
     saveManualOrder,
     saveSortPreference,
 } from '../utils/knowledgeBoardOrder';
@@ -53,6 +57,7 @@ export default function KnowledgeBoardPage() {
     const [filterTagIds, setFilterTagIds] = useState([]);
     const [showArchived, setShowArchived] = useState(false);
     const [filtersExpanded, setFiltersExpanded] = useState(false);
+    const [manageMode, setManageMode] = useState(() => loadManageModePreference());
     const [selectedIds, setSelectedIds] = useState(() => new Set());
     const [manualOrder, setManualOrder] = useState([]);
     const [editorOpen, setEditorOpen] = useState(false);
@@ -304,7 +309,7 @@ export default function KnowledgeBoardPage() {
                 setFiltersExpanded(true);
                 setTimeout(() => searchInputRef.current?.focus(), 0);
             }
-            if (event.key === 'Delete' && selectedIds.size > 0) {
+            if (event.key === 'Delete' && manageMode && selectedIds.size > 0) {
                 event.preventDefault();
                 bulkAction('delete');
             }
@@ -312,6 +317,28 @@ export default function KnowledgeBoardPage() {
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
     });
+
+    const setManageModePreference = useCallback((enabled) => {
+        setManageMode(enabled);
+        saveManageModePreference(enabled);
+        if (!enabled) {
+            setSelectedIds(new Set());
+        }
+    }, []);
+
+    const manageModeToggle = (
+        <SegmentToggle
+            compact
+            className="lido-knowledge-manage-toggle"
+            ariaLabel="Note viewing mode"
+            value={manageMode ? 'manage' : 'read'}
+            onChange={(value) => setManageModePreference(value === 'manage')}
+            options={[
+                { value: 'read', label: 'Read' },
+                { value: 'manage', label: 'Manage' },
+            ]}
+        />
+    );
 
     return (
         <div className="d-grid gap-2 lido-knowledge-board-page">
@@ -324,6 +351,7 @@ export default function KnowledgeBoardPage() {
                     >
                         + New
                     </button>
+                    {manageModeToggle}
                     <div className="card lido-knowledge-toolbar-card lido-knowledge-toolbar-card--collapsed">
                         <button
                             type="button"
@@ -355,15 +383,20 @@ export default function KnowledgeBoardPage() {
                         </button>
 
                         <div id="kb-toolbar-panel" className="card-body pt-0 pb-2 px-2 px-md-3">
-                        <div className="d-flex flex-wrap lido-knowledge-toolbar-actions mb-2">
+                        <div className="d-flex flex-wrap lido-knowledge-toolbar-actions mb-2 align-items-center">
                             <button type="button" className="btn btn-sm btn-primary" onClick={openNewNote}>New Note</button>
-                            <button type="button" className="btn btn-sm btn-outline-secondary" onClick={selectAllVisible}>Select All</button>
-                            <button type="button" className="btn btn-sm btn-outline-secondary" onClick={clearSelection} disabled={!selectedIds.size}>Clear</button>
-                            <button type="button" className="btn btn-sm btn-outline-secondary" disabled={!selectedIds.size} onClick={() => bulkAction('archive')}>Archive</button>
-                            <button type="button" className="btn btn-sm btn-outline-danger" disabled={!selectedIds.size} onClick={() => bulkAction('delete')}>Delete</button>
-                            <button type="button" className="btn btn-sm btn-outline-primary" disabled={!selectedIds.size} onClick={() => setExportOpen(true)}>Export</button>
+                            {manageModeToggle}
+                            {manageMode ? (
+                                <>
+                                    <button type="button" className="btn btn-sm btn-outline-secondary" onClick={selectAllVisible}>Select All</button>
+                                    <button type="button" className="btn btn-sm btn-outline-secondary" onClick={clearSelection} disabled={!selectedIds.size}>Clear</button>
+                                    <button type="button" className="btn btn-sm btn-outline-secondary" disabled={!selectedIds.size} onClick={() => bulkAction('archive')}>Archive</button>
+                                    <button type="button" className="btn btn-sm btn-outline-danger" disabled={!selectedIds.size} onClick={() => bulkAction('delete')}>Delete</button>
+                                    <button type="button" className="btn btn-sm btn-outline-primary" disabled={!selectedIds.size} onClick={() => setExportOpen(true)}>Export</button>
+                                </>
+                            ) : null}
                             <Link to="/knowledge-board/tags" className="btn btn-sm btn-outline-secondary">Manage tags</Link>
-                            {selectedIds.size ? (
+                            {manageMode && selectedIds.size ? (
                                 <span className="small text-muted align-self-center ms-1">{selectedIds.size} selected</span>
                             ) : null}
                         </div>
@@ -454,6 +487,7 @@ export default function KnowledgeBoardPage() {
                 <KnowledgeNoteGrid
                     notes={displayNotes}
                     sortMode={sort}
+                    showControls={manageMode}
                     selectedIds={selectedIds}
                     onToggleSelect={toggleSelect}
                     onReorder={handleReorder}
@@ -483,6 +517,8 @@ export default function KnowledgeBoardPage() {
                     onClose={() => setExportOpen(false)}
                 />
             ) : null}
+
+            <KnowledgeImageLightbox />
         </div>
     );
 }

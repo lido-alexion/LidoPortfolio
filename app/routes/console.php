@@ -176,6 +176,24 @@ if (config('portfolio.universe_price_sync.enabled')) {
         ->name('universe-maintenance');
 }
 
+// History depth deepening campaign: runs ALL DAY (not just the maintenance
+// window) every 5 minutes until one full universe pass completes, then the
+// isDue() gate keeps it idle. Re-arms automatically if the target is raised.
+$historyDepthDue = function (): bool {
+    try {
+        return app(\App\Services\HistoryDepthBackfillService::class)->isDue();
+    } catch (\Throwable) {
+        return false;
+    }
+};
+
+Schedule::command('portfolio:backfill-history-depth')
+    ->timezone($timezone)
+    ->everyFiveMinutes()
+    ->when($historyDepthDue)
+    ->withoutOverlapping(30)
+    ->name('history-depth-backfill');
+
 Schedule::command('portfolio:run-due-screeners')
     ->everyMinute()
     ->timezone($timezone)

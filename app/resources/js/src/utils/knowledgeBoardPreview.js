@@ -102,6 +102,20 @@ export function htmlToMarkdownLite(html) {
         return '';
     }
     let text = html;
+    text = text.replace(/<img\b[^>]*>/gi, (tag) => {
+        const src = /src=["']([^"']+)["']/i.exec(tag)?.[1] || '';
+        if (!src) {
+            return '';
+        }
+        const alt = (/alt=["']([^"']*)["']/i.exec(tag)?.[1] || 'image').replace(/[[\]]/g, '');
+        const full = /data-full-src=["']([^"']+)["']/i.exec(tag)?.[1]
+            || /title=["']([^"']+)["']/i.exec(tag)?.[1]
+            || '';
+        if (full && full !== src) {
+            return `\n\n![${alt}](${src} "${full}")\n\n`;
+        }
+        return `\n\n![${alt}](${src})\n\n`;
+    });
     text = text.replace(/<h1[^>]*>(.*?)<\/h1>/gi, '# $1\n\n');
     text = text.replace(/<h2[^>]*>(.*?)<\/h2>/gi, '## $1\n\n');
     text = text.replace(/<h3[^>]*>(.*?)<\/h3>/gi, '### $1\n\n');
@@ -119,6 +133,20 @@ export function htmlToMarkdownLite(html) {
     text = text.replace(/<\/p>/gi, '\n\n');
     text = text.replace(/<[^>]+>/g, '');
     return text.replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/**
+ * True when HTML has visible text or at least one image.
+ * @param {string} [html]
+ */
+export function htmlHasContent(html) {
+    if (!html) {
+        return false;
+    }
+    if (/<img\b/i.test(html)) {
+        return true;
+    }
+    return htmlToPlainText(html).trim().length > 0;
 }
 
 /**

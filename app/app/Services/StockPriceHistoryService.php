@@ -37,10 +37,17 @@ class StockPriceHistoryService
     }
 
     /**
+     * @param  bool  $includePreListingPrefix  Report the prefix edge gap even when it looks
+     *                                         pre-listing (history-depth backfill: providers
+     *                                         simply return nothing before the listing date).
      * @return array<int, array{from: Carbon, to: Carbon}>
      */
-    public function getMissingHistoryRanges(Stock $stock, Carbon $requiredFrom, Carbon $requiredTo): array
-    {
+    public function getMissingHistoryRanges(
+        Stock $stock,
+        Carbon $requiredFrom,
+        Carbon $requiredTo,
+        bool $includePreListingPrefix = false,
+    ): array {
         $requiredFrom = $requiredFrom->copy()->startOfDay();
         $requiredTo = $requiredTo->copy()->startOfDay();
 
@@ -60,7 +67,8 @@ class StockPriceHistoryService
 
         if ($requiredFrom->lt($available['from'])) {
             $prefixTo = $available['from']->copy()->subDay();
-            if (! $this->isPreListingPrefixGap($stock, $requiredFrom, $prefixTo, $available['from'])) {
+            if ($includePreListingPrefix
+                || ! $this->isPreListingPrefixGap($stock, $requiredFrom, $prefixTo, $available['from'])) {
                 $ranges[] = [
                     'from' => $requiredFrom,
                     'to' => $prefixTo,
@@ -104,10 +112,11 @@ class StockPriceHistoryService
         Carbon $requiredFrom,
         Carbon $requiredTo,
         bool $notifyTelegramOnFailure = true,
+        bool $includePreListingPrefix = false,
     ): array
     {
         $started = microtime(true);
-        $missingRanges = $this->getMissingHistoryRanges($stock, $requiredFrom, $requiredTo);
+        $missingRanges = $this->getMissingHistoryRanges($stock, $requiredFrom, $requiredTo, $includePreListingPrefix);
 
         if ($missingRanges === []) {
             $this->portfolioLogger->api('info', 'Historical cache hit — no fetch required', [

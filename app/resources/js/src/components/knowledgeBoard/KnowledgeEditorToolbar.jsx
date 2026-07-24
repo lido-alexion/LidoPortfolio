@@ -1,7 +1,9 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { FONT_FAMILY_OPTIONS, FONT_SIZE_OPTIONS } from './tiptapExtensions';
+import { KNOWLEDGE_IMAGE_ACCEPT, uploadKnowledgeImage } from '../../utils/knowledgeImageUpload';
+import { showToast } from '../../toast';
 
-function ToolbarButton({ active, label, onClick, children }) {
+function ToolbarButton({ active, label, onClick, children, disabled = false }) {
     return (
         <button
             type="button"
@@ -9,6 +11,7 @@ function ToolbarButton({ active, label, onClick, children }) {
             onClick={onClick}
             aria-label={label}
             title={label}
+            disabled={disabled}
         >
             {children}
         </button>
@@ -16,6 +19,9 @@ function ToolbarButton({ active, label, onClick, children }) {
 }
 
 export default function KnowledgeEditorToolbar({ editor }) {
+    const fileInputRef = useRef(null);
+    const [uploading, setUploading] = useState(false);
+
     const setLink = useCallback(() => {
         const previous = editor.getAttributes('link').href;
         const url = window.prompt('Link URL', previous || 'https://');
@@ -28,6 +34,35 @@ export default function KnowledgeEditorToolbar({ editor }) {
         }
         editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
     }, [editor]);
+
+    const insertImage = useCallback(async (file) => {
+        if (!file || !editor) {
+            return;
+        }
+        setUploading(true);
+        try {
+            const uploaded = await uploadKnowledgeImage(file);
+            editor.chain().focus().setImage({
+                src: uploaded.display_url,
+                alt: uploaded.original_name || 'Image',
+                fullSrc: uploaded.full_url,
+            }).run();
+        } catch (err) {
+            showToast(err?.response?.data?.message || err?.message || 'Image upload failed.', 'danger');
+        } finally {
+            setUploading(false);
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+        }
+    }, [editor]);
+
+    const onFileChange = useCallback((event) => {
+        const file = event.target.files?.[0];
+        if (file) {
+            insertImage(file);
+        }
+    }, [insertImage]);
 
     if (!editor) {
         return null;
@@ -77,6 +112,22 @@ export default function KnowledgeEditorToolbar({ editor }) {
             <ToolbarButton label="Link" active={editor.isActive('link')} onClick={setLink}>
                 🔗
             </ToolbarButton>
+            <ToolbarButton
+                label={uploading ? 'Uploading image…' : 'Insert image'}
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+            >
+                {uploading ? '…' : '🖼'}
+            </ToolbarButton>
+            <input
+                ref={fileInputRef}
+                type="file"
+                accept={KNOWLEDGE_IMAGE_ACCEPT}
+                className="d-none"
+                aria-hidden="true"
+                tabIndex={-1}
+                onChange={onFileChange}
+            />
             <ToolbarButton label="Undo" onClick={() => editor.chain().focus().undo().run()}>
                 ↶
             </ToolbarButton>

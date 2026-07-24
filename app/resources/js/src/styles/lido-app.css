@@ -2275,6 +2275,11 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     width: 100%;
 }
 
+.lido-knowledge-toolbar-collapsed-row .lido-knowledge-manage-toggle {
+    flex: 0 0 auto;
+    align-self: center;
+}
+
 .lido-knowledge-toolbar-new-collapsed {
     border: none;
     border-radius: 0.375rem;
@@ -2402,12 +2407,62 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
 .lido-knowledge-card-preview {
     position: relative;
     z-index: 1;
-    white-space: pre-wrap;
     word-break: break-word;
     color: var(--lido-knowledge-note-text);
     font-size: 0.95rem;
     line-height: 1.45;
     font-weight: 400;
+}
+
+.lido-knowledge-card-preview p {
+    margin: 0 0 0.65rem;
+}
+
+.lido-knowledge-card-preview p:last-child {
+    margin-bottom: 0;
+}
+
+.lido-knowledge-card-preview img.lido-knowledge-image,
+.lido-knowledge-editor-content .ProseMirror img.lido-knowledge-image,
+.lido-knowledge-markdown-preview img.lido-knowledge-image,
+.lido-knowledge-markdown-preview img {
+    display: block;
+    max-width: min(100%, 40rem);
+    width: auto;
+    height: auto;
+    margin: 0.75rem 0;
+    border-radius: 0.35rem;
+    cursor: zoom-in;
+    border: 1px solid var(--lido-border, rgba(127, 127, 127, 0.35));
+}
+
+.lido-knowledge-image-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 2100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    background: rgba(0, 0, 0, 0.85);
+    cursor: zoom-out;
+}
+
+.lido-knowledge-image-lightbox-close {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    z-index: 1;
+}
+
+.lido-knowledge-image-lightbox-img {
+    max-width: min(100%, 96vw);
+    max-height: 92vh;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    cursor: default;
+    box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, 0.45);
 }
 
 .lido-knowledge-card-overlay {
@@ -2513,6 +2568,12 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     flex-wrap: wrap;
     gap: 0.25rem;
     min-width: 0;
+}
+
+.lido-knowledge-card-tags-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
 }
 
 .lido-knowledge-card-tag {

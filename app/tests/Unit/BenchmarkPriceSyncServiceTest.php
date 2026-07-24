@@ -24,7 +24,11 @@ class BenchmarkPriceSyncServiceTest extends TestCase
 
     public function test_skips_when_already_synced_today(): void
     {
-        Setting::setValue(BenchmarkPriceSyncService::KEY_LAST_SYNC_DATE, now()->toDateString());
+        // The service compares dates in cron_timezone (Asia/Kolkata), not the app
+        // timezone — seeding with plain now() made this fail between midnight and
+        // 05:30 IST when the UTC date is still the previous day.
+        $today = \Carbon\Carbon::now(app(SettingsService::class)->get('cron_timezone', 'Asia/Kolkata'))->toDateString();
+        Setting::setValue(BenchmarkPriceSyncService::KEY_LAST_SYNC_DATE, $today);
 
         $indexSync = Mockery::mock(IndexPriceSyncService::class);
         $indexSync->shouldNotReceive('syncOneSymbol');
@@ -73,6 +77,7 @@ class BenchmarkPriceSyncServiceTest extends TestCase
         $this->assertFalse($result['skipped']);
         $this->assertTrue($result['success']);
         $this->assertSame(12, $result['stored_rows']);
-        $this->assertSame(now()->toDateString(), Setting::getValue(BenchmarkPriceSyncService::KEY_LAST_SYNC_DATE));
+        $cronToday = \Carbon\Carbon::now(app(SettingsService::class)->get('cron_timezone', 'Asia/Kolkata'))->toDateString();
+        $this->assertSame($cronToday, Setting::getValue(BenchmarkPriceSyncService::KEY_LAST_SYNC_DATE));
     }
 }

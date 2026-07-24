@@ -1,4 +1,47 @@
 import { Extension } from '@tiptap/core';
+import Image from '@tiptap/extension-image';
+
+export const KnowledgeImage = Image.extend({
+    name: 'image',
+
+    addAttributes() {
+        return {
+            ...this.parent?.(),
+            src: {
+                default: null,
+            },
+            alt: {
+                default: null,
+            },
+            title: {
+                default: null,
+            },
+            fullSrc: {
+                default: null,
+                parseHTML: (element) => element.getAttribute('data-full-src'),
+                renderHTML: (attributes) => {
+                    if (!attributes.fullSrc) {
+                        return {};
+                    }
+                    return { 'data-full-src': attributes.fullSrc };
+                },
+            },
+        };
+    },
+
+    renderHTML({ HTMLAttributes }) {
+        return [
+            'img',
+            {
+                ...HTMLAttributes,
+                class: [HTMLAttributes.class, 'lido-knowledge-image'].filter(Boolean).join(' '),
+            },
+        ];
+    },
+}).configure({
+    inline: false,
+    allowBase64: false,
+});
 
 export const FontSize = Extension.create({
     name: 'fontSize',

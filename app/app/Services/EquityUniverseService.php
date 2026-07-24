@@ -142,11 +142,20 @@ class EquityUniverseService
             return self::SYNC_PRIORITY_OTHER;
         }
 
-        if (in_array($stockId, $this->holdingStockIds()->all(), true)) {
+        $holdings = $this->holdingStockIds();
+        $watchlists = $this->watchlistOnlyStockIds();
+
+        // With no holdings/watchlists syncPriorityCase() is the constant 0 for
+        // every stock; return the same value so cursor comparisons stay aligned.
+        if ($holdings->isEmpty() && $watchlists->isEmpty()) {
             return self::SYNC_PRIORITY_HOLDING;
         }
 
-        if (in_array($stockId, $this->watchlistOnlyStockIds()->all(), true)) {
+        if (in_array($stockId, $holdings->all(), true)) {
+            return self::SYNC_PRIORITY_HOLDING;
+        }
+
+        if (in_array($stockId, $watchlists->all(), true)) {
             return self::SYNC_PRIORITY_WATCHLIST;
         }
 
@@ -194,6 +203,13 @@ class EquityUniverseService
     public function applySyncPriorityOrder(Builder $query): Builder
     {
         [$sql, $bindings] = $this->syncPriorityCase();
+
+        // With no holdings/watchlists the priority is the constant '0'; SQL
+        // engines treat a bare integer in ORDER BY as a column position
+        // (SQLite/MySQL error on `ORDER BY 0`), so order by id alone.
+        if ($sql === '0') {
+            return $query->orderBy('id');
+        }
 
         return $query->orderByRaw($sql, $bindings)->orderBy('id');
     }

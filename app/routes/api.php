@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\PortfolioHistoryController;
 use App\Http\Controllers\Api\OperationalAlertController;
 use App\Http\Controllers\Api\PasswordResetAcceptController;
 use App\Http\Controllers\Api\PasswordResetLinkController;
+use App\Http\Controllers\Api\KnowledgeBoardImageController;
 use App\Http\Controllers\Api\KnowledgeBoardNoteController;
 use App\Http\Controllers\Api\KnowledgeBoardTagController;
 use App\Http\Controllers\Api\PatternScanController;
@@ -103,6 +104,7 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::get('/stocks/{stock}/market-prices', [StockPriceController::class, 'market']);
     Route::get('/dashboard', [DashboardController::class, 'index']);
     Route::get('/patterns/scan', [PatternScanController::class, 'index']);
+    Route::get('/stocks/{stock}/pattern-scan', [PatternScanController::class, 'stock']);
 
     Route::prefix('calendar')->group(function () {
         Route::get('/events', [CalendarEventController::class, 'index']);
@@ -114,6 +116,10 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     });
 
     Route::prefix('knowledge-board')->group(function () {
+        Route::post('/images', [KnowledgeBoardImageController::class, 'store']);
+        Route::get('/images/{knowledgeImage}', [KnowledgeBoardImageController::class, 'show']);
+        Route::get('/images/{knowledgeImage}/full', [KnowledgeBoardImageController::class, 'full']);
+
         Route::get('/notes', [KnowledgeBoardNoteController::class, 'index']);
         Route::post('/notes/bulk', [KnowledgeBoardNoteController::class, 'bulk']);
         Route::post('/notes', [KnowledgeBoardNoteController::class, 'store']);

@@ -25,9 +25,12 @@ class SyncUniversePricesCommandTest extends TestCase
             'portfolio.universe_price_sync.delay_ms_between_stocks' => 0,
         ]);
 
+        // Benchmark sync compares dates in cron_timezone (Asia/Kolkata); seeding
+        // with the UTC date left the guard open between midnight and 05:30 IST,
+        // so syncStock was called an extra time for the benchmark symbol.
         \App\Models\Setting::setValue(
             \App\Services\BenchmarkPriceSyncService::KEY_LAST_SYNC_DATE,
-            now()->toDateString(),
+            \Carbon\Carbon::now(app(\App\Services\SettingsService::class)->get('cron_timezone', 'Asia/Kolkata'))->toDateString(),
         );
 
         Stock::query()->create([

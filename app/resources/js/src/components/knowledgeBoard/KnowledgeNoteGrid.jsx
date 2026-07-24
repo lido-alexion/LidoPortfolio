@@ -15,6 +15,7 @@ import KnowledgeNoteCard from './KnowledgeNoteCard';
 export default function KnowledgeNoteGrid({
     notes,
     sortMode,
+    showControls = true,
     selectedIds,
     onToggleSelect,
     onReorder,
@@ -27,7 +28,7 @@ export default function KnowledgeNoteGrid({
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     );
-    const draggable = sortMode === 'manual';
+    const draggable = showControls && sortMode === 'manual';
 
     const handleDragEnd = (event) => {
         const { active, over } = event;
@@ -53,6 +54,7 @@ export default function KnowledgeNoteGrid({
                     key={note.id}
                     note={note}
                     draggable={draggable}
+                    showControls={showControls}
                     selected={selectedIds.has(String(note.id))}
                     onToggleSelect={onToggleSelect}
                     onEdit={onEdit}

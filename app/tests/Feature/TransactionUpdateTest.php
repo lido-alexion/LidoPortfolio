@@ -42,6 +42,10 @@ class TransactionUpdateTest extends TestCase
 
         $this->actingAs($user);
 
+        // update() dispatchSync's a price backfill that would otherwise call
+        // live providers (NSE/Yahoo) for the fake symbol and 500 the request.
+        \Illuminate\Support\Facades\Bus::fake([\App\Jobs\BackfillHistoricalDataJob::class]);
+
         $response = $this->putJson("/api/transactions/{$transaction->id}", [
             'stock_id' => $stock->id,
             'type' => 'buy',

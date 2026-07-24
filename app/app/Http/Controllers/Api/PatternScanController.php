@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Stock;
 use App\Services\PatternScanService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -41,5 +42,19 @@ class PatternScanController extends Controller
         );
 
         return response()->json($payload);
+    }
+
+    /**
+     * Single-stock scan for the stock detail panel. Reuses valid persisted
+     * watchlist scans when available; otherwise computes fresh.
+     */
+    public function stock(Request $request, Stock $stock): JsonResponse
+    {
+        $profile = \activePortfolio();
+        $actionableOnly = $request->boolean('actionable_only', false);
+
+        return response()->json(
+            $this->scan->scanStock($profile, $stock, $actionableOnly),
+        );
     }
 }

@@ -58,6 +58,14 @@ return Application::configure(basePath: dirname(__DIR__))
                 return null;
             }
 
+            // Let the framework render 401/403 (AuthenticationException and
+            // AuthorizationException are not HttpExceptionInterface, so the
+            // generic branch below would wrongly report them as 500).
+            if ($e instanceof \Illuminate\Auth\AuthenticationException
+                || $e instanceof \Illuminate\Auth\Access\AuthorizationException) {
+                return null;
+            }
+
             if ($e instanceof \Illuminate\Http\Exceptions\HttpResponseException) {
                 return $e->getResponse();
             }

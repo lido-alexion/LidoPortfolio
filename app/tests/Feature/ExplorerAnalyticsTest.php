@@ -41,9 +41,13 @@ class ExplorerAnalyticsTest extends TestCase
             'yahoo_symbol' => '^NSEI',
         ]);
 
-        $sixMonthsAgo = now()->subMonths(6)->subDays(2)->toDateString();
-        $threeMonthsAgo = now()->subMonths(3)->subDays(2)->toDateString();
-        $twelveMonthsAgo = now()->subMonths(12)->subDays(2)->toDateString();
+        // Anchor rows must fall on trading sessions: getCloseOnOrBeforeDate skips
+        // weekends/holidays, so raw "X months ago minus 2 days" dates made this
+        // test fail whenever they landed on a Saturday/Sunday.
+        $sixMonthsAgo = \App\Support\TradingCalendar::normalizeToSessionDate(now()->subMonths(6)->subDays(2))->toDateString();
+        $threeMonthsAgo = \App\Support\TradingCalendar::normalizeToSessionDate(now()->subMonths(3)->subDays(2))->toDateString();
+        $twelveMonthsAgo = \App\Support\TradingCalendar::normalizeToSessionDate(now()->subMonths(12)->subDays(2))->toDateString();
+        $latestSession = \App\Support\TradingCalendar::normalizeToSessionDate(now()->subDay())->toDateString();
 
         foreach ([$stock, $benchmark] as $s) {
             foreach ([$twelveMonthsAgo, $sixMonthsAgo, $threeMonthsAgo] as $date) {
@@ -59,7 +63,7 @@ class ExplorerAnalyticsTest extends TestCase
             }
             StockPrice::query()->create([
                 'stock_id' => $s->id,
-                'price_date' => now()->subDay()->toDateString(),
+                'price_date' => $latestSession,
                 'close_price' => $s->symbol === 'CACHED' ? 120 : 110,
                 'adjusted_close_price' => $s->symbol === 'CACHED' ? 120 : 110,
                 'provider_source' => 'test',

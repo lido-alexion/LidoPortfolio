@@ -68,6 +68,7 @@ Copy-Item (Join-Path $PSScriptRoot 'cpanel-run-universe-maintenance.php') (Join-
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-db-query.php') (Join-Path $staging 'portfolio/cpanel-db-query.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-read-logs.php') (Join-Path $staging 'portfolio/cpanel-read-logs.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-api-call.php') (Join-Path $staging 'portfolio/cpanel-api-call.php') -Force
+Copy-Item (Join-Path $PSScriptRoot 'cpanel-history-depth.php') (Join-Path $staging 'portfolio/cpanel-history-depth.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'portfolio-OK.txt') (Join-Path $staging 'portfolio/portfolio-OK.txt') -Force
 Copy-Item (Join-Path $PSScriptRoot 'portfolio-mobile-debug.html') (Join-Path $staging 'portfolio/mobile-debug.html') -Force
 Copy-Item (Join-Path $PSScriptRoot 'public_html-portfolio-.htaccess') (Join-Path $staging 'portfolio/.htaccess') -Force
