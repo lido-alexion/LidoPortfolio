@@ -85,6 +85,16 @@ Subtree hub: **[specs/README.md](specs/README.md)**
 | 2.13 | [specs/engines/Evaluation-Engine-Specification.md](specs/engines/Evaluation-Engine-Specification.md) | |
 | 2.14 | [specs/engines/Recommendation-Engine-Specification.md](specs/engines/Recommendation-Engine-Specification.md) | |
 | 2.14a | [specs/engines/Cash-Management-Specification.md](specs/engines/Cash-Management-Specification.md) | SD-026 cash ledger + reserved cash |
+| 2.14b | [specs/engines/Strategy-Configuration-Specification.md](specs/engines/Strategy-Configuration-Specification.md) | SD-027/030 strategy scoring + Screener eligibility |
+| 2.14c | [specs/engines/Screener-Specification.md](specs/engines/Screener-Specification.md) | Sole eligibility engine; Strategy consumes Screeners |
+| 2.14d | [specs/engines/Analytics-Architecture-Specification.md](specs/engines/Analytics-Architecture-Specification.md) | SD-031 analytics ownership |
+| 2.14e | [specs/engines/Market-Analysis-Engine-Specification.md](specs/engines/Market-Analysis-Engine-Specification.md) | SD-032 market analytics / sentiment / phase |
+| 2.14f | [specs/engines/Dashboard-Specification.md](specs/engines/Dashboard-Specification.md) | Dashboard page purpose |
+| 2.14g | [specs/engines/Watchlist-Specification.md](specs/engines/Watchlist-Specification.md) | Watchlist research workspace |
+| 2.14h | [specs/engines/Portfolio-Specification.md](specs/engines/Portfolio-Specification.md) | Holdings / Portfolio workspace |
+| 2.14i | [specs/engines/Portfolio-Analytics-Specification.md](specs/engines/Portfolio-Analytics-Specification.md) | Portfolio-wide analytics + market context |
+| 2.14j | [specs/engines/Strategy-Specification.md](specs/engines/Strategy-Specification.md) | Strategy overview + market gates |
+| 2.14k | [specs/engines/Discovery-Specification.md](specs/engines/Discovery-Specification.md) | Discovery page purpose |
 | 2.15 | [specs/engines/Notification-Engine-Specification.md](specs/engines/Notification-Engine-Specification.md) | |
 | 2.16 | [specs/engines/Execution-Engine-Specification.md](specs/engines/Execution-Engine-Specification.md) | |
 | 2.17 | [specs/engines/Review-Engine-Specification.md](specs/engines/Review-Engine-Specification.md) | |

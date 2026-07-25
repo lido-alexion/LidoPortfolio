@@ -449,6 +449,15 @@ export default function HoldingsPage() {
     const emptyMessage = 'No open holdings. Add a buy transaction first.';
 
     return (
+        <div>
+            <div className="mb-3">
+                <h1 className="h3 mb-1">Portfolio</h1>
+                <p className="text-muted small mb-0">
+                    Manage existing holdings — allocation, returns, stops, and position actions.
+                    Stock discovery belongs on <Link to="/candidates">Discovery</Link>; research on{' '}
+                    <Link to="/watchlist">Watchlist</Link>.
+                </p>
+            </div>
         <div className="card">
             <div className="card-header d-flex justify-content-between align-items-center gap-2">
                 <div className="mb-0">
@@ -484,6 +493,7 @@ export default function HoldingsPage() {
                     />
                 </div>
             </div>
+        </div>
         </div>
     );
 }

@@ -4,6 +4,7 @@ namespace App\Engines\Recommendation;
 
 use App\Engines\Recommendation\Allocation\CapitalAllocationStrategy;
 use App\Engines\Recommendation\Allocation\ScorePriorityCapitalAllocator;
+use App\Engines\Strategy\ExitStrategyEvaluator;
 use App\Models\EvaluationResult;
 use App\Models\EvaluationRun;
 use App\Models\Holding;
@@ -16,18 +17,22 @@ use App\Models\User;
 use App\Services\CashManagementService;
 use App\Services\PortfolioCalculationService;
 use App\Services\PortfolioLoggerService;
+use App\Services\StrategyConfigurationService;
+use App\Services\StrategyEligibilityService;
+use App\Services\Analytics\MarketAnalyticsService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
 /**
- * Recommendation Engine — stages:
- * 1) Market Opinion (portfolio-independent)
- * 2) Portfolio Decision (position / allocation aware)
- * 3) Ranking (score / confidence / priority)
- * 4) Capital Allocation (portfolio-wide vs available investable cash)
- * 5) Trade Recommendation Generation (funded execution plans)
+ * Recommendation Engine — stages (SD-030 / SD-032):
+ * 1) Receive candidates from Strategy Screeners (eligibility)
+ * 2) Strategy weighted scoring (eligible stocks only for new entries)
+ * 3) Market Opinion → Portfolio Decision → Ranking
+ * 4) Apply Market Analysis allocation multiplier / entry gates
+ * 5) Capital Allocation
+ * 6) BUY generation + Exit Strategy on holdings → SELL
  */
 class RecommendationEngine
 {
@@ -37,6 +42,9 @@ class RecommendationEngine
         protected PortfolioCalculationService $portfolio,
         protected PortfolioLoggerService $logger,
         protected CashManagementService $cash,
+        protected StrategyConfigurationService $strategies,
+        protected StrategyEligibilityService $eligibility,
+        protected MarketAnalyticsService $marketAnalytics,
         ?CapitalAllocationStrategy $allocator = null,
     ) {
         $this->allocator = $allocator ?? new ScorePriorityCapitalAllocator();
@@ -46,7 +54,8 @@ class RecommendationEngine
      * @return array{
      *     recommendations: list<TradingRecommendation>,
      *     batch_id: string,
-     *     cash: array{cash_balance: float, reserved_cash: float, available_investable_cash: float}
+     *     cash: array{cash_balance: float, reserved_cash: float, available_investable_cash: float},
+     *     strategy: array{version_id: int, version: int, name: string}
      * }
      */
     public function generate(PortfolioProfile $profile, ?EvaluationRun $evaluationRun = null): array
@@ -61,24 +70,87 @@ class RecommendationEngine
             throw new \RuntimeException('No completed evaluation run available for recommendations.');
         }
 
-        $config = config('trading_os.recommendation', []);
-        $buyMin = (float) ($config['buy_score_min'] ?? 65);
-        $watchMin = (float) ($config['watch_score_min'] ?? 45);
-        $sellMax = (float) ($config['sell_score_max'] ?? 35);
-        $expiryHours = (int) ($config['expiry_hours'] ?? 48);
-        $defaultPct = (float) ($config['default_position_pct'] ?? 5);
-        $maxPct = (float) ($config['max_position_pct'] ?? 10);
-        $allocationBand = (float) ($config['allocation_band_pct'] ?? 1.0);
+        $strategyVersion = $this->strategies->ensureActive($profile);
+        $strategy = $strategyVersion->strategy;
+        $config = $strategyVersion->config_json ?? $this->strategies->defaultConfig();
+
+        $thresholds = $config['thresholds'] ?? [];
+        $buyMin = (float) ($thresholds['open_position'] ?? 65);
+        $increaseMin = (float) ($thresholds['increase_position'] ?? $buyMin);
+        $watchMin = (float) ($thresholds['watch'] ?? 45);
+        $sellMax = (float) ($thresholds['exit_position'] ?? 35);
+        $reduceMax = (float) ($thresholds['reduce_position'] ?? $sellMax);
+        $veryStrongHigh = (float) ($thresholds['very_strong_high'] ?? 85);
+        $veryStrongLow = (float) ($thresholds['very_strong_low'] ?? 15);
+
+        $behaviour = $config['recommendation_behaviour'] ?? [];
+        $expiryHours = (int) ($behaviour['expiry_hours'] ?? 48);
+        $allowIncrease = (bool) ($behaviour['allow_increase_position'] ?? true);
+        $allowReduce = (bool) ($behaviour['allow_reduce_position'] ?? true);
+        $maxConcurrent = (int) ($behaviour['max_concurrent_recommendations'] ?? 100);
+
+        $portfolioRules = $config['portfolio_rules'] ?? [];
+        $defaultPct = (float) ($portfolioRules['default_position_size_pct'] ?? 5);
+        $maxPct = (float) ($portfolioRules['max_position_size_pct'] ?? 10);
+        $allocationBand = (float) ($portfolioRules['allocation_band_pct'] ?? 1.0);
+        $maxNewPositions = (int) ($portfolioRules['max_new_positions_per_cycle'] ?? 50);
+        $minCashReservePct = (float) ($portfolioRules['min_cash_reserve_pct'] ?? 0);
+        $maxCashDeployPct = (float) ($portfolioRules['max_cash_deployment_pct'] ?? 100);
+
+        // SD-032: consume Market Analysis Engine — never recalculate market metrics here.
+        $market = [];
+        try {
+            $market = $this->marketAnalytics->latest();
+        } catch (Throwable) {
+            $market = [];
+        }
+        $marketMult = (float) ($market['allocation_multiplier'] ?? 1.0);
+        $marketAllowsEntry = (bool) ($market['new_entry_allowed'] ?? true);
+        $marketGates = is_array($config['market_gates'] ?? null) ? $config['market_gates'] : [];
+        if (($marketGates['enabled'] ?? false) === true) {
+            $minSentiment = $marketGates['min_sentiment'] ?? null;
+            $allowedPhases = $marketGates['allowed_phases'] ?? null;
+            $sentimentScore = (float) ($market['sentiment']['score'] ?? 50);
+            $phase = (string) ($market['market_phase'] ?? '');
+            if ($minSentiment !== null && $sentimentScore < (float) $minSentiment) {
+                $marketAllowsEntry = false;
+            }
+            if (is_array($allowedPhases) && $allowedPhases !== [] && ! in_array($phase, $allowedPhases, true)) {
+                $marketAllowsEntry = false;
+            }
+            if (isset($marketGates['max_risk_raw']) && is_numeric($market['risk']['raw_risk'] ?? null)) {
+                if ((float) $market['risk']['raw_risk'] > (float) $marketGates['max_risk_raw']) {
+                    $marketAllowsEntry = false;
+                    $marketMult = min($marketMult, 0.5);
+                }
+            }
+        }
+        $defaultPct = round($defaultPct * $marketMult, 4);
+        $maxPct = round($maxPct * $marketMult, 4);
+
         $riskCfg = $config['risk'] ?? [];
+        $allocCfg = $config['capital_allocation'] ?? [];
 
         $cashSummary = $this->cash->summary($profile);
         $availableCash = (float) $cashSummary['available_investable_cash'];
+        if ($minCashReservePct > 0 && $cashSummary['cash_balance'] > 0) {
+            $reserveFloor = round(((float) $cashSummary['cash_balance']) * ($minCashReservePct / 100.0), 4);
+            $availableCash = max(0.0, $availableCash - $reserveFloor);
+        }
+        if ($maxCashDeployPct < 100) {
+            $cap = round(((float) $cashSummary['cash_balance']) * ($maxCashDeployPct / 100.0), 4);
+            $availableCash = min($availableCash, max(0.0, $cap));
+        }
 
         $results = EvaluationResult::query()
             ->where('evaluation_run_id', $evaluationRun->id)
             ->with(['candidate.security'])
             ->orderBy('rank')
             ->get();
+
+        $eligibility = $this->eligibility->resolve($profile, is_array($config) ? $config : []);
+        $eligibleSet = array_fill_keys($eligibility['eligible_security_ids'] ?? [], true);
+        $eligibilityRestricted = in_array($eligibility['mode'] ?? 'unrestricted', ['screener_union'], true);
 
         $heldQty = Holding::query()
             ->where('profile_id', $profile->id)
@@ -97,6 +169,9 @@ class RecommendationEngine
                     'quantity' => (float) ($h['quantity'] ?? 0),
                     'market_value' => (float) ($h['market_value'] ?? 0),
                     'latest_close' => (float) ($h['latest_close'] ?? 0),
+                    'unrealized_pnl_pct' => isset($h['unrealized_pnl_percent'])
+                        ? (float) $h['unrealized_pnl_percent']
+                        : (isset($h['gain_loss_percent']) ? (float) $h['gain_loss_percent'] : null),
                 ];
             }
         } catch (Throwable) {
@@ -112,8 +187,12 @@ class RecommendationEngine
             $heldQty,
             $allocationByStock,
             $buyMin,
+            $increaseMin,
             $watchMin,
             $sellMax,
+            $reduceMax,
+            $veryStrongHigh,
+            $veryStrongLow,
             $expiresAt,
             $defaultPct,
             $maxPct,
@@ -122,6 +201,18 @@ class RecommendationEngine
             $riskCfg,
             $cashSummary,
             $availableCash,
+            $config,
+            $strategyVersion,
+            $allowIncrease,
+            $allowReduce,
+            $maxConcurrent,
+            $maxNewPositions,
+            $allocCfg,
+            $eligibility,
+            $eligibleSet,
+            $eligibilityRestricted,
+            $market,
+            $marketAllowsEntry,
             &$created,
         ) {
             TradingRecommendation::query()
@@ -137,10 +228,22 @@ class RecommendationEngine
             $drafts = [];
             foreach ($results as $index => $result) {
                 $securityId = (int) $result->candidate->security_id;
-                $score = (float) $result->score;
-                $confidence = (float) $result->confidence;
                 $qtyHeld = (float) ($heldQty[$securityId] ?? 0);
                 $isHeld = $qtyHeld > 0;
+                $isEligible = ! $eligibilityRestricted || isset($eligibleSet[$securityId]);
+
+                // SD-030: new entries only from Screener-eligible candidates; holdings always reviewed for exits.
+                if (! $isEligible && ! $isHeld) {
+                    continue;
+                }
+
+                $factorScores = $result->evidence['indicator_scores']
+                    ?? $result->evidence['factor_scores']
+                    ?? $result->evidence['component_scores']
+                    ?? [];
+                $scored = $this->strategies->score(is_array($factorScores) ? $factorScores : [], $config);
+                $score = (float) $scored['overall_score'];
+                $confidence = (float) $result->confidence;
                 $holdingMeta = $allocationByStock[$securityId] ?? null;
                 $currentAlloc = $holdingMeta ? (float) $holdingMeta['allocation_pct'] : 0.0;
                 $atrPct = $result->evidence['indicators']['atr_pct'] ?? null;
@@ -152,11 +255,34 @@ class RecommendationEngine
                     $referencePrice = $this->latestClose($securityId);
                 }
 
-                // Stage 1 — Market Opinion (no portfolio context).
-                $opinion = $this->buildMarketOpinion($score, $confidence, $buyMin, $watchMin, $sellMax, $result);
+                $bandPct = $this->strategies->allocationPctForScore($score, $config);
+                $targetAlloc = min($maxPct, $bandPct > 0 ? $bandPct : $defaultPct);
 
-                // Stage 2 — Portfolio Decision.
-                $targetAlloc = min($maxPct, $defaultPct);
+                $screenerExplain = $this->eligibility->explainForSecurity($eligibility, $securityId);
+                $exitEval = ['triggered' => false, 'matched' => [], 'status' => 'Not Triggered'];
+                if ($isHeld) {
+                    $exitEval = ExitStrategyEvaluator::evaluate(
+                        is_array($config['exit_strategy'] ?? null) ? $config['exit_strategy'] : [],
+                        [
+                            'overall_score' => $score,
+                            'indicator_scores' => is_array($factorScores) ? $factorScores : [],
+                            'indicators' => $result->evidence['indicators'] ?? [],
+                            'unrealized_pnl_pct' => $holdingMeta['unrealized_pnl_pct'] ?? null,
+                        ]
+                    );
+                }
+
+                $opinion = $this->buildMarketOpinion(
+                    $score,
+                    $confidence,
+                    $buyMin,
+                    $watchMin,
+                    $sellMax,
+                    $veryStrongHigh,
+                    $veryStrongLow,
+                    $result,
+                );
+
                 $risk = $this->riskLevel($atrPct, $riskCfg);
                 $action = $this->decidePortfolioAction(
                     $opinion,
@@ -167,10 +293,40 @@ class RecommendationEngine
                     $risk,
                     $score,
                     $buyMin,
+                    $increaseMin,
                     $sellMax,
+                    $reduceMax,
+                    $allowIncrease,
+                    $allowReduce,
                 );
 
-                // Desired execution plan (pre–capital allocation).
+                // Exit strategy overrides: force EXIT when rules trigger.
+                if ($isHeld && ($exitEval['triggered'] ?? false)) {
+                    $action = 'EXIT_POSITION';
+                    if (is_array($opinion)) {
+                        $dir = (string) ($opinion['direction'] ?? '');
+                        if (! in_array($dir, ['STRONG_SELL', 'SELL'], true)) {
+                            $opinion['direction'] = 'SELL';
+                            $opinion['strength'] = $opinion['strength'] ?? 'moderate';
+                        }
+                    }
+                }
+
+                // Non-eligible holdings: only emit if exit triggered; otherwise HOLD.
+                if ($isHeld && ! $isEligible && ! ($exitEval['triggered'] ?? false)) {
+                    $action = 'HOLD_POSITION';
+                }
+
+                // Non-eligible cannot open / increase.
+                if (! $isEligible && in_array($action, ['OPEN_POSITION', 'INCREASE_POSITION'], true)) {
+                    $action = $isHeld ? 'HOLD_POSITION' : 'WATCH';
+                }
+
+                // Market Analysis gate: block / demote new entries when market phase/risk forbids.
+                if (! $marketAllowsEntry && in_array($action, ['OPEN_POSITION', 'INCREASE_POSITION'], true)) {
+                    $action = $isHeld ? 'HOLD_POSITION' : 'WATCH';
+                }
+
                 $plan = null;
                 $suggestedAlloc = $currentAlloc;
                 $positionSize = null;
@@ -200,9 +356,13 @@ class RecommendationEngine
                     'result' => $result,
                     'security_id' => $securityId,
                     'score' => $score,
+                    'strategy_breakdown' => $scored['breakdown'],
                     'confidence' => $confidence,
                     'qty_held' => $qtyHeld,
                     'is_held' => $isHeld,
+                    'is_eligible' => $isEligible,
+                    'screener_explain' => $screenerExplain,
+                    'exit_eval' => $exitEval,
                     'current_alloc' => $currentAlloc,
                     'target_alloc' => $targetAlloc,
                     'suggested_alloc' => $suggestedAlloc,
@@ -213,15 +373,48 @@ class RecommendationEngine
                     'position_size' => $positionSize,
                     'priority' => $priority,
                     'risk' => $risk,
+                    'factor_scores' => $factorScores,
                 ];
             }
 
-            // Stage 3–4 — Collect buy drafts and allocate available investable cash.
+            // Tie-break / sort for allocation
+            $tieBreak = (string) ($allocCfg['tie_break'] ?? 'highest_score');
+            usort($drafts, function (array $a, array $b) use ($tieBreak): int {
+                $scoreCmp = ($b['score'] ?? 0) <=> ($a['score'] ?? 0);
+                if ($scoreCmp !== 0) {
+                    return $scoreCmp;
+                }
+                if ($tieBreak === 'highest_relative_strength') {
+                    return (($b['factor_scores']['relative_strength'] ?? 0) <=> ($a['factor_scores']['relative_strength'] ?? 0));
+                }
+                if ($tieBreak === 'highest_momentum') {
+                    $bM = $b['factor_scores']['momentum_score'] ?? $b['factor_scores']['momentum'] ?? 0;
+                    $aM = $a['factor_scores']['momentum_score'] ?? $a['factor_scores']['momentum'] ?? 0;
+
+                    return ($bM <=> $aM);
+                }
+                if ($tieBreak === 'highest_breakout') {
+                    $bB = $b['factor_scores']['breakout_score'] ?? $b['factor_scores']['pattern_bonus'] ?? 0;
+                    $aB = $a['factor_scores']['breakout_score'] ?? $a['factor_scores']['pattern_bonus'] ?? 0;
+
+                    return ($bB <=> $aB);
+                }
+
+                return ($b['confidence'] ?? 0) <=> ($a['confidence'] ?? 0);
+            });
+
             $buyDrafts = [];
             $maxPositionAmount = $portfolioValue > 0 ? round($portfolioValue * ($maxPct / 100.0), 4) : null;
+            $newOpenCount = 0;
             foreach ($drafts as $draft) {
                 if (! in_array($draft['action'], ['OPEN_POSITION', 'INCREASE_POSITION'], true)) {
                     continue;
+                }
+                if ($draft['action'] === 'OPEN_POSITION') {
+                    if ($newOpenCount >= $maxNewPositions) {
+                        continue;
+                    }
+                    $newOpenCount++;
                 }
                 $desired = (float) ($draft['plan']['suggested_investment_amount'] ?? $draft['position_size'] ?? 0);
                 $buyDrafts[] = [
@@ -236,10 +429,29 @@ class RecommendationEngine
                 ];
             }
 
+            $allocStrategy = (string) ($allocCfg['strategy'] ?? 'proportional');
+            if ($allocStrategy === 'equal_weight') {
+                foreach ($buyDrafts as &$bd) {
+                    $bd['score'] = 1.0;
+                }
+                unset($bd);
+            } elseif ($allocStrategy === 'simple_ranking') {
+                // Greedy: highest score gets full desired until cash runs out (handled by allocator with extreme weights).
+                $rank = count($buyDrafts);
+                foreach ($buyDrafts as &$bd) {
+                    $bd['score'] = (float) $rank;
+                    $rank--;
+                }
+                unset($bd);
+            }
+
             $allocations = $this->allocator->allocate($availableCash, $buyDrafts);
 
-            // Stage 5 — Persist funded / demoted recommendations.
+            $persisted = 0;
             foreach ($drafts as $draft) {
+                if ($persisted >= $maxConcurrent) {
+                    break;
+                }
                 $action = $draft['action'];
                 $plan = $draft['plan'];
                 $suggestedAlloc = $draft['suggested_alloc'];
@@ -301,14 +513,38 @@ class RecommendationEngine
 
                 $evidence = [
                     'score' => $draft['score'],
+                    'strategy_score' => $draft['score'],
+                    'strategy_version_id' => $strategyVersion->id,
+                    'strategy_version' => $strategyVersion->version,
+                    'eligibility' => [
+                        'mode' => $eligibility['mode'] ?? 'unrestricted',
+                        'is_eligible' => (bool) ($draft['is_eligible'] ?? true),
+                        'screeners' => $draft['screener_explain'] ?? [],
+                    ],
+                    'factor_breakdown' => $draft['strategy_breakdown'],
+                    'scoring' => [
+                        'overall_score' => $draft['score'],
+                        'breakdown' => $draft['strategy_breakdown'],
+                    ],
+                    'exit_strategy' => $draft['exit_eval'] ?? ['status' => 'Not Triggered'],
                     'rank' => $draft['result']->rank,
                     'passed_rules' => $draft['result']->passed_rules,
                     'failed_rules' => $draft['result']->failed_rules,
                     'indicators' => $draft['result']->evidence['indicators'] ?? [],
+                    'factor_scores' => $draft['factor_scores'],
                     'discovery' => $draft['result']->evidence['discovery'] ?? [],
                     'held' => $draft['is_held'],
                     'market_opinion' => $draft['opinion'],
                     'portfolio_action' => $action,
+                    'portfolio_decision' => $action,
+                    'market_analysis' => [
+                        'market_phase' => $market['market_phase'] ?? null,
+                        'sentiment_score' => $market['sentiment']['score'] ?? null,
+                        'sentiment_label' => $market['sentiment']['label'] ?? null,
+                        'risk_label' => $market['risk']['label'] ?? null,
+                        'allocation_multiplier' => $market['allocation_multiplier'] ?? 1,
+                        'new_entry_allowed' => $marketAllowsEntry,
+                    ],
                 ];
                 if ($capitalAllocationMeta !== null) {
                     $evidence['capital_allocation'] = $capitalAllocationMeta;
@@ -317,11 +553,13 @@ class RecommendationEngine
                 $created[] = TradingRecommendation::query()->create([
                     'profile_id' => $profile->id,
                     'evaluation_result_id' => $draft['result']->id,
+                    'strategy_version_id' => $strategyVersion->id,
                     'security_id' => $draft['security_id'],
                     'recommendation_type' => $action,
                     'market_opinion' => $draft['opinion'],
                     'execution_plan' => $plan,
                     'priority' => $draft['priority'],
+                    'strategy_score' => $draft['score'],
                     'confidence' => $draft['confidence'],
                     'risk_level' => $draft['risk'],
                     'suggested_position_size' => $positionSize,
@@ -339,10 +577,11 @@ class RecommendationEngine
                     'available_cash_at_generation' => $cashSummary['available_investable_cash'],
                     'reservation_status' => TradingRecommendation::RESERVATION_NONE,
                     'reserved_amount' => 0,
-                    'version' => 3,
+                    'version' => 4,
                     'expires_at' => $expiresAt,
                     'generated_at' => now(),
                 ]);
+                $persisted++;
             }
         });
 
@@ -350,6 +589,7 @@ class RecommendationEngine
             'profile_id' => $profile->id,
             'count' => count($created),
             'evaluation_run_id' => $evaluationRun->id,
+            'strategy_version_id' => $strategyVersion->id,
             'available_investable_cash' => $availableCash,
         ]);
 
@@ -357,6 +597,11 @@ class RecommendationEngine
             'recommendations' => $created,
             'batch_id' => 'eval-'.$evaluationRun->id.'-'.now()->format('YmdHis'),
             'cash' => $cashSummary,
+            'strategy' => [
+                'version_id' => $strategyVersion->id,
+                'version' => $strategyVersion->version,
+                'name' => $strategy?->name ?? 'Strategy',
+            ],
         ];
     }
 
@@ -369,6 +614,8 @@ class RecommendationEngine
         float $buyMin,
         float $watchMin,
         float $sellMax,
+        float $veryStrongHigh,
+        float $veryStrongLow,
         EvaluationResult $result,
     ): array {
         if ($score >= $buyMin) {
@@ -380,7 +627,7 @@ class RecommendationEngine
         }
 
         $strength = match (true) {
-            $score >= 85 || $score <= 15 => 'Very Strong',
+            $score >= $veryStrongHigh || $score <= $veryStrongLow => 'Very Strong',
             $score >= $buyMin || $score <= $sellMax => 'Strong',
             $score >= $watchMin || $score <= ($sellMax + 10) => 'Moderate',
             default => 'Weak',
@@ -412,7 +659,11 @@ class RecommendationEngine
         string $risk,
         float $score,
         float $buyMin,
+        float $increaseMin,
         float $sellMax,
+        float $reduceMax,
+        bool $allowIncrease,
+        bool $allowReduce,
     ): string {
         $direction = $opinion['direction'];
         $strength = $opinion['strength'];
@@ -435,20 +686,20 @@ class RecommendationEngine
             return 'EXIT_POSITION';
         }
 
-        if ($direction === 'Bearish' || ($highRisk && $overTarget)) {
+        if ($allowReduce && ($direction === 'Bearish' || $score <= $reduceMax || ($highRisk && $overTarget))) {
             return 'REDUCE_POSITION';
         }
 
-        if ($overTarget && ($direction !== 'Bullish' || $highRisk)) {
+        if ($allowReduce && $overTarget && ($direction !== 'Bullish' || $highRisk)) {
             return 'REDUCE_POSITION';
         }
 
-        if ($direction === 'Bullish' && $underTarget) {
+        if ($allowIncrease && $direction === 'Bullish' && $underTarget && $score >= $increaseMin) {
             return 'INCREASE_POSITION';
         }
 
-        if ($strongBull && $underTarget) {
-            return 'INCREASE_POSITION';
+        if ($direction === 'Bullish' || $score >= $buyMin) {
+            return 'HOLD_POSITION';
         }
 
         return 'HOLD_POSITION';

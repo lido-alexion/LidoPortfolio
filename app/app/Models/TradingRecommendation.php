@@ -116,11 +116,13 @@ class TradingRecommendation extends Model
     protected $fillable = [
         'profile_id',
         'evaluation_result_id',
+        'strategy_version_id',
         'security_id',
         'recommendation_type',
         'market_opinion',
         'execution_plan',
         'priority',
+        'strategy_score',
         'confidence',
         'risk_level',
         'suggested_position_size',
@@ -153,6 +155,9 @@ class TradingRecommendation extends Model
     protected function casts(): array
     {
         return [
+            'priority' => 'integer',
+            'strategy_version_id' => 'integer',
+            'strategy_score' => 'decimal:4',
             'confidence' => 'decimal:4',
             'suggested_position_size' => 'decimal:4',
             'suggested_allocation_amount' => 'decimal:4',

@@ -35,8 +35,10 @@ Specs under `specs/` define a seven-engine decision platform. Implementation evo
 |--------|-------|----------------|
 | Data | `Data\DataEngine` | `portfolio_stocks` / `portfolio_stock_prices` / daily sync |
 | Discovery | `Discovery\DiscoveryEngine` | `portfolio_tos_candidates` (orchestrates PatternScan + Screener) |
-| Evaluation | `Evaluation\EvaluationEngine` | Score/rank/evidence → `portfolio_tos_evaluation_results` |
-| Recommendation | `Recommendation\RecommendationEngine` | Market Opinion → Portfolio Decision → Ranking → Capital Allocation → Trade gen; Approve/Reject/Defer; pending-execution / cancel-execution / expire; cash reservation lifecycle |
+| Evaluation | `Evaluation\EvaluationEngine` | Factor facts only (no Strategy weights) → `portfolio_tos_evaluation_results` |
+| Strategy | `Services\StrategyConfigurationService` | Versioned strategy config (factors, thresholds, rules); consumed by Recommendation |
+| Recommendation | `Recommendation\RecommendationEngine` | Strategy scoring → Market Opinion → Portfolio Decision → Ranking → Capital Allocation → Trade gen; Approve/Reject/Defer; pending-execution / cancel-execution / expire; cash reservation lifecycle |
+| Market Analysis | `Market\MarketAnalysisEngine` | Benchmark OHLCV → market analytics / sentiment / phase (SD-032); façade `MarketAnalyticsService` |
 | Notification | `Notification\NotificationEngine` | Telegram + `portfolio_tos_notifications` |
 | Execution | `Execution\ExecutionEngine` | Pending execution → ledger transaction (manual or future broker); completion tracking |
 | Review | `Review\ReviewEngine` | Dashboard, outcomes, reports |
@@ -45,9 +47,12 @@ Specs under `specs/` define a seven-engine decision platform. Implementation evo
 ### Config / schema / CLI
 
 - Config: `config/trading_os.php`.
-- Migrations: `2026_07_25_000002_*` … `000008_*` (incl. SD-025 approval≠execution: `pending_execution`, tx `source` + `recommendation_id`; SD-026 cash + capital allocation columns; cash ledger `entry_date`).
+- Migrations: `2026_07_25_000002_*` … `000013_*` (market analysis snapshots).
 - Command: `php artisan portfolio:decision-pipeline`.
 - **Cash / capital allocation (SD-026):** Spec: [`specs/engines/Cash-Management-Specification.md`](specs/engines/Cash-Management-Specification.md). `CashManagementService` (balance, reserved from pending_execution buys, available investable cash; `reservationDetails` for breakdown). `RecommendationEngine::generate()` allocates available cash via pluggable `CapitalAllocationStrategy` (default `ScorePriorityCapitalAllocator`); unfunded OPEN/INCREASE demoted to WATCH (`evidence.capital_allocation.status=unfunded`); version=3 snapshots cash at generation. Approve buy → `reserveForApproval` (fails if amount exceeds available); cancel/expire/reopen → `releaseReservation`; execute → `convertReservation`. APIs: `GET/POST /api/cash*` (deposit/withdraw/adjust + ledger + reservations).
+- **Strategy + Screeners (SD-027 / SD-028 / SD-029 / SD-030):** Specs: [`Strategy-Configuration-Specification.md`](specs/engines/Strategy-Configuration-Specification.md), [`Screener-Specification.md`](specs/engines/Screener-Specification.md). **Screeners** are the sole eligibility engine; Strategies reference them (`eligibility_sources`, `portfolio_tos_strategy_screeners`). Factory **Minervini Trend Template** Screener + **Momentum Strategy** that consumes it. Scoring weights must sum to 100. Exit Strategy on holdings. Recommendation evidence: eligibility / scoring / exit. APIs: `/api/v1/strategy*`, `PUT /strategy/screeners`, `POST /strategy/duplicate`. UI: Eligibility Sources · Scoring · Exit (conditions edited only in Screener module).
+- **Analytics Architecture (SD-031):** Spec: [`Analytics-Architecture-Specification.md`](specs/engines/Analytics-Architecture-Specification.md). Owners: `StockAnalyticsService`, Evaluation Engine (`EvaluationProfileService`), `PortfolioAnalyticsService`, `MarketAnalyticsService`. Pages: Dashboard (portfolio+market), Watchlist (research tabs), Portfolio/Holdings (positions), Discovery (candidates). APIs: `/api/v1/analytics/*`. Cache tables `000012`. Nav label Holdings → **Portfolio**.
+- **Market Analysis Engine (SD-032):** Spec: [`Market-Analysis-Engine-Specification.md`](specs/engines/Market-Analysis-Engine-Specification.md). `MarketAnalysisEngine` analyses primary benchmark OHLCV (NIFTY50 via IndexCatalog) into trend/momentum/volatility/risk/drawdown/breadth + sentiment (0–100) + deterministic market phase. Persists `portfolio_tos_market_analytics` (`000013`). APIs: `/api/v1/market-analysis*`. Recommendation applies `allocation_multiplier` / `new_entry_allowed` + optional Strategy `market_gates`. Dashboard Market Analytics section + explainability. Portfolio Analytics attaches `market_context`.
 - **Transactions routes:** `/transactions` = Transaction History; `/transactions/pending` = Pending Execution. Toggle navigates between them. Page tabs toggle has no “View” label; uses larger height/font (`.lido-segment-toggle--page-tabs`).
 
 ### REST `/api/v1` (additive)
@@ -56,7 +61,7 @@ Sanctum auth. `TradingOsController`: securities, imports, candidates, evaluation
 
 ### Frontend
 
-`/candidates` (nav: **Discovery**), `/evaluations`, `/recommendations` (**Approve**/Reject/Defer only), `/transactions` (**Pending Execution** + history), `/cash` (**Cash** tab), `/review`, `/notification-history` (nav: **Notifications**). Manual execute from pending queue → Add Transaction form.
+`/candidates` (nav: **Discovery**), `/evaluations`, `/recommendations` (**Approve**/Reject/Defer only), `/strategy` (**Strategy** tab), `/transactions` (**Pending Execution** + history), `/cash` (**Cash** tab), `/review`, `/notification-history` (nav: **Notifications**). Manual execute from pending queue → Add Transaction form.
 
 **Cash UI (2026-07-25):** Dashboard shows **Available Cash** only (link to `/cash`). Full cash management lives on `/cash`: balance / reserved / available, deposit / withdraw / adjust via shared `NumberInput` (₹1 steps), optional remarks, transaction date (`TransactionDateInput`, default today), reservation detail breakdown, and cash account statement. Withdrawals cannot exceed available investable cash (UI + API). Ledger stores `entry_date` (migration `000008`).
 

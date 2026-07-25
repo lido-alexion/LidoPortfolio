@@ -43,6 +43,7 @@ import EvaluationsPage from './pages/EvaluationsPage';
 import ReviewDashboardPage from './pages/ReviewDashboardPage';
 import NotificationHistoryPage from './pages/NotificationHistoryPage';
 import CashManagementPage from './pages/CashManagementPage';
+import StrategyPage from './pages/StrategyPage';
 
 const FOOTER_NAV_ENABLED = true;
 
@@ -155,6 +156,7 @@ function App() {
                                 <Route path="/candidates" element={<CandidatesPage />} />
                                 <Route path="/evaluations" element={<EvaluationsPage />} />
                                 <Route path="/recommendations" element={<RecommendationsPage />} />
+                                <Route path="/strategy" element={<StrategyPage />} />
                                 <Route path="/review" element={<ReviewDashboardPage />} />
                                 <Route path="/notification-history" element={<NotificationHistoryPage />} />
                                 <Route path="/patterns" element={<PatternGuidePage />} />

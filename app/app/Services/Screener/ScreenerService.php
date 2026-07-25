@@ -195,6 +195,8 @@ class ScreenerService
             'telegram_enabled' => (bool) $screener->telegram_enabled,
             'is_enabled' => (bool) $screener->is_enabled,
             'is_shared' => (bool) $screener->is_shared,
+            'is_factory' => (bool) $screener->is_factory,
+            'factory_key' => $screener->factory_key,
             'watchlist_issue' => $this->watchlistIssue($screener),
             'index_issue' => $this->indexIssue($screener),
             'last_run_at' => optional($screener->last_run_at)?->toIso8601String(),

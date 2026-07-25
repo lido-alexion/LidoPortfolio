@@ -43,15 +43,15 @@ interact, and the standards to be followed during implementation.
 
 ``` text
 React UI
-    │
+    ?
 REST API
-    │
+    ?
 Application Services
-    │
+    ?
 Business Engines
-    │
+    ?
 Repositories
-    │
+    ?
 MariaDB
 ```
 
@@ -64,21 +64,21 @@ interfaces.
 
 ``` text
 backend/
-├── app/
-│   ├── Controllers/
-│   ├── Services/
-│   ├── Engines/
-│   ├── Repositories/
-│   ├── Models/
-│   ├── Middleware/
-│   ├── Jobs/
-│   ├── Events/
-│   ├── DTO/
-│   └── Utils/
-├── config/
-├── database/
-├── public/
-└── tests/
+??? app/
+?   ??? Controllers/
+?   ??? Services/
+?   ??? Engines/
+?   ??? Repositories/
+?   ??? Models/
+?   ??? Middleware/
+?   ??? Jobs/
+?   ??? Events/
+?   ??? DTO/
+?   ??? Utils/
+??? config/
+??? database/
+??? public/
+??? tests/
 ```
 
 ------------------------------------------------------------------------
@@ -87,17 +87,17 @@ backend/
 
 ``` text
 frontend/
-├── src/
-│   ├── api/
-│   ├── components/
-│   ├── pages/
-│   ├── features/
-│   ├── hooks/
-│   ├── store/
-│   ├── layouts/
-│   ├── utils/
-│   └── types/
-└── public/
+??? src/
+?   ??? api/
+?   ??? components/
+?   ??? pages/
+?   ??? features/
+?   ??? hooks/
+?   ??? store/
+?   ??? layouts/
+?   ??? utils/
+?   ??? types/
+??? public/
 ```
 
 ------------------------------------------------------------------------
@@ -144,8 +144,8 @@ Scheduled jobs include:
 -   Market data import
 -   Discovery run
 -   Evaluation run
--   Recommendation generation (Market Opinion → Portfolio Decision →
-    Ranking → Capital Allocation → Trade gen)
+-   Recommendation generation (Market Opinion ? Portfolio Decision ?
+    Ranking ? Capital Allocation ? Trade gen)
 -   Notification processing
 -   Review generation
 -   Cleanup tasks
@@ -154,12 +154,22 @@ Every job SHALL be independently executable.
 
 ------------------------------------------------------------------------
 
-# 10. Engine vs module responsibilities (SD-025 / SD-026)
+# 10. Engine vs module responsibilities (SD-025 / SD-026 / SD-027)
+
+## Strategy Configuration
+
+- Versioned investment philosophy (`portfolio_tos_strategies` /
+  `portfolio_tos_strategy_versions`)
+- **Fixed supported indicator catalogue** (SD-028) ? enable/weight/
+  threshold/parameters only; no plugins
+- Thresholds, portfolio rules, capital allocation, recommendation behaviour
+- One active strategy per profile (V1)
 
 ## Recommendation Engine
 
-- Market Opinion → Portfolio Decision → Ranking → Capital Allocation →
-  Trade Recommendation Generation (SD-026)
+- Consumes active Strategy + Evaluation factor facts (SD-027)
+- Strategy scoring ? Market Opinion ? Portfolio Decision ? Ranking ?
+  Capital Allocation ? Trade Recommendation Generation
 - Pluggable `CapitalAllocationStrategy` (default
   `ScorePriorityCapitalAllocator`)
 - User review: Approve / Reject / Defer
@@ -168,6 +178,19 @@ Every job SHALL be independently executable.
 - Status lifecycle including `pending_execution`, expire, cancel-execution
   (cancel of pending trade), reopen
 - Does **not** own cash balance posts (delegates to CashManagementService)
+- Does **not** own factor weights (delegates to Strategy Configuration)
+
+## Evaluation Engine
+
+- Produces measurable factor facts only (no Strategy weights)
+- Does **not** own market-wide sentiment / phase (Market Analysis Engine)
+
+## Market Analysis Engine (SD-032)
+
+- Benchmark OHLCV ? market analytics, sentiment, phase
+- Persists `portfolio_tos_market_analytics`
+- Fa�ade: `MarketAnalyticsService` for Dashboard / consumers
+- Does **not** know portfolios or recommendations
 
 ## CashManagementService
 
@@ -181,7 +204,7 @@ Every job SHALL be independently executable.
 - Pending-execution handoff and completion tracking
 - Completing a recommendation when a linked transaction is created
 - Triggers reservation convert + cash buy/sell ledger via cash service
-- Undo fill → return to `pending_execution` (+ cash reverse / re-reserve)
+- Undo fill ? return to `pending_execution` (+ cash reverse / re-reserve)
 - Legacy order APIs (BC); future broker adapters
 - Does **not** perform Approve / Reject / Defer
 
@@ -255,3 +278,40 @@ Architecture SHALL remain portable to VPS or cloud platforms.
 -   Use feature branches for each engine.
 -   Write tests before marking an engine complete.
 -   Do not implement future-scope features unless explicitly requested.
+
+------------------------------------------------------------------------
+
+# 16. Architectural Clarification (SD-030)
+
+Eligibility vs decision separation:
+
+``` text
+Market Data ? Evaluation (facts)
+                 ?
+              Screeners (eligibility)
+                 ?
+           Candidate stocks
+                 ?
+              Strategy (score / portfolio / allocation / exit)
+                 ?
+         Recommendation Engine ? Capital Allocation ? Trades
+```
+
+- Screener module is the **only** eligibility rule engine.
+- Strategy references Screeners; does not copy conditions.
+- Recommendation Engine does not execute Screener logic.
+
+See Screener-Specification.md and Strategy-Configuration-Specification.md.
+
+# 17. Analytics Architecture (SD-031)
+
+Four owned categories: Stock Analytics, Evaluation Profile, Portfolio Analytics, Market Analytics.
+
+Primary workspaces:
+
+- Dashboard ? portfolio + market
+- Watchlist ? stock research
+- Portfolio (Holdings) ? manage positions
+- Discovery ? find opportunities
+
+See Analytics-Architecture-Specification.md and page specs (Dashboard, Watchlist, Portfolio, Discovery).

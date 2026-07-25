@@ -54,14 +54,44 @@ export default function CandidatesPage() {
                 <div>
                     <h1 className="h3 mb-1">Discovery</h1>
                     <p className="text-muted small mb-0">
-                        Discovery output — patterns, screener hits, or holdings/watchlist membership.
+                        Which stocks deserve attention today? Screeners, candidates, and breakouts —
+                        not portfolio statistics.
                     </p>
                 </div>
                 <div className="d-flex gap-2">
+                    <Link className="btn btn-outline-secondary btn-sm" to="/screeners">Screeners</Link>
+                    <Link className="btn btn-outline-secondary btn-sm" to="/watchlist">Research on Watchlist</Link>
                     <button type="button" className="btn btn-outline-secondary btn-sm" onClick={load} disabled={loading || running}>Refresh</button>
                     <button type="button" className="btn btn-primary btn-sm" onClick={runDiscovery} disabled={running}>
                         {running ? 'Running…' : 'Run discovery'}
                     </button>
+                </div>
+            </div>
+
+            <div className="row g-2 mb-3">
+                <div className="col-md-4 col-lg-3">
+                    <div className="card h-100">
+                        <div className="card-body py-2">
+                            <div className="text-muted small">Candidates</div>
+                            <div className="fw-semibold">{loading ? '…' : items.length}</div>
+                        </div>
+                    </div>
+                </div>
+                <div className="col-md-4 col-lg-3">
+                    <div className="card h-100">
+                        <div className="card-body py-2">
+                            <div className="text-muted small">Screener hits</div>
+                            <div className="fw-semibold">{loading ? '…' : items.filter((i) => i.source === 'screener').length}</div>
+                        </div>
+                    </div>
+                </div>
+                <div className="col-md-4 col-lg-3">
+                    <div className="card h-100">
+                        <div className="card-body py-2">
+                            <div className="text-muted small">Pattern hits</div>
+                            <div className="fw-semibold">{loading ? '…' : items.filter((i) => i.source === 'pattern').length}</div>
+                        </div>
+                    </div>
                 </div>
             </div>
 

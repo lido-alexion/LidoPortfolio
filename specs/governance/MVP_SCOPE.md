@@ -107,9 +107,21 @@ Version 1.0 is **not** automated brokerage, multi-strategy isolation, or a green
 - APIs: generate/list/show reviews, dashboard, outcomes
 - Review UI (`/review`)
 
+### Strategy Configuration (SD-027 / SD-028 / SD-029)
+
+- Fixed supported-indicator catalogue (not plugins)
+- Versioned Strategy config: scoring, thresholds, portfolio rules,
+  capital allocation, cash rules, exit strategy, recommendation behaviour
+- **Eligibility via Screeners only** (SD-030) — Strategy references Screener IDs
+- **Factory Momentum Strategy 1.0** + factory **Minervini Trend Template** Screener
+- Enabled scoring weights must sum to exactly **100** (no silent normalisation)
+- Strategy UI (`/strategy`) with Eligibility Sources, Scoring, Exit, Duplicate
+- APIs: `/api/v1/strategy*`, `POST /strategy/duplicate`, `PUT /strategy/screeners`
+
 ### Frontend
 
-- Five TOS pages in main nav: Discovery, Evaluations, Recommendations, Review, Notifications
+- TOS pages in main nav: Discovery, Evaluations, Recommendations, Strategy,
+  Cash, Review, Notifications
 - Sanctum-authenticated SPA consumption of `/api/v1`
 - Legacy pages retained for holdings, watchlists, screeners, sync, analytics
 
@@ -136,7 +148,7 @@ Intentionally **out of Version 1.0** (see backlog for targeting):
 
 | Area | Excluded |
 |------|----------|
-| Strategy | Strategy entity, multi-strategy isolation/comparison |
+| Strategy | Multi-strategy isolation / A-B comparison product (single active strategy + factory baseline ships) |
 | Auth | JWT Bearer (Sanctum used instead) |
 | Data | Hard publish/validation gates, trading calendar product, immutable dataset snapshots |
 | Discovery | Dedicated Discovery Engine Spec document as a deliverable; full-universe mandatory scan |
@@ -166,8 +178,9 @@ Version 1.0 deployment is successful when:
 6. Pending-execution items can be executed manually (Transactions + `recommendation_id`), cancelled, or left delayed; holdings + cash update on execute.  
 7. Telegram notifications are delivered **or** intentionally skipped with history empty-state.  
 8. Review dashboard shows outcomes consistent with the session.  
-9. No manual SQL is required for the demo path (`../MVP_DEMO_CHECKLIST.md`).  
-10. `TradingOsPipelineTest` passes in CI/local.
+9. Fresh install includes active factory Momentum Strategy — no manual strategy configuration required to generate recommendations.  
+10. No manual SQL is required for the demo path (`../MVP_DEMO_CHECKLIST.md`).  
+11. `TradingOsPipelineTest` passes in CI/local.
 
 ---
 

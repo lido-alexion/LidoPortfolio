@@ -57,21 +57,23 @@ interfaces.
                │ Data Engine  │
                └──────────────┘
                       │
-                      ▼
-            ┌──────────────────┐
-            │ Discovery Engine │
-            └──────────────────┘
-                      │
-               Candidates
-                      │
-                      ▼
-            ┌──────────────────┐
-            │ Evaluation Engine│
-            └──────────────────┘
-                      │
-          Rankings / Risk / Scores
-                      │
-                      ▼
+          ┌───────────┴───────────┐
+          ▼                       ▼
+┌──────────────────┐   ┌──────────────────────┐
+│ Discovery Engine │   │ Market Analysis      │
+└──────────────────┘   │ Engine (benchmark)   │
+          │            └──────────┬───────────┘
+   Candidates                     │
+          │                       │ Market Analytics /
+          ▼                       │ Sentiment / Phase
+┌──────────────────┐              │
+│ Evaluation Engine│              │
+└────────┬─────────┘              │
+         │                        │
+   Stock scores                   │
+         │                        │
+         └───────────┬────────────┘
+                     ▼
          ┌─────────────────────────┐
          │ Recommendation Engine   │
          └─────────────────────────┘
@@ -85,6 +87,10 @@ interfaces.
                    ▼    ▼
               Review Engine
 ```
+
+Market Analysis Engine is orthogonal to Evaluation: market-level vs stock-level.
+Dashboard, Strategy, and Portfolio Analytics also consume Market Analysis outputs
+directly (not only via Recommendation).
 
 ------------------------------------------------------------------------
 
@@ -128,13 +134,13 @@ Outputs:
 
 ## Evaluation Engine
 
-Evaluates discovered opportunities.
+Evaluates discovered opportunities **at the stock level**.
 
 Responsibilities:
 
--   Indicator calculation
+-   Indicator calculation (per security)
 -   Rule evaluation
--   Risk analysis
+-   Risk analysis (per security)
 -   Ranking
 -   Scoring
 
@@ -143,6 +149,30 @@ Outputs:
 -   Rankings
 -   Scores
 -   Risk metrics
+
+Does **not** own market-wide regime, sentiment, or phase (see Market Analysis Engine).
+
+------------------------------------------------------------------------
+
+## Market Analysis Engine
+
+Analyses benchmark index OHLCV and produces reusable **market-level** analytics.
+
+Responsibilities:
+
+-   Trend / momentum / volatility / risk / drawdown / breadth (market)
+-   Market Sentiment (0–100, weighted, explainable)
+-   Market Phase (categorical, deterministic)
+-   Persist historical snapshots
+
+Outputs:
+
+-   Market Analytics payload
+-   Sentiment + Phase + explainability
+-   Consumer helpers (`allocation_multiplier`, `new_entry_allowed`)
+
+Does **not** know portfolios or recommendations. Consumed by Recommendation,
+Strategy, Portfolio Analytics, and Dashboard.
 
 ------------------------------------------------------------------------
 
@@ -157,6 +187,7 @@ Responsibilities:
 -   WATCH
 -   HOLD
 -   Evidence generation
+-   Consume Market Analysis outputs for sizing / entry gates (never recalculate)
 -   Recommendation lifecycle
 
 Outputs:

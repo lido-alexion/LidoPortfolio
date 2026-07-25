@@ -123,7 +123,7 @@ This register is the authoritative record of **why Version 1.0 differs** from th
 | **Benefits** | Simpler model and UI |
 | **Trade-offs** | No multi-strategy comparison |
 | **Future Recommendation** | Introduce Strategy in 2.0 |
-| **Status** | Deferred |
+| **Status** | **Superseded by SD-027** (Strategy Configuration implemented) |
 
 ---
 
@@ -411,6 +411,102 @@ This register is the authoritative record of **why Version 1.0 differs** from th
 
 ---
 
+### SD-027 — Recommendation logic externalised into Strategy Configuration
+
+| Field | Content |
+|-------|---------|
+| **Category** | Architecture / Recommendation / Evaluation |
+| **Original Design** | Evaluation Engine applied hardcoded/config weights into a final score; Recommendation Engine used `trading_os.recommendation` thresholds and position % from PHP config. Strategy entity was deferred (SD-007) |
+| **Reason for Change** | Investment philosophy was tightly coupled to engine code/config files. Operators could not tune factors, thresholds, or allocation rules without deployments. Historical recommendations could not be attributed to a named strategy version |
+| **Benefits** | Strategy is editable in UI; Recommendation Engine becomes a generic executor; Evaluation emits factor facts only; every recommendation stores strategy version + factor breakdown for explainability and future backtesting; config-driven factors avoid schema churn |
+| **Migration Impact** | Migration `2026_07_26_000009_*`: `portfolio_tos_strategies`, `portfolio_tos_strategy_versions`, recommendation `strategy_version_id` + `strategy_score`. First generate/API call seeds Default Strategy v1 from legacy `trading_os.php` values. Existing recommendations without strategy_version remain readable |
+| **Future Extensions** | Multiple strategies per profile; A/B activation; richer scoring curves; sector/theme caps; backtests against version snapshots |
+| **Spec** | [`../engines/Strategy-Configuration-Specification.md`](../engines/Strategy-Configuration-Specification.md) |
+| **Supersedes** | SD-007 (Strategy deferred) for V1.1+ — Strategy is now implemented |
+| **Status** | Accepted |
+
+---
+
+### SD-028 — Adopt Fixed Supported Indicator Catalogue Instead of Plugin-Based Indicator Framework
+
+| Field | Content |
+|-------|---------|
+| **Category** | Architecture / Strategy |
+| **Original Proposal** | Fully generic / plugin-style indicator framework (arbitrary factor keys, user-defined indicators, extensible without releases) |
+| **Reason for Simplification** | Product goal is a configurable **momentum trading OS**, not a generic trading/indicator platform. Plugin/EAV frameworks add complexity without user value for V1 |
+| **Benefits** | Simple catalogue; clear UI (no Add Indicator); Evaluation/Strategy/Recommendation stay maintainable; adding an indicator = evaluation logic + catalogue entry + config exposure |
+| **Trade-offs** | New indicators require an application release; users cannot invent custom formulas |
+| **Future Expansion Strategy** | Extend `SupportedIndicators` catalogue and Evaluation measurements in releases; keep Strategy JSON versioning; still no plugin runtime |
+| **Relationship** | Clarifies / constrains SD-027 Strategy Configuration |
+| **Status** | Accepted |
+
+---
+
+### SD-029 — Factory Strategy with User-Customisable Versions
+
+| Field | Content |
+|-------|---------|
+| **Category** | Architecture / Strategy |
+| **Original Design** | Empty or legacy-config-seeded strategy requiring operators to tune every weight, threshold, and rule before usable recommendations |
+| **Decision** | Ship a protected **factory Momentum Strategy 1.0** with production-ready defaults (indicators, thresholds, portfolio / capital / cash rules, behaviour). Factory is not edited in place; **Duplicate Strategy** or save-on-factory forks an editable custom strategy while preserving the factory baseline |
+| **Why opinionated defaults** | Installation must be immediately usable after market data import — empty strategy configuration is a barrier, not flexibility. Defaults are starting points; all values remain editable on user copies |
+| **Weight integrity** | Enabled indicator weights must sum to exactly **100**; UI shows total; activation/save blocked when invalid; **no silent normalisation** |
+| **Migration Impact** | Migration `2026_07_26_000010_*`: `is_factory`, `factory_key`, `duplicated_from_id`, `version_label`. Seeder `FactoryMomentumStrategySeeder`; `ensureActive` seeds factory when no active strategy |
+| **Spec** | [`../engines/Strategy-Configuration-Specification.md`](../engines/Strategy-Configuration-Specification.md) § Default Factory Strategy |
+| **Relationship** | Extends SD-027 / SD-028 |
+| **Status** | Accepted |
+
+---
+
+### SD-030 — Strategies Consume Screeners Instead of Owning Eligibility Rules
+
+| Field | Content |
+|-------|---------|
+| **Category** | Architecture / Strategy / Screener |
+| **Original Design** | Strategy Configuration included indicator min/enable gates that acted as a second eligibility / filtering layer alongside the existing Screener module (JSON condition trees, runs, hits) |
+| **Problem** | Two independent “rule engines” solved the same problem (which stocks qualify). Duplication invited drift, confused ownership, and pushed Recommendation toward re-evaluating market rules |
+| **Decision** | **Screeners** are the sole eligibility engine. **Strategies** reference one or more Screeners by ID (`eligibility_sources` / `portfolio_tos_strategy_screeners`). Strategy owns scoring, portfolio rules, capital allocation, exits, and thresholds only. Recommendation Engine consumes Screener hits + Evaluation facts — it never executes Screener condition logic |
+| **Benefits** | One eligibility engine; Screener reuse across Discovery/Strategy/alerts; clearer explainability (Screener PASS + scoring + exit); simpler Strategy UI (no condition editor) |
+| **Migration Impact** | Migration `2026_07_26_000011_*`; factory **Minervini Trend Template** Screener; factory Momentum Strategy links it; existing Screeners unchanged; Strategy indicator gates remain **scoring** gates only |
+| **Future Extensibility** | Watchlists/alerts/automation reuse same Screeners; optional normalized Condition entities later without changing Strategy→Screener reference model |
+| **Spec** | [`../engines/Screener-Specification.md`](../engines/Screener-Specification.md), [`../engines/Strategy-Configuration-Specification.md`](../engines/Strategy-Configuration-Specification.md) |
+| **Status** | Accepted |
+
+---
+
+### SD-031 — Analytics Ownership Model
+
+| Field | Content |
+|-------|---------|
+| **Category** | Architecture / Product IA |
+| **Reason** | Analytical metrics were scattered across Dashboard, Watchlist, Holdings, Explorer, and TOS pages without clear ownership, causing duplication and mixed page purposes |
+| **Decision** | Four categories with single owners: **Stock Analytics** (`StockAnalyticsService`), **Evaluation Profile** (Evaluation Engine), **Portfolio Analytics** (`PortfolioAnalyticsService`), **Market Analytics** (`MarketAnalyticsService`). Pages answer one question each: Dashboard (portfolio+market), Watchlist (research), Portfolio/Holdings (manage positions), Discovery (find opportunities) |
+| **Benefits** | Single source of truth per metric; clearer UX; cacheable market/portfolio snapshots; Evaluation scores never recalculated ad hoc in UI |
+| **Migration Impact** | Migration `2026_07_26_000012_*` cache tables; APIs under `/api/v1/analytics/*`; Dashboard/Watchlist/Holdings/Discovery UI updated; legacy `/api/analytics/*` retained |
+| **Future Extensibility** | Sector performance, pairwise correlation, richer beta vs index; deeper Portfolio page recommendation columns |
+| **Spec** | [`../engines/Analytics-Architecture-Specification.md`](../engines/Analytics-Architecture-Specification.md) |
+| **Status** | Accepted |
+
+---
+
+### SD-032 — Introduce Market Analysis Engine
+
+| Field | Content |
+|-------|---------|
+| **Category** | Architecture / Engine |
+| **Reason** | Experienced traders evaluate the overall market before stocks; the app analysed only individual securities, leaving market regime/sentiment duplicated or missing across Recommendation, Strategy, Portfolio Analytics, and Dashboard |
+| **Decision** | Add a dedicated **Market Analysis Engine** that analyses benchmark index OHLCV into reusable market analytics (trend, momentum, volatility, risk, drawdown, breadth), continuous **Market Sentiment** (0–100 with weighted components), and categorical **Market Phase** (deterministic rules). Evaluation Engine remains stock-level; Recommendation / Strategy / Portfolio Analytics / Dashboard **consume** market outputs and never recalculate them. V1: one primary benchmark |
+| **Architecture** | `MarketAnalysisEngine` ← OHLCV + shared `TechnicalIndicatorService` → persist `portfolio_tos_market_analytics` → façade `MarketAnalyticsService` → APIs `/api/v1/market-analysis*` and `/api/v1/analytics/market` |
+| **Interaction with Evaluation** | Orthogonal: Evaluation = stock facts; Market Analysis = market facts; neither knows portfolios/recommendations |
+| **Interaction with Recommendation** | Recommendation applies `allocation_multiplier`, `new_entry_allowed`, and optional Strategy `market_gates` (min sentiment, allowed phases, max raw risk) |
+| **Benefits** | Single market source of truth; explainable phase/sentiment; consistent sizing and entry gates; Dashboard market section |
+| **Migration Impact** | Migration `2026_07_26_000013_*`; Dashboard Market Analytics UI; Strategy Market Gates section; Portfolio Analytics `market_context` |
+| **Future Extensibility** | Multiple benchmarks; constituent breadth V2; optional news/macro contributors without redesign |
+| **Spec** | [`../engines/Market-Analysis-Engine-Specification.md`](../engines/Market-Analysis-Engine-Specification.md) |
+| **Status** | Accepted |
+
+---
+
 ## Summary table
 
 | ID | Decision | Status |
@@ -421,7 +517,7 @@ This register is the authoritative record of **why Version 1.0 differs** from th
 | SD-004 | Formal publish/validation gates | Deferred |
 | SD-005 | PatternScan + Screener reuse | Accepted |
 | SD-006 | Weighted scoring via existing indicators | Accepted |
-| SD-007 | Strategy deferred | Deferred |
+| SD-007 | Strategy deferred | **Superseded by SD-027** |
 | SD-008 | User review recommendation states | Accepted |
 | SD-009 | Telegram only | Accepted |
 | SD-010 | Manual execution (no broker) | Accepted |
@@ -441,6 +537,12 @@ This register is the authoritative record of **why Version 1.0 differs** from th
 | SD-024 | Undo review / undo executed fill | Accepted |
 | SD-025 | Approval separated from execution | Accepted |
 | SD-026 | Cash management + portfolio-wide capital allocation | Accepted |
+| SD-027 | Strategy Configuration externalises recommendation logic | Accepted |
+| SD-028 | Fixed supported indicator catalogue (not plugins) | Accepted |
+| SD-029 | Factory Momentum Strategy + protected / duplicate | Accepted |
+| SD-030 | Strategies consume Screeners (single eligibility engine) | Accepted |
+| SD-031 | Analytics Ownership Model (four categories / page questions) | Accepted |
+| SD-032 | Introduce Market Analysis Engine | Accepted |
 
 ---
 

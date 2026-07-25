@@ -320,6 +320,8 @@ Reservation (buy): `none` → `reserved` → `converted` | `released`
 Depends on:
 
 -   Evaluation Engine
+-   Market Analysis Engine (sentiment / phase / allocation helpers ? never recalculated here)
+-   Strategy Configuration (including optional `market_gates`)
 -   Portfolio calculation (holdings / allocation)
 -   CashManagementService (balance / reserved / available)
 
@@ -331,13 +333,15 @@ Provides services to:
 
 # 16. Acceptance Criteria
 
--   Every ranked opportunity is processed through stages 1–5.
+-   Every ranked opportunity is processed through stages 1?5.
 -   Market Opinion does not depend on holdings.
+-   Market analytics are consumed from Market Analysis Engine, not recomputed.
 -   Portfolio Decision changes when holdings / allocation change.
 -   Capital Allocation respects available investable cash and reserved
     cash from prior approvals.
 -   Execution Plan present iff funded and actionable.
--   Evidence and reasoning accompany every recommendation.
+-   Evidence and reasoning accompany every recommendation (including
+    `evidence.market_analysis` when available).
 -   History remains auditable (including legacy BUY/SELL/HOLD/WATCH
     records mapped to the new model).
 
@@ -362,3 +366,35 @@ Provides services to:
 -   Do not embed notification or cash-ledger posting in generation;
     reservation metadata only until Execution / CashManagementService
     posts buy/sell entries.
+
+------------------------------------------------------------------------
+
+# 19. Architectural Evolution (SD-027)
+
+The Recommendation Engine **consumes Strategy Configuration** instead of
+hardcoded weights:
+
+1. Load active Strategy Version.
+2. Score evaluation factor facts via Strategy weights ? overall score +
+   factor breakdown.
+3. Apply Strategy thresholds / portfolio rules / behaviour flags.
+4. Capital allocation (strategy mode + score bands + tie-break).
+5. Persist `strategy_version_id`, `strategy_score`, and
+   `evidence.factor_breakdown`.
+
+See [Strategy-Configuration-Specification.md](./Strategy-Configuration-Specification.md)
+and governance **SD-027**. Configuration section �13 thresholds remain
+as legacy intent; runtime source of truth is Strategy `config_json`.
+
+# 20. Architectural Clarification (SD-030)
+
+Recommendation Engine workflow:
+
+1. Resolve candidate stocks from Strategy eligibility Screeners (recent run hits; union of enabled sources).
+2. Score eligible stocks via Strategy scoring model using Evaluation facts.
+3. Rank, apply Portfolio Rules, Capital Allocation, generate BUY recommendations.
+4. Evaluate holdings via Strategy Exit Strategy; generate SELL recommendations.
+
+Explainability evidence includes Screener PASS/FAIL, scoring breakdown, portfolio decision, capital allocation, and exit status.
+
+The engine SHALL NOT execute Screener condition trees.

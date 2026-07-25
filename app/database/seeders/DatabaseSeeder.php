@@ -35,5 +35,7 @@ class DatabaseSeeder extends Seeder
         if ($admin->portfolios()->doesntExist()) {
             app(PortfolioProfileService::class)->createDefaultForUser($admin);
         }
+
+        $this->call(FactoryMomentumStrategySeeder::class);
     }
 }

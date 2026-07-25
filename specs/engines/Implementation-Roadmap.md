@@ -252,3 +252,9 @@ Accepted implementation decisions, Version 1.0 scope, and future work are govern
 
 Do not rewrite historical specification sections above to match Version 1.0 code.
 Evolve future releases from the governance baseline.
+
+**Terminology note (SD-027):** Recommendation Engine responsibilities now
+**consume Strategy Configuration** for weights and thresholds. Milestone 3
+“scoring/ranking” in Evaluation means **factor facts**; Milestone 4
+recommendation generation applies Strategy scoring. Completed milestones
+are not reopened — see SD-027.

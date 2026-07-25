@@ -667,6 +667,147 @@ export default function DashboardPage() {
                     </div>
                 </div>
             ))}
+            {data.portfolio_analytics || data.market_analytics ? (
+                <>
+                    <div className="col-12">
+                        <h2 className="h6 text-muted mb-0">Portfolio analytics</h2>
+                        <p className="small text-muted mb-0">
+                            Portfolio-wide metrics only — individual stock research lives on{' '}
+                            <Link to="/watchlist">Watchlist</Link>.
+                        </p>
+                    </div>
+                    {(data.portfolio_analytics ? [
+                        ['Positions', data.portfolio_analytics.number_of_positions],
+                        ['Diversification', data.portfolio_analytics.diversification_score != null ? `${data.portfolio_analytics.diversification_score}` : null],
+                        ['Largest position %', data.portfolio_analytics.largest_position_pct != null ? `${data.portfolio_analytics.largest_position_pct}%` : null],
+                        ['Avg Relative Strength', data.portfolio_analytics.average_relative_strength],
+                        ['Avg Momentum', data.portfolio_analytics.average_momentum_score],
+                        ['Avg Trend', data.portfolio_analytics.average_trend_score],
+                        ['Cash reserved', data.portfolio_analytics.cash_reserved != null ? formatInrWhole(data.portfolio_analytics.cash_reserved) : null],
+                        ['Cash utilisation %', data.portfolio_analytics.cash_utilisation_pct != null ? `${data.portfolio_analytics.cash_utilisation_pct}%` : null],
+                    ] : []).filter(([, v]) => v != null && v !== '').map(([title, value]) => (
+                        <div className="col-6 col-md-4 col-lg-3" key={`pa-${title}`}>
+                            <div className="card h-100">
+                                <div className="card-body py-2">
+                                    <div className="text-muted small">{title}</div>
+                                    <div className="fw-semibold">{value}</div>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                    {data.market_analytics ? (
+                        <div className="col-12">
+                            <h2 className="h6 text-muted mb-1">Market analytics</h2>
+                            <p className="small text-muted mb-2">
+                                {data.market_analytics.benchmark?.symbol
+                                    ? `${data.market_analytics.benchmark.symbol}`
+                                    : 'Benchmark'}
+                                {data.market_analytics.as_of_date ? ` · as of ${data.market_analytics.as_of_date}` : ''}
+                                {data.market_analytics.computed_at
+                                    ? ` · updated ${new Date(data.market_analytics.computed_at).toLocaleString()}`
+                                    : ''}
+                            </p>
+                        </div>
+                    ) : null}
+                    {(data.market_analytics ? [
+                        ['Sentiment', data.market_analytics.sentiment?.score != null
+                            ? `${data.market_analytics.sentiment.score} · ${data.market_analytics.sentiment.label || ''}`
+                            : null],
+                        ['Market phase', data.market_analytics.market_phase],
+                        ['Trend', data.market_analytics.trend?.label
+                            || data.market_analytics.index_trend],
+                        ['Trend strength', data.market_analytics.trend?.strength != null
+                            ? data.market_analytics.trend.strength
+                            : null],
+                        ['Momentum', data.market_analytics.momentum?.label
+                            || (data.market_analytics.momentum?.score != null
+                                ? String(data.market_analytics.momentum.score)
+                                : null)],
+                        ['Volatility', data.market_analytics.volatility?.label],
+                        ['Risk', data.market_analytics.risk?.label],
+                        ['Current drawdown', data.market_analytics.drawdown?.current_drawdown_pct != null
+                            ? `${data.market_analytics.drawdown.current_drawdown_pct}%`
+                            : null],
+                        ['Max drawdown', data.market_analytics.drawdown?.maximum_drawdown_pct != null
+                            ? `${data.market_analytics.drawdown.maximum_drawdown_pct}%`
+                            : null],
+                        ['Distance from 200 DMA', data.market_analytics.trend?.distance_200_dma_pct != null
+                            ? `${data.market_analytics.trend.distance_200_dma_pct}%`
+                            : (data.market_analytics.indicators?.price_vs_sma200_pct != null
+                                ? `${data.market_analytics.indicators.price_vs_sma200_pct}%`
+                                : null)],
+                        ['Distance from 52w high', data.market_analytics.drawdown?.distance_52w_high_pct != null
+                            ? `${data.market_analytics.drawdown.distance_52w_high_pct}%`
+                            : null],
+                        ['Market breadth', data.market_analytics.breadth?.label
+                            || (data.market_analytics.advance_decline_ratio != null
+                                ? `A/D ${data.market_analytics.advance_decline_ratio}`
+                                : null)],
+                        ['Market regime', data.market_analytics.market_regime],
+                        ['% above 50 DMA', data.market_analytics.pct_stocks_above_50_dma != null
+                            ? `${data.market_analytics.pct_stocks_above_50_dma}%`
+                            : null],
+                        ['% above 200 DMA', data.market_analytics.pct_stocks_above_200_dma != null
+                            ? `${data.market_analytics.pct_stocks_above_200_dma}%`
+                            : null],
+                    ] : []).filter(([, v]) => v != null && v !== '').map(([title, value]) => (
+                        <div className="col-6 col-md-4 col-lg-3" key={`ma-${title}`}>
+                            <div className="card h-100">
+                                <div className="card-body py-2">
+                                    <div className="text-muted small">{title}</div>
+                                    <div className="fw-semibold">{value}</div>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                    {data.market_analytics?.explainability?.reasons?.length ? (
+                        <div className="col-12">
+                            <div className="card">
+                                <div className="card-body py-2">
+                                    <div className="text-muted small mb-1">Market explainability</div>
+                                    <ul className="small mb-0 ps-3">
+                                        {data.market_analytics.explainability.reasons.map((r) => (
+                                            <li key={`${r.factor}-${r.value}`}>
+                                                <span className="fw-semibold">{r.factor}</span>
+                                                {': '}
+                                                {r.value}
+                                                {r.detail ? ` — ${r.detail}` : ''}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                    {data.market_analytics.explainability.phase_rule ? (
+                                        <div className="text-muted small mt-2">
+                                            Phase rule: {data.market_analytics.explainability.phase_rule}
+                                        </div>
+                                    ) : null}
+                                </div>
+                            </div>
+                        </div>
+                    ) : null}
+                </>
+            ) : null}
+            {data.strategy ? (
+                <div className="col-12">
+                    <div className="card">
+                        <div className="card-body d-flex flex-wrap justify-content-between align-items-center gap-2 py-3">
+                            <div>
+                                <div className="text-muted small">Active strategy</div>
+                                <div className="fw-semibold">
+                                    {data.strategy.name}
+                                    {data.strategy.version != null ? ` · v${data.strategy.version}` : ''}
+                                </div>
+                                <div className="text-muted small">
+                                    {(data.strategy.enabled_factor_count ?? '—')} factors enabled
+                                    {data.strategy.modified_at
+                                        ? ` · updated ${new Date(data.strategy.modified_at).toLocaleString()}`
+                                        : ''}
+                                </div>
+                            </div>
+                            <Link to="/strategy" className="btn btn-sm btn-outline-secondary">Configure strategy</Link>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
             <DashboardTopMoverCard
                 title="Top Gainer"
                 mover={topGainer}

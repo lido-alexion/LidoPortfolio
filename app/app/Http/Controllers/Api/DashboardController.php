@@ -11,6 +11,8 @@ use App\Services\PortfolioCalculationService;
 use App\Services\PortfolioSnapshotRebuildService;
 use App\Services\RelativeStrengthService;
 use App\Services\AlertService;
+use App\Services\Analytics\MarketAnalyticsService;
+use App\Services\Analytics\PortfolioAnalyticsService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,6 +28,9 @@ class DashboardController extends Controller
         protected PortfolioSnapshotRebuildService $snapshotRebuild,
         protected DailyMarketSyncService $dailySync,
         protected CashManagementService $cash,
+        protected \App\Services\StrategyConfigurationService $strategies,
+        protected PortfolioAnalyticsService $portfolioAnalytics,
+        protected MarketAnalyticsService $marketAnalytics,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -40,6 +45,25 @@ class DashboardController extends Controller
 
         $benchmark = $this->relativeStrength->benchmarkStock();
         $cash = $this->cash->summary($profile);
+        $strategy = null;
+        try {
+            $strategy = $this->strategies->summaryCard($profile);
+        } catch (\Throwable) {
+            $strategy = null;
+        }
+
+        $portfolioAnalytics = null;
+        $marketAnalytics = null;
+        try {
+            $portfolioAnalytics = $this->portfolioAnalytics->forProfile($profile);
+        } catch (\Throwable) {
+            $portfolioAnalytics = null;
+        }
+        try {
+            $marketAnalytics = $this->marketAnalytics->summary($profile);
+        } catch (\Throwable) {
+            $marketAnalytics = null;
+        }
 
         return response()->json([
             'portfolio_value' => $summary['portfolio_value'],
@@ -52,6 +76,9 @@ class DashboardController extends Controller
             'reserved_cash' => $cash['reserved_cash'],
             'available_investable_cash' => $cash['available_investable_cash'],
             'cash' => $cash,
+            'strategy' => $strategy,
+            'portfolio_analytics' => $portfolioAnalytics,
+            'market_analytics' => $marketAnalytics,
             'daily_change' => $this->portfolio->dailyChange($profile),
             'top_movers' => $topMovers,
             'top_gainer' => $topMovers['all_time']['gainer'],
@@ -69,6 +96,7 @@ class DashboardController extends Controller
                 'benchmark' => $benchmark->only(['id', 'symbol', 'name']),
                 'prices' => $benchmark->prices()->orderByDesc('price_date')->limit(90)->get(),
             ],
+            // Per-stock RS trends remain available for BC but Dashboard UI should prefer portfolio_analytics averages.
             'relative_strength_trends' => collect($holdings)->map(function ($h) {
                 return [
                     'symbol' => $h['symbol'],

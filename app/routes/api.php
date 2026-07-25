@@ -294,4 +294,35 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
     Route::get('/review/outcomes', [TradingOsController::class, 'reviewOutcomes']);
 
     Route::post('/pipeline/run', [TradingOsController::class, 'pipelineRun']);
+
+    Route::get('/analytics/portfolio', [\App\Http\Controllers\Api\V1\AnalyticsArchitectureController::class, 'portfolio']);
+    Route::get('/analytics/market', [\App\Http\Controllers\Api\V1\AnalyticsArchitectureController::class, 'market']);
+    Route::get('/analytics/dashboard', [\App\Http\Controllers\Api\V1\AnalyticsArchitectureController::class, 'dashboardBundle']);
+    Route::get('/analytics/stocks/{stock}', [\App\Http\Controllers\Api\V1\AnalyticsArchitectureController::class, 'stock']);
+    Route::get('/analytics/stocks/{stock}/evaluation-profile', [\App\Http\Controllers\Api\V1\AnalyticsArchitectureController::class, 'evaluationProfile']);
+    Route::get('/analytics/stocks/{stock}/recommendation-preview', [\App\Http\Controllers\Api\V1\AnalyticsArchitectureController::class, 'recommendationPreview']);
+    Route::get('/analytics/stocks/{stock}/research', [\App\Http\Controllers\Api\V1\AnalyticsArchitectureController::class, 'watchlistResearch']);
+
+    Route::get('/market-analysis', [\App\Http\Controllers\Api\V1\MarketAnalysisController::class, 'latest']);
+    Route::get('/market-analysis/sentiment', [\App\Http\Controllers\Api\V1\MarketAnalysisController::class, 'sentiment']);
+    Route::get('/market-analysis/phase', [\App\Http\Controllers\Api\V1\MarketAnalysisController::class, 'phase']);
+    Route::get('/market-analysis/history', [\App\Http\Controllers\Api\V1\MarketAnalysisController::class, 'history']);
+    Route::get('/market-analysis/timeline', [\App\Http\Controllers\Api\V1\MarketAnalysisController::class, 'timeline']);
+    Route::get('/market-analysis/explainability', [\App\Http\Controllers\Api\V1\MarketAnalysisController::class, 'explainability']);
+
+    Route::get('/strategy', [\App\Http\Controllers\Api\V1\StrategyController::class, 'active']);
+    Route::get('/strategy/summary', [\App\Http\Controllers\Api\V1\StrategyController::class, 'summary']);
+    Route::get('/strategy/catalogue', [\App\Http\Controllers\Api\V1\StrategyController::class, 'catalogue']);
+    Route::put('/strategy', [\App\Http\Controllers\Api\V1\StrategyController::class, 'update']);
+    Route::post('/strategy/duplicate', [\App\Http\Controllers\Api\V1\StrategyController::class, 'duplicate']);
+    Route::put('/strategy/screeners', [\App\Http\Controllers\Api\V1\StrategyController::class, 'assignScreeners']);
+    Route::get('/strategy/eligibility', [\App\Http\Controllers\Api\V1\StrategyController::class, 'eligibility']);
+    Route::get('/strategy/scoring', [\App\Http\Controllers\Api\V1\StrategyController::class, 'scoring']);
+    Route::get('/strategy/exit', [\App\Http\Controllers\Api\V1\StrategyController::class, 'exitStrategy']);
+    Route::get('/strategy/factors', [\App\Http\Controllers\Api\V1\StrategyController::class, 'factors']);
+    Route::get('/strategy/indicators', [\App\Http\Controllers\Api\V1\StrategyController::class, 'factors']);
+    Route::get('/strategy/thresholds', [\App\Http\Controllers\Api\V1\StrategyController::class, 'thresholds']);
+    Route::get('/strategy/portfolio-rules', [\App\Http\Controllers\Api\V1\StrategyController::class, 'portfolioRules']);
+    Route::get('/strategy/capital-allocation', [\App\Http\Controllers\Api\V1\StrategyController::class, 'capitalAllocation']);
+    Route::get('/strategy/recommendation-rules', [\App\Http\Controllers\Api\V1\StrategyController::class, 'recommendationRules']);
 });

@@ -16,7 +16,8 @@ use Illuminate\Support\Facades\DB;
 use Throwable;
 
 /**
- * Evaluation Engine — indicators, rules, scoring, ranking (deterministic).
+ * Evaluation Engine — measurable factor facts only (SD-027).
+ * Does not apply Strategy weights or produce recommendation decisions.
  */
 class EvaluationEngine
 {
@@ -82,6 +83,7 @@ class EvaluationEngine
             }
 
             usort($scored, function ($a, $b) {
+                // Informational ranking only (equal-weight mean of factor facts — not Strategy score).
                 $cmp = $b['score'] <=> $a['score'];
                 if ($cmp !== 0) {
                     return $cmp;
@@ -273,17 +275,53 @@ class EvaluationEngine
             $failed[] = 'no_pattern';
         }
 
-        $score =
-            ($trendScore * (float) ($weights['trend'] ?? 0.3)) +
-            ($momentumScore * (float) ($weights['momentum'] ?? 0.25)) +
-            ($rsScore * (float) ($weights['relative_strength'] ?? 0.25)) +
-            ($volumeScore * (float) ($weights['volume'] ?? 0.1)) +
-            ($patternBonus * (float) ($weights['pattern_bonus'] ?? 0.1));
-
-        $score = round(max(0.0, min(100.0, $score)), 4);
-        $confidence = round(min(1.0, (count($passed) / max(1, count($passed) + count($failed)))), 4);
-
         $atrPct = ($close && $atr && $close > 0) ? round(($atr / $close) * 100, 4) : null;
+        // Risk fact: higher ATR% → higher risk score (0–100). Strategy may invert/weight.
+        $riskScore = 50.0;
+        if ($atrPct !== null) {
+            $riskScore = round(max(0.0, min(100.0, $atrPct * 10.0)), 4);
+            if ($riskScore <= 20) {
+                $passed[] = 'risk_contained';
+            } elseif ($riskScore >= 40) {
+                $failed[] = 'risk_elevated';
+            }
+        } else {
+            $failed[] = 'atr_unavailable';
+        }
+
+        $factorScores = [
+            'relative_strength' => $this->safeFloat($rsScore) ?? 0.0,
+            'momentum_score' => $this->safeFloat($momentumScore) ?? 0.0,
+            'trend_score' => $this->safeFloat($trendScore) ?? 0.0,
+            'breakout_score' => $this->safeFloat($patternBonus) ?? 0.0,
+            'volume_score' => $this->safeFloat($volumeScore) ?? 0.0,
+            // Neutral stubs until dedicated market/sector models ship (SD-028 catalogue).
+            'market_regime' => 50.0,
+            'sector_strength' => 50.0,
+            'risk_score' => $this->safeFloat($riskScore) ?? 0.0,
+            // Legacy aliases for older Strategy versions / UI
+            'momentum' => $this->safeFloat($momentumScore) ?? 0.0,
+            'trend' => $this->safeFloat($trendScore) ?? 0.0,
+            'pattern_bonus' => $this->safeFloat($patternBonus) ?? 0.0,
+            'volume' => $this->safeFloat($volumeScore) ?? 0.0,
+            'risk' => $this->safeFloat($riskScore) ?? 0.0,
+        ];
+
+        // Equal-weight mean of catalogue scores for list ranking only (not Strategy score).
+        $catalogueKeys = [
+            'relative_strength', 'momentum_score', 'trend_score', 'breakout_score',
+            'volume_score', 'market_regime', 'sector_strength', 'risk_score',
+        ];
+        $present = [];
+        foreach ($catalogueKeys as $k) {
+            if (isset($factorScores[$k]) && $factorScores[$k] !== null) {
+                $present[] = $factorScores[$k];
+            }
+        }
+        $score = $present !== []
+            ? round(array_sum($present) / count($present), 4)
+            : 0.0;
+        $confidence = round(min(1.0, (count($passed) / max(1, count($passed) + count($failed)))), 4);
 
         return [
             'candidate' => $candidate,
@@ -291,6 +329,7 @@ class EvaluationEngine
             'confidence' => $confidence,
             'evidence' => [
                 'skipped' => false,
+                'scoring_mode' => 'supported_indicator_facts',
                 'indicators' => [
                     'close' => $this->safeFloat($close),
                     'sma_fast' => $this->safeFloat($smaFast),
@@ -303,13 +342,9 @@ class EvaluationEngine
                     'relative_strength_3m' => $this->safeFloat($rs),
                 ],
                 'discovery' => is_array($candidate->evidence) ? $candidate->evidence : [],
-                'component_scores' => [
-                    'trend' => $this->safeFloat($trendScore) ?? 0.0,
-                    'momentum' => $this->safeFloat($momentumScore) ?? 0.0,
-                    'relative_strength' => $this->safeFloat($rsScore) ?? 0.0,
-                    'volume' => $this->safeFloat($volumeScore) ?? 0.0,
-                    'pattern_bonus' => $this->safeFloat($patternBonus) ?? 0.0,
-                ],
+                'indicator_scores' => array_intersect_key($factorScores, array_flip($catalogueKeys)),
+                'factor_scores' => $factorScores,
+                'component_scores' => $factorScores,
             ],
             'passed_rules' => $passed,
             'failed_rules' => $failed,

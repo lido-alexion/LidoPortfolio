@@ -8,6 +8,7 @@ import ManageWatchlistsModal from '../components/ManageWatchlistsModal';
 import PatternSketch from '../components/PatternSketch';
 import StockAutocomplete from '../components/StockAutocomplete';
 import PriceVolumeChart from '../components/charts/PriceVolumeChart';
+import WatchlistResearchPanel from '../components/WatchlistResearchPanel';
 import { IconDelete } from '../components/knowledgeBoard/KnowledgeCardIcons';
 import { usePortfolio } from '../context/PortfolioContext';
 import usePortfolioChanged from '../hooks/usePortfolioChanged';
@@ -318,6 +319,8 @@ function WatchlistStockPanel({
                 title={title}
                 emptyMessage="No cached price history for this stock."
             />
+
+            <WatchlistResearchPanel stockId={stock.id} />
         </div>
     );
 }
@@ -795,6 +798,11 @@ export default function WatchlistPage() {
 
     return (
         <div className="d-grid gap-3">
+            <div>
+                <p className="text-muted small mb-0">
+                    Should I invest in this stock? Select a symbol for Stock Analytics, Evaluation Profile, and Recommendation Preview.
+                </p>
+            </div>
             <StockAutocomplete
                 id="watchlist-stock-search"
                 value={searchSymbol}

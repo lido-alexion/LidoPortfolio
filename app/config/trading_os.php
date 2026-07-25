@@ -60,4 +60,17 @@ return [
         'schedule_enabled' => env('TRADING_OS_PIPELINE_SCHEDULE', false),
         'schedule_time' => env('TRADING_OS_PIPELINE_TIME', '19:00'),
     ],
+
+    /*
+    | Market Analysis Engine (SD-032) — sentiment weights sum to 100.
+    */
+    'market_analysis' => [
+        'sentiment_weights' => [
+            'trend' => 25,
+            'momentum' => 20,
+            'breadth' => 20,
+            'risk' => 20,
+            'volatility' => 15,
+        ],
+    ],
 ];

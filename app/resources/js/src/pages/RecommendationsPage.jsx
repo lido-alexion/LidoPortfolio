@@ -326,7 +326,33 @@ export default function RecommendationsPage() {
                                     Confidence
                                     {' '}
                                     {formatPct(opinion?.confidence ?? selected.confidence)}
+                                    {' · Score '}
+                                    {selected.strategy_score ?? selected.score ?? '—'}
+                                    {selected.strategy_version != null ? ` · Strategy v${selected.strategy_version}` : ''}
                                 </p>
+
+                                {(selected.factor_breakdown || selected.evidence?.factor_breakdown)?.length ? (
+                                    <>
+                                        <h6>Factor breakdown</h6>
+                                        <p className="small mb-1">
+                                            Overall score
+                                            {' '}
+                                            <strong>{selected.strategy_score ?? selected.score ?? '—'}</strong>
+                                        </p>
+                                        <ul className="small mb-3">
+                                            {(selected.factor_breakdown || selected.evidence?.factor_breakdown || []).map((row) => (
+                                                <li key={row.key}>
+                                                    {row.display_name || row.key}
+                                                    {': '}
+                                                    {Number(row.contribution).toFixed(1)}
+                                                    {' / '}
+                                                    {Number(row.max_contribution).toFixed(1)}
+                                                    {row.gated ? ' (gated)' : ''}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </>
+                                ) : null}
 
                                 <h6>Portfolio decision</h6>
                                 <p className="small mb-1">

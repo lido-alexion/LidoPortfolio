@@ -24,6 +24,8 @@ class Screener extends Model
         'telegram_enabled',
         'is_enabled',
         'is_shared',
+        'is_factory',
+        'factory_key',
         'last_run_at',
     ];
 
@@ -38,6 +40,7 @@ class Screener extends Model
             'telegram_enabled' => 'boolean',
             'is_enabled' => 'boolean',
             'is_shared' => 'boolean',
+            'is_factory' => 'boolean',
             'last_run_at' => 'datetime',
         ];
     }

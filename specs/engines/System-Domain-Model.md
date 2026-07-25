@@ -4,7 +4,7 @@
   -------------- ---------------------
   **Document**   System Domain Model
   **Version**    1.1
-  **Status**     Active (SD-025 / SD-026 aligned)
+  **Status**     Active (SD-025 / SD-026 / SD-027 aligned)
 
 ------------------------------------------------------------------------
 
@@ -27,6 +27,8 @@ Each business entity SHALL have exactly one owning engine.
   Market Dataset      Data Engine
   Candidate           Discovery Engine
   Evaluation Result   Evaluation Engine
+  Strategy            Strategy Configuration
+  Strategy Version    Strategy Configuration
   Recommendation      Recommendation Engine
   Cash Account        Cash Management (service)
   Cash Ledger Entry   Cash Management (service)
@@ -285,3 +287,37 @@ Transaction Recorded → Position Updated → Review Generated
 -   Avoid circular dependencies between engines.
 -   Build APIs around aggregate roots owned by each engine.
 -   Preserve referential integrity across relationships.
+
+# SD-030 Domain Additions
+
+| Entity | Owner | Notes |
+|--------|-------|-------|
+| Screener | Screener module | Eligibility definitions (definition_json) |
+| ScreenerRun / Hit | Screener module | Eligibility results |
+| StrategyScreener | Strategy Configuration | Version ? Screener reference (no condition copy) |
+| Exit rules | Strategy Version config | Declarative exit on holdings |
+
+Relationship: Strategy Version **references** Screener(s). Screener conditions are never duplicated into Strategy tables.
+
+# Analytics entities (SD-031)
+
+| Entity / cache | Owner |
+|----------------|-------|
+| Stock Analytics payload | StockAnalyticsService |
+| Evaluation Profile (from EvaluationResult) | Evaluation Engine |
+| Portfolio Analytics snapshot | PortfolioAnalyticsService |
+| Market Analytics snapshot | MarketAnalyticsService → Market Analysis Engine |
+| Recommendation Preview | Recommendation Engine |
+
+Tables: `portfolio_analytics_snapshots`, `portfolio_stock_analytics_cache`.
+
+# Market Analysis entities (SD-032)
+
+| Entity | Owner | Notes |
+|--------|-------|-------|
+| MarketAnalyticsSnapshot | Market Analysis Engine | Table `portfolio_tos_market_analytics` |
+| Sentiment / Phase / Trend / Momentum / Volatility / Risk / Breadth / Drawdown | Engine payload blocks | Logical entities in `payload_json` + columns for phase/sentiment |
+| History | Same table | One row per `(benchmark_stock_id, as_of_date)` |
+
+Relationship: Evaluation = stock facts; Market Analysis = market facts;
+Recommendation / Strategy / Portfolio Analytics / Dashboard consume both.

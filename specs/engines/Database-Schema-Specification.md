@@ -235,6 +235,26 @@ Create indexes for:
 
 ------------------------------------------------------------------------
 
+# 6b. Market Analysis Engine (SD-032)
+
+### portfolio_tos_market_analytics
+
+-   id (PK)
+-   benchmark_stock_id (FK → portfolio_stocks)
+-   as_of_date
+-   market_phase
+-   sentiment_score
+-   sentiment_label
+-   payload_json (full analytics blocks)
+-   explainability_json
+-   computed_at
+-   unique (benchmark_stock_id, as_of_date)
+
+Logical blocks inside payload (not separate tables in V1): Trend,
+Momentum, Volatility, Risk, Breadth, Drawdown, Sentiment components.
+
+------------------------------------------------------------------------
+
 # 7. Versioning
 
 Schema changes SHALL use database migrations. Backward compatibility

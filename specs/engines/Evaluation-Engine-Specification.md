@@ -208,3 +208,41 @@ Provides services to:
 -   Keep scoring configurable.
 -   Avoid embedding recommendation logic.
 -   Preserve complete auditability for every score.
+
+------------------------------------------------------------------------
+
+# 19. Architectural Evolution (SD-027 / SD-028)
+
+**Effective with Strategy Configuration:** The Evaluation Engine
+**SHALL NOT** apply Strategy weights or produce recommendation
+decisions. It **SHALL** emit measurable scores for the **fixed
+supported indicator catalogue** (Relative Strength, Momentum Score,
+Trend Score, Breakout Score, Volume Score, Market Regime, Sector
+Strength, Risk Score) plus raw indicators.
+
+Weighted overall scores, thresholds, and portfolio actions belong to
+Strategy Configuration + Recommendation Engine. See
+[`Strategy-Configuration-Specification.md`](./Strategy-Configuration-Specification.md)
+and governance **SD-027** / **SD-028**.
+
+Historical sections above that mention “Scoring Weights” inside
+Evaluation describe original intent and are superseded for
+implementation by SD-027/SD-028.
+
+# Architectural Clarification (SD-027 / SD-030)
+
+The Evaluation Engine calculates **objective facts** only (indicator scores, ATR, RSI, MAs, 52w high/low, etc.).
+
+It SHALL NOT:
+
+- Filter candidates via Screener conditions (Screeners own eligibility).
+- Apply Strategy weights (Strategy / Recommendation own scoring).
+- Generate trade recommendations.
+
+Pipeline: Evaluation facts ? Screeners (eligibility) ? Strategy scoring ? Recommendations.
+
+# Evaluation Profile ownership (SD-031)
+
+Evaluation Engine is the sole producer of Evaluation Profile metrics (momentum, trend, breakout, volume, risk, sector strength, market alignment, overall score).
+
+UI surfaces (Watchlist research, Portfolio averages) MUST read Evaluation Engine outputs via EvaluationProfileService � they MUST NOT recompute these scores independently.

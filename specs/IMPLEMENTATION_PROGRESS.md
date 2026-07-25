@@ -76,6 +76,12 @@ Independent freeze audit (2026-07-25): [`audit/`](./audit/) — verdict **YES** 
 | 2026-07-25 | SD-025 | Recommendation approval separated from trade execution |
 | 2026-07-25 | SD-026 | Cash management + portfolio-wide capital allocation (reserved cash, ScorePriority allocator) |
 | 2026-07-25 | UI | Cash tab (`/cash`): deposit/withdraw/adjust/statement/reservations; Dashboard shows available cash only |
+| 2026-07-26 | SD-027 | Strategy Configuration framework: Evaluation facts → Strategy scoring → Recommendation; Strategy UI + APIs |
+| 2026-07-26 | SD-028 | Fixed supported indicator catalogue (no plugins / no Add Indicator) |
+| 2026-07-26 | SD-029 | Factory Momentum Strategy 1.0 seed + protected factory / duplicate / weight=100 validation |
+| 2026-07-26 | SD-030 | Strategies consume Screeners; Minervini Trend Template factory screener; exit strategy; eligibility explainability |
+| 2026-07-26 | SD-031 | Analytics Ownership Model: Stock / Evaluation / Portfolio / Market owners; Dashboard/Watchlist/Portfolio/Discovery page questions |
+| 2026-07-26 | SD-032 | Market Analysis Engine: benchmark OHLCV → sentiment/phase/analytics; Dashboard + Rec/Strategy/Portfolio consume |
 
 ---
 
@@ -84,10 +90,10 @@ Independent freeze audit (2026-07-25): [`audit/`](./audit/) — verdict **YES** 
 - Dedicated Discovery Engine Specification document
 - Email / webhook / SMS / push channels
 - Automated broker execution (Zerodha, GTT, …)
-- Strategy entity / multi-strategy isolation
+- Multi-strategy isolation / A-B comparison (factory + single active custom ships)
 - OpenAPI for `/api/v1`
 - Formal Data Engine publish/validation gates & trading calendar product
-- Pluggable evaluation rules / market regime
+- Pluggable evaluation rules / multi-benchmark market analysis / constituent breadth V2
 - CI workflow improvements
 - Pipeline auto-run after daily sync (config exists; default off)
 

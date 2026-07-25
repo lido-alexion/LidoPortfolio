@@ -44,6 +44,7 @@ specs/
 │   ├── Evaluation-Engine-Specification.md
 │   ├── Recommendation-Engine-Specification.md
 │   ├── Cash-Management-Specification.md   (SD-026)
+│   ├── Strategy-Configuration-Specification.md (SD-027)
 │   ├── Notification-Engine-Specification.md
 │   ├── Execution-Engine-Specification.md
 │   ├── Review-Engine-Specification.md
@@ -94,8 +95,11 @@ specs/
 10. [engines/Application-Architecture-Specification.md](engines/Application-Architecture-Specification.md)  
 11. [engines/Data-Engine-Specification.md](engines/Data-Engine-Specification.md)  
 12. [engines/Evaluation-Engine-Specification.md](engines/Evaluation-Engine-Specification.md)  
+12a. [engines/Market-Analysis-Engine-Specification.md](engines/Market-Analysis-Engine-Specification.md) (SD-032)  
 13. [engines/Recommendation-Engine-Specification.md](engines/Recommendation-Engine-Specification.md)  
 14. [engines/Cash-Management-Specification.md](engines/Cash-Management-Specification.md) (SD-026)  
+14a. [engines/Strategy-Configuration-Specification.md](engines/Strategy-Configuration-Specification.md) / [Strategy-Specification.md](engines/Strategy-Specification.md)  
+14b. [engines/Analytics-Architecture-Specification.md](engines/Analytics-Architecture-Specification.md) / [Portfolio-Analytics-Specification.md](engines/Portfolio-Analytics-Specification.md) / [Dashboard-Specification.md](engines/Dashboard-Specification.md)  
 15. [engines/Notification-Engine-Specification.md](engines/Notification-Engine-Specification.md)  
 16. [engines/Execution-Engine-Specification.md](engines/Execution-Engine-Specification.md)  
 17. [engines/Review-Engine-Specification.md](engines/Review-Engine-Specification.md)  

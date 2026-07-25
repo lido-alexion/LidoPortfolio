@@ -154,6 +154,61 @@ Legacy `/api` surface (active portfolio; Sanctum):
 Summary fields: `cash_balance`, `reserved_cash`,
 `available_investable_cash`.
 
+## Strategy Configuration (SD-027 / SD-028)
+
+Fixed supported-indicator catalogue (not plugins).
+
+  Method   Endpoint                                 Description
+  -------- ---------------------------------------- --------------------------------
+  GET      /api/v1/strategy                         Active strategy + full config
+  GET      /api/v1/strategy/catalogue               Catalogue by category
+  GET      /api/v1/strategy/summary                 Dashboard card fields
+  PUT      /api/v1/strategy                         Save new version (`config` required)
+  POST     /api/v1/strategy/duplicate               Duplicate active strategy
+  PUT      /api/v1/strategy/screeners               Assign eligibility Screeners
+  GET      /api/v1/strategy/eligibility             Eligibility sources
+  GET      /api/v1/strategy/scoring                 Scoring model
+  GET      /api/v1/strategy/exit                    Exit strategy
+  GET      /api/v1/strategy/indicators              Scoring indicators
+  GET      /api/v1/strategy/factors                 BC alias of indicators
+  GET      /api/v1/strategy/thresholds              Recommendation thresholds
+  GET      /api/v1/strategy/portfolio-rules         Portfolio rules
+  GET      /api/v1/strategy/capital-allocation      Capital allocation rules
+  GET      /api/v1/strategy/recommendation-rules    Behaviour flags
+
+Recommendations include `strategy_version_id`, `strategy_score`,
+`evidence.eligibility`, `evidence.scoring`, `evidence.exit_strategy`.
+Strategy eligibility references Screeners (SD-030); Screener CRUD remains under `/api/screeners*`.
+
+### Analytics Architecture (SD-031)
+
+``` text
+  GET      /api/v1/analytics/portfolio
+  GET      /api/v1/analytics/market
+  GET      /api/v1/analytics/dashboard
+  GET      /api/v1/analytics/stocks/{stock}
+  GET      /api/v1/analytics/stocks/{stock}/evaluation-profile
+  GET      /api/v1/analytics/stocks/{stock}/recommendation-preview
+  GET      /api/v1/analytics/stocks/{stock}/research
+```
+
+Each endpoint returns only its owned metrics (or an intentional research bundle).
+`factor_breakdown` (explainability).
+
+### Market Analysis Engine (SD-032)
+
+``` text
+  GET      /api/v1/market-analysis                  Latest analytics (+ ?refresh=1)
+  GET      /api/v1/market-analysis/sentiment
+  GET      /api/v1/market-analysis/phase
+  GET      /api/v1/market-analysis/history          ?days=
+  GET      /api/v1/market-analysis/timeline         alias of history
+  GET      /api/v1/market-analysis/explainability
+```
+
+Recommendations may include `evidence.market_analysis` (phase, sentiment,
+allocation multiplier, entry allowed). Strategy config may include `market_gates`.
+
 ## Notifications
 
   Method   Endpoint                           Description
