@@ -36,6 +36,7 @@ use App\Http\Controllers\Api\ScreenerController;
 use App\Http\Controllers\Api\ScreenerRunController;
 use App\Http\Controllers\Api\WatchlistController;
 use App\Http\Controllers\Api\WatchlistsController;
+use App\Http\Controllers\Api\V1\TradingOsController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
@@ -238,4 +239,48 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
         Route::post('/password-reset-links/{passwordResetLink}/regenerate', [PasswordResetLinkController::class, 'regenerate']);
         Route::delete('/password-reset-links/{passwordResetLink}', [PasswordResetLinkController::class, 'destroy']);
     });
+});
+
+/*
+| Trading Operating System REST API (specs/engines/REST-API-Specification.md).
+| Additive /api/v1 surface; legacy /api/* routes above are unchanged.
+| Auth: Sanctum session (existing SPA) rather than JWT.
+*/
+Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
+    Route::get('/securities', [TradingOsController::class, 'securities']);
+    Route::get('/securities/{id}', [TradingOsController::class, 'securityShow'])->whereNumber('id');
+    Route::get('/price-bars', [TradingOsController::class, 'priceBars']);
+    Route::get('/dataset/status', [TradingOsController::class, 'datasetStatus']);
+    Route::post('/imports', [TradingOsController::class, 'importsStore']);
+    Route::get('/imports/{id}', [TradingOsController::class, 'importsShow']);
+
+    Route::post('/discovery/runs', [TradingOsController::class, 'discoveryRunsStore']);
+    Route::get('/candidates', [TradingOsController::class, 'candidates']);
+
+    Route::post('/evaluation/runs', [TradingOsController::class, 'evaluationRunsStore']);
+    Route::get('/evaluations', [TradingOsController::class, 'evaluations']);
+
+    Route::post('/recommendations/generate', [TradingOsController::class, 'recommendationsGenerate']);
+    Route::get('/recommendations', [TradingOsController::class, 'recommendationsIndex']);
+    Route::get('/recommendations/{id}', [TradingOsController::class, 'recommendationsShow'])->whereNumber('id');
+    Route::post('/recommendations/{id}/review', [TradingOsController::class, 'recommendationsReview'])->whereNumber('id');
+    Route::get('/recommendations/{id}/reviews', [TradingOsController::class, 'recommendationsReviewHistory'])->whereNumber('id');
+
+    Route::get('/notifications', [TradingOsController::class, 'notificationsIndex']);
+    Route::post('/notifications/{id}/retry', [TradingOsController::class, 'notificationsRetry'])->whereNumber('id');
+
+    Route::post('/orders', [TradingOsController::class, 'ordersStore']);
+    Route::get('/orders', [TradingOsController::class, 'ordersIndex']);
+    Route::post('/orders/{id}/execute', [TradingOsController::class, 'ordersExecute'])->whereNumber('id');
+    Route::post('/orders/{id}/cancel', [TradingOsController::class, 'ordersCancel'])->whereNumber('id');
+    Route::get('/transactions', [TradingOsController::class, 'transactionsIndex']);
+    Route::get('/positions', [TradingOsController::class, 'positionsIndex']);
+
+    Route::post('/reviews/generate', [TradingOsController::class, 'reviewsGenerate']);
+    Route::get('/reviews', [TradingOsController::class, 'reviewsIndex']);
+    Route::get('/reviews/{id}', [TradingOsController::class, 'reviewsShow'])->whereNumber('id');
+    Route::get('/review/dashboard', [TradingOsController::class, 'reviewDashboard']);
+    Route::get('/review/outcomes', [TradingOsController::class, 'reviewOutcomes']);
+
+    Route::post('/pipeline/run', [TradingOsController::class, 'pipelineRun']);
 });

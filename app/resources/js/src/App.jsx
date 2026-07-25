@@ -37,6 +37,11 @@ import PortfoliosPage from './pages/PortfoliosPage';
 import AlertPoliciesPage from './pages/AlertPoliciesPage';
 import ScreenersPage from './pages/ScreenersPage';
 import ScreenerEditorPage from './pages/ScreenerEditorPage';
+import RecommendationsPage from './pages/RecommendationsPage';
+import CandidatesPage from './pages/CandidatesPage';
+import EvaluationsPage from './pages/EvaluationsPage';
+import ReviewDashboardPage from './pages/ReviewDashboardPage';
+import NotificationHistoryPage from './pages/NotificationHistoryPage';
 
 const FOOTER_NAV_ENABLED = true;
 
@@ -144,6 +149,11 @@ function App() {
                                 <Route path="/indices" element={<IndicesPage />} />
                                 <Route path="/screeners" element={<ScreenersPage />} />
                                 <Route path="/screeners/:id" element={<ScreenerEditorPage />} />
+                                <Route path="/candidates" element={<CandidatesPage />} />
+                                <Route path="/evaluations" element={<EvaluationsPage />} />
+                                <Route path="/recommendations" element={<RecommendationsPage />} />
+                                <Route path="/review" element={<ReviewDashboardPage />} />
+                                <Route path="/notification-history" element={<NotificationHistoryPage />} />
                                 <Route path="/patterns" element={<PatternGuidePage />} />
                                 <Route path="/knowledge-board" element={<KnowledgeBoardPage />} />
                                 <Route path="/knowledge-board/tags" element={<KnowledgeBoardTagsPage />} />

@@ -17,6 +17,54 @@ Living reference for Lido Portfolio. **Update this file whenever code changes.**
 - Web app runs as a React SPA mounted from Laravel view `resources/views/app.blade.php`. Favicon: `public/favicon.ico` with `<link rel="icon" href="{APP_PATH}/favicon.ico">` in `app.blade.php`; production copy at `public_html/portfolio/favicon.ico` (included in `prepare-upload.ps1` staging).
 - API auth is **session-based** (Sanctum SPA cookies), not Bearer tokens in `localStorage`.
 
+## Trading Operating System (Jul 2026)
+
+Specs under `specs/` define a seven-engine decision platform. Implementation evolves the **existing** Lido Portfolio app (no greenfield rewrite). Progress: `specs/IMPLEMENTATION_PROGRESS.md`. Demo acceptance: `specs/MVP_DEMO_CHECKLIST.md`.
+
+**MVP status:** Complete for clarified workflow (data → discovery → evaluation → recommendation → user review → execution → review). Sanctum, `portfolio_*` tables, Screener/Pattern services, Telegram-only notifications accepted.
+
+**Independent audit (2026-07-25):** Full freeze audit vs `/specs` lives in [`specs/audit/`](specs/audit/). Verdict: clarified MVP **YES** (~90%); release posture **Ready for Internal Testing Only** — see `specs/audit/MVP_VERDICT.md`.
+
+**Governance (2026-07-25):** Bridge between architectural intent and V1.0 code — [`specs/governance/`](specs/governance/). Precedence: [`DOCUMENT_PRECEDENCE.md`](specs/governance/DOCUMENT_PRECEDENCE.md). Baseline: [`VERSION_1_BASELINE.md`](specs/governance/VERSION_1_BASELINE.md). Do not rewrite original `/specs` architecture or engine docs to match implementation; record decisions as SD-xxx instead.
+
+**Documentation map:** Repository-wide reading order and file tree — [`DOCS.md`](DOCS.md). Specs subtree — [`specs/README.md`](specs/README.md). For full ingest: requirements/architecture → governance → audit → this file. New Markdown docs must be indexed in `DOCS.md` (rule: `.cursor/rules/Keep-DOCS-md-ingestion-tree-updated.mdc`).
+
+### Engine layer (`app/app/Engines/`)
+
+| Engine | Class | Owns / wraps |
+|--------|-------|----------------|
+| Data | `Data\DataEngine` | `portfolio_stocks` / `portfolio_stock_prices` / daily sync |
+| Discovery | `Discovery\DiscoveryEngine` | `portfolio_tos_candidates` (orchestrates PatternScan + Screener) |
+| Evaluation | `Evaluation\EvaluationEngine` | Score/rank/evidence → `portfolio_tos_evaluation_results` |
+| Recommendation | `Recommendation\RecommendationEngine` | BUY/SELL/WATCH/HOLD + review lifecycle + `portfolio_tos_recommendation_reviews` |
+| Notification | `Notification\NotificationEngine` | Telegram + `portfolio_tos_notifications` |
+| Execution | `Execution\ExecutionEngine` | Pending/executed/cancelled orders → transactions/holdings |
+| Review | `Review\ReviewEngine` | Dashboard, outcomes, reports |
+| Pipeline | `Pipeline\DailyDecisionPipeline` | End-to-end stages |
+
+### Config / schema / CLI
+
+- Config: `config/trading_os.php`.
+- Migrations: `2026_07_25_000002_*`, `2026_07_25_000003_tos_mvp_review_and_orders.php` (reviews, `reference_price`, order cancel).
+- Command: `php artisan portfolio:decision-pipeline`.
+- Recommendations start as `pending_review`; Accept required before linked order; orders support pending → execute/cancel.
+
+### REST `/api/v1` (additive)
+
+Sanctum auth. `TradingOsController`: securities, imports, candidates, evaluations, recommendations (+ `/review`), notifications, orders (+ `/execute`, `/cancel`), review dashboard/outcomes, pipeline.
+
+### Frontend
+
+`/candidates`, `/evaluations`, `/recommendations` (Accept/Reject/Defer + orders), `/review`, `/notification-history`.
+
+### Tests
+
+`tests/Feature/TradingOsPipelineTest.php` (pipeline, review, pending/execute/cancel, outcomes).
+
+### Spec deviations (confirmed)
+
+Sanctum not JWT; reuse `portfolio_*`; Screener/PatternScan remain Services; Telegram only; no Strategy entity.
+
 ## Local development runbook (agent / future sessions)
 
 Use this section to bring the project up again on a Windows dev machine. Human-oriented summary also lives in root `README.md`.

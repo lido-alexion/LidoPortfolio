@@ -1,0 +1,36 @@
+---
+description: Link every new Markdown doc into DOCS.md (ingestion tree)
+alwaysApply: true
+---
+
+# Keep DOCS.md ingestion tree complete
+
+Entry point for humans/agents is **`README.md`**, which points to **`DOCS.md`** as the ingestion docs tree.
+
+## When this applies
+
+Whenever you **create** a new project Markdown document (`.md`) under the repo — including `specs/`, `deploy/`, root, or `app/` docs — you MUST update **`DOCS.md`** in the same session.
+
+Also apply when you **move or rename** a documented `.md` file (fix links in `DOCS.md`).
+
+## Required updates
+
+1. Add the file to the correct **section** in `DOCS.md` (orientation, architecture, governance, audit, technical reference, or deploy).
+2. Give it a **reading-order number** consistent with nearby docs (requirements/intent before implementation status).
+3. If it belongs under `specs/`, also link it from `specs/README.md` (and `specs/governance/README.md` or `specs/audit/README.md` when appropriate).
+4. Do **not** leave orphan documentation that cannot be reached from `README.md` → `DOCS.md`.
+
+## Exclude (do not force into DOCS.md)
+
+- Ephemeral scratch notes the user asked not to keep
+- Vendor / generated docs inside `node_modules`, `vendor`, `storage`
+- Cursor skill internals unless they are meant as project documentation
+
+## Example
+
+```text
+Created: specs/governance/NEW_POLICY.md
+→ Add row under DOCS.md §3 Governance
+→ Link from specs/README.md Phase B / governance tree
+→ Confirm README still points to DOCS.md as the ingest tree
+```

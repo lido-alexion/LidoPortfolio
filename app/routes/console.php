@@ -209,6 +209,14 @@ Schedule::command('portfolio:send-calendar-reminders')
     ->timezone($timezone)
     ->name('calendar-reminders');
 
+if (config('trading_os.enabled', true) && config('trading_os.pipeline.schedule_enabled', false)) {
+    $pipelineTime = config('trading_os.pipeline.schedule_time', '19:00');
+    Schedule::command('portfolio:decision-pipeline')
+        ->dailyAt(is_string($pipelineTime) ? $pipelineTime : '19:00')
+        ->timezone($timezone)
+        ->name('trading-os-decision-pipeline');
+}
+
 Schedule::command('portfolio:check-operational-alerts')
     ->hourly()
     ->timezone($timezone)

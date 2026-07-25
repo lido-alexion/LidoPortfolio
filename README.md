@@ -9,6 +9,12 @@ Self-hosted **Indian stock portfolio** tracker for personal / multi-portfolio us
 
 Production example layout: subdirectory app under cPanel (`/portfolio`) — see [deploy/DEPLOY.md](deploy/DEPLOY.md).
 
+### Project documentation ingest
+
+**Always start here (`README.md`).** For a full, ordered documentation tree (requirements → architecture → governance → audit → runbook → deploy), continue in **[DOCS.md](DOCS.md)**. Specs subtree: [specs/README.md](specs/README.md). Living technical reference: [implementation.md](implementation.md).
+
+Any **new** project Markdown doc must be linked into `DOCS.md` in the same change (Cursor rule: `.cursor/rules/Keep-DOCS-md-ingestion-tree-updated.mdc`).
+
 ---
 
 ## Features
@@ -296,11 +302,15 @@ PowerShell -ExecutionPolicy Bypass -File app\tests\Feature\api_smoke.ps1
 
 ## Documentation
 
+Start with this **README.md**. The **ingestion docs tree** (every major Markdown file in recommended reading order) is in **[DOCS.md](DOCS.md)**.
+
 | File | Description |
 |------|-------------|
+| [DOCS.md](DOCS.md) | **Ingestion docs tree** — follow this after README for full project understanding |
+| [specs/README.md](specs/README.md) | Trading OS specs hub (architecture → engines → governance → audit) |
 | [Features](#features) | Product feature overview (this README) |
 | [Project structure](#project-structure) | Folder layout and how Laravel + React fit together |
-| [implementation.md](implementation.md) | Living technical reference (agents: read first) |
+| [implementation.md](implementation.md) | Living technical reference (agents: keep updated) |
 | [debugging.md](debugging.md) | Production debug hooks & agent runbook |
 | [app/API_DOCUMENTATION.md](app/API_DOCUMENTATION.md) | REST API |
 | [deploy/DEPLOY.md](deploy/DEPLOY.md) | **Production deploy** (lidoalexion.com/portfolio, updates) |

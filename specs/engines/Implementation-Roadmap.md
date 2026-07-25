@@ -235,3 +235,20 @@ The project is considered MVP-complete when:
 -   Executions are recorded.
 -   Performance can be reviewed.
 -   The system operates end-to-end with no manual database intervention.
+
+------------------------------------------------------------------------
+
+## Version 1.0 Baseline
+
+The first MVP implementation pass and independent audit are complete. Architectural
+intent remains defined by the documents in `/specs/architecture` and `/specs/engines`.
+Accepted implementation decisions, Version 1.0 scope, and future work are governed by:
+
+-   [`../governance/VERSION_1_BASELINE.md`](../governance/VERSION_1_BASELINE.md) — frozen V1.0 baseline
+-   [`../governance/SPECIFICATION_DECISIONS.md`](../governance/SPECIFICATION_DECISIONS.md) — accepted deviations from original specifications
+-   [`../governance/MVP_SCOPE.md`](../governance/MVP_SCOPE.md) — definitive Version 1.0 inclusion/exclusion
+-   [`../governance/PRODUCT_BACKLOG.md`](../governance/PRODUCT_BACKLOG.md) — deferred work and release roadmap
+-   [`../governance/DOCUMENT_PRECEDENCE.md`](../governance/DOCUMENT_PRECEDENCE.md) — document authority hierarchy
+
+Do not rewrite historical specification sections above to match Version 1.0 code.
+Evolve future releases from the governance baseline.
