@@ -386,8 +386,7 @@ export default function RecommendationsPage() {
                                     <div className="mb-3">
                                         <Link
                                             className="btn btn-primary btn-sm"
-                                            to="/transactions"
-                                            state={{ pageTab: 'pending' }}
+                                            to="/transactions/pending"
                                         >
                                             Go to Pending Execution
                                         </Link>

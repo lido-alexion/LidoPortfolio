@@ -1256,6 +1256,18 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     cursor: not-allowed;
 }
 
+.lido-segment-toggle--page-tabs .lido-segment-toggle-track {
+    padding: 0.3rem;
+}
+
+.lido-segment-toggle--page-tabs .lido-segment-toggle-btn {
+    font-size: 1rem;
+    font-weight: 600;
+    padding: 0.65rem 1.25rem;
+    line-height: 1.3;
+    min-height: 2.75rem;
+}
+
 .lido-top-mover-period-toggle {
     flex-shrink: 0;
     padding: 0.1rem;

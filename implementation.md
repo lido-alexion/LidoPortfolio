@@ -47,7 +47,7 @@ Specs under `specs/` define a seven-engine decision platform. Implementation evo
 - Config: `config/trading_os.php`.
 - Migrations: `2026_07_25_000002_*` … `000006_*` (incl. SD-025 approval≠execution: `pending_execution`, tx `source` + `recommendation_id`).
 - Command: `php artisan portfolio:decision-pipeline`.
-- **SD-025 workflow:** actionable recommendations `pending_review` → **Approve** → `pending_execution` → execute later via **Transactions** (`recommendation_id`) → `executed`, or **Cancel execution** → `cancelled`, or expire. Reject/Defer unchanged. HOLD/WATCH stay informational (`published`). No new Orders page; legacy `/api/v1/orders*` kept with `execute_now` default **false**.
+- **Transactions routes:** `/transactions` = Transaction History; `/transactions/pending` = Pending Execution. Toggle navigates between them. Page tabs toggle has no “View” label; uses larger height/font (`.lido-segment-toggle--page-tabs`).
 
 ### REST `/api/v1` (additive)
 

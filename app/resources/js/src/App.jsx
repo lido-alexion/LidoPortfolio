@@ -140,6 +140,7 @@ function App() {
                             <Routes>
                                 <Route path="/" element={<DashboardPage />} />
                                 <Route path="/transactions" element={<TransactionsPage />} />
+                                <Route path="/transactions/pending" element={<TransactionsPage />} />
                                 <Route path="/corporate-action" element={<CorporateActionPage />} />
                                 <Route path="/transactions/closed" element={<ClosedTransactionsPage />} />
                                 <Route path="/holdings" element={<HoldingsPage />} />

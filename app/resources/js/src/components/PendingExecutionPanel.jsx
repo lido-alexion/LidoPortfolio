@@ -75,7 +75,6 @@ export default function PendingExecutionPanel({ onExecuteStarted }) {
         onExecuteStarted?.();
         navigate('/transactions', {
             state: {
-                pageTab: 'history',
                 executeRecommendation: {
                     recommendation_id: rec.id,
                     stock_id: rec.security_id,
@@ -87,23 +86,7 @@ export default function PendingExecutionPanel({ onExecuteStarted }) {
                     notes: `From recommendation #${rec.id} (${rec.ui_label || rec.portfolio_action})`,
                 },
             },
-            replace: false,
         });
-        // Same page: parent handles state when already on Transactions
-        if (window.location.pathname.includes('/transactions')) {
-            window.dispatchEvent(new CustomEvent('lido:execute-recommendation', {
-                detail: {
-                    recommendation_id: rec.id,
-                    stock_id: rec.security_id,
-                    symbol: rec.symbol,
-                    name: rec.name,
-                    type: side,
-                    quantity: qty,
-                    price: price !== '' && price != null ? String(price) : '',
-                    notes: `From recommendation #${rec.id} (${rec.ui_label || rec.portfolio_action})`,
-                },
-            }));
-        }
     };
 
     const cancelExecution = async (id) => {

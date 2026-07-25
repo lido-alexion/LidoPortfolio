@@ -150,9 +150,11 @@ export default function TransactionsPage() {
     const [stockSearch, setStockSearch] = useState('');
 
     const [entryMode, setEntryMode] = useState('single');
-    const [pageTab, setPageTab] = useState(() => (
-        location.state?.pageTab === 'pending' ? 'pending' : 'history'
-    ));
+    const pageTab = location.pathname.startsWith('/transactions/pending') ? 'pending' : 'history';
+
+    const setPageTab = useCallback((tab) => {
+        navigate(tab === 'pending' ? '/transactions/pending' : '/transactions');
+    }, [navigate]);
 
 
 
@@ -479,7 +481,6 @@ export default function TransactionsPage() {
         if (!tx) {
             return;
         }
-        setPageTab('history');
         setEntryMode('single');
         editTx(tx);
         navigate('/transactions', { replace: true, state: {} });
@@ -495,7 +496,6 @@ export default function TransactionsPage() {
         if (!prefill?.stock_id && !prefill?.symbol) {
             return;
         }
-        setPageTab('history');
         setEntryMode('single');
         const stock = {
             id: prefill.stock_id,
@@ -531,24 +531,8 @@ export default function TransactionsPage() {
             return;
         }
         applyExecuteRecommendation(prefill);
-        navigate('/transactions', { replace: true, state: { pageTab: 'history' } });
+        navigate('/transactions', { replace: true, state: {} });
     }, [location.state, applyExecuteRecommendation, navigate]);
-
-    useEffect(() => {
-        const handler = (e) => {
-            if (e?.detail) {
-                applyExecuteRecommendation(e.detail);
-            }
-        };
-        window.addEventListener('lido:execute-recommendation', handler);
-        return () => window.removeEventListener('lido:execute-recommendation', handler);
-    }, [applyExecuteRecommendation]);
-
-    useEffect(() => {
-        if (location.state?.pageTab === 'pending') {
-            setPageTab('pending');
-        }
-    }, [location.state]);
 
 
 
@@ -930,8 +914,8 @@ export default function TransactionsPage() {
                 <div className="d-flex flex-wrap align-items-center justify-content-between gap-2">
                     <h1 className="h3 mb-0">Transactions</h1>
                     <SegmentToggle
-                        label="View"
                         ariaLabel="Transactions page tabs"
+                        className="lido-segment-toggle--page-tabs"
                         value={pageTab}
                         onChange={setPageTab}
                         options={[

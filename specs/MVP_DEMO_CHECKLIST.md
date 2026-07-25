@@ -67,9 +67,9 @@ Prerequisites: MySQL running, `php artisan migrate` applied (includes `portfolio
 
 ## 5. Execution (pending queue + manual trade)
 
-1. Open **Pending Execution** tab on Recommendations (or use pending-execution list).
+1. Open **Pending Execution** at `/transactions/pending`.
 2. Confirm the approved recommendation appears.
-3. **Execute manually:** go to **Transactions**, add a buy/sell with the same stock and link / pass `recommendation_id` (UI path from pending panel if present).
+3. **Execute manually:** opens Transaction History (`/transactions`) with Add Transaction prefilled; save links `recommendation_id`.
 4. Confirm holdings updated; recommendation becomes `executed`.
 5. Optionally Approve another item and use **Cancel** on pending execution — status `cancelled`, no ledger row.
 
