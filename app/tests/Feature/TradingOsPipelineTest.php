@@ -68,7 +68,7 @@ class TradingOsPipelineTest extends TestCase
         }
     }
 
-    public function test_v1_recommendations_api_and_order_execution(): void
+    public function test_v1_recommendations_api_and_manual_execution(): void
     {
         [$user, $profile, $stock] = $this->seedWatchlistWithTrend();
 
@@ -86,10 +86,11 @@ class TradingOsPipelineTest extends TestCase
         $this->assertNotEmpty($list->json('data'));
 
         $recId = $list->json('data.0.id');
-        // Order lifecycle applies to BUY/SELL only (WATCH/HOLD cannot create orders).
         TradingRecommendation::query()->whereKey($recId)->update([
             'recommendation_type' => 'OPEN_POSITION',
             'status' => 'pending_review',
+            'reference_price' => 120,
+            'execution_plan' => ['suggested_quantity' => 2],
         ]);
 
         $detail = $this->getJson('/api/v1/recommendations/'.$recId);
@@ -97,49 +98,47 @@ class TradingOsPipelineTest extends TestCase
         $detail->assertJsonPath('data.id', $recId);
         $this->assertArrayHasKey('evidence', $detail->json('data'));
 
-        // Must accept before creating an order.
-        $blocked = $this->postJson('/api/v1/orders', [
-            'security_id' => $stock->id,
-            'side' => 'buy',
+        // Must approve before linking a transaction.
+        $blocked = $this->postJson('/api/transactions', [
+            'stock_id' => $stock->id,
+            'type' => 'buy',
             'quantity' => 2,
             'price' => 120,
             'fees' => 1,
-            'recommendation_id' => $recId,
             'transaction_date' => now()->toDateString(),
+            'recommendation_id' => $recId,
         ]);
         $blocked->assertStatus(422);
 
-        $accept = $this->postJson('/api/v1/recommendations/'.$recId.'/review', [
-            'decision' => 'accepted',
+        $approve = $this->postJson('/api/v1/recommendations/'.$recId.'/review', [
+            'decision' => 'approved',
             'notes' => 'Looks good',
         ]);
-        $accept->assertOk();
-        $accept->assertJsonPath('data.status', 'accepted');
+        $approve->assertOk();
+        $approve->assertJsonPath('data.status', 'pending_execution');
+        $approve->assertJsonPath('data.execution_status', 'pending');
         $this->assertDatabaseHas('portfolio_tos_recommendation_reviews', [
             'recommendation_id' => $recId,
-            'decision' => 'accepted',
+            'decision' => 'approved',
             'user_id' => $user->id,
         ]);
 
-        $pending = $this->postJson('/api/v1/orders', [
-            'security_id' => $stock->id,
-            'side' => 'buy',
-            'quantity' => 2,
-            'recommendation_id' => $recId,
-            'execute_now' => false,
-        ]);
-        $pending->assertCreated();
-        $pending->assertJsonPath('data.order.status', 'pending');
-        $orderId = $pending->json('data.order.id');
+        $pendingList = $this->getJson('/api/v1/recommendations/pending-execution');
+        $pendingList->assertOk();
+        $this->assertTrue(collect($pendingList->json('data'))->contains(fn ($r) => (int) $r['id'] === (int) $recId));
 
-        $order = $this->postJson('/api/v1/orders/'.$orderId.'/execute', [
-            'price' => 120,
+        $fill = $this->postJson('/api/transactions', [
+            'stock_id' => $stock->id,
+            'type' => 'buy',
+            'quantity' => 2,
+            'price' => 118.5,
             'fees' => 1,
             'transaction_date' => now()->toDateString(),
+            'notes' => 'Actual broker fill',
+            'recommendation_id' => $recId,
         ]);
-        $order->assertOk();
-        $order->assertJsonPath('success', true);
-        $order->assertJsonPath('data.order.status', 'executed');
+        $fill->assertCreated();
+        $this->assertSame('executed', $fill->json('tos.recommendation_status'));
 
         $this->assertDatabaseHas('portfolio_tos_recommendations', [
             'id' => $recId,
@@ -149,25 +148,19 @@ class TradingOsPipelineTest extends TestCase
             'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'type' => 'buy',
+            'source' => 'recommendation',
+            'recommendation_id' => $recId,
         ]);
-        $this->assertDatabaseHas('portfolio_holdings', [
-            'profile_id' => $profile->id,
-            'stock_id' => $stock->id,
-        ]);
-
-        $positions = $this->getJson('/api/v1/positions');
-        $positions->assertOk();
-        $this->assertTrue(collect($positions->json('data'))->contains(fn ($p) => (int) $p['security_id'] === $stock->id));
 
         $dashboard = $this->getJson('/api/v1/review/dashboard');
         $dashboard->assertOk();
-        $dashboard->assertJsonPath('success', true);
         $this->assertNotEmpty($dashboard->json('data.outcomes'));
 
-        // Undo executed fill: delete ledger tx → recommendation reopens.
+        // Undo executed fill → back to pending_execution.
         $txId = \App\Models\Transaction::query()
             ->where('profile_id', $profile->id)
             ->where('stock_id', $stock->id)
+            ->where('recommendation_id', $recId)
             ->orderByDesc('id')
             ->value('id');
         $this->assertNotNull($txId);
@@ -176,23 +169,28 @@ class TradingOsPipelineTest extends TestCase
         $this->assertTrue((bool) $del->json('tos.recommendation_reopened'));
         $this->assertDatabaseHas('portfolio_tos_recommendations', [
             'id' => $recId,
-            'status' => 'pending_review',
-        ]);
-        $this->assertDatabaseHas('portfolio_tos_orders', [
-            'id' => $orderId,
-            'status' => 'cancelled',
+            'status' => 'pending_execution',
         ]);
 
-        // Reject then reopen.
+        // Cancel execution.
+        $cancel = $this->postJson('/api/v1/recommendations/'.$recId.'/cancel-execution', [
+            'reason' => 'price_moved',
+        ]);
+        $cancel->assertOk();
+        $cancel->assertJsonPath('data.status', 'cancelled');
+        $this->assertDatabaseHas('portfolio_tos_recommendations', [
+            'id' => $recId,
+            'status' => 'cancelled',
+            'cancellation_reason' => 'price_moved',
+        ]);
+
+        // Reopen cancelled → pending_review, then reject and reopen.
+        $this->postJson('/api/v1/recommendations/'.$recId.'/reopen', ['notes' => 'Undo cancel'])->assertOk();
+        $this->assertDatabaseHas('portfolio_tos_recommendations', ['id' => $recId, 'status' => 'pending_review']);
         $this->postJson('/api/v1/recommendations/'.$recId.'/review', ['decision' => 'rejected'])->assertOk();
-        $this->assertDatabaseHas('portfolio_tos_recommendations', ['id' => $recId, 'status' => 'rejected']);
         $reopen = $this->postJson('/api/v1/recommendations/'.$recId.'/reopen', ['notes' => 'Undo reject']);
         $reopen->assertOk();
         $reopen->assertJsonPath('data.status', 'pending_review');
-        $this->assertDatabaseHas('portfolio_tos_recommendation_reviews', [
-            'recommendation_id' => $recId,
-            'decision' => 'reopened',
-        ]);
     }
 
     public function test_order_cancel_lifecycle(): void

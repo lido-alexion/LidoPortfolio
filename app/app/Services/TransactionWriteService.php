@@ -46,17 +46,15 @@ class TransactionWriteService
     }
 
     /**
-     * Insert the ledger row only (no holdings/snapshot side effects).
-     * Callers that also write TOS order links should wrap this in DB::transaction with those writes,
-     * then call applyAfterCreate() after commit.
-     *
      * @param  array{
      *     type: string,
      *     quantity: float|int|string,
      *     price: float|int|string,
      *     fees?: float|int|string|null,
      *     transaction_date: string,
-     *     notes?: string|null
+     *     notes?: string|null,
+     *     source?: string|null,
+     *     recommendation_id?: int|null
      * }  $input
      */
     public function insert(PortfolioProfile $profile, Stock $stock, array $input): Transaction
@@ -72,6 +70,8 @@ class TransactionWriteService
             'fees' => $normalized['fees'],
             'transaction_date' => $normalized['transaction_date'],
             'notes' => $normalized['notes'],
+            'source' => $normalized['source'],
+            'recommendation_id' => $normalized['recommendation_id'],
         ]);
     }
 
@@ -114,7 +114,7 @@ class TransactionWriteService
 
     /**
      * @param  array<string, mixed>  $input
-     * @return array{type: string, quantity: float, price: float, fees: float, transaction_date: string, notes: ?string}
+     * @return array{type: string, quantity: float, price: float, fees: float, transaction_date: string, notes: ?string, source: string, recommendation_id: ?int}
      */
     protected function normalizeInput(PortfolioProfile $profile, Stock $stock, array $input): array
     {
@@ -176,6 +176,24 @@ class TransactionWriteService
             ]);
         }
 
+        $source = strtolower((string) ($input['source'] ?? Transaction::SOURCE_MANUAL));
+        if ($source === '') {
+            $source = Transaction::SOURCE_MANUAL;
+        }
+        if (! in_array($source, Transaction::SOURCES, true)) {
+            throw ValidationException::withMessages([
+                'source' => ['Invalid transaction source.'],
+            ]);
+        }
+
+        $recommendationId = isset($input['recommendation_id']) ? (int) $input['recommendation_id'] : null;
+        if ($recommendationId !== null && $recommendationId <= 0) {
+            $recommendationId = null;
+        }
+        if ($recommendationId !== null) {
+            $source = Transaction::SOURCE_RECOMMENDATION;
+        }
+
         return [
             'type' => $type,
             'quantity' => $quantity,
@@ -183,6 +201,8 @@ class TransactionWriteService
             'fees' => $fees,
             'transaction_date' => $dateOnly,
             'notes' => is_string($notes) || $notes === null ? $notes : null,
+            'source' => $source,
+            'recommendation_id' => $recommendationId,
         ];
     }
 }

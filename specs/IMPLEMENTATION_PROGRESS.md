@@ -7,7 +7,7 @@ Existing stack (Laravel + React + Sanctum + `portfolio_*` tables) is preserved.
 
 **MVP is COMPLETE** for the clarified end-to-end workflow:
 
-Market Data → Discovery → Evaluation → Recommendation → User Review → Execution → Review
+Market Data → Discovery → Evaluation → Recommendation → User Review (Approve) → Pending Execution → Manual/Broker Trade → Review
 
 Acceptance demo: [`MVP_DEMO_CHECKLIST.md`](./MVP_DEMO_CHECKLIST.md).
 
@@ -28,8 +28,8 @@ Independent freeze audit (2026-07-25): [`audit/`](./audit/) — verdict **YES** 
 | A7 | Discovery sources: patterns, screener hits, holdings/watchlist fallback. |
 | A8 | Evaluation weighted scoring is acceptable for MVP (no pluggable rules engine). |
 | A9 | Telegram only for MVP notifications. |
-| A10 | Broker automation out of MVP; manual order lifecycle only. |
-| A11 | Recommendations start as `pending_review`; user must Accept before creating an order. |
+| A10 | Broker automation out of MVP; manual execution via Transactions + pending-execution queue. |
+| A11 | Recommendations start as `pending_review`; Approve → `pending_execution`; execute separately (SD-025). |
 | A12 | Strategy entity deferred; recommendations remain portfolio-scoped. |
 | A13 | Data Engine formal publish/validation gates deferred (existing import OK). |
 
@@ -52,11 +52,11 @@ Independent freeze audit (2026-07-25): [`audit/`](./audit/) — verdict **YES** 
 
 ### Pass 2 (MVP completion sprint)
 
-- [x] **M1** User Review workflow (`pending_review` / `accepted` / `rejected` / `deferred`) + review history table
+- [x] **M1** User Review workflow (`pending_review` → Approve/`pending_execution` | Reject | Defer) + review history
 - [x] **M2** Candidates UI (`/candidates`) with filters + evidence
 - [x] **M3** Evaluations UI (`/evaluations`) with scores/indicators/explanation
-- [x] **M4** Recommendation detail improvements + Accept/Reject/Defer UI
-- [x] **M5** Order lifecycle Pending → Executed | Cancelled
+- [x] **M4** Recommendation detail + Approve/Reject/Defer UI
+- [x] **M5** Pending execution → manual transaction / cancel (SD-025; legacy orders BC)
 - [x] **M6** Review dashboard page (`/review`)
 - [x] **M7** Recommendation outcome tracking (ref vs current price)
 - [x] **M8** Notification history page (`/notification-history`)
@@ -73,6 +73,7 @@ Independent freeze audit (2026-07-25): [`audit/`](./audit/) — verdict **YES** 
 | 2026-07-25 | SD-022 | Actionable (BUY/SELL) vs informational (HOLD/WATCH) recommendation workflows |
 | 2026-07-25 | SD-023 | Market Opinion → Portfolio Decision → Execution Plan redesign |
 | 2026-07-25 | SD-024 | Undo Accept/Reject/Defer + reopen on TOS fill delete |
+| 2026-07-25 | SD-025 | Recommendation approval separated from trade execution |
 
 ---
 

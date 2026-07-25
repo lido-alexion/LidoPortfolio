@@ -15,8 +15,13 @@ Version 1.0 delivers a **Stage 1 decision-support Trading Operating System** ins
 
 1. Transform market data into explainable, ranked opportunities.  
 2. Produce position-aware recommendations (Market Opinion + Portfolio Decision + Execution Plan).  
-3. Require human Accept / Reject / Defer before recording trades **for actionable portfolio decisions**; HOLD_POSITION / WATCH are informational and auto-published.  
-4. Record manual executions against the existing portfolio ledger.  
+3. Require human **Approve** / Reject / Defer before a trade may be
+   recorded **for actionable portfolio decisions**; HOLD_POSITION / WATCH
+   are informational and auto-published. Approval does **not** execute
+   (SD-025).  
+4. Support **delayed / manual execution**: pending-execution queue,
+   execute later via Transactions, cancel pending execution, and
+   recommendation↔transaction traceability (`recommendation_id`).  
 5. Notify via Telegram and retain delivery history.  
 6. Review outcomes and basic performance without manual database edits.
 
@@ -55,11 +60,11 @@ Version 1.0 is **not** automated brokerage, multi-strategy isolation, or a green
 
 - Three-stage model: **Market Opinion** → **Portfolio Decision** → **Execution Plan** (SD-023)
 - Portfolio actions: OPEN / INCREASE / REDUCE / EXIT / HOLD_POSITION / WATCH (UI: Buy / Buy More / Sell Partial / Sell All / Hold / Watch)
-- **Actionable** decisions require Accept / Reject / Defer then optional order
-- **Informational** (HOLD_POSITION / WATCH) auto-published; no orders
+- **Actionable** decisions: Approve / Reject / Defer; Approve → `pending_execution` (not an immediate trade) (SD-025)
+- **Informational** (HOLD_POSITION / WATCH) auto-published; no pending execution
 - Position-aware: uses holdings + allocation toward configured target / max position %
 - Review history for actionable decisions
-- Recommendations UI: **Trade recommendations** vs **Market insights**
+- Recommendations UI: **Trade recommendations** vs **Market insights**; **Pending Execution** tab
 
 ### Notification Engine
 
@@ -69,12 +74,13 @@ Version 1.0 is **not** automated brokerage, multi-strategy isolation, or a green
 
 ### Execution Engine
 
-- Orders linked to accepted recommendations
-- Lifecycle: pending → executed | cancelled
-- Fill writes `portfolio_transactions` and updates holdings via existing services
-- Order link table `portfolio_tos_order_transactions`
+- Pending-execution queue for approved actionable recommendations
+- Manual execute via **Transactions** page / `POST /api/transactions` with `recommendation_id`
+- Cancel pending execution (recommendation → `cancelled`) without Reject semantics
+- Traceability: transaction `source` + `recommendation_id`; recommendation stores executed link
+- Shared ledger write via `TransactionWriteService` (SD-021)
+- Legacy `/api/v1/orders*` retained; `execute_now` defaults false; **no new Orders page**
 - Positions / transactions query via ExecutionEngine APIs
-- Order actions on Recommendations and Review pages
 
 ### Review Engine
 
@@ -139,8 +145,8 @@ Version 1.0 deployment is successful when:
 2. Discovery produces candidates with evidence in the UI.  
 3. Evaluation produces ranked, explainable scores.  
 4. Pipeline or generate path produces recommendations in `pending_review`.  
-5. User can Accept / Reject / Defer with persisted history.  
-6. Accepted recommendations can become pending/executed/cancelled orders that update holdings.  
+5. User can Approve / Reject / Defer with persisted history (Approve → pending execution).  
+6. Pending-execution items can be executed manually (Transactions + `recommendation_id`), cancelled, or left delayed; holdings update on execute.  
 7. Telegram notifications are delivered **or** intentionally skipped with history empty-state.  
 8. Review dashboard shows outcomes consistent with the session.  
 9. No manual SQL is required for the demo path (`../MVP_DEMO_CHECKLIST.md`).  

@@ -86,6 +86,28 @@ class TransactionController extends Controller
         $stock = $this->stocks->resolve($request);
         $validated = $this->validateTransaction($request);
 
+        if (! empty($validated['recommendation_id'])) {
+            $rec = \App\Models\TradingRecommendation::query()
+                ->where('profile_id', $profile->id)
+                ->where('id', (int) $validated['recommendation_id'])
+                ->first();
+            if (! $rec) {
+                throw ValidationException::withMessages([
+                    'recommendation_id' => ['Recommendation not found for this portfolio.'],
+                ]);
+            }
+            if ((int) $rec->security_id !== (int) $stock->id) {
+                throw ValidationException::withMessages([
+                    'recommendation_id' => ['Recommendation security does not match transaction stock.'],
+                ]);
+            }
+            if (! $rec->canExecuteManually()) {
+                throw ValidationException::withMessages([
+                    'recommendation_id' => ['Recommendation is not pending execution (status: '.$rec->status.').'],
+                ]);
+            }
+        }
+
         $transaction = $this->writes->create($profile, $stock, [
             'type' => $validated['type'],
             'quantity' => $validated['quantity'],
@@ -93,9 +115,32 @@ class TransactionController extends Controller
             'fees' => $validated['fees'] ?? 0,
             'transaction_date' => $validated['transaction_date'],
             'notes' => $validated['notes'] ?? null,
+            'source' => $validated['source'] ?? null,
+            'recommendation_id' => $validated['recommendation_id'] ?? null,
         ]);
 
-        return response()->json(['data' => $transaction], 201);
+        $tos = null;
+        if (! empty($validated['recommendation_id'])) {
+            $rec = $this->execution->completeRecommendationFromTransaction(
+                $profile,
+                $transaction,
+                $request->user(),
+            );
+            if ($rec) {
+                $tos = [
+                    'recommendation_id' => $rec->id,
+                    'recommendation_status' => $rec->status,
+                ];
+            }
+        }
+
+        return response()->json([
+            'data' => $transaction->fresh()->load('stock'),
+            'tos' => $tos,
+            'message' => $tos
+                ? 'Transaction saved; recommendation marked executed.'
+                : null,
+        ], 201);
     }
 
     public function show(Request $request, Transaction $transaction): JsonResponse
@@ -188,7 +233,7 @@ class TransactionController extends Controller
                 'recommendation_reopened' => $tosRevert['recommendation_id'] !== null,
                 'recommendation_id' => $tosRevert['recommendation_id'],
             ];
-            $payload['message'] = 'Transaction deleted; linked TOS order cancelled and recommendation reopened for review.';
+            $payload['message'] = 'Transaction deleted; linked recommendation returned to pending execution.';
         }
 
         return response()->json($payload);
@@ -210,6 +255,8 @@ class TransactionController extends Controller
             'fees' => ['nullable', 'numeric', 'gte:0'],
             'transaction_date' => ['required', 'date', 'before_or_equal:today'],
             'notes' => ['nullable', 'string', 'max:1000'],
+            'source' => ['nullable', 'string', 'in:'.implode(',', Transaction::SOURCES)],
+            'recommendation_id' => ['nullable', 'integer'],
         ]);
     }
 }

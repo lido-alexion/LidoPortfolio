@@ -58,10 +58,15 @@ Security
 Recommendation
 │
 ├── Notification
-├── Order
+├── Transaction (reference via recommendation_id — not merged)
+├── Order (legacy / optional BC)
 └── Review Report
 ```
 
+**SD-025:** Recommendation and Transaction are separate entities. A
+transaction **references** a recommendation (`recommendation_id`); they
+are not the same record. Approval lives on Recommendation; fill lives on
+Transaction.
 ------------------------------------------------------------------------
 
 # 4. Core Entity Definitions
@@ -118,7 +123,11 @@ Portfolio-aware decision composed of:
 
 Relationship: - References one Evaluation Result.
 
-Flow: Market Opinion → Portfolio Decision → Execution Plan (optional)
+May be referenced by zero or one completed Transaction
+(`recommendation_id` on the transaction).
+
+Flow: Market Opinion → Portfolio Decision → Execution Plan (optional) →
+User Approval → Pending Execution → Transaction (optional)
 
 Owned By: - Recommendation Engine
 
@@ -126,7 +135,8 @@ Owned By: - Recommendation Engine
 
 ## Order
 
-User intent to execute.
+Legacy / optional intent record (BC APIs). Not required for V1.0 manual
+execution path (SD-025).
 
 Relationship: - References zero or one Recommendation.
 
@@ -136,11 +146,17 @@ Owned By: - Execution Engine
 
 ## Transaction
 
-Executed trade.
+Executed trade in the portfolio ledger.
 
-Relationship: - References one Order.
+Attributes (TOS-relevant): `source`, `recommendation_id` (nullable).
 
-Owned By: - Execution Engine
+Relationship:
+
+- Derived holdings / Position
+- Optionally references one Recommendation (does not absorb it)
+
+Owned By: - Execution Engine (writes via shared ledger services; legacy
+Transactions Module is the primary UI/API for create)
 
 ------------------------------------------------------------------------
 
@@ -173,7 +189,9 @@ Owned By: - Review Engine
 Market Data
 
 Security → Price Bar → Candidate → Evaluation Result → Recommendation →
-Order → Transaction → Position → Review Report
+(Pending Execution) → Transaction → Position → Review Report
+
+(Order is optional/legacy and not on the primary path — SD-025.)
 
 ------------------------------------------------------------------------
 
@@ -196,8 +214,8 @@ DM-005 Historical entities SHALL be immutable once finalized.
 # 7. Event Flow
 
 Data Published → Candidate Generated → Evaluation Completed →
-Recommendation Generated → Notification Sent → Order Executed → Position
-Updated → Review Generated
+Recommendation Generated → Notification Sent → Recommendation Approved →
+Transaction Recorded → Position Updated → Review Generated
 
 ------------------------------------------------------------------------
 

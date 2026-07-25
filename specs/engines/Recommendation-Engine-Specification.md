@@ -3,11 +3,11 @@
   Field            Value
   ---------------- -------------------------------------
   **Document**     Recommendation Engine Specification
-  **Version**      1.1
-  **Status**       Active (V1.0 implementation aligned)
+  **Version**      1.2
+  **Status**       Active (V1.0 / SD-025 aligned)
   **Owner**        Architecture
   **Depends On**   Evaluation Engine
-  **Governance**   SD-022, SD-023
+  **Governance**   SD-022, SD-023, SD-025
 
 ------------------------------------------------------------------------
 
@@ -59,8 +59,9 @@ The Recommendation Engine SHALL NOT:
 -   Stage 1 — Market Opinion generation (portfolio-independent)
 -   Stage 2 — Portfolio Decision generation (portfolio-dependent)
 -   Stage 3 — Execution Plan generation (actionable only)
--   Recommendation lifecycle (pending_review / published / …)
--   User review recording for actionable decisions
+-   Recommendation lifecycle (approval ≠ execution — SD-025)
+-   User review / approval recording for actionable decisions
+-   Pending-execution queue handoff to Execution Engine
 -   Recommendation audit trail
 
 # 6. Domain Model
@@ -123,16 +124,40 @@ Attributes:
 -   Evidence, Failed Checks
 -   Status, Version, Generated / Expiry Time
 
-## Recommendation Status
+## Recommendation Status (SD-025)
 
-Actionable path:
+Lifecycle separates **Recommendation Approval**, **Trade Execution**, and
+**Recommendation Completion**.
 
-`pending_review` → `accepted` | `rejected` | `deferred` → (orders) →
-`executed` / `cancelled` / `expired`
+### Recommendation Approval (this engine)
 
-Informational path:
+Actionable:
 
-`published` → `expired` / `cancelled` (superseded)
+`pending_review` → `pending_execution` (Approved) | `rejected` | `deferred`
+
+Review API decisions: `approved` | `accepted` (BC alias → approved) |
+`rejected` | `deferred`.
+
+Informational:
+
+`published` on generation (no approval).
+
+### Trade Execution (Execution Engine / Transactions)
+
+`pending_execution` means approved and waiting for a ledger transaction
+(manual via Transactions page, or future broker fill). Approval does
+**not** create a trade.
+
+### Recommendation Completion
+
+From `pending_execution`:
+
+-   `executed` — transaction recorded with `recommendation_id`
+-   `cancelled` — operator cancelled pending execution
+-   `expired` — past expiry / explicit expire
+
+Also: `rejected` / `deferred` may later `expired` or be superseded;
+informational `published` → `expired` / `cancelled` (superseded).
 
 # 7. Inputs
 
@@ -192,17 +217,28 @@ same evaluation inputs, portfolio state, and config.
 risk limits.
 
 **RC-012** Informational decisions (HOLD_POSITION / WATCH) SHALL NOT
-require Accept/Reject/Defer and SHALL NOT create orders.
+require Approve/Reject/Defer and SHALL NOT enter pending execution.
+
+**RC-013** Approving a recommendation SHALL NOT create a transaction
+or broker order (SD-025). Status becomes `pending_execution` only.
+
+**RC-014** Completing execution (ledger write) SHALL mark the
+recommendation `executed` and link via `recommendation_id`.
 
 # 11. State Model
 
 See §6 Recommendation Status.
 
+Summary (actionable):
+
+`pending_review` → `pending_execution` | `rejected` | `deferred` →
+`executed` | `cancelled` | `expired`
+
 # 12. Failure Handling
 
 -   Do not publish partial recommendation sets for a batch.
--   Supersede prior open `pending_review` / `published` / `deferred`
-    items when a new batch is generated.
+-   Supersede prior open `pending_review` / `pending_execution` /
+    `published` / `deferred` items when a new batch is generated.
 -   Record failures; publish failure events.
 
 # 13. Configuration
@@ -218,7 +254,9 @@ See §6 Recommendation Status.
 -   Generate Recommendations
 -   Query Open / All Recommendations
 -   Query Recommendation Details (opinion, decision, plan)
--   Record Review (actionable only)
+-   Record Review / Approval (actionable only)
+-   List Pending Execution
+-   Cancel Pending Execution / Expire
 -   Query Recommendation / Review History
 
 # 15. Dependencies

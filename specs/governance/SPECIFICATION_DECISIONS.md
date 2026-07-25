@@ -374,8 +374,23 @@ This register is the authoritative record of **why Version 1.0 differs** from th
 | **Category** | Recommendation / Execution |
 | **Original Design** | Reject final; executed stays executed even if ledger fill deleted |
 | **Reason for Change** | Operators need to correct mistakes without SSH/DB edits |
-| **Implemented Behaviour** | (1) `POST /api/v1/recommendations/{id}/reopen` — Accept/Reject/Defer → `pending_review`; audit `reopened`; cancels pending orders. (2) Deleting a Transactions row linked via `portfolio_tos_order_transactions` cancels the order and reopens the recommendation to `pending_review`. Executed cannot use reopen API until fill deleted. |
+| **Implemented Behaviour** | (1) `POST /api/v1/recommendations/{id}/reopen` — Approve/Reject/Defer → `pending_review`; audit `reopened`. (2) Deleting a Transactions row linked by `recommendation_id` (or legacy order link) returns the recommendation to `pending_execution` (SD-025). Executed cannot use reopen API until fill deleted. |
 | **Benefits** | Safe undo path aligned with shared ledger (SD-021) |
+| **Status** | Accepted |
+
+---
+
+### SD-025 — Recommendation Approval separated from Trade Execution
+
+| Field | Content |
+|-------|---------|
+| **Category** | Recommendation / Execution |
+| **Original Design** | Accept implied readiness to trade; Accept + Execute often combined; `accepted` status sat between review and fill; orders were the primary execution surface |
+| **Reason for Change** | Approval (“I agree with this portfolio decision”) is not the same as execution (“I placed / recorded this trade”). Operators often approve now and trade later (or never). Coupling them forced premature ledger writes and confused UX |
+| **Benefits** | Clear Approve vs Execute; delayed/manual execution; pending-execution queue; cancel without rejecting the decision; recommendation↔transaction traceability; no new Orders page |
+| **Future Broker Integration** | Broker adapters will fill the same pending-execution queue (create/link transactions); approval remains Recommendation Engine; execution remains Execution Engine + ledger |
+| **Migration Impact** | Migration `2026_07_25_000006_*`: `accepted` → `pending_execution`; recommendations gain approval/cancel/execute metadata; `portfolio_transactions` gain `source` + `recommendation_id`. Review decision `approved` (BC alias `accepted`) |
+| **Implemented Behaviour** | Actionable: `pending_review` → Approve → `pending_execution` → manual `POST /api/transactions` with `recommendation_id` → `executed`, or Cancel execution → `cancelled`, or Expire → `expired`. Reject/Defer unchanged. Informational path unchanged (`published`). Legacy `/api/v1/orders*` retained; `execute_now` defaults **false** |
 | **Status** | Accepted |
 
 ---
@@ -408,6 +423,7 @@ This register is the authoritative record of **why Version 1.0 differs** from th
 | SD-022 | Actionable vs informational recommendations | Accepted |
 | SD-023 | Market Opinion vs Portfolio Decision | Accepted |
 | SD-024 | Undo review / undo executed fill | Accepted |
+| SD-025 | Approval separated from execution | Accepted |
 
 ---
 

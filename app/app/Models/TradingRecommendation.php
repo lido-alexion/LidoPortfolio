@@ -15,7 +15,13 @@ class TradingRecommendation extends Model
     /** Informational — visible, no user approval. */
     public const STATUS_PUBLISHED = 'published';
 
+    /**
+     * @deprecated Use STATUS_PENDING_EXECUTION. Kept for API/BC during migration.
+     */
     public const STATUS_ACCEPTED = 'accepted';
+
+    /** Approved for execution — waiting for a ledger transaction (or future broker fill). */
+    public const STATUS_PENDING_EXECUTION = 'pending_execution';
 
     public const STATUS_REJECTED = 'rejected';
 
@@ -25,12 +31,15 @@ class TradingRecommendation extends Model
 
     public const STATUS_EXPIRED = 'expired';
 
+    /** Approved but will not be executed (operator cancelled the execution). */
     public const STATUS_CANCELLED = 'cancelled';
 
     public const STATUS_ARCHIVED = 'archived';
 
+    /** Review decisions accepted by the API (approved maps to pending_execution). */
     public const REVIEW_DECISIONS = [
-        self::STATUS_ACCEPTED,
+        'approved',
+        'accepted', // BC alias → approved / pending_execution
         self::STATUS_REJECTED,
         self::STATUS_DEFERRED,
     ];
@@ -38,7 +47,33 @@ class TradingRecommendation extends Model
     /** Audit-only decision when a review is undone. */
     public const DECISION_REOPENED = 'reopened';
 
-    /** Portfolio actions that may create orders after Accept. */
+    public const DECISION_APPROVED = 'approved';
+
+    public const DECISION_EXECUTION_CANCELLED = 'execution_cancelled';
+
+    public const DECISION_EXPIRED = 'expired';
+
+    public const CANCELLATION_REASONS = [
+        'price_moved',
+        'market_conditions',
+        'funds_unavailable',
+        'broker_rejected',
+        'executed_outside_system',
+        'no_longer_valid',
+        'other',
+    ];
+
+    public const CANCELLATION_REASON_LABELS = [
+        'price_moved' => 'Price moved significantly',
+        'market_conditions' => 'Market conditions changed',
+        'funds_unavailable' => 'Funds unavailable',
+        'broker_rejected' => 'Broker rejected order',
+        'executed_outside_system' => 'Executed outside system',
+        'no_longer_valid' => 'Recommendation no longer valid',
+        'other' => 'Other',
+    ];
+
+    /** Portfolio actions that require review then pending execution. */
     public const ACTIONABLE_ACTIONS = [
         'OPEN_POSITION',
         'INCREASE_POSITION',
@@ -52,7 +87,7 @@ class TradingRecommendation extends Model
         'WATCH',
     ];
 
-    /** @deprecated Use ACTIONABLE_ACTIONS — kept for older callers/tests. */
+    /** @deprecated Use ACTIONABLE_ACTIONS */
     public const ACTIONABLE_TYPES = self::ACTIONABLE_ACTIONS;
 
     /** @deprecated Use INFORMATIONAL_ACTIONS */
@@ -65,7 +100,6 @@ class TradingRecommendation extends Model
         'EXIT_POSITION' => 'Sell All',
         'HOLD_POSITION' => 'Hold',
         'WATCH' => 'Watch',
-        // Legacy
         'BUY' => 'Buy',
         'SELL' => 'Sell All',
         'HOLD' => 'Hold',
@@ -93,6 +127,11 @@ class TradingRecommendation extends Model
         'version',
         'expires_at',
         'generated_at',
+        'approved_at',
+        'cancelled_at',
+        'cancellation_reason',
+        'executed_at',
+        'executed_transaction_id',
     ];
 
     protected function casts(): array
@@ -110,6 +149,10 @@ class TradingRecommendation extends Model
             'failed_checks' => 'array',
             'expires_at' => 'datetime',
             'generated_at' => 'datetime',
+            'approved_at' => 'datetime',
+            'cancelled_at' => 'datetime',
+            'executed_at' => 'datetime',
+            'executed_transaction_id' => 'integer',
         ];
     }
 
@@ -143,12 +186,21 @@ class TradingRecommendation extends Model
         return $this->hasMany(RecommendationReview::class, 'recommendation_id');
     }
 
+    public function executedTransaction(): BelongsTo
+    {
+        return $this->belongsTo(Transaction::class, 'executed_transaction_id');
+    }
+
+    public function transactions(): HasMany
+    {
+        return $this->hasMany(Transaction::class, 'recommendation_id');
+    }
+
     public function actionUpper(): string
     {
         return strtoupper((string) $this->recommendation_type);
     }
 
-    /** Normalized portfolio action (maps legacy BUY/SELL/HOLD). */
     public function portfolioAction(): string
     {
         return match ($this->actionUpper()) {
@@ -190,11 +242,25 @@ class TradingRecommendation extends Model
         };
     }
 
-    public function isImmutable(): bool
+    public function isPendingExecution(): bool
     {
-        return in_array($this->status, [self::STATUS_EXECUTED, self::STATUS_CANCELLED, self::STATUS_ARCHIVED], true);
+        return in_array($this->status, [
+            self::STATUS_PENDING_EXECUTION,
+            self::STATUS_ACCEPTED, // BC pre-migration rows
+        ], true);
     }
 
+    public function isImmutable(): bool
+    {
+        return in_array($this->status, [
+            self::STATUS_EXECUTED,
+            self::STATUS_CANCELLED,
+            self::STATUS_EXPIRED,
+            self::STATUS_ARCHIVED,
+        ], true);
+    }
+
+    /** Still awaiting Approve / Reject / Defer. */
     public function canBeReviewed(): bool
     {
         if (! $this->isActionable()) {
@@ -204,12 +270,11 @@ class TradingRecommendation extends Model
         return in_array($this->status, [
             self::STATUS_PENDING_REVIEW,
             self::STATUS_DEFERRED,
-            self::STATUS_ACCEPTED,
         ], true);
     }
 
     /**
-     * Undo Accept / Reject / Defer back to pending_review (not available after execute).
+     * Undo Approve / Reject / Defer / Cancelled (execution) → pending_review.
      */
     public function canReopenForReview(): bool
     {
@@ -218,19 +283,79 @@ class TradingRecommendation extends Model
         }
 
         return in_array($this->status, [
+            self::STATUS_PENDING_EXECUTION,
             self::STATUS_ACCEPTED,
             self::STATUS_REJECTED,
             self::STATUS_DEFERRED,
+            self::STATUS_CANCELLED,
         ], true);
     }
 
+    /** Manual or future broker execution may proceed. */
+    public function canExecuteManually(): bool
+    {
+        return $this->isActionable() && $this->isPendingExecution();
+    }
+
+    /** @deprecated Use canExecuteManually() */
     public function canCreateOrder(): bool
     {
-        if (! $this->isActionable()) {
-            return false;
+        return $this->canExecuteManually();
+    }
+
+    public function canCancelExecution(): bool
+    {
+        return $this->canExecuteManually();
+    }
+
+    public function reviewStatusLabel(): string
+    {
+        return match ($this->status) {
+            self::STATUS_PENDING_REVIEW => 'pending_review',
+            self::STATUS_PENDING_EXECUTION, self::STATUS_ACCEPTED, self::STATUS_EXECUTED,
+            self::STATUS_CANCELLED, self::STATUS_EXPIRED => 'approved',
+            self::STATUS_REJECTED => 'rejected',
+            self::STATUS_DEFERRED => 'deferred',
+            self::STATUS_PUBLISHED => 'published',
+            default => (string) $this->status,
+        };
+    }
+
+    public function executionStatusLabel(): string
+    {
+        return match ($this->status) {
+            self::STATUS_PENDING_EXECUTION, self::STATUS_ACCEPTED => 'pending',
+            self::STATUS_EXECUTED => 'executed',
+            self::STATUS_CANCELLED => 'cancelled',
+            self::STATUS_EXPIRED => 'expired',
+            self::STATUS_PENDING_REVIEW, self::STATUS_DEFERRED, self::STATUS_REJECTED => 'awaiting_approval',
+            self::STATUS_PUBLISHED => 'not_applicable',
+            default => 'not_applicable',
+        };
+    }
+
+    public function suggestedQuantity(): ?float
+    {
+        $plan = is_array($this->execution_plan) ? $this->execution_plan : [];
+        if (isset($plan['suggested_quantity'])) {
+            return (float) $plan['suggested_quantity'];
+        }
+        if ($this->suggested_position_size !== null) {
+            return (float) $this->suggested_position_size;
         }
 
-        return $this->status === self::STATUS_ACCEPTED;
+        return null;
+    }
+
+    public function suggestedInvestmentAmount(): ?float
+    {
+        $qty = $this->suggestedQuantity();
+        $price = $this->reference_price !== null ? (float) $this->reference_price : null;
+        if ($qty === null || $price === null) {
+            return null;
+        }
+
+        return round($qty * $price, 2);
     }
 
     public static function initialStatusForAction(string $action): string
@@ -249,9 +374,13 @@ class TradingRecommendation extends Model
         return self::STATUS_PENDING_REVIEW;
     }
 
-    /** @deprecated use initialStatusForAction */
-    public static function initialStatusForType(string $type): string
+    public static function normalizeReviewDecision(string $decision): string
     {
-        return self::initialStatusForAction($type);
+        $decision = strtolower(trim($decision));
+        if ($decision === 'accepted') {
+            return self::DECISION_APPROVED;
+        }
+
+        return $decision;
     }
 }

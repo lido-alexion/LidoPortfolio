@@ -27,7 +27,14 @@ function typeBadgeClass(action) {
 
 function statusBadge(status) {
     switch (status) {
-        case 'accepted': return 'text-bg-success';
+        case 'pending_execution':
+        case 'accepted':
+            return 'text-bg-success';
+        case 'executed':
+            return 'text-bg-primary';
+        case 'cancelled':
+        case 'expired':
+            return 'text-bg-secondary';
         case 'rejected': return 'text-bg-danger';
         case 'deferred': return 'text-bg-warning';
         case 'executed': return 'text-bg-primary';
@@ -122,8 +129,6 @@ export default function RecommendationsPage() {
     const [pipelineMeta, setPipelineMeta] = useState(null);
     const [selected, setSelected] = useState(null);
     const [notes, setNotes] = useState('');
-    const [orderQty, setOrderQty] = useState('1');
-    const [orderPrice, setOrderPrice] = useState('');
     const [busyId, setBusyId] = useState(null);
     const [showAll, setShowAll] = useState(false);
 
@@ -152,13 +157,6 @@ export default function RecommendationsPage() {
             const detail = data?.data || null;
             setSelected(detail);
             setNotes('');
-            const planQty = detail?.execution_plan?.suggested_quantity
-                ?? detail?.execution_plan?.suggested_shares_to_sell;
-            const wholeQty = planQty != null && !Number.isNaN(Number(planQty))
-                ? String(Math.max(0, Math.round(Number(planQty))))
-                : '1';
-            setOrderQty(wholeQty === '0' ? '1' : wholeQty);
-            setOrderPrice(detail?.reference_price != null ? String(detail.reference_price) : '');
         } catch (e) {
             showToast(e?.response?.data?.error?.message || e.message || 'Failed to load detail', 'danger');
         }
@@ -205,53 +203,15 @@ export default function RecommendationsPage() {
                 decision,
                 notes: notes || null,
             });
-            showToast(`Marked ${decision}`, 'success');
+            const label = decision === 'approved' || decision === 'accepted' ? 'approved for execution' : decision;
+            showToast(`Marked ${label}`, 'success');
             await load();
-            if (decision === 'rejected' || decision === 'deferred') {
-                setSelected(null);
-            } else {
-                const { data } = await api.get(`/v1/recommendations/${selected.id}`);
-                setSelected(data?.data || null);
+            setSelected(null);
+            if (decision === 'approved' || decision === 'accepted') {
+                showToast('Open Transactions → Pending Execution to record the trade when ready', 'success');
             }
         } catch (e) {
             showToast(e?.response?.data?.error?.message || e?.response?.data?.message || e.message || 'Review failed', 'danger');
-        } finally {
-            setBusyId(null);
-        }
-    };
-
-    const createOrder = async (executeNow) => {
-        if (!selected) return;
-        setBusyId(selected.id);
-        try {
-            const side = selected.order_side
-                || (['EXIT_POSITION', 'REDUCE_POSITION', 'SELL'].includes(String(selected.portfolio_action || selected.recommendation_type).toUpperCase())
-                    ? 'sell'
-                    : 'buy');
-            const quantity = Math.max(0, Math.round(Number(orderQty)));
-            if (quantity < 1) {
-                showToast('Quantity must be at least 1 whole share', 'danger');
-                return;
-            }
-            const payload = {
-                security_id: selected.security_id,
-                recommendation_id: selected.id,
-                side,
-                quantity,
-                execute_now: executeNow,
-                notes: notes || undefined,
-            };
-            if (executeNow) {
-                payload.price = Number(orderPrice);
-            } else if (orderPrice) {
-                payload.limit_price = Number(orderPrice);
-            }
-            await api.post('/v1/orders', payload);
-            showToast(executeNow ? 'Transaction added' : 'Pending order created', 'success');
-            await openDetail(selected.id);
-            await load();
-        } catch (e) {
-            showToast(e?.response?.data?.error?.message || e.message || 'Order failed', 'danger');
         } finally {
             setBusyId(null);
         }
@@ -342,6 +302,12 @@ export default function RecommendationsPage() {
                                     Status
                                     {' '}
                                     <span className={`badge ${statusBadge(selected.status)}`}>{selected.status}</span>
+                                    {selected.review_status ? (
+                                        <span className="badge text-bg-light border ms-1">Review: {selected.review_status}</span>
+                                    ) : null}
+                                    {selected.execution_status ? (
+                                        <span className="badge text-bg-light border ms-1">Execution: {selected.execution_status}</span>
+                                    ) : null}
                                     {' · '}
                                     Confidence
                                     {' '}
@@ -411,9 +377,49 @@ export default function RecommendationsPage() {
                                             Undo decision — reopen for review
                                         </button>
                                         <p className="form-text mb-0 mt-1">
-                                            Clears Accept / Reject / Defer and returns to pending review. Pending orders are cancelled. Use Show all history to find rejected items.
+                                            Clears Approve / Reject / Defer / Cancelled and returns to pending review.
                                         </p>
                                     </div>
+                                )}
+
+                                {selected.can_execute_manually && selectedActionable && (
+                                    <div className="mb-3">
+                                        <Link
+                                            className="btn btn-primary btn-sm"
+                                            to="/transactions"
+                                            state={{ pageTab: 'pending' }}
+                                        >
+                                            Go to Pending Execution
+                                        </Link>
+                                        <p className="form-text mb-0 mt-1">
+                                            Approval does not create a trade. Record the actual fill on Transactions when ready.
+                                        </p>
+                                    </div>
+                                )}
+
+                                {selected.execution && (
+                                    <div className="mb-3 small">
+                                        <h6>Execution</h6>
+                                        <p className="mb-1">
+                                            Transaction #
+                                            {selected.execution.transaction_id}
+                                            {' · '}
+                                            {selected.execution.transaction_date}
+                                            {' · qty '}
+                                            {selected.execution.quantity}
+                                            {' @ '}
+                                            {selected.execution.price}
+                                        </p>
+                                    </div>
+                                )}
+
+                                {selected.cancellation_reason_label && (
+                                    <p className="small text-muted">
+                                        Cancelled:
+                                        {' '}
+                                        {selected.cancellation_reason_label}
+                                        {selected.cancelled_at ? ` (${new Date(selected.cancelled_at).toLocaleString()})` : ''}
+                                    </p>
                                 )}
 
                                 {selected.can_review && selectedActionable && (
@@ -427,31 +433,11 @@ export default function RecommendationsPage() {
                                             onChange={(e) => setNotes(e.target.value)}
                                         />
                                         <div className="d-flex flex-wrap gap-2 mb-1">
-                                            <button type="button" className="btn btn-success btn-sm" disabled={busyId === selected.id} onClick={() => decide('accepted')}>Accept</button>
+                                            <button type="button" className="btn btn-success btn-sm" disabled={busyId === selected.id} onClick={() => decide('approved')}>Approve</button>
                                             <button type="button" className="btn btn-outline-warning btn-sm" disabled={busyId === selected.id} onClick={() => decide('deferred')}>Defer</button>
                                             <button type="button" className="btn btn-outline-danger btn-sm" disabled={busyId === selected.id} onClick={() => decide('rejected')}>Reject</button>
                                         </div>
                                     </>
-                                )}
-
-                                {selected.can_create_order && selectedActionable && (
-                                    <div className="lido-tos-review-order-box rounded p-2 mb-2">
-                                        <h6 className="mb-2">Record trade</h6>
-                                        <div className="row g-2 align-items-end">
-                                            <div className="col-4">
-                                                <label className="form-label mb-0" htmlFor="tos-order-qty">Quantity</label>
-                                                <input id="tos-order-qty" className="form-control form-control-sm" value={orderQty} onChange={(e) => setOrderQty(e.target.value)} />
-                                            </div>
-                                            <div className="col-4">
-                                                <label className="form-label mb-0" htmlFor="tos-order-price">Price</label>
-                                                <input id="tos-order-price" className="form-control form-control-sm" value={orderPrice} onChange={(e) => setOrderPrice(e.target.value)} />
-                                            </div>
-                                            <div className="col-4 d-flex gap-1 flex-wrap">
-                                                <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busyId === selected.id} onClick={() => createOrder(false)}>Pending</button>
-                                                <button type="button" className="btn btn-primary btn-sm" disabled={busyId === selected.id} onClick={() => createOrder(true)}>Add transaction</button>
-                                            </div>
-                                        </div>
-                                    </div>
                                 )}
 
                                 {(selected.reviews || []).length > 0 && (

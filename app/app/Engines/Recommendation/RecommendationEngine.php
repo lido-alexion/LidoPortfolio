@@ -449,10 +449,14 @@ class RecommendationEngine
             ]);
         }
 
-        $decision = strtolower(trim($decision));
-        if (! in_array($decision, TradingRecommendation::REVIEW_DECISIONS, true)) {
+        $decision = TradingRecommendation::normalizeReviewDecision($decision);
+        if (! in_array($decision, [
+            TradingRecommendation::DECISION_APPROVED,
+            TradingRecommendation::STATUS_REJECTED,
+            TradingRecommendation::STATUS_DEFERRED,
+        ], true)) {
             throw ValidationException::withMessages([
-                'decision' => ['Decision must be accepted, rejected, or deferred.'],
+                'decision' => ['Decision must be approved (or accepted), rejected, or deferred.'],
             ]);
         }
 
@@ -488,7 +492,11 @@ class RecommendationEngine
             ]);
         }
 
-        DB::transaction(function () use ($recommendation, $user, $decision, $notes) {
+        $status = $decision === TradingRecommendation::DECISION_APPROVED
+            ? TradingRecommendation::STATUS_PENDING_EXECUTION
+            : $decision;
+
+        DB::transaction(function () use ($recommendation, $user, $decision, $notes, $status) {
             RecommendationReview::query()->create([
                 'recommendation_id' => $recommendation->id,
                 'user_id' => $user->id,
@@ -497,12 +505,22 @@ class RecommendationEngine
                 'created_at' => now(),
             ]);
 
-            $recommendation->forceFill(['status' => $decision])->save();
+            $fill = ['status' => $status];
+            if ($status === TradingRecommendation::STATUS_PENDING_EXECUTION) {
+                $fill['approved_at'] = now();
+                $fill['cancelled_at'] = null;
+                $fill['cancellation_reason'] = null;
+                $fill['executed_at'] = null;
+                $fill['executed_transaction_id'] = null;
+            }
+
+            $recommendation->forceFill($fill)->save();
         });
 
         $this->logger->log('daily', 'RecommendationEngine', 'info', 'Recommendation reviewed', [
             'recommendation_id' => $recommendation->id,
             'decision' => $decision,
+            'status' => $status,
             'user_id' => $user->id,
         ]);
 
@@ -510,8 +528,132 @@ class RecommendationEngine
     }
 
     /**
-     * Undo Accept / Reject / Defer → pending_review. Cancels any pending orders for this recommendation.
-     * Executed recommendations must have their fill deleted first (reopens via ExecutionEngine).
+     * Cancel pending execution (approved recommendation will not be traded in-system).
+     */
+    public function cancelExecution(
+        PortfolioProfile $profile,
+        User $user,
+        TradingRecommendation $recommendation,
+        ?string $reason = null,
+        ?string $notes = null,
+    ): TradingRecommendation {
+        if ((int) $recommendation->profile_id !== (int) $profile->id) {
+            throw ValidationException::withMessages([
+                'recommendation' => ['Recommendation does not belong to this portfolio.'],
+            ]);
+        }
+
+        if (! $recommendation->canCancelExecution()) {
+            throw ValidationException::withMessages([
+                'recommendation' => ['Only recommendations pending execution can be cancelled.'],
+            ]);
+        }
+
+        $reason = $reason ? strtolower(trim($reason)) : 'other';
+        if (! in_array($reason, TradingRecommendation::CANCELLATION_REASONS, true)) {
+            throw ValidationException::withMessages([
+                'reason' => ['Invalid cancellation reason.'],
+            ]);
+        }
+
+        $label = TradingRecommendation::CANCELLATION_REASON_LABELS[$reason] ?? $reason;
+        $auditNotes = trim(($notes ? $notes.' — ' : '').$label);
+
+        DB::transaction(function () use ($recommendation, $user, $reason, $auditNotes, $profile) {
+            TradingOrder::query()
+                ->where('profile_id', $profile->id)
+                ->where('recommendation_id', $recommendation->id)
+                ->where('status', TradingOrder::STATUS_PENDING)
+                ->update([
+                    'status' => TradingOrder::STATUS_CANCELLED,
+                    'cancelled_at' => now(),
+                ]);
+
+            RecommendationReview::query()->create([
+                'recommendation_id' => $recommendation->id,
+                'user_id' => $user->id,
+                'decision' => TradingRecommendation::DECISION_EXECUTION_CANCELLED,
+                'notes' => $auditNotes !== '' ? $auditNotes : null,
+                'created_at' => now(),
+            ]);
+
+            $recommendation->forceFill([
+                'status' => TradingRecommendation::STATUS_CANCELLED,
+                'cancelled_at' => now(),
+                'cancellation_reason' => $reason,
+            ])->save();
+        });
+
+        $this->logger->log('daily', 'RecommendationEngine', 'info', 'Recommendation execution cancelled', [
+            'recommendation_id' => $recommendation->id,
+            'reason' => $reason,
+            'user_id' => $user->id,
+        ]);
+
+        return $recommendation->fresh(['security', 'evaluationResult', 'reviews']);
+    }
+
+    /**
+     * Manual expire (automatic expiry reserved for later).
+     */
+    public function markExpired(
+        PortfolioProfile $profile,
+        User $user,
+        TradingRecommendation $recommendation,
+        ?string $notes = null,
+    ): TradingRecommendation {
+        if ((int) $recommendation->profile_id !== (int) $profile->id) {
+            throw ValidationException::withMessages([
+                'recommendation' => ['Recommendation does not belong to this portfolio.'],
+            ]);
+        }
+
+        if (! $recommendation->isActionable()) {
+            throw ValidationException::withMessages([
+                'recommendation' => ['Only actionable recommendations can expire.'],
+            ]);
+        }
+
+        if (in_array($recommendation->status, [
+            TradingRecommendation::STATUS_EXECUTED,
+            TradingRecommendation::STATUS_EXPIRED,
+            TradingRecommendation::STATUS_ARCHIVED,
+        ], true)) {
+            throw ValidationException::withMessages([
+                'recommendation' => ['Recommendation cannot be expired from status '.$recommendation->status.'.'],
+            ]);
+        }
+
+        DB::transaction(function () use ($recommendation, $user, $notes, $profile) {
+            TradingOrder::query()
+                ->where('profile_id', $profile->id)
+                ->where('recommendation_id', $recommendation->id)
+                ->where('status', TradingOrder::STATUS_PENDING)
+                ->update([
+                    'status' => TradingOrder::STATUS_CANCELLED,
+                    'cancelled_at' => now(),
+                ]);
+
+            RecommendationReview::query()->create([
+                'recommendation_id' => $recommendation->id,
+                'user_id' => $user->id,
+                'decision' => TradingRecommendation::DECISION_EXPIRED,
+                'notes' => $notes,
+                'created_at' => now(),
+            ]);
+
+            $recommendation->forceFill([
+                'status' => TradingRecommendation::STATUS_EXPIRED,
+                'expires_at' => $recommendation->expires_at ?? now(),
+            ])->save();
+        });
+
+        return $recommendation->fresh(['security', 'evaluationResult', 'reviews']);
+    }
+
+    /**
+     * Undo Approve / Reject / Defer / Cancelled → pending_review.
+     * Executed recommendations: delete the linked transaction first (returns to pending_execution).
      */
     public function reopenForReview(
         PortfolioProfile $profile,
@@ -565,6 +707,11 @@ class RecommendationEngine
 
             $recommendation->forceFill([
                 'status' => TradingRecommendation::STATUS_PENDING_REVIEW,
+                'approved_at' => null,
+                'cancelled_at' => null,
+                'cancellation_reason' => null,
+                'executed_at' => null,
+                'executed_transaction_id' => null,
             ])->save();
         });
 
@@ -670,9 +817,26 @@ class RecommendationEngine
             [
                 TradingRecommendation::STATUS_PENDING_REVIEW,
                 TradingRecommendation::STATUS_DEFERRED,
-                TradingRecommendation::STATUS_ACCEPTED,
             ],
             100,
+            [...TradingRecommendation::ACTIONABLE_ACTIONS, 'BUY', 'SELL'],
+        );
+    }
+
+    /**
+     * Approved recommendations awaiting a ledger fill (Transactions → Pending Execution).
+     *
+     * @return list<TradingRecommendation>
+     */
+    public function listPendingExecution(PortfolioProfile $profile, int $limit = 100): array
+    {
+        return $this->listForProfile(
+            $profile,
+            [
+                TradingRecommendation::STATUS_PENDING_EXECUTION,
+                TradingRecommendation::STATUS_ACCEPTED,
+            ],
+            $limit,
             [...TradingRecommendation::ACTIONABLE_ACTIONS, 'BUY', 'SELL'],
         );
     }
@@ -686,7 +850,13 @@ class RecommendationEngine
     public function findForProfile(PortfolioProfile $profile, int $id): ?TradingRecommendation
     {
         return TradingRecommendation::query()
-            ->with(['security', 'evaluationResult.candidate', 'reviews.user', 'orders'])
+            ->with([
+                'security',
+                'evaluationResult.candidate',
+                'reviews.user',
+                'orders',
+                'executedTransaction.stock',
+            ])
             ->where('profile_id', $profile->id)
             ->where('id', $id)
             ->first();

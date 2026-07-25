@@ -9,6 +9,33 @@ class Transaction extends Model
 {
     protected $table = 'portfolio_transactions';
 
+    public const SOURCE_MANUAL = 'manual';
+
+    public const SOURCE_RECOMMENDATION = 'recommendation';
+
+    public const SOURCE_IPO = 'ipo';
+
+    public const SOURCE_BONUS = 'bonus';
+
+    public const SOURCE_RIGHTS = 'rights';
+
+    public const SOURCE_SPLIT = 'split';
+
+    public const SOURCE_DIVIDEND_REINVESTMENT = 'dividend_reinvestment';
+
+    public const SOURCE_OTHER = 'other';
+
+    public const SOURCES = [
+        self::SOURCE_MANUAL,
+        self::SOURCE_RECOMMENDATION,
+        self::SOURCE_IPO,
+        self::SOURCE_BONUS,
+        self::SOURCE_RIGHTS,
+        self::SOURCE_SPLIT,
+        self::SOURCE_DIVIDEND_REINVESTMENT,
+        self::SOURCE_OTHER,
+    ];
+
     protected $fillable = [
         'profile_id',
         'stock_id',
@@ -21,6 +48,8 @@ class Transaction extends Model
         'transaction_date',
         'notes',
         'corporate_action_id',
+        'source',
+        'recommendation_id',
     ];
 
     protected function casts(): array
@@ -35,6 +64,7 @@ class Transaction extends Model
             'squared_off_fees' => 'decimal:4',
             'transaction_date' => 'date',
             'corporate_action_id' => 'integer',
+            'recommendation_id' => 'integer',
         ];
     }
 
@@ -67,5 +97,10 @@ class Transaction extends Model
     public function corporateAction(): BelongsTo
     {
         return $this->belongsTo(CorporateAction::class, 'corporate_action_id');
+    }
+
+    public function recommendation(): BelongsTo
+    {
+        return $this->belongsTo(TradingRecommendation::class, 'recommendation_id');
     }
 }

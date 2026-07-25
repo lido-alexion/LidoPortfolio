@@ -44,13 +44,15 @@ class ReviewEngine
         $actionableCounts = $this->countByStatus($actionable);
         $informationalCounts = $this->countByStatus($informational);
 
-        $accepted = (int) ($actionableCounts[TradingRecommendation::STATUS_ACCEPTED] ?? 0);
+        $accepted = (int) ($actionableCounts[TradingRecommendation::STATUS_PENDING_EXECUTION] ?? 0)
+            + (int) ($actionableCounts[TradingRecommendation::STATUS_ACCEPTED] ?? 0);
         $rejected = (int) ($actionableCounts[TradingRecommendation::STATUS_REJECTED] ?? 0);
         $deferred = (int) ($actionableCounts[TradingRecommendation::STATUS_DEFERRED] ?? 0);
         $executed = (int) ($actionableCounts[TradingRecommendation::STATUS_EXECUTED] ?? 0);
+        $cancelled = (int) ($actionableCounts[TradingRecommendation::STATUS_CANCELLED] ?? 0);
         $pending = (int) ($actionableCounts[TradingRecommendation::STATUS_PENDING_REVIEW] ?? 0)
             + (int) ($actionableCounts['active'] ?? 0);
-        $decided = $accepted + $rejected + $deferred + $executed;
+        $decided = $accepted + $rejected + $deferred + $executed + $cancelled;
         $acceptanceAmongDecided = $decided > 0
             ? round((($accepted + $executed) / $decided) * 100, 2)
             : null;
@@ -109,11 +111,12 @@ class ReviewEngine
             'total' => $actionable->count(),
             'pending_review' => $pending,
             'accepted' => $accepted,
+            'pending_execution' => $accepted,
             'rejected' => $rejected,
             'deferred' => $deferred,
             'executed' => $executed,
             'expired' => (int) ($actionableCounts[TradingRecommendation::STATUS_EXPIRED] ?? 0),
-            'cancelled' => (int) ($actionableCounts[TradingRecommendation::STATUS_CANCELLED] ?? 0),
+            'cancelled' => $cancelled,
             'acceptance_rate_pct' => $acceptanceAmongDecided,
             'by_status' => $actionableCounts,
         ];
@@ -292,7 +295,10 @@ class ReviewEngine
         $informational = $recs->filter(fn (TradingRecommendation $r) => $r->isInformational());
 
         $executed = $actionable->where('status', TradingRecommendation::STATUS_EXECUTED)->count();
-        $accepted = $actionable->where('status', TradingRecommendation::STATUS_ACCEPTED)->count();
+        $accepted = $actionable->whereIn('status', [
+            TradingRecommendation::STATUS_PENDING_EXECUTION,
+            TradingRecommendation::STATUS_ACCEPTED,
+        ])->count();
         $rejected = $actionable->where('status', TradingRecommendation::STATUS_REJECTED)->count();
         $deferred = $actionable->where('status', TradingRecommendation::STATUS_DEFERRED)->count();
         $pending = $actionable->whereIn('status', [
@@ -300,7 +306,8 @@ class ReviewEngine
             'active',
         ])->count();
         $publishedInfo = $informational->where('status', TradingRecommendation::STATUS_PUBLISHED)->count();
-        $decided = $accepted + $rejected + $deferred + $executed;
+        $cancelled = $actionable->where('status', TradingRecommendation::STATUS_CANCELLED)->count();
+        $decided = $accepted + $rejected + $deferred + $executed + $cancelled;
         $acceptanceRate = $decided > 0 ? (($accepted + $executed) / $decided) * 100 : null;
 
         $metricMap = [

@@ -21,7 +21,7 @@ Living reference for Lido Portfolio. **Update this file whenever code changes.**
 
 Specs under `specs/` define a seven-engine decision platform. Implementation evolves the **existing** Lido Portfolio app (no greenfield rewrite). Progress: `specs/IMPLEMENTATION_PROGRESS.md`. Demo acceptance: `specs/MVP_DEMO_CHECKLIST.md`.
 
-**MVP status:** Complete for clarified workflow (data → discovery → evaluation → recommendation → user review → execution → review). Sanctum, `portfolio_*` tables, Screener/Pattern services, Telegram-only notifications accepted.
+**MVP status:** Complete for clarified workflow (data → discovery → evaluation → recommendation → user **approval** → **pending execution** → manual/broker trade → review). Sanctum, `portfolio_*` tables, Screener/Pattern services, Telegram-only notifications accepted.
 
 **Independent audit (2026-07-25):** Full freeze audit vs `/specs` lives in [`specs/audit/`](specs/audit/). Verdict: clarified MVP **YES** (~90%); release posture **Ready for Internal Testing Only** — see `specs/audit/MVP_VERDICT.md`.
 
@@ -36,36 +36,36 @@ Specs under `specs/` define a seven-engine decision platform. Implementation evo
 | Data | `Data\DataEngine` | `portfolio_stocks` / `portfolio_stock_prices` / daily sync |
 | Discovery | `Discovery\DiscoveryEngine` | `portfolio_tos_candidates` (orchestrates PatternScan + Screener) |
 | Evaluation | `Evaluation\EvaluationEngine` | Score/rank/evidence → `portfolio_tos_evaluation_results` |
-| Recommendation | `Recommendation\RecommendationEngine` | Market Opinion → Portfolio Decision → Execution Plan; review lifecycle |
+| Recommendation | `Recommendation\RecommendationEngine` | Market Opinion → Portfolio Decision → Execution Plan; Approve/Reject/Defer; pending-execution / cancel-execution / expire |
 | Notification | `Notification\NotificationEngine` | Telegram + `portfolio_tos_notifications` |
-| Execution | `Execution\ExecutionEngine` | Pending/executed/cancelled orders → transactions/holdings |
+| Execution | `Execution\ExecutionEngine` | Pending execution → ledger transaction (manual or future broker); completion tracking |
 | Review | `Review\ReviewEngine` | Dashboard, outcomes, reports |
 | Pipeline | `Pipeline\DailyDecisionPipeline` | End-to-end stages |
 
 ### Config / schema / CLI
 
 - Config: `config/trading_os.php`.
-- Migrations: `2026_07_25_000002_*`, `2026_07_25_000003_tos_mvp_review_and_orders.php` (reviews, `reference_price`, order cancel).
+- Migrations: `2026_07_25_000002_*` … `000006_*` (incl. SD-025 approval≠execution: `pending_execution`, tx `source` + `recommendation_id`).
 - Command: `php artisan portfolio:decision-pipeline`.
-- Recommendations start as `pending_review` (**BUY/SELL**) or `published` (**HOLD/WATCH**); Accept required before linked order (actionable only); orders support pending → execute/cancel.
+- **SD-025 workflow:** actionable recommendations `pending_review` → **Approve** → `pending_execution` → execute later via **Transactions** (`recommendation_id`) → `executed`, or **Cancel execution** → `cancelled`, or expire. Reject/Defer unchanged. HOLD/WATCH stay informational (`published`). No new Orders page; legacy `/api/v1/orders*` kept with `execute_now` default **false**.
 
 ### REST `/api/v1` (additive)
 
-Sanctum auth. `TradingOsController`: securities, imports, candidates, evaluations, recommendations (+ `/review`), notifications, orders (+ `/execute`, `/cancel`), review dashboard/outcomes, pipeline.
+Sanctum auth. `TradingOsController`: securities, imports, candidates, evaluations, recommendations (`/review` with `approved|accepted|rejected|deferred`, `/pending-execution`, `/cancel-execution`, `/expire`, `/reopen`), notifications, orders (BC), review dashboard/outcomes, pipeline. Ledger create: `POST /api/transactions` (+ optional `recommendation_id`).
 
 ### Frontend
 
-`/candidates` (nav: **Discovery**), `/evaluations`, `/recommendations` (Accept/Reject/Defer + orders), `/review`, `/notification-history` (nav: **Notifications**).
+`/candidates` (nav: **Discovery**), `/evaluations`, `/recommendations` (**Approve**/Reject/Defer only), `/transactions` (**Pending Execution** + history), `/review`, `/notification-history` (nav: **Notifications**). Manual execute from pending queue → Add Transaction form.
 
-**Recommendations review dialog:** Bootstrap modals were staying light in dark mode because only `data-theme` was set (not `data-bs-theme`). `applyResolvedTheme` now sets both. Dialog also uses `.lido-tos-review-modal` Lido tokens. Qty → Quantity. Defer/Reject close the dialog; Accept on BUY/SELL stays open for Pending / **Add transaction**; Accept on WATCH/HOLD closes (no trade UI). Order controls only for BUY/SELL.
+**Recommendations review dialog:** Bootstrap modals were staying light in dark mode because only `data-theme` was set (not `data-bs-theme`). `applyResolvedTheme` now sets both. Dialog also uses `.lido-tos-review-modal` Lido tokens. Qty → Quantity. Defer/Reject close the dialog; Approve on BUY/SELL moves to pending execution (trade later); Approve on WATCH/HOLD N/A (insights view-only).
 
-**Shared ledger write (Option A):** `TransactionWriteService::create` is the single create path for `POST /api/transactions` and TOS order fills (`ExecutionEngine` → same service, then TOS order link + recommendation `executed`). Holdings, realizations, buy OHLCV backfill, and snapshot rebuild stay aligned; execute remains “add transaction + TOS overlay.”
+**Shared ledger write (Option A):** `TransactionWriteService::create` is the single create path for `POST /api/transactions` and TOS completions (`ExecutionEngine` after shared insert). Holdings, realizations, buy OHLCV backfill, and snapshot rebuild stay aligned.
 
-**Undo review / fill:** `POST /api/v1/recommendations/{id}/reopen` returns Accept/Reject/Defer to `pending_review` (cancels pending orders). Deleting a Transactions-page row that is a TOS fill cancels the linked order and reopens the recommendation to `pending_review`.
+**Undo review / fill:** `POST /api/v1/recommendations/{id}/reopen` returns Approve/Reject/Defer to `pending_review`. Deleting a Transactions row linked by `recommendation_id` returns the recommendation to `pending_execution`.
 
 ### Tests
 
-`tests/Feature/TradingOsPipelineTest.php` (pipeline, review, pending/execute/cancel, outcomes).
+`tests/Feature/TradingOsPipelineTest.php` (pipeline, review/approve, pending-execution, manual execute, cancel-execution, outcomes).
 
 ### Production schema note (Jul 2026)
 
@@ -83,7 +83,7 @@ Delete repair script after success. Updated `cpanel-migrate.php` also verifies T
 
 ### Spec deviations (confirmed)
 
-Sanctum not JWT; reuse `portfolio_*`; Screener/PatternScan remain Services; Telegram only; no Strategy entity.
+Sanctum not JWT; reuse `portfolio_*`; Screener/PatternScan remain Services; Telegram only; no Strategy entity; approval separated from execution (SD-025).
 
 ## Local development runbook (agent / future sessions)
 

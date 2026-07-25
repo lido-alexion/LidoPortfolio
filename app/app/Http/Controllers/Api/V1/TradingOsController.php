@@ -190,6 +190,7 @@ class TradingOsController extends Controller
             $statuses = [
                 \App\Models\TradingRecommendation::STATUS_PENDING_REVIEW,
                 \App\Models\TradingRecommendation::STATUS_DEFERRED,
+                \App\Models\TradingRecommendation::STATUS_PENDING_EXECUTION,
                 \App\Models\TradingRecommendation::STATUS_ACCEPTED,
                 \App\Models\TradingRecommendation::STATUS_PUBLISHED,
             ];
@@ -198,6 +199,14 @@ class TradingOsController extends Controller
         $items = $this->recommendation->listForProfile($profile, $statuses);
 
         return ApiEnvelope::success(array_map(fn ($r) => $this->serializeRecommendation($r), $items));
+    }
+
+    public function recommendationsPendingExecution(): JsonResponse
+    {
+        $profile = \activePortfolio();
+        $items = $this->recommendation->listPendingExecution($profile);
+
+        return ApiEnvelope::success(array_map(fn ($r) => $this->serializeRecommendation($r, true), $items));
     }
 
     public function recommendationsShow(int $id): JsonResponse
@@ -220,7 +229,7 @@ class TradingOsController extends Controller
         }
 
         $validated = $request->validate([
-            'decision' => 'required|in:accepted,rejected,deferred,ACCEPTED,REJECTED,DEFERRED',
+            'decision' => 'required|in:approved,accepted,rejected,deferred,APPROVED,ACCEPTED,REJECTED,DEFERRED',
             'notes' => 'nullable|string|max:2000',
         ]);
 
@@ -255,6 +264,64 @@ class TradingOsController extends Controller
 
         try {
             $updated = $this->recommendation->reopenForReview(
+                $profile,
+                $request->user(),
+                $rec,
+                $validated['notes'] ?? null,
+            );
+        } catch (ValidationException $e) {
+            $msg = collect($e->errors())->flatten()->first() ?? 'Validation failed.';
+
+            return ApiEnvelope::error('VALIDATION_ERROR', $msg, 422);
+        }
+
+        return ApiEnvelope::success($this->serializeRecommendation($updated, true));
+    }
+
+    public function recommendationsCancelExecution(Request $request, int $id): JsonResponse
+    {
+        $profile = \activePortfolio();
+        $rec = $this->recommendation->findForProfile($profile, $id);
+        if (! $rec) {
+            return ApiEnvelope::error('NOT_FOUND', 'Recommendation not found.', 404);
+        }
+
+        $validated = $request->validate([
+            'reason' => 'nullable|string|in:'.implode(',', \App\Models\TradingRecommendation::CANCELLATION_REASONS),
+            'notes' => 'nullable|string|max:2000',
+        ]);
+
+        try {
+            $updated = $this->recommendation->cancelExecution(
+                $profile,
+                $request->user(),
+                $rec,
+                $validated['reason'] ?? 'other',
+                $validated['notes'] ?? null,
+            );
+        } catch (ValidationException $e) {
+            $msg = collect($e->errors())->flatten()->first() ?? 'Validation failed.';
+
+            return ApiEnvelope::error('VALIDATION_ERROR', $msg, 422);
+        }
+
+        return ApiEnvelope::success($this->serializeRecommendation($updated, true));
+    }
+
+    public function recommendationsExpire(Request $request, int $id): JsonResponse
+    {
+        $profile = \activePortfolio();
+        $rec = $this->recommendation->findForProfile($profile, $id);
+        if (! $rec) {
+            return ApiEnvelope::error('NOT_FOUND', 'Recommendation not found.', 404);
+        }
+
+        $validated = $request->validate([
+            'notes' => 'nullable|string|max:2000',
+        ]);
+
+        try {
+            $updated = $this->recommendation->markExpired(
                 $profile,
                 $request->user(),
                 $rec,
@@ -331,7 +398,7 @@ class TradingOsController extends Controller
 
         $executeNow = array_key_exists('execute_now', $validated)
             ? (bool) $validated['execute_now']
-            : true;
+            : false;
 
         if ($executeNow && (! isset($validated['price']) || $validated['price'] === null)) {
             return ApiEnvelope::error('VALIDATION_ERROR', 'price is required when execute_now is true.', 422);
@@ -592,18 +659,36 @@ class TradingOsController extends Controller
             'score' => $r->evidence['score'] ?? ($r->market_opinion['score'] ?? null),
             'risk_level' => $r->risk_level,
             'suggested_position_size' => $r->suggested_position_size !== null ? (float) $r->suggested_position_size : null,
+            'suggested_quantity' => method_exists($r, 'suggestedQuantity') ? $r->suggestedQuantity() : null,
+            'suggested_investment_amount' => method_exists($r, 'suggestedInvestmentAmount') ? $r->suggestedInvestmentAmount() : null,
             'reference_price' => $r->reference_price !== null ? (float) $r->reference_price : null,
+            'current_market_price' => $this->latestCloseForSecurity($r->security_id),
             'status' => $r->status,
             'lifecycle_status' => $r->status,
+            'review_status' => method_exists($r, 'reviewStatusLabel') ? $r->reviewStatusLabel() : $r->status,
+            'execution_status' => method_exists($r, 'executionStatusLabel') ? $r->executionStatusLabel() : null,
             'category' => method_exists($r, 'category') ? $r->category() : 'actionable',
             'order_side' => method_exists($r, 'orderSide') ? $r->orderSide() : null,
             'evidence' => $r->evidence,
             'failed_checks' => $r->failed_checks,
             'expires_at' => optional($r->expires_at)?->toIso8601String(),
             'generated_at' => optional($r->generated_at)?->toIso8601String(),
+            'approved_at' => optional($r->approved_at)?->toIso8601String(),
+            'cancelled_at' => optional($r->cancelled_at)?->toIso8601String(),
+            'cancellation_reason' => $r->cancellation_reason,
+            'cancellation_reason_label' => $r->cancellation_reason
+                ? (\App\Models\TradingRecommendation::CANCELLATION_REASON_LABELS[$r->cancellation_reason] ?? $r->cancellation_reason)
+                : null,
+            'executed_at' => optional($r->executed_at)?->toIso8601String(),
+            'executed_transaction_id' => $r->executed_transaction_id,
+            'recommendation_age_days' => $r->generated_at
+                ? (int) $r->generated_at->diffInDays(now())
+                : null,
             'evaluation_result_id' => $r->evaluation_result_id,
             'can_review' => method_exists($r, 'canBeReviewed') ? $r->canBeReviewed() : false,
             'can_reopen' => method_exists($r, 'canReopenForReview') ? $r->canReopenForReview() : false,
+            'can_execute_manually' => method_exists($r, 'canExecuteManually') ? $r->canExecuteManually() : false,
+            'can_cancel_execution' => method_exists($r, 'canCancelExecution') ? $r->canCancelExecution() : false,
             'can_create_order' => method_exists($r, 'canCreateOrder') ? $r->canCreateOrder() : false,
         ];
 
@@ -625,8 +710,36 @@ class TradingOsController extends Controller
                     'quantity' => (float) $o->quantity,
                 ])->all()
                 : [];
+            if ($r->relationLoaded('executedTransaction') && $r->executedTransaction) {
+                $tx = $r->executedTransaction;
+                $payload['execution'] = [
+                    'transaction_id' => $tx->id,
+                    'transaction_date' => optional($tx->transaction_date)?->toDateString(),
+                    'quantity' => (float) $tx->quantity,
+                    'price' => (float) $tx->price,
+                    'fees' => (float) $tx->fees,
+                    'type' => $tx->type,
+                    'source' => $tx->source,
+                ];
+            } else {
+                $payload['execution'] = null;
+            }
         }
 
         return $payload;
+    }
+
+    protected function latestCloseForSecurity(?int $securityId): ?float
+    {
+        if (! $securityId) {
+            return null;
+        }
+
+        $close = \App\Models\StockPrice::query()
+            ->where('stock_id', $securityId)
+            ->orderByDesc('price_date')
+            ->value('close_price');
+
+        return $close !== null ? (float) $close : null;
     }
 }

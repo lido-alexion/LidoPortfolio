@@ -154,7 +154,34 @@ Every job SHALL be independently executable.
 
 ------------------------------------------------------------------------
 
-# 10. Configuration
+# 10. Engine vs module responsibilities (SD-025)
+
+## Recommendation Engine
+
+- Market Opinion → Portfolio Decision → Execution Plan
+- User review: Approve / Reject / Defer
+- Status lifecycle including `pending_execution`, expire, cancel-execution
+  (cancel of pending trade), reopen
+- Does **not** write portfolio ledger rows
+
+## Execution Engine
+
+- Pending-execution handoff and completion tracking
+- Completing a recommendation when a linked transaction is created
+- Undo fill → return to `pending_execution`
+- Legacy order APIs (BC); future broker adapters
+- Does **not** perform Approve / Reject / Defer
+
+## Transactions Module (existing SPA + `/api/transactions`)
+
+- Primary UI/API for recording buys/sells
+- Manual execute of approved recommendations via `recommendation_id`
+- Shared create path: `TransactionWriteService` (SD-021)
+- No separate Orders page required for V1.0
+
+------------------------------------------------------------------------
+
+# 11. Configuration
 
 Configuration SHALL be centralized.
 
@@ -169,7 +196,7 @@ Examples:
 
 ------------------------------------------------------------------------
 
-# 11. Testing Strategy
+# 12. Testing Strategy
 
 -   Unit tests
 -   Repository tests
@@ -181,7 +208,7 @@ Business rules SHALL be covered by automated tests.
 
 ------------------------------------------------------------------------
 
-# 12. Deployment
+# 13. Deployment
 
 Target environment:
 
@@ -195,7 +222,7 @@ Architecture SHALL remain portable to VPS or cloud platforms.
 
 ------------------------------------------------------------------------
 
-# 13. Security
+# 14. Security
 
 -   JWT authentication
 -   Password hashing
@@ -207,7 +234,7 @@ Architecture SHALL remain portable to VPS or cloud platforms.
 
 ------------------------------------------------------------------------
 
-# 14. Cursor Implementation Notes
+# 15. Cursor Implementation Notes
 
 -   Implement one engine at a time.
 -   Keep engine boundaries intact.

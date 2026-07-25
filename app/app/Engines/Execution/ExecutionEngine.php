@@ -18,9 +18,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Execution Engine — manual order lifecycle: pending → executed | cancelled.
+ * Execution Engine — pending execution → ledger transaction (manual or future broker).
+ * Does not approve recommendations; that is RecommendationEngine.
  * Ledger fills go through TransactionWriteService (same path as POST /api/transactions).
- * Positions remain portfolio_holdings; ledger remains portfolio_transactions.
  */
 class ExecutionEngine
 {
@@ -31,7 +31,81 @@ class ExecutionEngine
     ) {}
 
     /**
-     * Create a pending order (or execute immediately when execute_now=true).
+     * After a ledger transaction is created with recommendation_id, mark the recommendation executed.
+     * Safe to call when recommendation_id is null (no-op).
+     */
+    public function completeRecommendationFromTransaction(
+        PortfolioProfile $profile,
+        Transaction $transaction,
+        ?User $user = null,
+    ): ?TradingRecommendation {
+        $recId = $transaction->recommendation_id;
+        if (! $recId) {
+            return null;
+        }
+
+        $recommendation = TradingRecommendation::query()
+            ->where('profile_id', $profile->id)
+            ->where('id', $recId)
+            ->first();
+
+        if (! $recommendation) {
+            throw ValidationException::withMessages([
+                'recommendation_id' => ['Recommendation not found for this portfolio.'],
+            ]);
+        }
+
+        if ((int) $recommendation->security_id !== (int) $transaction->stock_id) {
+            throw ValidationException::withMessages([
+                'recommendation_id' => ['Recommendation security does not match transaction stock.'],
+            ]);
+        }
+
+        if ($recommendation->status === TradingRecommendation::STATUS_EXECUTED
+            && (int) $recommendation->executed_transaction_id === (int) $transaction->id) {
+            return $recommendation;
+        }
+
+        if (! $recommendation->canExecuteManually()
+            && $recommendation->status !== TradingRecommendation::STATUS_EXECUTED) {
+            throw ValidationException::withMessages([
+                'recommendation_id' => ['Recommendation is not pending execution (status: '.$recommendation->status.').'],
+            ]);
+        }
+
+        DB::transaction(function () use ($recommendation, $transaction, $profile) {
+            TradingOrder::query()
+                ->where('profile_id', $profile->id)
+                ->where('recommendation_id', $recommendation->id)
+                ->where('status', TradingOrder::STATUS_PENDING)
+                ->update([
+                    'status' => TradingOrder::STATUS_EXECUTED,
+                    'executed_at' => now(),
+                ]);
+
+            $recommendation->forceFill([
+                'status' => TradingRecommendation::STATUS_EXECUTED,
+                'executed_at' => now(),
+                'executed_transaction_id' => $transaction->id,
+            ])->save();
+
+            if (empty($transaction->source)) {
+                $transaction->forceFill(['source' => Transaction::SOURCE_RECOMMENDATION])->save();
+            }
+        });
+
+        $this->logger->log('daily', 'ExecutionEngine', 'info', 'Recommendation completed from ledger transaction', [
+            'recommendation_id' => $recommendation->id,
+            'transaction_id' => $transaction->id,
+            'user_id' => $user?->id,
+        ]);
+
+        return $recommendation->fresh(['security', 'executedTransaction']);
+    }
+
+    /**
+     * Create a pending order (legacy / BC). Prefer recording a transaction with recommendation_id.
+     * Default execute_now is false so approval is never an immediate trade.
      *
      * @param  array{side:string,quantity:float|int|string,price?:float|int|string,fees?:float|int|string,transaction_date?:string,notes?:string,recommendation_id?:int|null,execute_now?:bool,limit_price?:float|int|string|null}  $input
      * @return array{order: TradingOrder, transaction: ?Transaction, position: ?Holding}
@@ -53,7 +127,7 @@ class ExecutionEngine
         $recommendation = $this->resolveRecommendation($profile, $stock, $input);
         $executeNow = array_key_exists('execute_now', $input)
             ? (bool) $input['execute_now']
-            : true;
+            : false;
 
         $order = DB::transaction(function () use ($profile, $stock, $side, $quantity, $input, $recommendation) {
             return TradingOrder::query()->create([
@@ -132,9 +206,8 @@ class ExecutionEngine
 
         $notes = $input['notes']
             ?? $order->notes
-            ?? ($recommendation ? 'TOS order #'.$order->id.' (rec #'.$recommendation->id.')' : 'TOS order #'.$order->id);
+            ?? ($recommendation ? 'TOS recommendation #'.$recommendation->id : 'TOS order #'.$order->id);
 
-        // Ledger insert + TOS order/recommendation updates commit together, then shared side effects.
         $transaction = DB::transaction(function () use ($profile, $stock, $side, $quantity, $price, $fees, $date, $notes, $order, $recommendation) {
             $transaction = $this->writes->insert($profile, $stock, [
                 'type' => $side,
@@ -143,6 +216,8 @@ class ExecutionEngine
                 'fees' => $fees,
                 'transaction_date' => $date,
                 'notes' => $notes,
+                'source' => Transaction::SOURCE_RECOMMENDATION,
+                'recommendation_id' => $recommendation?->id,
             ]);
 
             OrderTransaction::query()->create([
@@ -159,8 +234,12 @@ class ExecutionEngine
                 'executed_at' => now(),
             ])->save();
 
-            if ($recommendation && $recommendation->status !== TradingRecommendation::STATUS_EXECUTED) {
-                $recommendation->forceFill(['status' => TradingRecommendation::STATUS_EXECUTED])->save();
+            if ($recommendation && $recommendation->isActionable()) {
+                $recommendation->forceFill([
+                    'status' => TradingRecommendation::STATUS_EXECUTED,
+                    'executed_at' => now(),
+                    'executed_transaction_id' => $transaction->id,
+                ])->save();
             }
 
             return $transaction;
@@ -212,7 +291,7 @@ class ExecutionEngine
     }
 
     /**
-     * Before deleting a ledger transaction, undo TOS order fill linkage and reopen the recommendation.
+     * Before deleting a ledger transaction, undo recommendation completion (back to pending_execution).
      *
      * @return array{reverted: bool, order_id: ?int, recommendation_id: ?int}
      */
@@ -221,29 +300,42 @@ class ExecutionEngine
         Transaction $transaction,
         ?User $user = null,
     ): array {
+        $recommendation = null;
+        $order = null;
+
+        if ($transaction->recommendation_id) {
+            $recommendation = TradingRecommendation::query()
+                ->where('profile_id', $profile->id)
+                ->where('id', $transaction->recommendation_id)
+                ->first();
+        }
+
         $link = OrderTransaction::query()
             ->with(['order.recommendation'])
             ->where('transaction_id', $transaction->id)
             ->first();
 
-        if (! $link || ! $link->order) {
+        if ($link?->order && (int) $link->order->profile_id === (int) $profile->id) {
+            $order = $link->order;
+            if (! $recommendation) {
+                $recommendation = $order->recommendation;
+            }
+        }
+
+        if (! $recommendation && ! $order) {
             return ['reverted' => false, 'order_id' => null, 'recommendation_id' => null];
         }
 
-        $order = $link->order;
-        if ((int) $order->profile_id !== (int) $profile->id) {
-            return ['reverted' => false, 'order_id' => null, 'recommendation_id' => null];
-        }
-
-        $recommendation = $order->recommendation;
         $recommendationId = $recommendation?->id;
 
         DB::transaction(function () use ($order, $recommendation, $user, $transaction) {
-            $order->forceFill([
-                'status' => TradingOrder::STATUS_CANCELLED,
-                'cancelled_at' => now(),
-                'executed_at' => null,
-            ])->save();
+            if ($order) {
+                $order->forceFill([
+                    'status' => TradingOrder::STATUS_CANCELLED,
+                    'cancelled_at' => now(),
+                    'executed_at' => null,
+                ])->save();
+            }
 
             if ($recommendation
                 && $recommendation->status === TradingRecommendation::STATUS_EXECUTED
@@ -252,25 +344,28 @@ class ExecutionEngine
                     'recommendation_id' => $recommendation->id,
                     'user_id' => $user?->id,
                     'decision' => TradingRecommendation::DECISION_REOPENED,
-                    'notes' => 'Reopened after deleting TOS fill transaction #'.$transaction->id,
+                    'notes' => 'Returned to pending execution after deleting transaction #'.$transaction->id,
                     'created_at' => now(),
                 ]);
 
                 $recommendation->forceFill([
-                    'status' => TradingRecommendation::STATUS_PENDING_REVIEW,
+                    'status' => TradingRecommendation::STATUS_PENDING_EXECUTION,
+                    'executed_at' => null,
+                    'executed_transaction_id' => null,
+                    'approved_at' => $recommendation->approved_at ?? now(),
                 ])->save();
             }
         });
 
         $this->logger->log('daily', 'ExecutionEngine', 'info', 'TOS fill reverted before transaction delete', [
             'transaction_id' => $transaction->id,
-            'order_id' => $order->id,
+            'order_id' => $order?->id,
             'recommendation_id' => $recommendationId,
         ]);
 
         return [
             'reverted' => true,
-            'order_id' => $order->id,
+            'order_id' => $order?->id,
             'recommendation_id' => $recommendationId,
         ];
     }
@@ -313,9 +408,9 @@ class ExecutionEngine
                 'recommendation_id' => ['Rejected recommendations cannot be executed.'],
             ]);
         }
-        if (! $recommendation->canCreateOrder()) {
+        if (! $recommendation->canExecuteManually()) {
             throw ValidationException::withMessages([
-                'recommendation_id' => ['Accept the recommendation before creating an order.'],
+                'recommendation_id' => ['Approve the recommendation before recording execution.'],
             ]);
         }
         if ((int) $recommendation->security_id !== (int) $stock->id) {

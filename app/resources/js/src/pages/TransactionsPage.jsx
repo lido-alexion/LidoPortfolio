@@ -30,6 +30,7 @@ import { stockExchangeLabel } from '../utils/exchangeDisplay';
 import FeeBreakdownHint from '../components/FeeBreakdownHint';
 import BulkTransactionImport from '../components/BulkTransactionImport';
 import TransactionDateInput from '../components/TransactionDateInput';
+import PendingExecutionPanel from '../components/PendingExecutionPanel';
 import {
     calculateTransactionFees,
     DEFAULT_FEE_COMPONENTS,
@@ -47,27 +48,17 @@ import { buildTransactionTableColumns } from '../utils/transactionTableColumns';
 
 
 const emptyForm = () => ({
-
     id: null,
-
     stock_id: '',
-
     symbol: '',
-
     name: '',
-
     exchange: 'NSE',
-
     type: 'buy',
-
     quantity: '',
-
     price: '',
-
     transaction_date: getLocalTodayDateString(),
-
     notes: '',
-
+    recommendation_id: null,
 });
 
 
@@ -159,6 +150,9 @@ export default function TransactionsPage() {
     const [stockSearch, setStockSearch] = useState('');
 
     const [entryMode, setEntryMode] = useState('single');
+    const [pageTab, setPageTab] = useState(() => (
+        location.state?.pageTab === 'pending' ? 'pending' : 'history'
+    ));
 
 
 
@@ -372,13 +366,12 @@ export default function TransactionsPage() {
                 setSymbolValidation(null);
 
             } else {
-
-                await api.post('/transactions', payload);
-
-                showToast('Transaction saved');
-
-                setForm((prev) => ({ ...prev, price: '' }));
-
+                const { data } = await api.post('/transactions', payload);
+                showToast(data?.message || 'Transaction saved', 'success');
+                setForm(emptyForm());
+                setSelectedStock(null);
+                setSymbolValidation(null);
+                setTransactionDateInput(formatTransactionDateDisplay(getLocalTodayDateString()));
             }
 
             await load();
@@ -408,51 +401,33 @@ export default function TransactionsPage() {
     const buildPayload = () => {
 
         const base = {
-
             type: form.type,
-
             quantity: Number(form.quantity),
-
             price: Number(form.price),
-
             fees: feeCalculation.total,
-
             transaction_date: form.transaction_date,
-
             notes: form.notes,
-
         };
 
-
+        if (form.recommendation_id && !form.id) {
+            base.recommendation_id = form.recommendation_id;
+            base.source = 'recommendation';
+        }
 
         if (form.id) {
-
             return { ...base, stock_id: form.stock_id };
-
         }
-
-
 
         if (selectedStock?.id) {
-
             return {
-
                 ...base,
-
                 stock_id: selectedStock.id,
-
             };
-
         }
 
-
-
         const symbol = form.symbol.trim().toUpperCase();
-
         return {
-
             ...base,
-
             symbol,
 
             name: form.name.trim() || selectedStock?.name || symbol,
@@ -488,7 +463,7 @@ export default function TransactionsPage() {
             transaction_date: tx.transaction_date,
 
             notes: tx.notes || '',
-
+            recommendation_id: null,
         });
 
         setSelectedStock(tx.stock || null);
@@ -504,6 +479,7 @@ export default function TransactionsPage() {
         if (!tx) {
             return;
         }
+        setPageTab('history');
         setEntryMode('single');
         editTx(tx);
         navigate('/transactions', { replace: true, state: {} });
@@ -515,10 +491,69 @@ export default function TransactionsPage() {
         });
     }, [location.state, editTx, navigate]);
 
+    const applyExecuteRecommendation = useCallback((prefill) => {
+        if (!prefill?.stock_id && !prefill?.symbol) {
+            return;
+        }
+        setPageTab('history');
+        setEntryMode('single');
+        const stock = {
+            id: prefill.stock_id,
+            symbol: prefill.symbol,
+            name: prefill.name || '',
+            exchange: prefill.exchange || 'NSE',
+        };
+        setSelectedStock(stock);
+        setForm({
+            ...emptyForm(),
+            stock_id: String(prefill.stock_id || ''),
+            symbol: prefill.symbol || '',
+            name: prefill.name || '',
+            exchange: prefill.exchange || 'NSE',
+            type: prefill.type === 'sell' ? 'sell' : 'buy',
+            quantity: prefill.quantity !== '' && prefill.quantity != null ? Number(prefill.quantity) : '',
+            price: prefill.price != null && prefill.price !== '' ? roundToTwoDecimals(prefill.price) : '',
+            notes: prefill.notes || '',
+            recommendation_id: prefill.recommendation_id || null,
+        });
+        setSymbolValidation({ valid: true, stock, source: 'recommendation' });
+        requestAnimationFrame(() => {
+            document.getElementById('transaction-form-card')?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start',
+            });
+        });
+    }, []);
+
+    useEffect(() => {
+        const prefill = location.state?.executeRecommendation;
+        if (!prefill) {
+            return;
+        }
+        applyExecuteRecommendation(prefill);
+        navigate('/transactions', { replace: true, state: { pageTab: 'history' } });
+    }, [location.state, applyExecuteRecommendation, navigate]);
+
+    useEffect(() => {
+        const handler = (e) => {
+            if (e?.detail) {
+                applyExecuteRecommendation(e.detail);
+            }
+        };
+        window.addEventListener('lido:execute-recommendation', handler);
+        return () => window.removeEventListener('lido:execute-recommendation', handler);
+    }, [applyExecuteRecommendation]);
+
+    useEffect(() => {
+        if (location.state?.pageTab === 'pending') {
+            setPageTab('pending');
+        }
+    }, [location.state]);
+
 
 
     const deleteTx = useCallback(async (id) => {
-        if (!window.confirm('Delete this transaction? If it came from a TOS recommendation fill, that recommendation will reopen for review.')) {
+        if (!window.confirm('Delete this transaction? If it came from a recommendation, that item returns to Pending Execution.')) {
             return;
         }
         try {
@@ -892,6 +927,29 @@ export default function TransactionsPage() {
         <div className="row g-3">
 
             <div className="col-12">
+                <div className="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                    <h1 className="h3 mb-0">Transactions</h1>
+                    <SegmentToggle
+                        label="View"
+                        ariaLabel="Transactions page tabs"
+                        value={pageTab}
+                        onChange={setPageTab}
+                        options={[
+                            { value: 'pending', label: 'Pending Execution' },
+                            { value: 'history', label: 'Transaction History' },
+                        ]}
+                    />
+                </div>
+            </div>
+
+            {pageTab === 'pending' ? (
+                <div className="col-12">
+                    <PendingExecutionPanel />
+                </div>
+            ) : (
+            <>
+
+            <div className="col-12">
                 <SegmentToggle
                     label="Add transactions"
                     ariaLabel="Transaction entry mode"
@@ -902,6 +960,13 @@ export default function TransactionsPage() {
                         { value: 'bulk', label: 'Bulk (CSV)' },
                     ]}
                 />
+                {form.recommendation_id ? (
+                    <p className="small text-muted mt-2 mb-0">
+                        Recording actual broker fill for recommendation #
+                        {form.recommendation_id}
+                        . Adjust quantity, price, fees, and date to match what happened.
+                    </p>
+                ) : null}
             </div>
 
             <div className="col-12">
@@ -1294,6 +1359,9 @@ export default function TransactionsPage() {
                 />
 
             </div>
+
+            </>
+            )}
 
         </div>
 

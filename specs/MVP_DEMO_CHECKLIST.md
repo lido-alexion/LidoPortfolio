@@ -44,44 +44,43 @@ Prerequisites: MySQL running, `php artisan migrate` applied (includes `portfolio
 
 1. Open **Recommendations** (`/recommendations`).
 2. Click **Run decision pipeline** (runs discovery → evaluation → recommendations → optional Telegram → review report).
-4. Confirm recommendations: trade actions (Buy / Buy More / Sell Partial / Sell All) under **Trade recommendations**; Hold / Watch under **Market insights**.
-5. Open a trade row — confirm Market Opinion, Portfolio Decision, allocations, Execution Plan, evidence.
-6. Accept / Defer / Reject only on trade rows; insights are view-only.
-7. Confirm review history for actionable rows.
+3. Confirm recommendations: trade actions (Buy / Buy More / Sell Partial / Sell All) under **Trade recommendations**; Hold / Watch under **Market insights**.
+4. Open a trade row — confirm Market Opinion, Portfolio Decision, allocations, Execution Plan, evidence.
+5. **Approve** / Defer / Reject only on trade rows; insights are view-only. Approve does **not** create a transaction.
+6. Confirm review history for actionable rows; approved rows show status `pending_execution`.
 
-**Pass:** Accept / Reject / Defer persist; history shows user + timestamp + decision.
+**Pass:** Approve / Reject / Defer persist; Approve → pending execution (no ledger fill yet).
 
 ---
 
 ## 4b. Undo review / undo fill
 
-1. Accept (or Reject / Defer) an actionable recommendation.
+1. Approve (or Reject / Defer) an actionable recommendation.
 2. Click **Undo decision — reopen for review** (use **Show all history** to find Rejected).
-3. Confirm status returns to `pending_review` and Accept/Defer/Reject are available again.
-4. Accept → Execute a fill → on **Transactions**, delete that row.
-5. Confirm toast mentions TOS reopen; recommendation is `pending_review` again; order is `cancelled`.
+3. Confirm status returns to `pending_review` and Approve/Defer/Reject are available again.
+4. Approve → execute manually (step 5) → on **Transactions**, delete that row.
+5. Confirm toast mentions return to pending execution; recommendation is `pending_execution` again.
 
 **Pass:** Mistakes can be undone without database edits; executed path only via transaction delete.
 
 ---
 
-## 5. Execution (manual order lifecycle)
+## 5. Execution (pending queue + manual trade)
 
-1. On an **accepted** recommendation, use **Record execution**:
-   - **Pending** — creates order with status `pending` (no ledger fill yet), **or**
-   - **Execute** — creates and fills immediately with price/qty.
-2. Open **Review** (`/review`) → **Orders** table.
-3. For a pending order: **Execute** (enter fill price) or **Cancel**.
-4. Confirm holdings/transactions updated after execute; recommendation becomes `executed`.
+1. Open **Pending Execution** tab on Recommendations (or use pending-execution list).
+2. Confirm the approved recommendation appears.
+3. **Execute manually:** go to **Transactions**, add a buy/sell with the same stock and link / pass `recommendation_id` (UI path from pending panel if present).
+4. Confirm holdings updated; recommendation becomes `executed`.
+5. Optionally Approve another item and use **Cancel** on pending execution — status `cancelled`, no ledger row.
 
-**Pass:** Orders move through Pending → Executed or Pending → Cancelled without broker automation.
+**Pass:** Delayed/manual execute and cancel work without a separate Orders page; broker not required.
 
 ---
 
 ## 6. Review dashboard + outcomes
 
 1. Open **Review** (`/review`).
-2. Confirm portfolio snapshot cards (value, XIRR, accept/reject counts).
+2. Confirm portfolio snapshot cards (value, XIRR, approve/reject/pending-execution counts).
 3. Confirm **Recommendation outcomes** table: reference price, current price, gain/loss.
 4. Confirm recent review decisions list.
 
@@ -107,9 +106,10 @@ POST /api/v1/pipeline/run
 GET  /api/v1/candidates
 GET  /api/v1/evaluations
 GET  /api/v1/recommendations
-POST /api/v1/recommendations/{id}/review  { "decision": "accepted" }
-POST /api/v1/orders  { ..., "execute_now": false }
-POST /api/v1/orders/{id}/execute  { "price": ... }
+POST /api/v1/recommendations/{id}/review  { "decision": "approved" }
+GET  /api/v1/recommendations/pending-execution
+POST /api/transactions  { ..., "recommendation_id": ... }
+POST /api/v1/recommendations/{id}/cancel-execution
 GET  /api/v1/review/dashboard
 GET  /api/v1/notifications
 ```
@@ -125,8 +125,8 @@ Automated coverage: `php artisan test --filter=TradingOsPipelineTest`
 | 1 Market data | | |
 | 2 Discovery | | |
 | 3 Evaluations | | |
-| 4 User review | | |
-| 5 Orders | | |
+| 4 User review (Approve) | | |
+| 5 Pending execution / manual trade | | |
 | 6 Review dashboard | | |
 | 7 Notifications | | |
 

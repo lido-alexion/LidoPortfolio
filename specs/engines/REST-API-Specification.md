@@ -95,13 +95,28 @@ expose business capabilities, not database tables.
 
 ## Recommendations
 
-  Method   Endpoint                           Description
-  -------- ---------------------------------- --------------------------
-  POST     /api/v1/recommendations/generate   Generate recommendations
-  GET      /api/v1/recommendations            Open / filtered list
-  GET      /api/v1/recommendations/{id}       Recommendation details
-  POST     /api/v1/recommendations/{id}/review  Accept / Reject / Defer (actionable only)
-  POST     /api/v1/recommendations/{id}/reopen  Undo Accept / Reject / Defer → pending_review
+  Method   Endpoint                                    Description
+  -------- ------------------------------------------- ------------------------------------------
+  POST     /api/v1/recommendations/generate            Generate recommendations
+  GET      /api/v1/recommendations                     Open / filtered list
+  GET      /api/v1/recommendations/{id}                Recommendation details
+  POST     /api/v1/recommendations/{id}/review         Approve / Reject / Defer (actionable only)
+  GET      /api/v1/recommendations/pending-execution   Approved queue awaiting trade
+  POST     /api/v1/recommendations/{id}/cancel-execution  Cancel pending execution → cancelled
+  POST     /api/v1/recommendations/{id}/expire         Expire recommendation
+  POST     /api/v1/recommendations/{id}/reopen         Undo Approve / Reject / Defer → pending_review
+
+### Review body (approval — not execution)
+
+``` json
+{ "decision": "approved" }
+```
+
+Allowed `decision` values: `approved` | `accepted` (BC alias → approved) |
+`rejected` | `deferred`.
+
+Approve sets status `pending_execution`. It does **not** create a
+ledger transaction (SD-025).
 
 Detail payload SHALL expose:
 
@@ -112,7 +127,8 @@ Detail payload SHALL expose:
 - `current_allocation_pct`, `target_allocation_pct`, `suggested_allocation_pct`
 - `reasoning`, `category` (`actionable` | `informational`)
 - `order_side` — `buy` | `sell` | null
-- `can_reopen` — Undo Accept/Reject/Defer via `POST /api/v1/recommendations/{id}/reopen`
+- `execution_status` — e.g. `pending` while awaiting trade
+- `can_reopen`, `can_cancel_execution`
 
 ## Notifications
 
@@ -121,15 +137,31 @@ Detail payload SHALL expose:
   GET      /api/v1/notifications              Notification history
   POST     /api/v1/notifications/{id}/retry   Retry delivery
 
-## Execution
+## Execution (ledger + legacy orders)
 
-  Method   Endpoint               Description
-  -------- ---------------------- -------------------
-  POST     /api/v1/orders         Create order
-  GET      /api/v1/orders         List orders
-  GET      /api/v1/transactions   List transactions
-  GET      /api/v1/positions      Current positions
+Primary V1.0 path — **Transactions module** (not under `/api/v1` only):
 
+  Method   Endpoint              Description
+  -------- --------------------- -----------------------------------------------
+  POST     /api/transactions     Create ledger row; optional `recommendation_id`
+
+When `recommendation_id` is set, the recommendation MUST be
+`pending_execution`; on success it becomes `executed` and the row stores
+`source` + `recommendation_id`.
+
+Legacy / BC order APIs (remain; no dedicated Orders page):
+
+  Method   Endpoint                    Description
+  -------- --------------------------- ---------------------------------
+  POST     /api/v1/orders              Create order (`execute_now` **defaults false**)
+  GET      /api/v1/orders              List orders
+  POST     /api/v1/orders/{id}/execute Execute / fill order
+  POST     /api/v1/orders/{id}/cancel  Cancel order
+  GET      /api/v1/transactions        List transactions (TOS view)
+  GET      /api/v1/positions           Current positions
+
+Approval APIs are under Recommendations; transaction creation is under
+Transactions. Do not treat order create as approval.
 ## Review
 
   Method   Endpoint                   Description
