@@ -14,8 +14,8 @@ Related: [`SPECIFICATION_DECISIONS.md`](./SPECIFICATION_DECISIONS.md) · [`PRODU
 Version 1.0 delivers a **Stage 1 decision-support Trading Operating System** inside Lido Portfolio:
 
 1. Transform market data into explainable, ranked opportunities.  
-2. Produce BUY / SELL / WATCH / HOLD recommendations with evidence.  
-3. Require human Accept / Reject / Defer before recording trades.  
+2. Produce position-aware recommendations (Market Opinion + Portfolio Decision + Execution Plan).  
+3. Require human Accept / Reject / Defer before recording trades **for actionable portfolio decisions**; HOLD_POSITION / WATCH are informational and auto-published.  
 4. Record manual executions against the existing portfolio ledger.  
 5. Notify via Telegram and retain delivery history.  
 6. Review outcomes and basic performance without manual database edits.
@@ -53,11 +53,13 @@ Version 1.0 is **not** automated brokerage, multi-strategy isolation, or a green
 
 ### Recommendation Engine
 
-- BUY / SELL / WATCH / HOLD generation from evaluation results
-- Confidence, priority, risk level, suggested size, expiry, reference price
-- Lifecycle: `pending_review` → accept / reject / defer → executed / cancelled / expired
-- Recommendation review history (`portfolio_tos_recommendation_reviews`)
-- Recommendations UI with Accept / Reject / Defer and detail evidence
+- Three-stage model: **Market Opinion** → **Portfolio Decision** → **Execution Plan** (SD-023)
+- Portfolio actions: OPEN / INCREASE / REDUCE / EXIT / HOLD_POSITION / WATCH (UI: Buy / Buy More / Sell Partial / Sell All / Hold / Watch)
+- **Actionable** decisions require Accept / Reject / Defer then optional order
+- **Informational** (HOLD_POSITION / WATCH) auto-published; no orders
+- Position-aware: uses holdings + allocation toward configured target / max position %
+- Review history for actionable decisions
+- Recommendations UI: **Trade recommendations** vs **Market insights**
 
 ### Notification Engine
 
@@ -77,14 +79,16 @@ Version 1.0 is **not** automated brokerage, multi-strategy isolation, or a green
 ### Review Engine
 
 - Review reports and metrics persistence
-- Dashboard: portfolio snapshot, accept/reject counts, recommendation outcomes
+- Dashboard: portfolio snapshot; **actionable** accept/reject/pending/executed counts; separate **informational** published/expired counts
+- Separate actionable vs insight outcome tables
+- Recent review decisions for BUY/SELL only
 - Recent review decisions
 - APIs: generate/list/show reviews, dashboard, outcomes
 - Review UI (`/review`)
 
 ### Frontend
 
-- Five TOS pages in main nav: Candidates, Evaluations, Recommendations, Review, Notify log
+- Five TOS pages in main nav: Discovery, Evaluations, Recommendations, Review, Notifications
 - Sanctum-authenticated SPA consumption of `/api/v1`
 - Legacy pages retained for holdings, watchlists, screeners, sync, analytics
 

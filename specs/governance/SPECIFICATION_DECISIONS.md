@@ -322,6 +322,64 @@ This register is the authoritative record of **why Version 1.0 differs** from th
 
 ---
 
+### SD-021 — Shared TransactionWriteService for ledger creates
+
+| Field | Content |
+|-------|---------|
+| **Category** | Execution / Ledger |
+| **Original Specification** | Dual entry points OK (legacy + engines) with bridge table |
+| **Implemented Behaviour** | `TransactionWriteService` is the single create path for `POST /api/transactions` and TOS order fills; ExecutionEngine adds order link + recommendation `executed` after shared insert |
+| **Reason** | Avoid divergent holdings/backfill/snapshot behaviour between Transactions Add and Review Add transaction |
+| **Benefits** | Add transaction is a subset of execute; one portfolio truth |
+| **Trade-offs** | Update/delete still live only on TransactionController (not required for execute) |
+| **Future Recommendation** | Optional “link existing transaction to recommendation” for drift repair |
+| **Status** | Accepted |
+
+---
+
+### SD-022 — Actionable vs informational recommendation workflows
+
+| Field | Content |
+|-------|---------|
+| **Category** | Recommendation / UX |
+| **Original Specification** | All recommendations enter user review (Accept / Reject / Defer) before further action |
+| **Implemented Behaviour** | **BUY/SELL** are actionable: `pending_review` → review → optional order → execution. **HOLD/WATCH** are informational: auto-`published` on generation; no Accept/Reject/Defer; no orders. Review dashboard metrics and queues are actionable-only; insights have separate counts/outcomes. |
+| **Reason** | The User Review workflow exists to approve trading actions. Informational recommendations (HOLD and WATCH) do not require approval because they do not result in an executable action. |
+| **Benefits** | Clearer UX; review queue not cluttered with non-trade ideas; matches product intent |
+| **Trade-offs** | Historical HOLD/WATCH left in `pending_review` are backfilled to `published` (migration `2026_07_25_000004_*`) |
+| **Future Recommendation** | Optional archive / mark-as-read for insights if product needs it |
+| **Status** | Accepted |
+
+---
+
+### SD-023 — Recommendation Engine separates Market Opinion from Portfolio Decision
+
+| Field | Content |
+|-------|---------|
+| **Category** | Recommendation / Architecture |
+| **Original Design** | Single recommendation type BUY / SELL / HOLD / WATCH derived mainly from score ± held flag |
+| **Reason for Change** | A stock recommendation is not universal; the correct action depends on holdings, allocation, cash/risk limits. MVP testing showed simple BUY/SELL conflated market view with portfolio action. |
+| **Implemented Behaviour** | Three stages: (1) Market Opinion — Bullish/Neutral/Bearish + strength + confidence + evidence, portfolio-independent; (2) Portfolio Decision — OPEN_POSITION / INCREASE_POSITION / REDUCE_POSITION / EXIT_POSITION / HOLD_POSITION / WATCH; (3) Execution Plan — sizing toward target allocation for actionable decisions only. UI labels: Buy / Buy More / Sell Partial / Sell All / Hold / Watch. |
+| **Benefits** | Matches real portfolio management; enables Review metrics such as “bullish → increase”; clearer Accept/Reject semantics |
+| **Migration Impact** | Migration `2026_07_25_000005_*` widens type, adds JSON/allocation columns; maps BUY→OPEN_POSITION, SELL→EXIT_POSITION, HOLD→HOLD_POSITION; API keeps `recommendation_type` and adds `market_opinion` / `execution_plan` |
+| **Future Extensions** | Per-symbol target weights, explicit cash, strategy policies |
+| **Status** | Accepted |
+
+---
+
+### SD-024 — Undo review decisions and undo executed fills
+
+| Field | Content |
+|-------|---------|
+| **Category** | Recommendation / Execution |
+| **Original Design** | Reject final; executed stays executed even if ledger fill deleted |
+| **Reason for Change** | Operators need to correct mistakes without SSH/DB edits |
+| **Implemented Behaviour** | (1) `POST /api/v1/recommendations/{id}/reopen` — Accept/Reject/Defer → `pending_review`; audit `reopened`; cancels pending orders. (2) Deleting a Transactions row linked via `portfolio_tos_order_transactions` cancels the order and reopens the recommendation to `pending_review`. Executed cannot use reopen API until fill deleted. |
+| **Benefits** | Safe undo path aligned with shared ledger (SD-021) |
+| **Status** | Accepted |
+
+---
+
 ## Summary table
 
 | ID | Decision | Status |
@@ -346,6 +404,10 @@ This register is the authoritative record of **why Version 1.0 differs** from th
 | SD-018 | Execution updates recommendation status | Accepted |
 | SD-019 | OpenAPI deferred | Deferred |
 | SD-020 | Engines + DailyDecisionPipeline | Accepted |
+| SD-021 | Shared TransactionWriteService | Accepted |
+| SD-022 | Actionable vs informational recommendations | Accepted |
+| SD-023 | Market Opinion vs Portfolio Decision | Accepted |
+| SD-024 | Undo review / undo executed fill | Accepted |
 
 ---
 

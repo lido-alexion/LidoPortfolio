@@ -110,9 +110,15 @@ Owned By: - Evaluation Engine
 
 ## Recommendation
 
-Actionable trading decision.
+Portfolio-aware decision composed of:
+
+- Market Opinion (direction, strength, confidence, evidence)
+- Portfolio Decision (OPEN / INCREASE / REDUCE / EXIT / HOLD / WATCH)
+- Execution Plan (actionable decisions only)
 
 Relationship: - References one Evaluation Result.
+
+Flow: Market Opinion → Portfolio Decision → Execution Plan (optional)
 
 Owned By: - Recommendation Engine
 

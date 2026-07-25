@@ -20,6 +20,8 @@ export function readStoredThemePreference() {
 
 export function applyResolvedTheme(resolved) {
     document.documentElement.setAttribute('data-theme', resolved);
+    // Bootstrap 5.3 components (modals, etc.) key off data-bs-theme, not data-theme.
+    document.documentElement.setAttribute('data-bs-theme', resolved);
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) {
         meta.setAttribute('content', resolved === 'light' ? '#f3f4f6' : '#000000');

@@ -20,7 +20,7 @@ Prerequisites: MySQL running, `php artisan migrate` applied (includes `portfolio
 
 ## 2. Discovery → Candidates UI
 
-1. Open **Candidates** in the main nav (`/candidates`).
+1. Open **Discovery** in the main nav (`/candidates`).
 2. Click **Run discovery** (or run the full pipeline later).
 3. Confirm a candidate list appears with source and discovery reason.
 4. Open **Evidence** on a row; confirm patterns/signals JSON.
@@ -44,14 +44,24 @@ Prerequisites: MySQL running, `php artisan migrate` applied (includes `portfolio
 
 1. Open **Recommendations** (`/recommendations`).
 2. Click **Run decision pipeline** (runs discovery → evaluation → recommendations → optional Telegram → review report).
-3. Confirm recommendations appear with status `pending_review`.
-4. Click **Review** on a row:
-   - See score, confidence, reference price, generated/expiry times, evidence.
-   - Optionally add notes.
-   - Click **Accept** (or try **Defer** / **Reject** on another row).
-5. Confirm status updates and review history is listed.
+4. Confirm recommendations: trade actions (Buy / Buy More / Sell Partial / Sell All) under **Trade recommendations**; Hold / Watch under **Market insights**.
+5. Open a trade row — confirm Market Opinion, Portfolio Decision, allocations, Execution Plan, evidence.
+6. Accept / Defer / Reject only on trade rows; insights are view-only.
+7. Confirm review history for actionable rows.
 
 **Pass:** Accept / Reject / Defer persist; history shows user + timestamp + decision.
+
+---
+
+## 4b. Undo review / undo fill
+
+1. Accept (or Reject / Defer) an actionable recommendation.
+2. Click **Undo decision — reopen for review** (use **Show all history** to find Rejected).
+3. Confirm status returns to `pending_review` and Accept/Defer/Reject are available again.
+4. Accept → Execute a fill → on **Transactions**, delete that row.
+5. Confirm toast mentions TOS reopen; recommendation is `pending_review` again; order is `cancelled`.
+
+**Pass:** Mistakes can be undone without database edits; executed path only via transaction delete.
 
 ---
 
@@ -82,7 +92,7 @@ Prerequisites: MySQL running, `php artisan migrate` applied (includes `portfolio
 ## 7. Notification history
 
 1. With Telegram configured for the portfolio, run the pipeline with notifications on.
-2. Open **Notify log** (`/notification-history`).
+2. Open **Notifications** (`/notification-history`).
 3. Confirm rows show channel, status, attempts, created/delivered times.
 4. If a delivery failed, use **Retry**.
 
@@ -113,7 +123,7 @@ Automated coverage: `php artisan test --filter=TradingOsPipelineTest`
 | Step | Pass? | Notes |
 |------|-------|-------|
 | 1 Market data | | |
-| 2 Candidates | | |
+| 2 Discovery | | |
 | 3 Evaluations | | |
 | 4 User review | | |
 | 5 Orders | | |

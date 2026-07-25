@@ -42,7 +42,7 @@ export default function ReviewDashboardPage() {
         if (!price) return;
         try {
             await api.post(`/v1/orders/${orderId}/execute`, { price: Number(price) });
-            showToast('Order executed', 'success');
+            showToast('Transaction added', 'success');
             await load();
         } catch (e) {
             showToast(e?.response?.data?.error?.message || e.message || 'Execute failed', 'danger');
@@ -59,9 +59,11 @@ export default function ReviewDashboardPage() {
         }
     };
 
-    const counts = dash?.recommendation_counts || {};
+    const counts = dash?.actionable_counts || dash?.recommendation_counts || {};
+    const infoCounts = dash?.informational_counts || {};
     const portfolio = dash?.portfolio || {};
     const outcomes = dash?.outcomes || [];
+    const infoOutcomes = dash?.informational_outcomes || [];
 
     return (
         <div className="container-fluid py-3">
@@ -69,7 +71,7 @@ export default function ReviewDashboardPage() {
                 <div>
                     <h1 className="h3 mb-1">Review</h1>
                     <p className="text-muted small mb-0">
-                        Recommendation outcomes, accept/reject history, executed trades, and portfolio snapshot.
+                        Actionable portfolio decisions (trade recommendations), orders, and market-insight outcomes.
                     </p>
                 </div>
                 <div className="d-flex gap-2">
@@ -83,6 +85,7 @@ export default function ReviewDashboardPage() {
                 <p className="text-muted">Loading…</p>
             ) : (
                 <>
+                    <h2 className="h6 text-muted text-uppercase mb-2">Trade recommendations (actionable)</h2>
                     <div className="row g-3 mb-4">
                         <div className="col-md-3">
                             <div className="border rounded p-3 h-100">
@@ -118,8 +121,30 @@ export default function ReviewDashboardPage() {
                         </div>
                     </div>
 
-                    <h2 className="h5">Recommendation outcomes</h2>
-                    <p className="small text-muted">Reference price at generation vs latest close (SELL flips sign so favourable moves are positive).</p>
+                    <h2 className="h6 text-muted text-uppercase mb-2">Market insights (HOLD / WATCH)</h2>
+                    <div className="row g-3 mb-4">
+                        <div className="col-md-4">
+                            <div className="border rounded p-3 h-100">
+                                <div className="text-muted small">Published</div>
+                                <div className="fs-5">{infoCounts.published ?? 0}</div>
+                            </div>
+                        </div>
+                        <div className="col-md-4">
+                            <div className="border rounded p-3 h-100">
+                                <div className="text-muted small">Expired</div>
+                                <div className="fs-5">{infoCounts.expired ?? 0}</div>
+                            </div>
+                        </div>
+                        <div className="col-md-4">
+                            <div className="border rounded p-3 h-100">
+                                <div className="text-muted small">Total insights</div>
+                                <div className="fs-5">{infoCounts.total ?? 0}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h2 className="h5">Actionable outcomes</h2>
+                    <p className="small text-muted">BUY/SELL reference price at generation vs latest close (SELL flips sign so favourable moves are positive).</p>
                     <div className="table-responsive mb-4">
                         <table className="table table-sm align-middle">
                             <thead>
@@ -135,8 +160,41 @@ export default function ReviewDashboardPage() {
                             </thead>
                             <tbody>
                                 {outcomes.length === 0 ? (
-                                    <tr><td colSpan={7} className="text-muted">No outcomes yet.</td></tr>
+                                    <tr><td colSpan={7} className="text-muted">No actionable outcomes yet.</td></tr>
                                 ) : outcomes.map((o) => (
+                                    <tr key={o.recommendation_id}>
+                                        <td><strong>{o.symbol}</strong></td>
+                                        <td>{o.recommendation_type}</td>
+                                        <td>{o.status}</td>
+                                        <td>{fmtNum(o.reference_price)}</td>
+                                        <td>{fmtNum(o.current_price)}</td>
+                                        <td className={o.gain_loss > 0 ? 'text-success' : o.gain_loss < 0 ? 'text-danger' : ''}>{fmtNum(o.gain_loss)}</td>
+                                        <td className={o.gain_loss_pct > 0 ? 'text-success' : o.gain_loss_pct < 0 ? 'text-danger' : ''}>{fmtPct(o.gain_loss_pct)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <h2 className="h5">Insight outcomes</h2>
+                    <p className="small text-muted">HOLD/WATCH price movement vs reference (informational only).</p>
+                    <div className="table-responsive mb-4">
+                        <table className="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Symbol</th>
+                                    <th>Type</th>
+                                    <th>Status</th>
+                                    <th>Ref</th>
+                                    <th>Current</th>
+                                    <th>P/L</th>
+                                    <th>P/L %</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {infoOutcomes.length === 0 ? (
+                                    <tr><td colSpan={7} className="text-muted">No insight outcomes yet.</td></tr>
+                                ) : infoOutcomes.map((o) => (
                                     <tr key={o.recommendation_id}>
                                         <td><strong>{o.symbol}</strong></td>
                                         <td>{o.recommendation_type}</td>
@@ -177,7 +235,7 @@ export default function ReviewDashboardPage() {
                                         <td className="text-nowrap">
                                             {o.status === 'pending' && (
                                                 <>
-                                                    <button type="button" className="btn btn-link btn-sm px-0 me-2" onClick={() => executePending(o.id)}>Execute</button>
+                                                    <button type="button" className="btn btn-link btn-sm px-0 me-2" onClick={() => executePending(o.id)}>Add transaction</button>
                                                     <button type="button" className="btn btn-link btn-sm px-0 text-danger" onClick={() => cancelPending(o.id)}>Cancel</button>
                                                 </>
                                             )}

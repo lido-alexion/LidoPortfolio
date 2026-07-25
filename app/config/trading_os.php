@@ -38,6 +38,7 @@ return [
         'expiry_hours' => 48,
         'default_position_pct' => 5.0,
         'max_position_pct' => 10.0,
+        'allocation_band_pct' => 1.0,
         'risk' => [
             'high_atr_pct' => 4.0,
             'medium_atr_pct' => 2.0,

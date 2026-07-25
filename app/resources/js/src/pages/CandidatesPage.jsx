@@ -52,7 +52,7 @@ export default function CandidatesPage() {
         <div className="container-fluid py-3">
             <div className="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
                 <div>
-                    <h1 className="h3 mb-1">Candidates</h1>
+                    <h1 className="h3 mb-1">Discovery</h1>
                     <p className="text-muted small mb-0">
                         Discovery output — patterns, screener hits, or holdings/watchlist membership.
                     </p>

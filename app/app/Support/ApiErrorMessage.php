@@ -18,6 +18,15 @@ class ApiErrorMessage
             return $message !== '' ? $message : 'Request could not be completed.';
         }
 
+        if ($e instanceof \JsonException) {
+            return 'A value produced during analysis could not be stored as JSON (invalid number). Re-run after the latest EvaluationEngine fix, or contact support with the request ID.';
+        }
+
+        if ($e instanceof \RuntimeException && $e->getMessage() !== '') {
+            // Engine preconditions (e.g. missing discovery run) — safe to surface.
+            return $e->getMessage();
+        }
+
         if ($e instanceof QueryException) {
             return self::forQueryException($e);
         }
@@ -54,6 +63,10 @@ class ApiErrorMessage
         }
 
         if (str_contains($sqlMessage, 'Unknown column') || str_contains($sqlMessage, "doesn't exist")) {
+            if (str_contains($sqlMessage, 'portfolio_tos_')) {
+                return 'Trading OS database tables are missing or incomplete. Upload migrations 2026_07_25_000002 and 2026_07_25_000003, then run cpanel-repair-tos-schema.php?token=...&apply=1 (or cpanel-migrate.php), then try again.';
+            }
+
             return 'Database schema is out of date for this feature. Run the latest migrations on the server, then try again.';
         }
 

@@ -1,15 +1,27 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
 import { showToast } from '../toast';
 
-function typeBadgeClass(type) {
-    switch (String(type || '').toUpperCase()) {
-        case 'BUY': return 'text-bg-success';
-        case 'SELL': return 'text-bg-danger';
-        case 'HOLD': return 'text-bg-secondary';
-        case 'WATCH': return 'text-bg-warning';
-        default: return 'text-bg-light';
+const ACTIONABLE = new Set(['OPEN_POSITION', 'INCREASE_POSITION', 'REDUCE_POSITION', 'EXIT_POSITION', 'BUY', 'SELL']);
+
+function typeBadgeClass(action) {
+    switch (String(action || '').toUpperCase()) {
+        case 'OPEN_POSITION':
+        case 'INCREASE_POSITION':
+        case 'BUY':
+            return 'text-bg-success';
+        case 'REDUCE_POSITION':
+        case 'EXIT_POSITION':
+        case 'SELL':
+            return 'text-bg-danger';
+        case 'HOLD_POSITION':
+        case 'HOLD':
+            return 'text-bg-secondary';
+        case 'WATCH':
+            return 'text-bg-warning';
+        default:
+            return 'text-bg-light';
     }
 }
 
@@ -20,6 +32,7 @@ function statusBadge(status) {
         case 'deferred': return 'text-bg-warning';
         case 'executed': return 'text-bg-primary';
         case 'pending_review': return 'text-bg-info';
+        case 'published': return 'text-bg-secondary';
         default: return 'text-bg-secondary';
     }
 }
@@ -27,6 +40,79 @@ function statusBadge(status) {
 function formatPct(v) {
     if (v == null || Number.isNaN(Number(v))) return '—';
     return `${Math.round(Number(v) * 100)}%`;
+}
+
+function formatAlloc(v) {
+    if (v == null || Number.isNaN(Number(v))) return '—';
+    return `${Number(v).toFixed(2)}%`;
+}
+
+function isActionableRec(r) {
+    const action = String(r.portfolio_action || r.recommendation_type || '').toUpperCase();
+    return r.category === 'actionable' || ACTIONABLE.has(action);
+}
+
+function displayLabel(r) {
+    return r.ui_label || r.recommendation_type || '—';
+}
+
+function RecTable({ rows, actionLabel, onOpen }) {
+    if (rows.length === 0) {
+        return <p className="text-muted small mb-0">None.</p>;
+    }
+
+    return (
+        <div className="table-responsive">
+            <table className="table table-sm align-middle">
+                <thead>
+                    <tr>
+                        <th>Action</th>
+                        <th>Symbol</th>
+                        <th>Opinion</th>
+                        <th>Status</th>
+                        <th>Alloc</th>
+                        <th>Confidence</th>
+                        <th>Generated</th>
+                        <th />
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows.map((r) => (
+                        <tr key={r.id}>
+                            <td>
+                                <span className={`badge ${typeBadgeClass(r.portfolio_action || r.recommendation_type)}`}>
+                                    {displayLabel(r)}
+                                </span>
+                            </td>
+                            <td>
+                                <strong>{r.symbol}</strong>
+                                {r.name ? <div className="small text-muted">{r.name}</div> : null}
+                            </td>
+                            <td className="small">
+                                {r.market_opinion?.direction || '—'}
+                                {r.market_opinion?.strength ? (
+                                    <div className="text-muted">{r.market_opinion.strength}</div>
+                                ) : null}
+                            </td>
+                            <td><span className={`badge ${statusBadge(r.status)}`}>{r.status}</span></td>
+                            <td className="small">
+                                {formatAlloc(r.current_allocation_pct)}
+                                {' → '}
+                                {formatAlloc(r.suggested_allocation_pct ?? r.target_allocation_pct)}
+                            </td>
+                            <td>{formatPct(r.confidence)}</td>
+                            <td className="small">{r.generated_at ? new Date(r.generated_at).toLocaleString() : '—'}</td>
+                            <td>
+                                <button type="button" className="btn btn-link btn-sm px-0" onClick={() => onOpen(r.id)}>
+                                    {actionLabel}
+                                </button>
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
 }
 
 export default function RecommendationsPage() {
@@ -57,13 +143,22 @@ export default function RecommendationsPage() {
 
     useEffect(() => { load(); }, [load]);
 
+    const tradeRecs = useMemo(() => recs.filter(isActionableRec), [recs]);
+    const insights = useMemo(() => recs.filter((r) => !isActionableRec(r)), [recs]);
+
     const openDetail = async (id) => {
         try {
             const { data } = await api.get(`/v1/recommendations/${id}`);
-            setSelected(data?.data || null);
+            const detail = data?.data || null;
+            setSelected(detail);
             setNotes('');
-            setOrderQty('1');
-            setOrderPrice(data?.data?.reference_price != null ? String(data.data.reference_price) : '');
+            const planQty = detail?.execution_plan?.suggested_quantity
+                ?? detail?.execution_plan?.suggested_shares_to_sell;
+            const wholeQty = planQty != null && !Number.isNaN(Number(planQty))
+                ? String(Math.max(0, Math.round(Number(planQty))))
+                : '1';
+            setOrderQty(wholeQty === '0' ? '1' : wholeQty);
+            setOrderPrice(detail?.reference_price != null ? String(detail.reference_price) : '');
         } catch (e) {
             showToast(e?.response?.data?.error?.message || e.message || 'Failed to load detail', 'danger');
         }
@@ -84,19 +179,42 @@ export default function RecommendationsPage() {
         }
     };
 
+    const reopen = async () => {
+        if (!selected) return;
+        setBusyId(selected.id);
+        try {
+            await api.post(`/v1/recommendations/${selected.id}/reopen`, {
+                notes: notes || null,
+            });
+            showToast('Reopened for review', 'success');
+            await load();
+            const { data } = await api.get(`/v1/recommendations/${selected.id}`);
+            setSelected(data?.data || null);
+        } catch (e) {
+            showToast(e?.response?.data?.error?.message || e?.response?.data?.message || e.message || 'Reopen failed', 'danger');
+        } finally {
+            setBusyId(null);
+        }
+    };
+
     const decide = async (decision) => {
         if (!selected) return;
         setBusyId(selected.id);
         try {
-            const { data } = await api.post(`/v1/recommendations/${selected.id}/review`, {
+            await api.post(`/v1/recommendations/${selected.id}/review`, {
                 decision,
                 notes: notes || null,
             });
-            setSelected(data?.data || null);
             showToast(`Marked ${decision}`, 'success');
             await load();
+            if (decision === 'rejected' || decision === 'deferred') {
+                setSelected(null);
+            } else {
+                const { data } = await api.get(`/v1/recommendations/${selected.id}`);
+                setSelected(data?.data || null);
+            }
         } catch (e) {
-            showToast(e?.response?.data?.error?.message || e.message || 'Review failed', 'danger');
+            showToast(e?.response?.data?.error?.message || e?.response?.data?.message || e.message || 'Review failed', 'danger');
         } finally {
             setBusyId(null);
         }
@@ -106,12 +224,20 @@ export default function RecommendationsPage() {
         if (!selected) return;
         setBusyId(selected.id);
         try {
-            const side = String(selected.recommendation_type).toUpperCase() === 'SELL' ? 'sell' : 'buy';
+            const side = selected.order_side
+                || (['EXIT_POSITION', 'REDUCE_POSITION', 'SELL'].includes(String(selected.portfolio_action || selected.recommendation_type).toUpperCase())
+                    ? 'sell'
+                    : 'buy');
+            const quantity = Math.max(0, Math.round(Number(orderQty)));
+            if (quantity < 1) {
+                showToast('Quantity must be at least 1 whole share', 'danger');
+                return;
+            }
             const payload = {
                 security_id: selected.security_id,
                 recommendation_id: selected.id,
                 side,
-                quantity: Number(orderQty),
+                quantity,
                 execute_now: executeNow,
                 notes: notes || undefined,
             };
@@ -121,7 +247,7 @@ export default function RecommendationsPage() {
                 payload.limit_price = Number(orderPrice);
             }
             await api.post('/v1/orders', payload);
-            showToast(executeNow ? 'Order executed' : 'Pending order created', 'success');
+            showToast(executeNow ? 'Transaction added' : 'Pending order created', 'success');
             await openDetail(selected.id);
             await load();
         } catch (e) {
@@ -131,21 +257,25 @@ export default function RecommendationsPage() {
         }
     };
 
+    const selectedActionable = selected && isActionableRec(selected);
+    const opinion = selected?.market_opinion;
+    const plan = selected?.execution_plan;
+
     return (
         <div className="container-fluid py-3">
             <div className="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-3">
                 <div>
                     <h1 className="h3 mb-1">Recommendations</h1>
                     <p className="text-muted small mb-0">
-                        Review decisions before execution. Accept → create order → record fill.
+                        Market opinion is independent of your book; portfolio decisions respect holdings and target allocation.
                     </p>
                 </div>
                 <div className="d-flex flex-wrap gap-2 align-items-center">
                     <div className="form-check form-switch mb-0">
                         <input className="form-check-input" type="checkbox" id="showAllRecs" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
-                        <label className="form-check-label small" htmlFor="showAllRecs">Show all</label>
+                        <label className="form-check-label small" htmlFor="showAllRecs">Show all history</label>
                     </div>
-                    <Link className="btn btn-outline-secondary btn-sm" to="/candidates">Candidates</Link>
+                    <Link className="btn btn-outline-secondary btn-sm" to="/candidates">Discovery</Link>
                     <Link className="btn btn-outline-secondary btn-sm" to="/evaluations">Evaluations</Link>
                     <button type="button" className="btn btn-outline-secondary btn-sm" onClick={load} disabled={loading || running}>Refresh</button>
                     <button type="button" className="btn btn-primary btn-sm" onClick={runPipeline} disabled={running}>
@@ -164,61 +294,46 @@ export default function RecommendationsPage() {
                 </div>
             )}
 
-            {loading ? <p className="text-muted">Loading…</p> : recs.length === 0 ? (
-                <div className="border rounded p-4 text-muted">
-                    No open recommendations. Run the decision pipeline after market data and holdings/watchlist are ready.
-                </div>
+            {loading ? (
+                <p className="text-muted">Loading…</p>
             ) : (
-                <div className="table-responsive">
-                    <table className="table table-sm align-middle">
-                        <thead>
-                            <tr>
-                                <th>Type</th>
-                                <th>Symbol</th>
-                                <th>Status</th>
-                                <th>Score</th>
-                                <th>Confidence</th>
-                                <th>Risk</th>
-                                <th>Generated</th>
-                                <th>Expires</th>
-                                <th />
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {recs.map((r) => (
-                                <tr key={r.id}>
-                                    <td><span className={`badge ${typeBadgeClass(r.recommendation_type)}`}>{r.recommendation_type}</span></td>
-                                    <td>
-                                        <strong>{r.symbol}</strong>
-                                        {r.name ? <div className="small text-muted">{r.name}</div> : null}
-                                    </td>
-                                    <td><span className={`badge ${statusBadge(r.status)}`}>{r.status}</span></td>
-                                    <td>{r.score != null ? Number(r.score).toFixed(1) : '—'}</td>
-                                    <td>{formatPct(r.confidence)}</td>
-                                    <td className="text-capitalize">{r.risk_level}</td>
-                                    <td className="small">{r.generated_at ? new Date(r.generated_at).toLocaleString() : '—'}</td>
-                                    <td className="small">{r.expires_at ? new Date(r.expires_at).toLocaleString() : '—'}</td>
-                                    <td>
-                                        <button type="button" className="btn btn-link btn-sm px-0" onClick={() => openDetail(r.id)}>
-                                            Review
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                <>
+                    <section className="mb-4">
+                        <h2 className="h5 mb-1">Trade recommendations</h2>
+                        <p className="small text-muted mb-2">Open / Buy More / Sell Partial / Sell All — review before recording a trade.</p>
+                        {tradeRecs.length === 0 ? (
+                            <div className="border rounded p-3 text-muted small">
+                                No trade recommendations. Run the decision pipeline when market data is ready.
+                            </div>
+                        ) : (
+                            <RecTable rows={tradeRecs} actionLabel="Review" onOpen={openDetail} />
+                        )}
+                    </section>
+
+                    <section className="mb-2">
+                        <h2 className="h5 mb-1">Market insights</h2>
+                        <p className="small text-muted mb-2">Hold and Watch — informational only; no approval or orders.</p>
+                        {insights.length === 0 ? (
+                            <div className="border rounded p-3 text-muted small">No insights right now.</div>
+                        ) : (
+                            <RecTable rows={insights} actionLabel="View details" onOpen={openDetail} />
+                        )}
+                    </section>
+                </>
             )}
 
             {selected && (
-                <div className="modal show d-block" style={{ background: 'rgba(0,0,0,.45)' }}>
+                <div className="modal show d-block lido-tos-review-modal" style={{ background: 'rgba(0,0,0,.45)' }} role="dialog" aria-modal="true">
                     <div className="modal-dialog modal-lg modal-dialog-scrollable">
                         <div className="modal-content">
                             <div className="modal-header">
                                 <h5 className="modal-title">
-                                    {selected.recommendation_type}
+                                    {displayLabel(selected)}
                                     {' '}
                                     {selected.symbol}
+                                    {!selectedActionable ? (
+                                        <span className="badge text-bg-secondary ms-2">Insight</span>
+                                    ) : null}
                                 </h5>
                                 <button type="button" className="btn-close" onClick={() => setSelected(null)} aria-label="Close" />
                             </div>
@@ -228,10 +343,6 @@ export default function RecommendationsPage() {
                                     {' '}
                                     <span className={`badge ${statusBadge(selected.status)}`}>{selected.status}</span>
                                     {' · '}
-                                    Score
-                                    {' '}
-                                    {selected.score ?? '—'}
-                                    {' · '}
                                     Confidence
                                     {' '}
                                     {formatPct(selected.confidence)}
@@ -239,30 +350,83 @@ export default function RecommendationsPage() {
                                     Ref ₹
                                     {selected.reference_price ?? '—'}
                                 </p>
-                                <p className="small">
-                                    Generated
-                                    {' '}
-                                    {selected.generated_at ? new Date(selected.generated_at).toLocaleString() : '—'}
+
+                                <h6>Market opinion</h6>
+                                <p className="small mb-2">
+                                    {opinion?.direction || '—'}
                                     {' · '}
-                                    Expires
+                                    {opinion?.strength || '—'}
+                                    {' · '}
+                                    Confidence
                                     {' '}
-                                    {selected.expires_at ? new Date(selected.expires_at).toLocaleString() : '—'}
+                                    {formatPct(opinion?.confidence ?? selected.confidence)}
                                 </p>
+
+                                <h6>Portfolio decision</h6>
+                                <p className="small mb-1">
+                                    <span className={`badge ${typeBadgeClass(selected.portfolio_action || selected.recommendation_type)}`}>
+                                        {displayLabel(selected)}
+                                    </span>
+                                    <span className="text-muted ms-2">{selected.portfolio_action || selected.recommendation_type}</span>
+                                </p>
+                                <p className="small text-muted mb-2">
+                                    Current
+                                    {' '}
+                                    {formatAlloc(selected.current_allocation_pct)}
+                                    {' · Target '}
+                                    {formatAlloc(selected.target_allocation_pct)}
+                                    {' · Suggested '}
+                                    {formatAlloc(selected.suggested_allocation_pct)}
+                                </p>
+                                {selected.reasoning ? <p className="small">{selected.reasoning}</p> : null}
+
+                                {plan && (
+                                    <>
+                                        <h6>Execution plan</h6>
+                                        <pre className="small lido-tos-review-pre p-2 rounded" style={{ whiteSpace: 'pre-wrap' }}>
+                                            {JSON.stringify(plan, null, 2)}
+                                        </pre>
+                                    </>
+                                )}
 
                                 <h6>Evidence</h6>
                                 <ul className="small">
-                                    {(selected.evidence?.passed_rules || []).map((x) => <li key={`p-${x}`}>✓ {x}</li>)}
+                                    {(selected.evidence?.passed_rules || opinion?.evidence?.passed_rules || []).map((x) => (
+                                        <li key={`p-${x}`}>✓ {x}</li>
+                                    ))}
                                     {(selected.failed_checks || []).map((x) => <li key={`f-${x}`}>✗ {x}</li>)}
                                 </ul>
-                                <pre className="small bg-body-tertiary p-2 rounded" style={{ whiteSpace: 'pre-wrap' }}>
-                                    {JSON.stringify(selected.evidence?.indicators || {}, null, 2)}
+                                <pre className="small lido-tos-review-pre p-2 rounded" style={{ whiteSpace: 'pre-wrap' }}>
+                                    {JSON.stringify(selected.evidence?.indicators || opinion?.evidence?.indicators || {}, null, 2)}
                                 </pre>
 
-                                {selected.can_review && (
+                                {selected.can_reopen && selectedActionable && (
+                                    <div className="mb-3">
+                                        <button
+                                            type="button"
+                                            className="btn btn-outline-secondary btn-sm"
+                                            disabled={busyId === selected.id}
+                                            onClick={reopen}
+                                        >
+                                            Undo decision — reopen for review
+                                        </button>
+                                        <p className="form-text mb-0 mt-1">
+                                            Clears Accept / Reject / Defer and returns to pending review. Pending orders are cancelled. Use Show all history to find rejected items.
+                                        </p>
+                                    </div>
+                                )}
+
+                                {selected.can_review && selectedActionable && (
                                     <>
-                                        <label className="form-label small mb-1">Review notes (optional)</label>
-                                        <textarea className="form-control form-control-sm mb-2" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
-                                        <div className="d-flex flex-wrap gap-2 mb-3">
+                                        <label className="form-label" htmlFor="tos-review-notes">Review notes (optional)</label>
+                                        <textarea
+                                            id="tos-review-notes"
+                                            className="form-control form-control-sm mb-2"
+                                            rows={2}
+                                            value={notes}
+                                            onChange={(e) => setNotes(e.target.value)}
+                                        />
+                                        <div className="d-flex flex-wrap gap-2 mb-1">
                                             <button type="button" className="btn btn-success btn-sm" disabled={busyId === selected.id} onClick={() => decide('accepted')}>Accept</button>
                                             <button type="button" className="btn btn-outline-warning btn-sm" disabled={busyId === selected.id} onClick={() => decide('deferred')}>Defer</button>
                                             <button type="button" className="btn btn-outline-danger btn-sm" disabled={busyId === selected.id} onClick={() => decide('rejected')}>Reject</button>
@@ -270,21 +434,21 @@ export default function RecommendationsPage() {
                                     </>
                                 )}
 
-                                {selected.can_create_order && (
-                                    <div className="border rounded p-2 mb-2">
-                                        <h6 className="mb-2">Record execution</h6>
+                                {selected.can_create_order && selectedActionable && (
+                                    <div className="lido-tos-review-order-box rounded p-2 mb-2">
+                                        <h6 className="mb-2">Record trade</h6>
                                         <div className="row g-2 align-items-end">
                                             <div className="col-4">
-                                                <label className="form-label small mb-0">Qty</label>
-                                                <input className="form-control form-control-sm" value={orderQty} onChange={(e) => setOrderQty(e.target.value)} />
+                                                <label className="form-label mb-0" htmlFor="tos-order-qty">Quantity</label>
+                                                <input id="tos-order-qty" className="form-control form-control-sm" value={orderQty} onChange={(e) => setOrderQty(e.target.value)} />
                                             </div>
                                             <div className="col-4">
-                                                <label className="form-label small mb-0">Price</label>
-                                                <input className="form-control form-control-sm" value={orderPrice} onChange={(e) => setOrderPrice(e.target.value)} />
+                                                <label className="form-label mb-0" htmlFor="tos-order-price">Price</label>
+                                                <input id="tos-order-price" className="form-control form-control-sm" value={orderPrice} onChange={(e) => setOrderPrice(e.target.value)} />
                                             </div>
-                                            <div className="col-4 d-flex gap-1">
+                                            <div className="col-4 d-flex gap-1 flex-wrap">
                                                 <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busyId === selected.id} onClick={() => createOrder(false)}>Pending</button>
-                                                <button type="button" className="btn btn-primary btn-sm" disabled={busyId === selected.id} onClick={() => createOrder(true)}>Execute</button>
+                                                <button type="button" className="btn btn-primary btn-sm" disabled={busyId === selected.id} onClick={() => createOrder(true)}>Add transaction</button>
                                             </div>
                                         </div>
                                     </div>
@@ -297,13 +461,9 @@ export default function RecommendationsPage() {
                                             {selected.reviews.map((rev) => (
                                                 <li key={rev.id}>
                                                     {rev.decision}
-                                                    {' '}
-                                                    by
-                                                    {' '}
+                                                    {' by '}
                                                     {rev.user || 'user'}
-                                                    {' '}
-                                                    at
-                                                    {' '}
+                                                    {' at '}
                                                     {rev.created_at ? new Date(rev.created_at).toLocaleString() : ''}
                                                     {rev.notes ? ` — ${rev.notes}` : ''}
                                                 </li>

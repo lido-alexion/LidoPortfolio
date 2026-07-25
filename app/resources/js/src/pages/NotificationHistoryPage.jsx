@@ -49,7 +49,7 @@ export default function NotificationHistoryPage() {
         <div className="container-fluid py-3">
             <div className="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
                 <div>
-                    <h1 className="h3 mb-1">Notification history</h1>
+                    <h1 className="h3 mb-1">Notifications</h1>
                     <p className="text-muted small mb-0">
                         Trading OS Telegram deliveries — status, timestamps, and retries.
                     </p>

@@ -36,7 +36,7 @@ Specs under `specs/` define a seven-engine decision platform. Implementation evo
 | Data | `Data\DataEngine` | `portfolio_stocks` / `portfolio_stock_prices` / daily sync |
 | Discovery | `Discovery\DiscoveryEngine` | `portfolio_tos_candidates` (orchestrates PatternScan + Screener) |
 | Evaluation | `Evaluation\EvaluationEngine` | Score/rank/evidence → `portfolio_tos_evaluation_results` |
-| Recommendation | `Recommendation\RecommendationEngine` | BUY/SELL/WATCH/HOLD + review lifecycle + `portfolio_tos_recommendation_reviews` |
+| Recommendation | `Recommendation\RecommendationEngine` | Market Opinion → Portfolio Decision → Execution Plan; review lifecycle |
 | Notification | `Notification\NotificationEngine` | Telegram + `portfolio_tos_notifications` |
 | Execution | `Execution\ExecutionEngine` | Pending/executed/cancelled orders → transactions/holdings |
 | Review | `Review\ReviewEngine` | Dashboard, outcomes, reports |
@@ -47,7 +47,7 @@ Specs under `specs/` define a seven-engine decision platform. Implementation evo
 - Config: `config/trading_os.php`.
 - Migrations: `2026_07_25_000002_*`, `2026_07_25_000003_tos_mvp_review_and_orders.php` (reviews, `reference_price`, order cancel).
 - Command: `php artisan portfolio:decision-pipeline`.
-- Recommendations start as `pending_review`; Accept required before linked order; orders support pending → execute/cancel.
+- Recommendations start as `pending_review` (**BUY/SELL**) or `published` (**HOLD/WATCH**); Accept required before linked order (actionable only); orders support pending → execute/cancel.
 
 ### REST `/api/v1` (additive)
 
@@ -55,11 +55,31 @@ Sanctum auth. `TradingOsController`: securities, imports, candidates, evaluation
 
 ### Frontend
 
-`/candidates`, `/evaluations`, `/recommendations` (Accept/Reject/Defer + orders), `/review`, `/notification-history`.
+`/candidates` (nav: **Discovery**), `/evaluations`, `/recommendations` (Accept/Reject/Defer + orders), `/review`, `/notification-history` (nav: **Notifications**).
+
+**Recommendations review dialog:** Bootstrap modals were staying light in dark mode because only `data-theme` was set (not `data-bs-theme`). `applyResolvedTheme` now sets both. Dialog also uses `.lido-tos-review-modal` Lido tokens. Qty → Quantity. Defer/Reject close the dialog; Accept on BUY/SELL stays open for Pending / **Add transaction**; Accept on WATCH/HOLD closes (no trade UI). Order controls only for BUY/SELL.
+
+**Shared ledger write (Option A):** `TransactionWriteService::create` is the single create path for `POST /api/transactions` and TOS order fills (`ExecutionEngine` → same service, then TOS order link + recommendation `executed`). Holdings, realizations, buy OHLCV backfill, and snapshot rebuild stay aligned; execute remains “add transaction + TOS overlay.”
+
+**Undo review / fill:** `POST /api/v1/recommendations/{id}/reopen` returns Accept/Reject/Defer to `pending_review` (cancels pending orders). Deleting a Transactions-page row that is a TOS fill cancels the linked order and reopens the recommendation to `pending_review`.
 
 ### Tests
 
 `tests/Feature/TradingOsPipelineTest.php` (pipeline, review, pending/execute/cancel, outcomes).
+
+### Production schema note (Jul 2026)
+
+Recommendations / Review / Notifications return “schema out of date” when `portfolio_tos_*` tables are missing (migrate ran without those migration files, or migrate failed).
+
+**MySQL index name limit:** auto-generated compound index names on `portfolio_tos_*` exceeded 64 characters and aborted mid-migration (tables partially created). Migrations now use short explicit index names (`tos_rec_profile_type_idx`, etc.) and are idempotent.
+
+Repair: upload updated `2026_07_25_000002_*` + `000003_*`, then:
+
+`/portfolio/cpanel-repair-tos-schema.php?token=YOUR_TOKEN&apply=1`
+
+Delete repair script after success. Updated `cpanel-migrate.php` also verifies TOS tables.
+
+**Evaluation JSON crash:** Indicator `INF`/`NAN` values can break Eloquent JSON casts on shared hosting. EvaluationEngine now sanitizes floats, caps OHLCV history, and isolates per-candidate failures.
 
 ### Spec deviations (confirmed)
 

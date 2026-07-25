@@ -132,10 +132,25 @@ class TradingOsController extends Controller
     public function evaluationRunsStore(): JsonResponse
     {
         $profile = \activePortfolio();
-        $result = $this->evaluation->run($profile);
+
+        try {
+            $result = $this->evaluation->run($profile);
+        } catch (\RuntimeException $e) {
+            return ApiEnvelope::error('EVALUATION_PRECONDITION', $e->getMessage(), 422);
+        }
+
+        $run = $result['run'];
 
         return ApiEnvelope::success([
-            'run' => $result['run'],
+            'run' => [
+                'id' => $run->id,
+                'profile_id' => $run->profile_id,
+                'discovery_run_id' => $run->discovery_run_id,
+                'status' => $run->status,
+                'stats' => $run->stats_json,
+                'started_at' => optional($run->started_at)?->toIso8601String(),
+                'completed_at' => optional($run->completed_at)?->toIso8601String(),
+            ],
             'results' => array_map(fn ($r) => $this->serializeEvaluation($r), $result['results']),
         ], [], 201);
     }
@@ -176,6 +191,7 @@ class TradingOsController extends Controller
                 \App\Models\TradingRecommendation::STATUS_PENDING_REVIEW,
                 \App\Models\TradingRecommendation::STATUS_DEFERRED,
                 \App\Models\TradingRecommendation::STATUS_ACCEPTED,
+                \App\Models\TradingRecommendation::STATUS_PUBLISHED,
             ];
         }
 
@@ -214,6 +230,34 @@ class TradingOsController extends Controller
                 $request->user(),
                 $rec,
                 strtolower($validated['decision']),
+                $validated['notes'] ?? null,
+            );
+        } catch (ValidationException $e) {
+            $msg = collect($e->errors())->flatten()->first() ?? 'Validation failed.';
+
+            return ApiEnvelope::error('VALIDATION_ERROR', $msg, 422);
+        }
+
+        return ApiEnvelope::success($this->serializeRecommendation($updated, true));
+    }
+
+    public function recommendationsReopen(Request $request, int $id): JsonResponse
+    {
+        $profile = \activePortfolio();
+        $rec = $this->recommendation->findForProfile($profile, $id);
+        if (! $rec) {
+            return ApiEnvelope::error('NOT_FOUND', 'Recommendation not found.', 404);
+        }
+
+        $validated = $request->validate([
+            'notes' => 'nullable|string|max:2000',
+        ]);
+
+        try {
+            $updated = $this->recommendation->reopenForReview(
+                $profile,
+                $request->user(),
+                $rec,
                 $validated['notes'] ?? null,
             );
         } catch (ValidationException $e) {
@@ -535,20 +579,31 @@ class TradingOsController extends Controller
             'symbol' => $r->security?->symbol,
             'name' => $r->security?->name,
             'recommendation_type' => $r->recommendation_type,
+            'portfolio_action' => method_exists($r, 'portfolioAction') ? $r->portfolioAction() : $r->recommendation_type,
+            'ui_label' => method_exists($r, 'uiLabel') ? $r->uiLabel() : $r->recommendation_type,
+            'market_opinion' => $r->market_opinion,
+            'execution_plan' => $r->execution_plan,
+            'current_allocation_pct' => $r->current_allocation_pct !== null ? (float) $r->current_allocation_pct : null,
+            'target_allocation_pct' => $r->target_allocation_pct !== null ? (float) $r->target_allocation_pct : null,
+            'suggested_allocation_pct' => $r->suggested_allocation_pct !== null ? (float) $r->suggested_allocation_pct : null,
+            'reasoning' => $r->reasoning,
             'priority' => $r->priority,
             'confidence' => (float) $r->confidence,
-            'score' => $r->evidence['score'] ?? null,
+            'score' => $r->evidence['score'] ?? ($r->market_opinion['score'] ?? null),
             'risk_level' => $r->risk_level,
             'suggested_position_size' => $r->suggested_position_size !== null ? (float) $r->suggested_position_size : null,
             'reference_price' => $r->reference_price !== null ? (float) $r->reference_price : null,
             'status' => $r->status,
             'lifecycle_status' => $r->status,
+            'category' => method_exists($r, 'category') ? $r->category() : 'actionable',
+            'order_side' => method_exists($r, 'orderSide') ? $r->orderSide() : null,
             'evidence' => $r->evidence,
             'failed_checks' => $r->failed_checks,
             'expires_at' => optional($r->expires_at)?->toIso8601String(),
             'generated_at' => optional($r->generated_at)?->toIso8601String(),
             'evaluation_result_id' => $r->evaluation_result_id,
             'can_review' => method_exists($r, 'canBeReviewed') ? $r->canBeReviewed() : false,
+            'can_reopen' => method_exists($r, 'canReopenForReview') ? $r->canReopenForReview() : false,
             'can_create_order' => method_exists($r, 'canCreateOrder') ? $r->canCreateOrder() : false,
         ];
 

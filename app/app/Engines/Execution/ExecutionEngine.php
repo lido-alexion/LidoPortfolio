@@ -5,27 +5,28 @@ namespace App\Engines\Execution;
 use App\Models\Holding;
 use App\Models\OrderTransaction;
 use App\Models\PortfolioProfile;
+use App\Models\RecommendationReview;
 use App\Models\Stock;
 use App\Models\TradingOrder;
 use App\Models\TradingRecommendation;
 use App\Models\Transaction;
+use App\Models\User;
 use App\Services\HoldingsCalculationService;
 use App\Services\PortfolioLoggerService;
-use App\Services\PortfolioSnapshotRebuildService;
-use App\Services\TransactionRealizationService;
+use App\Services\TransactionWriteService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
  * Execution Engine — manual order lifecycle: pending → executed | cancelled.
+ * Ledger fills go through TransactionWriteService (same path as POST /api/transactions).
  * Positions remain portfolio_holdings; ledger remains portfolio_transactions.
  */
 class ExecutionEngine
 {
     public function __construct(
         protected HoldingsCalculationService $holdings,
-        protected TransactionRealizationService $realizations,
-        protected PortfolioSnapshotRebuildService $snapshots,
+        protected TransactionWriteService $writes,
         protected PortfolioLoggerService $logger,
     ) {}
 
@@ -125,32 +126,24 @@ class ExecutionEngine
         $quantity = (float) $order->quantity;
         $date = $input['transaction_date'] ?? now()->toDateString();
         $recommendation = $order->recommendation;
-
-        if ($side === 'sell') {
-            $available = $this->holdings->getAvailableQuantity($profile, $stock);
-            if ($quantity > $available + 0.00001) {
-                throw ValidationException::withMessages([
-                    'quantity' => ['Sell quantity cannot exceed current holding quantity.'],
-                ]);
-            }
+        if ($recommendation === null && $order->recommendation_id) {
+            $recommendation = TradingRecommendation::query()->find($order->recommendation_id);
         }
 
-        return DB::transaction(function () use ($profile, $stock, $side, $quantity, $price, $fees, $date, $input, $order, $recommendation) {
-            $transaction = Transaction::query()->create([
-                'profile_id' => $profile->id,
-                'stock_id' => $stock->id,
+        $notes = $input['notes']
+            ?? $order->notes
+            ?? ($recommendation ? 'TOS order #'.$order->id.' (rec #'.$recommendation->id.')' : 'TOS order #'.$order->id);
+
+        // Ledger insert + TOS order/recommendation updates commit together, then shared side effects.
+        $transaction = DB::transaction(function () use ($profile, $stock, $side, $quantity, $price, $fees, $date, $notes, $order, $recommendation) {
+            $transaction = $this->writes->insert($profile, $stock, [
                 'type' => $side,
                 'quantity' => $quantity,
                 'price' => $price,
                 'fees' => $fees,
                 'transaction_date' => $date,
-                'notes' => $input['notes']
-                    ?? $order->notes
-                    ?? ($recommendation ? 'TOS order #'.$order->id.' (rec #'.$recommendation->id.')' : 'TOS order #'.$order->id),
+                'notes' => $notes,
             ]);
-
-            $this->holdings->recalculateForProfileStock($profile, $stock);
-            $this->realizations->recalculateForProfileStock($profile, $stock);
 
             OrderTransaction::query()->create([
                 'order_id' => $order->id,
@@ -170,32 +163,28 @@ class ExecutionEngine
                 $recommendation->forceFill(['status' => TradingRecommendation::STATUS_EXECUTED])->save();
             }
 
-            try {
-                $this->snapshots->rebuildAfterTransactionChange($profile, null, $date);
-            } catch (\Throwable $e) {
-                $this->logger->log('daily', 'ExecutionEngine', 'warning', 'Snapshot rebuild failed: '.$e->getMessage(), [
-                    'profile_id' => $profile->id,
-                ]);
-            }
-
-            $position = Holding::query()
-                ->where('profile_id', $profile->id)
-                ->where('stock_id', $stock->id)
-                ->first();
-
-            $this->logger->log('daily', 'ExecutionEngine', 'info', 'Order executed', [
-                'order_id' => $order->id,
-                'transaction_id' => $transaction->id,
-                'side' => $side,
-                'symbol' => $stock->symbol,
-            ]);
-
-            return [
-                'order' => $order->fresh(['security', 'recommendation']),
-                'transaction' => $transaction->fresh(),
-                'position' => $position,
-            ];
+            return $transaction;
         });
+
+        $this->writes->applyAfterCreate($profile, $stock, $transaction, softFailSnapshots: true);
+
+        $position = Holding::query()
+            ->where('profile_id', $profile->id)
+            ->where('stock_id', $stock->id)
+            ->first();
+
+        $this->logger->log('daily', 'ExecutionEngine', 'info', 'Order executed', [
+            'order_id' => $order->id,
+            'transaction_id' => $transaction->id,
+            'side' => $side,
+            'symbol' => $stock->symbol,
+        ]);
+
+        return [
+            'order' => $order->fresh(['security', 'recommendation']),
+            'transaction' => $transaction->fresh()->load('stock'),
+            'position' => $position,
+        ];
     }
 
     public function cancelOrder(PortfolioProfile $profile, TradingOrder $order): TradingOrder
@@ -220,6 +209,70 @@ class ExecutionEngine
         ]);
 
         return $order->fresh(['security', 'recommendation']);
+    }
+
+    /**
+     * Before deleting a ledger transaction, undo TOS order fill linkage and reopen the recommendation.
+     *
+     * @return array{reverted: bool, order_id: ?int, recommendation_id: ?int}
+     */
+    public function revertLinkedFillBeforeTransactionDelete(
+        PortfolioProfile $profile,
+        Transaction $transaction,
+        ?User $user = null,
+    ): array {
+        $link = OrderTransaction::query()
+            ->with(['order.recommendation'])
+            ->where('transaction_id', $transaction->id)
+            ->first();
+
+        if (! $link || ! $link->order) {
+            return ['reverted' => false, 'order_id' => null, 'recommendation_id' => null];
+        }
+
+        $order = $link->order;
+        if ((int) $order->profile_id !== (int) $profile->id) {
+            return ['reverted' => false, 'order_id' => null, 'recommendation_id' => null];
+        }
+
+        $recommendation = $order->recommendation;
+        $recommendationId = $recommendation?->id;
+
+        DB::transaction(function () use ($order, $recommendation, $user, $transaction) {
+            $order->forceFill([
+                'status' => TradingOrder::STATUS_CANCELLED,
+                'cancelled_at' => now(),
+                'executed_at' => null,
+            ])->save();
+
+            if ($recommendation
+                && $recommendation->status === TradingRecommendation::STATUS_EXECUTED
+                && $recommendation->isActionable()) {
+                RecommendationReview::query()->create([
+                    'recommendation_id' => $recommendation->id,
+                    'user_id' => $user?->id,
+                    'decision' => TradingRecommendation::DECISION_REOPENED,
+                    'notes' => 'Reopened after deleting TOS fill transaction #'.$transaction->id,
+                    'created_at' => now(),
+                ]);
+
+                $recommendation->forceFill([
+                    'status' => TradingRecommendation::STATUS_PENDING_REVIEW,
+                ])->save();
+            }
+        });
+
+        $this->logger->log('daily', 'ExecutionEngine', 'info', 'TOS fill reverted before transaction delete', [
+            'transaction_id' => $transaction->id,
+            'order_id' => $order->id,
+            'recommendation_id' => $recommendationId,
+        ]);
+
+        return [
+            'reverted' => true,
+            'order_id' => $order->id,
+            'recommendation_id' => $recommendationId,
+        ];
     }
 
     public function findOrder(PortfolioProfile $profile, int $id): ?TradingOrder

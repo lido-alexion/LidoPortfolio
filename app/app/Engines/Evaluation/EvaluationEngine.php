@@ -57,7 +57,28 @@ class EvaluationEngine
 
             $scored = [];
             foreach ($candidates as $candidate) {
-                $scored[] = $this->evaluateCandidate($candidate, $config);
+                try {
+                    $scored[] = $this->evaluateCandidate($candidate, $config);
+                } catch (Throwable $candidateError) {
+                    $scored[] = [
+                        'candidate' => $candidate,
+                        'score' => 0.0,
+                        'confidence' => 0.0,
+                        'evidence' => [
+                            'skipped' => true,
+                            'reason' => 'evaluation_error',
+                            'error' => $candidateError->getMessage(),
+                            'indicators' => [],
+                        ],
+                        'passed_rules' => [],
+                        'failed_rules' => ['evaluation_error'],
+                    ];
+                    $this->logger->log('daily', 'EvaluationEngine', 'warning', 'Candidate evaluation failed', [
+                        'candidate_id' => $candidate->id,
+                        'security_id' => $candidate->security_id,
+                        'error' => $candidateError->getMessage(),
+                    ]);
+                }
             }
 
             usort($scored, function ($a, $b) {
@@ -76,23 +97,29 @@ class EvaluationEngine
                     $results[] = EvaluationResult::query()->create([
                         'evaluation_run_id' => $run->id,
                         'candidate_id' => $row['candidate']->id,
-                        'score' => $row['score'],
-                        'confidence' => $row['confidence'],
+                        'score' => $this->safeFloat($row['score']) ?? 0.0,
+                        'confidence' => $this->safeFloat($row['confidence']) ?? 0.0,
                         'rank' => $rank++,
-                        'evidence' => $row['evidence'],
-                        'passed_rules' => $row['passed_rules'],
-                        'failed_rules' => $row['failed_rules'],
+                        'evidence' => $this->jsonSafe($row['evidence']),
+                        'passed_rules' => array_values($row['passed_rules'] ?? []),
+                        'failed_rules' => array_values($row['failed_rules'] ?? []),
                         'created_at' => now(),
                     ]);
                 }
             });
 
+            $evaluated = count(array_filter(
+                $scored,
+                fn ($r) => ($r['evidence']['skipped'] ?? false) !== true,
+            ));
+
             $run->forceFill([
                 'status' => 'completed',
                 'completed_at' => now(),
                 'stats_json' => [
-                    'evaluated' => count($results),
-                    'skipped' => $candidates->count() - count(array_filter($scored, fn ($r) => ($r['evidence']['skipped'] ?? false) === false)),
+                    'evaluated' => $evaluated,
+                    'skipped' => max(0, $candidates->count() - $evaluated),
+                    'results' => count($results),
                 ],
             ])->save();
 
@@ -237,7 +264,8 @@ class EvaluationEngine
         }
 
         $patternBonus = 0.0;
-        $patternCount = count($candidate->evidence['patterns'] ?? []);
+        $patterns = $candidate->evidence['patterns'] ?? [];
+        $patternCount = is_array($patterns) ? count($patterns) : 0;
         if ($patternCount > 0) {
             $patternBonus = min(100.0, 40.0 + ($patternCount * 20.0));
             $passed[] = 'pattern_present';
@@ -264,23 +292,23 @@ class EvaluationEngine
             'evidence' => [
                 'skipped' => false,
                 'indicators' => [
-                    'close' => $close,
-                    'sma_fast' => $smaFast,
-                    'sma_slow' => $smaSlow,
-                    'rsi' => $rsi,
-                    'atr' => $atr,
-                    'atr_pct' => $atrPct,
-                    'volume_ratio' => $volumeRatio,
-                    'price_vs_sma_pct' => $priceVsSma,
-                    'relative_strength_3m' => $rs,
+                    'close' => $this->safeFloat($close),
+                    'sma_fast' => $this->safeFloat($smaFast),
+                    'sma_slow' => $this->safeFloat($smaSlow),
+                    'rsi' => $this->safeFloat($rsi),
+                    'atr' => $this->safeFloat($atr),
+                    'atr_pct' => $this->safeFloat($atrPct),
+                    'volume_ratio' => $this->safeFloat($volumeRatio),
+                    'price_vs_sma_pct' => $this->safeFloat($priceVsSma),
+                    'relative_strength_3m' => $this->safeFloat($rs),
                 ],
-                'discovery' => $candidate->evidence,
+                'discovery' => is_array($candidate->evidence) ? $candidate->evidence : [],
                 'component_scores' => [
-                    'trend' => $trendScore,
-                    'momentum' => $momentumScore,
-                    'relative_strength' => $rsScore,
-                    'volume' => $volumeScore,
-                    'pattern_bonus' => $patternBonus,
+                    'trend' => $this->safeFloat($trendScore) ?? 0.0,
+                    'momentum' => $this->safeFloat($momentumScore) ?? 0.0,
+                    'relative_strength' => $this->safeFloat($rsScore) ?? 0.0,
+                    'volume' => $this->safeFloat($volumeScore) ?? 0.0,
+                    'pattern_bonus' => $this->safeFloat($patternBonus) ?? 0.0,
                 ],
             ],
             'passed_rules' => $passed,
@@ -297,23 +325,66 @@ class EvaluationEngine
             return [];
         }
 
+        // Cap history for shared-hosting memory/time; ~18 months of sessions is enough for SMA50/RS.
+        $limit = 400;
         $rows = StockPrice::query()
             ->where('stock_id', $stock->id)
-            ->orderBy('price_date')
+            ->whereNotNull('close_price')
+            ->orderByDesc('price_date')
+            ->limit($limit)
             ->get(['open_price', 'high_price', 'low_price', 'close_price', 'volume']);
 
         $bars = [];
-        foreach ($rows as $row) {
+        foreach ($rows->reverse()->values() as $row) {
+            $close = $this->safeFloat($row->close_price);
+            if ($close === null) {
+                continue;
+            }
             $bars[] = [
-                'open' => $row->open_price !== null ? (float) $row->open_price : null,
-                'high' => $row->high_price !== null ? (float) $row->high_price : null,
-                'low' => $row->low_price !== null ? (float) $row->low_price : null,
-                'close' => (float) $row->close_price,
-                'volume' => $row->volume !== null ? (float) $row->volume : null,
+                'open' => $this->safeFloat($row->open_price),
+                'high' => $this->safeFloat($row->high_price),
+                'low' => $this->safeFloat($row->low_price),
+                'close' => $close,
+                'volume' => $this->safeFloat($row->volume),
             ];
         }
 
         return $bars;
+    }
+
+    /**
+     * JSON cannot encode NAN/INF; those crash Eloquent JSON casts and API responses.
+     */
+    protected function safeFloat(mixed $value): ?float
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        if (! is_numeric($value)) {
+            return null;
+        }
+        $f = (float) $value;
+        if (! is_finite($f)) {
+            return null;
+        }
+
+        return $f;
+    }
+
+    protected function jsonSafe(mixed $value): mixed
+    {
+        if (is_float($value) || is_int($value)) {
+            return $this->safeFloat($value);
+        }
+        if (! is_array($value)) {
+            return $value;
+        }
+        $out = [];
+        foreach ($value as $k => $v) {
+            $out[$k] = $this->jsonSafe($v);
+        }
+
+        return $out;
     }
 
     /**

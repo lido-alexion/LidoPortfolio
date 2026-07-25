@@ -98,8 +98,21 @@ expose business capabilities, not database tables.
   Method   Endpoint                           Description
   -------- ---------------------------------- --------------------------
   POST     /api/v1/recommendations/generate   Generate recommendations
-  GET      /api/v1/recommendations            Active recommendations
+  GET      /api/v1/recommendations            Open / filtered list
   GET      /api/v1/recommendations/{id}       Recommendation details
+  POST     /api/v1/recommendations/{id}/review  Accept / Reject / Defer (actionable only)
+  POST     /api/v1/recommendations/{id}/reopen  Undo Accept / Reject / Defer → pending_review
+
+Detail payload SHALL expose:
+
+- `market_opinion` — direction, strength, confidence, evidence
+- `portfolio_action` / `recommendation_type` — portfolio decision enum
+- `ui_label` — friendly label (Buy, Buy More, …)
+- `execution_plan` — sizing / sell plan when actionable (else null)
+- `current_allocation_pct`, `target_allocation_pct`, `suggested_allocation_pct`
+- `reasoning`, `category` (`actionable` | `informational`)
+- `order_side` — `buy` | `sell` | null
+- `can_reopen` — Undo Accept/Reject/Defer via `POST /api/v1/recommendations/{id}/reopen`
 
 ## Notifications
 

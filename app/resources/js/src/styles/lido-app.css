@@ -3955,3 +3955,88 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     max-width: 14rem;
 }
 
+/* TOS recommendation review dialog — force Lido theme (Bootstrap defaults to light without data-bs-theme) */
+.lido-tos-review-modal {
+    --bs-modal-bg: var(--lido-bg-surface);
+    --bs-modal-color: var(--lido-text);
+    --bs-modal-border-color: var(--lido-border-strong);
+    --bs-modal-header-border-color: var(--lido-border);
+    --bs-modal-footer-border-color: var(--lido-border);
+    --bs-body-bg: var(--lido-bg-surface);
+    --bs-body-color: var(--lido-text);
+    --bs-heading-color: var(--lido-text);
+    --bs-secondary-color: var(--lido-text-muted);
+    --bs-border-color: var(--lido-border);
+}
+
+.lido-tos-review-modal .modal-content {
+    background-color: var(--lido-bg-surface);
+    color: var(--lido-text);
+    border: 1px solid var(--lido-border-strong);
+    border-radius: 0.5rem;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+.lido-tos-review-modal .modal-header,
+.lido-tos-review-modal .modal-body,
+.lido-tos-review-modal .modal-footer {
+    background-color: var(--lido-bg-surface);
+    color: var(--lido-text);
+    border-color: var(--lido-border);
+}
+
+.lido-tos-review-modal .modal-title,
+.lido-tos-review-modal h6 {
+    color: var(--lido-text);
+}
+
+[data-theme='light'] .lido-tos-review-modal .modal-content {
+    box-shadow: 0 12px 40px rgba(17, 24, 39, 0.15);
+}
+
+.lido-tos-review-modal .form-label {
+    color: var(--lido-text);
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.lido-tos-review-modal .form-control,
+.lido-tos-review-modal textarea.form-control {
+    background-color: var(--lido-input-bg);
+    border-color: var(--lido-input-border);
+    color: var(--lido-text);
+}
+
+.lido-tos-review-modal .form-control:focus,
+.lido-tos-review-modal textarea.form-control:focus {
+    background-color: var(--lido-input-bg);
+    border-color: var(--lido-brand);
+    color: var(--lido-text);
+    box-shadow: 0 0 0 0.2rem rgba(30, 144, 255, 0.25);
+}
+
+.lido-tos-review-modal .form-control::placeholder {
+    color: var(--lido-text-muted);
+    opacity: 1;
+}
+
+.lido-tos-review-modal .form-text,
+.lido-tos-review-modal .text-muted {
+    color: var(--lido-text-muted) !important;
+}
+
+.lido-tos-review-modal .lido-tos-review-pre {
+    background-color: var(--lido-bg-elevated);
+    color: var(--lido-text);
+    border: 1px solid var(--lido-border);
+}
+
+.lido-tos-review-modal .lido-tos-review-order-box {
+    border: 1px solid var(--lido-border);
+    background-color: var(--lido-bg-elevated);
+}
+
+[data-theme='dark'] .lido-tos-review-modal .btn-close {
+    filter: invert(1) grayscale(100%);
+}
+

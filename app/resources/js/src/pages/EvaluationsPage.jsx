@@ -20,7 +20,7 @@ export default function EvaluationsPage() {
             const { data } = await api.get('/v1/evaluations');
             setItems(Array.isArray(data?.data) ? data.data : []);
         } catch (e) {
-            showToast(e?.response?.data?.error?.message || e.message || 'Failed to load evaluations', 'danger');
+            showToast(e?.response?.data?.error?.message || e?.response?.data?.message || e.message || 'Failed to load evaluations', 'danger');
         } finally {
             setLoading(false);
         }
@@ -35,7 +35,7 @@ export default function EvaluationsPage() {
             showToast('Evaluation completed', 'success');
             await load();
         } catch (e) {
-            showToast(e?.response?.data?.error?.message || e.message || 'Evaluation failed', 'danger');
+            showToast(e?.response?.data?.error?.message || e?.response?.data?.message || e.message || 'Evaluation failed', 'danger');
         } finally {
             setRunning(false);
         }
@@ -51,7 +51,7 @@ export default function EvaluationsPage() {
                     </p>
                 </div>
                 <div className="d-flex gap-2">
-                    <Link className="btn btn-outline-secondary btn-sm" to="/candidates">Candidates</Link>
+                    <Link className="btn btn-outline-secondary btn-sm" to="/candidates">Discovery</Link>
                     <button type="button" className="btn btn-outline-secondary btn-sm" onClick={load} disabled={loading || running}>Refresh</button>
                     <button type="button" className="btn btn-primary btn-sm" onClick={runEval} disabled={running}>
                         {running ? 'Running…' : 'Run evaluation'}

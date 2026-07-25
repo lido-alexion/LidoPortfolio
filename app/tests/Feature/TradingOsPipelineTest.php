@@ -49,8 +49,23 @@ class TradingOsPipelineTest extends TestCase
         $this->assertDatabaseHas('portfolio_tos_recommendations', [
             'profile_id' => $profile->id,
             'security_id' => $stock->id,
-            'status' => 'pending_review',
         ]);
+
+        $rec = TradingRecommendation::query()
+            ->where('profile_id', $profile->id)
+            ->where('security_id', $stock->id)
+            ->first();
+        $this->assertNotNull($rec);
+        $type = strtoupper((string) $rec->recommendation_type);
+        if (in_array($type, ['HOLD_POSITION', 'HOLD', 'WATCH'], true)) {
+            $this->assertSame('published', $rec->status);
+            $this->assertFalse($rec->canBeReviewed());
+            $this->assertFalse($rec->canCreateOrder());
+        } else {
+            $this->assertSame('pending_review', $rec->status);
+            $this->assertTrue($rec->canBeReviewed());
+            $this->assertNotEmpty($rec->market_opinion);
+        }
     }
 
     public function test_v1_recommendations_api_and_order_execution(): void
@@ -71,6 +86,12 @@ class TradingOsPipelineTest extends TestCase
         $this->assertNotEmpty($list->json('data'));
 
         $recId = $list->json('data.0.id');
+        // Order lifecycle applies to BUY/SELL only (WATCH/HOLD cannot create orders).
+        TradingRecommendation::query()->whereKey($recId)->update([
+            'recommendation_type' => 'OPEN_POSITION',
+            'status' => 'pending_review',
+        ]);
+
         $detail = $this->getJson('/api/v1/recommendations/'.$recId);
         $detail->assertOk();
         $detail->assertJsonPath('data.id', $recId);
@@ -142,6 +163,36 @@ class TradingOsPipelineTest extends TestCase
         $dashboard->assertOk();
         $dashboard->assertJsonPath('success', true);
         $this->assertNotEmpty($dashboard->json('data.outcomes'));
+
+        // Undo executed fill: delete ledger tx → recommendation reopens.
+        $txId = \App\Models\Transaction::query()
+            ->where('profile_id', $profile->id)
+            ->where('stock_id', $stock->id)
+            ->orderByDesc('id')
+            ->value('id');
+        $this->assertNotNull($txId);
+        $del = $this->deleteJson('/api/transactions/'.$txId);
+        $del->assertOk();
+        $this->assertTrue((bool) $del->json('tos.recommendation_reopened'));
+        $this->assertDatabaseHas('portfolio_tos_recommendations', [
+            'id' => $recId,
+            'status' => 'pending_review',
+        ]);
+        $this->assertDatabaseHas('portfolio_tos_orders', [
+            'id' => $orderId,
+            'status' => 'cancelled',
+        ]);
+
+        // Reject then reopen.
+        $this->postJson('/api/v1/recommendations/'.$recId.'/review', ['decision' => 'rejected'])->assertOk();
+        $this->assertDatabaseHas('portfolio_tos_recommendations', ['id' => $recId, 'status' => 'rejected']);
+        $reopen = $this->postJson('/api/v1/recommendations/'.$recId.'/reopen', ['notes' => 'Undo reject']);
+        $reopen->assertOk();
+        $reopen->assertJsonPath('data.status', 'pending_review');
+        $this->assertDatabaseHas('portfolio_tos_recommendation_reviews', [
+            'recommendation_id' => $recId,
+            'decision' => 'reopened',
+        ]);
     }
 
     public function test_order_cancel_lifecycle(): void
@@ -153,6 +204,10 @@ class TradingOsPipelineTest extends TestCase
         $this->withProfileHeader($user, $profile);
 
         $recId = $this->getJson('/api/v1/recommendations')->json('data.0.id');
+        TradingRecommendation::query()->whereKey($recId)->update([
+            'recommendation_type' => 'OPEN_POSITION',
+            'status' => 'pending_review',
+        ]);
         $this->postJson('/api/v1/recommendations/'.$recId.'/review', ['decision' => 'accepted'])->assertOk();
 
         $pending = $this->postJson('/api/v1/orders', [
@@ -182,18 +237,19 @@ class TradingOsPipelineTest extends TestCase
         $a = $pipeline->run($profile, ['notify' => false, 'review' => false]);
         $scoreA = TradingRecommendation::query()
             ->where('profile_id', $profile->id)
-            ->where('status', 'pending_review')
             ->where('security_id', $stock->id)
+            ->orderByDesc('id')
             ->value('confidence');
 
         // Cancel and regenerate via second pipeline run.
         $b = $pipeline->run($profile, ['notify' => false, 'review' => false]);
         $scoreB = TradingRecommendation::query()
             ->where('profile_id', $profile->id)
-            ->where('status', 'pending_review')
             ->where('security_id', $stock->id)
+            ->orderByDesc('id')
             ->value('confidence');
 
+        $this->assertNotNull($scoreA);
         $this->assertSame((string) $scoreA, (string) $scoreB);
         $this->assertSame('completed', $a['pipeline_run']->status);
         $this->assertSame('completed', $b['pipeline_run']->status);

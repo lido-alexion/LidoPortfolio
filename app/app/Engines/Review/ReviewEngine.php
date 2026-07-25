@@ -38,17 +38,18 @@ class ReviewEngine
             ->where('profile_id', $profile->id)
             ->get();
 
-        $byStatus = [];
-        foreach ($recs as $rec) {
-            $byStatus[$rec->status] = ($byStatus[$rec->status] ?? 0) + 1;
-        }
+        $actionable = $recs->filter(fn (TradingRecommendation $r) => $r->isActionable());
+        $informational = $recs->filter(fn (TradingRecommendation $r) => $r->isInformational());
 
-        $accepted = (int) ($byStatus[TradingRecommendation::STATUS_ACCEPTED] ?? 0);
-        $rejected = (int) ($byStatus[TradingRecommendation::STATUS_REJECTED] ?? 0);
-        $deferred = (int) ($byStatus[TradingRecommendation::STATUS_DEFERRED] ?? 0);
-        $executed = (int) ($byStatus[TradingRecommendation::STATUS_EXECUTED] ?? 0);
-        $pending = (int) ($byStatus[TradingRecommendation::STATUS_PENDING_REVIEW] ?? 0)
-            + (int) ($byStatus['active'] ?? 0);
+        $actionableCounts = $this->countByStatus($actionable);
+        $informationalCounts = $this->countByStatus($informational);
+
+        $accepted = (int) ($actionableCounts[TradingRecommendation::STATUS_ACCEPTED] ?? 0);
+        $rejected = (int) ($actionableCounts[TradingRecommendation::STATUS_REJECTED] ?? 0);
+        $deferred = (int) ($actionableCounts[TradingRecommendation::STATUS_DEFERRED] ?? 0);
+        $executed = (int) ($actionableCounts[TradingRecommendation::STATUS_EXECUTED] ?? 0);
+        $pending = (int) ($actionableCounts[TradingRecommendation::STATUS_PENDING_REVIEW] ?? 0)
+            + (int) ($actionableCounts['active'] ?? 0);
         $decided = $accepted + $rejected + $deferred + $executed;
         $acceptanceAmongDecided = $decided > 0
             ? round((($accepted + $executed) / $decided) * 100, 2)
@@ -62,7 +63,18 @@ class ReviewEngine
             ->get();
 
         $reviewActions = RecommendationReview::query()
-            ->whereHas('recommendation', fn ($q) => $q->where('profile_id', $profile->id))
+            ->whereHas('recommendation', function ($q) use ($profile) {
+                $q->where('profile_id', $profile->id)
+                    ->where(function ($tq) {
+                        foreach (TradingRecommendation::ACTIONABLE_ACTIONS as $i => $t) {
+                            $method = $i === 0 ? 'whereRaw' : 'orWhereRaw';
+                            $tq->{$method}('UPPER(recommendation_type) = ?', [$t]);
+                        }
+                        // Legacy types still count as actionable for historical reviews.
+                        $tq->orWhereRaw('UPPER(recommendation_type) = ?', ['BUY'])
+                            ->orWhereRaw('UPPER(recommendation_type) = ?', ['SELL']);
+                    });
+            })
             ->with(['user', 'recommendation.security'])
             ->orderByDesc('id')
             ->limit(25)
@@ -74,9 +86,37 @@ class ReviewEngine
                 'user' => $r->user?->name ?? $r->user?->email,
                 'symbol' => $r->recommendation?->security?->symbol,
                 'recommendation_id' => $r->recommendation_id,
+                'recommendation_type' => $r->recommendation?->recommendation_type,
                 'created_at' => optional($r->created_at)?->toIso8601String(),
             ])
             ->all();
+
+        $allOutcomes = $this->recommendationOutcomes($profile, 80);
+        $actionableOutcomes = array_values(array_filter(
+            $allOutcomes,
+            fn ($o) => ($o['category'] ?? '') === 'actionable'
+                || in_array(strtoupper((string) ($o['portfolio_action'] ?? $o['recommendation_type'] ?? '')), TradingRecommendation::ACTIONABLE_ACTIONS, true)
+                || in_array(strtoupper((string) ($o['recommendation_type'] ?? '')), ['BUY', 'SELL'], true),
+        ));
+        $informationalOutcomes = array_values(array_filter(
+            $allOutcomes,
+            fn ($o) => ($o['category'] ?? '') === 'informational'
+                || in_array(strtoupper((string) ($o['portfolio_action'] ?? $o['recommendation_type'] ?? '')), TradingRecommendation::INFORMATIONAL_ACTIONS, true)
+                || in_array(strtoupper((string) ($o['recommendation_type'] ?? '')), ['HOLD', 'WATCH'], true),
+        ));
+
+        $actionableSummary = [
+            'total' => $actionable->count(),
+            'pending_review' => $pending,
+            'accepted' => $accepted,
+            'rejected' => $rejected,
+            'deferred' => $deferred,
+            'executed' => $executed,
+            'expired' => (int) ($actionableCounts[TradingRecommendation::STATUS_EXPIRED] ?? 0),
+            'cancelled' => (int) ($actionableCounts[TradingRecommendation::STATUS_CANCELLED] ?? 0),
+            'acceptance_rate_pct' => $acceptanceAmongDecided,
+            'by_status' => $actionableCounts,
+        ];
 
         return [
             'portfolio' => [
@@ -86,17 +126,16 @@ class ReviewEngine
                 'realized_profit' => $summary['realized_profit'] ?? null,
                 'xirr' => $summary['xirr'] ?? null,
             ],
-            'recommendation_counts' => [
-                'total' => $recs->count(),
-                'pending_review' => $pending,
-                'accepted' => $accepted,
-                'rejected' => $rejected,
-                'deferred' => $deferred,
-                'executed' => $executed,
-                'expired' => (int) ($byStatus[TradingRecommendation::STATUS_EXPIRED] ?? 0),
-                'cancelled' => (int) ($byStatus[TradingRecommendation::STATUS_CANCELLED] ?? 0),
-                'acceptance_rate_pct' => $acceptanceAmongDecided,
-                'by_status' => $byStatus,
+            // Backward-compatible alias: review stats are actionable-only.
+            'recommendation_counts' => $actionableSummary,
+            'actionable_counts' => $actionableSummary,
+            'informational_counts' => [
+                'total' => $informational->count(),
+                'published' => (int) ($informationalCounts[TradingRecommendation::STATUS_PUBLISHED] ?? 0),
+                'expired' => (int) ($informationalCounts[TradingRecommendation::STATUS_EXPIRED] ?? 0),
+                'cancelled' => (int) ($informationalCounts[TradingRecommendation::STATUS_CANCELLED] ?? 0),
+                'archived' => (int) ($informationalCounts[TradingRecommendation::STATUS_ARCHIVED] ?? 0),
+                'by_status' => $informationalCounts,
             ],
             'orders' => $orders->map(fn (TradingOrder $o) => [
                 'id' => $o->id,
@@ -110,8 +149,23 @@ class ReviewEngine
                 'created_at' => optional($o->created_at)?->toIso8601String(),
             ])->all(),
             'recent_reviews' => $reviewActions,
-            'outcomes' => $this->recommendationOutcomes($profile, 50),
+            'outcomes' => $actionableOutcomes,
+            'informational_outcomes' => $informationalOutcomes,
         ];
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, TradingRecommendation>  $recs
+     * @return array<string, int>
+     */
+    protected function countByStatus($recs): array
+    {
+        $byStatus = [];
+        foreach ($recs as $rec) {
+            $byStatus[$rec->status] = ($byStatus[$rec->status] ?? 0) + 1;
+        }
+
+        return $byStatus;
     }
 
     /**
@@ -157,8 +211,9 @@ class ReviewEngine
             if ($ref !== null && $ref > 0 && $current !== null) {
                 $gainAbs = round($current - $ref, 4);
                 $gainPct = round((($current - $ref) / $ref) * 100, 4);
-                // For SELL recommendations, a price drop is a favourable outcome.
-                if (strtoupper((string) $rec->recommendation_type) === 'SELL') {
+                // For EXIT / REDUCE / legacy SELL, a price drop is a favourable outcome.
+                $action = method_exists($rec, 'portfolioAction') ? $rec->portfolioAction() : strtoupper((string) $rec->recommendation_type);
+                if (in_array($action, ['EXIT_POSITION', 'REDUCE_POSITION', 'SELL'], true)) {
                     $gainPct = -$gainPct;
                     $gainAbs = -$gainAbs;
                 }
@@ -169,9 +224,15 @@ class ReviewEngine
                 'symbol' => $rec->security?->symbol,
                 'name' => $rec->security?->name,
                 'recommendation_type' => $rec->recommendation_type,
+                'portfolio_action' => $rec->portfolioAction(),
+                'ui_label' => $rec->uiLabel(),
+                'market_opinion' => $rec->market_opinion,
+                'category' => $rec->category(),
                 'status' => $rec->status,
                 'reference_price' => $ref,
                 'current_price' => $current,
+                'current_allocation_pct' => $rec->current_allocation_pct !== null ? (float) $rec->current_allocation_pct : null,
+                'target_allocation_pct' => $rec->target_allocation_pct !== null ? (float) $rec->target_allocation_pct : null,
                 'gain_loss' => $gainAbs,
                 'gain_loss_pct' => $gainPct,
                 'generated_at' => optional($rec->generated_at)?->toIso8601String(),
@@ -227,14 +288,18 @@ class ReviewEngine
             ->where('generated_at', '<=', $periodEnd->copy()->endOfDay())
             ->get();
 
-        $executed = $recs->where('status', TradingRecommendation::STATUS_EXECUTED)->count();
-        $accepted = $recs->where('status', TradingRecommendation::STATUS_ACCEPTED)->count();
-        $rejected = $recs->where('status', TradingRecommendation::STATUS_REJECTED)->count();
-        $deferred = $recs->where('status', TradingRecommendation::STATUS_DEFERRED)->count();
-        $pending = $recs->whereIn('status', [
+        $actionable = $recs->filter(fn (TradingRecommendation $r) => $r->isActionable());
+        $informational = $recs->filter(fn (TradingRecommendation $r) => $r->isInformational());
+
+        $executed = $actionable->where('status', TradingRecommendation::STATUS_EXECUTED)->count();
+        $accepted = $actionable->where('status', TradingRecommendation::STATUS_ACCEPTED)->count();
+        $rejected = $actionable->where('status', TradingRecommendation::STATUS_REJECTED)->count();
+        $deferred = $actionable->where('status', TradingRecommendation::STATUS_DEFERRED)->count();
+        $pending = $actionable->whereIn('status', [
             TradingRecommendation::STATUS_PENDING_REVIEW,
             'active',
         ])->count();
+        $publishedInfo = $informational->where('status', TradingRecommendation::STATUS_PUBLISHED)->count();
         $decided = $accepted + $rejected + $deferred + $executed;
         $acceptanceRate = $decided > 0 ? (($accepted + $executed) / $decided) * 100 : null;
 
@@ -251,11 +316,14 @@ class ReviewEngine
             'expectancy' => $expectancy,
             'sells_closed' => (float) $closed,
             'recommendation_count' => (float) $recs->count(),
+            'actionable_recommendation_count' => (float) $actionable->count(),
+            'informational_recommendation_count' => (float) $informational->count(),
             'recommendation_executed' => (float) $executed,
             'recommendation_accepted' => (float) $accepted,
             'recommendation_rejected' => (float) $rejected,
             'recommendation_deferred' => (float) $deferred,
             'recommendation_pending_review' => (float) $pending,
+            'informational_published' => (float) $publishedInfo,
             'recommendation_acceptance_rate_pct' => $acceptanceRate,
         ];
 

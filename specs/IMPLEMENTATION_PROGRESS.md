@@ -70,6 +70,9 @@ Independent freeze audit (2026-07-25): [`audit/`](./audit/) — verdict **YES** 
 |------|------|-------|
 | 2026-07-25 | T0–T15 | First pass: engines + pipeline slice |
 | 2026-07-25 | M1–M9 | MVP completion sprint: user review, UIs, order lifecycle, outcomes |
+| 2026-07-25 | SD-022 | Actionable (BUY/SELL) vs informational (HOLD/WATCH) recommendation workflows |
+| 2026-07-25 | SD-023 | Market Opinion → Portfolio Decision → Execution Plan redesign |
+| 2026-07-25 | SD-024 | Undo Accept/Reject/Defer + reopen on TOS fill delete |
 
 ---
 

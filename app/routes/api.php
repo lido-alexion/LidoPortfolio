@@ -264,6 +264,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
     Route::get('/recommendations', [TradingOsController::class, 'recommendationsIndex']);
     Route::get('/recommendations/{id}', [TradingOsController::class, 'recommendationsShow'])->whereNumber('id');
     Route::post('/recommendations/{id}/review', [TradingOsController::class, 'recommendationsReview'])->whereNumber('id');
+    Route::post('/recommendations/{id}/reopen', [TradingOsController::class, 'recommendationsReopen'])->whereNumber('id');
     Route::get('/recommendations/{id}/reviews', [TradingOsController::class, 'recommendationsReviewHistory'])->whereNumber('id');
 
     Route::get('/notifications', [TradingOsController::class, 'notificationsIndex']);

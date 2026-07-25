@@ -397,6 +397,53 @@ if (Illuminate\Support\Facades\Schema::hasTable('portfolio_user_settings')) {
     check_line('   portfolio_user_settings dropped', true);
 }
 
+echo "\n--- 6b) Trading OS (portfolio_tos_*) ---\n";
+
+$tosMigrationFiles = [
+    '2026_07_25_000002_create_portfolio_tos_engine_tables',
+    '2026_07_25_000003_tos_mvp_review_and_orders',
+    '2026_07_25_000004_publish_informational_recommendations',
+    '2026_07_25_000005_recommendation_market_opinion_execution_plan',
+];
+foreach ($tosMigrationFiles as $migrationName) {
+    $path = LARAVEL_ROOT.'/database/migrations/'.$migrationName.'.php';
+    $onDisk = is_file($path);
+    check_line("   migration file {$migrationName}.php", $onDisk, 'upload database/migrations/');
+    if (! $onDisk) {
+        record_failure($failures, "Missing TOS migration file: {$migrationName}.php");
+    }
+}
+
+$tosTables = [
+    'portfolio_tos_discovery_runs',
+    'portfolio_tos_candidates',
+    'portfolio_tos_evaluation_runs',
+    'portfolio_tos_evaluation_results',
+    'portfolio_tos_recommendations',
+    'portfolio_tos_recommendation_reviews',
+    'portfolio_tos_notifications',
+    'portfolio_tos_orders',
+    'portfolio_tos_order_transactions',
+    'portfolio_tos_review_reports',
+    'portfolio_tos_review_metrics',
+    'portfolio_tos_pipeline_runs',
+];
+foreach ($tosTables as $table) {
+    $exists = Illuminate\Support\Facades\Schema::hasTable($table);
+    $result = check_line("   {$table}", $exists, 'run migrate or cpanel-repair-tos-schema.php?apply=1');
+    if (! $exists) {
+        record_failure($failures, "TOS table still missing: {$table}");
+    }
+}
+
+if (Illuminate\Support\Facades\Schema::hasTable('portfolio_tos_recommendations')) {
+    $hasRef = Illuminate\Support\Facades\Schema::hasColumn('portfolio_tos_recommendations', 'reference_price');
+    $result = check_line('   portfolio_tos_recommendations.reference_price', $hasRef, 'migration 2026_07_25_000003');
+    if (! $hasRef) {
+        record_failure($failures, 'Column still missing: portfolio_tos_recommendations.reference_price');
+    }
+}
+
 $syncLogReady = false;
 $retentionDays = null;
 

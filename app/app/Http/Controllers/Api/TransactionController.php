@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Engines\Execution\ExecutionEngine;
 use App\Http\Controllers\Controller;
 use App\Jobs\BackfillHistoricalDataJob;
 use App\Models\Holding;
@@ -10,6 +11,7 @@ use App\Services\HoldingsCalculationService;
 use App\Services\PortfolioSnapshotRebuildService;
 use App\Services\StockResolverService;
 use App\Services\TransactionRealizationService;
+use App\Services\TransactionWriteService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use InvalidArgumentException;
@@ -22,6 +24,8 @@ class TransactionController extends Controller
         protected StockResolverService $stocks,
         protected PortfolioSnapshotRebuildService $snapshotRebuild,
         protected TransactionRealizationService $realizations,
+        protected TransactionWriteService $writes,
+        protected ExecutionEngine $execution,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -81,39 +85,17 @@ class TransactionController extends Controller
         $profile = \activePortfolio();
         $stock = $this->stocks->resolve($request);
         $validated = $this->validateTransaction($request);
-        $validated['stock_id'] = $stock->id;
 
-        if ($validated['type'] === 'sell') {
-            $available = $this->holdings->getAvailableQuantity($profile, $stock);
-            if ($validated['quantity'] > $available + 0.00001) {
-                throw ValidationException::withMessages([
-                    'quantity' => ['Sell quantity cannot exceed current holding quantity.'],
-                ]);
-            }
-        }
-
-        $transaction = Transaction::query()->create([
-            ...$validated,
-            'profile_id' => $profile->id,
+        $transaction = $this->writes->create($profile, $stock, [
+            'type' => $validated['type'],
+            'quantity' => $validated['quantity'],
+            'price' => $validated['price'],
+            'fees' => $validated['fees'] ?? 0,
+            'transaction_date' => $validated['transaction_date'],
+            'notes' => $validated['notes'] ?? null,
         ]);
 
-        $this->holdings->recalculateForProfileStock($profile, $stock);
-        $this->realizations->recalculateForProfileStock($profile, $stock);
-        if ($validated['type'] === 'buy') {
-            try {
-                BackfillHistoricalDataJob::dispatchSync($stock->id, $validated['transaction_date']);
-            } catch (\Throwable) {
-                // Buy is saved; price sync can be retried from Holdings → OHLCV → Force sync.
-            }
-        }
-
-        $this->snapshotRebuild->rebuildAfterTransactionChange(
-            $profile,
-            null,
-            $validated['transaction_date'],
-        );
-
-        return response()->json(['data' => $transaction->load('stock')], 201);
+        return response()->json(['data' => $transaction], 201);
     }
 
     public function show(Request $request, Transaction $transaction): JsonResponse
@@ -181,6 +163,13 @@ class TransactionController extends Controller
 
         $stock = $transaction->stock;
         $deletedDate = $transaction->transaction_date;
+
+        $tosRevert = $this->execution->revertLinkedFillBeforeTransactionDelete(
+            $profile,
+            $transaction,
+            $request->user(),
+        );
+
         $transaction->delete();
         $this->holdings->recalculateForProfileStock($profile, $stock);
         $this->realizations->recalculateForProfileStock($profile, $stock);
@@ -191,7 +180,18 @@ class TransactionController extends Controller
             null,
         );
 
-        return response()->json(['message' => 'Transaction deleted']);
+        $payload = ['message' => 'Transaction deleted'];
+        if ($tosRevert['reverted']) {
+            $payload['tos'] = [
+                'order_cancelled' => true,
+                'order_id' => $tosRevert['order_id'],
+                'recommendation_reopened' => $tosRevert['recommendation_id'] !== null,
+                'recommendation_id' => $tosRevert['recommendation_id'],
+            ];
+            $payload['message'] = 'Transaction deleted; linked TOS order cancelled and recommendation reopened for review.';
+        }
+
+        return response()->json($payload);
     }
 
     protected function validateTransaction(Request $request, ?Transaction $transaction = null): array

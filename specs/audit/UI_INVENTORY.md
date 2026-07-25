@@ -16,7 +16,7 @@
 | `/review` | `pages/ReviewDashboardPage.jsx` | Performance + orders + outcomes | Snapshot cards, outcomes table, orders Execute/Cancel | `GET /v1/review/dashboard`, `GET /v1/orders`, `POST orders/{id}/execute\|cancel` | Review, Execution |
 | `/notification-history` | `pages/NotificationHistoryPage.jsx` | Notification delivery log | List, Retry | `GET /v1/notifications`, `POST /v1/notifications/{id}/retry` | Notification |
 
-All five are authenticated routes and appear in main nav (Candidates, Evaluations, Recommendations, Review, Notify log).
+All five are authenticated routes and appear in main nav (Discovery, Evaluations, Recommendations, Review, Notifications).
 
 **Shared client:** `api.js` (axios, Sanctum cookies, `X-Profile-Id`). No dedicated TOS components under `components/` — logic is page-local.
 

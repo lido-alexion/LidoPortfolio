@@ -38,7 +38,8 @@ Authoritative roadmap of work **deferred from Version 1.0**. Priorities guide se
 | PB-012 | Notification | Channel abstraction | Interface for Telegram/email/webhook; config-driven selection | SD-009 hardcoded channel | NotificationEngine refactor | 1.2 |
 | PB-013 | Notification | Email notifications | Deliver recommendation events by email | Out of V1.0 scope | PB-012 | 1.2 |
 | PB-014 | Architecture | Recommendation markExecuted API | Execution calls RecommendationEngine instead of direct status write | SD-018 ownership | ExecutionEngine | 1.1 |
-| PB-015 | Recommendation | Enforce `max_position_pct` | Cap suggested position size | Config unused | RecommendationEngine | 1.1 |
+| PB-015 | Recommendation | Per-symbol target allocation + cash | Explicit targets and cash balance beyond default/max position % | V1.0 uses config default/max % only (SD-023) | Portfolio settings | 1.1 |
+| PB-015a | Recommendation | Opinion→Decision analytics | Review dashboards: bullish→increase rates, reject rates by action | Needs soak data | ReviewEngine | 1.2 |
 | PB-016 | Developer Experience | OpenAPI for `/api/v1` | Machine-readable contract | SD-019 | Stable v1 routes | 1.2 |
 | PB-017 | Review | Soak / production migrate checklist | Harden cPanel migrate + Telegram live test | Release posture Internal Only | Deploy scripts | 1.1 |
 

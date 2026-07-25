@@ -518,21 +518,18 @@ export default function TransactionsPage() {
 
 
     const deleteTx = useCallback(async (id) => {
-
-        if (!window.confirm('Delete this transaction?')) {
-
+        if (!window.confirm('Delete this transaction? If it came from a TOS recommendation fill, that recommendation will reopen for review.')) {
             return;
-
         }
-
-        await api.delete(`/transactions/${id}`);
-
-        showToast('Transaction deleted');
-
-        await load();
-
-        notifyPortfolioDashboardRefresh();
-
+        try {
+            const { data } = await api.delete(`/transactions/${id}`);
+            const msg = data?.message || 'Transaction deleted';
+            showToast(msg, data?.tos?.recommendation_reopened ? 'success' : undefined);
+            await load();
+            notifyPortfolioDashboardRefresh();
+        } catch (e) {
+            showToast(e?.response?.data?.message || e?.response?.data?.error?.message || e.message || 'Delete failed', 'danger');
+        }
     }, [load]);
 
 

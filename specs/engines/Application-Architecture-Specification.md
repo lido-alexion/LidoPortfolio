@@ -144,7 +144,8 @@ Scheduled jobs include:
 -   Market data import
 -   Discovery run
 -   Evaluation run
--   Recommendation generation
+-   Recommendation generation (Market Opinion → Portfolio Decision →
+    Execution Plan)
 -   Notification processing
 -   Review generation
 -   Cleanup tasks
