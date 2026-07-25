@@ -53,6 +53,14 @@ class TradingRecommendation extends Model
 
     public const DECISION_EXPIRED = 'expired';
 
+    public const RESERVATION_NONE = 'none';
+
+    public const RESERVATION_RESERVED = 'reserved';
+
+    public const RESERVATION_RELEASED = 'released';
+
+    public const RESERVATION_CONVERTED = 'converted';
+
     public const CANCELLATION_REASONS = [
         'price_moved',
         'market_conditions',
@@ -116,6 +124,14 @@ class TradingRecommendation extends Model
         'confidence',
         'risk_level',
         'suggested_position_size',
+        'suggested_allocation_amount',
+        'reserved_amount',
+        'reservation_status',
+        'reserved_at',
+        'cash_balance_at_generation',
+        'reserved_cash_at_generation',
+        'available_cash_at_generation',
+        'executed_amount',
         'reference_price',
         'current_allocation_pct',
         'target_allocation_pct',
@@ -139,6 +155,12 @@ class TradingRecommendation extends Model
         return [
             'confidence' => 'decimal:4',
             'suggested_position_size' => 'decimal:4',
+            'suggested_allocation_amount' => 'decimal:4',
+            'reserved_amount' => 'decimal:4',
+            'cash_balance_at_generation' => 'decimal:4',
+            'reserved_cash_at_generation' => 'decimal:4',
+            'available_cash_at_generation' => 'decimal:4',
+            'executed_amount' => 'decimal:4',
             'reference_price' => 'decimal:4',
             'current_allocation_pct' => 'decimal:4',
             'target_allocation_pct' => 'decimal:4',
@@ -152,6 +174,7 @@ class TradingRecommendation extends Model
             'approved_at' => 'datetime',
             'cancelled_at' => 'datetime',
             'executed_at' => 'datetime',
+            'reserved_at' => 'datetime',
             'executed_transaction_id' => 'integer',
         ];
     }
@@ -349,6 +372,13 @@ class TradingRecommendation extends Model
 
     public function suggestedInvestmentAmount(): ?float
     {
+        if ($this->suggested_allocation_amount !== null) {
+            return (float) $this->suggested_allocation_amount;
+        }
+        $plan = is_array($this->execution_plan) ? $this->execution_plan : [];
+        if (isset($plan['suggested_investment_amount'])) {
+            return (float) $plan['suggested_investment_amount'];
+        }
         $qty = $this->suggestedQuantity();
         $price = $this->reference_price !== null ? (float) $this->reference_price : null;
         if ($qty === null || $price === null) {
@@ -356,6 +386,11 @@ class TradingRecommendation extends Model
         }
 
         return round($qty * $price, 2);
+    }
+
+    public function requiresCashReservation(): bool
+    {
+        return in_array($this->orderSide(), ['buy'], true);
     }
 
     public static function initialStatusForAction(string $action): string

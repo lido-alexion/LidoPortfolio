@@ -3,8 +3,8 @@
   Field          Value
   -------------- ----------------------------------------
   **Document**   Application Architecture Specification
-  **Version**    1.0 Draft
-  **Status**     Draft
+  **Version**    1.1
+  **Status**     Active (V1.0 / SD-025 / SD-026 aligned)
 
 ------------------------------------------------------------------------
 
@@ -145,7 +145,7 @@ Scheduled jobs include:
 -   Discovery run
 -   Evaluation run
 -   Recommendation generation (Market Opinion → Portfolio Decision →
-    Execution Plan)
+    Ranking → Capital Allocation → Trade gen)
 -   Notification processing
 -   Review generation
 -   Cleanup tasks
@@ -154,21 +154,34 @@ Every job SHALL be independently executable.
 
 ------------------------------------------------------------------------
 
-# 10. Engine vs module responsibilities (SD-025)
+# 10. Engine vs module responsibilities (SD-025 / SD-026)
 
 ## Recommendation Engine
 
-- Market Opinion → Portfolio Decision → Execution Plan
+- Market Opinion → Portfolio Decision → Ranking → Capital Allocation →
+  Trade Recommendation Generation (SD-026)
+- Pluggable `CapitalAllocationStrategy` (default
+  `ScorePriorityCapitalAllocator`)
 - User review: Approve / Reject / Defer
+- Cash reservation on buy Approve; release on cancel/expire/reopen;
+  convert on execute
 - Status lifecycle including `pending_execution`, expire, cancel-execution
   (cancel of pending trade), reopen
-- Does **not** write portfolio ledger rows
+- Does **not** own cash balance posts (delegates to CashManagementService)
+
+## CashManagementService
+
+- Ledger-backed cash balance per profile
+- Derived reserved cash from pending-execution buy reservations
+- Available investable cash for capital allocation
+- Deposit / withdraw / adjust APIs; buy/sell posts from trade fills
 
 ## Execution Engine
 
 - Pending-execution handoff and completion tracking
 - Completing a recommendation when a linked transaction is created
-- Undo fill → return to `pending_execution`
+- Triggers reservation convert + cash buy/sell ledger via cash service
+- Undo fill → return to `pending_execution` (+ cash reverse / re-reserve)
 - Legacy order APIs (BC); future broker adapters
 - Does **not** perform Approve / Reject / Defer
 

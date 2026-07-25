@@ -3,8 +3,8 @@
   Field          Value
   -------------- ------------------------
   **Document**   REST API Specification
-  **Version**    1.0 Draft
-  **Status**     Draft
+  **Version**    1.1
+  **Status**     Active (V1.0 / SD-025 / SD-026 aligned)
 
 ------------------------------------------------------------------------
 
@@ -125,10 +125,33 @@ Detail payload SHALL expose:
 - `ui_label` — friendly label (Buy, Buy More, …)
 - `execution_plan` — sizing / sell plan when actionable (else null)
 - `current_allocation_pct`, `target_allocation_pct`, `suggested_allocation_pct`
+- `suggested_allocation_amount` — capital allocated at generation (SD-026)
+- `reserved_amount`, `reservation_status`, `reserved_at`, `executed_amount`
+- `cash_balance_at_generation`, `reserved_cash_at_generation`,
+  `available_cash_at_generation`
 - `reasoning`, `category` (`actionable` | `informational`)
 - `order_side` — `buy` | `sell` | null
 - `execution_status` — e.g. `pending` while awaiting trade
 - `can_reopen`, `can_cancel_execution`
+
+Approve on a **buy** reserves cash (SD-026); fails if amount exceeds
+available investable cash. Cancel-execution / expire / reopen **release**
+reservation. Execute **converts** reservation and posts cash buy/sell.
+
+## Cash (SD-026)
+
+Legacy `/api` surface (active portfolio; Sanctum):
+
+  Method   Endpoint              Description
+  -------- --------------------- --------------------------------
+  GET      /api/cash             Balance, reserved, available
+  GET      /api/cash/ledger      Recent ledger entries
+  POST     /api/cash/deposit     `{ amount, reason }`
+  POST     /api/cash/withdraw    `{ amount, reason }`
+  POST     /api/cash/adjust      `{ amount, reason }` (reason required)
+
+Summary fields: `cash_balance`, `reserved_cash`,
+`available_investable_cash`.
 
 ## Notifications
 

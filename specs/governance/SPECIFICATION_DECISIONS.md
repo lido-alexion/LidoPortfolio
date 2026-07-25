@@ -395,6 +395,22 @@ This register is the authoritative record of **why Version 1.0 differs** from th
 
 ---
 
+### SD-026 — Recommendation Engine enhanced with portfolio-wide Capital Allocation
+
+| Field | Content |
+|-------|---------|
+| **Category** | Recommendation / Cash |
+| **Original Design** | Per-symbol Execution Plan toward target / max position %; no portfolio cash account; no reserved cash; generation did not optimise across the batch against a cash pool |
+| **Reason** | Without cash and portfolio-wide allocation, buy suggestions could over-commit capital and ignore prior approved-but-unexecuted buys. Operators need deposit/withdraw/adjust, and generation must fund the best opportunities first within available investable cash |
+| **Benefits** | Real capital constraint; reserved cash prevents double-spend of pending buys; pluggable allocators; auditable cash ledger; demote unfunded OPEN/INCREASE to WATCH with evidence |
+| **Reserved Cash Model** | Cash **balance** is ledger-backed (`portfolio_cash_accounts`). **Reserved cash** = sum of `reserved_amount` on `pending_execution` buys with `reservation_status=reserved`. **Available investable cash** = max(0, balance − reserved). Approve buy → reserve; execute → convert + cash buy post; cancel/expire/reopen → release. Reserved is **not** deducted from balance until execution |
+| **Future Optimisation Algorithms** | Replace or compose `CapitalAllocationStrategy` (default `ScorePriorityCapitalAllocator`) with risk-parity, sector/concentration caps, Kelly-style, or ML-assisted allocators without changing reservation semantics |
+| **Migration Considerations** | Migration `2026_07_25_000007_*`: create `portfolio_cash_accounts` + `portfolio_cash_ledger_entries`; add recommendation capital/reservation columns. Existing profiles start at balance 0 until deposit/adjust. Recommendation generation version=3 snapshots cash |
+| **Implemented Behaviour** | `CashManagementService` + `/api/cash*` APIs; `RecommendationEngine` stages Ranking → Capital Allocation → Trade gen; unfunded buys → WATCH (`evidence.capital_allocation.status=unfunded`); Pending Execution UI shows reserved/available cash |
+| **Status** | Accepted |
+
+---
+
 ## Summary table
 
 | ID | Decision | Status |
@@ -424,6 +440,7 @@ This register is the authoritative record of **why Version 1.0 differs** from th
 | SD-023 | Market Opinion vs Portfolio Decision | Accepted |
 | SD-024 | Undo review / undo executed fill | Accepted |
 | SD-025 | Approval separated from execution | Accepted |
+| SD-026 | Cash management + portfolio-wide capital allocation | Accepted |
 
 ---
 

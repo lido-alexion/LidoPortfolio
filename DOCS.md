@@ -84,6 +84,7 @@ Subtree hub: **[specs/README.md](specs/README.md)**
 | 2.12 | *(no Discovery Engine Spec file)* | Discovery intent is in architecture; implementation wraps PatternScan + Screener |
 | 2.13 | [specs/engines/Evaluation-Engine-Specification.md](specs/engines/Evaluation-Engine-Specification.md) | |
 | 2.14 | [specs/engines/Recommendation-Engine-Specification.md](specs/engines/Recommendation-Engine-Specification.md) | |
+| 2.14a | [specs/engines/Cash-Management-Specification.md](specs/engines/Cash-Management-Specification.md) | SD-026 cash ledger + reserved cash |
 | 2.15 | [specs/engines/Notification-Engine-Specification.md](specs/engines/Notification-Engine-Specification.md) | |
 | 2.16 | [specs/engines/Execution-Engine-Specification.md](specs/engines/Execution-Engine-Specification.md) | |
 | 2.17 | [specs/engines/Review-Engine-Specification.md](specs/engines/Review-Engine-Specification.md) | |

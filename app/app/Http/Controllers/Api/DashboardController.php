@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\PortfolioProfile;
 use App\Models\PortfolioSnapshot;
+use App\Services\CashManagementService;
 use App\Services\DailyMarketSyncService;
 use App\Services\PortfolioCalculationService;
 use App\Services\PortfolioSnapshotRebuildService;
@@ -24,6 +25,7 @@ class DashboardController extends Controller
         protected RelativeStrengthService $relativeStrength,
         protected PortfolioSnapshotRebuildService $snapshotRebuild,
         protected DailyMarketSyncService $dailySync,
+        protected CashManagementService $cash,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -37,6 +39,7 @@ class DashboardController extends Controller
         $growth = $this->portfolioGrowthSeries($profile);
 
         $benchmark = $this->relativeStrength->benchmarkStock();
+        $cash = $this->cash->summary($profile);
 
         return response()->json([
             'portfolio_value' => $summary['portfolio_value'],
@@ -45,6 +48,10 @@ class DashboardController extends Controller
             'unrealized_profit' => $summary['unrealized_profit'],
             'realized_profit' => $summary['realized_profit'],
             'xirr' => $summary['xirr'],
+            'cash_balance' => $cash['cash_balance'],
+            'reserved_cash' => $cash['reserved_cash'],
+            'available_investable_cash' => $cash['available_investable_cash'],
+            'cash' => $cash,
             'daily_change' => $this->portfolio->dailyChange($profile),
             'top_movers' => $topMovers,
             'top_gainer' => $topMovers['all_time']['gainer'],

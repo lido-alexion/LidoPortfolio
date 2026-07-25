@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Jobs\BackfillHistoricalDataJob;
 use App\Models\Holding;
 use App\Models\Transaction;
+use App\Services\CashManagementService;
 use App\Services\HoldingsCalculationService;
 use App\Services\PortfolioSnapshotRebuildService;
 use App\Services\StockResolverService;
@@ -26,6 +27,7 @@ class TransactionController extends Controller
         protected TransactionRealizationService $realizations,
         protected TransactionWriteService $writes,
         protected ExecutionEngine $execution,
+        protected CashManagementService $cash,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -134,9 +136,12 @@ class TransactionController extends Controller
             }
         }
 
+        $this->cash->applyTradeTransaction($profile, $transaction, $request->user());
+
         return response()->json([
             'data' => $transaction->fresh()->load('stock'),
             'tos' => $tos,
+            'cash' => $this->cash->summary($profile),
             'message' => $tos
                 ? 'Transaction saved; recommendation marked executed.'
                 : null,
@@ -208,6 +213,9 @@ class TransactionController extends Controller
 
         $stock = $transaction->stock;
         $deletedDate = $transaction->transaction_date;
+
+        $tosRevert = null;
+        $this->cash->reverseTradeTransaction($profile, $transaction, $request->user());
 
         $tosRevert = $this->execution->revertLinkedFillBeforeTransactionDelete(
             $profile,

@@ -382,6 +382,19 @@ export default function RecommendationsPage() {
                                     </div>
                                 )}
 
+                                {selected.available_cash_at_generation != null && (
+                                    <p className="small text-muted mb-2">
+                                        Cash at generation — balance
+                                        {' '}
+                                        {Number(selected.cash_balance_at_generation).toLocaleString()}
+                                        {' · reserved '}
+                                        {Number(selected.reserved_cash_at_generation).toLocaleString()}
+                                        {' · available '}
+                                        {Number(selected.available_cash_at_generation).toLocaleString()}
+                                        {selected.reserved_amount != null ? ` · reserved now ${Number(selected.reserved_amount).toLocaleString()}` : ''}
+                                    </p>
+                                )}
+
                                 {selected.can_execute_manually && selectedActionable && (
                                     <div className="mb-3">
                                         <Link

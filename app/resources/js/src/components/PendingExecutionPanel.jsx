@@ -39,15 +39,18 @@ export default function PendingExecutionPanel({ onExecuteStarted }) {
     const [busyId, setBusyId] = useState(null);
     const [cancelId, setCancelId] = useState(null);
     const [cancelReason, setCancelReason] = useState('other');
+    const [cash, setCash] = useState(null);
 
     const load = useCallback(async () => {
         setLoading(true);
         try {
             const { data } = await api.get('/v1/recommendations/pending-execution');
             setRows(Array.isArray(data?.data) ? data.data : []);
+            setCash(data?.meta?.cash || null);
         } catch (e) {
             showToast(e?.response?.data?.error?.message || e.message || 'Failed to load pending execution', 'danger');
             setRows([]);
+            setCash(null);
         } finally {
             setLoading(false);
         }
@@ -123,6 +126,13 @@ export default function PendingExecutionPanel({ onExecuteStarted }) {
                     </button>
                 </div>
             </div>
+            {cash && (
+                <div className="px-3 pt-3 small text-muted d-flex flex-wrap gap-3">
+                    <span>Cash balance: <strong className="text-body">{money(cash.cash_balance)}</strong></span>
+                    <span>Reserved: <strong className="text-body">{money(cash.reserved_cash)}</strong></span>
+                    <span>Available: <strong className="text-body">{money(cash.available_investable_cash)}</strong></span>
+                </div>
+            )}
             <div className="card-body p-0">
                 {loading ? (
                     <p className="p-3 text-muted mb-0">Loading…</p>
@@ -143,7 +153,8 @@ export default function PendingExecutionPanel({ onExecuteStarted }) {
                                     <th>Stock</th>
                                     <th>Action</th>
                                     <th className="text-end">Qty</th>
-                                    <th className="text-end">Suggested amt</th>
+                                    <th className="text-end">Sugg. amt</th>
+                                    <th className="text-end">Reserved</th>
                                     <th className="text-end">Sugg. price</th>
                                     <th className="text-end">Market</th>
                                     <th>Approved</th>
@@ -163,6 +174,7 @@ export default function PendingExecutionPanel({ onExecuteStarted }) {
                                         <td>{r.ui_label || r.portfolio_action}</td>
                                         <td className="text-end">{r.suggested_quantity != null ? Math.round(Number(r.suggested_quantity)) : '—'}</td>
                                         <td className="text-end">{money(r.suggested_investment_amount)}</td>
+                                        <td className="text-end">{money(r.reserved_amount)}</td>
                                         <td className="text-end">{money(r.reference_price)}</td>
                                         <td className="text-end">{money(r.current_market_price)}</td>
                                         <td className="small">{fmtDate(r.approved_at)}</td>

@@ -36,7 +36,7 @@ Specs under `specs/` define a seven-engine decision platform. Implementation evo
 | Data | `Data\DataEngine` | `portfolio_stocks` / `portfolio_stock_prices` / daily sync |
 | Discovery | `Discovery\DiscoveryEngine` | `portfolio_tos_candidates` (orchestrates PatternScan + Screener) |
 | Evaluation | `Evaluation\EvaluationEngine` | Score/rank/evidence → `portfolio_tos_evaluation_results` |
-| Recommendation | `Recommendation\RecommendationEngine` | Market Opinion → Portfolio Decision → Execution Plan; Approve/Reject/Defer; pending-execution / cancel-execution / expire |
+| Recommendation | `Recommendation\RecommendationEngine` | Market Opinion → Portfolio Decision → Ranking → Capital Allocation → Trade gen; Approve/Reject/Defer; pending-execution / cancel-execution / expire; cash reservation lifecycle |
 | Notification | `Notification\NotificationEngine` | Telegram + `portfolio_tos_notifications` |
 | Execution | `Execution\ExecutionEngine` | Pending execution → ledger transaction (manual or future broker); completion tracking |
 | Review | `Review\ReviewEngine` | Dashboard, outcomes, reports |
@@ -45,8 +45,9 @@ Specs under `specs/` define a seven-engine decision platform. Implementation evo
 ### Config / schema / CLI
 
 - Config: `config/trading_os.php`.
-- Migrations: `2026_07_25_000002_*` … `000006_*` (incl. SD-025 approval≠execution: `pending_execution`, tx `source` + `recommendation_id`).
+- Migrations: `2026_07_25_000002_*` … `000007_*` (incl. SD-025 approval≠execution: `pending_execution`, tx `source` + `recommendation_id`; SD-026 cash + capital allocation columns).
 - Command: `php artisan portfolio:decision-pipeline`.
+- **Cash / capital allocation (SD-026):** Spec: [`specs/engines/Cash-Management-Specification.md`](specs/engines/Cash-Management-Specification.md). `CashManagementService` (balance, reserved from pending_execution buys, available investable cash). `RecommendationEngine::generate()` allocates available cash via pluggable `CapitalAllocationStrategy` (default `ScorePriorityCapitalAllocator`); unfunded OPEN/INCREASE demoted to WATCH (`evidence.capital_allocation.status=unfunded`); version=3 snapshots cash at generation. Approve buy → `reserveForApproval` (fails if amount exceeds available); cancel/expire/reopen → `releaseReservation`; execute → `convertReservation`. APIs: `GET/POST /api/cash*` (deposit/withdraw/adjust + ledger).
 - **Transactions routes:** `/transactions` = Transaction History; `/transactions/pending` = Pending Execution. Toggle navigates between them. Page tabs toggle has no “View” label; uses larger height/font (`.lido-segment-toggle--page-tabs`).
 
 ### REST `/api/v1` (additive)

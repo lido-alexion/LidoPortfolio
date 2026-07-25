@@ -3,8 +3,8 @@
   Field          Value
   -------------- ---------------------
   **Document**   System Domain Model
-  **Version**    1.0 Draft
-  **Status**     Draft
+  **Version**    1.1
+  **Status**     Active (SD-025 / SD-026 aligned)
 
 ------------------------------------------------------------------------
 
@@ -28,6 +28,8 @@ Each business entity SHALL have exactly one owning engine.
   Candidate           Discovery Engine
   Evaluation Result   Evaluation Engine
   Recommendation      Recommendation Engine
+  Cash Account        Cash Management (service)
+  Cash Ledger Entry   Cash Management (service)
   Notification        Notification Engine
   Order               Execution Engine
   Transaction         Execution Engine
@@ -60,13 +62,22 @@ Recommendation
 ├── Notification
 ├── Transaction (reference via recommendation_id — not merged)
 ├── Order (legacy / optional BC)
+├── Cash Reservation fields (reserved_amount / reservation_status)
 └── Review Report
+
+Portfolio Profile
+│
+├── Cash Account (1:1)
+└── Cash Ledger Entries (1:N)
 ```
 
 **SD-025:** Recommendation and Transaction are separate entities. A
 transaction **references** a recommendation (`recommendation_id`); they
 are not the same record. Approval lives on Recommendation; fill lives on
 Transaction.
+
+**SD-026:** Cash Account holds ledger-backed balance. Reserved cash is
+derived from Recommendation reservation fields, not a second balance.
 ------------------------------------------------------------------------
 
 # 4. Core Entity Definitions
@@ -119,17 +130,52 @@ Portfolio-aware decision composed of:
 
 - Market Opinion (direction, strength, confidence, evidence)
 - Portfolio Decision (OPEN / INCREASE / REDUCE / EXIT / HOLD / WATCH)
-- Execution Plan (actionable decisions only)
+- Ranking + Capital Allocation (portfolio-wide vs available cash)
+- Execution Plan (funded actionable decisions only)
+
+Cash / reservation fields (SD-026):
+
+- `suggested_allocation_amount`
+- `reserved_amount`, `reservation_status`, `reserved_at`
+- `cash_balance_at_generation`, `reserved_cash_at_generation`,
+  `available_cash_at_generation`
+- `executed_amount`
 
 Relationship: - References one Evaluation Result.
 
 May be referenced by zero or one completed Transaction
 (`recommendation_id` on the transaction).
 
-Flow: Market Opinion → Portfolio Decision → Execution Plan (optional) →
-User Approval → Pending Execution → Transaction (optional)
+Flow: Market Opinion → Portfolio Decision → Ranking → Capital Allocation
+→ Trade gen → User Approval (reserve) → Pending Execution → Transaction
+(convert / cash post) (optional)
 
 Owned By: - Recommendation Engine
+
+------------------------------------------------------------------------
+
+## Cash Account
+
+One cash balance per Portfolio Profile (`portfolio_cash_accounts`).
+
+Attributes: `profile_id` (unique), `balance`.
+
+Owned By: - CashManagementService (not a separate engine)
+
+------------------------------------------------------------------------
+
+## Cash Ledger Entry
+
+Append-only cash movement (`portfolio_cash_ledger_entries`).
+
+Attributes: `entry_type` (deposit / withdrawal / adjustment / buy /
+sell), signed `amount`, `balance_after`, `reason`, optional
+`transaction_id` / `recommendation_id` / `user_id`.
+
+Relationship: - Belongs to one Cash Account / Profile; may reference
+Transaction and Recommendation.
+
+Owned By: - CashManagementService
 
 ------------------------------------------------------------------------
 

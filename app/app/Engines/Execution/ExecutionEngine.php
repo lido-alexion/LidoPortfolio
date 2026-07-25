@@ -2,6 +2,7 @@
 
 namespace App\Engines\Execution;
 
+use App\Engines\Recommendation\RecommendationEngine;
 use App\Models\Holding;
 use App\Models\OrderTransaction;
 use App\Models\PortfolioProfile;
@@ -11,6 +12,7 @@ use App\Models\TradingOrder;
 use App\Models\TradingRecommendation;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\CashManagementService;
 use App\Services\HoldingsCalculationService;
 use App\Services\PortfolioLoggerService;
 use App\Services\TransactionWriteService;
@@ -28,6 +30,8 @@ class ExecutionEngine
         protected HoldingsCalculationService $holdings,
         protected TransactionWriteService $writes,
         protected PortfolioLoggerService $logger,
+        protected CashManagementService $cash,
+        protected RecommendationEngine $recommendation,
     ) {}
 
     /**
@@ -82,6 +86,12 @@ class ExecutionEngine
                     'status' => TradingOrder::STATUS_EXECUTED,
                     'executed_at' => now(),
                 ]);
+
+            $executedAmount = round(
+                ((float) $transaction->quantity * (float) $transaction->price) + (float) ($transaction->fees ?? 0),
+                4,
+            );
+            $this->recommendation->convertReservation($recommendation, $executedAmount);
 
             $recommendation->forceFill([
                 'status' => TradingRecommendation::STATUS_EXECUTED,
@@ -235,6 +245,8 @@ class ExecutionEngine
             ])->save();
 
             if ($recommendation && $recommendation->isActionable()) {
+                $executedAmount = round($quantity * $price + $fees, 4);
+                $this->recommendation->convertReservation($recommendation, $executedAmount);
                 $recommendation->forceFill([
                     'status' => TradingRecommendation::STATUS_EXECUTED,
                     'executed_at' => now(),
@@ -246,6 +258,7 @@ class ExecutionEngine
         });
 
         $this->writes->applyAfterCreate($profile, $stock, $transaction, softFailSnapshots: true);
+        $this->cash->applyTradeTransaction($profile, $transaction);
 
         $position = Holding::query()
             ->where('profile_id', $profile->id)
@@ -352,8 +365,13 @@ class ExecutionEngine
                     'status' => TradingRecommendation::STATUS_PENDING_EXECUTION,
                     'executed_at' => null,
                     'executed_transaction_id' => null,
+                    'executed_amount' => null,
                     'approved_at' => $recommendation->approved_at ?? now(),
                 ])->save();
+
+                if ($recommendation->requiresCashReservation()) {
+                    $this->recommendation->reserveForApproval($recommendation->fresh());
+                }
             }
         });
 

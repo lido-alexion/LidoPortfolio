@@ -197,12 +197,31 @@ export default function DashboardPage() {
     const [calendarEvents, setCalendarEvents] = useState([]);
     const [calendarLoading, setCalendarLoading] = useState(true);
     const [servedFromCache, setServedFromCache] = useState(false);
-    const [cachedAt, setCachedAt] = useState(null);
+    const [cashAmount, setCashAmount] = useState('');
+    const [cashReason, setCashReason] = useState('');
+    const [cashBusy, setCashBusy] = useState(false);
 
-    const handleTopMoverPeriodChange = useCallback((period) => {
-        setTopMoverPeriod(period);
-        saveTopMoverPeriod(period);
-    }, []);
+    const submitCashDeposit = useCallback(async (e) => {
+        e.preventDefault();
+        const amount = Number(cashAmount);
+        if (!(amount > 0) || !cashReason.trim()) {
+            showToast('Enter a positive amount and reason', 'danger');
+            return;
+        }
+        setCashBusy(true);
+        try {
+            await api.post('/cash/deposit', { amount, reason: cashReason.trim() });
+            showToast('Cash deposited', 'success');
+            setCashAmount('');
+            setCashReason('');
+            clearDashboardCache(userId, profileId);
+            await fetchDashboard({ force: true });
+        } catch (err) {
+            showToast(err?.response?.data?.message || err?.response?.data?.errors?.amount?.[0] || err.message || 'Deposit failed', 'danger');
+        } finally {
+            setCashBusy(false);
+        }
+    }, [cashAmount, cashReason, userId, profileId, fetchDashboard]);
 
     const fetchCalendarUpcoming = useCallback(() => {
         if (!profileId) {
@@ -566,6 +585,21 @@ export default function DashboardPage() {
             value: data.xirr != null ? `${Number(data.xirr).toFixed(2)}%` : 'N/A',
             valueClassName: signedMetricClass(data.xirr),
         },
+        {
+            title: 'Cash Balance',
+            value: formatInrWhole(data.cash_balance ?? data.cash?.cash_balance),
+            valueClassName: '',
+        },
+        {
+            title: 'Reserved Cash',
+            value: formatInrWhole(data.reserved_cash ?? data.cash?.reserved_cash),
+            valueClassName: '',
+        },
+        {
+            title: 'Available Cash',
+            value: formatInrWhole(data.available_investable_cash ?? data.cash?.available_investable_cash),
+            valueClassName: '',
+        },
     ];
 
     const topMoversForPeriod = data.top_movers?.[topMoverPeriod] || {};
@@ -657,6 +691,47 @@ export default function DashboardPage() {
                     </div>
                 </div>
             ))}
+            <div className="col-12">
+                <div className="card">
+                    <div className="card-body py-3">
+                        <form className="row g-2 align-items-end" onSubmit={submitCashDeposit}>
+                            <div className="col-12 col-md-auto">
+                                <div className="text-muted small mb-1">Add cash (deposit)</div>
+                            </div>
+                            <div className="col-6 col-md-2">
+                                <label className="form-label small mb-0" htmlFor="dash-cash-amount">Amount</label>
+                                <input
+                                    id="dash-cash-amount"
+                                    type="number"
+                                    min="0.01"
+                                    step="0.01"
+                                    className="form-control form-control-sm"
+                                    value={cashAmount}
+                                    onChange={(e) => setCashAmount(e.target.value)}
+                                    required
+                                />
+                            </div>
+                            <div className="col-12 col-md-4">
+                                <label className="form-label small mb-0" htmlFor="dash-cash-reason">Reason</label>
+                                <input
+                                    id="dash-cash-reason"
+                                    type="text"
+                                    className="form-control form-control-sm"
+                                    value={cashReason}
+                                    onChange={(e) => setCashReason(e.target.value)}
+                                    placeholder="e.g. Bank transfer"
+                                    required
+                                />
+                            </div>
+                            <div className="col-auto">
+                                <button type="submit" className="btn btn-sm btn-primary" disabled={cashBusy}>
+                                    {cashBusy ? 'Saving…' : 'Deposit'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
             <DashboardTopMoverCard
                 title="Top Gainer"
                 mover={topGainer}

@@ -4,7 +4,21 @@ Acceptance test for the end-to-end Trading Operating System workflow on Lido Por
 
 **MVP is complete when every step below can be demonstrated without manual database edits.**
 
-Prerequisites: MySQL running, `php artisan migrate` applied (includes `portfolio_tos_*` tables), app reachable (`php artisan serve --port=8001` + frontend assets), logged-in user with an active portfolio.
+Prerequisites: MySQL running, `php artisan migrate` applied (includes
+`portfolio_tos_*` and cash tables), app reachable
+(`php artisan serve --port=8001` + frontend assets), logged-in user with
+an active portfolio.
+
+---
+
+## 0. Cash (before pipeline)
+
+1. Deposit investable cash for the active portfolio (`POST /api/cash/deposit`
+   with `amount` + `reason`, or UI if available).
+2. Optional: `GET /api/cash` — confirm `cash_balance` and
+   `available_investable_cash`.
+
+**Pass:** Available investable cash &gt; 0 so buy recommendations can be funded.
 
 ---
 
@@ -69,11 +83,13 @@ Prerequisites: MySQL running, `php artisan migrate` applied (includes `portfolio
 
 1. Open **Pending Execution** at `/transactions/pending`.
 2. Confirm the approved recommendation appears.
-3. **Execute manually:** opens Transaction History (`/transactions`) with Add Transaction prefilled; save links `recommendation_id`.
-4. Confirm holdings updated; recommendation becomes `executed`.
-5. Optionally Approve another item and use **Cancel** on pending execution — status `cancelled`, no ledger row.
+3. Confirm cash strip shows **Cash balance**, **Reserved**, and
+   **Available**; buy rows show **reserved amount**.
+4. **Execute manually:** opens Transaction History (`/transactions`) with Add Transaction prefilled; save links `recommendation_id`.
+5. Confirm holdings updated; recommendation becomes `executed`; reserved cash releases/converts and cash balance reflects the buy.
+6. Optionally Approve another item and use **Cancel** on pending execution — status `cancelled`, reserved cash released, no ledger row.
 
-**Pass:** Delayed/manual execute and cancel work without a separate Orders page; broker not required.
+**Pass:** Delayed/manual execute and cancel work without a separate Orders page; broker not required; reserved cash visible while pending.
 
 ---
 
@@ -102,6 +118,8 @@ Prerequisites: MySQL running, `php artisan migrate` applied (includes `portfolio
 ## Quick API smoke (optional)
 
 ```text
+GET  /api/cash
+POST /api/cash/deposit  { "amount": ..., "reason": "..." }
 POST /api/v1/pipeline/run
 GET  /api/v1/candidates
 GET  /api/v1/evaluations
@@ -122,11 +140,12 @@ Automated coverage: `php artisan test --filter=TradingOsPipelineTest`
 
 | Step | Pass? | Notes |
 |------|-------|-------|
+| 0 Cash deposit | | |
 | 1 Market data | | |
 | 2 Discovery | | |
 | 3 Evaluations | | |
 | 4 User review (Approve) | | |
-| 5 Pending execution / manual trade | | |
+| 5 Pending execution / manual trade (reserved cash) | | |
 | 6 Review dashboard | | |
 | 7 Notifications | | |
 

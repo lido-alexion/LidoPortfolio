@@ -87,6 +87,12 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::get('/stocks/{stock}', [StockController::class, 'show']);
     Route::apiResource('transactions', TransactionController::class);
 
+    Route::get('/cash', [\App\Http\Controllers\Api\CashController::class, 'summary']);
+    Route::get('/cash/ledger', [\App\Http\Controllers\Api\CashController::class, 'ledger']);
+    Route::post('/cash/deposit', [\App\Http\Controllers\Api\CashController::class, 'deposit']);
+    Route::post('/cash/withdraw', [\App\Http\Controllers\Api\CashController::class, 'withdraw']);
+    Route::post('/cash/adjust', [\App\Http\Controllers\Api\CashController::class, 'adjust']);
+
     Route::get('/corporate-actions', [CorporateActionController::class, 'index']);
     Route::post('/corporate-actions/preview', [CorporateActionController::class, 'preview']);
     Route::post('/corporate-actions', [CorporateActionController::class, 'store']);

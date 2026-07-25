@@ -80,6 +80,11 @@ class TradingOsPipelineTest extends TestCase
         $this->actingAs($user);
         $this->withProfileHeader($user, $profile);
 
+        $this->postJson('/api/cash/deposit', [
+            'amount' => 100000,
+            'reason' => 'Test seed capital',
+        ])->assertCreated();
+
         $list = $this->getJson('/api/v1/recommendations');
         $list->assertOk();
         $list->assertJsonPath('success', true);
@@ -90,7 +95,12 @@ class TradingOsPipelineTest extends TestCase
             'recommendation_type' => 'OPEN_POSITION',
             'status' => 'pending_review',
             'reference_price' => 120,
-            'execution_plan' => ['suggested_quantity' => 2],
+            'suggested_allocation_amount' => 240,
+            'execution_plan' => [
+                'suggested_quantity' => 2,
+                'suggested_investment_amount' => 240,
+                'side' => 'buy',
+            ],
         ]);
 
         $detail = $this->getJson('/api/v1/recommendations/'.$recId);
@@ -201,10 +211,22 @@ class TradingOsPipelineTest extends TestCase
         $this->actingAs($user);
         $this->withProfileHeader($user, $profile);
 
+        $this->postJson('/api/cash/deposit', [
+            'amount' => 50000,
+            'reason' => 'Test seed capital',
+        ])->assertCreated();
+
         $recId = $this->getJson('/api/v1/recommendations')->json('data.0.id');
         TradingRecommendation::query()->whereKey($recId)->update([
             'recommendation_type' => 'OPEN_POSITION',
             'status' => 'pending_review',
+            'reference_price' => 100,
+            'suggested_allocation_amount' => 100,
+            'execution_plan' => [
+                'suggested_quantity' => 1,
+                'suggested_investment_amount' => 100,
+                'side' => 'buy',
+            ],
         ]);
         $this->postJson('/api/v1/recommendations/'.$recId.'/review', ['decision' => 'accepted'])->assertOk();
 

@@ -205,8 +205,12 @@ class TradingOsController extends Controller
     {
         $profile = \activePortfolio();
         $items = $this->recommendation->listPendingExecution($profile);
+        $cash = app(\App\Services\CashManagementService::class)->summary($profile);
 
-        return ApiEnvelope::success(array_map(fn ($r) => $this->serializeRecommendation($r, true), $items));
+        return ApiEnvelope::success(
+            array_map(fn ($r) => $this->serializeRecommendation($r, true), $items),
+            ['cash' => $cash],
+        );
     }
 
     public function recommendationsShow(int $id): JsonResponse
@@ -659,8 +663,16 @@ class TradingOsController extends Controller
             'score' => $r->evidence['score'] ?? ($r->market_opinion['score'] ?? null),
             'risk_level' => $r->risk_level,
             'suggested_position_size' => $r->suggested_position_size !== null ? (float) $r->suggested_position_size : null,
+            'suggested_allocation_amount' => $r->suggested_allocation_amount !== null ? (float) $r->suggested_allocation_amount : null,
             'suggested_quantity' => method_exists($r, 'suggestedQuantity') ? $r->suggestedQuantity() : null,
             'suggested_investment_amount' => method_exists($r, 'suggestedInvestmentAmount') ? $r->suggestedInvestmentAmount() : null,
+            'reserved_amount' => $r->reserved_amount !== null ? (float) $r->reserved_amount : null,
+            'reservation_status' => $r->reservation_status,
+            'reserved_at' => optional($r->reserved_at)?->toIso8601String(),
+            'cash_balance_at_generation' => $r->cash_balance_at_generation !== null ? (float) $r->cash_balance_at_generation : null,
+            'reserved_cash_at_generation' => $r->reserved_cash_at_generation !== null ? (float) $r->reserved_cash_at_generation : null,
+            'available_cash_at_generation' => $r->available_cash_at_generation !== null ? (float) $r->available_cash_at_generation : null,
+            'executed_amount' => $r->executed_amount !== null ? (float) $r->executed_amount : null,
             'reference_price' => $r->reference_price !== null ? (float) $r->reference_price : null,
             'current_market_price' => $this->latestCloseForSecurity($r->security_id),
             'status' => $r->status,

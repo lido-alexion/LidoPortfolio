@@ -2,6 +2,8 @@
 
 namespace App\Engines\Recommendation;
 
+use App\Engines\Recommendation\Allocation\CapitalAllocationStrategy;
+use App\Engines\Recommendation\Allocation\ScorePriorityCapitalAllocator;
 use App\Models\EvaluationResult;
 use App\Models\EvaluationRun;
 use App\Models\Holding;
@@ -11,6 +13,7 @@ use App\Models\StockPrice;
 use App\Models\TradingOrder;
 use App\Models\TradingRecommendation;
 use App\Models\User;
+use App\Services\CashManagementService;
 use App\Services\PortfolioCalculationService;
 use App\Services\PortfolioLoggerService;
 use Carbon\Carbon;
@@ -19,20 +22,32 @@ use Illuminate\Validation\ValidationException;
 use Throwable;
 
 /**
- * Recommendation Engine — three stages:
+ * Recommendation Engine — stages:
  * 1) Market Opinion (portfolio-independent)
  * 2) Portfolio Decision (position / allocation aware)
- * 3) Execution Plan (actionable actions only)
+ * 3) Ranking (score / confidence / priority)
+ * 4) Capital Allocation (portfolio-wide vs available investable cash)
+ * 5) Trade Recommendation Generation (funded execution plans)
  */
 class RecommendationEngine
 {
+    protected CapitalAllocationStrategy $allocator;
+
     public function __construct(
         protected PortfolioCalculationService $portfolio,
         protected PortfolioLoggerService $logger,
-    ) {}
+        protected CashManagementService $cash,
+        ?CapitalAllocationStrategy $allocator = null,
+    ) {
+        $this->allocator = $allocator ?? new ScorePriorityCapitalAllocator();
+    }
 
     /**
-     * @return array{recommendations: list<TradingRecommendation>, batch_id: string}
+     * @return array{
+     *     recommendations: list<TradingRecommendation>,
+     *     batch_id: string,
+     *     cash: array{cash_balance: float, reserved_cash: float, available_investable_cash: float}
+     * }
      */
     public function generate(PortfolioProfile $profile, ?EvaluationRun $evaluationRun = null): array
     {
@@ -55,6 +70,9 @@ class RecommendationEngine
         $maxPct = (float) ($config['max_position_pct'] ?? 10);
         $allocationBand = (float) ($config['allocation_band_pct'] ?? 1.0);
         $riskCfg = $config['risk'] ?? [];
+
+        $cashSummary = $this->cash->summary($profile);
+        $availableCash = (float) $cashSummary['available_investable_cash'];
 
         $results = EvaluationResult::query()
             ->where('evaluation_run_id', $evaluationRun->id)
@@ -102,6 +120,8 @@ class RecommendationEngine
             $allocationBand,
             $portfolioValue,
             $riskCfg,
+            $cashSummary,
+            $availableCash,
             &$created,
         ) {
             TradingRecommendation::query()
@@ -114,7 +134,8 @@ class RecommendationEngine
                 ])
                 ->update(['status' => TradingRecommendation::STATUS_CANCELLED]);
 
-            foreach ($results as $result) {
+            $drafts = [];
+            foreach ($results as $index => $result) {
                 $securityId = (int) $result->candidate->security_id;
                 $score = (float) $result->score;
                 $confidence = (float) $result->confidence;
@@ -149,7 +170,7 @@ class RecommendationEngine
                     $sellMax,
                 );
 
-                // Stage 3 — Execution Plan (actionable only).
+                // Desired execution plan (pre–capital allocation).
                 $plan = null;
                 $suggestedAlloc = $currentAlloc;
                 $positionSize = null;
@@ -172,39 +193,153 @@ class RecommendationEngine
                     $suggestedAlloc = $isHeld ? $currentAlloc : 0.0;
                 }
 
-                $reasoning = $this->buildReasoning($opinion, $action, $currentAlloc, $targetAlloc, $isHeld, $risk);
                 $priority = (int) max(1, min(100, round($score)));
+
+                $drafts[] = [
+                    'key' => $index,
+                    'result' => $result,
+                    'security_id' => $securityId,
+                    'score' => $score,
+                    'confidence' => $confidence,
+                    'qty_held' => $qtyHeld,
+                    'is_held' => $isHeld,
+                    'current_alloc' => $currentAlloc,
+                    'target_alloc' => $targetAlloc,
+                    'suggested_alloc' => $suggestedAlloc,
+                    'reference_price' => $referencePrice,
+                    'opinion' => $opinion,
+                    'action' => $action,
+                    'plan' => $plan,
+                    'position_size' => $positionSize,
+                    'priority' => $priority,
+                    'risk' => $risk,
+                ];
+            }
+
+            // Stage 3–4 — Collect buy drafts and allocate available investable cash.
+            $buyDrafts = [];
+            $maxPositionAmount = $portfolioValue > 0 ? round($portfolioValue * ($maxPct / 100.0), 4) : null;
+            foreach ($drafts as $draft) {
+                if (! in_array($draft['action'], ['OPEN_POSITION', 'INCREASE_POSITION'], true)) {
+                    continue;
+                }
+                $desired = (float) ($draft['plan']['suggested_investment_amount'] ?? $draft['position_size'] ?? 0);
+                $buyDrafts[] = [
+                    'key' => $draft['key'],
+                    'score' => $draft['score'],
+                    'confidence' => $draft['confidence'],
+                    'priority' => $draft['priority'],
+                    'desired_amount' => max(0.0, $desired),
+                    'reference_price' => (float) ($draft['reference_price'] ?? 0),
+                    'action' => $draft['action'],
+                    'max_position_amount' => $maxPositionAmount,
+                ];
+            }
+
+            $allocations = $this->allocator->allocate($availableCash, $buyDrafts);
+
+            // Stage 5 — Persist funded / demoted recommendations.
+            foreach ($drafts as $draft) {
+                $action = $draft['action'];
+                $plan = $draft['plan'];
+                $suggestedAlloc = $draft['suggested_alloc'];
+                $positionSize = $draft['position_size'];
+                $suggestedAllocationAmount = null;
+                $capitalAllocationMeta = null;
+
+                if (in_array($action, ['OPEN_POSITION', 'INCREASE_POSITION'], true)) {
+                    $alloc = $allocations[$draft['key']] ?? ['allocated_amount' => 0.0, 'quantity' => 0];
+                    $qty = (int) ($alloc['quantity'] ?? 0);
+                    $amount = round((float) ($alloc['allocated_amount'] ?? 0), 4);
+                    $desiredAmount = (float) ($draft['plan']['suggested_investment_amount'] ?? $draft['position_size'] ?? 0);
+
+                    if ($qty < 1 || $amount <= 0) {
+                        $capitalAllocationMeta = [
+                            'status' => 'unfunded',
+                            'desired_amount' => $desiredAmount,
+                            'allocated_amount' => 0.0,
+                            'quantity' => 0,
+                        ];
+                        $action = 'WATCH';
+                        $plan = is_array($draft['plan']) ? array_merge($draft['plan'], [
+                            'capital_allocation' => $capitalAllocationMeta,
+                            'suggested_quantity' => 0,
+                            'suggested_investment_amount' => 0.0,
+                        ]) : ['capital_allocation' => $capitalAllocationMeta];
+                        $positionSize = null;
+                        $suggestedAllocationAmount = 0.0;
+                        $suggestedAlloc = $draft['is_held'] ? $draft['current_alloc'] : 0.0;
+                    } else {
+                        $capitalAllocationMeta = [
+                            'status' => 'funded',
+                            'desired_amount' => $desiredAmount,
+                            'allocated_amount' => $amount,
+                            'quantity' => $qty,
+                        ];
+                        $plan = is_array($plan) ? $plan : [];
+                        $plan['suggested_quantity'] = $qty;
+                        $plan['suggested_investment_amount'] = $amount;
+                        $plan['capital_allocation'] = $capitalAllocationMeta;
+                        if (isset($plan['position_after']) && is_array($plan['position_after'])) {
+                            $plan['position_after']['quantity_delta'] = $qty;
+                        }
+                        $positionSize = $amount;
+                        $suggestedAllocationAmount = $amount;
+                    }
+                } elseif (is_array($plan) && isset($plan['suggested_investment_amount'])) {
+                    $suggestedAllocationAmount = (float) $plan['suggested_investment_amount'];
+                }
+
+                $reasoning = $this->buildReasoning(
+                    $draft['opinion'],
+                    $action,
+                    $draft['current_alloc'],
+                    $draft['target_alloc'],
+                    $draft['is_held'],
+                    $draft['risk'],
+                );
+
+                $evidence = [
+                    'score' => $draft['score'],
+                    'rank' => $draft['result']->rank,
+                    'passed_rules' => $draft['result']->passed_rules,
+                    'failed_rules' => $draft['result']->failed_rules,
+                    'indicators' => $draft['result']->evidence['indicators'] ?? [],
+                    'discovery' => $draft['result']->evidence['discovery'] ?? [],
+                    'held' => $draft['is_held'],
+                    'market_opinion' => $draft['opinion'],
+                    'portfolio_action' => $action,
+                ];
+                if ($capitalAllocationMeta !== null) {
+                    $evidence['capital_allocation'] = $capitalAllocationMeta;
+                }
 
                 $created[] = TradingRecommendation::query()->create([
                     'profile_id' => $profile->id,
-                    'evaluation_result_id' => $result->id,
-                    'security_id' => $securityId,
+                    'evaluation_result_id' => $draft['result']->id,
+                    'security_id' => $draft['security_id'],
                     'recommendation_type' => $action,
-                    'market_opinion' => $opinion,
+                    'market_opinion' => $draft['opinion'],
                     'execution_plan' => $plan,
-                    'priority' => $priority,
-                    'confidence' => $confidence,
-                    'risk_level' => $risk,
+                    'priority' => $draft['priority'],
+                    'confidence' => $draft['confidence'],
+                    'risk_level' => $draft['risk'],
                     'suggested_position_size' => $positionSize,
-                    'reference_price' => $referencePrice,
-                    'current_allocation_pct' => round($currentAlloc, 4),
-                    'target_allocation_pct' => round($targetAlloc, 4),
+                    'suggested_allocation_amount' => $suggestedAllocationAmount,
+                    'reference_price' => $draft['reference_price'],
+                    'current_allocation_pct' => round($draft['current_alloc'], 4),
+                    'target_allocation_pct' => round($draft['target_alloc'], 4),
                     'suggested_allocation_pct' => round($suggestedAlloc, 4),
                     'status' => TradingRecommendation::initialStatusForAction($action),
-                    'evidence' => [
-                        'score' => $score,
-                        'rank' => $result->rank,
-                        'passed_rules' => $result->passed_rules,
-                        'failed_rules' => $result->failed_rules,
-                        'indicators' => $result->evidence['indicators'] ?? [],
-                        'discovery' => $result->evidence['discovery'] ?? [],
-                        'held' => $isHeld,
-                        'market_opinion' => $opinion,
-                        'portfolio_action' => $action,
-                    ],
-                    'failed_checks' => $result->failed_rules ?? [],
+                    'evidence' => $evidence,
+                    'failed_checks' => $draft['result']->failed_rules ?? [],
                     'reasoning' => $reasoning,
-                    'version' => 2,
+                    'cash_balance_at_generation' => $cashSummary['cash_balance'],
+                    'reserved_cash_at_generation' => $cashSummary['reserved_cash'],
+                    'available_cash_at_generation' => $cashSummary['available_investable_cash'],
+                    'reservation_status' => TradingRecommendation::RESERVATION_NONE,
+                    'reserved_amount' => 0,
+                    'version' => 3,
                     'expires_at' => $expiresAt,
                     'generated_at' => now(),
                 ]);
@@ -215,11 +350,13 @@ class RecommendationEngine
             'profile_id' => $profile->id,
             'count' => count($created),
             'evaluation_run_id' => $evaluationRun->id,
+            'available_investable_cash' => $availableCash,
         ]);
 
         return [
             'recommendations' => $created,
             'batch_id' => 'eval-'.$evaluationRun->id.'-'.now()->format('YmdHis'),
+            'cash' => $cashSummary,
         ];
     }
 
@@ -496,7 +633,7 @@ class RecommendationEngine
             ? TradingRecommendation::STATUS_PENDING_EXECUTION
             : $decision;
 
-        DB::transaction(function () use ($recommendation, $user, $decision, $notes, $status) {
+        DB::transaction(function () use ($recommendation, $user, $decision, $notes, $status, $profile) {
             RecommendationReview::query()->create([
                 'recommendation_id' => $recommendation->id,
                 'user_id' => $user->id,
@@ -515,6 +652,12 @@ class RecommendationEngine
             }
 
             $recommendation->forceFill($fill)->save();
+
+            if ($status === TradingRecommendation::STATUS_PENDING_EXECUTION
+                && $recommendation->requiresCashReservation()) {
+                $recommendation->setRelation('profile', $profile);
+                $this->reserveForApproval($recommendation);
+            }
         });
 
         $this->logger->log('daily', 'RecommendationEngine', 'info', 'Recommendation reviewed', [
@@ -525,6 +668,68 @@ class RecommendationEngine
         ]);
 
         return $recommendation->fresh(['security', 'evaluationResult', 'reviews']);
+    }
+
+    /**
+     * Reserve suggested investable cash when approving a buy recommendation.
+     */
+    public function reserveForApproval(TradingRecommendation $r): void
+    {
+        if (! $r->requiresCashReservation()) {
+            return;
+        }
+
+        $amount = $r->suggestedInvestmentAmount();
+        if ($amount === null || $amount <= 0) {
+            throw ValidationException::withMessages([
+                'cash' => ['Cannot reserve cash: recommendation has no suggested investment amount.'],
+            ]);
+        }
+
+        $amount = round((float) $amount, 4);
+        $profile = $r->relationLoaded('profile') && $r->profile
+            ? $r->profile
+            : PortfolioProfile::query()->findOrFail($r->profile_id);
+
+        $available = $this->cash->availableInvestableCash($profile);
+        if ($amount > $available + 0.0001) {
+            throw ValidationException::withMessages([
+                'cash' => [
+                    'Insufficient available investable cash to approve this recommendation '
+                    .'(need '.$amount.', available '.$available.').',
+                ],
+            ]);
+        }
+
+        $r->forceFill([
+            'reserved_amount' => $amount,
+            'reservation_status' => TradingRecommendation::RESERVATION_RESERVED,
+            'reserved_at' => now(),
+        ])->save();
+    }
+
+    /**
+     * Release cash reserved for a pending-execution buy recommendation.
+     */
+    public function releaseReservation(TradingRecommendation $r): void
+    {
+        $r->forceFill([
+            'reservation_status' => TradingRecommendation::RESERVATION_RELEASED,
+            'reserved_amount' => 0,
+            'reserved_at' => null,
+        ])->save();
+    }
+
+    /**
+     * Convert a reservation into an actual executed outflow amount.
+     */
+    public function convertReservation(TradingRecommendation $r, float $executedAmount): void
+    {
+        $r->forceFill([
+            'reservation_status' => TradingRecommendation::RESERVATION_CONVERTED,
+            'executed_amount' => round($executedAmount, 4),
+            'reserved_amount' => 0,
+        ])->save();
     }
 
     /**
@@ -582,6 +787,8 @@ class RecommendationEngine
                 'cancelled_at' => now(),
                 'cancellation_reason' => $reason,
             ])->save();
+
+            $this->releaseReservation($recommendation);
         });
 
         $this->logger->log('daily', 'RecommendationEngine', 'info', 'Recommendation execution cancelled', [
@@ -646,6 +853,8 @@ class RecommendationEngine
                 'status' => TradingRecommendation::STATUS_EXPIRED,
                 'expires_at' => $recommendation->expires_at ?? now(),
             ])->save();
+
+            $this->releaseReservation($recommendation);
         });
 
         return $recommendation->fresh(['security', 'evaluationResult', 'reviews']);
@@ -713,6 +922,8 @@ class RecommendationEngine
                 'executed_at' => null,
                 'executed_transaction_id' => null,
             ])->save();
+
+            $this->releaseReservation($recommendation);
         });
 
         $this->logger->log('daily', 'RecommendationEngine', 'info', 'Recommendation reopened for review', [

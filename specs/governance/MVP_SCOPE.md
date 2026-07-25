@@ -14,7 +14,8 @@ Related: [`SPECIFICATION_DECISIONS.md`](./SPECIFICATION_DECISIONS.md) · [`PRODU
 Version 1.0 delivers a **Stage 1 decision-support Trading Operating System** inside Lido Portfolio:
 
 1. Transform market data into explainable, ranked opportunities.  
-2. Produce position-aware recommendations (Market Opinion + Portfolio Decision + Execution Plan).  
+2. Produce position-aware recommendations (Market Opinion + Portfolio
+   Decision + Ranking + Capital Allocation + Execution Plan).  
 3. Require human **Approve** / Reject / Defer before a trade may be
    recorded **for actionable portfolio decisions**; HOLD_POSITION / WATCH
    are informational and auto-published. Approval does **not** execute
@@ -22,8 +23,10 @@ Version 1.0 delivers a **Stage 1 decision-support Trading Operating System** ins
 4. Support **delayed / manual execution**: pending-execution queue,
    execute later via Transactions, cancel pending execution, and
    recommendation↔transaction traceability (`recommendation_id`).  
-5. Notify via Telegram and retain delivery history.  
-6. Review outcomes and basic performance without manual database edits.
+5. Track **cash balance**, **reserved cash**, and **available investable
+   cash**; allocate capital portfolio-wide on generation (SD-026).  
+6. Notify via Telegram and retain delivery history.  
+7. Review outcomes and basic performance without manual database edits.
 
 Version 1.0 is **not** automated brokerage, multi-strategy isolation, or a greenfield rewrite.
 
@@ -58,13 +61,25 @@ Version 1.0 is **not** automated brokerage, multi-strategy isolation, or a green
 
 ### Recommendation Engine
 
-- Three-stage model: **Market Opinion** → **Portfolio Decision** → **Execution Plan** (SD-023)
+- Five-stage model: **Market Opinion** → **Portfolio Decision** →
+  **Ranking** → **Capital Allocation** → **Trade gen** (SD-023 / SD-026)
 - Portfolio actions: OPEN / INCREASE / REDUCE / EXIT / HOLD_POSITION / WATCH (UI: Buy / Buy More / Sell Partial / Sell All / Hold / Watch)
+- **Portfolio-wide capital allocation** vs available investable cash;
+  pluggable `CapitalAllocationStrategy` (default ScorePriority);
+  unfunded OPEN/INCREASE demoted to WATCH
 - **Actionable** decisions: Approve / Reject / Defer; Approve → `pending_execution` (not an immediate trade) (SD-025)
+- Buy Approve **reserves** cash; cancel/expire/reopen **releases**; execute **converts** (SD-026)
 - **Informational** (HOLD_POSITION / WATCH) auto-published; no pending execution
 - Position-aware: uses holdings + allocation toward configured target / max position %
 - Review history for actionable decisions
 - Recommendations UI: **Trade recommendations** vs **Market insights**; **Pending Execution** tab
+
+### Cash Management (SD-026)
+
+- Cash account + ledger per portfolio profile
+- Deposit / withdraw / adjust (`reason` required); buy/sell posts from trades
+- Derived reserved cash from pending-execution buy reservations
+- APIs: `GET /api/cash`, ledger, deposit, withdraw, adjust
 
 ### Notification Engine
 
@@ -127,7 +142,8 @@ Intentionally **out of Version 1.0** (see backlog for targeting):
 | Discovery | Dedicated Discovery Engine Spec document as a deliverable; full-universe mandatory scan |
 | Evaluation | Market regime, ML scoring, pluggable rules engine product |
 | Notification | Email, webhook, SMS, push, multi-channel preference center |
-| Execution | Broker automation (Zerodha etc.), GTT, partial fills, stop/target orders |
+| Execution | Broker automation (Zerodha etc.), GTT, partial fills, stop/target orders; broker cash reconciliation |
+| Cash | Alternate capital optimisers beyond ScorePriority (future pluggable strategies) |
 | Review | Full attribution, tax reporting, AI insights, dedicated Reports UI |
 | Architecture | Repository/DTO refactor, interface-only engines |
 | API | OpenAPI generation, fine-grained RBAC matrix |
@@ -144,9 +160,10 @@ Version 1.0 deployment is successful when:
 1. Market data can be synced and is visible to discovery/evaluation.  
 2. Discovery produces candidates with evidence in the UI.  
 3. Evaluation produces ranked, explainable scores.  
-4. Pipeline or generate path produces recommendations in `pending_review`.  
-5. User can Approve / Reject / Defer with persisted history (Approve → pending execution).  
-6. Pending-execution items can be executed manually (Transactions + `recommendation_id`), cancelled, or left delayed; holdings update on execute.  
+4. Pipeline or generate path produces recommendations in `pending_review`
+   (capital allocation respects available investable cash).  
+5. User can Approve / Reject / Defer with persisted history (Approve → pending execution; buy Approve reserves cash).  
+6. Pending-execution items can be executed manually (Transactions + `recommendation_id`), cancelled, or left delayed; holdings + cash update on execute.  
 7. Telegram notifications are delivered **or** intentionally skipped with history empty-state.  
 8. Review dashboard shows outcomes consistent with the session.  
 9. No manual SQL is required for the demo path (`../MVP_DEMO_CHECKLIST.md`).  
