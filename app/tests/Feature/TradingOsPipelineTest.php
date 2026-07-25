@@ -133,6 +133,18 @@ class TradingOsPipelineTest extends TestCase
             'user_id' => $user->id,
         ]);
 
+        $cashSummary = $this->getJson('/api/cash?include_reservations=1');
+        $cashSummary->assertOk();
+        $this->assertGreaterThan(0, (float) $cashSummary->json('data.reserved_cash'));
+        $this->assertTrue(collect($cashSummary->json('data.reservations'))->contains(
+            fn ($r) => (int) $r['recommendation_id'] === (int) $recId
+        ));
+        $reservations = $this->getJson('/api/cash/reservations');
+        $reservations->assertOk();
+        $this->assertTrue(collect($reservations->json('data'))->contains(
+            fn ($r) => (int) $r['recommendation_id'] === (int) $recId
+        ));
+
         $pendingList = $this->getJson('/api/v1/recommendations/pending-execution');
         $pendingList->assertOk();
         $this->assertTrue(collect($pendingList->json('data'))->contains(fn ($r) => (int) $r['id'] === (int) $recId));

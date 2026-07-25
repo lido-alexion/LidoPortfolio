@@ -75,6 +75,7 @@ Independent freeze audit (2026-07-25): [`audit/`](./audit/) — verdict **YES** 
 | 2026-07-25 | SD-024 | Undo Accept/Reject/Defer + reopen on TOS fill delete |
 | 2026-07-25 | SD-025 | Recommendation approval separated from trade execution |
 | 2026-07-25 | SD-026 | Cash management + portfolio-wide capital allocation (reserved cash, ScorePriority allocator) |
+| 2026-07-25 | UI | Cash tab (`/cash`): deposit/withdraw/adjust/statement/reservations; Dashboard shows available cash only |
 
 ---
 

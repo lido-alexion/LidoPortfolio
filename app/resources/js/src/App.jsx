@@ -42,6 +42,7 @@ import CandidatesPage from './pages/CandidatesPage';
 import EvaluationsPage from './pages/EvaluationsPage';
 import ReviewDashboardPage from './pages/ReviewDashboardPage';
 import NotificationHistoryPage from './pages/NotificationHistoryPage';
+import CashManagementPage from './pages/CashManagementPage';
 
 const FOOTER_NAV_ENABLED = true;
 
@@ -141,6 +142,7 @@ function App() {
                                 <Route path="/" element={<DashboardPage />} />
                                 <Route path="/transactions" element={<TransactionsPage />} />
                                 <Route path="/transactions/pending" element={<TransactionsPage />} />
+                                <Route path="/cash" element={<CashManagementPage />} />
                                 <Route path="/corporate-action" element={<CorporateActionPage />} />
                                 <Route path="/transactions/closed" element={<ClosedTransactionsPage />} />
                                 <Route path="/holdings" element={<HoldingsPage />} />

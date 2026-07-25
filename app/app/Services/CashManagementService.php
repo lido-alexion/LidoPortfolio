@@ -56,67 +56,152 @@ class CashManagementService
      * @return array{
      *     cash_balance: float,
      *     reserved_cash: float,
-     *     available_investable_cash: float
+     *     available_investable_cash: float,
+     *     reservations: list<array<string, mixed>>
      * }
      */
-    public function summary(PortfolioProfile $profile): array
+    public function summary(PortfolioProfile $profile, bool $includeReservations = false): array
     {
         $balance = $this->balance($profile);
         $reserved = $this->reservedCash($profile);
 
-        return [
+        $payload = [
             'cash_balance' => $balance,
             'reserved_cash' => $reserved,
             'available_investable_cash' => round(max(0.0, $balance - $reserved), 4),
         ];
+
+        if ($includeReservations) {
+            $payload['reservations'] = $this->reservationDetails($profile);
+        }
+
+        return $payload;
+    }
+
+    /**
+     * Active cash reservations (approved buys awaiting execution).
+     *
+     * @return list<array{
+     *     recommendation_id: int,
+     *     symbol: ?string,
+     *     name: ?string,
+     *     portfolio_action: ?string,
+     *     ui_label: ?string,
+     *     reserved_amount: float,
+     *     suggested_quantity: ?float,
+     *     reference_price: ?float,
+     *     reserved_at: ?string,
+     *     approved_at: ?string,
+     *     status: string
+     * }>
+     */
+    public function reservationDetails(PortfolioProfile $profile): array
+    {
+        $rows = TradingRecommendation::query()
+            ->with('security')
+            ->where('profile_id', $profile->id)
+            ->whereIn('status', [
+                TradingRecommendation::STATUS_PENDING_EXECUTION,
+                TradingRecommendation::STATUS_ACCEPTED,
+            ])
+            ->where('reservation_status', TradingRecommendation::RESERVATION_RESERVED)
+            ->whereNotNull('reserved_amount')
+            ->where('reserved_amount', '>', 0)
+            ->orderByDesc('reserved_at')
+            ->orderByDesc('id')
+            ->get();
+
+        return $rows->map(function (TradingRecommendation $r) {
+            return [
+                'recommendation_id' => $r->id,
+                'symbol' => $r->security?->symbol,
+                'name' => $r->security?->name,
+                'portfolio_action' => method_exists($r, 'portfolioAction') ? $r->portfolioAction() : $r->recommendation_type,
+                'ui_label' => method_exists($r, 'uiLabel') ? $r->uiLabel() : $r->recommendation_type,
+                'reserved_amount' => round((float) $r->reserved_amount, 4),
+                'suggested_quantity' => method_exists($r, 'suggestedQuantity') ? $r->suggestedQuantity() : null,
+                'reference_price' => $r->reference_price !== null ? (float) $r->reference_price : null,
+                'reserved_at' => optional($r->reserved_at)?->toIso8601String(),
+                'approved_at' => optional($r->approved_at)?->toIso8601String(),
+                'status' => $r->status,
+            ];
+        })->values()->all();
     }
 
     public function deposit(
         PortfolioProfile $profile,
         float $amount,
-        string $reason,
+        ?string $reason = null,
         ?User $user = null,
+        ?string $entryDate = null,
     ): CashLedgerEntry {
         if ($amount <= 0) {
             throw ValidationException::withMessages(['amount' => ['Deposit amount must be positive.']]);
         }
-        if (trim($reason) === '') {
-            throw ValidationException::withMessages(['reason' => ['Reason is required.']]);
-        }
 
-        return $this->post($profile, CashLedgerEntry::TYPE_DEPOSIT, $amount, $reason, $user);
+        return $this->post(
+            $profile,
+            CashLedgerEntry::TYPE_DEPOSIT,
+            $amount,
+            $reason,
+            $user,
+            null,
+            null,
+            $entryDate,
+        );
     }
 
     public function withdraw(
         PortfolioProfile $profile,
         float $amount,
-        string $reason,
+        ?string $reason = null,
         ?User $user = null,
+        ?string $entryDate = null,
     ): CashLedgerEntry {
         if ($amount <= 0) {
             throw ValidationException::withMessages(['amount' => ['Withdrawal amount must be positive.']]);
         }
-        if (trim($reason) === '') {
-            throw ValidationException::withMessages(['reason' => ['Reason is required.']]);
+
+        $available = $this->availableInvestableCash($profile);
+        if ($amount > $available + 0.0001) {
+            throw ValidationException::withMessages([
+                'amount' => ['Withdrawal cannot exceed available cash (₹'.number_format($available, 0, '.', ',').').'],
+            ]);
         }
 
-        return $this->post($profile, CashLedgerEntry::TYPE_WITHDRAWAL, -abs($amount), $reason, $user);
+        return $this->post(
+            $profile,
+            CashLedgerEntry::TYPE_WITHDRAWAL,
+            -abs($amount),
+            $reason,
+            $user,
+            null,
+            null,
+            $entryDate,
+        );
     }
 
     public function adjust(
         PortfolioProfile $profile,
         float $amount,
-        string $reason,
+        ?string $reason = null,
         ?User $user = null,
+        ?string $entryDate = null,
     ): CashLedgerEntry {
         if ($amount == 0.0) {
             throw ValidationException::withMessages(['amount' => ['Adjustment amount cannot be zero.']]);
         }
-        if (trim($reason) === '') {
-            throw ValidationException::withMessages(['reason' => ['Reason is required for cash adjustments.']]);
-        }
 
-        return $this->post($profile, CashLedgerEntry::TYPE_ADJUSTMENT, $amount, $reason, $user);
+        return $this->post(
+            $profile,
+            CashLedgerEntry::TYPE_ADJUSTMENT,
+            $amount,
+            $reason,
+            $user,
+            null,
+            null,
+            $entryDate,
+        );
     }
 
     /**
@@ -131,6 +216,9 @@ class CashManagementService
         $price = (float) $transaction->price;
         $fees = (float) ($transaction->fees ?? 0);
         $notional = round($qty * $price, 4);
+        $entryDate = $transaction->transaction_date
+            ? \Carbon\Carbon::parse($transaction->transaction_date)->toDateString()
+            : null;
 
         if (strtolower((string) $transaction->type) === 'buy') {
             $delta = -round($notional + $fees, 4);
@@ -143,6 +231,7 @@ class CashManagementService
                 $user,
                 $transaction->id,
                 $transaction->recommendation_id,
+                $entryDate,
             );
         }
 
@@ -157,6 +246,7 @@ class CashManagementService
                 $user,
                 $transaction->id,
                 $transaction->recommendation_id,
+                $entryDate,
             );
         }
 
@@ -190,6 +280,7 @@ class CashManagementService
             $user,
             $transaction->id,
             $transaction->recommendation_id,
+            now()->toDateString(),
         );
     }
 
@@ -200,6 +291,7 @@ class CashManagementService
     {
         return CashLedgerEntry::query()
             ->where('profile_id', $profile->id)
+            ->orderByDesc('entry_date')
             ->orderByDesc('id')
             ->limit($limit)
             ->get()
@@ -210,10 +302,11 @@ class CashManagementService
         PortfolioProfile $profile,
         string $type,
         float $signedAmount,
-        string $reason,
+        ?string $reason = null,
         ?User $user = null,
         ?int $transactionId = null,
         ?int $recommendationId = null,
+        ?string $entryDate = null,
     ): CashLedgerEntry {
         return DB::transaction(function () use (
             $profile,
@@ -223,6 +316,7 @@ class CashManagementService
             $user,
             $transactionId,
             $recommendationId,
+            $entryDate,
         ) {
             $account = CashAccount::query()
                 ->where('profile_id', $profile->id)
@@ -249,12 +343,19 @@ class CashManagementService
 
             $account->forceFill(['balance' => max(0, $newBalance)])->save();
 
+            $resolvedDate = $entryDate
+                ? \Carbon\Carbon::parse($entryDate)->toDateString()
+                : now()->toDateString();
+
+            $trimmedReason = $reason !== null ? trim($reason) : '';
+
             return CashLedgerEntry::query()->create([
                 'profile_id' => $profile->id,
                 'entry_type' => $type,
                 'amount' => $signedAmount,
                 'balance_after' => (float) $account->balance,
-                'reason' => $reason,
+                'reason' => $trimmedReason !== '' ? $trimmedReason : null,
+                'entry_date' => $resolvedDate,
                 'transaction_id' => $transactionId,
                 'recommendation_id' => $recommendationId,
                 'user_id' => $user?->id,

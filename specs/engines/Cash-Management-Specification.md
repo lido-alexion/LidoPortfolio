@@ -80,9 +80,11 @@ Sell-side approvals do not reserve cash.
 
 # 6. Deposits, Withdrawals, Adjustments
 
-- **Deposit** — amount &gt; 0; reason required.
-- **Withdrawal** — amount &gt; 0; reason required; must leave balance ≥ 0.
-- **Adjustment** — non-zero signed amount; **reason required** (audit).
+- **Deposit** — amount &gt; 0 (whole rupees in UI); remarks optional; `transaction_date` /
+  `entry_date` optional (defaults to today; not future).
+- **Withdrawal** — amount &gt; 0; **cannot exceed available investable cash**;
+  remarks optional; date as above.
+- **Adjustment** — non-zero signed whole-rupee amount; remarks optional; date as above.
 
 # 7. Future Broker Reconciliation
 
@@ -111,7 +113,8 @@ the same; broker fills convert reservations as today.
 | `entry_type`         | deposit / withdrawal / adjustment / buy / sell |
 | `amount`             | Signed |
 | `balance_after`      | After post |
-| `reason`             | Nullable string (required for adjust; required on deposit/withdraw APIs) |
+| `reason`             | Nullable string (optional remarks) |
+| `entry_date`         | Business date (defaults to today) |
 | `transaction_id`     | Nullable |
 | `recommendation_id`  | Nullable |
 | `user_id`            | Nullable |
@@ -126,13 +129,14 @@ Recommendation cash/reservation columns (on `portfolio_tos_recommendations`):
 
 Legacy `/api` (Sanctum; active portfolio):
 
-  Method   Endpoint              Description
-  -------- --------------------- --------------------------------
-  GET      /api/cash             Summary (balance, reserved, available)
-  GET      /api/cash/ledger      Recent ledger entries (`limit` 1–100)
-  POST     /api/cash/deposit     `{ amount, reason }`
-  POST     /api/cash/withdraw    `{ amount, reason }`
-  POST     /api/cash/adjust      `{ amount, reason }`
+  Method   Endpoint                Description
+  -------- ----------------------- --------------------------------
+  GET      /api/cash               Summary (balance, reserved, available); `?include_reservations=1` adds reservation rows
+  GET      /api/cash/reservations  Active reservation details only
+  GET      /api/cash/ledger        Recent ledger entries (`limit` 1–100)
+  POST     /api/cash/deposit       `{ amount, remarks?, reason?, transaction_date? }`
+  POST     /api/cash/withdraw      `{ amount, remarks?, reason?, transaction_date? }` (≤ available cash)
+  POST     /api/cash/adjust        `{ amount, remarks?, reason?, transaction_date? }`
 
 Summary shape:
 
@@ -140,9 +144,21 @@ Summary shape:
 {
   "cash_balance": 0,
   "reserved_cash": 0,
-  "available_investable_cash": 0
+  "available_investable_cash": 0,
+  "reservations": []
 }
 ```
+
+`reservations` is present only when requested. Each item includes
+`recommendation_id`, `symbol`, `portfolio_action` / `ui_label`,
+`reserved_amount`, optional qty/price, and `reserved_at`.
+
+# 9.1 UI
+
+- **Dashboard** — shows **Available Cash** only (link to Cash management).
+- **Cash** tab (`/cash`) — balance / reserved / available, deposit /
+  withdraw / adjust (whole-rupee `NumberInput`, optional remarks,
+  transaction date via calendar), reservation details, and cash account statement.
 
 # 10. Dependencies
 

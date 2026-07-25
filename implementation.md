@@ -45,9 +45,9 @@ Specs under `specs/` define a seven-engine decision platform. Implementation evo
 ### Config / schema / CLI
 
 - Config: `config/trading_os.php`.
-- Migrations: `2026_07_25_000002_*` … `000007_*` (incl. SD-025 approval≠execution: `pending_execution`, tx `source` + `recommendation_id`; SD-026 cash + capital allocation columns).
+- Migrations: `2026_07_25_000002_*` … `000008_*` (incl. SD-025 approval≠execution: `pending_execution`, tx `source` + `recommendation_id`; SD-026 cash + capital allocation columns; cash ledger `entry_date`).
 - Command: `php artisan portfolio:decision-pipeline`.
-- **Cash / capital allocation (SD-026):** Spec: [`specs/engines/Cash-Management-Specification.md`](specs/engines/Cash-Management-Specification.md). `CashManagementService` (balance, reserved from pending_execution buys, available investable cash). `RecommendationEngine::generate()` allocates available cash via pluggable `CapitalAllocationStrategy` (default `ScorePriorityCapitalAllocator`); unfunded OPEN/INCREASE demoted to WATCH (`evidence.capital_allocation.status=unfunded`); version=3 snapshots cash at generation. Approve buy → `reserveForApproval` (fails if amount exceeds available); cancel/expire/reopen → `releaseReservation`; execute → `convertReservation`. APIs: `GET/POST /api/cash*` (deposit/withdraw/adjust + ledger).
+- **Cash / capital allocation (SD-026):** Spec: [`specs/engines/Cash-Management-Specification.md`](specs/engines/Cash-Management-Specification.md). `CashManagementService` (balance, reserved from pending_execution buys, available investable cash; `reservationDetails` for breakdown). `RecommendationEngine::generate()` allocates available cash via pluggable `CapitalAllocationStrategy` (default `ScorePriorityCapitalAllocator`); unfunded OPEN/INCREASE demoted to WATCH (`evidence.capital_allocation.status=unfunded`); version=3 snapshots cash at generation. Approve buy → `reserveForApproval` (fails if amount exceeds available); cancel/expire/reopen → `releaseReservation`; execute → `convertReservation`. APIs: `GET/POST /api/cash*` (deposit/withdraw/adjust + ledger + reservations).
 - **Transactions routes:** `/transactions` = Transaction History; `/transactions/pending` = Pending Execution. Toggle navigates between them. Page tabs toggle has no “View” label; uses larger height/font (`.lido-segment-toggle--page-tabs`).
 
 ### REST `/api/v1` (additive)
@@ -56,7 +56,11 @@ Sanctum auth. `TradingOsController`: securities, imports, candidates, evaluation
 
 ### Frontend
 
-`/candidates` (nav: **Discovery**), `/evaluations`, `/recommendations` (**Approve**/Reject/Defer only), `/transactions` (**Pending Execution** + history), `/review`, `/notification-history` (nav: **Notifications**). Manual execute from pending queue → Add Transaction form.
+`/candidates` (nav: **Discovery**), `/evaluations`, `/recommendations` (**Approve**/Reject/Defer only), `/transactions` (**Pending Execution** + history), `/cash` (**Cash** tab), `/review`, `/notification-history` (nav: **Notifications**). Manual execute from pending queue → Add Transaction form.
+
+**Cash UI (2026-07-25):** Dashboard shows **Available Cash** only (link to `/cash`). Full cash management lives on `/cash`: balance / reserved / available, deposit / withdraw / adjust via shared `NumberInput` (₹1 steps), optional remarks, transaction date (`TransactionDateInput`, default today), reservation detail breakdown, and cash account statement. Withdrawals cannot exceed available investable cash (UI + API). Ledger stores `entry_date` (migration `000008`).
+
+**Dashboard cash deposit fix (2026-07-25):** SD-026 deposit UI briefly declared `submitCashDeposit` before `fetchDashboard` (TDZ → production “Cannot access … before initialization”) and dropped `cachedAt` / `handleTopMoverPeriodChange`. Deposit callback now sits after `fetchDashboard`; cache timestamp and top-mover period handler restored. Deposit UI later moved off Dashboard to `/cash`.
 
 **Recommendations review dialog:** Bootstrap modals were staying light in dark mode because only `data-theme` was set (not `data-bs-theme`). `applyResolvedTheme` now sets both. Dialog also uses `.lido-tos-review-modal` Lido tokens. Qty → Quantity. Defer/Reject close the dialog; Approve on BUY/SELL moves to pending execution (trade later); Approve on WATCH/HOLD N/A (insights view-only).
 

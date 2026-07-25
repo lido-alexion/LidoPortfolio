@@ -13,10 +13,10 @@ an active portfolio.
 
 ## 0. Cash (before pipeline)
 
-1. Deposit investable cash for the active portfolio (`POST /api/cash/deposit`
-   with `amount` + `reason`, or UI if available).
-2. Optional: `GET /api/cash` — confirm `cash_balance` and
-   `available_investable_cash`.
+1. Deposit investable cash for the active portfolio via **Cash** tab (`/cash`)
+   or `POST /api/cash/deposit` with `amount` + `reason`.
+2. Optional: on Cash tab confirm **Cash balance**, **Reserved**, **Available**;
+   or `GET /api/cash` — confirm `cash_balance` and `available_investable_cash`.
 
 **Pass:** Available investable cash &gt; 0 so buy recommendations can be funded.
 

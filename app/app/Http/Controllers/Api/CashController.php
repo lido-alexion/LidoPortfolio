@@ -14,12 +14,28 @@ class CashController extends Controller
         protected CashManagementService $cash,
     ) {}
 
-    public function summary(): JsonResponse
+    public function summary(Request $request): JsonResponse
+    {
+        $profile = \activePortfolio();
+        $includeReservations = filter_var(
+            $request->input('include_reservations', false),
+            FILTER_VALIDATE_BOOLEAN
+        );
+
+        return response()->json([
+            'data' => $this->cash->summary($profile, $includeReservations),
+        ]);
+    }
+
+    public function reservations(): JsonResponse
     {
         $profile = \activePortfolio();
 
         return response()->json([
-            'data' => $this->cash->summary($profile),
+            'data' => $this->cash->reservationDetails($profile),
+            'meta' => [
+                'reserved_cash' => $this->cash->reservedCash($profile),
+            ],
         ]);
     }
 
@@ -34,6 +50,7 @@ class CashController extends Controller
             'amount' => (float) $e->amount,
             'balance_after' => (float) $e->balance_after,
             'reason' => $e->reason,
+            'entry_date' => optional($e->entry_date)?->toDateString(),
             'transaction_id' => $e->transaction_id,
             'recommendation_id' => $e->recommendation_id,
             'created_at' => optional($e->created_at)?->toIso8601String(),
@@ -62,14 +79,34 @@ class CashController extends Controller
         $profile = \activePortfolio();
         $validated = $request->validate([
             'amount' => 'required|numeric',
-            'reason' => 'required|string|max:500',
+            'reason' => 'nullable|string|max:500',
+            'remarks' => 'nullable|string|max:500',
+            'transaction_date' => 'nullable|date|before_or_equal:today',
+            'entry_date' => 'nullable|date|before_or_equal:today',
         ]);
+
+        $remarks = trim((string) ($validated['remarks'] ?? $validated['reason'] ?? ''));
+        $entryDate = $validated['transaction_date'] ?? $validated['entry_date'] ?? null;
+        $amount = (float) $validated['amount'];
+
+        // Whole-rupee cash movements from the Cash UI.
+        if ($op !== 'adjust' && abs($amount - round($amount)) > 0.0001) {
+            throw ValidationException::withMessages([
+                'amount' => ['Amount must be a whole number of rupees.'],
+            ]);
+        }
+        if ($op === 'adjust' && abs($amount - round($amount)) > 0.0001) {
+            throw ValidationException::withMessages([
+                'amount' => ['Amount must be a whole number of rupees.'],
+            ]);
+        }
+        $amount = round($amount);
 
         try {
             $entry = match ($op) {
-                'deposit' => $this->cash->deposit($profile, (float) $validated['amount'], $validated['reason'], $request->user()),
-                'withdraw' => $this->cash->withdraw($profile, (float) $validated['amount'], $validated['reason'], $request->user()),
-                default => $this->cash->adjust($profile, (float) $validated['amount'], $validated['reason'], $request->user()),
+                'deposit' => $this->cash->deposit($profile, $amount, $remarks !== '' ? $remarks : null, $request->user(), $entryDate),
+                'withdraw' => $this->cash->withdraw($profile, $amount, $remarks !== '' ? $remarks : null, $request->user(), $entryDate),
+                default => $this->cash->adjust($profile, $amount, $remarks !== '' ? $remarks : null, $request->user(), $entryDate),
             };
         } catch (ValidationException $e) {
             throw $e;
@@ -83,6 +120,7 @@ class CashController extends Controller
                     'amount' => (float) $entry->amount,
                     'balance_after' => (float) $entry->balance_after,
                     'reason' => $entry->reason,
+                    'entry_date' => optional($entry->entry_date)?->toDateString(),
                 ],
                 'summary' => $this->cash->summary($profile),
             ],

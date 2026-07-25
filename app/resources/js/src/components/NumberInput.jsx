@@ -52,6 +52,7 @@ export default function NumberInput({
     id,
     disabled = false,
     allowDecimals = null,
+    allowNegative = false,
     height,
     compact = false,
     fixedDecimals = null,
@@ -87,7 +88,7 @@ export default function NumberInput({
             return;
         }
 
-        if (numericValue === null && direction < 0) {
+        if (numericValue === null && direction < 0 && !allowNegative) {
             return;
         }
 
@@ -119,16 +120,18 @@ export default function NumberInput({
                 id,
             },
         });
-    }, [disabled, fixedDecimals, id, maxNum, minNum, numericValue, onChange, stepNum]);
+    }, [allowNegative, disabled, fixedDecimals, id, maxNum, minNum, numericValue, onChange, stepNum]);
 
     const handleInputChange = (event) => {
         const next = event.target.value;
-        if (next === '') {
-            onChange?.({ target: { value: '', id } });
+        if (next === '' || (allowNegative && next === '-')) {
+            onChange?.({ target: { value: next === '-' ? '-' : '', id } });
             return;
         }
 
-        const pattern = decimalsAllowed ? /^\d*\.?\d*$/ : /^\d+$/;
+        const pattern = decimalsAllowed
+            ? (allowNegative ? /^-?\d*\.?\d*$/ : /^\d*\.?\d*$/)
+            : (allowNegative ? /^-?\d+$/ : /^\d+$/);
         if (pattern.test(next)) {
             onChange?.({ target: { value: next, id } });
         }

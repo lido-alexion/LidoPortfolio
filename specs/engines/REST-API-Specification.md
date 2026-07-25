@@ -144,11 +144,12 @@ Legacy `/api` surface (active portfolio; Sanctum):
 
   Method   Endpoint              Description
   -------- --------------------- --------------------------------
-  GET      /api/cash             Balance, reserved, available
+  GET      /api/cash             Balance, reserved, available (`?include_reservations=1` optional)
+  GET      /api/cash/reservations Active reservation breakdown
   GET      /api/cash/ledger      Recent ledger entries
-  POST     /api/cash/deposit     `{ amount, reason }`
-  POST     /api/cash/withdraw    `{ amount, reason }`
-  POST     /api/cash/adjust      `{ amount, reason }` (reason required)
+  POST     /api/cash/deposit     `{ amount, remarks?, transaction_date? }`
+  POST     /api/cash/withdraw    `{ amount, remarks?, transaction_date? }` (≤ available)
+  POST     /api/cash/adjust      `{ amount, remarks?, transaction_date? }` (reason/remarks optional)
 
 Summary fields: `cash_balance`, `reserved_cash`,
 `available_investable_cash`.
