@@ -6,6 +6,7 @@ use App\Models\Setting;
 use App\Models\Stock;
 use App\Models\StockPrice;
 use App\Models\SyncLog;
+use App\Services\UniversePrice\UniversePriceBatchExecutor;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -24,13 +25,18 @@ class UniversePriceSyncService
 
     public const KEY_LAST_RUN_JSON = 'universe_price_sync_last_run_json';
 
+    protected UniversePriceBatchExecutor $executor;
+
     public function __construct(
         protected UniverseStockResolverService $resolver,
         protected PriceFetchService $priceFetch,
         protected BenchmarkPriceSyncService $benchmarkSync,
         protected SyncLogService $syncLog,
         protected PortfolioLoggerService $logger,
-    ) {}
+        ?UniversePriceBatchExecutor $executor = null,
+    ) {
+        $this->executor = $executor ?? new UniversePriceBatchExecutor($this->priceFetch, $this->syncLog);
+    }
 
     public function isEnabled(): bool
     {
@@ -787,69 +793,9 @@ class UniversePriceSyncService
             'universe_count' => $universeCount,
         ]);
 
-        $lastStockId = 0;
-
-        PriceSyncNotificationContext::withoutTelegram(function () use (
-            $stocks,
-            $from,
-            $to,
-            $delayMs,
-            $runId,
-            $jobName,
-            &$stats,
-            &$lastStockId,
-        ) {
-            foreach ($stocks as $index => $stock) {
-                $lastStockId = $stock->id;
-                $stats['processed']++;
-
-                try {
-                    $result = $this->priceFetch->syncStock(
-                        $stock,
-                        $from,
-                        $to,
-                        notifyTelegramOnFailure: false,
-                    );
-
-                    if ($result['success']) {
-                        $stats['succeeded']++;
-                        $stats['stored_rows'] += (int) ($result['stored_rows'] ?? 0);
-                        if (! empty($result['cache_hit'])) {
-                            $stats['cache_hits']++;
-                        }
-                    } else {
-                        $stats['failed']++;
-                        $error = $stock->symbol.': '.implode('; ', $result['errors'] ?? ['sync failed']);
-                        if (self::looksLikeRateLimit($error)) {
-                            $stats['rate_limit_hits']++;
-                        }
-                        if (count($stats['errors']) < 20) {
-                            $stats['errors'][] = $error;
-                        }
-                        $this->syncLog->log($runId, $jobName, 'warning', 'Universe stock sync returned no rows', [
-                            'symbol' => $stock->symbol,
-                            'errors' => $result['errors'] ?? [],
-                        ]);
-                    }
-                } catch (\Throwable $e) {
-                    $stats['failed']++;
-                    if (self::looksLikeRateLimit($e->getMessage())) {
-                        $stats['rate_limit_hits']++;
-                    }
-                    if (count($stats['errors']) < 20) {
-                        $stats['errors'][] = $stock->symbol.': '.$e->getMessage();
-                    }
-                    $this->syncLog->log($runId, $jobName, 'error', 'Universe stock sync failed', [
-                        'symbol' => $stock->symbol,
-                        'failure_reason' => $e->getMessage(),
-                    ]);
-                }
-
-                if ($delayMs > 0 && $index < $stocks->count() - 1) {
-                    usleep($delayMs * 1000);
-                }
-            }
-        });
+        $batchResult = $this->executor->run($stocks, $from, $to, $delayMs, $runId, $jobName, $stats);
+        $stats = $batchResult['stats'];
+        $lastStockId = $batchResult['last_stock_id'];
 
         if ($lastStockId > 0) {
             $this->setCursor($lastStockId);
