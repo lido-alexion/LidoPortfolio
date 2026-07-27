@@ -64,22 +64,34 @@ class StockPriceHistoryService
         }
 
         $ranges = [];
+        $prefixRanges = [];
 
         if ($requiredFrom->lt($available['from'])) {
             $prefixTo = $available['from']->copy()->subDay();
             if ($includePreListingPrefix
                 || ! $this->isPreListingPrefixGap($stock, $requiredFrom, $prefixTo, $available['from'])) {
-                $ranges[] = [
+                $prefixRanges[] = [
                     'from' => $requiredFrom,
                     'to' => $prefixTo,
                 ];
             }
         }
 
-        // Suffix edge gaps (missing days after last stored price through required_through)
-        // are ignored — universe daily sync covers recent sessions.
+        // Trailing edge after last stored bar must be fetched so daily/index sync can
+        // ask providers through requiredTo (otherwise sync reports a false cache hit).
+        if ($available['to']->lt($requiredTo)) {
+            $suffixFrom = $available['to']->copy()->addDay()->startOfDay();
+            if ($suffixFrom->lte($requiredTo)) {
+                $ranges[] = [
+                    'from' => $suffixFrom,
+                    'to' => $requiredTo->copy(),
+                ];
+            }
+        }
 
-        $ranges = $this->filterEdgeGapsByMinSpan($ranges);
+        // Min-span filter applies to prefix edge noise only — never drop trailing suffix.
+        $prefixRanges = $this->filterEdgeGapsByMinSpan($prefixRanges);
+        $ranges = array_merge($prefixRanges, $ranges);
         $ranges = array_values(array_filter($ranges, fn (array $range) => $range['from']->lte($range['to'])));
 
         $internalGaps = $this->detectInternalGaps($stock, $requiredFrom, $requiredTo);

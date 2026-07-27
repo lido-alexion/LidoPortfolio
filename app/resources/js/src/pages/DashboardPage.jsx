@@ -8,6 +8,14 @@ import AnalyseStockButton from '../components/AnalyseStockButton';
 import DashboardTopMoverCard from '../components/DashboardTopMoverCard';
 import DashboardAllocationCard from '../components/DashboardAllocationCard';
 import PercentGradientBar from '../components/PercentGradientBar';
+import SentimentGauge from '../components/SentimentGauge';
+import MarketPhaseGauge from '../components/MarketPhaseGauge';
+import TrendGauge from '../components/TrendGauge';
+import MomentumGauge from '../components/MomentumGauge';
+import VolatilityGauge from '../components/VolatilityGauge';
+import RiskGauge from '../components/RiskGauge';
+import MarketRegimeGauge from '../components/MarketRegimeGauge';
+import MarketBreadthGauge from '../components/MarketBreadthGauge';
 import { DashboardCalendarCard } from '../components/calendar/CalendarDayEventsDialog';
 import PatternSketch from '../components/PatternSketch';
 import { showToast } from '../toast';
@@ -679,6 +687,18 @@ export default function DashboardPage() {
                     </div>
                 </div>
             ))}
+            <DashboardTopMoverCard
+                title="Top Gainer"
+                mover={topGainer}
+                period={topMoverPeriod}
+                onPeriodChange={handleTopMoverPeriodChange}
+            />
+            <DashboardTopMoverCard
+                title="Top Loser"
+                mover={topLoser}
+                period={topMoverPeriod}
+                onPeriodChange={handleTopMoverPeriodChange}
+            />
             {data.portfolio_analytics || data.market_analytics ? (
                 <>
                     {(data.portfolio_analytics ? [
@@ -756,53 +776,126 @@ export default function DashboardPage() {
                     ))}
                     {data.market_analytics ? (
                         <div className="col-12">
-                            <h2 className="h6 text-muted mb-1">Market analytics</h2>
-                            <p className="small text-muted mb-2">
-                                {data.market_analytics.benchmark?.symbol
-                                    ? `${data.market_analytics.benchmark.symbol}`
-                                    : 'Benchmark'}
-                                {data.market_analytics.as_of_date ? ` · as of ${data.market_analytics.as_of_date}` : ''}
-                                {data.market_analytics.computed_at
-                                    ? ` · updated ${new Date(data.market_analytics.computed_at).toLocaleString()}`
-                                    : ''}
-                            </p>
+                            <h2 className="h6 text-muted mb-2">Market analytics</h2>
+                        </div>
+                    ) : null}
+                    {data.market_analytics?.sentiment?.score != null ? (
+                        <div className="col-6 col-md-4 col-lg-3" key="ma-Sentiment">
+                            <div className="card h-100">
+                                <div className="card-body py-2">
+                                    <div className="text-muted small">Sentiment</div>
+                                    <SentimentGauge
+                                        score={data.market_analytics.sentiment.score}
+                                        className="mt-1"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    ) : null}
+                    {data.market_analytics?.market_phase ? (
+                        <div className="col-6 col-md-4 col-lg-3" key="ma-MarketPhase">
+                            <div className="card h-100">
+                                <div className="card-body py-2">
+                                    <div className="text-muted small">Market phase</div>
+                                    <MarketPhaseGauge
+                                        phase={data.market_analytics.market_phase}
+                                        className="mt-1"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    ) : null}
+                    {(data.market_analytics?.trend?.score != null
+                        || data.market_analytics?.trend?.strength != null) ? (
+                        <div className="col-6 col-md-4 col-lg-3" key="ma-Trend">
+                            <div className="card h-100">
+                                <div className="card-body py-2">
+                                    <div className="text-muted small">Trend</div>
+                                    <TrendGauge
+                                        score={data.market_analytics.trend?.score
+                                            ?? data.market_analytics.trend?.strength}
+                                        className="mt-1"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    ) : null}
+                    {data.market_analytics?.momentum?.score != null ? (
+                        <div className="col-6 col-md-4 col-lg-3" key="ma-Momentum">
+                            <div className="card h-100">
+                                <div className="card-body py-2">
+                                    <div className="text-muted small">Momentum</div>
+                                    <MomentumGauge
+                                        score={data.market_analytics.momentum.score}
+                                        direction={data.market_analytics.momentum.direction}
+                                        className="mt-1"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    ) : null}
+                    {data.market_analytics?.volatility?.score != null ? (
+                        <div className="col-6 col-md-4 col-lg-3" key="ma-Volatility">
+                            <div className="card h-100">
+                                <div className="card-body py-2">
+                                    <div className="text-muted small">Volatility</div>
+                                    <VolatilityGauge
+                                        score={data.market_analytics.volatility.score}
+                                        historicalVolatilityPct={
+                                            data.market_analytics.volatility.historical_volatility_pct
+                                        }
+                                        className="mt-1"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    ) : null}
+                    {(data.market_analytics?.risk?.raw_risk != null
+                        || data.market_analytics?.risk?.score != null) ? (
+                        <div className="col-6 col-md-4 col-lg-3" key="ma-Risk">
+                            <div className="card h-100">
+                                <div className="card-body py-2">
+                                    <div className="text-muted small">Risk</div>
+                                    <RiskGauge
+                                        rawRisk={data.market_analytics.risk?.raw_risk}
+                                        score={data.market_analytics.risk?.score}
+                                        className="mt-1"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    ) : null}
+                    {data.market_analytics?.market_regime ? (
+                        <div className="col-6 col-md-4 col-lg-3" key="ma-MarketRegime">
+                            <div className="card h-100">
+                                <div className="card-body py-2">
+                                    <div className="text-muted small">Market regime</div>
+                                    <MarketRegimeGauge
+                                        regime={data.market_analytics.market_regime}
+                                        className="mt-1"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    ) : null}
+                    {data.market_analytics?.breadth?.score != null ? (
+                        <div className="col-6 col-md-4 col-lg-3" key="ma-MarketBreadth">
+                            <div className="card h-100">
+                                <div className="card-body py-2">
+                                    <div className="text-muted small">Market breadth</div>
+                                    <MarketBreadthGauge
+                                        score={data.market_analytics.breadth.score}
+                                        advanceDeclineRatio={
+                                            data.market_analytics.breadth.advance_decline_ratio
+                                            ?? data.market_analytics.advance_decline_ratio
+                                        }
+                                        className="mt-1"
+                                    />
+                                </div>
+                            </div>
                         </div>
                     ) : null}
                     {(data.market_analytics ? [
-                        ['Sentiment', data.market_analytics.sentiment?.score != null
-                            ? `${data.market_analytics.sentiment.score} · ${data.market_analytics.sentiment.label || ''}`
-                            : null],
-                        ['Market phase', data.market_analytics.market_phase],
-                        ['Trend', data.market_analytics.trend?.label
-                            || data.market_analytics.index_trend],
-                        ['Trend strength', data.market_analytics.trend?.strength != null
-                            ? data.market_analytics.trend.strength
-                            : null],
-                        ['Momentum', data.market_analytics.momentum?.label
-                            || (data.market_analytics.momentum?.score != null
-                                ? String(data.market_analytics.momentum.score)
-                                : null)],
-                        ['Volatility', data.market_analytics.volatility?.label],
-                        ['Risk', data.market_analytics.risk?.label],
-                        ['Current drawdown', data.market_analytics.drawdown?.current_drawdown_pct != null
-                            ? `${data.market_analytics.drawdown.current_drawdown_pct}%`
-                            : null],
-                        ['Max drawdown', data.market_analytics.drawdown?.maximum_drawdown_pct != null
-                            ? `${data.market_analytics.drawdown.maximum_drawdown_pct}%`
-                            : null],
-                        ['Distance from 200 DMA', data.market_analytics.trend?.distance_200_dma_pct != null
-                            ? `${data.market_analytics.trend.distance_200_dma_pct}%`
-                            : (data.market_analytics.indicators?.price_vs_sma200_pct != null
-                                ? `${data.market_analytics.indicators.price_vs_sma200_pct}%`
-                                : null)],
-                        ['Distance from 52w high', data.market_analytics.drawdown?.distance_52w_high_pct != null
-                            ? `${data.market_analytics.drawdown.distance_52w_high_pct}%`
-                            : null],
-                        ['Market breadth', data.market_analytics.breadth?.label
-                            || (data.market_analytics.advance_decline_ratio != null
-                                ? `A/D ${data.market_analytics.advance_decline_ratio}`
-                                : null)],
-                        ['Market regime', data.market_analytics.market_regime],
                         ['% above 50 DMA', data.market_analytics.pct_stocks_above_50_dma != null
                             ? `${data.market_analytics.pct_stocks_above_50_dma}%`
                             : null],
@@ -819,66 +912,8 @@ export default function DashboardPage() {
                             </div>
                         </div>
                     ))}
-                    {data.market_analytics?.explainability?.reasons?.length ? (
-                        <div className="col-12">
-                            <div className="card">
-                                <div className="card-body py-2">
-                                    <div className="text-muted small mb-1">Market explainability</div>
-                                    <ul className="small mb-0 ps-3">
-                                        {data.market_analytics.explainability.reasons.map((r) => (
-                                            <li key={`${r.factor}-${r.value}`}>
-                                                <span className="fw-semibold">{r.factor}</span>
-                                                {': '}
-                                                {r.value}
-                                                {r.detail ? ` — ${r.detail}` : ''}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                    {data.market_analytics.explainability.phase_rule ? (
-                                        <div className="text-muted small mt-2">
-                                            Phase rule: {data.market_analytics.explainability.phase_rule}
-                                        </div>
-                                    ) : null}
-                                </div>
-                            </div>
-                        </div>
-                    ) : null}
                 </>
             ) : null}
-            {data.strategy ? (
-                <div className="col-12">
-                    <div className="card">
-                        <div className="card-body d-flex flex-wrap justify-content-between align-items-center gap-2 py-3">
-                            <div>
-                                <div className="text-muted small">Active strategy</div>
-                                <div className="fw-semibold">
-                                    {data.strategy.name}
-                                    {data.strategy.version != null ? ` · v${data.strategy.version}` : ''}
-                                </div>
-                                <div className="text-muted small">
-                                    {(data.strategy.enabled_factor_count ?? '—')} factors enabled
-                                    {data.strategy.modified_at
-                                        ? ` · updated ${new Date(data.strategy.modified_at).toLocaleString()}`
-                                        : ''}
-                                </div>
-                            </div>
-                            <Link to="/strategy" className="btn btn-sm btn-outline-secondary">Configure strategy</Link>
-                        </div>
-                    </div>
-                </div>
-            ) : null}
-            <DashboardTopMoverCard
-                title="Top Gainer"
-                mover={topGainer}
-                period={topMoverPeriod}
-                onPeriodChange={handleTopMoverPeriodChange}
-            />
-            <DashboardTopMoverCard
-                title="Top Loser"
-                mover={topLoser}
-                period={topMoverPeriod}
-                onPeriodChange={handleTopMoverPeriodChange}
-            />
             <div className="col-12">
                 {alerts.length > 0 ? (
                     <DataTableCard

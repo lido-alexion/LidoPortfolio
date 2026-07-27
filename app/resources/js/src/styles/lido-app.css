@@ -839,6 +839,170 @@ html.lido-footer-visible .lido-main {
     overflow: visible;
 }
 
+/* SentimentGauge / half-donut gauges — upper semicircle only */
+.lido-sentiment-gauge {
+    position: relative;
+    width: 100%;
+    max-width: 260px;
+    margin-inline: auto;
+    margin-bottom: 0;
+    line-height: 0;
+    outline: none;
+    cursor: default;
+}
+
+.lido-sentiment-gauge:hover,
+.lido-sentiment-gauge:focus,
+.lido-sentiment-gauge:focus-visible {
+    cursor: default;
+    outline: none;
+}
+
+.lido-sentiment-gauge__svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+    vertical-align: top;
+}
+
+.lido-sentiment-gauge__label {
+    fill: var(--lido-text, #111827);
+    font-size: 9px;
+    font-weight: 400;
+    font-family: inherit;
+    letter-spacing: 0.01em;
+    pointer-events: none;
+    user-select: none;
+}
+
+.lido-sentiment-gauge__needle {
+    stroke: var(--lido-text, #111827);
+}
+
+.lido-sentiment-gauge__hub {
+    fill: var(--lido-text, #111827);
+}
+
+.lido-sentiment-gauge__tooltip {
+    position: absolute;
+    left: 50%;
+    top: 62%;
+    transform: translate(-50%, -50%);
+    z-index: 5;
+    width: max-content;
+    max-width: min(200px, 92%);
+    padding: 0.4rem 0.55rem;
+    border-radius: 6px;
+    border: 1px solid var(--lido-chart-tooltip-border);
+    background: var(--lido-chart-tooltip-bg);
+    color: var(--lido-chart-tooltip-text);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    pointer-events: none;
+    text-align: center;
+    line-height: 1.35;
+    cursor: default;
+}
+
+.lido-sentiment-gauge__tooltip-score {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--lido-chart-tooltip-label);
+    line-height: 1.25;
+}
+
+.lido-sentiment-gauge__tooltip-zone {
+    font-weight: 500;
+}
+
+.lido-sentiment-gauge__tooltip-def {
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
+    line-height: 1.35;
+    color: var(--lido-chart-tooltip-text);
+}
+
+/* MarketPhaseGauge — full-circle cycle donut */
+.lido-market-phase-gauge {
+    width: 100%;
+}
+
+.lido-market-phase-gauge__chart {
+    position: relative;
+    width: 100%;
+    max-width: 240px;
+    margin-inline: auto;
+}
+
+.lido-market-phase-gauge__svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+}
+
+.lido-market-phase-gauge__hit {
+    cursor: default;
+}
+
+.lido-market-phase-gauge__tooltip {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 6;
+    width: max-content;
+    max-width: min(210px, 88%);
+    padding: 0.45rem 0.55rem;
+    border-radius: 6px;
+    border: 1px solid var(--lido-chart-tooltip-border);
+    background: var(--lido-chart-tooltip-bg);
+    color: var(--lido-chart-tooltip-text);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    pointer-events: none;
+    text-align: left;
+}
+
+.lido-market-phase-gauge__tooltip-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--lido-chart-tooltip-label);
+    margin-bottom: 0.3rem;
+    line-height: 1.2;
+}
+
+.lido-market-phase-gauge__tooltip-current {
+    font-weight: 500;
+    opacity: 0.8;
+}
+
+.lido-market-phase-gauge__tooltip-row {
+    font-size: 0.7rem;
+    line-height: 1.35;
+    margin-bottom: 0.25rem;
+}
+
+.lido-market-phase-gauge__tooltip-k {
+    display: block;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--lido-text-muted, #9ca3af);
+    margin-bottom: 0.05rem;
+}
+
+.lido-market-phase-gauge__tooltip-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.35rem;
+    margin-top: 0.35rem;
+    padding-top: 0.35rem;
+    border-top: 1px solid var(--lido-chart-tooltip-border);
+    font-size: 0.7rem;
+    line-height: 1.3;
+}
+
 /* Recharts tooltips (inline light defaults overridden for dark theme) */
 .contentPane .recharts-default-tooltip {
     background-color: var(--lido-chart-tooltip-bg) !important;

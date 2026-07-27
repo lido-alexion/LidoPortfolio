@@ -280,12 +280,13 @@ $dates = [];
         Carbon::setTestNow();
     }
 
-    public function test_edge_gap_shorter_than_threshold_is_ignored(): void
+    public function test_edge_gap_shorter_than_threshold_is_ignored_for_prefix_only(): void
     {
         Carbon::setTestNow('2026-07-10 13:39:00');
         config(['portfolio.history.max_internal_gap_days' => 7]);
 
         $stock = $this->makeStock('EDGE');
+        // Short trailing hole (1 calendar day) must still be reported so sync fetches it.
         $dates = [];
         for ($d = Carbon::parse('2026-06-01'); $d->lte(Carbon::parse('2026-07-08')); $d->addDay()) {
             $dates[] = $d->toDateString();
@@ -299,12 +300,14 @@ $dates = [];
             Carbon::parse('2026-07-09'),
         );
 
-        $this->assertSame([], $ranges);
+        $this->assertCount(1, $ranges);
+        $this->assertSame('2026-07-09', $ranges[0]['from']->toDateString());
+        $this->assertSame('2026-07-09', $ranges[0]['to']->toDateString());
 
         Carbon::setTestNow();
     }
 
-    public function test_suffix_edge_gap_is_ignored(): void
+    public function test_suffix_edge_gap_is_reported_for_fetch(): void
     {
         Carbon::setTestNow('2026-07-10 13:39:00');
         config(['portfolio.history.max_internal_gap_days' => 7]);
@@ -323,7 +326,9 @@ $dates = [];
             Carbon::parse('2026-07-09'),
         );
 
-        $this->assertSame([], $ranges);
+        $this->assertCount(1, $ranges);
+        $this->assertSame('2026-07-01', $ranges[0]['from']->toDateString());
+        $this->assertSame('2026-07-09', $ranges[0]['to']->toDateString());
 
         Carbon::setTestNow();
     }

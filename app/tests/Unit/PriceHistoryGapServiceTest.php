@@ -599,7 +599,7 @@ class PriceHistoryGapServiceTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_gaps_for_stock_ignores_short_suffix_gap_at_latest_session(): void
+    public function test_gaps_for_stock_reports_short_suffix_gap_at_latest_session(): void
     {
         Carbon::setTestNow('2026-07-10 13:39:00');
         config([
@@ -646,8 +646,9 @@ class PriceHistoryGapServiceTest extends TestCase
 
         $result = $service->gapsForStock($stock);
 
-        $this->assertFalse($result['has_gaps']);
-        $this->assertSame([], $result['ranges']);
+        $this->assertTrue($result['has_gaps']);
+        $this->assertGreaterThan(0, $result['gap_count']);
+        $this->assertSame($requiredTo->toDateString(), $result['ranges'][0]['to']);
 
         Carbon::setTestNow();
     }

@@ -49,6 +49,8 @@ class IgnoredPriceGapServiceTest extends TestCase
 
         $before = $history->getMissingHistoryRanges($stock, $from, $to);
         $this->assertNotEmpty($before);
+        // Internal hole (Apr 2–19) plus trailing suffix through requiredTo.
+        $this->assertGreaterThanOrEqual(2, count($before));
 
         foreach ($before as $range) {
             app(IgnoredPriceGapService::class)->ignore(
@@ -60,6 +62,6 @@ class IgnoredPriceGapServiceTest extends TestCase
 
         $after = $history->getMissingHistoryRanges($stock, $from, $to);
         $this->assertSame([], $after);
-        $this->assertSame(1, IgnoredPriceGap::query()->count());
+        $this->assertSame(count($before), IgnoredPriceGap::query()->count());
     }
 }
