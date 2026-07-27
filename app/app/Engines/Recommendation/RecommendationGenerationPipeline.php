@@ -4,6 +4,7 @@ namespace App\Engines\Recommendation;
 
 use App\Engines\Recommendation\Allocation\CapitalAllocationStrategy;
 use App\Engines\Recommendation\Allocation\ScorePriorityCapitalAllocator;
+use App\Exceptions\DomainException;
 use App\Engines\Strategy\ExitStrategyEvaluator;
 use App\Models\EvaluationResult;
 use App\Models\EvaluationRun;
@@ -103,7 +104,10 @@ class RecommendationGenerationPipeline
             ->first();
 
         if (! $evaluationRun) {
-            throw new \RuntimeException('No completed evaluation run available for recommendations.');
+            throw new DomainException(
+                'No completed evaluation run available for recommendations.',
+                'RECOMMENDATION_PRECONDITION',
+            );
         }
 
         $strategyVersion = $this->strategies->ensureActive($profile);

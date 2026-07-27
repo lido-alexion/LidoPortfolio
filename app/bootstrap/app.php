@@ -2,6 +2,8 @@
 
 require_once dirname(__DIR__).'/app/Support/helpers.php';
 
+use App\Engines\Support\ApiEnvelope;
+use App\Exceptions\DomainException;
 use App\Http\Middleware\AssignRequestId;
 use App\Services\PortfolioLoggerService;
 use App\Support\ApiErrorMessage;
@@ -56,6 +58,11 @@ return Application::configure(basePath: dirname(__DIR__))
 
             if ($e instanceof ValidationException) {
                 return null;
+            }
+
+            // TD-010: domain preconditions → Trading OS ApiEnvelope (422/400).
+            if ($e instanceof DomainException) {
+                return ApiEnvelope::error($e->errorCode(), $e->getMessage(), $e->httpStatus());
             }
 
             // Let the framework render 401/403 (AuthenticationException and
