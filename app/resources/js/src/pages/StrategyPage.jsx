@@ -1,7 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
 import NumberInput from '../components/NumberInput';
+import useApiGet from '../hooks/useApiGet';
+import { runApiMutation } from '../hooks/useApiMutation';
 import { showToast } from '../toast';
 
 const SECTIONS = [
@@ -75,7 +77,6 @@ function applyPayload(payload, setMeta, setConfig) {
 
 export default function StrategyPage() {
     const [section, setSection] = useState('general');
-    const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [duplicating, setDuplicating] = useState(false);
     const [availableScreeners, setAvailableScreeners] = useState([]);
@@ -87,26 +88,22 @@ export default function StrategyPage() {
     const [changeNotes, setChangeNotes] = useState('');
     const [addScreenerId, setAddScreenerId] = useState('');
 
-    const load = useCallback(async () => {
-        setLoading(true);
-        try {
+    const { loading, reload: load } = useApiGet({
+        deps: [],
+        errorFallback: 'Failed to load strategy',
+        request: async () => {
             const [{ data }, screenersRes] = await Promise.all([
-                api.get('/v1/strategy'),
-                api.get('/screeners').catch(() => ({ data: [] })),
+                api.get('/v1/strategy', { skipErrorToast: true }),
+                api.get('/screeners', { skipErrorToast: true }).catch(() => ({ data: [] })),
             ]);
             applyPayload(data?.data || {}, setMeta, setConfig);
             const list = Array.isArray(screenersRes?.data?.data)
                 ? screenersRes.data.data
                 : (Array.isArray(screenersRes?.data) ? screenersRes.data : []);
             setAvailableScreeners(list);
-        } catch (e) {
-            showToast(e?.response?.data?.error?.message || e.message || 'Failed to load strategy', 'danger');
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
-    useEffect(() => { load(); }, [load]);
+            return data?.data;
+        },
+    });
 
     const grouped = useMemo(() => {
         const map = {};
@@ -139,30 +136,32 @@ export default function StrategyPage() {
         }
         setSaving(true);
         try {
-            const { data } = await api.put('/v1/strategy', {
-                name: meta.name,
-                description: meta.description,
-                change_notes: changeNotes || undefined,
-                config: {
-                    ...config,
-                    indicators: config.indicators,
-                    eligibility_sources: config.eligibility_sources,
-                    exit_strategy: config.exit_strategy,
-                    market_gates: config.market_gates,
-                },
-            });
-            const payload = data?.data || {};
-            showToast(
-                meta.is_factory
-                    ? `Factory preserved. Custom strategy saved as ${payload.version_label || payload.version}`
-                    : `Strategy saved as version ${payload.version_label || payload.version}`,
-                'success',
-            );
-            setChangeNotes('');
-            applyPayload(payload, setMeta, setConfig);
-        } catch (e) {
-            const errors = e?.response?.data?.errors;
-            showToast(errors?.indicators?.[0] || e?.response?.data?.message || e?.response?.data?.error?.message || e.message || 'Save failed', 'danger');
+            const { ok, data: payload } = await runApiMutation(async () => {
+                const { data } = await api.put('/v1/strategy', {
+                    name: meta.name,
+                    description: meta.description,
+                    change_notes: changeNotes || undefined,
+                    config: {
+                        ...config,
+                        indicators: config.indicators,
+                        eligibility_sources: config.eligibility_sources,
+                        exit_strategy: config.exit_strategy,
+                        market_gates: config.market_gates,
+                    },
+                }, { skipErrorToast: true });
+                const next = data?.data || {};
+                setChangeNotes('');
+                applyPayload(next, setMeta, setConfig);
+                return next;
+            }, { errorFallback: 'Save failed' });
+            if (ok && payload) {
+                showToast(
+                    meta.is_factory
+                        ? `Factory preserved. Custom strategy saved as ${payload.version_label || payload.version}`
+                        : `Strategy saved as version ${payload.version_label || payload.version}`,
+                    'success',
+                );
+            }
         } finally {
             setSaving(false);
         }
@@ -171,13 +170,18 @@ export default function StrategyPage() {
     const duplicate = async () => {
         setDuplicating(true);
         try {
-            const { data } = await api.post('/v1/strategy/duplicate', {
-                name: meta.is_factory ? 'Momentum Strategy (Custom)' : `${meta.name} (Copy)`,
+            const { ok } = await runApiMutation(async () => {
+                const { data } = await api.post('/v1/strategy/duplicate', {
+                    name: meta.is_factory ? 'Momentum Strategy (Custom)' : `${meta.name} (Copy)`,
+                }, { skipErrorToast: true });
+                applyPayload(data?.data || {}, setMeta, setConfig);
+            }, {
+                successMessage: 'Strategy duplicated. Customise the copy freely.',
+                errorFallback: 'Duplicate failed',
             });
-            applyPayload(data?.data || {}, setMeta, setConfig);
-            showToast('Strategy duplicated. Customise the copy freely.', 'success');
-        } catch (e) {
-            showToast(e?.response?.data?.error?.message || e.message || 'Duplicate failed', 'danger');
+            if (!ok) {
+                return;
+            }
         } finally {
             setDuplicating(false);
         }

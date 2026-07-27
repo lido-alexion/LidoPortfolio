@@ -64,10 +64,29 @@ api.interceptors.request.use((config) => {
     return config;
 });
 
+export function getApiErrorMessage(error, fallback = 'Something went wrong. Please try again.') {
+    const msg = resolveApiErrorMessage(error);
+    if (msg && msg !== 'Something went wrong. Please try again.') {
+        return msg;
+    }
+    const nested = error?.response?.data?.error?.message;
+    if (typeof nested === 'string' && nested.trim()) {
+        return nested.trim();
+    }
+    if (typeof error?.message === 'string' && error.message.trim()) {
+        return error.message.trim();
+    }
+    return fallback;
+}
+
 function resolveApiErrorMessage(error) {
     const status = error?.response?.status;
     const data = error?.response?.data ?? {};
     let msg = null;
+
+    if (data.error?.message) {
+        msg = data.error.message;
+    }
 
     const validationErrors = data.errors;
     if (validationErrors && typeof validationErrors === 'object') {

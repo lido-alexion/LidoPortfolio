@@ -1,8 +1,10 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
 import NumberInput from '../components/NumberInput';
 import TransactionDateInput from '../components/TransactionDateInput';
+import useApiGet from '../hooks/useApiGet';
+import { runApiMutation } from '../hooks/useApiMutation';
 import { showToast } from '../toast';
 import { formatInrWhole } from '../utils/tableFormat';
 import { notifyPortfolioDashboardRefresh } from '../utils/portfolioEvents';
@@ -62,7 +64,6 @@ export default function CashManagementPage() {
 
     const [summary, setSummary] = useState(null);
     const [ledger, setLedger] = useState([]);
-    const [loading, setLoading] = useState(true);
     const [showReservations, setShowReservations] = useState(false);
     const [op, setOp] = useState('deposit');
     const [amount, setAmount] = useState('');
@@ -73,31 +74,33 @@ export default function CashManagementPage() {
     ));
     const [busy, setBusy] = useState(false);
 
-    const load = useCallback(async () => {
+    useEffect(() => {
         if (!profileId) {
             setSummary(null);
             setLedger([]);
-            setLoading(false);
-            return;
-        }
-        setLoading(true);
-        try {
-            const [summaryRes, ledgerRes] = await Promise.all([
-                api.get('/cash', { params: { include_reservations: true } }),
-                api.get('/cash/ledger', { params: { limit: 100 } }),
-            ]);
-            setSummary(summaryRes.data?.data || null);
-            setLedger(Array.isArray(ledgerRes.data?.data) ? ledgerRes.data.data : []);
-        } catch (e) {
-            showToast(e?.response?.data?.message || e.message || 'Failed to load cash', 'danger');
-            setSummary(null);
-            setLedger([]);
-        } finally {
-            setLoading(false);
         }
     }, [profileId]);
 
-    useEffect(() => { load(); }, [load]);
+    const { loading, reload: load } = useApiGet({
+        deps: [profileId],
+        enabled: Boolean(profileId),
+        errorFallback: 'Failed to load cash',
+        onError: () => {
+            setSummary(null);
+            setLedger([]);
+        },
+        request: async () => {
+            const [summaryRes, ledgerRes] = await Promise.all([
+                api.get('/cash', { params: { include_reservations: true }, skipErrorToast: true }),
+                api.get('/cash/ledger', { params: { limit: 100 }, skipErrorToast: true }),
+            ]);
+            const nextSummary = summaryRes.data?.data || null;
+            const nextLedger = Array.isArray(ledgerRes.data?.data) ? ledgerRes.data.data : [];
+            setSummary(nextSummary);
+            setLedger(nextLedger);
+            return { summary: nextSummary, ledger: nextLedger };
+        },
+    });
 
     const resetFormDates = () => {
         const today = getLocalTodayDateString();
@@ -132,26 +135,21 @@ export default function CashManagementPage() {
         }
         setBusy(true);
         try {
-            await api.post(selected.endpoint, {
-                amount: num,
-                remarks: remarks.trim() || undefined,
-                transaction_date: transactionDate,
+            await runApiMutation(async () => {
+                await api.post(selected.endpoint, {
+                    amount: num,
+                    remarks: remarks.trim() || undefined,
+                    transaction_date: transactionDate,
+                }, { skipErrorToast: true });
+                setAmount('');
+                setRemarks('');
+                resetFormDates();
+                notifyPortfolioDashboardRefresh();
+                await load();
+            }, {
+                successMessage: `${selected.label} recorded`,
+                errorFallback: `${selected.label} failed`,
             });
-            showToast(`${selected.label} recorded`, 'success');
-            setAmount('');
-            setRemarks('');
-            resetFormDates();
-            notifyPortfolioDashboardRefresh();
-            await load();
-        } catch (err) {
-            const msg = err?.response?.data?.message
-                || err?.response?.data?.errors?.amount?.[0]
-                || err?.response?.data?.errors?.remarks?.[0]
-                || err?.response?.data?.errors?.reason?.[0]
-                || err?.response?.data?.errors?.transaction_date?.[0]
-                || err.message
-                || `${selected.label} failed`;
-            showToast(msg, 'danger');
         } finally {
             setBusy(false);
         }

@@ -1,6 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
+import useApiGet from '../hooks/useApiGet';
+import { runApiMutation } from '../hooks/useApiMutation';
 import { showToast } from '../toast';
 
 const ACTIONABLE = new Set(['OPEN_POSITION', 'INCREASE_POSITION', 'REDUCE_POSITION', 'EXIT_POSITION', 'BUY', 'SELL']);
@@ -124,7 +126,6 @@ function RecTable({ rows, actionLabel, onOpen }) {
 
 export default function RecommendationsPage() {
     const [recs, setRecs] = useState([]);
-    const [loading, setLoading] = useState(true);
     const [running, setRunning] = useState(false);
     const [pipelineMeta, setPipelineMeta] = useState(null);
     const [selected, setSelected] = useState(null);
@@ -132,33 +133,31 @@ export default function RecommendationsPage() {
     const [busyId, setBusyId] = useState(null);
     const [showAll, setShowAll] = useState(false);
 
-    const load = useCallback(async () => {
-        setLoading(true);
-        try {
+    const { loading, reload: load } = useApiGet({
+        deps: [showAll],
+        errorFallback: 'Failed to load recommendations',
+        request: async () => {
             const { data } = await api.get('/v1/recommendations', {
                 params: showAll ? { all: 1 } : { open: 1 },
+                skipErrorToast: true,
             });
-            setRecs(Array.isArray(data?.data) ? data.data : []);
-        } catch (e) {
-            showToast(e?.response?.data?.error?.message || e.message || 'Failed to load recommendations', 'danger');
-        } finally {
-            setLoading(false);
-        }
-    }, [showAll]);
-
-    useEffect(() => { load(); }, [load]);
+            const list = Array.isArray(data?.data) ? data.data : [];
+            setRecs(list);
+            return list;
+        },
+    });
 
     const tradeRecs = useMemo(() => recs.filter(isActionableRec), [recs]);
     const insights = useMemo(() => recs.filter((r) => !isActionableRec(r)), [recs]);
 
     const openDetail = async (id) => {
-        try {
-            const { data } = await api.get(`/v1/recommendations/${id}`);
-            const detail = data?.data || null;
+        const { ok, data: detail } = await runApiMutation(async () => {
+            const { data } = await api.get(`/v1/recommendations/${id}`, { skipErrorToast: true });
+            return data?.data || null;
+        }, { errorFallback: 'Failed to load detail' });
+        if (ok) {
             setSelected(detail);
             setNotes('');
-        } catch (e) {
-            showToast(e?.response?.data?.error?.message || e.message || 'Failed to load detail', 'danger');
         }
     };
 
@@ -166,12 +165,20 @@ export default function RecommendationsPage() {
         setRunning(true);
         setPipelineMeta(null);
         try {
-            const { data } = await api.post('/v1/pipeline/run', null, { params: { notify: 1, review: 1 } });
-            setPipelineMeta(data?.data?.stages || null);
-            showToast('Decision pipeline completed', 'success');
-            await load();
-        } catch (e) {
-            showToast(e?.response?.data?.error?.message || e.message || 'Pipeline failed', 'danger');
+            const { ok, data: stages } = await runApiMutation(async () => {
+                const { data } = await api.post('/v1/pipeline/run', null, {
+                    params: { notify: 1, review: 1 },
+                    skipErrorToast: true,
+                });
+                return data?.data?.stages || null;
+            }, {
+                successMessage: 'Decision pipeline completed',
+                errorFallback: 'Pipeline failed',
+            });
+            if (ok) {
+                setPipelineMeta(stages);
+                await load();
+            }
         } finally {
             setRunning(false);
         }
@@ -180,16 +187,19 @@ export default function RecommendationsPage() {
     const reopen = async () => {
         if (!selected) return;
         setBusyId(selected.id);
+        const id = selected.id;
         try {
-            await api.post(`/v1/recommendations/${selected.id}/reopen`, {
-                notes: notes || null,
+            await runApiMutation(async () => {
+                await api.post(`/v1/recommendations/${id}/reopen`, {
+                    notes: notes || null,
+                }, { skipErrorToast: true });
+                await load();
+                const { data } = await api.get(`/v1/recommendations/${id}`, { skipErrorToast: true });
+                setSelected(data?.data || null);
+            }, {
+                successMessage: 'Reopened for review',
+                errorFallback: 'Reopen failed',
             });
-            showToast('Reopened for review', 'success');
-            await load();
-            const { data } = await api.get(`/v1/recommendations/${selected.id}`);
-            setSelected(data?.data || null);
-        } catch (e) {
-            showToast(e?.response?.data?.error?.message || e?.response?.data?.message || e.message || 'Reopen failed', 'danger');
         } finally {
             setBusyId(null);
         }
@@ -198,20 +208,22 @@ export default function RecommendationsPage() {
     const decide = async (decision) => {
         if (!selected) return;
         setBusyId(selected.id);
+        const recId = selected.id;
         try {
-            await api.post(`/v1/recommendations/${selected.id}/review`, {
-                decision,
-                notes: notes || null,
+            const { ok } = await runApiMutation(async () => {
+                await api.post(`/v1/recommendations/${recId}/review`, {
+                    decision,
+                    notes: notes || null,
+                }, { skipErrorToast: true });
+                await load();
+                setSelected(null);
+            }, {
+                successMessage: `Marked ${decision === 'approved' || decision === 'accepted' ? 'approved for execution' : decision}`,
+                errorFallback: 'Review failed',
             });
-            const label = decision === 'approved' || decision === 'accepted' ? 'approved for execution' : decision;
-            showToast(`Marked ${label}`, 'success');
-            await load();
-            setSelected(null);
-            if (decision === 'approved' || decision === 'accepted') {
+            if (ok && (decision === 'approved' || decision === 'accepted')) {
                 showToast('Open Transactions → Pending Execution to record the trade when ready', 'success');
             }
-        } catch (e) {
-            showToast(e?.response?.data?.error?.message || e?.response?.data?.message || e.message || 'Review failed', 'danger');
         } finally {
             setBusyId(null);
         }
