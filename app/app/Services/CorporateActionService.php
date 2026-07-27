@@ -19,6 +19,7 @@ class CorporateActionService
         protected StockResolverService $stocks,
         protected CorporateActionPriceAdjustmentService $priceAdjustment,
         protected MetricsUpdateService $metricsUpdate,
+        protected TransactionWriteService $writes,
     ) {}
 
     /**
@@ -66,7 +67,7 @@ class CorporateActionService
             if ($payload['action_type'] === 'split') {
                 $this->applySplit($action, $preview);
             } else {
-                $this->applyBonus($action, $preview);
+                $this->applyBonus($profile, $stock, $action, $preview);
             }
 
             return $action;
@@ -410,21 +411,23 @@ class CorporateActionService
 
     /**
      * @param  array<string, mixed>  $preview
+     *
+     * Uses TransactionWriteService::insert (not create) because the caller (apply()) already
+     * recalculates holdings/realizations/snapshots afterwards — applyAfterCreate would duplicate that work.
      */
-    protected function applyBonus(CorporateAction $action, array $preview): void
+    protected function applyBonus(PortfolioProfile $profile, Stock $stock, CorporateAction $action, array $preview): void
     {
         $buy = $preview['proposed_buy'];
         $ratioLabel = $action->ratio_from.':'.$action->ratio_to;
 
-        Transaction::query()->create([
-            'profile_id' => $action->profile_id,
-            'stock_id' => $action->stock_id,
+        $this->writes->insert($profile, $stock, [
             'type' => 'buy',
             'quantity' => $buy['quantity'],
             'price' => 0,
             'fees' => 0,
             'transaction_date' => $buy['transaction_date'],
             'notes' => trim('Bonus '.$ratioLabel.' (corporate action #'.$action->id.')'.($action->notes ? ' — '.$action->notes : '')),
+            'source' => Transaction::SOURCE_BONUS,
             'corporate_action_id' => $action->id,
         ]);
     }

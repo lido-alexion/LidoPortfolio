@@ -54,7 +54,8 @@ class TransactionWriteService
      *     transaction_date: string,
      *     notes?: string|null,
      *     source?: string|null,
-     *     recommendation_id?: int|null
+     *     recommendation_id?: int|null,
+     *     corporate_action_id?: int|null
      * }  $input
      */
     public function insert(PortfolioProfile $profile, Stock $stock, array $input): Transaction
@@ -72,6 +73,7 @@ class TransactionWriteService
             'notes' => $normalized['notes'],
             'source' => $normalized['source'],
             'recommendation_id' => $normalized['recommendation_id'],
+            'corporate_action_id' => $normalized['corporate_action_id'],
         ]);
     }
 
@@ -114,7 +116,7 @@ class TransactionWriteService
 
     /**
      * @param  array<string, mixed>  $input
-     * @return array{type: string, quantity: float, price: float, fees: float, transaction_date: string, notes: ?string, source: string, recommendation_id: ?int}
+     * @return array{type: string, quantity: float, price: float, fees: float, transaction_date: string, notes: ?string, source: string, recommendation_id: ?int, corporate_action_id: ?int}
      */
     protected function normalizeInput(PortfolioProfile $profile, Stock $stock, array $input): array
     {
@@ -132,11 +134,39 @@ class TransactionWriteService
             ]);
         }
 
-        $price = (float) ($input['price'] ?? 0);
-        if ($price <= 0) {
+        $source = strtolower((string) ($input['source'] ?? Transaction::SOURCE_MANUAL));
+        if ($source === '') {
+            $source = Transaction::SOURCE_MANUAL;
+        }
+        if (! in_array($source, Transaction::SOURCES, true)) {
             throw ValidationException::withMessages([
-                'price' => ['Price must be greater than zero.'],
+                'source' => ['Invalid transaction source.'],
             ]);
+        }
+
+        $recommendationId = isset($input['recommendation_id']) ? (int) $input['recommendation_id'] : null;
+        if ($recommendationId !== null && $recommendationId <= 0) {
+            $recommendationId = null;
+        }
+        if ($recommendationId !== null) {
+            $source = Transaction::SOURCE_RECOMMENDATION;
+        }
+
+        $corporateActionId = isset($input['corporate_action_id']) ? (int) $input['corporate_action_id'] : null;
+        if ($corporateActionId !== null && $corporateActionId <= 0) {
+            $corporateActionId = null;
+        }
+
+        // Bonus corporate action buys are price 0 by design; all other sources require a positive price.
+        if ($source === Transaction::SOURCE_BONUS) {
+            $price = 0.0;
+        } else {
+            $price = (float) ($input['price'] ?? 0);
+            if ($price <= 0) {
+                throw ValidationException::withMessages([
+                    'price' => ['Price must be greater than zero.'],
+                ]);
+            }
         }
 
         $fees = (float) ($input['fees'] ?? 0);
@@ -176,24 +206,6 @@ class TransactionWriteService
             ]);
         }
 
-        $source = strtolower((string) ($input['source'] ?? Transaction::SOURCE_MANUAL));
-        if ($source === '') {
-            $source = Transaction::SOURCE_MANUAL;
-        }
-        if (! in_array($source, Transaction::SOURCES, true)) {
-            throw ValidationException::withMessages([
-                'source' => ['Invalid transaction source.'],
-            ]);
-        }
-
-        $recommendationId = isset($input['recommendation_id']) ? (int) $input['recommendation_id'] : null;
-        if ($recommendationId !== null && $recommendationId <= 0) {
-            $recommendationId = null;
-        }
-        if ($recommendationId !== null) {
-            $source = Transaction::SOURCE_RECOMMENDATION;
-        }
-
         return [
             'type' => $type,
             'quantity' => $quantity,
@@ -203,6 +215,7 @@ class TransactionWriteService
             'notes' => is_string($notes) || $notes === null ? $notes : null,
             'source' => $source,
             'recommendation_id' => $recommendationId,
+            'corporate_action_id' => $corporateActionId,
         ];
     }
 }
