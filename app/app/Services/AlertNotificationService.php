@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\PortfolioProfile;
 use App\Models\User;
+use App\Services\Notification\NotificationMessageComposer;
 
 class AlertNotificationService
 {
@@ -13,6 +14,7 @@ class AlertNotificationService
         protected TelegramNotificationService $telegram,
         protected PortfolioLoggerService $logger,
         protected SettingsService $settings,
+        protected NotificationMessageComposer $composer,
     ) {}
 
     /**
@@ -99,7 +101,7 @@ class AlertNotificationService
         $alerts = $this->alerts->getActiveForProfile($profile);
         $text = $alerts === []
             ? 'No active alerts at this time'
-            : $this->formatAlertsMessage($alerts);
+            : $this->composer->alertsMessage($alerts);
 
         $sent = $this->telegram->sendMessageWithCredentials($text, $token, $chatId);
 
@@ -135,7 +137,7 @@ class AlertNotificationService
 
         if ($alerts === []) {
             if ($this->settings->isTelegramPingWhenClearEnabled()) {
-                $text = $this->formatClearPingMessage($profile, $atTime);
+                $text = $this->composer->clearPingMessage($profile, $atTime);
                 $sent = $this->telegram->sendMessageForProfile($profile, $text);
 
                 return [
@@ -152,7 +154,7 @@ class AlertNotificationService
             ];
         }
 
-        $text = $this->formatAlertsMessage($alerts);
+        $text = $this->composer->alertsMessage($alerts);
         $sent = $this->telegram->sendMessageForProfile($profile, $text);
 
         return [
@@ -160,30 +162,5 @@ class AlertNotificationService
             'skipped' => false,
             'alert_count' => count($alerts),
         ];
-    }
-
-    protected function formatClearPingMessage(PortfolioProfile $profile, ?string $atTime = null): string
-    {
-        $name = trim((string) $profile->name) !== '' ? $profile->name : 'Portfolio';
-        $timeLabel = $atTime ? " (scheduled check at {$atTime})" : '';
-
-        return "✅ Lido Portfolio — {$name}: No active alerts{$timeLabel}.\n\n"
-            .'Scheduled notification check — cron is working. Disable “Ping Telegram when clear” in Settings → Global when done testing.';
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $alerts
-     */
-    protected function formatAlertsMessage(array $alerts): string
-    {
-        $lines = ['Portfolio alerts ('.count($alerts).')'];
-
-        foreach ($alerts as $alert) {
-            $symbol = $alert['stock']['symbol'] ?? $alert['stock']['name'] ?? 'Unknown';
-            $message = trim((string) ($alert['message'] ?? ''));
-            $lines[] = $message !== '' ? "• {$symbol}: {$message}" : "• {$symbol}";
-        }
-
-        return implode("\n", $lines);
     }
 }

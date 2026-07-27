@@ -5,12 +5,14 @@ namespace App\Engines\Notification;
 use App\Models\PortfolioProfile;
 use App\Models\TosNotification;
 use App\Models\TradingRecommendation;
+use App\Services\Notification\NotificationMessageComposer;
 use App\Services\PortfolioLoggerService;
 use App\Services\ProfileSettingsService;
 use App\Services\TelegramNotificationService;
 
 /**
  * Notification Engine — delivery only; never mutates recommendation content.
+ * Message composition is owned by NotificationMessageComposer (TD-005).
  */
 class NotificationEngine
 {
@@ -18,6 +20,7 @@ class NotificationEngine
         protected TelegramNotificationService $telegram,
         protected ProfileSettingsService $profileSettings,
         protected PortfolioLoggerService $logger,
+        protected NotificationMessageComposer $composer,
     ) {}
 
     /**
@@ -63,7 +66,7 @@ class NotificationEngine
             'priority' => $rec->priority,
             'confidence' => (float) $rec->confidence,
             'risk_level' => $rec->risk_level,
-            'message' => $this->formatMessage($rec),
+            'message' => $this->composer->recommendationMessage($rec),
         ];
 
         $notification = $existing ?? TosNotification::query()->create([
@@ -165,24 +168,5 @@ class NotificationEngine
             ->limit($limit)
             ->get()
             ->all();
-    }
-
-    protected function formatMessage(TradingRecommendation $rec): string
-    {
-        $symbol = $rec->security?->symbol ?? '#'.$rec->security_id;
-        $lines = [
-            'Lido Trading OS recommendation',
-            sprintf('%s %s (priority %d)', $rec->recommendation_type, $symbol, $rec->priority),
-            sprintf('Confidence: %.0f%% | Risk: %s', ((float) $rec->confidence) * 100, $rec->risk_level),
-        ];
-        if ($rec->suggested_position_size) {
-            $lines[] = sprintf('Suggested size: ₹%s', number_format((float) $rec->suggested_position_size, 0));
-        }
-        $passed = $rec->evidence['passed_rules'] ?? [];
-        if ($passed) {
-            $lines[] = 'Passed: '.implode(', ', array_slice($passed, 0, 5));
-        }
-
-        return implode("\n", $lines);
     }
 }
