@@ -4256,3 +4256,31 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     filter: invert(1) grayscale(100%);
 }
 
+/* Market depth heatmap (Dashboard → Market analytics) */
+.lido-market-depth-table {
+    --lido-md-cell: 3.25rem;
+}
+
+.lido-market-depth-table th.lido-market-depth-metric-col {
+    font-size: 0.8rem;
+    color: var(--lido-text);
+    min-width: var(--lido-md-cell);
+}
+
+.lido-market-depth-table .lido-market-depth-index-col {
+    min-width: 8.5rem;
+    white-space: nowrap;
+}
+
+.lido-market-depth-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: var(--lido-md-cell);
+    min-height: 2.35rem;
+    padding: 0.35rem 0.5rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+    border-radius: 2px;
+}
+

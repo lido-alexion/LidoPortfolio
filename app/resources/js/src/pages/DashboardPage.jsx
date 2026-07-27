@@ -16,6 +16,7 @@ import VolatilityGauge from '../components/VolatilityGauge';
 import RiskGauge from '../components/RiskGauge';
 import MarketRegimeGauge from '../components/MarketRegimeGauge';
 import MarketBreadthGauge from '../components/MarketBreadthGauge';
+import MarketDepthTable from '../components/MarketDepthTable';
 import { DashboardCalendarCard } from '../components/calendar/CalendarDayEventsDialog';
 import PatternSketch from '../components/PatternSketch';
 import { showToast } from '../toast';
@@ -599,6 +600,25 @@ export default function DashboardPage() {
     const topGainer = topMoversForPeriod.gainer ?? data.top_gainer;
     const topLoser = topMoversForPeriod.loser ?? data.top_loser;
 
+    const cashAvailable = Number(
+        data.available_investable_cash
+        ?? data.portfolio_analytics?.cash_available
+        ?? data.cash?.available_investable_cash,
+    );
+    const cashAvailableValid = !Number.isNaN(cashAvailable);
+    const cashDenom = cashAvailableValid
+        ? cashAvailable + (Number.isNaN(Number(data.portfolio_value)) ? 0 : Number(data.portfolio_value))
+        : 0;
+    const cashAvailablePct = cashAvailableValid && cashDenom > 0
+        ? (cashAvailable / cashDenom) * 100
+        : null;
+    const cashAvailablePctInBand = cashAvailablePct != null
+        && cashAvailablePct >= 7.1
+        && cashAvailablePct <= 15;
+    const cashAvailablePctLabel = cashAvailablePct != null
+        ? ` ( ${cashAvailablePct.toFixed(1)}% )`
+        : '';
+
     const growthData = (data.portfolio_growth || []).map((point) => {
         const rawDate = point.snapshot_date;
         const date = typeof rawDate === 'string'
@@ -688,18 +708,30 @@ export default function DashboardPage() {
                 </div>
             ))}
             <DashboardTopMoverCard
-                title="Top Gainer"
-                mover={topGainer}
+                gainer={topGainer}
+                loser={topLoser}
                 period={topMoverPeriod}
                 onPeriodChange={handleTopMoverPeriodChange}
             />
-            <DashboardTopMoverCard
-                title="Top Loser"
-                mover={topLoser}
-                period={topMoverPeriod}
-                onPeriodChange={handleTopMoverPeriodChange}
-            />
-            {data.portfolio_analytics || data.market_analytics ? (
+            {cashAvailableValid ? (
+                <div className="col-12 col-md-6 col-lg-4" key="Cash available">
+                    <div className="card h-100">
+                        <div className="card-body">
+                            <div className="text-muted small">Cash available</div>
+                            <div
+                                className={[
+                                    'h5 m-0',
+                                    cashAvailablePctInBand ? 'text-success' : '',
+                                ].join(' ').trim()}
+                            >
+                                {formatInrWhole(cashAvailable)}
+                                {cashAvailablePctLabel}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
+            {data.portfolio_analytics || data.market_analytics || data.market_depth ? (
                 <>
                     {(data.portfolio_analytics ? [
                         {
@@ -774,7 +806,7 @@ export default function DashboardPage() {
                             </div>
                         </div>
                     ))}
-                    {data.market_analytics ? (
+                    {(data.market_analytics || data.market_depth) ? (
                         <div className="col-12">
                             <h2 className="h6 text-muted mb-2">Market analytics</h2>
                         </div>
@@ -912,6 +944,11 @@ export default function DashboardPage() {
                             </div>
                         </div>
                     ))}
+                    {data.market_depth?.rows?.length ? (
+                        <div className="col-12" key="ma-MarketDepth">
+                            <MarketDepthTable data={data.market_depth} />
+                        </div>
+                    ) : null}
                 </>
             ) : null}
             <div className="col-12">

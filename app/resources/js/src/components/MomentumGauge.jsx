@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import HalfDonutShell, { clampScore } from './HalfDonutShell';
+import HalfDonutShell, { BULLISH_GRADIENT_STOPS, clampScore } from './HalfDonutShell';
 
 /**
  * Momentum zones (score 0–100), aligned with MarketAnalysisEngine::buildMomentum.
@@ -66,6 +66,7 @@ export default function MomentumGauge({ score, direction = null, className = '' 
         <HalfDonutShell
             score={clamped}
             zones={MOMENTUM_ZONES}
+            gradientStops={BULLISH_GRADIENT_STOPS}
             className={className}
             tabIndex={0}
             ariaLabel={`Momentum ${Math.round(clamped)}, ${zone.displayName}.${directionNote} ${zone.definition}`}

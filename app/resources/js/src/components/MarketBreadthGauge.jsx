@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import HalfDonutShell, { clampScore } from './HalfDonutShell';
+import HalfDonutShell, { BULLISH_GRADIENT_STOPS, clampScore } from './HalfDonutShell';
 
 /**
  * Market breadth zones aligned with MarketAnalysisEngine::buildBreadthV1.
@@ -70,6 +70,7 @@ export default function MarketBreadthGauge({
         <HalfDonutShell
             score={clamped}
             zones={BREADTH_ZONES}
+            gradientStops={BULLISH_GRADIENT_STOPS}
             className={className}
             tabIndex={0}
             ariaLabel={`Market breadth ${Math.round(clamped)}, ${zone.displayName}.${adNote} ${zone.definition}`}

@@ -21,6 +21,10 @@ export const CY = LABEL_R + LABEL_PAD;
 export const VB_W = CX + LABEL_R + LABEL_PAD;
 export const VB_H = CY + HUB_R + 6;
 
+/**
+ * Green (left) → red (right). Use when left is calm/safe/fear and right is
+ * extreme risk or greed (Sentiment, Volatility, Risk).
+ */
 export const DEFAULT_GRADIENT_STOPS = [
     { offset: '0%', color: '#22c55e' },
     { offset: '18%', color: '#84cc16' },
@@ -31,6 +35,22 @@ export const DEFAULT_GRADIENT_STOPS = [
     { offset: '72%', color: '#fb923c' },
     { offset: '82%', color: '#f97316' },
     { offset: '100%', color: '#ef4444' },
+];
+
+/**
+ * Red (left) → green (right). Use when left is bearish/weak/down and right is
+ * bullish/strong/up (Trend, Momentum, Market regime, Market breadth).
+ */
+export const BULLISH_GRADIENT_STOPS = [
+    { offset: '0%', color: '#ef4444' },
+    { offset: '18%', color: '#f97316' },
+    { offset: '28%', color: '#fb923c' },
+    { offset: '42%', color: '#cbd5e1' },
+    { offset: '50%', color: '#94a3b8' },
+    { offset: '58%', color: '#cbd5e1' },
+    { offset: '72%', color: '#eab308' },
+    { offset: '82%', color: '#84cc16' },
+    { offset: '100%', color: '#22c55e' },
 ];
 
 export function clampScore(value) {

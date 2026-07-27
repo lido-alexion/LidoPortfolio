@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import HalfDonutShell from './HalfDonutShell';
+import HalfDonutShell, { BULLISH_GRADIENT_STOPS } from './HalfDonutShell';
 
 /**
  * Market regime zones from MarketAnalysisEngine::regimeFromPhase.
@@ -64,6 +64,7 @@ export default function MarketRegimeGauge({ regime, className = '' }) {
         <HalfDonutShell
             score={needleScore}
             zones={MARKET_REGIME_ZONES}
+            gradientStops={BULLISH_GRADIENT_STOPS}
             className={className}
             tabIndex={0}
             ariaLabel={`Market regime ${zone.name}. ${zone.definition}`}

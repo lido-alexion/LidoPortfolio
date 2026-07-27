@@ -138,6 +138,24 @@ return [
     ],
 
     /*
+    | Dashboard market depth heatmap: % of index constituents above RS55 / SMAs.
+    | RS 55 = 55-session return vs primary benchmark (NIFTY50) > 0.
+    | Midcap row uses NIFTYMIDCAP50 (no Midcap Select in catalog).
+    */
+    'market_depth' => [
+        'indexes' => [
+            'NIFTY50',
+            'NIFTY500',
+            'NIFTYBANK',
+            'NIFTYFINSERVICE',
+            'NIFTYMIDCAP50',
+        ],
+        'rs_sessions' => max(1, (int) env('MARKET_DEPTH_RS_SESSIONS', 55)),
+        'history_calendar_days' => max(250, (int) env('MARKET_DEPTH_HISTORY_DAYS', 400)),
+        'cache_ttl_seconds' => max(300, (int) env('MARKET_DEPTH_CACHE_TTL', 21600)),
+    ],
+
+    /*
     | Admin operational alerts (rate limits, scheduler downtime, job failures).
     | Telegram goes to all admin users with Telegram configured on any portfolio.
     */

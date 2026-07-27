@@ -137,6 +137,15 @@ class DailyMarketDataJob implements ShouldQueue
                     $dailySyncStatus->markSuccessful();
                     $syncLog->completeRun($runId, 'success', $stats);
 
+                    try {
+                        app(\App\Services\Analytics\MarketDepthService::class)->matrix(forceRefresh: true);
+                        $syncLog->log($runId, $jobName, 'info', 'Market depth matrix refreshed');
+                    } catch (\Throwable $e) {
+                        $syncLog->log($runId, $jobName, 'warning', 'Market depth refresh failed', [
+                            'failure_reason' => $e->getMessage(),
+                        ]);
+                    }
+
                     $priceDateAfter = $alertExpiration->latestPortfolioPriceDate();
                     if ($priceDateAfter && (! $priceDateBefore || $priceDateAfter > $priceDateBefore)) {
                         $expiredOnRefresh = $alertExpiration->expireBeforeTradingDay(

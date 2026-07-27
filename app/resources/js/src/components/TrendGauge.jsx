@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import HalfDonutShell, { clampScore } from './HalfDonutShell';
+import HalfDonutShell, { BULLISH_GRADIENT_STOPS, clampScore } from './HalfDonutShell';
 
 /**
  * Trend zones (score 0–100), aligned with MarketAnalysisEngine::buildTrend labels.
@@ -82,6 +82,7 @@ export default function TrendGauge({ score, className = '' }) {
         <HalfDonutShell
             score={clamped}
             zones={TREND_ZONES}
+            gradientStops={BULLISH_GRADIENT_STOPS}
             className={className}
             tabIndex={0}
             ariaLabel={`Trend ${Math.round(clamped)}, ${zone.displayName}. ${zone.definition}`}
