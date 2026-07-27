@@ -45,6 +45,8 @@
     --lido-text-success: #4ade80;
     --lido-text-danger: #f87171;
     --lido-text-allocation-elevated: #fb923c;
+    --lido-percent-marker-fill: #ffffff;
+    --lido-percent-marker-stroke: #000000;
     --lido-admin-settings-text: #9ecbff;
     --lido-number-step-bg: #1e90ff;
     --lido-number-step-disabled-bg: #6b7280;
@@ -91,6 +93,8 @@
     --lido-text-success: #15803d;
     --lido-text-danger: #dc2626;
     --lido-text-allocation-elevated: #ea580c;
+    --lido-percent-marker-fill: #000000;
+    --lido-percent-marker-stroke: #ffffff;
     --lido-admin-settings-text: #7a5f00;
     --lido-number-step-bg: #1e90ff;
     --lido-number-step-disabled-bg: #9ca3af;
@@ -797,6 +801,42 @@ html.lido-footer-visible .lido-main {
 
 .contentPane .text-allocation-elevated {
     color: var(--lido-text-allocation-elevated) !important;
+}
+
+.contentPane a.text-allocation-elevated,
+.contentPane a.text-allocation-elevated:hover,
+.contentPane a.text-allocation-elevated:focus {
+    color: var(--lido-text-allocation-elevated) !important;
+    text-decoration: none !important;
+}
+
+/* PercentGradientBar — red→green range with equilateral tip marker */
+.lido-percent-gradient-bar {
+    position: relative;
+    width: 100%;
+    /* Triangle (1.5× bar height) hangs above the bar; tip sits 3px inside the top edge */
+    padding-top: 12px;
+}
+
+.lido-percent-gradient-bar__track {
+    position: relative;
+    height: 10px;
+    border-radius: 2px;
+    background: linear-gradient(
+        to right,
+        var(--lido-text-danger),
+        var(--lido-text-success)
+    );
+    overflow: visible;
+}
+
+.lido-percent-gradient-bar__marker {
+    position: absolute;
+    display: block;
+    transform: translateX(-50%);
+    pointer-events: auto;
+    cursor: default;
+    overflow: visible;
 }
 
 /* Recharts tooltips (inline light defaults overridden for dark theme) */

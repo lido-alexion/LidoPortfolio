@@ -7,6 +7,7 @@ import { DataTableCard } from '../components/DataTable';
 import AnalyseStockButton from '../components/AnalyseStockButton';
 import DashboardTopMoverCard from '../components/DashboardTopMoverCard';
 import DashboardAllocationCard from '../components/DashboardAllocationCard';
+import PercentGradientBar from '../components/PercentGradientBar';
 import { DashboardCalendarCard } from '../components/calendar/CalendarDayEventsDialog';
 import PatternSketch from '../components/PatternSketch';
 import { showToast } from '../toast';
@@ -545,6 +546,24 @@ export default function DashboardPage() {
         data.invested_value,
     );
 
+    const investedNum = Number(data.invested_value);
+    const gainLossNum = Number(data.total_gain_loss);
+    const profitLossPct = investedNum > 0 && !Number.isNaN(investedNum) && !Number.isNaN(gainLossNum)
+        ? (gainLossNum / investedNum) * 100
+        : null;
+
+    const positionCount = data.portfolio_analytics?.number_of_positions;
+    const oversizedPositionCount = (data.portfolio_analytics?.allocation || [])
+        .filter((row) => Number(row.allocation_pct) > 15)
+        .length;
+    const positionsCountClass = positionCount == null
+        ? ''
+        : (positionCount >= 6 && positionCount <= 20 ? 'text-success' : 'text-danger');
+
+    const profitLossPctLabel = profitLossPct != null
+        ? ` ( ${profitLossPct >= 0 ? '+' : ''}${profitLossPct.toFixed(1)}% )`
+        : '';
+
     const cards = [
         {
             title: 'Portfolio Value',
@@ -558,18 +577,13 @@ export default function DashboardPage() {
         },
         {
             title: 'Total Gain/Loss',
-            value: formatInrWhole(data.total_gain_loss),
+            value: `${formatInrWhole(data.total_gain_loss)}${profitLossPctLabel}`,
             valueClassName: portfolioVsInvestedClass,
         },
         {
             title: 'XIRR',
             value: data.xirr != null ? `${Number(data.xirr).toFixed(2)}%` : 'N/A',
             valueClassName: signedMetricClass(data.xirr),
-        },
-        {
-            title: 'Available Cash',
-            value: formatInrWhole(data.available_investable_cash ?? data.cash?.available_investable_cash),
-            valueClassName: '',
         },
     ];
 
@@ -652,45 +666,90 @@ export default function DashboardPage() {
                     </div>
                 ) : null}
             </div>
+            <div className="col-12">
+                <h2 className="h6 text-muted mb-0">Portfolio</h2>
+            </div>
             {cards.map(({ title, value, valueClassName }) => (
                 <div className="col-12 col-md-6 col-lg-4" key={title}>
                     <div className="card h-100">
                         <div className="card-body">
                             <div className="text-muted small">{title}</div>
                             <div className={`h5 m-0 ${valueClassName}`.trim()}>{value}</div>
-                            {title === 'Available Cash' ? (
-                                <Link to="/cash" className="small d-inline-block mt-1">
-                                    Cash management
-                                </Link>
-                            ) : null}
                         </div>
                     </div>
                 </div>
             ))}
             {data.portfolio_analytics || data.market_analytics ? (
                 <>
-                    <div className="col-12">
-                        <h2 className="h6 text-muted mb-0">Portfolio analytics</h2>
-                        <p className="small text-muted mb-0">
-                            Portfolio-wide metrics only — individual stock research lives on{' '}
-                            <Link to="/watchlist">Watchlist</Link>.
-                        </p>
-                    </div>
                     {(data.portfolio_analytics ? [
-                        ['Positions', data.portfolio_analytics.number_of_positions],
-                        ['Diversification', data.portfolio_analytics.diversification_score != null ? `${data.portfolio_analytics.diversification_score}` : null],
-                        ['Largest position %', data.portfolio_analytics.largest_position_pct != null ? `${data.portfolio_analytics.largest_position_pct}%` : null],
-                        ['Avg Relative Strength', data.portfolio_analytics.average_relative_strength],
-                        ['Avg Momentum', data.portfolio_analytics.average_momentum_score],
-                        ['Avg Trend', data.portfolio_analytics.average_trend_score],
-                        ['Cash reserved', data.portfolio_analytics.cash_reserved != null ? formatInrWhole(data.portfolio_analytics.cash_reserved) : null],
-                        ['Cash utilisation %', data.portfolio_analytics.cash_utilisation_pct != null ? `${data.portfolio_analytics.cash_utilisation_pct}%` : null],
-                    ] : []).filter(([, v]) => v != null && v !== '').map(([title, value]) => (
-                        <div className="col-6 col-md-4 col-lg-3" key={`pa-${title}`}>
+                        {
+                            title: 'Positions',
+                            value: positionCount,
+                            valueClassName: `${positionsCountClass} fw-semibold`.trim(),
+                            hint: null,
+                            renderValue: () => (
+                                <div className={`fw-semibold ${positionsCountClass}`.trim()}>
+                                    <span>{positionCount}</span>
+                                    {oversizedPositionCount > 0 ? (
+                                        <a
+                                            href="#dashboard-allocation"
+                                            className="text-allocation-elevated small ms-1 fw-normal text-decoration-none"
+                                            title="Jump to Allocation"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                document.getElementById('dashboard-allocation')
+                                                    ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                            }}
+                                        >
+                                            (Oversized: {oversizedPositionCount})
+                                        </a>
+                                    ) : null}
+                                </div>
+                            ),
+                        },
+                        {
+                            title: 'Diversification',
+                            value: data.portfolio_analytics.diversification_score,
+                            valueClassName: 'fw-semibold',
+                            hint: null,
+                            renderValue: () => (
+                                <PercentGradientBar
+                                    value={data.portfolio_analytics.diversification_score}
+                                    className="mt-1"
+                                />
+                            ),
+                        },
+                        {
+                            title: 'Avg Relative Strength (3-month Nifty50)',
+                            value: data.portfolio_analytics.average_relative_strength,
+                            valueClassName: `fw-semibold ${signedMetricClass(data.portfolio_analytics.average_relative_strength)}`.trim(),
+                            hint: null,
+                        },
+                        {
+                            title: 'Avg Momentum',
+                            value: data.portfolio_analytics.average_momentum_score,
+                            valueClassName: 'fw-semibold',
+                            hint: null,
+                        },
+                        {
+                            title: 'Avg Trend',
+                            value: data.portfolio_analytics.average_trend_score,
+                            valueClassName: 'fw-semibold',
+                            hint: null,
+                        },
+                    ] : []).filter((card) => card.value != null && card.value !== '').map((card) => (
+                        <div className="col-12 col-md-6 col-lg-4" key={`pa-${card.title}`}>
                             <div className="card h-100">
                                 <div className="card-body py-2">
-                                    <div className="text-muted small">{title}</div>
-                                    <div className="fw-semibold">{value}</div>
+                                    <div className="text-muted small">{card.title}</div>
+                                    {card.renderValue ? card.renderValue() : (
+                                        <div className={card.valueClassName}>{card.value}</div>
+                                    )}
+                                    {card.hint ? (
+                                        <div className="text-muted small mt-1 lh-sm">
+                                            {card.hint}
+                                        </div>
+                                    ) : null}
                                 </div>
                             </div>
                         </div>
@@ -909,7 +968,7 @@ export default function DashboardPage() {
                     emptyMessage={`No relative strength data. Values need ${rsBenchmarkSymbol} and stock OHLCV (run daily price sync).`}
                 />
             </div>
-            <div className="col-12 col-lg-6">
+            <div className="col-12 col-lg-6" id="dashboard-allocation">
                 <DashboardAllocationCard
                     className="h-100"
                     allocation={data.allocation || []}
