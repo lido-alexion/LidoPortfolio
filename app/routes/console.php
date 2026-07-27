@@ -4,6 +4,7 @@ use App\Jobs\DailyMarketDataJob;
 use App\Services\BenchmarkPriceSyncService;
 use App\Services\NotificationScheduleService;
 use App\Services\SettingsService;
+use App\Support\TradingOsConfig;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -209,10 +210,10 @@ Schedule::command('portfolio:send-calendar-reminders')
     ->timezone($timezone)
     ->name('calendar-reminders');
 
-if (config('trading_os.enabled', true) && config('trading_os.pipeline.schedule_enabled', false)) {
-    $pipelineTime = config('trading_os.pipeline.schedule_time', '19:00');
+if (TradingOsConfig::enabled() && TradingOsConfig::pipelineScheduleEnabled()) {
+    $pipelineTime = TradingOsConfig::pipelineScheduleTime();
     Schedule::command('portfolio:decision-pipeline')
-        ->dailyAt(is_string($pipelineTime) ? $pipelineTime : '19:00')
+        ->dailyAt($pipelineTime)
         ->timezone($timezone)
         ->name('trading-os-decision-pipeline');
 }

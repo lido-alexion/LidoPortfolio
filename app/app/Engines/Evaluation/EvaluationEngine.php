@@ -12,6 +12,7 @@ use App\Models\StockPrice;
 use App\Services\PortfolioLoggerService;
 use App\Services\RelativeStrengthService;
 use App\Services\Screener\TechnicalIndicatorService;
+use App\Support\TradingOsConfig;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -42,7 +43,7 @@ class EvaluationEngine
             throw new \RuntimeException('No completed discovery run available for evaluation.');
         }
 
-        $config = config('trading_os.evaluation', []);
+        $config = TradingOsConfig::evaluation();
         $run = EvaluationRun::query()->create([
             'profile_id' => $profile->id,
             'discovery_run_id' => $discoveryRun->id,

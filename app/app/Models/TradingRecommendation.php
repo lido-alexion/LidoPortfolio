@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -35,6 +36,45 @@ class TradingRecommendation extends Model
     public const STATUS_CANCELLED = 'cancelled';
 
     public const STATUS_ARCHIVED = 'archived';
+
+    /** Legacy rows pre–status migration; treated as open when cancelling/expiring stale. */
+    public const STATUS_ACTIVE_LEGACY = 'active';
+
+    public const RISK_LOW = 'low';
+
+    public const RISK_MEDIUM = 'medium';
+
+    public const RISK_HIGH = 'high';
+
+    public const ALLOCATION_FUNDED = 'funded';
+
+    public const ALLOCATION_UNFUNDED = 'unfunded';
+
+    public const OPINION_BULLISH = 'Bullish';
+
+    public const OPINION_BEARISH = 'Bearish';
+
+    public const OPINION_NEUTRAL = 'Neutral';
+
+    public const STRENGTH_VERY_STRONG = 'Very Strong';
+
+    public const STRENGTH_STRONG = 'Strong';
+
+    public const STRENGTH_MODERATE = 'Moderate';
+
+    public const STRENGTH_WEAK = 'Weak';
+
+    public const ACTION_OPEN_POSITION = 'OPEN_POSITION';
+
+    public const ACTION_INCREASE_POSITION = 'INCREASE_POSITION';
+
+    public const ACTION_REDUCE_POSITION = 'REDUCE_POSITION';
+
+    public const ACTION_EXIT_POSITION = 'EXIT_POSITION';
+
+    public const ACTION_HOLD_POSITION = 'HOLD_POSITION';
+
+    public const ACTION_WATCH = 'WATCH';
 
     /** Review decisions accepted by the API (approved maps to pending_execution). */
     public const REVIEW_DECISIONS = [
@@ -83,16 +123,33 @@ class TradingRecommendation extends Model
 
     /** Portfolio actions that require review then pending execution. */
     public const ACTIONABLE_ACTIONS = [
-        'OPEN_POSITION',
-        'INCREASE_POSITION',
-        'REDUCE_POSITION',
-        'EXIT_POSITION',
+        self::ACTION_OPEN_POSITION,
+        self::ACTION_INCREASE_POSITION,
+        self::ACTION_REDUCE_POSITION,
+        self::ACTION_EXIT_POSITION,
     ];
 
     /** Portfolio actions that are auto-published. */
     public const INFORMATIONAL_ACTIONS = [
-        'HOLD_POSITION',
-        'WATCH',
+        self::ACTION_HOLD_POSITION,
+        self::ACTION_WATCH,
+    ];
+
+    /** Default API "open" recommendation list (pending review + execution + published). */
+    public const OPEN_LIST_STATUSES = [
+        self::STATUS_PENDING_REVIEW,
+        self::STATUS_DEFERRED,
+        self::STATUS_PENDING_EXECUTION,
+        self::STATUS_ACCEPTED,
+        self::STATUS_PUBLISHED,
+    ];
+
+    /** Rows eligible for expiry or cancellation when a new generation batch runs. */
+    public const STALE_OPEN_STATUSES = [
+        self::STATUS_PENDING_REVIEW,
+        self::STATUS_DEFERRED,
+        self::STATUS_PUBLISHED,
+        self::STATUS_ACTIVE_LEGACY,
     ];
 
     /** @deprecated Use ACTIONABLE_ACTIONS */
@@ -102,12 +159,12 @@ class TradingRecommendation extends Model
     public const INFORMATIONAL_TYPES = self::INFORMATIONAL_ACTIONS;
 
     public const UI_LABELS = [
-        'OPEN_POSITION' => 'Buy',
-        'INCREASE_POSITION' => 'Buy More',
-        'REDUCE_POSITION' => 'Sell Partial',
-        'EXIT_POSITION' => 'Sell All',
-        'HOLD_POSITION' => 'Hold',
-        'WATCH' => 'Watch',
+        self::ACTION_OPEN_POSITION => 'Buy',
+        self::ACTION_INCREASE_POSITION => 'Buy More',
+        self::ACTION_REDUCE_POSITION => 'Sell Partial',
+        self::ACTION_EXIT_POSITION => 'Sell All',
+        self::ACTION_HOLD_POSITION => 'Hold',
+        self::ACTION_WATCH => 'Watch',
         'BUY' => 'Buy',
         'SELL' => 'Sell All',
         'HOLD' => 'Hold',
@@ -222,6 +279,96 @@ class TradingRecommendation extends Model
     public function transactions(): HasMany
     {
         return $this->hasMany(Transaction::class, 'recommendation_id');
+    }
+
+    /**
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopeForProfile(Builder $query, PortfolioProfile|int $profile): Builder
+    {
+        $id = $profile instanceof PortfolioProfile ? $profile->id : $profile;
+
+        return $query->where('profile_id', $id);
+    }
+
+    /**
+     * Approved recommendations awaiting ledger fill (includes BC `accepted` rows).
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopePendingExecution(Builder $query): Builder
+    {
+        return $query->whereIn('status', [
+            self::STATUS_PENDING_EXECUTION,
+            self::STATUS_ACCEPTED,
+        ]);
+    }
+
+    /**
+     * Actionable recommendations still awaiting Approve / Reject / Defer.
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopeOpenForReview(Builder $query): Builder
+    {
+        return $query->whereIn('status', [
+            self::STATUS_PENDING_REVIEW,
+            self::STATUS_DEFERRED,
+        ]);
+    }
+
+    /**
+     * Buy recommendations with cash reserved at approval time.
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopeWithCashReservation(Builder $query): Builder
+    {
+        return $query->where('reservation_status', self::RESERVATION_RESERVED);
+    }
+
+    /**
+     * Actionable portfolio actions plus legacy BUY/SELL recommendation_type values.
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopeActionableTypes(Builder $query): Builder
+    {
+        return $query->where(function (Builder $q) {
+            foreach (self::ACTIONABLE_ACTIONS as $i => $t) {
+                $method = $i === 0 ? 'whereRaw' : 'orWhereRaw';
+                $q->{$method}('UPPER(recommendation_type) = ?', [$t]);
+            }
+            $q->orWhereRaw('UPPER(recommendation_type) = ?', ['BUY'])
+                ->orWhereRaw('UPPER(recommendation_type) = ?', ['SELL']);
+        });
+    }
+
+    /**
+     * Open lifecycle statuses shown in default recommendation lists / preview lookup.
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopeOpenList(Builder $query): Builder
+    {
+        return $query->whereIn('status', self::OPEN_LIST_STATUSES);
+    }
+
+    /**
+     * Pre-terminal rows cancelled or expired by generation / maintenance jobs.
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopeStaleOpen(Builder $query): Builder
+    {
+        return $query->whereIn('status', self::STALE_OPEN_STATUSES);
     }
 
     public function actionUpper(): string

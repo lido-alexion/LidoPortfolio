@@ -7,6 +7,7 @@ use App\Models\Stock;
 use App\Models\StockPrice;
 use App\Services\RelativeStrengthService;
 use App\Services\Screener\TechnicalIndicatorService;
+use App\Support\TradingOsConfig;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Schema;
 
@@ -111,7 +112,7 @@ class MarketAnalysisEngine
      */
     public function analyze(Stock $benchmark): array
     {
-        $cfg = config('trading_os.market_analysis', []);
+        $cfg = TradingOsConfig::marketAnalysis();
         $bars = StockPrice::query()
             ->where('stock_id', $benchmark->id)
             ->orderByDesc('price_date')

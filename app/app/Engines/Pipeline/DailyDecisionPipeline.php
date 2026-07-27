@@ -12,6 +12,7 @@ use App\Engines\Review\ReviewEngine;
 use App\Models\PipelineRun;
 use App\Models\PortfolioProfile;
 use App\Services\PortfolioLoggerService;
+use App\Support\TradingOsConfig;
 use Throwable;
 
 /**
@@ -37,7 +38,7 @@ class DailyDecisionPipeline
      */
     public function run(PortfolioProfile $profile, array $options = []): array
     {
-        $notify = $options['notify'] ?? (bool) config('trading_os.notification.notify_on_generate', true);
+        $notify = $options['notify'] ?? TradingOsConfig::notificationNotifyOnGenerate();
         $doReview = $options['review'] ?? true;
 
         $pipeline = PipelineRun::query()->create([

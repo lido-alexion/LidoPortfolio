@@ -36,12 +36,9 @@ class CashManagementService
     public function reservedCash(PortfolioProfile $profile): float
     {
         $sum = TradingRecommendation::query()
-            ->where('profile_id', $profile->id)
-            ->whereIn('status', [
-                TradingRecommendation::STATUS_PENDING_EXECUTION,
-                TradingRecommendation::STATUS_ACCEPTED,
-            ])
-            ->where('reservation_status', TradingRecommendation::RESERVATION_RESERVED)
+            ->forProfile($profile)
+            ->pendingExecution()
+            ->withCashReservation()
             ->sum('reserved_amount');
 
         return round((float) $sum, 4);
@@ -99,12 +96,9 @@ class CashManagementService
     {
         $rows = TradingRecommendation::query()
             ->with('security')
-            ->where('profile_id', $profile->id)
-            ->whereIn('status', [
-                TradingRecommendation::STATUS_PENDING_EXECUTION,
-                TradingRecommendation::STATUS_ACCEPTED,
-            ])
-            ->where('reservation_status', TradingRecommendation::RESERVATION_RESERVED)
+            ->forProfile($profile)
+            ->pendingExecution()
+            ->withCashReservation()
             ->whereNotNull('reserved_amount')
             ->where('reserved_amount', '>', 0)
             ->orderByDesc('reserved_at')

@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Engines\Pipeline\DailyDecisionPipeline;
 use App\Models\PortfolioProfile;
+use App\Support\TradingOsConfig;
 use Illuminate\Console\Command;
 use Throwable;
 
@@ -18,7 +19,7 @@ class RunDecisionPipelineCommand extends Command
 
     public function handle(DailyDecisionPipeline $pipeline): int
     {
-        if (! config('trading_os.enabled', true)) {
+        if (! TradingOsConfig::enabled()) {
             $this->warn('Trading OS is disabled (TRADING_OS_ENABLED=false).');
 
             return self::SUCCESS;

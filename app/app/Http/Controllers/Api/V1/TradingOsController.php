@@ -13,6 +13,7 @@ use App\Engines\Review\ReviewEngine;
 use App\Engines\Support\ApiEnvelope;
 use App\Http\Controllers\Controller;
 use App\Services\StockResolverService;
+use App\Support\TradingOsConfig;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -169,7 +170,7 @@ class TradingOsController extends Controller
         $profile = \activePortfolio();
         $result = $this->recommendation->generate($profile);
 
-        if (config('trading_os.notification.notify_on_generate')) {
+        if (TradingOsConfig::notificationNotifyOnGenerate()) {
             $this->notification->notifyRecommendations($profile, $result['recommendations']);
         }
 
@@ -187,13 +188,7 @@ class TradingOsController extends Controller
         if (is_string($statusParam) && trim($statusParam) !== '') {
             $statuses = array_values(array_filter(array_map('trim', explode(',', $statusParam))));
         } elseif ($request->boolean('open', true) && ! $request->has('status') && ! $request->boolean('all')) {
-            $statuses = [
-                \App\Models\TradingRecommendation::STATUS_PENDING_REVIEW,
-                \App\Models\TradingRecommendation::STATUS_DEFERRED,
-                \App\Models\TradingRecommendation::STATUS_PENDING_EXECUTION,
-                \App\Models\TradingRecommendation::STATUS_ACCEPTED,
-                \App\Models\TradingRecommendation::STATUS_PUBLISHED,
-            ];
+            $statuses = \App\Models\TradingRecommendation::OPEN_LIST_STATUSES;
         }
 
         $items = $this->recommendation->listForProfile($profile, $statuses);

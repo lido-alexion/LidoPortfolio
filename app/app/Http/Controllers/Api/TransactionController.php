@@ -90,7 +90,7 @@ class TransactionController extends Controller
 
         if (! empty($validated['recommendation_id'])) {
             $rec = \App\Models\TradingRecommendation::query()
-                ->where('profile_id', $profile->id)
+                ->forProfile($profile)
                 ->where('id', (int) $validated['recommendation_id'])
                 ->first();
             if (! $rec) {

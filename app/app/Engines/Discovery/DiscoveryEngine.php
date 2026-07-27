@@ -12,6 +12,7 @@ use App\Models\ScreenerRunHit;
 use App\Models\Watchlist;
 use App\Services\PatternScanService;
 use App\Services\PortfolioLoggerService;
+use App\Support\TradingOsConfig;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -33,7 +34,7 @@ class DiscoveryEngine
      */
     public function run(PortfolioProfile $profile): array
     {
-        $config = config('trading_os.discovery', []);
+        $config = TradingOsConfig::discovery();
         $run = DiscoveryRun::query()->create([
             'profile_id' => $profile->id,
             'dataset_version' => $this->data->currentDatasetVersion(),

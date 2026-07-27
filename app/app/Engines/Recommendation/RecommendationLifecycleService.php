@@ -393,13 +393,8 @@ class RecommendationLifecycleService
     public function expireStale(PortfolioProfile $profile): int
     {
         return TradingRecommendation::query()
-            ->where('profile_id', $profile->id)
-            ->whereIn('status', [
-                TradingRecommendation::STATUS_PENDING_REVIEW,
-                TradingRecommendation::STATUS_DEFERRED,
-                TradingRecommendation::STATUS_PUBLISHED,
-                'active',
-            ])
+            ->forProfile($profile)
+            ->staleOpen()
             ->whereNotNull('expires_at')
             ->where('expires_at', '<', now())
             ->update(['status' => TradingRecommendation::STATUS_EXPIRED]);
@@ -420,7 +415,7 @@ class RecommendationLifecycleService
 
         $query = TradingRecommendation::query()
             ->with(['security', 'evaluationResult', 'reviews'])
-            ->where('profile_id', $profile->id);
+            ->forProfile($profile);
 
         if ($statuses !== null && $statuses !== []) {
             $query->whereIn('status', $statuses);
@@ -428,12 +423,17 @@ class RecommendationLifecycleService
 
         if ($types !== null && $types !== []) {
             $upper = array_map('strtoupper', $types);
-            $query->where(function ($q) use ($upper) {
-                foreach ($upper as $i => $t) {
-                    $method = $i === 0 ? 'whereRaw' : 'orWhereRaw';
-                    $q->{$method}('UPPER(recommendation_type) = ?', [$t]);
-                }
-            });
+            $actionableWithLegacy = [...TradingRecommendation::ACTIONABLE_ACTIONS, 'BUY', 'SELL'];
+            if ($upper === array_map('strtoupper', $actionableWithLegacy)) {
+                $query->actionableTypes();
+            } else {
+                $query->where(function ($q) use ($upper) {
+                    foreach ($upper as $i => $t) {
+                        $method = $i === 0 ? 'whereRaw' : 'orWhereRaw';
+                        $q->{$method}('UPPER(recommendation_type) = ?', [$t]);
+                    }
+                });
+            }
         }
 
         return $query
@@ -449,15 +449,18 @@ class RecommendationLifecycleService
      */
     public function listOpenForReview(PortfolioProfile $profile): array
     {
-        return $this->listForProfile(
-            $profile,
-            [
-                TradingRecommendation::STATUS_PENDING_REVIEW,
-                TradingRecommendation::STATUS_DEFERRED,
-            ],
-            100,
-            [...TradingRecommendation::ACTIONABLE_ACTIONS, 'BUY', 'SELL'],
-        );
+        $this->expireStale($profile);
+
+        return TradingRecommendation::query()
+            ->with(['security', 'evaluationResult', 'reviews'])
+            ->forProfile($profile)
+            ->openForReview()
+            ->actionableTypes()
+            ->orderByDesc('priority')
+            ->orderByDesc('id')
+            ->limit(100)
+            ->get()
+            ->all();
     }
 
     /**
@@ -467,15 +470,18 @@ class RecommendationLifecycleService
      */
     public function listPendingExecution(PortfolioProfile $profile, int $limit = 100): array
     {
-        return $this->listForProfile(
-            $profile,
-            [
-                TradingRecommendation::STATUS_PENDING_EXECUTION,
-                TradingRecommendation::STATUS_ACCEPTED,
-            ],
-            $limit,
-            [...TradingRecommendation::ACTIONABLE_ACTIONS, 'BUY', 'SELL'],
-        );
+        $this->expireStale($profile);
+
+        return TradingRecommendation::query()
+            ->with(['security', 'evaluationResult', 'reviews'])
+            ->forProfile($profile)
+            ->pendingExecution()
+            ->actionableTypes()
+            ->orderByDesc('priority')
+            ->orderByDesc('id')
+            ->limit($limit)
+            ->get()
+            ->all();
     }
 
     /** @deprecated use listOpenForReview */
@@ -494,7 +500,7 @@ class RecommendationLifecycleService
                 'orders',
                 'executedTransaction.stock',
             ])
-            ->where('profile_id', $profile->id)
+            ->forProfile($profile)
             ->where('id', $id)
             ->first();
     }

@@ -25,15 +25,9 @@ class RecommendationPreviewService
     public function forStock(PortfolioProfile $profile, Stock $stock): array
     {
         $existing = TradingRecommendation::query()
-            ->where('profile_id', $profile->id)
+            ->forProfile($profile)
             ->where('security_id', $stock->id)
-            ->whereIn('status', [
-                TradingRecommendation::STATUS_PENDING_REVIEW,
-                TradingRecommendation::STATUS_PENDING_EXECUTION,
-                TradingRecommendation::STATUS_ACCEPTED,
-                TradingRecommendation::STATUS_PUBLISHED,
-                TradingRecommendation::STATUS_DEFERRED,
-            ])
+            ->openList()
             ->orderByDesc('id')
             ->first();
 

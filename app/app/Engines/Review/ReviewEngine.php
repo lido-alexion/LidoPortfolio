@@ -12,6 +12,7 @@ use App\Models\TradingRecommendation;
 use App\Models\Transaction;
 use App\Services\PortfolioCalculationService;
 use App\Services\PortfolioLoggerService;
+use App\Support\TradingOsConfig;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -35,7 +36,7 @@ class ReviewEngine
         $summary = $this->portfolio->calculateForProfile($profile);
 
         $recs = TradingRecommendation::query()
-            ->where('profile_id', $profile->id)
+            ->forProfile($profile)
             ->get();
 
         $actionable = $recs->filter(fn (TradingRecommendation $r) => $r->isActionable());
@@ -66,16 +67,7 @@ class ReviewEngine
 
         $reviewActions = RecommendationReview::query()
             ->whereHas('recommendation', function ($q) use ($profile) {
-                $q->where('profile_id', $profile->id)
-                    ->where(function ($tq) {
-                        foreach (TradingRecommendation::ACTIONABLE_ACTIONS as $i => $t) {
-                            $method = $i === 0 ? 'whereRaw' : 'orWhereRaw';
-                            $tq->{$method}('UPPER(recommendation_type) = ?', [$t]);
-                        }
-                        // Legacy types still count as actionable for historical reviews.
-                        $tq->orWhereRaw('UPPER(recommendation_type) = ?', ['BUY'])
-                            ->orWhereRaw('UPPER(recommendation_type) = ?', ['SELL']);
-                    });
+                $q->forProfile($profile)->actionableTypes();
             })
             ->with(['user', 'recommendation.security'])
             ->orderByDesc('id')
@@ -180,7 +172,7 @@ class ReviewEngine
     {
         $recs = TradingRecommendation::query()
             ->with('security')
-            ->where('profile_id', $profile->id)
+            ->forProfile($profile)
             ->whereNotIn('status', [TradingRecommendation::STATUS_CANCELLED])
             ->orderByDesc('id')
             ->limit($limit)
@@ -251,7 +243,7 @@ class ReviewEngine
      */
     public function generate(PortfolioProfile $profile, ?Carbon $periodStart = null, ?Carbon $periodEnd = null): array
     {
-        $lookback = (int) config('trading_os.review.default_lookback_days', 90);
+        $lookback = TradingOsConfig::reviewDefaultLookbackDays();
         $periodEnd ??= Carbon::now()->startOfDay();
         $periodStart ??= $periodEnd->copy()->subDays($lookback);
 
@@ -286,7 +278,7 @@ class ReviewEngine
         $expectancy = $closed > 0 ? (($gainSum - $lossSum) / $closed) : null;
 
         $recs = TradingRecommendation::query()
-            ->where('profile_id', $profile->id)
+            ->forProfile($profile)
             ->where('generated_at', '>=', $periodStart)
             ->where('generated_at', '<=', $periodEnd->copy()->endOfDay())
             ->get();

@@ -9,6 +9,7 @@ use App\Services\Notification\NotificationMessageComposer;
 use App\Services\PortfolioLoggerService;
 use App\Services\ProfileSettingsService;
 use App\Services\TelegramNotificationService;
+use App\Support\TradingOsConfig;
 
 /**
  * Notification Engine — delivery only; never mutates recommendation content.
@@ -33,7 +34,7 @@ class NotificationEngine
     {
         $recommendations ??= TradingRecommendation::query()
             ->with('security')
-            ->where('profile_id', $profile->id)
+            ->forProfile($profile)
             ->where('status', 'active')
             ->orderByDesc('priority')
             ->limit(20)
@@ -94,7 +95,7 @@ class NotificationEngine
 
     public function send(TosNotification $notification): TosNotification
     {
-        $maxRetries = (int) config('trading_os.notification.max_retries', 3);
+        $maxRetries = TradingOsConfig::notificationMaxRetries();
         $notification->forceFill([
             'status' => 'sending',
             'attempt_count' => $notification->attempt_count + 1,

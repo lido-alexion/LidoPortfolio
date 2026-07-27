@@ -49,7 +49,7 @@ class ExecutionEngine
         }
 
         $recommendation = TradingRecommendation::query()
-            ->where('profile_id', $profile->id)
+            ->forProfile($profile)
             ->where('id', $recId)
             ->first();
 
@@ -318,7 +318,7 @@ class ExecutionEngine
 
         if ($transaction->recommendation_id) {
             $recommendation = TradingRecommendation::query()
-                ->where('profile_id', $profile->id)
+                ->forProfile($profile)
                 ->where('id', $transaction->recommendation_id)
                 ->first();
         }
@@ -407,7 +407,7 @@ class ExecutionEngine
         }
 
         $recommendation = TradingRecommendation::query()
-            ->where('profile_id', $profile->id)
+            ->forProfile($profile)
             ->where('id', (int) $input['recommendation_id'])
             ->first();
 

@@ -10,6 +10,7 @@ use App\Models\TradingRecommendation;
 use App\Models\User;
 use App\Models\WatchlistItem;
 use App\Services\WatchlistService;
+use App\Support\TradingOsConfig;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -23,11 +24,11 @@ class TradingOsPipelineTest extends TestCase
         parent::setUp();
 
         config([
-            'trading_os.enabled' => true,
-            'trading_os.evaluation.min_bars' => 15,
-            'trading_os.notification.notify_on_generate' => false,
-            'trading_os.discovery.include_screener_hits' => false,
-            'trading_os.discovery.include_patterns' => true,
+            TradingOsConfig::KEY_ENABLED => true,
+            TradingOsConfig::KEY_EVALUATION.'.min_bars' => 15,
+            TradingOsConfig::KEY_NOTIFICATION.'.notify_on_generate' => false,
+            TradingOsConfig::KEY_DISCOVERY.'.include_screener_hits' => false,
+            TradingOsConfig::KEY_DISCOVERY.'.include_patterns' => true,
         ]);
     }
 

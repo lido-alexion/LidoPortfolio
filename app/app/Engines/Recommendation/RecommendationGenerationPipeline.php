@@ -17,6 +17,7 @@ use App\Services\PortfolioLoggerService;
 use App\Services\StrategyConfigurationService;
 use App\Services\StrategyEligibilityService;
 use App\Services\Analytics\MarketAnalyticsService;
+use App\Support\TradingOsConfig;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -109,26 +110,26 @@ class RecommendationGenerationPipeline
         $strategy = $strategyVersion->strategy;
         $config = $strategyVersion->config_json ?? $this->strategies->defaultConfig();
 
-        $thresholds = $config['thresholds'] ?? [];
-        $buyMin = (float) ($thresholds['open_position'] ?? 65);
-        $increaseMin = (float) ($thresholds['increase_position'] ?? $buyMin);
-        $watchMin = (float) ($thresholds['watch'] ?? 45);
-        $sellMax = (float) ($thresholds['exit_position'] ?? 35);
-        $reduceMax = (float) ($thresholds['reduce_position'] ?? $sellMax);
-        $veryStrongHigh = (float) ($thresholds['very_strong_high'] ?? 85);
-        $veryStrongLow = (float) ($thresholds['very_strong_low'] ?? 15);
+        $thresholds = $config[TradingOsConfig::STRATEGY_THRESHOLDS] ?? [];
+        $buyMin = (float) ($thresholds[TradingOsConfig::THRESHOLD_OPEN_POSITION] ?? TradingOsConfig::recommendationBuyScoreMin());
+        $increaseMin = (float) ($thresholds[TradingOsConfig::THRESHOLD_INCREASE_POSITION] ?? $buyMin);
+        $watchMin = (float) ($thresholds[TradingOsConfig::THRESHOLD_WATCH] ?? TradingOsConfig::recommendationWatchScoreMin());
+        $sellMax = (float) ($thresholds[TradingOsConfig::THRESHOLD_EXIT_POSITION] ?? TradingOsConfig::recommendationSellScoreMax());
+        $reduceMax = (float) ($thresholds[TradingOsConfig::THRESHOLD_REDUCE_POSITION] ?? $sellMax);
+        $veryStrongHigh = (float) ($thresholds[TradingOsConfig::THRESHOLD_VERY_STRONG_HIGH] ?? TradingOsConfig::recommendationVeryStrongHigh());
+        $veryStrongLow = (float) ($thresholds[TradingOsConfig::THRESHOLD_VERY_STRONG_LOW] ?? TradingOsConfig::recommendationVeryStrongLow());
 
-        $behaviour = $config['recommendation_behaviour'] ?? [];
-        $expiryHours = (int) ($behaviour['expiry_hours'] ?? 48);
+        $behaviour = $config[TradingOsConfig::STRATEGY_RECOMMENDATION_BEHAVIOUR] ?? [];
+        $expiryHours = (int) ($behaviour['expiry_hours'] ?? TradingOsConfig::recommendationExpiryHours());
         $allowIncrease = (bool) ($behaviour['allow_increase_position'] ?? true);
         $allowReduce = (bool) ($behaviour['allow_reduce_position'] ?? true);
-        $maxConcurrent = (int) ($behaviour['max_concurrent_recommendations'] ?? 100);
+        $maxConcurrent = (int) ($behaviour['max_concurrent_recommendations'] ?? TradingOsConfig::recommendationMaxConcurrent());
 
-        $portfolioRules = $config['portfolio_rules'] ?? [];
-        $defaultPct = (float) ($portfolioRules['default_position_size_pct'] ?? 5);
-        $maxPct = (float) ($portfolioRules['max_position_size_pct'] ?? 10);
-        $allocationBand = (float) ($portfolioRules['allocation_band_pct'] ?? 1.0);
-        $maxNewPositions = (int) ($portfolioRules['max_new_positions_per_cycle'] ?? 50);
+        $portfolioRules = $config[TradingOsConfig::STRATEGY_PORTFOLIO_RULES] ?? [];
+        $defaultPct = (float) ($portfolioRules['default_position_size_pct'] ?? TradingOsConfig::recommendationDefaultPositionPct());
+        $maxPct = (float) ($portfolioRules['max_position_size_pct'] ?? TradingOsConfig::recommendationMaxPositionPct());
+        $allocationBand = (float) ($portfolioRules['allocation_band_pct'] ?? TradingOsConfig::recommendationAllocationBandPct());
+        $maxNewPositions = (int) ($portfolioRules['max_new_positions_per_cycle'] ?? TradingOsConfig::recommendationMaxNewPositionsPerCycle());
         $minCashReservePct = (float) ($portfolioRules['min_cash_reserve_pct'] ?? 0);
         $maxCashDeployPct = (float) ($portfolioRules['max_cash_deployment_pct'] ?? 100);
 
@@ -141,7 +142,7 @@ class RecommendationGenerationPipeline
         }
         $marketMult = (float) ($market['allocation_multiplier'] ?? 1.0);
         $marketAllowsEntry = (bool) ($market['new_entry_allowed'] ?? true);
-        $marketGates = is_array($config['market_gates'] ?? null) ? $config['market_gates'] : [];
+        $marketGates = is_array($config[TradingOsConfig::STRATEGY_MARKET_GATES] ?? null) ? $config[TradingOsConfig::STRATEGY_MARKET_GATES] : [];
         if (($marketGates['enabled'] ?? false) === true) {
             $minSentiment = $marketGates['min_sentiment'] ?? null;
             $allowedPhases = $marketGates['allowed_phases'] ?? null;
@@ -163,8 +164,8 @@ class RecommendationGenerationPipeline
         $defaultPct = round($defaultPct * $marketMult, 4);
         $maxPct = round($maxPct * $marketMult, 4);
 
-        $riskCfg = $config['risk'] ?? [];
-        $allocCfg = $config['capital_allocation'] ?? [];
+        $riskCfg = $config[TradingOsConfig::STRATEGY_RISK] ?? [];
+        $allocCfg = $config[TradingOsConfig::STRATEGY_CAPITAL_ALLOCATION] ?? [];
 
         $cashSummary = $this->cash->summary($profile);
         $availableCash = (float) $cashSummary['available_investable_cash'];
@@ -257,13 +258,8 @@ class RecommendationGenerationPipeline
     protected function cancelStaleRecommendations(PortfolioProfile $profile): void
     {
         TradingRecommendation::query()
-            ->where('profile_id', $profile->id)
-            ->whereIn('status', [
-                TradingRecommendation::STATUS_PENDING_REVIEW,
-                TradingRecommendation::STATUS_DEFERRED,
-                TradingRecommendation::STATUS_PUBLISHED,
-                'active',
-            ])
+            ->forProfile($profile)
+            ->staleOpen()
             ->update(['status' => TradingRecommendation::STATUS_CANCELLED]);
     }
 
@@ -375,7 +371,7 @@ class RecommendationGenerationPipeline
 
             // Exit strategy overrides: force EXIT when rules trigger.
             if ($isHeld && ($exitEval['triggered'] ?? false)) {
-                $action = 'EXIT_POSITION';
+                $action = TradingRecommendation::ACTION_EXIT_POSITION;
                 if (is_array($opinion)) {
                     $dir = (string) ($opinion['direction'] ?? '');
                     if (! in_array($dir, ['STRONG_SELL', 'SELL'], true)) {
@@ -387,17 +383,17 @@ class RecommendationGenerationPipeline
 
             // Non-eligible holdings: only emit if exit triggered; otherwise HOLD.
             if ($isHeld && ! $isEligible && ! ($exitEval['triggered'] ?? false)) {
-                $action = 'HOLD_POSITION';
+                $action = TradingRecommendation::ACTION_HOLD_POSITION;
             }
 
             // Non-eligible cannot open / increase.
-            if (! $isEligible && in_array($action, ['OPEN_POSITION', 'INCREASE_POSITION'], true)) {
-                $action = $isHeld ? 'HOLD_POSITION' : 'WATCH';
+            if (! $isEligible && in_array($action, [TradingRecommendation::ACTION_OPEN_POSITION, TradingRecommendation::ACTION_INCREASE_POSITION], true)) {
+                $action = $isHeld ? TradingRecommendation::ACTION_HOLD_POSITION : TradingRecommendation::ACTION_WATCH;
             }
 
             // Market Analysis gate: block / demote new entries when market phase/risk forbids.
-            if (! $marketAllowsEntry && in_array($action, ['OPEN_POSITION', 'INCREASE_POSITION'], true)) {
-                $action = $isHeld ? 'HOLD_POSITION' : 'WATCH';
+            if (! $marketAllowsEntry && in_array($action, [TradingRecommendation::ACTION_OPEN_POSITION, TradingRecommendation::ACTION_INCREASE_POSITION], true)) {
+                $action = $isHeld ? TradingRecommendation::ACTION_HOLD_POSITION : TradingRecommendation::ACTION_WATCH;
             }
 
             $plan = null;
@@ -511,10 +507,10 @@ class RecommendationGenerationPipeline
         $maxPositionAmount = $portfolioValue > 0 ? round($portfolioValue * ($maxPct / 100.0), 4) : null;
         $newOpenCount = 0;
         foreach ($drafts as $draft) {
-            if (! in_array($draft['action'], ['OPEN_POSITION', 'INCREASE_POSITION'], true)) {
+            if (! in_array($draft['action'], [TradingRecommendation::ACTION_OPEN_POSITION, TradingRecommendation::ACTION_INCREASE_POSITION], true)) {
                 continue;
             }
-            if ($draft['action'] === 'OPEN_POSITION') {
+            if ($draft['action'] === TradingRecommendation::ACTION_OPEN_POSITION) {
                 if ($newOpenCount >= $maxNewPositions) {
                     continue;
                 }
@@ -583,7 +579,7 @@ class RecommendationGenerationPipeline
             $suggestedAllocationAmount = null;
             $capitalAllocationMeta = null;
 
-            if (in_array($action, ['OPEN_POSITION', 'INCREASE_POSITION'], true)) {
+            if (in_array($action, [TradingRecommendation::ACTION_OPEN_POSITION, TradingRecommendation::ACTION_INCREASE_POSITION], true)) {
                 $alloc = $allocations[$draft['key']] ?? ['allocated_amount' => 0.0, 'quantity' => 0];
                 $qty = (int) ($alloc['quantity'] ?? 0);
                 $amount = round((float) ($alloc['allocated_amount'] ?? 0), 4);
@@ -591,12 +587,12 @@ class RecommendationGenerationPipeline
 
                 if ($qty < 1 || $amount <= 0) {
                     $capitalAllocationMeta = [
-                        'status' => 'unfunded',
+                        'status' => TradingRecommendation::ALLOCATION_UNFUNDED,
                         'desired_amount' => $desiredAmount,
                         'allocated_amount' => 0.0,
                         'quantity' => 0,
                     ];
-                    $action = 'WATCH';
+                    $action = TradingRecommendation::ACTION_WATCH;
                     $plan = is_array($draft['plan']) ? array_merge($draft['plan'], [
                         'capital_allocation' => $capitalAllocationMeta,
                         'suggested_quantity' => 0,
@@ -607,7 +603,7 @@ class RecommendationGenerationPipeline
                     $suggestedAlloc = $draft['is_held'] ? $draft['current_alloc'] : 0.0;
                 } else {
                     $capitalAllocationMeta = [
-                        'status' => 'funded',
+                        'status' => TradingRecommendation::ALLOCATION_FUNDED,
                         'desired_amount' => $desiredAmount,
                         'allocated_amount' => $amount,
                         'quantity' => $qty,
@@ -725,18 +721,18 @@ class RecommendationGenerationPipeline
         EvaluationResult $result,
     ): array {
         if ($score >= $buyMin) {
-            $direction = 'Bullish';
+            $direction = TradingRecommendation::OPINION_BULLISH;
         } elseif ($score <= $sellMax) {
-            $direction = 'Bearish';
+            $direction = TradingRecommendation::OPINION_BEARISH;
         } else {
-            $direction = 'Neutral';
+            $direction = TradingRecommendation::OPINION_NEUTRAL;
         }
 
         $strength = match (true) {
-            $score >= $veryStrongHigh || $score <= $veryStrongLow => 'Very Strong',
-            $score >= $buyMin || $score <= $sellMax => 'Strong',
-            $score >= $watchMin || $score <= ($sellMax + 10) => 'Moderate',
-            default => 'Weak',
+            $score >= $veryStrongHigh || $score <= $veryStrongLow => TradingRecommendation::STRENGTH_VERY_STRONG,
+            $score >= $buyMin || $score <= $sellMax => TradingRecommendation::STRENGTH_STRONG,
+            $score >= $watchMin || $score <= ($sellMax + 10) => TradingRecommendation::STRENGTH_MODERATE,
+            default => TradingRecommendation::STRENGTH_WEAK,
         };
 
         return [
@@ -773,42 +769,44 @@ class RecommendationGenerationPipeline
     ): string {
         $direction = $opinion['direction'];
         $strength = $opinion['strength'];
-        $strongBull = $direction === 'Bullish' && in_array($strength, ['Strong', 'Very Strong'], true);
-        $strongBear = $direction === 'Bearish' && in_array($strength, ['Strong', 'Very Strong'], true);
+        $strongBull = $direction === TradingRecommendation::OPINION_BULLISH
+            && in_array($strength, [TradingRecommendation::STRENGTH_STRONG, TradingRecommendation::STRENGTH_VERY_STRONG], true);
+        $strongBear = $direction === TradingRecommendation::OPINION_BEARISH
+            && in_array($strength, [TradingRecommendation::STRENGTH_STRONG, TradingRecommendation::STRENGTH_VERY_STRONG], true);
         $overTarget = $currentAlloc > ($targetAlloc + $band);
         $underTarget = $currentAlloc < ($targetAlloc - $band);
-        $highRisk = $risk === 'high';
+        $highRisk = $risk === TradingRecommendation::RISK_HIGH;
 
         if (! $isHeld) {
             if ($strongBull || $score >= $buyMin) {
-                return 'OPEN_POSITION';
+                return TradingRecommendation::ACTION_OPEN_POSITION;
             }
 
-            return 'WATCH';
+            return TradingRecommendation::ACTION_WATCH;
         }
 
         // Held
         if ($strongBear || $score <= $sellMax) {
-            return 'EXIT_POSITION';
+            return TradingRecommendation::ACTION_EXIT_POSITION;
         }
 
-        if ($allowReduce && ($direction === 'Bearish' || $score <= $reduceMax || ($highRisk && $overTarget))) {
-            return 'REDUCE_POSITION';
+        if ($allowReduce && ($direction === TradingRecommendation::OPINION_BEARISH || $score <= $reduceMax || ($highRisk && $overTarget))) {
+            return TradingRecommendation::ACTION_REDUCE_POSITION;
         }
 
-        if ($allowReduce && $overTarget && ($direction !== 'Bullish' || $highRisk)) {
-            return 'REDUCE_POSITION';
+        if ($allowReduce && $overTarget && ($direction !== TradingRecommendation::OPINION_BULLISH || $highRisk)) {
+            return TradingRecommendation::ACTION_REDUCE_POSITION;
         }
 
-        if ($allowIncrease && $direction === 'Bullish' && $underTarget && $score >= $increaseMin) {
-            return 'INCREASE_POSITION';
+        if ($allowIncrease && $direction === TradingRecommendation::OPINION_BULLISH && $underTarget && $score >= $increaseMin) {
+            return TradingRecommendation::ACTION_INCREASE_POSITION;
         }
 
-        if ($direction === 'Bullish' || $score >= $buyMin) {
-            return 'HOLD_POSITION';
+        if ($direction === TradingRecommendation::OPINION_BULLISH || $score >= $buyMin) {
+            return TradingRecommendation::ACTION_HOLD_POSITION;
         }
 
-        return 'HOLD_POSITION';
+        return TradingRecommendation::ACTION_HOLD_POSITION;
     }
 
     /**
@@ -832,9 +830,9 @@ class RecommendationGenerationPipeline
             'risk_explanation' => $this->riskExplanation($action, $risk, $currentAlloc, $capAlloc),
         ];
 
-        if ($action === 'OPEN_POSITION' || $action === 'INCREASE_POSITION') {
-            $suggestedAlloc = $action === 'OPEN_POSITION' ? $capAlloc : max($currentAlloc, $capAlloc);
-            if ($action === 'INCREASE_POSITION') {
+        if ($action === TradingRecommendation::ACTION_OPEN_POSITION || $action === TradingRecommendation::ACTION_INCREASE_POSITION) {
+            $suggestedAlloc = $action === TradingRecommendation::ACTION_OPEN_POSITION ? $capAlloc : max($currentAlloc, $capAlloc);
+            if ($action === TradingRecommendation::ACTION_INCREASE_POSITION) {
                 $suggestedAlloc = min($maxPct, max($currentAlloc, $capAlloc));
             }
             $gapPct = max(0, $suggestedAlloc - $currentAlloc);
@@ -851,7 +849,7 @@ class RecommendationGenerationPipeline
                 'allocation_pct' => round($suggestedAlloc, 4),
                 'quantity_delta' => $qty,
             ];
-        } elseif ($action === 'REDUCE_POSITION') {
+        } elseif ($action === TradingRecommendation::ACTION_REDUCE_POSITION) {
             $suggestedAlloc = max(0, min($currentAlloc, $capAlloc));
             if ($suggestedAlloc >= $currentAlloc - 0.01) {
                 // Still reduce something when over-risk: sell ~30% of position.
@@ -874,7 +872,7 @@ class RecommendationGenerationPipeline
                 'allocation_pct' => round($suggestedAlloc, 4),
                 'quantity' => max(0, $heldWhole - $sharesToSell),
             ];
-        } elseif ($action === 'EXIT_POSITION') {
+        } elseif ($action === TradingRecommendation::ACTION_EXIT_POSITION) {
             $heldWhole = $this->wholeShareQuantity($qtyHeld);
             $plan['suggested_allocation_pct'] = 0.0;
             $plan['suggested_sell_pct_of_position'] = 100.0;
@@ -901,10 +899,10 @@ class RecommendationGenerationPipeline
     protected function riskExplanation(string $action, string $risk, float $current, float $target): string
     {
         return match ($action) {
-            'OPEN_POSITION' => "Open toward ~{$target}% of portfolio (risk: {$risk}). Respects max position size.",
-            'INCREASE_POSITION' => "Increase from {$current}% toward ~{$target}% (risk: {$risk}).",
-            'REDUCE_POSITION' => "Reduce from {$current}% toward ~{$target}% (risk: {$risk}).",
-            'EXIT_POSITION' => "Exit full position (risk: {$risk}).",
+            TradingRecommendation::ACTION_OPEN_POSITION => "Open toward ~{$target}% of portfolio (risk: {$risk}). Respects max position size.",
+            TradingRecommendation::ACTION_INCREASE_POSITION => "Increase from {$current}% toward ~{$target}% (risk: {$risk}).",
+            TradingRecommendation::ACTION_REDUCE_POSITION => "Reduce from {$current}% toward ~{$target}% (risk: {$risk}).",
+            TradingRecommendation::ACTION_EXIT_POSITION => "Exit full position (risk: {$risk}).",
             default => "Risk level: {$risk}.",
         };
     }
@@ -946,16 +944,16 @@ class RecommendationGenerationPipeline
     protected function riskLevel(mixed $atrPct, array $riskCfg): string
     {
         if (! is_numeric($atrPct)) {
-            return 'medium';
+            return TradingRecommendation::RISK_MEDIUM;
         }
         $v = (float) $atrPct;
-        if ($v >= (float) ($riskCfg['high_atr_pct'] ?? 4.0)) {
-            return 'high';
+        if ($v >= (float) ($riskCfg['high_atr_pct'] ?? TradingOsConfig::recommendationRiskHighAtrPct())) {
+            return TradingRecommendation::RISK_HIGH;
         }
-        if ($v >= (float) ($riskCfg['medium_atr_pct'] ?? 2.0)) {
-            return 'medium';
+        if ($v >= (float) ($riskCfg['medium_atr_pct'] ?? TradingOsConfig::recommendationRiskMediumAtrPct())) {
+            return TradingRecommendation::RISK_MEDIUM;
         }
 
-        return 'low';
+        return TradingRecommendation::RISK_LOW;
     }
 }
