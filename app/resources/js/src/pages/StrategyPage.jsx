@@ -2,11 +2,13 @@ import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
 import NumberInput from '../components/NumberInput';
+import StrategyGuideTab from '../components/strategy/StrategyGuideTab';
 import useApiGet from '../hooks/useApiGet';
 import { runApiMutation } from '../hooks/useApiMutation';
 import { showToast } from '../toast';
 
 const SECTIONS = [
+    { id: 'guide', label: 'Guide' },
     { id: 'general', label: 'General' },
     { id: 'eligibility', label: 'Eligibility Sources' },
     { id: 'scoring', label: 'Scoring Model' },
@@ -285,6 +287,12 @@ export default function StrategyPage() {
                     <h1 className="h3 mb-1">Strategy</h1>
                     <p className="text-muted small mb-0">
                         Screeners select eligible stocks. Strategy scores, allocates, and exits — it does not redefine eligibility rules.
+                        {' '}
+                        <button type="button" className="btn btn-link btn-sm p-0 align-baseline" onClick={() => setSection('guide')}>
+                            Read the Guide
+                        </button>
+                        {' '}
+                        for the full walkthrough.
                     </p>
                 </div>
                 <div className="d-flex flex-wrap gap-2">
@@ -334,6 +342,10 @@ export default function StrategyPage() {
                     </button>
                 ))}
             </div>
+
+            {section === 'guide' && (
+                <StrategyGuideTab onOpenSection={setSection} />
+            )}
 
             {section === 'general' && (
                 <div className="card card-body row g-3">

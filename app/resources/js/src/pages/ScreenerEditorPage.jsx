@@ -253,11 +253,33 @@ function OperandEditor({ value, onChange, meta, side, bare = false, leading = nu
                 </button>
             </div>
             {isConstant ? (
-                <input
-                    type="number"
-                    className="form-control form-control-sm"
+                <NumberInput
+                    compact
+                    buttonVariant="secondary"
+                    step={1}
+                    allowDecimals
+                    allowNegative
+                    className="lido-screener-constant-input"
                     value={value?.value ?? 0}
-                    onChange={(e) => onChange({ type: 'constant', value: Number(e.target.value) })}
+                    onChange={(e) => {
+                        const raw = e.target.value;
+                        if (raw === '' || raw === '-') {
+                            onChange({ type: 'constant', value: raw === '-' ? '-' : '' });
+                            return;
+                        }
+                        const parsed = Number(raw);
+                        onChange({
+                            type: 'constant',
+                            value: Number.isFinite(parsed) ? parsed : raw,
+                        });
+                    }}
+                    onBlur={() => {
+                        const parsed = Number(value?.value);
+                        onChange({
+                            type: 'constant',
+                            value: Number.isFinite(parsed) ? parsed : 0,
+                        });
+                    }}
                     aria-label={`${side} constant`}
                 />
             ) : (
@@ -282,21 +304,37 @@ function OperandEditor({ value, onChange, meta, side, bare = false, leading = nu
                         {(selected?.params || []).map((p) => (
                             <label key={p.id} className="small mb-0">
                                 {p.label}
-                                <input
-                                    type="number"
-                                    className="form-control form-control-sm"
-                                    style={{ width: 88 }}
+                                <NumberInput
+                                    compact
+                                    buttonVariant="secondary"
+                                    className="lido-screener-param-input"
+                                    step={p.step || 1}
                                     min={p.min}
                                     max={p.max}
-                                    step={p.step || 1}
                                     value={value?.params?.[p.id] ?? p.default}
-                                    onChange={(e) => onChange({
-                                        ...value,
-                                        params: {
-                                            ...(value.params || {}),
-                                            [p.id]: Number(e.target.value),
-                                        },
-                                    })}
+                                    onChange={(e) => {
+                                        const raw = e.target.value;
+                                        onChange({
+                                            ...value,
+                                            params: {
+                                                ...(value.params || {}),
+                                                [p.id]: raw === '' ? '' : Number(raw),
+                                            },
+                                        });
+                                    }}
+                                    onBlur={() => {
+                                        const current = value?.params?.[p.id];
+                                        if (current === '' || current == null || Number.isNaN(Number(current))) {
+                                            onChange({
+                                                ...value,
+                                                params: {
+                                                    ...(value.params || {}),
+                                                    [p.id]: p.default,
+                                                },
+                                            });
+                                        }
+                                    }}
+                                    aria-label={p.label}
                                 />
                             </label>
                         ))}
@@ -429,6 +467,7 @@ function ConditionNode({ node, onChange, onRemove, meta, depth }) {
                             <div className="d-flex align-items-center gap-1 mb-2 lido-screener-rhs-weight">
                                 <NumberInput
                                     compact
+                                    buttonVariant="secondary"
                                     step={0.1}
                                     min={0}
                                     className="lido-screener-weight-input"

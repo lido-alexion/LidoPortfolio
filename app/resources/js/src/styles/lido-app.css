@@ -50,6 +50,9 @@
     --lido-admin-settings-text: #9ecbff;
     --lido-number-step-bg: #1e90ff;
     --lido-number-step-disabled-bg: #6b7280;
+    --lido-number-step-secondary-bg: #6c757d;
+    --lido-number-step-secondary-hover: #5c636a;
+    --lido-number-step-secondary-disabled-bg: #6b7280;
     --lido-chart-tooltip-bg: #1a1a1a;
     --lido-chart-tooltip-border: #404040;
     --lido-chart-tooltip-text: #e5e7eb;
@@ -98,6 +101,9 @@
     --lido-admin-settings-text: #7a5f00;
     --lido-number-step-bg: #1e90ff;
     --lido-number-step-disabled-bg: #9ca3af;
+    --lido-number-step-secondary-bg: #6c757d;
+    --lido-number-step-secondary-hover: #5c636a;
+    --lido-number-step-secondary-disabled-bg: #9ca3af;
     --lido-chart-tooltip-bg: #ffffff;
     --lido-chart-tooltip-border: #d1d5db;
     --lido-chart-tooltip-text: #111827;
@@ -1151,6 +1157,22 @@ html.lido-footer-visible .lido-main {
     opacity: 1;
 }
 
+.lido-number-input--secondary .lido-number-input-btn {
+    background-color: var(--lido-number-step-secondary-bg);
+}
+
+.lido-number-input--secondary .lido-number-input-btn:hover:not(:disabled) {
+    background-color: var(--lido-number-step-secondary-hover);
+}
+
+.lido-number-input--secondary .lido-number-input-btn:focus-visible {
+    outline-color: var(--lido-number-step-secondary-hover);
+}
+
+.lido-number-input--secondary .lido-number-input-btn:disabled {
+    background-color: var(--lido-number-step-secondary-disabled-bg);
+}
+
 .lido-number-input-field {
     flex: 1 1 auto;
     min-width: 0;
@@ -1737,7 +1759,9 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--lido-brand) 22%, transparent);
 }
 
-.lido-screener-weight-input {
+.lido-screener-weight-input,
+.lido-screener-param-input,
+.lido-screener-constant-input {
     width: 7.25rem;
 }
 

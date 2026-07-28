@@ -56,6 +56,7 @@ export default function NumberInput({
     height,
     compact = false,
     fixedDecimals = null,
+    buttonVariant = 'primary',
     ...rest
 }) {
     const [focused, setFocused] = useState(false);
@@ -156,6 +157,7 @@ export default function NumberInput({
     const wrapperClassName = [
         'lido-number-input',
         compact ? 'lido-number-input--compact' : '',
+        buttonVariant === 'secondary' ? 'lido-number-input--secondary' : '',
         className,
     ].filter(Boolean).join(' ');
 
