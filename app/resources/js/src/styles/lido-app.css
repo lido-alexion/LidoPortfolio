@@ -4284,3 +4284,16 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     border-radius: 2px;
 }
 
+.lido-market-depth-title-link {
+    color: var(--lido-text);
+}
+
+.lido-market-depth-title-link:hover {
+    color: var(--lido-link, #3b82f6);
+    text-decoration: underline !important;
+}
+
+.lido-market-depth-page .lido-segment-toggle-track {
+    display: inline-flex;
+}
+

@@ -138,7 +138,7 @@ class DailyMarketDataJob implements ShouldQueue
                     $syncLog->completeRun($runId, 'success', $stats);
 
                     try {
-                        app(\App\Services\Analytics\MarketDepthService::class)->matrix(forceRefresh: true);
+                        app(\App\Services\Analytics\MarketDepthService::class)->refreshLatest(forceRefresh: true);
                         $syncLog->log($runId, $jobName, 'info', 'Market depth matrix refreshed');
                     } catch (\Throwable $e) {
                         $syncLog->log($runId, $jobName, 'warning', 'Market depth refresh failed', [

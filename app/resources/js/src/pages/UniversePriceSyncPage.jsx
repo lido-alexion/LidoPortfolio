@@ -4,7 +4,7 @@ import api from '../api';
 import FieldHint from '../components/FieldHint';
 import { showToast } from '../toast';
 import { formatSchedulerTimestamp } from '../utils/schedulerTimestamp';
-import { expandGapScanRows, gapRowKey } from '../utils/gapReportUtils';
+import { expandGapScanRows, formatGapRangeList, gapRowKey } from '../utils/gapReportUtils';
 
 const SCOPE_OPTIONS = [
     { value: 'all_equities', label: 'All equities (NSE + BSE-only)' },

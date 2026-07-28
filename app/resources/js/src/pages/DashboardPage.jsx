@@ -16,7 +16,6 @@ import VolatilityGauge from '../components/VolatilityGauge';
 import RiskGauge from '../components/RiskGauge';
 import MarketRegimeGauge from '../components/MarketRegimeGauge';
 import MarketBreadthGauge from '../components/MarketBreadthGauge';
-import MarketDepthTable from '../components/MarketDepthTable';
 import { DashboardCalendarCard } from '../components/calendar/CalendarDayEventsDialog';
 import PatternSketch from '../components/PatternSketch';
 import { showToast } from '../toast';
@@ -731,7 +730,7 @@ export default function DashboardPage() {
                     </div>
                 </div>
             ) : null}
-            {data.portfolio_analytics || data.market_analytics || data.market_depth ? (
+            {data.portfolio_analytics || data.market_analytics ? (
                 <>
                     {(data.portfolio_analytics ? [
                         {
@@ -806,7 +805,7 @@ export default function DashboardPage() {
                             </div>
                         </div>
                     ))}
-                    {(data.market_analytics || data.market_depth) ? (
+                    {data.market_analytics ? (
                         <div className="col-12">
                             <h2 className="h6 text-muted mb-2">Market analytics</h2>
                         </div>
@@ -914,7 +913,14 @@ export default function DashboardPage() {
                         <div className="col-6 col-md-4 col-lg-3" key="ma-MarketBreadth">
                             <div className="card h-100">
                                 <div className="card-body py-2">
-                                    <div className="text-muted small">Market breadth</div>
+                                    <div className="text-muted small">
+                                        <Link
+                                            to="/market-depth"
+                                            className="lido-market-depth-title-link text-muted text-decoration-none"
+                                        >
+                                            Market breadth
+                                        </Link>
+                                    </div>
                                     <MarketBreadthGauge
                                         score={data.market_analytics.breadth.score}
                                         advanceDeclineRatio={
@@ -944,11 +950,6 @@ export default function DashboardPage() {
                             </div>
                         </div>
                     ))}
-                    {data.market_depth?.rows?.length ? (
-                        <div className="col-12" key="ma-MarketDepth">
-                            <MarketDepthTable data={data.market_depth} />
-                        </div>
-                    ) : null}
                 </>
             ) : null}
             <div className="col-12">

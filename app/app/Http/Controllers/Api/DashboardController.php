@@ -12,7 +12,6 @@ use App\Services\PortfolioSnapshotRebuildService;
 use App\Services\RelativeStrengthService;
 use App\Services\AlertService;
 use App\Services\Analytics\MarketAnalyticsService;
-use App\Services\Analytics\MarketDepthService;
 use App\Services\Analytics\PortfolioAnalyticsService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -32,7 +31,6 @@ class DashboardController extends Controller
         protected \App\Services\StrategyConfigurationService $strategies,
         protected PortfolioAnalyticsService $portfolioAnalytics,
         protected MarketAnalyticsService $marketAnalytics,
-        protected MarketDepthService $marketDepth,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -56,7 +54,6 @@ class DashboardController extends Controller
 
         $portfolioAnalytics = null;
         $marketAnalytics = null;
-        $marketDepth = null;
         try {
             $portfolioAnalytics = $this->portfolioAnalytics->forProfile($profile);
         } catch (\Throwable) {
@@ -66,11 +63,6 @@ class DashboardController extends Controller
             $marketAnalytics = $this->marketAnalytics->summary($profile);
         } catch (\Throwable) {
             $marketAnalytics = null;
-        }
-        try {
-            $marketDepth = $this->marketDepth->matrix();
-        } catch (Throwable) {
-            $marketDepth = null;
         }
 
         return response()->json([
@@ -87,7 +79,6 @@ class DashboardController extends Controller
             'strategy' => $strategy,
             'portfolio_analytics' => $portfolioAnalytics,
             'market_analytics' => $marketAnalytics,
-            'market_depth' => $marketDepth,
             'daily_change' => $this->portfolio->dailyChange($profile),
             'top_movers' => $topMovers,
             'top_gainer' => $topMovers['all_time']['gainer'],

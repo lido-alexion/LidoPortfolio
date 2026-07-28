@@ -111,6 +111,7 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::get('/stocks/{stock}/prices', [StockPriceController::class, 'index']);
     Route::get('/stocks/{stock}/market-prices', [StockPriceController::class, 'market']);
     Route::get('/dashboard', [DashboardController::class, 'index']);
+    Route::get('/market-depth', [\App\Http\Controllers\Api\MarketDepthController::class, 'show']);
     Route::get('/patterns/scan', [PatternScanController::class, 'index']);
     Route::get('/stocks/{stock}/pattern-scan', [PatternScanController::class, 'stock']);
 
