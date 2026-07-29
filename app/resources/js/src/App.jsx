@@ -40,7 +40,6 @@ import ScreenersPage from './pages/ScreenersPage';
 import ScreenerEditorPage from './pages/ScreenerEditorPage';
 import RecommendationsPage from './pages/RecommendationsPage';
 import CandidatesPage from './pages/CandidatesPage';
-import EvaluationsPage from './pages/EvaluationsPage';
 import ReviewDashboardPage from './pages/ReviewDashboardPage';
 import NotificationHistoryPage from './pages/NotificationHistoryPage';
 import CashManagementPage from './pages/CashManagementPage';
@@ -167,7 +166,7 @@ function App() {
                                 <Route path="/screeners" element={<ScreenersPage />} />
                                 <Route path="/screeners/:id" element={<ScreenerEditorPage />} />
                                 <Route path="/candidates" element={<CandidatesPage />} />
-                                <Route path="/evaluations" element={<EvaluationsPage />} />
+                                <Route path="/evaluations" element={<Navigate to="/candidates" replace />} />
                                 <Route path="/recommendations" element={<RecommendationsPage />} />
                                 <Route path="/strategy" element={<StrategyPage />} />
                                 <Route path="/review" element={<ReviewDashboardPage />} />

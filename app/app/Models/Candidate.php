@@ -40,6 +40,6 @@ class Candidate extends Model
 
     public function evaluationResult(): HasOne
     {
-        return $this->hasOne(EvaluationResult::class, 'candidate_id');
+        return $this->hasOne(EvaluationResult::class, 'candidate_id')->latestOfMany();
     }
 }

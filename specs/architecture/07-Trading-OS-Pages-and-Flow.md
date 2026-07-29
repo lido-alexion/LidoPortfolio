@@ -15,14 +15,13 @@ These are the main Trading OS navigation pages. Strategy is **configuration only
 
 **Day-to-day loop (what you configure / act on):** Screener → Strategy → Recommendations → Pending Execution → Transactions → Review.
 
-**Discovery and Evaluations** are still run by the decision pipeline (they produce candidates and factor facts), but you usually do **not** need to open those pages to use a Strategy-based workflow — treat them as inspection / diagnostics unless you are debugging.
+**Discovery** still runs inside the decision pipeline (candidates + long-focused evaluation facts on one page). You usually do **not** need to open it unless inspecting or debugging. The former Evaluations page is merged into Discovery (`/evaluations` redirects to `/candidates`).
 
 | Page (route) | What it is about | What data you see |
 |--------------|------------------|-------------------|
 | **Screener** (`/screeners`) | Eligibility rules (condition trees). Admits stocks; does not score or size them. | Screener definitions, run history, hit lists, schedules, optional backtests. |
 | **Strategy** (`/strategy`) | One editable policy per portfolio (default Minervini). Scoring weights, thresholds, portfolio/cash rules, exits, market gates. | Configuration forms only — not a stock recommendation list. |
-| **Discovery** (`/candidates`) | Pipeline inventory of candidates (Screeners + pattern scans). Used by Evaluation; optional to visit. | Candidate symbols / runs. |
-| **Evaluations** (`/evaluations`) | Factor **facts** for candidates (RS, trend, momentum, risk, …). Required as pipeline data; optional to visit. | Evaluation runs and per-stock factor scores / evidence. |
+| **Discovery** (`/candidates`) | Candidate inventory (Screeners + pattern scans) **plus** Evaluation factor facts (score, confidence, explanation). Long-focused. | Candidates ranked with discovery reason and evaluation columns. |
 | **Recommendations** (`/recommendations`) | Final trade ideas after Strategy scoring + filters + allocation. | Open / Increase / Reduce / Exit (actionable) plus HOLD / WATCH insights; Approve / Reject / Defer. |
 | **Pending Execution** (`/transactions/pending`) | Approved ideas waiting for a broker fill. | Queue of approved buys/sells; cash may be reserved. |
 | **Transactions** (`/transactions`) | Ledger of recorded fills. | Buy/sell history (source of truth for holdings). |
@@ -34,13 +33,23 @@ Supporting pages (Holdings, Watchlist, Explorer, Notifications) sit around this 
 
 ---
 
-## 1b. Are Discovery and Evaluations “needed”?
+## 1b. Is Discovery “needed”?
 
 | Lens | Answer |
 |------|--------|
 | **Do I configure recommendations there?** | No. Configure eligibility on **Screener**, policy on **Strategy**, act on **Recommendations**. |
-| **Does the pipeline still run them?** | Yes. Full pipeline: Discovery → Evaluation → Recommendation. Evaluation facts are what Strategy scoring reads. Without a completed evaluation run, recommendation generation cannot run. |
-| **Must I open those tabs daily?** | No. Opening them is optional (inspect candidates / factor facts). |
+| **Does the pipeline still run Discovery → Evaluation?** | Yes. Evaluation facts are what Strategy scoring reads. Without a completed evaluation run, recommendation generation cannot run. |
+| **Must I open Discovery daily?** | No. Opening it is optional (inspect candidates / factor facts). |
+| **Where did Evaluations go?** | Merged into Discovery. Same engines and tables; one UI. |
+
+---
+
+## 1c. Discovery ↔ Evaluation (long-focused)
+
+- **Discovery** builds candidates from screener hits, patterns, or holdings/watchlist fallback.
+- **Evaluation** measures the same long-leaning factor facts for every candidate (trend, momentum, RS, volume, risk, pattern bonus). It does **not** flip to a sell viewpoint based on which screener produced the hit.
+- Screeners have no bullish/bearish flag. Wire **entry** screeners under Strategy Eligibility Sources; wire **exit** screeners under Strategy → Screener Exit (holdings only).
+- Link: `EvaluationRun.discovery_run_id` and `EvaluationResult.candidate_id`.
 
 ---
 
@@ -58,7 +67,7 @@ Screener hits  ------------------+
 Discovery candidates             |  (eligibility)
         |                        |
         v                        |
-Evaluations (factor facts)       |
+Evaluation (factor facts)        |  (shown on Discovery page)
         |                        |
         +------------------------+
         |
@@ -83,7 +92,7 @@ Holdings updated  →  Review outcomes later
 
 1. Build / run **Screeners** (e.g. Minervini Trend Template).
 2. Set **Strategy** (eligibility sources, scoring, thresholds, exits, cash/gates).
-3. Pipeline refreshes Discovery → Evaluations → **Recommendations**.
+3. Pipeline refreshes Discovery → Evaluation → **Recommendations**.
 4. Approve on Recommendations → **Pending Execution** → ledger fill → **Review**.
 
 ---
@@ -94,8 +103,7 @@ Holdings updated  →  Review outcomes later
 |-------|------|--------------|
 | Screener | Who is eligible | Ranking, position size, Approve |
 | Strategy | How to score / filter / size / exit | Listing final ideas for Approve |
-| Discovery | Candidate inventory | Final Open/Exit labels |
-| Evaluations | Measured factor facts | Weighted overall strategy score as policy |
+| Discovery (+ Evaluation UI) | Candidate inventory + long-focused factor facts | Final Open/Exit labels; sell-flipped scores |
 | Recommendations | Final ideas + human review | Broker fills |
 | Pending Execution / Transactions | Trade lifecycle / ledger | Scoring policy |
 | Review | Learning from outcomes | Creating new eligibility rules |
@@ -104,4 +112,4 @@ Holdings updated  →  Review outcomes later
 
 ## 4. In-app help
 
-Same content is mirrored under Documentation → **Trading OS pages & flow** (`?q=trading-os-flow`), linked from Screener, Strategy, Discovery, Evaluations, Recommendations, and Review topics.
+Same content is mirrored under Documentation → **Trading OS pages & flow** (`?q=trading-os-flow`) and **Discovery** (`?q=discovery`, aliases include `evaluations`), linked from Screener, Strategy, Discovery, Recommendations, and Review topics.

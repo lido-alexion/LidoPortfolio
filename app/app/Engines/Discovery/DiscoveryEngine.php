@@ -319,6 +319,25 @@ class DiscoveryEngine
             });
         }
 
-        return $query->orderBy('id')->get()->all();
+        $items = $query->orderBy('id')->get()->all();
+
+        // Prefer evaluation rank when present (latest result via Candidate::evaluationResult).
+        usort($items, function (Candidate $a, Candidate $b) {
+            $rankA = $a->evaluationResult?->rank;
+            $rankB = $b->evaluationResult?->rank;
+            if ($rankA !== null && $rankB !== null && (int) $rankA !== (int) $rankB) {
+                return (int) $rankA <=> (int) $rankB;
+            }
+            if ($rankA !== null && $rankB === null) {
+                return -1;
+            }
+            if ($rankA === null && $rankB !== null) {
+                return 1;
+            }
+
+            return $a->id <=> $b->id;
+        });
+
+        return $items;
     }
 }

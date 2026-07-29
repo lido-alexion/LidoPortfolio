@@ -72,7 +72,7 @@ Sanctum auth. `TradingOsController`: securities, imports, candidates, evaluation
 
 ### Frontend
 
-`/candidates` (nav: **Discovery**), `/evaluations`, `/recommendations` (**Approve**/Reject/Defer only), `/strategy` (**Strategy** tab), `/transactions` (**Pending Execution** + history), `/cash` (**Cash** tab), `/review`, `/notification-history` (nav: **Notifications**). Manual execute from pending queue → Add Transaction form.
+`/candidates` (nav: **Discovery** — includes evaluation score/confidence/explanation; `/evaluations` redirects here), `/recommendations` (**Approve**/Reject/Defer only), `/strategy` (**Strategy** tab), `/transactions` (**Pending Execution** + history), `/cash` (**Cash** tab), `/review`, `/notification-history` (nav: **Notifications**). Manual execute from pending queue → Add Transaction form.
 
 **Public documentation (2026-07-29):** `/documentation` is reachable **without login** (alongside invite/reset-password). Guests see docs in `lido-main` with a Sign in button; login screen links to documentation; header (?) is shown even when logged out. Product routes linked from topics still require authentication.
 
@@ -84,7 +84,9 @@ Sanctum auth. `TradingOsController`: securities, imports, candidates, evaluation
 
 **Scoring weight auto-normalisation (2026-07-29):** Enabled indicator weights no longer block Save when the live total ≠ 100. `StrategyConfigurationService::normalizeConfig` calls `redistributeEnabledWeights` (proportional scale to 100, 2 d.p., largest-remainder). Strategy UI mirrors this on Save and offers **Normalise now**. SD-029 / Strategy spec / MVP scope updated accordingly. Save still requires at least one enabled positive weight.
 
-**Trading OS pages & flow (2026-07-29):** Product-facing map of Screener / Strategy / Discovery / Evaluations / Recommendations / Pending Execution / Review (what each page shows + recommendation path). Spec: [`specs/architecture/07-Trading-OS-Pages-and-Flow.md`](specs/architecture/07-Trading-OS-Pages-and-Flow.md). In-app Documentation topic `trading-os-flow` (also linked from overview and related TOS pages). Indexed in `DOCS.md` §2.6a.
+**Trading OS pages & flow (2026-07-29):** Product-facing map of Screener / Strategy / Discovery / Recommendations / Pending Execution / Review (what each page shows + recommendation path). Spec: [`specs/architecture/07-Trading-OS-Pages-and-Flow.md`](specs/architecture/07-Trading-OS-Pages-and-Flow.md). In-app Documentation topic `trading-os-flow` (also linked from overview and related TOS pages). Indexed in `DOCS.md` §2.6a.
+
+**Discovery merges Evaluations UI (2026-07-30):** Removed the separate Evaluations nav page. Discovery (`/candidates`) shows evaluation rank/score/confidence/explanation (from latest `EvaluationResult` per candidate); **Run discovery** auto-runs evaluation afterward; **Run evaluation** re-scores the latest discovery run. `/evaluations` redirects to `/candidates`. Docs clarify long-focused evaluation scoring and Discovery↔Evaluation linkage (no Recommendations references in that Discovery topic). APIs `GET /v1/evaluations` and `POST /v1/evaluation/runs` remain.
 
 **Shared API hooks (TD-014):** `resources/js/src/hooks/useApiGet.js` and `useApiMutation.js` wrap the existing axios client (`api.js`); export `getApiErrorMessage()` from `api.js` for TOS/Laravel error text. Adopted on Strategy, Recommendations, and Cash pages as the migration pattern for other screens.
 

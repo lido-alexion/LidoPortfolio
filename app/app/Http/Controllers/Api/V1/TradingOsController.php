@@ -592,6 +592,27 @@ class TradingOsController extends Controller
             }
         }
 
+        $eval = $c->evaluationResult;
+        $score = null;
+        $confidence = null;
+        $rank = null;
+        $explanation = null;
+        $indicators = null;
+        $componentScores = null;
+        $passedRules = null;
+        $failedRules = null;
+        if ($eval) {
+            $serialized = $this->serializeEvaluation($eval);
+            $score = $serialized['score'];
+            $confidence = $serialized['confidence'];
+            $rank = $serialized['rank'];
+            $explanation = $serialized['explanation'];
+            $indicators = $serialized['indicators'];
+            $componentScores = $serialized['component_scores'];
+            $passedRules = $serialized['passed_rules'];
+            $failedRules = $serialized['failed_rules'];
+        }
+
         return [
             'id' => $c->id,
             'discovery_run_id' => $c->discovery_run_id,
@@ -601,7 +622,15 @@ class TradingOsController extends Controller
             'source' => $c->source,
             'discovery_reason' => $reason,
             'evidence' => $c->evidence,
-            'evaluation_result_id' => $c->evaluationResult?->id,
+            'evaluation_result_id' => $eval?->id,
+            'score' => $score,
+            'confidence' => $confidence,
+            'rank' => $rank,
+            'explanation' => $explanation,
+            'indicators' => $indicators,
+            'component_scores' => $componentScores,
+            'passed_rules' => $passedRules,
+            'failed_rules' => $failedRules,
             'created_at' => optional($c->created_at)?->toIso8601String(),
         ];
     }

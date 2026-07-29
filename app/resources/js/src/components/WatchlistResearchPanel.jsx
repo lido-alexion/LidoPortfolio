@@ -116,8 +116,8 @@ export default function WatchlistResearchPanel({ stockId }) {
                             {evalProfile.message || 'No evaluation profile yet.'}
                             {' '}
                             <Link to="/candidates">Run Discovery</Link>
-                            {' → '}
-                            <Link to="/evaluations">Evaluation</Link>
+                            {' '}
+                            (includes evaluation).
                         </p>
                     )
                 ) : null}

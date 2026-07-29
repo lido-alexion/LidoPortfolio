@@ -74,8 +74,7 @@ export const DOC_PRESENTATION = {
                 rows: [
                     ['Screener', 'Eligibility rules', 'Definitions, runs, hit lists'],
                     ['Strategy', 'Policy / config only', 'Weights, thresholds, exits, gates (no stock list)'],
-                    ['Discovery', 'Candidates (pipeline)', 'Symbols — optional to open; still run by pipeline'],
-                    ['Evaluations', 'Factor facts (pipeline)', 'RS/trend/… — optional to open; required as data'],
+                    ['Discovery', 'Candidates + factor facts', 'Symbols, long-focused score/confidence/explanation'],
                     ['Recommendations', 'Final ideas', 'Open/Increase/Reduce/Exit + HOLD/WATCH; Approve'],
                     ['Pending Exec.', 'Approved, not filled yet', 'Queue + optional cash reservation'],
                     ['Transactions', 'Ledger fills', 'Buys/sells (holdings source of truth)'],
@@ -89,7 +88,7 @@ export const DOC_PRESENTATION = {
                 headers: ['Layer', 'Job'],
                 rows: [
                     ['Screener', 'Finds / admits stocks (eligibility)'],
-                    ['Evaluation', 'Measures factor facts (RS, trend, …)'],
+                    ['Discovery / Evaluation', 'Inventory + long-focused factor facts (same page)'],
                     ['Strategy', 'Scores, thresholds, exits, gates, allocation'],
                     ['Recommendations', 'Where you review and approve ideas'],
                 ],
@@ -97,10 +96,10 @@ export const DOC_PRESENTATION = {
         ],
         behindTheScenes: {
             summary:
-                'Day-to-day you configure Screener + Strategy and act on Recommendations. Discovery and Evaluations still run inside the pipeline.',
+                'Day-to-day you configure Screener + Strategy and act on Recommendations. Discovery (candidates + evaluation) still runs inside the pipeline.',
             mermaid: `flowchart TD
   A[Screener hits] --> B[Discovery candidates]
-  B --> C[Evaluations facts]
+  B --> C[Evaluation facts on Discovery]
   C --> D[Strategy score thresholds exits gates cash]
   D --> E[Recommendations]
   E --> F[Approve]
@@ -121,8 +120,8 @@ export const DOC_PRESENTATION = {
                 a: 'Strategy is configuration only. Ideas appear on Recommendations after a pipeline run.',
             },
             {
-                q: 'Do I need to open Discovery / Evaluations?',
-                a: 'Usually no. Those stages still run in the pipeline; open them when debugging.',
+                q: 'Do I need to open Discovery?',
+                a: 'Usually no. Candidates and evaluation facts still run in the pipeline; open Discovery when inspecting. There is no separate Evaluations page.',
             },
         ],
     },
@@ -355,40 +354,45 @@ export const DOC_PRESENTATION = {
     },
     discovery: {
         icon: 'bi-search',
-        purpose: 'Shows pipeline candidates after eligibility — “who deserves deeper scoring,” not “who to buy now.”',
+        purpose:
+            'Pipeline candidates plus long-focused evaluation facts on one page — “who deserves attention,” not a sell-flipped score.',
         workflow: [
             { label: 'Screeners', keyword: 'screener' },
-            { label: 'Discovery', current: true },
-            { label: 'Evaluations', keyword: 'evaluations' },
+            { label: 'Discovery (+ evaluation)', current: true },
             { label: 'Strategy', keyword: 'strategy' },
             { label: 'Recommendations', keyword: 'recommendations' },
         ],
         callouts: [
             {
                 variant: 'info',
-                body: 'Opening this tab is optional. Discovery still runs inside the decision pipeline.',
+                body: 'Opening this tab is optional. Discovery and evaluation still run inside the decision pipeline. /evaluations redirects here.',
             },
-        ],
-    },
-    evaluations: {
-        icon: 'bi-clipboard-data',
-        purpose: 'Factor facts (inputs) for candidates — Strategy turns these into scores and labels.',
-        workflow: [
-            { label: 'Discovery', keyword: 'discovery' },
-            { label: 'Evaluations', current: true },
-            { label: 'Strategy scoring', keyword: 'strategy' },
-            { label: 'Recommendations', keyword: 'recommendations' },
+            {
+                variant: 'important',
+                title: 'Long-focused scoring',
+                body: 'Factor scores favour longs. Bearish screener hits can appear, but Evaluation does not rewrite them for a sell viewpoint — wire exits via Strategy Screener Exit.',
+            },
         ],
         conceptBoxes: [
             {
-                title: 'Compared against (typical factor)',
-                icon: 'bi-bullseye',
+                title: 'Discovery ↔ Evaluation',
+                icon: 'bi-link-45deg',
                 rows: [
-                    { label: 'Source', value: 'Evaluation Engine' },
-                    { label: 'Value', value: 'Per-factor metrics (e.g. RS, trend)' },
-                    { label: 'Used by', value: 'Strategy scoring model' },
-                    { label: 'Updated', value: 'Latest pipeline / evaluation run' },
+                    { label: 'Discovery', value: 'Candidate inventory (screeners / patterns / membership)' },
+                    { label: 'Evaluation', value: 'Long-focused factor facts on those candidates' },
+                    { label: 'Link', value: 'evaluation_run.discovery_run_id + result.candidate_id' },
+                    { label: 'UI', value: 'Score / confidence / explanation columns on Discovery' },
                 ],
+            },
+        ],
+        commonMistakes: [
+            {
+                q: 'Where did the Evaluations page go?',
+                a: 'Merged into Discovery. Use score/confidence/explanation columns and the Factors detail link.',
+            },
+            {
+                q: 'Why is my bearish screener hit scored poorly?',
+                a: 'Evaluation is long-focused by design. A weak long profile is expected; attach that screener under Strategy Screener Exit for sell intent on holdings.',
             },
         ],
     },
@@ -636,7 +640,7 @@ export const DOC_PRESENTATION = {
     },
     'universe-price-sync': {
         icon: 'bi-cloud-download',
-        purpose: 'Keeps equity and index OHLCV caches fresh so Screeners, Evaluations, and charts have data to work with.',
+        purpose: 'Keeps equity and index OHLCV caches fresh so Screeners, Discovery evaluation, and charts have data to work with.',
         workflow: [
             { label: 'Price sync', current: true },
             { label: 'Screeners / pipeline', keyword: 'screener' },

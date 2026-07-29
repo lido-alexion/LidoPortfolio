@@ -248,7 +248,6 @@ export default function RecommendationsPage() {
                         <label className="form-check-label small" htmlFor="showAllRecs">Show all history</label>
                     </div>
                     <Link className="btn btn-outline-secondary btn-sm" to="/candidates">Discovery</Link>
-                    <Link className="btn btn-outline-secondary btn-sm" to="/evaluations">Evaluations</Link>
                     <button type="button" className="btn btn-outline-secondary btn-sm" onClick={load} disabled={loading || running}>Refresh</button>
                     <button type="button" className="btn btn-primary btn-sm" onClick={runPipeline} disabled={running}>
                         {running ? 'Running pipeline…' : 'Run decision pipeline'}

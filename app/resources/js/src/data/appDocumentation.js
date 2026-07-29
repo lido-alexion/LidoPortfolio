@@ -89,17 +89,16 @@ const APP_DOCUMENTATION_BASE = [
         title: 'Trading OS pages & flow',
         routeLabel: '/documentation?q=trading-os-flow',
         match: () => false,
-        summary: 'What Screener, Strategy, Discovery, Evaluations, Recommendations, and Review each show — and how stocks flow between them.',
+        summary: 'What Screener, Strategy, Discovery, Recommendations, and Review each show — and how stocks flow between them.',
         overview:
-            'Strategy is only configuration. Recommended stocks appear on Recommendations after the decision pipeline applies Screeners, Evaluation facts, and Strategy rules.\n\n'
+            'Strategy is only configuration. Recommended stocks appear on Recommendations after the decision pipeline applies Screeners, Discovery/Evaluation facts, and Strategy rules.\n\n'
             + 'What each page is about:\n\n'
             + '```text\n'
             + 'Page              About                         Data you see\n'
             + '---------------   ---------------------------   ------------------------------------------\n'
             + 'Screener          Eligibility rules             Definitions, runs, hit lists\n'
             + 'Strategy          Policy / config only          Weights, thresholds, exits, gates (no stock list)\n'
-            + 'Discovery         Candidates (pipeline)         Symbols — optional to open; still run by pipeline\n'
-            + 'Evaluations       Factor facts (pipeline)       RS/trend/… — optional to open; required as data\n'
+            + 'Discovery         Candidates + factor facts     Symbols, long-focused score/confidence/explanation\n'
             + 'Recommendations   Final ideas                   Open/Increase/Reduce/Exit + HOLD/WATCH; Approve\n'
             + 'Pending Exec.     Approved, not filled yet      Queue + optional cash reservation\n'
             + 'Transactions      Ledger fills                  Buys/sells (holdings source of truth)\n'
@@ -107,12 +106,12 @@ const APP_DOCUMENTATION_BASE = [
             + 'Cash              Money available               Balance, reserved, available investable\n'
             + 'Dashboard         Portfolio + market snapshot   Value, analytics — not the idea queue\n'
             + '```\n\n'
-            + 'Day-to-day: configure Screener + Strategy, act on Recommendations. Discovery and Evaluations are pipeline stages (candidates → factor facts) that still run behind the scenes when you generate ideas — you usually do not need to visit those tabs.\n\n'
+            + 'Day-to-day: configure Screener + Strategy, act on Recommendations. Discovery (candidates + evaluation facts) still runs inside the pipeline — open it when inspecting or debugging.\n\n'
             + 'How a stock becomes a recommendation:\n\n'
             + '```mermaid\n'
             + 'flowchart TD\n'
             + '  A[Screener hits] --> B[Discovery candidates]\n'
-            + '  B --> C[Evaluations facts]\n'
+            + '  B --> C[Evaluation facts on Discovery]\n'
             + '  C --> D[Strategy: score thresholds exits gates cash]\n'
             + '  D --> E[Recommendations]\n'
             + '  E --> F[Approve]\n'
@@ -124,7 +123,7 @@ const APP_DOCUMENTATION_BASE = [
         controls: [
             {
                 name: 'Run decision pipeline',
-                description: 'On Recommendations — regenerates ideas using current Screener hits, Evaluation facts, and Strategy config.',
+                description: 'On Recommendations — regenerates ideas using current Screener hits, Discovery/Evaluation facts, and Strategy config.',
             },
             {
                 name: 'Approve / Reject / Defer',
@@ -133,13 +132,13 @@ const APP_DOCUMENTATION_BASE = [
         ],
         concepts: [
             {
-                name: 'Discovery / Evaluations optional to visit',
+                name: 'Discovery optional to visit',
                 description:
-                    'You configure Screener + Strategy and act on Recommendations. Discovery and Evaluations still run inside the decision pipeline (candidates → factor facts Strategy scores). Opening those tabs is optional unless you are inspecting or debugging.',
+                    'You configure Screener + Strategy and act on Recommendations. Discovery still runs inside the decision pipeline (candidates → long-focused factor facts). Opening Discovery is optional unless you are inspecting or debugging. Evaluation scores live on the Discovery table (no separate Evaluations page).',
             },
             {
                 name: 'Eligibility vs scoring vs ideas',
-                description: 'Screener admits; Evaluation measures; Strategy scores and filters; Recommendations is where you act.',
+                description: 'Screener admits; Discovery/Evaluation measures (long-focused); Strategy scores and filters; Recommendations is where you act.',
             },
             {
                 name: 'Strategy never lists stocks',
@@ -154,7 +153,6 @@ const APP_DOCUMENTATION_BASE = [
             'screener',
             'strategy',
             'discovery',
-            'evaluations',
             'recommendations',
             'pending-execution',
             'review',
@@ -453,40 +451,75 @@ const APP_DOCUMENTATION_BASE = [
     {
         id: 'discovery',
         keyword: 'discovery',
-        aliases: ['candidates'],
+        aliases: ['candidates', 'evaluations', 'evaluation', 'factors'],
         title: 'Discovery',
         routeLabel: '/candidates',
-        match: (p) => pathStarts(p, '/candidates'),
-        summary: 'Candidates produced by screeners and pattern scans for evaluation.',
+        match: (p) => pathStarts(p, '/candidates') || pathStarts(p, '/evaluations'),
+        summary: 'Candidates from screeners and patterns, plus long-focused evaluation scores on one page.',
         overview:
-            'Discovery lists candidates from the Discovery Engine (Screeners + PatternScan). These feed Evaluation and then Recommendation generation. See Trading OS pages & flow for the full path.',
+            'Discovery lists candidates from the Discovery Engine (Screeners + PatternScan), then the Evaluation Engine measures factor facts for those same rows. Score, confidence, and explanation appear in the Discovery table — there is no separate Evaluations page.\n\n'
+            + 'How Discovery and Evaluation link:\n\n'
+            + '```mermaid\n'
+            + 'flowchart TD\n'
+            + '  A[Screener hits / patterns / membership] --> B[Discovery candidates]\n'
+            + '  B --> C[Evaluation factor facts]\n'
+            + '  C --> D[Same Discovery table: score confidence explanation]\n'
+            + '```\n\n'
+            + 'Discovery builds the candidate inventory for the latest run. Evaluation loads that run’s candidates and computes measurable facts (trend, momentum, relative strength, volume, risk, pattern bonus). Each evaluation result points back to a candidate (`candidate_id`); the evaluation run points back to the discovery run (`discovery_run_id`).\n\n'
+            + 'Long-focused scoring (important):\n\n'
+            + 'Evaluation and the informational score on this page are **long-focused**. Factor heuristics favour longs (e.g. SMA uptrend stack and healthy RSI score higher). They do **not** switch to a sell viewpoint based on which screener produced the hit.\n\n'
+            + 'Screeners themselves have no bullish/bearish flag — they are condition trees. You can build a bearish screener (weak RSI, price below MA, distribution, etc.). Bearish hits can still appear as Discovery candidates when recent screener runs are merged in. Evaluation still scores them with the same long-leaning facts; a weak long profile simply shows as a low score / failed rules — it is not re-interpreted as “good to sell.”\n\n'
+            + 'How buy vs sell intent is wired (outside Evaluation):\n\n'
+            + '| Where you attach a screener | Meaning |\n'
+            + '|-----------------------------|---------|\n'
+            + '| Strategy → Eligibility Sources | Hits may be considered for **entry** |\n'
+            + '| Strategy → Exit Strategy → Screener Exit | If you **already hold** the stock and it appears in that screener’s latest run → exit signal |\n'
+            + '\n'
+            + 'The system does not infer sell purpose from screener condition text. You assign purpose by wiring the screener to eligibility (buy gate) or Screener Exit (sell trigger). Discovery/Evaluation only inventory and measure; they do not invent that wiring.\n\n'
+            + 'Use **Run discovery** to rebuild candidates (evaluation follows automatically). Use **Run evaluation** to re-measure the latest discovery run without rebuilding candidates.',
         controls: [
-            { name: 'Candidate list', description: 'Browse symbols admitted by eligibility sources for recent runs.' },
-            { name: 'Refresh / pipeline', description: 'Depends on scheduled or manual decision-pipeline / screener runs.' },
+            {
+                name: 'Run discovery',
+                description:
+                    'Creates a new discovery run (pattern scans + recent screener hits, with holdings/watchlist fallback), then runs evaluation on those candidates and refreshes the table.',
+            },
+            {
+                name: 'Run evaluation',
+                description:
+                    'Re-scores the latest completed discovery run’s candidates with long-focused factor facts (score, confidence, rank, explanation). Requires a prior discovery run.',
+            },
+            {
+                name: 'Candidate table',
+                description:
+                    'Symbol, source, discovery reason, plus evaluation rank / score / confidence / explanation when evaluated. Evidence opens discovery signals; Factors opens indicators and passed/failed rules.',
+            },
+            {
+                name: 'Filters',
+                description: 'Search by symbol/name and filter by source (screener, pattern, holding, watchlist, mixed).',
+            },
         ],
         concepts: [
-            { name: 'Candidate', description: 'A stock that passed eligibility and is available for factor evaluation.' },
-            { name: 'Pipeline stage', description: 'Data → Discovery → Evaluation → Recommendation → Approval → Execution → Review.' },
+            {
+                name: 'Candidate',
+                description: 'A stock admitted into the latest discovery inventory (screener hit, pattern, or membership fallback).',
+            },
+            {
+                name: 'Factor facts vs Strategy weights',
+                description:
+                    'Evaluation stores measurable facts and an informational equal-weight rank. Strategy weights and buy/sell action labels are applied later in the decision pipeline — not rewritten on this page.',
+            },
+            {
+                name: 'Long-focused evaluation',
+                description:
+                    'Scores favour long setups. Bearish screener hits are listed and measured the same way; they are not auto-flipped into a sell score. Sell-oriented screeners belong on Strategy Screener Exit when you want exits from holdings.',
+            },
+            {
+                name: 'Discovery → Evaluation link',
+                description:
+                    'Evaluation requires a completed discovery run. Results attach to candidates via candidate_id; the evaluation run records discovery_run_id.',
+            },
         ],
-        related: ['trading-os-flow', 'screener', 'evaluations', 'recommendations'],
-    },
-    {
-        id: 'evaluations',
-        keyword: 'evaluations',
-        aliases: ['evaluation', 'factors'],
-        title: 'Evaluations',
-        routeLabel: '/evaluations',
-        match: (p) => pathStarts(p, '/evaluations'),
-        summary: 'Factor facts for candidates — inputs to Strategy scoring, not the weights themselves.',
-        overview:
-            'Evaluation computes measurable factor facts (momentum, trend, risk, etc.) for Discovery candidates. Strategy configuration owns weights and thresholds that turn those facts into actions. Final ideas still land on Recommendations — not here.',
-        controls: [
-            { name: 'Evaluation runs', description: 'Inspect recent runs and per-candidate factor results.' },
-        ],
-        concepts: [
-            { name: 'Factor facts vs Strategy', description: 'Evaluation does not apply Strategy weights; Recommendation scoring does.' },
-        ],
-        related: ['trading-os-flow', 'discovery', 'strategy', 'recommendations'],
+        related: ['trading-os-flow', 'screener', 'strategy'],
     },
     {
         id: 'recommendations',
@@ -497,7 +530,7 @@ const APP_DOCUMENTATION_BASE = [
         match: (p) => pathStarts(p, '/recommendations'),
         summary: 'Review trade ideas and market insights — Approve, Reject, or Defer.',
         overview:
-            'This is where final recommended stocks appear after Screeners, Evaluations, and Strategy filters. Recommendations are generated from Strategy scoring, market opinion, portfolio rules, and capital allocation. Trade recommendations (Open / Increase / Reduce / Exit) can be Approved into pending execution. HOLD / WATCH insights are view-only guidance.',
+            'This is where final recommended stocks appear after Screeners, Discovery/Evaluation facts, and Strategy filters. Recommendations are generated from Strategy scoring, market opinion, portfolio rules, and capital allocation. Trade recommendations (Open / Increase / Reduce / Exit) can be Approved into pending execution. HOLD / WATCH insights are view-only guidance.',
         controls: [
             { name: 'Approve / Reject / Defer', description: 'Lifecycle actions on actionable recommendations.' },
             { name: 'Review dialog', description: 'Inspect evidence, quantity, and cash impact before deciding.' },
@@ -1168,16 +1201,17 @@ const DOC_ENRICHMENTS = {
     },
     discovery: {
         overview:
-            'Discovery is the candidate funnel entry point. Think of it as "who deserves deeper scoring now" rather than "who to buy now." Candidates still need evaluation and recommendation logic.',
+            'Discovery is the candidate funnel plus long-focused evaluation facts on one page. Think of it as "who deserves deeper attention now" with measured score/confidence — not a sell-flipped score for bearish screeners. Candidates still need Strategy scoring later in the pipeline for action labels.\n\n'
+            + 'Bearish screeners can contribute hits to Discovery, but Evaluation does not know which screener was “for selling.” Wire sell intent via Strategy Screener Exit on holdings; keep Eligibility Sources for entry-oriented screeners.',
         controls: [
             { name: 'Run provenance', description: 'Check which screener/pipeline run produced candidates before comparing two lists from different run contexts.' },
+            { name: 'Score / confidence / explanation', description: 'Come from the latest evaluation result for each candidate (long-focused factor facts). Empty until you run evaluation (or Run discovery, which evaluates afterward).' },
         ],
-    },
-    evaluations: {
-        overview:
-            'Evaluations provide feature facts (inputs), not decisions (outputs). When recommendation outcomes seem odd, compare evaluation factor values with active strategy thresholds/weights.',
-        controls: [
-            { name: 'Factor diagnostics', description: 'Use per-candidate factor details to explain why one symbol outranks another under the same strategy.' },
+        concepts: [
+            {
+                name: 'No separate Evaluations page',
+                description: 'Former /evaluations redirects to Discovery. Factor details open from the Factors link on each row.',
+            },
         ],
     },
     recommendations: {
