@@ -57,7 +57,7 @@ const APP_DOCUMENTATION_BASE = [
             },
             {
                 name: 'Topic list',
-                description: 'Click any topic to load its overview, controls, and concepts.',
+                description: 'Click any topic to load Purpose, Workflow, Overview, Controls, Concepts, and Related topics.',
             },
         ],
         concepts: [
@@ -109,17 +109,16 @@ const APP_DOCUMENTATION_BASE = [
             + '```\n\n'
             + 'Day-to-day: configure Screener + Strategy, act on Recommendations. Discovery and Evaluations are pipeline stages (candidates → factor facts) that still run behind the scenes when you generate ideas — you usually do not need to visit those tabs.\n\n'
             + 'How a stock becomes a recommendation:\n\n'
-            + '```text\n'
-            + 'Screener hits → Discovery candidates → Evaluations (facts)\n'
-            + '        |\n'
-            + '        v\n'
-            + 'Strategy applied (score → thresholds → exits → portfolio/gates → cash allocation)\n'
-            + '        |\n'
-            + '        v\n'
-            + 'Recommendations  →  Approve  →  Pending Execution  →  Transactions fill\n'
-            + '        |\n'
-            + '        v\n'
-            + 'Review (later outcomes)\n'
+            + '```mermaid\n'
+            + 'flowchart TD\n'
+            + '  A[Screener hits] --> B[Discovery candidates]\n'
+            + '  B --> C[Evaluations facts]\n'
+            + '  C --> D[Strategy: score thresholds exits gates cash]\n'
+            + '  D --> E[Recommendations]\n'
+            + '  E --> F[Approve]\n'
+            + '  F --> G[Pending Execution]\n'
+            + '  G --> H[Transactions fill]\n'
+            + '  E --> I[Review later outcomes]\n'
             + '```\n\n'
             + 'Configure Screeners + Strategy first, then run the decision pipeline from Recommendations (or the scheduled daily pipeline). Full write-up: specs/architecture/07-Trading-OS-Pages-and-Flow.md.',
         controls: [
@@ -527,30 +526,20 @@ const APP_DOCUMENTATION_BASE = [
             + 'Where do finished ideas appear?\n\n'
             + 'After you save Strategy and run the decision pipeline (Recommendations page → “Run decision pipeline”, or the scheduled daily pipeline), surviving trade ideas land on Recommendations (/recommendations). Approve a buy/sell there → it moves to Pending Execution (/transactions/pending). After you record the broker fill, it becomes a ledger transaction and shows on Holdings / Review. Insights (HOLD / WATCH) also appear on Recommendations but are view-only and are not sent to Telegram.\n\n'
             + 'Filter sequence (high level):\n\n'
-            + '```text\n'
-            + 'Screener hits (Eligibility Sources)\n'
-            + '        |\n'
-            + '        v\n'
-            + 'Scoring Model  →  overall score 0–100\n'
-            + '        |\n'
-            + '        v\n'
-            + 'Recommendation Thresholds  →  Open / Increase / Reduce / Exit / Watch / Hold\n'
-            + '        |\n'
-            + '        +---- holdings only ---->  Exit Strategy rules (can force Exit)\n'
-            + '        |\n'
-            + '        v\n'
-            + 'Portfolio Rules + Behaviour flags\n'
-            + '        |\n'
-            + '        v\n'
-            + 'Market Gates (optional; blocks new Open/Increase)\n'
-            + '        |\n'
-            + '        v\n'
-            + 'Capital Allocation + Cash Management\n'
-            + '  (rank, size, fund from available cash;\n'
-            + '   unfunded Open/Increase → Watch)\n'
-            + '        |\n'
-            + '        v\n'
-            + 'Recommendations page  →  Approve  →  Pending Execution  →  ledger fill\n'
+            + '```mermaid\n'
+            + 'flowchart TD\n'
+            + '  A[Screener hits - Eligibility Sources] --> B[Scoring Model overall 0-100]\n'
+            + '  B --> C[Recommendation Thresholds]\n'
+            + '  C --> D[Open / Increase / Reduce / Exit / Watch / Hold]\n'
+            + '  C --> E[Exit Strategy rules - holdings only]\n'
+            + '  E -.->|can force Exit| D\n'
+            + '  D --> F[Portfolio Rules + Behaviour flags]\n'
+            + '  F --> G[Market Gates - may block new Open/Increase]\n'
+            + '  G --> H[Capital Allocation + Cash Management]\n'
+            + '  H -->|unfunded Open/Increase become Watch| I[Recommendations page]\n'
+            + '  I --> J[Approve]\n'
+            + '  J --> K[Pending Execution]\n'
+            + '  K --> L[Ledger fill]\n'
             + '```\n\n'
             + 'Read Controls below for every tab field (what it means and what number it is compared against). Read Concepts for a scored example of four candidates and three holdings hitting exit rules.',
         controls: [
@@ -686,15 +675,16 @@ const APP_DOCUMENTATION_BASE = [
                     + 'Ranking for capital: INFY first (highest score), then RELIANCE, then TCS. Only Open/Increase compete for cash.',
             },
             {
-                name: 'Worked example — ASCII score bars',
+                name: 'Worked example — score bands vs thresholds',
                 description:
-                    '```text\n'
-                    + 'Overall score (0–100)     Exit  Reduce    Watch        Open   Increase\n'
-                    + '                         |20    |40        |60          |85     |90\n'
-                    + 'IDEA      ####---------- 44\n'
-                    + 'TCS       #######------- 70\n'
-                    + 'RELIANCE  ########------ 82\n'
-                    + 'INFY      #########----- 88   ← crosses Open (≥85)\n'
+                    'Overall score (0–100) vs factory-like thresholds: Exit ≤20 · Reduce ≤40 · Watch ≥60 · Open ≥85 · Increase ≥90.\n\n'
+                    + '```text\n'
+                    + 'Symbol    | Score | Band reading\n'
+                    + '--------- | ----- | ------------\n'
+                    + 'IDEA      | 44    | Near Reduce if held; not an Open\n'
+                    + 'TCS       | 70    | Watch band\n'
+                    + 'RELIANCE  | 82    | Below Open (≥85); Watch/Hold path\n'
+                    + 'INFY      | 88    | Crosses Open (≥85); ranks first for capital\n'
                     + '```',
             },
             {
@@ -1056,7 +1046,7 @@ const DEFAULT_RICH_CONTENT = {
 const DOC_ENRICHMENTS = {
     overview: {
         overview:
-            'Documentation is public (no login required). How to use this effectively: start from a page you are on via the header (?), or open /documentation directly. Read "About this page" first, then "Controls" and "Concepts". Use "Related topics" to follow the natural journey. Links to product screens still require sign-in.',
+            'Documentation is public (no login required). How to use this effectively: start from a page you are on via the header (?), or open /documentation directly. Read Purpose and Workflow first, then Overview, Controls, and Concepts. Use Common mistakes when stuck, and Related topics to follow the natural journey. Links to product screens still require sign-in.',
     },
     dashboard: {
         overview:

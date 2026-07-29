@@ -2,89 +2,20 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { APP_DOCUMENTATION } from '../data/appDocumentation';
+import DocCallout from '../components/docs/DocCallout';
+import DocComparisonTable from '../components/docs/DocComparisonTable';
+import DocConceptBox from '../components/docs/DocConceptBox';
+import DocDecisionCards from '../components/docs/DocDecisionCards';
+import DocMermaid from '../components/docs/DocMermaid';
+import DocRichText from '../components/docs/DocRichText';
+import DocSection, { DocItemCards } from '../components/docs/DocSection';
+import DocWorkflow from '../components/docs/DocWorkflow';
+import { getDocPresentation } from '../components/docs/docPresentation';
 import {
     findDocumentationByKeyword,
     getDocumentationByKeyword,
     searchDocumentationIndex,
 } from '../utils/documentationLinks';
-
-function DocSection({ title, children }) {
-    return (
-        <section className="lido-docs-section mb-4">
-            <h2 className="h5 mb-2">{title}</h2>
-            {children}
-        </section>
-    );
-}
-
-function DocItemList({ items }) {
-    if (!items?.length) {
-        return <p className="small text-muted mb-0">None listed for this topic.</p>;
-    }
-    return (
-        <ul className="lido-docs-item-list list-unstyled mb-0">
-            {items.map((item) => (
-                <li key={item.name} className="lido-docs-item mb-3">
-                    <div className="fw-semibold">{item.name}</div>
-                    <div className="small text-muted lido-docs-item-body">
-                        <DocOverview text={item.description} />
-                    </div>
-                </li>
-            ))}
-        </ul>
-    );
-}
-
-function DocOverview({ text }) {
-    const raw = String(text || '').trim();
-    if (!raw) {
-        return <p className="mb-0 text-muted">No overview available.</p>;
-    }
-
-    const parts = [];
-    const fenceRegex = /```[\w-]*\n([\s\S]*?)```/g;
-    let lastIndex = 0;
-    let match = fenceRegex.exec(raw);
-    while (match) {
-        const before = raw.slice(lastIndex, match.index).trim();
-        if (before) {
-            parts.push({ type: 'text', value: before });
-        }
-        parts.push({ type: 'pre', value: match[1].replace(/\n$/, '') });
-        lastIndex = fenceRegex.lastIndex;
-        match = fenceRegex.exec(raw);
-    }
-    const tail = raw.slice(lastIndex).trim();
-    if (tail) {
-        parts.push({ type: 'text', value: tail });
-    }
-
-    return (
-        <>
-            {parts.map((part, partIdx) => {
-                if (part.type === 'pre') {
-                    return (
-                        <pre key={`pre-${partIdx}`} className="lido-docs-pre small mb-3">
-                            {part.value}
-                        </pre>
-                    );
-                }
-                const paragraphs = part.value
-                    .split(/\n{2,}/)
-                    .map((line) => line.trim())
-                    .filter(Boolean);
-                return paragraphs.map((paragraph, idx) => (
-                    <p
-                        key={`p-${partIdx}-${idx}`}
-                        className={`lido-docs-paragraph${partIdx === parts.length - 1 && idx === paragraphs.length - 1 ? ' mb-0' : ''}`}
-                    >
-                        {paragraph}
-                    </p>
-                ));
-            })}
-        </>
-    );
-}
 
 export default function DocumentationPage() {
     const { isAuthenticated } = useAuth();
@@ -93,6 +24,10 @@ export default function DocumentationPage() {
     const [filter, setFilter] = useState('');
 
     const activeDoc = useMemo(() => findDocumentationByKeyword(qParam), [qParam]);
+    const presentation = useMemo(
+        () => getDocPresentation(activeDoc?.keyword || ''),
+        [activeDoc?.keyword],
+    );
     const indexItems = useMemo(() => searchDocumentationIndex(filter), [filter]);
 
     useEffect(() => {
@@ -154,6 +89,7 @@ export default function DocumentationPage() {
                             )}
                             {indexItems.map((doc) => {
                                 const isActive = doc.keyword === activeDoc?.keyword;
+                                const icon = getDocPresentation(doc.keyword).icon || 'bi-file-text';
                                 return (
                                     <button
                                         key={doc.id}
@@ -163,7 +99,10 @@ export default function DocumentationPage() {
                                         onClick={() => selectTopic(doc.keyword)}
                                         aria-current={isActive ? 'true' : undefined}
                                     >
-                                        <span className="lido-docs-index-title">{doc.title}</span>
+                                        <span className="lido-docs-index-title">
+                                            <i className={`bi ${icon} me-1 opacity-75`} aria-hidden="true" />
+                                            {doc.title}
+                                        </span>
                                         <span className="lido-docs-index-meta text-muted">
                                             {doc.routeLabel}
                                             {' · '}
@@ -187,6 +126,12 @@ export default function DocumentationPage() {
                         >
                             <header className="mb-3 pb-3 border-bottom">
                                 <div className="d-flex flex-wrap align-items-baseline gap-2 mb-1">
+                                    {presentation.icon ? (
+                                        <i
+                                            className={`bi ${presentation.icon} lido-docs-topic-icon`}
+                                            aria-hidden="true"
+                                        />
+                                    ) : null}
                                     <h2 className="h4 mb-0">{activeDoc.title}</h2>
                                     <code className="small">{activeDoc.keyword}</code>
                                 </div>
@@ -206,31 +151,172 @@ export default function DocumentationPage() {
                                 </p>
                             </header>
 
-                            <DocSection title="About this page">
-                                <DocOverview text={activeDoc.overview} />
+                            {presentation.purpose ? (
+                                <DocSection
+                                    title="Purpose"
+                                    subtitle="Why this page exists"
+                                    icon="bi-bullseye"
+                                    id="doc-purpose"
+                                >
+                                    <DocCallout variant="info" title="Purpose">
+                                        {presentation.purpose}
+                                    </DocCallout>
+                                </DocSection>
+                            ) : null}
+
+                            {presentation.workflow?.length ? (
+                                <DocSection
+                                    title="Workflow"
+                                    subtitle="Where this page fits"
+                                    icon="bi-signpost-2"
+                                    id="doc-workflow"
+                                >
+                                    <DocWorkflow steps={presentation.workflow} />
+                                </DocSection>
+                            ) : null}
+
+                            {(presentation.callouts || []).map((callout) => (
+                                <DocCallout
+                                    key={`${callout.title || ''}-${callout.body.slice(0, 40)}`}
+                                    variant={callout.variant}
+                                    title={callout.title}
+                                >
+                                    {callout.body}
+                                </DocCallout>
+                            ))}
+
+                            <DocSection
+                                title="Overview"
+                                subtitle="What this page is and how it works"
+                                icon="bi-book"
+                                id="doc-overview"
+                            >
+                                <DocRichText text={activeDoc.overview} />
                             </DocSection>
 
-                            <DocSection title="Controls">
-                                <DocItemList items={activeDoc.controls} />
+                            {(presentation.comparisons || []).map((table) => (
+                                <DocComparisonTable
+                                    key={table.caption || table.headers.join('-')}
+                                    caption={table.caption}
+                                    headers={table.headers}
+                                    rows={table.rows}
+                                />
+                            ))}
+
+                            {(presentation.conceptBoxes || []).map((box) => (
+                                <DocConceptBox
+                                    key={box.title}
+                                    title={box.title}
+                                    icon={box.icon}
+                                    rows={box.rows}
+                                />
+                            ))}
+
+                            {presentation.decisions?.length ? (
+                                <DocSection
+                                    title="Decision points"
+                                    subtitle="When action is allowed, cautious, or blocked"
+                                    icon="bi-traffic-light"
+                                    id="doc-decisions"
+                                >
+                                    <DocDecisionCards items={presentation.decisions} />
+                                </DocSection>
+                            ) : null}
+
+                            <DocSection
+                                title="Controls"
+                                subtitle="What each control does"
+                                icon="bi-toggles"
+                                id="doc-controls"
+                            >
+                                <DocItemCards items={activeDoc.controls} />
                             </DocSection>
 
-                            <DocSection title="Concepts">
-                                <DocItemList items={activeDoc.concepts} />
+                            <DocSection
+                                title="Concepts"
+                                subtitle="What the numbers and states mean"
+                                icon="bi-lightbulb"
+                                id="doc-concepts"
+                            >
+                                <DocItemCards items={activeDoc.concepts} />
                             </DocSection>
+
+                            {presentation.behindTheScenes ? (
+                                <DocSection
+                                    title="Behind the scenes"
+                                    subtitle="What happens internally"
+                                    icon="bi-cpu"
+                                    id="doc-behind"
+                                >
+                                    {presentation.behindTheScenes.summary ? (
+                                        <p className="small mb-3">{presentation.behindTheScenes.summary}</p>
+                                    ) : null}
+                                    {presentation.behindTheScenes.mermaid ? (
+                                        <DocMermaid chart={presentation.behindTheScenes.mermaid} />
+                                    ) : null}
+                                </DocSection>
+                            ) : null}
+
+                            {presentation.commonMistakes?.length ? (
+                                <DocSection
+                                    title="Common mistakes"
+                                    subtitle="Short troubleshooting tips"
+                                    icon="bi-question-circle"
+                                    id="doc-mistakes"
+                                >
+                                    <div className="accordion lido-docs-accordion" id={`doc-mistakes-${activeDoc.id}`}>
+                                        {presentation.commonMistakes.map((item, idx) => {
+                                            const collapseId = `mistake-${activeDoc.id}-${idx}`;
+                                            return (
+                                                <div className="accordion-item" key={item.q}>
+                                                    <h3 className="accordion-header">
+                                                        <button
+                                                            className="accordion-button collapsed py-2 small"
+                                                            type="button"
+                                                            data-bs-toggle="collapse"
+                                                            data-bs-target={`#${collapseId}`}
+                                                            aria-expanded="false"
+                                                            aria-controls={collapseId}
+                                                        >
+                                                            {item.q}
+                                                        </button>
+                                                    </h3>
+                                                    <div
+                                                        id={collapseId}
+                                                        className="accordion-collapse collapse"
+                                                        data-bs-parent={`#doc-mistakes-${activeDoc.id}`}
+                                                    >
+                                                        <div className="accordion-body small">{item.a}</div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </DocSection>
+                            ) : null}
 
                             {relatedDocs.length > 0 && (
-                                <DocSection title="Related topics">
+                                <DocSection
+                                    title="Related topics"
+                                    subtitle="Where to go next"
+                                    icon="bi-link-45deg"
+                                    id="doc-related"
+                                >
                                     <ul className="lido-docs-related-list list-unstyled mb-0">
-                                        {relatedDocs.map((doc) => (
-                                            <li key={doc.id}>
-                                                <Link
-                                                    to={`/documentation?q=${encodeURIComponent(doc.keyword)}`}
-                                                    className="lido-docs-related-link"
-                                                >
-                                                    {doc.title}
-                                                </Link>
-                                            </li>
-                                        ))}
+                                        {relatedDocs.map((doc) => {
+                                            const icon = getDocPresentation(doc.keyword).icon || 'bi-file-text';
+                                            return (
+                                                <li key={doc.id}>
+                                                    <Link
+                                                        to={`/documentation?q=${encodeURIComponent(doc.keyword)}`}
+                                                        className="lido-docs-related-link"
+                                                    >
+                                                        <i className={`bi ${icon} me-1`} aria-hidden="true" />
+                                                        {doc.title}
+                                                    </Link>
+                                                </li>
+                                            );
+                                        })}
                                     </ul>
                                 </DocSection>
                             )}

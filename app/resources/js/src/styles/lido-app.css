@@ -324,6 +324,125 @@ body {
     text-decoration: underline;
 }
 
+.lido-docs-topic-icon {
+    font-size: 1.25rem;
+    color: var(--lido-brand, #1e90ff);
+}
+
+.lido-docs-workflow-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding-left: 0.25rem;
+}
+
+.lido-docs-workflow-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.lido-docs-workflow-link {
+    text-decoration: none;
+    color: inherit;
+}
+
+.lido-docs-workflow-link:hover .lido-docs-workflow-label,
+.lido-docs-workflow-link:focus-visible .lido-docs-workflow-label {
+    text-decoration: underline;
+}
+
+.lido-docs-workflow-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    padding: 0.2rem 0;
+}
+
+.lido-docs-workflow-dot {
+    width: 0.65rem;
+    height: 0.65rem;
+    margin-top: 0.35rem;
+    border-radius: 50%;
+    background: rgba(127, 127, 127, 0.45);
+    flex-shrink: 0;
+}
+
+.lido-docs-workflow-step.is-current .lido-docs-workflow-dot {
+    background: var(--lido-brand, #1e90ff);
+    box-shadow: 0 0 0 3px rgba(30, 144, 255, 0.25);
+}
+
+.lido-docs-workflow-label {
+    font-size: 0.9rem;
+    line-height: 1.35;
+}
+
+.lido-docs-workflow-connector {
+    width: 2px;
+    height: 0.65rem;
+    margin-left: 0.28rem;
+    background: rgba(127, 127, 127, 0.35);
+}
+
+.lido-docs-callout .small {
+    line-height: 1.45;
+}
+
+.lido-docs-item-card {
+    background: var(--lido-surface, rgba(127, 127, 127, 0.05));
+    border-color: rgba(127, 127, 127, 0.22);
+}
+
+.lido-docs-item-card .lido-docs-item-body {
+    white-space: normal;
+}
+
+.lido-docs-table-wrap {
+    border-radius: 0.5rem;
+}
+
+.lido-docs-table caption {
+    padding-bottom: 0.35rem;
+    color: inherit;
+}
+
+.lido-docs-decision--allow {
+    border-color: rgba(25, 135, 84, 0.45);
+    background: rgba(25, 135, 84, 0.08);
+}
+
+.lido-docs-decision--caution {
+    border-color: rgba(255, 193, 7, 0.55);
+    background: rgba(255, 193, 7, 0.1);
+}
+
+.lido-docs-decision--block {
+    border-color: rgba(220, 53, 69, 0.45);
+    background: rgba(220, 53, 69, 0.08);
+}
+
+.lido-docs-concept-box .card-header {
+    background: var(--lido-surface, rgba(127, 127, 127, 0.08));
+}
+
+.lido-docs-mermaid {
+    overflow-x: auto;
+    background: var(--lido-surface, rgba(127, 127, 127, 0.06));
+}
+
+.lido-docs-mermaid svg {
+    max-width: 100%;
+    height: auto;
+}
+
+.lido-docs-pre--flow {
+    border-left: 3px solid var(--lido-brand, #1e90ff);
+}
+
+.lido-docs-accordion .accordion-button {
+    font-weight: 600;
+}
+
 .lido-strategy-category-title {
     display: inline-flex;
     align-items: center;
