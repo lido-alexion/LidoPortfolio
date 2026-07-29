@@ -1,13 +1,28 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { saveRedirectPath } from '../auth/redirect';
 
 export default function LoginPage() {
     const { login, sessionExpired, consumeRedirectPath } = useAuth();
     const navigate = useNavigate();
+    const { pathname, search } = useLocation();
     const [form, setForm] = useState({ email: '', password: '', remember: true });
     const [message, setMessage] = useState('');
     const [submitting, setSubmitting] = useState(false);
+
+    useEffect(() => {
+        const path = `${pathname}${search || ''}`;
+        if (
+            path
+            && path !== '/'
+            && !path.startsWith('/documentation')
+            && !path.startsWith('/invite/')
+            && !path.startsWith('/reset-password/')
+        ) {
+            saveRedirectPath(path);
+        }
+    }, [pathname, search]);
 
     const submit = async (e) => {
         e.preventDefault();
@@ -87,6 +102,11 @@ export default function LoginPage() {
                 </form>
                 <p className="text-muted small mt-3 mb-0 text-center">
                     New accounts are invite-only. Contact your administrator if you need access.
+                </p>
+                <p className="text-center mt-2 mb-0">
+                    <Link to="/documentation" className="small">
+                        Browse documentation (no login required)
+                    </Link>
                 </p>
             </div>
         </div>

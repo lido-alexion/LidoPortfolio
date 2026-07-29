@@ -137,6 +137,14 @@ function App() {
                     <Routes>
                         <Route path="/invite/:token" element={<AcceptInvitePage />} />
                         <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
+                        <Route
+                            path="/documentation"
+                            element={(
+                                <div className="lido-main">
+                                    <DocumentationPage />
+                                </div>
+                            )}
+                        />
                         <Route path="*" element={<LoginPage />} />
                     </Routes>
                 ) : (

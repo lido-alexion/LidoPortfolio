@@ -33,12 +33,8 @@ export default function AppHeader({ user }) {
                     </Link>
                 </div>
                 <div className="lido-header-actions">
-                    {user && (
-                        <>
-                            <HeaderHelpButton />
-                            <ProfileMenu user={user} />
-                        </>
-                    )}
+                    <HeaderHelpButton />
+                    {user && <ProfileMenu user={user} />}
                 </div>
             </div>
         </header>

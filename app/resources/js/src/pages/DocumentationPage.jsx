@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { APP_DOCUMENTATION } from '../data/appDocumentation';
 import {
     findDocumentationByKeyword,
@@ -86,6 +87,7 @@ function DocOverview({ text }) {
 }
 
 export default function DocumentationPage() {
+    const { isAuthenticated } = useAuth();
     const [searchParams, setSearchParams] = useSearchParams();
     const qParam = searchParams.get('q') || '';
     const [filter, setFilter] = useState('');
@@ -116,11 +118,19 @@ export default function DocumentationPage() {
 
     return (
         <div className="container-fluid py-3 lido-docs-page">
-            <div className="mb-3">
-                <h1 className="h3 mb-1">Documentation</h1>
-                <p className="text-muted small mb-0">
-                    Context-aware help for Lido Alexion screens — overview, controls, and related concepts.
-                </p>
+            <div className="mb-3 d-flex flex-wrap align-items-start justify-content-between gap-2">
+                <div>
+                    <h1 className="h3 mb-1">Documentation</h1>
+                    <p className="text-muted small mb-0">
+                        Context-aware help for Lido Alexion screens — overview, controls, and related concepts.
+                        These pages are public; you do not need to sign in to read them.
+                    </p>
+                </div>
+                {!isAuthenticated ? (
+                    <Link to="/" className="btn btn-sm btn-outline-info flex-shrink-0">
+                        Sign in
+                    </Link>
+                ) : null}
             </div>
 
             <div className="row g-3">

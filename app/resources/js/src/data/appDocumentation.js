@@ -41,11 +41,15 @@ const APP_DOCUMENTATION_BASE = [
         match: (p) => pathStarts(p, '/documentation'),
         summary: 'How contextual help works and how to browse topics for every screen.',
         overview:
-            'Use the (?) button in the header (left of your profile) on any page. It opens this Documentation page in a new tab with a search keyword for the screen you were on. You can also browse or search the topic list below.',
+            'Documentation is public — anyone with the URL can read it without signing in. When you are logged in, use the (?) button in the header (left of your profile) on any page: it opens this Documentation page in a new tab with a search keyword for the screen you were on. Guests can open /documentation from the login screen or the header (?). Browse or search the topic list below.',
         controls: [
             {
                 name: 'Header (?)',
-                description: 'Opens Documentation for the current route in a new browser tab.',
+                description: 'Opens Documentation for the current route in a new browser tab (available before and after login).',
+            },
+            {
+                name: 'Public access',
+                description: 'No login required to view /documentation. Product screens linked from topics still require sign-in.',
             },
             {
                 name: 'Search topics',
@@ -1052,7 +1056,7 @@ const DEFAULT_RICH_CONTENT = {
 const DOC_ENRICHMENTS = {
     overview: {
         overview:
-            'How to use this effectively: start with a page you are currently on (via the header help button), read the "About this page" section first, then scan "Controls" for actions and "Concepts" for meanings behind the numbers. Use "Related topics" to follow the natural user journey instead of jumping randomly.',
+            'Documentation is public (no login required). How to use this effectively: start from a page you are on via the header (?), or open /documentation directly. Read "About this page" first, then "Controls" and "Concepts". Use "Related topics" to follow the natural journey. Links to product screens still require sign-in.',
     },
     dashboard: {
         overview:
