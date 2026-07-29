@@ -195,4 +195,24 @@ class IndiaVixAlertServiceTest extends TestCase
 
         $this->assertSame(1, app(IndiaVixAlertService::class)->evaluateAndNotify()['notified']);
     }
+
+    public function test_latest_vix_close_repairs_hundredfold_scaled_row(): void
+    {
+        $stock = $this->seedVixClose(1264.5, '2026-07-28');
+        StockPrice::query()->where('stock_id', $stock->id)->update([
+            'open_price' => 1266.0,
+            'high_price' => 1282.0,
+            'low_price' => 1172.25,
+            'adjusted_close_price' => 1264.5,
+        ]);
+
+        $latest = app(IndiaVixAlertService::class)->latestVixClose();
+        $this->assertNotNull($latest);
+        $this->assertEqualsWithDelta(12.645, $latest['close'], 0.0001);
+        $this->assertSame('2026-07-28', $latest['price_date']);
+
+        $row = StockPrice::query()->where('stock_id', $stock->id)->first();
+        $this->assertEqualsWithDelta(12.645, (float) $row->close_price, 0.0001);
+        $this->assertEqualsWithDelta(12.66, (float) $row->open_price, 0.0001);
+    }
 }

@@ -66,6 +66,7 @@ Subtree hub: **[specs/README.md](specs/README.md)**
 | 2.4 | [specs/architecture/04-System-Architecture.md](specs/architecture/04-System-Architecture.md) |
 | 2.5 | [specs/architecture/05-Daily-Decision-Pipeline.md](specs/architecture/05-Daily-Decision-Pipeline.md) |
 | 2.6 | [specs/architecture/06-Engine-Overview.md](specs/architecture/06-Engine-Overview.md) |
+| 2.6a | [specs/architecture/07-Trading-OS-Pages-and-Flow.md](specs/architecture/07-Trading-OS-Pages-and-Flow.md) | Which UI page shows what; recommendation path through pages |
 
 ### 2.B Domain & contracts
 

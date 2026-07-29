@@ -27,9 +27,10 @@ Screeners → Candidate stocks → Strategy scoring / rules → Recommendations
 # 2. Design Principles
 
 - Fixed supported scoring indicators (SD-028) — no plugins / user-defined formulas.
-- Factory Momentum Strategy with protected baseline (SD-029).
+- Default Minervini Strategy seeded once; fully editable in place (SD-029 amended).
 - Strategies **consume Screeners by reference** — no duplicated eligibility rules (SD-030).
-- Enabled scoring weights must sum to **exactly 100** (no silent normalisation).
+- Enabled scoring weights must sum to **exactly 100** (auto-normalised on save; relative proportions kept).
+- One editable strategy per portfolio; Save updates in place.
 - Recommendation Engine never evaluates raw Screener conditions.
 
 ---
@@ -80,31 +81,29 @@ Junction table: `portfolio_tos_strategy_screeners` (version ↔ screener).
 
 ---
 
-# 6. Default Factory Strategy
+# 6. Default Strategy
 
 | Field | Value |
 |-------|-------|
-| Name | Momentum Strategy |
-| Version | 1.0 |
+| Name | Minervini Strategy |
 | Eligibility | **Minervini Trend Template** Screener |
-| Protected | Yes |
+| Editable | Yes — Save updates config in place |
 
-Scoring weights, thresholds, portfolio/capital/cash defaults: see prior SD-029 section / `FactoryMomentumStrategy`.
+Scoring weights, thresholds, portfolio/capital/cash defaults: see SD-029 / `FactoryMomentumStrategy`.
 
-Exit defaults: MA breakdown, RS/trend weakening, score exit, max loss (ATR/trailing optional off).
+Exit defaults: MA breakdown, RS/trend weakening, score exit, max loss (ATR/trailing/screener exit optional).
 
 ---
 
 # 7. Weight Validation
 
-Enabled scoring weights must equal **100**. UI shows total; save blocked when invalid.
+Enabled scoring weights must equal **100** after normalisation. The UI shows the live total; if it is not 100, Save (and optional **Normalise now**) scales enabled weights proportionally to 100 (2 d.p., largest-remainder). Disabled factors keep unused stored weights. Save is blocked only when no enabled factor has a positive weight.
 
 ---
 
-# 8. Versioning & Protection
+# 8. Persistence
 
-Factory protected; save forks custom copy. Duplicate Strategy recommended.  
-Historical recommendations keep `strategy_version_id`.
+One active strategy per portfolio. Save overwrites the active version’s `config_json` (no user-facing versions or Duplicate). Recommendations may still store `strategy_version_id` for FK stability and `strategy_name` in evidence.
 
 ---
 
@@ -112,8 +111,7 @@ Historical recommendations keep `strategy_version_id`.
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET/PUT | `/api/v1/strategy` | Active strategy |
-| POST | `/api/v1/strategy/duplicate` | Duplicate |
+| GET/PUT | `/api/v1/strategy` | Active strategy (PUT saves in place) |
 | PUT | `/api/v1/strategy/screeners` | Assign eligibility Screeners |
 | GET | `/api/v1/strategy/eligibility` | Eligibility sources |
 | GET | `/api/v1/strategy/scoring` | Scoring model |

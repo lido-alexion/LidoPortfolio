@@ -201,6 +201,97 @@ class StrategyEligibilityService
     }
 
     /**
+     * Resolve stock IDs from enabled Screener Exit rules (latest completed run within lookback).
+     *
+     * @param  array<string, mixed>  $exitConfig
+     * @return array{
+     *     by_screener: array<int, list<int>>,
+     *     meta: list<array<string, mixed>>
+     * }
+     */
+    public function resolveExitScreenerHits(PortfolioProfile $profile, array $exitConfig): array
+    {
+        $byScreener = [];
+        $meta = [];
+        if (! ($exitConfig['enabled'] ?? true)) {
+            return ['by_screener' => [], 'meta' => []];
+        }
+
+        $rules = is_array($exitConfig['rules'] ?? null) ? $exitConfig['rules'] : [];
+        $since = now()->subHours(self::LOOKBACK_HOURS);
+
+        foreach ($rules as $rule) {
+            if (! is_array($rule) || ($rule['key'] ?? '') !== 'screener_exit' || ! ($rule['enabled'] ?? false)) {
+                continue;
+            }
+            $screenerId = (int) ($rule['screener_id'] ?? 0);
+            if ($screenerId < 1) {
+                $meta[] = [
+                    'screener_id' => 0,
+                    'name' => (string) ($rule['screener_name'] ?? 'Unassigned'),
+                    'status' => 'UNASSIGNED',
+                    'run_id' => null,
+                    'hit_count' => 0,
+                ];
+                continue;
+            }
+
+            $screener = Screener::query()
+                ->where('id', $screenerId)
+                ->where(function ($q) use ($profile) {
+                    $q->where('profile_id', $profile->id)->orWhere('is_shared', true);
+                })
+                ->first();
+
+            $name = $screener?->name ?? (string) ($rule['screener_name'] ?? 'Screener #'.$screenerId);
+            $run = null;
+            $hitIds = [];
+
+            if ($screener) {
+                $run = ScreenerRun::query()
+                    ->where('screener_id', $screener->id)
+                    ->where('status', 'completed')
+                    ->where('finished_at', '>=', $since)
+                    ->orderByDesc('id')
+                    ->first();
+
+                if ($run) {
+                    $hitIds = ScreenerRunHit::query()
+                        ->where('screener_run_id', $run->id)
+                        ->pluck('stock_id')
+                        ->map(fn ($id) => (int) $id)
+                        ->unique()
+                        ->values()
+                        ->all();
+                }
+            }
+
+            $status = 'NO_RUN';
+            if ($screener === null) {
+                $status = 'MISSING';
+            } elseif ($run && $hitIds !== []) {
+                $status = 'PASS';
+            } elseif ($run) {
+                $status = 'EMPTY';
+            }
+
+            $byScreener[$screenerId] = $hitIds;
+            $meta[] = [
+                'screener_id' => $screenerId,
+                'name' => $name,
+                'status' => $status,
+                'run_id' => $run?->id,
+                'hit_count' => count($hitIds),
+            ];
+        }
+
+        return [
+            'by_screener' => $byScreener,
+            'meta' => $meta,
+        ];
+    }
+
+    /**
      * Per-stock screener pass map for explainability.
      *
      * @param  array{screeners: list<array<string, mixed>>}  $eligibility

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\PortfolioProfile;
 use App\Models\Stock;
 use App\Models\StockPrice;
+use App\Support\IndiaVixScale;
 
 class IndiaVixAlertService
 {
@@ -136,8 +137,29 @@ class IndiaVixAlertService
             return null;
         }
 
+        $close = (float) $row->close_price;
+        if (IndiaVixScale::needsRescale($close)) {
+            $normalized = IndiaVixScale::normalizeRow([
+                'open_price' => $row->open_price,
+                'high_price' => $row->high_price,
+                'low_price' => $row->low_price,
+                'close_price' => $row->close_price,
+                'adjusted_close_price' => $row->adjusted_close_price,
+            ]);
+            $row->fill([
+                'open_price' => $normalized['open_price'] ?? $row->open_price,
+                'high_price' => $normalized['high_price'] ?? $row->high_price,
+                'low_price' => $normalized['low_price'] ?? $row->low_price,
+                'close_price' => $normalized['close_price'],
+                'adjusted_close_price' => $normalized['adjusted_close_price']
+                    ?? $normalized['close_price'],
+            ]);
+            $row->save();
+            $close = (float) $row->close_price;
+        }
+
         return [
-            'close' => (float) $row->close_price,
+            'close' => $close,
             'price_date' => $row->price_date?->toDateString() ?? (string) $row->getRawOriginal('price_date'),
         ];
     }

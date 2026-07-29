@@ -91,7 +91,6 @@ class StrategyController extends Controller
             'eligibility_sources.*.enabled' => 'nullable|boolean',
             'eligibility_sources.*.priority' => 'nullable|integer|min:1',
             'eligibility_sources.*.display_order' => 'nullable|integer|min:0',
-            'change_notes' => 'nullable|string|max:1000',
         ]);
 
         $current = $this->strategies->getActiveStrategy($profile);
@@ -103,7 +102,7 @@ class StrategyController extends Controller
             $merged,
             null,
             null,
-            $validated['change_notes'] ?? 'Updated eligibility sources',
+            'Updated eligibility sources',
         );
 
         return ApiEnvelope::success($payload);
@@ -128,26 +127,6 @@ class StrategyController extends Controller
         $data = $this->strategies->getActiveStrategy(\activePortfolio());
 
         return ApiEnvelope::success($data['exit_strategy'] ?? []);
-    }
-
-    public function duplicate(Request $request): JsonResponse
-    {
-        $profile = \activePortfolio();
-        $validated = $request->validate([
-            'name' => 'nullable|string|max:120',
-            'strategy_id' => 'nullable|integer',
-            'change_notes' => 'nullable|string|max:1000',
-        ]);
-
-        $payload = $this->strategies->duplicateStrategy(
-            $profile,
-            $validated['strategy_id'] ?? null,
-            $validated['name'] ?? null,
-            null,
-            $validated['change_notes'] ?? null,
-        );
-
-        return ApiEnvelope::success($payload);
     }
 
     public function catalogue(): JsonResponse

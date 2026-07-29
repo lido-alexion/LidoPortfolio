@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { getToastAutoDismissMs } from './toast';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import AppBottomNav from './components/AppBottomNav';
 import AppHeader from './components/AppHeader';
 import AppTabs from './components/AppTabs';
@@ -45,13 +45,16 @@ import ReviewDashboardPage from './pages/ReviewDashboardPage';
 import NotificationHistoryPage from './pages/NotificationHistoryPage';
 import CashManagementPage from './pages/CashManagementPage';
 import StrategyPage from './pages/StrategyPage';
+import DocumentationPage from './pages/DocumentationPage';
 
 const FOOTER_NAV_ENABLED = true;
 
 function App() {
     const { user, isAuthenticated, loading } = useAuth();
+    const { pathname } = useLocation();
     const [toast, setToast] = useState(null);
     const dismissTimerRef = useRef(null);
+    const isDocumentationRoute = pathname === '/documentation' || pathname.startsWith('/documentation/');
 
     const dismissToast = useCallback(() => {
         if (dismissTimerRef.current) {
@@ -139,7 +142,7 @@ function App() {
                 ) : (
                     <>
                         <div className="lido-main">
-                            <AppTabs />
+                            {!isDocumentationRoute && <AppTabs />}
                             <Routes>
                                 <Route path="/" element={<DashboardPage />} />
                                 <Route path="/transactions" element={<TransactionsPage />} />
@@ -166,6 +169,7 @@ function App() {
                                 <Route path="/knowledge-board/tags" element={<KnowledgeBoardTagsPage />} />
                                 <Route path="/calendar" element={<CalendarPage />} />
                                 <Route path="/profile" element={<ProfilePage />} />
+                                <Route path="/documentation" element={<DocumentationPage />} />
                                 <Route path="/portfolios" element={<PortfoliosPage />} />
                                 <Route path="/settings" element={<Navigate to="/settings/portfolio" replace />} />
                                 <Route path="/settings/global" element={<SettingsPage />} />
@@ -207,7 +211,7 @@ function App() {
                                 />
                             </Routes>
                         </div>
-                        {FOOTER_NAV_ENABLED && <AppBottomNav />}
+                        {FOOTER_NAV_ENABLED && !isDocumentationRoute && <AppBottomNav />}
                     </>
                 )}
             </div>

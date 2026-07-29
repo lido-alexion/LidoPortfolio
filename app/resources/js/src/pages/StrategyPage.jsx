@@ -1,14 +1,13 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
+import { DataTableCard } from '../components/DataTable';
 import NumberInput from '../components/NumberInput';
-import StrategyGuideTab from '../components/strategy/StrategyGuideTab';
 import useApiGet from '../hooks/useApiGet';
 import { runApiMutation } from '../hooks/useApiMutation';
 import { showToast } from '../toast';
 
 const SECTIONS = [
-    { id: 'guide', label: 'Guide' },
     { id: 'general', label: 'General' },
     { id: 'eligibility', label: 'Eligibility Sources' },
     { id: 'scoring', label: 'Scoring Model' },
@@ -18,14 +17,107 @@ const SECTIONS = [
     { id: 'exit', label: 'Exit Strategy' },
     { id: 'market', label: 'Market Gates' },
     { id: 'cash', label: 'Cash Management' },
-    { id: 'summary', label: 'Summary' },
 ];
 
 const CATEGORY_ORDER = ['Momentum', 'Trend', 'Volume', 'Market', 'Risk'];
 
+/** Scale enabled indicator weights to sum to 100 (2 d.p., largest-remainder). */
+function redistributeEnabledWeights(indicators = []) {
+    const list = indicators.map((ind) => ({ ...ind }));
+    const enabledIdx = [];
+    let sum = 0;
+    list.forEach((ind, i) => {
+        if (!ind.enabled) return;
+        const w = Math.max(0, Number(ind.weight) || 0);
+        enabledIdx.push(i);
+        sum += w;
+    });
+    if (!enabledIdx.length || sum <= 0) return list;
+    if (Math.abs(sum - 100) <= 0.01) return list;
+
+    const floors = {};
+    const fracs = [];
+    enabledIdx.forEach((i) => {
+        const w = Math.max(0, Number(list[i].weight) || 0);
+        const scaled = (w / sum) * 100;
+        const floor = Math.floor(scaled * 100) / 100;
+        floors[i] = floor;
+        fracs.push({ i, frac: scaled - floor });
+    });
+    let remainderHundredths = Math.round((100 - Object.values(floors).reduce((a, b) => a + b, 0)) * 100);
+    fracs.sort((a, b) => b.frac - a.frac);
+    for (const { i } of fracs) {
+        if (remainderHundredths <= 0) break;
+        floors[i] = Math.round((floors[i] + 0.01) * 100) / 100;
+        remainderHundredths -= 1;
+    }
+    Object.entries(floors).forEach(([i, weight]) => {
+        list[Number(i)].weight = weight;
+    });
+    return list;
+}
+
+const SCORING_CATEGORY_ICONS = {
+    Momentum: (
+        <svg className="lido-strategy-category-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path fill="currentColor" d="M3.5 18.5 9 13l3.5 3.5L20.5 7.5 19 6l-6.5 8L9 10.5 2 17.5z" />
+            <path fill="currentColor" d="M14 6h6v6h-2V9.4l-6.3 6.3-1.4-1.4L16.6 8H14z" />
+        </svg>
+    ),
+    Trend: (
+        <svg className="lido-strategy-category-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path fill="currentColor" d="M4 18h2V9h3v9h2V6h3v12h2V8h3v10h1v2H3v-2h1z" />
+        </svg>
+    ),
+    Volume: (
+        <svg className="lido-strategy-category-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path fill="currentColor" d="M4 20h3V10H4zm6.5 0h3V4h-3zm6.5 0h3v-7h-3z" />
+        </svg>
+    ),
+    Market: (
+        <svg className="lido-strategy-category-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm7.4 9h-3.1a15.6 15.6 0 0 0-1.3-5.1A8 8 0 0 1 19.4 11zM12 4c.9 0 2.5 2.3 3.1 6H8.9C9.5 6.3 11.1 4 12 4zM4.6 13h3.1c.2 1.9.7 3.6 1.3 5.1A8 8 0 0 1 4.6 13zm3.1-2H4.6a8 8 0 0 1 4.4-5.1A15.6 15.6 0 0 0 7.7 11zm1.2 2h6.2c-.6 3.7-2.2 6-3.1 6s-2.5-2.3-3.1-6zm6.3 5.1c.6-1.5 1.1-3.2 1.3-5.1h3.1a8 8 0 0 1-4.4 5.1z" />
+        </svg>
+    ),
+    Risk: (
+        <svg className="lido-strategy-category-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path fill="currentColor" d="M12 2 2 21h20L12 2zm0 4.8 6.3 11.7H5.7L12 6.8zM11 10h2v5h-2zm0 6h2v2h-2z" />
+        </svg>
+    ),
+};
+
+function ScoringCategoryTitle({ category }) {
+    return (
+        <span className="lido-strategy-category-title">
+            {SCORING_CATEGORY_ICONS[category] || null}
+            <span>{category}</span>
+        </span>
+    );
+}
+
 const MARKET_PHASES = [
     'Strong Bull', 'Bull', 'Consolidation', 'Pullback', 'Correction', 'Bear', 'Capitulation', 'Recovery',
 ];
+
+function StrategySwitch({ id, checked, onChange, label = null, className = 'mb-0', ariaLabel = null, disabled = false }) {
+    return (
+        <div className={`form-check form-switch ${className}`.trim()}>
+            <input
+                className="form-check-input"
+                type="checkbox"
+                role="switch"
+                id={id}
+                checked={Boolean(checked)}
+                disabled={disabled}
+                onChange={(e) => onChange(e.target.checked)}
+                aria-label={ariaLabel || label || undefined}
+            />
+            {label ? (
+                <label className={`form-check-label${disabled ? ' text-muted' : ''}`} htmlFor={id}>{label}</label>
+            ) : null}
+        </div>
+    );
+}
 
 function emptyConfig() {
     return {
@@ -51,21 +143,22 @@ function applyPayload(payload, setMeta, setConfig) {
     setMeta({
         name: payload.name || 'Strategy',
         description: payload.description || '',
-        version: payload.version,
-        version_label: payload.version_label || (payload.version != null ? `${payload.version}.0` : null),
         modified_at: payload.modified_at,
         status: payload.status,
-        is_factory: Boolean(payload.is_factory),
-        is_protected: Boolean(payload.is_protected ?? payload.is_factory),
         enabled_indicator_count: payload.enabled_indicator_count ?? payload.enabled_factor_count,
         weight_total: payload.weight_total,
         weights_valid: payload.weights_valid,
     });
+    const rawIndicators = payload.scoring_model || payload.indicators || payload.config?.indicators || payload.factors || [];
     setConfig({
         ...emptyConfig(),
         ...(payload.config || {}),
         eligibility_sources: payload.eligibility_sources || payload.config?.eligibility_sources || [],
-        indicators: payload.scoring_model || payload.indicators || payload.config?.indicators || payload.factors || [],
+        indicators: rawIndicators.map((ind) => (
+            ind?.key === 'risk_score' && (ind.minimum == null || ind.minimum === '')
+                ? { ...ind, minimum: 0 }
+                : ind
+        )),
         thresholds: payload.thresholds || payload.config?.thresholds || {},
         portfolio_rules: payload.portfolio_rules || payload.config?.portfolio_rules || {},
         capital_allocation: payload.capital_allocation || payload.config?.capital_allocation || emptyConfig().capital_allocation,
@@ -80,29 +173,29 @@ function applyPayload(payload, setMeta, setConfig) {
 export default function StrategyPage() {
     const [section, setSection] = useState('general');
     const [saving, setSaving] = useState(false);
-    const [duplicating, setDuplicating] = useState(false);
     const [availableScreeners, setAvailableScreeners] = useState([]);
     const [meta, setMeta] = useState({
-        name: '', description: '', version: null, version_label: null,
-        modified_at: null, status: null, is_factory: false, is_protected: false,
+        name: '', description: '', modified_at: null, status: null,
     });
     const [config, setConfig] = useState(emptyConfig);
-    const [changeNotes, setChangeNotes] = useState('');
     const [addScreenerId, setAddScreenerId] = useState('');
+    const [benchmarkIndexes, setBenchmarkIndexes] = useState([]);
 
     const { loading, reload: load } = useApiGet({
         deps: [],
         errorFallback: 'Failed to load strategy',
         request: async () => {
-            const [{ data }, screenersRes] = await Promise.all([
+            const [{ data }, screenersRes, indexesRes] = await Promise.all([
                 api.get('/v1/strategy', { skipErrorToast: true }),
                 api.get('/screeners', { skipErrorToast: true }).catch(() => ({ data: [] })),
+                api.get('/indexes', { skipErrorToast: true }).catch(() => ({ data: {} })),
             ]);
             applyPayload(data?.data || {}, setMeta, setConfig);
             const list = Array.isArray(screenersRes?.data?.data)
                 ? screenersRes.data.data
                 : (Array.isArray(screenersRes?.data) ? screenersRes.data : []);
             setAvailableScreeners(list);
+            setBenchmarkIndexes(indexesRes?.data?.data?.indexes || []);
             return data?.data;
         },
     });
@@ -131,36 +224,42 @@ export default function StrategyPage() {
     );
 
     const save = async () => {
-        if (!weightsValid) {
-            showToast(`Enabled weights must sum to 100 (currently ${weightTotal}).`, 'danger');
+        const enabledPositive = (config.indicators || []).some(
+            (ind) => ind.enabled && Number(ind.weight || 0) > 0,
+        );
+        if (!enabledPositive) {
+            showToast('Enable at least one scoring factor with a positive weight.', 'danger');
             setSection('scoring');
             return;
         }
+
+        const didNormalize = !weightsValid;
+        const indicators = redistributeEnabledWeights(config.indicators || []);
+        if (didNormalize) {
+            setConfig((prev) => ({ ...prev, indicators }));
+        }
+
         setSaving(true);
         try {
             const { ok, data: payload } = await runApiMutation(async () => {
                 const { data } = await api.put('/v1/strategy', {
                     name: meta.name,
                     description: meta.description,
-                    change_notes: changeNotes || undefined,
                     config: {
                         ...config,
-                        indicators: config.indicators,
+                        indicators,
                         eligibility_sources: config.eligibility_sources,
                         exit_strategy: config.exit_strategy,
                         market_gates: config.market_gates,
                     },
                 }, { skipErrorToast: true });
                 const next = data?.data || {};
-                setChangeNotes('');
                 applyPayload(next, setMeta, setConfig);
                 return next;
             }, { errorFallback: 'Save failed' });
             if (ok && payload) {
                 showToast(
-                    meta.is_factory
-                        ? `Factory preserved. Custom strategy saved as ${payload.version_label || payload.version}`
-                        : `Strategy saved as version ${payload.version_label || payload.version}`,
+                    `Strategy saved${didNormalize ? ' (weights auto-normalised to 100)' : ''}`,
                     'success',
                 );
             }
@@ -169,34 +268,14 @@ export default function StrategyPage() {
         }
     };
 
-    const duplicate = async () => {
-        setDuplicating(true);
-        try {
-            const { ok } = await runApiMutation(async () => {
-                const { data } = await api.post('/v1/strategy/duplicate', {
-                    name: meta.is_factory ? 'Momentum Strategy (Custom)' : `${meta.name} (Copy)`,
-                }, { skipErrorToast: true });
-                applyPayload(data?.data || {}, setMeta, setConfig);
-            }, {
-                successMessage: 'Strategy duplicated. Customise the copy freely.',
-                errorFallback: 'Duplicate failed',
-            });
-            if (!ok) {
-                return;
-            }
-        } finally {
-            setDuplicating(false);
-        }
-    };
-
-    const updateIndicator = (key, patch) => {
+    const updateIndicator = useCallback((key, patch) => {
         setConfig((prev) => ({
             ...prev,
             indicators: (prev.indicators || []).map((row) => (row.key === key ? { ...row, ...patch } : row)),
         }));
-    };
+    }, []);
 
-    const updateIndicatorParam = (key, paramKey, value) => {
+    const updateIndicatorParam = useCallback((key, paramKey, value) => {
         setConfig((prev) => ({
             ...prev,
             indicators: (prev.indicators || []).map((row) => {
@@ -204,7 +283,202 @@ export default function StrategyPage() {
                 return { ...row, parameters: { ...(row.parameters || {}), [paramKey]: value } };
             }),
         }));
-    };
+    }, []);
+
+    const scoringColumns = useMemo(() => [
+        {
+            id: 'enabled',
+            accessorKey: 'enabled',
+            header: () => <span className="ps-3">On</span>,
+            size: 88,
+            minSize: 72,
+            maxSize: 120,
+            enableSorting: false,
+            cell: ({ row }) => (
+                <div className="ps-3">
+                    <StrategySwitch
+                        id={`score-on-${row.original.key}`}
+                        checked={Boolean(row.original.enabled)}
+                        onChange={(enabled) => updateIndicator(row.original.key, { enabled })}
+                        ariaLabel={`Enable ${row.original.display_name || row.original.key}`}
+                    />
+                </div>
+            ),
+        },
+        {
+            id: 'factor',
+            accessorKey: 'display_name',
+            header: 'Factor',
+            size: 260,
+            minSize: 160,
+            cell: ({ row }) => {
+                const disabled = !row.original.enabled;
+                return (
+                    <div className={disabled ? 'opacity-50' : undefined}>
+                        <div className="fw-semibold">{row.original.display_name}</div>
+                        <div className="text-muted small">{row.original.description}</div>
+                    </div>
+                );
+            },
+        },
+        {
+            id: 'weight',
+            accessorKey: 'weight',
+            header: 'Weight',
+            size: 180,
+            minSize: 150,
+            maxSize: 280,
+            cell: ({ row }) => {
+                const disabled = !row.original.enabled;
+                return (
+                    <NumberInput
+                        className="lido-number-input--compact"
+                        buttonVariant="secondary"
+                        step="1"
+                        min="0"
+                        allowDecimals={false}
+                        disabled={disabled}
+                        value={row.original.weight ?? ''}
+                        onChange={(e) => updateIndicator(row.original.key, {
+                            weight: e.target.value === '' ? 0 : Number(e.target.value),
+                        })}
+                        aria-label={`Weight for ${row.original.display_name || row.original.key}`}
+                    />
+                );
+            },
+        },
+        {
+            id: 'minimum',
+            accessorKey: 'minimum',
+            header: 'Min',
+            size: 180,
+            minSize: 150,
+            maxSize: 280,
+            cell: ({ row }) => {
+                const disabled = !row.original.enabled;
+                const isRisk = row.original.key === 'risk_score';
+                const minValue = row.original.minimum ?? (isRisk ? 0 : '');
+                return (
+                    <NumberInput
+                        className="lido-number-input--compact"
+                        buttonVariant="secondary"
+                        step="1"
+                        min="0"
+                        max="100"
+                        allowDecimals={false}
+                        disabled={disabled}
+                        value={minValue}
+                        onChange={(e) => updateIndicator(row.original.key, {
+                            minimum: e.target.value === '' ? null : Number(e.target.value),
+                        })}
+                        aria-label={`Minimum for ${row.original.display_name || row.original.key}`}
+                    />
+                );
+            },
+        },
+        {
+            id: 'maximum',
+            accessorKey: 'maximum',
+            header: 'Max',
+            size: 180,
+            minSize: 150,
+            maxSize: 280,
+            cell: ({ row }) => {
+                const disabled = !row.original.enabled;
+                if (!(row.original.supports_maximum || row.original.key === 'risk_score')) {
+                    return <span className="text-muted small">—</span>;
+                }
+                return (
+                    <NumberInput
+                        className="lido-number-input--compact"
+                        buttonVariant="secondary"
+                        step="1"
+                        min="0"
+                        max="100"
+                        allowDecimals={false}
+                        disabled={disabled}
+                        value={row.original.maximum ?? ''}
+                        onChange={(e) => updateIndicator(row.original.key, {
+                            maximum: e.target.value === '' ? null : Number(e.target.value),
+                        })}
+                        aria-label={`Maximum for ${row.original.display_name || row.original.key}`}
+                    />
+                );
+            },
+        },
+        {
+            id: 'parameters',
+            header: 'Parameters',
+            size: 320,
+            minSize: 200,
+            enableSorting: false,
+            cell: ({ row }) => {
+                const disabled = !row.original.enabled;
+                const params = row.original.parameters || {};
+                if (Object.keys(params).length === 0) {
+                    return <span className="text-muted small">—</span>;
+                }
+                const indexOptions = [...benchmarkIndexes];
+                return (
+                    <div className={`d-flex flex-wrap gap-2${disabled ? ' opacity-75' : ''}`}>
+                        {Object.entries(params).map(([paramKey, paramVal]) => {
+                            const label = paramKey.replaceAll('_', ' ');
+                            const isBenchmark = paramKey === 'benchmark' || paramKey.endsWith('_benchmark');
+                            if (isBenchmark) {
+                                const current = paramVal ?? '';
+                                const hasCurrent = indexOptions.some((idx) => idx.symbol === current);
+                                return (
+                                    <div key={paramKey} style={{ minWidth: 160 }}>
+                                        <div className="form-text mb-0 text-capitalize">{label}</div>
+                                        <select
+                                            className="form-select form-select-sm"
+                                            value={current}
+                                            disabled={disabled}
+                                            onChange={(e) => updateIndicatorParam(row.original.key, paramKey, e.target.value)}
+                                            aria-label={`${label} for ${row.original.display_name || row.original.key}`}
+                                        >
+                                            {!hasCurrent && current !== '' ? (
+                                                <option value={current}>{current}</option>
+                                            ) : null}
+                                            {current === '' ? <option value="">Select index…</option> : null}
+                                            {indexOptions.map((idx) => (
+                                                <option key={idx.symbol} value={idx.symbol}>
+                                                    {idx.symbol} — {idx.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                );
+                            }
+                            return (
+                                <div key={paramKey} style={{ minWidth: 120 }}>
+                                    <div className="form-text mb-0 text-capitalize">{label}</div>
+                                    <NumberInput
+                                        className="lido-number-input--compact"
+                                        buttonVariant="secondary"
+                                        step="1"
+                                        min="1"
+                                        allowDecimals={false}
+                                        disabled={disabled}
+                                        value={paramVal ?? ''}
+                                        onChange={(e) => {
+                                            const raw = e.target.value;
+                                            updateIndicatorParam(
+                                                row.original.key,
+                                                paramKey,
+                                                raw === '' ? '' : Number(raw),
+                                            );
+                                        }}
+                                        aria-label={`${label} for ${row.original.display_name || row.original.key}`}
+                                    />
+                                </div>
+                            );
+                        })}
+                    </div>
+                );
+            },
+        },
+    ], [benchmarkIndexes, updateIndicator, updateIndicatorParam]);
 
     const updateThreshold = (key, value) => {
         setConfig((prev) => ({ ...prev, thresholds: { ...prev.thresholds, [key]: value === '' ? '' : Number(value) } }));
@@ -230,29 +504,240 @@ export default function StrategyPage() {
         });
     };
 
-    const updateExitRule = (idx, patch) => {
-        setConfig((prev) => {
-            const rules = [...(prev.exit_strategy?.rules || [])];
-            rules[idx] = { ...rules[idx], ...patch };
-            return { ...prev, exit_strategy: { ...prev.exit_strategy, rules } };
-        });
-    };
+    const updateExitRule = useCallback((ruleKey, patch) => {
+        setConfig((prev) => ({
+            ...prev,
+            exit_strategy: {
+                ...prev.exit_strategy,
+                rules: (prev.exit_strategy?.rules || []).map((rule) => (
+                    rule.key === ruleKey ? { ...rule, ...patch } : rule
+                )),
+            },
+        }));
+    }, []);
 
-    const updateEligibility = (screenerId, patch) => {
+    const exitColumns = useMemo(() => [
+        {
+            id: 'enabled',
+            accessorKey: 'enabled',
+            header: () => <span className="ps-3">On</span>,
+            size: 88,
+            minSize: 72,
+            maxSize: 120,
+            enableSorting: false,
+            cell: ({ row }) => (
+                <div className="ps-3">
+                    <StrategySwitch
+                        id={`exit-rule-${row.original.key}`}
+                        checked={Boolean(row.original.enabled)}
+                        disabled={!config.exit_strategy?.enabled}
+                        onChange={(enabled) => updateExitRule(row.original.key, { enabled })}
+                        ariaLabel={`Enable ${row.original.display_name || row.original.key}`}
+                    />
+                </div>
+            ),
+        },
+        {
+            id: 'rule',
+            accessorFn: (row) => row.display_name || row.key,
+            header: 'Rule',
+            size: 360,
+            minSize: 200,
+            cell: ({ row }) => (
+                <>
+                    <div className="fw-semibold">{row.original.display_name || row.original.key}</div>
+                    <div className="text-muted small">{row.original.description}</div>
+                </>
+            ),
+        },
+        {
+            id: 'value',
+            header: 'Value',
+            size: 260,
+            minSize: 180,
+            maxSize: 360,
+            enableSorting: false,
+            cell: ({ row }) => {
+                const rule = row.original;
+                const disabled = !config.exit_strategy?.enabled;
+                if (rule.key === 'screener_exit') {
+                    const currentId = rule.screener_id != null ? String(rule.screener_id) : '';
+                    return (
+                        <select
+                            className="form-select form-select-sm"
+                            value={currentId}
+                            disabled={disabled || !rule.enabled}
+                            onChange={(e) => {
+                                const id = e.target.value ? Number(e.target.value) : null;
+                                const scr = availableScreeners.find((s) => Number(s.id) === Number(id));
+                                updateExitRule(rule.key, {
+                                    screener_id: id,
+                                    screener_name: scr?.name || null,
+                                });
+                            }}
+                            aria-label="Exit screener"
+                        >
+                            <option value="">Select screener…</option>
+                            {availableScreeners.map((s) => (
+                                <option key={s.id} value={s.id}>
+                                    {s.name}{s.is_factory ? ' (factory)' : ''}
+                                </option>
+                            ))}
+                        </select>
+                    );
+                }
+                if (rule.value != null || rule.atr_multiple != null) {
+                    return (
+                        <NumberInput
+                            className="lido-number-input--compact"
+                            buttonVariant="secondary"
+                            step="1"
+                            allowDecimals
+                            disabled={disabled || !rule.enabled}
+                            value={rule.atr_multiple ?? rule.value ?? ''}
+                            onChange={(e) => {
+                                const v = Number(e.target.value);
+                                if (rule.key === 'atr_stop') updateExitRule(rule.key, { atr_multiple: v });
+                                else updateExitRule(rule.key, { value: v });
+                            }}
+                            aria-label={`Value for ${rule.display_name || rule.key}`}
+                        />
+                    );
+                }
+                if (rule.params?.period != null) {
+                    return (
+                        <NumberInput
+                            className="lido-number-input--compact"
+                            buttonVariant="secondary"
+                            step="1"
+                            allowDecimals={false}
+                            disabled={disabled || !rule.enabled}
+                            value={rule.params.period}
+                            onChange={(e) => updateExitRule(rule.key, {
+                                params: { ...rule.params, period: Number(e.target.value) },
+                            })}
+                            aria-label={`Period for ${rule.display_name || rule.key}`}
+                        />
+                    );
+                }
+                return <span className="text-muted small">—</span>;
+            },
+        },
+    ], [availableScreeners, config.exit_strategy?.enabled, updateExitRule]);
+
+    const updateEligibility = useCallback((screenerId, patch) => {
         setConfig((prev) => ({
             ...prev,
             eligibility_sources: (prev.eligibility_sources || []).map((row) => (
                 Number(row.screener_id) === Number(screenerId) ? { ...row, ...patch } : row
             )),
         }));
-    };
+    }, []);
 
-    const removeEligibility = (screenerId) => {
+    const removeEligibility = useCallback((screenerId) => {
         setConfig((prev) => ({
             ...prev,
             eligibility_sources: (prev.eligibility_sources || []).filter((row) => Number(row.screener_id) !== Number(screenerId)),
         }));
-    };
+    }, []);
+
+    const eligibilityColumns = useMemo(() => [
+        {
+            id: 'enabled',
+            accessorKey: 'enabled',
+            header: 'On',
+            size: 72,
+            minSize: 64,
+            maxSize: 100,
+            enableSorting: false,
+            cell: ({ row }) => (
+                <StrategySwitch
+                    id={`elig-on-${row.original.screener_id}`}
+                    checked={Boolean(row.original.enabled)}
+                    onChange={(enabled) => updateEligibility(row.original.screener_id, { enabled })}
+                    ariaLabel={`Enable ${row.original.screener_name || `Screener #${row.original.screener_id}`}`}
+                />
+            ),
+        },
+        {
+            id: 'screener',
+            accessorFn: (row) => row.screener_name || `Screener #${row.screener_id}`,
+            header: 'Screener',
+            size: 280,
+            minSize: 160,
+            cell: ({ row }) => (
+                <>
+                    <div className="fw-semibold">{row.original.screener_name || `Screener #${row.original.screener_id}`}</div>
+                    <div className="text-muted small">{row.original.description || '—'}</div>
+                </>
+            ),
+        },
+        {
+            id: 'priority',
+            accessorKey: 'priority',
+            header: 'Priority',
+            size: 200,
+            minSize: 160,
+            maxSize: 320,
+            cell: ({ row }) => (
+                <NumberInput
+                    className="lido-number-input--compact"
+                    buttonVariant="secondary"
+                    step="1"
+                    min="1"
+                    allowDecimals={false}
+                    value={row.original.priority ?? 1}
+                    onChange={(e) => updateEligibility(row.original.screener_id, { priority: Number(e.target.value) })}
+                    aria-label={`Priority for ${row.original.screener_name || `Screener #${row.original.screener_id}`}`}
+                />
+            ),
+        },
+        {
+            id: 'conditions',
+            accessorKey: 'condition_count',
+            header: 'Conditions',
+            size: 160,
+            minSize: 120,
+            enableSorting: false,
+            cell: ({ row }) => {
+                const count = row.original.condition_count;
+                const label = count != null
+                    ? `${count} condition${Number(count) === 1 ? '' : 's'}`
+                    : 'Conditions';
+                return (
+                    <Link
+                        className="btn btn-link btn-sm px-0"
+                        to={`/screeners/${row.original.screener_id}`}
+                        title="Open screener"
+                    >
+                        {label}
+                        <span className="ms-1" aria-hidden="true">↗</span>
+                        <span className="visually-hidden"> (opens Screener page)</span>
+                    </Link>
+                );
+            },
+        },
+        {
+            id: 'actions',
+            header: '',
+            size: 110,
+            minSize: 96,
+            maxSize: 140,
+            enableSorting: false,
+            meta: { columnMenuLabel: 'Actions' },
+            cell: ({ row }) => (
+                <div className="text-end">
+                    <button
+                        type="button"
+                        className="btn btn-outline-danger btn-sm"
+                        onClick={() => removeEligibility(row.original.screener_id)}
+                    >
+                        Remove
+                    </button>
+                </div>
+            ),
+        },
+    ], [removeEligibility, updateEligibility]);
 
     const addEligibility = () => {
         const id = Number(addScreenerId);
@@ -285,51 +770,55 @@ export default function StrategyPage() {
             <div className="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
                 <div>
                     <h1 className="h3 mb-1">Strategy</h1>
+                    <p className="text-muted small mb-1">
+                        Strategy is a set of configurations. Based on these settings, recommended stocks appear on the{' '}
+                        <Link to="/recommendations">Recommendations</Link> tab after you run the decision pipeline.
+                    </p>
                     <p className="text-muted small mb-0">
                         Screeners select eligible stocks. Strategy scores, allocates, and exits — it does not redefine eligibility rules.
-                        {' '}
-                        <button type="button" className="btn btn-link btn-sm p-0 align-baseline" onClick={() => setSection('guide')}>
-                            Read the Guide
-                        </button>
-                        {' '}
-                        for the full walkthrough.
                     </p>
                 </div>
                 <div className="d-flex flex-wrap gap-2">
                     <Link className="btn btn-outline-secondary btn-sm" to="/screeners">Screeners</Link>
                     <Link className="btn btn-outline-secondary btn-sm" to="/recommendations">Recommendations</Link>
                     <button type="button" className="btn btn-outline-secondary btn-sm" onClick={load}>Refresh</button>
-                    <button type="button" className="btn btn-outline-primary btn-sm" onClick={duplicate} disabled={duplicating}>
-                        {duplicating ? 'Duplicating…' : 'Duplicate Strategy'}
-                    </button>
-                    <button type="button" className="btn btn-primary btn-sm" onClick={save} disabled={saving || !weightsValid}>
-                        {saving ? 'Saving…' : (meta.is_factory ? 'Save as custom strategy' : 'Save new version')}
+                    <button type="button" className="btn btn-primary btn-sm" onClick={save} disabled={saving}>
+                        {saving ? 'Saving…' : 'Save'}
                     </button>
                 </div>
             </div>
 
             <div className="card mb-3">
                 <div className="card-body py-3">
-                    <div className="row g-2 align-items-center">
+                    <div className="row g-2 align-items-start">
                         <div className="col-md-3">
                             <div className="text-muted small">Strategy Name</div>
                             <div className="fw-semibold">{meta.name}</div>
                         </div>
-                        <div className="col-md-2">
-                            <div className="text-muted small">Version</div>
-                            <div className="fw-semibold">{meta.version_label || meta.version || '—'}</div>
-                        </div>
-                        <div className="col-md-2">
-                            <div className="text-muted small">Factory Strategy</div>
-                            <div>{meta.is_factory ? <span className="badge text-bg-info">Yes — shipped default</span> : <span className="badge text-bg-secondary">No</span>}</div>
-                        </div>
-                        <div className="col-md-2">
-                            <div className="text-muted small">Current Status</div>
-                            <div className="fw-semibold text-capitalize">{meta.status || '—'}</div>
-                        </div>
                         <div className="col-md-3">
                             <div className="text-muted small">Last Modified</div>
                             <div className="fw-semibold">{meta.modified_at ? new Date(meta.modified_at).toLocaleString() : '—'}</div>
+                        </div>
+                        <div className="col-md-3">
+                            <div className="text-muted small">Eligibility sources</div>
+                            <div className="fw-semibold">
+                                {(config.eligibility_sources || []).filter((s) => s.enabled).map((s) => s.screener_name).join(', ') || 'None'}
+                            </div>
+                        </div>
+                        <div className="col-md-2">
+                            <div className="text-muted small">Weight total</div>
+                            <div className={`fw-semibold${weightsValid ? '' : ' text-warning'}`}>
+                                {Number(weightTotal.toFixed(2))}
+                                {weightsValid ? ' (valid)' : ' (auto-normalises on save)'}
+                            </div>
+                        </div>
+                        <div className="col-md-2">
+                            <div className="text-muted small">Exit strategy</div>
+                            <div className="fw-semibold">{config.exit_strategy?.enabled ? 'Enabled' : 'Disabled'}</div>
+                        </div>
+                        <div className="col-md-2">
+                            <div className="text-muted small">Market gates</div>
+                            <div className="fw-semibold">{config.market_gates?.enabled ? 'Enabled' : 'Disabled'}</div>
                         </div>
                     </div>
                 </div>
@@ -343,10 +832,6 @@ export default function StrategyPage() {
                 ))}
             </div>
 
-            {section === 'guide' && (
-                <StrategyGuideTab onOpenSection={setSection} />
-            )}
-
             {section === 'general' && (
                 <div className="card card-body row g-3">
                     <div className="col-md-6">
@@ -357,10 +842,9 @@ export default function StrategyPage() {
                         <label className="form-label" htmlFor="strat-desc">Description</label>
                         <textarea id="strat-desc" className="form-control" rows={3} value={meta.description} onChange={(e) => setMeta({ ...meta, description: e.target.value })} />
                     </div>
-                    <div className="col-12">
-                        <label className="form-label" htmlFor="strat-notes">Change notes</label>
-                        <input id="strat-notes" className="form-control" value={changeNotes} onChange={(e) => setChangeNotes(e.target.value)} />
-                    </div>
+                    <p className="col-12 text-muted small mb-0">
+                        Each portfolio has one strategy. It starts as Momentum with Minervini Trend Template eligibility; edit any tab and Save.
+                    </p>
                 </div>
             )}
 
@@ -372,7 +856,7 @@ export default function StrategyPage() {
                     </div>
                     <div className="card">
                         <div className="card-body">
-                            <div className="row g-2 align-items-end mb-3">
+                            <div className="row g-2 align-items-end">
                                 <div className="col-md-8">
                                     <label className="form-label">Add Screener</label>
                                     <select className="form-select" value={addScreenerId} onChange={(e) => setAddScreenerId(e.target.value)}>
@@ -388,129 +872,66 @@ export default function StrategyPage() {
                                     <button type="button" className="btn btn-outline-primary" onClick={addEligibility} disabled={!addScreenerId}>Add</button>
                                 </div>
                             </div>
-                            {(config.eligibility_sources || []).length === 0 ? (
-                                <p className="text-muted mb-0">No Screeners assigned. Assign at least one eligibility source for production use.</p>
-                            ) : (
-                                <div className="table-responsive">
-                                    <table className="table table-sm align-middle mb-0">
-                                        <thead>
-                                            <tr>
-                                                <th style={{ width: 70 }}>On</th>
-                                                <th>Screener</th>
-                                                <th style={{ width: 100 }}>Priority</th>
-                                                <th>Conditions</th>
-                                                <th />
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {(config.eligibility_sources || []).map((src) => (
-                                                <tr key={src.screener_id}>
-                                                    <td>
-                                                        <input type="checkbox" className="form-check-input" checked={Boolean(src.enabled)} onChange={(e) => updateEligibility(src.screener_id, { enabled: e.target.checked })} />
-                                                    </td>
-                                                    <td>
-                                                        <div className="fw-semibold">{src.screener_name || `Screener #${src.screener_id}`}</div>
-                                                        <div className="text-muted small">{src.description || '—'}</div>
-                                                    </td>
-                                                    <td>
-                                                        <NumberInput step="1" min="1" allowDecimals={false} value={src.priority ?? 1} onChange={(e) => updateEligibility(src.screener_id, { priority: Number(e.target.value) })} />
-                                                    </td>
-                                                    <td>
-                                                        <Link className="btn btn-link btn-sm px-0" to={`/screeners/${src.screener_id}`}>
-                                                            View conditions{src.condition_count != null ? ` (${src.condition_count})` : ''}
-                                                        </Link>
-                                                    </td>
-                                                    <td className="text-end">
-                                                        <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => removeEligibility(src.screener_id)}>Remove</button>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
                         </div>
                     </div>
+                    <DataTableCard
+                        title="Assigned Screeners"
+                        columns={eligibilityColumns}
+                        data={config.eligibility_sources || []}
+                        storageKey="strategy-eligibility-v1"
+                        emptyMessage="No Screeners assigned. Assign at least one eligibility source for production use."
+                        defaultColumnOrder={['enabled', 'screener', 'priority', 'conditions', 'actions']}
+                        initialSorting={[{ id: 'priority', desc: false }]}
+                        enableColumnResizing
+                    />
                 </div>
             )}
 
             {section === 'scoring' && (
                 <div className="d-flex flex-column gap-3">
                     <div className={`alert ${weightsValid ? 'alert-success' : 'alert-warning'} py-2 mb-0`}>
-                        <strong>Enabled weight total: {weightTotal}</strong>
-                        {weightsValid ? ' — valid (must equal 100).' : ' — must equal 100 before save. Weights are not normalised automatically.'}
+                        <strong>Enabled weight total: {Number(weightTotal.toFixed(2))}</strong>
+                        {weightsValid
+                            ? ' — equals 100.'
+                            : ' — will auto-normalise to 100 on Save (relative proportions kept).'}
+                        {!weightsValid && (
+                            <button
+                                type="button"
+                                className="btn btn-sm btn-outline-secondary ms-2"
+                                onClick={() => setConfig((prev) => ({
+                                    ...prev,
+                                    indicators: redistributeEnabledWeights(prev.indicators || []),
+                                }))}
+                            >
+                                Normalise now
+                            </button>
+                        )}
                     </div>
                     <p className="text-muted small mb-0">Only eligible Screener candidates are scored. Scoring factors are not eligibility filters.</p>
                     {CATEGORY_ORDER.filter((cat) => grouped[cat]?.length).map((category) => (
-                        <div className="card" key={category}>
-                            <div className="card-header fw-semibold">{category}</div>
-                            <div className="card-body p-0">
-                                <div className="table-responsive">
-                                    <table className="table table-sm align-middle mb-0">
-                                        <thead>
-                                            <tr>
-                                                <th style={{ width: 70 }}>On</th>
-                                                <th>Factor</th>
-                                                <th className="text-end" style={{ width: 110 }}>Weight</th>
-                                                <th className="text-end" style={{ width: 110 }}>Min</th>
-                                                <th className="text-end" style={{ width: 110 }}>Max</th>
-                                                <th>Parameters</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {grouped[category].map((ind) => (
-                                                <tr key={ind.key}>
-                                                    <td>
-                                                        <input type="checkbox" className="form-check-input" checked={Boolean(ind.enabled)} onChange={(e) => updateIndicator(ind.key, { enabled: e.target.checked })} />
-                                                    </td>
-                                                    <td>
-                                                        <div className="fw-semibold">{ind.display_name}</div>
-                                                        <div className="text-muted small">{ind.description}</div>
-                                                    </td>
-                                                    <td>
-                                                        <NumberInput step="1" min="0" allowDecimals={false} value={ind.weight ?? ''} onChange={(e) => updateIndicator(ind.key, { weight: e.target.value === '' ? 0 : Number(e.target.value) })} />
-                                                    </td>
-                                                    <td>
-                                                        <NumberInput step="1" min="0" max="100" allowDecimals={false} value={ind.minimum ?? ''} onChange={(e) => updateIndicator(ind.key, { minimum: e.target.value === '' ? null : Number(e.target.value) })} />
-                                                    </td>
-                                                    <td>
-                                                        {ind.supports_maximum || ind.key === 'risk_score' ? (
-                                                            <NumberInput step="1" min="0" max="100" allowDecimals={false} value={ind.maximum ?? ''} onChange={(e) => updateIndicator(ind.key, { maximum: e.target.value === '' ? null : Number(e.target.value) })} />
-                                                        ) : <span className="text-muted small">—</span>}
-                                                    </td>
-                                                    <td>
-                                                        {Object.keys(ind.parameters || {}).length === 0 ? <span className="text-muted small">—</span> : (
-                                                            <div className="d-flex flex-wrap gap-2">
-                                                                {Object.entries(ind.parameters || {}).map(([paramKey, paramVal]) => (
-                                                                    <div key={paramKey} style={{ minWidth: 100 }}>
-                                                                        <div className="form-text mb-0 text-capitalize">{paramKey.replaceAll('_', ' ')}</div>
-                                                                        <input
-                                                                            className="form-control form-control-sm"
-                                                                            value={paramVal ?? ''}
-                                                                            onChange={(e) => {
-                                                                                const raw = e.target.value;
-                                                                                const num = Number(raw);
-                                                                                updateIndicatorParam(ind.key, paramKey, raw !== '' && !Number.isNaN(num) && String(num) === raw ? num : raw);
-                                                                            }}
-                                                                        />
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
+                        <DataTableCard
+                            key={category}
+                            title={<ScoringCategoryTitle category={category} />}
+                            columns={scoringColumns}
+                            data={grouped[category]}
+                            storageKey="strategy-scoring-v1"
+                            emptyMessage="No factors in this category."
+                            defaultColumnOrder={['enabled', 'factor', 'weight', 'minimum', 'maximum', 'parameters']}
+                            enableColumnResizing
+                            bodyClassName="p-0"
+                        />
                     ))}
                 </div>
             )}
 
             {section === 'thresholds' && (
                 <div className="card card-body">
+                    <p className="text-muted small mb-3">
+                        These cutoffs are compared against the strategy&apos;s <strong>overall score (0–100)</strong> —
+                        the weighted blend of enabled Scoring Model factors for each eligible stock.
+                        Higher thresholds open / increase positions; lower thresholds reduce / exit.
+                        Watch marks ideas that are interesting but not strong enough for a funded trade action.
+                    </p>
                     <div className="row g-3">
                         {[
                             ['minimum_overall_score', 'Minimum Overall Score'],
@@ -522,7 +943,14 @@ export default function StrategyPage() {
                         ].map(([key, label]) => (
                             <div className="col-md-4" key={key}>
                                 <label className="form-label">{label}</label>
-                                <NumberInput step="1" allowDecimals={false} value={config.thresholds?.[key] ?? ''} onChange={(e) => updateThreshold(key, e.target.value)} />
+                                <NumberInput
+                                    step="1"
+                                    allowDecimals={false}
+                                    buttonVariant="secondary"
+                                    value={config.thresholds?.[key] ?? ''}
+                                    onChange={(e) => updateThreshold(key, e.target.value)}
+                                />
+                                <div className="form-text">Score points (0–100)</div>
                             </div>
                         ))}
                     </div>
@@ -542,7 +970,13 @@ export default function StrategyPage() {
                         ].map(([key, label]) => (
                             <div className="col-md-4" key={key}>
                                 <label className="form-label">{label}</label>
-                                <NumberInput step="1" allowDecimals={false} value={config.portfolio_rules?.[key] ?? ''} onChange={(e) => updatePortfolioRule(key, e.target.value)} />
+                                <NumberInput
+                                    step="1"
+                                    allowDecimals={false}
+                                    buttonVariant="secondary"
+                                    value={config.portfolio_rules?.[key] ?? ''}
+                                    onChange={(e) => updatePortfolioRule(key, e.target.value)}
+                                />
                             </div>
                         ))}
                         <div className="col-12"><hr /><div className="fw-semibold small">Behaviour</div></div>
@@ -553,10 +987,12 @@ export default function StrategyPage() {
                             ['allow_averaging_down', 'Allow averaging down'],
                         ].map(([key, label]) => (
                             <div className="col-md-6" key={key}>
-                                <div className="form-check">
-                                    <input className="form-check-input" type="checkbox" id={`beh-${key}`} checked={Boolean(config.recommendation_behaviour?.[key])} onChange={(e) => updateBehaviour(key, e.target.checked)} />
-                                    <label className="form-check-label" htmlFor={`beh-${key}`}>{label}</label>
-                                </div>
+                                <StrategySwitch
+                                    id={`beh-${key}`}
+                                    checked={Boolean(config.recommendation_behaviour?.[key])}
+                                    onChange={(enabled) => updateBehaviour(key, enabled)}
+                                    label={label}
+                                />
                             </div>
                         ))}
                     </div>
@@ -590,9 +1026,33 @@ export default function StrategyPage() {
                         <tbody>
                             {(config.capital_allocation?.score_bands || []).map((band, idx) => (
                                 <tr key={idx}>
-                                    <td><NumberInput step="1" allowDecimals={false} value={band.min ?? ''} onChange={(e) => updateBand(idx, { min: Number(e.target.value) })} /></td>
-                                    <td><NumberInput step="1" allowDecimals={false} value={band.max ?? ''} onChange={(e) => updateBand(idx, { max: Number(e.target.value) })} /></td>
-                                    <td><NumberInput step="1" allowDecimals={false} value={band.allocation_pct ?? ''} onChange={(e) => updateBand(idx, { allocation_pct: Number(e.target.value) })} /></td>
+                                    <td>
+                                        <NumberInput
+                                            step="1"
+                                            allowDecimals={false}
+                                            buttonVariant="secondary"
+                                            value={band.min ?? ''}
+                                            onChange={(e) => updateBand(idx, { min: Number(e.target.value) })}
+                                        />
+                                    </td>
+                                    <td>
+                                        <NumberInput
+                                            step="1"
+                                            allowDecimals={false}
+                                            buttonVariant="secondary"
+                                            value={band.max ?? ''}
+                                            onChange={(e) => updateBand(idx, { max: Number(e.target.value) })}
+                                        />
+                                    </td>
+                                    <td>
+                                        <NumberInput
+                                            step="1"
+                                            allowDecimals={false}
+                                            buttonVariant="secondary"
+                                            value={band.allocation_pct ?? ''}
+                                            onChange={(e) => updateBand(idx, { allocation_pct: Number(e.target.value) })}
+                                        />
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
@@ -601,52 +1061,34 @@ export default function StrategyPage() {
             )}
 
             {section === 'exit' && (
-                <div className="card card-body">
-                    <div className="form-check mb-3">
-                        <input className="form-check-input" type="checkbox" id="exit-enabled" checked={Boolean(config.exit_strategy?.enabled)} onChange={(e) => setConfig((prev) => ({ ...prev, exit_strategy: { ...prev.exit_strategy, enabled: e.target.checked } }))} />
-                        <label className="form-check-label" htmlFor="exit-enabled">Exit strategy enabled</label>
+                <div className="d-flex flex-column gap-3">
+                    <div className="card card-body py-3">
+                        <StrategySwitch
+                            id="exit-enabled"
+                            className="mb-2"
+                            checked={Boolean(config.exit_strategy?.enabled)}
+                            onChange={(enabled) => setConfig((prev) => ({
+                                ...prev,
+                                exit_strategy: { ...prev.exit_strategy, enabled },
+                            }))}
+                            label="Exit strategy enabled"
+                        />
+                        <p className="text-muted small mb-0">
+                            Exit rules use Evaluation facts on existing holdings. Enable <strong>Screener Exit</strong> and pick a screener —
+                            any open holding that appears in that screener&apos;s latest results gets an Exit recommendation.
+                            Eligibility condition trees still live in the Screener module.
+                        </p>
                     </div>
-                    <p className="text-muted small">Exit rules use Evaluation facts on existing holdings. Condition editing for eligibility remains in Screeners.</p>
-                    <div className="table-responsive">
-                        <table className="table table-sm align-middle">
-                            <thead>
-                                <tr>
-                                    <th style={{ width: 70 }}>On</th>
-                                    <th>Rule</th>
-                                    <th style={{ width: 120 }}>Value</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {(config.exit_strategy?.rules || []).map((rule, idx) => (
-                                    <tr key={rule.key || idx}>
-                                        <td>
-                                            <input type="checkbox" className="form-check-input" checked={Boolean(rule.enabled)} onChange={(e) => updateExitRule(idx, { enabled: e.target.checked })} />
-                                        </td>
-                                        <td>
-                                            <div className="fw-semibold">{rule.display_name || rule.key}</div>
-                                            <div className="text-muted small">{rule.description}</div>
-                                        </td>
-                                        <td>
-                                            {rule.value != null || rule.atr_multiple != null ? (
-                                                <NumberInput
-                                                    step="1"
-                                                    allowDecimals
-                                                    value={rule.atr_multiple ?? rule.value ?? ''}
-                                                    onChange={(e) => {
-                                                        const v = Number(e.target.value);
-                                                        if (rule.key === 'atr_stop') updateExitRule(idx, { atr_multiple: v });
-                                                        else updateExitRule(idx, { value: v });
-                                                    }}
-                                                />
-                                            ) : (rule.params?.period != null ? (
-                                                <NumberInput step="1" allowDecimals={false} value={rule.params.period} onChange={(e) => updateExitRule(idx, { params: { ...rule.params, period: Number(e.target.value) } })} />
-                                            ) : <span className="text-muted small">—</span>)}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                    <DataTableCard
+                        title="Exit rules"
+                        columns={exitColumns}
+                        data={config.exit_strategy?.rules || []}
+                        storageKey="strategy-exit-v1"
+                        emptyMessage="No exit rules configured."
+                        defaultColumnOrder={['enabled', 'rule', 'value']}
+                        enableColumnResizing
+                        bodyClassName="p-0"
+                    />
                 </div>
             )}
 
@@ -654,75 +1096,82 @@ export default function StrategyPage() {
                 <div className="card card-body">
                     <p className="text-muted small">
                         Optional gates consume Market Analysis Engine outputs. Recommendation Engine never recalculates market metrics.
+                        When gates are off, sentiment / phase / risk cutoffs are ignored during recommendation generation.
                     </p>
-                    <div className="form-check mb-3">
-                        <input
-                            className="form-check-input"
-                            type="checkbox"
-                            id="market-gates-enabled"
-                            checked={Boolean(config.market_gates?.enabled)}
-                            onChange={(e) => setConfig((prev) => ({
-                                ...prev,
-                                market_gates: { ...prev.market_gates, enabled: e.target.checked },
-                            }))}
-                        />
-                        <label className="form-check-label" htmlFor="market-gates-enabled">Enable market gates</label>
-                    </div>
-                    <div className="row g-3">
-                        <div className="col-md-4">
-                            <label className="form-label">Min sentiment</label>
-                            <NumberInput
-                                step="1"
-                                allowDecimals={false}
-                                value={config.market_gates?.min_sentiment ?? ''}
-                                onChange={(e) => setConfig((prev) => ({
-                                    ...prev,
-                                    market_gates: { ...prev.market_gates, min_sentiment: Number(e.target.value) },
-                                }))}
-                            />
-                        </div>
-                        <div className="col-md-4">
-                            <label className="form-label">Max risk (raw)</label>
-                            <NumberInput
-                                step="1"
-                                allowDecimals={false}
-                                value={config.market_gates?.max_risk_raw ?? ''}
-                                onChange={(e) => setConfig((prev) => ({
-                                    ...prev,
-                                    market_gates: { ...prev.market_gates, max_risk_raw: Number(e.target.value) },
-                                }))}
-                            />
-                        </div>
-                        <div className="col-12">
-                            <label className="form-label">Allowed phases</label>
-                            <div className="d-flex flex-wrap gap-3">
-                                {MARKET_PHASES.map((phase) => {
-                                    const selected = (config.market_gates?.allowed_phases || []).includes(phase);
-                                    return (
-                                        <div className="form-check" key={phase}>
-                                            <input
-                                                className="form-check-input"
-                                                type="checkbox"
-                                                id={`phase-${phase}`}
-                                                checked={selected}
-                                                onChange={(e) => setConfig((prev) => {
-                                                    const current = prev.market_gates?.allowed_phases || [];
-                                                    const next = e.target.checked
-                                                        ? [...new Set([...current, phase])]
-                                                        : current.filter((p) => p !== phase);
-                                                    return {
-                                                        ...prev,
-                                                        market_gates: { ...prev.market_gates, allowed_phases: next },
-                                                    };
-                                                })}
-                                            />
-                                            <label className="form-check-label" htmlFor={`phase-${phase}`}>{phase}</label>
-                                        </div>
-                                    );
-                                })}
+                    <StrategySwitch
+                        id="market-gates-enabled"
+                        className="mb-3"
+                        checked={Boolean(config.market_gates?.enabled)}
+                        onChange={(enabled) => setConfig((prev) => ({
+                            ...prev,
+                            market_gates: { ...prev.market_gates, enabled },
+                        }))}
+                        label="Enable market gates"
+                    />
+                    {(() => {
+                        const gatesDisabled = !config.market_gates?.enabled;
+                        return (
+                            <div className={`row g-3${gatesDisabled ? ' opacity-75' : ''}`}>
+                                <div className="col-md-4">
+                                    <label className="form-label" htmlFor="market-min-sentiment">Min sentiment</label>
+                                    <NumberInput
+                                        id="market-min-sentiment"
+                                        step="1"
+                                        allowDecimals={false}
+                                        buttonVariant="secondary"
+                                        disabled={gatesDisabled}
+                                        value={config.market_gates?.min_sentiment ?? ''}
+                                        onChange={(e) => setConfig((prev) => ({
+                                            ...prev,
+                                            market_gates: { ...prev.market_gates, min_sentiment: Number(e.target.value) },
+                                        }))}
+                                    />
+                                </div>
+                                <div className="col-md-4">
+                                    <label className="form-label" htmlFor="market-max-risk">Max risk (raw)</label>
+                                    <NumberInput
+                                        id="market-max-risk"
+                                        step="1"
+                                        allowDecimals={false}
+                                        buttonVariant="secondary"
+                                        disabled={gatesDisabled}
+                                        value={config.market_gates?.max_risk_raw ?? ''}
+                                        onChange={(e) => setConfig((prev) => ({
+                                            ...prev,
+                                            market_gates: { ...prev.market_gates, max_risk_raw: Number(e.target.value) },
+                                        }))}
+                                    />
+                                </div>
+                                <div className="col-12">
+                                    <label className="form-label">Allowed phases</label>
+                                    <div className="d-flex flex-wrap gap-3">
+                                        {MARKET_PHASES.map((phase) => {
+                                            const selected = (config.market_gates?.allowed_phases || []).includes(phase);
+                                            return (
+                                                <StrategySwitch
+                                                    key={phase}
+                                                    id={`phase-${phase}`}
+                                                    checked={selected}
+                                                    disabled={gatesDisabled}
+                                                    onChange={(enabled) => setConfig((prev) => {
+                                                        const current = prev.market_gates?.allowed_phases || [];
+                                                        const next = enabled
+                                                            ? [...new Set([...current, phase])]
+                                                            : current.filter((p) => p !== phase);
+                                                        return {
+                                                            ...prev,
+                                                            market_gates: { ...prev.market_gates, allowed_phases: next },
+                                                        };
+                                                    })}
+                                                    label={phase}
+                                                />
+                                            );
+                                        })}
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                    </div>
+                        );
+                    })()}
                 </div>
             )}
 
@@ -737,28 +1186,15 @@ export default function StrategyPage() {
                             ['release_on_expiry', 'Release on expiry'],
                         ].map(([key, label]) => (
                             <div className="col-md-6" key={key}>
-                                <div className="form-check">
-                                    <input className="form-check-input" type="checkbox" id={`cash-${key}`} checked={Boolean(config.cash_rules?.[key])} onChange={(e) => updateCashRule(key, e.target.checked)} />
-                                    <label className="form-check-label" htmlFor={`cash-${key}`}>{label}</label>
-                                </div>
+                                <StrategySwitch
+                                    id={`cash-${key}`}
+                                    checked={Boolean(config.cash_rules?.[key])}
+                                    onChange={(enabled) => updateCashRule(key, enabled)}
+                                    label={label}
+                                />
                             </div>
                         ))}
                     </div>
-                </div>
-            )}
-
-            {section === 'summary' && (
-                <div className="card card-body">
-                    <dl className="row mb-0">
-                        <dt className="col-sm-3">Strategy Name</dt><dd className="col-sm-9">{meta.name}</dd>
-                        <dt className="col-sm-3">Version</dt><dd className="col-sm-9">{meta.version_label || meta.version || '—'}</dd>
-                        <dt className="col-sm-3">Factory</dt><dd className="col-sm-9">{meta.is_factory ? 'Yes' : 'No'}</dd>
-                        <dt className="col-sm-3">Eligibility sources</dt>
-                        <dd className="col-sm-9">{(config.eligibility_sources || []).filter((s) => s.enabled).map((s) => s.screener_name).join(', ') || 'None'}</dd>
-                        <dt className="col-sm-3">Weight total</dt><dd className="col-sm-9">{weightTotal}{weightsValid ? ' (valid)' : ''}</dd>
-                        <dt className="col-sm-3">Exit strategy</dt><dd className="col-sm-9">{config.exit_strategy?.enabled ? 'Enabled' : 'Disabled'}</dd>
-                        <dt className="col-sm-3">Market gates</dt><dd className="col-sm-9">{config.market_gates?.enabled ? 'Enabled' : 'Disabled'}</dd>
-                    </dl>
                 </div>
             )}
         </div>

@@ -148,4 +148,51 @@ class NsePriceProviderTest extends TestCase
         $this->assertCount(1, $rows);
         $this->assertSame('2025-12-24', $rows[0]['price_date']);
     }
+
+    public function test_india_vix_charting_rows_scaled_by_100_are_normalized(): void
+    {
+        Http::fake([
+            'charting.nseindia.com/*' => Http::sequence()
+                ->push('', 200)
+                ->push([
+                    'status' => true,
+                    'data' => [[
+                        'symbol' => 'INDIA VIX',
+                        'scripcode' => '26011',
+                        'description' => 'INDIA VIX',
+                    ]],
+                ], 200)
+                ->push([
+                    'status' => true,
+                    'data' => [[
+                        'time' => Carbon::parse('2026-07-28')->startOfDay()->timestamp * 1000,
+                        'open' => 1266.0,
+                        'high' => 1282.0,
+                        'low' => 1172.25,
+                        'close' => 1264.5,
+                        'volume' => 0,
+                    ]],
+                ], 200),
+        ]);
+
+        $catalog = Mockery::mock(\App\Services\IndexCatalogService::class);
+        $catalog->shouldReceive('nseChartingNameForSymbol')
+            ->with('INDIAVIX')
+            ->andReturn('INDIA VIX');
+        $this->app->instance(\App\Services\IndexCatalogService::class, $catalog);
+
+        $settings = Mockery::mock(SettingsService::class);
+        $settings->shouldReceive('get')->with('nse_retry_count')->andReturn('1');
+
+        $provider = new NsePriceProvider($settings);
+        $rows = $provider->fetchHistorical(
+            'INDIAVIX',
+            Carbon::parse('2026-07-28'),
+            Carbon::parse('2026-07-28'),
+        );
+
+        $this->assertCount(1, $rows);
+        $this->assertEqualsWithDelta(12.645, $rows[0]['close_price'], 0.0001);
+        $this->assertEqualsWithDelta(12.66, $rows[0]['open_price'], 0.0001);
+    }
 }

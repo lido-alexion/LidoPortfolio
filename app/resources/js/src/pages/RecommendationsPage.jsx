@@ -340,7 +340,7 @@ export default function RecommendationsPage() {
                                     {formatPct(opinion?.confidence ?? selected.confidence)}
                                     {' · Score '}
                                     {selected.strategy_score ?? selected.score ?? '—'}
-                                    {selected.strategy_version != null ? ` · Strategy v${selected.strategy_version}` : ''}
+                                    {selected.strategy_name ? ` · ${selected.strategy_name}` : ''}
                                 </p>
 
                                 {(selected.factor_breakdown || selected.evidence?.factor_breakdown)?.length ? (

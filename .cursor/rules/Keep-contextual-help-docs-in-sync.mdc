@@ -1,0 +1,32 @@
+---
+description: Keep in-app contextual help docs synchronized with feature changes
+alwaysApply: true
+---
+
+# Keep contextual help docs in sync
+
+When changing product behavior, keep the in-app help system fully updated in the same session.
+
+## Required updates on feature change
+
+If you create, modify, rename, or remove any user-facing feature/page/control:
+
+1. Update `app/resources/js/src/data/appDocumentation.js`:
+   - `summary` and `overview` for affected topics
+   - `controls` (buttons, toggles, workflows, validations)
+   - `concepts` (what numbers/states mean)
+   - `related` links and route aliases/keywords
+2. If routes changed, update mapping behavior in:
+   - `app/resources/js/src/utils/documentationLinks.js`
+   - route matching entries in `appDocumentation.js`
+3. Keep docs accurate for add/change/delete:
+   - Added feature → add/expand topic
+   - Changed behavior → revise existing text
+   - Removed feature → remove/replace stale docs references
+4. Ensure docs stay practical and detailed (not one-line placeholders).
+5. Update `implementation.md` to note the documentation-sync changes made.
+
+## Validation
+
+- Run frontend checks/build after substantial docs/schema edits.
+- Never leave outdated help text that contradicts current UI behavior.

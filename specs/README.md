@@ -33,7 +33,8 @@ specs/
 │   ├── 03-Core-Concepts.md
 │   ├── 04-System-Architecture.md
 │   ├── 05-Daily-Decision-Pipeline.md
-│   └── 06-Engine-Overview.md
+│   ├── 06-Engine-Overview.md
+│   └── 07-Trading-OS-Pages-and-Flow.md   (UI page map + recommendation path)
 │
 ├── engines/                           【 INTENT — contracts & engines 】
 │   ├── System-Domain-Model.md
@@ -87,8 +88,9 @@ specs/
 2. [architecture/02-Guiding-Principles.md](architecture/02-Guiding-Principles.md)  
 3. [architecture/03-Core-Concepts.md](architecture/03-Core-Concepts.md)  
 4. [architecture/04-System-Architecture.md](architecture/04-System-Architecture.md)  
-5. [architecture/05-Daily-Decision-Pipeline.md](architecture/05-Daily-Decision-Pipeline.md)  
-6. [architecture/06-Engine-Overview.md](architecture/06-Engine-Overview.md)  
+5. [architecture/05-Daily-Decision-Pipeline.md](architecture/05-Daily-Decision-Pipeline.md)
+6. [architecture/06-Engine-Overview.md](architecture/06-Engine-Overview.md)
+7. [architecture/07-Trading-OS-Pages-and-Flow.md](architecture/07-Trading-OS-Pages-and-Flow.md)
 7. [engines/System-Domain-Model.md](engines/System-Domain-Model.md)  
 8. [engines/Database-Schema-Specification.md](engines/Database-Schema-Specification.md)  
 9. [engines/REST-API-Specification.md](engines/REST-API-Specification.md)  

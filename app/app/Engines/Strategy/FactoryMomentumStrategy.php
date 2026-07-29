@@ -5,19 +5,18 @@ namespace App\Engines\Strategy;
 use App\Engines\Strategy\SupportedIndicators;
 
 /**
- * Shipped factory Momentum Strategy defaults (SD-029).
- * Weights sum to exactly 100 (Relative Strength kept at 35; other proposed
- * weights trimmed so activation validation passes without silent normalisation).
+ * Default Momentum / Minervini strategy config (SD-029).
+ * Seeded once per portfolio; editable in place (no version fork).
  */
 final class FactoryMomentumStrategy
 {
-    public const NAME = 'Momentum Strategy';
+    public const NAME = 'Minervini Strategy';
 
     public const VERSION_LABEL = '1.0';
 
     public const FACTORY_KEY = 'momentum_factory';
 
-    public const DESCRIPTION = 'Default momentum investing strategy provided with the application.';
+    public const DESCRIPTION = 'Default strategy: Minervini Trend Template eligibility with momentum scoring, thresholds, allocation, and exits.';
 
     /**
      * @return array<string, mixed>
@@ -189,7 +188,7 @@ final class FactoryMomentumStrategy
             SupportedIndicators::RISK_SCORE => [
                 'enabled' => true,
                 'weight' => 3,
-                'minimum' => null,
+                'minimum' => 0,
                 'maximum' => 40,
                 'parameters' => [],
             ],

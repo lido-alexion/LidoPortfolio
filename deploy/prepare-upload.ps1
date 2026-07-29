@@ -52,6 +52,7 @@ Copy-Item (Join-Path $PSScriptRoot 'cpanel-config-cache.php') (Join-Path $stagin
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-repair-tos-schema.php') (Join-Path $staging 'portfolio/cpanel-repair-tos-schema.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-backfill-sell-realizations.php') (Join-Path $staging 'portfolio/cpanel-backfill-sell-realizations.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-repair-corporate-action-prices.php') (Join-Path $staging 'portfolio/cpanel-repair-corporate-action-prices.php') -Force
+Copy-Item (Join-Path $PSScriptRoot 'cpanel-repair-indiavix-scale.php') (Join-Path $staging 'portfolio/cpanel-repair-indiavix-scale.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-mobile-debug.php') (Join-Path $staging 'portfolio/cpanel-mobile-debug.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-ping.php') (Join-Path $staging 'portfolio/cpanel-ping.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-api-probe.php') (Join-Path $staging 'portfolio/cpanel-api-probe.php') -Force

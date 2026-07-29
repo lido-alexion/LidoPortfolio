@@ -448,13 +448,13 @@ This register is the authoritative record of **why Version 1.0 differs** from th
 |-------|---------|
 | **Category** | Architecture / Strategy |
 | **Original Design** | Empty or legacy-config-seeded strategy requiring operators to tune every weight, threshold, and rule before usable recommendations |
-| **Decision** | Ship a protected **factory Momentum Strategy 1.0** with production-ready defaults (indicators, thresholds, portfolio / capital / cash rules, behaviour). Factory is not edited in place; **Duplicate Strategy** or save-on-factory forks an editable custom strategy while preserving the factory baseline |
-| **Why opinionated defaults** | Installation must be immediately usable after market data import — empty strategy configuration is a barrier, not flexibility. Defaults are starting points; all values remain editable on user copies |
-| **Weight integrity** | Enabled indicator weights must sum to exactly **100**; UI shows total; activation/save blocked when invalid; **no silent normalisation** |
-| **Migration Impact** | Migration `2026_07_26_000010_*`: `is_factory`, `factory_key`, `duplicated_from_id`, `version_label`. Seeder `FactoryMomentumStrategySeeder`; `ensureActive` seeds factory when no active strategy |
-| **Spec** | [`../engines/Strategy-Configuration-Specification.md`](../engines/Strategy-Configuration-Specification.md) § Default Factory Strategy |
+| **Decision (amended 2026-07-29)** | Ship one **default Minervini Strategy** per portfolio (Minervini Trend Template eligibility + momentum scoring defaults). **Save updates that strategy in place** — no version fork, no Duplicate, no protected factory copy. Internal `portfolio_tos_strategy_versions` row still holds `config_json` for FK stability (`strategy_version_id` on recommendations) but the UI exposes a single editable strategy |
+| **Why opinionated defaults** | Installation must be immediately usable after market data import — empty strategy configuration is a barrier, not flexibility. Defaults are starting points; all values remain editable |
+| **Weight integrity** | Enabled indicator weights must sum to exactly **100** after save. UI shows the live total; when the total is not 100, Save auto-normalises enabled weights proportionally (largest-remainder, 2 d.p.). Optional **Normalise now** previews the scaled values. Save is blocked only when no enabled factor has a positive weight |
+| **Migration Impact** | Migration `2026_07_26_000010_*`: `is_factory`, `factory_key`, `duplicated_from_id`, `version_label` retained for seed idempotency. Seeder `FactoryMomentumStrategySeeder`; `ensureActive` seeds default when no active strategy. `POST /strategy/duplicate` removed |
+| **Spec** | [`../engines/Strategy-Configuration-Specification.md`](../engines/Strategy-Configuration-Specification.md) § Default Strategy |
 | **Relationship** | Extends SD-027 / SD-028 |
-| **Status** | Accepted |
+| **Status** | Accepted (amended) |
 
 ---
 

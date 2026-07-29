@@ -101,21 +101,44 @@ class StrategyConfigurationServiceTest extends TestCase
         $config = $svc->defaultConfig();
         $this->assertEqualsWithDelta(100.0, $svc->enabledWeightTotal($config), 0.01);
         $svc->validateConfig($svc->normalizeConfig($config));
-        $this->assertSame('Momentum Strategy', \App\Engines\Strategy\FactoryMomentumStrategy::NAME);
+        $this->assertSame('Minervini Strategy', \App\Engines\Strategy\FactoryMomentumStrategy::NAME);
     }
 
-    public function test_validate_rejects_weight_sum_not_100(): void
+    public function test_normalize_config_auto_normalizes_enabled_weights_to_100(): void
     {
         $svc = app(StrategyConfigurationService::class);
         $config = $svc->normalizeConfig([]);
         foreach ($config['indicators'] as &$ind) {
             if ($ind['key'] === SupportedIndicators::RELATIVE_STRENGTH) {
-                $ind['weight'] = 99;
+                $ind['weight'] = 50; // factory RS is 35 → total becomes 115
             }
         }
         unset($ind);
 
-        $this->expectException(\Illuminate\Validation\ValidationException::class);
-        $svc->validateConfig($config);
+        $normalized = $svc->normalizeConfig($config);
+        $this->assertEqualsWithDelta(100.0, $svc->enabledWeightTotal($normalized), 0.01);
+        $svc->validateConfig($normalized);
+
+        $afterRs = null;
+        foreach ($normalized['indicators'] as $ind) {
+            if ($ind['key'] === SupportedIndicators::RELATIVE_STRENGTH) {
+                $afterRs = (float) $ind['weight'];
+            }
+        }
+        $this->assertEqualsWithDelta((50 / 115) * 100, $afterRs, 0.05);
+    }
+
+    public function test_redistribute_enabled_weights_scales_proportions(): void
+    {
+        $svc = app(StrategyConfigurationService::class);
+        $indicators = [
+            ['key' => 'a', 'enabled' => true, 'weight' => 30],
+            ['key' => 'b', 'enabled' => true, 'weight' => 10],
+            ['key' => 'c', 'enabled' => false, 'weight' => 99],
+        ];
+        $out = $svc->redistributeEnabledWeights($indicators);
+        $this->assertEqualsWithDelta(75.0, $out[0]['weight'], 0.01);
+        $this->assertEqualsWithDelta(25.0, $out[1]['weight'], 0.01);
+        $this->assertSame(99.0, (float) $out[2]['weight']);
     }
 }

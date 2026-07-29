@@ -25,7 +25,9 @@ class NotificationEngine
     ) {}
 
     /**
-     * Queue + deliver notifications for active recommendations (idempotent per recommendation+channel).
+     * Queue + deliver notifications for actionable recommendations only
+     * (OPEN / INCREASE / REDUCE / EXIT). HOLD / WATCH insights are skipped.
+     * Idempotent per recommendation+channel.
      *
      * @param  list<TradingRecommendation>|null  $recommendations
      * @return list<TosNotification>
@@ -36,6 +38,7 @@ class NotificationEngine
             ->with('security')
             ->forProfile($profile)
             ->where('status', 'active')
+            ->actionableTypes()
             ->orderByDesc('priority')
             ->limit(20)
             ->get()
@@ -43,6 +46,9 @@ class NotificationEngine
 
         $delivered = [];
         foreach ($recommendations as $rec) {
+            if (! $rec->isActionable()) {
+                continue;
+            }
             $delivered[] = $this->queueAndSend($profile, $rec);
         }
 

@@ -9,6 +9,7 @@ use App\Services\PriceProviders\AlphaVantagePriceProvider;
 use App\Services\PriceProviders\BseBhavcopyPriceProvider;
 use App\Services\PriceProviders\NsePriceProvider;
 use App\Services\PriceProviders\YahooPriceProvider;
+use App\Support\IndiaVixScale;
 use App\Support\TradingCalendar;
 use Carbon\Carbon;
 
@@ -113,6 +114,11 @@ class PriceFetchService
         if ($stock && $stock->is_benchmark) {
             if (strtoupper((string) $stock->exchange) === 'BSE') {
                 return ['yahoo', 'alpha_vantage'];
+            }
+
+            // Yahoo is more stable for India VIX; NSE charting occasionally returns ×100 scaled bars.
+            if (strtoupper((string) $stock->symbol) === 'INDIAVIX') {
+                return ['yahoo', 'nse', 'alpha_vantage'];
             }
 
             return ['nse', 'yahoo', 'alpha_vantage'];
@@ -255,6 +261,10 @@ class PriceFetchService
             $priceDate = Carbon::parse($row['price_date'])->startOfDay();
             if (! TradingCalendar::isEquitySessionDate($priceDate)) {
                 continue;
+            }
+
+            if (IndiaVixScale::isIndiaVixSymbol($stock->symbol)) {
+                $row = IndiaVixScale::normalizeRow($row);
             }
 
             StockPrice::query()->updateOrCreate(

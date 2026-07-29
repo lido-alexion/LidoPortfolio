@@ -15,6 +15,7 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Strategy Configuration (SD-027 / SD-028 / SD-029 / SD-030).
+ * One editable strategy per portfolio (default Momentum + Minervini eligibility).
  * Scoring + portfolio rules; eligibility via Screeners (not duplicated conditions).
  */
 class StrategyConfigurationService
@@ -64,7 +65,8 @@ class StrategyConfigurationService
     }
 
     /**
-     * Create the protected factory Momentum Strategy (idempotent per profile).
+     * Create the default Momentum / Minervini strategy (idempotent per profile).
+     * Editable in place — not protected after seed.
      */
     public function seedFactoryStrategy(PortfolioProfile $profile): TradingStrategy
     {
@@ -136,7 +138,7 @@ class StrategyConfigurationService
                 'version_label' => FactoryMomentumStrategy::VERSION_LABEL,
                 'config_json' => $config,
                 'status' => TradingStrategyVersion::STATUS_ACTIVE,
-                'change_notes' => 'Factory Momentum Strategy 1.0 — eligibility: Minervini Trend Template',
+                'change_notes' => 'Default Momentum Strategy — eligibility: Minervini Trend Template',
                 'activated_at' => now(),
             ]);
 
@@ -159,74 +161,8 @@ class StrategyConfigurationService
     }
 
     /**
-     * Duplicate the active strategy (or a specific strategy) into an editable copy.
-     * Factory remains untouched; copy becomes active.
+     * Update the single active strategy in place (no version fork, no duplicate).
      *
-     * @param  array<string, mixed>|null  $configOverride
-     */
-    public function duplicateStrategy(
-        PortfolioProfile $profile,
-        ?int $strategyId = null,
-        ?string $name = null,
-        ?array $configOverride = null,
-        ?string $changeNotes = null,
-    ): array {
-        $source = $strategyId
-            ? TradingStrategy::query()->where('profile_id', $profile->id)->findOrFail($strategyId)
-            : TradingStrategy::query()->findOrFail($this->ensureActive($profile)->strategy_id);
-
-        $sourceVersion = $source->activeVersion
-            ?? TradingStrategyVersion::query()->findOrFail($source->active_version_id);
-
-        $baseConfig = $this->normalizeConfig($sourceVersion->config_json ?? []);
-        if ($configOverride !== null) {
-            $baseConfig = $this->normalizeConfig(array_replace_recursive($baseConfig, $configOverride));
-            if (isset($configOverride['indicators'])) {
-                $baseConfig = $this->normalizeConfig(array_merge($baseConfig, ['indicators' => $configOverride['indicators']]));
-            }
-        }
-        $this->validateConfig($baseConfig);
-
-        $copyName = $name !== null && trim($name) !== ''
-            ? trim($name)
-            : ($source->is_factory
-                ? FactoryMomentumStrategy::NAME.' (Custom)'
-                : $source->name.' (Copy)');
-
-        return DB::transaction(function () use ($profile, $source, $baseConfig, $copyName, $changeNotes) {
-            TradingStrategy::query()
-                ->where('profile_id', $profile->id)
-                ->where('status', TradingStrategy::STATUS_ACTIVE)
-                ->update(['status' => TradingStrategy::STATUS_ARCHIVED]);
-
-            $copy = TradingStrategy::query()->create([
-                'profile_id' => $profile->id,
-                'name' => $copyName,
-                'description' => $source->description,
-                'status' => TradingStrategy::STATUS_ACTIVE,
-                'is_factory' => false,
-                'factory_key' => null,
-                'duplicated_from_id' => $source->id,
-            ]);
-
-            $version = TradingStrategyVersion::query()->create([
-                'strategy_id' => $copy->id,
-                'version' => 1,
-                'version_label' => '1.0',
-                'config_json' => $baseConfig,
-                'status' => TradingStrategyVersion::STATUS_ACTIVE,
-                'change_notes' => $changeNotes ?? 'Duplicated from '.($source->is_factory ? 'factory strategy' : $source->name),
-                'activated_at' => now(),
-            ]);
-
-            $copy->forceFill(['active_version_id' => $version->id])->save();
-            $this->eligibility->syncStrategyScreeners($version, $baseConfig['eligibility_sources'] ?? []);
-
-            return $this->serializeStrategy($copy->fresh(), $version);
-        });
-    }
-
-    /**
      * @param  array<string, mixed>  $config
      */
     public function updateActiveConfig(
@@ -241,44 +177,26 @@ class StrategyConfigurationService
         $version = $this->ensureActive($profile);
         $strategy = TradingStrategy::query()->findOrFail($version->strategy_id);
 
-        // Factory is protected: save forks into a new editable strategy.
-        if ($strategy->is_factory) {
-            return $this->duplicateStrategy(
-                $profile,
-                $strategy->id,
-                $name !== null && trim($name) !== '' ? trim($name) : FactoryMomentumStrategy::NAME.' (Custom)',
-                $normalized,
-                $changeNotes ?? 'Customised from factory Momentum Strategy 1.0',
-            );
-        }
-
-        return DB::transaction(function () use ($strategy, $normalized, $name, $description, $changeNotes) {
-            TradingStrategyVersion::query()
-                ->where('strategy_id', $strategy->id)
-                ->where('status', TradingStrategyVersion::STATUS_ACTIVE)
-                ->update(['status' => TradingStrategyVersion::STATUS_SUPERSEDED]);
-
-            $next = ((int) TradingStrategyVersion::query()->where('strategy_id', $strategy->id)->max('version')) + 1;
-            $newVersion = TradingStrategyVersion::query()->create([
-                'strategy_id' => $strategy->id,
-                'version' => $next,
-                'version_label' => $next.'.0',
+        return DB::transaction(function () use ($strategy, $version, $normalized, $name, $description, $changeNotes) {
+            $version->forceFill([
                 'config_json' => $normalized,
-                'status' => TradingStrategyVersion::STATUS_ACTIVE,
                 'change_notes' => $changeNotes,
-                'activated_at' => now(),
-            ]);
+                'status' => TradingStrategyVersion::STATUS_ACTIVE,
+                'activated_at' => $version->activated_at ?? now(),
+            ])->save();
 
             $strategy->forceFill([
                 'name' => $name !== null && trim($name) !== '' ? trim($name) : $strategy->name,
                 'description' => $description !== null ? $description : $strategy->description,
                 'status' => TradingStrategy::STATUS_ACTIVE,
-                'active_version_id' => $newVersion->id,
+                'active_version_id' => $version->id,
+                // Once the user saves, it is their working strategy (still seedable via factory_key).
+                'is_factory' => false,
             ])->save();
 
-            $this->eligibility->syncStrategyScreeners($newVersion, $normalized['eligibility_sources'] ?? []);
+            $this->eligibility->syncStrategyScreeners($version, $normalized['eligibility_sources'] ?? []);
 
-            return $this->serializeStrategy($strategy->fresh(), $newVersion);
+            return $this->serializeStrategy($strategy->fresh(), $version->fresh());
         });
     }
 
@@ -496,6 +414,9 @@ class StrategyConfigurationService
         $exitRules = is_array($exitIncoming['rules'] ?? null)
             ? $exitIncoming['rules']
             : ($exitBase['rules'] ?? ExitStrategyEvaluator::defaultRules());
+        $exitRules = ExitStrategyEvaluator::mergeWithDefaults(is_array($exitRules) ? $exitRules : []);
+
+        $indicators = $this->redistributeEnabledWeights($indicators);
 
         return [
             'eligibility_sources' => $eligibility,
@@ -610,23 +531,73 @@ class StrategyConfigurationService
             throw ValidationException::withMessages(['indicators' => ['At least one enabled indicator must have a positive weight.']]);
         }
 
-        // Exact 100 — do not silently normalise.
+        // Persist path always runs redistributeEnabledWeights via normalizeConfig first.
+        // Keep a soft check for callers that skip normalizeConfig.
         if (abs($weightSum - 100.0) > 0.01) {
-            $delta = round($weightSum - 100.0, 2);
-            $list = collect($enabled)
-                ->map(fn ($e) => $e['display_name'].' ('.$e['weight'].')')
-                ->implode(', ');
-            $hint = $delta > 0
-                ? "Reduce enabled weights by {$delta} points."
-                : 'Increase enabled weights by '.abs($delta).' points.';
-
             throw ValidationException::withMessages([
                 'indicators' => [
-                    "Enabled indicator weights must sum to exactly 100 (current total: {$weightSum}). {$hint} Enabled: {$list}. Weights are not normalised automatically.",
+                    "Enabled indicator weights must sum to 100 after normalisation (current total: {$weightSum}). Call normalizeConfig before validateConfig.",
                 ],
                 'weight_total' => [$weightSum],
             ]);
         }
+    }
+
+    /**
+     * Scale enabled indicator weights so they sum to exactly 100 (2 d.p., largest-remainder).
+     * Disabled rows keep their stored weight unchanged. No-op when already ~100 or sum ≤ 0.
+     *
+     * @param  list<array<string, mixed>>  $indicators
+     * @return list<array<string, mixed>>
+     */
+    public function redistributeEnabledWeights(array $indicators): array
+    {
+        $enabledIndexes = [];
+        $sum = 0.0;
+        foreach ($indicators as $i => $indicator) {
+            if (! ($indicator['enabled'] ?? false)) {
+                continue;
+            }
+            $w = max(0.0, (float) ($indicator['weight'] ?? 0));
+            $enabledIndexes[] = $i;
+            $sum += $w;
+        }
+
+        if ($enabledIndexes === [] || $sum <= 0.0) {
+            return $indicators;
+        }
+
+        if (abs($sum - 100.0) <= 0.01) {
+            return $indicators;
+        }
+
+        $floors = [];
+        $fracs = [];
+        foreach ($enabledIndexes as $i) {
+            $w = max(0.0, (float) ($indicators[$i]['weight'] ?? 0));
+            $scaled = ($w / $sum) * 100.0;
+            $floor = floor($scaled * 100) / 100;
+            $floors[$i] = $floor;
+            $fracs[$i] = $scaled - $floor;
+        }
+
+        $floorSum = array_sum($floors);
+        $remainderHundredths = (int) round((100.0 - $floorSum) * 100);
+
+        arsort($fracs, SORT_NUMERIC);
+        foreach (array_keys($fracs) as $i) {
+            if ($remainderHundredths <= 0) {
+                break;
+            }
+            $floors[$i] = round($floors[$i] + 0.01, 2);
+            $remainderHundredths--;
+        }
+
+        foreach ($floors as $i => $weight) {
+            $indicators[$i]['weight'] = $weight;
+        }
+
+        return $indicators;
     }
 
     public function enabledIndicatorCount(array $config): int
@@ -677,7 +648,7 @@ class StrategyConfigurationService
             'description' => $strategy->description,
             'status' => $strategy->status,
             'is_factory' => (bool) $strategy->is_factory,
-            'is_protected' => (bool) $strategy->is_factory,
+            'is_protected' => false,
             'factory_key' => $strategy->factory_key,
             'duplicated_from_id' => $strategy->duplicated_from_id,
             'version' => $version->version,

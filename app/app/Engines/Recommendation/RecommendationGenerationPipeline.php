@@ -192,6 +192,9 @@ class RecommendationGenerationPipeline
         $eligibleSet = array_fill_keys($eligibility['eligible_security_ids'] ?? [], true);
         $eligibilityRestricted = in_array($eligibility['mode'] ?? 'unrestricted', ['screener_union'], true);
 
+        $exitConfig = is_array($config['exit_strategy'] ?? null) ? $config['exit_strategy'] : [];
+        $exitScreenerHits = $this->eligibility->resolveExitScreenerHits($profile, $exitConfig);
+
         $heldQty = Holding::query()
             ->where('profile_id', $profile->id)
             ->where('quantity', '>', 0)
@@ -249,6 +252,8 @@ class RecommendationGenerationPipeline
             'eligibility' => $eligibility,
             'eligible_set' => $eligibleSet,
             'eligibility_restricted' => $eligibilityRestricted,
+            'exit_screener_hits_by_screener' => $exitScreenerHits['by_screener'] ?? [],
+            'exit_screener_meta' => $exitScreenerHits['meta'] ?? [],
             'held_qty' => $heldQty,
             'portfolio_value' => $portfolioValue,
             'allocation_by_stock' => $allocationByStock,
@@ -337,10 +342,12 @@ class RecommendationGenerationPipeline
                 $exitEval = ExitStrategyEvaluator::evaluate(
                     is_array($config['exit_strategy'] ?? null) ? $config['exit_strategy'] : [],
                     [
+                        'security_id' => $securityId,
                         'overall_score' => $score,
                         'indicator_scores' => is_array($factorScores) ? $factorScores : [],
                         'indicators' => $result->evidence['indicators'] ?? [],
                         'unrealized_pnl_pct' => $holdingMeta['unrealized_pnl_pct'] ?? null,
+                        'exit_screener_hits_by_screener' => $ctx['exit_screener_hits_by_screener'] ?? [],
                     ]
                 );
             }
@@ -448,6 +455,125 @@ class RecommendationGenerationPipeline
                 'risk' => $risk,
                 'factor_scores' => $factorScores,
             ];
+        }
+
+        $drafts = $this->appendScreenerExitOnlyDrafts($drafts, $ctx);
+
+        return $drafts;
+    }
+
+    /**
+     * Create EXIT drafts for holdings that hit Screener Exit but were not in the evaluation result set.
+     *
+     * @param  list<array<string, mixed>>  $drafts
+     * @param  array<string, mixed>  $ctx
+     * @return list<array<string, mixed>>
+     */
+    protected function appendScreenerExitOnlyDrafts(array $drafts, array $ctx): array
+    {
+        $config = $ctx['config'] ?? [];
+        $exitConfig = is_array($config['exit_strategy'] ?? null) ? $config['exit_strategy'] : [];
+        if (! ($exitConfig['enabled'] ?? true)) {
+            return $drafts;
+        }
+
+        $screenerRules = array_values(array_filter(
+            is_array($exitConfig['rules'] ?? null) ? $exitConfig['rules'] : [],
+            static fn ($rule) => is_array($rule)
+                && ($rule['key'] ?? '') === 'screener_exit'
+                && ($rule['enabled'] ?? false)
+                && (int) ($rule['screener_id'] ?? 0) > 0
+        ));
+        if ($screenerRules === []) {
+            return $drafts;
+        }
+
+        $processed = [];
+        foreach ($drafts as $draft) {
+            $processed[(int) ($draft['security_id'] ?? 0)] = true;
+        }
+
+        $heldQty = $ctx['held_qty'] ?? [];
+        $allocationByStock = $ctx['allocation_by_stock'] ?? [];
+        $eligibility = $ctx['eligibility'] ?? [];
+        $eligibleSet = $ctx['eligible_set'] ?? [];
+        $eligibilityRestricted = (bool) ($ctx['eligibility_restricted'] ?? false);
+        $maxPct = (float) ($ctx['max_pct'] ?? 10);
+        $portfolioValue = (float) ($ctx['portfolio_value'] ?? 0);
+
+        foreach ($heldQty as $stockId => $qty) {
+            $securityId = (int) $stockId;
+            $qtyHeld = (float) $qty;
+            if ($securityId < 1 || $qtyHeld <= 0 || isset($processed[$securityId])) {
+                continue;
+            }
+
+            $exitEval = ExitStrategyEvaluator::evaluate(
+                [
+                    'enabled' => true,
+                    'mode' => 'any',
+                    'rules' => $screenerRules,
+                ],
+                [
+                    'security_id' => $securityId,
+                    'exit_screener_hits_by_screener' => $ctx['exit_screener_hits_by_screener'] ?? [],
+                ]
+            );
+            if (! ($exitEval['triggered'] ?? false)) {
+                continue;
+            }
+
+            $holdingMeta = $allocationByStock[$securityId] ?? null;
+            $currentAlloc = $holdingMeta ? (float) $holdingMeta['allocation_pct'] : 0.0;
+            $referencePrice = $holdingMeta['latest_close'] ?? null;
+            if ($referencePrice === null || $referencePrice <= 0) {
+                $referencePrice = $this->latestClose($securityId);
+            }
+            $isEligible = ! $eligibilityRestricted || isset($eligibleSet[$securityId]);
+            $opinion = [
+                'direction' => 'SELL',
+                'strength' => 'moderate',
+                'confidence' => 0.7,
+                'score' => 0.0,
+                'evidence' => ['source' => 'screener_exit'],
+            ];
+            $action = TradingRecommendation::ACTION_EXIT_POSITION;
+            $plan = $this->buildExecutionPlan(
+                $action,
+                $portfolioValue,
+                $currentAlloc,
+                0.0,
+                $maxPct,
+                $qtyHeld,
+                is_numeric($referencePrice) ? (float) $referencePrice : null,
+                TradingRecommendation::RISK_MEDIUM,
+            );
+
+            $drafts[] = [
+                'key' => 'screener-exit-'.$securityId,
+                'result' => null,
+                'security_id' => $securityId,
+                'score' => 0.0,
+                'strategy_breakdown' => [],
+                'confidence' => 0.7,
+                'qty_held' => $qtyHeld,
+                'is_held' => true,
+                'is_eligible' => $isEligible,
+                'screener_explain' => $this->eligibility->explainForSecurity($eligibility, $securityId),
+                'exit_eval' => $exitEval,
+                'current_alloc' => $currentAlloc,
+                'target_alloc' => 0.0,
+                'suggested_alloc' => 0.0,
+                'reference_price' => $referencePrice,
+                'opinion' => $opinion,
+                'action' => $action,
+                'plan' => $plan,
+                'position_size' => $plan['suggested_investment_amount'] ?? null,
+                'priority' => 90,
+                'risk' => TradingRecommendation::RISK_MEDIUM,
+                'factor_scores' => [],
+            ];
+            $processed[$securityId] = true;
         }
 
         return $drafts;
@@ -564,6 +690,7 @@ class RecommendationGenerationPipeline
     {
         $maxConcurrent = $ctx['max_concurrent'];
         $strategyVersion = $ctx['strategy_version'];
+        $strategy = $ctx['strategy'] ?? null;
         $eligibility = $ctx['eligibility'];
         $market = $ctx['market'];
         $marketAllowsEntry = $ctx['market_allows_entry'];
@@ -640,6 +767,7 @@ class RecommendationGenerationPipeline
                 'strategy_score' => $draft['score'],
                 'strategy_version_id' => $strategyVersion->id,
                 'strategy_version' => $strategyVersion->version,
+                'strategy_name' => $strategy->name ?? 'Strategy',
                 'eligibility' => [
                     'mode' => $eligibility['mode'] ?? 'unrestricted',
                     'is_eligible' => (bool) ($draft['is_eligible'] ?? true),
@@ -651,12 +779,12 @@ class RecommendationGenerationPipeline
                     'breakdown' => $draft['strategy_breakdown'],
                 ],
                 'exit_strategy' => $draft['exit_eval'] ?? ['status' => 'Not Triggered'],
-                'rank' => $draft['result']->rank,
-                'passed_rules' => $draft['result']->passed_rules,
-                'failed_rules' => $draft['result']->failed_rules,
-                'indicators' => $draft['result']->evidence['indicators'] ?? [],
+                'rank' => $draft['result']?->rank,
+                'passed_rules' => $draft['result']?->passed_rules ?? [],
+                'failed_rules' => $draft['result']?->failed_rules ?? [],
+                'indicators' => $draft['result']?->evidence['indicators'] ?? [],
                 'factor_scores' => $draft['factor_scores'],
-                'discovery' => $draft['result']->evidence['discovery'] ?? [],
+                'discovery' => $draft['result']?->evidence['discovery'] ?? [],
                 'held' => $draft['is_held'],
                 'market_opinion' => $draft['opinion'],
                 'portfolio_action' => $action,
@@ -676,7 +804,7 @@ class RecommendationGenerationPipeline
 
             $created[] = TradingRecommendation::query()->create([
                 'profile_id' => $profile->id,
-                'evaluation_result_id' => $draft['result']->id,
+                'evaluation_result_id' => $draft['result']?->id,
                 'strategy_version_id' => $strategyVersion->id,
                 'security_id' => $draft['security_id'],
                 'recommendation_type' => $action,
@@ -694,7 +822,7 @@ class RecommendationGenerationPipeline
                 'suggested_allocation_pct' => round($suggestedAlloc, 4),
                 'status' => TradingRecommendation::initialStatusForAction($action),
                 'evidence' => $evidence,
-                'failed_checks' => $draft['result']->failed_rules ?? [],
+                'failed_checks' => $draft['result']?->failed_rules ?? [],
                 'reasoning' => $reasoning,
                 'cash_balance_at_generation' => $cashSummary['cash_balance'],
                 'reserved_cash_at_generation' => $cashSummary['reserved_cash'],

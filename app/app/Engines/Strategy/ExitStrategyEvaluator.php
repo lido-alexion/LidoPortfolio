@@ -97,6 +97,19 @@ final class ExitStrategyEvaluator
                         $detail = "Trailing proxy: unrealized {$unrealizedPct}% ≤ -{$trail}%";
                     }
                     break;
+                case 'screener_exit':
+                    $screenerId = (int) ($rule['screener_id'] ?? 0);
+                    $securityId = (int) ($context['security_id'] ?? 0);
+                    $byScreener = is_array($context['exit_screener_hits_by_screener'] ?? null)
+                        ? $context['exit_screener_hits_by_screener']
+                        : [];
+                    $hitIds = $byScreener[$screenerId] ?? [];
+                    if ($screenerId > 0 && $securityId > 0 && in_array($securityId, $hitIds, true)) {
+                        $hit = true;
+                        $screenerName = (string) ($rule['screener_name'] ?? ('Screener #'.$screenerId));
+                        $detail = "Holding appears in exit screener \"{$screenerName}\" results";
+                    }
+                    break;
                 default:
                     break;
             }
@@ -177,6 +190,51 @@ final class ExitStrategyEvaluator
                 'enabled' => false,
                 'value' => 10,
             ],
+            [
+                'key' => 'screener_exit',
+                'display_name' => 'Screener Exit',
+                'description' => 'Exit the holding when it appears in the selected screener\'s latest completed results.',
+                'enabled' => false,
+                'screener_id' => null,
+                'screener_name' => null,
+            ],
         ];
+    }
+
+    /**
+     * Ensure catalogue exit rules exist while preserving user overrides.
+     *
+     * @param  list<array<string, mixed>>  $rules
+     * @return list<array<string, mixed>>
+     */
+    public static function mergeWithDefaults(array $rules): array
+    {
+        $byKey = [];
+        foreach ($rules as $rule) {
+            if (! is_array($rule)) {
+                continue;
+            }
+            $key = (string) ($rule['key'] ?? '');
+            if ($key === '') {
+                continue;
+            }
+            $byKey[$key] = $rule;
+        }
+
+        $merged = [];
+        foreach (self::defaultRules() as $default) {
+            $key = $default['key'];
+            $merged[] = isset($byKey[$key])
+                ? array_merge($default, $byKey[$key], ['key' => $key])
+                : $default;
+            unset($byKey[$key]);
+        }
+
+        // Preserve any unknown custom rules after catalogue defaults.
+        foreach ($byKey as $rule) {
+            $merged[] = $rule;
+        }
+
+        return $merged;
     }
 }

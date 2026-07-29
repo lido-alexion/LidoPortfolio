@@ -4,6 +4,7 @@ namespace App\Services\PriceProviders;
 
 use App\Contracts\PriceProviderInterface;
 use App\Services\SettingsService;
+use App\Support\IndiaVixScale;
 use App\Support\NseChartingHttpClient;
 use App\Support\NseHttpClient;
 use Carbon\Carbon;
@@ -215,6 +216,9 @@ class NsePriceProvider implements PriceProviderInterface
 
                 $mapped = $this->mapChartingRow($row);
                 if ($mapped !== null) {
+                    if (strcasecmp($chartingName, 'INDIA VIX') === 0) {
+                        $mapped = IndiaVixScale::normalizeRow($mapped);
+                    }
                     $rows[$mapped['price_date']] = $mapped;
                 }
             }

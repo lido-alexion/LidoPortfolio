@@ -174,7 +174,7 @@ final class SupportedIndicators
                 'supports_maximum' => true,
                 'default_enabled' => true,
                 'default_weight' => 3,
-                'default_minimum' => null,
+                'default_minimum' => 0,
                 'default_maximum' => 40,
                 'parameters' => [
                     'atr_period' => ['type' => 'integer', 'label' => 'ATR Period', 'default' => 14],

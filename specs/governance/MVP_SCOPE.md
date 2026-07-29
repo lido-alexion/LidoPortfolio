@@ -113,10 +113,10 @@ Version 1.0 is **not** automated brokerage, multi-strategy isolation, or a green
 - Versioned Strategy config: scoring, thresholds, portfolio rules,
   capital allocation, cash rules, exit strategy, recommendation behaviour
 - **Eligibility via Screeners only** (SD-030) — Strategy references Screener IDs
-- **Factory Momentum Strategy 1.0** + factory **Minervini Trend Template** Screener
-- Enabled scoring weights must sum to exactly **100** (no silent normalisation)
-- Strategy UI (`/strategy`) with Eligibility Sources, Scoring, Exit, Duplicate
-- APIs: `/api/v1/strategy*`, `POST /strategy/duplicate`, `PUT /strategy/screeners`
+- **Factory Minervini Strategy** (default seed) + Minervini Trend Template Screener
+- Enabled scoring weights must sum to exactly **100** (auto-normalised on save)
+- Strategy UI (`/strategy`) — one editable strategy; Save in place
+- APIs: `/api/v1/strategy*`, `PUT /strategy/screeners`
 
 ### Frontend
 

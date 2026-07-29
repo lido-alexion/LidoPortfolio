@@ -131,11 +131,13 @@ class PriceFetchServiceTest extends TestCase
         $nse = new \App\Models\Stock(['symbol' => 'INFY', 'exchange' => 'NSE']);
         $nifty = new \App\Models\Stock(['symbol' => 'NIFTY50', 'exchange' => 'NSE', 'is_benchmark' => true]);
         $sensex = new \App\Models\Stock(['symbol' => 'SENSEX', 'exchange' => 'BSE', 'is_benchmark' => true]);
+        $vix = new \App\Models\Stock(['symbol' => 'INDIAVIX', 'exchange' => 'NSE', 'is_benchmark' => true]);
 
         $this->assertSame(['bse_bhavcopy', 'yahoo', 'alpha_vantage'], $service->providerChainForStock($bse));
         $this->assertSame(['nse', 'yahoo', 'alpha_vantage'], $service->providerChainForStock($nse));
         $this->assertSame(['nse', 'yahoo', 'alpha_vantage'], $service->providerChainForStock($nifty));
         $this->assertSame(['yahoo', 'alpha_vantage'], $service->providerChainForStock($sensex));
+        $this->assertSame(['yahoo', 'nse', 'alpha_vantage'], $service->providerChainForStock($vix));
     }
 
     public function test_yahoo_tries_bo_when_ns_returns_no_rows(): void

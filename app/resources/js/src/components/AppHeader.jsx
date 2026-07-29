@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import HeaderHelpButton from './HeaderHelpButton';
 import ProfileMenu from './ProfileMenu';
 import PortfolioSwitcher from './PortfolioSwitcher';
 
@@ -32,7 +33,12 @@ export default function AppHeader({ user }) {
                     </Link>
                 </div>
                 <div className="lido-header-actions">
-                    {user && <ProfileMenu user={user} />}
+                    {user && (
+                        <>
+                            <HeaderHelpButton />
+                            <ProfileMenu user={user} />
+                        </>
+                    )}
                 </div>
             </div>
         </header>

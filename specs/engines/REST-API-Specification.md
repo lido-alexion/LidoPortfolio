@@ -163,8 +163,7 @@ Fixed supported-indicator catalogue (not plugins).
   GET      /api/v1/strategy                         Active strategy + full config
   GET      /api/v1/strategy/catalogue               Catalogue by category
   GET      /api/v1/strategy/summary                 Dashboard card fields
-  PUT      /api/v1/strategy                         Save new version (`config` required)
-  POST     /api/v1/strategy/duplicate               Duplicate active strategy
+  PUT      /api/v1/strategy                         Save strategy in place (`config` required)
   PUT      /api/v1/strategy/screeners               Assign eligibility Screeners
   GET      /api/v1/strategy/eligibility             Eligibility sources
   GET      /api/v1/strategy/scoring                 Scoring model

@@ -315,7 +315,6 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
     Route::get('/strategy/summary', [\App\Http\Controllers\Api\V1\StrategyController::class, 'summary']);
     Route::get('/strategy/catalogue', [\App\Http\Controllers\Api\V1\StrategyController::class, 'catalogue']);
     Route::put('/strategy', [\App\Http\Controllers\Api\V1\StrategyController::class, 'update']);
-    Route::post('/strategy/duplicate', [\App\Http\Controllers\Api\V1\StrategyController::class, 'duplicate']);
     Route::put('/strategy/screeners', [\App\Http\Controllers\Api\V1\StrategyController::class, 'assignScreeners']);
     Route::get('/strategy/eligibility', [\App\Http\Controllers\Api\V1\StrategyController::class, 'eligibility']);
     Route::get('/strategy/scoring', [\App\Http\Controllers\Api\V1\StrategyController::class, 'scoring']);

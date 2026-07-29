@@ -183,8 +183,161 @@ body {
     display: flex;
     justify-content: flex-end;
     align-items: center;
+    gap: 0.35rem;
     justify-self: end;
     min-width: 0;
+}
+
+.lido-header-help {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.15rem;
+    height: 2.15rem;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    color: var(--lido-profile-text);
+    background: transparent;
+    cursor: pointer;
+    transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.lido-header-help:hover,
+.lido-header-help:focus-visible {
+    color: var(--lido-profile-hover-text);
+    background-color: var(--lido-profile-hover-bg);
+    border-color: rgba(126, 200, 255, 0.35);
+}
+
+.lido-header-help:focus-visible {
+    outline: 2px solid rgba(126, 200, 255, 0.55);
+    outline-offset: 2px;
+}
+
+.lido-header-help-icon {
+    display: block;
+}
+
+.lido-docs-page {
+    max-width: min(1760px, calc(100vw - 1.5rem));
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.lido-docs-index {
+    background: var(--lido-surface, rgba(127, 127, 127, 0.06));
+    position: sticky;
+    top: 0.75rem;
+    max-height: calc(100vh - 6rem);
+    overflow: auto;
+}
+
+.lido-docs-index-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.lido-docs-index-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.15rem;
+    width: 100%;
+    text-align: left;
+    padding: 0.55rem 0.65rem;
+    border: 1px solid transparent;
+    border-radius: 0.5rem;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+}
+
+.lido-docs-index-item:hover,
+.lido-docs-index-item:focus-visible {
+    background: var(--lido-profile-hover-bg, rgba(255, 255, 255, 0.08));
+}
+
+.lido-docs-index-item.is-active {
+    border-color: rgba(126, 200, 255, 0.45);
+    background: rgba(30, 144, 255, 0.12);
+}
+
+.lido-docs-index-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    line-height: 1.25;
+}
+
+.lido-docs-index-meta {
+    font-size: 0.72rem;
+    line-height: 1.3;
+}
+
+.lido-docs-article {
+    background: var(--lido-surface, rgba(127, 127, 127, 0.04));
+}
+
+.lido-docs-item {
+    padding-bottom: 0.65rem;
+    border-bottom: 1px solid rgba(127, 127, 127, 0.18);
+}
+
+.lido-docs-item:last-child {
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.lido-docs-item-body {
+    white-space: pre-line;
+}
+
+.lido-docs-paragraph {
+    white-space: pre-line;
+}
+
+.lido-docs-pre {
+    margin: 0 0 1rem;
+    padding: 0.85rem 1rem;
+    border: 1px solid rgba(127, 127, 127, 0.28);
+    border-radius: 0.5rem;
+    background: var(--lido-surface, rgba(127, 127, 127, 0.08));
+    overflow-x: auto;
+    white-space: pre;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    line-height: 1.35;
+}
+
+.lido-docs-related-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.lido-docs-related-link {
+    text-decoration: none;
+}
+
+.lido-docs-related-link:hover,
+.lido-docs-related-link:focus-visible {
+    text-decoration: underline;
+}
+
+.lido-strategy-category-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.lido-strategy-category-icon {
+    width: 1.15rem;
+    height: 1.15rem;
+    flex: 0 0 auto;
+    color: var(--lido-brand, #1e90ff);
+    opacity: 0.95;
 }
 
 .lido-header-title {
