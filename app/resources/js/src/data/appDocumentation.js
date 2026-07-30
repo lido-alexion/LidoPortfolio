@@ -479,7 +479,7 @@ const APP_DOCUMENTATION_BASE = [
         summary: 'Import/export Screener JSON artifacts — mandatory fields, slug rules, condition tree shape, and version history.',
         overview:
             'The Screener Registry turns portfolio screeners into reusable Trading Artifacts. Each screener still uses the same condition tree the run engine executes. The registry adds slug, metadata, artifact_version, definition_hash, and version history.\n\n'
-            + 'Export downloads the Trading Artifact JSON envelope. **Validate** checks the envelope. **Create from JSON / Import** validates, then creates a new screener in the active portfolio. Shared screeners from other portfolios appear read-only and can be copied with Import copy.\n\n'
+            + 'Export downloads the Trading Artifact JSON envelope. **Validate** checks the envelope. **Import** stays disabled until validation succeeds, then creates a new screener in the active portfolio. Shared screeners from other portfolios appear read-only and can be copied with Import copy.\n\n'
             + '## Importing JSON — start here\n\n'
             + 'If Validate or Import reports many field errors, you almost always missed a **mandatory** envelope field or built an empty/invalid `definition.root` tree. Use the minimum schema below, then expand.\n\n'
             + '### Minimum valid envelope (copy/paste starting point)\n\n'
@@ -574,7 +574,7 @@ const APP_DOCUMENTATION_BASE = [
             + '### Recommended import workflow\n\n'
             + '1. Start from the minimum example above (or Export an existing working screener and edit a copy).\n'
             + '2. Paste into Registry → **Validate** and fix every listed path (`$.slug`, `$.definition.root`, …).\n'
-            + '3. Use **Create from JSON** / Import.\n'
+            + '3. Use **Import** (enabled only after Validate succeeds).\n'
             + '4. Open the classic Screener editor to refine conditions visually if needed.\n\n'
             + '### Common validation / import errors\n\n'
             + '| Message / code | Likely cause |\n'
@@ -592,8 +592,8 @@ const APP_DOCUMENTATION_BASE = [
         controls: [
             { name: 'Search / filters', description: 'Filter by status, ownership (own vs shared), and origin (factory / user / shared).' },
             { name: 'Export JSON', description: 'Download the Screener artifact envelope (schema_version, slug, name, metadata, definition.root, dependencies). Best template for a new import.' },
-            { name: 'Validate', description: 'Check pasted JSON against Trading Artifact Screener rules. Fix every path error before Import. Empty trees may still fail on Import — keep ≥1 condition.' },
-            { name: 'Create from JSON / Import', description: 'Validate then create a new screener in this portfolio. Mandatory: schema_version, artifact_type, slug, name, metadata, definition.root with ≥1 condition.' },
+            { name: 'Validate', description: 'Check pasted JSON against Trading Artifact Screener rules. Fix every path error before Import. Empty trees may still fail on Import — keep ≥1 condition. Import stays disabled until this reports ok.' },
+            { name: 'Import', description: 'Enabled only after successful Validate. Creates a new screener in this portfolio. Mandatory: schema_version, artifact_type, slug, name, metadata, definition.root with ≥1 condition. Editing the JSON clears validation and disables Import again.' },
             { name: 'Import copy (shared)', description: 'Copy a shared screener from another portfolio into yours (same as Shared screens import).' },
             { name: 'Open editor', description: 'Jump to the classic Screener editor to change conditions or run screens after import.' },
             { name: 'Version history', description: 'On detail for owned screeners, list definition snapshots and change notes.' },
@@ -972,22 +972,178 @@ const APP_DOCUMENTATION_BASE = [
         title: 'Strategy Registry',
         routeLabel: '/strategy/registry',
         match: (p) => pathStarts(p, '/strategy/registry') || pathStarts(p, '/settings/strategy-registry'),
-        summary: 'Reusable Strategy artifacts — metadata, versions, validate/import/export JSON, and Select the one active strategy per portfolio.',
+        summary: 'Import/export Strategy JSON artifacts — mandatory fields, eligibility refs, scoring_model weights, Select one active strategy per portfolio.',
         overview:
-            'The Strategy Registry evolves portfolio_tos_strategies into first-class Trading Artifacts. Each portfolio still has exactly one active Strategy (selection). Import creates drafts; Select activates one and archives the previous active. Export emits portable JSON: Screener refs by screener_slug / screener_factory_key and Indicator keys by registry id — never portfolio-local Screener ids and never embedded Screener trees. Existing Minervini (momentum_factory) migrates automatically to slug momentum_strategy with eligibility linked to minervini_trend_template.',
+            'The Strategy Registry turns portfolio strategies into reusable Trading Artifacts. Each portfolio still has **exactly one active Strategy** (selection). '
+            + 'The registry adds slug, metadata, artifact_version, definition_hash, and version history on top of the same config the Recommendation engine already uses.\n\n'
+            + 'Export downloads the portable Trading Artifact JSON envelope. **Validate** checks the envelope. **Import** stays disabled until validation succeeds, then creates a **draft** — use **Select** to activate it (archives the previous active). '
+            + 'Existing Minervini (`momentum_factory`) migrates automatically to slug `momentum_strategy` with eligibility linked to `minervini_trend_template`.\n\n'
+            + '## Importing JSON — start here\n\n'
+            + 'If Validate or Import reports many field errors, you almost always missed a **mandatory** envelope field, forgot `scoring_model`, or embedded a Screener condition tree. '
+            + 'Strategies reference Screeners by **slug / factory_key only** — never paste `definition.root` into a Strategy. Use the minimum schema below, then expand.\n\n'
+            + '### Minimum valid envelope (copy/paste starting point)\n\n'
+            + '```json\n'
+            + '{\n'
+            + '  "schema_version": "1.0",\n'
+            + '  "artifact_type": "strategy",\n'
+            + '  "slug": "my_first_strategy",\n'
+            + '  "name": "My First Strategy",\n'
+            + '  "metadata": {\n'
+            + '    "scope": "portfolio",\n'
+            + '    "status": "draft",\n'
+            + '    "origin": "user",\n'
+            + '    "description": "RS-only example strategy"\n'
+            + '  },\n'
+            + '  "definition": {\n'
+            + '    "eligibility_sources": [\n'
+            + '      {\n'
+            + '        "screener_slug": "minervini_trend_template",\n'
+            + '        "screener_factory_key": "minervini_trend_template",\n'
+            + '        "enabled": true,\n'
+            + '        "priority": 1\n'
+            + '      }\n'
+            + '    ],\n'
+            + '    "scoring_model": [\n'
+            + '      {\n'
+            + '        "key": "relative_strength",\n'
+            + '        "enabled": true,\n'
+            + '        "weight": 100,\n'
+            + '        "minimum": 70,\n'
+            + '        "maximum": null,\n'
+            + '        "parameters": {}\n'
+            + '      }\n'
+            + '    ]\n'
+            + '  }\n'
+            + '}\n'
+            + '```\n\n'
+            + 'That JSON has every runtime-required field. Enabled weights sum to **100**. Eligibility points at a Screener by slug (import the Screener first if it is not already in this portfolio).\n\n'
+            + '### Mandatory vs optional fields\n\n'
+            + '| Field | Required? | What to put |\n'
+            + '|-------|-----------|-------------|\n'
+            + '| `schema_version` | **Yes** | Always `"1.0"` |\n'
+            + '| `artifact_type` | **Yes** | Always `"strategy"` |\n'
+            + '| `slug` | **Yes** | Stable id: lowercase letters, numbers, underscores (e.g. `swing_rs`). See **Slug** below |\n'
+            + '| `name` | **Yes** | Human label shown in the UI |\n'
+            + '| `metadata` | **Yes** | An object — may be `{}`, but prefer `description` / `origin` / `status` |\n'
+            + '| `definition` | **Yes** | Object with scoring + optional eligibility |\n'
+            + '| `definition.scoring_model` | **Yes** | Non-empty array of scoring rows; enabled weights must sum to **100** (alias: `indicators`) |\n'
+            + '| `definition.eligibility_sources` | Optional | Array of Screener refs by `screener_slug` / `screener_factory_key` |\n'
+            + '| `artifact_id` | Optional | Leave out on create; export may include a local id |\n'
+            + '| `artifact_version` | Optional | Integer ≥ 1; Import starts versions at 1 anyway |\n'
+            + '| `definition_hash` | Optional | Recalculated on Import — do not invent this |\n'
+            + '| `minimum_engine_version` | Optional | e.g. `"1.1.0"` |\n'
+            + '| `dependencies` | Optional | Array of refs; export fills this |\n'
+            + '| `validation` | Optional | Embedded hints; not executed as rules |\n'
+            + '\n'
+            + '**Forbidden:** `definition.root`, `definition.children`, or embedding `definition` / `root` inside an eligibility source — Strategies must not carry Screener trees.\n\n'
+            + '### What each field means\n\n'
+            + '**`schema_version`** — Envelope contract version. Must be `"1.0"`. Wrong or missing → `SCHEMA_VERSION_UNSUPPORTED`.\n\n'
+            + '**`artifact_type`** — Discriminator so the registry knows this is a Strategy (not Screener/Indicator). Must be `"strategy"`.\n\n'
+            + '**`slug`** — Machine-stable key for this strategy inside a portfolio. Use snake_case like `swing_rs` or `momentum_strategy`. '
+            + 'Allowed characters after normalisation: `a-z`, `0-9`, `_`. Keep it short and unique — display title belongs in `name`. '
+            + 'If the slug already exists on Import, the system may suffix it (e.g. `_import_ab12`) so the import still succeeds.\n\n'
+            + '**`name`** — Display title in lists and the Strategy editor. If the name collides, Import may append `" (import)"`.\n\n'
+            + '**`metadata`** — Descriptive object. Common keys:\n'
+            + '- `scope` — usually `portfolio`\n'
+            + '- `description` / `intent` / `summary` — human prose\n'
+            + '- `tags` — array of strings\n'
+            + '- `status` — lifecycle hint: `draft` | `active` | `archived` (Import always stores **draft** regardless)\n'
+            + '- `origin` — provenance: `factory` | `user` | `imported` | …\n'
+            + '- `factory_key` — stable factory id when shipping a built-in (e.g. `momentum_factory`)\n'
+            + '- `is_selected` — export-only; Import ignores this (use **Select** after import)\n\n'
+            + '**`definition.eligibility_sources`** — Which Screeners feed candidates into Recommendations. Each source:\n\n'
+            + '```json\n'
+            + '{\n'
+            + '  "screener_slug": "minervini_trend_template",\n'
+            + '  "screener_factory_key": "minervini_trend_template",\n'
+            + '  "enabled": true,\n'
+            + '  "priority": 1\n'
+            + '}\n'
+            + '```\n'
+            + '- Prefer `screener_slug` and/or `screener_factory_key` — portable across portfolios\n'
+            + '- Do **not** put portfolio-local `screener_id` in export/import packs (export strips it)\n'
+            + '- Do **not** embed a Screener `definition` / `root` tree here\n'
+            + '- Empty `eligibility_sources` is allowed by Validate; Recommendations will have no Screener feed until you add refs\n\n'
+            + '**`definition.scoring_model`** (alias **`indicators`**) — Weighted score rows the Strategy engine uses:\n\n'
+            + '```json\n'
+            + '{\n'
+            + '  "key": "relative_strength",\n'
+            + '  "enabled": true,\n'
+            + '  "weight": 50,\n'
+            + '  "minimum": 70,\n'
+            + '  "maximum": null,\n'
+            + '  "parameters": {}\n'
+            + '}\n'
+            + '```\n'
+            + '- `key` must be a strategy-scorable catalogue id (see list below)\n'
+            + '- Enabled rows’ `weight` values must sum to **100** (tolerance 0.01)\n'
+            + '- At least one enabled row with positive weight is required\n'
+            + '- `minimum` / `maximum` are optional score gates; `parameters` holds indicator-specific knobs\n\n'
+            + '**Strategy-scorable keys** (common): `relative_strength`, `momentum_score`, `trend_score`, `breakout_score`, `volume_score`, `market_regime`, `sector_strength`, `risk_score`. '
+            + 'Legacy aliases such as `momentum` → `momentum_score` may resolve via the catalogue; prefer canonical keys in new JSON.\n\n'
+            + 'Other `definition` keys the Strategy editor uses (position sizing, market gates, exit rules, etc.) may appear in Export and are preserved on Import via normalise — but Validate’s hard checks focus on eligibility refs + scoring weights.\n\n'
+            + '**`artifact_version` / `definition_hash`** — Versioning metadata. Export includes them; Import recomputes the hash and starts history for the new local draft.\n\n'
+            + '### Recommended import workflow\n\n'
+            + '1. Ensure referenced Screeners exist in this portfolio (Registry → import Screener JSON, or use a factory screener like `minervini_trend_template`).\n'
+            + '2. Start from the minimum example above (or Export an existing working strategy and edit a copy).\n'
+            + '3. Paste into Strategy Registry → **Validate** and fix every listed path (`$.slug`, `$.definition.scoring_model`, …).\n'
+            + '4. Use **Import** (enabled only after Validate succeeds) — creates a **draft**.\n'
+            + '5. Click **Select** on the new row when you want it to drive Recommendations (archives the previous active).\n'
+            + '6. Optionally open **Edit** on the active strategy (`/strategy`) to refine tabs visually.\n\n'
+            + '### Common validation / import errors\n\n'
+            + '| Message / code | Likely cause |\n'
+            + '|----------------|--------------|\n'
+            + '| `slug is required` | Missing or blank `slug` |\n'
+            + '| `name is required` | Missing or blank `name` |\n'
+            + '| `definition object is required` | Omitted `definition` |\n'
+            + '| `metadata object is required` | Omitted `metadata` or not an object |\n'
+            + '| `STRATEGY_SCORING_REQUIRED` | Missing `scoring_model` / `indicators` |\n'
+            + '| `STRATEGY_WEIGHTS_SUM_100` | Enabled weights ≠ 100, or none enabled |\n'
+            + '| `STRATEGY_KEYS_REGISTRY` / not strategy-scorable | Unknown or non-scorable `key` |\n'
+            + '| `STRATEGY_ELIGIBILITY_REFS` | Source missing slug, factory_key, and screener_id |\n'
+            + '| `STRATEGY_NO_EMBEDDED_SCREENER` | Put a Screener `root` tree on the Strategy |\n'
+            + '| Must not embed Screener definitions | Eligibility row contains `definition` / `root` |\n'
+            + '| Slug / name already exists | Pick another or let Import rename |\n',
         controls: [
             { name: 'Search / filters', description: 'Filter by status (active/draft/archived) and origin (factory/user).' },
-            { name: 'Select', description: 'Make this strategy the portfolio’s only active strategy (archives the previous active).' },
-            { name: 'Export JSON', description: 'Download the portable Trading Artifact envelope.' },
-            { name: 'Validate', description: 'Check pasted JSON against Strategy artifact rules before import.' },
-            { name: 'Create from JSON', description: 'Import as a draft; does not change Recommendations until Select.' },
+            { name: 'Select', description: 'Make this strategy the portfolio’s only active strategy (archives the previous active). Recommendations use the selected strategy.' },
+            { name: 'Export JSON', description: 'Download the portable Trading Artifact envelope (schema_version, slug, name, metadata, definition with eligibility_sources + scoring_model, dependencies). Best template for a new import.' },
+            { name: 'Validate', description: 'Check pasted JSON against Trading Artifact Strategy rules. Fix every path error before Import. Import stays disabled until this reports ok.' },
+            { name: 'Import', description: 'Enabled only after successful Validate. Creates a draft strategy in this portfolio (does not change Recommendations until Select). Editing the JSON clears validation and disables Import again.' },
             { name: 'Edit active', description: 'Jump to /strategy to edit the selected strategy’s tabs and Save.' },
-            { name: 'Version history', description: 'Draft updates that change definition hash append version rows; active editor Save remains in-place BC.' },
+            { name: 'Version history', description: 'On detail for owned strategies, list definition snapshots and change notes. Draft definition-hash changes append versions; active editor Save remains in-place BC.' },
         ],
         concepts: [
-            { name: 'Exactly one active', description: 'Selection rule: one STATUS_ACTIVE strategy per portfolio drives Recommendation scoring.' },
-            { name: 'No Screener duplication', description: 'eligibility_sources reference Screeners; condition trees stay on Screener Registry.' },
-            { name: 'Minervini auto-migrate', description: 'ensureActive / seedFactoryStrategy backfills slug, metadata, and Minervini screener eligibility links without overwriting user-edited scores.' },
+            {
+                name: 'Slug',
+                description:
+                    'Stable machine id (snake_case: `swing_rs`). Used for uniqueness and selection. Not the display title — that is `name`. Only a–z, 0–9, and underscore after normalisation.',
+            },
+            {
+                name: 'Exactly one active',
+                description:
+                    'Selection rule: one STATUS_ACTIVE strategy per portfolio drives Recommendation scoring. Import always creates draft; Select activates.',
+            },
+            {
+                name: 'No Screener duplication',
+                description:
+                    'eligibility_sources reference Screeners by screener_slug / screener_factory_key. Condition trees stay on Screener Registry — never embed root/children on a Strategy.',
+            },
+            {
+                name: 'scoring_model vs indicators',
+                description:
+                    'Portable JSON prefers scoring_model. The engine also accepts indicators as an alias; Import normalises both. Enabled weights must sum to 100.',
+            },
+            {
+                name: 'Mandatory envelope fields',
+                description:
+                    'schema_version ("1.0"), artifact_type ("strategy"), slug, name, metadata (object), and definition.scoring_model with enabled weights summing to 100.',
+            },
+            {
+                name: 'Minervini auto-migrate',
+                description:
+                    'ensureActive / seedFactoryStrategy backfills slug momentum_strategy, metadata, and Minervini screener eligibility links without overwriting user-edited scores.',
+            },
         ],
         related: ['strategy', 'screener-registry', 'indicator-registry', 'recommendations', 'settings'],
     },

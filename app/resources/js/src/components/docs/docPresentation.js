@@ -385,6 +385,43 @@ export const DOC_PRESENTATION = {
             },
         ],
     },
+    'strategy-registry': {
+        icon: 'bi-journal-bookmark',
+        purpose:
+            'Import/export Strategy Trading Artifact JSON — mandatory fields (schema_version, artifact_type, slug, name, metadata, scoring_model weights = 100), then Select one active strategy.',
+        workflow: [
+            { label: 'Screener Registry (eligibility)', keyword: 'screener-registry' },
+            { label: 'Strategy Registry', current: true },
+            { label: 'Select active', keyword: 'strategy-registry' },
+            { label: 'Recommendations', keyword: 'recommendations' },
+        ],
+        callouts: [
+            {
+                variant: 'tip',
+                title: 'New to import?',
+                body: 'Copy the minimum JSON from this topic, point eligibility at an existing screener slug, Validate, Import (draft), then Select to activate.',
+            },
+            {
+                variant: 'warning',
+                title: 'No embedded Screener trees',
+                body: 'Strategies reference screeners by screener_slug / screener_factory_key only. Never paste definition.root into a Strategy envelope.',
+            },
+        ],
+        commonMistakes: [
+            {
+                q: 'Import stays disabled',
+                a: 'Run Validate successfully first. Editing the JSON clears validation and disables Import again.',
+            },
+            {
+                q: 'Weights sum error',
+                a: 'Enabled scoring_model rows must sum to exactly 100. Disable unused rows or redistribute weights.',
+            },
+            {
+                q: 'What do I put in slug?',
+                a: 'A short snake_case machine id such as swing_rs or momentum_strategy — not a sentence. Display title goes in name.',
+            },
+        ],
+    },
     discovery: {
         icon: 'bi-search',
         purpose:

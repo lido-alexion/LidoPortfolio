@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
+import { appUrl } from '../appBase';
 
 function statusBadgeClass(status) {
     switch (status) {
@@ -42,6 +43,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
     const [importText, setImportText] = useState('');
     const [validateResult, setValidateResult] = useState(null);
     const [busy, setBusy] = useState(false);
+    const importValidated = Boolean(validateResult?.ok);
 
     const load = async () => {
         setLoading(true);
@@ -102,6 +104,10 @@ export default function StrategyRegistryPage({ adminMode = false }) {
     };
 
     const onImport = async () => {
+        if (!validateResult?.ok) {
+            setError('Validate the JSON successfully before importing.');
+            return;
+        }
         setBusy(true);
         setNotice('');
         setError('');
@@ -316,7 +322,15 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                     <h3 className="h6 mb-0">Import / validate Strategy JSON</h3>
                     <p className="text-muted small mb-0">
                         Paste a Trading Artifact envelope (<code>artifact_type: strategy</code>).
-                        Eligibility must reference Screeners by <code>screener_slug</code> / <code>screener_factory_key</code> only.
+                        Mandatory fields: <code>schema_version</code>, <code>artifact_type</code>, <code>slug</code>, <code>name</code>, <code>metadata</code>, and <code>definition.scoring_model</code> with enabled weights summing to 100.
+                        Eligibility must reference Screeners by <code>screener_slug</code> / <code>screener_factory_key</code> only — never embed condition trees.
+                        {' '}
+                        <a href={appUrl('/docs/strategy-registry.html')} target="_blank" rel="noopener noreferrer">
+                            Import schema guide
+                        </a>
+                        {' '}
+                        (mandatory vs optional fields, scoring keys, minimal example).
+                        Run <strong>Validate</strong> first — <strong>Import</strong> stays disabled until validation succeeds.
                         Import creates a <strong>draft</strong> — use Select to activate it for this portfolio.
                     </p>
                     <textarea
@@ -324,14 +338,23 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                         rows={10}
                         placeholder='{"schema_version":"1.0","artifact_type":"strategy","slug":"...", ...}'
                         value={importText}
-                        onChange={(e) => setImportText(e.target.value)}
+                        onChange={(e) => {
+                            setImportText(e.target.value);
+                            setValidateResult(null);
+                        }}
                     />
                     <div className="d-flex flex-wrap gap-2">
                         <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || !importText.trim()} onClick={onValidate}>
                             Validate
                         </button>
-                        <button type="button" className="btn btn-primary btn-sm" disabled={busy || !importText.trim()} onClick={onImport}>
-                            Create from JSON
+                        <button
+                            type="button"
+                            className="btn btn-primary btn-sm"
+                            disabled={busy || !importText.trim() || !importValidated}
+                            title={importValidated ? 'Import validated JSON as draft' : 'Validate successfully before importing'}
+                            onClick={onImport}
+                        >
+                            Import
                         </button>
                     </div>
                     {validateResult && (

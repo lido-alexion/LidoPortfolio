@@ -44,6 +44,7 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
     const [importText, setImportText] = useState('');
     const [validateResult, setValidateResult] = useState(null);
     const [busy, setBusy] = useState(false);
+    const importValidated = Boolean(validateResult?.ok);
 
     const load = async () => {
         setLoading(true);
@@ -105,6 +106,10 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
     };
 
     const onImport = async () => {
+        if (!validateResult?.ok) {
+            setError('Validate the JSON successfully before importing.');
+            return;
+        }
         setBusy(true);
         setNotice('');
         setError('');
@@ -345,21 +350,31 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
                         </a>
                         {' '}
                         (mandatory vs optional fields, what slug means, minimal example).
-                        Validate before import. Import always creates a new screener in this portfolio.
+                        Run <strong>Validate</strong> first — <strong>Import</strong> stays disabled until validation succeeds.
+                        Import always creates a new screener in this portfolio.
                     </p>
                     <textarea
                         className="form-control font-monospace small"
                         rows={10}
                         placeholder='{"schema_version":"1.0","artifact_type":"screener","slug":"...", ...}'
                         value={importText}
-                        onChange={(e) => setImportText(e.target.value)}
+                        onChange={(e) => {
+                            setImportText(e.target.value);
+                            setValidateResult(null);
+                        }}
                     />
                     <div className="d-flex flex-wrap gap-2">
                         <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || !importText.trim()} onClick={onValidate}>
                             Validate
                         </button>
-                        <button type="button" className="btn btn-primary btn-sm" disabled={busy || !importText.trim()} onClick={onImport}>
-                            Create from JSON
+                        <button
+                            type="button"
+                            className="btn btn-primary btn-sm"
+                            disabled={busy || !importText.trim() || !importValidated}
+                            title={importValidated ? 'Import validated JSON' : 'Validate successfully before importing'}
+                            onClick={onImport}
+                        >
+                            Import
                         </button>
                     </div>
                     {validateResult && (

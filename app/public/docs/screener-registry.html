@@ -90,7 +90,7 @@
       <section class="panel">
         <h2>Overview</h2>
         <p>The Screener Registry turns portfolio screeners into reusable Trading Artifacts. Each screener still uses the same condition tree the run engine executes. The registry adds slug, metadata, artifact_version, definition_hash, and version history.</p>
-<p>Export downloads the Trading Artifact JSON envelope. <strong>Validate</strong> checks the envelope. <strong>Create from JSON / Import</strong> validates, then creates a new screener in the active portfolio. Shared screeners from other portfolios appear read-only and can be copied with Import copy.</p>
+<p>Export downloads the Trading Artifact JSON envelope. <strong>Validate</strong> checks the envelope. <strong>Import</strong> stays disabled until validation succeeds, then creates a new screener in the active portfolio. Shared screeners from other portfolios appear read-only and can be copied with Import copy.</p>
 <h2>Importing JSON — start here</h2>
 <p>If Validate or Import reports many field errors, you almost always missed a <strong>mandatory</strong> envelope field or built an empty/invalid <code>definition.root</code> tree. Use the minimum schema below, then expand.</p>
 <h3>Minimum valid envelope (copy/paste starting point)</h3>
@@ -242,7 +242,7 @@
 <ol>
 <li>Start from the minimum example above (or Export an existing working screener and edit a copy).</li>
 <li>Paste into Registry → <strong>Validate</strong> and fix every listed path (<code>$.slug</code>, <code>$.definition.root</code>, …).</li>
-<li>Use <strong>Create from JSON</strong> / Import.</li>
+<li>Use <strong>Import</strong> (enabled only after Validate succeeds).</li>
 <li>Open the classic Screener editor to refine conditions visually if needed.</li>
 </ol>
 <h3>Common validation / import errors</h3>
@@ -308,10 +308,10 @@
         <dd>Download the Screener artifact envelope (schema_version, slug, name, metadata, definition.root, dependencies). Best template for a new import.</dd>
     
         <dt>Validate</dt>
-        <dd>Check pasted JSON against Trading Artifact Screener rules. Fix every path error before Import. Empty trees may still fail on Import — keep ≥1 condition.</dd>
+        <dd>Check pasted JSON against Trading Artifact Screener rules. Fix every path error before Import. Empty trees may still fail on Import — keep ≥1 condition. Import stays disabled until this reports ok.</dd>
     
-        <dt>Create from JSON / Import</dt>
-        <dd>Validate then create a new screener in this portfolio. Mandatory: schema_version, artifact_type, slug, name, metadata, definition.root with ≥1 condition.</dd>
+        <dt>Import</dt>
+        <dd>Enabled only after successful Validate. Creates a new screener in this portfolio. Mandatory: schema_version, artifact_type, slug, name, metadata, definition.root with ≥1 condition. Editing the JSON clears validation and disables Import again.</dd>
     
         <dt>Import copy (shared)</dt>
         <dd>Copy a shared screener from another portfolio into yours (same as Shared screens import).</dd>
