@@ -59,6 +59,10 @@ const APP_DOCUMENTATION_BASE = [
                 name: 'Direct topic URLs',
                 description: 'Share /docs/{keyword}.html (for example /docs/strategy.html) with humans or AI crawlers.',
             },
+            {
+                name: 'Sidebar toggle (Ctrl/Cmd+B)',
+                description: 'Collapses or expands the primary sidebar on wide screens, or opens/closes the navigation overlay on narrower screens. Ignored while typing in form fields.',
+            },
         ],
         concepts: [
             {
@@ -72,7 +76,13 @@ const APP_DOCUMENTATION_BASE = [
             {
                 name: 'Primary sidebar',
                 description:
-                    'Logged-in navigation is a left sidebar with Portfolio, Market, Trading, Knowledge, and Administration (Settings only). Child pages such as Pending Execution, registries, and admin tools are opened from their parent page or from Settings — they are not listed in the sidebar. Routes and URLs are unchanged.',
+                    'Primary navigation is sidebar-only and fully configuration-driven (`config/navigation.js` + `navigation/` registry). Sections: Favourites, Quick Actions, then groups — Portfolio, Market, Trading, Knowledge, Administration. Reusable primitives: NavMenuItem, NavGroup, NavBadge, NavTooltip. Icons come from a single registry (no duplicated Lucide imports in rows). Routes use ROUTES constants. Editors stay internal. Future plugins register via navigationRegistry.registerModule. Ctrl/Cmd+B toggles the sidebar. See Documentation topic and specs/architecture/15-Sidebar-Navigation-Architecture.md.',
+
+            },
+            {
+                name: 'Page chrome',
+                description:
+                    'Above the page content, breadcrumbs (Home → group → page) and the current page title come from the same navigation catalog. Tags such as NEW or BETA and numeric badges can appear on sidebar items and the page title row. Disabled items stay visible but are not clickable; external items open in a new tab. Permission keys on catalog entries are reserved for future access filtering. Browser Back/Forward work with normal history entries from sidebar links.',
             },
             {
                 name: 'Trading OS flow',
@@ -945,7 +955,7 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Editors', description: 'Simple / Formatted / Markdown with autosave.' },
             { name: 'Images', description: 'Embed resized images; click for full-size lightbox.' },
             { name: 'Export', description: 'Plain, Markdown, or AI-friendly bulk export.' },
-            { name: 'Tags page', description: 'Manage tags at `/knowledge-board/tags`.' },
+            { name: 'Tags page', description: 'Open Knowledge Tags from the sidebar (Knowledge group) or manage at `/knowledge-board/tags`.' },
         ],
         concepts: [
             { name: 'Portfolio notes', description: 'Notes belong to the active portfolio context.' },

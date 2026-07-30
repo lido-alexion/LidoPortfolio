@@ -6,17 +6,24 @@ import PortfolioSwitcher from './PortfolioSwitcher';
 import { useSidebar } from '../context/SidebarContext';
 
 function SidebarToggle() {
-    const { isOpen, toggle, isDesktop } = useSidebar();
-    const label = isDesktop
-        ? (isOpen ? 'Collapse sidebar' : 'Expand sidebar')
-        : (isOpen ? 'Close navigation' : 'Open navigation');
+    const { toggle, isLayoutMode, canCollapse, isCollapsed, isOverlayOpen } = useSidebar();
+
+    if (isLayoutMode && !canCollapse) {
+        return null;
+    }
+
+    const label = isLayoutMode
+        ? (isCollapsed ? 'Expand sidebar' : 'Collapse sidebar')
+        : (isOverlayOpen ? 'Close navigation' : 'Open navigation');
 
     return (
         <button
             type="button"
             className="lido-sidebar-toggle"
             aria-label={label}
-            aria-expanded={isOpen}
+            title={`${label} (Ctrl+B)`}
+            aria-keyshortcuts="Control+B Meta+B"
+            aria-expanded={isLayoutMode ? !isCollapsed : isOverlayOpen}
             aria-controls="lido-primary-sidebar"
             onClick={toggle}
         >

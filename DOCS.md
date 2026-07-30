@@ -74,6 +74,7 @@ Subtree hub: **[specs/README.md](specs/README.md)**
 | 2.6e | [specs/architecture/11-Trading-Artifact-Framework.md](specs/architecture/11-Trading-Artifact-Framework.md) | **Target** Trading Artifact Framework (SD-034) — Indicators, Screeners, Strategies |
 | 2.6f | [specs/architecture/13-Indicator-Lifecycle.md](specs/architecture/13-Indicator-Lifecycle.md) | Indicator lifecycle, Liquidity/Tradability V1, capability gates |
 | 2.6g | [specs/architecture/14-Indicator-Registry-Diagrams.md](specs/architecture/14-Indicator-Registry-Diagrams.md) | Class / component / registry / dependency / lifecycle diagrams |
+| 2.6h | [specs/architecture/15-Sidebar-Navigation-Architecture.md](specs/architecture/15-Sidebar-Navigation-Architecture.md) | Sidebar / navigation registry, config, extensibility how-to |
 
 ### 2.B Domain & contracts
 

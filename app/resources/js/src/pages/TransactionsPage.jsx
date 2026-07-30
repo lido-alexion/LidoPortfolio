@@ -230,6 +230,19 @@ export default function TransactionsPage() {
     }, [location.state, navigate]);
 
     useEffect(() => {
+        if (!location.state?.focusAddForm) {
+            return;
+        }
+        setEntryMode('single');
+        navigate('/transactions', { replace: true, state: {} });
+        requestAnimationFrame(() => {
+            const card = document.getElementById('transaction-form-card');
+            card?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            card?.querySelector('input, select, textarea, button')?.focus?.();
+        });
+    }, [location.state, navigate]);
+
+    useEffect(() => {
         const search = location.state?.transactionSearch;
         if (typeof search !== 'string' || !search.trim()) {
             return;

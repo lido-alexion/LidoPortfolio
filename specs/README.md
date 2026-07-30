@@ -40,7 +40,8 @@ specs/
 │   ├── 10-Indicator-Registry-Implementation-Plan.md  (Epics/Stories/Tasks)
 │   ├── 11-Trading-Artifact-Framework.md       (target Artifact Framework; SD-034)
 │   ├── 13-Indicator-Lifecycle.md              (lifecycle + Liquidity/Tradability V1)
-│   └── 14-Indicator-Registry-Diagrams.md      (class/component/deps diagrams)
+│   ├── 14-Indicator-Registry-Diagrams.md      (class/component/deps diagrams)
+│   └── 15-Sidebar-Navigation-Architecture.md  (sidebar registry, config, how-to)
 │
 ├── engines/                           【 INTENT — contracts & engines 】
 │   ├── System-Domain-Model.md
@@ -112,7 +113,8 @@ specs/
 10. [architecture/10-Indicator-Registry-Implementation-Plan.md](architecture/10-Indicator-Registry-Implementation-Plan.md) — Epics/Stories/Tasks plan  
 11. [architecture/11-Trading-Artifact-Framework.md](architecture/11-Trading-Artifact-Framework.md) — Trading Artifact Framework (SD-034)  
 11a. [architecture/13-Indicator-Lifecycle.md](architecture/13-Indicator-Lifecycle.md) — Indicator lifecycle + Liquidity/Tradability V1  
-11b. [architecture/14-Indicator-Registry-Diagrams.md](architecture/14-Indicator-Registry-Diagrams.md) — Registry diagrams  
+11b. [architecture/14-Indicator-Registry-Diagrams.md](architecture/14-Indicator-Registry-Diagrams.md) — Registry diagrams
+11c. [architecture/15-Sidebar-Navigation-Architecture.md](architecture/15-Sidebar-Navigation-Architecture.md) — Sidebar / navigation architecture
 12. [engines/System-Domain-Model.md](engines/System-Domain-Model.md)  
 13. [engines/Database-Schema-Specification.md](engines/Database-Schema-Specification.md)  
 14. [engines/REST-API-Specification.md](engines/REST-API-Specification.md)  

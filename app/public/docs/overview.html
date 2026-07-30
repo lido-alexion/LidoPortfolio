@@ -110,6 +110,9 @@
         <dt>Direct topic URLs</dt>
         <dd>Share /docs/{keyword}.html (for example /docs/strategy.html) with humans or AI crawlers.</dd>
     
+        <dt>Sidebar toggle (Ctrl/Cmd+B)</dt>
+        <dd>Collapses or expands the primary sidebar on wide screens, or opens/closes the navigation overlay on narrower screens. Ignored while typing in form fields.</dd>
+    
         <dt>Typical flow</dt>
         <dd>Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.</dd>
     
@@ -128,7 +131,10 @@
         <dd>Most screens read and write data for the portfolio selected in the header switcher.</dd>
     
         <dt>Primary sidebar</dt>
-        <dd>Logged-in navigation is a left sidebar with Portfolio, Market, Trading, Knowledge, and Administration (Settings only). Child pages such as Pending Execution, registries, and admin tools are opened from their parent page or from Settings — they are not listed in the sidebar. Routes and URLs are unchanged.</dd>
+        <dd>Primary navigation is sidebar-only and fully configuration-driven (<code>config/navigation.js</code> + <code>navigation/</code> registry). Sections: Favourites, Quick Actions, then groups — Portfolio, Market, Trading, Knowledge, Administration. Reusable primitives: NavMenuItem, NavGroup, NavBadge, NavTooltip. Icons come from a single registry (no duplicated Lucide imports in rows). Routes use ROUTES constants. Editors stay internal. Future plugins register via navigationRegistry.registerModule. Ctrl/Cmd+B toggles the sidebar. See Documentation topic and specs/architecture/15-Sidebar-Navigation-Architecture.md.</dd>
+    
+        <dt>Page chrome</dt>
+        <dd>Above the page content, breadcrumbs (Home → group → page) and the current page title come from the same navigation catalog. Tags such as NEW or BETA and numeric badges can appear on sidebar items and the page title row. Disabled items stay visible but are not clickable; external items open in a new tab. Permission keys on catalog entries are reserved for future access filtering. Browser Back/Forward work with normal history entries from sidebar links.</dd>
     
         <dt>Trading OS flow</dt>
         <dd>See topic Trading OS pages &amp; flow for which page shows what and how recommendations move from Screener → Strategy → Recommendations → Review.</dd>

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import api from '../api';
 import AddToWatchlistComboButton from '../components/AddToWatchlistComboButton';
 import AnalyseStockButton from '../components/AnalyseStockButton';
@@ -329,6 +329,7 @@ export default function WatchlistPage() {
     const { activePortfolio } = usePortfolio();
     const profileId = activePortfolio?.id ?? null;
     const navigate = useNavigate();
+    const location = useLocation();
     const { symbol: symbolParam } = useParams();
     const symbolFromUrl = symbolParam ? decodeURIComponent(symbolParam).trim().toUpperCase() : '';
 
@@ -408,6 +409,19 @@ export default function WatchlistPage() {
             active = false;
         };
     }, []);
+
+    useEffect(() => {
+        if (!location.state?.focusAddSearch) {
+            return;
+        }
+        navigate('/watchlist', { replace: true, state: {} });
+        requestAnimationFrame(() => {
+            const input = document.querySelector('#watchlist-quick-add input, #watchlist-stock-search input, #watchlist-quick-add');
+            const el = input || document.getElementById('watchlist-quick-add');
+            el?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+            (document.querySelector('#watchlist-quick-add input') || el)?.focus?.();
+        });
+    }, [location.state, navigate]);
 
     const loadItems = useCallback(async (watchlistId, search, sort) => {
         if (!watchlistId) {
