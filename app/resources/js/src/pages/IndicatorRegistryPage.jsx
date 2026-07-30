@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
+import { appUrl } from '../appBase';
 
 function statusBadgeClass(status) {
     switch (status) {
@@ -70,6 +71,12 @@ export default function IndicatorRegistryPage() {
                     <h2 className="h4 mb-1">Indicator Registry</h2>
                     <p className="text-muted small mb-0">
                         Read-only catalogue of Primary, Composite, and Metric indicators. Formula explanations are documentation only — there is no formula editor.
+                        {' '}
+                        <a href={appUrl('/docs/indicator-registry.html')} target="_blank" rel="noopener noreferrer">
+                            Catalogue guide
+                        </a>
+                        {' '}
+                        (definitions, defaults, ranges, Screener vs Strategy usage).
                     </p>
                     {countsLabel && <p className="text-muted small mb-0 mt-1">{countsLabel}</p>}
                 </div>

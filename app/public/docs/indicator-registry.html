@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Indicator Registry — StoX docs</title>
-  <meta name="description" content="Admin read-only catalogue of Primary, Composite, and Metric indicators with dependency trees and formula documentation.">
+  <meta name="description" content="Complete Indicator catalogue — definitions, parameters (defaults/min/max), screenable vs strategy-scorable, formulas, and how to use each id in Screeners or Strategy.">
   <link rel="canonical" href="indicator-registry.html">
   <style>
     :root {
@@ -85,11 +85,760 @@
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Indicator Registry</h1>
       <p class="muted"><code>indicator-registry</code> · screen: <code>/settings/indicators</code></p>
-      <p>Admin read-only catalogue of Primary, Composite, and Metric indicators with dependency trees and formula documentation.</p>
+      <p>Complete Indicator catalogue — definitions, parameters (defaults/min/max), screenable vs strategy-scorable, formulas, and how to use each id in Screeners or Strategy.</p>
 
       <section class="panel">
         <h2>Overview</h2>
-        <p>The Indicator Registry is the metadata source of truth for indicators (SD-033). Use the list to search and filter by category, type, and status. Open any row for description, parameters, consumers, capabilities, a dependency tree, and a formula explanation. Formula text is documentation only — there is no formula editor. Liquidity and Tradability indicators are available for Screeners and future Discovery / Dashboard / Stock Details consumers; they are not auto-wired into Strategy scoring or the Recommendation Engine.</p>
+        <p>The Indicator Registry is the <strong>metadata source of truth</strong> for every calculator StoX exposes (SD-033). Use <code>/settings/indicators</code> to search and filter by category, type, and status. Open any row for description, parameters, consumers, capabilities, a dependency tree, and a formula explanation. <strong>Formula text is documentation only</strong> — there is no formula editor and release-shipped calculators are not mutated from the UI.</p>
+<p>This page is written for humans and AI agents: every registry <strong>id</strong>, what it means, defaults, ranges, and where you can use it.</p>
+<h2>How to use indicators</h2>
+<table>
+<thead>
+<tr>
+<th>Consumer</th>
+<th>Which ids</th>
+<th>How you reference them</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Screener conditions</strong></td>
+<td><code>screenable</code> Primaries (39)</td>
+<td>Operand <code>{ &quot;indicator&quot;: &quot;&lt;id&gt;&quot;, &quot;params&quot;: {…} }</code> — see Screener Registry</td>
+</tr>
+<tr>
+<td><strong>Strategy scoring</strong></td>
+<td><code>strategy_scorable</code> Composites (8)</td>
+<td><code>scoring_model[].key</code> — see Strategy Registry</td>
+</tr>
+<tr>
+<td><strong>Evaluation facts</strong></td>
+<td>Strategy deps + RS primaries</td>
+<td>Computed by Evaluation; feed Strategy scores</td>
+</tr>
+<tr>
+<td><strong>Stock Details / Dashboard</strong></td>
+<td>Metrics + Liquidity/Tradability</td>
+<td>Display analytics (not Strategy weights)</td>
+</tr>
+<tr>
+<td><strong>Admin Registry UI</strong></td>
+<td>All 62</td>
+<td>Browse metadata only</td>
+</tr>
+</tbody></table>
+<p><strong>Important:</strong> No indicator is both screenable and strategy-scorable. Screeners use price/volume Primaries (<code>ema</code>, <code>rsi</code>, …). Strategy uses score Composites (<code>momentum_score</code>, <code>trend_score</code>, …) that <strong>depend on</strong> Primaries.</p>
+<h2>Types, status, and capabilities</h2>
+<table>
+<thead>
+<tr>
+<th>Concept</th>
+<th>Values / meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Type</strong></td>
+<td><code>primary</code> = OHLCV calculator; <code>composite</code> = combines dependencies into a score; <code>metric</code> = descriptive analytics field</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><code>active</code> = live; <code>stub</code> = placeholder (constant/neutral until model ships); <code>planned</code> / <code>deprecated</code> reserved</td>
+</tr>
+<tr>
+<td><strong>screenable</strong></td>
+<td>May appear on the left/right of a Screener condition</td>
+</tr>
+<tr>
+<td><strong>strategy_scorable</strong></td>
+<td>May appear as a Strategy <code>scoring_model</code> key with weight</td>
+</tr>
+<tr>
+<td><strong>needs_volume</strong></td>
+<td>Requires volume bars; fails/null if volume missing</td>
+</tr>
+<tr>
+<td><strong>supports_maximum</strong></td>
+<td>Strategy may apply a <strong>maximum</strong> gate (used by <code>risk_score</code>)</td>
+</tr>
+<tr>
+<td><strong>Units</strong></td>
+<td><code>price</code>, <code>percent</code>, <code>ratio</code>, <code>count</code>, <code>currency</code>, <code>score_0_100</code>, <code>none</code></td>
+</tr>
+</tbody></table>
+<p><strong>Uniqueness:</strong> each indicator <code>id</code> (also used as artifact <code>slug</code>) is globally unique in the registry. Aliases (legacy Strategy keys) resolve to a canonical id.</p>
+<h2>Parameter conventions (Screenable Primaries)</h2>
+<p>Screener params are numeric with <strong>default / min / max / step</strong>. Period-like params usually allow <strong>1–400</strong> (RSI/ATR period max <strong>200</strong>; Stochastic <code>smooth</code> max <strong>50</strong>; MACD <code>signal</code> max <strong>100</strong>; Bollinger <code>mult</code> <strong>0.5–5</strong> step <strong>0.1</strong>).</p>
+<p>Strategy Composite params are <code>{ type, label, default }</code> (often no min/max in metadata) and are UI-persisted on the Strategy; Evaluation may still use trading_os defaults for some inputs (TD-19).</p>
+<hr>
+<h2>Catalogue A — Screenable Primaries (for Screener JSON)</h2>
+<p>Use these ids in Screener <code>left</code> / <code>right</code> operands. Params shown as <code>name=default (min–max[, step])</code>.</p>
+<h3>Price</h3>
+<table>
+<thead>
+<tr>
+<th>Id</th>
+<th>Name</th>
+<th>Meaning</th>
+<th>Units</th>
+<th>Params</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>close</code></td>
+<td>Close</td>
+<td>Last traded / session closing price</td>
+<td>price</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>open</code></td>
+<td>Open</td>
+<td>Session opening price</td>
+<td>price</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>high</code></td>
+<td>High</td>
+<td>Session high</td>
+<td>price</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>low</code></td>
+<td>Low</td>
+<td>Session low</td>
+<td>price</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>change_pct</code></td>
+<td>% Change</td>
+<td>Percent change vs close <code>period</code> bars ago</td>
+<td>percent</td>
+<td><code>period=1 (1–400)</code></td>
+</tr>
+<tr>
+<td><code>high_n</code></td>
+<td>Highest high (N)</td>
+<td>Highest high over N bars</td>
+<td>price</td>
+<td><code>period=20 (1–400)</code></td>
+</tr>
+<tr>
+<td><code>low_n</code></td>
+<td>Lowest low (N)</td>
+<td>Lowest low over N bars</td>
+<td>price</td>
+<td><code>period=20 (1–400)</code></td>
+</tr>
+<tr>
+<td><code>high_52w</code></td>
+<td>52-week high</td>
+<td>Highest high over ~252 trading days</td>
+<td>price</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>low_52w</code></td>
+<td>52-week low</td>
+<td>Lowest low over ~252 trading days</td>
+<td>price</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>range_pct</code></td>
+<td>Range % (H-L)/C</td>
+<td>Intraday range as % of close: <code>(high−low)/close×100</code></td>
+<td>percent</td>
+<td>—</td>
+</tr>
+</tbody></table>
+<h3>Trend</h3>
+<table>
+<thead>
+<tr>
+<th>Id</th>
+<th>Name</th>
+<th>Meaning</th>
+<th>Units</th>
+<th>Params</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sma</code></td>
+<td>SMA</td>
+<td><strong>Simple Moving Average</strong> — arithmetic mean of close over <code>period</code> bars. Smooths price; slower than EMA.</td>
+<td>price</td>
+<td><code>period=20 (1–400)</code></td>
+</tr>
+<tr>
+<td><code>ema</code></td>
+<td>EMA</td>
+<td><strong>Exponential Moving Average</strong> — weighted average of close that reacts faster to recent prices than SMA. Common trend line (e.g. 50-day).</td>
+<td>price</td>
+<td><code>period=50 (1–400)</code></td>
+</tr>
+<tr>
+<td><code>price_vs_sma_pct</code></td>
+<td>Price vs SMA %</td>
+<td><code>(close − SMA) / SMA × 100</code> — how far price is above/below its SMA</td>
+<td>percent</td>
+<td><code>period=20 (1–400)</code></td>
+</tr>
+<tr>
+<td><code>price_vs_ema_pct</code></td>
+<td>Price vs EMA %</td>
+<td>Same idea vs EMA</td>
+<td>percent</td>
+<td><code>period=50 (1–400)</code></td>
+</tr>
+<tr>
+<td><code>sma_spread_pct</code></td>
+<td>SMA spread %</td>
+<td>Percent spread between fast and slow SMAs</td>
+<td>percent</td>
+<td><code>fast=20</code>, <code>slow=50</code> (both 1–400)</td>
+</tr>
+<tr>
+<td><code>ema_spread_pct</code></td>
+<td>EMA spread %</td>
+<td>Percent spread between fast and slow EMAs</td>
+<td>percent</td>
+<td><code>fast=12</code>, <code>slow=26</code> (both 1–400)</td>
+</tr>
+</tbody></table>
+<p><strong>Example Screener condition (close above 50-EMA):</strong></p>
+<pre><code class="language-json">{
+  &quot;type&quot;: &quot;condition&quot;,
+  &quot;left&quot;: { &quot;indicator&quot;: &quot;close&quot;, &quot;params&quot;: {} },
+  &quot;operator&quot;: &quot;gt&quot;,
+  &quot;weight_factor&quot;: 1,
+  &quot;right&quot;: { &quot;indicator&quot;: &quot;ema&quot;, &quot;params&quot;: { &quot;period&quot;: 50 } }
+}
+</code></pre>
+<h3>Momentum</h3>
+<table>
+<thead>
+<tr>
+<th>Id</th>
+<th>Name</th>
+<th>Meaning</th>
+<th>Units</th>
+<th>Params</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>rsi</code></td>
+<td>RSI</td>
+<td><strong>Relative Strength Index</strong> (Wilder) — momentum oscillator typically 0–100. Often &gt;70 overbought, &lt;30 oversold (heuristic).</td>
+<td>percent</td>
+<td><code>period=14 (1–200)</code></td>
+</tr>
+<tr>
+<td><code>roc</code></td>
+<td>ROC %</td>
+<td><strong>Rate of Change</strong> — percent change of close over <code>period</code></td>
+<td>percent</td>
+<td><code>period=12 (1–400)</code></td>
+</tr>
+<tr>
+<td><code>stoch_k</code></td>
+<td>Stochastic %K</td>
+<td>Close location in the high–low range over <code>period</code> (0–100 style)</td>
+<td>percent</td>
+<td><code>period=14 (1–400)</code></td>
+</tr>
+<tr>
+<td><code>stoch_d</code></td>
+<td>Stochastic %D</td>
+<td>Smoothed %K</td>
+<td>percent</td>
+<td><code>period=14 (1–400)</code>, <code>smooth=3 (1–50)</code></td>
+</tr>
+<tr>
+<td><code>macd</code></td>
+<td>MACD line</td>
+<td><strong>Moving Average Convergence Divergence</strong> — EMA(fast) − EMA(slow)</td>
+<td>price</td>
+<td><code>fast=12</code>, <code>slow=26</code> (1–400)</td>
+</tr>
+<tr>
+<td><code>macd_signal</code></td>
+<td>MACD signal</td>
+<td>EMA of the MACD line</td>
+<td>price</td>
+<td>+ <code>signal=9 (1–100)</code></td>
+</tr>
+<tr>
+<td><code>macd_hist</code></td>
+<td>MACD histogram</td>
+<td>MACD − signal (momentum of the MACD)</td>
+<td>price</td>
+<td>same as signal</td>
+</tr>
+</tbody></table>
+<h3>Volatility</h3>
+<table>
+<thead>
+<tr>
+<th>Id</th>
+<th>Name</th>
+<th>Meaning</th>
+<th>Units</th>
+<th>Params</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>atr</code></td>
+<td>ATR</td>
+<td><strong>Average True Range</strong> — average of true range; volatility in price units</td>
+<td>price</td>
+<td><code>period=14 (1–200)</code></td>
+</tr>
+<tr>
+<td><code>bb_mid</code></td>
+<td>Bollinger mid</td>
+<td>Middle Bollinger Band = SMA(<code>period</code>)</td>
+<td>price</td>
+<td><code>period=20 (1–400)</code></td>
+</tr>
+<tr>
+<td><code>bb_upper</code></td>
+<td>Bollinger upper</td>
+<td>Mid + <code>mult</code> × stdev</td>
+<td>price</td>
+<td><code>period=20</code>, <code>mult=2 (0.5–5, step 0.1)</code></td>
+</tr>
+<tr>
+<td><code>bb_lower</code></td>
+<td>Bollinger lower</td>
+<td>Mid − <code>mult</code> × stdev</td>
+<td>price</td>
+<td>same</td>
+</tr>
+<tr>
+<td><code>bb_pct_b</code></td>
+<td>Bollinger %B</td>
+<td>Where close sits in the band (0 at lower, 1 at upper)</td>
+<td>ratio</td>
+<td>same</td>
+</tr>
+<tr>
+<td><code>bb_width_pct</code></td>
+<td>Bollinger width %</td>
+<td>Band width as % of mid</td>
+<td>percent</td>
+<td>same</td>
+</tr>
+</tbody></table>
+<h3>Volume (needs volume)</h3>
+<table>
+<thead>
+<tr>
+<th>Id</th>
+<th>Name</th>
+<th>Meaning</th>
+<th>Units</th>
+<th>Params</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>volume</code></td>
+<td>Volume</td>
+<td>Session share volume</td>
+<td>count</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>volume_sma</code></td>
+<td>Volume SMA</td>
+<td>SMA of volume</td>
+<td>count</td>
+<td><code>period=20 (1–400)</code></td>
+</tr>
+<tr>
+<td><code>volume_ratio</code></td>
+<td>Volume / Vol SMA</td>
+<td><code>volume / volume_sma</code> — &gt;1 = above average activity</td>
+<td>ratio</td>
+<td><code>period=20 (1–400)</code></td>
+</tr>
+<tr>
+<td><code>average_volume</code></td>
+<td>Average Daily Volume</td>
+<td>Mean share volume over N (same math as Volume SMA)</td>
+<td>count</td>
+<td><code>period=20 (1–400)</code></td>
+</tr>
+</tbody></table>
+<h3>Liquidity (needs volume)</h3>
+<table>
+<thead>
+<tr>
+<th>Id</th>
+<th>Name</th>
+<th>Meaning</th>
+<th>Units</th>
+<th>Params</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>average_turnover</code></td>
+<td>Average Daily Turnover</td>
+<td>SMA of <code>close × volume</code> (typical daily traded value)</td>
+<td>currency</td>
+<td><code>period=20 (1–400)</code></td>
+</tr>
+<tr>
+<td><code>relative_turnover</code></td>
+<td>Relative Turnover</td>
+<td>Short ADT / longer baseline ADT; ~1.0 = in-line with own baseline</td>
+<td>ratio</td>
+<td><code>period=20</code>, <code>baseline=60</code> (1–400)</td>
+</tr>
+</tbody></table>
+<h3>Tradability / Risk heuristics</h3>
+<table>
+<thead>
+<tr>
+<th>Id</th>
+<th>Name</th>
+<th>Meaning</th>
+<th>Units</th>
+<th>Params</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>gap_frequency</code></td>
+<td>Gap Frequency</td>
+<td>Rate of opening gaps vs prior close</td>
+<td>ratio</td>
+<td><code>period=60</code>, <code>threshold_pct=1 (0.1–20, step 0.1)</code></td>
+</tr>
+<tr>
+<td><code>gap_fill_ratio</code></td>
+<td>Gap Fill Ratio</td>
+<td>Fraction of gaps that fill within <code>fill_window</code></td>
+<td>ratio</td>
+<td>+ <code>fill_window=5 (1–40)</code></td>
+</tr>
+<tr>
+<td><code>circuit_frequency</code></td>
+<td>Circuit Frequency</td>
+<td>Heuristic rate of circuit-like sessions (<strong>not</strong> exchange circuit feed)</td>
+<td>ratio</td>
+<td><code>period=60</code>, <code>move_pct=9.5 (1–25)</code>, <code>range_pct=0.5 (0.05–5)</code></td>
+</tr>
+<tr>
+<td><code>circuit_risk</code></td>
+<td>Circuit Risk</td>
+<td>0–100 severity from frequency + move size</td>
+<td>score_0_100</td>
+<td>same move/range params</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>Catalogue B — Relative Strength Primaries (Evaluation inputs)</h2>
+<p>Not screenable. Used as Evaluation / analytics inputs (especially <code>relative_strength_3m</code> → Strategy <code>relative_strength</code>).</p>
+<table>
+<thead>
+<tr>
+<th>Id</th>
+<th>Name</th>
+<th>Meaning</th>
+<th>Units</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>relative_strength_1m</code></td>
+<td>Relative Strength (1m)</td>
+<td>Stock vs benchmark return ratio ~1 month</td>
+<td>ratio</td>
+</tr>
+<tr>
+<td><code>relative_strength_3m</code></td>
+<td>Relative Strength (3m)</td>
+<td>~3 months — default Evaluation input for RS score</td>
+<td>ratio</td>
+</tr>
+<tr>
+<td><code>relative_strength_6m</code></td>
+<td>Relative Strength (6m)</td>
+<td>~6 months</td>
+<td>ratio</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>Catalogue C — Strategy-scorable Composites (for Strategy JSON)</h2>
+<p>Use these <strong>keys</strong> in <code>definition.scoring_model</code>. Values are <strong>0–100</strong> scores. Enabled weights must sum to <strong>100</strong>. Defaults below are Strategy UI defaults (weight / minimum / maximum).</p>
+<table>
+<thead>
+<tr>
+<th>Key (aliases)</th>
+<th>Name</th>
+<th>Meaning</th>
+<th>Default weight</th>
+<th>Default min</th>
+<th>Default max</th>
+<th>Params</th>
+<th>Depends on</th>
+<th>Formula (summary)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>relative_strength</code></td>
+<td>Relative Strength</td>
+<td>Strength vs benchmark (long-leaning)</td>
+<td>35</td>
+<td>80</td>
+<td>—</td>
+<td><code>lookback_days=90</code>, <code>benchmark=NIFTY50</code></td>
+<td><code>relative_strength_3m</code></td>
+<td>RS3m ≥1.05→100; ≥1.0→70; else 30</td>
+</tr>
+<tr>
+<td><code>momentum_score</code> (<code>momentum</code>)</td>
+<td>Momentum Score</td>
+<td>RSI-based momentum strength</td>
+<td>15</td>
+<td>70</td>
+<td>—</td>
+<td><code>rsi_period=14</code></td>
+<td><code>rsi</code></td>
+<td>RSI in [45,70]→100; &gt;70→55; &lt;30→35; else 50</td>
+</tr>
+<tr>
+<td><code>trend_score</code> (<code>trend</code>)</td>
+<td>Trend Score</td>
+<td>Price vs SMA stack</td>
+<td>20</td>
+<td>70</td>
+<td>—</td>
+<td><code>sma_fast=20</code>, <code>sma_slow=50</code></td>
+<td><code>close</code>, <code>sma</code></td>
+<td>close&gt;fast&gt;slow→100; close&gt;fast→60; else 20</td>
+</tr>
+<tr>
+<td><code>breakout_score</code> (<code>pattern_bonus</code>)</td>
+<td>Breakout Score</td>
+<td>Pattern/breakout evidence from Discovery</td>
+<td>10</td>
+<td>75</td>
+<td>—</td>
+<td>—</td>
+<td><code>discovery_pattern_count</code></td>
+<td>min(100, 40+20×count); 0 if none</td>
+</tr>
+<tr>
+<td><code>volume_score</code> (<code>volume</code>)</td>
+<td>Volume Score</td>
+<td>Volume vs recent average</td>
+<td>8</td>
+<td>60</td>
+<td>—</td>
+<td><code>volume_sma_period=20</code></td>
+<td><code>volume_ratio</code></td>
+<td>≥1.2→100; ≥0.8→60; else 30</td>
+</tr>
+<tr>
+<td><code>market_regime</code></td>
+<td>Market Regime</td>
+<td>Broad market regime (<strong>stub</strong>)</td>
+<td>5</td>
+<td>60</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>Constant <strong>50</strong> until model ships</td>
+</tr>
+<tr>
+<td><code>sector_strength</code></td>
+<td>Sector Strength</td>
+<td>Sector RS (<strong>stub</strong>)</td>
+<td>4</td>
+<td>60</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>Constant <strong>50</strong> until model ships</td>
+</tr>
+<tr>
+<td><code>risk_score</code> (<code>risk</code>)</td>
+<td>Risk Score</td>
+<td>ATR-based risk; <strong>higher = riskier</strong></td>
+<td>3</td>
+<td>0</td>
+<td><strong>40</strong></td>
+<td><code>atr_period=14</code></td>
+<td><code>atr</code>, <code>close</code></td>
+<td>clamp((atr/close×100)×10, 0, 100); supports <strong>maximum</strong> gate</td>
+</tr>
+</tbody></table>
+<p><strong>Example Strategy scoring rows (weights = 100):</strong></p>
+<pre><code class="language-json">&quot;scoring_model&quot;: [
+  { &quot;key&quot;: &quot;relative_strength&quot;, &quot;enabled&quot;: true, &quot;weight&quot;: 50, &quot;minimum&quot;: 70, &quot;maximum&quot;: null, &quot;parameters&quot;: {} },
+  { &quot;key&quot;: &quot;momentum_score&quot;, &quot;enabled&quot;: true, &quot;weight&quot;: 50, &quot;minimum&quot;: 60, &quot;maximum&quot;: null, &quot;parameters&quot;: { &quot;rsi_period&quot;: 14 } }
+]
+</code></pre>
+<hr>
+<h2>Catalogue D — Liquidity / Tradability Composites</h2>
+<p>Active for Discovery / Dashboard / Stock Details / Screener consumers. <strong>Not</strong> strategy-scorable and <strong>not</strong> wired into Recommendation scoring.</p>
+<table>
+<thead>
+<tr>
+<th>Id</th>
+<th>Name</th>
+<th>Meaning</th>
+<th>Units</th>
+<th>Depends on</th>
+<th>Formula (summary)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>liquidity_score</code></td>
+<td>Liquidity Score</td>
+<td>0–100 liquidity quality</td>
+<td>score_0_100</td>
+<td><code>relative_turnover</code>, <code>average_turnover</code>, <code>average_volume</code></td>
+<td>Map RT/turnover/volume → 0–100; mean of available</td>
+</tr>
+<tr>
+<td><code>tradability_score</code></td>
+<td>Tradability Score</td>
+<td>0–100 ease of trading (higher = easier)</td>
+<td>score_0_100</td>
+<td>gap + circuit primaries</td>
+<td>Invert freqs / use fill; mean of available</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>Catalogue E — Discovery + Stock Analytics Metrics</h2>
+<table>
+<thead>
+<tr>
+<th>Id</th>
+<th>Name</th>
+<th>Meaning</th>
+<th>Units</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>discovery_pattern_count</code></td>
+<td>Discovery Pattern Count</td>
+<td>Count of matched patterns on Discovery evidence (not a TI series)</td>
+<td>count</td>
+</tr>
+<tr>
+<td><code>distance_52w_high_pct</code></td>
+<td>Distance from 52-week High %</td>
+<td>How far latest close is below/above 52w high</td>
+<td>percent</td>
+</tr>
+<tr>
+<td><code>distance_52w_low_pct</code></td>
+<td>Distance from 52-week Low %</td>
+<td>Distance from 52w low</td>
+<td>percent</td>
+</tr>
+<tr>
+<td><code>historical_volatility_pct</code></td>
+<td>Historical Volatility %</td>
+<td>Annualised log-return volatility proxy</td>
+<td>percent</td>
+</tr>
+<tr>
+<td><code>beta</code></td>
+<td>Beta (proxy)</td>
+<td>Soft vol proxy — <strong>not</strong> formal regression beta</td>
+<td>ratio</td>
+</tr>
+<tr>
+<td><code>trend_strength</code></td>
+<td>Trend Strength</td>
+<td>Heuristic 0–100 from close vs SMA50/200 — <strong>≠</strong> Strategy <code>trend_score</code></td>
+<td>score_0_100</td>
+</tr>
+<tr>
+<td><code>maximum_drawdown_pct</code></td>
+<td>Maximum Drawdown %</td>
+<td>Peak-to-trough over loaded history</td>
+<td>percent</td>
+</tr>
+<tr>
+<td><code>current_drawdown_pct</code></td>
+<td>Current Drawdown %</td>
+<td>Peak to latest close</td>
+<td>percent</td>
+</tr>
+<tr>
+<td><code>average_daily_volume_metric</code></td>
+<td>Average Daily Volume (analytics)</td>
+<td>Descriptive ADV — distinct from Primary <code>average_volume</code></td>
+<td>count</td>
+</tr>
+<tr>
+<td><code>liquidity_rating</code></td>
+<td>Liquidity Rating</td>
+<td>High / Medium / Low / Unknown from notional ADV</td>
+<td>none</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>Quick definitions glossary (common acronyms)</h2>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Plain meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>SMA</strong></td>
+<td>Simple Moving Average — equal-weight average of recent closes</td>
+</tr>
+<tr>
+<td><strong>EMA</strong></td>
+<td>Exponential Moving Average — recent closes weigh more; reacts faster than SMA</td>
+</tr>
+<tr>
+<td><strong>RSI</strong></td>
+<td>Relative Strength Index — 0–100 momentum oscillator from average gains vs losses</td>
+</tr>
+<tr>
+<td><strong>MACD</strong></td>
+<td>Moving Average Convergence Divergence — difference of two EMAs (+ signal + histogram)</td>
+</tr>
+<tr>
+<td><strong>ATR</strong></td>
+<td>Average True Range — typical bar range including gaps; volatility in price units</td>
+</tr>
+<tr>
+<td><strong>Bollinger Bands</strong></td>
+<td>SMA ± (multiplier × standard deviation); width expands/contracts with volatility</td>
+</tr>
+<tr>
+<td><strong>ROC</strong></td>
+<td>Rate of Change — percent price change over N bars</td>
+</tr>
+<tr>
+<td><strong>Stochastic</strong></td>
+<td>Where close sits in the recent high–low range (%K / smoothed %D)</td>
+</tr>
+<tr>
+<td><strong>Relative Strength (RS)</strong></td>
+<td>Here: stock performance vs a benchmark (not the RSI oscillator)</td>
+</tr>
+</tbody></table>
+<h2>Artifact envelope (optional packaging)</h2>
+<p>Indicators can be exported as Trading Artifact envelopes (<code>artifact_type: &quot;indicator&quot;</code>) for packages. Release calculators stay immutable; create/update only drafts. Envelope needs <code>schema_version</code>, <code>artifact_type</code>, <code>slug</code> (= registry id), <code>name</code>, <code>metadata</code>, and <code>definition</code> with <code>registry_id</code> / <code>indicator_kind</code> (<code>primary</code> / <code>composite</code> / <code>metric</code>). No executable <code>code</code> / <code>script</code> / <code>formula</code> fields allowed.</p>
+<h2>Recommended reading order for builders</h2>
+<ol>
+<li>Pick consumer: Screener condition vs Strategy weight.</li>
+<li>Copy the correct id/key from the tables above (never invent ids).</li>
+<li>Set params within min/max (or omit to use defaults).</li>
+<li>For Strategy, ensure enabled weights sum to 100; for Screeners, build a valid <code>definition.root</code> tree.</li>
+<li>Open Registry detail for dependency tree + full formula prose when unsure.</li>
+</ol>
 <p>Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).</p>
 
       </section>
@@ -101,16 +850,19 @@
         <dd>Match against indicator id, display name, or description.</dd>
     
         <dt>Category / Type / Status filters</dt>
-        <dd>Narrow the catalogue (e.g. liquidity composites, planned stubs).</dd>
+        <dd>Narrow the catalogue (e.g. momentum primaries, stub composites, liquidity).</dd>
     
         <dt>Indicator row</dt>
-        <dd>Open the detail page for full metadata.</dd>
+        <dd>Open the detail page for full metadata, parameters, consumers, and capabilities.</dd>
     
         <dt>Dependency tree</dt>
-        <dd>On detail, expand declared depends_on relationships recursively.</dd>
+        <dd>On detail, expand declared depends_on relationships recursively (e.g. momentum_score → rsi).</dd>
     
         <dt>Formula explanation</dt>
         <dd>Read-only prose describing how the indicator is computed; not editable in the UI.</dd>
+    
+        <dt>Catalogue guide</dt>
+        <dd>This documentation topic — full id list, meanings, defaults, ranges, and Screener vs Strategy usage.</dd>
     
         <dt>Typical flow</dt>
         <dd>Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.</dd>
@@ -124,13 +876,25 @@
         <h2>Concepts</h2>
         <dl class="doc-list">
         <dt>Primary / Composite / Metric</dt>
-        <dd>Primaries are OHLCV calculators (often screenable). Composites combine dependencies. Metrics are descriptive analytics fields.</dd>
+        <dd>Primaries are OHLCV calculators (often screenable). Composites combine dependencies into scores (Strategy or Liquidity/Tradability). Metrics are descriptive Stock Analytics / Discovery fields.</dd>
     
         <dt>Screenable vs strategy-scorable</dt>
-        <dd>Screenable indicators appear in Screener conditions. Strategy-scorable composites appear in Strategy weights — Liquidity/Tradability composites are intentionally not strategy-scorable yet.</dd>
+        <dd>Screenable Primaries appear in Screener conditions. Strategy-scorable Composites appear in Strategy weights. No id is both. Liquidity/Tradability composites are intentionally not strategy-scorable.</dd>
+    
+        <dt>EMA / SMA / RSI (plain language)</dt>
+        <dd>SMA = equal-weight average of closes. EMA = exponential average (faster). RSI = 0–100 momentum from average gains vs losses. Relative Strength (Strategy) is stock vs benchmark — not the RSI oscillator.</dd>
+    
+        <dt>Id uniqueness and aliases</dt>
+        <dd>Registry id is unique. Strategy aliases: momentum→momentum_score, trend→trend_score, pattern_bonus→breakout_score, volume→volume_score, risk→risk_score. Prefer canonical keys in new JSON.</dd>
+    
+        <dt>Parameter ranges</dt>
+        <dd>Screener Primary params declare default/min/max/step (periods usually 1–400). Strategy Composite params declare type/label/default. Stay inside ranges or Validate/runtime will reject or clamp.</dd>
     
         <dt>Circuit heuristics</dt>
         <dd>Circuit Frequency / Risk use OHLCV heuristics (large move + locked range), not official exchange circuit feeds.</dd>
+    
+        <dt>Immutable calculators</dt>
+        <dd>Shipping calculators are release-owned. Registry UI is read-only documentation; artifact drafts do not rewrite TechnicalIndicatorService math.</dd>
     
         <dt>Active portfolio context</dt>
         <dd>Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.</dd>
@@ -144,7 +908,7 @@
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
-          <a href="settings.html">Settings</a><a href="screener.html">Screener</a><a href="strategy.html">Strategy</a><a href="data-quality-center.html">Data Quality Center</a>
+          <a href="settings.html">Settings</a><a href="screener.html">Screener</a><a href="screener-registry.html">Screener Registry</a><a href="strategy.html">Strategy</a><a href="strategy-registry.html">Strategy Registry</a><a href="data-quality-center.html">Data Quality Center</a>
         </div>
       </section>
     </article>

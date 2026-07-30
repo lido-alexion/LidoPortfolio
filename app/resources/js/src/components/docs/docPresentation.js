@@ -385,6 +385,38 @@ export const DOC_PRESENTATION = {
             },
         ],
     },
+    'indicator-registry': {
+        icon: 'bi-sliders',
+        purpose:
+            'Complete Indicator catalogue — meanings (EMA, RSI, …), params with defaults/min/max, screenable vs strategy-scorable, and how to use each id.',
+        workflow: [
+            { label: 'Indicator Registry', current: true },
+            { label: 'Screener conditions', keyword: 'screener-registry' },
+            { label: 'Strategy scoring', keyword: 'strategy-registry' },
+        ],
+        callouts: [
+            {
+                variant: 'tip',
+                title: 'Which catalogue?',
+                body: 'Screener conditions use screenable Primaries (ema, rsi, …). Strategy weights use strategy-scorable Composites (momentum_score, trend_score, …). No id is both.',
+            },
+            {
+                variant: 'info',
+                title: 'Acronyms',
+                body: 'EMA = Exponential Moving Average (faster than SMA). RSI = Relative Strength Index (0–100 oscillator). Strategy “Relative Strength” is stock vs benchmark — not RSI.',
+            },
+        ],
+        commonMistakes: [
+            {
+                q: 'Unknown indicator in Screener Validate',
+                a: 'Use a screenable Primary id from the catalogue (e.g. ema), not a Strategy composite key like momentum_score.',
+            },
+            {
+                q: 'Unknown Strategy scoring key',
+                a: 'Use a strategy-scorable composite key (relative_strength, momentum_score, …). Prefer canonical keys over aliases.',
+            },
+        ],
+    },
     'strategy-registry': {
         icon: 'bi-journal-bookmark',
         purpose:

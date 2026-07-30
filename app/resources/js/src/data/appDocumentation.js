@@ -1523,22 +1523,241 @@ const APP_DOCUMENTATION_BASE = [
         title: 'Indicator Registry',
         routeLabel: '/settings/indicators',
         match: (p) => pathStarts(p, '/settings/indicators'),
-        summary: 'Admin read-only catalogue of Primary, Composite, and Metric indicators with dependency trees and formula documentation.',
+        summary: 'Complete Indicator catalogue — definitions, parameters (defaults/min/max), screenable vs strategy-scorable, formulas, and how to use each id in Screeners or Strategy.',
         overview:
-            'The Indicator Registry is the metadata source of truth for indicators (SD-033). Use the list to search and filter by category, type, and status. Open any row for description, parameters, consumers, capabilities, a dependency tree, and a formula explanation. Formula text is documentation only — there is no formula editor. Liquidity and Tradability indicators are available for Screeners and future Discovery / Dashboard / Stock Details consumers; they are not auto-wired into Strategy scoring or the Recommendation Engine.',
+            'The Indicator Registry is the **metadata source of truth** for every calculator StoX exposes (SD-033). '
+            + 'Use `/settings/indicators` to search and filter by category, type, and status. Open any row for description, parameters, consumers, capabilities, a dependency tree, and a formula explanation. '
+            + '**Formula text is documentation only** — there is no formula editor and release-shipped calculators are not mutated from the UI.\n\n'
+            + 'This page is written for humans and AI agents: every registry **id**, what it means, defaults, ranges, and where you can use it.\n\n'
+            + '## How to use indicators\n\n'
+            + '| Consumer | Which ids | How you reference them |\n'
+            + '|----------|-----------|------------------------|\n'
+            + '| **Screener conditions** | `screenable` Primaries (39) | Operand `{ "indicator": "<id>", "params": {…} }` — see Screener Registry |\n'
+            + '| **Strategy scoring** | `strategy_scorable` Composites (8) | `scoring_model[].key` — see Strategy Registry |\n'
+            + '| **Evaluation facts** | Strategy deps + RS primaries | Computed by Evaluation; feed Strategy scores |\n'
+            + '| **Stock Details / Dashboard** | Metrics + Liquidity/Tradability | Display analytics (not Strategy weights) |\n'
+            + '| **Admin Registry UI** | All 62 | Browse metadata only |\n'
+            + '\n'
+            + '**Important:** No indicator is both screenable and strategy-scorable. Screeners use price/volume Primaries (`ema`, `rsi`, …). Strategy uses score Composites (`momentum_score`, `trend_score`, …) that **depend on** Primaries.\n\n'
+            + '## Types, status, and capabilities\n\n'
+            + '| Concept | Values / meaning |\n'
+            + '|---------|------------------|\n'
+            + '| **Type** | `primary` = OHLCV calculator; `composite` = combines dependencies into a score; `metric` = descriptive analytics field |\n'
+            + '| **Status** | `active` = live; `stub` = placeholder (constant/neutral until model ships); `planned` / `deprecated` reserved |\n'
+            + '| **screenable** | May appear on the left/right of a Screener condition |\n'
+            + '| **strategy_scorable** | May appear as a Strategy `scoring_model` key with weight |\n'
+            + '| **needs_volume** | Requires volume bars; fails/null if volume missing |\n'
+            + '| **supports_maximum** | Strategy may apply a **maximum** gate (used by `risk_score`) |\n'
+            + '| **Units** | `price`, `percent`, `ratio`, `count`, `currency`, `score_0_100`, `none` |\n'
+            + '\n'
+            + '**Uniqueness:** each indicator `id` (also used as artifact `slug`) is globally unique in the registry. Aliases (legacy Strategy keys) resolve to a canonical id.\n\n'
+            + '## Parameter conventions (Screenable Primaries)\n\n'
+            + 'Screener params are numeric with **default / min / max / step**. Period-like params usually allow **1–400** (RSI/ATR period max **200**; Stochastic `smooth` max **50**; MACD `signal` max **100**; Bollinger `mult` **0.5–5** step **0.1**).\n\n'
+            + 'Strategy Composite params are `{ type, label, default }` (often no min/max in metadata) and are UI-persisted on the Strategy; Evaluation may still use trading_os defaults for some inputs (TD-19).\n\n'
+            + '---\n\n'
+            + '## Catalogue A — Screenable Primaries (for Screener JSON)\n\n'
+            + 'Use these ids in Screener `left` / `right` operands. Params shown as `name=default (min–max[, step])`.\n\n'
+            + '### Price\n\n'
+            + '| Id | Name | Meaning | Units | Params |\n'
+            + '|----|------|---------|-------|--------|\n'
+            + '| `close` | Close | Last traded / session closing price | price | — |\n'
+            + '| `open` | Open | Session opening price | price | — |\n'
+            + '| `high` | High | Session high | price | — |\n'
+            + '| `low` | Low | Session low | price | — |\n'
+            + '| `change_pct` | % Change | Percent change vs close `period` bars ago | percent | `period=1 (1–400)` |\n'
+            + '| `high_n` | Highest high (N) | Highest high over N bars | price | `period=20 (1–400)` |\n'
+            + '| `low_n` | Lowest low (N) | Lowest low over N bars | price | `period=20 (1–400)` |\n'
+            + '| `high_52w` | 52-week high | Highest high over ~252 trading days | price | — |\n'
+            + '| `low_52w` | 52-week low | Lowest low over ~252 trading days | price | — |\n'
+            + '| `range_pct` | Range % (H-L)/C | Intraday range as % of close: `(high−low)/close×100` | percent | — |\n'
+            + '\n'
+            + '### Trend\n\n'
+            + '| Id | Name | Meaning | Units | Params |\n'
+            + '|----|------|---------|-------|--------|\n'
+            + '| `sma` | SMA | **Simple Moving Average** — arithmetic mean of close over `period` bars. Smooths price; slower than EMA. | price | `period=20 (1–400)` |\n'
+            + '| `ema` | EMA | **Exponential Moving Average** — weighted average of close that reacts faster to recent prices than SMA. Common trend line (e.g. 50-day). | price | `period=50 (1–400)` |\n'
+            + '| `price_vs_sma_pct` | Price vs SMA % | `(close − SMA) / SMA × 100` — how far price is above/below its SMA | percent | `period=20 (1–400)` |\n'
+            + '| `price_vs_ema_pct` | Price vs EMA % | Same idea vs EMA | percent | `period=50 (1–400)` |\n'
+            + '| `sma_spread_pct` | SMA spread % | Percent spread between fast and slow SMAs | percent | `fast=20`, `slow=50` (both 1–400) |\n'
+            + '| `ema_spread_pct` | EMA spread % | Percent spread between fast and slow EMAs | percent | `fast=12`, `slow=26` (both 1–400) |\n'
+            + '\n'
+            + '**Example Screener condition (close above 50-EMA):**\n\n'
+            + '```json\n'
+            + '{\n'
+            + '  "type": "condition",\n'
+            + '  "left": { "indicator": "close", "params": {} },\n'
+            + '  "operator": "gt",\n'
+            + '  "weight_factor": 1,\n'
+            + '  "right": { "indicator": "ema", "params": { "period": 50 } }\n'
+            + '}\n'
+            + '```\n\n'
+            + '### Momentum\n\n'
+            + '| Id | Name | Meaning | Units | Params |\n'
+            + '|----|------|---------|-------|--------|\n'
+            + '| `rsi` | RSI | **Relative Strength Index** (Wilder) — momentum oscillator typically 0–100. Often >70 overbought, <30 oversold (heuristic). | percent | `period=14 (1–200)` |\n'
+            + '| `roc` | ROC % | **Rate of Change** — percent change of close over `period` | percent | `period=12 (1–400)` |\n'
+            + '| `stoch_k` | Stochastic %K | Close location in the high–low range over `period` (0–100 style) | percent | `period=14 (1–400)` |\n'
+            + '| `stoch_d` | Stochastic %D | Smoothed %K | percent | `period=14 (1–400)`, `smooth=3 (1–50)` |\n'
+            + '| `macd` | MACD line | **Moving Average Convergence Divergence** — EMA(fast) − EMA(slow) | price | `fast=12`, `slow=26` (1–400) |\n'
+            + '| `macd_signal` | MACD signal | EMA of the MACD line | price | + `signal=9 (1–100)` |\n'
+            + '| `macd_hist` | MACD histogram | MACD − signal (momentum of the MACD) | price | same as signal |\n'
+            + '\n'
+            + '### Volatility\n\n'
+            + '| Id | Name | Meaning | Units | Params |\n'
+            + '|----|------|---------|-------|--------|\n'
+            + '| `atr` | ATR | **Average True Range** — average of true range; volatility in price units | price | `period=14 (1–200)` |\n'
+            + '| `bb_mid` | Bollinger mid | Middle Bollinger Band = SMA(`period`) | price | `period=20 (1–400)` |\n'
+            + '| `bb_upper` | Bollinger upper | Mid + `mult` × stdev | price | `period=20`, `mult=2 (0.5–5, step 0.1)` |\n'
+            + '| `bb_lower` | Bollinger lower | Mid − `mult` × stdev | price | same |\n'
+            + '| `bb_pct_b` | Bollinger %B | Where close sits in the band (0 at lower, 1 at upper) | ratio | same |\n'
+            + '| `bb_width_pct` | Bollinger width % | Band width as % of mid | percent | same |\n'
+            + '\n'
+            + '### Volume (needs volume)\n\n'
+            + '| Id | Name | Meaning | Units | Params |\n'
+            + '|----|------|---------|-------|--------|\n'
+            + '| `volume` | Volume | Session share volume | count | — |\n'
+            + '| `volume_sma` | Volume SMA | SMA of volume | count | `period=20 (1–400)` |\n'
+            + '| `volume_ratio` | Volume / Vol SMA | `volume / volume_sma` — >1 = above average activity | ratio | `period=20 (1–400)` |\n'
+            + '| `average_volume` | Average Daily Volume | Mean share volume over N (same math as Volume SMA) | count | `period=20 (1–400)` |\n'
+            + '\n'
+            + '### Liquidity (needs volume)\n\n'
+            + '| Id | Name | Meaning | Units | Params |\n'
+            + '|----|------|---------|-------|--------|\n'
+            + '| `average_turnover` | Average Daily Turnover | SMA of `close × volume` (typical daily traded value) | currency | `period=20 (1–400)` |\n'
+            + '| `relative_turnover` | Relative Turnover | Short ADT / longer baseline ADT; ~1.0 = in-line with own baseline | ratio | `period=20`, `baseline=60` (1–400) |\n'
+            + '\n'
+            + '### Tradability / Risk heuristics\n\n'
+            + '| Id | Name | Meaning | Units | Params |\n'
+            + '|----|------|---------|-------|--------|\n'
+            + '| `gap_frequency` | Gap Frequency | Rate of opening gaps vs prior close | ratio | `period=60`, `threshold_pct=1 (0.1–20, step 0.1)` |\n'
+            + '| `gap_fill_ratio` | Gap Fill Ratio | Fraction of gaps that fill within `fill_window` | ratio | + `fill_window=5 (1–40)` |\n'
+            + '| `circuit_frequency` | Circuit Frequency | Heuristic rate of circuit-like sessions (**not** exchange circuit feed) | ratio | `period=60`, `move_pct=9.5 (1–25)`, `range_pct=0.5 (0.05–5)` |\n'
+            + '| `circuit_risk` | Circuit Risk | 0–100 severity from frequency + move size | score_0_100 | same move/range params |\n'
+            + '\n'
+            + '---\n\n'
+            + '## Catalogue B — Relative Strength Primaries (Evaluation inputs)\n\n'
+            + 'Not screenable. Used as Evaluation / analytics inputs (especially `relative_strength_3m` → Strategy `relative_strength`).\n\n'
+            + '| Id | Name | Meaning | Units |\n'
+            + '|----|------|---------|-------|\n'
+            + '| `relative_strength_1m` | Relative Strength (1m) | Stock vs benchmark return ratio ~1 month | ratio |\n'
+            + '| `relative_strength_3m` | Relative Strength (3m) | ~3 months — default Evaluation input for RS score | ratio |\n'
+            + '| `relative_strength_6m` | Relative Strength (6m) | ~6 months | ratio |\n'
+            + '\n'
+            + '---\n\n'
+            + '## Catalogue C — Strategy-scorable Composites (for Strategy JSON)\n\n'
+            + 'Use these **keys** in `definition.scoring_model`. Values are **0–100** scores. Enabled weights must sum to **100**. '
+            + 'Defaults below are Strategy UI defaults (weight / minimum / maximum).\n\n'
+            + '| Key (aliases) | Name | Meaning | Default weight | Default min | Default max | Params | Depends on | Formula (summary) |\n'
+            + '|---------------|------|---------|----------------|-------------|-------------|--------|------------|-------------------|\n'
+            + '| `relative_strength` | Relative Strength | Strength vs benchmark (long-leaning) | 35 | 80 | — | `lookback_days=90`, `benchmark=NIFTY50` | `relative_strength_3m` | RS3m ≥1.05→100; ≥1.0→70; else 30 |\n'
+            + '| `momentum_score` (`momentum`) | Momentum Score | RSI-based momentum strength | 15 | 70 | — | `rsi_period=14` | `rsi` | RSI in [45,70]→100; >70→55; <30→35; else 50 |\n'
+            + '| `trend_score` (`trend`) | Trend Score | Price vs SMA stack | 20 | 70 | — | `sma_fast=20`, `sma_slow=50` | `close`, `sma` | close>fast>slow→100; close>fast→60; else 20 |\n'
+            + '| `breakout_score` (`pattern_bonus`) | Breakout Score | Pattern/breakout evidence from Discovery | 10 | 75 | — | — | `discovery_pattern_count` | min(100, 40+20×count); 0 if none |\n'
+            + '| `volume_score` (`volume`) | Volume Score | Volume vs recent average | 8 | 60 | — | `volume_sma_period=20` | `volume_ratio` | ≥1.2→100; ≥0.8→60; else 30 |\n'
+            + '| `market_regime` | Market Regime | Broad market regime (**stub**) | 5 | 60 | — | — | — | Constant **50** until model ships |\n'
+            + '| `sector_strength` | Sector Strength | Sector RS (**stub**) | 4 | 60 | — | — | — | Constant **50** until model ships |\n'
+            + '| `risk_score` (`risk`) | Risk Score | ATR-based risk; **higher = riskier** | 3 | 0 | **40** | `atr_period=14` | `atr`, `close` | clamp((atr/close×100)×10, 0, 100); supports **maximum** gate |\n'
+            + '\n'
+            + '**Example Strategy scoring rows (weights = 100):**\n\n'
+            + '```json\n'
+            + '"scoring_model": [\n'
+            + '  { "key": "relative_strength", "enabled": true, "weight": 50, "minimum": 70, "maximum": null, "parameters": {} },\n'
+            + '  { "key": "momentum_score", "enabled": true, "weight": 50, "minimum": 60, "maximum": null, "parameters": { "rsi_period": 14 } }\n'
+            + ']\n'
+            + '```\n\n'
+            + '---\n\n'
+            + '## Catalogue D — Liquidity / Tradability Composites\n\n'
+            + 'Active for Discovery / Dashboard / Stock Details / Screener consumers. **Not** strategy-scorable and **not** wired into Recommendation scoring.\n\n'
+            + '| Id | Name | Meaning | Units | Depends on | Formula (summary) |\n'
+            + '|----|------|---------|-------|------------|-------------------|\n'
+            + '| `liquidity_score` | Liquidity Score | 0–100 liquidity quality | score_0_100 | `relative_turnover`, `average_turnover`, `average_volume` | Map RT/turnover/volume → 0–100; mean of available |\n'
+            + '| `tradability_score` | Tradability Score | 0–100 ease of trading (higher = easier) | score_0_100 | gap + circuit primaries | Invert freqs / use fill; mean of available |\n'
+            + '\n'
+            + '---\n\n'
+            + '## Catalogue E — Discovery + Stock Analytics Metrics\n\n'
+            + '| Id | Name | Meaning | Units |\n'
+            + '|----|------|---------|-------|\n'
+            + '| `discovery_pattern_count` | Discovery Pattern Count | Count of matched patterns on Discovery evidence (not a TI series) | count |\n'
+            + '| `distance_52w_high_pct` | Distance from 52-week High % | How far latest close is below/above 52w high | percent |\n'
+            + '| `distance_52w_low_pct` | Distance from 52-week Low % | Distance from 52w low | percent |\n'
+            + '| `historical_volatility_pct` | Historical Volatility % | Annualised log-return volatility proxy | percent |\n'
+            + '| `beta` | Beta (proxy) | Soft vol proxy — **not** formal regression beta | ratio |\n'
+            + '| `trend_strength` | Trend Strength | Heuristic 0–100 from close vs SMA50/200 — **≠** Strategy `trend_score` | score_0_100 |\n'
+            + '| `maximum_drawdown_pct` | Maximum Drawdown % | Peak-to-trough over loaded history | percent |\n'
+            + '| `current_drawdown_pct` | Current Drawdown % | Peak to latest close | percent |\n'
+            + '| `average_daily_volume_metric` | Average Daily Volume (analytics) | Descriptive ADV — distinct from Primary `average_volume` | count |\n'
+            + '| `liquidity_rating` | Liquidity Rating | High / Medium / Low / Unknown from notional ADV | none |\n'
+            + '\n'
+            + '---\n\n'
+            + '## Quick definitions glossary (common acronyms)\n\n'
+            + '| Term | Plain meaning |\n'
+            + '|------|---------------|\n'
+            + '| **SMA** | Simple Moving Average — equal-weight average of recent closes |\n'
+            + '| **EMA** | Exponential Moving Average — recent closes weigh more; reacts faster than SMA |\n'
+            + '| **RSI** | Relative Strength Index — 0–100 momentum oscillator from average gains vs losses |\n'
+            + '| **MACD** | Moving Average Convergence Divergence — difference of two EMAs (+ signal + histogram) |\n'
+            + '| **ATR** | Average True Range — typical bar range including gaps; volatility in price units |\n'
+            + '| **Bollinger Bands** | SMA ± (multiplier × standard deviation); width expands/contracts with volatility |\n'
+            + '| **ROC** | Rate of Change — percent price change over N bars |\n'
+            + '| **Stochastic** | Where close sits in the recent high–low range (%K / smoothed %D) |\n'
+            + '| **Relative Strength (RS)** | Here: stock performance vs a benchmark (not the RSI oscillator) |\n'
+            + '\n'
+            + '## Artifact envelope (optional packaging)\n\n'
+            + 'Indicators can be exported as Trading Artifact envelopes (`artifact_type: "indicator"`) for packages. '
+            + 'Release calculators stay immutable; create/update only drafts. Envelope needs `schema_version`, `artifact_type`, `slug` (= registry id), `name`, `metadata`, and `definition` with `registry_id` / `indicator_kind` (`primary` / `composite` / `metric`). '
+            + 'No executable `code` / `script` / `formula` fields allowed.\n\n'
+            + '## Recommended reading order for builders\n\n'
+            + '1. Pick consumer: Screener condition vs Strategy weight.\n'
+            + '2. Copy the correct id/key from the tables above (never invent ids).\n'
+            + '3. Set params within min/max (or omit to use defaults).\n'
+            + '4. For Strategy, ensure enabled weights sum to 100; for Screeners, build a valid `definition.root` tree.\n'
+            + '5. Open Registry detail for dependency tree + full formula prose when unsure.\n',
         controls: [
             { name: 'Search', description: 'Match against indicator id, display name, or description.' },
-            { name: 'Category / Type / Status filters', description: 'Narrow the catalogue (e.g. liquidity composites, planned stubs).' },
-            { name: 'Indicator row', description: 'Open the detail page for full metadata.' },
-            { name: 'Dependency tree', description: 'On detail, expand declared depends_on relationships recursively.' },
+            { name: 'Category / Type / Status filters', description: 'Narrow the catalogue (e.g. momentum primaries, stub composites, liquidity).' },
+            { name: 'Indicator row', description: 'Open the detail page for full metadata, parameters, consumers, and capabilities.' },
+            { name: 'Dependency tree', description: 'On detail, expand declared depends_on relationships recursively (e.g. momentum_score → rsi).' },
             { name: 'Formula explanation', description: 'Read-only prose describing how the indicator is computed; not editable in the UI.' },
+            { name: 'Catalogue guide', description: 'This documentation topic — full id list, meanings, defaults, ranges, and Screener vs Strategy usage.' },
         ],
         concepts: [
-            { name: 'Primary / Composite / Metric', description: 'Primaries are OHLCV calculators (often screenable). Composites combine dependencies. Metrics are descriptive analytics fields.' },
-            { name: 'Screenable vs strategy-scorable', description: 'Screenable indicators appear in Screener conditions. Strategy-scorable composites appear in Strategy weights — Liquidity/Tradability composites are intentionally not strategy-scorable yet.' },
-            { name: 'Circuit heuristics', description: 'Circuit Frequency / Risk use OHLCV heuristics (large move + locked range), not official exchange circuit feeds.' },
+            {
+                name: 'Primary / Composite / Metric',
+                description:
+                    'Primaries are OHLCV calculators (often screenable). Composites combine dependencies into scores (Strategy or Liquidity/Tradability). Metrics are descriptive Stock Analytics / Discovery fields.',
+            },
+            {
+                name: 'Screenable vs strategy-scorable',
+                description:
+                    'Screenable Primaries appear in Screener conditions. Strategy-scorable Composites appear in Strategy weights. No id is both. Liquidity/Tradability composites are intentionally not strategy-scorable.',
+            },
+            {
+                name: 'EMA / SMA / RSI (plain language)',
+                description:
+                    'SMA = equal-weight average of closes. EMA = exponential average (faster). RSI = 0–100 momentum from average gains vs losses. Relative Strength (Strategy) is stock vs benchmark — not the RSI oscillator.',
+            },
+            {
+                name: 'Id uniqueness and aliases',
+                description:
+                    'Registry id is unique. Strategy aliases: momentum→momentum_score, trend→trend_score, pattern_bonus→breakout_score, volume→volume_score, risk→risk_score. Prefer canonical keys in new JSON.',
+            },
+            {
+                name: 'Parameter ranges',
+                description:
+                    'Screener Primary params declare default/min/max/step (periods usually 1–400). Strategy Composite params declare type/label/default. Stay inside ranges or Validate/runtime will reject or clamp.',
+            },
+            {
+                name: 'Circuit heuristics',
+                description:
+                    'Circuit Frequency / Risk use OHLCV heuristics (large move + locked range), not official exchange circuit feeds.',
+            },
+            {
+                name: 'Immutable calculators',
+                description:
+                    'Shipping calculators are release-owned. Registry UI is read-only documentation; artifact drafts do not rewrite TechnicalIndicatorService math.',
+            },
         ],
-        related: ['settings', 'screener', 'strategy', 'data-quality-center'],
+        related: ['settings', 'screener', 'screener-registry', 'strategy', 'strategy-registry', 'data-quality-center'],
     },
     {
         id: 'users',
