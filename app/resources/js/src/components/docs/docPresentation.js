@@ -391,6 +391,7 @@ export const DOC_PRESENTATION = {
             'Complete Indicator catalogue — meanings (EMA, RSI, …), params with defaults/min/max, screenable vs strategy-scorable, and how to use each id.',
         workflow: [
             { label: 'Indicator Registry', current: true },
+            { label: 'Authoring guide', keyword: 'authoring-trading-artifacts' },
             { label: 'Screener conditions', keyword: 'screener-registry' },
             { label: 'Strategy scoring', keyword: 'strategy-registry' },
         ],
@@ -405,6 +406,11 @@ export const DOC_PRESENTATION = {
                 title: 'Acronyms',
                 body: 'EMA = Exponential Moving Average (faster than SMA). RSI = Relative Strength Index (0–100 oscillator). Strategy “Relative Strength” is stock vs benchmark — not RSI.',
             },
+            {
+                variant: 'tip',
+                title: 'Param names',
+                body: 'Use exact ids: period/fast/slow/mult on Primaries; lookback_days/rsi_period/sma_fast/benchmark on Strategy Composites.',
+            },
         ],
         commonMistakes: [
             {
@@ -414,6 +420,45 @@ export const DOC_PRESENTATION = {
             {
                 q: 'Unknown Strategy scoring key',
                 a: 'Use a strategy-scorable composite key (relative_strength, momentum_score, …). Prefer canonical keys over aliases.',
+            },
+        ],
+    },
+    'authoring-trading-artifacts': {
+        icon: 'bi-pencil-square',
+        purpose: 'Ordered workflow for humans and AI: Indicators → Screener → Validate/Import → Strategy → Select.',
+        workflow: [
+            { label: 'Indicators', keyword: 'indicator-registry' },
+            { label: 'Screener', keyword: 'screener-registry' },
+            { label: 'Strategy', keyword: 'strategy-registry' },
+            { label: 'Cookbook', keyword: 'trading-cookbook' },
+        ],
+        callouts: [
+            {
+                variant: 'warning',
+                title: 'Do not guess operators',
+                body: 'Only gt/gte/lt/lte/eq and AND/OR. No NOT, neq, or crosses_*.',
+            },
+        ],
+    },
+    'trading-cookbook': {
+        icon: 'bi-journal-richtext',
+        purpose: 'Complete recipes with philosophy + Screener JSON + Strategy JSON for common investing styles.',
+        workflow: [
+            { label: 'Authoring guide', keyword: 'authoring-trading-artifacts' },
+            { label: 'Cookbook', current: true },
+            { label: 'Import Screener', keyword: 'screener-registry' },
+            { label: 'Import Strategy', keyword: 'strategy-registry' },
+        ],
+        callouts: [
+            {
+                variant: 'tip',
+                title: 'Import order',
+                body: 'Always import the Screener first so Strategy screener_slug can resolve.',
+            },
+            {
+                variant: 'info',
+                title: 'Approximations',
+                body: 'Darvas/CANSLIM/Value note where StoX lacks fundamentals or native box indicators — use documented proxies.',
             },
         ],
     },

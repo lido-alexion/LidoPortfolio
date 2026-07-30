@@ -111,6 +111,7 @@ Subtree hub: **[specs/README.md](specs/README.md)**
 | 2.14p | [specs/engines/Trading-Artifact-Registry-Migration.md](specs/engines/Trading-Artifact-Registry-Migration.md) | Registry infrastructure migration / BC guide |
 | 2.14q | [specs/engines/Screener-Registry-Migration.md](specs/engines/Screener-Registry-Migration.md) | Screener Registry (metadata, versions, import/export UI) migrate notes |
 | 2.14r | [specs/engines/Strategy-Registry-Migration.md](specs/engines/Strategy-Registry-Migration.md) | Strategy Registry (selection, portable JSON, Minervini migrate) |
+| 2.14s | [specs/engines/StoX-Trading-Artifacts-AI-Guide.md](specs/engines/StoX-Trading-Artifacts-AI-Guide.md) | **AI download pack** — consolidated Indicator + Screener + Strategy + Authoring + Cookbook (also served at `/docs/stox-trading-artifacts-ai-guide.md`) |
 | 2.14q | [specs/engines/artifacts/README.md](specs/engines/artifacts/README.md) | Worked JSON examples (Momentum, Swing, Liquidity, Breakout, …) |
 | 2.15 | [specs/engines/Notification-Engine-Specification.md](specs/engines/Notification-Engine-Specification.md) | |
 | 2.16 | [specs/engines/Execution-Engine-Specification.md](specs/engines/Execution-Engine-Specification.md) | |

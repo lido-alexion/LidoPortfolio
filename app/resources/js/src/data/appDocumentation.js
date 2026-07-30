@@ -3,6 +3,14 @@
  * Each entry is reachable via static HTML at /docs/{keyword}.html (and legacy /documentation?q= redirects there).
  */
 
+import {
+    AUTHORING_TRADING_ARTIFACTS_TOPIC,
+    INDICATOR_REGISTRY_GUIDE_EXTRAS,
+    SCREENER_REGISTRY_GUIDE_EXTRAS,
+    STRATEGY_REGISTRY_GUIDE_EXTRAS,
+    TRADING_COOKBOOK_TOPIC,
+} from './tradingArtifactGuides.js';
+
 function pathIs(pathname, exact) {
     const p = pathname.replace(/\/$/, '') || '/';
     return p === exact;
@@ -89,7 +97,7 @@ const APP_DOCUMENTATION_BASE = [
                 description: 'See topic Trading OS pages & flow for which page shows what and how recommendations move from Screener → Strategy → Recommendations → Review.',
             },
         ],
-        related: ['trading-os-flow', 'dashboard', 'settings'],
+        related: ['trading-os-flow', 'dashboard', 'settings', 'authoring-trading-artifacts', 'trading-cookbook'],
     },
     {
         id: 'trading-os-flow',
@@ -588,12 +596,15 @@ const APP_DOCUMENTATION_BASE = [
             + '| `Invalid condition operator` | Use `gt`/`gte`/`lt`/`lte`/`eq` only |\n'
             + '| `Unknown indicator…` | Indicator id not in the Screener catalogue |\n'
             + '| Nesting / too many conditions | Depth > 4 or > 40 conditions |\n'
-            + '| Slug already exists | Pick another slug or let Import rename |\n',
+            + '| Slug already exists | Pick another slug or let Import rename |\n'
+            + '\n'
+            + SCREENER_REGISTRY_GUIDE_EXTRAS,
         controls: [
             { name: 'Search / filters', description: 'Filter by status, ownership (own vs shared), and origin (factory / user / shared).' },
             { name: 'Export JSON', description: 'Download the Screener artifact envelope (schema_version, slug, name, metadata, definition.root, dependencies). Best template for a new import.' },
             { name: 'Validate', description: 'Check pasted JSON against Trading Artifact Screener rules. Fix every path error before Import. Empty trees may still fail on Import — keep ≥1 condition. Import stays disabled until this reports ok.' },
             { name: 'Import', description: 'Enabled only after successful Validate. Creates a new screener in this portfolio. Mandatory: schema_version, artifact_type, slug, name, metadata, definition.root with ≥1 condition. Editing the JSON clears validation and disables Import again.' },
+            { name: 'Download AI authoring guide (.md)', description: 'Download /docs/stox-trading-artifacts-ai-guide.md — consolidated Indicator + Screener + Strategy + Authoring + Cookbook Markdown for AI agents and offline authoring.' },
             { name: 'Import copy (shared)', description: 'Copy a shared screener from another portfolio into yours (same as Shared screens import).' },
             { name: 'Open editor', description: 'Jump to the classic Screener editor to change conditions or run screens after import.' },
             { name: 'Version history', description: 'On detail for owned screeners, list definition snapshots and change notes.' },
@@ -615,6 +626,16 @@ const APP_DOCUMENTATION_BASE = [
                     'schema_version ("1.0"), artifact_type ("screener"), slug, name, metadata (object), and definition.root with at least one condition for a successful Import.',
             },
             {
+                name: 'Operator enum',
+                description:
+                    'Condition operators: gt, gte, lt, lte, eq only. Group ops: AND, OR only. NOT, neq, crosses_*, between, etc. are not supported.',
+            },
+            {
+                name: 'Operand shapes',
+                description:
+                    'Indicator `{ indicator, params }` or constant `{ type: "constant", value: <number> }`. No boolean/string/null/date operands.',
+            },
+            {
                 name: 'No execution redesign',
                 description: 'Runs, schedules, and backtests still use ScreenerRunService and the existing definition tree.',
             },
@@ -627,7 +648,7 @@ const APP_DOCUMENTATION_BASE = [
                 description: 'Changing the condition tree (via editor or registry update) increments artifact_version and appends portfolio_screener_versions.',
             },
         ],
-        related: ['screener', 'screener-editor', 'indicator-registry', 'settings'],
+        related: ['screener', 'screener-editor', 'indicator-registry', 'strategy-registry', 'authoring-trading-artifacts', 'trading-cookbook', 'settings'],
     },
     {
         id: 'discovery',
@@ -1152,13 +1173,16 @@ const APP_DOCUMENTATION_BASE = [
             + '| `STRATEGY_ELIGIBILITY_REFS` | Source missing slug, factory_key, and screener_id |\n'
             + '| `STRATEGY_NO_EMBEDDED_SCREENER` | Put a Screener `root` / `children` tree on the Strategy |\n'
             + '| Must not embed Screener definitions | Eligibility row contains `definition` / `root` |\n'
-            + '| Slug / name already exists | Pick another or let Import rename |\n',
+            + '| Slug / name already exists | Pick another or let Import rename |\n'
+            + '\n'
+            + STRATEGY_REGISTRY_GUIDE_EXTRAS,
         controls: [
             { name: 'Search / filters', description: 'Filter by status (active/draft/archived) and origin (factory/user).' },
             { name: 'Select', description: 'Make this strategy the portfolio’s only active strategy (archives the previous active). Recommendations use the selected strategy.' },
             { name: 'Export JSON', description: 'Download the portable Trading Artifact envelope (schema_version, slug, name, metadata, definition with eligibility_sources + scoring_model, dependencies). Best template for a new import — includes thresholds/exits/gates when present.' },
             { name: 'Validate', description: 'Check pasted JSON against Trading Artifact Strategy rules. Fix every path error before Import. Import stays disabled until this reports ok.' },
             { name: 'Import', description: 'Enabled only after successful Validate. Creates a draft strategy in this portfolio (does not change Recommendations until Select). Mandatory: schema_version, artifact_type, slug, name, metadata, definition.scoring_model with enabled weights = 100. Editing the JSON clears validation and disables Import again.' },
+            { name: 'Download AI authoring guide (.md)', description: 'Download /docs/stox-trading-artifacts-ai-guide.md — consolidated Indicator + Screener + Strategy + Authoring + Cookbook Markdown for AI agents and offline authoring.' },
             { name: 'Edit active', description: 'Jump to /strategy to edit the selected strategy’s tabs and Save.' },
             { name: 'Version history', description: 'On detail for owned strategies, list definition snapshots and change notes. Draft definition-hash changes append versions; active editor Save remains in-place BC.' },
         ],
@@ -1203,8 +1227,13 @@ const APP_DOCUMENTATION_BASE = [
                 description:
                     'ensureActive / seedFactoryStrategy backfills slug momentum_strategy, metadata, and Minervini screener eligibility links without overwriting user-edited scores.',
             },
+            {
+                name: 'Optional sections are live',
+                description:
+                    'thresholds, portfolio_rules, exit_strategy, and market_gates are runtime-usable and Import-preserved — not reserved. Prefer Export-then-edit for full defaults.',
+            },
         ],
-        related: ['strategy', 'screener-registry', 'indicator-registry', 'recommendations', 'settings'],
+        related: ['strategy', 'screener-registry', 'indicator-registry', 'recommendations', 'authoring-trading-artifacts', 'trading-cookbook', 'settings'],
     },
     {
         id: 'review',
@@ -1747,7 +1776,8 @@ const APP_DOCUMENTATION_BASE = [
             + '2. Copy the correct id/key from the tables above (never invent ids).\n'
             + '3. Set params within min/max (or omit to use defaults).\n'
             + '4. For Strategy, ensure enabled weights sum to 100; for Screeners, build a valid `definition.root` tree.\n'
-            + '5. Open Registry detail for dependency tree + full formula prose when unsure.\n',
+            + '5. Open Registry detail for dependency tree + full formula prose when unsure.\n\n'
+            + INDICATOR_REGISTRY_GUIDE_EXTRAS,
         controls: [
             { name: 'Search', description: 'Match against indicator id, display name, or description.' },
             { name: 'Category / Type / Status filters', description: 'Narrow the catalogue (e.g. momentum primaries, stub composites, liquidity).' },
@@ -1783,6 +1813,11 @@ const APP_DOCUMENTATION_BASE = [
                     'Screener Primary params declare default/min/max/step (periods usually 1–400). Strategy Composite params declare type/label/default. Stay inside ranges or Validate/runtime will reject or clamp.',
             },
             {
+                name: 'Parameter naming convention',
+                description:
+                    'Use catalogue param ids exactly: period/fast/slow/signal/mult for Primaries; lookback_days/rsi_period/sma_fast/benchmark etc. for Strategy Composites. Do not invent synonyms.',
+            },
+            {
                 name: 'Circuit heuristics',
                 description:
                     'Circuit Frequency / Risk use OHLCV heuristics (large move + locked range), not official exchange circuit feeds.',
@@ -1793,8 +1828,10 @@ const APP_DOCUMENTATION_BASE = [
                     'Shipping calculators are release-owned. Registry UI is read-only documentation; artifact drafts do not rewrite TechnicalIndicatorService math.',
             },
         ],
-        related: ['settings', 'screener', 'screener-registry', 'strategy', 'strategy-registry', 'data-quality-center'],
+        related: ['settings', 'screener', 'screener-registry', 'strategy', 'strategy-registry', 'authoring-trading-artifacts', 'trading-cookbook', 'data-quality-center'],
     },
+    AUTHORING_TRADING_ARTIFACTS_TOPIC,
+    TRADING_COOKBOOK_TOPIC,
     {
         id: 'users',
         keyword: 'users',

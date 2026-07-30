@@ -1,6 +1,7 @@
 /**
  * Generate crawlable static HTML documentation from APP_DOCUMENTATION.
  * Output: app/public/docs/{keyword}.html + index.html
+ *         + stox-trading-artifacts-ai-guide.md (AI download pack)
  *
  * Usage: node scripts/generate-static-docs.mjs
  */
@@ -11,10 +12,22 @@ import { marked } from 'marked';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(__dirname, '..');
+const repoRoot = path.resolve(appRoot, '..');
 const outDir = path.join(appRoot, 'public', 'docs');
+const specsAiGuidePath = path.join(repoRoot, 'specs', 'engines', 'StoX-Trading-Artifacts-AI-Guide.md');
+const AI_GUIDE_BASENAME = 'stox-trading-artifacts-ai-guide.md';
 const docsModuleUrl = pathToFileURL(
     path.join(appRoot, 'resources', 'js', 'src', 'data', 'appDocumentation.js'),
 ).href;
+
+/** Topic keywords included in the AI download pack (order matters). */
+const AI_GUIDE_KEYWORDS = [
+    'authoring-trading-artifacts',
+    'indicator-registry',
+    'screener-registry',
+    'strategy-registry',
+    'trading-cookbook',
+];
 
 function escapeHtml(value) {
     return String(value ?? '')
@@ -262,6 +275,118 @@ function aliasRedirectPage(targetKeyword) {
 `;
 }
 
+function findDoc(docs, keyword) {
+    return docs.find((d) => d.keyword === keyword || d.id === keyword) || null;
+}
+
+function formatDocItems(title, items) {
+    if (!Array.isArray(items) || items.length === 0) return '';
+    const lines = [`### ${title}`, ''];
+    for (const item of items) {
+        lines.push(`- **${item.name}** — ${item.description || ''}`);
+    }
+    lines.push('');
+    return `${lines.join('\n')}\n`;
+}
+
+/**
+ * Build a single Markdown pack for AI / offline authoring.
+ * @param {Array<Record<string, unknown>>} docs
+ */
+function buildAiGuideMarkdown(docs) {
+    const generatedAt = new Date().toISOString();
+    const parts = [];
+
+    parts.push('# StoX Trading Artifacts - AI Authoring Guide');
+    parts.push('');
+    parts.push('> **Audience:** AI agents and developers authoring portable Indicator / Screener / Strategy JSON **without** reading application source code.');
+    parts.push('>');
+    parts.push(`> **Generated:** ${generatedAt}`);
+    parts.push(`> **Deploy download:** \`/docs/${AI_GUIDE_BASENAME}\` (also linked from Screener Registry and Strategy Registry).`);
+    parts.push('> **Repo copy:** `specs/engines/StoX-Trading-Artifacts-AI-Guide.md`');
+    parts.push('');
+    parts.push('This file consolidates:');
+    parts.push('');
+    parts.push('1. Authoring Trading Artifacts (workflow)');
+    parts.push('2. Indicator Registry (full catalogue)');
+    parts.push('3. Screener Registry (operators, operands, complete examples)');
+    parts.push('4. Strategy Registry (scoring, optional sections, complete examples)');
+    parts.push('5. Trading Cookbook (philosophy + paired JSON recipes)');
+    parts.push('');
+    parts.push('HTML mirrors (same prose): `/docs/authoring-trading-artifacts.html`, `/docs/indicator-registry.html`, `/docs/screener-registry.html`, `/docs/strategy-registry.html`, `/docs/trading-cookbook.html`.');
+    parts.push('');
+    parts.push('---');
+    parts.push('');
+    parts.push('## Hard rules (read first - do not guess)');
+    parts.push('');
+    parts.push('| Rule | Detail |');
+    parts.push('|------|--------|');
+    parts.push('| Schema | Always `schema_version: "1.0"`. Import field is `definition` (not DB column names). |');
+    parts.push('| Screener operators | Condition: `gt` `gte` `lt` `lte` `eq` only. Group: `AND` `OR` only. |');
+    parts.push('| NOT supported | `neq`, `NOT`, `crosses_above`/`crosses_below`, `between`, `outside`, `contains`, `in`, string/boolean/null/date operands. |');
+    parts.push('| Operands | Indicator `{ "indicator", "params" }` or constant `{ "type":"constant", "value": <number> }`. |');
+    parts.push('| Nesting | Max depth **4**; max **40** conditions. |');
+    parts.push('| Indicator dual-use | No id is both screenable and strategy-scorable. |');
+    parts.push('| Strategy eligibility | Reference Screeners by `screener_slug` / `screener_factory_key` only - never embed `definition.root`. |');
+    parts.push('| Strategy weights | Enabled `scoring_model` weights must sum to **exactly 100**. |');
+    parts.push('| Import UX | Validate must succeed before Import is enabled; Import Strategy = **draft** until Select. |');
+    parts.push('| Param names | Use catalogue ids exactly (`period`, `fast`, `slow`, `mult`, `lookback_days`, `rsi_period`, ...). |');
+    parts.push('');
+    parts.push('---');
+    parts.push('');
+
+    for (const keyword of AI_GUIDE_KEYWORDS) {
+        const doc = findDoc(docs, keyword);
+        if (!doc) {
+            parts.push(`## Missing topic: ${keyword}`);
+            parts.push('');
+            parts.push('_This topic was expected in APP_DOCUMENTATION but was not found._');
+            parts.push('');
+            continue;
+        }
+        parts.push(`# ${doc.title}`);
+        parts.push('');
+        const aliasBit = doc.aliases?.length
+            ? ` | **Aliases:** ${doc.aliases.map((a) => `\`${a}\``).join(', ')}`
+            : '';
+        parts.push(`**Keyword:** \`${doc.keyword}\`${aliasBit}`);
+        parts.push('');
+        parts.push(`**Summary:** ${doc.summary || ''}`);
+        parts.push('');
+        if (doc.routeLabel) {
+            parts.push(`**UI / docs route label:** \`${doc.routeLabel}\``);
+            parts.push('');
+        }
+        parts.push(String(doc.overview || '').trim());
+        parts.push('');
+        parts.push(formatDocItems('Controls', doc.controls));
+        parts.push(formatDocItems('Concepts', doc.concepts));
+        if (Array.isArray(doc.related) && doc.related.length > 0) {
+            parts.push('### Related topics');
+            parts.push('');
+            parts.push(doc.related.map((r) => `- \`${r}\``).join('\n'));
+            parts.push('');
+        }
+        parts.push('---');
+        parts.push('');
+    }
+
+    parts.push('# Appendix - Authoring checklist');
+    parts.push('');
+    parts.push('1. Read Indicator Registry section - pick screenable Primaries and/or strategy-scorable Composites.');
+    parts.push('2. Build Screener JSON - only allowed operators/operands; >=1 condition; unique slug.');
+    parts.push('3. Validate -> Import Screener; note final slug.');
+    parts.push('4. Build Strategy JSON - eligibility refs that slug; scoring keys from composites; weights = 100.');
+    parts.push('5. Optionally add `thresholds` / `portfolio_rules` / `exit_strategy` / `market_gates` (documented above; runtime-usable).');
+    parts.push('6. Validate -> Import Strategy (draft) -> Select to activate.');
+    parts.push('7. Prefer Cookbook recipes when matching a known investing style; note stated approximations (Darvas/CANSLIM/Value).');
+    parts.push('');
+    parts.push('_End of StoX Trading Artifacts AI Authoring Guide._');
+    parts.push('');
+
+    return parts.filter((p, i, arr) => !(p === '' && arr[i - 1] === '')).join('\n');
+}
+
 async function main() {
     const { APP_DOCUMENTATION } = await import(docsModuleUrl);
     if (!Array.isArray(APP_DOCUMENTATION) || APP_DOCUMENTATION.length === 0) {
@@ -287,6 +412,13 @@ async function main() {
     }
 
     fs.writeFileSync(path.join(outDir, 'index.html'), indexPage(APP_DOCUMENTATION), 'utf8');
+
+    const aiGuide = buildAiGuideMarkdown(APP_DOCUMENTATION);
+    const aiGuidePublic = path.join(outDir, AI_GUIDE_BASENAME);
+    fs.writeFileSync(aiGuidePublic, aiGuide, 'utf8');
+    fs.mkdirSync(path.dirname(specsAiGuidePath), { recursive: true });
+    fs.writeFileSync(specsAiGuidePath, aiGuide, 'utf8');
+
     fs.writeFileSync(
         path.join(outDir, 'README.txt'),
         [
@@ -294,12 +426,16 @@ async function main() {
             `Generated: ${new Date().toISOString()}`,
             `Topics: ${APP_DOCUMENTATION.length}`,
             'Open index.html or any {keyword}.html — no JavaScript required.',
+            `AI download pack: ${AI_GUIDE_BASENAME}`,
             '',
         ].join('\n'),
         'utf8',
     );
 
-    console.log(`Static docs written to ${outDir} (${APP_DOCUMENTATION.length} topics, ${written.size} html files + index)`);
+    console.log(
+        `Static docs written to ${outDir} (${APP_DOCUMENTATION.length} topics, ${written.size} html files + index + ${AI_GUIDE_BASENAME})`,
+    );
+    console.log(`AI guide also written to ${specsAiGuidePath}`);
 }
 
 main().catch((err) => {

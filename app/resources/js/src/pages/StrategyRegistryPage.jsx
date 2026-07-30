@@ -330,6 +330,17 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                         </a>
                         {' '}
                         (mandatory vs optional fields, scoring keys, minimal example).
+                        {' '}
+                        <a
+                            href={appUrl('/docs/stox-trading-artifacts-ai-guide.md')}
+                            download="stox-trading-artifacts-ai-guide.md"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            Download AI authoring guide (.md)
+                        </a>
+                        {' '}
+                        — full Indicator + Screener + Strategy + Cookbook pack for AI/offline use.
                         Run <strong>Validate</strong> first — <strong>Import</strong> stays disabled until validation succeeds.
                         Import creates a <strong>draft</strong> — use Select to activate it for this portfolio.
                     </p>

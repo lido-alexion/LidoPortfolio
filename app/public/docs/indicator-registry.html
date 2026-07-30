@@ -937,6 +937,84 @@
 <li>For Strategy, ensure enabled weights sum to 100; for Screeners, build a valid <code>definition.root</code> tree.</li>
 <li>Open Registry detail for dependency tree + full formula prose when unsure.</li>
 </ol>
+<h2>Strategy parameter examples (complete rows)</h2>
+<p>When authoring Strategy <code>scoring_model</code> rows, put Composite params under <code>parameters</code>:</p>
+<pre><code class="language-json">{
+  &quot;key&quot;: &quot;relative_strength&quot;,
+  &quot;enabled&quot;: true,
+  &quot;weight&quot;: 35,
+  &quot;minimum&quot;: 80,
+  &quot;maximum&quot;: null,
+  &quot;parameters&quot;: {
+    &quot;lookback_days&quot;: 90,
+    &quot;benchmark&quot;: &quot;NIFTY50&quot;
+  }
+}
+</code></pre>
+<pre><code class="language-json">{
+  &quot;key&quot;: &quot;trend_score&quot;,
+  &quot;enabled&quot;: true,
+  &quot;weight&quot;: 20,
+  &quot;minimum&quot;: 70,
+  &quot;maximum&quot;: null,
+  &quot;parameters&quot;: {
+    &quot;sma_fast&quot;: 20,
+    &quot;sma_slow&quot;: 50
+  }
+}
+</code></pre>
+<h2>Parameter naming convention</h2>
+<p>Use these <strong>exact</strong> param ids (do not invent synonyms like <code>length</code>, <code>window</code>, or <code>ma_period</code> unless listed):</p>
+<table>
+<thead>
+<tr>
+<th>Family</th>
+<th>Param ids</th>
+<th>Used by (examples)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Periods</td>
+<td><code>period</code></td>
+<td>Most Primaries: <code>sma</code>, <code>ema</code>, <code>rsi</code>, <code>atr</code>, <code>volume_sma</code>, …</td>
+</tr>
+<tr>
+<td>Dual MA</td>
+<td><code>fast</code>, <code>slow</code></td>
+<td><code>sma_spread_pct</code>, <code>ema_spread_pct</code>, <code>macd*</code></td>
+</tr>
+<tr>
+<td>MACD signal</td>
+<td><code>signal</code></td>
+<td><code>macd_signal</code>, <code>macd_hist</code></td>
+</tr>
+<tr>
+<td>Stochastic smooth</td>
+<td><code>smooth</code></td>
+<td><code>stoch_d</code></td>
+</tr>
+<tr>
+<td>Band multiplier</td>
+<td><code>mult</code></td>
+<td>Bollinger <code>bb_*</code></td>
+</tr>
+<tr>
+<td>Windows</td>
+<td><code>lookback_days</code>, <code>fill_window</code>, <code>baseline</code></td>
+<td>Strategy RS; gap fill; relative turnover</td>
+</tr>
+<tr>
+<td>Gap / circuit</td>
+<td><code>threshold_pct</code>, <code>move_pct</code>, <code>range_pct</code></td>
+<td>gap_* / circuit_*</td>
+</tr>
+<tr>
+<td>Strategy composites</td>
+<td><code>rsi_period</code>, <code>sma_fast</code>, <code>sma_slow</code>, <code>volume_sma_period</code>, <code>atr_period</code>, <code>benchmark</code></td>
+<td>scoring_model parameters</td>
+</tr>
+</tbody></table>
+<p>Screener operand params use Primary names (<code>period</code>, <code>fast</code>, <code>slow</code>, …). Strategy Composite params use the Composite’s own keys (<code>rsi_period</code>, not <code>period</code>, on <code>momentum_score</code>).</p>
 <p>Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).</p>
 
       </section>
@@ -988,6 +1066,9 @@
         <dt>Parameter ranges</dt>
         <dd>Screener Primary params declare default/min/max/step (periods usually 1–400). Strategy Composite params declare type/label/default. Stay inside ranges or Validate/runtime will reject or clamp.</dd>
     
+        <dt>Parameter naming convention</dt>
+        <dd>Use catalogue param ids exactly: period/fast/slow/signal/mult for Primaries; lookback_days/rsi_period/sma_fast/benchmark etc. for Strategy Composites. Do not invent synonyms.</dd>
+    
         <dt>Circuit heuristics</dt>
         <dd>Circuit Frequency / Risk use OHLCV heuristics (large move + locked range), not official exchange circuit feeds.</dd>
     
@@ -1006,7 +1087,7 @@
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
-          <a href="settings.html">Settings</a><a href="screener.html">Screener</a><a href="screener-registry.html">Screener Registry</a><a href="strategy.html">Strategy</a><a href="strategy-registry.html">Strategy Registry</a><a href="data-quality-center.html">Data Quality Center</a>
+          <a href="settings.html">Settings</a><a href="screener.html">Screener</a><a href="screener-registry.html">Screener Registry</a><a href="strategy.html">Strategy</a><a href="strategy-registry.html">Strategy Registry</a><a href="authoring-trading-artifacts.html">Authoring Trading Artifacts</a><a href="trading-cookbook.html">Trading Cookbook</a><a href="data-quality-center.html">Data Quality Center</a>
         </div>
       </section>
     </article>

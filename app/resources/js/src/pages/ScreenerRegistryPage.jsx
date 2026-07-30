@@ -350,6 +350,17 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
                         </a>
                         {' '}
                         (mandatory vs optional fields, what slug means, minimal example).
+                        {' '}
+                        <a
+                            href={appUrl('/docs/stox-trading-artifacts-ai-guide.md')}
+                            download="stox-trading-artifacts-ai-guide.md"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            Download AI authoring guide (.md)
+                        </a>
+                        {' '}
+                        — full Indicator + Screener + Strategy + Cookbook pack for AI/offline use.
                         Run <strong>Validate</strong> first — <strong>Import</strong> stays disabled until validation succeeds.
                         Import always creates a new screener in this portfolio.
                     </p>

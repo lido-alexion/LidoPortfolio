@@ -63,6 +63,7 @@ specs/
 │   ├── Trading-Artifact-Registry-Migration.md (infrastructure phase BC / migrate)
 │   ├── Screener-Registry-Migration.md (Screener Registry phase — versions + UI)
 │   ├── Strategy-Registry-Migration.md (Strategy Registry — selection + portable JSON)
+│   ├── StoX-Trading-Artifacts-AI-Guide.md (AI download pack; /docs/stox-trading-artifacts-ai-guide.md)
 │   ├── artifacts/                             (JSON examples for AI / I/O design)
 │   ├── Notification-Engine-Specification.md
 │   ├── Execution-Engine-Specification.md
@@ -133,6 +134,7 @@ specs/
 19d3. [engines/Trading-Artifact-Registry-Migration.md](engines/Trading-Artifact-Registry-Migration.md) (Registry infrastructure migrate / BC)
 19d4. [engines/Screener-Registry-Migration.md](engines/Screener-Registry-Migration.md) (Screener Registry migrate / BC)
 19d5. [engines/Strategy-Registry-Migration.md](engines/Strategy-Registry-Migration.md) (Strategy Registry migrate / BC)  
+19d6. [engines/StoX-Trading-Artifacts-AI-Guide.md](engines/StoX-Trading-Artifacts-AI-Guide.md) (AI authoring pack; deploy `/docs/stox-trading-artifacts-ai-guide.md`)  
 19e. [engines/Screener-Specification.md](engines/Screener-Specification.md) (SD-030 — Screener artifact evolution §8)  
 20. [engines/Notification-Engine-Specification.md](engines/Notification-Engine-Specification.md)  
 21. [engines/Execution-Engine-Specification.md](engines/Execution-Engine-Specification.md)  

@@ -319,6 +319,389 @@
 <td>Pick another slug or let Import rename</td>
 </tr>
 </tbody></table>
+<h2>Complete operator catalogue</h2>
+<p>Condition <code>operator</code> values are an <strong>exact enum</strong>. Anything else fails Validate / Import.</p>
+<h3>Comparison operators (condition nodes)</h3>
+<table>
+<thead>
+<tr>
+<th>Operator</th>
+<th>Meaning</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>gt</code></td>
+<td>left &gt; (weight × right)</td>
+<td>close above SMA</td>
+</tr>
+<tr>
+<td><code>gte</code></td>
+<td>left ≥ (weight × right)</td>
+<td>close at or above 52w high × 0.75</td>
+</tr>
+<tr>
+<td><code>lt</code></td>
+<td>left &lt; (weight × right)</td>
+<td>RSI below 30</td>
+</tr>
+<tr>
+<td><code>lte</code></td>
+<td>left ≤ (weight × right)</td>
+<td>volume ratio ≤ 0.8</td>
+</tr>
+<tr>
+<td><code>eq</code></td>
+<td>left ≈ right (float equality)</td>
+<td>rare; prefer inequalities</td>
+</tr>
+</tbody></table>
+<h3>Logical operators (group nodes only)</h3>
+<table>
+<thead>
+<tr>
+<th>Operator</th>
+<th>Where</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>AND</code></td>
+<td><code>group.op</code></td>
+<td>Every child must pass</td>
+</tr>
+<tr>
+<td><code>OR</code></td>
+<td><code>group.op</code></td>
+<td>Any child may pass</td>
+</tr>
+</tbody></table>
+<h3>Explicitly NOT supported</h3>
+<p>Do <strong>not</strong> invent these — they are <strong>not</strong> in the Screener catalogue or validators:</p>
+<ul>
+<li>Comparison: <code>neq</code>, <code>ne</code>, <code>!=</code>, <code>crosses_above</code>, <code>crosses_below</code>, <code>between</code>, <code>outside</code>, <code>contains</code>, <code>in</code>, <code>starts_with</code>, <code>ends_with</code></li>
+<li>Logical: <code>NOT</code>, <code>NAND</code>, <code>XOR</code>, unary negation nodes</li>
+<li>Node types other than <code>group</code> and <code>condition</code></li>
+</ul>
+<p>Workarounds: express “not equal” as two OR’d inequalities when needed; express “between” as an AND of <code>gte</code> and <code>lte</code>; express “outside” as an OR of <code>lt</code> and <code>gt</code>.</p>
+<h2>Operand types</h2>
+<p>Each of <code>left</code> and <code>right</code> must be <strong>exactly one</strong> of the shapes below.</p>
+<h3>Indicator operand</h3>
+<pre><code class="language-json">{
+  &quot;indicator&quot;: &quot;ema&quot;,
+  &quot;params&quot;: { &quot;period&quot;: 20 }
+}
+</code></pre>
+<ul>
+<li><code>indicator</code> — required; must be a <strong>screenable</strong> Primary id from Indicator Registry</li>
+<li><code>params</code> — object; omit keys to use catalogue defaults; values must be numeric within min/max</li>
+<li><code>entity</code> — <strong>left only</strong>, optional. Default is the scanned stock (<code>stock</code> / omit). Allowed index entities: <code>NIFTY50</code>, <code>SENSEX</code>, <code>NIFTY100</code>, <code>NIFTY200</code>, <code>NIFTY500</code>, <code>NIFTYMIDCAP150</code>, <code>NIFTYSMLCAP250</code>. Right-hand side is always evaluated on the scanned stock (no <code>entity</code> on right).</li>
+</ul>
+<h3>Constant operand</h3>
+<pre><code class="language-json">{
+  &quot;type&quot;: &quot;constant&quot;,
+  &quot;value&quot;: 100
+}
+</code></pre>
+<ul>
+<li><code>type</code> must be the string <code>&quot;constant&quot;</code></li>
+<li><code>value</code> must be <strong>numeric</strong> (integer or float)</li>
+</ul>
+<h3>Explicitly NOT supported as operands</h3>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Supported?</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>number (via constant)</td>
+<td><strong>Yes</strong></td>
+</tr>
+<tr>
+<td>boolean</td>
+<td><strong>No</strong></td>
+</tr>
+<tr>
+<td>string</td>
+<td><strong>No</strong></td>
+</tr>
+<tr>
+<td>null</td>
+<td><strong>No</strong></td>
+</tr>
+<tr>
+<td>date / datetime</td>
+<td><strong>No</strong></td>
+</tr>
+<tr>
+<td>arrays / objects as value</td>
+<td><strong>No</strong></td>
+</tr>
+</tbody></table>
+<p>Optional on the condition: <code>weight_factor</code> (number, default <code>1</code>) multiplies the <strong>right</strong> side before compare (used by Minervini for “25% above low” as <code>close &gt;= 1.25 × low_52w</code>).</p>
+<h2>Complete example screeners</h2>
+<p>Each example is a full Trading Artifact envelope you can Validate → Import. Pick unique <code>slug</code> values in your portfolio. See also <strong>Trading Cookbook</strong> for paired Strategy recipes.</p>
+<h3>Example 1 — Moving Average Breakout</h3>
+<p>Philosophy: price clears the 50-SMA with the 20-SMA stacked above it.</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;1.0&quot;,
+  &quot;artifact_type&quot;: &quot;screener&quot;,
+  &quot;slug&quot;: &quot;ma_breakout&quot;,
+  &quot;name&quot;: &quot;Moving Average Breakout&quot;,
+  &quot;metadata&quot;: {
+    &quot;universe&quot;: &quot;all_equities&quot;,
+    &quot;description&quot;: &quot;Close above SMA50 with SMA20 &gt; SMA50&quot;
+  },
+  &quot;definition&quot;: {
+    &quot;root&quot;: {
+      &quot;type&quot;: &quot;group&quot;,
+      &quot;op&quot;: &quot;AND&quot;,
+      &quot;children&quot;: [
+        {
+          &quot;type&quot;: &quot;condition&quot;,
+          &quot;left&quot;: { &quot;indicator&quot;: &quot;close&quot;, &quot;params&quot;: {} },
+          &quot;operator&quot;: &quot;gt&quot;,
+          &quot;weight_factor&quot;: 1,
+          &quot;right&quot;: { &quot;indicator&quot;: &quot;sma&quot;, &quot;params&quot;: { &quot;period&quot;: 50 } }
+        },
+        {
+          &quot;type&quot;: &quot;condition&quot;,
+          &quot;left&quot;: { &quot;indicator&quot;: &quot;sma_spread_pct&quot;, &quot;params&quot;: { &quot;fast&quot;: 20, &quot;slow&quot;: 50 } },
+          &quot;operator&quot;: &quot;gt&quot;,
+          &quot;weight_factor&quot;: 1,
+          &quot;right&quot;: { &quot;type&quot;: &quot;constant&quot;, &quot;value&quot;: 0 }
+        }
+      ]
+    }
+  }
+}
+</code></pre>
+<h3>Example 2 — RSI Pullback</h3>
+<p>Philosophy: uptrend (close &gt; SMA50) with RSI cooled into a buy zone.</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;1.0&quot;,
+  &quot;artifact_type&quot;: &quot;screener&quot;,
+  &quot;slug&quot;: &quot;rsi_pullback&quot;,
+  &quot;name&quot;: &quot;RSI Pullback&quot;,
+  &quot;metadata&quot;: {
+    &quot;universe&quot;: &quot;all_equities&quot;,
+    &quot;description&quot;: &quot;Close above SMA50 and RSI between 40 and 55&quot;
+  },
+  &quot;definition&quot;: {
+    &quot;root&quot;: {
+      &quot;type&quot;: &quot;group&quot;,
+      &quot;op&quot;: &quot;AND&quot;,
+      &quot;children&quot;: [
+        {
+          &quot;type&quot;: &quot;condition&quot;,
+          &quot;left&quot;: { &quot;indicator&quot;: &quot;close&quot;, &quot;params&quot;: {} },
+          &quot;operator&quot;: &quot;gt&quot;,
+          &quot;weight_factor&quot;: 1,
+          &quot;right&quot;: { &quot;indicator&quot;: &quot;sma&quot;, &quot;params&quot;: { &quot;period&quot;: 50 } }
+        },
+        {
+          &quot;type&quot;: &quot;condition&quot;,
+          &quot;left&quot;: { &quot;indicator&quot;: &quot;rsi&quot;, &quot;params&quot;: { &quot;period&quot;: 14 } },
+          &quot;operator&quot;: &quot;gte&quot;,
+          &quot;weight_factor&quot;: 1,
+          &quot;right&quot;: { &quot;type&quot;: &quot;constant&quot;, &quot;value&quot;: 40 }
+        },
+        {
+          &quot;type&quot;: &quot;condition&quot;,
+          &quot;left&quot;: { &quot;indicator&quot;: &quot;rsi&quot;, &quot;params&quot;: { &quot;period&quot;: 14 } },
+          &quot;operator&quot;: &quot;lte&quot;,
+          &quot;weight_factor&quot;: 1,
+          &quot;right&quot;: { &quot;type&quot;: &quot;constant&quot;, &quot;value&quot;: 55 }
+        }
+      ]
+    }
+  }
+}
+</code></pre>
+<h3>Example 3 — Bollinger Squeeze (narrow band + near mid)</h3>
+<p>Philosophy: low band width with price near the middle band (compression before expansion).</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;1.0&quot;,
+  &quot;artifact_type&quot;: &quot;screener&quot;,
+  &quot;slug&quot;: &quot;bollinger_squeeze&quot;,
+  &quot;name&quot;: &quot;Bollinger Squeeze&quot;,
+  &quot;metadata&quot;: {
+    &quot;universe&quot;: &quot;all_equities&quot;,
+    &quot;description&quot;: &quot;BB width % low and close near mid band&quot;
+  },
+  &quot;definition&quot;: {
+    &quot;root&quot;: {
+      &quot;type&quot;: &quot;group&quot;,
+      &quot;op&quot;: &quot;AND&quot;,
+      &quot;children&quot;: [
+        {
+          &quot;type&quot;: &quot;condition&quot;,
+          &quot;left&quot;: { &quot;indicator&quot;: &quot;bb_width_pct&quot;, &quot;params&quot;: { &quot;period&quot;: 20, &quot;mult&quot;: 2 } },
+          &quot;operator&quot;: &quot;lt&quot;,
+          &quot;weight_factor&quot;: 1,
+          &quot;right&quot;: { &quot;type&quot;: &quot;constant&quot;, &quot;value&quot;: 8 }
+        },
+        {
+          &quot;type&quot;: &quot;condition&quot;,
+          &quot;left&quot;: { &quot;indicator&quot;: &quot;bb_pct_b&quot;, &quot;params&quot;: { &quot;period&quot;: 20, &quot;mult&quot;: 2 } },
+          &quot;operator&quot;: &quot;gte&quot;,
+          &quot;weight_factor&quot;: 1,
+          &quot;right&quot;: { &quot;type&quot;: &quot;constant&quot;, &quot;value&quot;: 0.35 }
+        },
+        {
+          &quot;type&quot;: &quot;condition&quot;,
+          &quot;left&quot;: { &quot;indicator&quot;: &quot;bb_pct_b&quot;, &quot;params&quot;: { &quot;period&quot;: 20, &quot;mult&quot;: 2 } },
+          &quot;operator&quot;: &quot;lte&quot;,
+          &quot;weight_factor&quot;: 1,
+          &quot;right&quot;: { &quot;type&quot;: &quot;constant&quot;, &quot;value&quot;: 0.65 }
+        }
+      ]
+    }
+  }
+}
+</code></pre>
+<h3>Example 4 — High Volume Breakout</h3>
+<p>Philosophy: new N-day high with volume expansion.</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;1.0&quot;,
+  &quot;artifact_type&quot;: &quot;screener&quot;,
+  &quot;slug&quot;: &quot;high_volume_breakout&quot;,
+  &quot;name&quot;: &quot;High Volume Breakout&quot;,
+  &quot;metadata&quot;: {
+    &quot;universe&quot;: &quot;all_equities&quot;,
+    &quot;description&quot;: &quot;Close at 20-day high with volume_ratio &gt; 1.5&quot;
+  },
+  &quot;definition&quot;: {
+    &quot;root&quot;: {
+      &quot;type&quot;: &quot;group&quot;,
+      &quot;op&quot;: &quot;AND&quot;,
+      &quot;children&quot;: [
+        {
+          &quot;type&quot;: &quot;condition&quot;,
+          &quot;left&quot;: { &quot;indicator&quot;: &quot;close&quot;, &quot;params&quot;: {} },
+          &quot;operator&quot;: &quot;gte&quot;,
+          &quot;weight_factor&quot;: 1,
+          &quot;right&quot;: { &quot;indicator&quot;: &quot;high_n&quot;, &quot;params&quot;: { &quot;period&quot;: 20 } }
+        },
+        {
+          &quot;type&quot;: &quot;condition&quot;,
+          &quot;left&quot;: { &quot;indicator&quot;: &quot;volume_ratio&quot;, &quot;params&quot;: { &quot;period&quot;: 20 } },
+          &quot;operator&quot;: &quot;gt&quot;,
+          &quot;weight_factor&quot;: 1,
+          &quot;right&quot;: { &quot;type&quot;: &quot;constant&quot;, &quot;value&quot;: 1.5 }
+        }
+      ]
+    }
+  }
+}
+</code></pre>
+<h3>Example 5 — Minervini Trend Template (factory)</h3>
+<p>Matches the shipped factory screener <code>minervini_trend_template</code> (Stage-2 trend template approximation). Importing this creates a <strong>user copy</strong>; the factory key remains on the seeded screener.</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;1.0&quot;,
+  &quot;artifact_type&quot;: &quot;screener&quot;,
+  &quot;slug&quot;: &quot;minervini_trend_template_copy&quot;,
+  &quot;name&quot;: &quot;Minervini Trend Template&quot;,
+  &quot;metadata&quot;: {
+    &quot;universe&quot;: &quot;all_equities&quot;,
+    &quot;description&quot;: &quot;Price above SMA 50/150/200 stack; ≥25% above 52w low; within 25% of 52w high&quot;
+  },
+  &quot;definition&quot;: {
+    &quot;root&quot;: {
+      &quot;type&quot;: &quot;group&quot;,
+      &quot;op&quot;: &quot;AND&quot;,
+      &quot;children&quot;: [
+        {
+          &quot;type&quot;: &quot;condition&quot;,
+          &quot;left&quot;: { &quot;indicator&quot;: &quot;close&quot;, &quot;params&quot;: {} },
+          &quot;operator&quot;: &quot;gt&quot;,
+          &quot;weight_factor&quot;: 1,
+          &quot;right&quot;: { &quot;indicator&quot;: &quot;sma&quot;, &quot;params&quot;: { &quot;period&quot;: 150 } }
+        },
+        {
+          &quot;type&quot;: &quot;condition&quot;,
+          &quot;left&quot;: { &quot;indicator&quot;: &quot;close&quot;, &quot;params&quot;: {} },
+          &quot;operator&quot;: &quot;gt&quot;,
+          &quot;weight_factor&quot;: 1,
+          &quot;right&quot;: { &quot;indicator&quot;: &quot;sma&quot;, &quot;params&quot;: { &quot;period&quot;: 200 } }
+        },
+        {
+          &quot;type&quot;: &quot;condition&quot;,
+          &quot;left&quot;: { &quot;indicator&quot;: &quot;sma_spread_pct&quot;, &quot;params&quot;: { &quot;fast&quot;: 150, &quot;slow&quot;: 200 } },
+          &quot;operator&quot;: &quot;gt&quot;,
+          &quot;weight_factor&quot;: 1,
+          &quot;right&quot;: { &quot;type&quot;: &quot;constant&quot;, &quot;value&quot;: 0 }
+        },
+        {
+          &quot;type&quot;: &quot;condition&quot;,
+          &quot;left&quot;: { &quot;indicator&quot;: &quot;close&quot;, &quot;params&quot;: {} },
+          &quot;operator&quot;: &quot;gt&quot;,
+          &quot;weight_factor&quot;: 1,
+          &quot;right&quot;: { &quot;indicator&quot;: &quot;sma&quot;, &quot;params&quot;: { &quot;period&quot;: 50 } }
+        },
+        {
+          &quot;type&quot;: &quot;condition&quot;,
+          &quot;left&quot;: { &quot;indicator&quot;: &quot;sma_spread_pct&quot;, &quot;params&quot;: { &quot;fast&quot;: 50, &quot;slow&quot;: 150 } },
+          &quot;operator&quot;: &quot;gt&quot;,
+          &quot;weight_factor&quot;: 1,
+          &quot;right&quot;: { &quot;type&quot;: &quot;constant&quot;, &quot;value&quot;: 0 }
+        },
+        {
+          &quot;type&quot;: &quot;condition&quot;,
+          &quot;left&quot;: { &quot;indicator&quot;: &quot;close&quot;, &quot;params&quot;: {} },
+          &quot;operator&quot;: &quot;gte&quot;,
+          &quot;weight_factor&quot;: 1.25,
+          &quot;right&quot;: { &quot;indicator&quot;: &quot;low_52w&quot;, &quot;params&quot;: {} }
+        },
+        {
+          &quot;type&quot;: &quot;condition&quot;,
+          &quot;left&quot;: { &quot;indicator&quot;: &quot;close&quot;, &quot;params&quot;: {} },
+          &quot;operator&quot;: &quot;gte&quot;,
+          &quot;weight_factor&quot;: 0.75,
+          &quot;right&quot;: { &quot;indicator&quot;: &quot;high_52w&quot;, &quot;params&quot;: {} }
+        }
+      ]
+    }
+  }
+}
+</code></pre>
+<h3>Example 6 — Darvas Box (approximation)</h3>
+<p>Philosophy: close breaks the recent N-day high (box top) with supportive volume. StoX has no dedicated Darvas box indicator — this is a high_n breakout proxy.</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;1.0&quot;,
+  &quot;artifact_type&quot;: &quot;screener&quot;,
+  &quot;slug&quot;: &quot;darvas_box_proxy&quot;,
+  &quot;name&quot;: &quot;Darvas Box Proxy&quot;,
+  &quot;metadata&quot;: {
+    &quot;universe&quot;: &quot;all_equities&quot;,
+    &quot;description&quot;: &quot;Close breaks 55-day high with volume_ratio &gt; 1.2&quot;
+  },
+  &quot;definition&quot;: {
+    &quot;root&quot;: {
+      &quot;type&quot;: &quot;group&quot;,
+      &quot;op&quot;: &quot;AND&quot;,
+      &quot;children&quot;: [
+        {
+          &quot;type&quot;: &quot;condition&quot;,
+          &quot;left&quot;: { &quot;indicator&quot;: &quot;close&quot;, &quot;params&quot;: {} },
+          &quot;operator&quot;: &quot;gte&quot;,
+          &quot;weight_factor&quot;: 1,
+          &quot;right&quot;: { &quot;indicator&quot;: &quot;high_n&quot;, &quot;params&quot;: { &quot;period&quot;: 55 } }
+        },
+        {
+          &quot;type&quot;: &quot;condition&quot;,
+          &quot;left&quot;: { &quot;indicator&quot;: &quot;volume_ratio&quot;, &quot;params&quot;: { &quot;period&quot;: 20 } },
+          &quot;operator&quot;: &quot;gt&quot;,
+          &quot;weight_factor&quot;: 1,
+          &quot;right&quot;: { &quot;type&quot;: &quot;constant&quot;, &quot;value&quot;: 1.2 }
+        }
+      ]
+    }
+  }
+}
+</code></pre>
 <p>Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).</p>
 
       </section>
@@ -337,6 +720,9 @@
     
         <dt>Import</dt>
         <dd>Enabled only after successful Validate. Creates a new screener in this portfolio. Mandatory: schema_version, artifact_type, slug, name, metadata, definition.root with ≥1 condition. Editing the JSON clears validation and disables Import again.</dd>
+    
+        <dt>Download AI authoring guide (.md)</dt>
+        <dd>Download /docs/stox-trading-artifacts-ai-guide.md — consolidated Indicator + Screener + Strategy + Authoring + Cookbook Markdown for AI agents and offline authoring.</dd>
     
         <dt>Import copy (shared)</dt>
         <dd>Copy a shared screener from another portfolio into yours (same as Shared screens import).</dd>
@@ -367,6 +753,12 @@
         <dt>Mandatory envelope fields</dt>
         <dd>schema_version (&quot;1.0&quot;), artifact_type (&quot;screener&quot;), slug, name, metadata (object), and definition.root with at least one condition for a successful Import.</dd>
     
+        <dt>Operator enum</dt>
+        <dd>Condition operators: gt, gte, lt, lte, eq only. Group ops: AND, OR only. NOT, neq, crosses_*, between, etc. are not supported.</dd>
+    
+        <dt>Operand shapes</dt>
+        <dd>Indicator <code>{ indicator, params }</code> or constant <code>{ type: &quot;constant&quot;, value: &lt;number&gt; }</code>. No boolean/string/null/date operands.</dd>
+    
         <dt>No execution redesign</dt>
         <dd>Runs, schedules, and backtests still use ScreenerRunService and the existing definition tree.</dd>
     
@@ -388,7 +780,7 @@
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
-          <a href="screener.html">Screener</a><a href="screener-editor.html">Screener editor</a><a href="indicator-registry.html">Indicator Registry</a><a href="settings.html">Settings</a>
+          <a href="screener.html">Screener</a><a href="screener-editor.html">Screener editor</a><a href="indicator-registry.html">Indicator Registry</a><a href="strategy-registry.html">Strategy Registry</a><a href="authoring-trading-artifacts.html">Authoring Trading Artifacts</a><a href="trading-cookbook.html">Trading Cookbook</a><a href="settings.html">Settings</a>
         </div>
       </section>
     </article>

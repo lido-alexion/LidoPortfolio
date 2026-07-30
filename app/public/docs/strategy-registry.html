@@ -544,6 +544,335 @@
 <td>Pick another or let Import rename</td>
 </tr>
 </tbody></table>
+<h2>Optional definition sections (fully usable)</h2>
+<p>These sections are <strong>runtime-usable today</strong>. Import preserves them via <code>normalizeConfig</code> (Validate focuses hard checks on eligibility + scoring — Export a working Strategy, then edit, for safest authoring). They are <strong>not</strong> “reserved / undocumented.”</p>
+<h3><code>thresholds</code> — recommendation label bands (0–100 scores)</h3>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>minimum_overall_score</code></td>
+<td>80</td>
+<td>Soft floor stored on Strategy UI</td>
+</tr>
+<tr>
+<td><code>open_position</code></td>
+<td>85</td>
+<td>Open new long when overall score ≥ this</td>
+</tr>
+<tr>
+<td><code>increase_position</code></td>
+<td>90</td>
+<td>Add to existing when score ≥ this</td>
+</tr>
+<tr>
+<td><code>watch</code></td>
+<td>60</td>
+<td>Insight / watch band</td>
+</tr>
+<tr>
+<td><code>reduce_position</code></td>
+<td>40</td>
+<td>Reduce when score ≤ this</td>
+</tr>
+<tr>
+<td><code>exit_position</code></td>
+<td>20</td>
+<td>Exit when score ≤ this</td>
+</tr>
+<tr>
+<td><code>very_strong_high</code></td>
+<td>95</td>
+<td>Very-strong high band</td>
+</tr>
+<tr>
+<td><code>very_strong_low</code></td>
+<td>15</td>
+<td>Very-strong low band</td>
+</tr>
+</tbody></table>
+<pre><code class="language-json">&quot;thresholds&quot;: {
+  &quot;minimum_overall_score&quot;: 80,
+  &quot;open_position&quot;: 85,
+  &quot;increase_position&quot;: 90,
+  &quot;reduce_position&quot;: 40,
+  &quot;exit_position&quot;: 20,
+  &quot;watch&quot;: 60,
+  &quot;very_strong_high&quot;: 95,
+  &quot;very_strong_low&quot;: 15
+}
+</code></pre>
+<h3><code>portfolio_rules</code> — size and cash caps (%)</h3>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>max_position_size_pct</code></td>
+<td>10</td>
+<td>Cap per position</td>
+</tr>
+<tr>
+<td><code>min_position_size_pct</code></td>
+<td>2</td>
+<td>Floor when sizing</td>
+</tr>
+<tr>
+<td><code>default_position_size_pct</code></td>
+<td>6</td>
+<td>Default clip size</td>
+</tr>
+<tr>
+<td><code>allocation_band_pct</code></td>
+<td>1</td>
+<td>Band around target</td>
+</tr>
+<tr>
+<td><code>max_cash_deployment_pct</code></td>
+<td>80</td>
+<td>Max capital deployed</td>
+</tr>
+<tr>
+<td><code>min_cash_reserve_pct</code></td>
+<td>20</td>
+<td>Cash reserve</td>
+</tr>
+<tr>
+<td><code>max_new_positions_per_cycle</code></td>
+<td>5</td>
+<td>New opens per cycle</td>
+</tr>
+<tr>
+<td><code>max_exposure_per_stock_pct</code></td>
+<td>10</td>
+<td>Per-name exposure cap</td>
+</tr>
+</tbody></table>
+<h3><code>exit_strategy</code> — holding exit rules</h3>
+<pre><code class="language-json">&quot;exit_strategy&quot;: {
+  &quot;enabled&quot;: true,
+  &quot;mode&quot;: &quot;any&quot;,
+  &quot;rules&quot;: [
+    {
+      &quot;key&quot;: &quot;ma_breakdown&quot;,
+      &quot;display_name&quot;: &quot;Moving Average Breakdown&quot;,
+      &quot;enabled&quot;: true,
+      &quot;params&quot;: { &quot;period&quot;: 50 }
+    },
+    {
+      &quot;key&quot;: &quot;score_exit&quot;,
+      &quot;display_name&quot;: &quot;Overall Score Exit&quot;,
+      &quot;enabled&quot;: true,
+      &quot;value&quot;: 20
+    }
+  ]
+}
+</code></pre>
+<ul>
+<li><code>mode</code>: <code>any</code> (first matching rule) or <code>all</code> (every enabled rule must match)</li>
+<li>Rule <code>key</code> values: <code>ma_breakdown</code>, <code>rs_weakening</code>, <code>trend_weakening</code>, <code>score_exit</code>, <code>max_loss</code>, <code>atr_stop</code>, <code>trailing_stop</code>, <code>screener_exit</code></li>
+<li>Use <code>value</code> and/or <code>params</code> as appropriate to the key (see Export of Momentum Strategy for full defaults)</li>
+</ul>
+<h3><code>market_gates</code> — block new entries by market regime</h3>
+<pre><code class="language-json">&quot;market_gates&quot;: {
+  &quot;enabled&quot;: false,
+  &quot;min_sentiment&quot;: 45,
+  &quot;allowed_phases&quot;: [
+    &quot;Strong Bull&quot;,
+    &quot;Bull&quot;,
+    &quot;Consolidation&quot;,
+    &quot;Pullback&quot;,
+    &quot;Recovery&quot;
+  ],
+  &quot;max_risk_raw&quot;: 70
+}
+</code></pre>
+<p>Also mergeable (same as Export): <code>capital_allocation</code>, <code>cash_rules</code>, <code>recommendation_behaviour</code>, <code>risk</code>.</p>
+<h2>Complete Strategy examples</h2>
+<p>Each Strategy assumes you already imported (or seeded) a Screener whose <strong>slug</strong> matches <code>screener_slug</code>. Import creates a <strong>draft</strong> — <strong>Select</strong> to activate. Enabled weights sum to <strong>100</strong>.</p>
+<h3>Strategy — Momentum (Minervini-style)</h3>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;1.0&quot;,
+  &quot;artifact_type&quot;: &quot;strategy&quot;,
+  &quot;slug&quot;: &quot;momentum_swing&quot;,
+  &quot;name&quot;: &quot;Momentum Swing&quot;,
+  &quot;metadata&quot;: {
+    &quot;scope&quot;: &quot;portfolio&quot;,
+    &quot;status&quot;: &quot;draft&quot;,
+    &quot;origin&quot;: &quot;user&quot;,
+    &quot;description&quot;: &quot;RS + trend + momentum on Minervini eligibility&quot;
+  },
+  &quot;definition&quot;: {
+    &quot;eligibility_sources&quot;: [
+      {
+        &quot;screener_slug&quot;: &quot;minervini_trend_template&quot;,
+        &quot;screener_factory_key&quot;: &quot;minervini_trend_template&quot;,
+        &quot;enabled&quot;: true,
+        &quot;priority&quot;: 1
+      }
+    ],
+    &quot;scoring_model&quot;: [
+      {
+        &quot;key&quot;: &quot;relative_strength&quot;,
+        &quot;enabled&quot;: true,
+        &quot;weight&quot;: 35,
+        &quot;minimum&quot;: 80,
+        &quot;maximum&quot;: null,
+        &quot;parameters&quot;: {
+          &quot;lookback_days&quot;: 90,
+          &quot;benchmark&quot;: &quot;NIFTY50&quot;
+        }
+      },
+      {
+        &quot;key&quot;: &quot;trend_score&quot;,
+        &quot;enabled&quot;: true,
+        &quot;weight&quot;: 25,
+        &quot;minimum&quot;: 70,
+        &quot;maximum&quot;: null,
+        &quot;parameters&quot;: {
+          &quot;sma_fast&quot;: 20,
+          &quot;sma_slow&quot;: 50
+        }
+      },
+      {
+        &quot;key&quot;: &quot;momentum_score&quot;,
+        &quot;enabled&quot;: true,
+        &quot;weight&quot;: 20,
+        &quot;minimum&quot;: 70,
+        &quot;maximum&quot;: null,
+        &quot;parameters&quot;: { &quot;rsi_period&quot;: 14 }
+      },
+      {
+        &quot;key&quot;: &quot;volume_score&quot;,
+        &quot;enabled&quot;: true,
+        &quot;weight&quot;: 10,
+        &quot;minimum&quot;: 60,
+        &quot;maximum&quot;: null,
+        &quot;parameters&quot;: { &quot;volume_sma_period&quot;: 20 }
+      },
+      {
+        &quot;key&quot;: &quot;breakout_score&quot;,
+        &quot;enabled&quot;: true,
+        &quot;weight&quot;: 10,
+        &quot;minimum&quot;: 75,
+        &quot;maximum&quot;: null,
+        &quot;parameters&quot;: {}
+      }
+    ],
+    &quot;thresholds&quot;: {
+      &quot;open_position&quot;: 85,
+      &quot;increase_position&quot;: 90,
+      &quot;watch&quot;: 60,
+      &quot;reduce_position&quot;: 40,
+      &quot;exit_position&quot;: 20
+    }
+  }
+}
+</code></pre>
+<h3>Strategy — Growth (trend + RS heavy)</h3>
+<p>Eligibility: <code>ma_breakout</code> screener (import Example 1 first).</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;1.0&quot;,
+  &quot;artifact_type&quot;: &quot;strategy&quot;,
+  &quot;slug&quot;: &quot;growth_trend&quot;,
+  &quot;name&quot;: &quot;Growth Trend&quot;,
+  &quot;metadata&quot;: {
+    &quot;scope&quot;: &quot;portfolio&quot;,
+    &quot;origin&quot;: &quot;user&quot;,
+    &quot;description&quot;: &quot;Growth: strong trend and RS on MA breakout names&quot;
+  },
+  &quot;definition&quot;: {
+    &quot;eligibility_sources&quot;: [
+      {
+        &quot;screener_slug&quot;: &quot;ma_breakout&quot;,
+        &quot;enabled&quot;: true,
+        &quot;priority&quot;: 1
+      }
+    ],
+    &quot;scoring_model&quot;: [
+      { &quot;key&quot;: &quot;trend_score&quot;, &quot;enabled&quot;: true, &quot;weight&quot;: 40, &quot;minimum&quot;: 70, &quot;maximum&quot;: null, &quot;parameters&quot;: { &quot;sma_fast&quot;: 20, &quot;sma_slow&quot;: 50 } },
+      { &quot;key&quot;: &quot;relative_strength&quot;, &quot;enabled&quot;: true, &quot;weight&quot;: 40, &quot;minimum&quot;: 80, &quot;maximum&quot;: null, &quot;parameters&quot;: { &quot;lookback_days&quot;: 90, &quot;benchmark&quot;: &quot;NIFTY50&quot; } },
+      { &quot;key&quot;: &quot;momentum_score&quot;, &quot;enabled&quot;: true, &quot;weight&quot;: 20, &quot;minimum&quot;: 60, &quot;maximum&quot;: null, &quot;parameters&quot;: { &quot;rsi_period&quot;: 14 } }
+    ]
+  }
+}
+</code></pre>
+<h3>Strategy — Value (lower risk weight, RS + trend)</h3>
+<p>Note: StoX Screeners have no fundamental PE/PB — “value” here means lower-risk / quality tilt after a defensive eligibility screen. Use a pullback or mean-reversion screener slug.</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;1.0&quot;,
+  &quot;artifact_type&quot;: &quot;strategy&quot;,
+  &quot;slug&quot;: &quot;value_quality&quot;,
+  &quot;name&quot;: &quot;Value Quality Tilt&quot;,
+  &quot;metadata&quot;: {
+    &quot;scope&quot;: &quot;portfolio&quot;,
+    &quot;origin&quot;: &quot;user&quot;,
+    &quot;description&quot;: &quot;Quality tilt: RS + trend with risk capped&quot;
+  },
+  &quot;definition&quot;: {
+    &quot;eligibility_sources&quot;: [
+      { &quot;screener_slug&quot;: &quot;rsi_pullback&quot;, &quot;enabled&quot;: true, &quot;priority&quot;: 1 }
+    ],
+    &quot;scoring_model&quot;: [
+      { &quot;key&quot;: &quot;relative_strength&quot;, &quot;enabled&quot;: true, &quot;weight&quot;: 30, &quot;minimum&quot;: 70, &quot;maximum&quot;: null, &quot;parameters&quot;: {} },
+      { &quot;key&quot;: &quot;trend_score&quot;, &quot;enabled&quot;: true, &quot;weight&quot;: 30, &quot;minimum&quot;: 60, &quot;maximum&quot;: null, &quot;parameters&quot;: {} },
+      { &quot;key&quot;: &quot;momentum_score&quot;, &quot;enabled&quot;: true, &quot;weight&quot;: 20, &quot;minimum&quot;: 50, &quot;maximum&quot;: null, &quot;parameters&quot;: {} },
+      { &quot;key&quot;: &quot;risk_score&quot;, &quot;enabled&quot;: true, &quot;weight&quot;: 20, &quot;minimum&quot;: 0, &quot;maximum&quot;: 40, &quot;parameters&quot;: { &quot;atr_period&quot;: 14 } }
+    ]
+  }
+}
+</code></pre>
+<h3>Strategy — Swing (balanced)</h3>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;1.0&quot;,
+  &quot;artifact_type&quot;: &quot;strategy&quot;,
+  &quot;slug&quot;: &quot;swing_balanced&quot;,
+  &quot;name&quot;: &quot;Swing Balanced&quot;,
+  &quot;metadata&quot;: { &quot;scope&quot;: &quot;portfolio&quot;, &quot;origin&quot;: &quot;user&quot;, &quot;description&quot;: &quot;Balanced swing scoring&quot; },
+  &quot;definition&quot;: {
+    &quot;eligibility_sources&quot;: [
+      { &quot;screener_slug&quot;: &quot;rsi_pullback&quot;, &quot;enabled&quot;: true, &quot;priority&quot;: 1 }
+    ],
+    &quot;scoring_model&quot;: [
+      { &quot;key&quot;: &quot;relative_strength&quot;, &quot;enabled&quot;: true, &quot;weight&quot;: 25, &quot;minimum&quot;: 70, &quot;maximum&quot;: null, &quot;parameters&quot;: {} },
+      { &quot;key&quot;: &quot;momentum_score&quot;, &quot;enabled&quot;: true, &quot;weight&quot;: 25, &quot;minimum&quot;: 60, &quot;maximum&quot;: null, &quot;parameters&quot;: {} },
+      { &quot;key&quot;: &quot;trend_score&quot;, &quot;enabled&quot;: true, &quot;weight&quot;: 25, &quot;minimum&quot;: 60, &quot;maximum&quot;: null, &quot;parameters&quot;: {} },
+      { &quot;key&quot;: &quot;volume_score&quot;, &quot;enabled&quot;: true, &quot;weight&quot;: 15, &quot;minimum&quot;: 50, &quot;maximum&quot;: null, &quot;parameters&quot;: {} },
+      { &quot;key&quot;: &quot;risk_score&quot;, &quot;enabled&quot;: true, &quot;weight&quot;: 10, &quot;minimum&quot;: 0, &quot;maximum&quot;: 45, &quot;parameters&quot;: {} }
+    ]
+  }
+}
+</code></pre>
+<h3>Strategy — Breakout</h3>
+<p>Eligibility: <code>high_volume_breakout</code>.</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;1.0&quot;,
+  &quot;artifact_type&quot;: &quot;strategy&quot;,
+  &quot;slug&quot;: &quot;breakout_thrust&quot;,
+  &quot;name&quot;: &quot;Breakout Thrust&quot;,
+  &quot;metadata&quot;: { &quot;scope&quot;: &quot;portfolio&quot;, &quot;origin&quot;: &quot;user&quot;, &quot;description&quot;: &quot;Breakout + volume + pattern evidence&quot; },
+  &quot;definition&quot;: {
+    &quot;eligibility_sources&quot;: [
+      { &quot;screener_slug&quot;: &quot;high_volume_breakout&quot;, &quot;enabled&quot;: true, &quot;priority&quot;: 1 }
+    ],
+    &quot;scoring_model&quot;: [
+      { &quot;key&quot;: &quot;breakout_score&quot;, &quot;enabled&quot;: true, &quot;weight&quot;: 30, &quot;minimum&quot;: 75, &quot;maximum&quot;: null, &quot;parameters&quot;: {} },
+      { &quot;key&quot;: &quot;volume_score&quot;, &quot;enabled&quot;: true, &quot;weight&quot;: 25, &quot;minimum&quot;: 60, &quot;maximum&quot;: null, &quot;parameters&quot;: {} },
+      { &quot;key&quot;: &quot;relative_strength&quot;, &quot;enabled&quot;: true, &quot;weight&quot;: 25, &quot;minimum&quot;: 70, &quot;maximum&quot;: null, &quot;parameters&quot;: {} },
+      { &quot;key&quot;: &quot;trend_score&quot;, &quot;enabled&quot;: true, &quot;weight&quot;: 20, &quot;minimum&quot;: 60, &quot;maximum&quot;: null, &quot;parameters&quot;: {} }
+    ]
+  }
+}
+</code></pre>
 <p>Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).</p>
 
       </section>
@@ -565,6 +894,9 @@
     
         <dt>Import</dt>
         <dd>Enabled only after successful Validate. Creates a draft strategy in this portfolio (does not change Recommendations until Select). Mandatory: schema_version, artifact_type, slug, name, metadata, definition.scoring_model with enabled weights = 100. Editing the JSON clears validation and disables Import again.</dd>
+    
+        <dt>Download AI authoring guide (.md)</dt>
+        <dd>Download /docs/stox-trading-artifacts-ai-guide.md — consolidated Indicator + Screener + Strategy + Authoring + Cookbook Markdown for AI agents and offline authoring.</dd>
     
         <dt>Edit active</dt>
         <dd>Jump to /strategy to edit the selected strategy’s tabs and Save.</dd>
@@ -607,6 +939,9 @@
         <dt>Minervini auto-migrate</dt>
         <dd>ensureActive / seedFactoryStrategy backfills slug momentum_strategy, metadata, and Minervini screener eligibility links without overwriting user-edited scores.</dd>
     
+        <dt>Optional sections are live</dt>
+        <dd>thresholds, portfolio_rules, exit_strategy, and market_gates are runtime-usable and Import-preserved — not reserved. Prefer Export-then-edit for full defaults.</dd>
+    
         <dt>Active portfolio context</dt>
         <dd>Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.</dd>
     
@@ -619,7 +954,7 @@
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
-          <a href="strategy.html">Strategy</a><a href="screener-registry.html">Screener Registry</a><a href="indicator-registry.html">Indicator Registry</a><a href="recommendations.html">Recommendations</a><a href="settings.html">Settings</a>
+          <a href="strategy.html">Strategy</a><a href="screener-registry.html">Screener Registry</a><a href="indicator-registry.html">Indicator Registry</a><a href="recommendations.html">Recommendations</a><a href="authoring-trading-artifacts.html">Authoring Trading Artifacts</a><a href="trading-cookbook.html">Trading Cookbook</a><a href="settings.html">Settings</a>
         </div>
       </section>
     </article>
