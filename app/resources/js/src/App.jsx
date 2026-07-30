@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { getToastAutoDismissMs } from './toast';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import AppBottomNav from './components/AppBottomNav';
 import AppHeader from './components/AppHeader';
-import AppTabs from './components/AppTabs';
+import AppSidebar from './components/AppSidebar';
 import ErrorBoundary from './components/ErrorBoundary';
 import BootErrorBanner, { clearBootError } from './components/BootErrorBanner';
 import { hideBootPanel } from './utils/bootPanel';
 import { useAuth } from './context/AuthContext';
+import { SidebarProvider } from './context/SidebarContext';
 import DashboardPage from './pages/DashboardPage';
 import HoldingsPage from './pages/HoldingsPage';
 import StockPricesPage from './pages/StockPricesPage';
@@ -53,8 +53,6 @@ import NotificationHistoryPage from './pages/NotificationHistoryPage';
 import CashManagementPage from './pages/CashManagementPage';
 import StrategyPage from './pages/StrategyPage';
 import DocumentationPage from './pages/DocumentationPage';
-
-const FOOTER_NAV_ENABLED = true;
 
 function App() {
     const { user, isAuthenticated, loading } = useAuth();
@@ -122,7 +120,7 @@ function App() {
         <ErrorBoundary>
             <div className="contentPane">
                 <BootErrorBanner />
-                <AppHeader user={isAuthenticated ? user : null} />
+                {!isAuthenticated && <AppHeader user={null} />}
 
                 {toast && (
                     <div
@@ -155,123 +153,125 @@ function App() {
                         <Route path="*" element={<LoginPage />} />
                     </Routes>
                 ) : (
-                    <>
-                        <div className="lido-main">
-                            {!isDocumentationRoute && <AppTabs />}
-                            <Routes>
-                                <Route path="/" element={<DashboardPage />} />
-                                <Route path="/transactions" element={<TransactionsPage />} />
-                                <Route path="/transactions/pending" element={<TransactionsPage />} />
-                                <Route path="/cash" element={<CashManagementPage />} />
-                                <Route path="/corporate-action" element={<CorporateActionPage />} />
-                                <Route path="/transactions/closed" element={<ClosedTransactionsPage />} />
-                                <Route path="/holdings" element={<HoldingsPage />} />
-                                <Route path="/holdings/:stockId/prices" element={<StockPricesPage />} />
-                                <Route path="/watchlist/:symbol?" element={<WatchlistPage />} />
-                                <Route path="/explorer" element={<StockExplorerPage />} />
-                                <Route path="/indices" element={<IndicesPage />} />
-                                <Route path="/market-depth" element={<MarketDepthPage />} />
-                                <Route path="/screeners" element={<ScreenersPage />} />
-                                <Route path="/screeners/registry" element={<ScreenerRegistryPage />} />
-                                <Route path="/screeners/registry/:id" element={<ScreenerRegistryDetailPage />} />
-                                <Route path="/screeners/:id" element={<ScreenerEditorPage />} />
-                                <Route path="/candidates" element={<CandidatesPage />} />
-                                <Route path="/evaluations" element={<Navigate to="/candidates" replace />} />
-                                <Route path="/recommendations" element={<RecommendationsPage />} />
-                                <Route path="/strategy/registry" element={<StrategyRegistryPage />} />
-                                <Route path="/strategy/registry/:id" element={<StrategyRegistryDetailPage />} />
-                                <Route path="/strategy" element={<StrategyPage />} />
-                                <Route path="/review" element={<ReviewDashboardPage />} />
-                                <Route path="/notification-history" element={<NotificationHistoryPage />} />
-                                <Route path="/patterns" element={<PatternGuidePage />} />
-                                <Route path="/knowledge-board" element={<KnowledgeBoardPage />} />
-                                <Route path="/knowledge-board/tags" element={<KnowledgeBoardTagsPage />} />
-                                <Route path="/calendar" element={<CalendarPage />} />
-                                <Route path="/profile" element={<ProfilePage />} />
-                                <Route path="/documentation" element={<DocumentationPage />} />
-                                <Route path="/portfolios" element={<PortfoliosPage />} />
-                                <Route path="/settings" element={<Navigate to="/settings/portfolio" replace />} />
-                                <Route path="/settings/global" element={<SettingsPage />} />
-                                <Route path="/settings/portfolio" element={<SettingsPage />} />
-                                <Route path="/settings/account" element={<SettingsPage />} />
-                                <Route path="/settings/alert-policies" element={<AlertPoliciesPage />} />
-                                <Route path="/settings/sync-logs" element={(
-                                    <AdminRoute>
-                                        <SyncLogsPage />
-                                    </AdminRoute>
-                                )} />
-                                <Route path="/settings/admin-alerts" element={(
-                                    <AdminRoute>
-                                        <AdminAlertsPage />
-                                    </AdminRoute>
-                                )} />
-                                <Route path="/settings/universe-price-sync" element={(
-                                    <AdminRoute>
-                                        <UniversePriceSyncPage />
-                                    </AdminRoute>
-                                )} />
-                                <Route path="/settings/data-quality" element={(
-                                    <AdminRoute>
-                                        <DataQualityCenterPage />
-                                    </AdminRoute>
-                                )} />
-                                <Route path="/settings/data-quality/history" element={(
-                                    <AdminRoute>
-                                        <CorporateActionHistoryPage />
-                                    </AdminRoute>
-                                )} />
-                                <Route path="/settings/indicators" element={(
-                                    <AdminRoute>
-                                        <IndicatorRegistryPage />
-                                    </AdminRoute>
-                                )} />
-                                <Route path="/settings/indicators/:id" element={(
-                                    <AdminRoute>
-                                        <IndicatorRegistryDetailPage />
-                                    </AdminRoute>
-                                )} />
-                                <Route path="/settings/screener-registry" element={(
-                                    <AdminRoute>
-                                        <ScreenerRegistryPage adminMode />
-                                    </AdminRoute>
-                                )} />
-                                <Route path="/settings/screener-registry/:id" element={(
-                                    <AdminRoute>
-                                        <ScreenerRegistryDetailPage adminMode />
-                                    </AdminRoute>
-                                )} />
-                                <Route path="/settings/strategy-registry" element={(
-                                    <AdminRoute>
-                                        <StrategyRegistryPage adminMode />
-                                    </AdminRoute>
-                                )} />
-                                <Route path="/settings/strategy-registry/:id" element={(
-                                    <AdminRoute>
-                                        <StrategyRegistryDetailPage adminMode />
-                                    </AdminRoute>
-                                )} />
-                                <Route path="/settings/universe-price-sync/gap-failures" element={(
-                                    <AdminRoute>
-                                        <GapFillFailuresPage />
-                                    </AdminRoute>
-                                )} />
-                                <Route path="/settings/universe-price-sync/ignored-gaps" element={(
-                                    <AdminRoute>
-                                        <IgnoredPriceGapsPage />
-                                    </AdminRoute>
-                                )} />
-                                <Route
-                                    path="/settings/users"
-                                    element={(
+                    <SidebarProvider>
+                        <AppHeader user={user} showSidebarToggle={!isDocumentationRoute} />
+                        <div className={`lido-shell${isDocumentationRoute ? ' lido-shell--docs' : ''}`}>
+                            {!isDocumentationRoute && <AppSidebar />}
+                            <div className="lido-main">
+                                <Routes>
+                                    <Route path="/" element={<DashboardPage />} />
+                                    <Route path="/transactions" element={<TransactionsPage />} />
+                                    <Route path="/transactions/pending" element={<TransactionsPage />} />
+                                    <Route path="/cash" element={<CashManagementPage />} />
+                                    <Route path="/corporate-action" element={<CorporateActionPage />} />
+                                    <Route path="/transactions/closed" element={<ClosedTransactionsPage />} />
+                                    <Route path="/holdings" element={<HoldingsPage />} />
+                                    <Route path="/holdings/:stockId/prices" element={<StockPricesPage />} />
+                                    <Route path="/watchlist/:symbol?" element={<WatchlistPage />} />
+                                    <Route path="/explorer" element={<StockExplorerPage />} />
+                                    <Route path="/indices" element={<IndicesPage />} />
+                                    <Route path="/market-depth" element={<MarketDepthPage />} />
+                                    <Route path="/screeners" element={<ScreenersPage />} />
+                                    <Route path="/screeners/registry" element={<ScreenerRegistryPage />} />
+                                    <Route path="/screeners/registry/:id" element={<ScreenerRegistryDetailPage />} />
+                                    <Route path="/screeners/:id" element={<ScreenerEditorPage />} />
+                                    <Route path="/candidates" element={<CandidatesPage />} />
+                                    <Route path="/evaluations" element={<Navigate to="/candidates" replace />} />
+                                    <Route path="/recommendations" element={<RecommendationsPage />} />
+                                    <Route path="/strategy/registry" element={<StrategyRegistryPage />} />
+                                    <Route path="/strategy/registry/:id" element={<StrategyRegistryDetailPage />} />
+                                    <Route path="/strategy" element={<StrategyPage />} />
+                                    <Route path="/review" element={<ReviewDashboardPage />} />
+                                    <Route path="/notification-history" element={<NotificationHistoryPage />} />
+                                    <Route path="/patterns" element={<PatternGuidePage />} />
+                                    <Route path="/knowledge-board" element={<KnowledgeBoardPage />} />
+                                    <Route path="/knowledge-board/tags" element={<KnowledgeBoardTagsPage />} />
+                                    <Route path="/calendar" element={<CalendarPage />} />
+                                    <Route path="/profile" element={<ProfilePage />} />
+                                    <Route path="/documentation" element={<DocumentationPage />} />
+                                    <Route path="/portfolios" element={<PortfoliosPage />} />
+                                    <Route path="/settings" element={<Navigate to="/settings/portfolio" replace />} />
+                                    <Route path="/settings/global" element={<SettingsPage />} />
+                                    <Route path="/settings/portfolio" element={<SettingsPage />} />
+                                    <Route path="/settings/account" element={<SettingsPage />} />
+                                    <Route path="/settings/alert-policies" element={<AlertPoliciesPage />} />
+                                    <Route path="/settings/sync-logs" element={(
                                         <AdminRoute>
-                                            <UserManagementPage />
+                                            <SyncLogsPage />
                                         </AdminRoute>
-                                    )}
-                                />
-                            </Routes>
+                                    )} />
+                                    <Route path="/settings/admin-alerts" element={(
+                                        <AdminRoute>
+                                            <AdminAlertsPage />
+                                        </AdminRoute>
+                                    )} />
+                                    <Route path="/settings/universe-price-sync" element={(
+                                        <AdminRoute>
+                                            <UniversePriceSyncPage />
+                                        </AdminRoute>
+                                    )} />
+                                    <Route path="/settings/data-quality" element={(
+                                        <AdminRoute>
+                                            <DataQualityCenterPage />
+                                        </AdminRoute>
+                                    )} />
+                                    <Route path="/settings/data-quality/history" element={(
+                                        <AdminRoute>
+                                            <CorporateActionHistoryPage />
+                                        </AdminRoute>
+                                    )} />
+                                    <Route path="/settings/indicators" element={(
+                                        <AdminRoute>
+                                            <IndicatorRegistryPage />
+                                        </AdminRoute>
+                                    )} />
+                                    <Route path="/settings/indicators/:id" element={(
+                                        <AdminRoute>
+                                            <IndicatorRegistryDetailPage />
+                                        </AdminRoute>
+                                    )} />
+                                    <Route path="/settings/screener-registry" element={(
+                                        <AdminRoute>
+                                            <ScreenerRegistryPage adminMode />
+                                        </AdminRoute>
+                                    )} />
+                                    <Route path="/settings/screener-registry/:id" element={(
+                                        <AdminRoute>
+                                            <ScreenerRegistryDetailPage adminMode />
+                                        </AdminRoute>
+                                    )} />
+                                    <Route path="/settings/strategy-registry" element={(
+                                        <AdminRoute>
+                                            <StrategyRegistryPage adminMode />
+                                        </AdminRoute>
+                                    )} />
+                                    <Route path="/settings/strategy-registry/:id" element={(
+                                        <AdminRoute>
+                                            <StrategyRegistryDetailPage adminMode />
+                                        </AdminRoute>
+                                    )} />
+                                    <Route path="/settings/universe-price-sync/gap-failures" element={(
+                                        <AdminRoute>
+                                            <GapFillFailuresPage />
+                                        </AdminRoute>
+                                    )} />
+                                    <Route path="/settings/universe-price-sync/ignored-gaps" element={(
+                                        <AdminRoute>
+                                            <IgnoredPriceGapsPage />
+                                        </AdminRoute>
+                                    )} />
+                                    <Route
+                                        path="/settings/users"
+                                        element={(
+                                            <AdminRoute>
+                                                <UserManagementPage />
+                                            </AdminRoute>
+                                        )}
+                                    />
+                                </Routes>
+                            </div>
                         </div>
-                        {FOOTER_NAV_ENABLED && !isDocumentationRoute && <AppBottomNav />}
-                    </>
+                    </SidebarProvider>
                 )}
             </div>
         </ErrorBoundary>

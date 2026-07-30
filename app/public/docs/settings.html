@@ -89,7 +89,7 @@
 
       <section class="panel">
         <h2>Overview</h2>
-        <p>Settings are split into Global (admins), Portfolio, and Account. Configure fee components, cron timezone, Telegram bot/chat, external stock links, and related preferences.</p>
+        <p>Settings is the only Administration item in the primary sidebar. Open it for Global (admins), Portfolio, and Account preferences. Admin tools (users, sync logs, data quality, indicator/screener/strategy registries, universe sync, alert policies) are linked from Settings cards — they are not separate sidebar entries.</p>
 <p>Settings controls app behavior and data interpretation. Make changes intentionally, especially to fees, telegram, and sync configuration, because they impact multiple workflows downstream.</p>
 <p>Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).</p>
 
@@ -110,6 +110,9 @@
         <dt>Notification history</dt>
         <dd>Open /notification-history from Portfolio → Alerts &amp; notifications to audit Telegram deliveries.</dd>
     
+        <dt>Admin shortcuts</dt>
+        <dd>From Global settings: Admin alerts, Sync logs, Universe price sync, Data Quality, Indicator/Screener/Strategy registries.</dd>
+    
         <dt>Screener Registry (admin)</dt>
         <dd>Admin shortcut to Screener artifact import/export and catalogue.</dd>
     
@@ -129,6 +132,9 @@
         <dl class="doc-list">
         <dt>Admin vs portfolio scope</dt>
         <dd>Some tools (users, sync logs, universe sync) are admin-only.</dd>
+    
+        <dt>Not in sidebar</dt>
+        <dd>Settings sub-pages and registries stay off the primary sidebar; reach them from Settings or parent product pages.</dd>
     
         <dt>Active portfolio context</dt>
         <dd>Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.</dd>

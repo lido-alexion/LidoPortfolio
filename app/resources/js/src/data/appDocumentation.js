@@ -70,6 +70,11 @@ const APP_DOCUMENTATION_BASE = [
                 description: 'Most screens read and write data for the portfolio selected in the header switcher.',
             },
             {
+                name: 'Primary sidebar',
+                description:
+                    'Logged-in navigation is a left sidebar with Portfolio, Market, Trading, Knowledge, and Administration (Settings only). Child pages such as Pending Execution, registries, and admin tools are opened from their parent page or from Settings — they are not listed in the sidebar. Routes and URLs are unchanged.',
+            },
+            {
                 name: 'Trading OS flow',
                 description: 'See topic Trading OS pages & flow for which page shows what and how recommendations move from Screener → Strategy → Recommendations → Review.',
             },
@@ -338,12 +343,12 @@ const APP_DOCUMENTATION_BASE = [
         id: 'explorer',
         keyword: 'explorer',
         aliases: ['relative-strength', 'universe-analytics'],
-        title: 'Explorer',
+        title: 'Stock Explorer',
         routeLabel: '/explorer',
         match: (p) => pathStarts(p, '/explorer'),
         summary: 'Universe-cache analytics: price cards, relative strength, charts, normalized gain.',
         overview:
-            'Explorer analyses stocks from the universe price cache over selectable windows (1M / 3M / 6M / 1Y). Use it to compare strength versus benchmarks and peers.',
+            'Stock Explorer (sidebar → Market) analyses stocks from the universe price cache over selectable windows (1M / 3M / 6M / 1Y). Use it to compare strength versus benchmarks and peers.',
         controls: [
             { name: 'Period toggles', description: 'Choose the lookback window for cards and charts.' },
             { name: 'Relative strength / charts', description: 'Compare normalized performance across selected symbols or vs indices.' },
@@ -1021,17 +1026,19 @@ const APP_DOCUMENTATION_BASE = [
             && !pathStarts(p, '/settings/users'),
         summary: 'Global (admin), Portfolio, and Account settings — fees, Telegram, sync, and links.',
         overview:
-            'Settings are split into Global (admins), Portfolio, and Account. Configure fee components, cron timezone, Telegram bot/chat, external stock links, and related preferences.',
+            'Settings is the only Administration item in the primary sidebar. Open it for Global (admins), Portfolio, and Account preferences. Admin tools (users, sync logs, data quality, indicator/screener/strategy registries, universe sync, alert policies) are linked from Settings cards — they are not separate sidebar entries.',
         controls: [
             { name: 'Settings tabs', description: 'Navigate Global / Portfolio / Account sections.' },
             { name: 'Fee components', description: 'Drive auto fees on buy/sell ledger rows.' },
             { name: 'Telegram', description: 'Bot token and chat id for portfolio notifications.' },
             { name: 'Notification history', description: 'Open /notification-history from Portfolio → Alerts & notifications to audit Telegram deliveries.' },
+            { name: 'Admin shortcuts', description: 'From Global settings: Admin alerts, Sync logs, Universe price sync, Data Quality, Indicator/Screener/Strategy registries.' },
             { name: 'Screener Registry (admin)', description: 'Admin shortcut to Screener artifact import/export and catalogue.' },
             { name: 'Strategy Registry (admin)', description: 'Admin shortcut to Strategy artifact import/export, selection, and catalogue.' },
         ],
         concepts: [
             { name: 'Admin vs portfolio scope', description: 'Some tools (users, sync logs, universe sync) are admin-only.' },
+            { name: 'Not in sidebar', description: 'Settings sub-pages and registries stay off the primary sidebar; reach them from Settings or parent product pages.' },
         ],
         related: ['alert-policies', 'universe-price-sync', 'data-quality-center', 'indicator-registry', 'screener-registry', 'strategy-registry', 'users', 'notifications'],
     },
