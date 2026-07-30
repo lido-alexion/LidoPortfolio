@@ -9,7 +9,7 @@
     @endphp
     <meta name="app-base" content="{{ $appBase }}">
     <script>window.__LIDO_APP_BASE__ = @json($appBase);</script>
-    <title>Lido Portfolio</title>
+    <title>StoX by Lido Alexion</title>
     <link rel="icon" href="{{ ($appBase !== '' ? $appBase : '') }}/favicon.ico" type="image/x-icon" sizes="any">
     <script>
         (function () {
@@ -179,7 +179,7 @@
     <div id="lido-boot-panel" hidden style="position:fixed;inset:0;z-index:2147483000;overflow:auto;padding:1rem;background:#1a1a1a;color:#e5e7eb"></div>
     <noscript>
         <div style="padding:1rem;font-family:system-ui,sans-serif;background:#1a1a1a;color:#e5e7eb;min-height:100vh">
-            JavaScript is required for Lido Portfolio.
+            JavaScript is required for StoX by Lido Alexion.
         </div>
     </noscript>
 </body>

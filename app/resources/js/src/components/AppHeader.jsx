@@ -28,8 +28,11 @@ export default function AppHeader({ user }) {
                     {user && <PortfolioSwitcher />}
                 </div>
                 <div className="lido-header-center">
-                    <Link to="/" className="lido-header-title-link">
-                        <h1 className="lido-header-title">Lido Alexion</h1>
+                    <Link to="/" className="lido-header-title-link" aria-label="StoX by Lido Alexion">
+                        <h1 className="lido-header-title">
+                            <span className="lido-header-title-mark">StoX</span>
+                            <span className="lido-header-title-by">by Lido Alexion</span>
+                        </h1>
                     </Link>
                 </div>
                 <div className="lido-header-actions">

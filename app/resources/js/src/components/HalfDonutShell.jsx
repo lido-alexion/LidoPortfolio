@@ -22,8 +22,8 @@ export const VB_W = CX + LABEL_R + LABEL_PAD;
 export const VB_H = CY + HUB_R + 6;
 
 /**
- * Green (left) → red (right). Use when left is calm/safe/fear and right is
- * extreme risk or greed (Sentiment, Volatility, Risk).
+ * Green (left) → red (right). Prefer BULLISH_GRADIENT_STOPS + invertScale for
+ * Sentiment / Volatility / Risk so all dashboard gauges read red→green left→right.
  */
 export const DEFAULT_GRADIENT_STOPS = [
     { offset: '0%', color: '#22c55e' },
@@ -40,6 +40,7 @@ export const DEFAULT_GRADIENT_STOPS = [
 /**
  * Red (left) → green (right). Use when left is bearish/weak/down and right is
  * bullish/strong/up (Trend, Momentum, Market regime, Market breadth).
+ * Also used with invertScale for fear/risk gauges so the ring matches.
  */
 export const BULLISH_GRADIENT_STOPS = [
     { offset: '0%', color: '#ef4444' },
@@ -59,6 +60,35 @@ export function clampScore(value) {
         return null;
     }
     return Math.min(100, Math.max(0, n));
+}
+
+/** Flip a 0–100 score across the dial midpoint. */
+export function invertScore(score) {
+    const s = clampScore(score);
+    if (s == null) {
+        return null;
+    }
+    return 100 - s;
+}
+
+/** Mirror zone bands so labels stay under the same colors after invertScale. */
+export function invertZones(zones = []) {
+    return zones.map((z) => ({
+        ...z,
+        min: 100 - Number(z.max),
+        max: 100 - Number(z.min),
+    }));
+}
+
+/** Mirror linearGradient stops left↔right. */
+export function invertGradientStops(stops = []) {
+    return stops
+        .map((s) => {
+            const pct = parseFloat(String(s.offset));
+            const mirrored = Number.isFinite(pct) ? 100 - pct : pct;
+            return { ...s, offset: `${mirrored}%` };
+        })
+        .sort((a, b) => parseFloat(a.offset) - parseFloat(b.offset));
 }
 
 /** Score 0 → left (π), 100 → right (0). */
@@ -122,6 +152,7 @@ function smoothstep(edge0, edge1, x) {
  *   zones: Array<{ id: string, label: string, min: number, max: number, color?: string }>,
  *   gradientStops?: Array<{ offset: string, color: string }>,
  *   colorMode?: 'gradient' | 'zoneBlend',
+ *   invertScale?: boolean,
  *   hitZones?: boolean,
  *   onZoneEnter?: (zoneId: string|null) => void,
  *   className?: string,
@@ -139,6 +170,7 @@ export default function HalfDonutShell({
     zones,
     gradientStops = DEFAULT_GRADIENT_STOPS,
     colorMode = 'gradient',
+    invertScale = false,
     hitZones = false,
     onZoneEnter,
     className = '',
@@ -155,18 +187,28 @@ export default function HalfDonutShell({
     const labelPathId = `lido-half-donut-label-${uid}`;
 
     const clamped = clampScore(score);
+    const geometryScore = invertScale ? invertScore(clamped) : clamped;
+    const geometryZones = useMemo(
+        () => (invertScale ? invertZones(zones) : zones),
+        [invertScale, zones],
+    );
+    const geometryStops = useMemo(
+        () => (invertScale ? invertGradientStops(gradientStops) : gradientStops),
+        [invertScale, gradientStops],
+    );
+
     const needleTip = useMemo(() => {
-        if (clamped == null) {
+        if (geometryScore == null) {
             return null;
         }
-        return polar(CX, CY, NEEDLE_TIP_R, scoreToRadians(clamped));
-    }, [clamped]);
+        return polar(CX, CY, NEEDLE_TIP_R, scoreToRadians(geometryScore));
+    }, [geometryScore]);
 
     const blendedSlices = useMemo(() => {
-        if (colorMode !== 'zoneBlend' || !zones?.length) {
+        if (colorMode !== 'zoneBlend' || !geometryZones?.length) {
             return [];
         }
-        const n = zones.length;
+        const n = geometryZones.length;
         const sliceCount = n * 12;
         return Array.from({ length: sliceCount }, (_, i) => {
             const startScore = (i / sliceCount) * 100;
@@ -175,8 +217,8 @@ export default function HalfDonutShell({
             const pos = Math.min(0.9999, t) * n;
             const zi = Math.floor(pos);
             const f = pos - zi;
-            const curr = hexToRgb(zones[zi].color || '#94a3b8');
-            const next = hexToRgb(zones[Math.min(n - 1, zi + 1)].color || '#94a3b8');
+            const curr = hexToRgb(geometryZones[zi].color || '#94a3b8');
+            const next = hexToRgb(geometryZones[Math.min(n - 1, zi + 1)].color || '#94a3b8');
             const blend = zi >= n - 1 ? 0 : smoothstep(0.7, 1, f);
             return {
                 key: `slice-${i}`,
@@ -190,9 +232,9 @@ export default function HalfDonutShell({
                 color: rgbToCss(mixRgb(curr, next, blend)),
             };
         });
-    }, [colorMode, zones]);
+    }, [colorMode, geometryZones]);
 
-    if (clamped == null || !needleTip || !zones?.length) {
+    if (clamped == null || geometryScore == null || !needleTip || !geometryZones?.length) {
         return null;
     }
 
@@ -219,13 +261,13 @@ export default function HalfDonutShell({
                 <defs>
                     {colorMode === 'gradient' ? (
                         <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="0%">
-                            {gradientStops.map((s) => (
-                                <stop key={s.offset} offset={s.offset} stopColor={s.color} />
+                            {geometryStops.map((s, i) => (
+                                <stop key={`${s.offset}-${i}`} offset={s.offset} stopColor={s.color} />
                             ))}
                         </linearGradient>
                     ) : null}
                     <path id={labelPathId} d={semicirclePath(CX, CY, LABEL_R)} fill="none" />
-                    {zones.map((z, i) => (
+                    {geometryZones.map((z, i) => (
                         <path
                             key={`lp-${z.id}`}
                             id={`${labelPathId}-${i}`}
@@ -264,9 +306,9 @@ export default function HalfDonutShell({
                     ))
                 )}
 
-                {zones.map((z, i) => {
+                {geometryZones.map((z, i) => {
                     const midFrac = (z.min + z.max) / 2 / 100;
-                    const useSegmentPath = zones.length > 5;
+                    const useSegmentPath = geometryZones.length > 5;
                     return (
                         <text
                             key={z.id}
@@ -284,7 +326,7 @@ export default function HalfDonutShell({
                 })}
 
                 {hitZones
-                    ? zones.map((z) => (
+                    ? geometryZones.map((z) => (
                         <path
                             key={`hit-${z.id}`}
                             d={arcPath(

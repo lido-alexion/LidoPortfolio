@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import Collapse from 'bootstrap/js/dist/collapse';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import { usePortfolio } from '../context/PortfolioContext';
@@ -44,6 +45,7 @@ import {
 } from 'recharts';
 
 const TOP_MOVER_PERIOD_KEY = 'portfolio_dashboard_top_mover_period';
+const MARKET_DIAGNOSTICS_COLLAPSED_KEY = 'portfolio_dashboard_market_diagnostics_collapsed';
 
 function loadTopMoverPeriod() {
     try {
@@ -59,6 +61,46 @@ function saveTopMoverPeriod(period) {
     } catch {
         // Quota or private mode — ignore.
     }
+}
+
+function loadMarketDiagnosticsExpanded() {
+    try {
+        return sessionStorage.getItem(MARKET_DIAGNOSTICS_COLLAPSED_KEY) !== '1';
+    } catch {
+        return false;
+    }
+}
+
+function persistMarketDiagnosticsExpanded(expanded) {
+    try {
+        sessionStorage.setItem(MARKET_DIAGNOSTICS_COLLAPSED_KEY, expanded ? '0' : '1');
+    } catch {
+        // Ignore storage failures (private mode/quota).
+    }
+}
+
+function marketHealthStatus(score) {
+    if (score == null) return '—';
+    if (score >= 80) return 'Excellent';
+    if (score >= 65) return 'Healthy';
+    if (score >= 50) return 'Neutral';
+    if (score >= 35) return 'Weak';
+    return 'Poor';
+}
+
+function marketDecisionZone(score) {
+    if (score == null) return { label: '—', icon: 'bi-dash-circle', className: 'text-muted' };
+    if (score >= 75) return { label: 'Aggressive', icon: 'bi-circle-fill', className: 'text-success' };
+    if (score >= 45) return { label: 'Selective', icon: 'bi-circle-fill', className: 'text-warning' };
+    return { label: 'Defensive', icon: 'bi-circle-fill', className: 'text-danger' };
+}
+
+function suggestedExposure(score) {
+    if (score == null) return '—';
+    if (score >= 85) return '100%';
+    if (score >= 65) return '80%';
+    if (score >= 45) return '50%';
+    return '20%';
 }
 
 const growthChartTooltipStyle = {
@@ -207,6 +249,8 @@ export default function DashboardPage() {
     const [calendarLoading, setCalendarLoading] = useState(true);
     const [servedFromCache, setServedFromCache] = useState(false);
     const [cachedAt, setCachedAt] = useState(null);
+    const [marketDiagnosticsExpanded, setMarketDiagnosticsExpanded] = useState(loadMarketDiagnosticsExpanded);
+    const marketDiagnosticsCollapseRef = useRef(null);
 
     const handleTopMoverPeriodChange = useCallback((period) => {
         setTopMoverPeriod(period);
@@ -363,6 +407,32 @@ export default function DashboardPage() {
         setLoadError('');
         fetchDashboard({ force: false });
     }, [userId, profileId, fetchDashboard]);
+
+    useEffect(() => {
+        if (!marketDiagnosticsCollapseRef.current) {
+            return undefined;
+        }
+        const node = marketDiagnosticsCollapseRef.current;
+        const collapse = new Collapse(node, { toggle: false });
+        if (marketDiagnosticsExpanded) {
+            collapse.show();
+        } else {
+            collapse.hide();
+        }
+        return () => collapse.dispose();
+    }, []);
+
+    useEffect(() => {
+        if (!marketDiagnosticsCollapseRef.current) {
+            return;
+        }
+        const collapse = Collapse.getOrCreateInstance(marketDiagnosticsCollapseRef.current, { toggle: false });
+        if (marketDiagnosticsExpanded) {
+            collapse.show();
+        } else {
+            collapse.hide();
+        }
+    }, [marketDiagnosticsExpanded]);
 
     const allocationColumns = useMemo(() => [
         { accessorKey: 'symbol', header: 'Symbol' },
@@ -639,6 +709,46 @@ export default function DashboardPage() {
     const pricesSyncedToday = Boolean(dailySync.synced_today);
     const syncInProgress = Boolean(dailySync.in_progress) || syncingPrices;
     const rsBenchmarkSymbol = data.nifty_comparison?.benchmark?.symbol || 'NIFTY50';
+    const marketAnalytics = data.market_analytics || null;
+    const marketHealthScoreRaw = marketAnalytics?.market_health_score ?? marketAnalytics?.health_score;
+    const marketHealthScore = marketHealthScoreRaw == null || Number.isNaN(Number(marketHealthScoreRaw))
+        ? null
+        : Math.round(Number(marketHealthScoreRaw));
+    const marketHealthStatusLabel = marketHealthStatus(marketHealthScore);
+    const marketZone = marketDecisionZone(marketHealthScore);
+    const marketExposure = suggestedExposure(marketHealthScore);
+    const marketContributorFlags = [
+        {
+            key: 'trend',
+            label: 'Trend',
+            ok: (marketAnalytics?.trend?.score ?? marketAnalytics?.trend?.strength) >= 60,
+            available: (marketAnalytics?.trend?.score ?? marketAnalytics?.trend?.strength) != null,
+        },
+        {
+            key: 'momentum',
+            label: 'Momentum',
+            ok: marketAnalytics?.momentum?.score >= 60,
+            available: marketAnalytics?.momentum?.score != null,
+        },
+        {
+            key: 'breadth',
+            label: 'Breadth',
+            ok: marketAnalytics?.breadth?.score >= 55,
+            available: marketAnalytics?.breadth?.score != null,
+        },
+        {
+            key: 'risk',
+            label: 'Risk',
+            ok: (marketAnalytics?.risk?.raw_risk ?? marketAnalytics?.risk?.score) <= 50,
+            available: (marketAnalytics?.risk?.raw_risk ?? marketAnalytics?.risk?.score) != null,
+        },
+        {
+            key: 'sentiment',
+            label: 'Sentiment',
+            ok: marketAnalytics?.sentiment?.score >= 50,
+            available: marketAnalytics?.sentiment?.score != null,
+        },
+    ];
 
     return (
         <div className="row g-3">
@@ -805,151 +915,237 @@ export default function DashboardPage() {
                             </div>
                         </div>
                     ))}
-                    {data.market_analytics ? (
+                    {marketAnalytics ? (
                         <div className="col-12">
                             <h2 className="h6 text-muted mb-2">Market analytics</h2>
-                        </div>
-                    ) : null}
-                    {data.market_analytics?.sentiment?.score != null ? (
-                        <div className="col-6 col-md-4 col-lg-3" key="ma-Sentiment">
-                            <div className="card h-100">
-                                <div className="card-body py-2">
-                                    <div className="text-muted small">Sentiment</div>
-                                    <SentimentGauge
-                                        score={data.market_analytics.sentiment.score}
-                                        className="mt-1"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    ) : null}
-                    {data.market_analytics?.market_phase ? (
-                        <div className="col-6 col-md-4 col-lg-3" key="ma-MarketPhase">
-                            <div className="card h-100">
-                                <div className="card-body py-2">
-                                    <div className="text-muted small">Market phase</div>
-                                    <MarketPhaseGauge
-                                        phase={data.market_analytics.market_phase}
-                                        className="mt-1"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    ) : null}
-                    {(data.market_analytics?.trend?.score != null
-                        || data.market_analytics?.trend?.strength != null) ? (
-                        <div className="col-6 col-md-4 col-lg-3" key="ma-Trend">
-                            <div className="card h-100">
-                                <div className="card-body py-2">
-                                    <div className="text-muted small">Trend</div>
-                                    <TrendGauge
-                                        score={data.market_analytics.trend?.score
-                                            ?? data.market_analytics.trend?.strength}
-                                        className="mt-1"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    ) : null}
-                    {data.market_analytics?.momentum?.score != null ? (
-                        <div className="col-6 col-md-4 col-lg-3" key="ma-Momentum">
-                            <div className="card h-100">
-                                <div className="card-body py-2">
-                                    <div className="text-muted small">Momentum</div>
-                                    <MomentumGauge
-                                        score={data.market_analytics.momentum.score}
-                                        direction={data.market_analytics.momentum.direction}
-                                        className="mt-1"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    ) : null}
-                    {data.market_analytics?.volatility?.score != null ? (
-                        <div className="col-6 col-md-4 col-lg-3" key="ma-Volatility">
-                            <div className="card h-100">
-                                <div className="card-body py-2">
-                                    <div className="text-muted small">Volatility</div>
-                                    <VolatilityGauge
-                                        score={data.market_analytics.volatility.score}
-                                        historicalVolatilityPct={
-                                            data.market_analytics.volatility.historical_volatility_pct
-                                        }
-                                        className="mt-1"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    ) : null}
-                    {(data.market_analytics?.risk?.raw_risk != null
-                        || data.market_analytics?.risk?.score != null) ? (
-                        <div className="col-6 col-md-4 col-lg-3" key="ma-Risk">
-                            <div className="card h-100">
-                                <div className="card-body py-2">
-                                    <div className="text-muted small">Risk</div>
-                                    <RiskGauge
-                                        rawRisk={data.market_analytics.risk?.raw_risk}
-                                        score={data.market_analytics.risk?.score}
-                                        className="mt-1"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    ) : null}
-                    {data.market_analytics?.market_regime ? (
-                        <div className="col-6 col-md-4 col-lg-3" key="ma-MarketRegime">
-                            <div className="card h-100">
-                                <div className="card-body py-2">
-                                    <div className="text-muted small">Market regime</div>
-                                    <MarketRegimeGauge
-                                        regime={data.market_analytics.market_regime}
-                                        className="mt-1"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    ) : null}
-                    {data.market_analytics?.breadth?.score != null ? (
-                        <div className="col-6 col-md-4 col-lg-3" key="ma-MarketBreadth">
-                            <div className="card h-100">
-                                <div className="card-body py-2">
-                                    <div className="text-muted small">
-                                        <Link
-                                            to="/market-depth"
-                                            className="lido-market-depth-title-link text-muted text-decoration-none"
-                                        >
-                                            Market breadth
-                                        </Link>
+                            <div className="card lido-market-health-card">
+                                <div className="card-body py-3">
+                                    <div className="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
+                                        <div>
+                                            <div className="fw-semibold">Market Health</div>
+                                            <div className="small text-muted">Executive summary</div>
+                                        </div>
+                                        <span className="badge text-bg-secondary">0–100</span>
                                     </div>
-                                    <MarketBreadthGauge
-                                        score={data.market_analytics.breadth.score}
-                                        advanceDeclineRatio={
-                                            data.market_analytics.breadth.advance_decline_ratio
-                                            ?? data.market_analytics.advance_decline_ratio
-                                        }
-                                        className="mt-1"
-                                    />
+                                    {marketHealthScore != null ? (
+                                        <PercentGradientBar
+                                            value={marketHealthScore}
+                                            className="mt-1 mb-2"
+                                            title={`${marketHealthScore} / 100`}
+                                        />
+                                    ) : (
+                                        <div className="small text-muted mb-2">Score placeholder</div>
+                                    )}
+                                    <div className="d-flex flex-wrap align-items-baseline gap-2 mb-2">
+                                        <div className="h5 mb-0">{marketHealthScore != null ? `${marketHealthScore} / 100` : '— / 100'}</div>
+                                        <div className="small text-muted">{marketHealthStatusLabel}</div>
+                                    </div>
+                                    <div className="row g-2">
+                                        <div className="col-sm-6">
+                                            <div className="small text-muted">Decision Zone</div>
+                                            <div className={`small fw-semibold d-inline-flex align-items-center gap-1 ${marketZone.className}`.trim()}>
+                                                <i className={`bi ${marketZone.icon}`} aria-hidden="true" />
+                                                <span>{marketZone.label}</span>
+                                            </div>
+                                        </div>
+                                        <div className="col-sm-6">
+                                            <div className="small text-muted">Suggested Exposure</div>
+                                            <div className="small fw-semibold">{marketExposure}</div>
+                                        </div>
+                                    </div>
+                                    <div className="d-flex flex-wrap align-items-center gap-1 mt-2">
+                                        <span className="small text-muted me-1">Contributors</span>
+                                        {marketContributorFlags.map((item) => (
+                                            <span
+                                                key={item.key}
+                                                className={`badge ${
+                                                    item.available
+                                                        ? (item.ok ? 'text-bg-success-subtle' : 'text-bg-warning-subtle')
+                                                        : 'text-bg-secondary-subtle'
+                                                }`}
+                                            >
+                                                {item.available ? (item.ok ? '✓' : '⚠') : '•'} {item.label}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="lido-market-diagnostics-separator">
+                                <button
+                                    type="button"
+                                    className="btn btn-light btn-sm lido-market-diagnostics-toggle rounded-circle shadow-sm"
+                                    onClick={() => {
+                                        const next = !marketDiagnosticsExpanded;
+                                        setMarketDiagnosticsExpanded(next);
+                                        persistMarketDiagnosticsExpanded(next);
+                                    }}
+                                    title={marketDiagnosticsExpanded ? 'Hide market diagnostics' : 'Show market diagnostics'}
+                                    aria-label={marketDiagnosticsExpanded ? 'Hide market diagnostics' : 'Show market diagnostics'}
+                                    aria-expanded={marketDiagnosticsExpanded}
+                                    aria-controls="dashboard-market-diagnostics"
+                                >
+                                    <i className={`bi ${marketDiagnosticsExpanded ? 'bi-chevron-up' : 'bi-chevron-down'}`} aria-hidden="true" />
+                                </button>
+                            </div>
+                            <div
+                                id="dashboard-market-diagnostics"
+                                ref={marketDiagnosticsCollapseRef}
+                                className={`collapse mt-2${marketDiagnosticsExpanded ? ' show' : ''}`}
+                            >
+                                <div className="d-flex justify-content-between align-items-center mb-2">
+                                    <div className="small text-muted">Analytics gauges (diagnostics)</div>
+                                    <Link
+                                        to="/market-depth"
+                                        className="small lido-market-depth-title-link text-decoration-none"
+                                    >
+                                        View Market Depth →
+                                    </Link>
+                                </div>
+                                <div className="row g-3">
+                                    {marketAnalytics?.sentiment?.score != null ? (
+                                        <div className="col-6 col-md-4 col-lg-3" key="ma-Sentiment">
+                                            <div className="card h-100">
+                                                <div className="card-body py-2">
+                                                    <div className="text-muted small">Sentiment</div>
+                                                    <SentimentGauge
+                                                        score={marketAnalytics.sentiment.score}
+                                                        className="mt-1"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : null}
+                                    {marketAnalytics?.market_phase ? (
+                                        <div className="col-6 col-md-4 col-lg-3" key="ma-MarketPhase">
+                                            <div className="card h-100">
+                                                <div className="card-body py-2">
+                                                    <div className="text-muted small">Market phase</div>
+                                                    <MarketPhaseGauge
+                                                        phase={marketAnalytics.market_phase}
+                                                        className="mt-1"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : null}
+                                    {(marketAnalytics?.trend?.score != null
+                                        || marketAnalytics?.trend?.strength != null) ? (
+                                        <div className="col-6 col-md-4 col-lg-3" key="ma-Trend">
+                                            <div className="card h-100">
+                                                <div className="card-body py-2">
+                                                    <div className="text-muted small">Trend</div>
+                                                    <TrendGauge
+                                                        score={marketAnalytics.trend?.score
+                                                            ?? marketAnalytics.trend?.strength}
+                                                        className="mt-1"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : null}
+                                    {marketAnalytics?.momentum?.score != null ? (
+                                        <div className="col-6 col-md-4 col-lg-3" key="ma-Momentum">
+                                            <div className="card h-100">
+                                                <div className="card-body py-2">
+                                                    <div className="text-muted small">Momentum</div>
+                                                    <MomentumGauge
+                                                        score={marketAnalytics.momentum.score}
+                                                        direction={marketAnalytics.momentum.direction}
+                                                        className="mt-1"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : null}
+                                    {marketAnalytics?.volatility?.score != null ? (
+                                        <div className="col-6 col-md-4 col-lg-3" key="ma-Volatility">
+                                            <div className="card h-100">
+                                                <div className="card-body py-2">
+                                                    <div className="text-muted small">Volatility</div>
+                                                    <VolatilityGauge
+                                                        score={marketAnalytics.volatility.score}
+                                                        historicalVolatilityPct={
+                                                            marketAnalytics.volatility.historical_volatility_pct
+                                                        }
+                                                        className="mt-1"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : null}
+                                    {(marketAnalytics?.risk?.raw_risk != null
+                                        || marketAnalytics?.risk?.score != null) ? (
+                                        <div className="col-6 col-md-4 col-lg-3" key="ma-Risk">
+                                            <div className="card h-100">
+                                                <div className="card-body py-2">
+                                                    <div className="text-muted small">Risk</div>
+                                                    <RiskGauge
+                                                        rawRisk={marketAnalytics.risk?.raw_risk}
+                                                        score={marketAnalytics.risk?.score}
+                                                        className="mt-1"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : null}
+                                    {marketAnalytics?.market_regime ? (
+                                        <div className="col-6 col-md-4 col-lg-3" key="ma-MarketRegime">
+                                            <div className="card h-100">
+                                                <div className="card-body py-2">
+                                                    <div className="text-muted small">Market regime</div>
+                                                    <MarketRegimeGauge
+                                                        regime={marketAnalytics.market_regime}
+                                                        className="mt-1"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : null}
+                                    {marketAnalytics?.breadth?.score != null ? (
+                                        <div className="col-6 col-md-4 col-lg-3" key="ma-MarketBreadth">
+                                            <div className="card h-100">
+                                                <div className="card-body py-2">
+                                                    <div className="text-muted small">
+                                                        <Link
+                                                            to="/market-depth"
+                                                            className="lido-market-depth-title-link text-muted text-decoration-none"
+                                                        >
+                                                            Market breadth
+                                                        </Link>
+                                                    </div>
+                                                    <MarketBreadthGauge
+                                                        score={marketAnalytics.breadth.score}
+                                                        advanceDeclineRatio={
+                                                            marketAnalytics.breadth.advance_decline_ratio
+                                                            ?? marketAnalytics.advance_decline_ratio
+                                                        }
+                                                        className="mt-1"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : null}
+                                    {(marketAnalytics ? [
+                                        ['% above 50 DMA', marketAnalytics.pct_stocks_above_50_dma != null
+                                            ? `${marketAnalytics.pct_stocks_above_50_dma}%`
+                                            : null],
+                                        ['% above 200 DMA', marketAnalytics.pct_stocks_above_200_dma != null
+                                            ? `${marketAnalytics.pct_stocks_above_200_dma}%`
+                                            : null],
+                                    ] : []).filter(([, v]) => v != null && v !== '').map(([title, value]) => (
+                                        <div className="col-6 col-md-4 col-lg-3" key={`ma-${title}`}>
+                                            <div className="card h-100">
+                                                <div className="card-body py-2">
+                                                    <div className="text-muted small">{title}</div>
+                                                    <div className="fw-semibold">{value}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         </div>
                     ) : null}
-                    {(data.market_analytics ? [
-                        ['% above 50 DMA', data.market_analytics.pct_stocks_above_50_dma != null
-                            ? `${data.market_analytics.pct_stocks_above_50_dma}%`
-                            : null],
-                        ['% above 200 DMA', data.market_analytics.pct_stocks_above_200_dma != null
-                            ? `${data.market_analytics.pct_stocks_above_200_dma}%`
-                            : null],
-                    ] : []).filter(([, v]) => v != null && v !== '').map(([title, value]) => (
-                        <div className="col-6 col-md-4 col-lg-3" key={`ma-${title}`}>
-                            <div className="card h-100">
-                                <div className="card-body py-2">
-                                    <div className="text-muted small">{title}</div>
-                                    <div className="fw-semibold">{value}</div>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
                 </>
             ) : null}
             <div className="col-12">

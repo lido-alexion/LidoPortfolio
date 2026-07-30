@@ -41,7 +41,7 @@ export const DOC_PRESENTATION = {
     overview: {
         icon: 'bi-journal-richtext',
         purpose:
-            'This index is the map of every screen in Lido Alexion. Use it to learn what a page is for before you change settings or act on recommendations.',
+            'This index is the map of every screen in StoX by Lido Alexion. Use it to learn what a page is for before you change settings or act on recommendations.',
         workflow: [
             { label: 'Open any app screen', keyword: 'dashboard' },
             { label: 'Tap header (?)', current: true },

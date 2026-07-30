@@ -6,9 +6,10 @@ const AMBER = '#f59e0b';
 const RED = '#ef4444';
 
 /**
- * Market-cycle phases on an upper half-donut, left → right.
- * Starts at Pullback; ends at Correction. Consolidation is not drawn;
- * needle maps between Capitulation and Bear when active.
+ * Market-cycle phases on an upper half-donut.
+ * Logical order is Pullback → … → Correction; Consolidation is not drawn
+ * (needle maps between Capitulation and Bear). invertScale mirrors the dial so
+ * colours read red→green left→right (aligned with Trend / Momentum gauges).
  */
 export const MARKET_PHASES = [
     {
@@ -211,6 +212,7 @@ export default function MarketPhaseGauge({ phase, className = '' }) {
             zones={PHASE_ZONES}
             colorMode="gradient"
             gradientStops={PHASE_GRADIENT_STOPS}
+            invertScale
             className={className}
             tabIndex={0}
             ariaLabel={`Market phase ${current.name}. New buys: ${current.newBuys}. Existing positions: ${current.existingPositions}.`}

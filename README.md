@@ -110,7 +110,7 @@ Any **new** project Markdown doc must be linked into `DOCS.md` in the same chang
 ### Ops & UX shell
 
 - Main tabs: Dashboard, Transactions, Holdings, Watchlist, Explorer, Indices, Screener, Patterns, Calendar, Knowledge
-- Collapsible bottom footer nav; branded header (**Lido Alexion**)
+- Collapsible bottom footer nav; branded header (**StoX by Lido Alexion**)
 - **Contextual help** — header (?) opens `/documentation?q=<keyword>` for the current screen
 - Settings: Global (admin), Portfolio, Account — fees, cron timezone, external stock links, sync logs
 - Structured logging (backend + frontend), request IDs, optional frontend log ingest

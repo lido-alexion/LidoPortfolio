@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import HalfDonutShell, { clampScore } from './HalfDonutShell';
 
-/** Classic fear→greed zones (score 0–100). Left = fear, right = greed. */
+/** Classic fear→greed zones (score 0–100). With invertScale, dial reads red→green left→right (extreme greed left / extreme fear right). */
 export const SENTIMENT_ZONES = [
     {
         id: 'extreme_fear',
@@ -85,6 +85,7 @@ export default function SentimentGauge({ score, className = '' }) {
         <HalfDonutShell
             score={clamped}
             zones={SENTIMENT_ZONES}
+            invertScale
             className={className}
             tabIndex={0}
             ariaLabel={`Sentiment ${Math.round(clamped)}, ${zoneTitle}. ${zone.definition}`}

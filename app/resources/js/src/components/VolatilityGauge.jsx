@@ -3,7 +3,8 @@ import HalfDonutShell, { clampScore } from './HalfDonutShell';
 
 /**
  * Volatility intensity zones. Engine stores inverted safety score; gauge uses
- * intensity = 100 − score so right = more volatile.
+ * intensity = 100 − score so higher intensity is more volatile. With invertScale,
+ * the dial reads red→green (extreme left / low right) like the other gauges.
  */
 export const VOLATILITY_ZONES = [
     {
@@ -90,6 +91,7 @@ export default function VolatilityGauge({
         <HalfDonutShell
             score={intensity}
             zones={VOLATILITY_ZONES}
+            invertScale
             className={className}
             tabIndex={0}
             ariaLabel={`Volatility ${zone.displayName}.${hvNote} ${zone.definition}`}

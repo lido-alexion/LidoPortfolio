@@ -173,7 +173,7 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Refresh dashboard', description: 'Clears the local cache and reloads dashboard + pattern scan data.' },
             { name: 'Sync prices for today', description: 'Admin: pulls latest holdings prices for the current session day.' },
             { name: 'Allocation charts', description: 'Donut / table views of market % and invested % by holding.' },
-            { name: 'Market Analytics gauges', description: 'Trend, momentum, volatility, risk, sentiment, phase, breadth, and regime from Market Analysis.' },
+            { name: 'Market Analytics gauges', description: 'Market Health summary card stays visible; gauge diagnostics are collapsible and explain the score. Diagnostics still include trend, momentum, volatility, risk, sentiment, phase, breadth, and regime. Market breadth keeps its link to Market Depth.' },
             { name: 'Stocks Above heatmap', description: 'Market-depth view of how many stocks sit above key moving averages.' },
             { name: 'Pattern signals', description: 'Matched pattern names link into the Patterns guide.' },
             { name: 'Calendar card', description: 'Upcoming portfolio events for the next ~31 days.' },

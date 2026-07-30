@@ -57,7 +57,7 @@ export default function DocumentationPage() {
                 <div>
                     <h1 className="h3 mb-1">Documentation</h1>
                     <p className="text-muted small mb-0">
-                        Context-aware help for Lido Alexion screens — overview, controls, and related concepts.
+                        Context-aware help for StoX by Lido Alexion screens — overview, controls, and related concepts.
                         These pages are public; you do not need to sign in to read them.
                     </p>
                 </div>

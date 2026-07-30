@@ -3,6 +3,7 @@ import HalfDonutShell, { clampScore } from './HalfDonutShell';
 
 /**
  * Risk intensity zones from raw_risk (or 100 − safety score).
+ * With invertScale, dial reads red→green (extreme left / low right).
  */
 export const RISK_ZONES = [
     {
@@ -89,6 +90,7 @@ export default function RiskGauge({ score = null, rawRisk = null, className = ''
         <HalfDonutShell
             score={intensity}
             zones={RISK_ZONES}
+            invertScale
             className={className}
             tabIndex={0}
             ariaLabel={`Risk ${Math.round(intensity)}, ${zone.displayName}. ${zone.definition}`}
