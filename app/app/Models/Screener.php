@@ -13,7 +13,14 @@ class Screener extends Model
     protected $fillable = [
         'profile_id',
         'name',
+        'slug',
+        'artifact_version',
+        'definition_hash',
         'description',
+        'intent',
+        'summary',
+        'tags_json',
+        'artifact_status',
         'scope',
         'watchlist_id',
         'index_symbol',
@@ -34,7 +41,9 @@ class Screener extends Model
         return [
             'profile_id' => 'integer',
             'watchlist_id' => 'integer',
+            'artifact_version' => 'integer',
             'definition_json' => 'array',
+            'tags_json' => 'array',
             'schedule_enabled' => 'boolean',
             'schedule_days' => 'array',
             'telegram_enabled' => 'boolean',
@@ -77,5 +86,10 @@ class Screener extends Model
     public function backtests(): HasMany
     {
         return $this->hasMany(ScreenerBacktest::class, 'screener_id');
+    }
+
+    public function versions(): HasMany
+    {
+        return $this->hasMany(ScreenerVersion::class, 'screener_id');
     }
 }

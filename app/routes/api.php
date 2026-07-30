@@ -37,7 +37,10 @@ use App\Http\Controllers\Api\ScreenerController;
 use App\Http\Controllers\Api\ScreenerRunController;
 use App\Http\Controllers\Api\WatchlistController;
 use App\Http\Controllers\Api\WatchlistsController;
+use App\Http\Controllers\Api\V1\ArtifactRegistryController;
 use App\Http\Controllers\Api\V1\IndicatorRegistryController;
+use App\Http\Controllers\Api\V1\ScreenerRegistryController;
+use App\Http\Controllers\Api\V1\StrategyRegistryController;
 use App\Http\Controllers\Api\V1\TradingOsController;
 use Illuminate\Support\Facades\Route;
 
@@ -334,6 +337,59 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
     Route::get('/strategy/portfolio-rules', [\App\Http\Controllers\Api\V1\StrategyController::class, 'portfolioRules']);
     Route::get('/strategy/capital-allocation', [\App\Http\Controllers\Api\V1\StrategyController::class, 'capitalAllocation']);
     Route::get('/strategy/recommendation-rules', [\App\Http\Controllers\Api\V1\StrategyController::class, 'recommendationRules']);
+
+    // Trading Artifact Registry (SD-034) — additive infrastructure; does not replace screeners/strategy APIs.
+    Route::get('/artifacts', [ArtifactRegistryController::class, 'index']);
+    Route::post('/artifacts/export', [ArtifactRegistryController::class, 'exportPackage']);
+    Route::post('/artifacts/import', [ArtifactRegistryController::class, 'importPackage']);
+    Route::post('/artifacts/validate', [ArtifactRegistryController::class, 'validatePackage']);
+    Route::get('/artifacts/{type}', [ArtifactRegistryController::class, 'indexType'])
+        ->where('type', 'indicator|screener|strategy');
+    Route::post('/artifacts/{type}', [ArtifactRegistryController::class, 'store'])
+        ->where('type', 'indicator|screener|strategy');
+    Route::post('/artifacts/{type}/validate', [ArtifactRegistryController::class, 'validateArtifact'])
+        ->where('type', 'indicator|screener|strategy');
+    Route::get('/artifacts/{type}/{id}', [ArtifactRegistryController::class, 'show'])
+        ->where('type', 'indicator|screener|strategy');
+    Route::put('/artifacts/{type}/{id}', [ArtifactRegistryController::class, 'update'])
+        ->where('type', 'indicator|screener|strategy');
+    Route::post('/artifacts/{type}/{id}/export', [ArtifactRegistryController::class, 'exportOne'])
+        ->where('type', 'indicator|screener|strategy');
+
+    // Screener Registry — first-class reusable Screener artifacts (same definition_json; no run-engine changes).
+    Route::get('/screener-registry/meta', [ScreenerRegistryController::class, 'meta']);
+    Route::get('/screener-registry', [ScreenerRegistryController::class, 'index']);
+    Route::post('/screener-registry', [ScreenerRegistryController::class, 'store']);
+    Route::post('/screener-registry/validate', [ScreenerRegistryController::class, 'validateEnvelope']);
+    Route::post('/screener-registry/import', [ScreenerRegistryController::class, 'import']);
+    Route::post('/screener-registry/shared/{sourceId}/import', [ScreenerRegistryController::class, 'importShared'])
+        ->whereNumber('sourceId');
+    Route::get('/screener-registry/{id}', [ScreenerRegistryController::class, 'show'])
+        ->where('id', '[A-Za-z0-9_\\-]+');
+    Route::put('/screener-registry/{id}', [ScreenerRegistryController::class, 'update'])
+        ->where('id', '[A-Za-z0-9_\\-]+');
+    Route::get('/screener-registry/{id}/versions', [ScreenerRegistryController::class, 'versions'])
+        ->where('id', '[A-Za-z0-9_\\-]+');
+    Route::post('/screener-registry/{id}/export', [ScreenerRegistryController::class, 'export'])
+        ->where('id', '[A-Za-z0-9_\\-]+');
+
+    // Strategy Registry — reusable Strategy artifacts; one active selection per portfolio.
+    Route::get('/strategy-registry/meta', [StrategyRegistryController::class, 'meta']);
+    Route::get('/strategy-registry/selection', [StrategyRegistryController::class, 'selection']);
+    Route::get('/strategy-registry', [StrategyRegistryController::class, 'index']);
+    Route::post('/strategy-registry', [StrategyRegistryController::class, 'store']);
+    Route::post('/strategy-registry/validate', [StrategyRegistryController::class, 'validateEnvelope']);
+    Route::post('/strategy-registry/import', [StrategyRegistryController::class, 'import']);
+    Route::get('/strategy-registry/{id}', [StrategyRegistryController::class, 'show'])
+        ->where('id', '[A-Za-z0-9_\\-]+');
+    Route::put('/strategy-registry/{id}', [StrategyRegistryController::class, 'update'])
+        ->where('id', '[A-Za-z0-9_\\-]+');
+    Route::get('/strategy-registry/{id}/versions', [StrategyRegistryController::class, 'versions'])
+        ->where('id', '[A-Za-z0-9_\\-]+');
+    Route::post('/strategy-registry/{id}/export', [StrategyRegistryController::class, 'export'])
+        ->where('id', '[A-Za-z0-9_\\-]+');
+    Route::post('/strategy-registry/{id}/activate', [StrategyRegistryController::class, 'activate'])
+        ->where('id', '[A-Za-z0-9_\\-]+');
 
     Route::middleware('admin')->group(function () {
         Route::get('/indicators', [IndicatorRegistryController::class, 'index']);

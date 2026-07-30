@@ -1,0 +1,130 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "screener",
+  "artifact_id": null,
+  "slug": "high_liquidity",
+  "name": "High Liquidity Screener",
+  "artifact_version": 1,
+  "definition_hash": null,
+  "minimum_engine_version": "1.1.0",
+  "metadata": {
+    "scope": "system",
+    "status": "draft",
+    "origin": "factory",
+    "factory_key": "high_liquidity",
+    "description": "Eligibility filter for stocks with elevated turnover and volume.",
+    "intent": "Restrict candidates to names that can absorb size without relying on Strategy scoring.",
+    "summary": "AND of Average Daily Turnover, Relative Turnover, and Average Daily Volume thresholds using screenable Registry primaries.",
+    "tags": ["liquidity", "eligibility", "factory"],
+    "category": "liquidity",
+    "locale": "en",
+    "authors": ["StoX Factory"],
+    "license": "proprietary",
+    "universe": "all_active_equities",
+    "schedule_hint": "daily_after_close",
+    "ai": {
+      "editable": true,
+      "generation_hints": [
+        "Only use screenable indicator ids.",
+        "Keep root as a group with AND/OR.",
+        "Do not add ranking or score fields."
+      ],
+      "forbidden_changes": [
+        "Do not embed executable code.",
+        "Do not invent indicator ids.",
+        "Do not add formula fields."
+      ]
+    }
+  },
+  "definition": {
+    "root": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "left": {
+            "indicator": "average_turnover",
+            "params": { "period": 20 }
+          },
+          "operator": "gte",
+          "weight_factor": 1.0,
+          "right": {
+            "type": "constant",
+            "value": 50000000
+          }
+        },
+        {
+          "type": "condition",
+          "left": {
+            "indicator": "relative_turnover",
+            "params": { "period": 20, "baseline": 60 }
+          },
+          "operator": "gte",
+          "weight_factor": 1.0,
+          "right": {
+            "type": "constant",
+            "value": 1.2
+          }
+        },
+        {
+          "type": "condition",
+          "left": {
+            "indicator": "average_volume",
+            "params": { "period": 20 }
+          },
+          "operator": "gte",
+          "weight_factor": 1.0,
+          "right": {
+            "type": "constant",
+            "value": 200000
+          }
+        }
+      ]
+    }
+  },
+  "dependencies": [
+    {
+      "kind": "uses_indicator",
+      "artifact_type": "indicator",
+      "ref": "average_turnover",
+      "ref_scheme": "registry_id",
+      "resolution": "runtime_registry",
+      "required": true
+    },
+    {
+      "kind": "uses_indicator",
+      "artifact_type": "indicator",
+      "ref": "relative_turnover",
+      "ref_scheme": "registry_id",
+      "resolution": "runtime_registry",
+      "required": true
+    },
+    {
+      "kind": "uses_indicator",
+      "artifact_type": "indicator",
+      "ref": "average_volume",
+      "ref_scheme": "registry_id",
+      "resolution": "runtime_registry",
+      "required": true
+    }
+  ],
+  "validation": {
+    "max_condition_depth": 6,
+    "max_conditions": 40,
+    "rules": [
+      {
+        "code": "SCREENER_INDICATOR_REGISTRY",
+        "path": "$.definition",
+        "severity": "error",
+        "message": "All indicator operands must be screenable Registry ids."
+      },
+      {
+        "code": "SCREENER_NO_STRATEGY_FIELDS",
+        "path": "$.definition",
+        "severity": "error",
+        "message": "Screener definition must not contain scoring or threshold sections."
+      }
+    ]
+  }
+}

@@ -535,6 +535,12 @@ export default function SettingsPage() {
                                     <Link to="/settings/indicators" className="btn btn-outline-secondary btn-sm">
                                         Indicator Registry
                                     </Link>
+                                    <Link to="/settings/screener-registry" className="btn btn-outline-secondary btn-sm">
+                                        Screener Registry
+                                    </Link>
+                                    <Link to="/settings/strategy-registry" className="btn btn-outline-secondary btn-sm">
+                                        Strategy Registry
+                                    </Link>
                                     </div>
                                 </div>
                                 <div className="col-12">

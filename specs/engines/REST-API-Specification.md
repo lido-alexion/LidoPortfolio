@@ -179,6 +179,24 @@ Recommendations include `strategy_version_id`, `strategy_score`,
 `evidence.eligibility`, `evidence.scoring`, `evidence.exit_strategy`.
 Strategy eligibility references Screeners (SD-030); Screener CRUD remains under `/api/screeners*`.
 
+### Trading Artifact Registry (SD-034)
+
+Additive discovery / I/O APIs. Does not replace Screener run or Strategy score paths.
+See [Trading-Artifact-Registry-Migration.md](./Trading-Artifact-Registry-Migration.md).
+
+``` text
+  GET      /api/v1/artifacts
+  GET      /api/v1/artifacts/{type}
+  GET      /api/v1/artifacts/{type}/{id}
+  POST     /api/v1/artifacts/{type}
+  PUT      /api/v1/artifacts/{type}/{id}
+  POST     /api/v1/artifacts/{type}/validate
+  POST     /api/v1/artifacts/{type}/{id}/export
+  POST     /api/v1/artifacts/export
+  POST     /api/v1/artifacts/import
+  POST     /api/v1/artifacts/validate
+```
+
 ### Indicator Registry (SD-033)
 
 Admin-only discovery APIs. Full contract: [Indicator-Registry-API.md](./Indicator-Registry-API.md).

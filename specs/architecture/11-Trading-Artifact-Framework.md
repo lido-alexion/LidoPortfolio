@@ -8,6 +8,7 @@
 | **Owner** | Architecture |
 | **Depends On** | 03 Core Concepts, 04 System Architecture, 06 Engine Overview, [09 Indicator Registry](./09-Indicator-Registry.md), Screener Spec, Strategy Configuration Spec |
 | **Engine spec** | [../engines/Trading-Artifact-Framework-Specification.md](../engines/Trading-Artifact-Framework-Specification.md) |
+| **JSON formats** | [../engines/Trading-Artifact-JSON-Specification.md](../engines/Trading-Artifact-JSON-Specification.md) (design only) |
 
 ---
 

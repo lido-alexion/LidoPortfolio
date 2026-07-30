@@ -4,10 +4,12 @@
 |-------|-------|
 | **Document** | Trading Artifact Framework Specification |
 | **Version** | 1.0 |
-| **Status** | Accepted design (SD-034) — **not implemented** |
+| **Status** | Accepted design (SD-034) — **infrastructure phase implemented** (registries + APIs; execution unchanged) |
 | **Owner** | Architecture |
 | **Depends On** | Core Concepts, Indicator Registry (SD-033), Screener Spec (SD-030), Strategy Configuration (SD-027…030), Guiding Principles |
 | **Architecture overview** | [../architecture/11-Trading-Artifact-Framework.md](../architecture/11-Trading-Artifact-Framework.md) |
+| **JSON formats (design)** | [Trading-Artifact-JSON-Specification.md](./Trading-Artifact-JSON-Specification.md) · [artifacts/examples/](./artifacts/examples/) |
+| **Migration / BC** | [Trading-Artifact-Registry-Migration.md](./Trading-Artifact-Registry-Migration.md) |
 
 ---
 

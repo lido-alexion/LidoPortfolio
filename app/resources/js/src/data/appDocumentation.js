@@ -415,14 +415,16 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Create / open screener', description: 'Opens the editor for a new or existing definition.' },
             { name: 'Run / schedule', description: 'Execute now or attach a cron schedule + optional Telegram delivery.' },
             { name: 'Share across portfolios', description: 'Reuse the same screener definition where supported.' },
+            { name: 'Screener Registry', description: 'Open the registry to export/import Screener JSON, view versions, and copy shared screeners.' },
             { name: 'Guide tab (editor)', description: 'Plain-language indicator definitions and Investopedia links.' },
         ],
         concepts: [
             { name: 'Eligibility vs scoring', description: 'Screeners admit candidates; Strategy scoring ranks them afterward.' },
             { name: 'Scopes', description: 'Holdings, watchlist, all equities, or index constituents.' },
             { name: 'Factory Minervini Trend Template', description: 'Shipped default screener often referenced by the default Minervini Strategy.' },
+            { name: 'Registry vs editor', description: 'The registry manages reusable artifact metadata and JSON I/O; the editor builds conditions and runs screens.' },
         ],
-        related: ['trading-os-flow', 'screener-editor', 'strategy', 'discovery'],
+        related: ['trading-os-flow', 'screener-editor', 'screener-registry', 'strategy', 'discovery'],
     },
     {
         id: 'screener-editor',
@@ -430,7 +432,11 @@ const APP_DOCUMENTATION_BASE = [
         aliases: ['screener-edit', 'conditions', 'backtest'],
         title: 'Screener editor',
         routeLabel: '/screeners/:id',
-        match: (p) => /^\/screeners\/[^/]+/.test(p.replace(/\/$/, '') || '/'),
+        match: (p) => {
+            const path = p.replace(/\/$/, '') || '/';
+            if (pathStarts(path, '/screeners/registry')) return false;
+            return /^\/screeners\/[^/]+/.test(path);
+        },
         summary: 'Edit conditions, run history, stacked results, and backtests.',
         overview:
             'Define LHS/RHS comparisons (stock or index entity), weight factors, and nested groups. Review run history, stacked compare matrices, and backtests over 1y / 6m / 3m / 1m / 15d windows.',
@@ -439,14 +445,40 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Run history', description: 'Past runs with hit lists for comparison.' },
             { name: 'Stacked results', description: 'Compare multiple runs side by side.' },
             { name: 'Backtest', description: 'Evaluate the rule set across dates with per-date persistence.' },
-            { name: 'Save', description: 'Persist definition changes for future Discovery / Strategy use.' },
+            { name: 'Save', description: 'Persist definition changes for future Discovery / Strategy use. Definition changes bump Screener Registry artifact versions.' },
         ],
         concepts: [
             { name: 'LHS entity', description: 'Compute the left side on the stock or an index (e.g. stock range % vs Nifty 50).' },
             { name: 'Weight factor', description: 'Compare left vs weight × right for scaled thresholds.' },
             { name: 'Stock-major series', description: 'Backtests reuse series efficiently across runs.' },
         ],
-        related: ['trading-os-flow', 'screener', 'strategy', 'discovery'],
+        related: ['trading-os-flow', 'screener', 'screener-registry', 'strategy', 'discovery'],
+    },
+    {
+        id: 'screener-registry',
+        keyword: 'screener-registry',
+        aliases: ['screener-artifacts', 'screener-json', 'import-screener'],
+        title: 'Screener Registry',
+        routeLabel: '/screeners/registry',
+        match: (p) => pathStarts(p, '/screeners/registry') || pathStarts(p, '/settings/screener-registry'),
+        summary: 'First-class Screener artifacts — metadata, versions, validate, and import/export JSON without changing the run engine.',
+        overview:
+            'The Screener Registry evolves existing portfolio_screeners into reusable Trading Artifacts. Each screener keeps the same definition_json condition tree used by the Screener execution engine. The registry adds slug, intent/summary/tags, artifact_version, definition_hash, and version history. Export downloads the approved Trading Artifact JSON envelope; Import / Create from JSON validates then creates a new screener in the active portfolio. Shared screeners from other portfolios appear as read-only registry entries and can be copied with Import copy. Admin settings also link the same UI under Settings → Screener Registry.',
+        controls: [
+            { name: 'Search / filters', description: 'Filter by status, ownership (own vs shared), and origin (factory / user / shared).' },
+            { name: 'Export JSON', description: 'Download the Screener artifact envelope (schema_version, metadata, definition.root, dependencies).' },
+            { name: 'Validate', description: 'Check pasted JSON against the Trading Artifact Screener rules before import.' },
+            { name: 'Create from JSON', description: 'Import a validated envelope as a new screener in this portfolio.' },
+            { name: 'Import copy (shared)', description: 'Copy a shared screener from another portfolio into yours (same as Shared screens import).' },
+            { name: 'Open editor', description: 'Jump to the classic Screener editor to change conditions or run screens.' },
+            { name: 'Version history', description: 'On detail for owned screeners, list definition snapshots and change notes.' },
+        ],
+        concepts: [
+            { name: 'No execution redesign', description: 'Runs, schedules, and backtests still use ScreenerRunService and the existing definition tree.' },
+            { name: 'Shared → Registry', description: 'is_shared screeners surface naturally in the registry list with ownership=shared; copying them creates a local owned artifact.' },
+            { name: 'Version bump', description: 'Changing definition_json (via editor or registry update) increments artifact_version and appends portfolio_screener_versions.' },
+        ],
+        related: ['screener', 'screener-editor', 'indicator-registry', 'settings'],
     },
     {
         id: 'discovery',
@@ -551,10 +583,11 @@ const APP_DOCUMENTATION_BASE = [
         aliases: ['scoring', 'eligibility', 'exit-strategy', 'strategy-guide'],
         title: 'Strategy',
         routeLabel: '/strategy',
-        match: (p) => pathStarts(p, '/strategy'),
+        match: (p) => pathStarts(p, '/strategy') && !pathStarts(p, '/strategy/registry'),
         summary: 'One strategy per portfolio — default Minervini; edit tabs and Save.',
         overview:
-            'Strategy is your decision policy. Each portfolio has exactly one strategy. It starts as Minervini Strategy (Minervini Trend Template eligibility + momentum scoring). Edit any tab and Save — there is no versioning, no Duplicate, and no protected factory fork.\n\n'
+            'Strategy is your decision policy. Each portfolio has exactly one active strategy. It starts as Minervini Strategy (Minervini Trend Template eligibility + momentum scoring). Edit any tab and Save — the active editor still saves in place.\n\n'
+            + 'Use Strategy Registry to import/export JSON, validate packs, browse drafts, and Select which definition is active for this portfolio. Strategies reference Screeners by slug / factory key — they never duplicate Screener condition trees.\n\n'
             + 'Strategy does not invent stocks and does not rewrite Screener conditions. Screeners admit candidates; Strategy scores them, labels an action, applies portfolio/cash/market limits, and watches holdings for exits.\n\n'
             + 'Where do finished ideas appear?\n\n'
             + 'After you save Strategy and run the decision pipeline (Recommendations page → “Run decision pipeline”, or the scheduled daily pipeline), surviving trade ideas land on Recommendations (/recommendations). Approve a buy/sell there → it moves to Pending Execution (/transactions/pending). After you record the broker fill, it becomes a ledger transaction and shows on Holdings / Review. Insights (HOLD / WATCH) also appear on Recommendations but are view-only and are not sent to Telegram.\n\n'
@@ -577,11 +610,16 @@ const APP_DOCUMENTATION_BASE = [
             + 'Read Controls below for every tab field (what it means and what number it is compared against). Read Concepts for a scored example of four candidates and three holdings hitting exit rules.',
         controls: [
             {
+                name: 'Strategy Registry',
+                description:
+                    'Open /strategy/registry to export/import Strategy JSON, validate packs, and Select the active strategy for this portfolio.',
+            },
+            {
                 name: 'General tab',
                 description:
                     'Name — label for your strategy (default: Minervini Strategy).\n'
                     + 'Description — free-text intent notes.\n'
-                    + 'One strategy per portfolio: Save overwrites the current config in place.',
+                    + 'One active strategy per portfolio: Save overwrites the current active config in place.',
             },
             {
                 name: 'Eligibility Sources tab',
@@ -686,9 +724,14 @@ const APP_DOCUMENTATION_BASE = [
         ],
         concepts: [
             {
-                name: 'One strategy per portfolio',
+                name: 'One active strategy per portfolio',
                 description:
-                    'There is no Duplicate and no version list. Defaults are Minervini Strategy (Minervini Trend Template screener + momentum weights/thresholds). Edit and Save whenever you want.',
+                    'Exactly one strategy is active (selected). Defaults are Minervini Strategy (Minervini Trend Template screener + momentum weights/thresholds). Use Strategy Registry to switch selection; the editor Save still updates the active config in place.',
+            },
+            {
+                name: 'Registry vs editor',
+                description:
+                    'Registry manages reusable JSON artifacts, drafts, and selection. The Strategy page edits the active portfolio strategy. Export never includes portfolio-local Screener ids — only slug / factory_key refs.',
             },
             {
                 name: 'Worked example — scoring four screener hits',
@@ -771,7 +814,33 @@ const APP_DOCUMENTATION_BASE = [
                     'Default seed only: Minervini eligibility; RS35/Trend20/Mom15/Breakout10/Vol8/Mkt5/Sec4/Risk3; Open≥85 Increase≥90 Watch≥60; exit on; market gates off. Fully editable after seed.',
             },
         ],
-        related: ['trading-os-flow', 'screener', 'recommendations', 'pending-execution', 'cash', 'dashboard'],
+        related: ['trading-os-flow', 'screener', 'screener-registry', 'strategy-registry', 'recommendations', 'pending-execution', 'cash', 'dashboard'],
+    },
+    {
+        id: 'strategy-registry',
+        keyword: 'strategy-registry',
+        aliases: ['strategy-artifacts', 'strategy-json', 'import-strategy', 'select-strategy'],
+        title: 'Strategy Registry',
+        routeLabel: '/strategy/registry',
+        match: (p) => pathStarts(p, '/strategy/registry') || pathStarts(p, '/settings/strategy-registry'),
+        summary: 'Reusable Strategy artifacts — metadata, versions, validate/import/export JSON, and Select the one active strategy per portfolio.',
+        overview:
+            'The Strategy Registry evolves portfolio_tos_strategies into first-class Trading Artifacts. Each portfolio still has exactly one active Strategy (selection). Import creates drafts; Select activates one and archives the previous active. Export emits portable JSON: Screener refs by screener_slug / screener_factory_key and Indicator keys by registry id — never portfolio-local Screener ids and never embedded Screener trees. Existing Minervini (momentum_factory) migrates automatically to slug momentum_strategy with eligibility linked to minervini_trend_template.',
+        controls: [
+            { name: 'Search / filters', description: 'Filter by status (active/draft/archived) and origin (factory/user).' },
+            { name: 'Select', description: 'Make this strategy the portfolio’s only active strategy (archives the previous active).' },
+            { name: 'Export JSON', description: 'Download the portable Trading Artifact envelope.' },
+            { name: 'Validate', description: 'Check pasted JSON against Strategy artifact rules before import.' },
+            { name: 'Create from JSON', description: 'Import as a draft; does not change Recommendations until Select.' },
+            { name: 'Edit active', description: 'Jump to /strategy to edit the selected strategy’s tabs and Save.' },
+            { name: 'Version history', description: 'Draft updates that change definition hash append version rows; active editor Save remains in-place BC.' },
+        ],
+        concepts: [
+            { name: 'Exactly one active', description: 'Selection rule: one STATUS_ACTIVE strategy per portfolio drives Recommendation scoring.' },
+            { name: 'No Screener duplication', description: 'eligibility_sources reference Screeners; condition trees stay on Screener Registry.' },
+            { name: 'Minervini auto-migrate', description: 'ensureActive / seedFactoryStrategy backfills slug, metadata, and Minervini screener eligibility links without overwriting user-edited scores.' },
+        ],
+        related: ['strategy', 'screener-registry', 'indicator-registry', 'recommendations', 'settings'],
     },
     {
         id: 'review',
@@ -944,6 +1013,8 @@ const APP_DOCUMENTATION_BASE = [
             && !pathStarts(p, '/settings/universe-price-sync')
             && !pathStarts(p, '/settings/data-quality')
             && !pathStarts(p, '/settings/indicators')
+            && !pathStarts(p, '/settings/screener-registry')
+            && !pathStarts(p, '/settings/strategy-registry')
             && !pathStarts(p, '/settings/users'),
         summary: 'Global (admin), Portfolio, and Account settings — fees, Telegram, sync, and links.',
         overview:
@@ -952,11 +1023,13 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Settings tabs', description: 'Navigate Global / Portfolio / Account sections.' },
             { name: 'Fee components', description: 'Drive auto fees on buy/sell ledger rows.' },
             { name: 'Telegram', description: 'Bot token and chat id for portfolio notifications.' },
+            { name: 'Screener Registry (admin)', description: 'Admin shortcut to Screener artifact import/export and catalogue.' },
+            { name: 'Strategy Registry (admin)', description: 'Admin shortcut to Strategy artifact import/export, selection, and catalogue.' },
         ],
         concepts: [
             { name: 'Admin vs portfolio scope', description: 'Some tools (users, sync logs, universe sync) are admin-only.' },
         ],
-        related: ['alert-policies', 'universe-price-sync', 'data-quality-center', 'indicator-registry', 'users', 'notifications'],
+        related: ['alert-policies', 'universe-price-sync', 'data-quality-center', 'indicator-registry', 'screener-registry', 'strategy-registry', 'users', 'notifications'],
     },
     {
         id: 'alert-policies',

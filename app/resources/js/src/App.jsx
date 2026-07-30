@@ -21,6 +21,10 @@ import UniversePriceSyncPage from './pages/UniversePriceSyncPage';
 import DataQualityCenterPage from './pages/DataQualityCenterPage';
 import IndicatorRegistryPage from './pages/IndicatorRegistryPage';
 import IndicatorRegistryDetailPage from './pages/IndicatorRegistryDetailPage';
+import ScreenerRegistryPage from './pages/ScreenerRegistryPage';
+import ScreenerRegistryDetailPage from './pages/ScreenerRegistryDetailPage';
+import StrategyRegistryPage from './pages/StrategyRegistryPage';
+import StrategyRegistryDetailPage from './pages/StrategyRegistryDetailPage';
 import GapFillFailuresPage from './pages/GapFillFailuresPage';
 import IgnoredPriceGapsPage from './pages/IgnoredPriceGapsPage';
 import CorporateActionHistoryPage from './pages/CorporateActionHistoryPage';
@@ -168,10 +172,14 @@ function App() {
                                 <Route path="/indices" element={<IndicesPage />} />
                                 <Route path="/market-depth" element={<MarketDepthPage />} />
                                 <Route path="/screeners" element={<ScreenersPage />} />
+                                <Route path="/screeners/registry" element={<ScreenerRegistryPage />} />
+                                <Route path="/screeners/registry/:id" element={<ScreenerRegistryDetailPage />} />
                                 <Route path="/screeners/:id" element={<ScreenerEditorPage />} />
                                 <Route path="/candidates" element={<CandidatesPage />} />
                                 <Route path="/evaluations" element={<Navigate to="/candidates" replace />} />
                                 <Route path="/recommendations" element={<RecommendationsPage />} />
+                                <Route path="/strategy/registry" element={<StrategyRegistryPage />} />
+                                <Route path="/strategy/registry/:id" element={<StrategyRegistryDetailPage />} />
                                 <Route path="/strategy" element={<StrategyPage />} />
                                 <Route path="/review" element={<ReviewDashboardPage />} />
                                 <Route path="/notification-history" element={<NotificationHistoryPage />} />
@@ -220,6 +228,26 @@ function App() {
                                 <Route path="/settings/indicators/:id" element={(
                                     <AdminRoute>
                                         <IndicatorRegistryDetailPage />
+                                    </AdminRoute>
+                                )} />
+                                <Route path="/settings/screener-registry" element={(
+                                    <AdminRoute>
+                                        <ScreenerRegistryPage adminMode />
+                                    </AdminRoute>
+                                )} />
+                                <Route path="/settings/screener-registry/:id" element={(
+                                    <AdminRoute>
+                                        <ScreenerRegistryDetailPage adminMode />
+                                    </AdminRoute>
+                                )} />
+                                <Route path="/settings/strategy-registry" element={(
+                                    <AdminRoute>
+                                        <StrategyRegistryPage adminMode />
+                                    </AdminRoute>
+                                )} />
+                                <Route path="/settings/strategy-registry/:id" element={(
+                                    <AdminRoute>
+                                        <StrategyRegistryDetailPage adminMode />
                                     </AdminRoute>
                                 )} />
                                 <Route path="/settings/universe-price-sync/gap-failures" element={(

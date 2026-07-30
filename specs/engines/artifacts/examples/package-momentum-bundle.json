@@ -1,0 +1,237 @@
+{
+  "schema_version": "1.0",
+  "package_id": "a1b2c3d4-e5f6-4789-a012-3456789abcde",
+  "package_format": "stox.trading_artifacts",
+  "exported_at": "2026-07-30T12:00:00Z",
+  "minimum_engine_version": "1.1.0",
+  "origin": {
+    "app": "StoX",
+    "app_version": "1.1.0",
+    "exporter": "design-example"
+  },
+  "artifacts": [
+    {
+      "schema_version": "1.0",
+      "artifact_type": "screener",
+      "slug": "minervini_trend_template",
+      "name": "Minervini Trend Template",
+      "artifact_version": 1,
+      "minimum_engine_version": "1.0.0",
+      "metadata": {
+        "scope": "system",
+        "status": "active",
+        "origin": "factory",
+        "factory_key": "minervini_trend_template",
+        "description": "Mark Minervini–style trend template eligibility.",
+        "intent": "Stage-2 trend structure filter for Momentum Strategy.",
+        "summary": "Price above SMA stack with proximity to 52-week highs.",
+        "tags": ["minervini", "trend", "factory"]
+      },
+      "definition": {
+        "root": {
+          "type": "group",
+          "op": "AND",
+          "children": [
+            {
+              "type": "condition",
+              "left": { "indicator": "close", "params": {} },
+              "operator": "gt",
+              "weight_factor": 1.0,
+              "right": { "indicator": "sma", "params": { "period": 150 } }
+            },
+            {
+              "type": "condition",
+              "left": { "indicator": "close", "params": {} },
+              "operator": "gt",
+              "weight_factor": 1.0,
+              "right": { "indicator": "sma", "params": { "period": 200 } }
+            },
+            {
+              "type": "condition",
+              "left": {
+                "indicator": "sma_spread_pct",
+                "params": { "fast": 150, "slow": 200 }
+              },
+              "operator": "gt",
+              "weight_factor": 1.0,
+              "right": { "type": "constant", "value": 0 }
+            },
+            {
+              "type": "condition",
+              "left": { "indicator": "close", "params": {} },
+              "operator": "gt",
+              "weight_factor": 1.0,
+              "right": { "indicator": "sma", "params": { "period": 50 } }
+            },
+            {
+              "type": "condition",
+              "left": {
+                "indicator": "sma_spread_pct",
+                "params": { "fast": 50, "slow": 150 }
+              },
+              "operator": "gt",
+              "weight_factor": 1.0,
+              "right": { "type": "constant", "value": 0 }
+            },
+            {
+              "type": "condition",
+              "left": { "indicator": "close", "params": {} },
+              "operator": "gte",
+              "weight_factor": 1.25,
+              "right": { "indicator": "low_52w", "params": {} }
+            },
+            {
+              "type": "condition",
+              "left": { "indicator": "close", "params": {} },
+              "operator": "gte",
+              "weight_factor": 0.75,
+              "right": { "indicator": "high_52w", "params": {} }
+            }
+          ]
+        }
+      },
+      "dependencies": [
+        {
+          "kind": "uses_indicator",
+          "artifact_type": "indicator",
+          "ref": "close",
+          "ref_scheme": "registry_id",
+          "resolution": "runtime_registry",
+          "required": true
+        },
+        {
+          "kind": "uses_indicator",
+          "artifact_type": "indicator",
+          "ref": "sma",
+          "ref_scheme": "registry_id",
+          "resolution": "runtime_registry",
+          "required": true
+        },
+        {
+          "kind": "uses_indicator",
+          "artifact_type": "indicator",
+          "ref": "sma_spread_pct",
+          "ref_scheme": "registry_id",
+          "resolution": "runtime_registry",
+          "required": true
+        },
+        {
+          "kind": "uses_indicator",
+          "artifact_type": "indicator",
+          "ref": "low_52w",
+          "ref_scheme": "registry_id",
+          "resolution": "runtime_registry",
+          "required": true
+        },
+        {
+          "kind": "uses_indicator",
+          "artifact_type": "indicator",
+          "ref": "high_52w",
+          "ref_scheme": "registry_id",
+          "resolution": "runtime_registry",
+          "required": true
+        }
+      ]
+    },
+    {
+      "schema_version": "1.0",
+      "artifact_type": "strategy",
+      "slug": "momentum_strategy",
+      "name": "Momentum Strategy",
+      "artifact_version": 1,
+      "minimum_engine_version": "1.0.0",
+      "metadata": {
+        "scope": "system",
+        "status": "active",
+        "origin": "exported",
+        "factory_key": "momentum_factory",
+        "description": "Bundled export of Momentum Strategy with Minervini eligibility.",
+        "intent": "Shareable pack: bundle Screener, reference Indicators.",
+        "summary": "See strategy-momentum.json for the full standalone document; this package entry is the portable share form.",
+        "tags": ["momentum", "minervini", "bundle"]
+      },
+      "definition": {
+        "eligibility_sources": [
+          {
+            "screener_slug": "minervini_trend_template",
+            "screener_factory_key": "minervini_trend_template",
+            "min_artifact_version": 1,
+            "enabled": true,
+            "priority": 1
+          }
+        ],
+        "scoring_model": [
+          { "key": "relative_strength", "enabled": true, "weight": 35, "minimum": 80, "maximum": null, "parameters": { "lookback_days": 90, "benchmark": "NIFTY50" } },
+          { "key": "momentum_score", "enabled": true, "weight": 15, "minimum": 70, "maximum": null, "parameters": { "rsi_period": 14 } },
+          { "key": "trend_score", "enabled": true, "weight": 20, "minimum": 70, "maximum": null, "parameters": {} },
+          { "key": "breakout_score", "enabled": true, "weight": 10, "minimum": 75, "maximum": null, "parameters": {} },
+          { "key": "volume_score", "enabled": true, "weight": 8, "minimum": 60, "maximum": null, "parameters": {} },
+          { "key": "market_regime", "enabled": true, "weight": 5, "minimum": 60, "maximum": null, "parameters": {} },
+          { "key": "sector_strength", "enabled": true, "weight": 4, "minimum": 60, "maximum": null, "parameters": {} },
+          { "key": "risk_score", "enabled": true, "weight": 3, "minimum": 0, "maximum": 40, "parameters": {} }
+        ],
+        "thresholds": {
+          "minimum_overall_score": 80,
+          "open_position": 85,
+          "increase_position": 90,
+          "reduce_position": 40,
+          "exit_position": 20,
+          "watch": 60
+        },
+        "portfolio_rules": {
+          "max_position_size_pct": 10,
+          "min_cash_reserve_pct": 20,
+          "max_new_positions_per_cycle": 5
+        },
+        "capital_allocation": {
+          "strategy": "proportional",
+          "tie_break": "highest_score"
+        },
+        "exit_strategy": {
+          "enabled": true,
+          "mode": "any",
+          "rules": [
+            {
+              "id": "score_exit",
+              "type": "score_below",
+              "enabled": true,
+              "params": { "threshold_key": "exit_position" }
+            }
+          ]
+        },
+        "market_gates": { "enabled": false },
+        "recommendation_behaviour": {
+          "expiry_hours": 48,
+          "generate_explainability": true
+        }
+      },
+      "dependencies": [
+        {
+          "kind": "uses_screener",
+          "artifact_type": "screener",
+          "ref": "minervini_trend_template",
+          "ref_scheme": "slug",
+          "resolution": "bundle",
+          "required": true
+        }
+      ]
+    }
+  ],
+  "indicator_refs": [
+    { "ref": "close", "ref_scheme": "registry_id", "min_definition_version": "1.0.0" },
+    { "ref": "sma", "ref_scheme": "registry_id", "min_definition_version": "1.0.0" },
+    { "ref": "sma_spread_pct", "ref_scheme": "registry_id", "min_definition_version": "1.0.0" },
+    { "ref": "low_52w", "ref_scheme": "registry_id", "min_definition_version": "1.0.0" },
+    { "ref": "high_52w", "ref_scheme": "registry_id", "min_definition_version": "1.0.0" },
+    { "ref": "relative_strength", "ref_scheme": "registry_id", "min_definition_version": "1.0.0" },
+    { "ref": "momentum_score", "ref_scheme": "registry_id", "min_definition_version": "1.0.0" },
+    { "ref": "trend_score", "ref_scheme": "registry_id", "min_definition_version": "1.0.0" },
+    { "ref": "breakout_score", "ref_scheme": "registry_id", "min_definition_version": "1.0.0" },
+    { "ref": "volume_score", "ref_scheme": "registry_id", "min_definition_version": "1.0.0" },
+    { "ref": "market_regime", "ref_scheme": "registry_id", "min_definition_version": "1.0.0" },
+    { "ref": "sector_strength", "ref_scheme": "registry_id", "min_definition_version": "1.0.0" },
+    { "ref": "risk_score", "ref_scheme": "registry_id", "min_definition_version": "1.0.0" }
+  ],
+  "extension": {},
+  "checksum": null
+}

@@ -107,6 +107,10 @@ class StrategyConfigurationService
                     'status' => TradingStrategy::STATUS_ACTIVE,
                     'is_factory' => true,
                     'factory_key' => FactoryMomentumStrategy::FACTORY_KEY,
+                    'slug' => 'momentum_strategy',
+                    'intent' => 'Trade stage-2 trend names with momentum-weighted scoring and explicit exits.',
+                    'summary' => 'Eligibility via Minervini Trend Template Screener reference. Scoring uses Registry composites.',
+                    'tags_json' => ['momentum', 'minervini', 'factory'],
                     'duplicated_from_id' => null,
                 ]);
             } else {
@@ -115,6 +119,10 @@ class StrategyConfigurationService
                     'description' => FactoryMomentumStrategy::DESCRIPTION,
                     'status' => TradingStrategy::STATUS_ACTIVE,
                     'is_factory' => true,
+                    'slug' => $factory->slug ?: 'momentum_strategy',
+                    'intent' => $factory->intent ?: 'Trade stage-2 trend names with momentum-weighted scoring and explicit exits.',
+                    'summary' => $factory->summary ?: 'Eligibility via Minervini Trend Template Screener reference. Scoring uses Registry composites.',
+                    'tags_json' => $factory->tags_json ?: ['momentum', 'minervini', 'factory'],
                 ])->save();
             }
 
@@ -125,6 +133,8 @@ class StrategyConfigurationService
                     'screener_id' => $minervini->id,
                     'screener_name' => $minervini->name,
                     'factory_key' => MinerviniTrendTemplateScreener::FACTORY_KEY,
+                    'screener_factory_key' => MinerviniTrendTemplateScreener::FACTORY_KEY,
+                    'screener_slug' => $minervini->slug ?: MinerviniTrendTemplateScreener::FACTORY_KEY,
                     'enabled' => true,
                     'priority' => 1,
                     'display_order' => 0,
@@ -397,7 +407,9 @@ class StrategyConfigurationService
                 $eligibility[] = [
                     'screener_id' => $sid,
                     'screener_name' => (string) ($src['screener_name'] ?? ''),
-                    'factory_key' => $src['factory_key'] ?? null,
+                    'factory_key' => $src['factory_key'] ?? $src['screener_factory_key'] ?? null,
+                    'screener_factory_key' => $src['screener_factory_key'] ?? $src['factory_key'] ?? null,
+                    'screener_slug' => $src['screener_slug'] ?? null,
                     'enabled' => (bool) ($src['enabled'] ?? true),
                     'priority' => (int) ($src['priority'] ?? ($i + 1)),
                     'display_order' => (int) ($src['display_order'] ?? $i),
@@ -475,6 +487,8 @@ class StrategyConfigurationService
                 'screener_id' => $minervini->id,
                 'screener_name' => $minervini->name,
                 'factory_key' => MinerviniTrendTemplateScreener::FACTORY_KEY,
+                'screener_factory_key' => MinerviniTrendTemplateScreener::FACTORY_KEY,
+                'screener_slug' => $minervini->slug ?: MinerviniTrendTemplateScreener::FACTORY_KEY,
                 'enabled' => true,
                 'priority' => 1,
                 'display_order' => 0,
@@ -483,6 +497,15 @@ class StrategyConfigurationService
         $config = $this->normalizeConfig(array_merge($config, ['eligibility_sources' => $sources]));
         $version->forceFill(['config_json' => $config])->save();
         $this->eligibility->syncStrategyScreeners($version, $sources);
+
+        $strategy = TradingStrategy::query()->find($version->strategy_id);
+        if ($strategy && ($strategy->slug === null || $strategy->slug === '')) {
+            $strategy->forceFill([
+                'slug' => $strategy->factory_key === FactoryMomentumStrategy::FACTORY_KEY
+                    ? 'momentum_strategy'
+                    : ('strategy_'.$strategy->id),
+            ])->save();
+        }
     }
 
     /**
@@ -645,7 +668,12 @@ class StrategyConfigurationService
         return [
             'id' => $strategy->id,
             'name' => $strategy->name,
+            'slug' => $strategy->slug,
+            'definition_hash' => $strategy->definition_hash ?? $version->definition_hash,
             'description' => $strategy->description,
+            'intent' => $strategy->intent,
+            'summary' => $strategy->summary,
+            'tags' => is_array($strategy->tags_json) ? $strategy->tags_json : [],
             'status' => $strategy->status,
             'is_factory' => (bool) $strategy->is_factory,
             'is_protected' => false,

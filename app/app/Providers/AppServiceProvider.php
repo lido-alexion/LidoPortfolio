@@ -2,6 +2,11 @@
 
 namespace App\Providers;
 
+use App\Services\Artifacts\ArtifactRegistry;
+use App\Services\Artifacts\ArtifactValidationService;
+use App\Services\Artifacts\IndicatorArtifactRegistry;
+use App\Services\Artifacts\ScreenerArtifactRegistry;
+use App\Services\Artifacts\StrategyArtifactRegistry;
 use App\Services\Indicators\IndicatorRegistry;
 use App\Services\Indicators\IndicatorRegistryFactory;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -22,6 +27,11 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(IndicatorRegistry::class, function () {
             return (new IndicatorRegistryFactory)->make();
         });
+        $this->app->singleton(ArtifactValidationService::class);
+        $this->app->singleton(IndicatorArtifactRegistry::class);
+        $this->app->singleton(ScreenerArtifactRegistry::class);
+        $this->app->singleton(StrategyArtifactRegistry::class);
+        $this->app->singleton(ArtifactRegistry::class);
     }
 
     /**

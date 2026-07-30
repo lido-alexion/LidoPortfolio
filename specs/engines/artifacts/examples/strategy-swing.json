@@ -1,0 +1,271 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "strategy",
+  "artifact_id": null,
+  "slug": "swing_strategy",
+  "name": "Swing Strategy",
+  "artifact_version": 1,
+  "definition_hash": null,
+  "minimum_engine_version": "1.1.0",
+  "metadata": {
+    "scope": "system",
+    "status": "draft",
+    "origin": "factory",
+    "factory_key": "swing_factory",
+    "description": "Shorter-horizon swing strategy using breakout eligibility and tighter exits.",
+    "intent": "Capture multi-day to multi-week swings with liquidity-aware eligibility and faster turnover.",
+    "summary": "References Breakout Screener and optionally High Liquidity Screener. Emphasises breakout_score and momentum_score; lower position count and shorter recommendation expiry.",
+    "tags": ["swing", "breakout", "factory"],
+    "category": "swing",
+    "style": "swing",
+    "holding_horizon": "swing",
+    "risk_profile": "aggressive",
+    "locale": "en",
+    "authors": ["StoX Factory"],
+    "license": "proprietary",
+    "template_of": null,
+    "ai": {
+      "editable": true,
+      "generation_hints": [
+        "Prefer breakout_screener and high_liquidity as eligibility sources.",
+        "Keep enabled weights summing to 100.",
+        "Do not reference liquidity_score in scoring_model unless strategy_scorable becomes true."
+      ],
+      "forbidden_changes": [
+        "Do not embed Screener condition trees.",
+        "Do not embed executable code or formulas."
+      ]
+    }
+  },
+  "definition": {
+    "eligibility_sources": [
+      {
+        "screener_slug": "breakout_screener",
+        "screener_factory_key": "breakout_screener",
+        "min_artifact_version": 1,
+        "enabled": true,
+        "priority": 1
+      },
+      {
+        "screener_slug": "high_liquidity",
+        "screener_factory_key": "high_liquidity",
+        "min_artifact_version": 1,
+        "enabled": true,
+        "priority": 2
+      }
+    ],
+    "scoring_model": [
+      {
+        "key": "breakout_score",
+        "enabled": true,
+        "weight": 30,
+        "minimum": 70,
+        "maximum": null,
+        "parameters": {}
+      },
+      {
+        "key": "momentum_score",
+        "enabled": true,
+        "weight": 25,
+        "minimum": 65,
+        "maximum": null,
+        "parameters": {
+          "rsi_period": 14
+        }
+      },
+      {
+        "key": "trend_score",
+        "enabled": true,
+        "weight": 20,
+        "minimum": 60,
+        "maximum": null,
+        "parameters": {}
+      },
+      {
+        "key": "volume_score",
+        "enabled": true,
+        "weight": 15,
+        "minimum": 55,
+        "maximum": null,
+        "parameters": {}
+      },
+      {
+        "key": "relative_strength",
+        "enabled": true,
+        "weight": 7,
+        "minimum": 70,
+        "maximum": null,
+        "parameters": {
+          "lookback_days": 60,
+          "benchmark": "NIFTY50"
+        }
+      },
+      {
+        "key": "risk_score",
+        "enabled": true,
+        "weight": 3,
+        "minimum": 0,
+        "maximum": 45,
+        "parameters": {}
+      }
+    ],
+    "thresholds": {
+      "minimum_overall_score": 75,
+      "open_position": 80,
+      "increase_position": 88,
+      "reduce_position": 45,
+      "exit_position": 25,
+      "watch": 55,
+      "very_strong_high": 92,
+      "very_strong_low": 18
+    },
+    "portfolio_rules": {
+      "max_position_size_pct": 8,
+      "min_position_size_pct": 2,
+      "default_position_size_pct": 5,
+      "allocation_band_pct": 1,
+      "max_cash_deployment_pct": 70,
+      "min_cash_reserve_pct": 30,
+      "max_new_positions_per_cycle": 3,
+      "max_exposure_per_stock_pct": 8
+    },
+    "capital_allocation": {
+      "strategy": "proportional",
+      "tie_break": "highest_score",
+      "score_bands": [
+        { "min": 90, "max": 100, "allocation_pct": 8 },
+        { "min": 80, "max": 90, "allocation_pct": 5 },
+        { "min": 75, "max": 80, "allocation_pct": 3 },
+        { "min": 0, "max": 75, "allocation_pct": 0 }
+      ]
+    },
+    "cash_rules": {
+      "reservations_enabled": true,
+      "reserve_on_approval": true,
+      "release_on_execution": true,
+      "release_on_cancellation": true,
+      "release_on_expiry": true
+    },
+    "exit_strategy": {
+      "enabled": true,
+      "mode": "any",
+      "rules": [
+        {
+          "id": "fast_score_exit",
+          "type": "score_below",
+          "enabled": true,
+          "params": { "threshold_key": "exit_position" }
+        }
+      ]
+    },
+    "market_gates": {
+      "enabled": true,
+      "min_sentiment": 50,
+      "allowed_phases": ["Strong Bull", "Bull", "Recovery"],
+      "max_risk_raw": 60
+    },
+    "recommendation_behaviour": {
+      "allow_increase_position": true,
+      "allow_reduce_position": true,
+      "allow_partial_exit": true,
+      "allow_averaging_up": false,
+      "allow_averaging_down": false,
+      "max_concurrent_recommendations": 40,
+      "expiry_hours": 24,
+      "generate_explainability": true,
+      "display_factor_breakdown": true,
+      "display_indicator_contributions": true,
+      "record_strategy_version": true,
+      "record_cash_snapshot": true,
+      "record_portfolio_snapshot": true
+    },
+    "risk": {
+      "high_atr_pct": 5,
+      "medium_atr_pct": 2.5
+    }
+  },
+  "dependencies": [
+    {
+      "kind": "uses_screener",
+      "artifact_type": "screener",
+      "ref": "breakout_screener",
+      "ref_scheme": "slug",
+      "min_artifact_version": 1,
+      "resolution": "bundle",
+      "required": true
+    },
+    {
+      "kind": "uses_screener",
+      "artifact_type": "screener",
+      "ref": "high_liquidity",
+      "ref_scheme": "slug",
+      "min_artifact_version": 1,
+      "resolution": "bundle",
+      "required": true
+    },
+    {
+      "kind": "uses_indicator",
+      "artifact_type": "indicator",
+      "ref": "breakout_score",
+      "ref_scheme": "registry_id",
+      "resolution": "runtime_registry",
+      "required": true
+    },
+    {
+      "kind": "uses_indicator",
+      "artifact_type": "indicator",
+      "ref": "momentum_score",
+      "ref_scheme": "registry_id",
+      "resolution": "runtime_registry",
+      "required": true
+    },
+    {
+      "kind": "uses_indicator",
+      "artifact_type": "indicator",
+      "ref": "trend_score",
+      "ref_scheme": "registry_id",
+      "resolution": "runtime_registry",
+      "required": true
+    },
+    {
+      "kind": "uses_indicator",
+      "artifact_type": "indicator",
+      "ref": "volume_score",
+      "ref_scheme": "registry_id",
+      "resolution": "runtime_registry",
+      "required": true
+    },
+    {
+      "kind": "uses_indicator",
+      "artifact_type": "indicator",
+      "ref": "relative_strength",
+      "ref_scheme": "registry_id",
+      "resolution": "runtime_registry",
+      "required": true
+    },
+    {
+      "kind": "uses_indicator",
+      "artifact_type": "indicator",
+      "ref": "risk_score",
+      "ref_scheme": "registry_id",
+      "resolution": "runtime_registry",
+      "required": true
+    }
+  ],
+  "validation": {
+    "rules": [
+      {
+        "code": "STRATEGY_WEIGHTS_SUM_100",
+        "path": "$.definition.scoring_model",
+        "severity": "error",
+        "message": "Enabled scoring weights must sum to 100."
+      },
+      {
+        "code": "STRATEGY_ELIGIBILITY_REFS",
+        "path": "$.definition.eligibility_sources",
+        "severity": "error",
+        "message": "Each eligibility source needs screener_slug and/or screener_factory_key."
+      }
+    ]
+  }
+}

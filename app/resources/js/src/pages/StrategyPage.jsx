@@ -779,6 +779,7 @@ export default function StrategyPage() {
                     </p>
                 </div>
                 <div className="d-flex flex-wrap gap-2">
+                    <Link className="btn btn-outline-secondary btn-sm" to="/strategy/registry">Strategy Registry</Link>
                     <Link className="btn btn-outline-secondary btn-sm" to="/screeners">Screeners</Link>
                     <Link className="btn btn-outline-secondary btn-sm" to="/recommendations">Recommendations</Link>
                     <button type="button" className="btn btn-outline-secondary btn-sm" onClick={load}>Refresh</button>

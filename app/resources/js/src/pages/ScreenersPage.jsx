@@ -1,5 +1,5 @@
 import React from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import ScreenerGuideTab from '../components/screener/ScreenerGuideTab';
 import ScreenerMyScreensTab from '../components/screener/ScreenerMyScreensTab';
 import ScreenerSharedTab from '../components/screener/ScreenerSharedTab';
@@ -30,11 +30,16 @@ export default function ScreenersPage() {
 
     return (
         <div className="container-fluid py-3 screeners-page">
-            <div className="mb-3">
-                <h1 className="h3 mb-0">Screener</h1>
-                <p className="text-muted small mb-0">
-                    OHLCV technical screens on holdings, a watchlist, or the equity universe.
-                </p>
+            <div className="mb-3 d-flex flex-wrap justify-content-between align-items-start gap-2">
+                <div>
+                    <h1 className="h3 mb-0">Screener</h1>
+                    <p className="text-muted small mb-0">
+                        OHLCV technical screens on holdings, a watchlist, or the equity universe.
+                    </p>
+                </div>
+                <Link to="/screeners/registry" className="btn btn-outline-secondary btn-sm">
+                    Screener Registry
+                </Link>
             </div>
 
             <ul className="nav nav-tabs mb-3" role="tablist">

@@ -19,7 +19,12 @@ class TradingStrategy extends Model
     protected $fillable = [
         'profile_id',
         'name',
+        'slug',
+        'definition_hash',
         'description',
+        'intent',
+        'summary',
+        'tags_json',
         'status',
         'is_factory',
         'factory_key',
@@ -34,6 +39,7 @@ class TradingStrategy extends Model
             'active_version_id' => 'integer',
             'duplicated_from_id' => 'integer',
             'is_factory' => 'boolean',
+            'tags_json' => 'array',
         ];
     }
 

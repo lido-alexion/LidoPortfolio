@@ -20,6 +20,7 @@ class TradingStrategyVersion extends Model
         'version',
         'version_label',
         'config_json',
+        'definition_hash',
         'status',
         'change_notes',
         'activated_at',

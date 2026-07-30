@@ -58,6 +58,11 @@ specs/
 │   ├── Indicator-Registry-Specification.md    (SD-033)
 │   ├── Indicator-Registry-API.md              (Admin indicators HTTP API)
 │   ├── Trading-Artifact-Framework-Specification.md (SD-034 design)
+│   ├── Trading-Artifact-JSON-Specification.md (declarative JSON formats)
+│   ├── Trading-Artifact-Registry-Migration.md (infrastructure phase BC / migrate)
+│   ├── Screener-Registry-Migration.md (Screener Registry phase — versions + UI)
+│   ├── Strategy-Registry-Migration.md (Strategy Registry — selection + portable JSON)
+│   ├── artifacts/                             (JSON examples for AI / I/O design)
 │   ├── Notification-Engine-Specification.md
 │   ├── Execution-Engine-Specification.md
 │   ├── Review-Engine-Specification.md
@@ -122,6 +127,10 @@ specs/
 19c. [engines/Indicator-Registry-Specification.md](engines/Indicator-Registry-Specification.md) (SD-033 — read with architecture/09)  
 19c2. [engines/Indicator-Registry-API.md](engines/Indicator-Registry-API.md) (Admin indicators HTTP API)  
 19d. [engines/Trading-Artifact-Framework-Specification.md](engines/Trading-Artifact-Framework-Specification.md) (SD-034 — read with architecture/11)  
+19d2. [engines/Trading-Artifact-JSON-Specification.md](engines/Trading-Artifact-JSON-Specification.md) (declarative JSON + [artifacts/examples](engines/artifacts/examples/))  
+19d3. [engines/Trading-Artifact-Registry-Migration.md](engines/Trading-Artifact-Registry-Migration.md) (Registry infrastructure migrate / BC)
+19d4. [engines/Screener-Registry-Migration.md](engines/Screener-Registry-Migration.md) (Screener Registry migrate / BC)
+19d5. [engines/Strategy-Registry-Migration.md](engines/Strategy-Registry-Migration.md) (Strategy Registry migrate / BC)  
 19e. [engines/Screener-Specification.md](engines/Screener-Specification.md) (SD-030 — Screener artifact evolution §8)  
 20. [engines/Notification-Engine-Specification.md](engines/Notification-Engine-Specification.md)  
 21. [engines/Execution-Engine-Specification.md](engines/Execution-Engine-Specification.md)  

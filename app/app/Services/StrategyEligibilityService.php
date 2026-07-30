@@ -30,10 +30,14 @@ class StrategyEligibilityService
             ->first();
 
         if ($existing) {
+            if (($existing->slug === null || $existing->slug === '') && \Schema::hasColumn('portfolio_screeners', 'slug')) {
+                $existing->forceFill(['slug' => MinerviniTrendTemplateScreener::FACTORY_KEY])->save();
+            }
+
             return $existing;
         }
 
-        return Screener::query()->create([
+        $screener = Screener::query()->create([
             'profile_id' => $profile->id,
             'name' => MinerviniTrendTemplateScreener::NAME,
             'description' => MinerviniTrendTemplateScreener::DESCRIPTION,
@@ -49,7 +53,19 @@ class StrategyEligibilityService
             'is_shared' => false,
             'is_factory' => true,
             'factory_key' => MinerviniTrendTemplateScreener::FACTORY_KEY,
+            'slug' => MinerviniTrendTemplateScreener::FACTORY_KEY,
         ]);
+
+        if (class_exists(\App\Services\Screener\ScreenerVersioningService::class)) {
+            try {
+                app(\App\Services\Screener\ScreenerVersioningService::class)
+                    ->afterCreate($screener, 'Factory Minervini Trend Template');
+            } catch (\Throwable) {
+                // Registry columns may not exist yet during early migrate
+            }
+        }
+
+        return $screener->fresh() ?? $screener;
     }
 
     /**

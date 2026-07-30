@@ -22,6 +22,7 @@ class ScreenerService
         protected ScreenerDefinitionValidator $validator,
         protected ExternalStockLinkService $externalStockLinks,
         protected IndexCatalogService $indexCatalog,
+        protected ScreenerVersioningService $versioning,
     ) {}
 
     /**
@@ -109,6 +110,9 @@ class ScreenerService
             'profile_id' => $profile->id,
             'name' => $name,
             'description' => $source->description,
+            'intent' => $source->intent,
+            'summary' => $source->summary,
+            'tags_json' => $source->tags_json,
             'scope' => $scope,
             'watchlist_id' => null,
             'index_symbol' => $indexSymbol,
@@ -120,6 +124,8 @@ class ScreenerService
             'is_enabled' => true,
             'is_shared' => false,
         ]);
+
+        $screener = $this->versioning->afterCreate($screener, 'Imported from shared screener #'.$sourceId);
 
         return $this->format($screener->fresh(['watchlist:id,name']));
     }
@@ -139,6 +145,10 @@ class ScreenerService
     {
         $data = $this->normalizeInput($profile, $input, null);
         $screener = Screener::query()->create($data);
+        $screener = $this->versioning->afterCreate(
+            $screener,
+            isset($input['change_notes']) ? (string) $input['change_notes'] : 'Created'
+        );
 
         return $this->format($screener->fresh(['watchlist:id,name']));
     }
@@ -149,6 +159,7 @@ class ScreenerService
     public function update(Screener $screener, array $input): array
     {
         $profile = PortfolioProfile::query()->findOrFail($screener->profile_id);
+        $previousHash = $screener->definition_hash;
         $data = $this->normalizeInput($profile, $input, $screener);
         $screener->fill($data);
 
@@ -158,6 +169,12 @@ class ScreenerService
         if ($invalidatesBacktest) {
             app(ScreenerBacktestService::class)->clearResults($screener);
         }
+
+        $screener = $this->versioning->afterUpdate(
+            $screener->fresh(),
+            $previousHash,
+            isset($input['change_notes']) ? (string) $input['change_notes'] : null
+        );
 
         return $this->format($screener->fresh(['watchlist:id,name']));
     }
@@ -179,7 +196,14 @@ class ScreenerService
             'id' => $screener->id,
             'profile_id' => $screener->profile_id,
             'name' => $screener->name,
+            'slug' => $screener->slug,
+            'artifact_version' => (int) ($screener->artifact_version ?? 1),
+            'definition_hash' => $screener->definition_hash,
             'description' => $screener->description,
+            'intent' => $screener->intent,
+            'summary' => $screener->summary,
+            'tags' => is_array($screener->tags_json) ? $screener->tags_json : [],
+            'artifact_status' => $screener->artifact_status ?? ($screener->is_enabled ? 'active' : 'draft'),
             'scope' => $screener->scope,
             'watchlist_id' => $screener->watchlist_id,
             'index_symbol' => $screener->index_symbol,
@@ -423,10 +447,67 @@ class ScreenerService
             }
         }
 
-        return [
+        $intent = array_key_exists('intent', $input) ? $input['intent'] : $existing?->intent;
+        if ($intent !== null) {
+            $intent = trim((string) $intent);
+            if ($intent === '') {
+                $intent = null;
+            } elseif (mb_strlen($intent) > 500) {
+                throw ValidationException::withMessages(['intent' => 'Intent max 500 characters.']);
+            }
+        }
+
+        $summary = array_key_exists('summary', $input) ? $input['summary'] : $existing?->summary;
+        if ($summary !== null) {
+            $summary = trim((string) $summary);
+            if ($summary === '') {
+                $summary = null;
+            }
+        }
+
+        $tags = array_key_exists('tags', $input)
+            ? $input['tags']
+            : (array_key_exists('tags_json', $input) ? $input['tags_json'] : $existing?->tags_json);
+        if ($tags === null) {
+            $tagsJson = null;
+        } elseif (is_array($tags)) {
+            $tagsJson = array_values(array_filter(array_map(static fn ($t) => is_scalar($t) ? trim((string) $t) : '', $tags)));
+        } else {
+            throw ValidationException::withMessages(['tags' => 'Tags must be an array.']);
+        }
+
+        $slug = array_key_exists('slug', $input) ? trim((string) $input['slug']) : ($existing?->slug);
+        if ($slug !== null && $slug !== '') {
+            $slug = preg_replace('/[^a-z0-9_]+/', '_', strtolower($slug)) ?: null;
+            $slug = $slug ? trim($slug, '_') : null;
+            if ($slug !== null) {
+                $slugDup = Screener::query()
+                    ->where('profile_id', $profile->id)
+                    ->where('slug', $slug)
+                    ->when($existing, fn ($q) => $q->where('id', '!=', $existing->id))
+                    ->exists();
+                if ($slugDup) {
+                    throw ValidationException::withMessages(['slug' => 'A screener with this slug already exists.']);
+                }
+            }
+        } else {
+            $slug = $existing?->slug;
+        }
+
+        $artifactStatus = array_key_exists('artifact_status', $input)
+            ? trim((string) $input['artifact_status'])
+            : ($existing?->artifact_status);
+        if ($artifactStatus === '') {
+            $artifactStatus = null;
+        }
+
+        $out = [
             'profile_id' => $profile->id,
             'name' => $name,
             'description' => $description,
+            'intent' => $intent,
+            'summary' => $summary,
+            'tags_json' => $tagsJson,
             'scope' => $scope,
             'watchlist_id' => $watchlistId,
             'index_symbol' => $indexSymbol,
@@ -438,6 +519,22 @@ class ScreenerService
             'is_enabled' => (bool) ($input['is_enabled'] ?? $existing?->is_enabled ?? true),
             'is_shared' => (bool) ($input['is_shared'] ?? $existing?->is_shared ?? false),
         ];
+        if ($slug !== null && $slug !== '') {
+            $out['slug'] = $slug;
+        }
+        if ($artifactStatus !== null) {
+            $out['artifact_status'] = $artifactStatus;
+        }
+        if (array_key_exists('factory_key', $input)) {
+            $out['factory_key'] = $input['factory_key'] !== null && $input['factory_key'] !== ''
+                ? (string) $input['factory_key']
+                : null;
+        }
+        if (array_key_exists('is_factory', $input)) {
+            $out['is_factory'] = (bool) $input['is_factory'];
+        }
+
+        return $out;
     }
 
     /**

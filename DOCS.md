@@ -104,7 +104,12 @@ Subtree hub: **[specs/README.md](specs/README.md)**
 | 2.14k | [specs/engines/Discovery-Specification.md](specs/engines/Discovery-Specification.md) | Discovery page purpose |
 | 2.14l | [specs/engines/Indicator-Registry-Specification.md](specs/engines/Indicator-Registry-Specification.md) | SD-033 unified Indicator Registry (specialization of SD-034) |
 | 2.14m | [specs/engines/Indicator-Registry-API.md](specs/engines/Indicator-Registry-API.md) | Admin `GET /api/v1/indicators*` API |
-| 2.14n | [specs/engines/Trading-Artifact-Framework-Specification.md](specs/engines/Trading-Artifact-Framework-Specification.md) | SD-034 Trading Artifact Framework (design; not yet coded) |
+| 2.14n | [specs/engines/Trading-Artifact-Framework-Specification.md](specs/engines/Trading-Artifact-Framework-Specification.md) | SD-034 Trading Artifact Framework (**registry infrastructure landed**) |
+| 2.14o | [specs/engines/Trading-Artifact-JSON-Specification.md](specs/engines/Trading-Artifact-JSON-Specification.md) | Declarative JSON formats for Indicator / Screener / Strategy |
+| 2.14p | [specs/engines/Trading-Artifact-Registry-Migration.md](specs/engines/Trading-Artifact-Registry-Migration.md) | Registry infrastructure migration / BC guide |
+| 2.14q | [specs/engines/Screener-Registry-Migration.md](specs/engines/Screener-Registry-Migration.md) | Screener Registry (metadata, versions, import/export UI) migrate notes |
+| 2.14r | [specs/engines/Strategy-Registry-Migration.md](specs/engines/Strategy-Registry-Migration.md) | Strategy Registry (selection, portable JSON, Minervini migrate) |
+| 2.14q | [specs/engines/artifacts/README.md](specs/engines/artifacts/README.md) | Worked JSON examples (Momentum, Swing, Liquidity, Breakout, …) |
 | 2.15 | [specs/engines/Notification-Engine-Specification.md](specs/engines/Notification-Engine-Specification.md) | |
 | 2.16 | [specs/engines/Execution-Engine-Specification.md](specs/engines/Execution-Engine-Specification.md) | |
 | 2.17 | [specs/engines/Review-Engine-Specification.md](specs/engines/Review-Engine-Specification.md) | |
