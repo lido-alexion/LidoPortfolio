@@ -44,7 +44,7 @@ import {
 } from 'recharts';
 
 const TOP_MOVER_PERIOD_KEY = 'portfolio_dashboard_top_mover_period';
-const MARKET_DIAGNOSTICS_COLLAPSED_KEY = 'portfolio_dashboard_market_diagnostics_collapsed';
+const MARKET_DIAGNOSTICS_COLLAPSED_KEY = 'portfolio_dashboard_market_diagnostics_collapsed_v2';
 
 function loadTopMoverPeriod() {
     try {
@@ -937,12 +937,9 @@ export default function DashboardPage() {
                             <h2 className="h6 text-muted mb-2">Market analytics</h2>
                             <div className="card lido-market-health-card">
                                 <div className="card-body py-3">
-                                    <div className="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
-                                        <div>
-                                            <div className="fw-semibold">Market Health</div>
-                                            <div className="small text-muted">Executive summary</div>
-                                        </div>
-                                        <span className="badge text-bg-secondary">0–100</span>
+                                    <div className="mb-2">
+                                        <div className="fw-semibold">Market Health</div>
+                                        <div className="small text-muted">Executive summary</div>
                                     </div>
                                     {marketHealthScore != null ? (
                                         <PercentGradientBar
@@ -1013,8 +1010,7 @@ export default function DashboardPage() {
                                 id="dashboard-market-diagnostics"
                                 className="mt-2"
                             >
-                                <div className="d-flex justify-content-between align-items-center mb-2">
-                                    <div className="small text-muted">Analytics gauges (diagnostics)</div>
+                                <div className="d-flex justify-content-end align-items-center mb-2">
                                     <Link
                                         to="/market-depth"
                                         className="small lido-market-depth-title-link text-decoration-none"
