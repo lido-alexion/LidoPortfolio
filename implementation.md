@@ -78,6 +78,8 @@ Sanctum auth. `TradingOsController`: securities, imports, candidates, evaluation
 
 **Dashboard (2026-07-30):** Removed the “View Market Depth →” link above Market Analytics diagnostic gauges; Market breadth gauge title still links to `/market-depth`.
 
+**Knowledge Board (2026-07-31):** Manage-mode note action icon buttons (pin/edit/duplicate/archive/delete + mobile menu) are 50% larger (hit target 1.95rem, icons 24px).
+
 **UI (2026-07-30):** Metadata-driven **sidebar-only** primary navigation (top AppTabs removed). Favourites (pin up to 8 per user, reorder) and configurable Quick Actions above Navigation groups. Notification history under Portfolio settings.
 
 **Navigation chrome (2026-07-30):** `PageChrome` breadcrumbs + page title (and `document.title`) from catalog via `buildBreadcrumbs` / `getPageTitle`. **Ctrl/Cmd+B** toggles sidebar (skipped in inputs). Active route’s group auto-expands; active highlight resolves via `findActiveSidebarPageId` (editors/registries keep their parent top-level item highlighted). Sidebar scroll position preserved in `sessionStorage` (`lido-sidebar-scroll`). Shell isolates scroll: sidebar and `.lido-main` scroll independently. Catalog supports `badge`, `tag` (`NEW`/`BETA`), `disabled`, `external`, and `permission` (future filter via `canAccessNavItem`). Editor/registry/admin tool routes stay internal (`showInSidebar: false`). Smooth width/group animations; reserved chrome height; reduced-motion respected.

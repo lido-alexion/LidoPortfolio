@@ -951,7 +951,7 @@ const APP_DOCUMENTATION_BASE = [
         overview:
             'Capture market research notes for the portfolio. Use Simple, Formatted (TipTap), or Markdown editors with autosave, images, color palettes, pin/archive, and bulk export.',
         controls: [
-            { name: 'Read / Manage toggle', description: 'Clean reading view vs checkboxes and action toolbar.' },
+            { name: 'Read / Manage toggle', description: 'Clean reading view vs checkboxes and larger action icons (pin, edit, duplicate, archive, delete) on each note card.' },
             { name: 'Editors', description: 'Simple / Formatted / Markdown with autosave.' },
             { name: 'Images', description: 'Embed resized images; click for full-size lightbox.' },
             { name: 'Export', description: 'Plain, Markdown, or AI-friendly bulk export.' },
