@@ -3,7 +3,8 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "build": "vite build",
+        "docs:static": "node scripts/generate-static-docs.mjs",
+        "build": "node scripts/generate-static-docs.mjs && vite build",
         "dev": "vite",
         "test:js": "node --test tests/js/*.test.mjs",
         "test:js:auth": "node --test tests/js/auth-redirect.test.mjs"

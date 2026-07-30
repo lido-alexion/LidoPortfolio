@@ -103,7 +103,7 @@ Trace "mainJs=$mainJs mainCssCount=$($mainCss.Count)"
 
 # --- classify paths ---
 $skipPattern = '(^app/tests/|^app/node_modules/|^deploy/staging/|\.phpunit|public/hot$|(^|/)implementation\.md$|(^|/)\.env$|DBConfig\.php$)'
-$frontendPattern = '(^app/resources/js/|^app/resources/css/|^app/resources/views/|^app/vite\.|^app/public/build/)'
+$frontendPattern = '(^app/resources/js/|^app/resources/css/|^app/resources/views/|^app/vite\.|^app/public/build/|^app/public/docs/|^app/scripts/generate-static-docs)'
 
 $rows = [System.Collections.Generic.List[object]]::new()
 $seenTarget = @{}
@@ -194,6 +194,14 @@ if ($hasFrontend) {
         "$repoRoot/deploy/staging/portfolio/build/" `
         '/home/USER/public_html/portfolio/build/' `
         'Replace entire directory - same bundle as above'
+    Add-Row `
+        "$repoRoot/app/public/docs/" `
+        '/home/USER/public_html/portfolio/docs/' `
+        'Replace entire directory - static HTML documentation'
+    Add-Row `
+        "$repoRoot/app/public/docs/" `
+        '/home/USER/public_html/lidoportfolio/public/docs/' `
+        'Replace entire directory - static HTML documentation (Laravel public)'
 }
 
 # --- markdown output ---

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Documentation index — StoX docs</title>
+  <meta name="description" content="StoX / Lido Portfolio static documentation index">
+  <link rel="canonical" href="index.html">
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a222c;
+      --text: #e7ecf1;
+      --muted: #9aa7b5;
+      --accent: #6cb6ff;
+      --border: #2a3542;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      line-height: 1.55;
+      background: var(--bg);
+      color: var(--text);
+    }
+    a { color: var(--accent); }
+    .wrap { max-width: 920px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+    header.app {
+      border-bottom: 1px solid var(--border);
+      padding: 0.85rem 0 1rem;
+      margin-bottom: 1.25rem;
+    }
+    header.app h1 { font-size: 1.35rem; margin: 0 0 0.35rem; }
+    .muted { color: var(--muted); }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.1rem;
+      margin: 1rem 0;
+    }
+    h2 { font-size: 1.1rem; margin: 0 0 0.65rem; }
+    .doc-list { margin: 0; }
+    .doc-list dt { font-weight: 600; margin-top: 0.75rem; }
+    .doc-list dd { margin: 0.2rem 0 0; color: var(--muted); }
+    .toc a { display: block; padding: 0.25rem 0; text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+    .related { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .related a {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 0.2rem 0.7rem;
+      text-decoration: none;
+      font-size: 0.92rem;
+    }
+    pre, code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.88rem;
+    }
+    pre {
+      background: #0b1015;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.85rem;
+      overflow: auto;
+    }
+    table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.92rem; }
+    th, td { border: 1px solid var(--border); padding: 0.4rem 0.55rem; text-align: left; vertical-align: top; }
+    th { background: #121820; }
+    .nav { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem; font-size: 0.92rem; }
+    footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="app">
+      <h1>StoX documentation</h1>
+      <p class="muted" style="margin:0">Static HTML — readable without JavaScript or login.</p>
+      <div class="nav">
+        <a href="index.html">All topics</a>
+        
+      </div>
+    </header>
+    
+    <section class="panel">
+      <h2>Topics</h2>
+      <p class="muted">Share links like <code>docs/strategy.html</code>. These pages are plain HTML for browsers and AI crawlers.</p>
+      <div class="toc"><a href="admin-alerts.html"><strong>Admin operational alerts</strong> — <span class="muted">Admin inbox for operational issues (sync, maintenance, data health).</span></a>
+<a href="alert-policies.html"><strong>Alert policies</strong> — <span class="muted">Rule builder on holdings — evaluate after sync or on demand.</span></a>
+<a href="overview.html"><strong>App documentation</strong> — <span class="muted">How contextual help works and how to browse topics for every screen.</span></a>
+<a href="calendar.html"><strong>Calendar</strong> — <span class="muted">Per-portfolio market events with optional Telegram reminders.</span></a>
+<a href="cash.html"><strong>Cash</strong> — <span class="muted">Cash balance, reserved capital, available investable cash, and the cash ledger.</span></a>
+<a href="corporate-action-history.html"><strong>Corporate Action History</strong> — <span class="muted">Resolved data-quality corporate-action decisions with reversal-ready audit trail.</span></a>
+<a href="corporate-action.html"><strong>Corporate actions</strong> — <span class="muted">Guided stock splits and bonus issues with OHLCV restatement.</span></a>
+<a href="dashboard.html"><strong>Dashboard</strong> — <span class="muted">Portfolio snapshot: value, allocation, market analytics, alerts, calendar, and pattern signals.</span></a>
+<a href="data-quality-center.html"><strong>Data Quality Center</strong> — <span class="muted">Admin queue for unresolved market-data anomalies, starting with corporate actions.</span></a>
+<a href="discovery.html"><strong>Discovery</strong> — <span class="muted">Candidates from screeners and patterns, plus long-focused evaluation scores on one page.</span></a>
+<a href="explorer.html"><strong>Explorer</strong> — <span class="muted">Universe-cache analytics: price cards, relative strength, charts, normalized gain.</span></a>
+<a href="indicator-registry.html"><strong>Indicator Registry</strong> — <span class="muted">Admin read-only catalogue of Primary, Composite, and Metric indicators with dependency trees and formula documentation.</span></a>
+<a href="indices.html"><strong>Indices</strong> — <span class="muted">Browse index pages, constituents, benchmark comparisons, and India VIX alerts.</span></a>
+<a href="knowledge.html"><strong>Knowledge Board</strong> — <span class="muted">Research notes with tags, editors, images, and export.</span></a>
+<a href="knowledge-tags.html"><strong>Knowledge tags</strong> — <span class="muted">Create and organise tags used on Knowledge Board notes.</span></a>
+<a href="market-depth.html"><strong>Market depth</strong> — <span class="muted">Breadth / stocks-above heatmap and related market-depth snapshots.</span></a>
+<a href="notifications.html"><strong>Notifications</strong> — <span class="muted">History of Telegram (and related) notifications sent for this portfolio.</span></a>
+<a href="patterns.html"><strong>Patterns</strong> — <span class="muted">Educational chart + candlestick guide with SVG sketches and deep links.</span></a>
+<a href="pending-execution.html"><strong>Pending Execution</strong> — <span class="muted">Approved recommendations waiting for you to record the broker fill.</span></a>
+<a href="holdings.html"><strong>Portfolio (Holdings)</strong> — <span class="muted">Open positions derived from the ledger — qty, cost, P/L, XIRR, and trailing stop.</span></a>
+<a href="portfolios.html"><strong>Portfolios</strong> — <span class="muted">Create and manage named portfolios; switch the active one from the header.</span></a>
+<a href="profile.html"><strong>Profile</strong> — <span class="muted">Display name, password, and profile photo for your user account.</span></a>
+<a href="recommendations.html"><strong>Recommendations</strong> — <span class="muted">Review trade ideas and market insights — Approve, Reject, or Defer.</span></a>
+<a href="review.html"><strong>Review</strong> — <span class="muted">Outcomes dashboard for recommendations, insights, and recent review decisions.</span></a>
+<a href="screener.html"><strong>Screener</strong> — <span class="muted">Eligibility engine — condition builders that feed Discovery and Strategy.</span></a>
+<a href="screener-editor.html"><strong>Screener editor</strong> — <span class="muted">Edit conditions, run history, stacked results, and backtests.</span></a>
+<a href="screener-registry.html"><strong>Screener Registry</strong> — <span class="muted">First-class Screener artifacts — metadata, versions, validate, and import/export JSON without changing the run engine.</span></a>
+<a href="settings.html"><strong>Settings</strong> — <span class="muted">Global (admin), Portfolio, and Account settings — fees, Telegram, sync, and links.</span></a>
+<a href="stock-prices.html"><strong>Stock price history</strong> — <span class="muted">OHLCV chart and table for a single stock, with optional force sync.</span></a>
+<a href="strategy.html"><strong>Strategy</strong> — <span class="muted">One strategy per portfolio — default Minervini; edit tabs and Save.</span></a>
+<a href="strategy-registry.html"><strong>Strategy Registry</strong> — <span class="muted">Reusable Strategy artifacts — metadata, versions, validate/import/export JSON, and Select the one active strategy per portfolio.</span></a>
+<a href="sync-logs.html"><strong>Sync logs</strong> — <span class="muted">Admin view of price and maintenance sync log messages.</span></a>
+<a href="trading-os-flow.html"><strong>Trading OS pages &amp; flow</strong> — <span class="muted">What Screener, Strategy, Discovery, Recommendations, and Review each show — and how stocks flow between them.</span></a>
+<a href="transactions.html"><strong>Transactions</strong> — <span class="muted">Buy/sell ledger — source of truth for holdings, fees, and realized P/L.</span></a>
+<a href="universe-price-sync.html"><strong>Universe price sync</strong> — <span class="muted">Admin control of NSE universe OHLCV batch sync, gaps, and depth backfill.</span></a>
+<a href="users.html"><strong>User management</strong> — <span class="muted">Admin invite links, password-reset links, and account administration.</span></a>
+<a href="watchlist.html"><strong>Watchlist</strong> — <span class="muted">Named research lists with prices, pattern scans, and links into Explorer.</span></a></div>
+    </section>
+    
+    <footer class="muted">
+      Generated from the StoX in-app documentation source. Product screens still require sign-in.
+    </footer>
+  </div>
+</body>
+</html>

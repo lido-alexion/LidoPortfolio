@@ -311,7 +311,7 @@ export default function CalendarEventFormDialog({
                                     </label>
                                 </div>
                                 <div className="small text-muted mb-2">
-                                    Uses Telegram settings for the active portfolio (Settings → Notifications).
+                                    Uses Telegram settings for the active portfolio (Settings → Portfolio).
                                 </div>
                                 {form.reminder_enabled && (
                                     <ReminderDaysInput

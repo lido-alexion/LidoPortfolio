@@ -18,11 +18,15 @@ export function resolveDocKeywordFromPath(pathname) {
 }
 
 /**
- * Absolute in-app URL for Documentation with optional keyword query.
+ * Absolute URL for static documentation HTML (crawlable, no JS required).
  */
 export function buildDocumentationUrl(keyword) {
     const q = String(keyword || 'overview').trim() || 'overview';
-    return appUrl(`/documentation?q=${encodeURIComponent(q)}`);
+    const normalized = q.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'overview';
+    if (normalized === 'help' || normalized === 'docs' || normalized === 'documentation' || normalized === 'home-help') {
+        return appUrl('/docs/index.html');
+    }
+    return appUrl(`/docs/${encodeURIComponent(normalized)}.html`);
 }
 
 /**

@@ -566,10 +566,13 @@ export default function SettingsPage() {
             {activeScope === 'portfolio' && (
                 <>
                     <div className="card">
-                        <div className="card-header">Alerts</div>
+                        <div className="card-header">Alerts &amp; notifications</div>
                         <div className="card-body d-flex flex-wrap gap-2">
                             <Link to="/settings/alert-policies" className="btn btn-primary">
                                 Manage alert policies
+                            </Link>
+                            <Link to="/notification-history" className="btn btn-outline-secondary">
+                                Notification history
                             </Link>
                         </div>
                     </div>

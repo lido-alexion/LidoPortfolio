@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { saveRedirectPath } from '../auth/redirect';
+import { appUrl } from '../appBase';
 
 export default function LoginPage() {
     const { login, sessionExpired, consumeRedirectPath } = useAuth();
@@ -17,6 +18,7 @@ export default function LoginPage() {
             path
             && path !== '/'
             && !path.startsWith('/documentation')
+            && !path.startsWith('/docs')
             && !path.startsWith('/invite/')
             && !path.startsWith('/reset-password/')
         ) {
@@ -104,9 +106,9 @@ export default function LoginPage() {
                     New accounts are invite-only. Contact your administrator if you need access.
                 </p>
                 <p className="text-center mt-2 mb-0">
-                    <Link to="/documentation" className="small">
+                    <a href={appUrl('/docs/index.html')} className="small">
                         Browse documentation (no login required)
-                    </Link>
+                    </a>
                 </p>
             </div>
         </div>

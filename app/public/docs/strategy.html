@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Strategy — StoX docs</title>
+  <meta name="description" content="One strategy per portfolio — default Minervini; edit tabs and Save.">
+  <link rel="canonical" href="strategy.html">
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a222c;
+      --text: #e7ecf1;
+      --muted: #9aa7b5;
+      --accent: #6cb6ff;
+      --border: #2a3542;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      line-height: 1.55;
+      background: var(--bg);
+      color: var(--text);
+    }
+    a { color: var(--accent); }
+    .wrap { max-width: 920px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+    header.app {
+      border-bottom: 1px solid var(--border);
+      padding: 0.85rem 0 1rem;
+      margin-bottom: 1.25rem;
+    }
+    header.app h1 { font-size: 1.35rem; margin: 0 0 0.35rem; }
+    .muted { color: var(--muted); }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.1rem;
+      margin: 1rem 0;
+    }
+    h2 { font-size: 1.1rem; margin: 0 0 0.65rem; }
+    .doc-list { margin: 0; }
+    .doc-list dt { font-weight: 600; margin-top: 0.75rem; }
+    .doc-list dd { margin: 0.2rem 0 0; color: var(--muted); }
+    .toc a { display: block; padding: 0.25rem 0; text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+    .related { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .related a {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 0.2rem 0.7rem;
+      text-decoration: none;
+      font-size: 0.92rem;
+    }
+    pre, code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.88rem;
+    }
+    pre {
+      background: #0b1015;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.85rem;
+      overflow: auto;
+    }
+    table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.92rem; }
+    th, td { border: 1px solid var(--border); padding: 0.4rem 0.55rem; text-align: left; vertical-align: top; }
+    th { background: #121820; }
+    .nav { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem; font-size: 0.92rem; }
+    footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="app">
+      <h1>StoX documentation</h1>
+      <p class="muted" style="margin:0">Static HTML — readable without JavaScript or login.</p>
+      <div class="nav">
+        <a href="index.html">All topics</a>
+        <a href="strategy.html">This topic</a>
+      </div>
+    </header>
+    
+    <article>
+      <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Strategy</h1>
+      <p class="muted"><code>strategy</code> · screen: <code>/strategy</code></p>
+      <p>One strategy per portfolio — default Minervini; edit tabs and Save.</p>
+
+      <section class="panel">
+        <h2>Overview</h2>
+        <p>Strategy is your decision policy. Each portfolio has exactly one active strategy. It starts as Minervini Strategy (Minervini Trend Template eligibility + momentum scoring). Edit any tab and Save — the active editor still saves in place.</p>
+<p>Use Strategy Registry to import/export JSON, validate packs, browse drafts, and Select which definition is active for this portfolio. Strategies reference Screeners by slug / factory key — they never duplicate Screener condition trees.</p>
+<p>Strategy does not invent stocks and does not rewrite Screener conditions. Screeners admit candidates; Strategy scores them, labels an action, applies portfolio/cash/market limits, and watches holdings for exits.</p>
+<p>Where do finished ideas appear?</p>
+<p>After you save Strategy and run the decision pipeline (Recommendations page → “Run decision pipeline”, or the scheduled daily pipeline), surviving trade ideas land on Recommendations (/recommendations). Approve a buy/sell there → it moves to Pending Execution (/transactions/pending). After you record the broker fill, it becomes a ledger transaction and shows on Holdings / Review. Insights (HOLD / WATCH) also appear on Recommendations but are view-only and are not sent to Telegram.</p>
+<p>Filter sequence (high level):</p>
+<pre><code>(mermaid diagram)
+flowchart TD
+  A[Screener hits - Eligibility Sources] --&gt; B[Scoring Model overall 0-100]
+  B --&gt; C[Recommendation Thresholds]
+  C --&gt; D[Open / Increase / Reduce / Exit / Watch / Hold]
+  C --&gt; E[Exit Strategy rules - holdings only]
+  E -.-&gt;|can force Exit| D
+  D --&gt; F[Portfolio Rules + Behaviour flags]
+  F --&gt; G[Market Gates - may block new Open/Increase]
+  G --&gt; H[Capital Allocation + Cash Management]
+  H --&gt;|unfunded Open/Increase become Watch| I[Recommendations page]
+  I --&gt; J[Approve]
+  J --&gt; K[Pending Execution]
+  K --&gt; L[Ledger fill]
+</code></pre>
+<p>Read Controls below for every tab field (what it means and what number it is compared against). Read Concepts for a scored example of four candidates and three holdings hitting exit rules.</p>
+<p>Each portfolio has one editable strategy (default Minervini). Change tabs, Save, then run the decision pipeline from Recommendations to refresh ideas.</p>
+<p>Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).</p>
+
+      </section>
+
+      <section class="panel">
+        <h2>Controls</h2>
+        <dl class="doc-list">
+        <dt>Strategy Registry</dt>
+        <dd>Open /strategy/registry to export/import Strategy JSON, validate packs, and Select the active strategy for this portfolio.</dd>
+    
+        <dt>General tab</dt>
+        <dd>Name — label for your strategy (default: Minervini Strategy).
+Description — free-text intent notes.
+One active strategy per portfolio: Save overwrites the current active config in place.</dd>
+    
+        <dt>Eligibility Sources tab</dt>
+        <dd>Assign Screeners that admit stocks into scoring.
+On — include this Screener in the union.
+Priority — ordering / explainability only; a stock is eligible if it passes ANY enabled Screener (not all).
+Compared against: latest completed Screener run hits (typically within ~72 hours). Stocks not in those hits are not eligible for new Open/Increase (holdings are still reviewed for exits).
+N conditions ↗ — opens the Screener editor; Strategy never edits condition trees here.</dd>
+    
+        <dt>Scoring Model — factors</dt>
+        <dd>Each enabled factor produces a 0–100 sub-score. Overall score = weighted average of enabled factors. Enabled Weights are auto-normalised to sum to exactly 100 on Save (and when you click Normalise now) — relative proportions are kept. You can edit free-form totals while drafting; Save is only blocked if every enabled weight is zero.
+On — include factor in the blend; Off disables Weight/Min/Max/Parameters for that row.
+Weight — share of overall score before/after normalisation (e.g. Relative Strength 35 means 35% when the total is already 100).
+Min / Max — soft targets used when scoring that factor (Risk uses Max as a risk cap; Risk Min defaults to 0).
+Compared against: Evaluation factor facts for that stock (RS, RSI/momentum, trend/SMA stack, volume, etc.), not raw rupee prices.</dd>
+    
+        <dt>Scoring Model — parameters by factor</dt>
+        <dd>Relative Strength: lookback_days (sessions) and Benchmark (index dropdown, e.g. NIFTY50) — stock return vs that benchmark.
+Momentum Score: rsi_period — RSI length for momentum strength.
+Trend Score: sma_fast / sma_slow — SMA lengths for trend stack.
+Volume Score: volume_sma_period — average volume window.
+Risk Score: atr_period — ATR window; higher Risk score is riskier; Max caps acceptable risk.
+Breakout / Market Regime / Sector Strength: may have no parameters (stub or discovery-fed).</dd>
+    
+        <dt>Recommendation Thresholds tab</dt>
+        <dd>Unit: overall score points 0–100 (the Scoring Model blend). Not ₹, not %.
+Minimum Overall Score — floor for actionable buy paths (factory ~80).
+Open Position — score ≥ this → suggest new buy (factory ~85).
+Increase Position — score ≥ this (and already held) → buy more (factory ~90).
+Watch — interesting but usually not funded (factory ~60).
+Reduce Position — score ≤ this → sell partial (factory ~40).
+Exit Position — score ≤ this → sell all (factory ~20).
+Compared against: the stock’s overall strategy score in this generation cycle. Portfolio rules, exits, gates, and cash can still change the final action.</dd>
+    
+        <dt>Portfolio Rules tab</dt>
+        <dd>Maximum / Minimum Position Size % — share of portfolio value per idea (compared against suggested allocation %).
+Maximum Cash Deployment % / Minimum Cash Reserve % — how much cash may be invested vs kept aside (compared against cash balance).
+Maximum New Positions — cap on fresh Opens per generation cycle.
+Maximum Exposure Per Stock % — concentration ceiling.
+Behaviour toggles: Allow increase / partial exit / averaging up / averaging down — permit those action types when other rules would suggest them.</dd>
+    
+        <dt>Capital Allocation tab</dt>
+        <dd>Applies only to Open / Increase ideas that survived thresholds, portfolio rules, and market gates.
+Allocation method: Proportional by score (stronger scores get more cash), Simple ranking, or Equal weight.
+Tie-breaking — secondary key when scores match (higher score / RS / momentum / breakout).
+Score bands — map overall-score ranges to target allocation % of portfolio (e.g. 95–100 → 10%).
+Compared against: available investable cash (Cash balance − reserved − reserve floor). If cash cannot fund the idea, it is demoted to Watch (unfunded).</dd>
+    
+        <dt>Exit Strategy — each rule</dt>
+        <dd>Applies to open holdings. If any enabled rule triggers (mode = any), action is forced to Exit.
+Moving Average Breakdown (Value = SMA period, e.g. 50) — compared against price vs that SMA; hits when close is below the MA.
+Relative Strength Weakening (Value = RS score max, e.g. 40) — hits when RS factor score &lt; Value.
+Trend Weakening (Value = trend score max, e.g. 40) — hits when Trend factor score &lt; Value.
+Overall Score Exit (Value = overall score max, e.g. 20) — hits when overall score ≤ Value.
+Maximum Loss (Value = %, e.g. 8) — hits when unrealized P/L % ≤ −Value (vs your cost basis).
+ATR Stop (Value = multiple, e.g. 2) — hits when unrealized % ≤ −(multiple × ATR%).
+Trailing Stop (Value = %, e.g. 10) — V1 proxy: hits when unrealized % ≤ −Value (drawdown from cost; not yet a true peak-trail engine).
+Screener Exit (Value = screener picker) — hits when the holding’s stock_id appears in that screener’s latest completed run (~72h).</dd>
+    
+        <dt>Market Gates tab</dt>
+        <dd>Optional. When Enable market gates is Off, Min sentiment / Allowed phases / Max risk are ignored (and disabled in the UI).
+When On: compared against Dashboard Market Analysis outputs.
+Min sentiment (0–100) — block new Open/Increase if market sentiment score &lt; this.
+Allowed phases — block new Open/Increase unless current market phase is checked.
+Max risk (raw) — if market raw risk &gt; this, block/shrink new entries.
+Exits on holdings are not blocked by market gates.</dd>
+    
+        <dt>Cash Management tab</dt>
+        <dd>Reservations enabled — use cash reservations for approved buys.
+Reserve on approval — when you Approve an Open/Increase on Recommendations, cash is reserved.
+Release on execution / cancellation / expiry — free the reservation when the idea closes.
+Compared against: Cash page balance and reserved amounts. Available investable cash drives Capital Allocation.</dd>
+    
+        <dt>Page subheader</dt>
+        <dd>Explains that Strategy is only a set of configurations. After Save and running the decision pipeline, recommended stocks appear on the Recommendations tab (/recommendations). Screeners still select eligible stocks; Strategy does not redefine eligibility rules.</dd>
+    
+        <dt>Header card + Save</dt>
+        <dd>Always-visible snapshot: name, last modified, enabled eligibility Screeners, weight total, exit/market flags.
+Save — writes the current config in place. After Save, run the pipeline from Recommendations to refresh ideas.</dd>
+    
+        <dt>Weights sum guardrail</dt>
+        <dd>Enabled scoring weights are auto-normalised to 100 on Save (proportions kept). Use Normalise now on the Scoring Model tab to preview the scaled values before saving.</dd>
+    
+        <dt>Where to look after Save</dt>
+        <dd>Final refined ideas appear on Recommendations (/recommendations), not on the Strategy page itself. Approve → Pending Execution → broker fill on Transactions. HOLD/WATCH stay on Recommendations as insights.</dd>
+    
+        <dt>Typical flow</dt>
+        <dd>Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.</dd>
+    
+        <dt>Validation and errors</dt>
+        <dd>Form and API validations are shown as inline errors or toast messages. Fix the first reported issue, retry, and re-check dependent sections that consume the same data.</dd>
+    </dl>
+      </section>
+
+      <section class="panel">
+        <h2>Concepts</h2>
+        <dl class="doc-list">
+        <dt>One active strategy per portfolio</dt>
+        <dd>Exactly one strategy is active (selected). Defaults are Minervini Strategy (Minervini Trend Template screener + momentum weights/thresholds). Use Strategy Registry to switch selection; the editor Save still updates the active config in place.</dd>
+    
+        <dt>Registry vs editor</dt>
+        <dd>Registry manages reusable JSON artifacts, drafts, and selection. The Strategy page edits the active portfolio strategy. Export never includes portfolio-local Screener ids — only slug / factory_key refs.</dd>
+    
+        <dt>Worked example — scoring four screener hits</dt>
+        <dd>Assume factory-like weights: RS 35, Trend 20, Momentum 15, Breakout 10, Volume 8, Market Regime 5, Sector 4, Risk 3 (total 100).
+Four eligible stocks with factor scores (0–100):
+
+RELIANCE — RS 92, Trend 88, Mom 80, Breakout 70, Vol 75, Mkt 70, Sec 65, Risk 25
+Overall ≈ 0.35×92 + 0.20×88 + 0.15×80 + 0.10×70 + 0.08×75 + 0.05×70 + 0.04×65 + 0.03×25 ≈ 81.9
+
+TCS — RS 78, Trend 74, Mom 68, Breakout 60, Vol 55, Mkt 70, Sec 60, Risk 30 → ≈ 70.4
+INFY — RS 95, Trend 90, Mom 88, Breakout 85, Vol 80, Mkt 75, Sec 70, Risk 20 → ≈ 87.6
+IDEA — RS 55, Trend 40, Mom 35, Breakout 30, Vol 40, Mkt 50, Sec 45, Risk 60 → ≈ 44.0
+
+With Open ≥ 85, Increase ≥ 90, Watch ≥ 60, Reduce ≤ 40, Exit ≤ 20:
+INFY ≈ 87.6 → Open (if not held).
+RELIANCE ≈ 81.9 → below Open; may be Watch/Hold depending on opinion path (not a funded Open at 85).
+TCS ≈ 70.4 → Watch band.
+IDEA ≈ 44.0 → near Reduce if held; not an Open.
+Ranking for capital: INFY first (highest score), then RELIANCE, then TCS. Only Open/Increase compete for cash.</dd>
+    
+        <dt>Worked example — score bands vs thresholds</dt>
+        <dd>Overall score (0–100) vs factory-like thresholds: Exit ≤20 · Reduce ≤40 · Watch ≥60 · Open ≥85 · Increase ≥90.
+
+<code>text Symbol    | Score | Band reading --------- | ----- | ------------ IDEA      | 44    | Near Reduce if held; not an Open TCS       | 70    | Watch band RELIANCE  | 82    | Below Open (≥85); Watch/Hold path INFY      | 88    | Crosses Open (≥85); ranks first for capital </code></dd>
+    
+        <dt>Worked example — three holdings vs exit rules</dt>
+        <dd>Holding A (HDFC Bank): bought ₹1,500; latest ₹1,360; unrealized ≈ −9.3%. Max Loss Value = 8 → −9.3% ≤ −8% → Maximum Loss triggers → Exit.
+
+Holding B (Asian Paints): bought ₹3,000; rallied to ₹3,400 then back to ₹3,050; unrealized vs cost ≈ +1.7%. Trailing Stop Value = 10 (V1 proxy vs cost, not peak): +1.7% is not ≤ −10% → does not trigger. (A true peak-trail would measure the drop from ₹3,400 ≈ −10.3% and might fire; V1 does not — it only looks at unrealized % from cost.)
+
+Holding B′ (same Trailing Stop = 10, different path): bought ₹3,000; latest ₹2,650; unrealized ≈ −11.7%. −11.7% ≤ −10% → Trailing Stop (V1) triggers → Exit. This is the same math as Max Loss with Value = 10; use Max Loss for an explicit hard floor and Trailing when you intend a future peak-based trail.
+
+Holding C (Tata Motors): close below 50-SMA while still green on P/L. MA Breakdown period = 50 → Moving Average Breakdown triggers → Exit even if score is still moderate.
+
+Holding D appears in your “Weakening names” Screener Exit list → Screener Exit triggers → Exit regardless of score.
+
+ATR Stop example: ATR% = 3.0, Value/multiple = 2 → stop at −6%. If unrealized = −6.5% → ATR Stop triggers.</dd>
+    
+        <dt>Trailing / max-loss picture</dt>
+        <dd><code>text Price   |                 * peak (true trail would anchor here)   |               *   |        *----*   |      *   |----*  buy @ 1500 -------------------- cost basis   |                 \   |                  * latest 1360  (−9.3% vs cost)   +------------------------------------&gt; time Max loss 8%: stop line ≈ 1500 × (1−0.08) = 1380 Latest 1360 is below 1380 → Max Loss hit. </code></dd>
+    
+        <dt>After filters — what you see</dt>
+        <dd>Suppose only INFY Open survives cash allocation and HDFC Bank Exit from Max Loss.
+You see both on Recommendations (/recommendations): INFY under trade recommendations (Approve / Reject / Defer), HDFC Bank as Exit.
+Approve INFY → Pending Execution (/transactions/pending) with cash reserved if Cash Management says so.
+Record the broker fill → Transactions / Holdings update; Review later shows outcomes.
+RELIANCE/TCS Watch or Hold stay on Recommendations as insights (not Telegram-notified).</dd>
+    
+        <dt>Screeners vs Strategy</dt>
+        <dd>Screeners admit; Strategy scores, thresholds, allocates, and exits. Edit conditions only in /screeners.</dd>
+    
+        <dt>Weights auto-normalise to 100</dt>
+        <dd>Enabled scoring weights are scaled to sum to exactly 100 on Save (largest-remainder, 2 decimal places). Relative proportions are preserved. Disabled factors keep their stored weight unused. Save is blocked only when no enabled factor has a positive weight.</dd>
+    
+        <dt>Factory Momentum Strategy</dt>
+        <dd>Default seed only: Minervini eligibility; RS35/Trend20/Mom15/Breakout10/Vol8/Mkt5/Sec4/Risk3; Open≥85 Increase≥90 Watch≥60; exit on; market gates off. Fully editable after seed.</dd>
+    
+        <dt>Policy layering</dt>
+        <dd>Eligibility admits → Scoring ranks → Thresholds label → Exit can force sells on holdings → Portfolio rules constrain → Market gates may block new buys → Capital allocation + cash fund what survives → Recommendations page.</dd>
+    
+        <dt>No versions or duplicates</dt>
+        <dd>Strategy versioning, Duplicate, and factory fork were removed. Save updates the single strategy in place.</dd>
+    
+        <dt>Active portfolio context</dt>
+        <dd>Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.</dd>
+    
+        <dt>Data freshness</dt>
+        <dd>Many analytics depend on cached daily OHLCV and scheduled sync jobs. If numbers look stale, refresh this page and verify sync status in admin tools.</dd>
+    </dl>
+      </section>
+
+      
+      <section class="panel">
+        <h2>Related topics</h2>
+        <div class="related">
+          <a href="trading-os-flow.html">Trading OS pages &amp; flow</a><a href="screener.html">Screener</a><a href="screener-registry.html">Screener Registry</a><a href="strategy-registry.html">Strategy Registry</a><a href="recommendations.html">Recommendations</a><a href="pending-execution.html">Pending Execution</a><a href="cash.html">Cash</a><a href="dashboard.html">Dashboard</a>
+        </div>
+      </section>
+    </article>
+    
+    <footer class="muted">
+      Generated from the StoX in-app documentation source. Product screens still require sign-in.
+    </footer>
+  </div>
+</body>
+</html>

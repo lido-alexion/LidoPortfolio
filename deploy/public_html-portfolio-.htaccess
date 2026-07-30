@@ -29,6 +29,9 @@
     # Static diagnostics page
     RewriteRule ^mobile-debug\.html$ - [L]
 
+    # Static documentation (plain HTML under /portfolio/docs/)
+    RewriteRule ^docs(/.*)?$ - [L]
+
     # Real files and folders (build/*, favicon, etc.)
     RewriteCond %{REQUEST_FILENAME} -f
     RewriteRule ^ - [L]

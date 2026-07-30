@@ -1,6 +1,6 @@
 /**
  * In-app contextual documentation index.
- * Each entry is reachable via /documentation?q=<keyword> from the header help button.
+ * Each entry is reachable via static HTML at /docs/{keyword}.html (and legacy /documentation?q= redirects there).
  */
 
 function pathIs(pathname, exact) {
@@ -37,33 +37,33 @@ const APP_DOCUMENTATION_BASE = [
         keyword: 'overview',
         aliases: ['help', 'docs', 'documentation', 'home-help'],
         title: 'App documentation',
-        routeLabel: '/documentation',
-        match: (p) => pathStarts(p, '/documentation'),
+        routeLabel: '/docs/',
+        match: (p) => pathStarts(p, '/documentation') || pathStarts(p, '/docs'),
         summary: 'How contextual help works and how to browse topics for every screen.',
         overview:
-            'Documentation is public — anyone with the URL can read it without signing in. When you are logged in, use the (?) button in the header (left of your profile) on any page: it opens this Documentation page in a new tab with a search keyword for the screen you were on. Guests can open /documentation from the login screen or the header (?). Browse or search the topic list below.',
+            'Documentation is public static HTML — anyone with the URL can read it without signing in or running JavaScript. Preferred links look like /docs/strategy.html (index: /docs/index.html). When you are logged in, use the (?) button in the header (left of your profile) on any page: it opens the matching static topic in a new tab. Guests can open /docs/ from the login screen. Legacy /documentation?q=… URLs redirect to these pages.',
         controls: [
             {
                 name: 'Header (?)',
-                description: 'Opens Documentation for the current route in a new browser tab (available before and after login).',
+                description: 'Opens static Documentation for the current route in a new browser tab (available before and after login).',
             },
             {
-                name: 'Public access',
-                description: 'No login required to view /documentation. Product screens linked from topics still require sign-in.',
+                name: 'Public static HTML',
+                description: 'No login or JavaScript required to view /docs/*.html. Product screens linked from topics still require sign-in.',
             },
             {
-                name: 'Search topics',
-                description: 'Filter the index by title, keyword, or phrase.',
+                name: 'Topic index',
+                description: 'Open /docs/index.html for the full topic list.',
             },
             {
-                name: 'Topic list',
-                description: 'Click any topic to load Purpose, Workflow, Overview, Controls, Concepts, and Related topics.',
+                name: 'Direct topic URLs',
+                description: 'Share /docs/{keyword}.html (for example /docs/strategy.html) with humans or AI crawlers.',
             },
         ],
         concepts: [
             {
                 name: 'Contextual keyword',
-                description: 'Each app route maps to a stable keyword (for example dashboard, screener, strategy). The URL uses ?q=<keyword>.',
+                description: 'Each app route maps to a stable keyword (for example dashboard, screener, strategy). Static files use that keyword as the HTML filename.',
             },
             {
                 name: 'Active portfolio',
@@ -870,11 +870,14 @@ const APP_DOCUMENTATION_BASE = [
         match: (p) => pathStarts(p, '/notification-history'),
         summary: 'History of Telegram (and related) notifications sent for this portfolio.',
         overview:
-            'Inspect outbound notification history. Delivery uses Telegram when configured under portfolio settings and alert / schedule rules. Recommendation Telegram messages are sent only for actionable trades (Open / Increase / Reduce / Exit) — HOLD and WATCH insights are not notified.',
+            'Open Notification history from Settings → Portfolio (Alerts & notifications). Inspect outbound messages for this portfolio. Delivery uses Telegram when configured under portfolio settings and alert / schedule rules. Recommendation Telegram messages are sent only for actionable trades (Open / Increase / Reduce / Exit) — HOLD and WATCH insights are not notified.',
         controls: [
             { name: 'History list', description: 'Browse recent messages and delivery status where available.' },
+            { name: 'Retry', description: 'Re-attempt a failed delivery when the API supports it.' },
+            { name: 'Back to settings', description: 'Return to Settings → Portfolio where Telegram schedules and credentials are configured.' },
         ],
         concepts: [
+            { name: 'Not a main tab', description: 'Notification history is reached from Portfolio settings, not the primary nav.' },
             { name: 'Telegram-only channel', description: 'Production notifications are Telegram Bot API based.' },
             { name: 'Actionable only', description: 'Recommendation notify skips HOLD / WATCH; those stay in-app as insights.' },
             { name: 'Schedules', description: 'Calendar reminders, screener results, and alert policies can enqueue messages.' },
@@ -1023,6 +1026,7 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Settings tabs', description: 'Navigate Global / Portfolio / Account sections.' },
             { name: 'Fee components', description: 'Drive auto fees on buy/sell ledger rows.' },
             { name: 'Telegram', description: 'Bot token and chat id for portfolio notifications.' },
+            { name: 'Notification history', description: 'Open /notification-history from Portfolio → Alerts & notifications to audit Telegram deliveries.' },
             { name: 'Screener Registry (admin)', description: 'Admin shortcut to Screener artifact import/export and catalogue.' },
             { name: 'Strategy Registry (admin)', description: 'Admin shortcut to Strategy artifact import/export, selection, and catalogue.' },
         ],
@@ -1220,7 +1224,7 @@ const DEFAULT_RICH_CONTENT = {
 const DOC_ENRICHMENTS = {
     overview: {
         overview:
-            'Documentation is public (no login required). How to use this effectively: start from a page you are on via the header (?), or open /documentation directly. Read Purpose and Workflow first, then Overview, Controls, and Concepts. Use Common mistakes when stuck, and Related topics to follow the natural journey. Links to product screens still require sign-in.',
+            'Documentation is public static HTML (no login or JavaScript required). How to use this effectively: start from a page you are on via the header (?), or open /docs/index.html. Prefer topic URLs like /docs/strategy.html for sharing with humans or AI agents. Legacy /documentation?q=… redirects to these files. Links to product screens still require sign-in.',
     },
     dashboard: {
         overview:

@@ -47,6 +47,8 @@ Copy-Tree (Join-Path $app 'public/build') (Join-Path $staging 'lidoportfolio/pub
 Copy-Tree (Join-Path $app 'public/build') (Join-Path $staging 'portfolio/build')
 
 Copy-Item (Join-Path $app 'public/favicon.ico') (Join-Path $staging 'portfolio/favicon.ico') -Force
+Copy-Tree (Join-Path $app 'public/docs') (Join-Path $staging 'portfolio/docs')
+Copy-Tree (Join-Path $app 'public/docs') (Join-Path $staging 'lidoportfolio/public/docs')
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-migrate.php') (Join-Path $staging 'portfolio/cpanel-migrate.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-config-cache.php') (Join-Path $staging 'portfolio/cpanel-config-cache.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-repair-tos-schema.php') (Join-Path $staging 'portfolio/cpanel-repair-tos-schema.php') -Force

@@ -55,6 +55,7 @@ export default function NotificationHistoryPage() {
                     </p>
                 </div>
                 <div className="d-flex gap-2">
+                    <Link className="btn btn-outline-secondary btn-sm" to="/settings/portfolio">Back to settings</Link>
                     <Link className="btn btn-outline-secondary btn-sm" to="/review">Review</Link>
                     <button type="button" className="btn btn-outline-secondary btn-sm" onClick={load} disabled={loading}>Refresh</button>
                 </div>

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Screener Registry — StoX docs</title>
+  <meta name="description" content="First-class Screener artifacts — metadata, versions, validate, and import/export JSON without changing the run engine.">
+  <link rel="canonical" href="screener-registry.html">
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a222c;
+      --text: #e7ecf1;
+      --muted: #9aa7b5;
+      --accent: #6cb6ff;
+      --border: #2a3542;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      line-height: 1.55;
+      background: var(--bg);
+      color: var(--text);
+    }
+    a { color: var(--accent); }
+    .wrap { max-width: 920px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+    header.app {
+      border-bottom: 1px solid var(--border);
+      padding: 0.85rem 0 1rem;
+      margin-bottom: 1.25rem;
+    }
+    header.app h1 { font-size: 1.35rem; margin: 0 0 0.35rem; }
+    .muted { color: var(--muted); }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.1rem;
+      margin: 1rem 0;
+    }
+    h2 { font-size: 1.1rem; margin: 0 0 0.65rem; }
+    .doc-list { margin: 0; }
+    .doc-list dt { font-weight: 600; margin-top: 0.75rem; }
+    .doc-list dd { margin: 0.2rem 0 0; color: var(--muted); }
+    .toc a { display: block; padding: 0.25rem 0; text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+    .related { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .related a {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 0.2rem 0.7rem;
+      text-decoration: none;
+      font-size: 0.92rem;
+    }
+    pre, code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.88rem;
+    }
+    pre {
+      background: #0b1015;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.85rem;
+      overflow: auto;
+    }
+    table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.92rem; }
+    th, td { border: 1px solid var(--border); padding: 0.4rem 0.55rem; text-align: left; vertical-align: top; }
+    th { background: #121820; }
+    .nav { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem; font-size: 0.92rem; }
+    footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="app">
+      <h1>StoX documentation</h1>
+      <p class="muted" style="margin:0">Static HTML — readable without JavaScript or login.</p>
+      <div class="nav">
+        <a href="index.html">All topics</a>
+        <a href="screener-registry.html">This topic</a>
+      </div>
+    </header>
+    
+    <article>
+      <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Screener Registry</h1>
+      <p class="muted"><code>screener-registry</code> · screen: <code>/screeners/registry</code></p>
+      <p>First-class Screener artifacts — metadata, versions, validate, and import/export JSON without changing the run engine.</p>
+
+      <section class="panel">
+        <h2>Overview</h2>
+        <p>The Screener Registry evolves existing portfolio_screeners into reusable Trading Artifacts. Each screener keeps the same definition_json condition tree used by the Screener execution engine. The registry adds slug, intent/summary/tags, artifact_version, definition_hash, and version history. Export downloads the approved Trading Artifact JSON envelope; Import / Create from JSON validates then creates a new screener in the active portfolio. Shared screeners from other portfolios appear as read-only registry entries and can be copied with Import copy. Admin settings also link the same UI under Settings → Screener Registry.</p>
+<p>Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).</p>
+
+      </section>
+
+      <section class="panel">
+        <h2>Controls</h2>
+        <dl class="doc-list">
+        <dt>Search / filters</dt>
+        <dd>Filter by status, ownership (own vs shared), and origin (factory / user / shared).</dd>
+    
+        <dt>Export JSON</dt>
+        <dd>Download the Screener artifact envelope (schema_version, metadata, definition.root, dependencies).</dd>
+    
+        <dt>Validate</dt>
+        <dd>Check pasted JSON against the Trading Artifact Screener rules before import.</dd>
+    
+        <dt>Create from JSON</dt>
+        <dd>Import a validated envelope as a new screener in this portfolio.</dd>
+    
+        <dt>Import copy (shared)</dt>
+        <dd>Copy a shared screener from another portfolio into yours (same as Shared screens import).</dd>
+    
+        <dt>Open editor</dt>
+        <dd>Jump to the classic Screener editor to change conditions or run screens.</dd>
+    
+        <dt>Version history</dt>
+        <dd>On detail for owned screeners, list definition snapshots and change notes.</dd>
+    
+        <dt>Typical flow</dt>
+        <dd>Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.</dd>
+    
+        <dt>Validation and errors</dt>
+        <dd>Form and API validations are shown as inline errors or toast messages. Fix the first reported issue, retry, and re-check dependent sections that consume the same data.</dd>
+    </dl>
+      </section>
+
+      <section class="panel">
+        <h2>Concepts</h2>
+        <dl class="doc-list">
+        <dt>No execution redesign</dt>
+        <dd>Runs, schedules, and backtests still use ScreenerRunService and the existing definition tree.</dd>
+    
+        <dt>Shared → Registry</dt>
+        <dd>is_shared screeners surface naturally in the registry list with ownership=shared; copying them creates a local owned artifact.</dd>
+    
+        <dt>Version bump</dt>
+        <dd>Changing definition_json (via editor or registry update) increments artifact_version and appends portfolio_screener_versions.</dd>
+    
+        <dt>Active portfolio context</dt>
+        <dd>Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.</dd>
+    
+        <dt>Data freshness</dt>
+        <dd>Many analytics depend on cached daily OHLCV and scheduled sync jobs. If numbers look stale, refresh this page and verify sync status in admin tools.</dd>
+    </dl>
+      </section>
+
+      
+      <section class="panel">
+        <h2>Related topics</h2>
+        <div class="related">
+          <a href="screener.html">Screener</a><a href="screener-editor.html">Screener editor</a><a href="indicator-registry.html">Indicator Registry</a><a href="settings.html">Settings</a>
+        </div>
+      </section>
+    </article>
+    
+    <footer class="muted">
+      Generated from the StoX in-app documentation source. Product screens still require sign-in.
+    </footer>
+  </div>
+</body>
+</html>

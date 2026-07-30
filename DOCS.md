@@ -47,6 +47,7 @@ DOCS.md                          ← you are here (documentation root)
 | 1.1 | [README.md](README.md) | Product overview, features, quick start |
 | 1.2 | [app/README.md](app/README.md) | Application-root notes (if present) |
 | 1.3 | [app/CHANGELOG.md](app/CHANGELOG.md) | App changelog |
+| 1.4 | [app/public/docs/](app/public/docs/) | **Static HTML** in-app help (crawlable; generated from `appDocumentation.js`) |
 
 ---
 

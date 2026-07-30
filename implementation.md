@@ -72,7 +72,11 @@ Sanctum auth. `TradingOsController`: securities, imports, candidates, evaluation
 
 ### Frontend
 
-`/candidates` (nav: **Discovery** — includes evaluation score/confidence/explanation; `/evaluations` redirects here), `/recommendations` (**Approve**/Reject/Defer only), `/strategy` (**Strategy** tab), `/transactions` (**Pending Execution** + history), `/cash` (**Cash** tab), `/review`, `/notification-history` (nav: **Notifications**). Manual execute from pending queue → Add Transaction form.
+`/candidates` (nav: **Discovery** — includes evaluation score/confidence/explanation; `/evaluations` redirects here), `/recommendations` (**Approve**/Reject/Defer only), `/strategy` (**Strategy** tab), `/transactions` (**Pending Execution** + history), `/cash` (**Cash** tab), `/review`, `/notification-history` (via **Settings → Portfolio → Notification history**, not a main nav tab). Manual execute from pending queue → Add Transaction form.
+
+**UI (2026-07-30):** Removed the main **Notifications** tab; access notification history from Portfolio settings.
+
+**Static documentation (2026-07-30):** In-app help is generated as plain HTML under `app/public/docs/` (`npm run docs:static` / part of `npm run build`). Public URLs: `/portfolio/docs/index.html`, `/portfolio/docs/{keyword}.html` (e.g. `strategy.html`). No login or JavaScript required for crawlers. Legacy `/documentation?q=` redirects to these files. Header (?) opens the matching static topic.
 
 **Public documentation (2026-07-29):** `/documentation` is reachable **without login** (alongside invite/reset-password). Guests see docs in `lido-main` with a Sign in button; login screen links to documentation; header (?) is shown even when logged out. Product routes linked from topics still require authentication.
 
