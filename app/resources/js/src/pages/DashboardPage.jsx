@@ -1010,14 +1010,6 @@ export default function DashboardPage() {
                                 id="dashboard-market-diagnostics"
                                 className="mt-2"
                             >
-                                <div className="d-flex justify-content-end align-items-center mb-2">
-                                    <Link
-                                        to="/market-depth"
-                                        className="small lido-market-depth-title-link text-decoration-none"
-                                    >
-                                        View Market Depth →
-                                    </Link>
-                                </div>
                                 <div className="row g-3">
                                     {marketAnalytics?.sentiment?.score != null ? (
                                         <div className="col-6 col-md-4 col-lg-3" key="ma-Sentiment">

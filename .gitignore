@@ -40,3 +40,5 @@ deploy/*trace*.log
 app/scripts/
 app/storage/debug-bhavcopy/
 app/tmp-*.json
+
+sync_config.jsonc
