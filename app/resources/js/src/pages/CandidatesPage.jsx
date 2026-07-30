@@ -1,7 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
+import PatternSketch from '../components/PatternSketch';
 import { showToast } from '../toast';
+import { categoryLabel, PATTERN_BY_ID } from '../utils/patternDetection';
+import { patternGuideLink } from '../utils/patternGuideLinks';
 
 function formatPct(v) {
     if (v == null || Number.isNaN(Number(v))) return '—';
@@ -11,6 +14,69 @@ function formatPct(v) {
 function formatScore(v) {
     if (v == null || Number.isNaN(Number(v))) return '—';
     return Number(v).toFixed(1);
+}
+
+/**
+ * Pattern matches as sketches (name on hover); other signals as compact text badges.
+ */
+function DiscoveryReasonCell({ candidate }) {
+    const signals = useMemo(() => {
+        const raw = candidate?.evidence?.signals || candidate?.evidence?.patterns || [];
+        if (!Array.isArray(raw) || raw.length === 0) {
+            return [];
+        }
+        const seen = new Set();
+        const out = [];
+        for (const signal of raw) {
+            const id = signal?.id;
+            if (!id || seen.has(id)) continue;
+            seen.add(id);
+            out.push(signal);
+        }
+        return out;
+    }, [candidate]);
+
+    if (signals.length === 0) {
+        return <span className="small text-muted">{candidate?.discovery_reason || '—'}</span>;
+    }
+
+    return (
+        <div className="lido-discovery-reason d-flex flex-wrap align-items-center gap-1">
+            {signals.map((signal) => {
+                const meta = PATTERN_BY_ID[signal.id];
+                if (meta) {
+                    const name = signal.label || meta.name || signal.id;
+                    const tip = [name, categoryLabel(signal.category || meta.category)].filter(Boolean).join(' · ');
+                    return (
+                        <Link
+                            key={signal.id}
+                            to={patternGuideLink(signal.id)}
+                            className="lido-watchlist-pattern-link"
+                            title={tip}
+                            aria-label={tip}
+                        >
+                            <PatternSketch
+                                patternId={signal.id}
+                                className="lido-pattern-sketch--watchlist"
+                                title=""
+                            />
+                        </Link>
+                    );
+                }
+
+                const label = signal.label || signal.id;
+                return (
+                    <span
+                        key={signal.id}
+                        className="badge text-bg-light border"
+                        title={label}
+                    >
+                        {label}
+                    </span>
+                );
+            })}
+        </div>
+    );
 }
 
 export default function CandidatesPage() {
@@ -206,7 +272,7 @@ export default function CandidatesPage() {
                                         {c.name ? <div className="small text-muted">{c.name}</div> : null}
                                     </td>
                                     <td><span className="badge text-bg-light">{c.source}</span></td>
-                                    <td className="small">{c.discovery_reason || '—'}</td>
+                                    <td><DiscoveryReasonCell candidate={c} /></td>
                                     <td>{formatScore(c.score)}</td>
                                     <td>{formatPct(c.confidence)}</td>
                                     <td className="small text-muted" style={{ maxWidth: 320 }}>{c.explanation || '—'}</td>

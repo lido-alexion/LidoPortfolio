@@ -491,7 +491,7 @@ const APP_DOCUMENTATION_BASE = [
             {
                 name: 'Candidate table',
                 description:
-                    'Symbol, source, discovery reason, plus evaluation rank / score / confidence / explanation when evaluated. Evidence opens discovery signals; Factors opens indicators and passed/failed rules.',
+                    'Symbol, source, discovery reason (matched patterns as sketch icons with name on hover — same sketches as the Patterns guide; screener/membership signals stay as text badges), plus evaluation rank / score / confidence / explanation when evaluated. Evidence opens discovery signals; Factors opens indicators and passed/failed rules. Click a pattern icon to open that entry in the Patterns guide.',
             },
             {
                 name: 'Filters',
