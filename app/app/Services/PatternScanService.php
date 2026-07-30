@@ -16,6 +16,7 @@ class PatternScanService
 {
     public function __construct(
         protected PatternDetectionService $detection,
+        protected DataQualityGuardService $dataQualityGuard,
     ) {}
 
     /**
@@ -406,6 +407,7 @@ class PatternScanService
             ->get()
             ->pluck('stock')
             ->filter()
+            ->reject(fn (Stock $stock) => $this->dataQualityGuard->isBlockedStock($stock))
             ->unique('id')
             ->values();
     }
@@ -424,6 +426,7 @@ class PatternScanService
         return $query->get()
             ->pluck('stock')
             ->filter()
+            ->reject(fn (Stock $stock) => $this->dataQualityGuard->isBlockedStock($stock))
             ->unique('id')
             ->values();
     }

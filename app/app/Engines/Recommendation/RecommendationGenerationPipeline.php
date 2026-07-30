@@ -18,6 +18,7 @@ use App\Services\PortfolioLoggerService;
 use App\Services\StrategyConfigurationService;
 use App\Services\StrategyEligibilityService;
 use App\Services\Analytics\MarketAnalyticsService;
+use App\Services\DataQualityGuardService;
 use App\Support\TradingOsConfig;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -42,6 +43,7 @@ class RecommendationGenerationPipeline
         protected StrategyConfigurationService $strategies,
         protected StrategyEligibilityService $eligibility,
         protected MarketAnalyticsService $marketAnalytics,
+        protected DataQualityGuardService $dataQualityGuard,
         ?CapitalAllocationStrategy $allocator = null,
     ) {
         $this->allocator = $allocator ?? new ScorePriorityCapitalAllocator();
@@ -187,6 +189,14 @@ class RecommendationGenerationPipeline
             ->with(['candidate.security'])
             ->orderBy('rank')
             ->get();
+        $blockedMap = $this->dataQualityGuard->blockedStockIdMap(
+            $results->pluck('candidate.security_id')->filter()->map(fn ($id) => (int) $id)->all(),
+        );
+        if ($blockedMap !== []) {
+            $results = $results
+                ->filter(fn ($result) => empty($blockedMap[(int) ($result->candidate?->security_id ?? 0)]))
+                ->values();
+        }
 
         $eligibility = $this->eligibility->resolve($profile, is_array($config) ? $config : []);
         $eligibleSet = array_fill_keys($eligibility['eligible_security_ids'] ?? [], true);

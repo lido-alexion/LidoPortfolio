@@ -223,6 +223,21 @@ Schedule::command('portfolio:check-operational-alerts')
     ->timezone($timezone)
     ->name('operational-alerts');
 
+Schedule::command('portfolio:sync-corporate-actions')
+    ->dailyAt('20:15')
+    ->timezone($timezone)
+    ->name('data-quality-corporate-action-sync');
+
+Schedule::command('portfolio:detect-corporate-action-anomalies')
+    ->dailyAt('20:45')
+    ->timezone($timezone)
+    ->name('data-quality-corporate-action-detect');
+
+Schedule::command('portfolio:auto-resolve-data-quality-issues')
+    ->dailyAt('21:15')
+    ->timezone($timezone)
+    ->name('data-quality-auto-resolve');
+
 Schedule::call(function () {
     if (\Illuminate\Support\Facades\Schema::hasTable('portfolio_sync_runs')) {
         app(\App\Services\SyncLogService::class)->prune();

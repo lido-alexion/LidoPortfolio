@@ -27,6 +27,7 @@ class DiscoveryEngine
         protected PatternScanService $patterns,
         protected DataEngine $data,
         protected PortfolioLoggerService $logger,
+        protected \App\Services\DataQualityGuardService $dataQualityGuard,
     ) {}
 
     /**
@@ -58,6 +59,15 @@ class DiscoveryEngine
             // so the daily pipeline remains useful on quiet days (assumption A7 extended).
             if ($bucket === []) {
                 $this->collectMembershipCandidates($profile, $bucket);
+            }
+
+            if ($bucket !== []) {
+                $blocked = $this->dataQualityGuard->blockedStockIdMap(array_map('intval', array_keys($bucket)));
+                foreach (array_keys($bucket) as $stockId) {
+                    if (! empty($blocked[(int) $stockId])) {
+                        unset($bucket[$stockId]);
+                    }
+                }
             }
 
             $max = (int) ($config['max_candidates'] ?? 100);

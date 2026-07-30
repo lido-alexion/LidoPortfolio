@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\AlertPolicyController;
 use App\Http\Controllers\Api\AnalyticsController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\DataQualityController;
 use App\Http\Controllers\Api\ExplorerAnalyticsController;
 use App\Http\Controllers\Api\FrontendLogController;
 use App\Http\Controllers\Api\HoldingController;
@@ -246,6 +247,13 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
         Route::post('/password-reset-links', [PasswordResetLinkController::class, 'store']);
         Route::post('/password-reset-links/{passwordResetLink}/regenerate', [PasswordResetLinkController::class, 'regenerate']);
         Route::delete('/password-reset-links/{passwordResetLink}', [PasswordResetLinkController::class, 'destroy']);
+
+        Route::get('/data-quality/dashboard', [DataQualityController::class, 'dashboard']);
+        Route::get('/data-quality/issues/unresolved', [DataQualityController::class, 'unresolved']);
+        Route::get('/data-quality/issues/history', [DataQualityController::class, 'history']);
+        Route::get('/data-quality/issues/{issue}', [DataQualityController::class, 'show']);
+        Route::post('/data-quality/issues/{issue}/accept', [DataQualityController::class, 'accept']);
+        Route::post('/data-quality/issues/{issue}/reject', [DataQualityController::class, 'reject']);
     });
 });
 

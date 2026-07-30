@@ -529,6 +529,9 @@ export default function SettingsPage() {
                                     <Link to="/settings/universe-price-sync" className="btn btn-outline-secondary btn-sm">
                                         Universe price sync
                                     </Link>
+                                    <Link to="/settings/data-quality" className="btn btn-outline-secondary btn-sm">
+                                        Data Quality Center
+                                    </Link>
                                     </div>
                                 </div>
                                 <div className="col-12">

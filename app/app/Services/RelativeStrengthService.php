@@ -10,10 +10,19 @@ class RelativeStrengthService
     public function __construct(
         protected StockPriceHistoryService $history,
         protected IndexCatalogService $indexCatalog,
+        protected DataQualityGuardService $dataQualityGuard,
     ) {}
 
     public function calculateForStock(Stock $stock, ?Carbon $asOf = null): array
     {
+        if ($this->dataQualityGuard->isBlockedStock($stock)) {
+            return [
+                'relative_strength_1m' => null,
+                'relative_strength_3m' => null,
+                'relative_strength_6m' => null,
+            ];
+        }
+
         $benchmark = $this->benchmarkStock();
         $this->history->ensureAnalyticsHistory($stock, 6);
         $this->history->ensureAnalyticsHistory($benchmark, 6);

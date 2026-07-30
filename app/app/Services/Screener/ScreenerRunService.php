@@ -28,6 +28,7 @@ class ScreenerRunService
         protected TelegramNotificationService $telegram,
         protected IndexConstituentService $indexConstituents,
         protected IndexCatalogService $indexCatalog,
+        protected \App\Services\DataQualityGuardService $dataQualityGuard,
     ) {}
 
     /**
@@ -405,7 +406,7 @@ class ScreenerRunService
                 ->values()
                 ->all();
 
-            return [$ids, null];
+            return [$this->filterBlockedIds($ids), null];
         }
 
         if ($screener->scope === 'watchlist') {
@@ -427,7 +428,7 @@ class ScreenerRunService
                 ->values()
                 ->all();
 
-            return [$ids, null];
+            return [$this->filterBlockedIds($ids), null];
         }
 
         if ($screener->scope === 'index') {
@@ -451,7 +452,7 @@ class ScreenerRunService
                 return [[], 'Index constituents unavailable; empty set.'];
             }
 
-            return [$ids, null];
+            return [$this->filterBlockedIds($ids), null];
         }
 
         // all_equities
@@ -460,7 +461,7 @@ class ScreenerRunService
             ->map(fn ($id) => (int) $id)
             ->all();
 
-        return [$ids, $warning];
+        return [$this->filterBlockedIds($ids), $warning];
     }
 
     /**
@@ -692,5 +693,19 @@ class ScreenerRunService
         $cursor = (int) ($stats['cursor'] ?? 0);
 
         return round(min(100, ($cursor / $total) * 100), 1);
+    }
+
+    /**
+     * @param  list<int>  $ids
+     * @return list<int>
+     */
+    private function filterBlockedIds(array $ids): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+        $blocked = $this->dataQualityGuard->blockedStockIdMap($ids);
+
+        return array_values(array_filter($ids, fn ($id) => empty($blocked[(int) $id])));
     }
 }

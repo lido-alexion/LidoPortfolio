@@ -26,6 +26,7 @@ class EvaluationEngine
         protected TechnicalIndicatorService $indicators,
         protected RelativeStrengthService $relativeStrength,
         protected PortfolioLoggerService $logger,
+        protected \App\Services\DataQualityGuardService $dataQualityGuard,
     ) {}
 
     /**
@@ -56,9 +57,27 @@ class EvaluationEngine
                 ->where('discovery_run_id', $discoveryRun->id)
                 ->with('security')
                 ->get();
+            $blockedMap = $this->dataQualityGuard->blockedStockIdMap(
+                $candidates->pluck('security_id')->map(fn ($id) => (int) $id)->all(),
+            );
 
             $scored = [];
             foreach ($candidates as $candidate) {
+                if (! empty($blockedMap[(int) $candidate->security_id])) {
+                    $scored[] = [
+                        'candidate' => $candidate,
+                        'score' => 0.0,
+                        'confidence' => 0.0,
+                        'evidence' => [
+                            'skipped' => true,
+                            'reason' => 'data_quality_pending_review',
+                            'indicators' => [],
+                        ],
+                        'passed_rules' => [],
+                        'failed_rules' => ['data_quality_pending_review'],
+                    ];
+                    continue;
+                }
                 try {
                     $scored[] = $this->evaluateCandidate($candidate, $config);
                 } catch (Throwable $candidateError) {

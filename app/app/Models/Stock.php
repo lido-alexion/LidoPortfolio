@@ -60,4 +60,14 @@ class Stock extends Model
     {
         return $this->hasMany(Alert::class);
     }
+
+    public function dataQualityIssues(): HasMany
+    {
+        return $this->hasMany(DataQualityIssue::class);
+    }
+
+    public function priceAdjustmentFactors(): HasMany
+    {
+        return $this->hasMany(PriceAdjustmentFactor::class);
+    }
 }

@@ -942,6 +942,7 @@ const APP_DOCUMENTATION_BASE = [
             && !pathStarts(p, '/settings/sync-logs')
             && !pathStarts(p, '/settings/admin-alerts')
             && !pathStarts(p, '/settings/universe-price-sync')
+            && !pathStarts(p, '/settings/data-quality')
             && !pathStarts(p, '/settings/users'),
         summary: 'Global (admin), Portfolio, and Account settings — fees, Telegram, sync, and links.',
         overview:
@@ -954,7 +955,7 @@ const APP_DOCUMENTATION_BASE = [
         concepts: [
             { name: 'Admin vs portfolio scope', description: 'Some tools (users, sync logs, universe sync) are admin-only.' },
         ],
-        related: ['alert-policies', 'universe-price-sync', 'users', 'notifications'],
+        related: ['alert-policies', 'universe-price-sync', 'data-quality-center', 'users', 'notifications'],
     },
     {
         id: 'alert-policies',
@@ -1028,6 +1029,48 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'History depth', description: 'Longer windows improve indicators and backtests.' },
         ],
         related: ['explorer', 'screener', 'sync-logs'],
+    },
+    {
+        id: 'data-quality-center',
+        keyword: 'data-quality-center',
+        aliases: ['data-quality', 'corporate-action-queue', 'anomaly-review'],
+        title: 'Data Quality Center',
+        routeLabel: '/settings/data-quality',
+        match: (p) => pathStarts(p, '/settings/data-quality') && !pathStarts(p, '/settings/data-quality/history'),
+        summary: 'Admin queue for unresolved market-data anomalies, starting with corporate actions.',
+        overview:
+            'This page is the control center for data integrity checks. Exchange-feed and heuristic detections create immutable issue records. Administrators review pending issues, then accept, reject, or apply a modified ratio. Pending corporate-action issues block affected stocks from discovery, screeners, and recommendation analytics to avoid corrupted decisions.',
+        controls: [
+            { name: 'Summary cards', description: 'Track pending corporate actions, accepted/rejected totals, and auto-accepted counts.' },
+            { name: 'Pending review queue', description: 'Open unresolved anomalies and inspect detection evidence before taking action.' },
+            { name: 'Accept / Modify Ratio & Accept / Reject', description: 'Resolve each issue while preserving the detector suggestion in audit history.' },
+        ],
+        concepts: [
+            { name: 'Detection vs resolution', description: 'Detector output is immutable; resolution decisions are append-only audit events that can be reversed later.' },
+            { name: 'Data safety gate', description: 'Stocks with pending corporate-action anomalies are excluded from data-driven engines until reviewed.' },
+            { name: 'Raw OHLCV immutability', description: 'The subsystem stores adjustment factors for analytics usage and keeps raw market bars intact for audit.' },
+        ],
+        related: ['corporate-action-history', 'corporate-action', 'universe-price-sync', 'sync-logs'],
+    },
+    {
+        id: 'corporate-action-history',
+        keyword: 'corporate-action-history',
+        aliases: ['data-quality-history', 'resolution-history'],
+        title: 'Corporate Action History',
+        routeLabel: '/settings/data-quality/history',
+        match: (p) => pathStarts(p, '/settings/data-quality/history'),
+        summary: 'Resolved data-quality corporate-action decisions with reversal-ready audit trail.',
+        overview:
+            'History keeps every resolved issue (manual accepted, modified accepted, auto accepted, rejected, and later reversals). Use this as the canonical timeline to verify who resolved an anomaly, which ratio was suggested vs applied, and whether auto-resolution occurred.',
+        controls: [
+            { name: 'Resolution table', description: 'Review stock, detection date, resolution date, status, method, source, and ratio deltas.' },
+            { name: 'Back navigation', description: 'Jump to Data Quality Center to continue handling pending items.' },
+        ],
+        concepts: [
+            { name: 'Audit permanence', description: 'Resolutions are not deleted; changes are represented as new events in sequence.' },
+            { name: 'Auto-resolution traceability', description: 'Auto-accepted records stay visible and can be manually overridden later.' },
+        ],
+        related: ['data-quality-center', 'corporate-action'],
     },
     {
         id: 'users',
