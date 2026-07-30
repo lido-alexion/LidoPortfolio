@@ -388,7 +388,7 @@ export const DOC_PRESENTATION = {
     'strategy-registry': {
         icon: 'bi-journal-bookmark',
         purpose:
-            'Import/export Strategy Trading Artifact JSON — mandatory fields (schema_version, artifact_type, slug, name, metadata, scoring_model weights = 100), then Select one active strategy.',
+            'Import/export Strategy Trading Artifact JSON — mandatory fields, uniqueness (slug per portfolio; one active), scoring_model weights = 100, then Select.',
         workflow: [
             { label: 'Screener Registry (eligibility)', keyword: 'screener-registry' },
             { label: 'Strategy Registry', current: true },
@@ -399,12 +399,17 @@ export const DOC_PRESENTATION = {
             {
                 variant: 'tip',
                 title: 'New to import?',
-                body: 'Copy the minimum JSON from this topic, point eligibility at an existing screener slug, Validate, Import (draft), then Select to activate.',
+                body: 'Copy the minimum JSON from this topic, point eligibility at an existing screener slug, keep enabled weights at 100, Validate, Import (draft), then Select to activate.',
             },
             {
                 variant: 'warning',
                 title: 'No embedded Screener trees',
                 body: 'Strategies reference screeners by screener_slug / screener_factory_key only. Never paste definition.root into a Strategy envelope.',
+            },
+            {
+                variant: 'info',
+                title: 'Uniqueness',
+                body: 'slug is unique per portfolio (Import may suffix on collision). name is soft-unique. Exactly one strategy can be active — Import always creates draft.',
             },
         ],
         commonMistakes: [
@@ -418,7 +423,7 @@ export const DOC_PRESENTATION = {
             },
             {
                 q: 'What do I put in slug?',
-                a: 'A short snake_case machine id such as swing_rs or momentum_strategy — not a sentence. Display title goes in name.',
+                a: 'A short snake_case machine id such as swing_rs or momentum_strategy — not a sentence. Display title goes in name. Slug must be unique within the portfolio.',
             },
         ],
     },

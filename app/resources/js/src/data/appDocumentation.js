@@ -972,14 +972,14 @@ const APP_DOCUMENTATION_BASE = [
         title: 'Strategy Registry',
         routeLabel: '/strategy/registry',
         match: (p) => pathStarts(p, '/strategy/registry') || pathStarts(p, '/settings/strategy-registry'),
-        summary: 'Import/export Strategy JSON artifacts — mandatory fields, eligibility refs, scoring_model weights, Select one active strategy per portfolio.',
+        summary: 'Import/export Strategy JSON artifacts — mandatory fields, uniqueness rules, eligibility refs, scoring_model weights, and Select one active strategy per portfolio.',
         overview:
             'The Strategy Registry turns portfolio strategies into reusable Trading Artifacts. Each portfolio still has **exactly one active Strategy** (selection). '
             + 'The registry adds slug, metadata, artifact_version, definition_hash, and version history on top of the same config the Recommendation engine already uses.\n\n'
             + 'Export downloads the portable Trading Artifact JSON envelope. **Validate** checks the envelope. **Import** stays disabled until validation succeeds, then creates a **draft** — use **Select** to activate it (archives the previous active). '
             + 'Existing Minervini (`momentum_factory`) migrates automatically to slug `momentum_strategy` with eligibility linked to `minervini_trend_template`.\n\n'
             + '## Importing JSON — start here\n\n'
-            + 'If Validate or Import reports many field errors, you almost always missed a **mandatory** envelope field, forgot `scoring_model`, or embedded a Screener condition tree. '
+            + 'If Validate or Import reports many field errors, you almost always missed a **mandatory** envelope field, forgot `scoring_model`, enabled weights that do not sum to 100, or embedded a Screener condition tree. '
             + 'Strategies reference Screeners by **slug / factory_key only** — never paste `definition.root` into a Strategy. Use the minimum schema below, then expand.\n\n'
             + '### Minimum valid envelope (copy/paste starting point)\n\n'
             + '```json\n'
@@ -1016,42 +1016,70 @@ const APP_DOCUMENTATION_BASE = [
             + '  }\n'
             + '}\n'
             + '```\n\n'
-            + 'That JSON has every runtime-required field. Enabled weights sum to **100**. Eligibility points at a Screener by slug (import the Screener first if it is not already in this portfolio).\n\n'
+            + 'That JSON has every runtime-required field. Enabled weights sum to **100**. Eligibility points at a Screener by slug '
+            + '(import / seed that Screener in this portfolio first if it is missing — factory `minervini_trend_template` is auto-ensured for Minervini).\n\n'
+            + '### Multi-factor scoring example\n\n'
+            + 'Enabled weights must still sum to 100:\n\n'
+            + '```json\n'
+            + '"scoring_model": [\n'
+            + '  { "key": "relative_strength", "enabled": true, "weight": 50, "minimum": 70, "maximum": null, "parameters": {} },\n'
+            + '  { "key": "momentum_score", "enabled": true, "weight": 50, "minimum": 60, "maximum": null, "parameters": {} }\n'
+            + ']\n'
+            + '```\n\n'
             + '### Mandatory vs optional fields\n\n'
-            + '| Field | Required? | What to put |\n'
-            + '|-------|-----------|-------------|\n'
-            + '| `schema_version` | **Yes** | Always `"1.0"` |\n'
-            + '| `artifact_type` | **Yes** | Always `"strategy"` |\n'
-            + '| `slug` | **Yes** | Stable id: lowercase letters, numbers, underscores (e.g. `swing_rs`). See **Slug** below |\n'
-            + '| `name` | **Yes** | Human label shown in the UI |\n'
-            + '| `metadata` | **Yes** | An object — may be `{}`, but prefer `description` / `origin` / `status` |\n'
-            + '| `definition` | **Yes** | Object with scoring + optional eligibility |\n'
-            + '| `definition.scoring_model` | **Yes** | Non-empty array of scoring rows; enabled weights must sum to **100** (alias: `indicators`) |\n'
-            + '| `definition.eligibility_sources` | Optional | Array of Screener refs by `screener_slug` / `screener_factory_key` |\n'
-            + '| `artifact_id` | Optional | Leave out on create; export may include a local id |\n'
-            + '| `artifact_version` | Optional | Integer ≥ 1; Import starts versions at 1 anyway |\n'
-            + '| `definition_hash` | Optional | Recalculated on Import — do not invent this |\n'
-            + '| `minimum_engine_version` | Optional | e.g. `"1.1.0"` |\n'
-            + '| `dependencies` | Optional | Array of refs; export fills this |\n'
-            + '| `validation` | Optional | Embedded hints; not executed as rules |\n'
+            + '| Field | Required? | Unique? | What to put |\n'
+            + '|-------|-----------|---------|-------------|\n'
+            + '| `schema_version` | **Yes** | No | Always `"1.0"` |\n'
+            + '| `artifact_type` | **Yes** | No | Always `"strategy"` |\n'
+            + '| `slug` | **Yes** | **Yes** (per portfolio) | Stable id: `a-z`, `0-9`, `_` only (e.g. `swing_rs`). See **Slug** / **Uniqueness** below |\n'
+            + '| `name` | **Yes** | Soft unique (per portfolio) | Human label shown in the UI; Import may append `" (import)"` on collision |\n'
+            + '| `metadata` | **Yes** | No | An object — may be `{}`, but prefer `description` / `origin` / `status` |\n'
+            + '| `definition` | **Yes** | No | Object with scoring + optional eligibility / editor sections |\n'
+            + '| `definition.scoring_model` | **Yes** | Keys unique within the array | Non-empty array of scoring rows; **enabled** weights must sum to **100** (alias: `indicators`) |\n'
+            + '| `definition.eligibility_sources` | Optional | Prefer unique screener refs | Array of Screener refs by `screener_slug` / `screener_factory_key` |\n'
+            + '| `artifact_id` | Optional | Local DB id | Leave out on create; export may include a portfolio-local id |\n'
+            + '| `artifact_version` | Optional | No | Integer ≥ 1; Import starts versions at 1 anyway |\n'
+            + '| `definition_hash` | Optional | Content fingerprint | Recalculated on Import — do not invent this |\n'
+            + '| `minimum_engine_version` | Optional | No | e.g. `"1.1.0"` |\n'
+            + '| `dependencies` | Optional | No | Array of refs; export fills this |\n'
+            + '| `validation` | Optional | No | Embedded hints; not executed as rules |\n'
             + '\n'
+            + 'Note: the database stores strategy config in `config_json` on version rows, but the **import JSON field name is `definition`** (same idea as Screener’s `definition` vs `definition_json`).\n\n'
             + '**Forbidden:** `definition.root`, `definition.children`, or embedding `definition` / `root` inside an eligibility source — Strategies must not carry Screener trees.\n\n'
+            + '### Uniqueness rules\n\n'
+            + '| Field | Scope | Rule |\n'
+            + '|-------|-------|------|\n'
+            + '| `slug` | One portfolio | Must be unique among that portfolio’s strategies. On Import collision the system may suffix `_import_<hex>` (or create-path may use `_2`, `_3`, …). |\n'
+            + '| `name` | One portfolio | Soft unique — Import may rename to `"… (import)"` if the display name already exists. |\n'
+            + '| `metadata.factory_key` | Built-ins | Stable factory identity (e.g. `momentum_factory`). Not required for user imports. |\n'
+            + '| Active selection | One portfolio | **Exactly one** strategy may be `active` / selected. Import always creates **draft**; **Select** activates and archives the previous active. |\n'
+            + '| `scoring_model[].key` | One envelope | Each catalogue key should appear once; duplicates are collapsed when normalised. |\n'
+            + '| `screener_slug` / `screener_factory_key` | Eligibility row | Identify a Screener in this portfolio (or a factory Screener the system can ensure). Not unique across strategies — many strategies may share the same Screener. |\n'
+            + '\n'
             + '### What each field means\n\n'
-            + '**`schema_version`** — Envelope contract version. Must be `"1.0"`. Wrong or missing → `SCHEMA_VERSION_UNSUPPORTED`.\n\n'
+            + '**`schema_version`** — Which envelope contract this file uses. Must be `"1.0"`. Wrong or missing → `SCHEMA_VERSION_UNSUPPORTED` / empty schema errors.\n\n'
             + '**`artifact_type`** — Discriminator so the registry knows this is a Strategy (not Screener/Indicator). Must be `"strategy"`.\n\n'
-            + '**`slug`** — Machine-stable key for this strategy inside a portfolio. Use snake_case like `swing_rs` or `momentum_strategy`. '
-            + 'Allowed characters after normalisation: `a-z`, `0-9`, `_`. Keep it short and unique — display title belongs in `name`. '
+            + '**`slug`** — Machine-stable key for this strategy inside a portfolio. Strategies are listed, exported, and selected by this id. '
+            + 'Use snake_case like `swing_rs` or `momentum_strategy`. Allowed characters after normalisation: `a-z`, `0-9`, `_` '
+            + '(spaces and punctuation become `_`). Keep it short, unique, and meaningful — do **not** put a sentence here; that belongs in `name` / `metadata.description`. '
             + 'If the slug already exists on Import, the system may suffix it (e.g. `_import_ab12`) so the import still succeeds.\n\n'
-            + '**`name`** — Display title in lists and the Strategy editor. If the name collides, Import may append `" (import)"`.\n\n'
-            + '**`metadata`** — Descriptive object. Common keys:\n'
-            + '- `scope` — usually `portfolio`\n'
-            + '- `description` / `intent` / `summary` — human prose\n'
-            + '- `tags` — array of strings\n'
-            + '- `status` — lifecycle hint: `draft` | `active` | `archived` (Import always stores **draft** regardless)\n'
-            + '- `origin` — provenance: `factory` | `user` | `imported` | …\n'
-            + '- `factory_key` — stable factory id when shipping a built-in (e.g. `momentum_factory`)\n'
-            + '- `is_selected` — export-only; Import ignores this (use **Select** after import)\n\n'
-            + '**`definition.eligibility_sources`** — Which Screeners feed candidates into Recommendations. Each source:\n\n'
+            + '**`name`** — Display title in Registry lists and the Strategy editor. Example: `"Swing RS Strategy"`. If the name collides, Import may append `" (import)"`.\n\n'
+            + '**`metadata`** — Descriptive object (required as an object; keys inside are optional):\n\n'
+            + '| Key | Required? | Meaning / example |\n'
+            + '|-----|-----------|-------------------|\n'
+            + '| `scope` | Optional | Usually `"portfolio"` |\n'
+            + '| `description` | Optional | Human prose, e.g. `"RS + momentum swing"` |\n'
+            + '| `intent` | Optional | Why this strategy exists |\n'
+            + '| `summary` | Optional | Short blurb (export often mirrors description) |\n'
+            + '| `tags` | Optional | Array of strings, e.g. `["swing", "rs"]` |\n'
+            + '| `status` | Optional | Hint: `draft` / `active` / `archived` — Import **always** stores draft regardless |\n'
+            + '| `origin` | Optional | `factory` / `user` / `imported` / … |\n'
+            + '| `factory_key` | Optional | Built-in id, e.g. `momentum_factory` |\n'
+            + '| `is_selected` | Export-only | Whether this row is the active selection; Import ignores it — use **Select** |\n'
+            + '| `storage` / `legacy_id` | Export-only | Internal pointers; leave out on hand-written JSON |\n'
+            + '\n'
+            + '**`definition`** — Strategy runtime config. Validate requires scoring; eligibility is strongly recommended for a working Recommendations feed.\n\n'
+            + '**`definition.eligibility_sources`** — Which Screeners feed candidates. Each source (do **not** embed condition trees):\n\n'
             + '```json\n'
             + '{\n'
             + '  "screener_slug": "minervini_trend_template",\n'
@@ -1059,12 +1087,19 @@ const APP_DOCUMENTATION_BASE = [
             + '  "enabled": true,\n'
             + '  "priority": 1\n'
             + '}\n'
-            + '```\n'
-            + '- Prefer `screener_slug` and/or `screener_factory_key` — portable across portfolios\n'
-            + '- Do **not** put portfolio-local `screener_id` in export/import packs (export strips it)\n'
-            + '- Do **not** embed a Screener `definition` / `root` tree here\n'
-            + '- Empty `eligibility_sources` is allowed by Validate; Recommendations will have no Screener feed until you add refs\n\n'
-            + '**`definition.scoring_model`** (alias **`indicators`**) — Weighted score rows the Strategy engine uses:\n\n'
+            + '```\n\n'
+            + '| Field | Required? | Meaning |\n'
+            + '|-------|-----------|--------|\n'
+            + '| `screener_slug` | One of slug / factory_key / (local) screener_id | Portable Screener id (preferred) |\n'
+            + '| `screener_factory_key` | One of the above | Factory Screener key (alias `factory_key` accepted) |\n'
+            + '| `screener_id` | Avoid in packs | Portfolio-local DB id — export strips it; do not rely on it for portability |\n'
+            + '| `enabled` | Optional | Default `true` |\n'
+            + '| `priority` | Optional | Integer order (lower = sooner); default `1` |\n'
+            + '| `min_artifact_version` | Optional | Minimum Screener artifact version if you pin one |\n'
+            + '| `definition` / `root` | **Forbidden** | Embedding a Screener tree fails Validate / Import |\n'
+            + '\n'
+            + 'Empty `eligibility_sources` may pass Validate, but Recommendations will have no Screener feed until you add refs.\n\n'
+            + '**`definition.scoring_model`** (alias **`indicators`**) — Weighted score rows:\n\n'
             + '```json\n'
             + '{\n'
             + '  "key": "relative_strength",\n'
@@ -1074,42 +1109,56 @@ const APP_DOCUMENTATION_BASE = [
             + '  "maximum": null,\n'
             + '  "parameters": {}\n'
             + '}\n'
-            + '```\n'
-            + '- `key` must be a strategy-scorable catalogue id (see list below)\n'
-            + '- Enabled rows’ `weight` values must sum to **100** (tolerance 0.01)\n'
+            + '```\n\n'
+            + '| Field | Required? | Meaning |\n'
+            + '|-------|-----------|--------|\n'
+            + '| `key` | **Yes** | Strategy-scorable catalogue id (see list below) |\n'
+            + '| `enabled` | Strongly recommended | Only **enabled** rows count toward the weight sum |\n'
+            + '| `weight` | **Yes** if enabled | Share of overall score; all enabled weights must sum to **100** (±0.01) |\n'
+            + '| `minimum` | Optional | Soft/hard gate on that factor (number or `null`) |\n'
+            + '| `maximum` | Optional | Upper gate when the catalogue supports it |\n'
+            + '| `parameters` | Optional | Indicator-specific knobs object (defaults filled on normalise) |\n'
+            + '\n'
+            + 'Rules:\n'
             + '- At least one enabled row with positive weight is required\n'
-            + '- `minimum` / `maximum` are optional score gates; `parameters` holds indicator-specific knobs\n\n'
-            + '**Strategy-scorable keys** (common): `relative_strength`, `momentum_score`, `trend_score`, `breakout_score`, `volume_score`, `market_regime`, `sector_strength`, `risk_score`. '
-            + 'Legacy aliases such as `momentum` → `momentum_score` may resolve via the catalogue; prefer canonical keys in new JSON.\n\n'
-            + 'Other `definition` keys the Strategy editor uses (position sizing, market gates, exit rules, etc.) may appear in Export and are preserved on Import via normalise — but Validate’s hard checks focus on eligibility refs + scoring weights.\n\n'
+            + '- Prefer canonical keys in new JSON (aliases like `momentum` → `momentum_score` may resolve)\n'
+            + '- Unknown keys fail Validate with `STRATEGY_KEYS_REGISTRY`\n\n'
+            + '**Strategy-scorable keys** (canonical): `relative_strength`, `momentum_score`, `trend_score`, `breakout_score`, `volume_score`, `market_regime`, `sector_strength`, `risk_score`.\n\n'
+            + '**Other optional `definition` sections** (appear in Export / Strategy editor; preserved on Import via normalise; not hard-checked by Validate the same way as scoring):\n'
+            + '- `thresholds` — label bands (e.g. Open / Increase / Hold / Watch cut-offs)\n'
+            + '- `portfolio_rules` — position size %, concentration, etc.\n'
+            + '- `exit_strategy` — exit rules (`enabled`, `mode`, `rules`)\n'
+            + '- `market_gates` — market-regime gates\n'
+            + '- Start from an Export of a working strategy when you need these filled in correctly.\n\n'
             + '**`artifact_version` / `definition_hash`** — Versioning metadata. Export includes them; Import recomputes the hash and starts history for the new local draft.\n\n'
+            + '**`dependencies`** — Export lists `uses_screener` / `uses_indicator` refs for packaging. Optional on Import; resolved from eligibility + scoring keys.\n\n'
             + '### Recommended import workflow\n\n'
-            + '1. Ensure referenced Screeners exist in this portfolio (Registry → import Screener JSON, or use a factory screener like `minervini_trend_template`).\n'
-            + '2. Start from the minimum example above (or Export an existing working strategy and edit a copy).\n'
+            + '1. Ensure referenced Screeners exist in this portfolio (Screener Registry → import Screener JSON, or use a factory screener like `minervini_trend_template`).\n'
+            + '2. Start from the minimum example above (or Export an existing working strategy and edit a copy — best for thresholds / exits / gates).\n'
             + '3. Paste into Strategy Registry → **Validate** and fix every listed path (`$.slug`, `$.definition.scoring_model`, …).\n'
-            + '4. Use **Import** (enabled only after Validate succeeds) — creates a **draft**.\n'
+            + '4. Use **Import** (enabled only after Validate succeeds) — creates a **draft** (does not change Recommendations yet).\n'
             + '5. Click **Select** on the new row when you want it to drive Recommendations (archives the previous active).\n'
-            + '6. Optionally open **Edit** on the active strategy (`/strategy`) to refine tabs visually.\n\n'
+            + '6. Optionally open **Edit** on the active strategy (`/strategy`) to refine tabs visually and Save.\n\n'
             + '### Common validation / import errors\n\n'
             + '| Message / code | Likely cause |\n'
             + '|----------------|--------------|\n'
             + '| `slug is required` | Missing or blank `slug` |\n'
             + '| `name is required` | Missing or blank `name` |\n'
-            + '| `definition object is required` | Omitted `definition` |\n'
+            + '| `definition object is required` | Omitted `definition` (or used a DB-only field name) |\n'
             + '| `metadata object is required` | Omitted `metadata` or not an object |\n'
             + '| `STRATEGY_SCORING_REQUIRED` | Missing `scoring_model` / `indicators` |\n'
             + '| `STRATEGY_WEIGHTS_SUM_100` | Enabled weights ≠ 100, or none enabled |\n'
             + '| `STRATEGY_KEYS_REGISTRY` / not strategy-scorable | Unknown or non-scorable `key` |\n'
             + '| `STRATEGY_ELIGIBILITY_REFS` | Source missing slug, factory_key, and screener_id |\n'
-            + '| `STRATEGY_NO_EMBEDDED_SCREENER` | Put a Screener `root` tree on the Strategy |\n'
+            + '| `STRATEGY_NO_EMBEDDED_SCREENER` | Put a Screener `root` / `children` tree on the Strategy |\n'
             + '| Must not embed Screener definitions | Eligibility row contains `definition` / `root` |\n'
             + '| Slug / name already exists | Pick another or let Import rename |\n',
         controls: [
             { name: 'Search / filters', description: 'Filter by status (active/draft/archived) and origin (factory/user).' },
             { name: 'Select', description: 'Make this strategy the portfolio’s only active strategy (archives the previous active). Recommendations use the selected strategy.' },
-            { name: 'Export JSON', description: 'Download the portable Trading Artifact envelope (schema_version, slug, name, metadata, definition with eligibility_sources + scoring_model, dependencies). Best template for a new import.' },
+            { name: 'Export JSON', description: 'Download the portable Trading Artifact envelope (schema_version, slug, name, metadata, definition with eligibility_sources + scoring_model, dependencies). Best template for a new import — includes thresholds/exits/gates when present.' },
             { name: 'Validate', description: 'Check pasted JSON against Trading Artifact Strategy rules. Fix every path error before Import. Import stays disabled until this reports ok.' },
-            { name: 'Import', description: 'Enabled only after successful Validate. Creates a draft strategy in this portfolio (does not change Recommendations until Select). Editing the JSON clears validation and disables Import again.' },
+            { name: 'Import', description: 'Enabled only after successful Validate. Creates a draft strategy in this portfolio (does not change Recommendations until Select). Mandatory: schema_version, artifact_type, slug, name, metadata, definition.scoring_model with enabled weights = 100. Editing the JSON clears validation and disables Import again.' },
             { name: 'Edit active', description: 'Jump to /strategy to edit the selected strategy’s tabs and Save.' },
             { name: 'Version history', description: 'On detail for owned strategies, list definition snapshots and change notes. Draft definition-hash changes append versions; active editor Save remains in-place BC.' },
         ],
@@ -1117,7 +1166,12 @@ const APP_DOCUMENTATION_BASE = [
             {
                 name: 'Slug',
                 description:
-                    'Stable machine id (snake_case: `swing_rs`). Used for uniqueness and selection. Not the display title — that is `name`. Only a–z, 0–9, and underscore after normalisation.',
+                    'Stable machine id (snake_case: `swing_rs`). Unique per portfolio. Used for uniqueness and selection. Not the display title — that is `name`. Only a–z, 0–9, and underscore after normalisation.',
+            },
+            {
+                name: 'Uniqueness',
+                description:
+                    'slug is unique per portfolio (Import may suffix on collision). name is soft-unique (may get " (import)"). Exactly one active strategy per portfolio. scoring keys should appear once in scoring_model. Screener refs may be shared across strategies.',
             },
             {
                 name: 'Exactly one active',
@@ -1128,6 +1182,11 @@ const APP_DOCUMENTATION_BASE = [
                 name: 'No Screener duplication',
                 description:
                     'eligibility_sources reference Screeners by screener_slug / screener_factory_key. Condition trees stay on Screener Registry — never embed root/children on a Strategy.',
+            },
+            {
+                name: 'definition vs config_json',
+                description:
+                    'Import/export JSON uses the field `definition`. Version rows store the same config in `config_json`. Do not invent a `config_json` field on the envelope.',
             },
             {
                 name: 'scoring_model vs indicators',
