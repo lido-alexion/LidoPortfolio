@@ -62,11 +62,36 @@
       border: 1px solid var(--border);
       border-radius: 8px;
       padding: 0.85rem;
-      overflow: auto;
+      overflow-x: hidden;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      max-width: 100%;
     }
-    table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.92rem; }
-    th, td { border: 1px solid var(--border); padding: 0.4rem 0.55rem; text-align: left; vertical-align: top; }
+    table {
+      width: 100%;
+      max-width: 100%;
+      border-collapse: collapse;
+      margin: 0.75rem 0;
+      font-size: 0.88rem;
+      table-layout: fixed;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.35rem 0.45rem;
+      text-align: left;
+      vertical-align: top;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
     th { background: #121820; }
+    code { overflow-wrap: anywhere; word-break: break-word; }
+    @media print {
+      body { background: #fff; color: #111; }
+      .panel { break-inside: avoid; }
+      pre, table { overflow: visible !important; }
+      a { color: inherit; }
+    }
     .nav { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem; font-size: 0.92rem; }
     footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; }
   </style>
@@ -570,16 +595,98 @@
 </tbody></table>
 <hr>
 <h2>Catalogue C — Strategy-scorable Composites (for Strategy JSON)</h2>
-<p>Use these <strong>keys</strong> in <code>definition.scoring_model</code>. Values are <strong>0–100</strong> scores. Enabled weights must sum to <strong>100</strong>. Defaults below are Strategy UI defaults (weight / minimum / maximum).</p>
+<p>Use these <strong>keys</strong> in <code>definition.scoring_model</code>. Values are <strong>0–100</strong> scores. Enabled weights must sum to <strong>100</strong>. Defaults below are Strategy UI defaults (weight / minimum / maximum). Split into two tables on the shared <strong>Key</strong> for print-friendly width.</p>
+<h3>C1 — Identity and Strategy defaults</h3>
 <table>
 <thead>
 <tr>
-<th>Key (aliases)</th>
+<th>Key</th>
+<th>Aliases</th>
 <th>Name</th>
 <th>Meaning</th>
-<th>Default weight</th>
-<th>Default min</th>
-<th>Default max</th>
+<th>Wt</th>
+<th>Min</th>
+<th>Max</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>relative_strength</code></td>
+<td>—</td>
+<td>Relative Strength</td>
+<td>Strength vs benchmark (long-leaning)</td>
+<td>35</td>
+<td>80</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>momentum_score</code></td>
+<td><code>momentum</code></td>
+<td>Momentum Score</td>
+<td>RSI-based momentum strength</td>
+<td>15</td>
+<td>70</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>trend_score</code></td>
+<td><code>trend</code></td>
+<td>Trend Score</td>
+<td>Price vs SMA stack</td>
+<td>20</td>
+<td>70</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>breakout_score</code></td>
+<td><code>pattern_bonus</code></td>
+<td>Breakout Score</td>
+<td>Pattern/breakout evidence from Discovery</td>
+<td>10</td>
+<td>75</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>volume_score</code></td>
+<td><code>volume</code></td>
+<td>Volume Score</td>
+<td>Volume vs recent average</td>
+<td>8</td>
+<td>60</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>market_regime</code></td>
+<td>—</td>
+<td>Market Regime</td>
+<td>Broad market regime (<strong>stub</strong>)</td>
+<td>5</td>
+<td>60</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>sector_strength</code></td>
+<td>—</td>
+<td>Sector Strength</td>
+<td>Sector RS (<strong>stub</strong>)</td>
+<td>4</td>
+<td>60</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>risk_score</code></td>
+<td><code>risk</code></td>
+<td>Risk Score</td>
+<td>ATR-based risk; <strong>higher = riskier</strong></td>
+<td>3</td>
+<td>0</td>
+<td><strong>40</strong></td>
+</tr>
+</tbody></table>
+<h3>C2 — Params, dependencies, and formula (same Key)</h3>
+<table>
+<thead>
+<tr>
+<th>Key</th>
 <th>Params</th>
 <th>Depends on</th>
 <th>Formula (summary)</th>
@@ -587,88 +694,48 @@
 </thead>
 <tbody><tr>
 <td><code>relative_strength</code></td>
-<td>Relative Strength</td>
-<td>Strength vs benchmark (long-leaning)</td>
-<td>35</td>
-<td>80</td>
-<td>—</td>
-<td><code>lookback_days=90</code>, <code>benchmark=NIFTY50</code></td>
+<td><code>lookback_days=90</code>; <code>benchmark=NIFTY50</code></td>
 <td><code>relative_strength_3m</code></td>
 <td>RS3m ≥1.05→100; ≥1.0→70; else 30</td>
 </tr>
 <tr>
-<td><code>momentum_score</code> (<code>momentum</code>)</td>
-<td>Momentum Score</td>
-<td>RSI-based momentum strength</td>
-<td>15</td>
-<td>70</td>
-<td>—</td>
+<td><code>momentum_score</code></td>
 <td><code>rsi_period=14</code></td>
 <td><code>rsi</code></td>
 <td>RSI in [45,70]→100; &gt;70→55; &lt;30→35; else 50</td>
 </tr>
 <tr>
-<td><code>trend_score</code> (<code>trend</code>)</td>
-<td>Trend Score</td>
-<td>Price vs SMA stack</td>
-<td>20</td>
-<td>70</td>
-<td>—</td>
-<td><code>sma_fast=20</code>, <code>sma_slow=50</code></td>
+<td><code>trend_score</code></td>
+<td><code>sma_fast=20</code>; <code>sma_slow=50</code></td>
 <td><code>close</code>, <code>sma</code></td>
 <td>close&gt;fast&gt;slow→100; close&gt;fast→60; else 20</td>
 </tr>
 <tr>
-<td><code>breakout_score</code> (<code>pattern_bonus</code>)</td>
-<td>Breakout Score</td>
-<td>Pattern/breakout evidence from Discovery</td>
-<td>10</td>
-<td>75</td>
-<td>—</td>
+<td><code>breakout_score</code></td>
 <td>—</td>
 <td><code>discovery_pattern_count</code></td>
 <td>min(100, 40+20×count); 0 if none</td>
 </tr>
 <tr>
-<td><code>volume_score</code> (<code>volume</code>)</td>
-<td>Volume Score</td>
-<td>Volume vs recent average</td>
-<td>8</td>
-<td>60</td>
-<td>—</td>
+<td><code>volume_score</code></td>
 <td><code>volume_sma_period=20</code></td>
 <td><code>volume_ratio</code></td>
 <td>≥1.2→100; ≥0.8→60; else 30</td>
 </tr>
 <tr>
 <td><code>market_regime</code></td>
-<td>Market Regime</td>
-<td>Broad market regime (<strong>stub</strong>)</td>
-<td>5</td>
-<td>60</td>
-<td>—</td>
 <td>—</td>
 <td>—</td>
 <td>Constant <strong>50</strong> until model ships</td>
 </tr>
 <tr>
 <td><code>sector_strength</code></td>
-<td>Sector Strength</td>
-<td>Sector RS (<strong>stub</strong>)</td>
-<td>4</td>
-<td>60</td>
-<td>—</td>
 <td>—</td>
 <td>—</td>
 <td>Constant <strong>50</strong> until model ships</td>
 </tr>
 <tr>
-<td><code>risk_score</code> (<code>risk</code>)</td>
-<td>Risk Score</td>
-<td>ATR-based risk; <strong>higher = riskier</strong></td>
-<td>3</td>
-<td>0</td>
-<td><strong>40</strong></td>
+<td><code>risk_score</code></td>
 <td><code>atr_period=14</code></td>
 <td><code>atr</code>, <code>close</code></td>
 <td>clamp((atr/close×100)×10, 0, 100); supports <strong>maximum</strong> gate</td>
@@ -676,13 +743,30 @@
 </tbody></table>
 <p><strong>Example Strategy scoring rows (weights = 100):</strong></p>
 <pre><code class="language-json">&quot;scoring_model&quot;: [
-  { &quot;key&quot;: &quot;relative_strength&quot;, &quot;enabled&quot;: true, &quot;weight&quot;: 50, &quot;minimum&quot;: 70, &quot;maximum&quot;: null, &quot;parameters&quot;: {} },
-  { &quot;key&quot;: &quot;momentum_score&quot;, &quot;enabled&quot;: true, &quot;weight&quot;: 50, &quot;minimum&quot;: 60, &quot;maximum&quot;: null, &quot;parameters&quot;: { &quot;rsi_period&quot;: 14 } }
+  {
+    &quot;key&quot;: &quot;relative_strength&quot;,
+    &quot;enabled&quot;: true,
+    &quot;weight&quot;: 50,
+    &quot;minimum&quot;: 70,
+    &quot;maximum&quot;: null,
+    &quot;parameters&quot;: {}
+  },
+  {
+    &quot;key&quot;: &quot;momentum_score&quot;,
+    &quot;enabled&quot;: true,
+    &quot;weight&quot;: 50,
+    &quot;minimum&quot;: 60,
+    &quot;maximum&quot;: null,
+    &quot;parameters&quot;: {
+      &quot;rsi_period&quot;: 14
+    }
+  }
 ]
 </code></pre>
 <hr>
 <h2>Catalogue D — Liquidity / Tradability Composites</h2>
 <p>Active for Discovery / Dashboard / Stock Details / Screener consumers. <strong>Not</strong> strategy-scorable and <strong>not</strong> wired into Recommendation scoring.</p>
+<h3>D1 — Identity</h3>
 <table>
 <thead>
 <tr>
@@ -690,8 +774,6 @@
 <th>Name</th>
 <th>Meaning</th>
 <th>Units</th>
-<th>Depends on</th>
-<th>Formula (summary)</th>
 </tr>
 </thead>
 <tbody><tr>
@@ -699,14 +781,30 @@
 <td>Liquidity Score</td>
 <td>0–100 liquidity quality</td>
 <td>score_0_100</td>
-<td><code>relative_turnover</code>, <code>average_turnover</code>, <code>average_volume</code></td>
-<td>Map RT/turnover/volume → 0–100; mean of available</td>
 </tr>
 <tr>
 <td><code>tradability_score</code></td>
 <td>Tradability Score</td>
 <td>0–100 ease of trading (higher = easier)</td>
 <td>score_0_100</td>
+</tr>
+</tbody></table>
+<h3>D2 — Dependencies and formula (same Id)</h3>
+<table>
+<thead>
+<tr>
+<th>Id</th>
+<th>Depends on</th>
+<th>Formula (summary)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>liquidity_score</code></td>
+<td><code>relative_turnover</code>, <code>average_turnover</code>, <code>average_volume</code></td>
+<td>Map RT/turnover/volume → 0–100; mean of available</td>
+</tr>
+<tr>
+<td><code>tradability_score</code></td>
 <td>gap + circuit primaries</td>
 <td>Invert freqs / use fill; mean of available</td>
 </tr>

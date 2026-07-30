@@ -922,8 +922,11 @@ body {
     border: 1px solid rgba(127, 127, 127, 0.28);
     border-radius: 0.5rem;
     background: var(--lido-surface, rgba(127, 127, 127, 0.08));
-    overflow-x: auto;
-    white-space: pre;
+    overflow-x: hidden;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    max-width: 100%;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     line-height: 1.35;
 }
@@ -1018,6 +1021,21 @@ body {
 
 .lido-docs-table-wrap {
     border-radius: 0.5rem;
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
+.lido-docs-table {
+    table-layout: fixed;
+    width: 100%;
+    max-width: 100%;
+}
+
+.lido-docs-table th,
+.lido-docs-table td {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    vertical-align: top;
 }
 
 .lido-docs-table caption {

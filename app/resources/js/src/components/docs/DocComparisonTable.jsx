@@ -14,7 +14,7 @@ export default function DocComparisonTable({ caption, headers = [], rows = [] })
     }
 
     return (
-        <div className="table-responsive lido-docs-table-wrap mb-3">
+        <div className="lido-docs-table-wrap mb-3">
             <table className="table table-sm table-bordered align-middle lido-docs-table mb-0">
                 {caption ? <caption className="caption-top small fw-semibold">{caption}</caption> : null}
                 <thead>

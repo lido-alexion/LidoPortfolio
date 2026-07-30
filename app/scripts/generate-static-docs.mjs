@@ -119,11 +119,36 @@ function pageShell({ title, description, canonical, body, navLinks }) {
       border: 1px solid var(--border);
       border-radius: 8px;
       padding: 0.85rem;
-      overflow: auto;
+      overflow-x: hidden;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      max-width: 100%;
     }
-    table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.92rem; }
-    th, td { border: 1px solid var(--border); padding: 0.4rem 0.55rem; text-align: left; vertical-align: top; }
+    table {
+      width: 100%;
+      max-width: 100%;
+      border-collapse: collapse;
+      margin: 0.75rem 0;
+      font-size: 0.88rem;
+      table-layout: fixed;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.35rem 0.45rem;
+      text-align: left;
+      vertical-align: top;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
     th { background: #121820; }
+    code { overflow-wrap: anywhere; word-break: break-word; }
+    @media print {
+      body { background: #fff; color: #111; }
+      .panel { break-inside: avoid; }
+      pre, table { overflow: visible !important; }
+      a { color: inherit; }
+    }
     .nav { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem; font-size: 0.92rem; }
     footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; }
   </style>
