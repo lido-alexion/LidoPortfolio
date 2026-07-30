@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
+import { appUrl } from '../appBase';
 
 function statusBadgeClass(status) {
     switch (status) {
@@ -336,7 +337,14 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
                 <div className="card-body d-grid gap-2">
                     <h3 className="h6 mb-0">Import / validate Screener JSON</h3>
                     <p className="text-muted small mb-0">
-                        Paste a Trading Artifact envelope (<code>artifact_type: screener</code>) following the approved JSON specification.
+                        Paste a Trading Artifact envelope (<code>artifact_type: screener</code>).
+                        Mandatory fields: <code>schema_version</code>, <code>artifact_type</code>, <code>slug</code>, <code>name</code>, <code>metadata</code>, and <code>definition.root</code> with at least one condition.
+                        {' '}
+                        <a href={appUrl('/docs/screener-registry.html')} target="_blank" rel="noopener noreferrer">
+                            Import schema guide
+                        </a>
+                        {' '}
+                        (mandatory vs optional fields, what slug means, minimal example).
                         Validate before import. Import always creates a new screener in this portfolio.
                     </p>
                     <textarea

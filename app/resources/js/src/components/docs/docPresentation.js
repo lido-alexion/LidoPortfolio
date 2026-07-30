@@ -352,6 +352,39 @@ export const DOC_PRESENTATION = {
             },
         ],
     },
+    'screener-registry': {
+        icon: 'bi-box-seam',
+        purpose:
+            'Import/export Screener Trading Artifact JSON — know mandatory fields (schema_version, artifact_type, slug, name, metadata, definition.root) before Validate/Import.',
+        workflow: [
+            { label: 'Screeners list', keyword: 'screener' },
+            { label: 'Screener Registry', current: true },
+            { label: 'Editor (refine)', keyword: 'screener-editor' },
+            { label: 'Run / Discovery', keyword: 'discovery' },
+        ],
+        callouts: [
+            {
+                variant: 'tip',
+                title: 'New to import?',
+                body: 'Copy the minimum JSON from this topic, change slug/name, Validate, then Import. Export an existing screener when you want a fuller template.',
+            },
+            {
+                variant: 'warning',
+                title: 'definition not definition_json',
+                body: 'The import envelope field is definition (with root). The DB column is definition_json — do not use that name in JSON.',
+            },
+        ],
+        commonMistakes: [
+            {
+                q: 'Validate lists many field errors',
+                a: 'Usually missing mandatory envelope keys (slug, name, schema_version, artifact_type, metadata, definition) or an empty condition tree. Start from the minimum example in this topic.',
+            },
+            {
+                q: 'What do I put in slug?',
+                a: 'A short snake_case machine id such as high_liquidity or breakout_volume — not a sentence. Display title goes in name.',
+            },
+        ],
+    },
     discovery: {
         icon: 'bi-search',
         purpose:

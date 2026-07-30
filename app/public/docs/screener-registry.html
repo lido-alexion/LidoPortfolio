@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Screener Registry — StoX docs</title>
-  <meta name="description" content="First-class Screener artifacts — metadata, versions, validate, and import/export JSON without changing the run engine.">
+  <meta name="description" content="Import/export Screener JSON artifacts — mandatory fields, slug rules, condition tree shape, and version history.">
   <link rel="canonical" href="screener-registry.html">
   <style>
     :root {
@@ -85,11 +85,215 @@
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Screener Registry</h1>
       <p class="muted"><code>screener-registry</code> · screen: <code>/screeners/registry</code></p>
-      <p>First-class Screener artifacts — metadata, versions, validate, and import/export JSON without changing the run engine.</p>
+      <p>Import/export Screener JSON artifacts — mandatory fields, slug rules, condition tree shape, and version history.</p>
 
       <section class="panel">
         <h2>Overview</h2>
-        <p>The Screener Registry evolves existing portfolio_screeners into reusable Trading Artifacts. Each screener keeps the same definition_json condition tree used by the Screener execution engine. The registry adds slug, intent/summary/tags, artifact_version, definition_hash, and version history. Export downloads the approved Trading Artifact JSON envelope; Import / Create from JSON validates then creates a new screener in the active portfolio. Shared screeners from other portfolios appear as read-only registry entries and can be copied with Import copy. Admin settings also link the same UI under Settings → Screener Registry.</p>
+        <p>The Screener Registry turns portfolio screeners into reusable Trading Artifacts. Each screener still uses the same condition tree the run engine executes. The registry adds slug, metadata, artifact_version, definition_hash, and version history.</p>
+<p>Export downloads the Trading Artifact JSON envelope. <strong>Validate</strong> checks the envelope. <strong>Create from JSON / Import</strong> validates, then creates a new screener in the active portfolio. Shared screeners from other portfolios appear read-only and can be copied with Import copy.</p>
+<h2>Importing JSON — start here</h2>
+<p>If Validate or Import reports many field errors, you almost always missed a <strong>mandatory</strong> envelope field or built an empty/invalid <code>definition.root</code> tree. Use the minimum schema below, then expand.</p>
+<h3>Minimum valid envelope (copy/paste starting point)</h3>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: &quot;1.0&quot;,
+  &quot;artifact_type&quot;: &quot;screener&quot;,
+  &quot;slug&quot;: &quot;my_first_screener&quot;,
+  &quot;name&quot;: &quot;My First Screener&quot;,
+  &quot;metadata&quot;: {
+    &quot;universe&quot;: &quot;holdings&quot;,
+    &quot;description&quot;: &quot;Close above 10 (example)&quot;
+  },
+  &quot;definition&quot;: {
+    &quot;root&quot;: {
+      &quot;type&quot;: &quot;group&quot;,
+      &quot;op&quot;: &quot;AND&quot;,
+      &quot;children&quot;: [
+        {
+          &quot;type&quot;: &quot;condition&quot;,
+          &quot;left&quot;: { &quot;indicator&quot;: &quot;close&quot;, &quot;params&quot;: {} },
+          &quot;operator&quot;: &quot;gt&quot;,
+          &quot;weight_factor&quot;: 1,
+          &quot;right&quot;: { &quot;type&quot;: &quot;constant&quot;, &quot;value&quot;: 10 }
+        }
+      ]
+    }
+  }
+}
+</code></pre>
+<p>That JSON has every runtime-required field and at least one condition (Import will reject an empty tree even if Validate is lenient on empty groups).</p>
+<h3>Mandatory vs optional fields</h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Required?</th>
+<th>What to put</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>schema_version</code></td>
+<td><strong>Yes</strong></td>
+<td>Always <code>&quot;1.0&quot;</code></td>
+</tr>
+<tr>
+<td><code>artifact_type</code></td>
+<td><strong>Yes</strong></td>
+<td>Always <code>&quot;screener&quot;</code></td>
+</tr>
+<tr>
+<td><code>slug</code></td>
+<td><strong>Yes</strong></td>
+<td>Stable id: lowercase letters, numbers, underscores only (e.g. <code>high_liquidity</code>). See <strong>Slug</strong> below</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td><strong>Yes</strong></td>
+<td>Human label shown in the UI (max 120 characters)</td>
+</tr>
+<tr>
+<td><code>metadata</code></td>
+<td><strong>Yes</strong></td>
+<td>An object — may be <code>{}</code>, but prefer at least <code>universe</code> / <code>description</code></td>
+</tr>
+<tr>
+<td><code>definition</code></td>
+<td><strong>Yes</strong></td>
+<td>Object with required <code>root</code> condition tree</td>
+</tr>
+<tr>
+<td><code>definition.root</code></td>
+<td><strong>Yes</strong></td>
+<td>A <code>group</code> or <code>condition</code> node; Import needs ≥1 condition</td>
+</tr>
+<tr>
+<td><code>artifact_id</code></td>
+<td>Optional</td>
+<td>Leave out on create; export may include a local id</td>
+</tr>
+<tr>
+<td><code>artifact_version</code></td>
+<td>Optional</td>
+<td>Integer ≥ 1; Import starts versions at 1 anyway</td>
+</tr>
+<tr>
+<td><code>definition_hash</code></td>
+<td>Optional</td>
+<td>Recalculated on Import — do not invent this</td>
+</tr>
+<tr>
+<td><code>minimum_engine_version</code></td>
+<td>Optional</td>
+<td>e.g. <code>&quot;1.1.0&quot;</code></td>
+</tr>
+<tr>
+<td><code>dependencies</code></td>
+<td>Optional</td>
+<td>Array of refs; export fills this</td>
+</tr>
+<tr>
+<td><code>validation</code></td>
+<td>Optional</td>
+<td>Embedded hints; not executed as rules</td>
+</tr>
+</tbody></table>
+<p>Note: the database column is <code>definition_json</code>, but the <strong>import JSON field name is <code>definition</code></strong> (not <code>definition_json</code>).</p>
+<h3>What each field means</h3>
+<p><strong><code>schema_version</code></strong> — Which envelope contract this file uses. Must be <code>&quot;1.0&quot;</code>. Wrong or missing → <code>SCHEMA_VERSION_UNSUPPORTED</code> / empty schema errors.</p>
+<p><strong><code>artifact_type</code></strong> — Discriminator so the registry knows this is a Screener (not Strategy/Indicator). Must be <code>&quot;screener&quot;</code>.</p>
+<p><strong><code>slug</code></strong> — Machine-stable key for this screener inside a portfolio. Strategies and other artifacts can refer to a screener by slug. Use snake_case like <code>breakout_volume</code> or <code>minervini_trend_template</code>. Allowed characters after normalisation: <code>a-z</code>, <code>0-9</code>, <code>_</code> (spaces and punctuation become <code>_</code>). Keep it short, unique, and meaningful — do <strong>not</strong> put a sentence here; that belongs in <code>name</code> / <code>metadata.description</code>. If the slug already exists on Import, the system may suffix it (e.g. <code>_import_ab12</code>) so the import still succeeds.</p>
+<p><strong><code>name</code></strong> — Display title in lists and the editor. Example: <code>&quot;Breakout with volume&quot;</code>. If the name collides, Import may append <code>&quot; (import)&quot;</code>.</p>
+<p><strong><code>metadata</code></strong> — Descriptive object. Common keys:</p>
+<ul>
+<li><code>universe</code> — maps to screener scope: <code>holdings</code> | <code>watchlist</code> | <code>all_equities</code> | <code>index</code> (aliases like <code>portfolio</code> → <code>holdings</code> are accepted)</li>
+<li><code>description</code> / <code>intent</code> / <code>summary</code> — human prose (description/intent capped ~500 chars on save)</li>
+<li><code>tags</code> — array of strings</li>
+<li><code>status</code> — lifecycle hint: <code>draft</code> | <code>active</code> | <code>deprecated</code> | <code>archived</code></li>
+<li><code>origin</code> — provenance: <code>factory</code> | <code>user</code> | <code>imported</code> | <code>ai_assisted</code> | <code>fork</code> | <code>exported</code></li>
+<li><code>factory_key</code> — stable factory id when shipping a built-in (e.g. <code>high_liquidity</code>)</li>
+</ul>
+<p><strong><code>definition</code></strong> — The condition tree the Screener engine runs. Shape:</p>
+<pre><code class="language-json">{
+  &quot;root&quot;: {
+    &quot;type&quot;: &quot;group&quot;,
+    &quot;op&quot;: &quot;AND&quot;,
+    &quot;children&quot;: [ /* conditions or nested groups */ ]
+  }
+}
+</code></pre>
+<p><strong>Group node:</strong> <code>type: &quot;group&quot;</code>, <code>op: &quot;AND&quot;</code> or <code>&quot;OR&quot;</code>, <code>children</code>: non-empty array on Import.</p>
+<p><strong>Condition node:</strong></p>
+<pre><code class="language-json">{
+  &quot;type&quot;: &quot;condition&quot;,
+  &quot;left&quot;: { &quot;indicator&quot;: &quot;close&quot;, &quot;params&quot;: {} },
+  &quot;operator&quot;: &quot;gt&quot;,
+  &quot;weight_factor&quot;: 1.0,
+  &quot;right&quot;: { &quot;indicator&quot;: &quot;sma&quot;, &quot;params&quot;: { &quot;period&quot;: 50 } }
+}
+</code></pre>
+<ul>
+<li><code>operator</code>: <code>gt</code> | <code>gte</code> | <code>lt</code> | <code>lte</code> | <code>eq</code></li>
+<li><code>left</code> / <code>right</code>: either <code>{ &quot;indicator&quot;: &quot;&lt;id&gt;&quot;, &quot;params&quot;: {…} }</code> or <code>{ &quot;type&quot;: &quot;constant&quot;, &quot;value&quot;: &lt;number&gt; }</code></li>
+<li>Indicator ids must be screenable catalogue ids (e.g. <code>close</code>, <code>sma</code>, <code>rsi</code>, <code>volume</code>) — unknown ids fail validation</li>
+<li>Optional <code>weight_factor</code> multiplies the right side (default <code>1</code>)</li>
+<li>Nesting depth max <strong>4</strong>; max <strong>40</strong> conditions</li>
+</ul>
+<p><strong><code>artifact_version</code> / <code>definition_hash</code></strong> — Versioning metadata. Export includes them; Import recomputes the hash and starts history for the new local copy.</p>
+<h3>Recommended import workflow</h3>
+<ol>
+<li>Start from the minimum example above (or Export an existing working screener and edit a copy).</li>
+<li>Paste into Registry → <strong>Validate</strong> and fix every listed path (<code>$.slug</code>, <code>$.definition.root</code>, …).</li>
+<li>Use <strong>Create from JSON</strong> / Import.</li>
+<li>Open the classic Screener editor to refine conditions visually if needed.</li>
+</ol>
+<h3>Common validation / import errors</h3>
+<table>
+<thead>
+<tr>
+<th>Message / code</th>
+<th>Likely cause</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>slug is required</code></td>
+<td>Missing or blank <code>slug</code></td>
+</tr>
+<tr>
+<td><code>name is required</code></td>
+<td>Missing or blank <code>name</code></td>
+</tr>
+<tr>
+<td><code>definition object is required</code></td>
+<td>Used <code>definition_json</code> instead of <code>definition</code>, or omitted it</td>
+</tr>
+<tr>
+<td><code>definition_json.root is required</code> / root errors</td>
+<td>Missing <code>definition.root</code></td>
+</tr>
+<tr>
+<td><code>Screener needs at least one condition</code></td>
+<td>Empty <code>children</code> array</td>
+</tr>
+<tr>
+<td><code>Group op must be AND or OR</code></td>
+<td>Typo in <code>op</code></td>
+</tr>
+<tr>
+<td><code>Invalid condition operator</code></td>
+<td>Use <code>gt</code>/<code>gte</code>/<code>lt</code>/<code>lte</code>/<code>eq</code> only</td>
+</tr>
+<tr>
+<td><code>Unknown indicator…</code></td>
+<td>Indicator id not in the Screener catalogue</td>
+</tr>
+<tr>
+<td>Nesting / too many conditions</td>
+<td>Depth &gt; 4 or &gt; 40 conditions</td>
+</tr>
+<tr>
+<td>Slug already exists</td>
+<td>Pick another slug or let Import rename</td>
+</tr>
+</tbody></table>
 <p>Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).</p>
 
       </section>
@@ -101,19 +305,19 @@
         <dd>Filter by status, ownership (own vs shared), and origin (factory / user / shared).</dd>
     
         <dt>Export JSON</dt>
-        <dd>Download the Screener artifact envelope (schema_version, metadata, definition.root, dependencies).</dd>
+        <dd>Download the Screener artifact envelope (schema_version, slug, name, metadata, definition.root, dependencies). Best template for a new import.</dd>
     
         <dt>Validate</dt>
-        <dd>Check pasted JSON against the Trading Artifact Screener rules before import.</dd>
+        <dd>Check pasted JSON against Trading Artifact Screener rules. Fix every path error before Import. Empty trees may still fail on Import — keep ≥1 condition.</dd>
     
-        <dt>Create from JSON</dt>
-        <dd>Import a validated envelope as a new screener in this portfolio.</dd>
+        <dt>Create from JSON / Import</dt>
+        <dd>Validate then create a new screener in this portfolio. Mandatory: schema_version, artifact_type, slug, name, metadata, definition.root with ≥1 condition.</dd>
     
         <dt>Import copy (shared)</dt>
         <dd>Copy a shared screener from another portfolio into yours (same as Shared screens import).</dd>
     
         <dt>Open editor</dt>
-        <dd>Jump to the classic Screener editor to change conditions or run screens.</dd>
+        <dd>Jump to the classic Screener editor to change conditions or run screens after import.</dd>
     
         <dt>Version history</dt>
         <dd>On detail for owned screeners, list definition snapshots and change notes.</dd>
@@ -129,14 +333,23 @@
       <section class="panel">
         <h2>Concepts</h2>
         <dl class="doc-list">
+        <dt>Slug</dt>
+        <dd>Stable machine id (snake_case: <code>my_breakout_screen</code>). Used for uniqueness and cross-artifact references. Not the display title — that is <code>name</code>. Only a–z, 0–9, and underscore after normalisation.</dd>
+    
+        <dt>definition vs definition_json</dt>
+        <dd>Import/export JSON uses the field <code>definition</code>. The database stores the same tree in column <code>definition_json</code>. Do not put <code>definition_json</code> in the envelope.</dd>
+    
+        <dt>Mandatory envelope fields</dt>
+        <dd>schema_version (&quot;1.0&quot;), artifact_type (&quot;screener&quot;), slug, name, metadata (object), and definition.root with at least one condition for a successful Import.</dd>
+    
         <dt>No execution redesign</dt>
         <dd>Runs, schedules, and backtests still use ScreenerRunService and the existing definition tree.</dd>
     
         <dt>Shared → Registry</dt>
-        <dd>is_shared screeners surface naturally in the registry list with ownership=shared; copying them creates a local owned artifact.</dd>
+        <dd>is_shared screeners surface in the registry with ownership=shared; copying them creates a local owned artifact.</dd>
     
         <dt>Version bump</dt>
-        <dd>Changing definition_json (via editor or registry update) increments artifact_version and appends portfolio_screener_versions.</dd>
+        <dd>Changing the condition tree (via editor or registry update) increments artifact_version and appends portfolio_screener_versions.</dd>
     
         <dt>Active portfolio context</dt>
         <dd>Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.</dd>
