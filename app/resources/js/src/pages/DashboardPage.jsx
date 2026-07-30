@@ -1,6 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import Collapse from 'bootstrap/js/dist/collapse';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import { usePortfolio } from '../context/PortfolioContext';
@@ -65,7 +64,8 @@ function saveTopMoverPeriod(period) {
 
 function loadMarketDiagnosticsExpanded() {
     try {
-        return sessionStorage.getItem(MARKET_DIAGNOSTICS_COLLAPSED_KEY) !== '1';
+        // Default collapsed. Explicit '0' = expanded, '1' = collapsed.
+        return sessionStorage.getItem(MARKET_DIAGNOSTICS_COLLAPSED_KEY) === '0';
     } catch {
         return false;
     }
@@ -79,6 +79,29 @@ function persistMarketDiagnosticsExpanded(expanded) {
     }
 }
 
+function clampDisplayScore(value) {
+    const n = Number(value);
+    if (value == null || value === '' || Number.isNaN(n)) {
+        return null;
+    }
+    return Math.min(100, Math.max(0, Math.round(n)));
+}
+
+/**
+ * Presentation-only Market Health score from existing analytics fields.
+ * Prefer dedicated keys when present; otherwise use sentiment (engine composite).
+ */
+function resolveMarketHealthScore(marketAnalytics) {
+    if (!marketAnalytics) {
+        return null;
+    }
+    return clampDisplayScore(
+        marketAnalytics.market_health_score
+        ?? marketAnalytics.health_score
+        ?? marketAnalytics.sentiment?.score,
+    );
+}
+
 function marketHealthStatus(score) {
     if (score == null) return '—';
     if (score >= 80) return 'Excellent';
@@ -88,19 +111,41 @@ function marketHealthStatus(score) {
     return 'Poor';
 }
 
-function marketDecisionZone(score) {
-    if (score == null) return { label: '—', icon: 'bi-dash-circle', className: 'text-muted' };
-    if (score >= 75) return { label: 'Aggressive', icon: 'bi-circle-fill', className: 'text-success' };
-    if (score >= 45) return { label: 'Selective', icon: 'bi-circle-fill', className: 'text-warning' };
+function marketDecisionZone(marketAnalytics, score) {
+    if (marketAnalytics?.new_entry_allowed === false) {
+        return { label: 'Defensive', icon: 'bi-circle-fill', className: 'text-danger' };
+    }
+    if (score == null) {
+        return { label: '—', icon: 'bi-dash-circle', className: 'text-muted' };
+    }
+    if (score >= 75) {
+        return { label: 'Aggressive', icon: 'bi-circle-fill', className: 'text-success' };
+    }
+    if (score >= 45) {
+        return { label: 'Selective', icon: 'bi-circle-fill', className: 'text-warning' };
+    }
     return { label: 'Defensive', icon: 'bi-circle-fill', className: 'text-danger' };
 }
 
-function suggestedExposure(score) {
+function suggestedExposure(marketAnalytics, score) {
+    const mult = Number(marketAnalytics?.allocation_multiplier);
+    if (!Number.isNaN(mult) && marketAnalytics?.allocation_multiplier != null) {
+        return `${Math.round(Math.min(1, Math.max(0, mult)) * 100)}%`;
+    }
     if (score == null) return '—';
     if (score >= 85) return '100%';
     if (score >= 65) return '80%';
     if (score >= 45) return '50%';
     return '20%';
+}
+
+function contributorBadgeClass(available, ok) {
+    if (!available) {
+        return 'bg-secondary-subtle text-secondary-emphasis';
+    }
+    return ok
+        ? 'bg-success-subtle text-success-emphasis'
+        : 'bg-warning-subtle text-warning-emphasis';
 }
 
 const growthChartTooltipStyle = {
@@ -250,7 +295,6 @@ export default function DashboardPage() {
     const [servedFromCache, setServedFromCache] = useState(false);
     const [cachedAt, setCachedAt] = useState(null);
     const [marketDiagnosticsExpanded, setMarketDiagnosticsExpanded] = useState(loadMarketDiagnosticsExpanded);
-    const marketDiagnosticsCollapseRef = useRef(null);
 
     const handleTopMoverPeriodChange = useCallback((period) => {
         setTopMoverPeriod(period);
@@ -407,32 +451,6 @@ export default function DashboardPage() {
         setLoadError('');
         fetchDashboard({ force: false });
     }, [userId, profileId, fetchDashboard]);
-
-    useEffect(() => {
-        if (!marketDiagnosticsCollapseRef.current) {
-            return undefined;
-        }
-        const node = marketDiagnosticsCollapseRef.current;
-        const collapse = new Collapse(node, { toggle: false });
-        if (marketDiagnosticsExpanded) {
-            collapse.show();
-        } else {
-            collapse.hide();
-        }
-        return () => collapse.dispose();
-    }, []);
-
-    useEffect(() => {
-        if (!marketDiagnosticsCollapseRef.current) {
-            return;
-        }
-        const collapse = Collapse.getOrCreateInstance(marketDiagnosticsCollapseRef.current, { toggle: false });
-        if (marketDiagnosticsExpanded) {
-            collapse.show();
-        } else {
-            collapse.hide();
-        }
-    }, [marketDiagnosticsExpanded]);
 
     const allocationColumns = useMemo(() => [
         { accessorKey: 'symbol', header: 'Symbol' },
@@ -710,13 +728,10 @@ export default function DashboardPage() {
     const syncInProgress = Boolean(dailySync.in_progress) || syncingPrices;
     const rsBenchmarkSymbol = data.nifty_comparison?.benchmark?.symbol || 'NIFTY50';
     const marketAnalytics = data.market_analytics || null;
-    const marketHealthScoreRaw = marketAnalytics?.market_health_score ?? marketAnalytics?.health_score;
-    const marketHealthScore = marketHealthScoreRaw == null || Number.isNaN(Number(marketHealthScoreRaw))
-        ? null
-        : Math.round(Number(marketHealthScoreRaw));
+    const marketHealthScore = resolveMarketHealthScore(marketAnalytics);
     const marketHealthStatusLabel = marketHealthStatus(marketHealthScore);
-    const marketZone = marketDecisionZone(marketHealthScore);
-    const marketExposure = suggestedExposure(marketHealthScore);
+    const marketZone = marketDecisionZone(marketAnalytics, marketHealthScore);
+    const marketExposure = suggestedExposure(marketAnalytics, marketHealthScore);
     const marketContributorFlags = [
         {
             key: 'trend',
@@ -739,7 +754,9 @@ export default function DashboardPage() {
         {
             key: 'risk',
             label: 'Risk',
-            ok: (marketAnalytics?.risk?.raw_risk ?? marketAnalytics?.risk?.score) <= 50,
+            ok: (marketAnalytics?.risk?.raw_risk ?? (marketAnalytics?.risk?.score != null
+                ? 100 - Number(marketAnalytics.risk.score)
+                : null)) <= 50,
             available: (marketAnalytics?.risk?.raw_risk ?? marketAnalytics?.risk?.score) != null,
         },
         {
@@ -958,13 +975,17 @@ export default function DashboardPage() {
                                         {marketContributorFlags.map((item) => (
                                             <span
                                                 key={item.key}
-                                                className={`badge ${
-                                                    item.available
-                                                        ? (item.ok ? 'text-bg-success-subtle' : 'text-bg-warning-subtle')
-                                                        : 'text-bg-secondary-subtle'
-                                                }`}
+                                                className={`badge rounded-pill ${contributorBadgeClass(item.available, item.ok)}`}
                                             >
-                                                {item.available ? (item.ok ? '✓' : '⚠') : '•'} {item.label}
+                                                <i
+                                                    className={`bi ${
+                                                        item.available
+                                                            ? (item.ok ? 'bi-check-lg' : 'bi-exclamation-triangle')
+                                                            : 'bi-dash'
+                                                    } me-1`}
+                                                    aria-hidden="true"
+                                                />
+                                                {item.label}
                                             </span>
                                         ))}
                                     </div>
@@ -987,10 +1008,10 @@ export default function DashboardPage() {
                                     <i className={`bi ${marketDiagnosticsExpanded ? 'bi-chevron-up' : 'bi-chevron-down'}`} aria-hidden="true" />
                                 </button>
                             </div>
+                            {marketDiagnosticsExpanded ? (
                             <div
                                 id="dashboard-market-diagnostics"
-                                ref={marketDiagnosticsCollapseRef}
-                                className={`collapse mt-2${marketDiagnosticsExpanded ? ' show' : ''}`}
+                                className="mt-2"
                             >
                                 <div className="d-flex justify-content-between align-items-center mb-2">
                                     <div className="small text-muted">Analytics gauges (diagnostics)</div>
@@ -1144,6 +1165,7 @@ export default function DashboardPage() {
                                     ))}
                                 </div>
                             </div>
+                            ) : null}
                         </div>
                     ) : null}
                 </>
