@@ -5,7 +5,9 @@
 
 import {
     AUTHORING_TRADING_ARTIFACTS_TOPIC,
+    AI_AUTHORING_CONTRACT_TOPIC,
     INDICATOR_REGISTRY_GUIDE_EXTRAS,
+    RUNTIME_SEMANTICS_TOPIC,
     SCREENER_REGISTRY_GUIDE_EXTRAS,
     STRATEGY_REGISTRY_GUIDE_EXTRAS,
     TRADING_COOKBOOK_TOPIC,
@@ -97,7 +99,7 @@ const APP_DOCUMENTATION_BASE = [
                 description: 'See topic Trading OS pages & flow for which page shows what and how recommendations move from Screener → Strategy → Recommendations → Review.',
             },
         ],
-        related: ['trading-os-flow', 'dashboard', 'settings', 'authoring-trading-artifacts', 'trading-cookbook'],
+        related: ['trading-os-flow', 'dashboard', 'settings', 'authoring-trading-artifacts', 'trading-artifact-runtime', 'trading-cookbook'],
     },
     {
         id: 'trading-os-flow',
@@ -648,7 +650,7 @@ const APP_DOCUMENTATION_BASE = [
                 description: 'Changing the condition tree (via editor or registry update) increments artifact_version and appends portfolio_screener_versions.',
             },
         ],
-        related: ['screener', 'screener-editor', 'indicator-registry', 'strategy-registry', 'authoring-trading-artifacts', 'trading-cookbook', 'settings'],
+        related: ['screener', 'screener-editor', 'indicator-registry', 'strategy-registry', 'authoring-trading-artifacts', 'trading-artifact-runtime', 'trading-cookbook', 'settings'],
     },
     {
         id: 'discovery',
@@ -1233,7 +1235,7 @@ const APP_DOCUMENTATION_BASE = [
                     'thresholds, portfolio_rules, exit_strategy, and market_gates are runtime-usable and Import-preserved — not reserved. Prefer Export-then-edit for full defaults.',
             },
         ],
-        related: ['strategy', 'screener-registry', 'indicator-registry', 'recommendations', 'authoring-trading-artifacts', 'trading-cookbook', 'settings'],
+        related: ['strategy', 'screener-registry', 'indicator-registry', 'recommendations', 'authoring-trading-artifacts', 'trading-artifact-runtime', 'trading-cookbook', 'settings'],
     },
     {
         id: 'review',
@@ -1810,7 +1812,7 @@ const APP_DOCUMENTATION_BASE = [
             {
                 name: 'Parameter ranges',
                 description:
-                    'Screener Primary params declare default/min/max/step (periods usually 1–400). Strategy Composite params declare type/label/default. Stay inside ranges or Validate/runtime will reject or clamp.',
+                    'Screener Primary params declare default/min/max/step (periods usually 1–400). Strategy Composite params declare type/label/default. Stay inside ranges — Validate/Import rejects out-of-range values (no silent clamp). Omitted Screener params use TechnicalIndicatorService fallbacks, which may differ from catalogue UI defaults.',
             },
             {
                 name: 'Parameter naming convention',
@@ -1828,9 +1830,11 @@ const APP_DOCUMENTATION_BASE = [
                     'Shipping calculators are release-owned. Registry UI is read-only documentation; artifact drafts do not rewrite TechnicalIndicatorService math.',
             },
         ],
-        related: ['settings', 'screener', 'screener-registry', 'strategy', 'strategy-registry', 'authoring-trading-artifacts', 'trading-cookbook', 'data-quality-center'],
+        related: ['settings', 'screener', 'screener-registry', 'strategy', 'strategy-registry', 'authoring-trading-artifacts', 'trading-artifact-runtime', 'trading-cookbook', 'data-quality-center'],
     },
+    AI_AUTHORING_CONTRACT_TOPIC,
     AUTHORING_TRADING_ARTIFACTS_TOPIC,
+    RUNTIME_SEMANTICS_TOPIC,
     TRADING_COOKBOOK_TOPIC,
     {
         id: 'users',

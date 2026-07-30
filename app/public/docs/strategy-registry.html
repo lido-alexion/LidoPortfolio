@@ -544,6 +544,15 @@
 <td>Pick another or let Import rename</td>
 </tr>
 </tbody></table>
+<h2>Runtime notes (scoring, eligibility, thresholds)</h2>
+<p>See <strong>Trading Artifact Runtime Semantics</strong> (<code>trading-artifact-runtime</code>) for the full Recommendation pipeline. Short form:</p>
+<ul>
+<li>Overall ≈ weighted average of enabled factor scores; gated min/max -&gt; contribution 0 but <strong>weight still dilutes</strong>.</li>
+<li>Multiple <code>eligibility_sources</code> = <strong>UNION</strong>; <code>priority</code> is order only.</li>
+<li>Thresholds use sequential if/else (not exclusive bands); score 82 with defaults is typically <strong>WATCH</strong> (not held) / <strong>HOLD</strong> (held).</li>
+<li><code>market_gates</code> demote OPEN/INCREASE only; exits still run.</li>
+<li>Portfolio cash rules can demote unfunded buys to <strong>WATCH</strong>.</li>
+</ul>
 <h2>Optional definition sections (fully usable)</h2>
 <p>These sections are <strong>runtime-usable today</strong>. Import preserves them via <code>normalizeConfig</code> (Validate focuses hard checks on eligibility + scoring — Export a working Strategy, then edit, for safest authoring). They are <strong>not</strong> “reserved / undocumented.”</p>
 <h3><code>thresholds</code> — recommendation label bands (0–100 scores)</h3>
@@ -558,7 +567,7 @@
 <tbody><tr>
 <td><code>minimum_overall_score</code></td>
 <td>80</td>
-<td>Soft floor stored on Strategy UI</td>
+<td>Stored on Strategy UI; <strong>not</strong> currently applied as a hard pipeline gate</td>
 </tr>
 <tr>
 <td><code>open_position</code></td>
@@ -678,7 +687,7 @@
 }
 </code></pre>
 <ul>
-<li><code>mode</code>: <code>any</code> (first matching rule) or <code>all</code> (every enabled rule must match)</li>
+<li><code>mode</code>: <code>any</code> (any matching enabled rule triggers; all matches recorded) or <code>all</code> (every enabled rule must match)</li>
 <li>Rule <code>key</code> values: <code>ma_breakdown</code>, <code>rs_weakening</code>, <code>trend_weakening</code>, <code>score_exit</code>, <code>max_loss</code>, <code>atr_stop</code>, <code>trailing_stop</code>, <code>screener_exit</code></li>
 <li>Use <code>value</code> and/or <code>params</code> as appropriate to the key (see Export of Momentum Strategy for full defaults)</li>
 </ul>
@@ -954,7 +963,7 @@
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
-          <a href="strategy.html">Strategy</a><a href="screener-registry.html">Screener Registry</a><a href="indicator-registry.html">Indicator Registry</a><a href="recommendations.html">Recommendations</a><a href="authoring-trading-artifacts.html">Authoring Trading Artifacts</a><a href="trading-cookbook.html">Trading Cookbook</a><a href="settings.html">Settings</a>
+          <a href="strategy.html">Strategy</a><a href="screener-registry.html">Screener Registry</a><a href="indicator-registry.html">Indicator Registry</a><a href="recommendations.html">Recommendations</a><a href="authoring-trading-artifacts.html">Authoring Trading Artifacts</a><a href="trading-artifact-runtime.html">Trading Artifact Runtime Semantics</a><a href="trading-cookbook.html">Trading Cookbook</a><a href="settings.html">Settings</a>
         </div>
       </section>
     </article>

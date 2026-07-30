@@ -19,14 +19,25 @@ const AI_GUIDE_BASENAME = 'stox-trading-artifacts-ai-guide.md';
 const docsModuleUrl = pathToFileURL(
     path.join(appRoot, 'resources', 'js', 'src', 'data', 'appDocumentation.js'),
 ).href;
+const contractModuleUrl = pathToFileURL(
+    path.join(appRoot, 'resources', 'js', 'src', 'data', 'tradingArtifactAuthoringContract.js'),
+).href;
+const runtimeModuleUrl = pathToFileURL(
+    path.join(appRoot, 'resources', 'js', 'src', 'data', 'tradingArtifactRuntimeSemantics.js'),
+).href;
 
-/** Topic keywords included in the AI download pack (order matters). */
-const AI_GUIDE_KEYWORDS = [
+/** Topic keywords included in the AI download pack (order matters). Reference material after Contract. */
+const AI_GUIDE_REFERENCE_KEYWORDS = [
     'authoring-trading-artifacts',
     'indicator-registry',
     'screener-registry',
     'strategy-registry',
     'trading-cookbook',
+];
+
+/** Runtime semantics placed in Appendix (detailed reference). */
+const AI_GUIDE_APPENDIX_KEYWORDS = [
+    'trading-artifact-runtime',
 ];
 
 function escapeHtml(value) {
@@ -291,13 +302,20 @@ function formatDocItems(title, items) {
 
 /**
  * Build a single Markdown pack for AI / offline authoring.
+ * Architecture: Introduction → Contract (normative) → Hard Rules → Workflow → Registries → Cookbook → Examples → Appendix.
  * @param {Array<Record<string, unknown>>} docs
+ * @param {{ contractMarkdown: string, completeExamplesMarkdown: string }} extras
  */
-function buildAiGuideMarkdown(docs) {
+function buildAiGuideMarkdown(docs, extras) {
     const generatedAt = new Date().toISOString();
     const parts = [];
+    const AI_AUTHORING_CONTRACT_MARKDOWN = extras?.contractMarkdown || '';
+    const COMPLETE_E2E_WALKTHROUGH_MARKDOWN = extras?.completeExamplesMarkdown || '';
 
+    // ── 1. Introduction ──────────────────────────────────────────────
     parts.push('# StoX Trading Artifacts - AI Authoring Guide');
+    parts.push('');
+    parts.push('## 1. Introduction');
     parts.push('');
     parts.push('> **Audience:** AI agents and developers authoring portable Indicator / Screener / Strategy JSON **without** reading application source code.');
     parts.push('>');
@@ -305,51 +323,84 @@ function buildAiGuideMarkdown(docs) {
     parts.push(`> **Deploy download:** \`/docs/${AI_GUIDE_BASENAME}\` (also linked from Screener Registry and Strategy Registry).`);
     parts.push('> **Repo copy:** `specs/engines/StoX-Trading-Artifacts-AI-Guide.md`');
     parts.push('');
-    parts.push('This file consolidates:');
+    parts.push('This guide is the **single authoritative specification** for authoring production-ready Trading Artifacts.');
     parts.push('');
-    parts.push('1. Authoring Trading Artifacts (workflow)');
-    parts.push('2. Indicator Registry (full catalogue)');
-    parts.push('3. Screener Registry (operators, operands, complete examples)');
-    parts.push('4. Strategy Registry (scoring, optional sections, complete examples)');
-    parts.push('5. Trading Cookbook (philosophy + paired JSON recipes)');
+    parts.push('| Section | Role |');
+    parts.push('|---------|------|');
+    parts.push('| **AI Authoring Contract** | Normative constitution (MUST / SHOULD). Read first. |');
+    parts.push('| Hard Rules | Compact reminder table derived from the Contract. |');
+    parts.push('| Authoring Workflow | Recommended Validate -> Import sequence. |');
+    parts.push('| Indicator / Screener / Strategy Registry | Detailed reference catalogues and schemas. |');
+    parts.push('| Trading Cookbook | Philosophy + paired JSON recipes. |');
+    parts.push('| Complete Examples | Canonical end-to-end lifecycle. |');
+    parts.push('| Appendix | Runtime semantics and other detailed behaviour. |');
     parts.push('');
-    parts.push('HTML mirrors (same prose): `/docs/authoring-trading-artifacts.html`, `/docs/indicator-registry.html`, `/docs/screener-registry.html`, `/docs/strategy-registry.html`, `/docs/trading-cookbook.html`.');
+    parts.push('**Document maintenance:** New authoring or behavioural constraints MUST be added to the AI Authoring Contract before detailed reference sections.');
     parts.push('');
-    parts.push('---');
-    parts.push('');
-    parts.push('## Hard rules (read first - do not guess)');
-    parts.push('');
-    parts.push('| Rule | Detail |');
-    parts.push('|------|--------|');
-    parts.push('| Schema | Always `schema_version: "1.0"`. Import field is `definition` (not DB column names). |');
-    parts.push('| Screener operators | Condition: `gt` `gte` `lt` `lte` `eq` only. Group: `AND` `OR` only. |');
-    parts.push('| NOT supported | `neq`, `NOT`, `crosses_above`/`crosses_below`, `between`, `outside`, `contains`, `in`, string/boolean/null/date operands. |');
-    parts.push('| Operands | Indicator `{ "indicator", "params" }` or constant `{ "type":"constant", "value": <number> }`. |');
-    parts.push('| Nesting | Max depth **4**; max **40** conditions. |');
-    parts.push('| Indicator dual-use | No id is both screenable and strategy-scorable. |');
-    parts.push('| Strategy eligibility | Reference Screeners by `screener_slug` / `screener_factory_key` only - never embed `definition.root`. |');
-    parts.push('| Strategy weights | Enabled `scoring_model` weights must sum to **exactly 100**. |');
-    parts.push('| Import UX | Validate must succeed before Import is enabled; Import Strategy = **draft** until Select. |');
-    parts.push('| Param names | Use catalogue ids exactly (`period`, `fast`, `slow`, `mult`, `lookback_days`, `rsi_period`, ...). |');
+    parts.push('HTML mirrors: `/docs/ai-authoring-contract.html`, `/docs/authoring-trading-artifacts.html`, `/docs/indicator-registry.html`, `/docs/screener-registry.html`, `/docs/strategy-registry.html`, `/docs/trading-cookbook.html`, `/docs/trading-artifact-runtime.html`.');
     parts.push('');
     parts.push('---');
     parts.push('');
 
-    for (const keyword of AI_GUIDE_KEYWORDS) {
+    // ── 2. AI Authoring Contract ──────────────────────────────────────
+    parts.push('## 2. AI Authoring Contract (Normative Rules)');
+    parts.push('');
+    // Strip the duplicate H1 from the contract module body
+    const contractBody = String(AI_AUTHORING_CONTRACT_MARKDOWN || '')
+        .replace(/^# AI Authoring Contract \(Normative Rules\)\s*/m, '')
+        .trim();
+    parts.push(contractBody);
+    parts.push('');
+    parts.push('---');
+    parts.push('');
+
+    // ── 3. Hard Rules ────────────────────────────────────────────────
+    parts.push('## 3. Hard Rules');
+    parts.push('');
+    parts.push('Compact reminder. The **AI Authoring Contract** is authoritative if anything conflicts.');
+    parts.push('');
+    parts.push('| Topic | Requirement |');
+    parts.push('|-------|-------------|');
+    parts.push('| Schema | `schema_version` MUST be `"1.0"`; body key MUST be `definition`. |');
+    parts.push('| Operators | Condition: `gt` `gte` `lt` `lte` `eq` only. Group: `AND` `OR` only. |');
+    parts.push('| Forbidden | `neq`, `NOT`, `crosses_*`, `between`, `outside`, string/boolean/null/date operands. |');
+    parts.push('| Operands | Indicator `{ indicator, params }` or constant `{ type:"constant", value:<number> }`. |');
+    parts.push('| Limits | Nesting depth ≤ 4; ≤ 40 conditions. |');
+    parts.push('| Dual-use | Screenable ≠ strategy-scorable. |');
+    parts.push('| Eligibility | `screener_slug` / `screener_factory_key` only — MUST NOT embed Screener trees. |');
+    parts.push('| Weights | Enabled `scoring_model` weights MUST total exactly 100. |');
+    parts.push('| Import | Validate MUST succeed before Import; Strategy Import is draft until Select. |');
+    parts.push('| Params | Present params MUST be in catalogue range; AI SHOULD set Screener params explicitly. |');
+    parts.push('| Eligibility set | Multiple sources = UNION. |');
+    parts.push('| Scoring gates | Min/max fail → contribution 0 (dilutes); stock is not rejected. |');
+    parts.push('');
+    parts.push('---');
+    parts.push('');
+
+    // ── 4–8. Reference topics ────────────────────────────────────────
+    const sectionTitles = {
+        'authoring-trading-artifacts': '## 4. Authoring Workflow',
+        'indicator-registry': '## 5. Indicator Registry',
+        'screener-registry': '## 6. Screener Registry',
+        'strategy-registry': '## 7. Strategy Registry',
+        'trading-cookbook': '## 8. Trading Cookbook',
+    };
+
+    for (const keyword of AI_GUIDE_REFERENCE_KEYWORDS) {
         const doc = findDoc(docs, keyword);
+        parts.push(sectionTitles[keyword] || `# ${keyword}`);
+        parts.push('');
         if (!doc) {
-            parts.push(`## Missing topic: ${keyword}`);
+            parts.push(`_Missing topic: ${keyword}_`);
             parts.push('');
-            parts.push('_This topic was expected in APP_DOCUMENTATION but was not found._');
+            parts.push('---');
             parts.push('');
             continue;
         }
-        parts.push(`# ${doc.title}`);
-        parts.push('');
-        const aliasBit = doc.aliases?.length
-            ? ` | **Aliases:** ${doc.aliases.map((a) => `\`${a}\``).join(', ')}`
-            : '';
-        parts.push(`**Keyword:** \`${doc.keyword}\`${aliasBit}`);
+        parts.push(`**Keyword:** \`${doc.keyword}\``);
+        if (doc.aliases?.length) {
+            parts.push(`**Aliases:** ${doc.aliases.map((a) => `\`${a}\``).join(', ')}`);
+        }
         parts.push('');
         parts.push(`**Summary:** ${doc.summary || ''}`);
         parts.push('');
@@ -371,15 +422,48 @@ function buildAiGuideMarkdown(docs) {
         parts.push('');
     }
 
-    parts.push('# Appendix - Authoring checklist');
+    // ── 9. Complete Examples ─────────────────────────────────────────
+    parts.push('## 9. Complete Examples');
     parts.push('');
-    parts.push('1. Read Indicator Registry section - pick screenable Primaries and/or strategy-scorable Composites.');
-    parts.push('2. Build Screener JSON - only allowed operators/operands; >=1 condition; unique slug.');
-    parts.push('3. Validate -> Import Screener; note final slug.');
-    parts.push('4. Build Strategy JSON - eligibility refs that slug; scoring keys from composites; weights = 100.');
-    parts.push('5. Optionally add `thresholds` / `portfolio_rules` / `exit_strategy` / `market_gates` (documented above; runtime-usable).');
-    parts.push('6. Validate -> Import Strategy (draft) -> Select to activate.');
-    parts.push('7. Prefer Cookbook recipes when matching a known investing style; note stated approximations (Darvas/CANSLIM/Value).');
+    const examplesBody = String(COMPLETE_E2E_WALKTHROUGH_MARKDOWN || '')
+        .replace(/^# Complete Examples\s*/m, '')
+        .trim();
+    parts.push(examplesBody);
+    parts.push('');
+    parts.push('---');
+    parts.push('');
+
+    // ── 10. Appendix ─────────────────────────────────────────────────
+    parts.push('## 10. Appendix');
+    parts.push('');
+    parts.push('### A. Runtime Semantics (detailed reference)');
+    parts.push('');
+    parts.push('Normative authoring implications appear in the Contract (Runtime Behaviour Rules). This appendix documents engine evaluation detail.');
+    parts.push('');
+
+    for (const keyword of AI_GUIDE_APPENDIX_KEYWORDS) {
+        const doc = findDoc(docs, keyword);
+        if (!doc) {
+            parts.push(`_Missing appendix topic: ${keyword}_`);
+            parts.push('');
+            continue;
+        }
+        parts.push(`#### ${doc.title}`);
+        parts.push('');
+        parts.push(`**Keyword:** \`${doc.keyword}\``);
+        parts.push('');
+        parts.push(String(doc.overview || '').trim());
+        parts.push('');
+        parts.push(formatDocItems('Controls', doc.controls));
+        parts.push(formatDocItems('Concepts', doc.concepts));
+    }
+
+    parts.push('### B. Contract-first maintenance');
+    parts.push('');
+    parts.push('1. Add or change a MUST/SHOULD rule in the AI Authoring Contract.');
+    parts.push('2. Update the relevant Registry / Runtime reference section.');
+    parts.push('3. Regenerate static docs (`npm run docs:static`).');
+    parts.push('4. Do not leave reference prose that contradicts the Contract.');
     parts.push('');
     parts.push('_End of StoX Trading Artifacts AI Authoring Guide._');
     parts.push('');
@@ -389,6 +473,8 @@ function buildAiGuideMarkdown(docs) {
 
 async function main() {
     const { APP_DOCUMENTATION } = await import(docsModuleUrl);
+    const { AI_AUTHORING_CONTRACT_MARKDOWN } = await import(contractModuleUrl);
+    const { COMPLETE_E2E_WALKTHROUGH_MARKDOWN } = await import(runtimeModuleUrl);
     if (!Array.isArray(APP_DOCUMENTATION) || APP_DOCUMENTATION.length === 0) {
         throw new Error('APP_DOCUMENTATION is empty or missing');
     }
@@ -413,7 +499,10 @@ async function main() {
 
     fs.writeFileSync(path.join(outDir, 'index.html'), indexPage(APP_DOCUMENTATION), 'utf8');
 
-    const aiGuide = buildAiGuideMarkdown(APP_DOCUMENTATION);
+    const aiGuide = buildAiGuideMarkdown(APP_DOCUMENTATION, {
+        contractMarkdown: AI_AUTHORING_CONTRACT_MARKDOWN,
+        completeExamplesMarkdown: COMPLETE_E2E_WALKTHROUGH_MARKDOWN,
+    });
     const aiGuidePublic = path.join(outDir, AI_GUIDE_BASENAME);
     fs.writeFileSync(aiGuidePublic, aiGuide, 'utf8');
     fs.mkdirSync(path.dirname(specsAiGuidePath), { recursive: true });

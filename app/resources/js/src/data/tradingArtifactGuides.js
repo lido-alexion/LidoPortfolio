@@ -3,7 +3,21 @@
  * Concatenated into registry topics; also exports standalone guide topics.
  */
 
+import {
+    INDICATOR_RUNTIME_POINTER,
+    SCREENER_RUNTIME_POINTER,
+    STRATEGY_RUNTIME_POINTER,
+} from './tradingArtifactRuntimeSemantics.js';
+
+export { RUNTIME_SEMANTICS_TOPIC, COMPLETE_E2E_WALKTHROUGH_MARKDOWN } from './tradingArtifactRuntimeSemantics.js';
+export {
+    AI_AUTHORING_CONTRACT_MARKDOWN,
+    AI_AUTHORING_CONTRACT_TOPIC,
+} from './tradingArtifactAuthoringContract.js';
+
 export const SCREENER_REGISTRY_GUIDE_EXTRAS =
+    SCREENER_RUNTIME_POINTER
+    +
     '## Complete operator catalogue\n\n'
     + 'Condition `operator` values are an **exact enum**. Anything else fails Validate / Import.\n\n'
     + '### Comparison operators (condition nodes)\n\n'
@@ -37,7 +51,8 @@ export const SCREENER_REGISTRY_GUIDE_EXTRAS =
     + '}\n'
     + '```\n\n'
     + '- `indicator` — required; must be a **screenable** Primary id from Indicator Registry\n'
-    + '- `params` — object; omit keys to use catalogue defaults; values must be numeric within min/max\n'
+    + '- `params` — object; **set keys explicitly** (recommended). Omitted keys use TechnicalIndicatorService fallbacks '
+    + '(often `period: 20`), which may differ from Indicator Registry UI catalogue defaults. Present values must be numeric within min/max\n'
     + '- `entity` — **left only**, optional. Default is the scanned stock (`stock` / omit). '
     + 'Allowed index entities: `NIFTY50`, `SENSEX`, `NIFTY100`, `NIFTY200`, `NIFTY500`, `NIFTYMIDCAP150`, `NIFTYSMLCAP250`. '
     + 'Right-hand side is always evaluated on the scanned stock (no `entity` on right).\n\n'
@@ -334,14 +349,15 @@ export const SCREENER_REGISTRY_GUIDE_EXTRAS =
     + '```\n\n';
 
 export const STRATEGY_REGISTRY_GUIDE_EXTRAS =
-    '## Optional definition sections (fully usable)\n\n'
+    STRATEGY_RUNTIME_POINTER
+    + '## Optional definition sections (fully usable)\n\n'
     + 'These sections are **runtime-usable today**. Import preserves them via `normalizeConfig` '
     + '(Validate focuses hard checks on eligibility + scoring — Export a working Strategy, then edit, for safest authoring). '
     + 'They are **not** “reserved / undocumented.”\n\n'
     + '### `thresholds` — recommendation label bands (0–100 scores)\n\n'
     + '| Key | Default | Meaning |\n'
     + '|-----|---------|--------|\n'
-    + '| `minimum_overall_score` | 80 | Soft floor stored on Strategy UI |\n'
+    + '| `minimum_overall_score` | 80 | Stored on Strategy UI; **not** currently applied as a hard pipeline gate |\n'
     + '| `open_position` | 85 | Open new long when overall score ≥ this |\n'
     + '| `increase_position` | 90 | Add to existing when score ≥ this |\n'
     + '| `watch` | 60 | Insight / watch band |\n'
@@ -395,7 +411,7 @@ export const STRATEGY_REGISTRY_GUIDE_EXTRAS =
     + '  ]\n'
     + '}\n'
     + '```\n\n'
-    + '- `mode`: `any` (first matching rule) or `all` (every enabled rule must match)\n'
+    + '- `mode`: `any` (any matching enabled rule triggers; all matches recorded) or `all` (every enabled rule must match)\n'
     + '- Rule `key` values: `ma_breakdown`, `rs_weakening`, `trend_weakening`, `score_exit`, `max_loss`, '
     + '`atr_stop`, `trailing_stop`, `screener_exit`\n'
     + '- Use `value` and/or `params` as appropriate to the key (see Export of Momentum Strategy for full defaults)\n\n'
@@ -600,6 +616,8 @@ export const STRATEGY_REGISTRY_GUIDE_EXTRAS =
     + '```\n\n';
 
 export const INDICATOR_REGISTRY_GUIDE_EXTRAS =
+    INDICATOR_RUNTIME_POINTER
+    +
     '## Strategy parameter examples (complete rows)\n\n'
     + 'When authoring Strategy `scoring_model` rows, put Composite params under `parameters`:\n\n'
     + '```json\n'
@@ -664,20 +682,15 @@ export const AUTHORING_TRADING_ARTIFACTS_TOPIC = {
         + '6. **Scoring keys** — only strategy-scorable composites (`relative_strength`, `momentum_score`, …). Prefer canonical keys over aliases.\n'
         + '7. **Weights** — enabled `scoring_model` weights must total **exactly 100**.\n'
         + '8. **Validate** Strategy → **Import** (creates **draft**) → **Select** to activate for Recommendations.\n\n'
-        + '## Hard rules (do not guess)\n\n'
-        + '| Rule | Detail |\n'
-        + '|------|--------|\n'
-        + '| No dual-use ids | Screenable ≠ strategy-scorable |\n'
-        + '| No Screener trees on Strategy | Refs only |\n'
-        + '| No unsupported ops | No `neq`, `NOT`, `crosses_*`, `between`, … |\n'
-        + '| Constants are numbers | No string/boolean/date operands |\n'
-        + '| Nesting | Max depth 4; max 40 conditions |\n'
-        + '| Schema | `schema_version: "1.0"`; field name is `definition` |\n'
-        + '\n'
+        + '## Normative rules\n\n'
+        + 'All MUST / SHOULD authoring rules live in the **[AI Authoring Contract](ai-authoring-contract.html)**. '
+        + 'This workflow page does not restate them.\n\n'
         + '## Topic map\n\n'
+        + '- [AI Authoring Contract](ai-authoring-contract.html) — normative constitution\n'
         + '- [Indicator Registry](indicator-registry.html) — catalogue\n'
         + '- [Screener Registry](screener-registry.html) — operators, operands, examples\n'
         + '- [Strategy Registry](strategy-registry.html) — scoring + optional sections\n'
+        + '- [Trading Artifact Runtime Semantics](trading-artifact-runtime.html) — scoring formula, eligibility UNION, thresholds, exits, gates\n'
         + '- [Trading Cookbook](trading-cookbook.html) — full recipes (philosophy + both JSONs)\n',
     controls: [
         { name: 'Validate then Import', description: 'Both registries disable Import until Validate succeeds; editing JSON clears validation.' },
@@ -688,8 +701,12 @@ export const AUTHORING_TRADING_ARTIFACTS_TOPIC = {
             name: 'Portable artifacts',
             description: 'JSON envelopes move between portfolios; Screeners and Strategies reference each other by slug/factory_key and indicator registry ids.',
         },
+        {
+            name: 'Contract-first',
+            description: 'Read the AI Authoring Contract before authoring; treat registry pages as reference.',
+        },
     ],
-    related: ['indicator-registry', 'screener-registry', 'strategy-registry', 'trading-cookbook', 'trading-os-flow'],
+    related: ['ai-authoring-contract', 'indicator-registry', 'screener-registry', 'strategy-registry', 'trading-artifact-runtime', 'trading-cookbook', 'trading-os-flow'],
 };
 
 export const TRADING_COOKBOOK_TOPIC = {
@@ -798,5 +815,5 @@ export const TRADING_COOKBOOK_TOPIC = {
             description: 'Relative strength ratios are Evaluation/Strategy inputs; Screeners use price/volume Primaries, then Strategy relative_strength ranks.',
         },
     ],
-    related: ['authoring-trading-artifacts', 'screener-registry', 'strategy-registry', 'indicator-registry', 'trading-os-flow'],
+    related: ['ai-authoring-contract', 'authoring-trading-artifacts', 'trading-artifact-runtime', 'screener-registry', 'strategy-registry', 'indicator-registry', 'trading-os-flow'],
 };

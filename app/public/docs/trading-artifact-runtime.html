@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trading Artifact Runtime Semantics — StoX docs</title>
+  <meta name="description" content="How StoX combines Strategy scores, eligibility UNION, thresholds, exits, market gates, portfolio rules, param defaults, missing data, and Import normalisation - for AI and humans.">
+  <link rel="canonical" href="trading-artifact-runtime.html">
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a222c;
+      --text: #e7ecf1;
+      --muted: #9aa7b5;
+      --accent: #6cb6ff;
+      --border: #2a3542;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      line-height: 1.55;
+      background: var(--bg);
+      color: var(--text);
+    }
+    a { color: var(--accent); }
+    .wrap { max-width: 920px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+    header.app {
+      border-bottom: 1px solid var(--border);
+      padding: 0.85rem 0 1rem;
+      margin-bottom: 1.25rem;
+    }
+    header.app h1 { font-size: 1.35rem; margin: 0 0 0.35rem; }
+    .muted { color: var(--muted); }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.1rem;
+      margin: 1rem 0;
+    }
+    h2 { font-size: 1.1rem; margin: 0 0 0.65rem; }
+    .doc-list { margin: 0; }
+    .doc-list dt { font-weight: 600; margin-top: 0.75rem; }
+    .doc-list dd { margin: 0.2rem 0 0; color: var(--muted); }
+    .toc a { display: block; padding: 0.25rem 0; text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+    .related { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .related a {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 0.2rem 0.7rem;
+      text-decoration: none;
+      font-size: 0.92rem;
+    }
+    pre, code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.88rem;
+    }
+    pre {
+      background: #0b1015;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.85rem;
+      overflow-x: hidden;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      max-width: 100%;
+    }
+    table {
+      width: 100%;
+      max-width: 100%;
+      border-collapse: collapse;
+      margin: 0.75rem 0;
+      font-size: 0.88rem;
+      table-layout: fixed;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.35rem 0.45rem;
+      text-align: left;
+      vertical-align: top;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    th { background: #121820; }
+    code { overflow-wrap: anywhere; word-break: break-word; }
+    @media print {
+      body { background: #fff; color: #111; }
+      .panel { break-inside: avoid; }
+      pre, table { overflow: visible !important; }
+      a { color: inherit; }
+    }
+    .nav { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem; font-size: 0.92rem; }
+    footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="app">
+      <h1>StoX documentation</h1>
+      <p class="muted" style="margin:0">Static HTML — readable without JavaScript or login.</p>
+      <div class="nav">
+        <a href="index.html">All topics</a>
+        <a href="trading-artifact-runtime.html">This topic</a>
+      </div>
+    </header>
+    
+    <article>
+      <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Trading Artifact Runtime Semantics</h1>
+      <p class="muted"><code>trading-artifact-runtime</code> · screen: <code>/docs/trading-artifact-runtime.html</code></p>
+      <p>How StoX combines Strategy scores, eligibility UNION, thresholds, exits, market gates, portfolio rules, param defaults, missing data, and Import normalisation - for AI and humans.</p>
+
+      <section class="panel">
+        <h2>Overview</h2>
+        <p>This section documents <strong>runtime behaviour</strong> of the Recommendation Engine and related services. Schema fields alone are not enough - AI authors need evaluation order, gating, and edge cases.</p>
+<hr>
+<h2>1. Strategy scoring semantics</h2>
+<p><strong>Where:</strong> <code>StrategyConfigurationService::score()</code> during Recommendation generation (Evaluation emits 0-100 factor facts; Strategy applies weights).</p>
+<h3>Formula</h3>
+<p>For each <strong>enabled</strong> scoring row with <code>weight &gt; 0</code>:</p>
+<ol>
+<li>Add <code>weight</code> to <code>totalWeight</code> (even if the factor later gates to zero).</li>
+<li>Read the Evaluation fact for <code>key</code> (canonicalised aliases apply).</li>
+<li>Compute <code>contribution</code>:<ul>
+<li>Missing / non-numeric fact -&gt; <code>contribution = 0</code>, <code>gated = true</code></li>
+<li><code>value &lt; minimum</code> (when minimum set) -&gt; <code>contribution = 0</code>, <code>gated = true</code></li>
+<li><code>value &gt; maximum</code> (when maximum set) -&gt; <code>contribution = 0</code>, <code>gated = true</code></li>
+<li>Else: <code>normalized = clamp(value, 0, 100) / 100</code><ul>
+<li>Special case <strong><code>risk_score</code></strong> with a maximum set: <code>normalized = 1 - value/100</code> (higher risk lowers contribution)</li>
+<li><code>contribution = round(normalized * weight, 4)</code></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><code>overall_score = round((earned / totalWeight) * 100, 4)</code>, then clamp to <code>[0, 100]</code></li>
+</ol>
+<p>When enabled weights sum to <strong>100</strong> and nothing is gated:</p>
+<p><code>overall ≈ Σ(weight × factor_score) / 100</code></p>
+<p>which is the same as a weight-normalised average:</p>
+<p><code>overall = Σ(weight × factor_score) / Σ(weight)</code></p>
+<h3>Rounding / precision</h3>
+<ul>
+<li>Per-factor <code>contribution</code> and <code>overall_score</code>: <strong>4 decimal places</strong> (<code>round(..., 4)</code>).</li>
+<li>Display UIs may show fewer decimals; stored recommendation math uses the 4 d.p. overall.</li>
+</ul>
+<h3><code>enabled</code>, <code>minimum</code>, <code>maximum</code></h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Behaviour</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>enabled: false</code></td>
+<td>Factor ignored - not in <code>totalWeight</code>, no contribution</td>
+</tr>
+<tr>
+<td><code>minimum: 70</code></td>
+<td>Soft gate: if fact <code>&lt; 70</code>, contribution = <strong>0</strong> (weight still in denominator)</td>
+</tr>
+<tr>
+<td><code>maximum: 90</code></td>
+<td>Soft gate: if fact <code>&gt; 90</code>, contribution = <strong>0</strong> (same dilution)</td>
+</tr>
+<tr>
+<td>Both set</td>
+<td>Pass band is <strong><code>minimum &lt;= value &lt;= maximum</code></strong> (inclusive). Outside -&gt; gated zero</td>
+</tr>
+</tbody></table>
+<p><strong>Important:</strong> Failing min/max does <strong>not</strong> reject the stock from Recommendations. It zeros that factor and <strong>dilutes</strong> overall because weight remains in <code>totalWeight</code>. There is no &quot;hard fail whole candidate&quot; on a single gated factor.</p>
+<hr>
+<h2>2. Eligibility and decision pipeline</h2>
+<p>Daily / recommendation cycle (simplified):</p>
+<pre><code class="language-text">Data readiness
+    |
+    v
+Discovery (patterns + recent screener hits / membership fallback)
+    |
+    v
+Evaluation (factor facts 0-100 - no Strategy weights yet)
+    |
+    v
+RecommendationGenerationPipeline
+    |-- resolve eligibility_sources (UNION of enabled Screeners)
+    |-- StrategyConfigurationService.score (scoring_model)
+    |-- ExitStrategyEvaluator (owned holdings only)
+    |-- buildMarketOpinion + decidePortfolioAction (thresholds)
+    |-- market_gates demotion (OPEN/INCREASE only)
+    |-- rankDrafts
+    |-- allocateCapital (portfolio_rules + cash)
+    |-- persistDrafts
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Strategy section</th>
+<th>When it applies</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>eligibility_sources</code></td>
+<td>Filters which names may receive <strong>new entry</strong> actions; holdings always reviewed</td>
+</tr>
+<tr>
+<td><code>scoring_model</code></td>
+<td>Weighted overall score from Evaluation facts</td>
+</tr>
+<tr>
+<td><code>thresholds</code></td>
+<td>Opinion (bull/bear/neutral) + OPEN/WATCH/HOLD/INCREASE/REDUCE/EXIT</td>
+</tr>
+<tr>
+<td><code>exit_strategy</code></td>
+<td>Can force EXIT on <strong>held</strong> names</td>
+</tr>
+<tr>
+<td><code>market_gates</code></td>
+<td>After scoring: demote OPEN/INCREASE when blocked; size multipliers</td>
+</tr>
+<tr>
+<td><code>portfolio_rules</code></td>
+<td>Position % caps, cash reserve/deploy, max new positions; can demote unfunded buys to WATCH</td>
+</tr>
+<tr>
+<td><code>capital_allocation</code></td>
+<td>Score bands for allocation %</td>
+</tr>
+</tbody></table>
+<p>Discovery itself is <strong>not</strong> limited to the active Strategy eligibility list (it merges recent screener hits broadly). Strategy eligibility is enforced in Recommendation.</p>
+<hr>
+<h2>3. Multiple eligibility screeners</h2>
+<ul>
+<li>Mode: <strong>UNION</strong> (<code>screener_union</code>). A stock is eligible if it appears in <strong>any</strong> enabled source&#39;s latest completed run (within ~72 hours).</li>
+<li><strong>Not</strong> intersection.</li>
+<li><code>priority</code>: sort order only - does <strong>not</strong> change union semantics.</li>
+<li>Duplicate hits across screeners are <strong>de-duplicated</strong> by security id.</li>
+<li>Empty <code>eligibility_sources</code>: unrestricted (no screener filter for entries).</li>
+<li>Sources configured but no recent completed runs: pipeline may treat as unrestricted pending runs (no artificial empty set).</li>
+<li><strong>Holdings</strong> are always considered for HOLD/REDUCE/EXIT even if not currently eligible for new entries.</li>
+</ul>
+<hr>
+<h2>4. Thresholds - runtime behaviour</h2>
+<p>Factory defaults (Momentum): <code>open_position=85</code>, <code>increase_position=90</code>, <code>watch=60</code>, <code>reduce_position=40</code>, <code>exit_position=20</code>.</p>
+<h3>Example: overall score = 82 (not held)</h3>
+<ul>
+<li>Opinion: <strong>NEUTRAL</strong> (not &gt;= open 85, not &lt;= exit 20), strength often **MODERATE** if &gt;= watch 60.</li>
+<li>Action: <strong>WATCH</strong> (OPEN requires score &gt;= open or strong-bull path).</li>
+</ul>
+<h3>Example: overall score = 82 (held)</h3>
+<ul>
+<li>Action: typically <strong>HOLD</strong> (not EXIT/REDUCE/INCREASE under default bands).</li>
+</ul>
+<h3>Evaluation order / conflicts</h3>
+<p>Thresholds are <strong>not</strong> exclusive score bands with ties. Code uses sequential rules:</p>
+<ol>
+<li>Market opinion: if <code>score &gt;= open</code> -&gt; bullish; else if <code>score &lt;= exit</code> -&gt; bearish; else neutral.</li>
+<li>Portfolio action (not held): OPEN only if bullish/strong path or <code>score &gt;= open</code>; else WATCH.</li>
+<li>Portfolio action (held): EXIT if bearish/<code>score &lt;= exit</code>; else REDUCE checks; else INCREASE if bullish and <code>score &gt;= increase</code>; else HOLD.</li>
+</ol>
+<p>Comparisons are <strong>inclusive</strong> on the side used (<code>&gt;=</code> open/watch/increase, <code>&lt;=</code> exit/reduce).</p>
+<p><strong>Open overrides Watch</strong> when open condition is met. Exit/reduce paths take precedence over hold/increase for holdings when those conditions fire.</p>
+<p><code>minimum_overall_score</code> is stored on Strategy config / UI but is <strong>not</strong> currently applied as a hard gate in the recommendation pipeline (use <code>open_position</code> / scoring mins instead).</p>
+<hr>
+<h2>5. Exit strategy - execution semantics</h2>
+<ul>
+<li>Evaluated on <strong>owned holdings</strong> (and a screener-exit-only pass for holdings missing from the eval set).</li>
+<li>Runs each Recommendation cycle for held names.</li>
+<li><code>mode: &quot;any&quot;</code> (default): if <strong>any</strong> enabled rule matches, exit triggers (all matches are recorded).</li>
+<li><code>mode: &quot;all&quot;</code>: <strong>every enabled rule</strong> must match to trigger.</li>
+<li>Rules can use Strategy/Evaluation scores (<code>score_exit</code>, <code>rs_weakening</code>, <code>trend_weakening</code>), price/SMA/ATR facts, unrealized PnL, and <strong><code>screener_exit</code></strong> (registry screener hit lists by local screener id - not an embedded condition tree).</li>
+<li>Triggered exit overrides other actions to <strong>EXIT</strong>.</li>
+</ul>
+<hr>
+<h2>6. Market gates</h2>
+<p>When <code>market_gates.enabled</code> is true and sentiment/phase/risk checks fail entry:</p>
+<ul>
+<li>Scoring <strong>still runs</strong> (gates do not skip Evaluation/Strategy score).</li>
+<li><strong>OPEN / INCREASE</strong> demoted to WATCH (not held) or HOLD (held).</li>
+<li><strong>EXIT / REDUCE / HOLD</strong> still allowed - sells and holds are not blocked by entry gates.</li>
+<li>Gates may also shrink position size multipliers when partially allowing entry.</li>
+</ul>
+<hr>
+<h2>7. Portfolio rules</h2>
+<ul>
+<li>Target size uses something like <code>min(max_position_size_pct, band_or_default_pct)</code> - <strong>max always caps</strong> default/band.</li>
+<li><code>min_cash_reserve_pct</code> / <code>max_cash_deployment_pct</code> reduce available cash before allocation.</li>
+<li>If cash cannot fund an OPEN/INCREASE, the draft is typically demoted to <strong>WATCH</strong> (<code>ALLOCATION_UNFUNDED</code>) - i.e. rules can <strong>suppress BUY actions</strong>, not only leave a zero-qty BUY.</li>
+<li><code>max_new_positions_per_cycle</code> limits how many new opens survive ranking/allocation.</li>
+</ul>
+<hr>
+<h2>8. Indicator parameter defaults (Screeners)</h2>
+<p><strong>Catalogue / UI defaults</strong> (Indicator Registry tables) are what the editor shows when you add a condition (e.g. EMA catalogue default period <strong>50</strong>).</p>
+<p><strong>Runtime</strong> (<code>TechnicalIndicatorService</code>): if a param key is <strong>omitted</strong> from JSON, the service uses its own fallbacks - for many series including <strong><code>ema</code>/<code>sma</code> that fallback is <code>period ?? 20</code></strong>, not necessarily the catalogue UI default.</p>
+<p>Therefore:</p>
+<pre><code class="language-json">{ &quot;indicator&quot;: &quot;ema&quot; }
+</code></pre>
+<p>is <strong>not guaranteed</strong> identical to</p>
+<pre><code class="language-json">{ &quot;indicator&quot;: &quot;ema&quot;, &quot;params&quot;: { &quot;period&quot;: 50 } }
+</code></pre>
+<p><strong>AI best practice:</strong> always set params explicitly for production artifacts.</p>
+<hr>
+<h2>9. Parameter validation</h2>
+<p>On Screener Validate / Import / save (<code>ScreenerDefinitionValidator</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Input</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Param present, non-numeric</td>
+<td><strong>Reject</strong></td>
+</tr>
+<tr>
+<td>Param present, outside catalogue min/max (e.g. period 0, period 500, mult 9)</td>
+<td><strong>Reject</strong></td>
+</tr>
+<tr>
+<td>Param <strong>omitted</strong></td>
+<td>Not range-checked; runtime fallback applies</td>
+</tr>
+</tbody></table>
+<p>No silent clamp to catalogue max on Validate. Do not rely on runtime <code>max(1, period)</code> as a substitute for correct JSON.</p>
+<hr>
+<h2>10. Missing data</h2>
+<table>
+<thead>
+<tr>
+<th>Situation</th>
+<th>Screener</th>
+<th>Strategy score</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Insufficient OHLCV bars</td>
+<td>Stock <strong>skipped</strong> (<code>insufficient_data</code>) - not a match</td>
+<td></td>
+</tr>
+<tr>
+<td><code>needs_volume</code> but no volume</td>
+<td>Stock <strong>skipped</strong> (<code>insufficient_volume</code>)</td>
+<td></td>
+</tr>
+<tr>
+<td>Indicator returns null on a condition</td>
+<td>That condition is <strong>false</strong> (AND fails / OR may still pass)</td>
+<td></td>
+</tr>
+<tr>
+<td>Corporate action / DQ hold</td>
+<td>Separate Data Quality guards may exclude names from pipelines</td>
+<td></td>
+</tr>
+<tr>
+<td>Missing Evaluation fact for a scoring key</td>
+<td>Factor contribution <strong>0</strong>, gated; weight still dilutes overall</td>
+<td></td>
+</tr>
+</tbody></table>
+<hr>
+<h2>11. Numeric precision and <code>eq</code></h2>
+<ul>
+<li>Screener <code>eq</code>: float compare with abs epsilon <strong>1e-4</strong>, else relative <strong>1e-6</strong> (<code>floatsEqual</code>). Prefer <code>gte</code>/<code>lte</code> for thresholds.</li>
+<li>Strategy overall: 4 decimal places as above.</li>
+<li>Cash/allocation amounts often rounded to 2-4 decimals in plan builders.</li>
+</ul>
+<hr>
+<h2>12. Import normalisation</h2>
+<h3>Strategy</h3>
+<ul>
+<li>Aliases: <code>scoring_model</code> &lt;-&gt; <code>indicators</code>; eligibility <code>factory_key</code> &lt;-&gt; <code>screener_factory_key</code>.</li>
+<li>Scoring keys normalised to catalogue; unsupported keys dropped; missing catalogue rows filled from defaults; enabled weights redistributed toward 100 when needed by <code>normalizeConfig</code>.</li>
+<li>Known sections merged (<code>thresholds</code>, <code>portfolio_rules</code>, <code>market_gates</code>, <code>exit_strategy</code>, ...).</li>
+<li>Unknown <strong>top-level</strong> definition keys are generally <strong>not</strong> preserved (config rebuilt from known sections).</li>
+<li>Extra <strong>nested</strong> keys inside merged objects may survive <code>array_merge</code>.</li>
+<li>Slug/name collisions get suffix / <code>(import)</code> rename.</li>
+<li>Always Import as <strong>draft</strong>; activation is Select.</li>
+</ul>
+<h3>Screener</h3>
+<ul>
+<li>Validate tree; create with unique slug; definition stored as provided (after validation).</li>
+<li>Prefer exporting a working screener before large edits.</li>
+</ul>
+<hr>
+<h2>13. Version compatibility</h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Behaviour</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>schema_version</code></td>
+<td>Required. Major must be &lt;= app major (<code>1.0</code> today). Empty or newer major -&gt; <code>SCHEMA_VERSION_UNSUPPORTED</code></td>
+</tr>
+<tr>
+<td><code>minimum_engine_version</code></td>
+<td>Exported for documentation / future use; <strong>not currently enforced</strong> on Validate/Import</td>
+</tr>
+</tbody></table>
+<p>Ship <code>schema_version: &quot;1.0&quot;</code> on all envelopes.</p>
+<hr>
+<h2>14. Normative authoring rules</h2>
+<p>Authoring MUST / SHOULD rules live in the <strong>AI Authoring Contract</strong>. Do not treat this Runtime section as a second constitution.</p>
+<hr>
+<h2>15. Complete end-to-end walkthrough</h2>
+<p>See <strong>Complete Examples</strong> in the AI Authoring Guide (canonical Minervini-style lifecycle). Worked JSON lives in Screener/Strategy Registry examples and the Trading Cookbook.</p>
+<p>Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).</p>
+
+      </section>
+
+      <section class="panel">
+        <h2>Controls</h2>
+        <dl class="doc-list">
+        <dt>Use with AI guide download</dt>
+        <dd>This topic is included in /docs/stox-trading-artifacts-ai-guide.md (Download AI authoring guide on Screener/Strategy Registry).</dd>
+    
+        <dt>Typical flow</dt>
+        <dd>Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.</dd>
+    
+        <dt>Validation and errors</dt>
+        <dd>Form and API validations are shown as inline errors or toast messages. Fix the first reported issue, retry, and re-check dependent sections that consume the same data.</dd>
+    </dl>
+      </section>
+
+      <section class="panel">
+        <h2>Concepts</h2>
+        <dl class="doc-list">
+        <dt>Soft min/max gates</dt>
+        <dd>Failing scoring minimum/maximum zeros that factor contribution but keeps its weight in the denominator - dilutes overall; does not reject the stock.</dd>
+    
+        <dt>Eligibility UNION</dt>
+        <dd>Multiple eligibility_sources OR together; priority is sort order only; holdings always reviewed.</dd>
+    
+        <dt>Explicit Screener params</dt>
+        <dd>Omitted params use TechnicalIndicatorService fallbacks (often period 20), which may differ from catalogue UI defaults (e.g. EMA 50).</dd>
+    
+        <dt>Active portfolio context</dt>
+        <dd>Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.</dd>
+    
+        <dt>Data freshness</dt>
+        <dd>Many analytics depend on cached daily OHLCV and scheduled sync jobs. If numbers look stale, refresh this page and verify sync status in admin tools.</dd>
+    </dl>
+      </section>
+
+      
+      <section class="panel">
+        <h2>Related topics</h2>
+        <div class="related">
+          <a href="ai-authoring-contract.html">AI Authoring Contract (Normative Rules)</a><a href="authoring-trading-artifacts.html">Authoring Trading Artifacts</a><a href="strategy-registry.html">Strategy Registry</a><a href="screener-registry.html">Screener Registry</a><a href="indicator-registry.html">Indicator Registry</a><a href="trading-cookbook.html">Trading Cookbook</a><a href="recommendations.html">Recommendations</a>
+        </div>
+      </section>
+    </article>
+    
+    <footer class="muted">
+      Generated from the StoX in-app documentation source. Product screens still require sign-in.
+    </footer>
+  </div>
+</body>
+</html>

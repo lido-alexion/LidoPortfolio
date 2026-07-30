@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Authoring Contract (Normative Rules) — StoX docs</title>
+  <meta name="description" content="RFC 2119 constitution for authoring portable Trading Artifacts. Read this first; other guide sections are detailed reference.">
+  <link rel="canonical" href="ai-authoring-contract.html">
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a222c;
+      --text: #e7ecf1;
+      --muted: #9aa7b5;
+      --accent: #6cb6ff;
+      --border: #2a3542;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      line-height: 1.55;
+      background: var(--bg);
+      color: var(--text);
+    }
+    a { color: var(--accent); }
+    .wrap { max-width: 920px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+    header.app {
+      border-bottom: 1px solid var(--border);
+      padding: 0.85rem 0 1rem;
+      margin-bottom: 1.25rem;
+    }
+    header.app h1 { font-size: 1.35rem; margin: 0 0 0.35rem; }
+    .muted { color: var(--muted); }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.1rem;
+      margin: 1rem 0;
+    }
+    h2 { font-size: 1.1rem; margin: 0 0 0.65rem; }
+    .doc-list { margin: 0; }
+    .doc-list dt { font-weight: 600; margin-top: 0.75rem; }
+    .doc-list dd { margin: 0.2rem 0 0; color: var(--muted); }
+    .toc a { display: block; padding: 0.25rem 0; text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+    .related { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .related a {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 0.2rem 0.7rem;
+      text-decoration: none;
+      font-size: 0.92rem;
+    }
+    pre, code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.88rem;
+    }
+    pre {
+      background: #0b1015;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.85rem;
+      overflow-x: hidden;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      max-width: 100%;
+    }
+    table {
+      width: 100%;
+      max-width: 100%;
+      border-collapse: collapse;
+      margin: 0.75rem 0;
+      font-size: 0.88rem;
+      table-layout: fixed;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.35rem 0.45rem;
+      text-align: left;
+      vertical-align: top;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    th { background: #121820; }
+    code { overflow-wrap: anywhere; word-break: break-word; }
+    @media print {
+      body { background: #fff; color: #111; }
+      .panel { break-inside: avoid; }
+      pre, table { overflow: visible !important; }
+      a { color: inherit; }
+    }
+    .nav { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem; font-size: 0.92rem; }
+    footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="app">
+      <h1>StoX documentation</h1>
+      <p class="muted" style="margin:0">Static HTML — readable without JavaScript or login.</p>
+      <div class="nav">
+        <a href="index.html">All topics</a>
+        <a href="ai-authoring-contract.html">This topic</a>
+      </div>
+    </header>
+    
+    <article>
+      <h1 style="font-size:1.6rem;margin:0 0 0.4rem">AI Authoring Contract (Normative Rules)</h1>
+      <p class="muted"><code>ai-authoring-contract</code> · screen: <code>/docs/ai-authoring-contract.html</code></p>
+      <p>RFC 2119 constitution for authoring portable Trading Artifacts. Read this first; other guide sections are detailed reference.</p>
+
+      <section class="panel">
+        <h2>Overview</h2>
+        <p>This Contract is the <strong>constitution</strong> of Trading Artifact authoring.</p>
+<p>Keywords follow RFC 2119: <strong>MUST</strong>, <strong>MUST NOT</strong>, <strong>SHOULD</strong>, <strong>SHOULD NOT</strong>, <strong>MAY</strong>.</p>
+<p>Detailed schemas, catalogues, runtime maths, and JSON samples live in later sections. Do not invent behaviour absent from this Contract and those references.</p>
+<p><strong>Maintenance rule:</strong> Any new authoring or behavioural constraint MUST be added here before it is documented elsewhere in this guide.</p>
+<hr>
+<h3>General Principles</h3>
+<ol>
+<li>AI MUST generate portable Trading Artifacts (JSON envelopes) consumable by Validate / Import.</li>
+<li>AI MUST rely only on functionality documented in this guide.</li>
+<li>AI MUST NOT invent undocumented features, operators, indicator ids, parameter names, or optional sections.</li>
+<li>AI MUST prefer canonical registry identifiers over aliases.</li>
+<li>AI MUST NOT read or depend on application source code to author artifacts.</li>
+<li>AI SHOULD minimise unnecessary configuration.</li>
+<li>AI SHOULD produce human-readable <code>name</code> and <code>slug</code> values.</li>
+<li>AI SHOULD treat later guide sections as reference manuals subordinate to this Contract.</li>
+</ol>
+<h3>Artifact Envelope</h3>
+<ol start="9">
+<li>Every artifact MUST include <code>schema_version</code>.</li>
+<li><code>schema_version</code> MUST equal <code>&quot;1.0&quot;</code> for artifacts authored against this guide.</li>
+<li>Every artifact MUST include <code>artifact_type</code> matching the payload (<code>indicator</code> | <code>screener</code> | <code>strategy</code>).</li>
+<li>Artifact body fields MUST use the portable key <code>definition</code> (not database column names such as <code>definition_json</code> or <code>config_json</code>).</li>
+<li>Every artifact MUST include <code>slug</code>.</li>
+<li>Every artifact MUST include <code>name</code>.</li>
+<li>Every artifact MUST include <code>metadata</code> as an object (empty object allowed).</li>
+<li>Unknown top-level envelope fields SHOULD NOT be introduced.</li>
+<li><code>minimum_engine_version</code> MAY be included; it is exported for documentation and is not currently enforced on Validate/Import. See Runtime Semantics.</li>
+<li>AI MUST NOT place Screener condition trees or Strategy scoring rows outside <code>definition</code>.</li>
+</ol>
+<h3>Indicator Rules</h3>
+<ol start="19">
+<li>Screeners MUST use only screenable Primary indicator ids from the Indicator Registry.</li>
+<li>Strategies MUST use only strategy-scorable Composite keys in <code>scoring_model</code>.</li>
+<li>No indicator id MUST be treated as both screenable and strategy-scorable.</li>
+<li>Indicator ids MUST exactly match the Indicator Registry (canonical spelling).</li>
+<li>Parameter names MUST exactly match the Indicator Registry for that indicator.</li>
+<li>Unknown indicator ids MUST NOT be invented.</li>
+<li>Unknown parameter names MUST NOT be invented.</li>
+<li>Parameter values that are present MUST be numeric where the registry requires numbers.</li>
+<li>Parameter values that are present MUST lie within catalogue min/max for that parameter.</li>
+<li>Out-of-range parameter values MUST NOT be authored (Validate rejects; values are not clamped).</li>
+<li>Screener <code>params</code> keys MAY be omitted; omitted keys resolve via TechnicalIndicatorService fallbacks. See Runtime Semantics / Indicator Registry.</li>
+<li>AI SHOULD set Screener <code>params</code> explicitly so runtime values match author intent (catalogue UI defaults may differ from runtime fallbacks).</li>
+<li>AI SHOULD NOT invent Indicator Registry shipping calculators; Indicator create/update drafts do not mutate release calculators.</li>
+</ol>
+<h3>Screener Rules</h3>
+<ol start="32">
+<li>Every Screener MUST contain <code>definition.root</code>.</li>
+<li><code>root</code> MUST be a <code>group</code> or <code>condition</code> node.</li>
+<li>Every Screener MUST contain at least one <code>condition</code> somewhere under <code>root</code>.</li>
+<li>Group operators MUST be exactly <code>AND</code> or <code>OR</code>.</li>
+<li>Condition operators MUST be exactly one of: <code>gt</code>, <code>gte</code>, <code>lt</code>, <code>lte</code>, <code>eq</code>.</li>
+<li>Unsupported operators MUST NOT be used (<code>neq</code>, <code>NOT</code>, <code>crosses_above</code>, <code>crosses_below</code>, <code>between</code>, <code>outside</code>, <code>contains</code>, <code>in</code>, and similar).</li>
+<li>Each of <code>left</code> and <code>right</code> MUST be either an indicator operand or a constant operand.</li>
+<li>Constant operands MUST use <code>{ &quot;type&quot;: &quot;constant&quot;, &quot;value&quot;: &lt;number&gt; }</code>.</li>
+<li>Constant values MUST be numeric.</li>
+<li>Boolean operands MUST NOT be used.</li>
+<li>String operands MUST NOT be used.</li>
+<li>Null and date operands MUST NOT be used.</li>
+<li>Indicator operands MUST use <code>{ &quot;indicator&quot;: &quot;&lt;id&gt;&quot;, &quot;params&quot;: { ... } }</code> shape (params object MAY be empty or omit keys per rules 29–30).</li>
+<li>Nesting depth MUST NOT exceed 4.</li>
+<li>Condition count MUST NOT exceed 40.</li>
+<li><code>eq</code> MUST be treated as float equality with documented epsilon; prefer <code>gte</code>/<code>lte</code> for thresholds. See Runtime Semantics.</li>
+<li>AI SHOULD express “between” as <code>AND</code> of <code>gte</code> and <code>lte</code>.</li>
+<li>AI SHOULD express “outside” as <code>OR</code> of <code>lt</code> and <code>gt</code>.</li>
+<li>Screener <code>slug</code> MUST be unique within the target portfolio (Import may suffix on collision).</li>
+</ol>
+<h3>Strategy Rules</h3>
+<ol start="51">
+<li>Strategies MUST reference Screeners via <code>screener_slug</code> and/or <code>screener_factory_key</code> in <code>eligibility_sources</code>.</li>
+<li>Strategies MUST NOT embed Screener trees (<code>definition.root</code>, nested condition groups) inside Strategy JSON. See Strategy Registry.</li>
+<li><code>definition.scoring_model</code> MUST be present (alias <code>indicators</code> is accepted and normalised).</li>
+<li><code>scoring_model</code> MUST contain at least one enabled row with <code>weight &gt; 0</code>.</li>
+<li>Enabled scoring weights MUST total exactly 100 (±0.01).</li>
+<li>Only strategy-scorable Composite keys MAY appear as scoring <code>key</code> values.</li>
+<li>Unknown scoring keys MUST NOT be used.</li>
+<li>Scoring row <code>enabled: false</code> MUST be treated as excluded from weight totals and contributions. See Runtime Semantics.</li>
+<li>When both <code>minimum</code> and <code>maximum</code> are set on a scoring row, the pass band MUST be interpreted as <code>minimum &lt;= value &lt;= maximum</code>.</li>
+<li>Failing a scoring <code>minimum</code> or <code>maximum</code> MUST NOT reject the stock from Recommendations; contribution is zero and weight still dilutes overall. See Runtime Semantics.</li>
+<li>Multiple <code>eligibility_sources</code> MUST be interpreted as UNION of candidates (not intersection).</li>
+<li><code>priority</code> on eligibility sources MUST be treated as sort order only.</li>
+<li>Optional sections <code>thresholds</code>, <code>portfolio_rules</code>, <code>exit_strategy</code>, and <code>market_gates</code> MAY be included when documented in Strategy Registry.</li>
+<li>AI MUST NOT invent undocumented Strategy definition sections or exit rule keys.</li>
+<li>Exit rule keys MUST be chosen from the documented set (<code>ma_breakdown</code>, <code>rs_weakening</code>, <code>trend_weakening</code>, <code>score_exit</code>, <code>max_loss</code>, <code>atr_stop</code>, <code>trailing_stop</code>, <code>screener_exit</code>).</li>
+<li><code>exit_strategy.mode</code> MUST be <code>any</code> or <code>all</code> when present.</li>
+<li>AI SHOULD Export an existing Strategy before large edits to preserve thresholds, exits, and gates.</li>
+</ol>
+<h3>Runtime Behaviour Rules (Authoring-Relevant)</h3>
+<ol start="68">
+<li>AI MUST NOT assume failing one scoring factor hard-rejects the candidate. See Runtime Semantics §1.</li>
+<li>AI MUST NOT assume eligibility INTERSECTION when multiple Screeners are listed. See Runtime Semantics §3.</li>
+<li>AI MUST NOT assume <code>minimum_overall_score</code> is a hard Recommendation pipeline gate. See Runtime Semantics §4.</li>
+<li>AI SHOULD assume market gates demote OPEN/INCREASE only and still allow EXIT/REDUCE. See Runtime Semantics §6.</li>
+<li>AI SHOULD assume insufficient cash can demote OPEN/INCREASE to WATCH. See Runtime Semantics §7.</li>
+<li>AI MUST NOT embed exit logic as Screener trees inside Strategy; use documented exit rule keys or <code>screener_exit</code> references.</li>
+</ol>
+<h3>Import Rules</h3>
+<ol start="74">
+<li>JSON MUST be Validated successfully before Import.</li>
+<li>Import MUST NOT be performed on invalid or unvalidated JSON.</li>
+<li>AI SHOULD Validate after every material edit.</li>
+<li>AI SHOULD Import Screener before Strategy when the Strategy references that Screener by slug.</li>
+<li>Strategy Import MUST be treated as creating a draft until Select activates it.</li>
+<li>AI SHOULD prefer Export → edit → Validate → Import over authoring large optional sections from scratch.</li>
+<li>AI SHOULD expect Import normalisation (aliases, weight redistribution, slug/name collision handling). See Runtime Semantics §12.</li>
+<li>AI MUST NOT rely on unknown top-level Strategy definition keys surviving Import.</li>
+</ol>
+<h3>Validation Rules</h3>
+<ol start="82">
+<li>Validation errors MUST be resolved before Import.</li>
+<li>Invalid JSON MUST NOT be imported.</li>
+<li>Validation MUST precede every Import attempt.</li>
+<li>AI MUST treat Validate <code>ok</code> as the sole gate that enables Import in Registry UI.</li>
+<li>Editing JSON after Validate MUST be assumed to clear validation state.</li>
+</ol>
+<h3>Portability Rules</h3>
+<ol start="87">
+<li>JSON MUST remain portable across portfolios.</li>
+<li>JSON MUST NOT depend on local database primary keys for cross-portfolio portability.</li>
+<li><code>screener_slug</code> or <code>screener_factory_key</code> SHOULD be preferred over <code>screener_id</code> in authored Strategy eligibility.</li>
+<li>AI SHOULD declare <code>dependencies</code> when the envelope format includes them.</li>
+<li>AI MUST NOT hard-code portfolio-specific absolute paths or environment secrets into artifacts.</li>
+</ol>
+<h3>AI Authoring Best Practices</h3>
+<ol start="92">
+<li>AI SHOULD prefer canonical indicator and scoring ids.</li>
+<li>AI SHOULD NOT invent registry ids.</li>
+<li>AI SHOULD NOT invent operators.</li>
+<li>AI SHOULD NOT invent optional Strategy sections beyond those documented.</li>
+<li>AI SHOULD omit Screener parameters only when the intended runtime fallback is known and acceptable.</li>
+<li>AI SHOULD preserve existing metadata when editing an Exported artifact.</li>
+<li>AI SHOULD generate distinct, descriptive <code>name</code> strings.</li>
+<li>AI SHOULD use Trading Cookbook recipes when matching a documented investing style.</li>
+<li>AI SHOULD note Cookbook approximations (for example Value without PE, Darvas/CANSLIM proxies) in <code>metadata</code> or names when relevant.</li>
+<li>AI SHOULD keep one atomic concern per Screener where practical.</li>
+<li>AI SHOULD keep Strategy scoring rows aligned to Evaluation composites the engine actually emits.</li>
+</ol>
+<h3>Pre-Generation Checklist</h3>
+<p>Before emitting JSON, AI MUST verify:</p>
+<ul>
+<li><input disabled="" type="checkbox"> <code>schema_version</code> present and equal to <code>&quot;1.0&quot;</code></li>
+<li><input disabled="" type="checkbox"> <code>artifact_type</code> correct (<code>screener</code> or <code>strategy</code>)</li>
+<li><input disabled="" type="checkbox"> <code>slug</code>, <code>name</code>, <code>metadata</code>, and <code>definition</code> present</li>
+<li><input disabled="" type="checkbox"> Field name is <code>definition</code> (not DB column names)</li>
+<li><input disabled="" type="checkbox"> Indicator ids exist in Indicator Registry for the intended use (screenable vs scorable)</li>
+<li><input disabled="" type="checkbox"> Parameter names match the registry; present values within min/max</li>
+<li><input disabled="" type="checkbox"> Screener operators are only <code>gt</code>/<code>gte</code>/<code>lt</code>/<code>lte</code>/<code>eq</code> and groups only <code>AND</code>/<code>OR</code></li>
+<li><input disabled="" type="checkbox"> Operands are indicator or numeric constant only</li>
+<li><input disabled="" type="checkbox"> Nesting depth ≤ 4 and condition count ≤ 40</li>
+<li><input disabled="" type="checkbox"> Strategy has no embedded Screener trees</li>
+<li><input disabled="" type="checkbox"> Eligibility uses <code>screener_slug</code> / <code>screener_factory_key</code></li>
+<li><input disabled="" type="checkbox"> Enabled <code>scoring_model</code> weights total exactly 100</li>
+<li><input disabled="" type="checkbox"> Scoring keys are strategy-scorable only</li>
+<li><input disabled="" type="checkbox"> Optional sections/keys are documented only</li>
+<li><input disabled="" type="checkbox"> JSON is portable (no reliance on local DB ids)</li>
+<li><input disabled="" type="checkbox"> Validate → Import sequence planned (Strategy remains draft until Select)</li>
+</ul>
+<p>Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).</p>
+
+      </section>
+
+      <section class="panel">
+        <h2>Controls</h2>
+        <dl class="doc-list">
+        <dt>Download AI guide</dt>
+        <dd>This Contract is the second major section of /docs/stox-trading-artifacts-ai-guide.md (after Introduction).</dd>
+    
+        <dt>Typical flow</dt>
+        <dd>Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.</dd>
+    
+        <dt>Validation and errors</dt>
+        <dd>Form and API validations are shown as inline errors or toast messages. Fix the first reported issue, retry, and re-check dependent sections that consume the same data.</dd>
+    </dl>
+      </section>
+
+      <section class="panel">
+        <h2>Concepts</h2>
+        <dl class="doc-list">
+        <dt>Normative keywords</dt>
+        <dd>MUST / MUST NOT / SHOULD / SHOULD NOT / MAY per RFC 2119.</dd>
+    
+        <dt>Contract-first maintenance</dt>
+        <dd>New authoring or behavioural constraints are added to this Contract before detailed reference topics.</dd>
+    
+        <dt>Active portfolio context</dt>
+        <dd>Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.</dd>
+    
+        <dt>Data freshness</dt>
+        <dd>Many analytics depend on cached daily OHLCV and scheduled sync jobs. If numbers look stale, refresh this page and verify sync status in admin tools.</dd>
+    </dl>
+      </section>
+
+      
+      <section class="panel">
+        <h2>Related topics</h2>
+        <div class="related">
+          <a href="authoring-trading-artifacts.html">Authoring Trading Artifacts</a><a href="trading-artifact-runtime.html">Trading Artifact Runtime Semantics</a><a href="indicator-registry.html">Indicator Registry</a><a href="screener-registry.html">Screener Registry</a><a href="strategy-registry.html">Strategy Registry</a><a href="trading-cookbook.html">Trading Cookbook</a>
+        </div>
+      </section>
+    </article>
+    
+    <footer class="muted">
+      Generated from the StoX in-app documentation source. Product screens still require sign-in.
+    </footer>
+  </div>
+</body>
+</html>

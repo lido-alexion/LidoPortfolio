@@ -1,43 +1,223 @@
 # StoX Trading Artifacts - AI Authoring Guide
 
+## 1. Introduction
+
 > **Audience:** AI agents and developers authoring portable Indicator / Screener / Strategy JSON **without** reading application source code.
 >
-> **Generated:** 2026-07-30T20:54:08.169Z
+> **Generated:** 2026-07-30T21:09:49.441Z
 > **Deploy download:** `/docs/stox-trading-artifacts-ai-guide.md` (also linked from Screener Registry and Strategy Registry).
 > **Repo copy:** `specs/engines/StoX-Trading-Artifacts-AI-Guide.md`
 
-This file consolidates:
+This guide is the **single authoritative specification** for authoring production-ready Trading Artifacts.
 
-1. Authoring Trading Artifacts (workflow)
-2. Indicator Registry (full catalogue)
-3. Screener Registry (operators, operands, complete examples)
-4. Strategy Registry (scoring, optional sections, complete examples)
-5. Trading Cookbook (philosophy + paired JSON recipes)
+| Section | Role |
+|---------|------|
+| **AI Authoring Contract** | Normative constitution (MUST / SHOULD). Read first. |
+| Hard Rules | Compact reminder table derived from the Contract. |
+| Authoring Workflow | Recommended Validate -> Import sequence. |
+| Indicator / Screener / Strategy Registry | Detailed reference catalogues and schemas. |
+| Trading Cookbook | Philosophy + paired JSON recipes. |
+| Complete Examples | Canonical end-to-end lifecycle. |
+| Appendix | Runtime semantics and other detailed behaviour. |
 
-HTML mirrors (same prose): `/docs/authoring-trading-artifacts.html`, `/docs/indicator-registry.html`, `/docs/screener-registry.html`, `/docs/strategy-registry.html`, `/docs/trading-cookbook.html`.
+**Document maintenance:** New authoring or behavioural constraints MUST be added to the AI Authoring Contract before detailed reference sections.
 
----
-
-## Hard rules (read first - do not guess)
-
-| Rule | Detail |
-|------|--------|
-| Schema | Always `schema_version: "1.0"`. Import field is `definition` (not DB column names). |
-| Screener operators | Condition: `gt` `gte` `lt` `lte` `eq` only. Group: `AND` `OR` only. |
-| NOT supported | `neq`, `NOT`, `crosses_above`/`crosses_below`, `between`, `outside`, `contains`, `in`, string/boolean/null/date operands. |
-| Operands | Indicator `{ "indicator", "params" }` or constant `{ "type":"constant", "value": <number> }`. |
-| Nesting | Max depth **4**; max **40** conditions. |
-| Indicator dual-use | No id is both screenable and strategy-scorable. |
-| Strategy eligibility | Reference Screeners by `screener_slug` / `screener_factory_key` only - never embed `definition.root`. |
-| Strategy weights | Enabled `scoring_model` weights must sum to **exactly 100**. |
-| Import UX | Validate must succeed before Import is enabled; Import Strategy = **draft** until Select. |
-| Param names | Use catalogue ids exactly (`period`, `fast`, `slow`, `mult`, `lookback_days`, `rsi_period`, ...). |
+HTML mirrors: `/docs/ai-authoring-contract.html`, `/docs/authoring-trading-artifacts.html`, `/docs/indicator-registry.html`, `/docs/screener-registry.html`, `/docs/strategy-registry.html`, `/docs/trading-cookbook.html`, `/docs/trading-artifact-runtime.html`.
 
 ---
 
-# Authoring Trading Artifacts
+## 2. AI Authoring Contract (Normative Rules)
 
-**Keyword:** `authoring-trading-artifacts` | **Aliases:** `artifact-authoring`, `ai-authoring-guide`, `trading-artifact-authoring`
+This Contract is the **constitution** of Trading Artifact authoring.
+
+Keywords follow RFC 2119: **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**, **MAY**.
+
+Detailed schemas, catalogues, runtime maths, and JSON samples live in later sections. Do not invent behaviour absent from this Contract and those references.
+
+**Maintenance rule:** Any new authoring or behavioural constraint MUST be added here before it is documented elsewhere in this guide.
+
+---
+
+### General Principles
+
+1. AI MUST generate portable Trading Artifacts (JSON envelopes) consumable by Validate / Import.
+2. AI MUST rely only on functionality documented in this guide.
+3. AI MUST NOT invent undocumented features, operators, indicator ids, parameter names, or optional sections.
+4. AI MUST prefer canonical registry identifiers over aliases.
+5. AI MUST NOT read or depend on application source code to author artifacts.
+6. AI SHOULD minimise unnecessary configuration.
+7. AI SHOULD produce human-readable `name` and `slug` values.
+8. AI SHOULD treat later guide sections as reference manuals subordinate to this Contract.
+
+### Artifact Envelope
+
+9. Every artifact MUST include `schema_version`.
+10. `schema_version` MUST equal `"1.0"` for artifacts authored against this guide.
+11. Every artifact MUST include `artifact_type` matching the payload (`indicator` | `screener` | `strategy`).
+12. Artifact body fields MUST use the portable key `definition` (not database column names such as `definition_json` or `config_json`).
+13. Every artifact MUST include `slug`.
+14. Every artifact MUST include `name`.
+15. Every artifact MUST include `metadata` as an object (empty object allowed).
+16. Unknown top-level envelope fields SHOULD NOT be introduced.
+17. `minimum_engine_version` MAY be included; it is exported for documentation and is not currently enforced on Validate/Import. See Runtime Semantics.
+18. AI MUST NOT place Screener condition trees or Strategy scoring rows outside `definition`.
+
+### Indicator Rules
+
+19. Screeners MUST use only screenable Primary indicator ids from the Indicator Registry.
+20. Strategies MUST use only strategy-scorable Composite keys in `scoring_model`.
+21. No indicator id MUST be treated as both screenable and strategy-scorable.
+22. Indicator ids MUST exactly match the Indicator Registry (canonical spelling).
+23. Parameter names MUST exactly match the Indicator Registry for that indicator.
+24. Unknown indicator ids MUST NOT be invented.
+25. Unknown parameter names MUST NOT be invented.
+26. Parameter values that are present MUST be numeric where the registry requires numbers.
+27. Parameter values that are present MUST lie within catalogue min/max for that parameter.
+28. Out-of-range parameter values MUST NOT be authored (Validate rejects; values are not clamped).
+29. Screener `params` keys MAY be omitted; omitted keys resolve via TechnicalIndicatorService fallbacks. See Runtime Semantics / Indicator Registry.
+30. AI SHOULD set Screener `params` explicitly so runtime values match author intent (catalogue UI defaults may differ from runtime fallbacks).
+31. AI SHOULD NOT invent Indicator Registry shipping calculators; Indicator create/update drafts do not mutate release calculators.
+
+### Screener Rules
+
+32. Every Screener MUST contain `definition.root`.
+33. `root` MUST be a `group` or `condition` node.
+34. Every Screener MUST contain at least one `condition` somewhere under `root`.
+35. Group operators MUST be exactly `AND` or `OR`.
+36. Condition operators MUST be exactly one of: `gt`, `gte`, `lt`, `lte`, `eq`.
+37. Unsupported operators MUST NOT be used (`neq`, `NOT`, `crosses_above`, `crosses_below`, `between`, `outside`, `contains`, `in`, and similar).
+38. Each of `left` and `right` MUST be either an indicator operand or a constant operand.
+39. Constant operands MUST use `{ "type": "constant", "value": <number> }`.
+40. Constant values MUST be numeric.
+41. Boolean operands MUST NOT be used.
+42. String operands MUST NOT be used.
+43. Null and date operands MUST NOT be used.
+44. Indicator operands MUST use `{ "indicator": "<id>", "params": { ... } }` shape (params object MAY be empty or omit keys per rules 29–30).
+45. Nesting depth MUST NOT exceed 4.
+46. Condition count MUST NOT exceed 40.
+47. `eq` MUST be treated as float equality with documented epsilon; prefer `gte`/`lte` for thresholds. See Runtime Semantics.
+48. AI SHOULD express “between” as `AND` of `gte` and `lte`.
+49. AI SHOULD express “outside” as `OR` of `lt` and `gt`.
+50. Screener `slug` MUST be unique within the target portfolio (Import may suffix on collision).
+
+### Strategy Rules
+
+51. Strategies MUST reference Screeners via `screener_slug` and/or `screener_factory_key` in `eligibility_sources`.
+52. Strategies MUST NOT embed Screener trees (`definition.root`, nested condition groups) inside Strategy JSON. See Strategy Registry.
+53. `definition.scoring_model` MUST be present (alias `indicators` is accepted and normalised).
+54. `scoring_model` MUST contain at least one enabled row with `weight > 0`.
+55. Enabled scoring weights MUST total exactly 100 (±0.01).
+56. Only strategy-scorable Composite keys MAY appear as scoring `key` values.
+57. Unknown scoring keys MUST NOT be used.
+58. Scoring row `enabled: false` MUST be treated as excluded from weight totals and contributions. See Runtime Semantics.
+59. When both `minimum` and `maximum` are set on a scoring row, the pass band MUST be interpreted as `minimum <= value <= maximum`.
+60. Failing a scoring `minimum` or `maximum` MUST NOT reject the stock from Recommendations; contribution is zero and weight still dilutes overall. See Runtime Semantics.
+61. Multiple `eligibility_sources` MUST be interpreted as UNION of candidates (not intersection).
+62. `priority` on eligibility sources MUST be treated as sort order only.
+63. Optional sections `thresholds`, `portfolio_rules`, `exit_strategy`, and `market_gates` MAY be included when documented in Strategy Registry.
+64. AI MUST NOT invent undocumented Strategy definition sections or exit rule keys.
+65. Exit rule keys MUST be chosen from the documented set (`ma_breakdown`, `rs_weakening`, `trend_weakening`, `score_exit`, `max_loss`, `atr_stop`, `trailing_stop`, `screener_exit`).
+66. `exit_strategy.mode` MUST be `any` or `all` when present.
+67. AI SHOULD Export an existing Strategy before large edits to preserve thresholds, exits, and gates.
+
+### Runtime Behaviour Rules (Authoring-Relevant)
+
+68. AI MUST NOT assume failing one scoring factor hard-rejects the candidate. See Runtime Semantics §1.
+69. AI MUST NOT assume eligibility INTERSECTION when multiple Screeners are listed. See Runtime Semantics §3.
+70. AI MUST NOT assume `minimum_overall_score` is a hard Recommendation pipeline gate. See Runtime Semantics §4.
+71. AI SHOULD assume market gates demote OPEN/INCREASE only and still allow EXIT/REDUCE. See Runtime Semantics §6.
+72. AI SHOULD assume insufficient cash can demote OPEN/INCREASE to WATCH. See Runtime Semantics §7.
+73. AI MUST NOT embed exit logic as Screener trees inside Strategy; use documented exit rule keys or `screener_exit` references.
+
+### Import Rules
+
+74. JSON MUST be Validated successfully before Import.
+75. Import MUST NOT be performed on invalid or unvalidated JSON.
+76. AI SHOULD Validate after every material edit.
+77. AI SHOULD Import Screener before Strategy when the Strategy references that Screener by slug.
+78. Strategy Import MUST be treated as creating a draft until Select activates it.
+79. AI SHOULD prefer Export → edit → Validate → Import over authoring large optional sections from scratch.
+80. AI SHOULD expect Import normalisation (aliases, weight redistribution, slug/name collision handling). See Runtime Semantics §12.
+81. AI MUST NOT rely on unknown top-level Strategy definition keys surviving Import.
+
+### Validation Rules
+
+82. Validation errors MUST be resolved before Import.
+83. Invalid JSON MUST NOT be imported.
+84. Validation MUST precede every Import attempt.
+85. AI MUST treat Validate `ok` as the sole gate that enables Import in Registry UI.
+86. Editing JSON after Validate MUST be assumed to clear validation state.
+
+### Portability Rules
+
+87. JSON MUST remain portable across portfolios.
+88. JSON MUST NOT depend on local database primary keys for cross-portfolio portability.
+89. `screener_slug` or `screener_factory_key` SHOULD be preferred over `screener_id` in authored Strategy eligibility.
+90. AI SHOULD declare `dependencies` when the envelope format includes them.
+91. AI MUST NOT hard-code portfolio-specific absolute paths or environment secrets into artifacts.
+
+### AI Authoring Best Practices
+
+92. AI SHOULD prefer canonical indicator and scoring ids.
+93. AI SHOULD NOT invent registry ids.
+94. AI SHOULD NOT invent operators.
+95. AI SHOULD NOT invent optional Strategy sections beyond those documented.
+96. AI SHOULD omit Screener parameters only when the intended runtime fallback is known and acceptable.
+97. AI SHOULD preserve existing metadata when editing an Exported artifact.
+98. AI SHOULD generate distinct, descriptive `name` strings.
+99. AI SHOULD use Trading Cookbook recipes when matching a documented investing style.
+100. AI SHOULD note Cookbook approximations (for example Value without PE, Darvas/CANSLIM proxies) in `metadata` or names when relevant.
+101. AI SHOULD keep one atomic concern per Screener where practical.
+102. AI SHOULD keep Strategy scoring rows aligned to Evaluation composites the engine actually emits.
+
+### Pre-Generation Checklist
+
+Before emitting JSON, AI MUST verify:
+
+- [ ] `schema_version` present and equal to `"1.0"`
+- [ ] `artifact_type` correct (`screener` or `strategy`)
+- [ ] `slug`, `name`, `metadata`, and `definition` present
+- [ ] Field name is `definition` (not DB column names)
+- [ ] Indicator ids exist in Indicator Registry for the intended use (screenable vs scorable)
+- [ ] Parameter names match the registry; present values within min/max
+- [ ] Screener operators are only `gt`/`gte`/`lt`/`lte`/`eq` and groups only `AND`/`OR`
+- [ ] Operands are indicator or numeric constant only
+- [ ] Nesting depth ≤ 4 and condition count ≤ 40
+- [ ] Strategy has no embedded Screener trees
+- [ ] Eligibility uses `screener_slug` / `screener_factory_key`
+- [ ] Enabled `scoring_model` weights total exactly 100
+- [ ] Scoring keys are strategy-scorable only
+- [ ] Optional sections/keys are documented only
+- [ ] JSON is portable (no reliance on local DB ids)
+- [ ] Validate → Import sequence planned (Strategy remains draft until Select)
+
+---
+
+## 3. Hard Rules
+
+Compact reminder. The **AI Authoring Contract** is authoritative if anything conflicts.
+
+| Topic | Requirement |
+|-------|-------------|
+| Schema | `schema_version` MUST be `"1.0"`; body key MUST be `definition`. |
+| Operators | Condition: `gt` `gte` `lt` `lte` `eq` only. Group: `AND` `OR` only. |
+| Forbidden | `neq`, `NOT`, `crosses_*`, `between`, `outside`, string/boolean/null/date operands. |
+| Operands | Indicator `{ indicator, params }` or constant `{ type:"constant", value:<number> }`. |
+| Limits | Nesting depth ≤ 4; ≤ 40 conditions. |
+| Dual-use | Screenable ≠ strategy-scorable. |
+| Eligibility | `screener_slug` / `screener_factory_key` only — MUST NOT embed Screener trees. |
+| Weights | Enabled `scoring_model` weights MUST total exactly 100. |
+| Import | Validate MUST succeed before Import; Strategy Import is draft until Select. |
+| Params | Present params MUST be in catalogue range; AI SHOULD set Screener params explicitly. |
+| Eligibility set | Multiple sources = UNION. |
+| Scoring gates | Min/max fail → contribution 0 (dilutes); stock is not rejected. |
+
+---
+
+## 4. Authoring Workflow
+
+**Keyword:** `authoring-trading-artifacts`
+**Aliases:** `artifact-authoring`, `ai-authoring-guide`, `trading-artifact-authoring`
 
 **Summary:** End-to-end workflow for humans and AI: Indicator → Screener → Strategy → Validate → Import → Select.
 
@@ -56,22 +236,17 @@ Use this page as the **recommended authoring order** when building portable Trad
 7. **Weights** — enabled `scoring_model` weights must total **exactly 100**.
 8. **Validate** Strategy → **Import** (creates **draft**) → **Select** to activate for Recommendations.
 
-## Hard rules (do not guess)
+## Normative rules
 
-| Rule | Detail |
-|------|--------|
-| No dual-use ids | Screenable ≠ strategy-scorable |
-| No Screener trees on Strategy | Refs only |
-| No unsupported ops | No `neq`, `NOT`, `crosses_*`, `between`, … |
-| Constants are numbers | No string/boolean/date operands |
-| Nesting | Max depth 4; max 40 conditions |
-| Schema | `schema_version: "1.0"`; field name is `definition` |
+All MUST / SHOULD authoring rules live in the **[AI Authoring Contract](ai-authoring-contract.html)**. This workflow page does not restate them.
 
 ## Topic map
 
+- [AI Authoring Contract](ai-authoring-contract.html) — normative constitution
 - [Indicator Registry](indicator-registry.html) — catalogue
 - [Screener Registry](screener-registry.html) — operators, operands, examples
 - [Strategy Registry](strategy-registry.html) — scoring + optional sections
+- [Trading Artifact Runtime Semantics](trading-artifact-runtime.html) — scoring formula, eligibility UNION, thresholds, exits, gates
 - [Trading Cookbook](trading-cookbook.html) — full recipes (philosophy + both JSONs)
 
 
@@ -88,23 +263,27 @@ Practical tip: treat this page as one step in a larger workflow, not an isolated
 ### Concepts
 
 - **Portable artifacts** — JSON envelopes move between portfolios; Screeners and Strategies reference each other by slug/factory_key and indicator registry ids.
+- **Contract-first** — Read the AI Authoring Contract before authoring; treat registry pages as reference.
 - **Active portfolio context** — Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.
 - **Data freshness** — Many analytics depend on cached daily OHLCV and scheduled sync jobs. If numbers look stale, refresh this page and verify sync status in admin tools.
 
 
 ### Related topics
 
+- `ai-authoring-contract`
 - `indicator-registry`
 - `screener-registry`
 - `strategy-registry`
+- `trading-artifact-runtime`
 - `trading-cookbook`
 - `trading-os-flow`
 
 ---
 
-# Indicator Registry
+## 5. Indicator Registry
 
-**Keyword:** `indicator-registry` | **Aliases:** `indicators`, `indicator-catalogue`, `liquidity-score`, `tradability-score`
+**Keyword:** `indicator-registry`
+**Aliases:** `indicators`, `indicator-catalogue`, `liquidity-score`, `tradability-score`
 
 **Summary:** Complete Indicator catalogue — definitions, parameters (defaults/min/max), screenable vs strategy-scorable, formulas, and how to use each id in Screeners or Strategy.
 
@@ -372,6 +551,10 @@ Indicators can be exported as Trading Artifact envelopes (`artifact_type: "indic
 4. For Strategy, ensure enabled weights sum to 100; for Screeners, build a valid `definition.root` tree.
 5. Open Registry detail for dependency tree + full formula prose when unsure.
 
+## Runtime notes (defaults vs catalogue)
+
+Catalogue **default** values are editor/documentation defaults. If Screener JSON omits a param, `TechnicalIndicatorService` applies its own fallback (commonly `period ?? 20` for SMA/EMA and many others) - **not always** the catalogue default. See **Trading Artifact Runtime Semantics**. AI authors should always emit explicit `params`.
+
 ## Strategy parameter examples (complete rows)
 
 When authoring Strategy `scoring_model` rows, put Composite params under `parameters`:
@@ -443,7 +626,7 @@ Practical tip: treat this page as one step in a larger workflow, not an isolated
 - **Screenable vs strategy-scorable** — Screenable Primaries appear in Screener conditions. Strategy-scorable Composites appear in Strategy weights. No id is both. Liquidity/Tradability composites are intentionally not strategy-scorable.
 - **EMA / SMA / RSI (plain language)** — SMA = equal-weight average of closes. EMA = exponential average (faster). RSI = 0–100 momentum from average gains vs losses. Relative Strength (Strategy) is stock vs benchmark — not the RSI oscillator.
 - **Id uniqueness and aliases** — Registry id is unique. Strategy aliases: momentum→momentum_score, trend→trend_score, pattern_bonus→breakout_score, volume→volume_score, risk→risk_score. Prefer canonical keys in new JSON.
-- **Parameter ranges** — Screener Primary params declare default/min/max/step (periods usually 1–400). Strategy Composite params declare type/label/default. Stay inside ranges or Validate/runtime will reject or clamp.
+- **Parameter ranges** — Screener Primary params declare default/min/max/step (periods usually 1–400). Strategy Composite params declare type/label/default. Stay inside ranges — Validate/Import rejects out-of-range values (no silent clamp). Omitted Screener params use TechnicalIndicatorService fallbacks, which may differ from catalogue UI defaults.
 - **Parameter naming convention** — Use catalogue param ids exactly: period/fast/slow/signal/mult for Primaries; lookback_days/rsi_period/sma_fast/benchmark etc. for Strategy Composites. Do not invent synonyms.
 - **Circuit heuristics** — Circuit Frequency / Risk use OHLCV heuristics (large move + locked range), not official exchange circuit feeds.
 - **Immutable calculators** — Shipping calculators are release-owned. Registry UI is read-only documentation; artifact drafts do not rewrite TechnicalIndicatorService math.
@@ -459,14 +642,16 @@ Practical tip: treat this page as one step in a larger workflow, not an isolated
 - `strategy`
 - `strategy-registry`
 - `authoring-trading-artifacts`
+- `trading-artifact-runtime`
 - `trading-cookbook`
 - `data-quality-center`
 
 ---
 
-# Screener Registry
+## 6. Screener Registry
 
-**Keyword:** `screener-registry` | **Aliases:** `screener-artifacts`, `screener-json`, `import-screener`
+**Keyword:** `screener-registry`
+**Aliases:** `screener-artifacts`, `screener-json`, `import-screener`
 
 **Summary:** Import/export Screener JSON artifacts — mandatory fields, slug rules, condition tree shape, and version history.
 
@@ -604,6 +789,15 @@ Note: the database column is `definition_json`, but the **import JSON field name
 | Nesting / too many conditions | Depth > 4 or > 40 conditions |
 | Slug already exists | Pick another slug or let Import rename |
 
+## Runtime notes (params, missing data, eq)
+
+See **Trading Artifact Runtime Semantics** (`trading-artifact-runtime`) for full behaviour. Short form:
+
+- **Always set `params` explicitly** - omitted keys use TechnicalIndicatorService fallbacks (often `period: 20`), which may differ from Indicator Registry UI defaults (e.g. EMA catalogue default 50).
+- Out-of-range params on Validate/Import -> **reject** (not clamp).
+- Insufficient bars / missing volume (when required) -> stock **skipped**; null indicator on a leaf -> condition **false**.
+- `eq` uses float epsilon (~1e-4 abs / 1e-6 relative).
+
 ## Complete operator catalogue
 
 Condition `operator` values are an **exact enum**. Anything else fails Validate / Import.
@@ -649,7 +843,7 @@ Each of `left` and `right` must be **exactly one** of the shapes below.
 ```
 
 - `indicator` — required; must be a **screenable** Primary id from Indicator Registry
-- `params` — object; omit keys to use catalogue defaults; values must be numeric within min/max
+- `params` — object; **set keys explicitly** (recommended). Omitted keys use TechnicalIndicatorService fallbacks (often `period: 20`), which may differ from Indicator Registry UI catalogue defaults. Present values must be numeric within min/max
 - `entity` — **left only**, optional. Default is the scanned stock (`stock` / omit). Allowed index entities: `NIFTY50`, `SENSEX`, `NIFTY100`, `NIFTY200`, `NIFTY500`, `NIFTYMIDCAP150`, `NIFTYSMLCAP250`. Right-hand side is always evaluated on the scanned stock (no `entity` on right).
 
 ### Constant operand
@@ -1003,14 +1197,16 @@ Practical tip: treat this page as one step in a larger workflow, not an isolated
 - `indicator-registry`
 - `strategy-registry`
 - `authoring-trading-artifacts`
+- `trading-artifact-runtime`
 - `trading-cookbook`
 - `settings`
 
 ---
 
-# Strategy Registry
+## 7. Strategy Registry
 
-**Keyword:** `strategy-registry` | **Aliases:** `strategy-artifacts`, `strategy-json`, `import-strategy`, `select-strategy`
+**Keyword:** `strategy-registry`
+**Aliases:** `strategy-artifacts`, `strategy-json`, `import-strategy`, `select-strategy`
 
 **Summary:** Import/export Strategy JSON artifacts — mandatory fields, uniqueness rules, eligibility refs, scoring_model weights, and Select one active strategy per portfolio.
 
@@ -1223,6 +1419,16 @@ Rules:
 | Must not embed Screener definitions | Eligibility row contains `definition` / `root` |
 | Slug / name already exists | Pick another or let Import rename |
 
+## Runtime notes (scoring, eligibility, thresholds)
+
+See **Trading Artifact Runtime Semantics** (`trading-artifact-runtime`) for the full Recommendation pipeline. Short form:
+
+- Overall ≈ weighted average of enabled factor scores; gated min/max -> contribution 0 but **weight still dilutes**.
+- Multiple `eligibility_sources` = **UNION**; `priority` is order only.
+- Thresholds use sequential if/else (not exclusive bands); score 82 with defaults is typically **WATCH** (not held) / **HOLD** (held).
+- `market_gates` demote OPEN/INCREASE only; exits still run.
+- Portfolio cash rules can demote unfunded buys to **WATCH**.
+
 ## Optional definition sections (fully usable)
 
 These sections are **runtime-usable today**. Import preserves them via `normalizeConfig` (Validate focuses hard checks on eligibility + scoring — Export a working Strategy, then edit, for safest authoring). They are **not** “reserved / undocumented.”
@@ -1231,7 +1437,7 @@ These sections are **runtime-usable today**. Import preserves them via `normaliz
 
 | Key | Default | Meaning |
 |-----|---------|--------|
-| `minimum_overall_score` | 80 | Soft floor stored on Strategy UI |
+| `minimum_overall_score` | 80 | Stored on Strategy UI; **not** currently applied as a hard pipeline gate |
 | `open_position` | 85 | Open new long when overall score ≥ this |
 | `increase_position` | 90 | Add to existing when score ≥ this |
 | `watch` | 60 | Insight / watch band |
@@ -1289,7 +1495,7 @@ These sections are **runtime-usable today**. Import preserves them via `normaliz
 }
 ```
 
-- `mode`: `any` (first matching rule) or `all` (every enabled rule must match)
+- `mode`: `any` (any matching enabled rule triggers; all matches recorded) or `all` (every enabled rule must match)
 - Rule `key` values: `ma_breakdown`, `rs_weakening`, `trend_weakening`, `score_exit`, `max_loss`, `atr_stop`, `trailing_stop`, `screener_exit`
 - Use `value` and/or `params` as appropriate to the key (see Export of Momentum Strategy for full defaults)
 
@@ -1548,14 +1754,16 @@ Practical tip: treat this page as one step in a larger workflow, not an isolated
 - `indicator-registry`
 - `recommendations`
 - `authoring-trading-artifacts`
+- `trading-artifact-runtime`
 - `trading-cookbook`
 - `settings`
 
 ---
 
-# Trading Cookbook
+## 8. Trading Cookbook
 
-**Keyword:** `trading-cookbook` | **Aliases:** `cookbook`, `investing-recipes`, `artifact-recipes`
+**Keyword:** `trading-cookbook`
+**Aliases:** `cookbook`, `investing-recipes`, `artifact-recipes`
 
 **Summary:** Complete investing recipes: philosophy + Screener JSON + Strategy JSON for Minervini, breakout, pullback, mean reversion, and more.
 
@@ -1698,7 +1906,9 @@ Practical tip: treat this page as one step in a larger workflow, not an isolated
 
 ### Related topics
 
+- `ai-authoring-contract`
 - `authoring-trading-artifacts`
+- `trading-artifact-runtime`
 - `screener-registry`
 - `strategy-registry`
 - `indicator-registry`
@@ -1706,14 +1916,325 @@ Practical tip: treat this page as one step in a larger workflow, not an isolated
 
 ---
 
-# Appendix - Authoring checklist
+## 9. Complete Examples
 
-1. Read Indicator Registry section - pick screenable Primaries and/or strategy-scorable Composites.
-2. Build Screener JSON - only allowed operators/operands; >=1 condition; unique slug.
-3. Validate -> Import Screener; note final slug.
-4. Build Strategy JSON - eligibility refs that slug; scoring keys from composites; weights = 100.
-5. Optionally add `thresholds` / `portfolio_rules` / `exit_strategy` / `market_gates` (documented above; runtime-usable).
-6. Validate -> Import Strategy (draft) -> Select to activate.
-7. Prefer Cookbook recipes when matching a known investing style; note stated approximations (Darvas/CANSLIM/Value).
+## Canonical end-to-end lifecycle (Minervini-style)
+
+1. Choose philosophy — trend template eligibility + RS/trend/momentum ranking.
+2. Select indicators — Screenable: `close`, `sma`, `sma_spread_pct`, `low_52w`, `high_52w`. Scorable: `relative_strength`, `trend_score`, `momentum_score`, `volume_score`, `breakout_score`.
+3. Build Screener — Screener Registry Minervini example or factory `minervini_trend_template`. Set all `params.period` explicitly.
+4. Validate Screener until `ok`.
+5. Import Screener; note final `slug`.
+6. Create Strategy envelope `artifact_type: strategy` with unique slug/name.
+7. Reference Screener via `eligibility_sources[].screener_slug` / `screener_factory_key`.
+8. Configure scoring — enabled weights = 100; optional `minimum` gates and Composite `parameters`.
+9. Configure thresholds — e.g. open 85 / watch 60 / exit 20 (or Export Momentum defaults).
+10. Validate Strategy until `ok`.
+11. Import Strategy (draft).
+12. Select Strategy (sole active Strategy).
+13. Engine execution — Discovery → Evaluation → eligibility UNION → weighted score → exits/gates/thresholds → capital → persist.
+14. Final output — OPEN/INCREASE/REDUCE/EXIT and WATCH/HOLD on Recommendations, subject to cash and gates.
+
+## Where full JSON lives
+
+- Screener Registry — complete Screener envelopes (operators, operands, Minervini/Darvas/…).
+- Strategy Registry — complete Strategy envelopes (scoring + optional sections).
+- Trading Cookbook — philosophy + paired Screener/Strategy recipes.
+
+AI MUST satisfy the AI Authoring Contract before emitting any example-based JSON.
+
+---
+
+## 10. Appendix
+
+### A. Runtime Semantics (detailed reference)
+
+Normative authoring implications appear in the Contract (Runtime Behaviour Rules). This appendix documents engine evaluation detail.
+
+#### Trading Artifact Runtime Semantics
+
+**Keyword:** `trading-artifact-runtime`
+
+This section documents **runtime behaviour** of the Recommendation Engine and related services. Schema fields alone are not enough - AI authors need evaluation order, gating, and edge cases.
+
+---
+
+## 1. Strategy scoring semantics
+
+**Where:** `StrategyConfigurationService::score()` during Recommendation generation (Evaluation emits 0-100 factor facts; Strategy applies weights).
+
+### Formula
+
+For each **enabled** scoring row with `weight > 0`:
+
+1. Add `weight` to `totalWeight` (even if the factor later gates to zero).
+2. Read the Evaluation fact for `key` (canonicalised aliases apply).
+3. Compute `contribution`:
+   - Missing / non-numeric fact -> `contribution = 0`, `gated = true`
+   - `value < minimum` (when minimum set) -> `contribution = 0`, `gated = true`
+   - `value > maximum` (when maximum set) -> `contribution = 0`, `gated = true`
+   - Else: `normalized = clamp(value, 0, 100) / 100`
+     - Special case **`risk_score`** with a maximum set: `normalized = 1 - value/100` (higher risk lowers contribution)
+     - `contribution = round(normalized * weight, 4)`
+4. `overall_score = round((earned / totalWeight) * 100, 4)`, then clamp to `[0, 100]`
+
+When enabled weights sum to **100** and nothing is gated:
+
+`overall ≈ Σ(weight × factor_score) / 100`
+
+which is the same as a weight-normalised average:
+
+`overall = Σ(weight × factor_score) / Σ(weight)`
+
+### Rounding / precision
+
+- Per-factor `contribution` and `overall_score`: **4 decimal places** (`round(..., 4)`).
+- Display UIs may show fewer decimals; stored recommendation math uses the 4 d.p. overall.
+
+### `enabled`, `minimum`, `maximum`
+
+| Field | Behaviour |
+|-------|-----------|
+| `enabled: false` | Factor ignored - not in `totalWeight`, no contribution |
+| `minimum: 70` | Soft gate: if fact `< 70`, contribution = **0** (weight still in denominator) |
+| `maximum: 90` | Soft gate: if fact `> 90`, contribution = **0** (same dilution) |
+| Both set | Pass band is **`minimum <= value <= maximum`** (inclusive). Outside -> gated zero |
+
+**Important:** Failing min/max does **not** reject the stock from Recommendations. It zeros that factor and **dilutes** overall because weight remains in `totalWeight`. There is no "hard fail whole candidate" on a single gated factor.
+
+---
+
+## 2. Eligibility and decision pipeline
+
+Daily / recommendation cycle (simplified):
+
+```text
+Data readiness
+    |
+    v
+Discovery (patterns + recent screener hits / membership fallback)
+    |
+    v
+Evaluation (factor facts 0-100 - no Strategy weights yet)
+    |
+    v
+RecommendationGenerationPipeline
+    |-- resolve eligibility_sources (UNION of enabled Screeners)
+    |-- StrategyConfigurationService.score (scoring_model)
+    |-- ExitStrategyEvaluator (owned holdings only)
+    |-- buildMarketOpinion + decidePortfolioAction (thresholds)
+    |-- market_gates demotion (OPEN/INCREASE only)
+    |-- rankDrafts
+    |-- allocateCapital (portfolio_rules + cash)
+    |-- persistDrafts
+```
+
+| Strategy section | When it applies |
+|------------------|-----------------|
+| `eligibility_sources` | Filters which names may receive **new entry** actions; holdings always reviewed |
+| `scoring_model` | Weighted overall score from Evaluation facts |
+| `thresholds` | Opinion (bull/bear/neutral) + OPEN/WATCH/HOLD/INCREASE/REDUCE/EXIT |
+| `exit_strategy` | Can force EXIT on **held** names |
+| `market_gates` | After scoring: demote OPEN/INCREASE when blocked; size multipliers |
+| `portfolio_rules` | Position % caps, cash reserve/deploy, max new positions; can demote unfunded buys to WATCH |
+| `capital_allocation` | Score bands for allocation % |
+
+Discovery itself is **not** limited to the active Strategy eligibility list (it merges recent screener hits broadly). Strategy eligibility is enforced in Recommendation.
+
+---
+
+## 3. Multiple eligibility screeners
+
+- Mode: **UNION** (`screener_union`). A stock is eligible if it appears in **any** enabled source's latest completed run (within ~72 hours).
+- **Not** intersection.
+- `priority`: sort order only - does **not** change union semantics.
+- Duplicate hits across screeners are **de-duplicated** by security id.
+- Empty `eligibility_sources`: unrestricted (no screener filter for entries).
+- Sources configured but no recent completed runs: pipeline may treat as unrestricted pending runs (no artificial empty set).
+- **Holdings** are always considered for HOLD/REDUCE/EXIT even if not currently eligible for new entries.
+
+---
+
+## 4. Thresholds - runtime behaviour
+
+Factory defaults (Momentum): `open_position=85`, `increase_position=90`, `watch=60`, `reduce_position=40`, `exit_position=20`.
+
+### Example: overall score = 82 (not held)
+
+- Opinion: **NEUTRAL** (not >= open 85, not <= exit 20), strength often **MODERATE** if >= watch 60.
+- Action: **WATCH** (OPEN requires score >= open or strong-bull path).
+
+### Example: overall score = 82 (held)
+
+- Action: typically **HOLD** (not EXIT/REDUCE/INCREASE under default bands).
+
+### Evaluation order / conflicts
+
+Thresholds are **not** exclusive score bands with ties. Code uses sequential rules:
+
+1. Market opinion: if `score >= open` -> bullish; else if `score <= exit` -> bearish; else neutral.
+2. Portfolio action (not held): OPEN only if bullish/strong path or `score >= open`; else WATCH.
+3. Portfolio action (held): EXIT if bearish/`score <= exit`; else REDUCE checks; else INCREASE if bullish and `score >= increase`; else HOLD.
+
+Comparisons are **inclusive** on the side used (`>=` open/watch/increase, `<=` exit/reduce).
+
+**Open overrides Watch** when open condition is met. Exit/reduce paths take precedence over hold/increase for holdings when those conditions fire.
+
+`minimum_overall_score` is stored on Strategy config / UI but is **not** currently applied as a hard gate in the recommendation pipeline (use `open_position` / scoring mins instead).
+
+---
+
+## 5. Exit strategy - execution semantics
+
+- Evaluated on **owned holdings** (and a screener-exit-only pass for holdings missing from the eval set).
+- Runs each Recommendation cycle for held names.
+- `mode: "any"` (default): if **any** enabled rule matches, exit triggers (all matches are recorded).
+- `mode: "all"`: **every enabled rule** must match to trigger.
+- Rules can use Strategy/Evaluation scores (`score_exit`, `rs_weakening`, `trend_weakening`), price/SMA/ATR facts, unrealized PnL, and **`screener_exit`** (registry screener hit lists by local screener id - not an embedded condition tree).
+- Triggered exit overrides other actions to **EXIT**.
+
+---
+
+## 6. Market gates
+
+When `market_gates.enabled` is true and sentiment/phase/risk checks fail entry:
+
+- Scoring **still runs** (gates do not skip Evaluation/Strategy score).
+- **OPEN / INCREASE** demoted to WATCH (not held) or HOLD (held).
+- **EXIT / REDUCE / HOLD** still allowed - sells and holds are not blocked by entry gates.
+- Gates may also shrink position size multipliers when partially allowing entry.
+
+---
+
+## 7. Portfolio rules
+
+- Target size uses something like `min(max_position_size_pct, band_or_default_pct)` - **max always caps** default/band.
+- `min_cash_reserve_pct` / `max_cash_deployment_pct` reduce available cash before allocation.
+- If cash cannot fund an OPEN/INCREASE, the draft is typically demoted to **WATCH** (`ALLOCATION_UNFUNDED`) - i.e. rules can **suppress BUY actions**, not only leave a zero-qty BUY.
+- `max_new_positions_per_cycle` limits how many new opens survive ranking/allocation.
+
+---
+
+## 8. Indicator parameter defaults (Screeners)
+
+**Catalogue / UI defaults** (Indicator Registry tables) are what the editor shows when you add a condition (e.g. EMA catalogue default period **50**).
+
+**Runtime** (`TechnicalIndicatorService`): if a param key is **omitted** from JSON, the service uses its own fallbacks - for many series including **`ema`/`sma` that fallback is `period ?? 20`**, not necessarily the catalogue UI default.
+
+Therefore:
+
+```json
+{ "indicator": "ema" }
+```
+
+is **not guaranteed** identical to
+
+```json
+{ "indicator": "ema", "params": { "period": 50 } }
+```
+
+**AI best practice:** always set params explicitly for production artifacts.
+
+---
+
+## 9. Parameter validation
+
+On Screener Validate / Import / save (`ScreenerDefinitionValidator`):
+
+| Input | Result |
+|-------|--------|
+| Param present, non-numeric | **Reject** |
+| Param present, outside catalogue min/max (e.g. period 0, period 500, mult 9) | **Reject** |
+| Param **omitted** | Not range-checked; runtime fallback applies |
+
+No silent clamp to catalogue max on Validate. Do not rely on runtime `max(1, period)` as a substitute for correct JSON.
+
+---
+
+## 10. Missing data
+
+| Situation | Screener | Strategy score |
+|-----------|----------|----------------|
+| Insufficient OHLCV bars | Stock **skipped** (`insufficient_data`) - not a match |
+| `needs_volume` but no volume | Stock **skipped** (`insufficient_volume`) |
+| Indicator returns null on a condition | That condition is **false** (AND fails / OR may still pass) |
+| Corporate action / DQ hold | Separate Data Quality guards may exclude names from pipelines |
+| Missing Evaluation fact for a scoring key | Factor contribution **0**, gated; weight still dilutes overall |
+
+---
+
+## 11. Numeric precision and `eq`
+
+- Screener `eq`: float compare with abs epsilon **1e-4**, else relative **1e-6** (`floatsEqual`). Prefer `gte`/`lte` for thresholds.
+- Strategy overall: 4 decimal places as above.
+- Cash/allocation amounts often rounded to 2-4 decimals in plan builders.
+
+---
+
+## 12. Import normalisation
+
+### Strategy
+
+- Aliases: `scoring_model` <-> `indicators`; eligibility `factory_key` <-> `screener_factory_key`.
+- Scoring keys normalised to catalogue; unsupported keys dropped; missing catalogue rows filled from defaults; enabled weights redistributed toward 100 when needed by `normalizeConfig`.
+- Known sections merged (`thresholds`, `portfolio_rules`, `market_gates`, `exit_strategy`, ...).
+- Unknown **top-level** definition keys are generally **not** preserved (config rebuilt from known sections).
+- Extra **nested** keys inside merged objects may survive `array_merge`.
+- Slug/name collisions get suffix / `(import)` rename.
+- Always Import as **draft**; activation is Select.
+
+### Screener
+
+- Validate tree; create with unique slug; definition stored as provided (after validation).
+- Prefer exporting a working screener before large edits.
+
+---
+
+## 13. Version compatibility
+
+| Field | Behaviour |
+|-------|-----------|
+| `schema_version` | Required. Major must be <= app major (`1.0` today). Empty or newer major -> `SCHEMA_VERSION_UNSUPPORTED` |
+| `minimum_engine_version` | Exported for documentation / future use; **not currently enforced** on Validate/Import |
+
+Ship `schema_version: "1.0"` on all envelopes.
+
+---
+
+## 14. Normative authoring rules
+
+Authoring MUST / SHOULD rules live in the **AI Authoring Contract**. Do not treat this Runtime section as a second constitution.
+
+---
+
+## 15. Complete end-to-end walkthrough
+
+See **Complete Examples** in the AI Authoring Guide (canonical Minervini-style lifecycle). Worked JSON lives in Screener/Strategy Registry examples and the Trading Cookbook.
+
+
+Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).
+
+### Controls
+
+- **Use with AI guide download** — This topic is included in /docs/stox-trading-artifacts-ai-guide.md (Download AI authoring guide on Screener/Strategy Registry).
+- **Typical flow** — Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.
+- **Validation and errors** — Form and API validations are shown as inline errors or toast messages. Fix the first reported issue, retry, and re-check dependent sections that consume the same data.
+
+
+### Concepts
+
+- **Soft min/max gates** — Failing scoring minimum/maximum zeros that factor contribution but keeps its weight in the denominator - dilutes overall; does not reject the stock.
+- **Eligibility UNION** — Multiple eligibility_sources OR together; priority is sort order only; holdings always reviewed.
+- **Explicit Screener params** — Omitted params use TechnicalIndicatorService fallbacks (often period 20), which may differ from catalogue UI defaults (e.g. EMA 50).
+- **Active portfolio context** — Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.
+- **Data freshness** — Many analytics depend on cached daily OHLCV and scheduled sync jobs. If numbers look stale, refresh this page and verify sync status in admin tools.
+
+
+### B. Contract-first maintenance
+
+1. Add or change a MUST/SHOULD rule in the AI Authoring Contract.
+2. Update the relevant Registry / Runtime reference section.
+3. Regenerate static docs (`npm run docs:static`).
+4. Do not leave reference prose that contradicts the Contract.
 
 _End of StoX Trading Artifacts AI Authoring Guide._

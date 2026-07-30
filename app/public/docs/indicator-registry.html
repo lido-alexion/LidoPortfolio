@@ -937,6 +937,8 @@
 <li>For Strategy, ensure enabled weights sum to 100; for Screeners, build a valid <code>definition.root</code> tree.</li>
 <li>Open Registry detail for dependency tree + full formula prose when unsure.</li>
 </ol>
+<h2>Runtime notes (defaults vs catalogue)</h2>
+<p>Catalogue <strong>default</strong> values are editor/documentation defaults. If Screener JSON omits a param, <code>TechnicalIndicatorService</code> applies its own fallback (commonly <code>period ?? 20</code> for SMA/EMA and many others) - <strong>not always</strong> the catalogue default. See <strong>Trading Artifact Runtime Semantics</strong>. AI authors should always emit explicit <code>params</code>.</p>
 <h2>Strategy parameter examples (complete rows)</h2>
 <p>When authoring Strategy <code>scoring_model</code> rows, put Composite params under <code>parameters</code>:</p>
 <pre><code class="language-json">{
@@ -1064,7 +1066,7 @@
         <dd>Registry id is unique. Strategy aliases: momentum→momentum_score, trend→trend_score, pattern_bonus→breakout_score, volume→volume_score, risk→risk_score. Prefer canonical keys in new JSON.</dd>
     
         <dt>Parameter ranges</dt>
-        <dd>Screener Primary params declare default/min/max/step (periods usually 1–400). Strategy Composite params declare type/label/default. Stay inside ranges or Validate/runtime will reject or clamp.</dd>
+        <dd>Screener Primary params declare default/min/max/step (periods usually 1–400). Strategy Composite params declare type/label/default. Stay inside ranges — Validate/Import rejects out-of-range values (no silent clamp). Omitted Screener params use TechnicalIndicatorService fallbacks, which may differ from catalogue UI defaults.</dd>
     
         <dt>Parameter naming convention</dt>
         <dd>Use catalogue param ids exactly: period/fast/slow/signal/mult for Primaries; lookback_days/rsi_period/sma_fast/benchmark etc. for Strategy Composites. Do not invent synonyms.</dd>
@@ -1087,7 +1089,7 @@
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
-          <a href="settings.html">Settings</a><a href="screener.html">Screener</a><a href="screener-registry.html">Screener Registry</a><a href="strategy.html">Strategy</a><a href="strategy-registry.html">Strategy Registry</a><a href="authoring-trading-artifacts.html">Authoring Trading Artifacts</a><a href="trading-cookbook.html">Trading Cookbook</a><a href="data-quality-center.html">Data Quality Center</a>
+          <a href="settings.html">Settings</a><a href="screener.html">Screener</a><a href="screener-registry.html">Screener Registry</a><a href="strategy.html">Strategy</a><a href="strategy-registry.html">Strategy Registry</a><a href="authoring-trading-artifacts.html">Authoring Trading Artifacts</a><a href="trading-artifact-runtime.html">Trading Artifact Runtime Semantics</a><a href="trading-cookbook.html">Trading Cookbook</a><a href="data-quality-center.html">Data Quality Center</a>
         </div>
       </section>
     </article>

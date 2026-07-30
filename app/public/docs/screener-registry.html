@@ -319,6 +319,14 @@
 <td>Pick another slug or let Import rename</td>
 </tr>
 </tbody></table>
+<h2>Runtime notes (params, missing data, eq)</h2>
+<p>See <strong>Trading Artifact Runtime Semantics</strong> (<code>trading-artifact-runtime</code>) for full behaviour. Short form:</p>
+<ul>
+<li><strong>Always set <code>params</code> explicitly</strong> - omitted keys use TechnicalIndicatorService fallbacks (often <code>period: 20</code>), which may differ from Indicator Registry UI defaults (e.g. EMA catalogue default 50).</li>
+<li>Out-of-range params on Validate/Import -&gt; <strong>reject</strong> (not clamp).</li>
+<li>Insufficient bars / missing volume (when required) -&gt; stock <strong>skipped</strong>; null indicator on a leaf -&gt; condition <strong>false</strong>.</li>
+<li><code>eq</code> uses float epsilon (~1e-4 abs / 1e-6 relative).</li>
+</ul>
 <h2>Complete operator catalogue</h2>
 <p>Condition <code>operator</code> values are an <strong>exact enum</strong>. Anything else fails Validate / Import.</p>
 <h3>Comparison operators (condition nodes)</h3>
@@ -394,7 +402,7 @@
 </code></pre>
 <ul>
 <li><code>indicator</code> — required; must be a <strong>screenable</strong> Primary id from Indicator Registry</li>
-<li><code>params</code> — object; omit keys to use catalogue defaults; values must be numeric within min/max</li>
+<li><code>params</code> — object; <strong>set keys explicitly</strong> (recommended). Omitted keys use TechnicalIndicatorService fallbacks (often <code>period: 20</code>), which may differ from Indicator Registry UI catalogue defaults. Present values must be numeric within min/max</li>
 <li><code>entity</code> — <strong>left only</strong>, optional. Default is the scanned stock (<code>stock</code> / omit). Allowed index entities: <code>NIFTY50</code>, <code>SENSEX</code>, <code>NIFTY100</code>, <code>NIFTY200</code>, <code>NIFTY500</code>, <code>NIFTYMIDCAP150</code>, <code>NIFTYSMLCAP250</code>. Right-hand side is always evaluated on the scanned stock (no <code>entity</code> on right).</li>
 </ul>
 <h3>Constant operand</h3>
@@ -780,7 +788,7 @@
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
-          <a href="screener.html">Screener</a><a href="screener-editor.html">Screener editor</a><a href="indicator-registry.html">Indicator Registry</a><a href="strategy-registry.html">Strategy Registry</a><a href="authoring-trading-artifacts.html">Authoring Trading Artifacts</a><a href="trading-cookbook.html">Trading Cookbook</a><a href="settings.html">Settings</a>
+          <a href="screener.html">Screener</a><a href="screener-editor.html">Screener editor</a><a href="indicator-registry.html">Indicator Registry</a><a href="strategy-registry.html">Strategy Registry</a><a href="authoring-trading-artifacts.html">Authoring Trading Artifacts</a><a href="trading-artifact-runtime.html">Trading Artifact Runtime Semantics</a><a href="trading-cookbook.html">Trading Cookbook</a><a href="settings.html">Settings</a>
         </div>
       </section>
     </article>

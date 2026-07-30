@@ -126,44 +126,15 @@
 <li><strong>Weights</strong> — enabled <code>scoring_model</code> weights must total <strong>exactly 100</strong>.</li>
 <li><strong>Validate</strong> Strategy → <strong>Import</strong> (creates <strong>draft</strong>) → <strong>Select</strong> to activate for Recommendations.</li>
 </ol>
-<h2>Hard rules (do not guess)</h2>
-<table>
-<thead>
-<tr>
-<th>Rule</th>
-<th>Detail</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>No dual-use ids</td>
-<td>Screenable ≠ strategy-scorable</td>
-</tr>
-<tr>
-<td>No Screener trees on Strategy</td>
-<td>Refs only</td>
-</tr>
-<tr>
-<td>No unsupported ops</td>
-<td>No <code>neq</code>, <code>NOT</code>, <code>crosses_*</code>, <code>between</code>, …</td>
-</tr>
-<tr>
-<td>Constants are numbers</td>
-<td>No string/boolean/date operands</td>
-</tr>
-<tr>
-<td>Nesting</td>
-<td>Max depth 4; max 40 conditions</td>
-</tr>
-<tr>
-<td>Schema</td>
-<td><code>schema_version: &quot;1.0&quot;</code>; field name is <code>definition</code></td>
-</tr>
-</tbody></table>
+<h2>Normative rules</h2>
+<p>All MUST / SHOULD authoring rules live in the <strong><a href="ai-authoring-contract.html">AI Authoring Contract</a></strong>. This workflow page does not restate them.</p>
 <h2>Topic map</h2>
 <ul>
+<li><a href="ai-authoring-contract.html">AI Authoring Contract</a> — normative constitution</li>
 <li><a href="indicator-registry.html">Indicator Registry</a> — catalogue</li>
 <li><a href="screener-registry.html">Screener Registry</a> — operators, operands, examples</li>
 <li><a href="strategy-registry.html">Strategy Registry</a> — scoring + optional sections</li>
+<li><a href="trading-artifact-runtime.html">Trading Artifact Runtime Semantics</a> — scoring formula, eligibility UNION, thresholds, exits, gates</li>
 <li><a href="trading-cookbook.html">Trading Cookbook</a> — full recipes (philosophy + both JSONs)</li>
 </ul>
 <p>Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).</p>
@@ -193,6 +164,9 @@
         <dt>Portable artifacts</dt>
         <dd>JSON envelopes move between portfolios; Screeners and Strategies reference each other by slug/factory_key and indicator registry ids.</dd>
     
+        <dt>Contract-first</dt>
+        <dd>Read the AI Authoring Contract before authoring; treat registry pages as reference.</dd>
+    
         <dt>Active portfolio context</dt>
         <dd>Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.</dd>
     
@@ -205,7 +179,7 @@
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
-          <a href="indicator-registry.html">Indicator Registry</a><a href="screener-registry.html">Screener Registry</a><a href="strategy-registry.html">Strategy Registry</a><a href="trading-cookbook.html">Trading Cookbook</a><a href="trading-os-flow.html">Trading OS pages &amp; flow</a>
+          <a href="ai-authoring-contract.html">AI Authoring Contract (Normative Rules)</a><a href="indicator-registry.html">Indicator Registry</a><a href="screener-registry.html">Screener Registry</a><a href="strategy-registry.html">Strategy Registry</a><a href="trading-artifact-runtime.html">Trading Artifact Runtime Semantics</a><a href="trading-cookbook.html">Trading Cookbook</a><a href="trading-os-flow.html">Trading OS pages &amp; flow</a>
         </div>
       </section>
     </article>
