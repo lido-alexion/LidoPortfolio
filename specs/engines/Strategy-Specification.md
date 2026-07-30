@@ -6,6 +6,7 @@
 | **Version** | 1.1 |
 | **Status** | Active (SD-027…SD-030 / SD-032) |
 | **Canonical detail** | [`Strategy-Configuration-Specification.md`](./Strategy-Configuration-Specification.md) |
+| **Artifact framework** | [`Trading-Artifact-Framework-Specification.md`](./Trading-Artifact-Framework-Specification.md) (SD-034) |
 
 ## Role
 

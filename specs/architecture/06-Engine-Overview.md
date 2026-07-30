@@ -242,3 +242,46 @@ The Trading Operating System is composed of independent business engines
 with clearly defined ownership boundaries. These engines form the stable
 core of the application and provide the foundation for all future
 features and implementations.
+
+------------------------------------------------------------------------
+
+# 14. Cross-cutting: Indicator Registry (SD-033)
+
+Indicator **metadata and discovery** are unified in the Indicator Registry
+(see [09-Indicator-Registry.md](./09-Indicator-Registry.md) and
+[Indicator-Registry-Specification.md](../engines/Indicator-Registry-Specification.md)).
+
+Engines retain calculation ownership:
+
+| Concern | Owner |
+|---------|-------|
+| Primary OHLCV indicators | Data path + `TechnicalIndicatorService` (used by Screener / Evaluation / Market) |
+| Stock Strategy composite facts | Evaluation Engine |
+| Market-level composites | Market Analysis Engine |
+| Descriptive Metrics | Analytics services (SD-031) |
+| Metadata / Admin discovery | Indicator Registry |
+
+This is an evolution of existing catalogues — not a new business engine in the
+pipeline sense.
+
+------------------------------------------------------------------------
+
+# 15. Cross-cutting: Trading Artifact Framework (SD-034)
+
+Reusable definitions — **Indicators**, **Screeners**, **Strategies** — share a
+common artifact envelope (metadata, lifecycle, versioning, validation,
+import/export, dependencies) under the Trading Artifact Framework.
+
+See [11-Trading-Artifact-Framework.md](./11-Trading-Artifact-Framework.md) and
+[Trading-Artifact-Framework-Specification.md](../engines/Trading-Artifact-Framework-Specification.md).
+
+| Concern | Owner |
+|---------|-------|
+| Shared envelope / package I/O / dep graph | Artifact Registry (umbrella) |
+| Indicator metadata | Indicator Registry (SD-033 specialization) |
+| Screener definitions (`definition_json`) | Screener module + Screener Artifact Registry |
+| Strategy definitions (`config_json`) | Strategy Configuration + Strategy Artifact Registry |
+| Runtime eligibility / scoring / calc | Unchanged engine/service owners |
+
+Not a pipeline stage engine — a platform framework over existing capabilities.
+“Strategy Template” is absorbed as factory/imported Strategy artifacts.

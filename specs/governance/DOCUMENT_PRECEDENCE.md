@@ -28,6 +28,8 @@ Architecture Specifications
 Engine Specifications
   (Data, Evaluation, Recommendation, Notification, Execution, Review,
    Application Architecture, REST API, Database Schema, System Domain Model,
+   Screener, Strategy Configuration, Analytics, Market Analysis,
+   Indicator Registry (SD-033), Trading Artifact Framework (SD-034),
    Implementation Roadmap)
         ↓
 Governance Documents

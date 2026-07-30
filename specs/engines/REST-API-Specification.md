@@ -179,6 +179,16 @@ Recommendations include `strategy_version_id`, `strategy_score`,
 `evidence.eligibility`, `evidence.scoring`, `evidence.exit_strategy`.
 Strategy eligibility references Screeners (SD-030); Screener CRUD remains under `/api/screeners*`.
 
+### Indicator Registry (SD-033)
+
+Admin-only discovery APIs. Full contract: [Indicator-Registry-API.md](./Indicator-Registry-API.md).
+
+``` text
+  GET      /api/v1/indicators          List (q, type, category, status, …)
+  GET      /api/v1/indicators/meta     Types / categories / statuses / counts
+  GET      /api/v1/indicators/{id}     Detail + dependency tree + formula explanation
+```
+
 ### Analytics Architecture (SD-031)
 
 ``` text

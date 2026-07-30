@@ -246,3 +246,20 @@ Pipeline: Evaluation facts ? Screeners (eligibility) ? Strategy scoring ? Recomm
 Evaluation Engine is the sole producer of Evaluation Profile metrics (momentum, trend, breakout, volume, risk, sector strength, market alignment, overall score).
 
 UI surfaces (Watchlist research, Portfolio averages) MUST read Evaluation Engine outputs via EvaluationProfileService — they MUST NOT recompute these scores independently.
+
+# Indicator Registry (SD-033)
+
+Evaluation composite facts (Momentum Score, Trend Score, and related Strategy
+scoring factors) are **Composite** indicators in the unified Indicator Registry.
+
+- Registry owns metadata, declared dependencies, formula explanations, and versions.
+- EvaluationEngine remains the **calculator** of stock-level Strategy composite facts.
+- Primaries used as inputs continue to come from `TechnicalIndicatorService` /
+  `RelativeStrengthService`.
+- Evidence SHOULD eventually record indicator definition versions (Registry Phase 5).
+
+**Separate bug (TD-19 / PB-054):** Strategy UI parameters are not yet applied when
+Evaluation computes facts â€” Evaluation uses `trading_os.evaluation` defaults.
+Do not treat Registry delivery as fixing this wiring.
+
+Spec: [Indicator-Registry-Specification.md](./Indicator-Registry-Specification.md).

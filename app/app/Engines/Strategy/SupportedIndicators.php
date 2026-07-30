@@ -2,8 +2,15 @@
 
 namespace App\Engines\Strategy;
 
+use App\Services\Indicators\IndicatorRegistry;
+use App\Services\Indicators\IndicatorRegistryFactory;
+use App\Services\Indicators\StrategyCatalogueProjector;
+
 /**
- * Fixed supported-indicator catalogue for momentum Strategy Configuration (SD-028).
+ * Strategy scoring catalogue façade (SD-028 / SD-033 Epic 2).
+ *
+ * Definitions project from {@see IndicatorRegistry}. Keys/aliases remain stable
+ * for StrategyConfigurationService and Evaluation evidence.
  * Not a plugin framework — new indicators ship only via application releases.
  */
 final class SupportedIndicators
@@ -33,6 +40,9 @@ final class SupportedIndicators
     public const CATEGORY_MARKET = 'Market';
 
     public const CATEGORY_RISK = 'Risk';
+
+    /** @var list<array<string, mixed>>|null */
+    private static ?array $definitionsCache = null;
 
     /**
      * Legacy Evaluation / Strategy keys → catalogue keys.
@@ -65,122 +75,21 @@ final class SupportedIndicators
 
     /**
      * Canonical catalogue metadata (display + default params schema).
+     * Backed by Indicator Registry (Epic 2).
      *
      * @return list<array<string, mixed>>
      */
     public static function definitions(): array
     {
-        return [
-            [
-                'key' => self::RELATIVE_STRENGTH,
-                'category' => self::CATEGORY_MOMENTUM,
-                'display_name' => 'Relative Strength',
-                'description' => 'Relative strength vs benchmark over the lookback window.',
-                'supports_maximum' => false,
-                // Factory defaults (SD-029) — weights sum to 100 across enabled set.
-                'default_enabled' => true,
-                'default_weight' => 35,
-                'default_minimum' => 80,
-                'default_maximum' => null,
-                'parameters' => [
-                    'lookback_days' => ['type' => 'integer', 'label' => 'Lookback Period (days)', 'default' => 90],
-                    'benchmark' => ['type' => 'string', 'label' => 'Benchmark', 'default' => 'NIFTY50'],
-                ],
-            ],
-            [
-                'key' => self::MOMENTUM_SCORE,
-                'category' => self::CATEGORY_MOMENTUM,
-                'display_name' => 'Momentum Score',
-                'description' => 'RSI-based momentum strength (objective measurement).',
-                'supports_maximum' => false,
-                'default_enabled' => true,
-                'default_weight' => 15,
-                'default_minimum' => 70,
-                'default_maximum' => null,
-                'parameters' => [
-                    'rsi_period' => ['type' => 'integer', 'label' => 'RSI Period', 'default' => 14],
-                ],
-            ],
-            [
-                'key' => self::TREND_SCORE,
-                'category' => self::CATEGORY_TREND,
-                'display_name' => 'Trend Score',
-                'description' => 'Price vs SMA stack trend strength.',
-                'supports_maximum' => false,
-                'default_enabled' => true,
-                'default_weight' => 20,
-                'default_minimum' => 70,
-                'default_maximum' => null,
-                'parameters' => [
-                    'sma_fast' => ['type' => 'integer', 'label' => 'Fast SMA', 'default' => 20],
-                    'sma_slow' => ['type' => 'integer', 'label' => 'Slow SMA', 'default' => 50],
-                ],
-            ],
-            [
-                'key' => self::BREAKOUT_SCORE,
-                'category' => self::CATEGORY_TREND,
-                'display_name' => 'Breakout Score',
-                'description' => 'Pattern / breakout strength from discovery evidence.',
-                'supports_maximum' => false,
-                'default_enabled' => true,
-                'default_weight' => 10,
-                'default_minimum' => 75,
-                'default_maximum' => null,
-                'parameters' => [],
-            ],
-            [
-                'key' => self::VOLUME_SCORE,
-                'category' => self::CATEGORY_VOLUME,
-                'display_name' => 'Volume Score',
-                'description' => 'Volume expansion versus recent average.',
-                'supports_maximum' => false,
-                'default_enabled' => true,
-                'default_weight' => 8,
-                'default_minimum' => 60,
-                'default_maximum' => null,
-                'parameters' => [
-                    'volume_sma_period' => ['type' => 'integer', 'label' => 'Volume SMA Period', 'default' => 20],
-                ],
-            ],
-            [
-                'key' => self::MARKET_REGIME,
-                'category' => self::CATEGORY_MARKET,
-                'display_name' => 'Market Regime',
-                'description' => 'Broad market regime score (neutral stub until dedicated regime model ships).',
-                'supports_maximum' => false,
-                'default_enabled' => true,
-                'default_weight' => 5,
-                'default_minimum' => 60,
-                'default_maximum' => null,
-                'parameters' => [],
-            ],
-            [
-                'key' => self::SECTOR_STRENGTH,
-                'category' => self::CATEGORY_MARKET,
-                'display_name' => 'Sector Strength',
-                'description' => 'Sector relative strength (neutral stub until sector model ships).',
-                'supports_maximum' => false,
-                'default_enabled' => true,
-                'default_weight' => 4,
-                'default_minimum' => 60,
-                'default_maximum' => null,
-                'parameters' => [],
-            ],
-            [
-                'key' => self::RISK_SCORE,
-                'category' => self::CATEGORY_RISK,
-                'display_name' => 'Risk Score',
-                'description' => 'Volatility / ATR risk. Higher is riskier; use Maximum to cap acceptable risk.',
-                'supports_maximum' => true,
-                'default_enabled' => true,
-                'default_weight' => 3,
-                'default_minimum' => 0,
-                'default_maximum' => 40,
-                'parameters' => [
-                    'atr_period' => ['type' => 'integer', 'label' => 'ATR Period', 'default' => 14],
-                ],
-            ],
-        ];
+        return self::$definitionsCache ??= StrategyCatalogueProjector::project(self::registry());
+    }
+
+    /**
+     * Clear static projection cache (unit tests).
+     */
+    public static function clearDefinitionsCache(): void
+    {
+        self::$definitionsCache = null;
     }
 
     /**
@@ -223,5 +132,18 @@ final class SupportedIndicators
         }
 
         return $out;
+    }
+
+    private static function registry(): IndicatorRegistry
+    {
+        try {
+            if (function_exists('app') && app()->bound(IndicatorRegistry::class)) {
+                return app(IndicatorRegistry::class);
+            }
+        } catch (\Throwable) {
+            // Unit tests without Laravel container.
+        }
+
+        return (new IndicatorRegistryFactory)->make();
     }
 }

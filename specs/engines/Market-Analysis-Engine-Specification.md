@@ -154,3 +154,20 @@ Designed so these can be added as additional contributors later without redesign
 
 Table: `portfolio_tos_market_analytics` (migration `2026_07_26_000013_*`).
 Snapshots keyed by `(benchmark_stock_id, as_of_date)`.
+
+---
+
+# 11. Indicator Registry (SD-033)
+
+Market Analysis outputs (Trend, Momentum, Volatility, Risk, Sentiment, Phase,
+and presentation aggregates such as Market Health) are registered as
+**Composites** with `market_level=true`.
+
+Underlying SMA/RSI/ATR/MACD/ROC remain **Primaries** calculated via
+`TechnicalIndicatorService`.
+
+The Registry provides metadata, dependency trees, and formula explanations for
+Admin / docs; it does **not** replace MarketAnalysisEngine calculation or
+sentiment weight config in `trading_os.php`.
+
+Spec: [Indicator-Registry-Specification.md](./Indicator-Registry-Specification.md).

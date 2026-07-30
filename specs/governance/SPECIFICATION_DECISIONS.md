@@ -436,8 +436,8 @@ This register is the authoritative record of **why Version 1.0 differs** from th
 | **Reason for Simplification** | Product goal is a configurable **momentum trading OS**, not a generic trading/indicator platform. Plugin/EAV frameworks add complexity without user value for V1 |
 | **Benefits** | Simple catalogue; clear UI (no Add Indicator); Evaluation/Strategy/Recommendation stay maintainable; adding an indicator = evaluation logic + catalogue entry + config exposure |
 | **Trade-offs** | New indicators require an application release; users cannot invent custom formulas |
-| **Future Expansion Strategy** | Extend `SupportedIndicators` catalogue and Evaluation measurements in releases; keep Strategy JSON versioning; still no plugin runtime |
-| **Relationship** | Clarifies / constrains SD-027 Strategy Configuration |
+| **Future Expansion Strategy** | Extend catalogue via **Indicator Registry** (SD-033) and Evaluation measurements in releases; keep Strategy JSON versioning; still no plugin runtime |
+| **Relationship** | Clarifies / constrains SD-027 Strategy Configuration; extended by **SD-033** |
 | **Status** | Accepted |
 
 ---
@@ -543,12 +543,52 @@ This register is the authoritative record of **why Version 1.0 differs** from th
 | SD-030 | Strategies consume Screeners (single eligibility engine) | Accepted |
 | SD-031 | Analytics Ownership Model (four categories / page questions) | Accepted |
 | SD-032 | Introduce Market Analysis Engine | Accepted |
+| SD-033 | Unified Indicator Registry (evolve dual catalogues) | Accepted (design) |
+| SD-034 | Trading Artifact Framework (Indicator / Screener / Strategy artifacts) | Accepted (design) |
+
+---
+
+### SD-033 — Unified Indicator Registry (Evolve Dual Catalogues; Preserve Calculators)
+
+| Field | Content |
+|-------|---------|
+| **Category** | Architecture / Indicators |
+| **Date** | 2026-07-30 |
+| **Original state** | Dual hardcoded catalogues (`ScreenerCatalog` + `SupportedIndicators`); metadata duplicated; no dependency/consumer model; no Admin registry UI; Metrics (Stock Analytics) outside catalogues |
+| **Decision** | Introduce a **unified Indicator Registry** as the single source of truth for indicator **metadata and discovery**. Preserve `TechnicalIndicatorService` (primary calc), `EvaluationEngine` (composite facts), `StrategyConfigurationService::score` (weights). Keep `ScreenerCatalog` and `SupportedIndicators` as **façades** that derive from / sync with the Registry. Formalize types: **Primary**, **Composite**, **Metric**. Formalize categories, expanded metadata, declared dependencies, consumer discovery, versioning, Admin Indicator Registry UI, formula explanation (docs only). Continue **SD-028** — no plugins, no user formula engine, release-shipped indicators only. |
+| **Planned indicators (metadata first)** | Primaries: Average Daily Turnover, Relative Turnover, Gap Frequency, Gap Fill Ratio, Circuit Frequency, Circuit Risk, Average Daily Volume. Composites: Liquidity Score, Tradability Score. Calculation formulas deferred until a dedicated implementation release. |
+| **Out of scope for Registry phases 1–3** | Wiring Strategy UI indicator parameters into EvaluationEngine (uses `trading_os.php` today). Tracked separately as **TD-19** / **PB-054**. |
+| **Benefits** | One discovery API; dependency trees; consumer clarity; Admin visibility; safer extensibility without rewrite |
+| **Trade-offs** | Migration cost to point façades at Registry; temporary dual-read period |
+| **Spec** | [`../engines/Indicator-Registry-Specification.md`](../engines/Indicator-Registry-Specification.md) · [`../architecture/09-Indicator-Registry.md`](../architecture/09-Indicator-Registry.md) · as-built [`../architecture/08-Indicator-Architecture-Analysis.md`](../architecture/08-Indicator-Architecture-Analysis.md) |
+| **Relationship** | Extends SD-028 (fixed catalogue → fixed Registry entries); complements SD-027/030/031/032; specialized under **SD-034** Trading Artifact Framework |
+| **Status** | **Accepted** (design / specification). Implementation phased via PRODUCT_BACKLOG (PB-055+) |
+
+---
+
+### SD-034 — Trading Artifact Framework (Indicators, Screeners, Strategies)
+
+| Field | Content |
+|-------|---------|
+| **Category** | Architecture / Platform |
+| **Date** | 2026-07-30 |
+| **Original state** | Indicator Registry designed (SD-033); Screeners as DB + `definition_json`; Strategies as portfolio-bound `config_json`; informal “Strategy Template” idea for reuse |
+| **Decision** | Introduce a **Trading Artifact Framework** as the shared model for reusable, versioned, validated, importable/exportable, AI-friendly trading definitions. First-class types: **Indicator**, **Screener**, **Strategy**. Absorb “Strategy Templates” into Strategy artifacts (`origin=factory\|imported\|fork`). Preserve Screener `definition_json` and Strategy `config_json` as definition cores. Preserve SD-028 (no plugins) and SD-030 (Strategy references Screeners). Indicator Registry remains the Indicator specialization. Umbrella Artifact Registry owns cross-type catalogue, package I/O, dependency resolution, validation orchestration. |
+| **Lifecycle** | `draft → active → deprecated → archived`; validate-before-activate; AI/imported drafts must not auto-activate |
+| **Versioning** | Immutable published versions; integer revisions internally; V1 Strategy Save-in-place retained as portfolio-binding compatibility mode |
+| **Import/Export** | Portable JSON packages (`schema_version`); bundle Screeners + Strategy; reference Indicators by slug/version (no executable payloads) |
+| **Out of scope for design acceptance** | Any implementation/code; marketplace; autonomous AI trading; redesign of Screener condition DSL |
+| **Benefits** | One reuse/share/AI model; clearer registries; safer generation; future sharing without rewrite |
+| **Trade-offs** | Migration to bindings/versions; temporary dual UX (Save-in-place vs library) |
+| **Spec** | [`../architecture/11-Trading-Artifact-Framework.md`](../architecture/11-Trading-Artifact-Framework.md) · [`../engines/Trading-Artifact-Framework-Specification.md`](../engines/Trading-Artifact-Framework-Specification.md) |
+| **Relationship** | Extends SD-027/028/030/033; does not supersede Indicator Registry — specializes it under a common envelope |
+| **Status** | **Accepted** (design / specification). Implementation phased via PRODUCT_BACKLOG (PB-058+) |
 
 ---
 
 ## Change control
 
 1. New deviations require a new **SD-xxx** entry (or status change to Superseded/Rejected).  
-2. Do **not** rewrite historical architecture/engine specs to erase intent.  
+2. Do **not** rewrite historical architecture/engine specs to erase intent. Additive evolution docs (e.g. Indicator Registry, Trading Artifact Framework) are allowed.  
 3. Scope of what ships is governed by [`MVP_SCOPE.md`](./MVP_SCOPE.md).  
 4. Deferred items are tracked in [`PRODUCT_BACKLOG.md`](./PRODUCT_BACKLOG.md).

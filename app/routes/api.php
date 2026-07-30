@@ -37,6 +37,7 @@ use App\Http\Controllers\Api\ScreenerController;
 use App\Http\Controllers\Api\ScreenerRunController;
 use App\Http\Controllers\Api\WatchlistController;
 use App\Http\Controllers\Api\WatchlistsController;
+use App\Http\Controllers\Api\V1\IndicatorRegistryController;
 use App\Http\Controllers\Api\V1\TradingOsController;
 use Illuminate\Support\Facades\Route;
 
@@ -333,4 +334,11 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
     Route::get('/strategy/portfolio-rules', [\App\Http\Controllers\Api\V1\StrategyController::class, 'portfolioRules']);
     Route::get('/strategy/capital-allocation', [\App\Http\Controllers\Api\V1\StrategyController::class, 'capitalAllocation']);
     Route::get('/strategy/recommendation-rules', [\App\Http\Controllers\Api\V1\StrategyController::class, 'recommendationRules']);
+
+    Route::middleware('admin')->group(function () {
+        Route::get('/indicators', [IndicatorRegistryController::class, 'index']);
+        Route::get('/indicators/meta', [IndicatorRegistryController::class, 'meta']);
+        Route::get('/indicators/{id}', [IndicatorRegistryController::class, 'show'])
+            ->where('id', '[A-Za-z0-9_\\-]+');
+    });
 });

@@ -321,3 +321,19 @@ Tables: `portfolio_analytics_snapshots`, `portfolio_stock_analytics_cache`.
 
 Relationship: Evaluation = stock facts; Market Analysis = market facts;
 Recommendation / Strategy / Portfolio Analytics / Dashboard consume both.
+
+# Trading Artifact Framework entities (SD-034)
+
+| Entity | Owner | Notes |
+|--------|-------|-------|
+| TradingArtifact (logical) | Artifact Registry umbrella | Envelope: metadata, version, lifecycle, provenance |
+| Indicator artifact | Indicator Registry (SD-033) | Metadata specialization; calc remains in services/engines |
+| Screener artifact | Screener module | `definition_json` preserved as definition core |
+| Strategy artifact | Strategy Configuration | `config_json` preserved; portfolio **binding** selects active version |
+| ArtifactPackage | Import/Export | Portable JSON; bundle Screeners, reference Indicators |
+| ArtifactDependency | Cross-cutting | DAG: Strategy→Screener→Indicator; Composite→Indicator |
+
+Runtime results (ScreenerRun, Recommendation, EvaluationResult) are **not**
+artifacts; they may reference artifact versions for explainability.
+
+Design only — see [Trading-Artifact-Framework-Specification.md](./Trading-Artifact-Framework-Specification.md).

@@ -943,6 +943,7 @@ const APP_DOCUMENTATION_BASE = [
             && !pathStarts(p, '/settings/admin-alerts')
             && !pathStarts(p, '/settings/universe-price-sync')
             && !pathStarts(p, '/settings/data-quality')
+            && !pathStarts(p, '/settings/indicators')
             && !pathStarts(p, '/settings/users'),
         summary: 'Global (admin), Portfolio, and Account settings — fees, Telegram, sync, and links.',
         overview:
@@ -955,7 +956,7 @@ const APP_DOCUMENTATION_BASE = [
         concepts: [
             { name: 'Admin vs portfolio scope', description: 'Some tools (users, sync logs, universe sync) are admin-only.' },
         ],
-        related: ['alert-policies', 'universe-price-sync', 'data-quality-center', 'users', 'notifications'],
+        related: ['alert-policies', 'universe-price-sync', 'data-quality-center', 'indicator-registry', 'users', 'notifications'],
     },
     {
         id: 'alert-policies',
@@ -1071,6 +1072,30 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Auto-resolution traceability', description: 'Auto-accepted records stay visible and can be manually overridden later.' },
         ],
         related: ['data-quality-center', 'corporate-action'],
+    },
+    {
+        id: 'indicator-registry',
+        keyword: 'indicator-registry',
+        aliases: ['indicators', 'indicator-catalogue', 'liquidity-score', 'tradability-score'],
+        title: 'Indicator Registry',
+        routeLabel: '/settings/indicators',
+        match: (p) => pathStarts(p, '/settings/indicators'),
+        summary: 'Admin read-only catalogue of Primary, Composite, and Metric indicators with dependency trees and formula documentation.',
+        overview:
+            'The Indicator Registry is the metadata source of truth for indicators (SD-033). Use the list to search and filter by category, type, and status. Open any row for description, parameters, consumers, capabilities, a dependency tree, and a formula explanation. Formula text is documentation only — there is no formula editor. Liquidity and Tradability indicators are available for Screeners and future Discovery / Dashboard / Stock Details consumers; they are not auto-wired into Strategy scoring or the Recommendation Engine.',
+        controls: [
+            { name: 'Search', description: 'Match against indicator id, display name, or description.' },
+            { name: 'Category / Type / Status filters', description: 'Narrow the catalogue (e.g. liquidity composites, planned stubs).' },
+            { name: 'Indicator row', description: 'Open the detail page for full metadata.' },
+            { name: 'Dependency tree', description: 'On detail, expand declared depends_on relationships recursively.' },
+            { name: 'Formula explanation', description: 'Read-only prose describing how the indicator is computed; not editable in the UI.' },
+        ],
+        concepts: [
+            { name: 'Primary / Composite / Metric', description: 'Primaries are OHLCV calculators (often screenable). Composites combine dependencies. Metrics are descriptive analytics fields.' },
+            { name: 'Screenable vs strategy-scorable', description: 'Screenable indicators appear in Screener conditions. Strategy-scorable composites appear in Strategy weights — Liquidity/Tradability composites are intentionally not strategy-scorable yet.' },
+            { name: 'Circuit heuristics', description: 'Circuit Frequency / Risk use OHLCV heuristics (large move + locked range), not official exchange circuit feeds.' },
+        ],
+        related: ['settings', 'screener', 'strategy', 'data-quality-center'],
     },
     {
         id: 'users',

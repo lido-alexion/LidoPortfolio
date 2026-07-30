@@ -22,3 +22,5 @@
 | 8 | Technical Debt Register | [TECHNICAL_DEBT.md](./TECHNICAL_DEBT.md) |
 | 9 | Repository Overview | [REPOSITORY_OVERVIEW.md](./REPOSITORY_OVERVIEW.md) |
 | 10 | Project Statistics | [PROJECT_STATISTICS.md](./PROJECT_STATISTICS.md) |
+
+**Later additions (post freeze):** Indicator Registry design tracked in governance SD-033 and [`../engines/Indicator-Registry-Specification.md`](../engines/Indicator-Registry-Specification.md); as-built analysis [`../architecture/08-Indicator-Architecture-Analysis.md`](../architecture/08-Indicator-Architecture-Analysis.md); debt TD-19 (Strategy params vs Evaluation).

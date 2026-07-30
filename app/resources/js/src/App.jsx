@@ -19,6 +19,8 @@ import ProfilePage from './pages/ProfilePage';
 import SyncLogsPage from './pages/SyncLogsPage';
 import UniversePriceSyncPage from './pages/UniversePriceSyncPage';
 import DataQualityCenterPage from './pages/DataQualityCenterPage';
+import IndicatorRegistryPage from './pages/IndicatorRegistryPage';
+import IndicatorRegistryDetailPage from './pages/IndicatorRegistryDetailPage';
 import GapFillFailuresPage from './pages/GapFillFailuresPage';
 import IgnoredPriceGapsPage from './pages/IgnoredPriceGapsPage';
 import CorporateActionHistoryPage from './pages/CorporateActionHistoryPage';
@@ -208,6 +210,16 @@ function App() {
                                 <Route path="/settings/data-quality/history" element={(
                                     <AdminRoute>
                                         <CorporateActionHistoryPage />
+                                    </AdminRoute>
+                                )} />
+                                <Route path="/settings/indicators" element={(
+                                    <AdminRoute>
+                                        <IndicatorRegistryPage />
+                                    </AdminRoute>
+                                )} />
+                                <Route path="/settings/indicators/:id" element={(
+                                    <AdminRoute>
+                                        <IndicatorRegistryDetailPage />
                                     </AdminRoute>
                                 )} />
                                 <Route path="/settings/universe-price-sync/gap-failures" element={(

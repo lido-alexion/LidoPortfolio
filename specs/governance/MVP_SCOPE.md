@@ -158,6 +158,8 @@ Intentionally **out of Version 1.0** (see backlog for targeting):
 | Cash | Alternate capital optimisers beyond ScorePriority (future pluggable strategies) |
 | Review | Full attribution, tax reporting, AI insights, dedicated Reports UI |
 | Architecture | Repository/DTO refactor, interface-only engines |
+| Indicators | Unified Indicator Registry **full** delivery (SD-033; Epics 1–2 metadata/façades landed; Admin UI + later phases PB-055+); Liquidity/Tradability calculators (PB-057); Strategy-param→Evaluation wiring (PB-054) |
+| Artifacts | Trading Artifact Framework **implementation** (SD-034 design accepted; PB-058+ — Screener/Strategy artifact registries, packages, AI catalogue) |
 | API | OpenAPI generation, fine-grained RBAC matrix |
 | Frontend | Mandatory TypeScript migration, TanStack Query, AG Grid as platform standards |
 | Markets | Options, crypto, ETF-specific products (beyond equities already supported) |

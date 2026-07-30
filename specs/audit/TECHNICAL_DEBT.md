@@ -22,3 +22,4 @@
 | TD-16 | Review reports without UI | Dashboard prioritized | Reports API underused | Simple reports list page | Low |
 | TD-17 | Logging not fully structured per App Arch §7 | Existing logger | Harder cross-engine tracing | Standardize engine/request_id fields | Low |
 | TD-18 | Pagination inconsistent on v1 lists | Arrays returned for speed | Large portfolios may overfetch | Add page/pageSize everywhere | Low |
+| TD-19 | Strategy indicator parameters ignored by EvaluationEngine | Strategy UI persists `parameters` (rsi_period, lookbacks, SMA periods, …) but Evaluation reads `trading_os.evaluation` defaults | Operators believe Strategy params change scores; they do not | Wire Evaluation to active Strategy parameters (fallback to trading_os). **Separate from Indicator Registry (SD-033)** — see PB-054 | High |

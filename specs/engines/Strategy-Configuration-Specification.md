@@ -4,9 +4,9 @@
 |-------|-------|
 | **Document** | Strategy Configuration Specification |
 | **Version** | 2.0 |
-| **Status** | Active (SD-027 / SD-028 / SD-029 / SD-030) |
+| **Status** | Active (SD-027 / SD-028 / SD-029 / SD-030 / SD-033 / SD-034) |
 | **Owner** | Architecture |
-| **Depends On** | Evaluation Engine, Screener, Recommendation Engine, Market Analysis Engine |
+| **Depends On** | Evaluation Engine, Screener, Recommendation Engine, Market Analysis Engine, Indicator Registry (SD-033), Trading Artifact Framework (SD-034) |
 
 ---
 
@@ -27,6 +27,7 @@ Screeners → Candidate stocks → Strategy scoring / rules → Recommendations
 # 2. Design Principles
 
 - Fixed supported scoring indicators (SD-028) — no plugins / user-defined formulas.
+- Scoring indicator **metadata** evolves through the unified Indicator Registry (SD-033); `SupportedIndicators` remains the Strategy-facing catalogue façade.
 - Default Minervini Strategy seeded once; fully editable in place (SD-029 amended).
 - Strategies **consume Screeners by reference** — no duplicated eligibility rules (SD-030).
 - Enabled scoring weights must sum to **exactly 100** (auto-normalised on save; relative proportions kept).
@@ -153,3 +154,51 @@ see [`Strategy-Specification.md`](./Strategy-Specification.md).
 
 Custom scripting, plugins, user-defined indicators, nested Boolean formula
 language beyond Screener groups, AI-generated strategies.
+
+---
+
+# 13. Indicator Registry (SD-033)
+
+Strategy scoring factors are **Composites** (and occasionally Primaries) with
+`strategy_scorable=true` in the Indicator Registry.
+
+**Today:** `SupportedIndicators` + `GET /api/v1/strategy/catalogue`.
+
+**Target:** Catalogue endpoint projects Registry entries; composites declare
+`depends_on` and `formula_explanation` (documentation). Weights / min / max /
+parameters remain in Strategy `config_json`.
+
+**Known gap (not fixed by Registry alone):** Strategy UI `parameters` are not
+yet consumed by EvaluationEngine (uses `trading_os.evaluation`). Tracked as
+TD-19 / PB-054 — **out of scope** for Registry Phases 1–3.
+
+Planned Strategy-relevant composites (metadata only until PB-057): Liquidity Score,
+Tradability Score.
+
+Spec: [Indicator-Registry-Specification.md](./Indicator-Registry-Specification.md).
+
+---
+
+# 14. Trading Artifact Framework (SD-034)
+
+Strategies evolve into **reusable Strategy artifacts**. The former “Strategy
+Template” proposal is **absorbed**: a template is a factory/imported/forkable
+Strategy artifact, not a separate subsystem.
+
+| Preserve | Add (design) |
+|----------|----------------|
+| `config_json` as definition core | Common artifact metadata (intent, summary, style, provenance) |
+| Screener eligibility by reference (SD-030) | Strategy Artifact Registry / library |
+| Scoring / thresholds / exits / market gates / cash sections | Explicit versioning + portfolio **binding** |
+| One active binding UX for V1 Save-in-place | Import/export packages (bundle Screeners, ref Indicators) |
+| Weight normalisation rules | Validate-before-activate; AI drafts as `origin=ai_assisted` |
+
+**JSON representation (portable):** package schema in
+[Trading-Artifact-Framework-Specification.md](./Trading-Artifact-Framework-Specification.md)
+§10 / §14 — `definition` mirrors `config_json`; eligibility uses screener
+slug+version (ids remapped on import).
+
+**Runtime vs library:** portfolio continues to bind to one active Strategy
+definition; the library may hold many artifacts for reuse and sharing.
+
+Architecture: [11-Trading-Artifact-Framework.md](../architecture/11-Trading-Artifact-Framework.md).

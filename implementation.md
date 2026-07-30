@@ -86,6 +86,37 @@ Sanctum auth. `TradingOsController`: securities, imports, candidates, evaluation
 
 **Trading OS pages & flow (2026-07-29):** Product-facing map of Screener / Strategy / Discovery / Recommendations / Pending Execution / Review (what each page shows + recommendation path). Spec: [`specs/architecture/07-Trading-OS-Pages-and-Flow.md`](specs/architecture/07-Trading-OS-Pages-and-Flow.md). In-app Documentation topic `trading-os-flow` (also linked from overview and related TOS pages). Indexed in `DOCS.md` §2.6a.
 
+**Indicator architecture analysis (2026-07-30):** As-built report of dual catalogues (`ScreenerCatalog` + `SupportedIndicators`), `TechnicalIndicatorService`, Evaluation composites, consumers, storage, and extensibility — [`specs/architecture/08-Indicator-Architecture-Analysis.md`](specs/architecture/08-Indicator-Architecture-Analysis.md).
+
+**Indicator Registry design (2026-07-30, SD-033):** Target evolution — unified metadata/discovery Registry; preserve TI + Evaluation + Strategy scoring; types Primary/Composite/Metric; Admin Indicator Registry UI; planned Liquidity/Tradability indicators (metadata only). Specs: [`specs/architecture/09-Indicator-Registry.md`](specs/architecture/09-Indicator-Registry.md), [`specs/engines/Indicator-Registry-Specification.md`](specs/engines/Indicator-Registry-Specification.md). Strategy-param→Evaluation wiring tracked separately (TD-19 / PB-054). Implementation plan: [`specs/architecture/10-Indicator-Registry-Implementation-Plan.md`](specs/architecture/10-Indicator-Registry-Implementation-Plan.md). Indexed in `DOCS.md` §2.6b–d / §2.14l.
+
+**Trading Artifact Framework (2026-07-30, SD-034 — design only, no code):** Supersedes the narrower “Strategy Template” idea. Shared envelope for **Indicator**, **Screener**, and **Strategy** artifacts (metadata, lifecycle, versioning, validation, import/export, dependencies, AI catalogues). Preserves Screener `definition_json` and Strategy `config_json` cores; Indicator Registry is the Indicator specialization. Specs: [`specs/architecture/11-Trading-Artifact-Framework.md`](specs/architecture/11-Trading-Artifact-Framework.md), [`specs/engines/Trading-Artifact-Framework-Specification.md`](specs/engines/Trading-Artifact-Framework-Specification.md). Backlog: PB-058+. Indexed in `DOCS.md` §2.6e / §2.14m.
+
+**Indicator Registry Epic 1 (2026-07-30):** Foundation landed — **metadata only, no behaviour change**. New package `App\Services\Indicators\*` (`IndicatorRegistry`, `IndicatorDefinition`, type/category/status/consumer/capability constants, `IndicatorRegistryFactory` seeds from catalogues + Stock Analytics metrics + planned Liquidity/Tradability entries). Bound as singleton in `AppServiceProvider`. Unit tests: `tests/Unit/Indicators/IndicatorRegistryTest.php`. Screener/Strategy/Evaluation/Recommendation/Dashboard **unchanged**.
+
+**Indicator Registry Epic 2 (2026-07-30):** Migration — Registry is metadata SoT. Seed data in `ScreenerPrimarySeed` + `StrategyCompositeSeed`; `ScreenerCatalog` / `SupportedIndicators` are **façades** (`ScreenerCatalogueProjector`, `StrategyCatalogueProjector`, `ScreenerMinBars`). Duplicated definition bodies removed from catalogues. Calculations / formulas / recommendation logic **unchanged**. Validator: `IndicatorRegistryValidator`. Tests: `IndicatorRegistryFacadeParityTest`.
+
+**Indicator Registry Epic 3 + Liquidity/Tradability V1 (2026-07-30):**
+- **Admin UI:** `/settings/indicators` list (search, category, type, status) + detail (metadata, parameters, consumers, capabilities, dependency tree, formula explanation — docs only, no editor). Nav from Global Settings.
+- **API (admin):** `GET /api/v1/indicators`, `/meta`, `/{id}` — see `specs/engines/Indicator-Registry-API.md`.
+- **New Primaries (screenable):** average_volume, average_turnover, relative_turnover, gap_frequency, gap_fill_ratio, circuit_frequency, circuit_risk — calculators in `LiquidityTradabilityCalculator` + `TechnicalIndicatorService`.
+- **New Composites (Registry active, NOT strategy_scorable):** liquidity_score, tradability_score (deps include circuit_risk). Available for future Discovery/Dashboard/Stock Details; **not** in Strategy catalogue; **not** wired into Recommendation/Evaluation ranking.
+- **Docs:** `specs/architecture/13-Indicator-Lifecycle.md`, `14-Indicator-Registry-Diagrams.md`; contextual help topic `indicator-registry`.
+- **Impact:** Existing screeners/strategies/recommendations/dashboards unchanged except Screener catalogue gains optional new primary ids (additive). Saved strategies unaffected.
+
+### Impact analysis (Parts A–D, 2026-07-30)
+
+| Surface | Result |
+|---------|--------|
+| Existing screeners | Continue; catalogue additive only (new optional primary ids). No change to existing conditions. |
+| Recommendations | Unchanged — Liquidity/Tradability not in Recommendation Engine. |
+| Dashboards | Unchanged — no auto-wiring of new scores. |
+| APIs | Backward compatible; new admin `/api/v1/indicators*` only. Strategy catalogue endpoints unchanged in content. |
+| Saved strategies | Unchanged — composites not `strategy_scorable`; factory keys unchanged. |
+| Evaluation ranking | Unchanged — composites not emitted as Evaluation facts. |
+
+**Recommended follow-ups:** Epic 5 consumer cutover (surface scores on Stock Details/Dashboard); optional Evaluation facts with default-off; TD-19 Strategy param→Evaluation wiring; universe/benchmark relative turnover; official circuit feed if available.
+
 **Discovery merges Evaluations UI (2026-07-30):** Removed the separate Evaluations nav page. Discovery (`/candidates`) shows evaluation rank/score/confidence/explanation (from latest `EvaluationResult` per candidate); **Run discovery** auto-runs evaluation afterward; **Run evaluation** re-scores the latest discovery run. `/evaluations` redirects to `/candidates`. Docs clarify long-focused evaluation scoring and Discovery↔Evaluation linkage (no Recommendations references in that Discovery topic). APIs `GET /v1/evaluations` and `POST /v1/evaluation/runs` remain.
 
 **Brand rename (2026-07-30):** Product display name is **StoX by Lido Alexion**. Header shows **StoX** in Nulshock at the former title size; **by Lido Alexion** is a much smaller cursive byline. Browser title (`app.blade.php`) updated accordingly.

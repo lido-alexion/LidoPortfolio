@@ -42,6 +42,13 @@ Authoritative roadmap of work **deferred from Version 1.0**. Priorities guide se
 | PB-015a | Recommendation | Opinion→Decision analytics | Review dashboards: bullish→increase rates, reject rates by action | Needs soak data | ReviewEngine | 1.2 |
 | PB-016 | Developer Experience | OpenAPI for `/api/v1` | Machine-readable contract | SD-019 | Stable v1 routes | 1.2 |
 | PB-017 | Review | Soak / production migrate checklist | Harden cPanel migrate + Telegram live test | Release posture Internal Only | Deploy scripts | 1.1 |
+| PB-054 | Evaluation / Strategy | Wire Strategy indicator parameters into Evaluation | Strategy UI params (`rsi_period`, lookbacks, SMA/ATR/vol periods, benchmark) are saved but EvaluationEngine uses `trading_os.evaluation` — see TD-19 / analysis §10 | Discovered 2026-07-30; **out of scope** for Indicator Registry Phases 1–3 (SD-033) | EvaluationEngine, StrategyConfigurationService | 1.1 |
+| PB-055 | Architecture | Indicator Registry Phase 1–3 | Registry module + seed from catalogues; Admin read-only UI; consumers discover via Registry façades. **Plan:** [../architecture/10-Indicator-Registry-Implementation-Plan.md](../architecture/10-Indicator-Registry-Implementation-Plan.md) Epics 1–3 (+5 discovery) | SD-033 design accepted; Epics 1–2 landed in code (metadata + façades); Admin UI remaining | ScreenerCatalog, SupportedIndicators | 1.1 |
+| PB-056 | Architecture | Indicator Registry Phase 4–5 | Declare deps + formula_explanation; persist definition versions on Evaluation/Recommendation evidence | After PB-055 | Evaluation evidence schema | 1.2 |
+| PB-057 | Indicators | Liquidity & Tradability indicators | Implement planned Primaries (turnover, gaps, circuits, …) + Liquidity Score / Tradability Score composites | Metadata in SD-033; formulas deferred | PB-055, market event data | 1.2 |
+| PB-058 | Architecture | Trading Artifact Framework Phase 1–2 | Shared envelope schemas; Screener artifact metadata + export/import (**keep `definition_json`**). **Spec:** [../architecture/11-Trading-Artifact-Framework.md](../architecture/11-Trading-Artifact-Framework.md) | SD-034 design accepted; not coded | Screener module, SD-033 | 1.2 |
+| PB-059 | Architecture | Trading Artifact Framework Phase 3–4 | Strategy artifact library + portfolio binding; umbrella ArtifactRegistry + dependency resolver | After PB-058; preserve Save-in-place UX initially | Strategy Configuration, PB-058 | 1.2 |
+| PB-060 | Architecture / AI | Trading Artifact Framework Phase 5 | AI catalogue cards + draft-from-schema validate-before-activate | After PB-059 | ArtifactRegistry, UI | 1.3 |
 
 ---
 
@@ -92,10 +99,11 @@ Authoritative roadmap of work **deferred from Version 1.0**. Priorities guide se
 
 | Category | Item IDs |
 |----------|----------|
-| Architecture | PB-014, PB-026, PB-040, PB-053 |
+| Architecture | PB-014, PB-026, PB-040, PB-053, PB-055, PB-056 |
 | Data Engine | PB-001, PB-002, PB-020 |
 | Discovery | PB-024, PB-025 |
-| Evaluation | PB-021, PB-022, PB-048 |
+| Evaluation | PB-021, PB-022, PB-048, PB-054 |
+| Indicators | PB-057 |
 | Recommendation | PB-003, PB-015 |
 | Notification | PB-012, PB-013, PB-023, PB-047 |
 | Execution | PB-034, PB-045, PB-046 |
@@ -111,8 +119,8 @@ Authoritative roadmap of work **deferred from Version 1.0**. Priorities guide se
 
 | Release | Theme |
 |---------|--------|
-| **1.1** | Harden trust: data gates, position review, ops wiring, ownership fix, internal soak |
-| **1.2** | Expand channels & analytics: email/webhook, OpenAPI, regime/rules modules, UI polish |
+| **1.1** | Harden trust: data gates, position review, ops wiring, ownership fix, internal soak; Indicator Registry Phases 1–3 (PB-055); Strategy-param→Evaluation wiring (PB-054) |
+| **1.2** | Expand channels & analytics: email/webhook, OpenAPI, regime/rules modules, UI polish; Registry versions (PB-056); Liquidity/Tradability indicators (PB-057) |
 | **2.0** | Strategy + Assisted Execution (broker) |
 | **Future** | AI, mobile, alternative assets, ML (only with explicit ADR) |
 

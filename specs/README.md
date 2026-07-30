@@ -34,7 +34,13 @@ specs/
 │   ├── 04-System-Architecture.md
 │   ├── 05-Daily-Decision-Pipeline.md
 │   ├── 06-Engine-Overview.md
-│   └── 07-Trading-OS-Pages-and-Flow.md   (UI page map + recommendation path)
+│   ├── 07-Trading-OS-Pages-and-Flow.md   (UI page map + recommendation path)
+│   ├── 08-Indicator-Architecture-Analysis.md  (as-built indicator system)
+│   ├── 09-Indicator-Registry.md               (target Registry architecture; SD-033)
+│   ├── 10-Indicator-Registry-Implementation-Plan.md  (Epics/Stories/Tasks)
+│   ├── 11-Trading-Artifact-Framework.md       (target Artifact Framework; SD-034)
+│   ├── 13-Indicator-Lifecycle.md              (lifecycle + Liquidity/Tradability V1)
+│   └── 14-Indicator-Registry-Diagrams.md      (class/component/deps diagrams)
 │
 ├── engines/                           【 INTENT — contracts & engines 】
 │   ├── System-Domain-Model.md
@@ -46,6 +52,12 @@ specs/
 │   ├── Recommendation-Engine-Specification.md
 │   ├── Cash-Management-Specification.md   (SD-026)
 │   ├── Strategy-Configuration-Specification.md (SD-027)
+│   ├── Screener-Specification.md              (SD-030)
+│   ├── Analytics-Architecture-Specification.md (SD-031)
+│   ├── Market-Analysis-Engine-Specification.md (SD-032)
+│   ├── Indicator-Registry-Specification.md    (SD-033)
+│   ├── Indicator-Registry-API.md              (Admin indicators HTTP API)
+│   ├── Trading-Artifact-Framework-Specification.md (SD-034 design)
 │   ├── Notification-Engine-Specification.md
 │   ├── Execution-Engine-Specification.md
 │   ├── Review-Engine-Specification.md
@@ -91,35 +103,44 @@ specs/
 5. [architecture/05-Daily-Decision-Pipeline.md](architecture/05-Daily-Decision-Pipeline.md)
 6. [architecture/06-Engine-Overview.md](architecture/06-Engine-Overview.md)
 7. [architecture/07-Trading-OS-Pages-and-Flow.md](architecture/07-Trading-OS-Pages-and-Flow.md)
-7. [engines/System-Domain-Model.md](engines/System-Domain-Model.md)  
-8. [engines/Database-Schema-Specification.md](engines/Database-Schema-Specification.md)  
-9. [engines/REST-API-Specification.md](engines/REST-API-Specification.md)  
-10. [engines/Application-Architecture-Specification.md](engines/Application-Architecture-Specification.md)  
-11. [engines/Data-Engine-Specification.md](engines/Data-Engine-Specification.md)  
-12. [engines/Evaluation-Engine-Specification.md](engines/Evaluation-Engine-Specification.md)  
-12a. [engines/Market-Analysis-Engine-Specification.md](engines/Market-Analysis-Engine-Specification.md) (SD-032)  
-13. [engines/Recommendation-Engine-Specification.md](engines/Recommendation-Engine-Specification.md)  
-14. [engines/Cash-Management-Specification.md](engines/Cash-Management-Specification.md) (SD-026)  
-14a. [engines/Strategy-Configuration-Specification.md](engines/Strategy-Configuration-Specification.md) / [Strategy-Specification.md](engines/Strategy-Specification.md)  
-14b. [engines/Analytics-Architecture-Specification.md](engines/Analytics-Architecture-Specification.md) / [Portfolio-Analytics-Specification.md](engines/Portfolio-Analytics-Specification.md) / [Dashboard-Specification.md](engines/Dashboard-Specification.md)  
-15. [engines/Notification-Engine-Specification.md](engines/Notification-Engine-Specification.md)  
-16. [engines/Execution-Engine-Specification.md](engines/Execution-Engine-Specification.md)  
-17. [engines/Review-Engine-Specification.md](engines/Review-Engine-Specification.md)  
-18. [engines/Implementation-Roadmap.md](engines/Implementation-Roadmap.md)
+9. [architecture/09-Indicator-Registry.md](architecture/09-Indicator-Registry.md) — target Indicator Registry (SD-033)  
+10. [architecture/10-Indicator-Registry-Implementation-Plan.md](architecture/10-Indicator-Registry-Implementation-Plan.md) — Epics/Stories/Tasks plan  
+11. [architecture/11-Trading-Artifact-Framework.md](architecture/11-Trading-Artifact-Framework.md) — Trading Artifact Framework (SD-034)  
+11a. [architecture/13-Indicator-Lifecycle.md](architecture/13-Indicator-Lifecycle.md) — Indicator lifecycle + Liquidity/Tradability V1  
+11b. [architecture/14-Indicator-Registry-Diagrams.md](architecture/14-Indicator-Registry-Diagrams.md) — Registry diagrams  
+12. [engines/System-Domain-Model.md](engines/System-Domain-Model.md)  
+13. [engines/Database-Schema-Specification.md](engines/Database-Schema-Specification.md)  
+14. [engines/REST-API-Specification.md](engines/REST-API-Specification.md)  
+15. [engines/Application-Architecture-Specification.md](engines/Application-Architecture-Specification.md)  
+16. [engines/Data-Engine-Specification.md](engines/Data-Engine-Specification.md)  
+17. [engines/Evaluation-Engine-Specification.md](engines/Evaluation-Engine-Specification.md)  
+17a. [engines/Market-Analysis-Engine-Specification.md](engines/Market-Analysis-Engine-Specification.md) (SD-032)  
+18. [engines/Recommendation-Engine-Specification.md](engines/Recommendation-Engine-Specification.md)  
+19. [engines/Cash-Management-Specification.md](engines/Cash-Management-Specification.md) (SD-026)  
+19a. [engines/Strategy-Configuration-Specification.md](engines/Strategy-Configuration-Specification.md) / [Strategy-Specification.md](engines/Strategy-Specification.md)  
+19b. [engines/Analytics-Architecture-Specification.md](engines/Analytics-Architecture-Specification.md) / [Portfolio-Analytics-Specification.md](engines/Portfolio-Analytics-Specification.md) / [Dashboard-Specification.md](engines/Dashboard-Specification.md)  
+19c. [engines/Indicator-Registry-Specification.md](engines/Indicator-Registry-Specification.md) (SD-033 — read with architecture/09)  
+19c2. [engines/Indicator-Registry-API.md](engines/Indicator-Registry-API.md) (Admin indicators HTTP API)  
+19d. [engines/Trading-Artifact-Framework-Specification.md](engines/Trading-Artifact-Framework-Specification.md) (SD-034 — read with architecture/11)  
+19e. [engines/Screener-Specification.md](engines/Screener-Specification.md) (SD-030 — Screener artifact evolution §8)  
+20. [engines/Notification-Engine-Specification.md](engines/Notification-Engine-Specification.md)  
+21. [engines/Execution-Engine-Specification.md](engines/Execution-Engine-Specification.md)  
+22. [engines/Review-Engine-Specification.md](engines/Review-Engine-Specification.md)  
+23. [engines/Implementation-Roadmap.md](engines/Implementation-Roadmap.md)
 
 ### Phase B — Governance (implemented V1.0)
 
-19. [governance/DOCUMENT_PRECEDENCE.md](governance/DOCUMENT_PRECEDENCE.md)  
-20. [governance/SPECIFICATION_DECISIONS.md](governance/SPECIFICATION_DECISIONS.md)  
-21. [governance/MVP_SCOPE.md](governance/MVP_SCOPE.md)  
-22. [governance/VERSION_1_BASELINE.md](governance/VERSION_1_BASELINE.md)  
-23. [governance/PRODUCT_BACKLOG.md](governance/PRODUCT_BACKLOG.md)
+24. [governance/DOCUMENT_PRECEDENCE.md](governance/DOCUMENT_PRECEDENCE.md)  
+25. [governance/SPECIFICATION_DECISIONS.md](governance/SPECIFICATION_DECISIONS.md)  
+26. [governance/MVP_SCOPE.md](governance/MVP_SCOPE.md)  
+27. [governance/VERSION_1_BASELINE.md](governance/VERSION_1_BASELINE.md)  
+28. [governance/PRODUCT_BACKLOG.md](governance/PRODUCT_BACKLOG.md)
 
 ### Phase C — Status, demo, audit
 
-24. [IMPLEMENTATION_PROGRESS.md](IMPLEMENTATION_PROGRESS.md)  
-25. [MVP_DEMO_CHECKLIST.md](MVP_DEMO_CHECKLIST.md)  
-26. [audit/README.md](audit/README.md) → prefer starting at [audit/MVP_VERDICT.md](audit/MVP_VERDICT.md)
+29. [IMPLEMENTATION_PROGRESS.md](IMPLEMENTATION_PROGRESS.md)  
+30. [MVP_DEMO_CHECKLIST.md](MVP_DEMO_CHECKLIST.md)  
+31. [audit/README.md](audit/README.md) → prefer starting at [audit/MVP_VERDICT.md](audit/MVP_VERDICT.md)
 
 ---
 

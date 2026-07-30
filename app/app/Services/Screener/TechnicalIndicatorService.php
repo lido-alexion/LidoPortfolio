@@ -2,6 +2,8 @@
 
 namespace App\Services\Screener;
 
+use App\Services\Indicators\LiquidityTradabilityCalculator;
+
 /**
  * Computes technical indicators from chronological OHLCV bar arrays.
  * Each bar: open, high, low, close, volume (floats|null). Series cache keyed per expression.
@@ -26,6 +28,8 @@ class TechnicalIndicatorService
      */
     private array $memo = [];
 
+    private ?LiquidityTradabilityCalculator $ltCalculator = null;
+
     /** @var list<array{open:?float,high:?float,low:?float,close:float,volume:?float}>|null */
     private ?array $validBarsCache = null;
 
@@ -40,6 +44,7 @@ class TechnicalIndicatorService
         $clone->seriesCache = [];
         $clone->memo = [];
         $clone->validBarsCache = null;
+        $clone->ltCalculator = null;
 
         return $clone;
     }
@@ -53,6 +58,7 @@ class TechnicalIndicatorService
         $this->seriesCache = [];
         $this->memo = [];
         $this->validBarsCache = null;
+        $this->ltCalculator = null;
     }
 
     /**
@@ -189,6 +195,39 @@ class TechnicalIndicatorService
             'bb_width_pct' => $this->bbWidthPctSeries((int) ($params['period'] ?? 20), (float) ($params['mult'] ?? 2)),
             'volume_sma' => $this->volumeSmaSeries((int) ($params['period'] ?? 20)),
             'volume_ratio' => $this->volumeRatioSeries((int) ($params['period'] ?? 20)),
+            'average_volume' => $this->volumeSmaSeries((int) ($params['period'] ?? 20)),
+            'average_turnover' => $this->ltCalculator()->averageTurnoverSeries(
+                $this->validBars(),
+                (int) ($params['period'] ?? 20),
+            ),
+            'relative_turnover' => $this->ltCalculator()->relativeTurnoverSeries(
+                $this->validBars(),
+                (int) ($params['period'] ?? 20),
+                (int) ($params['baseline'] ?? 60),
+            ),
+            'gap_frequency' => $this->ltCalculator()->gapFrequencySeries(
+                $this->validBars(),
+                (int) ($params['period'] ?? 60),
+                (float) ($params['threshold_pct'] ?? 1),
+            ),
+            'gap_fill_ratio' => $this->ltCalculator()->gapFillRatioSeries(
+                $this->validBars(),
+                (int) ($params['period'] ?? 60),
+                (float) ($params['threshold_pct'] ?? 1),
+                (int) ($params['fill_window'] ?? 5),
+            ),
+            'circuit_frequency' => $this->ltCalculator()->circuitFrequencySeries(
+                $this->validBars(),
+                (int) ($params['period'] ?? 60),
+                (float) ($params['move_pct'] ?? 9.5),
+                (float) ($params['range_pct'] ?? 0.5),
+            ),
+            'circuit_risk' => $this->ltCalculator()->circuitRiskSeries(
+                $this->validBars(),
+                (int) ($params['period'] ?? 60),
+                (float) ($params['move_pct'] ?? 9.5),
+                (float) ($params['range_pct'] ?? 0.5),
+            ),
             default => array_fill(0, max(0, count($closes)), null),
         };
     }
@@ -259,8 +298,20 @@ class TechnicalIndicatorService
             'bb_width_pct' => $this->bbWidthPct((int) ($params['period'] ?? 20), (float) ($params['mult'] ?? 2)),
             'volume_sma' => $this->lastOf($this->sma($this->series('volume'), (int) ($params['period'] ?? 20))),
             'volume_ratio' => $this->volumeRatio((int) ($params['period'] ?? 20)),
+            'average_volume',
+            'average_turnover',
+            'relative_turnover',
+            'gap_frequency',
+            'gap_fill_ratio',
+            'circuit_frequency',
+            'circuit_risk' => $this->lastOf($this->computeSeries($id, $params)),
             default => null,
         };
+    }
+
+    private function ltCalculator(): LiquidityTradabilityCalculator
+    {
+        return $this->ltCalculator ??= new LiquidityTradabilityCalculator;
     }
 
     /**

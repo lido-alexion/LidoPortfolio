@@ -1,12 +1,10 @@
 # 03 -- Core Concepts
 
-  Field            Value
-  ---------------- ----------------------------------------
-  **Document**     03 -- Core Concepts
-  **Version**      0.1
-  **Status**       Draft
-  **Owner**        Architecture
-  **Depends On**   01 -- Vision, 02 -- Guiding Principles
+**Document:** 03 -- Core Concepts  
+**Version:** 0.2  
+**Status:** Draft (updated 2026-07-30: Trading Artifact / Screener / Indicator Registry vocabulary)  
+**Owner:** Architecture  
+**Depends On:** 01 -- Vision, 02 -- Guiding Principles  
 
 ------------------------------------------------------------------------
 
@@ -33,21 +31,70 @@ introduced only by extending this document.
 
 # 3. Core Concepts
 
+## Trading Artifact
+
+**Definition**
+
+A reusable, versioned, validated trading definition with shared metadata,
+lifecycle, dependencies, and optional import/export packaging. First-class
+types: **Indicator**, **Screener**, **Strategy**.
+
+**Purpose**
+
+Provide one AI-friendly framework for discovery, registry management,
+validation, and future sharing — without redesigning type-specific cores
+(`definition_json`, `config_json`, Indicator Registry bodies).
+
+**Owner**
+
+Architecture / shared platform (Trading Artifact Framework — SD-034).
+
+See [11-Trading-Artifact-Framework.md](./11-Trading-Artifact-Framework.md).
+
+------------------------------------------------------------------------
+
 ## Strategy
 
 **Definition**
 
-An isolated trading methodology with its own configuration, holdings,
-transactions, watchlists, rules, recommendations and performance.
+An investment philosophy encoded as a **Strategy artifact**: scoring,
+portfolio rules, capital allocation, exits, thresholds, and eligibility
+**sources** (Screener references). At runtime a portfolio **binds** to one
+active Strategy artifact version.
+
+Historically described as an isolated methodology with holdings and
+performance; holdings/transactions remain portfolio ledger concepts — the
+reusable definition is the Strategy artifact (`config_json`).
 
 **Purpose**
 
-Allow multiple investment approaches to operate independently and be
-compared objectively.
+Allow investment approaches to be configured, reused, forked (including
+former “Strategy Templates”), compared, and explained objectively.
 
 **Owner**
 
-Strategy Management.
+Strategy Configuration / Strategy Artifact Registry (under Trading Artifact
+Framework).
+
+------------------------------------------------------------------------
+
+## Screener
+
+**Definition**
+
+An eligibility **Screener artifact**: a deterministic condition tree
+(`definition_json`) that selects stocks. Does not rank, allocate, or
+recommend.
+
+**Purpose**
+
+Reusable candidate selection for Discovery, Strategies, Watchlists, Alerts,
+and future automation — sole eligibility engine (SD-030).
+
+**Owner**
+
+Screener module / Screener Artifact Registry (under Trading Artifact
+Framework).
 
 ------------------------------------------------------------------------
 
@@ -82,17 +129,48 @@ Owner: Data Engine.
 
 ## Indicator
 
-A deterministic numeric value derived from market data.
+A deterministic numeric value or documented descriptive measure derived from
+market data or from other indicators. Indicators are typed as:
 
-Examples:
+- **Primary** — calculated directly from market data (or a dedicated service)
+- **Composite** — calculated from declared dependencies (other indicators)
+- **Metric** — descriptive analytics (discoverable; not always screenable/scorable)
 
--   EMA
--   SMA
--   ATR
--   Relative Strength
--   RSI
+Examples (Primary): EMA, SMA, ATR, RSI, Relative Strength (raw).  
+Examples (Composite): Momentum Score, Trend Score, Liquidity Score.  
+Examples (Metric): Distance from 52-week High, Beta, Historical Volatility.
 
-Owner: Evaluation Engine.
+**Metadata / discovery owner (target):** Indicator Registry (SD-033).  
+**Calculation owners (unchanged):** `TechnicalIndicatorService` / related
+services (Primaries); Evaluation Engine (stock Strategy Composites); Market
+Analysis Engine (market-level Composites); Analytics services (Metrics).
+
+See [09-Indicator-Registry.md](./09-Indicator-Registry.md) and
+[Indicator-Registry-Specification.md](../engines/Indicator-Registry-Specification.md).
+
+------------------------------------------------------------------------
+
+## Indicator Registry
+
+The single source of truth for indicator **metadata and discovery** (identity,
+type, category, dependencies, parameters, capabilities, consumers, version).
+It does not replace calculation engines. Entries are release-shipped (SD-028).
+
+**Framework role:** Indicator specialization of the Trading Artifact Framework
+(SD-034). Cross-cutting package/dependency/AI catalogue concerns are shared;
+indicator calculation non-goals remain as in SD-033.
+
+Owner: Architecture / shared platform module (Indicator Registry).
+
+------------------------------------------------------------------------
+
+## Artifact Registry
+
+Umbrella registry API over Indicator, Screener, and Strategy artifact
+registries: list/search, validate, import/export, dependency resolution.
+
+Owner: Architecture / Trading Artifact Framework (SD-034). Design only until
+implemented.
 
 ------------------------------------------------------------------------
 
@@ -262,7 +340,10 @@ Evidence → Recommendations → Notifications / Executions → Reviews
   Concept           Owner
   ----------------- -----------------------
   Market Data       Data Engine
-  Indicators        Evaluation Engine
+  Trading Artifacts Artifact Registry (umbrella; SD-034)
+  Indicators        Indicator Registry (meta) / Evaluation & TI (calc)
+  Screeners         Screener module
+  Strategies        Strategy Configuration
   Patterns          Discovery Engine
   Signals           Discovery Engine
   Rules             Evaluation Engine

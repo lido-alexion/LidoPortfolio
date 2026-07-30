@@ -86,3 +86,20 @@ Dedicated market APIs: `/api/v1/market-analysis*` — see
 [`Market-Analysis-Engine-Specification.md`](./Market-Analysis-Engine-Specification.md).
 
 Legacy `GET /api/analytics/portfolio` and `/api/analytics/stocks/{id}` remain for BC.
+
+---
+
+# 6. Indicator Registry (SD-033)
+
+Stock Analytics fields that are descriptive (distances from 52w, beta, HV,
+liquidity ratings, etc.) are classified as Registry type **Metric**.
+
+Evaluation Profile scores remain **Composites** owned by Evaluation Engine.
+Market Analytics blocks (trend/momentum/…) are **market-level Composites** owned
+by Market Analysis Engine.
+
+All three remain discoverable through the Indicator Registry for Admin UI,
+documentation, and consumer capability queries — without changing SD-031 ownership
+boundaries.
+
+Spec: [Indicator-Registry-Specification.md](./Indicator-Registry-Specification.md).

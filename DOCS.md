@@ -67,6 +67,12 @@ Subtree hub: **[specs/README.md](specs/README.md)**
 | 2.5 | [specs/architecture/05-Daily-Decision-Pipeline.md](specs/architecture/05-Daily-Decision-Pipeline.md) |
 | 2.6 | [specs/architecture/06-Engine-Overview.md](specs/architecture/06-Engine-Overview.md) |
 | 2.6a | [specs/architecture/07-Trading-OS-Pages-and-Flow.md](specs/architecture/07-Trading-OS-Pages-and-Flow.md) | Which UI page shows what; recommendation path through pages |
+| 2.6b | [specs/architecture/08-Indicator-Architecture-Analysis.md](specs/architecture/08-Indicator-Architecture-Analysis.md) | **As-built** indicator architecture (dual catalogues) |
+| 2.6c | [specs/architecture/09-Indicator-Registry.md](specs/architecture/09-Indicator-Registry.md) | **Target** Indicator Registry architecture (SD-033) — **implemented foundation + Admin UI** |
+| 2.6d | [specs/architecture/10-Indicator-Registry-Implementation-Plan.md](specs/architecture/10-Indicator-Registry-Implementation-Plan.md) | Epics / Stories / Tasks implementation plan |
+| 2.6e | [specs/architecture/11-Trading-Artifact-Framework.md](specs/architecture/11-Trading-Artifact-Framework.md) | **Target** Trading Artifact Framework (SD-034) — Indicators, Screeners, Strategies |
+| 2.6f | [specs/architecture/13-Indicator-Lifecycle.md](specs/architecture/13-Indicator-Lifecycle.md) | Indicator lifecycle, Liquidity/Tradability V1, capability gates |
+| 2.6g | [specs/architecture/14-Indicator-Registry-Diagrams.md](specs/architecture/14-Indicator-Registry-Diagrams.md) | Class / component / registry / dependency / lifecycle diagrams |
 
 ### 2.B Domain & contracts
 
@@ -96,6 +102,9 @@ Subtree hub: **[specs/README.md](specs/README.md)**
 | 2.14i | [specs/engines/Portfolio-Analytics-Specification.md](specs/engines/Portfolio-Analytics-Specification.md) | Portfolio-wide analytics + market context |
 | 2.14j | [specs/engines/Strategy-Specification.md](specs/engines/Strategy-Specification.md) | Strategy overview + market gates |
 | 2.14k | [specs/engines/Discovery-Specification.md](specs/engines/Discovery-Specification.md) | Discovery page purpose |
+| 2.14l | [specs/engines/Indicator-Registry-Specification.md](specs/engines/Indicator-Registry-Specification.md) | SD-033 unified Indicator Registry (specialization of SD-034) |
+| 2.14m | [specs/engines/Indicator-Registry-API.md](specs/engines/Indicator-Registry-API.md) | Admin `GET /api/v1/indicators*` API |
+| 2.14n | [specs/engines/Trading-Artifact-Framework-Specification.md](specs/engines/Trading-Artifact-Framework-Specification.md) | SD-034 Trading Artifact Framework (design; not yet coded) |
 | 2.15 | [specs/engines/Notification-Engine-Specification.md](specs/engines/Notification-Engine-Specification.md) | |
 | 2.16 | [specs/engines/Execution-Engine-Specification.md](specs/engines/Execution-Engine-Specification.md) | |
 | 2.17 | [specs/engines/Review-Engine-Specification.md](specs/engines/Review-Engine-Specification.md) | |
@@ -190,8 +199,8 @@ Hub: [deploy/README.md](deploy/README.md) · Skill: [.cursor/skills/deploy-cpane
 ### Recipe A — “Explain Trading OS from scratch” (~full)
 
 1. README.md (skim Features)  
-2. Architecture 01 → 06  
-3. System-Domain-Model + Engine specs (Data → Review)  
+2. Architecture 01 → 06 (+ 07 pages; 08–11 indicator/artifact design as needed)  
+3. System-Domain-Model + Engine specs (Data → Review) + Trading Artifact Framework if designing reuse/AI  
 4. DOCUMENT_PRECEDENCE → SPECIFICATION_DECISIONS → MVP_SCOPE → VERSION_1_BASELINE  
 5. IMPLEMENTATION_PROGRESS → MVP_VERDICT  
 6. implementation.md (Trading OS section + runbook)
@@ -225,7 +234,7 @@ specs/
 ├── README.md                 ← specs hub (links here + DOCS.md)
 ├── IMPLEMENTATION_PROGRESS.md
 ├── MVP_DEMO_CHECKLIST.md
-├── architecture/             ← intent (Vision → Engine Overview)
+├── architecture/             ← intent + indicator as-built (08) + Registry (09–10) + Artifact Framework (11)
 ├── engines/                  ← engine + contract specs + roadmap
 ├── governance/               ← V1.0 decisions, scope, backlog, baseline
 └── audit/                    ← freeze audit evidence

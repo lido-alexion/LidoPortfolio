@@ -25,11 +25,18 @@ Excluded: pure future roadmap (broker automation, Strategy product, AI) unless t
 
 ## Evaluation
 
-8. **No market regime assessment** — Spec responsibility unimplemented.  
+8. **No market regime assessment** — Spec responsibility unimplemented (stub composite `market_regime` = 50).  
 9. **Rules are hard-coded weighted components** — Not a pluggable rules engine.  
-10. **Thin history UX** — Runs stored, but UI focuses on latest results.
+10. **Thin history UX** — Runs stored, but UI focuses on latest results.  
+10a. **Strategy indicator parameters ignored by Evaluation** (2026-07-30) — Strategy UI persists periods/lookbacks/benchmark but EvaluationEngine reads `trading_os.evaluation`. Tracked TD-19 / PB-054; **not** solved by Indicator Registry Phases 1–3 (SD-033).
 
 ---
+
+## Indicators / Registry
+
+10b. **Dual catalogues (as-built)** — `ScreenerCatalog` + `SupportedIndicators` façades now project Indicator Registry (Epics 1–2); Admin Registry UI and full consumer cutover still pending (SD-033 / PB-055).  
+10c. **Liquidity / Tradability indicators not calculated** — Spec metadata only (PB-057).  
+10d. **Trading Artifact Framework not implemented** (2026-07-30) — SD-034 design only: Screeners/Strategies lack shared artifact envelope (versioning/import-export/AI catalogue). “Strategy Templates” absorbed into Strategy artifacts conceptually; no separate template product. Tracked PB-058+.
 
 ## Recommendation / Position review
 

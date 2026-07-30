@@ -4,7 +4,7 @@
 |-------|-------|
 | **Document** | Screener Specification |
 | **Version** | 1.0 |
-| **Status** | Active (SD-030) |
+| **Status** | Active (SD-030 / SD-033 / SD-034) |
 | **Owner** | Architecture |
 
 ---
@@ -88,3 +88,42 @@ re-executes Screener condition logic.
 Existing `/api/screeners*` (CRUD, run, continue, backtest, meta).  
 Strategy assignment: `PUT /api/v1/strategy/screeners`,
 `GET /api/v1/strategy/eligibility`.
+
+---
+
+# 7. Indicator Registry (SD-033)
+
+Screener operands remain the **screenable** subset of indicators.
+
+**Today (as-built):** `ScreenerCatalog` is the hardcoded meta source for
+`GET /api/screeners/meta`.
+
+**Target:** `ScreenerCatalog` becomes a **façade** over the unified
+[Indicator Registry](./Indicator-Registry-Specification.md). Consumers
+discover screenable Primaries (and any screenable Metrics) via Registry
+capabilities (`screenable=true`), not a second parallel list.
+
+Calculation continues via `TechnicalIndicatorService`. No plugin loaders.
+New screenable indicators ship in application releases (SD-028).
+
+See also: [09-Indicator-Registry.md](../architecture/09-Indicator-Registry.md).
+
+---
+
+# 8. Trading Artifact Framework (SD-034)
+
+Screeners evolve into **first-class Screener artifacts** under the
+[Trading Artifact Framework](./Trading-Artifact-Framework-Specification.md).
+
+| Preserve | Add (design) |
+|----------|----------------|
+| `definition_json` condition tree as the **only** eligibility definition format | Common artifact metadata (intent, summary, tags, provenance) |
+| Factory keys (e.g. Minervini Trend Template) | Versioning of definitions |
+| Strategy consumption by reference (SD-030) | Import/export packages; registry listing |
+| Existing operators / group model | Declared indicator dependencies extracted from operands |
+| Run / hit persistence (runtime, not an artifact) | Validate-before-activate for imported / AI drafts |
+
+**Non-goals for Screener evolution:** new condition DSL; embedding eligibility
+inside Strategy; treating Screener runs as artifacts.
+
+Architecture overview: [11-Trading-Artifact-Framework.md](../architecture/11-Trading-Artifact-Framework.md).

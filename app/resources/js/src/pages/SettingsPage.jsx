@@ -532,6 +532,9 @@ export default function SettingsPage() {
                                     <Link to="/settings/data-quality" className="btn btn-outline-secondary btn-sm">
                                         Data Quality Center
                                     </Link>
+                                    <Link to="/settings/indicators" className="btn btn-outline-secondary btn-sm">
+                                        Indicator Registry
+                                    </Link>
                                     </div>
                                 </div>
                                 <div className="col-12">
