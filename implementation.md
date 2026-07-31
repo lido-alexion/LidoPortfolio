@@ -43,6 +43,7 @@ Specs under `specs/` define a seven-engine decision platform. Implementation evo
 | Notification | `Notification\NotificationEngine` | Telegram + `portfolio_tos_notifications`; message text delegated to `Services\Notification\NotificationMessageComposer` (TD-005). Recommendation Telegram notify skips informational HOLD / WATCH (`isActionable()` / `ACTIONABLE_ACTIONS` only). |
 | Execution | `Execution\ExecutionEngine` | Pending execution → ledger transaction (manual or future broker); completion tracking |
 | Review | `Review\ReviewEngine` | Dashboard, outcomes, reports |
+| Backtest | `Services\Backtest\BacktestSimulationEngine` | Historical strategy simulation (paper portfolio; resumable ~20s slices) |
 | Pipeline | `Pipeline\DailyDecisionPipeline` | End-to-end stages |
 
 ### Config / schema / CLI
@@ -84,7 +85,25 @@ Sanctum auth. `TradingOsController`: securities, imports, candidates, evaluation
 
 **Navigation chrome (2026-07-30):** `PageChrome` breadcrumbs + page title (and `document.title`) from catalog via `buildBreadcrumbs` / `getPageTitle`. **Ctrl/Cmd+B** toggles sidebar (skipped in inputs). Active route’s group auto-expands; active highlight resolves via `findActiveSidebarPageId` (editors/registries keep their parent top-level item highlighted). Sidebar scroll position preserved in `sessionStorage` (`lido-sidebar-scroll`). Shell isolates scroll: sidebar and `.lido-main` scroll independently. Catalog supports `badge`, `tag` (`NEW`/`BETA`), `disabled`, `external`, and `permission` (future filter via `canAccessNavItem`). Editor/registry/admin tool routes stay internal (`showInSidebar: false`). Smooth width/group animations; reserved chrome height; reduced-motion respected.
 
-**Sidebar IA (2026-07-30):** Portfolio (Dashboard, Holdings, Watchlist, Transactions, Cash, Corporate Actions) · Market (Discovery, Stock Explorer, Patterns, Indices, Calendar, Market Depth) · Trading (Recommendations, Review, Strategies, Screeners) · Knowledge (Knowledge Board, Knowledge Tags) · Administration (Settings). URLs unchanged; browser Back uses normal React Router history (`NavLink` push).
+**Sidebar IA (2026-07-30):** Portfolio (Dashboard, Holdings, Watchlist, Transactions, Cash, Corporate Actions) · Market (Discovery, Stock Explorer, Patterns, Indices, Calendar, Market Depth) · Trading (Recommendations, Review, Strategies, **Backtests**, Screeners) · Knowledge (Knowledge Board, Knowledge Tags) · Administration (Settings). URLs unchanged; browser Back uses normal React Router history (`NavLink` push).
+
+**Strategy Backtests UI (2026-07-31):** `/backtests` (sidebar **Backtests**, Trading group) lists strategy simulation runs; `/backtests/:id` shows detail. APIs: `GET/POST /api/v1/backtests`, `GET/PUT/DELETE /api/v1/backtests/{id}`, `POST /api/v1/backtests/{id}/continue`, `GET /api/v1/backtests/meta`. Frontend: `BacktestHistoryPage` (new run modal, chunked Continue polling up to ~2000 slices, session token `lido_strategy_backtest_session`), `BacktestDetailPage` (summary cards, Recharts portfolio line, trade timeline matrix, trades/transactions/snapshots tables, full statistics grid, metadata save). Shared helpers: `utils/backtestHelpers.js`; components `components/backtest/BacktestPortfolioChart.jsx`, `BacktestTradeTimeline.jsx`. Contextual help topic `backtests` in `appDocumentation.js` (Strategy related links updated). Distinct from Screener editor backtests (`POST /api/screeners/{id}/backtest`).
+
+**Strategy Backtesting & Simulation engine (2026-07-31):** Core historical simulator for StoX — **not** live trading. Resumable state machine with cooperative **~20s** time budget per HTTP request (cPanel-safe). Stages: `PREPARING` (stock-major entry/exit screener hit precompute into transient `portfolio_backtest_run_hits`) → `SIMULATING_DAYS` (day-major path-dependent paper portfolio) → `GENERATING_STATISTICS` → `GENERATING_REPORT` → `COMPLETED` / `FAILED`.
+
+| Concern | Implementation |
+|---------|----------------|
+| Engine | `App\Services\Backtest\BacktestSimulationEngine` |
+| Day loop | `SimulationDayProcessor` — eligibility → `AsOfFactorScorer` → `StrategyConfigurationService::score` → `ExitStrategyEvaluator` → `ScorePriorityCapitalAllocator` → `PaperTradeExecutor` → daily snapshot |
+| Paper state | `SimulationContext` + `PaperPortfolioManager` (never mutates live cash/holdings/recommendations) |
+| Persistence | Immutable `portfolio_backtest_runs` + transactions / trades / snapshots; transient hits + `context_json` cleared on complete/fail/delete (`BacktestPersistenceService`) |
+| Reporting | `StatisticsGenerator`, `TimelineBuilder` (timeline derived from trades, not stored) |
+| Migration | `2026_07_31_000001_create_strategy_backtest_tables.php` |
+| Tests | `tests/Unit/Backtest/PaperPortfolioSimulationTest.php` |
+
+**Simulation day contract:** For each weekday as-of date: load paper portfolio → entry screener hits (union) → exit screener hits → score eligible + held stocks with OHLCV `price_date <= as_of` → decide OPEN/INCREASE/REDUCE/EXIT/HOLD/WATCH (same thresholds/rules as live Recommendation, market gates disabled pending historical Market Analysis series) → auto-execute funded actions at close → update cash/holdings/lots → persist snapshot. Recommendations are **not** cached across days or runs. Architecture intentionally reusable later for paper trading / walk-forward / portfolio replay (same engine + alternate clock/broker adapters).
+
+**Deploy:** upload migration + new PHP under `app/Services/Backtest/*`, `Models/Backtest*`, `Http/Controllers/Api/V1/BacktestController.php`, routes; frontend `build/`; run `cpanel-migrate.php` after upload.
 
 **Static documentation (2026-07-30):** In-app help is generated as plain HTML under `app/public/docs/` (`npm run docs:static` / part of `npm run build`). Public URLs: `/portfolio/docs/index.html`, `/portfolio/docs/{keyword}.html` (e.g. `strategy.html`). No login or JavaScript required for crawlers. Legacy `/documentation?q=` redirects to these files. Header (?) opens the matching static topic.
 

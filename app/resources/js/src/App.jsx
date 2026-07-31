@@ -53,6 +53,8 @@ import ReviewDashboardPage from './pages/ReviewDashboardPage';
 import NotificationHistoryPage from './pages/NotificationHistoryPage';
 import CashManagementPage from './pages/CashManagementPage';
 import StrategyPage from './pages/StrategyPage';
+import BacktestHistoryPage from './pages/BacktestHistoryPage';
+import BacktestDetailPage from './pages/BacktestDetailPage';
 import DocumentationPage from './pages/DocumentationPage';
 
 function AppRoutes() {
@@ -80,6 +82,8 @@ function AppRoutes() {
             <Route path="/strategy/registry" element={<StrategyRegistryPage />} />
             <Route path="/strategy/registry/:id" element={<StrategyRegistryDetailPage />} />
             <Route path="/strategy" element={<StrategyPage />} />
+            <Route path="/backtests" element={<BacktestHistoryPage />} />
+            <Route path="/backtests/:id" element={<BacktestDetailPage />} />
             <Route path="/review" element={<ReviewDashboardPage />} />
             <Route path="/notification-history" element={<NotificationHistoryPage />} />
             <Route path="/patterns" element={<PatternGuidePage />} />

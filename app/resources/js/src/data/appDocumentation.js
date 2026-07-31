@@ -999,7 +999,71 @@ const APP_DOCUMENTATION_BASE = [
                     'Default seed only: Minervini eligibility; RS35/Trend20/Mom15/Breakout10/Vol8/Mkt5/Sec4/Risk3; Open≥85 Increase≥90 Watch≥60; exit on; market gates off. Fully editable after seed.',
             },
         ],
-        related: ['trading-os-flow', 'screener', 'screener-registry', 'strategy-registry', 'authoring-trading-artifacts', 'ai-authoring-contract', 'trading-cookbook', 'recommendations', 'pending-execution', 'cash', 'dashboard'],
+        related: ['trading-os-flow', 'screener', 'screener-registry', 'strategy-registry', 'authoring-trading-artifacts', 'ai-authoring-contract', 'trading-cookbook', 'recommendations', 'pending-execution', 'cash', 'dashboard', 'backtests'],
+    },
+    {
+        id: 'backtests',
+        keyword: 'backtests',
+        aliases: ['strategy-backtest', 'backtest', 'paper-trading'],
+        title: 'Strategy Backtests',
+        routeLabel: '/backtests',
+        match: (p) => pathStarts(p, '/backtests'),
+        summary: 'Paper-trade the active Strategy over historical dates — runs, progress, trades, timeline, and statistics.',
+        overview:
+            'Strategy Backtests simulate how your **active Strategy** would have traded over a chosen lookback window (1y / 6m / 3m / 1m / 15d) using historical prices and the same eligibility, scoring, exit, and capital rules as the live Recommendation pipeline — but **without** writing to your ledger or Recommendations queue.\n\n'
+            + 'Strategy Backtests require at least one **enabled eligibility Screener** on the Strategy (same union rules as live Recommendations). Without eligibility sources, Start is rejected.\n\n'
+            + 'Each run is chunked across HTTP requests (time-budgeted server slices ~20s). The UI polls **Continue** until the run completes or fails. Session continuity uses a browser token (`lido_strategy_backtest_session` in localStorage) so eligibility precompute can resume safely.\n\n'
+            + 'Open a completed run for portfolio growth chart, per-stock trade timeline matrix, trades/transactions tables, daily snapshots, and the full statistics grid (return %, CAGR, drawdown, win rate, holding periods, utilization, etc.).\n\n'
+            + 'Backtests complement — but do not replace — Screener backtests on the Screener editor (those test eligibility rules only). Strategy backtests exercise the full Strategy policy on a paper portfolio.',
+        controls: [
+            {
+                name: 'New Backtest',
+                description: 'Choose period (range_key), initial capital (min ₹1,000), optional name/notes/tags, then Start. Progress shows stage, % complete, current simulation date, and eligibility precompute % while PREPARING.',
+            },
+            {
+                name: 'Continue polling',
+                description: 'After Start, the client POSTs /v1/backtests/{id}/continue while continued=true (up to ~2000 slices). Navigate to the detail page automatically when completed.',
+            },
+            {
+                name: 'Open / Delete',
+                description: 'History table actions. Delete is permanent. Duplicate is reserved for a future release.',
+            },
+            {
+                name: 'Detail — Save name / notes / tags',
+                description: 'PUT /v1/backtests/{id} updates metadata without re-running simulation.',
+            },
+            {
+                name: 'Detail — Resume banner',
+                description: 'If you open an in-progress run, the page auto-resumes Continue polling until completed or failed.',
+            },
+            {
+                name: 'Trade timeline',
+                description: 'Sticky symbol column × trading-day columns. Cell day count coloured green (profitable close), red (loss), or muted (open). Horizontal scroll for long periods.',
+            },
+            {
+                name: 'Portfolio growth chart',
+                description: 'Daily portfolio value line with reference line at initial capital. Tooltip: date, portfolio, cash, invested value.',
+            },
+        ],
+        concepts: [
+            {
+                name: 'Active Strategy snapshot',
+                description: 'Each run locks the active Strategy version (and linked Screener versions) at start time so results stay reproducible.',
+            },
+            {
+                name: 'Paper portfolio',
+                description: 'Simulated cash and positions — no broker orders, reservations, or ledger transactions.',
+            },
+            {
+                name: 'Eligibility precompute',
+                description: 'PREPARING stage rebuilds historical screener hits per day before day-by-day simulation.',
+            },
+            {
+                name: 'Statistics block',
+                description: 'Aggregates at completion: return_pct, CAGR, maximum_drawdown, win_rate, trade counts, holding periods, utilization, cash_remaining, maximum_concurrent_positions.',
+            },
+        ],
+        related: ['strategy', 'screener', 'screener-editor', 'recommendations', 'review', 'trading-os-flow'],
     },
     {
         id: 'strategy-registry',

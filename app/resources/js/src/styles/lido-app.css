@@ -5418,3 +5418,67 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     display: inline-flex;
 }
 
+/* Strategy backtest trade timeline */
+.backtest-timeline-wrap {
+    overflow-x: auto;
+    max-width: 100%;
+}
+
+.backtest-timeline-table {
+    font-size: 0.6875rem;
+    white-space: nowrap;
+}
+
+.backtest-timeline-table th,
+.backtest-timeline-table td {
+    padding: 0.15rem 0.25rem;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.backtest-timeline-sticky-col {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: var(--lido-surface, var(--bs-body-bg));
+    min-width: 4.5rem;
+    text-align: left !important;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.06);
+}
+
+.backtest-timeline-date-col {
+    min-width: 2.1rem;
+    font-weight: 500;
+}
+
+.backtest-timeline-cell {
+    min-width: 1.6rem;
+    height: 1.35rem;
+    line-height: 1.35rem;
+}
+
+.backtest-timeline-cell--empty {
+    background: transparent;
+}
+
+.backtest-timeline-cell--win {
+    background: rgba(25, 135, 84, 0.22);
+    color: var(--bs-success);
+    font-weight: 600;
+}
+
+.backtest-timeline-cell--loss {
+    background: rgba(220, 53, 69, 0.18);
+    color: var(--bs-danger);
+    font-weight: 600;
+}
+
+.backtest-timeline-cell--open {
+    background: rgba(108, 117, 125, 0.15);
+    color: var(--lido-text-muted, var(--bs-secondary-color));
+}
+
+.backtest-progress-banner {
+    border-left: 4px solid var(--bs-primary);
+}
+

@@ -338,6 +338,16 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
     Route::get('/strategy/capital-allocation', [\App\Http\Controllers\Api\V1\StrategyController::class, 'capitalAllocation']);
     Route::get('/strategy/recommendation-rules', [\App\Http\Controllers\Api\V1\StrategyController::class, 'recommendationRules']);
 
+    // Strategy Backtesting & Simulation (historical only; resumable time-budget engine).
+    Route::get('/backtests/meta', [\App\Http\Controllers\Api\V1\BacktestController::class, 'meta']);
+    Route::get('/backtests', [\App\Http\Controllers\Api\V1\BacktestController::class, 'index']);
+    Route::post('/backtests', [\App\Http\Controllers\Api\V1\BacktestController::class, 'store']);
+    Route::get('/backtests/{id}', [\App\Http\Controllers\Api\V1\BacktestController::class, 'show'])->whereNumber('id');
+    Route::post('/backtests/{id}/continue', [\App\Http\Controllers\Api\V1\BacktestController::class, 'continue'])->whereNumber('id');
+    Route::put('/backtests/{id}', [\App\Http\Controllers\Api\V1\BacktestController::class, 'update'])->whereNumber('id');
+    Route::delete('/backtests/{id}', [\App\Http\Controllers\Api\V1\BacktestController::class, 'destroy'])->whereNumber('id');
+    Route::get('/backtests/{id}/timeline', [\App\Http\Controllers\Api\V1\BacktestController::class, 'timeline'])->whereNumber('id');
+
     // Trading Artifact Registry (SD-034) — additive infrastructure; does not replace screeners/strategy APIs.
     Route::get('/artifacts', [ArtifactRegistryController::class, 'index']);
     Route::post('/artifacts/export', [ArtifactRegistryController::class, 'exportPackage']);
