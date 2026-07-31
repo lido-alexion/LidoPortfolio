@@ -4,7 +4,7 @@
 
 > **Audience:** AI agents and developers authoring portable Indicator / Screener / Strategy JSON **without** reading application source code.
 >
-> **Generated:** 2026-07-31T03:17:06.883Z
+> **Generated:** 2026-07-31T03:38:51.673Z
 > **Deploy download:** `/docs/stox-trading-artifacts-ai-guide.md` (also linked from Screener Registry and Strategy Registry).
 > **Repo copy:** `specs/engines/StoX-Trading-Artifacts-AI-Guide.md`
 
@@ -1166,8 +1166,8 @@ Practical tip: treat this page as one step in a larger workflow, not an isolated
 
 - **Search / filters** — Filter by status, ownership (own vs shared), and origin (factory / user / shared).
 - **Export JSON** — Download the Screener artifact envelope (schema_version, slug, name, metadata, definition.root, dependencies). Best template for a new import.
-- **Validate** — Check pasted JSON against Trading Artifact Screener rules. Fix every path error before Import. Empty trees may still fail on Import — keep ≥1 condition. Import stays disabled until this reports ok.
-- **Import** — Enabled only after successful Validate. Creates a new screener in this portfolio. Mandatory: schema_version, artifact_type, slug, name, metadata, definition.root with ≥1 condition. Editing the JSON clears validation and disables Import again.
+- **Validate** — Check pasted JSON against Trading Artifact Screener rules. On success, a green “Validated successfully” cue appears above Validate/Import and the JSON result panel still shows details. Import stays disabled until this reports ok. Editing the JSON clears validation.
+- **Import** — Enabled only after successful Validate. Creates a new screener in this portfolio and shows a success toast (not an inline alert). Mandatory: schema_version, artifact_type, slug, name, metadata, definition.root with ≥1 condition.
 - **Download AI authoring guide (.md)** — Download /docs/stox-trading-artifacts-ai-guide.md — consolidated Indicator + Screener + Strategy + Authoring + Cookbook Markdown for AI agents and offline authoring.
 - **Import copy (shared)** — Copy a shared screener from another portfolio into yours (same as Shared screens import).
 - **Open editor** — Jump to the classic Screener editor to change conditions or run screens after import.
@@ -1721,10 +1721,10 @@ Practical tip: treat this page as one step in a larger workflow, not an isolated
 ### Controls
 
 - **Search / filters** — Filter by status (active/draft/archived) and origin (factory/user).
-- **Select** — Make this strategy the portfolio’s only active strategy (archives the previous active). Recommendations use the selected strategy.
+- **Select** — Make this strategy the portfolio’s only active strategy (archives the previous active). Success shows a toast notification. Recommendations use the selected strategy.
 - **Export JSON** — Download the portable Trading Artifact envelope (schema_version, slug, name, metadata, definition with eligibility_sources + scoring_model, dependencies). Best template for a new import — includes thresholds/exits/gates when present.
-- **Validate** — Check pasted JSON against Trading Artifact Strategy rules. Fix every path error before Import. Import stays disabled until this reports ok.
-- **Import** — Enabled only after successful Validate. Creates a draft strategy in this portfolio (does not change Recommendations until Select). Mandatory: schema_version, artifact_type, slug, name, metadata, definition.scoring_model with enabled weights = 100. Editing the JSON clears validation and disables Import again.
+- **Validate** — Check pasted JSON against Trading Artifact Strategy rules. On success, a green “Validated successfully” cue appears above Validate/Import and the JSON result panel still shows details. Import stays disabled until this reports ok. Editing the JSON clears validation.
+- **Import** — Enabled only after successful Validate. Creates a draft strategy in this portfolio and shows a success toast (not an inline alert). Does not change Recommendations until Select. Mandatory: schema_version, artifact_type, slug, name, metadata, definition.scoring_model with enabled weights = 100.
 - **Download AI authoring guide (.md)** — Download /docs/stox-trading-artifacts-ai-guide.md — consolidated Indicator + Screener + Strategy + Authoring + Cookbook Markdown for AI agents and offline authoring.
 - **Edit active** — Jump to /strategy to edit the selected strategy’s tabs and Save.
 - **Version history** — On detail for owned strategies, list definition snapshots and change notes. Draft definition-hash changes append versions; active editor Save remains in-place BC.

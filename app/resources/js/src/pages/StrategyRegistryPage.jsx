@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
 import { appUrl } from '../appBase';
+import ValidationSuccessBanner from '../components/artifacts/ValidationSuccessBanner';
+import { showToast } from '../toast';
 
 function statusBadgeClass(status) {
     switch (status) {
@@ -36,7 +38,6 @@ export default function StrategyRegistryPage({ adminMode = false }) {
     const [meta, setMeta] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [notice, setNotice] = useState('');
     const [q, setQ] = useState('');
     const [status, setStatus] = useState('');
     const [origin, setOrigin] = useState('');
@@ -88,14 +89,16 @@ export default function StrategyRegistryPage({ adminMode = false }) {
 
     const onValidate = async () => {
         setBusy(true);
-        setNotice('');
         setValidateResult(null);
         setError('');
         try {
             const envelope = parseImportPayload();
             const res = await api.post('/v1/strategy-registry/validate', envelope);
-            setValidateResult(res.data?.data || null);
-            setNotice(res.data?.data?.ok ? 'Validation passed.' : 'Validation reported issues.');
+            const result = res.data?.data || null;
+            setValidateResult(result);
+            if (!result?.ok) {
+                showToast('Validation reported issues. See details below.', 'warning');
+            }
         } catch (err) {
             setError(err?.response?.data?.error?.message || err.message || 'Validate failed');
         } finally {
@@ -109,13 +112,14 @@ export default function StrategyRegistryPage({ adminMode = false }) {
             return;
         }
         setBusy(true);
-        setNotice('');
         setError('');
         try {
             const envelope = parseImportPayload();
             const res = await api.post('/v1/strategy-registry/import', envelope);
             const created = res.data?.data;
-            setNotice(`Imported “${created?.name || 'strategy'}” as draft (slug ${created?.slug || '—'}). Select it to make it active.`);
+            showToast(
+                `Imported “${created?.name || 'strategy'}” as draft (slug ${created?.slug || '—'}). Select it to make it active.`,
+            );
             setImportText('');
             setValidateResult(null);
             await load();
@@ -134,7 +138,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
             const res = await api.post(`/v1/strategy-registry/${encodeURIComponent(id)}/export`);
             const env = res.data?.data;
             downloadJson(`${env?.slug || 'strategy'}.json`, env);
-            setNotice(`Exported ${env?.slug || id} (portable Screener/Indicator refs only).`);
+            showToast(`Exported ${env?.slug || id} (portable Screener/Indicator refs only).`);
         } catch (err) {
             setError(err?.response?.data?.error?.message || err.message || 'Export failed');
         } finally {
@@ -149,7 +153,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
         setError('');
         try {
             await api.post(`/v1/strategy-registry/${encodeURIComponent(id)}/activate`);
-            setNotice(`“${row.name}” is now the active strategy for this portfolio.`);
+            showToast(`“${row.name}” is now the active strategy for this portfolio.`);
             await load();
         } catch (err) {
             setError(err?.response?.data?.error?.message || err.message || 'Selection failed');
@@ -239,7 +243,6 @@ export default function StrategyRegistryPage({ adminMode = false }) {
             </div>
 
             {error && <div className="alert alert-danger mb-0">{error}</div>}
-            {notice && <div className="alert alert-success mb-0">{notice}</div>}
 
             <div className="card">
                 <div className="table-responsive">
@@ -354,6 +357,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                             setValidateResult(null);
                         }}
                     />
+                    <ValidationSuccessBanner show={importValidated} />
                     <div className="d-flex flex-wrap gap-2">
                         <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || !importText.trim()} onClick={onValidate}>
                             Validate

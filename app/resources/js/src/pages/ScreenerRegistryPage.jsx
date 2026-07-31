@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
 import { appUrl } from '../appBase';
+import ValidationSuccessBanner from '../components/artifacts/ValidationSuccessBanner';
+import { showToast } from '../toast';
 
 function statusBadgeClass(status) {
     switch (status) {
@@ -36,7 +38,6 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
     const [meta, setMeta] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [notice, setNotice] = useState('');
     const [q, setQ] = useState('');
     const [status, setStatus] = useState('');
     const [ownership, setOwnership] = useState('');
@@ -90,14 +91,16 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
 
     const onValidate = async () => {
         setBusy(true);
-        setNotice('');
         setValidateResult(null);
         setError('');
         try {
             const envelope = parseImportPayload();
             const res = await api.post('/v1/screener-registry/validate', envelope);
-            setValidateResult(res.data?.data || null);
-            setNotice(res.data?.data?.ok ? 'Validation passed.' : 'Validation reported issues.');
+            const result = res.data?.data || null;
+            setValidateResult(result);
+            if (!result?.ok) {
+                showToast('Validation reported issues. See details below.', 'warning');
+            }
         } catch (err) {
             setError(err?.response?.data?.error?.message || err.message || 'Validate failed');
         } finally {
@@ -111,13 +114,12 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
             return;
         }
         setBusy(true);
-        setNotice('');
         setError('');
         try {
             const envelope = parseImportPayload();
             const res = await api.post('/v1/screener-registry/import', envelope);
             const created = res.data?.data;
-            setNotice(`Imported “${created?.name || 'screener'}” (slug ${created?.slug || '—'}).`);
+            showToast(`Imported “${created?.name || 'screener'}” (slug ${created?.slug || '—'}).`);
             setImportText('');
             setValidateResult(null);
             await load();
@@ -136,7 +138,7 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
             const res = await api.post(`/v1/screener-registry/${encodeURIComponent(id)}/export`);
             const env = res.data?.data;
             downloadJson(`${env?.slug || 'screener'}.json`, env);
-            setNotice(`Exported ${env?.slug || id}.`);
+            showToast(`Exported ${env?.slug || id}.`);
         } catch (err) {
             setError(err?.response?.data?.error?.message || err.message || 'Export failed');
         } finally {
@@ -151,7 +153,7 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
         setError('');
         try {
             const res = await api.post(`/v1/screener-registry/shared/${encodeURIComponent(sourceId)}/import`);
-            setNotice(`Copied shared screener into this portfolio as “${res.data?.data?.name || 'screener'}”.`);
+            showToast(`Copied shared screener into this portfolio as “${res.data?.data?.name || 'screener'}”.`);
             await load();
         } catch (err) {
             setError(err?.response?.data?.error?.message || err.message || 'Shared import failed');
@@ -255,7 +257,6 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
             </div>
 
             {error && <div className="alert alert-danger mb-0">{error}</div>}
-            {notice && <div className="alert alert-success mb-0">{notice}</div>}
 
             <div className="card">
                 <div className="table-responsive">
@@ -374,6 +375,7 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
                             setValidateResult(null);
                         }}
                     />
+                    <ValidationSuccessBanner show={importValidated} />
                     <div className="d-flex flex-wrap gap-2">
                         <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || !importText.trim()} onClick={onValidate}>
                             Validate

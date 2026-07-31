@@ -893,16 +893,16 @@
         <dd>Filter by status (active/draft/archived) and origin (factory/user).</dd>
     
         <dt>Select</dt>
-        <dd>Make this strategy the portfolio’s only active strategy (archives the previous active). Recommendations use the selected strategy.</dd>
+        <dd>Make this strategy the portfolio’s only active strategy (archives the previous active). Success shows a toast notification. Recommendations use the selected strategy.</dd>
     
         <dt>Export JSON</dt>
         <dd>Download the portable Trading Artifact envelope (schema_version, slug, name, metadata, definition with eligibility_sources + scoring_model, dependencies). Best template for a new import — includes thresholds/exits/gates when present.</dd>
     
         <dt>Validate</dt>
-        <dd>Check pasted JSON against Trading Artifact Strategy rules. Fix every path error before Import. Import stays disabled until this reports ok.</dd>
+        <dd>Check pasted JSON against Trading Artifact Strategy rules. On success, a green “Validated successfully” cue appears above Validate/Import and the JSON result panel still shows details. Import stays disabled until this reports ok. Editing the JSON clears validation.</dd>
     
         <dt>Import</dt>
-        <dd>Enabled only after successful Validate. Creates a draft strategy in this portfolio (does not change Recommendations until Select). Mandatory: schema_version, artifact_type, slug, name, metadata, definition.scoring_model with enabled weights = 100. Editing the JSON clears validation and disables Import again.</dd>
+        <dd>Enabled only after successful Validate. Creates a draft strategy in this portfolio and shows a success toast (not an inline alert). Does not change Recommendations until Select. Mandatory: schema_version, artifact_type, slug, name, metadata, definition.scoring_model with enabled weights = 100.</dd>
     
         <dt>Download AI authoring guide (.md)</dt>
         <dd>Download /docs/stox-trading-artifacts-ai-guide.md — consolidated Indicator + Screener + Strategy + Authoring + Cookbook Markdown for AI agents and offline authoring.</dd>

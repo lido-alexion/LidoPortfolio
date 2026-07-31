@@ -724,10 +724,10 @@
         <dd>Download the Screener artifact envelope (schema_version, slug, name, metadata, definition.root, dependencies). Best template for a new import.</dd>
     
         <dt>Validate</dt>
-        <dd>Check pasted JSON against Trading Artifact Screener rules. Fix every path error before Import. Empty trees may still fail on Import — keep ≥1 condition. Import stays disabled until this reports ok.</dd>
+        <dd>Check pasted JSON against Trading Artifact Screener rules. On success, a green “Validated successfully” cue appears above Validate/Import and the JSON result panel still shows details. Import stays disabled until this reports ok. Editing the JSON clears validation.</dd>
     
         <dt>Import</dt>
-        <dd>Enabled only after successful Validate. Creates a new screener in this portfolio. Mandatory: schema_version, artifact_type, slug, name, metadata, definition.root with ≥1 condition. Editing the JSON clears validation and disables Import again.</dd>
+        <dd>Enabled only after successful Validate. Creates a new screener in this portfolio and shows a success toast (not an inline alert). Mandatory: schema_version, artifact_type, slug, name, metadata, definition.root with ≥1 condition.</dd>
     
         <dt>Download AI authoring guide (.md)</dt>
         <dd>Download /docs/stox-trading-artifacts-ai-guide.md — consolidated Indicator + Screener + Strategy + Authoring + Cookbook Markdown for AI agents and offline authoring.</dd>

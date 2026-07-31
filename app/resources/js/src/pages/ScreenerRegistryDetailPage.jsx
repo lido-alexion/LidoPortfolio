@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import api from '../api';
+import { showToast } from '../toast';
 
 function downloadJson(filename, data) {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -22,7 +23,6 @@ export default function ScreenerRegistryDetailPage({ adminMode = false }) {
     const [versions, setVersions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [notice, setNotice] = useState('');
 
     useEffect(() => {
         let cancelled = false;
@@ -63,7 +63,7 @@ export default function ScreenerRegistryDetailPage({ adminMode = false }) {
             const res = await api.post(`/v1/screener-registry/${encodeURIComponent(id)}/export`);
             const data = res.data?.data;
             downloadJson(`${data?.slug || id}.json`, data);
-            setNotice('Exported JSON downloaded.');
+            showToast('Exported JSON downloaded.');
         } catch (err) {
             setError(err?.response?.data?.error?.message || err.message || 'Export failed');
         }
@@ -96,7 +96,6 @@ export default function ScreenerRegistryDetailPage({ adminMode = false }) {
             </div>
 
             {error && <div className="alert alert-danger mb-0">{error}</div>}
-            {notice && <div className="alert alert-success mb-0">{notice}</div>}
             {loading && <div className="text-muted">Loading…</div>}
 
             {!loading && env && (
