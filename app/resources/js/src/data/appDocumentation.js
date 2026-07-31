@@ -760,6 +760,7 @@ const APP_DOCUMENTATION_BASE = [
         overview:
             'Strategy is your decision policy. Each portfolio has exactly one active strategy. It starts as Minervini Strategy (Minervini Trend Template eligibility + momentum scoring). Edit any tab and Save — the active editor still saves in place.\n\n'
             + 'Use Strategy Registry to import/export JSON, validate packs, browse drafts, and Select which definition is active for this portfolio. Strategies reference Screeners by slug / factory key — they never duplicate Screener condition trees.\n\n'
+            + '**AI Strategy Designer** (collapsible panel on this page) does **not** call an LLM. It builds a paste-ready prompt from your style/risk/complexity choices, copies it to the clipboard, and expects you to attach the StoX Trading Artifacts AI Authoring Guide in ChatGPT/Gemini/Claude/etc. Import the resulting Screener/Strategy JSON via the registries after Validate.\n\n'
             + 'Strategy does not invent stocks and does not rewrite Screener conditions. Screeners admit candidates; Strategy scores them, labels an action, applies portfolio/cash/market limits, and watches holdings for exits.\n\n'
             + 'Where do finished ideas appear?\n\n'
             + 'After you save Strategy and run the decision pipeline (Recommendations page → “Run decision pipeline”, or the scheduled daily pipeline), surviving trade ideas land on Recommendations (/recommendations). Approve a buy/sell there → it moves to Pending Execution (/transactions/pending). After you record the broker fill, it becomes a ledger transaction and shows on Holdings / Review. Insights (HOLD / WATCH) also appear on Recommendations but are view-only and are not sent to Telegram.\n\n'
@@ -781,6 +782,13 @@ const APP_DOCUMENTATION_BASE = [
             + '```\n\n'
             + 'Read Controls below for every tab field (what it means and what number it is compared against). Read Concepts for a scored example of four candidates and three holdings hitting exit rules.',
         controls: [
+            {
+                name: 'AI Strategy Designer',
+                description:
+                    'Collapsible panel on /strategy. Fill Investment Style, Risk, Holding Period, Market, Universe, Max Positions, Capital Allocation, Exit Style, Market Preferences, Optimization Priorities, Complexity, Explainability, and optional Additional Constraints. '
+                    + 'Generate Prompt builds a client-side template (StoX Default Prompt; more templates can be added later), shows it in a read-only textarea, and auto-copies to the clipboard (toast: “AI prompt copied to clipboard.”). '
+                    + 'Copy Again / Select All / Clear / Reset Defaults are available. Form values persist in browser localStorage. Attach /docs/stox-trading-artifacts-ai-guide.md when pasting into an external AI. No backend LLM call.',
+            },
             {
                 name: 'Strategy Registry',
                 description:
@@ -906,6 +914,11 @@ const APP_DOCUMENTATION_BASE = [
                     'Registry manages reusable JSON artifacts, drafts, and selection. The Strategy page edits the active portfolio strategy. Export never includes portfolio-local Screener ids — only slug / factory_key refs.',
             },
             {
+                name: 'AI Strategy Designer',
+                description:
+                    'Prompt builder only — no in-app LLM. Generated text instructs an external assistant to obey the StoX AI Authoring Guide / Contract. You still Validate and Import JSON via Screener Registry and Strategy Registry.',
+            },
+            {
                 name: 'Worked example — scoring four screener hits',
                 description:
                     'Assume factory-like weights: RS 35, Trend 20, Momentum 15, Breakout 10, Volume 8, Market Regime 5, Sector 4, Risk 3 (total 100).\n'
@@ -986,7 +999,7 @@ const APP_DOCUMENTATION_BASE = [
                     'Default seed only: Minervini eligibility; RS35/Trend20/Mom15/Breakout10/Vol8/Mkt5/Sec4/Risk3; Open≥85 Increase≥90 Watch≥60; exit on; market gates off. Fully editable after seed.',
             },
         ],
-        related: ['trading-os-flow', 'screener', 'screener-registry', 'strategy-registry', 'recommendations', 'pending-execution', 'cash', 'dashboard'],
+        related: ['trading-os-flow', 'screener', 'screener-registry', 'strategy-registry', 'authoring-trading-artifacts', 'ai-authoring-contract', 'trading-cookbook', 'recommendations', 'pending-execution', 'cash', 'dashboard'],
     },
     {
         id: 'strategy-registry',

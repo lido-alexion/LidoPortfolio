@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import api from '../api';
 import { DataTableCard } from '../components/DataTable';
 import NumberInput from '../components/NumberInput';
+import AIStrategyPromptBuilder from '../components/strategy/AIStrategyPromptBuilder';
 import useApiGet from '../hooks/useApiGet';
 import { runApiMutation } from '../hooks/useApiMutation';
 import { showToast } from '../toast';
@@ -824,6 +825,8 @@ export default function StrategyPage() {
                     </div>
                 </div>
             </div>
+
+            <AIStrategyPromptBuilder />
 
             <div className="btn-group flex-wrap mb-3" role="group">
                 {SECTIONS.map((s) => (
