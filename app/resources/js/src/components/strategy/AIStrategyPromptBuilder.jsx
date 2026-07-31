@@ -201,8 +201,8 @@ export default function AIStrategyPromptBuilder() {
     };
 
     return (
-        <div className="border rounded mb-3">
-            <div className="card-header p-0 border-0">
+        <div className="card mb-3">
+            <div className="card-header p-0">
                 <button
                     type="button"
                     id="ai-strategy-designer-toggle"
@@ -217,9 +217,14 @@ export default function AIStrategyPromptBuilder() {
                     </span>
                 </button>
             </div>
-            <div id="ai-strategy-designer-panel" className={`collapse${open ? ' show' : ''}`}>
-                <div className="p-3">
-                    <p className="text-muted small mb-3 mb-md-2">
+            {/*
+              Do not use Bootstrap `.collapse` / `.show` here: the global bootstrap.bundle
+              Collapse CSS (`display:none` without matching JS animation) can leave the
+              panel visually empty when React only toggles classes. Mount content when open.
+            */}
+            {open ? (
+                <div id="ai-strategy-designer-panel" className="card-body">
+                    <p className="text-muted small mb-3">
                         Builds a high-quality prompt for ChatGPT, Gemini, Claude, or similar assistants.
                         StoX does <strong>not</strong> call an LLM — copy the prompt and attach the{' '}
                         <a href={guideHref} download="stox-trading-artifacts-ai-guide.md">
@@ -539,7 +544,7 @@ export default function AIStrategyPromptBuilder() {
                         />
                     </div>
                 </div>
-            </div>
+            ) : null}
         </div>
     );
 }
