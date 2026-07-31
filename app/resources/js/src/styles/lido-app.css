@@ -5482,3 +5482,46 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     border-left: 4px solid var(--bs-primary);
 }
 
+.backtest-collapse-toggle {
+    background: var(--lido-surface, var(--bs-card-cap-bg, var(--bs-tertiary-bg)));
+}
+
+.backtest-collapse-toggle:hover,
+.backtest-collapse-toggle:focus-visible {
+    background: var(--lido-surface-hover, var(--bs-secondary-bg));
+}
+
+.backtest-scroll-fab {
+    position: fixed;
+    right: 1.25rem;
+    bottom: 1.25rem;
+    z-index: 1040;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.backtest-scroll-fab-btn {
+    width: 2.5rem;
+    height: 2.5rem;
+    padding: 0;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+@media (max-width: 575.98px) {
+    .backtest-scroll-fab {
+        right: 0.75rem;
+        bottom: 0.75rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .backtest-scroll-fab-btn {
+        scroll-behavior: auto;
+    }
+}
+

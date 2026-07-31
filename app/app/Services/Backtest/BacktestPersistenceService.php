@@ -88,7 +88,7 @@ class BacktestPersistenceService
                 $holdingDays = max(0, (int) ((strtotime($asOfDate) - strtotime($buyDate)) / 86400));
                 $pl = $mark !== null ? round(($mark - $buyPrice) * $qty, 4) : null;
                 $ret = ($mark !== null && $buyPrice > 0)
-                    ? round((($mark - $buyPrice) / $buyPrice) * 100.0, 6)
+                    ? BacktestMath::clampDecimal12_6(round((($mark - $buyPrice) / $buyPrice) * 100.0, 6))
                     : null;
                 BacktestTrade::query()->create([
                     'backtest_run_id' => $run->id,

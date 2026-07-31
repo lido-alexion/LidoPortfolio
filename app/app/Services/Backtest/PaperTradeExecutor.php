@@ -184,11 +184,7 @@ class PaperTradeExecutor
                 $holdingDays = max(0, (int) ((strtotime($sellDate) - strtotime($buyDate)) / 86400));
                 $pl = round(($sellPrice - $buyPrice) * $take, 4);
                 $ret = $buyPrice > 0 ? round((($sellPrice - $buyPrice) / $buyPrice) * 100.0, 6) : 0.0;
-                $years = $holdingDays > 0 ? ($holdingDays / 365.25) : 0.0;
-                $cagr = null;
-                if ($years > 0 && $buyPrice > 0 && $sellPrice > 0) {
-                    $cagr = round((pow($sellPrice / $buyPrice, 1 / $years) - 1) * 100.0, 6);
-                }
+                $cagr = BacktestMath::cagrPercent($buyPrice, $sellPrice, $holdingDays);
                 $closed[] = [
                     'stock_id' => $stockId,
                     'symbol' => $symbol,
@@ -199,7 +195,7 @@ class PaperTradeExecutor
                     'sell_price' => $sellPrice,
                     'quantity' => $take,
                     'profit_loss' => $pl,
-                    'return_pct' => $ret,
+                    'return_pct' => BacktestMath::clampDecimal12_6($ret),
                     'cagr' => $cagr,
                     'exit_reason' => $exitReason,
                     'is_open' => false,

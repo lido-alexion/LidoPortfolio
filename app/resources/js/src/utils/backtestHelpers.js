@@ -2,6 +2,10 @@ import api from '../api';
 
 export const BACKTEST_SESSION_KEY = 'lido_strategy_backtest_session';
 
+/** Shown in New Backtest modal and while a run is in progress. */
+export const BACKTEST_DURATION_NOTICE =
+    'This operation can take several minutes depending on the backtest period. Please keep this page open until it finishes — leaving or closing the tab may interrupt progress.';
+
 const MAX_CONTINUE_ITERATIONS = 2000;
 
 export function getOrCreateBacktestSessionToken() {

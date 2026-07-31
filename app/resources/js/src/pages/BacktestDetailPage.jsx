@@ -6,6 +6,7 @@ import BacktestTradeTimeline from '../components/backtest/BacktestTradeTimeline'
 import { ROUTES } from '../navigation/routes';
 import { showToast } from '../toast';
 import {
+    BACKTEST_DURATION_NOTICE,
     backtestStatusBadgeClass,
     continueBacktestUntilDone,
     formatBacktestStage,
@@ -70,6 +71,74 @@ function SummaryCard({ label, value }) {
     );
 }
 
+function CollapsibleTableSection({ id, title, count, open, onToggle, children }) {
+    return (
+        <section className="card">
+            <button
+                type="button"
+                className="card-header py-2 btn btn-link text-decoration-none text-body w-100 text-start border-0 rounded-0 d-flex align-items-center justify-content-between gap-2 backtest-collapse-toggle"
+                onClick={onToggle}
+                aria-expanded={open}
+                aria-controls={id}
+            >
+                <span className="fw-semibold small mb-0">
+                    {title}
+                    {count != null ? (
+                        <span className="text-muted fw-normal ms-1">
+                            (
+                            {count}
+                            )
+                        </span>
+                    ) : null}
+                </span>
+                <i className={`bi ${open ? 'bi-chevron-up' : 'bi-chevron-down'}`} aria-hidden="true" />
+            </button>
+            {open ? (
+                <div id={id} className="card-body p-0">
+                    {children}
+                </div>
+            ) : null}
+        </section>
+    );
+}
+
+function PageScrollFab() {
+    const scrollMain = (to) => {
+        const main = document.querySelector('.lido-shell > .lido-main');
+        if (!main) {
+            window.scrollTo({ top: to === 'top' ? 0 : document.documentElement.scrollHeight, behavior: 'smooth' });
+            return;
+        }
+        main.scrollTo({
+            top: to === 'top' ? 0 : main.scrollHeight,
+            behavior: 'smooth',
+        });
+    };
+
+    return (
+        <div className="backtest-scroll-fab" role="group" aria-label="Page scroll">
+            <button
+                type="button"
+                className="btn btn-light border shadow-sm backtest-scroll-fab-btn"
+                title="Go to top"
+                aria-label="Go to top of page"
+                onClick={() => scrollMain('top')}
+            >
+                <i className="bi bi-arrow-up" aria-hidden="true" />
+            </button>
+            <button
+                type="button"
+                className="btn btn-light border shadow-sm backtest-scroll-fab-btn"
+                title="Go to bottom"
+                aria-label="Go to bottom of page"
+                onClick={() => scrollMain('bottom')}
+            >
+                <i className="bi bi-arrow-down" aria-hidden="true" />
+            </button>
+        </div>
+    );
+}
+
 function BacktestProgressBanner({ run, resuming }) {
     if (!run || !isBacktestInProgress(run)) {
         return null;
@@ -115,6 +184,7 @@ function BacktestProgressBanner({ run, resuming }) {
                     {Number(run.eligibility_progress || 0).toFixed(1)}%
                 </div>
             )}
+            <p className="small mb-0 mt-2">{BACKTEST_DURATION_NOTICE}</p>
         </div>
     );
 }
@@ -128,6 +198,8 @@ export default function BacktestDetailPage() {
     const [editName, setEditName] = useState('');
     const [editNotes, setEditNotes] = useState('');
     const [editTags, setEditTags] = useState('');
+    const [tradesOpen, setTradesOpen] = useState(false);
+    const [transactionsOpen, setTransactionsOpen] = useState(false);
     const resumeAttemptedRef = useRef(false);
 
     const load = useCallback(async () => {
@@ -352,95 +424,101 @@ export default function BacktestDetailPage() {
                 </div>
             </section>
 
-            <section className="card">
-                <div className="card-header py-2 fw-semibold small">Trades</div>
-                <div className="card-body p-0">
-                    <div className="table-responsive">
-                        <table className="table table-sm align-middle mb-0">
-                            <thead>
-                                <tr>
-                                    <th>Symbol</th>
-                                    <th>Buy</th>
-                                    <th>Sell</th>
-                                    <th className="text-end">Qty</th>
-                                    <th className="text-end">Buy price</th>
-                                    <th className="text-end">Sell price</th>
-                                    <th className="text-end">P/L</th>
-                                    <th className="text-end">Return %</th>
-                                    <th className="text-end">Days</th>
-                                    <th>Exit</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {(detail.trades || []).length === 0 ? (
-                                    <tr><td colSpan={11} className="text-muted small p-3">No trades.</td></tr>
-                                ) : (
-                                    detail.trades.map((t) => (
-                                        <tr key={t.id}>
-                                            <td className="fw-semibold">{t.symbol}</td>
-                                            <td className="small">{t.buy_date}</td>
-                                            <td className="small">{t.sell_date || '—'}</td>
-                                            <td className="text-end">{formatTableInteger(t.quantity)}</td>
-                                            <td className="text-end">{formatInr(t.buy_price)}</td>
-                                            <td className="text-end">{t.sell_price != null ? formatInr(t.sell_price) : '—'}</td>
-                                            <td className="text-end">{t.profit_loss != null ? formatInr(t.profit_loss) : '—'}</td>
-                                            <td className="text-end">{t.return_pct != null ? formatSignedPercent2(t.return_pct) : '—'}</td>
-                                            <td className="text-end">{t.holding_days ?? '—'}</td>
-                                            <td className="small">{t.exit_reason || '—'}</td>
-                                            <td>{t.is_open ? <span className="badge text-bg-secondary">Open</span> : <span className="badge text-bg-light border">Closed</span>}</td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+            <CollapsibleTableSection
+                id="backtest-trades-table"
+                title="Trades"
+                count={(detail.trades || []).length}
+                open={tradesOpen}
+                onToggle={() => setTradesOpen((v) => !v)}
+            >
+                <div className="table-responsive">
+                    <table className="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Symbol</th>
+                                <th>Buy</th>
+                                <th>Sell</th>
+                                <th className="text-end">Qty</th>
+                                <th className="text-end">Buy price</th>
+                                <th className="text-end">Sell price</th>
+                                <th className="text-end">P/L</th>
+                                <th className="text-end">Return %</th>
+                                <th className="text-end">Days</th>
+                                <th>Exit</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {(detail.trades || []).length === 0 ? (
+                                <tr><td colSpan={11} className="text-muted small p-3">No trades.</td></tr>
+                            ) : (
+                                detail.trades.map((t) => (
+                                    <tr key={t.id}>
+                                        <td className="fw-semibold">{t.symbol}</td>
+                                        <td className="small">{t.buy_date}</td>
+                                        <td className="small">{t.sell_date || '—'}</td>
+                                        <td className="text-end">{formatTableInteger(t.quantity)}</td>
+                                        <td className="text-end">{formatInr(t.buy_price)}</td>
+                                        <td className="text-end">{t.sell_price != null ? formatInr(t.sell_price) : '—'}</td>
+                                        <td className="text-end">{t.profit_loss != null ? formatInr(t.profit_loss) : '—'}</td>
+                                        <td className="text-end">{t.return_pct != null ? formatSignedPercent2(t.return_pct) : '—'}</td>
+                                        <td className="text-end">{t.holding_days ?? '—'}</td>
+                                        <td className="small">{t.exit_reason || '—'}</td>
+                                        <td>{t.is_open ? <span className="badge text-bg-secondary">Open</span> : <span className="badge text-bg-light border">Closed</span>}</td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
                 </div>
-            </section>
+            </CollapsibleTableSection>
 
-            <section className="card">
-                <div className="card-header py-2 fw-semibold small">Transactions</div>
-                <div className="card-body p-0">
-                    <div className="table-responsive">
-                        <table className="table table-sm align-middle mb-0">
-                            <thead>
-                                <tr>
-                                    <th>Date</th>
-                                    <th>Symbol</th>
-                                    <th>Side</th>
-                                    <th className="text-end">Qty</th>
-                                    <th className="text-end">Price</th>
-                                    <th className="text-end">Value</th>
-                                    <th>Reason</th>
-                                    <th>Recommendation</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {(detail.transactions || []).length === 0 ? (
-                                    <tr><td colSpan={8} className="text-muted small p-3">No transactions.</td></tr>
-                                ) : (
-                                    detail.transactions.map((tx) => (
-                                        <tr key={tx.id}>
-                                            <td className="small">{tx.date}</td>
-                                            <td className="fw-semibold">{tx.symbol}</td>
-                                            <td>
-                                                <span className={`badge ${tx.side === 'buy' ? 'text-bg-success' : 'text-bg-danger'}`}>
-                                                    {tx.side}
-                                                </span>
-                                            </td>
-                                            <td className="text-end">{formatTableInteger(tx.quantity)}</td>
-                                            <td className="text-end">{formatInr(tx.price)}</td>
-                                            <td className="text-end">{formatInr(tx.value)}</td>
-                                            <td className="small">{tx.reason || '—'}</td>
-                                            <td className="small">{tx.recommendation || '—'}</td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+            <CollapsibleTableSection
+                id="backtest-transactions-table"
+                title="Transactions"
+                count={(detail.transactions || []).length}
+                open={transactionsOpen}
+                onToggle={() => setTransactionsOpen((v) => !v)}
+            >
+                <div className="table-responsive">
+                    <table className="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Symbol</th>
+                                <th>Side</th>
+                                <th className="text-end">Qty</th>
+                                <th className="text-end">Price</th>
+                                <th className="text-end">Value</th>
+                                <th>Reason</th>
+                                <th>Recommendation</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {(detail.transactions || []).length === 0 ? (
+                                <tr><td colSpan={8} className="text-muted small p-3">No transactions.</td></tr>
+                            ) : (
+                                detail.transactions.map((tx) => (
+                                    <tr key={tx.id}>
+                                        <td className="small">{tx.date}</td>
+                                        <td className="fw-semibold">{tx.symbol}</td>
+                                        <td>
+                                            <span className={`badge ${tx.side === 'BUY' || tx.side === 'buy' ? 'text-bg-success' : 'text-bg-danger'}`}>
+                                                {tx.side}
+                                            </span>
+                                        </td>
+                                        <td className="text-end">{formatTableInteger(tx.quantity)}</td>
+                                        <td className="text-end">{formatInr(tx.price)}</td>
+                                        <td className="text-end">{formatInr(tx.value)}</td>
+                                        <td className="small">{tx.reason || '—'}</td>
+                                        <td className="small">{tx.recommendation || '—'}</td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
                 </div>
-            </section>
+            </CollapsibleTableSection>
 
             <section className="card">
                 <div className="card-header py-2 fw-semibold small">Daily snapshots</div>
@@ -508,6 +586,8 @@ export default function BacktestDetailPage() {
                     )}
                 </div>
             </section>
+
+            <PageScrollFab />
         </div>
     );
 }

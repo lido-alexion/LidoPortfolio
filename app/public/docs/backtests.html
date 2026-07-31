@@ -127,7 +127,7 @@
         <h2>Controls</h2>
         <dl class="doc-list">
         <dt>New Backtest</dt>
-        <dd>Choose period (range_key), initial capital (min ₹1,000), optional name/notes/tags, then Start. Progress shows stage, % complete, current simulation date, and eligibility precompute % while PREPARING.</dd>
+        <dd>Choose period (range_key), initial capital (min ₹1,000), optional name/notes/tags, then Start. A notice warns that the run can take several minutes and that you should keep the page open. Progress shows stage, % complete, current simulation date, and eligibility precompute % while PREPARING.</dd>
     
         <dt>Continue polling</dt>
         <dd>After Start, the client POSTs /v1/backtests/{id}/continue while continued=true (up to ~2000 slices). Navigate to the detail page automatically when completed.</dd>
@@ -146,6 +146,12 @@
     
         <dt>Portfolio growth chart</dt>
         <dd>Daily portfolio value line with reference line at initial capital. Tooltip: date, portfolio, cash, invested value.</dd>
+    
+        <dt>Collapsible Trades / Transactions</dt>
+        <dd>Trades and Transactions tables start collapsed (row count shown in the header). Expand a section to inspect the full table without scrolling past long lists by default.</dd>
+    
+        <dt>Scroll to top / bottom</dt>
+        <dd>Floating arrow buttons at the bottom-right of the detail page jump to the start or end of the main scroll area.</dd>
     
         <dt>Typical flow</dt>
         <dd>Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.</dd>
@@ -168,7 +174,7 @@
         <dd>PREPARING stage rebuilds historical screener hits per day before day-by-day simulation.</dd>
     
         <dt>Statistics block</dt>
-        <dd>Aggregates at completion: return_pct, CAGR, maximum_drawdown, win_rate, trade counts, holding periods, utilization, cash_remaining, maximum_concurrent_positions.</dd>
+        <dd>Aggregates at completion: return_pct, CAGR, maximum_drawdown, win_rate, trade counts, holding periods, utilization, cash_remaining, maximum_concurrent_positions. Per-trade CAGR is blank for holds shorter than 30 calendar days (annualizing overnight gains is meaningless and can overflow storage).</dd>
     
         <dt>Active portfolio context</dt>
         <dd>Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.</dd>

@@ -1018,7 +1018,7 @@ const APP_DOCUMENTATION_BASE = [
         controls: [
             {
                 name: 'New Backtest',
-                description: 'Choose period (range_key), initial capital (min ₹1,000), optional name/notes/tags, then Start. Progress shows stage, % complete, current simulation date, and eligibility precompute % while PREPARING.',
+                description: 'Choose period (range_key), initial capital (min ₹1,000), optional name/notes/tags, then Start. A notice warns that the run can take several minutes and that you should keep the page open. Progress shows stage, % complete, current simulation date, and eligibility precompute % while PREPARING.',
             },
             {
                 name: 'Continue polling',
@@ -1044,6 +1044,14 @@ const APP_DOCUMENTATION_BASE = [
                 name: 'Portfolio growth chart',
                 description: 'Daily portfolio value line with reference line at initial capital. Tooltip: date, portfolio, cash, invested value.',
             },
+            {
+                name: 'Collapsible Trades / Transactions',
+                description: 'Trades and Transactions tables start collapsed (row count shown in the header). Expand a section to inspect the full table without scrolling past long lists by default.',
+            },
+            {
+                name: 'Scroll to top / bottom',
+                description: 'Floating arrow buttons at the bottom-right of the detail page jump to the start or end of the main scroll area.',
+            },
         ],
         concepts: [
             {
@@ -1060,7 +1068,7 @@ const APP_DOCUMENTATION_BASE = [
             },
             {
                 name: 'Statistics block',
-                description: 'Aggregates at completion: return_pct, CAGR, maximum_drawdown, win_rate, trade counts, holding periods, utilization, cash_remaining, maximum_concurrent_positions.',
+                description: 'Aggregates at completion: return_pct, CAGR, maximum_drawdown, win_rate, trade counts, holding periods, utilization, cash_remaining, maximum_concurrent_positions. Per-trade CAGR is blank for holds shorter than 30 calendar days (annualizing overnight gains is meaningless and can overflow storage).',
             },
         ],
         related: ['strategy', 'screener', 'screener-editor', 'recommendations', 'review', 'trading-os-flow'],

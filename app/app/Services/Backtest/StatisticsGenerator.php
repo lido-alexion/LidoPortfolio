@@ -30,7 +30,13 @@ class StatisticsGenerator
         $years = max(1 / 365.25, $from->floatDiffInDays($to) / 365.25);
         $cagr = null;
         if ($initial > 0 && $finalValue > 0 && $years > 0) {
-            $cagr = round((pow($finalValue / $initial, 1 / $years) - 1) * 100.0, 6);
+            $cagr = BacktestMath::cagrPercent($initial, $finalValue, max(1, (int) round($from->floatDiffInDays($to))));
+            // Portfolio CAGR is meaningful over the full window even if shorter than trade min;
+            // recompute with actual days when below trade threshold but still multi-week.
+            if ($cagr === null && $from->floatDiffInDays($to) >= 7) {
+                $raw = (pow($finalValue / $initial, 1 / $years) - 1) * 100.0;
+                $cagr = BacktestMath::clampDecimal12_6(is_finite($raw) ? round($raw, 6) : null);
+            }
         }
 
         $maxDd = (float) BacktestSnapshot::query()
@@ -59,9 +65,9 @@ class StatisticsGenerator
             'initial_capital' => $initial,
             'final_portfolio_value' => round($finalValue, 4),
             'absolute_return' => $absoluteReturn,
-            'return_pct' => $returnPct,
+            'return_pct' => BacktestMath::clampDecimal12_6($returnPct),
             'cagr' => $cagr,
-            'maximum_drawdown' => round($maxDd, 6),
+            'maximum_drawdown' => BacktestMath::clampDecimal12_6(round($maxDd, 6)),
             'total_trades' => $totalTrades,
             'total_transactions' => $txCount,
             'winning_trades' => $winCount,

@@ -25,6 +25,7 @@ class PaperPortfolioSimulationTest extends TestCase
         $this->assertCount(1, $sell['closed_trades']);
         $this->assertSame(100.0, (float) $sell['closed_trades'][0]['profit_loss']);
         $this->assertSame(1, (int) $sell['closed_trades'][0]['holding_days']);
+        $this->assertNull($sell['closed_trades'][0]['cagr']);
     }
 
     public function test_buy_clamps_to_affordable_shares(): void

@@ -5,6 +5,7 @@ import NumberInput from '../components/NumberInput';
 import { showToast } from '../toast';
 import { backtestDetailPath } from '../navigation/routes';
 import {
+    BACKTEST_DURATION_NOTICE,
     backtestStatusBadgeClass,
     formatBacktestStage,
     getOrCreateBacktestSessionToken,
@@ -71,6 +72,7 @@ function BacktestProgressPanel({ run }) {
                         {Number(run.eligibility_progress || 0).toFixed(1)}%
                     </div>
                 )}
+                <p className="text-muted small mb-0 mt-2">{BACKTEST_DURATION_NOTICE}</p>
             </div>
         </div>
     );
@@ -287,6 +289,9 @@ export default function BacktestHistoryPage() {
                                     />
                                 </div>
                                 <div className="modal-body d-grid gap-3">
+                                    <div className="alert alert-warning py-2 px-3 mb-0 small" role="status">
+                                        {BACKTEST_DURATION_NOTICE}
+                                    </div>
                                     <div>
                                         <label className="form-label small mb-1" htmlFor="bt-name">Name</label>
                                         <input
