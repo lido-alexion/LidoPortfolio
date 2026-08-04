@@ -190,8 +190,9 @@ Use this checklist (Jul 2026 incident pattern):
 2. **If yes but UI card stale** — `cpanel-db-query.php` compare `portfolio_sync_runs` vs `universe_price_sync_last_run_json`.
 3. **If no runs tonight** — `cpanel-read-logs.php?file=scheduler&grep=heartbeat` — heartbeats every minute?
    - **No heartbeats** → cPanel cron not running `schedule:run` every minute.
-   - **Heartbeats, `would_skip_reason=not_due_window_or_interval`** → outside window or wrong interval (check deployed `routes/console.php` + config cache).
-   - **`mutex_held` / `sync_in_progress`** → `cpanel-schedule-diagnostic.php?clear_mutex=1` or `clear_in_progress=1`.
+   - **Heartbeats, `would_skip_reason=not_due_window_or_interval` / `outside_maintenance_hours` / `not_due_interval`** → outside window or wrong interval (check deployed `routes/console.php` + config cache).
+   - **`would_skip_reason=weekend_skip`** → Sat/Sun and prior equity session had no failed/partial universe batches (expected; set `UNIVERSE_MAINTENANCE_SKIP_WEEKENDS=false` only if you want every weekend).
+   - **`mutex_held` / `sync_in_progress`** → `cpanel-schedule-diagnostic.php?clear_mutex=1` or `clear_in_progress=1` (also abandons orphan `running` sync runs).
 4. **API truth** — `cpanel-api-call.php?path=api/universe-price-sync/status` — `last_run`, `maintenance`, `config.batch_size`.
 5. **Processed=75 every 15 min** → old config still on server; upload `config/portfolio.php` + `routes/console.php`, run `cpanel-config-cache.php`.
 

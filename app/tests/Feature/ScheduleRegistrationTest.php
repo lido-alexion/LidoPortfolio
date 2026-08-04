@@ -81,6 +81,8 @@ class ScheduleRegistrationTest extends TestCase
         $this->assertFalse($service->isMaintenanceWindowDue(Carbon::parse('2026-07-07 02:15:00', 'Asia/Kolkata')));
         $this->assertTrue($service->isMaintenanceWindowDue(Carbon::parse('2026-07-07 19:20:00', 'Asia/Kolkata')));
         $this->assertFalse($service->isMaintenanceWindowDue(Carbon::parse('2026-07-07 19:17:00', 'Asia/Kolkata')));
+        // Saturday — skipped when prior Friday had no failures.
+        $this->assertFalse($service->isMaintenanceWindowDue(Carbon::parse('2026-08-01 19:20:00', 'Asia/Kolkata')));
         $this->assertSame(58, $service->maintenanceRunsPerNight());
         $this->assertSame(7250, $service->maintenanceNightlyCapacity(125));
     }

@@ -71,7 +71,7 @@ class AdminOperationalAlertService
                 );
             }
 
-            $universeRun = $this->syncLog->latestRun(SyncLogService::JOB_UNIVERSE_PRICE_SYNC);
+            $universeRun = $this->syncLog->latestFinishedRun(SyncLogService::JOB_UNIVERSE_PRICE_SYNC);
             if ($universeRun && $universeRun->status === 'failed') {
                 $alerts[] = $this->alert(
                     self::KEY_UNIVERSE_SYNC_FAILED,
@@ -103,7 +103,7 @@ class AdminOperationalAlertService
                 : ((int) config('portfolio.operational_alerts.universe_sync_stale_hours', 26) * 60);
 
             $maintenanceWindowStart = $inMaintenanceWindow
-                ? $now->copy()->setTime(19, 0, 0)
+                ? $now->copy()->setTime($this->universeSync->maintenanceStartHour(), 0, 0)
                 : null;
             $lastUniverseAt = $this->latestUniverseActivityAt($universeRun, $lastRun);
             $lastUniverseInWindow = $maintenanceWindowStart !== null
@@ -514,11 +514,8 @@ class AdminOperationalAlertService
 
     protected function isUniverseMaintenanceWindow(Carbon $now): bool
     {
-        $hour = (int) $now->format('G');
-        $minute = (int) $now->format('i');
-        $minutes = ($hour * 60) + $minute;
-
-        return $minutes >= (19 * 60) && $minutes <= ((23 * 60) + 45);
+        return $this->universeSync->isWithinMaintenanceHours($now)
+            && $this->universeSync->allowsMaintenanceOnCalendarDay($now);
     }
 
     /**
@@ -531,9 +528,7 @@ class AdminOperationalAlertService
     ): ?Carbon {
         $candidates = [];
 
-        if ($universeRun?->started_at) {
-            $candidates[] = $universeRun->started_at;
-        }
+        // Prefer finished_at — orphan "running" rows must not look like healthy activity.
         if ($universeRun?->finished_at) {
             $candidates[] = $universeRun->finished_at;
         }

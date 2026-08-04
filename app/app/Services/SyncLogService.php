@@ -121,6 +121,44 @@ class SyncLogService
         ]);
     }
 
+    /**
+     * Mark orphaned running sync runs as failed (process killed / stale lock).
+     *
+     * @return int Number of runs abandoned
+     */
+    public function failStaleRunningRuns(
+        string $jobName,
+        Carbon $olderThan,
+        string $summary = 'Abandoned: sync process did not finish (stale lock / timeout).',
+    ): int {
+        if (! Schema::hasTable('portfolio_sync_runs')) {
+            return 0;
+        }
+
+        $runs = SyncRun::query()
+            ->where('job_name', $jobName)
+            ->where('status', 'running')
+            ->where('started_at', '<=', $olderThan)
+            ->orderBy('started_at')
+            ->get();
+
+        $count = 0;
+        foreach ($runs as $run) {
+            $this->completeRun($run->id, 'failed', [
+                'processed' => $run->stocks_processed,
+                'failures' => $run->failures,
+                'skipped' => $run->skipped,
+            ], $summary);
+            $this->log($run->id, $jobName, 'warning', $summary, [
+                'event' => 'sync_run_abandoned',
+                'started_at' => $run->started_at?->toIso8601String(),
+            ]);
+            $count++;
+        }
+
+        return $count;
+    }
+
     public function latestRun(?string $jobName = null): ?SyncRun
     {
         if (! Schema::hasTable('portfolio_sync_runs')) {

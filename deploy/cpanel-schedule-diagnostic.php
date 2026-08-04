@@ -212,8 +212,10 @@ try {
 
     if (($_GET['clear_in_progress'] ?? '') === '1') {
         section('Clear in-progress flag');
+        $abandoned = $sync->abandonHungSyncRuns(now());
         $sync->clearInProgress();
         line('result', 'cleared');
+        line('abandoned_running_runs', (string) $abandoned);
     }
 
     if (($_GET['explain'] ?? '') === '1') {

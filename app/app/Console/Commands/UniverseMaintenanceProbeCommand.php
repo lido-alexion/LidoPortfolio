@@ -71,7 +71,8 @@ class UniverseMaintenanceProbeCommand extends Command
     protected function buildProbe(UniversePriceSyncService $sync, string $cronTimezone, $now): array
     {
         $due = $sync->isMaintenanceWindowDue();
-        $windowOpen = $this->isInsideMaintenanceHours($sync, $now);
+        $windowOpen = $sync->isWithinMaintenanceHours($now);
+        $calendarAllowed = $sync->allowsMaintenanceOnCalendarDay($now);
         $intervalOk = ((int) $now->format('i')) % $sync->maintenanceIntervalMinutes() === 0;
         $inProgress = $sync->isSyncInProgress();
         $mutexHeld = $this->universeMaintenanceMutexHeld();
@@ -85,6 +86,10 @@ class UniverseMaintenanceProbeCommand extends Command
             'universe_enabled' => $sync->isEnabled(),
             'batch_size_config' => (int) config('portfolio.universe_price_sync.batch_size', 125),
             'window_open' => $windowOpen,
+            'calendar_day_allowed' => $calendarAllowed,
+            'skip_weekends' => $sync->skipsWeekends(),
+            'weekend_retry_on_prior_failures' => $sync->weekendRetryOnPriorFailures(),
+            'prior_session_had_failures' => $sync->priorEquitySessionHadFailures($now),
             'interval_slot' => $intervalOk,
             'is_maintenance_window_due' => $due,
             'is_window_start' => $sync->isMaintenanceWindowStart(),
@@ -93,7 +98,7 @@ class UniverseMaintenanceProbeCommand extends Command
             'cursor_stock_id' => (int) Setting::getValue(UniversePriceSyncService::KEY_CURSOR_STOCK_ID, '0'),
             'mutex_held' => $mutexHeld,
             'mutex_name' => $this->universeMaintenanceMutexName(),
-            'would_skip_reason' => $this->skipReason($sync, $due, $inProgress, $mutexHeld),
+            'would_skip_reason' => $this->skipReason($sync, $now, $due, $inProgress, $mutexHeld),
             'window_label' => $throughput['window_label'] ?? null,
             'interval_minutes' => $sync->maintenanceIntervalMinutes(),
             'start_hour' => $sync->maintenanceStartHour(),
@@ -102,30 +107,24 @@ class UniverseMaintenanceProbeCommand extends Command
         ];
     }
 
-    protected function isInsideMaintenanceHours(UniversePriceSyncService $sync, $now): bool
-    {
-        $hour = (int) $now->format('G');
-        $minute = (int) $now->format('i');
-
-        if ($hour < $sync->maintenanceStartHour() || $hour > $sync->maintenanceEndHour()) {
-            return false;
-        }
-
-        if ($hour === $sync->maintenanceEndHour() && $minute > $sync->maintenanceEndMinute()) {
-            return false;
-        }
-
-        return true;
-    }
-
     protected function skipReason(
         UniversePriceSyncService $sync,
+        $now,
         bool $due,
         bool $inProgress,
         bool $mutexHeld,
     ): string {
         if (! $sync->isEnabled()) {
             return 'universe_disabled';
+        }
+        if (! $sync->isWithinMaintenanceHours($now)) {
+            return 'outside_maintenance_hours';
+        }
+        if (! $sync->allowsMaintenanceOnCalendarDay($now)) {
+            return 'weekend_skip';
+        }
+        if (((int) $now->format('i')) % $sync->maintenanceIntervalMinutes() !== 0) {
+            return 'not_due_interval';
         }
         if (! $due) {
             return 'not_due_window_or_interval';

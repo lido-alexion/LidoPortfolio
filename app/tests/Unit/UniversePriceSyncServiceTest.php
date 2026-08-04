@@ -297,4 +297,124 @@ class UniversePriceSyncServiceTest extends TestCase
         $this->assertFalse($result['cycle_completed']);
         $this->assertNotSame($other->id, $syncedIds[0] ?? null);
     }
+
+    public function test_high_failure_rate_without_rate_limit_hits_is_not_rate_limited(): void
+    {
+        $service = app(UniversePriceSyncService::class);
+
+        $this->assertFalse($service->isLikelyRateLimitedPublic([
+            'processed' => 125,
+            'failed' => 125,
+            'rate_limit_hits' => 0,
+            'failure_rate_percent' => 100,
+        ], [
+            [
+                'likely_rate_limit' => false,
+                'message' => 'Universe stock sync returned no rows',
+                'context' => ['errors' => ['nse: returned 0 rows in requested range']],
+            ],
+            [
+                'likely_rate_limit' => false,
+                'message' => 'Universe stock sync returned no rows',
+                'context' => ['errors' => ['yahoo: returned 0 rows in requested range']],
+            ],
+            [
+                'likely_rate_limit' => false,
+                'message' => 'Universe stock sync returned no rows',
+                'context' => ['errors' => ['alpha_vantage: returned 0 rows in requested range']],
+            ],
+        ]));
+    }
+
+    public function test_rate_limit_hits_still_flag_likely_rate_limited(): void
+    {
+        $service = app(UniversePriceSyncService::class);
+
+        $this->assertTrue($service->isLikelyRateLimitedPublic([
+            'processed' => 125,
+            'failed' => 10,
+            'rate_limit_hits' => 3,
+        ], []));
+    }
+
+    public function test_weekend_maintenance_skipped_when_prior_session_succeeded(): void
+    {
+        config([
+            'portfolio.universe_price_sync.skip_weekends' => true,
+            'portfolio.universe_price_sync.weekend_retry_on_prior_session_failures' => true,
+        ]);
+        Setting::setValue('cron_timezone', 'Asia/Kolkata');
+
+        // Friday evening success only.
+        \App\Models\SyncRun::query()->create([
+            'id' => (string) \Illuminate\Support\Str::uuid(),
+            'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+            'status' => 'success',
+            'started_at' => Carbon::parse('2026-07-31 19:05:00', 'Asia/Kolkata')->utc(),
+            'finished_at' => Carbon::parse('2026-07-31 19:06:00', 'Asia/Kolkata')->utc(),
+            'stocks_processed' => 125,
+            'failures' => 0,
+        ]);
+
+        $service = app(UniversePriceSyncService::class);
+        $saturday = Carbon::parse('2026-08-01 19:20:00', 'Asia/Kolkata');
+
+        $this->assertTrue($service->isWithinMaintenanceHours($saturday));
+        $this->assertFalse($service->priorEquitySessionHadFailures($saturday));
+        $this->assertFalse($service->allowsMaintenanceOnCalendarDay($saturday));
+        $this->assertFalse($service->isMaintenanceWindowDue($saturday));
+    }
+
+    public function test_weekend_maintenance_runs_when_prior_session_had_failures(): void
+    {
+        config([
+            'portfolio.universe_price_sync.skip_weekends' => true,
+            'portfolio.universe_price_sync.weekend_retry_on_prior_session_failures' => true,
+        ]);
+        Setting::setValue('cron_timezone', 'Asia/Kolkata');
+
+        \App\Models\SyncRun::query()->create([
+            'id' => (string) \Illuminate\Support\Str::uuid(),
+            'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+            'status' => 'failed',
+            'started_at' => Carbon::parse('2026-07-31 20:00:00', 'Asia/Kolkata')->utc(),
+            'finished_at' => Carbon::parse('2026-07-31 20:05:00', 'Asia/Kolkata')->utc(),
+            'stocks_processed' => 125,
+            'failures' => 125,
+            'summary' => 'ok=0 fail=125',
+        ]);
+
+        $service = app(UniversePriceSyncService::class);
+        $saturday = Carbon::parse('2026-08-01 19:20:00', 'Asia/Kolkata');
+
+        $this->assertTrue($service->priorEquitySessionHadFailures($saturday));
+        $this->assertTrue($service->allowsMaintenanceOnCalendarDay($saturday));
+        $this->assertTrue($service->isMaintenanceWindowDue($saturday));
+    }
+
+    public function test_stale_in_progress_lock_fails_orphan_running_sync_runs(): void
+    {
+        config(['portfolio.universe_price_sync.stale_lock_minutes' => 30]);
+
+        $runId = (string) \Illuminate\Support\Str::uuid();
+        \App\Models\SyncRun::query()->create([
+            'id' => $runId,
+            'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+            'status' => 'running',
+            'started_at' => now()->subMinutes(45),
+            'finished_at' => null,
+        ]);
+
+        Setting::setValue(UniversePriceSyncService::KEY_IN_PROGRESS, '1');
+        Setting::setValue(UniversePriceSyncService::KEY_IN_PROGRESS_AT, now()->subMinutes(45)->toIso8601String());
+
+        $service = app(UniversePriceSyncService::class);
+        $this->assertFalse($service->isSyncInProgress());
+
+        $run = \App\Models\SyncRun::query()->find($runId);
+        $this->assertSame('failed', $run->status);
+        $this->assertNotNull($run->finished_at);
+        $this->assertStringContainsString('Abandoned', (string) $run->summary);
+        $this->assertSame('0', Setting::getValue(UniversePriceSyncService::KEY_IN_PROGRESS, '0'));
+    }
 }

@@ -70,6 +70,15 @@ return [
         'maintenance_gap_fill_retries' => max(0, (int) env('UNIVERSE_MAINTENANCE_GAP_FILL_RETRIES', 2)),
         'maintenance_gap_fill_enabled' => filter_var(env('UNIVERSE_MAINTENANCE_GAP_FILL_ENABLED', true), FILTER_VALIDATE_BOOL),
         'maintenance_gap_fill_chain_max_batches' => max(1, (int) env('UNIVERSE_MAINTENANCE_GAP_FILL_CHAIN_MAX_BATCHES', 500)),
+        // Skip Sat/Sun maintenance by default (markets closed). Retry weekend only when the
+        // prior equity session's maintenance window had failed/partial universe batches.
+        'skip_weekends' => filter_var(env('UNIVERSE_MAINTENANCE_SKIP_WEEKENDS', true), FILTER_VALIDATE_BOOL),
+        'weekend_retry_on_prior_session_failures' => filter_var(
+            env('UNIVERSE_MAINTENANCE_WEEKEND_RETRY_ON_FAILURES', true),
+            FILTER_VALIDATE_BOOL,
+        ),
+        // Auto-clear in-progress lock + fail orphan SyncRun rows after this many minutes.
+        'stale_lock_minutes' => max(5, min(120, (int) env('UNIVERSE_STALE_LOCK_MINUTES', 30))),
         'gap_fill_wait_seconds' => max(0, (int) env('UNIVERSE_GAP_FILL_WAIT_SECONDS', 20)),
         // UI "Fill all gaps" chunk size — keep low for cPanel HTTP timeouts (~60–120s/request).
         'gap_fill_all_batch_size' => max(1, min(100, (int) env('UNIVERSE_GAP_FILL_ALL_BATCH_SIZE', 5))),

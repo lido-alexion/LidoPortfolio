@@ -399,6 +399,103 @@ class AdminOperationalAlertTest extends TestCase
         $this->assertNotContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_OVERDUE, $keys);
     }
 
+    public function test_empty_provider_storm_does_not_create_rate_limit_alert(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-06 20:30:00', 'Asia/Kolkata'));
+        config(['portfolio.universe_price_sync.enabled' => true]);
+
+        Setting::setValue('universe_price_sync_last_run_json', json_encode([
+            'processed' => 125,
+            'succeeded' => 0,
+            'failed' => 125,
+            'rate_limit_hits' => 0,
+            'failure_rate_percent' => 100,
+            'completed_at' => now()->subMinutes(10)->toIso8601String(),
+            'errors' => ['RELIANCE: nse: returned 0 rows in requested range'],
+        ]));
+
+        SyncRun::query()->create([
+            'id' => (string) Str::uuid(),
+            'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+            'status' => 'failed',
+            'started_at' => now()->subMinutes(15),
+            'finished_at' => now()->subMinutes(10),
+            'stocks_processed' => 125,
+            'failures' => 125,
+            'summary' => 'ok=0 fail=125',
+        ]);
+        SyncRun::query()->create([
+            'id' => (string) Str::uuid(),
+            'job_name' => SyncLogService::JOB_DAILY_MARKET_DATA,
+            'status' => 'success',
+            'started_at' => now()->subHours(2),
+            'finished_at' => now()->subHours(2),
+        ]);
+        SyncRun::query()->create([
+            'id' => (string) Str::uuid(),
+            'job_name' => SyncLogService::JOB_STOCK_MASTER,
+            'status' => 'success',
+            'started_at' => now()->subDay(),
+            'finished_at' => now()->subDay(),
+        ]);
+
+        $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())
+            ->pluck('key')
+            ->all();
+
+        $this->assertContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $keys);
+        $this->assertNotContains(AdminOperationalAlertService::KEY_PROVIDER_RATE_LIMIT, $keys);
+    }
+
+    public function test_weekend_does_not_use_maintenance_overdue_threshold_when_skipped(): void
+    {
+        config([
+            'portfolio.universe_price_sync.enabled' => true,
+            'portfolio.universe_price_sync.skip_weekends' => true,
+            'portfolio.universe_price_sync.weekend_retry_on_prior_session_failures' => true,
+        ]);
+
+        // Saturday evening — Friday succeeded, so weekend maintenance is skipped.
+        Carbon::setTestNow(Carbon::parse('2026-08-01 20:30:00', 'Asia/Kolkata'));
+        SyncRun::query()->create([
+            'id' => (string) Str::uuid(),
+            'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+            'status' => 'success',
+            'started_at' => Carbon::parse('2026-07-31 20:00:00', 'Asia/Kolkata')->utc(),
+            'finished_at' => Carbon::parse('2026-07-31 20:05:00', 'Asia/Kolkata')->utc(),
+            'stocks_processed' => 125,
+            'failures' => 0,
+        ]);
+        Setting::setValue('universe_price_sync_last_run_json', json_encode([
+            'processed' => 125,
+            'succeeded' => 125,
+            'failed' => 0,
+            'rate_limit_hits' => 0,
+            'completed_at' => Carbon::parse('2026-07-31 20:05:00', 'Asia/Kolkata')->utc()->toIso8601String(),
+        ]));
+        SyncRun::query()->create([
+            'id' => (string) Str::uuid(),
+            'job_name' => SyncLogService::JOB_DAILY_MARKET_DATA,
+            'status' => 'success',
+            'started_at' => now()->subHours(10),
+            'finished_at' => now()->subHours(10),
+        ]);
+        SyncRun::query()->create([
+            'id' => (string) Str::uuid(),
+            'job_name' => SyncLogService::JOB_STOCK_MASTER,
+            'status' => 'success',
+            'started_at' => now()->subDay(),
+            'finished_at' => now()->subDay(),
+        ]);
+
+        $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())
+            ->pluck('key')
+            ->all();
+
+        // Outside maintenance (weekend skip) uses 26h threshold; Friday finish is ~24h ago → not overdue.
+        $this->assertNotContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_OVERDUE, $keys);
+    }
+
     protected function seedHealthySyncState(): void
     {
         config(['portfolio.universe_price_sync.enabled' => false]);

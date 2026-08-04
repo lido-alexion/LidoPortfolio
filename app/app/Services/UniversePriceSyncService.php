@@ -6,10 +6,13 @@ use App\Models\Setting;
 use App\Models\Stock;
 use App\Models\StockPrice;
 use App\Models\SyncLog;
+use App\Models\SyncRun;
 use App\Services\UniversePrice\UniversePriceBatchExecutor;
+use App\Support\TradingCalendar;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Schema;
 
 class UniversePriceSyncService
 {
@@ -50,13 +53,52 @@ class UniversePriceSyncService
         }
 
         $startedAt = Setting::getValue(self::KEY_IN_PROGRESS_AT);
-        if ($startedAt && Carbon::parse($startedAt)->lt(now()->subMinutes(30))) {
+        if ($startedAt && Carbon::parse($startedAt)->lt(now()->subMinutes($this->staleLockMinutes()))) {
+            $this->abandonHungSyncRuns();
             $this->clearInProgress();
 
             return false;
         }
 
         return true;
+    }
+
+    public function staleLockMinutes(): int
+    {
+        return max(5, min(120, (int) config('portfolio.universe_price_sync.stale_lock_minutes', 30)));
+    }
+
+    /**
+     * Fail orphan SyncRun rows still marked running (process kill / lock TTL).
+     *
+     * @return int Number of runs abandoned
+     */
+    public function abandonHungSyncRuns(?Carbon $olderThan = null): int
+    {
+        $cutoff = $olderThan ?? now()->subMinutes($this->staleLockMinutes());
+        $failed = $this->syncLog->failStaleRunningRuns(
+            SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+            $cutoff,
+        );
+
+        if ($failed > 0) {
+            $this->logger->scheduler('warning', 'Abandoned stale universe sync runs', [
+                'event' => 'universe_sync_runs_abandoned',
+                'count' => $failed,
+                'older_than' => $cutoff->toIso8601String(),
+            ]);
+        }
+
+        return $failed;
+    }
+
+    /**
+     * Clear in-progress flag and fail any currently running universe sync runs.
+     */
+    public function clearInProgressAndAbandonRuns(): void
+    {
+        $this->abandonHungSyncRuns(now());
+        $this->clearInProgress();
     }
 
     public function markInProgress(): void
@@ -91,10 +133,24 @@ class UniversePriceSyncService
         return max(0, min(59, (int) config('portfolio.universe_price_sync.maintenance_end_minute', 45)));
     }
 
-    public function isMaintenanceWindowDue(?Carbon $at = null): bool
+    public function skipsWeekends(): bool
     {
-        $timezone = app(SettingsService::class)->get('cron_timezone', 'Asia/Kolkata') ?? 'Asia/Kolkata';
-        $now = ($at ?? now())->timezone($timezone);
+        return (bool) config('portfolio.universe_price_sync.skip_weekends', true);
+    }
+
+    public function weekendRetryOnPriorFailures(): bool
+    {
+        return (bool) config('portfolio.universe_price_sync.weekend_retry_on_prior_session_failures', true);
+    }
+
+    public function cronTimezone(): string
+    {
+        return app(SettingsService::class)->get('cron_timezone', 'Asia/Kolkata') ?? 'Asia/Kolkata';
+    }
+
+    public function isWithinMaintenanceHours(?Carbon $at = null): bool
+    {
+        $now = ($at ?? now())->timezone($this->cronTimezone());
         $hour = (int) $now->format('G');
         $minute = (int) $now->format('i');
 
@@ -106,6 +162,74 @@ class UniversePriceSyncService
             return false;
         }
 
+        return true;
+    }
+
+    /**
+     * Weekday nights always allowed. Weekends skipped unless prior equity session
+     * (typically Friday) had failed/partial universe batches and retry is enabled.
+     */
+    public function allowsMaintenanceOnCalendarDay(?Carbon $at = null): bool
+    {
+        $now = ($at ?? now())->timezone($this->cronTimezone());
+
+        if (TradingCalendar::isEquitySessionDate($now)) {
+            return true;
+        }
+
+        if (! $this->skipsWeekends()) {
+            return true;
+        }
+
+        if (! $this->weekendRetryOnPriorFailures()) {
+            return false;
+        }
+
+        return $this->priorEquitySessionHadFailures($now);
+    }
+
+    /**
+     * True when the most recent prior equity session's maintenance window had
+     * any failed or partial universe-price-sync batch.
+     */
+    public function priorEquitySessionHadFailures(?Carbon $at = null): bool
+    {
+        if (! Schema::hasTable('portfolio_sync_runs')) {
+            return false;
+        }
+
+        $now = ($at ?? now())->timezone($this->cronTimezone());
+        $priorSession = TradingCalendar::normalizeToSessionDate($now->copy()->subDay());
+
+        $windowStart = $priorSession->copy()
+            ->setTime($this->maintenanceStartHour(), 0, 0)
+            ->utc();
+        $windowEnd = $priorSession->copy()
+            ->setTime($this->maintenanceEndHour(), $this->maintenanceEndMinute(), 59)
+            ->utc();
+
+        return SyncRun::query()
+            ->where('job_name', SyncLogService::JOB_UNIVERSE_PRICE_SYNC)
+            ->whereIn('status', ['failed', 'partial'])
+            ->whereNotNull('finished_at')
+            ->where('finished_at', '>=', $windowStart)
+            ->where('finished_at', '<=', $windowEnd)
+            ->exists();
+    }
+
+    public function isMaintenanceWindowDue(?Carbon $at = null): bool
+    {
+        if (! $this->isWithinMaintenanceHours($at)) {
+            return false;
+        }
+
+        if (! $this->allowsMaintenanceOnCalendarDay($at)) {
+            return false;
+        }
+
+        $now = ($at ?? now())->timezone($this->cronTimezone());
+        $minute = (int) $now->format('i');
+
         return $minute % $this->maintenanceIntervalMinutes() === 0;
     }
 
@@ -115,8 +239,7 @@ class UniversePriceSyncService
             return false;
         }
 
-        $timezone = app(SettingsService::class)->get('cron_timezone', 'Asia/Kolkata') ?? 'Asia/Kolkata';
-        $now = ($at ?? now())->timezone($timezone);
+        $now = ($at ?? now())->timezone($this->cronTimezone());
 
         return (int) $now->format('G') === $this->maintenanceStartHour()
             && (int) $now->format('i') === 0;
@@ -162,17 +285,23 @@ class UniversePriceSyncService
         $batchSize = (int) config('portfolio.universe_price_sync.batch_size', 125);
         $runsPerNight = $this->maintenanceRunsPerNight();
         $nightlyCapacity = $runsPerNight * $batchSize;
-        $timezone = app(SettingsService::class)->get('cron_timezone', 'Asia/Kolkata') ?? 'Asia/Kolkata';
+        $timezone = $this->cronTimezone();
+        $windowLabel = sprintf(
+            '%02d:00–%02d:%02d %s',
+            $this->maintenanceStartHour(),
+            $this->maintenanceEndHour(),
+            $this->maintenanceEndMinute(),
+            $timezone,
+        );
+        if ($this->skipsWeekends()) {
+            $windowLabel .= $this->weekendRetryOnPriorFailures()
+                ? ' (weekdays; weekend retry if prior session failed)'
+                : ' (weekdays only)';
+        }
 
         return [
             'timezone' => $timezone,
-            'window_label' => sprintf(
-                '%02d:00–%02d:%02d %s',
-                $this->maintenanceStartHour(),
-                $this->maintenanceEndHour(),
-                $this->maintenanceEndMinute(),
-                $timezone,
-            ),
+            'window_label' => $windowLabel,
             'interval_minutes' => $this->maintenanceIntervalMinutes(),
             'runs_per_night' => $runsPerNight,
             'batch_size' => $batchSize,
@@ -180,6 +309,10 @@ class UniversePriceSyncService
             'nights_for_full_cycle' => $universeCount > 0
                 ? (int) ceil($universeCount / max(1, $nightlyCapacity))
                 : 0,
+            'skip_weekends' => $this->skipsWeekends(),
+            'weekend_retry_on_prior_session_failures' => $this->weekendRetryOnPriorFailures(),
+            'weekend_retry_active' => ! TradingCalendar::isEquitySessionDate(now()->timezone($timezone))
+                && $this->allowsMaintenanceOnCalendarDay(),
         ];
     }
 
@@ -616,17 +749,9 @@ class UniversePriceSyncService
             ->filter(fn (array $row) => ! empty($row['likely_rate_limit']))
             ->count();
 
-        if ($recentRateHits >= 3) {
-            return true;
-        }
-
-        $processed = (int) ($lastRun['processed'] ?? 0);
-        $failed = (int) ($lastRun['failed'] ?? 0);
-        if ($processed >= 10 && $failed / $processed >= 0.5) {
-            return true;
-        }
-
-        return false;
+        // Require explicit rate-limit-shaped errors — do not treat empty provider
+        // responses ("returned 0 rows") or generic high failure rates as throttling.
+        return $recentRateHits >= 3;
     }
 
     protected function countStocksWithPrices(string $scope): int
@@ -793,46 +918,70 @@ class UniversePriceSyncService
             'universe_count' => $universeCount,
         ]);
 
-        $batchResult = $this->executor->run($stocks, $from, $to, $delayMs, $runId, $jobName, $stats);
-        $stats = $batchResult['stats'];
-        $lastStockId = $batchResult['last_stock_id'];
+        try {
+            $batchResult = $this->executor->run($stocks, $from, $to, $delayMs, $runId, $jobName, $stats);
+            $stats = $batchResult['stats'];
+            $lastStockId = $batchResult['last_stock_id'];
 
-        if ($lastStockId > 0) {
-            $this->setCursor($lastStockId);
-            $stats['cursor_stock_id'] = $lastStockId;
+            if ($lastStockId > 0) {
+                $this->setCursor($lastStockId);
+                $stats['cursor_stock_id'] = $lastStockId;
+            }
+
+            $stats['cycle_completed'] = $this->markCycleIfComplete($scope, $lastStockId, $processAll);
+            $stats['cursor_stock_id'] = (int) Setting::getValue(self::KEY_CURSOR_STOCK_ID, '0');
+            $stats['completed_at'] = now()->toIso8601String();
+            $stats['failure_rate_percent'] = $stats['processed'] > 0
+                ? round(($stats['failed'] / $stats['processed']) * 100, 1)
+                : 0.0;
+
+            Setting::setValue(self::KEY_LAST_RUN_JSON, json_encode($stats));
+
+            $status = $stats['failed'] === 0 ? 'success' : ($stats['succeeded'] > 0 ? 'partial' : 'failed');
+            $summary = sprintf(
+                'Universe price sync (%s/%s): processed=%d ok=%d fail=%d stored=%d cache_hits=%d',
+                $mode,
+                $scope,
+                $stats['processed'],
+                $stats['succeeded'],
+                $stats['failed'],
+                $stats['stored_rows'],
+                $stats['cache_hits'],
+            );
+
+            $this->syncLog->log($runId, $jobName, 'info', 'Universe price sync completed', $stats);
+            $this->syncLog->completeRun($runId, $status, [
+                'processed' => $stats['processed'],
+                'failures' => $stats['failed'],
+                'stored_rows' => $stats['stored_rows'],
+            ], $summary);
+
+            $this->logger->scheduler('info', $summary, array_merge(['category' => 'UniversePriceSync'], $stats));
+
+            return $stats;
+        } catch (\Throwable $e) {
+            $summary = sprintf(
+                'Universe price sync aborted (%s/%s): %s',
+                $mode,
+                $scope,
+                $e->getMessage(),
+            );
+            $this->syncLog->log($runId, $jobName, 'error', $summary, [
+                'event' => 'universe_sync_aborted',
+                'exception' => $e::class,
+            ]);
+            $this->syncLog->completeRun($runId, 'failed', [
+                'processed' => $stats['processed'] ?? 0,
+                'failures' => max(1, (int) ($stats['failed'] ?? 0)),
+            ], $summary);
+            $this->logger->scheduler('error', $summary, [
+                'category' => 'UniversePriceSync',
+                'exception' => $e::class,
+                'error' => $e->getMessage(),
+            ]);
+
+            throw $e;
         }
-
-        $stats['cycle_completed'] = $this->markCycleIfComplete($scope, $lastStockId, $processAll);
-        $stats['cursor_stock_id'] = (int) Setting::getValue(self::KEY_CURSOR_STOCK_ID, '0');
-        $stats['completed_at'] = now()->toIso8601String();
-        $stats['failure_rate_percent'] = $stats['processed'] > 0
-            ? round(($stats['failed'] / $stats['processed']) * 100, 1)
-            : 0.0;
-
-        Setting::setValue(self::KEY_LAST_RUN_JSON, json_encode($stats));
-
-        $status = $stats['failed'] === 0 ? 'success' : ($stats['succeeded'] > 0 ? 'partial' : 'failed');
-        $summary = sprintf(
-            'Universe price sync (%s/%s): processed=%d ok=%d fail=%d stored=%d cache_hits=%d',
-            $mode,
-            $scope,
-            $stats['processed'],
-            $stats['succeeded'],
-            $stats['failed'],
-            $stats['stored_rows'],
-            $stats['cache_hits'],
-        );
-
-        $this->syncLog->log($runId, $jobName, 'info', 'Universe price sync completed', $stats);
-        $this->syncLog->completeRun($runId, $status, [
-            'processed' => $stats['processed'],
-            'failures' => $stats['failed'],
-            'stored_rows' => $stats['stored_rows'],
-        ], $summary);
-
-        $this->logger->scheduler('info', $summary, array_merge(['category' => 'UniversePriceSync'], $stats));
-
-        return $stats;
     }
 
     protected function rangeFrom(string $mode): Carbon
