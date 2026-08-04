@@ -53,7 +53,11 @@ export const CALENDAR_COLOR_PRESETS = [
     '#db2777',
     '#7c3aed',
     '#475569',
+    '#b45309',
 ];
+
+export const TRADE_HOLIDAY_CATEGORY = 'trade_holiday';
+export const TRADE_HOLIDAY_COLOR = '#b45309';
 
 export const CALENDAR_EVENT_PRESETS = [
     {
@@ -82,6 +86,7 @@ export function defaultEventForm() {
         title: '',
         description: '',
         color: '#6366f1',
+        category: null,
         anchor_date: `${yyyy}-${mm}-${dd}`,
         recurrence_type: 'monthly_weekday',
         recurrence_config: {
@@ -106,7 +111,8 @@ export function eventToForm(event) {
     return {
         title: event.title ?? '',
         description: event.description ?? '',
-        color: event.color ?? '#6366f1',
+        color: event.is_trade_holiday ? TRADE_HOLIDAY_COLOR : (event.color ?? '#6366f1'),
+        category: event.category ?? null,
         anchor_date: event.anchor_date ?? '',
         recurrence_type: event.recurrence_type ?? 'none',
         recurrence_config: {

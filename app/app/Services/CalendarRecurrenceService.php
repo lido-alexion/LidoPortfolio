@@ -276,7 +276,7 @@ class CalendarRecurrenceService
     }
 
     /**
-     * @return array{date: string, event_id: int, title: string, color: string, description: ?string}
+     * @return array{date: string, event_id: int, title: string, color: string, description: ?string, category: ?string, is_global: bool, is_trade_holiday: bool}
      */
     private function formatOccurrence(CalendarEvent $event, Carbon $date): array
     {
@@ -288,6 +288,9 @@ class CalendarRecurrenceService
             'description' => $event->description,
             'recurrence_type' => $event->recurrence_type,
             'recurrence_config' => $event->recurrence_config ?? [],
+            'category' => $event->category,
+            'is_global' => $event->isGlobal(),
+            'is_trade_holiday' => $event->isTradeHoliday(),
         ];
     }
 }

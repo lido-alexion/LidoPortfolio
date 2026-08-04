@@ -42,3 +42,4 @@ app/storage/debug-bhavcopy/
 app/tmp-*.json
 
 sync_config.jsonc
+specs/architecture/live-trading/**/*.md

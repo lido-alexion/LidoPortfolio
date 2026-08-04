@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\CalendarEvent;
 use App\Models\PortfolioProfile;
+use App\Support\TradingCalendar;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
@@ -18,7 +19,8 @@ class CalendarEventService
     public function listForProfile(PortfolioProfile $profile): Collection
     {
         return CalendarEvent::query()
-            ->where('profile_id', $profile->id)
+            ->visibleToProfile($profile->id)
+            ->orderByRaw('CASE WHEN category = ? THEN 0 ELSE 1 END', [CalendarEvent::CATEGORY_TRADE_HOLIDAY])
             ->orderBy('title')
             ->get()
             ->map(fn (CalendarEvent $event) => $this->formatEvent($event));
@@ -30,7 +32,7 @@ class CalendarEventService
     public function occurrencesForProfile(PortfolioProfile $profile, Carbon $from, Carbon $to): array
     {
         $events = CalendarEvent::query()
-            ->where('profile_id', $profile->id)
+            ->visibleToProfile($profile->id)
             ->where('is_active', true)
             ->get();
 
@@ -56,30 +58,90 @@ class CalendarEventService
         }, $occurrences));
     }
 
-    public function create(PortfolioProfile $profile, array $data): array
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    public function create(PortfolioProfile $profile, array $data, bool $asAdmin = false): array
     {
-        $payload = $this->normalizePayload($data);
+        $isTradeHoliday = ($data['category'] ?? null) === CalendarEvent::CATEGORY_TRADE_HOLIDAY;
+        if ($isTradeHoliday && ! $asAdmin) {
+            throw ValidationException::withMessages([
+                'category' => ['Only admins can create global trade holidays.'],
+            ]);
+        }
+
+        $payload = $this->normalizePayload($data, null, $isTradeHoliday);
         $event = CalendarEvent::query()->create(array_merge($payload, [
-            'profile_id' => $profile->id,
+            'profile_id' => $isTradeHoliday ? null : $profile->id,
+            'category' => $isTradeHoliday ? CalendarEvent::CATEGORY_TRADE_HOLIDAY : null,
         ]));
+
+        TradingCalendar::clearHolidayCache();
 
         return $this->formatEvent($event);
     }
 
-    public function update(CalendarEvent $event, PortfolioProfile $profile, array $data): array
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    public function update(CalendarEvent $event, PortfolioProfile $profile, array $data, bool $asAdmin = false): array
     {
-        $this->assertBelongsToProfile($event, $profile);
-        $payload = $this->normalizePayload($data, $event);
+        if ($event->isTradeHoliday()) {
+            if (! $asAdmin) {
+                throw ValidationException::withMessages([
+                    'event' => ['Only admins can edit global trade holidays.'],
+                ]);
+            }
+        } else {
+            $this->assertBelongsToProfile($event, $profile);
+        }
+
+        // Non-admins cannot promote a portfolio event into a trade holiday.
+        if (! $asAdmin && ($data['category'] ?? null) === CalendarEvent::CATEGORY_TRADE_HOLIDAY) {
+            throw ValidationException::withMessages([
+                'category' => ['Only admins can create global trade holidays.'],
+            ]);
+        }
+
+        $isTradeHoliday = $event->isTradeHoliday()
+            || (($data['category'] ?? $event->category) === CalendarEvent::CATEGORY_TRADE_HOLIDAY);
+
+        $payload = $this->normalizePayload($data, $event, $isTradeHoliday);
+
+        if ($asAdmin && array_key_exists('category', $data)) {
+            if ($data['category'] === CalendarEvent::CATEGORY_TRADE_HOLIDAY) {
+                $payload['category'] = CalendarEvent::CATEGORY_TRADE_HOLIDAY;
+                $payload['profile_id'] = null;
+            } elseif ($event->isTradeHoliday() && $data['category'] === null) {
+                // Demote to portfolio event for the active profile.
+                $payload['category'] = null;
+                $payload['profile_id'] = $profile->id;
+            }
+        }
+
         $event->fill($payload);
         $event->save();
+        TradingCalendar::clearHolidayCache();
 
         return $this->formatEvent($event->fresh());
     }
 
-    public function delete(CalendarEvent $event, PortfolioProfile $profile): void
+    public function delete(CalendarEvent $event, PortfolioProfile $profile, bool $asAdmin = false): void
     {
-        $this->assertBelongsToProfile($event, $profile);
+        if ($event->isTradeHoliday()) {
+            if (! $asAdmin) {
+                throw ValidationException::withMessages([
+                    'event' => ['Only admins can delete global trade holidays.'],
+                ]);
+            }
+        } else {
+            $this->assertBelongsToProfile($event, $profile);
+        }
+
         $event->delete();
+        TradingCalendar::clearHolidayCache();
     }
 
     public function assertBelongsToProfile(CalendarEvent $event, PortfolioProfile $profile): void
@@ -98,6 +160,10 @@ class CalendarEventService
     {
         return [
             'id' => $event->id,
+            'profile_id' => $event->profile_id,
+            'category' => $event->category,
+            'is_global' => $event->isGlobal(),
+            'is_trade_holiday' => $event->isTradeHoliday(),
             'title' => $event->title,
             'description' => $event->description,
             'color' => $event->color,
@@ -116,7 +182,7 @@ class CalendarEventService
     /**
      * @return array<string, mixed>
      */
-    private function normalizePayload(array $data, ?CalendarEvent $existing = null): array
+    private function normalizePayload(array $data, ?CalendarEvent $existing = null, bool $isTradeHoliday = false): array
     {
         $recurrenceType = $data['recurrence_type'] ?? $existing?->recurrence_type ?? CalendarEvent::RECURRENCE_NONE;
         $config = $data['recurrence_config'] ?? $existing?->recurrence_config ?? [];
@@ -134,11 +200,16 @@ class CalendarEventService
         )));
         sort($reminderDays);
 
-        $color = $data['color'] ?? $existing?->color ?? '#6366f1';
+        $color = $data['color'] ?? $existing?->color
+            ?? ($isTradeHoliday ? CalendarEvent::TRADE_HOLIDAY_DEFAULT_COLOR : '#6366f1');
         if (! is_string($color) || ! preg_match('/^#[0-9A-Fa-f]{6}$/', $color)) {
             throw ValidationException::withMessages([
                 'color' => ['Color must be a hex value like #6366f1.'],
             ]);
+        }
+
+        if ($isTradeHoliday) {
+            $color = CalendarEvent::TRADE_HOLIDAY_DEFAULT_COLOR;
         }
 
         return [

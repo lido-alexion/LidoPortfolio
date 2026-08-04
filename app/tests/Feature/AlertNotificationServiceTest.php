@@ -3,11 +3,14 @@
 namespace Tests\Feature;
 
 use App\Models\Alert;
+use App\Models\CalendarEvent;
 use App\Models\Holding;
 use App\Models\Stock;
 use App\Models\User;
 use App\Services\AlertNotificationService;
 use App\Services\TelegramNotificationService;
+use App\Support\TradingCalendar;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -15,6 +18,20 @@ use Tests\TestCase;
 class AlertNotificationServiceTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Carbon::setTestNow(Carbon::parse('2026-07-07 10:00:00', 'Asia/Kolkata'));
+        TradingCalendar::clearHolidayCache();
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        TradingCalendar::clearHolidayCache();
+        parent::tearDown();
+    }
 
     public function test_scheduled_notifications_send_clear_ping_when_flag_enabled_and_no_alerts(): void
     {
@@ -139,7 +156,70 @@ class AlertNotificationServiceTest extends TestCase
         $this->assertSame(1, $result['alert_count']);
         $this->assertTrue($result['sent']);
     }
+
+    public function test_scheduled_notifications_skip_on_weekend(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-01 10:00:00', 'Asia/Kolkata'));
+
+        $user = User::query()->create([
+            'name' => 'Weekend Skip',
+            'email' => 'alert-weekend-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+        $profile = $this->defaultPortfolioFor($user);
+        app(\App\Services\NotificationScheduleService::class)->persistForProfile($profile, ['10:00']);
+        app(\App\Services\ProfileSettingsService::class)->update($profile, [
+            'notifications_enabled' => 'true',
+            'telegram_bot_token' => 'token',
+            'telegram_chat_id' => 'chat',
+        ]);
+
+        $telegram = $this->createMock(TelegramNotificationService::class);
+        $telegram->expects($this->never())->method('sendMessageForProfile');
+        $this->app->instance(TelegramNotificationService::class, $telegram);
+
+        $result = app(AlertNotificationService::class)->sendScheduledNotificationsAt('10:00');
+
+        $this->assertTrue($result['skipped']);
+        $this->assertSame('weekend', $result['skip_reason'] ?? null);
+    }
+
+    public function test_scheduled_notifications_skip_on_trade_holiday(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-10-02 10:00:00', 'Asia/Kolkata'));
+
+        CalendarEvent::query()->create([
+            'profile_id' => null,
+            'category' => CalendarEvent::CATEGORY_TRADE_HOLIDAY,
+            'title' => 'Gandhi Jayanti',
+            'color' => CalendarEvent::TRADE_HOLIDAY_DEFAULT_COLOR,
+            'anchor_date' => '2026-10-02',
+            'recurrence_type' => CalendarEvent::RECURRENCE_NONE,
+            'reminder_enabled' => false,
+            'is_active' => true,
+        ]);
+        TradingCalendar::clearHolidayCache();
+
+        $user = User::query()->create([
+            'name' => 'Holiday Skip',
+            'email' => 'alert-holiday-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+        $profile = $this->defaultPortfolioFor($user);
+        app(\App\Services\NotificationScheduleService::class)->persistForProfile($profile, ['10:00']);
+        app(\App\Services\ProfileSettingsService::class)->update($profile, [
+            'notifications_enabled' => 'true',
+            'telegram_bot_token' => 'token',
+            'telegram_chat_id' => 'chat',
+        ]);
+
+        $telegram = $this->createMock(TelegramNotificationService::class);
+        $telegram->expects($this->never())->method('sendMessageForProfile');
+        $this->app->instance(TelegramNotificationService::class, $telegram);
+
+        $result = app(AlertNotificationService::class)->sendScheduledNotificationsAt('10:00');
+
+        $this->assertTrue($result['skipped']);
+        $this->assertSame('trade_holiday', $result['skip_reason'] ?? null);
+    }
 }
-
-
-

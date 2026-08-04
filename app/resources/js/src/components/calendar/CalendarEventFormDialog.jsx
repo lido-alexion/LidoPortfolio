@@ -4,6 +4,8 @@ import {
     CALENDAR_EVENT_PRESETS,
     MONTH_OPTIONS,
     RECURRENCE_TYPES,
+    TRADE_HOLIDAY_CATEGORY,
+    TRADE_HOLIDAY_COLOR,
     WEEKDAY_OPTIONS,
     WEEK_OF_MONTH_OPTIONS,
     defaultEventForm,
@@ -79,6 +81,7 @@ export default function CalendarEventFormDialog({
     open,
     event,
     saving = false,
+    isAdmin = false,
     onClose,
     onSave,
     onDelete,
@@ -91,12 +94,21 @@ export default function CalendarEventFormDialog({
         }
     }, [open, event]);
 
+    const isTradeHoliday = form.category === TRADE_HOLIDAY_CATEGORY
+        || Boolean(event?.is_trade_holiday);
+    const readOnlyGlobal = Boolean(event?.is_trade_holiday) && !isAdmin;
+
     const showWeekday = ['weekly', 'monthly_weekday', 'yearly_weekday'].includes(form.recurrence_type);
     const showMonthDay = ['monthly_day', 'yearly_day'].includes(form.recurrence_type);
     const showWeekOfMonth = ['monthly_weekday', 'yearly_weekday'].includes(form.recurrence_type);
     const showMonth = ['yearly_day', 'yearly_weekday'].includes(form.recurrence_type);
 
-    const title = useMemo(() => (event?.id ? 'Edit event' : 'New event'), [event]);
+    const title = useMemo(() => {
+        if (event?.is_trade_holiday) {
+            return isAdmin ? 'Edit trade holiday' : 'Trade holiday';
+        }
+        return event?.id ? 'Edit event' : 'New event';
+    }, [event, isAdmin]);
 
     if (!open) {
         return null;
@@ -108,10 +120,34 @@ export default function CalendarEventFormDialog({
         recurrence_config: { ...prev.recurrence_config, ...patch },
     }));
 
+    const setTradeHoliday = (enabled) => {
+        if (!isAdmin) {
+            return;
+        }
+        if (enabled) {
+            update({
+                category: TRADE_HOLIDAY_CATEGORY,
+                color: TRADE_HOLIDAY_COLOR,
+                reminder_enabled: false,
+                reminder_days_before: [],
+            });
+        } else {
+            update({
+                category: null,
+                color: form.color === TRADE_HOLIDAY_COLOR ? '#6366f1' : form.color,
+            });
+        }
+    };
+
     const handleSubmit = (e) => {
         e.preventDefault();
+        if (readOnlyGlobal) {
+            return;
+        }
         onSave({
             ...form,
+            category: isTradeHoliday ? TRADE_HOLIDAY_CATEGORY : null,
+            color: isTradeHoliday ? TRADE_HOLIDAY_COLOR : form.color,
             recurrence_end_date: form.recurrence_end_date || null,
             reminder_days_before: form.reminder_enabled ? form.reminder_days_before : [],
         });
@@ -127,7 +163,28 @@ export default function CalendarEventFormDialog({
                             <button type="button" className="btn-close" aria-label="Close" onClick={onClose} />
                         </div>
                         <div className="modal-body">
-                            {!event?.id && (
+                            {readOnlyGlobal ? (
+                                <div className="alert alert-secondary py-2 small">
+                                    This is a global trade holiday (visible to everyone). Only an admin can edit it.
+                                </div>
+                            ) : null}
+
+                            {isAdmin && !readOnlyGlobal ? (
+                                <div className="form-check mb-3">
+                                    <input
+                                        className="form-check-input"
+                                        type="checkbox"
+                                        id="calendar-trade-holiday"
+                                        checked={isTradeHoliday}
+                                        onChange={(e) => setTradeHoliday(e.target.checked)}
+                                    />
+                                    <label className="form-check-label" htmlFor="calendar-trade-holiday">
+                                        Trade holiday (global — shown on every portfolio calendar; skips trade-alert Telegram)
+                                    </label>
+                                </div>
+                            ) : null}
+
+                            {!event?.id && !isTradeHoliday && (
                                 <div className="mb-3">
                                     <div className="small text-muted mb-2">Quick presets</div>
                                     <div className="d-flex flex-wrap gap-2">
@@ -140,6 +197,7 @@ export default function CalendarEventFormDialog({
                                                     ...prev,
                                                     title: preset.title,
                                                     color: preset.color,
+                                                    category: null,
                                                     recurrence_type: preset.recurrence_type,
                                                     recurrence_config: {
                                                         ...prev.recurrence_config,
@@ -164,9 +222,11 @@ export default function CalendarEventFormDialog({
                                     onChange={(e) => update({ title: e.target.value })}
                                     required
                                     maxLength={200}
+                                    disabled={readOnlyGlobal}
                                 />
                             </div>
 
+                            <fieldset disabled={readOnlyGlobal} className="border-0 p-0 m-0">
                             <div className="mb-3">
                                 <label className="form-label" htmlFor="calendar-event-desc">Description</label>
                                 <textarea
@@ -274,61 +334,75 @@ export default function CalendarEventFormDialog({
                                 </div>
                             )}
 
-                            <div className="mb-3">
-                                <label className="form-label">Color</label>
-                                <div className="d-flex flex-wrap align-items-center gap-2">
-                                    {CALENDAR_COLOR_PRESETS.map((color) => (
-                                        <button
-                                            key={color}
-                                            type="button"
-                                            className={`calendar-color-swatch${form.color === color ? ' is-selected' : ''}`}
-                                            style={{ backgroundColor: color }}
-                                            aria-label={`Color ${color}`}
-                                            onClick={() => update({ color })}
+                            {!isTradeHoliday ? (
+                                <div className="mb-3">
+                                    <label className="form-label">Color</label>
+                                    <div className="d-flex flex-wrap align-items-center gap-2">
+                                        {CALENDAR_COLOR_PRESETS.map((color) => (
+                                            <button
+                                                key={color}
+                                                type="button"
+                                                className={`calendar-color-swatch${form.color === color ? ' is-selected' : ''}`}
+                                                style={{ backgroundColor: color }}
+                                                aria-label={`Color ${color}`}
+                                                onClick={() => update({ color })}
+                                            />
+                                        ))}
+                                        <input
+                                            type="color"
+                                            className="form-control form-control-color calendar-color-input"
+                                            value={form.color}
+                                            onChange={(e) => update({ color: e.target.value })}
+                                            title="Pick custom color"
                                         />
-                                    ))}
-                                    <input
-                                        type="color"
-                                        className="form-control form-control-color calendar-color-input"
-                                        value={form.color}
-                                        onChange={(e) => update({ color: e.target.value })}
-                                        title="Pick custom color"
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="mb-3 small text-muted">
+                                    Trade holidays use a fixed amber marker on everyone’s calendar.
+                                    <span
+                                        className="calendar-event-dot ms-2 align-middle"
+                                        style={{ backgroundColor: TRADE_HOLIDAY_COLOR }}
+                                        aria-hidden="true"
                                     />
                                 </div>
-                            </div>
+                            )}
 
-                            <div className="mb-3">
-                                <div className="form-check form-switch">
-                                    <input
-                                        className="form-check-input"
-                                        type="checkbox"
-                                        id="calendar-reminder-enabled"
-                                        checked={form.reminder_enabled}
-                                        onChange={(e) => update({ reminder_enabled: e.target.checked })}
-                                    />
-                                    <label className="form-check-label" htmlFor="calendar-reminder-enabled">
-                                        Telegram reminder
-                                    </label>
+                            {!isTradeHoliday ? (
+                                <div className="mb-3">
+                                    <div className="form-check form-switch">
+                                        <input
+                                            className="form-check-input"
+                                            type="checkbox"
+                                            id="calendar-reminder-enabled"
+                                            checked={form.reminder_enabled}
+                                            onChange={(e) => update({ reminder_enabled: e.target.checked })}
+                                        />
+                                        <label className="form-check-label" htmlFor="calendar-reminder-enabled">
+                                            Telegram reminder
+                                        </label>
+                                    </div>
+                                    <div className="small text-muted mb-2">
+                                        Uses Telegram settings for the active portfolio (Settings → Portfolio).
+                                    </div>
+                                    {form.reminder_enabled && (
+                                        <ReminderDaysInput
+                                            value={form.reminder_days_before}
+                                            onChange={(reminder_days_before) => update({ reminder_days_before })}
+                                        />
+                                    )}
                                 </div>
-                                <div className="small text-muted mb-2">
-                                    Uses Telegram settings for the active portfolio (Settings → Portfolio).
-                                </div>
-                                {form.reminder_enabled && (
-                                    <ReminderDaysInput
-                                        value={form.reminder_days_before}
-                                        onChange={(reminder_days_before) => update({ reminder_days_before })}
-                                    />
-                                )}
-                            </div>
+                            ) : null}
+                            </fieldset>
                         </div>
                         <div className="modal-footer justify-content-between">
                             <div>
-                                {event?.id && onDelete ? (
+                                {event?.id && onDelete && (!event.is_trade_holiday || isAdmin) ? (
                                     <button
                                         type="button"
                                         className="btn btn-outline-danger"
                                         onClick={() => onDelete(event)}
-                                        disabled={saving}
+                                        disabled={saving || readOnlyGlobal}
                                     >
                                         Delete
                                     </button>
@@ -338,9 +412,11 @@ export default function CalendarEventFormDialog({
                                 <button type="button" className="btn btn-outline-secondary" onClick={onClose} disabled={saving}>
                                     Cancel
                                 </button>
-                                <button type="submit" className="btn btn-primary" disabled={saving || !form.title.trim()}>
-                                    {saving ? 'Saving…' : 'Save'}
-                                </button>
+                                {!readOnlyGlobal ? (
+                                    <button type="submit" className="btn btn-primary" disabled={saving || !form.title.trim()}>
+                                        {saving ? 'Saving…' : 'Save'}
+                                    </button>
+                                ) : null}
                             </div>
                         </div>
                     </form>

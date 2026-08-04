@@ -3,8 +3,8 @@
 namespace App\Services;
 
 use App\Models\PortfolioProfile;
-use App\Models\User;
 use App\Services\Notification\NotificationMessageComposer;
+use App\Support\TradingCalendar;
 
 class AlertNotificationService
 {
@@ -19,12 +19,38 @@ class AlertNotificationService
 
     /**
      * Dispatch notifications for profiles whose schedule includes the given time (HH:mm, cron timezone).
+     * Skipped entirely on weekends and admin-defined trade holidays (markets closed).
      *
-     * @return array{sent: bool, skipped: bool, alert_count: int, profiles_notified: int, message?: string}
+     * @return array{sent: bool, skipped: bool, alert_count: int, profiles_notified: int, message?: string, skip_reason?: string}
      */
     public function sendScheduledNotificationsAt(string $atTime): array
     {
         $scheduleService = app(NotificationScheduleService::class);
+        $timezone = $scheduleService->timezone();
+        $today = now()->timezone($timezone);
+
+        if (! TradingCalendar::isEquitySessionDate($today)) {
+            $reason = $today->isWeekend()
+                ? 'weekend'
+                : 'trade_holiday';
+
+            $this->logger->scheduler('info', 'Scheduled alert notification skipped — markets closed', [
+                'category' => 'AlertNotification',
+                'at' => $atTime,
+                'date' => $today->toDateString(),
+                'timezone' => $timezone,
+                'skip_reason' => $reason,
+            ]);
+
+            return [
+                'sent' => false,
+                'skipped' => true,
+                'alert_count' => 0,
+                'profiles_notified' => 0,
+                'skip_reason' => $reason,
+            ];
+        }
+
         $profilesNotified = 0;
         $totalAlerts = 0;
         $anySent = false;
@@ -80,7 +106,7 @@ class AlertNotificationService
     }
 
     /**
-     * @return array{sent: bool, skipped: bool, alert_count: int, profiles_notified: int, message?: string}
+     * @return array{sent: bool, skipped: bool, alert_count: int, profiles_notified: int, message?: string, skip_reason?: string}
      */
     public function sendScheduledNotifications(): array
     {
@@ -93,6 +119,7 @@ class AlertNotificationService
 
     /**
      * Manual test from Settings — sends only the active profile's alerts.
+     * Not gated by weekends/holidays so integration can be verified any day.
      *
      * @return array{sent: bool, alert_count: int, message: string}
      */

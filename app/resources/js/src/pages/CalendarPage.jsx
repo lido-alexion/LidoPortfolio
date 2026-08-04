@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
+import { useAuth } from '../context/AuthContext';
 import { showToast } from '../toast';
 import CalendarDayMarker from '../components/calendar/CalendarDayMarker';
 import CalendarDayEventsDialog from '../components/calendar/CalendarDayEventsDialog';
@@ -59,6 +60,8 @@ function MonthGrid({ year, monthIndex, occurrencesByDate, onDayClick }) {
 }
 
 export default function CalendarPage() {
+    const { user } = useAuth();
+    const isAdmin = Boolean(user?.is_admin);
     const [events, setEvents] = useState([]);
     const [occurrences, setOccurrences] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -166,7 +169,8 @@ export default function CalendarPage() {
                 <div>
                     <h1 className="h4 mb-1">Stocks calendar</h1>
                     <p className="text-muted small mb-0">
-                        Track F&amp;O expiry, options expiry, and other market dates.{' '}
+                        Track F&amp;O expiry, options expiry, trade holidays, and other market dates.
+                        Trade-alert Telegram digests are paused on weekends and trade holidays.{' '}
                         <Link to="/">Dashboard</Link> shows upcoming events for the next month.
                     </p>
                 </div>
@@ -201,6 +205,7 @@ export default function CalendarPage() {
                 open={formOpen}
                 event={editingEvent}
                 saving={saving}
+                isAdmin={isAdmin}
                 onClose={() => {
                     setFormOpen(false);
                     setEditingEvent(null);
@@ -213,6 +218,7 @@ export default function CalendarPage() {
                 open={dayDialog.open}
                 date={dayDialog.date}
                 events={dayDialog.events}
+                isAdmin={isAdmin}
                 onClose={() => setDayDialog({ open: false, date: null, events: [] })}
                 onEdit={openEdit}
             />

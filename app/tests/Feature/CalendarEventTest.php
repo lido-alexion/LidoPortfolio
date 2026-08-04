@@ -86,4 +86,70 @@ class CalendarEventTest extends TestCase
             'title' => 'Hacked',
         ])->assertNotFound();
     }
+
+    public function test_admin_can_create_global_trade_holiday_visible_to_all_portfolios(): void
+    {
+        $admin = User::query()->create([
+            'name' => 'Calendar Admin',
+            'email' => 'cal-admin-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+        $admin->is_admin = true;
+        $admin->save();
+        $this->defaultPortfolioFor($admin);
+        $this->actingAs($admin);
+
+        $create = $this->postJson('/api/calendar/events', [
+            'title' => 'Republic Day',
+            'category' => CalendarEvent::CATEGORY_TRADE_HOLIDAY,
+            'anchor_date' => '2026-01-26',
+            'recurrence_type' => 'yearly_day',
+            'recurrence_config' => ['month' => 1, 'month_day' => 26],
+        ]);
+        $create->assertCreated()
+            ->assertJsonPath('data.is_trade_holiday', true)
+            ->assertJsonPath('data.is_global', true)
+            ->assertJsonPath('data.profile_id', null);
+
+        $eventId = $create->json('data.id');
+
+        $other = User::query()->create([
+            'name' => 'Other Calendar User',
+            'email' => 'cal-other-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+        $this->defaultPortfolioFor($other);
+        $this->actingAs($other);
+
+        $this->getJson('/api/calendar/events')
+            ->assertOk()
+            ->assertJsonFragment(['id' => $eventId, 'title' => 'Republic Day']);
+
+        $this->getJson('/api/calendar/occurrences?from=2026-01-01&to=2026-01-31')
+            ->assertOk()
+            ->assertJsonFragment(['event_id' => $eventId, 'is_trade_holiday' => true]);
+
+        $this->putJson("/api/calendar/events/{$eventId}", [
+            'title' => 'Hacked holiday',
+        ])->assertStatus(422);
+    }
+
+    public function test_non_admin_cannot_create_trade_holiday(): void
+    {
+        $user = User::query()->create([
+            'name' => 'Calendar User',
+            'email' => 'cal-user-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+            'is_admin' => false,
+        ]);
+        $this->defaultPortfolioFor($user);
+        $this->actingAs($user);
+
+        $this->postJson('/api/calendar/events', [
+            'title' => 'Fake holiday',
+            'category' => CalendarEvent::CATEGORY_TRADE_HOLIDAY,
+            'anchor_date' => '2026-01-26',
+            'recurrence_type' => 'none',
+        ])->assertStatus(422);
+    }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -22,10 +23,16 @@ class CalendarEvent extends Model
 
     public const RECURRENCE_YEARLY_WEEKDAY = 'yearly_weekday';
 
+    /** Global exchange/market holiday visible to every portfolio. */
+    public const CATEGORY_TRADE_HOLIDAY = 'trade_holiday';
+
+    public const TRADE_HOLIDAY_DEFAULT_COLOR = '#b45309';
+
     protected $table = 'portfolio_calendar_events';
 
     protected $fillable = [
         'profile_id',
+        'category',
         'title',
         'description',
         'color',
@@ -51,18 +58,39 @@ class CalendarEvent extends Model
         ];
     }
 
+    public function isGlobal(): bool
+    {
+        return $this->profile_id === null;
+    }
+
+    public function isTradeHoliday(): bool
+    {
+        return $this->category === self::CATEGORY_TRADE_HOLIDAY && $this->isGlobal();
+    }
+
     public function resolveRouteBinding($value, $field = null)
     {
+        $field = $field ?? $this->getRouteKeyName();
         $profile = \activePortfolio();
 
-        if ($profile === null) {
-            return null;
+        $query = static::query()->where($field, $value);
+
+        // Portfolio events for the active profile, or global trade holidays (any authed user can resolve for read;
+        // mutations are gated in the controller).
+        if ($profile !== null) {
+            $query->where(function (Builder $inner) use ($profile) {
+                $inner->where('profile_id', $profile->id)
+                    ->orWhere(function (Builder $global) {
+                        $global->whereNull('profile_id')
+                            ->where('category', self::CATEGORY_TRADE_HOLIDAY);
+                    });
+            });
+        } else {
+            $query->whereNull('profile_id')
+                ->where('category', self::CATEGORY_TRADE_HOLIDAY);
         }
 
-        return static::query()
-            ->where('profile_id', $profile->id)
-            ->where($field ?? $this->getRouteKeyName(), $value)
-            ->first();
+        return $query->first();
     }
 
     public function profile(): BelongsTo
@@ -73,5 +101,30 @@ class CalendarEvent extends Model
     public function reminderSends(): HasMany
     {
         return $this->hasMany(CalendarReminderSend::class, 'event_id');
+    }
+
+    /**
+     * @param  Builder<CalendarEvent>  $query
+     * @return Builder<CalendarEvent>
+     */
+    public function scopeVisibleToProfile(Builder $query, int $profileId): Builder
+    {
+        return $query->where(function (Builder $inner) use ($profileId) {
+            $inner->where('profile_id', $profileId)
+                ->orWhere(function (Builder $global) {
+                    $global->whereNull('profile_id')
+                        ->where('category', self::CATEGORY_TRADE_HOLIDAY);
+                });
+        });
+    }
+
+    /**
+     * @param  Builder<CalendarEvent>  $query
+     * @return Builder<CalendarEvent>
+     */
+    public function scopeGlobalTradeHolidays(Builder $query): Builder
+    {
+        return $query->whereNull('profile_id')
+            ->where('category', self::CATEGORY_TRADE_HOLIDAY);
     }
 }

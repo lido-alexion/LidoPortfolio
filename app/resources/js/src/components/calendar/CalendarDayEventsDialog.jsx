@@ -6,6 +6,7 @@ export default function CalendarDayEventsDialog({
     open,
     date,
     events,
+    isAdmin = false,
     onClose,
     onEdit,
 }) {
@@ -29,33 +30,49 @@ export default function CalendarDayEventsDialog({
                                 <p className="text-muted mb-0">No events on this date.</p>
                             ) : (
                                 <ul className="list-group list-group-flush calendar-day-events-list">
-                                    {events.map((event) => (
-                                        <li key={`${event.event_id}-${event.date}`} className="list-group-item px-0">
-                                            <div className="d-flex align-items-start gap-2">
-                                                <span
-                                                    className="calendar-event-dot flex-shrink-0"
-                                                    style={{ backgroundColor: event.color }}
-                                                    aria-hidden="true"
-                                                />
-                                                <div className="flex-grow-1 min-w-0">
-                                                    <div className="fw-semibold">{event.title}</div>
-                                                    {event.description ? (
-                                                        <div className="small text-muted">{event.description}</div>
+                                    {events.map((event) => {
+                                        const canEdit = onEdit && (!event.is_trade_holiday || isAdmin);
+                                        return (
+                                            <li key={`${event.event_id}-${event.date}`} className="list-group-item px-0">
+                                                <div className="d-flex align-items-start gap-2">
+                                                    <span
+                                                        className="calendar-event-dot flex-shrink-0"
+                                                        style={{ backgroundColor: event.color }}
+                                                        aria-hidden="true"
+                                                    />
+                                                    <div className="flex-grow-1 min-w-0">
+                                                        <div className="fw-semibold">
+                                                            {event.title}
+                                                            {event.is_trade_holiday ? (
+                                                                <span className="badge text-bg-warning ms-2 fw-normal">Trade holiday</span>
+                                                            ) : null}
+                                                        </div>
+                                                        {event.description ? (
+                                                            <div className="small text-muted">{event.description}</div>
+                                                        ) : null}
+                                                        <div className="small text-muted">{recurrenceSummary(event)}</div>
+                                                    </div>
+                                                    {canEdit ? (
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-sm btn-outline-secondary flex-shrink-0"
+                                                            onClick={() => onEdit(event.event_id)}
+                                                        >
+                                                            Edit
+                                                        </button>
+                                                    ) : event.is_trade_holiday ? (
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-sm btn-outline-secondary flex-shrink-0"
+                                                            onClick={() => onEdit(event.event_id)}
+                                                        >
+                                                            View
+                                                        </button>
                                                     ) : null}
-                                                    <div className="small text-muted">{recurrenceSummary(event)}</div>
                                                 </div>
-                                                {onEdit ? (
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-sm btn-outline-secondary flex-shrink-0"
-                                                        onClick={() => onEdit(event.event_id)}
-                                                    >
-                                                        Edit
-                                                    </button>
-                                                ) : null}
-                                            </div>
-                                        </li>
-                                    ))}
+                                            </li>
+                                        );
+                                    })}
                                 </ul>
                             )}
                         </div>
@@ -99,7 +116,12 @@ export function DashboardCalendarCard({ events, loading, onOpenCalendar }) {
                                         aria-hidden="true"
                                     />
                                     <div className="flex-grow-1 min-w-0">
-                                        <div className="fw-semibold">{event.title}</div>
+                                        <div className="fw-semibold">
+                                            {event.title}
+                                            {event.is_trade_holiday ? (
+                                                <span className="badge text-bg-warning ms-2 fw-normal">Holiday</span>
+                                            ) : null}
+                                        </div>
                                         <div className="small text-muted">
                                             {formatTransactionDateDisplay(event.date)}
                                             {' · '}

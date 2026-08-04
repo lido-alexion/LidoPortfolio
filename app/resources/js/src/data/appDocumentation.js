@@ -1392,18 +1392,21 @@ const APP_DOCUMENTATION_BASE = [
         title: 'Calendar',
         routeLabel: '/calendar',
         match: (p) => pathStarts(p, '/calendar'),
-        summary: 'Per-portfolio market events with optional Telegram reminders.',
+        summary: 'Per-portfolio market events plus global trade holidays, with optional Telegram reminders.',
         overview:
-            'Track F&O / options expiry templates and custom recurring events on a year grid. Optional reminders fire before the event day via Telegram.',
+            'Track F&O / options expiry templates, custom recurring events, and admin-defined trade holidays on a year grid. Trade holidays appear on every portfolio calendar. Scheduled trade-alert Telegram digests are skipped on weekends and trade holidays (markets closed). Optional event reminders still use Telegram when configured.',
         controls: [
             { name: 'Year grid', description: 'Color markers for event days; open a day for details.' },
-            { name: 'Templates / custom events', description: 'Add expiry-style or custom recurrence rules.' },
-            { name: 'Reminders', description: 'Configure advance notice when Telegram is set up.' },
+            { name: 'Templates / custom events', description: 'Add expiry-style or custom recurrence rules for the active portfolio.' },
+            { name: 'Trade holiday (admin)', description: 'Mark an event as a global trade holiday so everyone sees it and trade-alert Telegram is suppressed that day.' },
+            { name: 'Reminders', description: 'Configure advance notice for portfolio events when Telegram is set up (not used for trade holidays).' },
         ],
         concepts: [
-            { name: 'Portfolio-scoped events', description: 'Each portfolio has its own calendar.' },
+            { name: 'Portfolio-scoped events', description: 'Ordinary events belong to the active portfolio only.' },
+            { name: 'Global trade holidays', description: 'Admin-created holidays (profile_id null, category trade_holiday) visible to all portfolios.' },
+            { name: 'Notification quiet days', description: 'Weekends and trade holidays skip scheduled trade-alert Telegram; Settings → Test telegram still works any day.' },
         ],
-        related: ['dashboard', 'notifications'],
+        related: ['dashboard', 'notifications', 'alert-policies'],
     },
     {
         id: 'knowledge',

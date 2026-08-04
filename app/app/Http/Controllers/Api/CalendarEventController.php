@@ -54,8 +54,9 @@ class CalendarEventController extends Controller
     {
         $profile = \activePortfolio();
         $validated = $this->validatePayload($request);
+        $asAdmin = (bool) ($request->user()?->is_admin);
 
-        $event = $this->events->create($profile, $validated);
+        $event = $this->events->create($profile, $validated, $asAdmin);
 
         return response()->json(['data' => $event], 201);
     }
@@ -64,16 +65,18 @@ class CalendarEventController extends Controller
     {
         $profile = \activePortfolio();
         $validated = $this->validatePayload($request, partial: true);
+        $asAdmin = (bool) ($request->user()?->is_admin);
 
-        $event = $this->events->update($calendarEvent, $profile, $validated);
+        $event = $this->events->update($calendarEvent, $profile, $validated, $asAdmin);
 
         return response()->json(['data' => $event]);
     }
 
-    public function destroy(CalendarEvent $calendarEvent): JsonResponse
+    public function destroy(Request $request, CalendarEvent $calendarEvent): JsonResponse
     {
         $profile = \activePortfolio();
-        $this->events->delete($calendarEvent, $profile);
+        $asAdmin = (bool) ($request->user()?->is_admin);
+        $this->events->delete($calendarEvent, $profile, $asAdmin);
 
         return response()->json(['message' => 'Calendar event deleted.']);
     }
@@ -110,6 +113,7 @@ class CalendarEventController extends Controller
             'reminder_days_before' => ['nullable', 'array'],
             'reminder_days_before.*' => ['integer', 'min:0', 'max:365'],
             'is_active' => ['sometimes', 'boolean'],
+            'category' => ['sometimes', 'nullable', 'string', Rule::in([CalendarEvent::CATEGORY_TRADE_HOLIDAY])],
         ];
 
         return $request->validate($rules);
