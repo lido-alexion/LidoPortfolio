@@ -9,9 +9,9 @@ Existing stack (Laravel + React + Sanctum + `portfolio_*` tables) is preserved.
 
 Market Data → Discovery → Evaluation → Recommendation → User Review (Approve) → Pending Execution → Manual/Broker Trade → Review
 
-Acceptance demo: [`MVP_DEMO_CHECKLIST.md`](./MVP_DEMO_CHECKLIST.md).
+Acceptance demo: [`./MVP_DEMO_CHECKLIST.md`](./MVP_DEMO_CHECKLIST.md).
 
-Independent freeze audit (2026-07-25): [`audit/`](./audit/) — verdict **YES** for clarified MVP; release posture **Internal Testing Only** ([`audit/MVP_VERDICT.md`](./audit/MVP_VERDICT.md)).
+Independent freeze audit (2026-07-25): [`architecture/audit/`](./architecture/audit/) — verdict **YES** for clarified MVP; release posture **Internal Testing Only** ([`architecture/audit/MVP_VERDICT.md`](./architecture/audit/MVP_VERDICT.md)).
 
 ---
 
@@ -84,7 +84,7 @@ Independent freeze audit (2026-07-25): [`audit/`](./audit/) — verdict **YES** 
 | 2026-07-26 | SD-031 | Analytics Ownership Model: Stock / Evaluation / Portfolio / Market owners; Dashboard/Watchlist/Portfolio/Discovery page questions |
 | 2026-07-26 | SD-032 | Market Analysis Engine: benchmark OHLCV → sentiment/phase/analytics; Dashboard + Rec/Strategy/Portfolio consume |
 | 2026-07-30 | SD-033 | Indicator Registry **design** accepted (docs only): unified metadata/discovery; preserve TI/Evaluation/Strategy calc; types Primary/Composite/Metric; Admin UI spec; planned Liquidity/Tradability metadata; PB-054/055/056/057 + TD-19 |
-| 2026-07-30 | Plan | Indicator Registry **implementation plan** (Epics 1–7 / Stories / Tasks) — `specs/architecture/10-Indicator-Registry-Implementation-Plan.md`; still no production code |
+| 2026-07-30 | Plan | Indicator Registry **implementation plan** (Epics 1–7 / Stories / Tasks) — `specs/architecture/indicators/10-Indicator-Registry-Implementation-Plan.md`; still no production code |
 | 2026-07-30 | Epic 1 | Indicator Registry **foundation** coded: `App\Services\Indicators\*` + factory seed + unit tests; no consumer cutover; calculators untouched |
 | 2026-07-30 | Epic 2 | Indicator Registry **migration**: ScreenerCatalog + SupportedIndicators façades; seeds SoT; min-bars helper; validator; façade parity tests; no calc/UI changes |
 | 2026-07-30 | SD-034 | Trading Artifact Framework **design** accepted (docs only): shared envelope for Indicator / Screener / Strategy; absorb Strategy Templates; preserve `definition_json` / `config_json`; PB-058/059/060 |

@@ -14,7 +14,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(__dirname, '..');
 const repoRoot = path.resolve(appRoot, '..');
 const outDir = path.join(appRoot, 'public', 'docs');
-const specsAiGuidePath = path.join(repoRoot, 'specs', 'engines', 'StoX-Trading-Artifacts-AI-Guide.md');
+const specsAiGuidePath = path.join(repoRoot, 'specs', 'architecture', 'engines', 'StoX-Trading-Artifacts-AI-Guide.md');
 const AI_GUIDE_BASENAME = 'stox-trading-artifacts-ai-guide.md';
 const docsModuleUrl = pathToFileURL(
     path.join(appRoot, 'resources', 'js', 'src', 'data', 'appDocumentation.js'),
@@ -321,7 +321,7 @@ function buildAiGuideMarkdown(docs, extras) {
     parts.push('>');
     parts.push(`> **Generated:** ${generatedAt}`);
     parts.push(`> **Deploy download:** \`/docs/${AI_GUIDE_BASENAME}\` (also linked from Screener Registry and Strategy Registry).`);
-    parts.push('> **Repo copy:** `specs/engines/StoX-Trading-Artifacts-AI-Guide.md`');
+    parts.push('> **Repo copy:** `specs/architecture/engines/StoX-Trading-Artifacts-AI-Guide.md`');
     parts.push('');
     parts.push('This guide is the **single authoritative specification** for authoring production-ready Trading Artifacts.');
     parts.push('');

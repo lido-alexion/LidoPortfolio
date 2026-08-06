@@ -17,7 +17,7 @@ Also apply when you **move or rename** a documented `.md` file (fix links in `DO
 
 1. Add the file to the correct **section** in `DOCS.md` (orientation, architecture, governance, audit, technical reference, or deploy).
 2. Give it a **reading-order number** consistent with nearby docs (requirements/intent before implementation status).
-3. If it belongs under `specs/`, also link it from `specs/README.md` (and `specs/governance/README.md` or `specs/audit/README.md` when appropriate).
+3. If it belongs under `specs/`, also link it from `specs/README.md` (and `specs/architecture/README.md`, `specs/architecture/governance/README.md`, or `specs/architecture/audit/README.md` when appropriate).
 4. Do **not** leave orphan documentation that cannot be reached from `README.md` → `DOCS.md`.
 
 ## Exclude (do not force into DOCS.md)
@@ -29,7 +29,7 @@ Also apply when you **move or rename** a documented `.md` file (fix links in `DO
 ## Example
 
 ```text
-Created: specs/governance/NEW_POLICY.md
+Created: specs/architecture/governance/NEW_POLICY.md
 → Add row under DOCS.md §3 Governance
 → Link from specs/README.md Phase B / governance tree
 → Confirm README still points to DOCS.md as the ingest tree

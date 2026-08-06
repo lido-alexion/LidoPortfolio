@@ -86,7 +86,7 @@ const APP_DOCUMENTATION_BASE = [
             {
                 name: 'Primary sidebar',
                 description:
-                    'Primary navigation is sidebar-only and fully configuration-driven (`config/navigation.js` + `navigation/` registry). Sections: Favourites, Quick Actions, then groups — Portfolio, Market, Trading, Knowledge, Administration. Reusable primitives: NavMenuItem, NavGroup, NavBadge, NavTooltip. Icons come from a single registry (no duplicated Lucide imports in rows). Routes use ROUTES constants. Editors stay internal. Future plugins register via navigationRegistry.registerModule. Ctrl/Cmd+B toggles the sidebar. See Documentation topic and specs/architecture/15-Sidebar-Navigation-Architecture.md.',
+                    'Primary navigation is sidebar-only and fully configuration-driven (`config/navigation.js` + `navigation/` registry). Sections: Favourites, Quick Actions, then groups — Portfolio, Market, Trading, Knowledge, Administration. Reusable primitives: NavMenuItem, NavGroup, NavBadge, NavTooltip. Icons come from a single registry (no duplicated Lucide imports in rows). Routes use ROUTES constants. Editors stay internal. Future plugins register via navigationRegistry.registerModule. Ctrl/Cmd+B toggles the sidebar. See Documentation topic and specs/architecture/ui/15-Sidebar-Navigation-Architecture.md.',
 
             },
             {
@@ -144,7 +144,7 @@ const APP_DOCUMENTATION_BASE = [
             + '  G --> H[Transactions fill]\n'
             + '  E --> I[Review later outcomes]\n'
             + '```\n\n'
-            + 'Configure Screeners + Strategy first, then run the decision pipeline from Recommendations (or the scheduled daily pipeline). Full write-up: specs/architecture/07-Trading-OS-Pages-and-Flow.md.',
+            + 'Configure Screeners + Strategy first, then run the decision pipeline from Recommendations (or the scheduled daily pipeline). Full write-up: specs/architecture/ui/07-Trading-OS-Pages-and-Flow.md.',
         controls: [
             {
                 name: 'Run decision pipeline',
