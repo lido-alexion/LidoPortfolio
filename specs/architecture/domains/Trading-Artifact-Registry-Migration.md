@@ -132,7 +132,7 @@ Rollback does **not** require undoing Screener/Strategy data created through the
 2. Admin UI for Artifact Registry (beyond Indicator Admin list).
 3. Persist Screener/Strategy version history tables.
 4. Wire imported indicator drafts into TI only via application releases.
-5. AI draft UX using JSON examples under `specs/architecture/engines/artifacts/examples/`.
+5. AI draft UX using JSON examples under `specs/architecture/domains/artifacts/examples/`.
 
 ---
 

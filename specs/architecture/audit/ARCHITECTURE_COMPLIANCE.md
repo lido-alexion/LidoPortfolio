@@ -1,7 +1,7 @@
 # Architecture Compliance Report
 
 **Audit date:** 2026-07-25  
-**Primary references:** `specs/architecture/platform/04-System-Architecture.md`, `specs/architecture/platform/06-Engine-Overview.md`, `specs/architecture/engines/Application-Architecture-Specification.md`
+**Primary references:** `specs/architecture/platform/04-System-Architecture.md`, `specs/architecture/platform/06-Engine-Overview.md`, `specs/architecture/domains/Application-Architecture-Specification.md`
 
 ---
 

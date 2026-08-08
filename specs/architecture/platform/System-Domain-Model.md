@@ -336,4 +336,4 @@ Recommendation / Strategy / Portfolio Analytics / Dashboard consume both.
 Runtime results (ScreenerRun, Recommendation, EvaluationResult) are **not**
 artifacts; they may reference artifact versions for explainability.
 
-Design only — see [./Trading-Artifact-Framework-Specification.md](./Trading-Artifact-Framework-Specification.md).
+Design only — see [../domains/Trading-Artifact-Framework-Specification.md](../domains/Trading-Artifact-Framework-Specification.md).

@@ -83,7 +83,7 @@ Engine persists daily snapshots in `portfolio_tos_market_analytics`.
 | `GET .../analytics/stocks/{id}/research` | Watchlist research bundle |
 
 Dedicated market APIs: `/api/v1/market-analysis*` — see
-[`../engines/Market-Analysis-Engine-Specification.md`](../engines/Market-Analysis-Engine-Specification.md).
+[`../domains/Market-Analysis-Engine-Specification.md`](../domains/Market-Analysis-Engine-Specification.md).
 
 Legacy `GET /api/analytics/portfolio` and `/api/analytics/stocks/{id}` remain for BC.
 
@@ -102,4 +102,4 @@ All three remain discoverable through the Indicator Registry for Admin UI,
 documentation, and consumer capability queries — without changing SD-031 ownership
 boundaries.
 
-Spec: [../engines/Indicator-Registry-Specification.md](../engines/Indicator-Registry-Specification.md).
+Spec: [../domains/Indicator-Registry-Specification.md](../domains/Indicator-Registry-Specification.md).

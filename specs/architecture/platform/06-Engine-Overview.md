@@ -249,7 +249,7 @@ features and implementations.
 
 Indicator **metadata and discovery** are unified in the Indicator Registry
 (see [../indicators/09-Indicator-Registry.md](../indicators/09-Indicator-Registry.md) and
-[../engines/Indicator-Registry-Specification.md](../engines/Indicator-Registry-Specification.md)).
+[../domains/Indicator-Registry-Specification.md](../domains/Indicator-Registry-Specification.md)).
 
 Engines retain calculation ownership:
 
@@ -273,7 +273,7 @@ common artifact envelope (metadata, lifecycle, versioning, validation,
 import/export, dependencies) under the Trading Artifact Framework.
 
 See [../indicators/11-Trading-Artifact-Framework.md](../indicators/11-Trading-Artifact-Framework.md) and
-[../engines/Trading-Artifact-Framework-Specification.md](../engines/Trading-Artifact-Framework-Specification.md).
+[../domains/Trading-Artifact-Framework-Specification.md](../domains/Trading-Artifact-Framework-Specification.md).
 
 | Concern | Owner |
 |---------|-------|

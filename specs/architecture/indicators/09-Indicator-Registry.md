@@ -7,7 +7,7 @@
 | **Status** | Accepted design (SD-033) — **foundation, façades, Admin UI, Liquidity/Tradability V1 implemented** |
 | **Owner** | Architecture |
 | **Depends On** | 03 Core Concepts, 04 System Architecture, 06 Engine Overview, [08 As-Built Analysis](./08-Indicator-Architecture-Analysis.md), [11 Trading Artifact Framework](./11-Trading-Artifact-Framework.md) |
-| **Engine spec** | [../engines/Indicator-Registry-Specification.md](../engines/Indicator-Registry-Specification.md) |
+| **Engine spec** | [../domains/Indicator-Registry-Specification.md](../domains/Indicator-Registry-Specification.md) |
 
 ---
 
@@ -177,7 +177,7 @@ Admin
 
 # 10. Related Documents
 
-- Full specification: [../engines/Indicator-Registry-Specification.md](../engines/Indicator-Registry-Specification.md)  
+- Full specification: [../domains/Indicator-Registry-Specification.md](../domains/Indicator-Registry-Specification.md)  
 - Implementation plan: [./10-Indicator-Registry-Implementation-Plan.md](./10-Indicator-Registry-Implementation-Plan.md)  
 - As-built analysis: [./08-Indicator-Architecture-Analysis.md](./08-Indicator-Architecture-Analysis.md)  
 - Parent framework: [./11-Trading-Artifact-Framework.md](./11-Trading-Artifact-Framework.md) (SD-034)  

@@ -1,158 +1,149 @@
 # Architecture specs migration summary
 
-**Date:** 2026-08-06  
 **Type:** Documentation-only reorganization (no implementation code changes)  
 **Method:** `git mv` to preserve history; filenames and document numbers unchanged
 
 ---
 
-## Objective
+## Pass 2 — Final cleanup (2026-08-06)
 
-Reorganize architecture specifications into a domain-driven folder hierarchy under `specs/architecture/`, keep content intact, and update all affected references.
+### Objectives
+
+- Rename `engines/` → `domains/` (folder holds contracts and domain specs, not only engines)
+- Move `System-Domain-Model.md` into `platform/` (platform-wide shared entities)
+- Add `integrations/` placeholder domain
+- Refresh architecture hub README and indexes
+
+### Folders renamed
+
+| From | To |
+|------|----|
+| `specs/architecture/engines/` | `specs/architecture/domains/` |
+
+### Files moved
+
+| File | From | To |
+|------|------|----|
+| `System-Domain-Model.md` | `specs/architecture/domains/` | `specs/architecture/platform/` |
+
+### Files / folders created
+
+| Path | Purpose |
+|------|---------|
+| `specs/architecture/integrations/README.md` | Placeholder for external integration specs |
+| `specs/architecture/README.md` | Updated for domains + integrations + SDM location |
+
+### References updated
+
+| Area | Change |
+|------|--------|
+| `DOCS.md` | `engines/` → `domains/`; SDM → `platform/`; integrations index; folder diagram |
+| `specs/README.md` | Tree, reading order, checklist paths |
+| `specs/architecture/README.md` | Full hub rewrite |
+| Cross-links under `specs/architecture/**` | `../engines/` → `../domains/`; SDM → `../platform/` |
+| `implementation.md` | Spec path strings |
+| `app/public/docs/stox-trading-artifacts-ai-guide.md` | Repo copy path |
+| `app/scripts/generate-static-docs.mjs` | Output path for AI guide mirror |
+| Governance / audit notes | Folder location strings |
+
+### Validation (Pass 2)
+
+- Relative markdown links under `specs/` + `DOCS.md` + `implementation.md`: **440 checked, 0 broken** (excluding deploy-relative `*.html` links in the StoX AI guide)
+- `node scripts/generate-static-docs.mjs`: succeeded; AI guide mirror written to `specs/architecture/domains/StoX-Trading-Artifacts-AI-Guide.md`
+- Confirmed absent: `specs/architecture/engines/`, `specs/engines/`
+- Confirmed present: `domains/`, `platform/System-Domain-Model.md`, `integrations/README.md`
+- No specification filenames renumbered or renamed
 
 ---
 
-## Target structure
+## Pass 1 — Domain-folder layout (2026-08-06)
+
+### Objective
+
+Reorganize architecture specifications into a domain-driven folder hierarchy under `specs/architecture/`, keep content intact, and update all affected references.
+
+### Target structure (after Pass 1; Pass 2 renames `engines/` → `domains/`)
 
 ```text
 specs/architecture/
-├── README.md                 (new)
-├── MIGRATION-SUMMARY.md      (this file)
+├── README.md
+├── MIGRATION-SUMMARY.md
 ├── platform/
 ├── ui/
 ├── indicators/
 ├── portfolio/
 ├── data/
-├── engines/                  (moved from specs/engines/)
-├── live-trading/             (unchanged location)
-├── governance/               (moved from specs/governance/)
-└── audit/                    (moved from specs/audit/)
+├── engines/          → later renamed domains/
+├── live-trading/
+├── governance/
+└── audit/
 ```
 
----
+### Files moved (Pass 1)
 
-## Files moved
+#### platform/ (from `specs/architecture/`)
 
-### platform/ (from `specs/architecture/`)
+- `01-Vision.md` … `06-Engine-Overview.md`
 
-| File |
-|------|
-| `01-Vision.md` |
-| `02-Guiding-Principles.md` |
-| `03-Core-Concepts.md` |
-| `04-System-Architecture.md` |
-| `05-Daily-Decision-Pipeline.md` |
-| `06-Engine-Overview.md` |
+#### ui/
 
-### ui/ (from `specs/architecture/`)
+- `07-Trading-OS-Pages-and-Flow.md`
+- `15-Sidebar-Navigation-Architecture.md`
 
-| File |
-|------|
-| `07-Trading-OS-Pages-and-Flow.md` |
-| `15-Sidebar-Navigation-Architecture.md` |
+#### indicators/
 
-### indicators/ (from `specs/architecture/`)
+- `08` … `11`, `13`, `14` indicator/artifact architecture docs
 
-| File |
-|------|
-| `08-Indicator-Architecture-Analysis.md` |
-| `09-Indicator-Registry.md` |
-| `10-Indicator-Registry-Implementation-Plan.md` |
-| `11-Trading-Artifact-Framework.md` |
-| `13-Indicator-Lifecycle.md` |
-| `14-Indicator-Registry-Diagrams.md` |
+#### portfolio/ (from `specs/engines/`)
 
-### portfolio/ (from `specs/engines/`)
+- Dashboard, Cash, Discovery, Analytics, Portfolio, Portfolio-Analytics, Watchlist specs
 
-| File |
-|------|
-| `Dashboard-Specification.md` |
-| `Cash-Management-Specification.md` |
-| `Discovery-Specification.md` |
-| `Analytics-Architecture-Specification.md` |
-| `Portfolio-Specification.md` |
-| `Portfolio-Analytics-Specification.md` |
-| `Watchlist-Specification.md` |
+#### data/ (from `specs/engines/`)
 
-### data/ (from `specs/engines/`)
+- `Database-Schema-Specification.md`
+- `Data-Engine-Specification.md`
 
-| File |
-|------|
-| `Database-Schema-Specification.md` |
-| `Data-Engine-Specification.md` |
+#### Folder moves
 
-### Folder moves
+| From | To (Pass 1) | Later (Pass 2) |
+|------|-------------|----------------|
+| `specs/engines/` (remainder) | `specs/architecture/engines/` | `specs/architecture/domains/` |
+| `specs/governance/` | `specs/architecture/governance/` | — |
+| `specs/audit/` | `specs/architecture/audit/` | — |
 
-| From | To |
-|------|----|
-| `specs/engines/` (remainder) | `specs/architecture/engines/` |
-| `specs/governance/` | `specs/architecture/governance/` |
-| `specs/audit/` | `specs/architecture/audit/` |
+### Ambiguous classifications (Pass 1)
 
-### Unchanged
+| Document | Classification | Notes |
+|----------|----------------|-------|
+| `07-Trading-OS-Pages-and-Flow.md` | **ui/** | Page map / UX flow |
+| `Watchlist-Specification.md` | **portfolio/** | Research workspace |
+| Indicator/Artifact **detail** specs | **domains/** (was engines) | Architecture overviews in **indicators/** |
+| `System-Domain-Model.md` | **platform/** (Pass 2) | Initially kept with contracts; moved as platform-wide |
 
-| Path | Notes |
-|------|-------|
-| `specs/architecture/live-trading/` | Left in place per instructions |
-| `specs/IMPLEMENTATION_PROGRESS.md` | Remains at `specs/` root |
-| `specs/MVP_DEMO_CHECKLIST.md` | Remains at `specs/` root |
+### Intentionally not updated (implementation code)
 
-### New files
+Path mentions in PHP comments / route headers left unchanged:
 
-| File | Purpose |
-|------|---------|
-| `specs/architecture/README.md` | Architecture hub: overview, folder descriptions, index, reading order |
-| `specs/architecture/MIGRATION-SUMMARY.md` | This summary |
+- `app/routes/api.php`
+- `app/database/migrations/2026_07_25_000002_create_portfolio_tos_engine_tables.php`
+- `app/app/Engines/Pipeline/DailyDecisionPipeline.php`
 
 ---
 
-## Links / indexes updated
+## Current structure (after Pass 2)
 
-| Area | Updates |
-|------|---------|
-| `DOCS.md` | All §2–§4 paths; folder diagram; architecture hub pointer; live-trading index row |
-| `specs/README.md` | Rewritten tree + Phase A–C checklist for new paths |
-| `specs/architecture/README.md` | New hub |
-| `implementation.md` | Spec paths + reorganization note |
-| Cross-links inside moved markdown | Relative `../architecture/NN`, `./sibling`, up-links to `DOCS.md` / specs `README.md` |
-| `app/resources/js/src/data/appDocumentation.js` | Path strings for sidebar + trading-os-flow topics |
-| `app/public/docs/overview.html`, `trading-os-flow.html` | Matching path strings |
-| `app/public/docs/stox-trading-artifacts-ai-guide.md` | Repo copy path |
-| `app/resources/js/src/navigation/README.md` | Canonical sidebar spec path |
-| Governance / audit / engines internals | Cross-domain relative links |
-
----
-
-## Ambiguous / judgment classifications
-
-| Document | Classification chosen | Notes |
-|----------|----------------------|-------|
-| `07-Trading-OS-Pages-and-Flow.md` | **ui/** | Page map / UX flow (not portfolio-only) |
-| `Watchlist-Specification.md` | **portfolio/** | Research workspace; not listed explicitly; grouped with portfolio domain |
-| `Analytics-Architecture-Specification.md` | **portfolio/** | Listed under Portfolio “Analytics” |
-| `Market-Analysis-Engine-Specification.md` | **engines/** | Remains an engine contract (not moved to portfolio) |
-| `Indicator-Registry-Specification.md` + API | **engines/** | Detailed engine/contract specs; architecture overview docs live in **indicators/** |
-| `Trading-Artifact-*-Specification.md` + migrations + AI guide | **engines/** | Contract / migrate / AI pack; architecture overview is **indicators/11** |
-| `Application-Architecture-Specification.md` | **engines/** | Could be argued as platform; kept with contracts |
-| `System-Domain-Model.md`, `REST-API-Specification.md` | **engines/** | Domain/API contracts |
-| `Implementation-Roadmap.md` | **engines/** | Historical intent timeline |
-
----
-
-## Intentionally not updated (implementation code)
-
-Path mentions in PHP comments / route headers were left unchanged to avoid non-doc code edits:
-
-- `app/routes/api.php` (comment referencing `specs/engines/REST-API-Specification.md`)
-- `app/database/migrations/2026_07_25_000002_create_portfolio_tos_engine_tables.php` (comment `specs/engines/*`)
-- `app/app/Engines/Pipeline/DailyDecisionPipeline.php` (comment `architecture/05-...`)
-
-These are stale comment paths only; functional behavior is unchanged.
-
----
-
-## Validation
-
-- Relative markdown links under `specs/` + `DOCS.md` + `implementation.md` resolved against the filesystem (excluding `/docs/*.html` deploy-relative links inside the StoX AI guide).
-- Key files verified present in each domain folder.
-- Live Trading folder not moved.
+```text
+specs/architecture/
+├── README.md
+├── MIGRATION-SUMMARY.md
+├── platform/          (+ System-Domain-Model.md)
+├── domains/           (renamed from engines/)
+├── live-trading/
+├── portfolio/
+├── indicators/
+├── data/
+├── ui/
+├── integrations/      (README placeholder)
+├── governance/
+└── audit/
+```

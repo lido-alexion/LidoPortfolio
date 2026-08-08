@@ -6,13 +6,13 @@
 **Effective:** 2026-07-25  
 **Authority:** Accepted deviations between `/specs` architectural intent and Version 1.0 implementation  
 
-Related: [`./MVP_SCOPE.md`](./MVP_SCOPE.md) · [`./VERSION_1_BASELINE.md`](./VERSION_1_BASELINE.md) · [`./DOCUMENT_PRECEDENCE.md`](./DOCUMENT_PRECEDENCE.md) · Audit [`../audit/`](../audit/)
+Related: [`./MVP_SCOPE.md`](./MVP_SCOPE.md) · [`./VERSION_1_BASELINE.md`](./VERSION_1_BASELINE.md) · [`./DOCUMENT_PRECEDENCE.md`](./DOCUMENT_PRECEDENCE.md) · [`./ARCHITECTURE_REPOSITORY_GOVERNANCE.md`](./ARCHITECTURE_REPOSITORY_GOVERNANCE.md) · Audit [`../audit/`](../audit/)
 
 ---
 
 ## Purpose
 
-Original specifications under `/specs/architecture` and `/specs/engines` define **architectural intent**. They are not rewritten to match code.
+Original specifications under `/specs/architecture` (including `domains/`) define **architectural intent**. They are not rewritten to match code. They are also not rewritten to duplicate concepts already owned by an Approved specification — see [ARCHITECTURE_REPOSITORY_GOVERNANCE.md](./ARCHITECTURE_REPOSITORY_GOVERNANCE.md) §7 and Golden Rule.
 
 This register is the authoritative record of **why Version 1.0 differs** from those documents, and how future work should treat each decision.
 
@@ -421,7 +421,7 @@ This register is the authoritative record of **why Version 1.0 differs** from th
 | **Benefits** | Strategy is editable in UI; Recommendation Engine becomes a generic executor; Evaluation emits factor facts only; every recommendation stores strategy version + factor breakdown for explainability and future backtesting; config-driven factors avoid schema churn |
 | **Migration Impact** | Migration `2026_07_26_000009_*`: `portfolio_tos_strategies`, `portfolio_tos_strategy_versions`, recommendation `strategy_version_id` + `strategy_score`. First generate/API call seeds Default Strategy v1 from legacy `trading_os.php` values. Existing recommendations without strategy_version remain readable |
 | **Future Extensions** | Multiple strategies per profile; A/B activation; richer scoring curves; sector/theme caps; backtests against version snapshots |
-| **Spec** | [`../engines/Strategy-Configuration-Specification.md`](../engines/Strategy-Configuration-Specification.md) |
+| **Spec** | [`../domains/Strategy-Configuration-Specification.md`](../domains/Strategy-Configuration-Specification.md) |
 | **Supersedes** | SD-007 (Strategy deferred) for V1.1+ — Strategy is now implemented |
 | **Status** | Accepted |
 
@@ -452,7 +452,7 @@ This register is the authoritative record of **why Version 1.0 differs** from th
 | **Why opinionated defaults** | Installation must be immediately usable after market data import — empty strategy configuration is a barrier, not flexibility. Defaults are starting points; all values remain editable |
 | **Weight integrity** | Enabled indicator weights must sum to exactly **100** after save. UI shows the live total; when the total is not 100, Save auto-normalises enabled weights proportionally (largest-remainder, 2 d.p.). Optional **Normalise now** previews the scaled values. Save is blocked only when no enabled factor has a positive weight |
 | **Migration Impact** | Migration `2026_07_26_000010_*`: `is_factory`, `factory_key`, `duplicated_from_id`, `version_label` retained for seed idempotency. Seeder `FactoryMomentumStrategySeeder`; `ensureActive` seeds default when no active strategy. `POST /strategy/duplicate` removed |
-| **Spec** | [`../engines/Strategy-Configuration-Specification.md`](../engines/Strategy-Configuration-Specification.md) § Default Strategy |
+| **Spec** | [`../domains/Strategy-Configuration-Specification.md`](../domains/Strategy-Configuration-Specification.md) § Default Strategy |
 | **Relationship** | Extends SD-027 / SD-028 |
 | **Status** | Accepted (amended) |
 
@@ -469,7 +469,7 @@ This register is the authoritative record of **why Version 1.0 differs** from th
 | **Benefits** | One eligibility engine; Screener reuse across Discovery/Strategy/alerts; clearer explainability (Screener PASS + scoring + exit); simpler Strategy UI (no condition editor) |
 | **Migration Impact** | Migration `2026_07_26_000011_*`; factory **Minervini Trend Template** Screener; factory Momentum Strategy links it; existing Screeners unchanged; Strategy indicator gates remain **scoring** gates only |
 | **Future Extensibility** | Watchlists/alerts/automation reuse same Screeners; optional normalized Condition entities later without changing Strategy→Screener reference model |
-| **Spec** | [`../engines/Screener-Specification.md`](../engines/Screener-Specification.md), [`../engines/Strategy-Configuration-Specification.md`](../engines/Strategy-Configuration-Specification.md) |
+| **Spec** | [`../domains/Screener-Specification.md`](../domains/Screener-Specification.md), [`../domains/Strategy-Configuration-Specification.md`](../domains/Strategy-Configuration-Specification.md) |
 | **Status** | Accepted |
 
 ---
@@ -502,7 +502,7 @@ This register is the authoritative record of **why Version 1.0 differs** from th
 | **Benefits** | Single market source of truth; explainable phase/sentiment; consistent sizing and entry gates; Dashboard market section |
 | **Migration Impact** | Migration `2026_07_26_000013_*`; Dashboard Market Analytics UI; Strategy Market Gates section; Portfolio Analytics `market_context` |
 | **Future Extensibility** | Multiple benchmarks; constituent breadth V2; optional news/macro contributors without redesign |
-| **Spec** | [`../engines/Market-Analysis-Engine-Specification.md`](../engines/Market-Analysis-Engine-Specification.md) |
+| **Spec** | [`../domains/Market-Analysis-Engine-Specification.md`](../domains/Market-Analysis-Engine-Specification.md) |
 | **Status** | Accepted |
 
 ---
@@ -560,7 +560,7 @@ This register is the authoritative record of **why Version 1.0 differs** from th
 | **Out of scope for Registry phases 1–3** | Wiring Strategy UI indicator parameters into EvaluationEngine (uses `trading_os.php` today). Tracked separately as **TD-19** / **PB-054**. |
 | **Benefits** | One discovery API; dependency trees; consumer clarity; Admin visibility; safer extensibility without rewrite |
 | **Trade-offs** | Migration cost to point façades at Registry; temporary dual-read period |
-| **Spec** | [`../engines/Indicator-Registry-Specification.md`](../engines/Indicator-Registry-Specification.md) · [`../indicators/09-Indicator-Registry.md`](../indicators/09-Indicator-Registry.md) · as-built [`../indicators/08-Indicator-Architecture-Analysis.md`](../indicators/08-Indicator-Architecture-Analysis.md) |
+| **Spec** | [`../domains/Indicator-Registry-Specification.md`](../domains/Indicator-Registry-Specification.md) · [`../indicators/09-Indicator-Registry.md`](../indicators/09-Indicator-Registry.md) · as-built [`../indicators/08-Indicator-Architecture-Analysis.md`](../indicators/08-Indicator-Architecture-Analysis.md) |
 | **Relationship** | Extends SD-028 (fixed catalogue → fixed Registry entries); complements SD-027/030/031/032; specialized under **SD-034** Trading Artifact Framework |
 | **Status** | **Accepted** (design / specification). Implementation phased via PRODUCT_BACKLOG (PB-055+) |
 
@@ -580,7 +580,7 @@ This register is the authoritative record of **why Version 1.0 differs** from th
 | **Out of scope for design acceptance** | Any implementation/code; marketplace; autonomous AI trading; redesign of Screener condition DSL |
 | **Benefits** | One reuse/share/AI model; clearer registries; safer generation; future sharing without rewrite |
 | **Trade-offs** | Migration to bindings/versions; temporary dual UX (Save-in-place vs library) |
-| **Spec** | [`../indicators/11-Trading-Artifact-Framework.md`](../indicators/11-Trading-Artifact-Framework.md) · [`../engines/Trading-Artifact-Framework-Specification.md`](../engines/Trading-Artifact-Framework-Specification.md) |
+| **Spec** | [`../indicators/11-Trading-Artifact-Framework.md`](../indicators/11-Trading-Artifact-Framework.md) · [`../domains/Trading-Artifact-Framework-Specification.md`](../domains/Trading-Artifact-Framework-Specification.md) |
 | **Relationship** | Extends SD-027/028/030/033; does not supersede Indicator Registry — specializes it under a common envelope |
 | **Status** | **Accepted** (design / specification). Implementation phased via PRODUCT_BACKLOG (PB-058+) |
 
@@ -589,6 +589,7 @@ This register is the authoritative record of **why Version 1.0 differs** from th
 ## Change control
 
 1. New deviations require a new **SD-xxx** entry (or status change to Superseded/Rejected).  
-2. Do **not** rewrite historical architecture/engine specs to erase intent. Additive evolution docs (e.g. Indicator Registry, Trading Artifact Framework) are allowed.  
+2. Do **not** rewrite historical architecture/engine specs to erase intent. Additive evolution docs (e.g. Indicator Registry, Trading Artifact Framework) are allowed **when they specialize or extend** without creating a second definition of an existing Approved concept — see [ARCHITECTURE_REPOSITORY_GOVERNANCE.md](./ARCHITECTURE_REPOSITORY_GOVERNANCE.md) §7.  
 3. Scope of what ships is governed by [`./MVP_SCOPE.md`](./MVP_SCOPE.md).  
 4. Deferred items are tracked in [`./PRODUCT_BACKLOG.md`](./PRODUCT_BACKLOG.md).
+5. New specifications MUST obey the repository Golden Rule: reference the canonical Approved concept; do not redefine it.

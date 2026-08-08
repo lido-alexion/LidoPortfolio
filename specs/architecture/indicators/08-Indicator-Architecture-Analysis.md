@@ -5,7 +5,7 @@
 **Purpose:** Complete understanding of the current indicator architecture before designing an Indicator Registry framework  
 **Up:** [../../README.md](../../README.md) · [../../../DOCS.md](../../../DOCS.md) · [../../../implementation.md](../../../implementation.md)
 
-**Target design (accepted):** [./09-Indicator-Registry.md](./09-Indicator-Registry.md) · [../engines/Indicator-Registry-Specification.md](../engines/Indicator-Registry-Specification.md) · [SD-033](../governance/SPECIFICATION_DECISIONS.md)
+**Target design (accepted):** [./09-Indicator-Registry.md](./09-Indicator-Registry.md) · [../domains/Indicator-Registry-Specification.md](../domains/Indicator-Registry-Specification.md) · [SD-033](../governance/SPECIFICATION_DECISIONS.md)
 
 **Related decisions:** [SD-028](../governance/SPECIFICATION_DECISIONS.md) (fixed supported-indicator catalogue, not plugins), [SD-033](../governance/SPECIFICATION_DECISIONS.md) (unified Indicator Registry — evolve, don’t rewrite), [SD-027](../governance/SPECIFICATION_DECISIONS.md) / [SD-030](../governance/SPECIFICATION_DECISIONS.md) (Strategy scoring + Screener eligibility), [SD-031](../governance/SPECIFICATION_DECISIONS.md) / [SD-032](../governance/SPECIFICATION_DECISIONS.md) (Analytics / Market Analysis).
 
@@ -461,7 +461,7 @@ app/resources/js/src/
 
 ## 13. Design recommendations (evolve, don’t rewrite)
 
-> **Superseded for authority:** Implement against [../engines/Indicator-Registry-Specification.md](../engines/Indicator-Registry-Specification.md) and [./09-Indicator-Registry.md](./09-Indicator-Registry.md) (SD-033). The table below is retained as the analysis-time sketch that informed that design.
+> **Superseded for authority:** Implement against [../domains/Indicator-Registry-Specification.md](../domains/Indicator-Registry-Specification.md) and [./09-Indicator-Registry.md](./09-Indicator-Registry.md) (SD-033). The table below is retained as the analysis-time sketch that informed that design.
 
 **Guiding principle:** Unify **metadata and registration** around the two existing catalogues; keep `TechnicalIndicatorService` as the primary calculator; keep `SupportedIndicators` as the scoring façade. Introduce a thin Indicator Registry that **indexes** both — do not replace Screener JSON or Strategy JSON.
 

@@ -7,8 +7,8 @@
 | **Status** | Accepted design (SD-034) — **not implemented** |
 | **Owner** | Architecture |
 | **Depends On** | 03 Core Concepts, 04 System Architecture, 06 Engine Overview, [09 Indicator Registry](./09-Indicator-Registry.md), Screener Spec, Strategy Configuration Spec |
-| **Engine spec** | [../engines/Trading-Artifact-Framework-Specification.md](../engines/Trading-Artifact-Framework-Specification.md) |
-| **JSON formats** | [../engines/Trading-Artifact-JSON-Specification.md](../engines/Trading-Artifact-JSON-Specification.md) (design only) |
+| **Engine spec** | [../domains/Trading-Artifact-Framework-Specification.md](../domains/Trading-Artifact-Framework-Specification.md) |
+| **JSON formats** | [../domains/Trading-Artifact-JSON-Specification.md](../domains/Trading-Artifact-JSON-Specification.md) (design only) |
 
 ---
 
@@ -110,7 +110,7 @@ Strategy Template proposal   →  absorbed as Strategy artifact + factory/import
 
 # 6. Answers at a Glance (Design Questions)
 
-Full detail lives in the [engine specification](../engines/Trading-Artifact-Framework-Specification.md). Summary:
+Full detail lives in the [engine specification](../domains/Trading-Artifact-Framework-Specification.md). Summary:
 
 | # | Question | Recommendation |
 |---|----------|----------------|
@@ -188,8 +188,8 @@ Indicator Registry implementation (PB-055+) proceeds **in parallel** as the Indi
 
 # 11. Related Documents
 
-- Full specification: [../engines/Trading-Artifact-Framework-Specification.md](../engines/Trading-Artifact-Framework-Specification.md)
+- Full specification: [../domains/Trading-Artifact-Framework-Specification.md](../domains/Trading-Artifact-Framework-Specification.md)
 - Indicator specialization: [./09-Indicator-Registry.md](./09-Indicator-Registry.md)
-- Screener: [../engines/Screener-Specification.md](../engines/Screener-Specification.md)
-- Strategy: [../engines/Strategy-Configuration-Specification.md](../engines/Strategy-Configuration-Specification.md)
+- Screener: [../domains/Screener-Specification.md](../domains/Screener-Specification.md)
+- Strategy: [../domains/Strategy-Configuration-Specification.md](../domains/Strategy-Configuration-Specification.md)
 - Governance: [SD-034](../governance/SPECIFICATION_DECISIONS.md)

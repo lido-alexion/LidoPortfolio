@@ -61,6 +61,7 @@ Subtree hub: **[specs/README.md](specs/README.md)** · Architecture hub: **[spec
 
 | Order | Document |
 |------:|----------|
+| 2.0 | [specs/architecture/platform/README.md](specs/architecture/platform/README.md) | **Platform Architecture** entry point |
 | 2.1 | [specs/architecture/platform/01-Vision.md](specs/architecture/platform/01-Vision.md) |
 | 2.2 | [specs/architecture/platform/02-Guiding-Principles.md](specs/architecture/platform/02-Guiding-Principles.md) |
 | 2.3 | [specs/architecture/platform/03-Core-Concepts.md](specs/architecture/platform/03-Core-Concepts.md) |
@@ -76,16 +77,17 @@ Subtree hub: **[specs/README.md](specs/README.md)** · Architecture hub: **[spec
 | 2.6g | [specs/architecture/indicators/14-Indicator-Registry-Diagrams.md](specs/architecture/indicators/14-Indicator-Registry-Diagrams.md) | Class / component / registry / dependency / lifecycle diagrams |
 | 2.6h | [specs/architecture/ui/15-Sidebar-Navigation-Architecture.md](specs/architecture/ui/15-Sidebar-Navigation-Architecture.md) | Sidebar / navigation registry, config, extensibility how-to |
 | 2.6i | [specs/architecture/live-trading/README.md](specs/architecture/live-trading/README.md) | Live Trading subsystem hub (glossary → overview → execution → security) |
-| 2.6j | [specs/architecture/MIGRATION-SUMMARY.md](specs/architecture/MIGRATION-SUMMARY.md) | One-time domain-folder reorganization (2026-08-06) |
+| 2.6j | [specs/architecture/integrations/README.md](specs/architecture/integrations/README.md) | External integrations domain (placeholder) |
+| 2.6k | [specs/architecture/MIGRATION-SUMMARY.md](specs/architecture/MIGRATION-SUMMARY.md) | Architecture folder reorganizations (2026-08-06) |
 
 ### 2.B Domain & contracts
 
 | Order | Document |
 |------:|----------|
-| 2.7 | [specs/architecture/engines/System-Domain-Model.md](specs/architecture/engines/System-Domain-Model.md) |
+| 2.7 | [specs/architecture/platform/System-Domain-Model.md](specs/architecture/platform/System-Domain-Model.md) |
 | 2.8 | [specs/architecture/data/Database-Schema-Specification.md](specs/architecture/data/Database-Schema-Specification.md) |
-| 2.9 | [specs/architecture/engines/REST-API-Specification.md](specs/architecture/engines/REST-API-Specification.md) |
-| 2.10 | [specs/architecture/engines/Application-Architecture-Specification.md](specs/architecture/engines/Application-Architecture-Specification.md) |
+| 2.9 | [specs/architecture/domains/REST-API-Specification.md](specs/architecture/domains/REST-API-Specification.md) |
+| 2.10 | [specs/architecture/domains/Application-Architecture-Specification.md](specs/architecture/domains/Application-Architecture-Specification.md) |
 
 ### 2.C Engine specifications (pipeline order)
 
@@ -93,37 +95,37 @@ Subtree hub: **[specs/README.md](specs/README.md)** · Architecture hub: **[spec
 |------:|----------|-------|
 | 2.11 | [specs/architecture/data/Data-Engine-Specification.md](specs/architecture/data/Data-Engine-Specification.md) | |
 | 2.12 | *(no Discovery Engine Spec file)* | Discovery intent is in architecture; implementation wraps PatternScan + Screener |
-| 2.13 | [specs/architecture/engines/Evaluation-Engine-Specification.md](specs/architecture/engines/Evaluation-Engine-Specification.md) | |
-| 2.14 | [specs/architecture/engines/Recommendation-Engine-Specification.md](specs/architecture/engines/Recommendation-Engine-Specification.md) | |
+| 2.13 | [specs/architecture/domains/Evaluation-Engine-Specification.md](specs/architecture/domains/Evaluation-Engine-Specification.md) | |
+| 2.14 | [specs/architecture/domains/Recommendation-Engine-Specification.md](specs/architecture/domains/Recommendation-Engine-Specification.md) | |
 | 2.14a | [specs/architecture/portfolio/Cash-Management-Specification.md](specs/architecture/portfolio/Cash-Management-Specification.md) | SD-026 cash ledger + reserved cash |
-| 2.14b | [specs/architecture/engines/Strategy-Configuration-Specification.md](specs/architecture/engines/Strategy-Configuration-Specification.md) | SD-027/030 strategy scoring + Screener eligibility |
-| 2.14c | [specs/architecture/engines/Screener-Specification.md](specs/architecture/engines/Screener-Specification.md) | Sole eligibility engine; Strategy consumes Screeners |
+| 2.14b | [specs/architecture/domains/Strategy-Configuration-Specification.md](specs/architecture/domains/Strategy-Configuration-Specification.md) | SD-027/030 strategy scoring + Screener eligibility |
+| 2.14c | [specs/architecture/domains/Screener-Specification.md](specs/architecture/domains/Screener-Specification.md) | Sole eligibility engine; Strategy consumes Screeners |
 | 2.14d | [specs/architecture/portfolio/Analytics-Architecture-Specification.md](specs/architecture/portfolio/Analytics-Architecture-Specification.md) | SD-031 analytics ownership |
-| 2.14e | [specs/architecture/engines/Market-Analysis-Engine-Specification.md](specs/architecture/engines/Market-Analysis-Engine-Specification.md) | SD-032 market analytics / sentiment / phase |
+| 2.14e | [specs/architecture/domains/Market-Analysis-Engine-Specification.md](specs/architecture/domains/Market-Analysis-Engine-Specification.md) | SD-032 market analytics / sentiment / phase |
 | 2.14f | [specs/architecture/portfolio/Dashboard-Specification.md](specs/architecture/portfolio/Dashboard-Specification.md) | Dashboard page purpose |
 | 2.14g | [specs/architecture/portfolio/Watchlist-Specification.md](specs/architecture/portfolio/Watchlist-Specification.md) | Watchlist research workspace |
 | 2.14h | [specs/architecture/portfolio/Portfolio-Specification.md](specs/architecture/portfolio/Portfolio-Specification.md) | Holdings / Portfolio workspace |
 | 2.14i | [specs/architecture/portfolio/Portfolio-Analytics-Specification.md](specs/architecture/portfolio/Portfolio-Analytics-Specification.md) | Portfolio-wide analytics + market context |
-| 2.14j | [specs/architecture/engines/Strategy-Specification.md](specs/architecture/engines/Strategy-Specification.md) | Strategy overview + market gates |
+| 2.14j | [specs/architecture/domains/Strategy-Specification.md](specs/architecture/domains/Strategy-Specification.md) | Strategy overview + market gates |
 | 2.14k | [specs/architecture/portfolio/Discovery-Specification.md](specs/architecture/portfolio/Discovery-Specification.md) | Discovery page purpose |
-| 2.14l | [specs/architecture/engines/Indicator-Registry-Specification.md](specs/architecture/engines/Indicator-Registry-Specification.md) | SD-033 unified Indicator Registry (specialization of SD-034) |
-| 2.14m | [specs/architecture/engines/Indicator-Registry-API.md](specs/architecture/engines/Indicator-Registry-API.md) | Admin `GET /api/v1/indicators*` API |
-| 2.14n | [specs/architecture/engines/Trading-Artifact-Framework-Specification.md](specs/architecture/engines/Trading-Artifact-Framework-Specification.md) | SD-034 Trading Artifact Framework (**registry infrastructure landed**) |
-| 2.14o | [specs/architecture/engines/Trading-Artifact-JSON-Specification.md](specs/architecture/engines/Trading-Artifact-JSON-Specification.md) | Declarative JSON formats for Indicator / Screener / Strategy |
-| 2.14p | [specs/architecture/engines/Trading-Artifact-Registry-Migration.md](specs/architecture/engines/Trading-Artifact-Registry-Migration.md) | Registry infrastructure migration / BC guide |
-| 2.14q | [specs/architecture/engines/Screener-Registry-Migration.md](specs/architecture/engines/Screener-Registry-Migration.md) | Screener Registry (metadata, versions, import/export UI) migrate notes |
-| 2.14r | [specs/architecture/engines/Strategy-Registry-Migration.md](specs/architecture/engines/Strategy-Registry-Migration.md) | Strategy Registry (selection, portable JSON, Minervini migrate) |
-| 2.14s | [specs/architecture/engines/StoX-Trading-Artifacts-AI-Guide.md](specs/architecture/engines/StoX-Trading-Artifacts-AI-Guide.md) | **AI download pack** — Introduction + **AI Authoring Contract (normative)** + Hard Rules + Workflow + Registries + Cookbook + Examples + Runtime appendix (`/docs/stox-trading-artifacts-ai-guide.md`) |
-| 2.14q | [specs/architecture/engines/artifacts/README.md](specs/architecture/engines/artifacts/README.md) | Worked JSON examples (Momentum, Swing, Liquidity, Breakout, …) |
-| 2.15 | [specs/architecture/engines/Notification-Engine-Specification.md](specs/architecture/engines/Notification-Engine-Specification.md) | |
-| 2.16 | [specs/architecture/engines/Execution-Engine-Specification.md](specs/architecture/engines/Execution-Engine-Specification.md) | |
-| 2.17 | [specs/architecture/engines/Review-Engine-Specification.md](specs/architecture/engines/Review-Engine-Specification.md) | |
+| 2.14l | [specs/architecture/domains/Indicator-Registry-Specification.md](specs/architecture/domains/Indicator-Registry-Specification.md) | SD-033 unified Indicator Registry (specialization of SD-034) |
+| 2.14m | [specs/architecture/domains/Indicator-Registry-API.md](specs/architecture/domains/Indicator-Registry-API.md) | Admin `GET /api/v1/indicators*` API |
+| 2.14n | [specs/architecture/domains/Trading-Artifact-Framework-Specification.md](specs/architecture/domains/Trading-Artifact-Framework-Specification.md) | SD-034 Trading Artifact Framework (**registry infrastructure landed**) |
+| 2.14o | [specs/architecture/domains/Trading-Artifact-JSON-Specification.md](specs/architecture/domains/Trading-Artifact-JSON-Specification.md) | Declarative JSON formats for Indicator / Screener / Strategy |
+| 2.14p | [specs/architecture/domains/Trading-Artifact-Registry-Migration.md](specs/architecture/domains/Trading-Artifact-Registry-Migration.md) | Registry infrastructure migration / BC guide |
+| 2.14q | [specs/architecture/domains/Screener-Registry-Migration.md](specs/architecture/domains/Screener-Registry-Migration.md) | Screener Registry (metadata, versions, import/export UI) migrate notes |
+| 2.14r | [specs/architecture/domains/Strategy-Registry-Migration.md](specs/architecture/domains/Strategy-Registry-Migration.md) | Strategy Registry (selection, portable JSON, Minervini migrate) |
+| 2.14s | [specs/architecture/domains/StoX-Trading-Artifacts-AI-Guide.md](specs/architecture/domains/StoX-Trading-Artifacts-AI-Guide.md) | **AI download pack** — Introduction + **AI Authoring Contract (normative)** + Hard Rules + Workflow + Registries + Cookbook + Examples + Runtime appendix (`/docs/stox-trading-artifacts-ai-guide.md`) |
+| 2.14q | [specs/architecture/domains/artifacts/README.md](specs/architecture/domains/artifacts/README.md) | Worked JSON examples (Momentum, Swing, Liquidity, Breakout, …) |
+| 2.15 | [specs/architecture/domains/Notification-Engine-Specification.md](specs/architecture/domains/Notification-Engine-Specification.md) | |
+| 2.16 | [specs/architecture/domains/Execution-Engine-Specification.md](specs/architecture/domains/Execution-Engine-Specification.md) | |
+| 2.17 | [specs/architecture/domains/Review-Engine-Specification.md](specs/architecture/domains/Review-Engine-Specification.md) | |
 
 ### 2.D Original implementation plan (intent timeline)
 
 | Order | Document |
 |------:|----------|
-| 2.18 | [specs/architecture/engines/Implementation-Roadmap.md](specs/architecture/engines/Implementation-Roadmap.md) | Includes append-only **Version 1.0 Baseline** pointer to governance |
+| 2.18 | [specs/architecture/domains/Implementation-Roadmap.md](specs/architecture/domains/Implementation-Roadmap.md) | Includes append-only **Version 1.0 Baseline** pointer to governance |
 
 ---
 
@@ -135,6 +137,10 @@ Hub: [specs/architecture/governance/README.md](specs/architecture/governance/REA
 
 | Order | Document | Why |
 |------:|----------|-----|
+| 3.0 | [specs/architecture/governance/ARCHITECTURE_REPOSITORY_GOVERNANCE.md](specs/architecture/governance/ARCHITECTURE_REPOSITORY_GOVERNANCE.md) | Architecture repo constitution (**mandatory authoring principles** + Golden Rule) |
+| 3.0a | [specs/architecture/governance/ARCHITECTURE_REPOSITORY_BASELINE_V1.md](specs/architecture/governance/ARCHITECTURE_REPOSITORY_BASELINE_V1.md) | **Architecture Repository V1.0 Frozen** baseline |
+| 3.0b | [specs/architecture/governance/SPECIFICATION_HEADER_TEMPLATE.md](specs/architecture/governance/SPECIFICATION_HEADER_TEMPLATE.md) | Standard header template for new specs |
+| 3.0c | [specs/architecture/platform/README.md](specs/architecture/platform/README.md) | **Platform Architecture** entry point |
 | 3.1 | [specs/architecture/governance/DOCUMENT_PRECEDENCE.md](specs/architecture/governance/DOCUMENT_PRECEDENCE.md) | How to resolve conflicts |
 | 3.2 | [specs/architecture/governance/SPECIFICATION_DECISIONS.md](specs/architecture/governance/SPECIFICATION_DECISIONS.md) | Accepted deviations (SD-xxx) |
 | 3.3 | [specs/architecture/governance/MVP_SCOPE.md](specs/architecture/governance/MVP_SCOPE.md) | What is in / out of V1.0 |
@@ -163,6 +169,12 @@ Hub: [specs/architecture/governance/README.md](specs/architecture/governance/REA
 | 4.12 | [specs/architecture/audit/TECHNICAL_DEBT.md](specs/architecture/audit/TECHNICAL_DEBT.md) | Debt register |
 | 4.13 | [specs/architecture/audit/REPOSITORY_OVERVIEW.md](specs/architecture/audit/REPOSITORY_OVERVIEW.md) | Folder map |
 | 4.14 | [specs/architecture/audit/PROJECT_STATISTICS.md](specs/architecture/audit/PROJECT_STATISTICS.md) | Counts / LOC |
+
+### 4.A Historical audits
+
+| Order | Document | Why |
+|------:|----------|-----|
+| 4.15 | [docs/audits/2026-08-08-feature-coverage/](docs/audits/2026-08-08-feature-coverage/) | Pre-implementation V1 feature coverage and gap audit (2026-08-08); **historical baseline only — not current implementation status** |
 
 ---
 
@@ -246,13 +258,14 @@ specs/
 ├── MVP_DEMO_CHECKLIST.md
 └── architecture/                  ← domain-driven architecture hub
     ├── README.md                  ← architecture index + reading order
-    ├── platform/                  ← vision → engine overview (01–06)
+    ├── platform/                  ← vision → engine overview + system domain model
     ├── ui/                        ← pages/flow + sidebar (07, 15)
     ├── indicators/                ← indicator/artifact architecture (08–11, 13–14)
     ├── portfolio/                 ← dashboard, cash, discovery, analytics, holdings
     ├── data/                      ← schema + data engine
-    ├── engines/                   ← engine contracts, REST, roadmap, artifacts
-    ├── live-trading/              ← live trading subsystem (unchanged)
+    ├── domains/                   ← contracts, pipeline/artifact specs, roadmap
+    ├── live-trading/              ← live trading subsystem
+    ├── integrations/              ← external integrations (placeholder)
     ├── governance/                ← V1.0 decisions, scope, backlog, baseline
     └── audit/                     ← freeze audit evidence
 ```

@@ -6,7 +6,7 @@
 **Effective:** 2026-07-25  
 **Source:** MVP implementation + `specs/audit` findings  
 
-Related: [`./MVP_SCOPE.md`](./MVP_SCOPE.md) · [`./SPECIFICATION_DECISIONS.md`](./SPECIFICATION_DECISIONS.md) · [`../audit/TECHNICAL_DEBT.md`](../audit/TECHNICAL_DEBT.md)
+Related: [`./MVP_SCOPE.md`](./MVP_SCOPE.md) · [`./SPECIFICATION_DECISIONS.md`](./SPECIFICATION_DECISIONS.md) · [`./ARCHITECTURE_REPOSITORY_GOVERNANCE.md`](./ARCHITECTURE_REPOSITORY_GOVERNANCE.md) · [`../audit/TECHNICAL_DEBT.md`](../audit/TECHNICAL_DEBT.md)
 
 ---
 

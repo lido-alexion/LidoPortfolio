@@ -1,7 +1,7 @@
 # Database Mapping Report
 
 **Audit date:** 2026-07-25  
-**Sources:** `specs/architecture/data/Database-Schema-Specification.md`, `specs/architecture/engines/System-Domain-Model.md`, migrations `2026_07_25_000002_*`, `2026_07_25_000003_*`, Eloquent models
+**Sources:** `specs/architecture/data/Database-Schema-Specification.md`, `specs/architecture/platform/System-Domain-Model.md`, migrations `2026_07_25_000002_*`, `2026_07_25_000003_*`, Eloquent models
 
 ---
 

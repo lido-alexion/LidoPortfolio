@@ -241,7 +241,7 @@ The project is considered MVP-complete when:
 ## Version 1.0 Baseline
 
 The first MVP implementation pass and independent audit are complete. Architectural
-intent remains defined by the documents in `/specs/architecture` and `/specs/engines`.
+intent remains defined by the documents in `/specs/architecture` (platform, domains, and related folders).
 Accepted implementation decisions, Version 1.0 scope, and future work are governed by:
 
 -   [`../governance/VERSION_1_BASELINE.md`](../governance/VERSION_1_BASELINE.md) — frozen V1.0 baseline

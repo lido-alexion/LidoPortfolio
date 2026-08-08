@@ -103,7 +103,7 @@ Uses the approved Trading Artifact envelope (`artifact_type: screener`):
 - `metadata.universe` maps to Screener `scope` (`all_active_equities` → `all_equities`)
 - Indicator refs must resolve in the Indicator Registry when validated
 
-Examples: `specs/architecture/engines/artifacts/examples/screener-*.json`
+Examples: `specs/architecture/domains/artifacts/examples/screener-*.json`
 
 ---
 

@@ -146,7 +146,7 @@ services (Primaries); Evaluation Engine (stock Strategy Composites); Market
 Analysis Engine (market-level Composites); Analytics services (Metrics).
 
 See [../indicators/09-Indicator-Registry.md](../indicators/09-Indicator-Registry.md) and
-[../engines/Indicator-Registry-Specification.md](../engines/Indicator-Registry-Specification.md).
+[../domains/Indicator-Registry-Specification.md](../domains/Indicator-Registry-Specification.md).
 
 ------------------------------------------------------------------------
 

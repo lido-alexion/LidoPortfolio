@@ -11,7 +11,8 @@
 
 Define the order of authority among project documents so conflicts are resolved consistently without rewriting historical specifications.
 
-**Navigation (not authority):** For a complete file tree and recommended reading order, see [../../../DOCS.md](../../../DOCS.md) and [../../README.md](../../README.md).
+**Navigation (not authority):** For a complete file tree and recommended reading order, see [../../../DOCS.md](../../../DOCS.md) and [../../README.md](../../README.md).  
+**Repository constitution (authoring rules):** [./ARCHITECTURE_REPOSITORY_GOVERNANCE.md](./ARCHITECTURE_REPOSITORY_GOVERNANCE.md) — mandatory Specification Authoring Principles and Golden Rule for all future specs.
 
 ---
 
@@ -33,8 +34,8 @@ Engine Specifications
    Implementation Roadmap)
         ↓
 Governance Documents
-  (SPECIFICATION_DECISIONS, MVP_SCOPE, VERSION_1_BASELINE,
-   PRODUCT_BACKLOG, this precedence guide)
+  (ARCHITECTURE_REPOSITORY_GOVERNANCE, SPECIFICATION_DECISIONS, MVP_SCOPE,
+   VERSION_1_BASELINE, PRODUCT_BACKLOG, this precedence guide)
         ↓
 Implementation
   (application code, migrations, config, UI)
@@ -90,17 +91,19 @@ Supporting operational docs (not in the intent chain, but binding for ops):
 ## Explicit rules
 
 1. **Original specifications define architectural intent.**  
-   They MUST NOT be modified to match implementation decisions (except factual error / broken link fixes, or append-only notes such as the Version 1.0 Baseline section on the Implementation Roadmap).
+   They MUST NOT be modified to match implementation decisions (except factual error / broken link fixes, or append-only notes such as the Version 1.0 Baseline section on the Implementation Roadmap).  
+   They also MUST NOT be rewritten to duplicate concepts already owned by an Approved specification — see [ARCHITECTURE_REPOSITORY_GOVERNANCE.md](./ARCHITECTURE_REPOSITORY_GOVERNANCE.md) §7 and Golden Rule.
 
 2. **Governance documents define accepted implementation decisions and V1.0 scope.**  
-   They are the official bridge between specs and code.
+   They are the official bridge between specs and code. Repository structure and authoring rules are governed by [ARCHITECTURE_REPOSITORY_GOVERNANCE.md](./ARCHITECTURE_REPOSITORY_GOVERNANCE.md).
 
 3. **Implementation must follow both:**  
    - Honour Vision / principles / engine boundaries as intent.  
    - Honour Governance for Accepted deviations and Included/Excluded scope.
 
 4. **Future work updates Governance (and backlog), not historical specs.**  
-   When behaviour changes again, add/update SD-xxx and baseline notes; leave v0.1/v1.0 Draft specs intact as history of intent.
+   When behaviour changes again, add/update SD-xxx and baseline notes; leave v0.1/v1.0 Draft specs intact as history of intent.  
+   New specs MUST search for existing concepts and **reference** them rather than redefining them.
 
 5. **Rejected decisions** stay in the SD register with Status = Rejected so the same debate is not repeated without new evidence.
 
@@ -117,3 +120,7 @@ Supporting operational docs (not in the intent chain, but binding for ops):
 | What do we build next? | PRODUCT_BACKLOG |
 | Did V1.0 pass audit? | `specs/architecture/audit/MVP_VERDICT.md` |
 | How should engines relate long-term? | Architecture + Engine specs (intent) |
+| How must new specs be authored? | ARCHITECTURE_REPOSITORY_GOVERNANCE (§7 Authoring Principles + Golden Rule) |
+| Where do platform-wide concepts live? | `specs/architecture/platform/` — start at `platform/README.md` |
+| Is the architecture repo structure frozen? | ARCHITECTURE_REPOSITORY_BASELINE_V1 (Architecture Repository V1.0) |
+| Spec metadata header for new docs? | SPECIFICATION_HEADER_TEMPLATE |

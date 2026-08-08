@@ -120,8 +120,9 @@ Reusable UI lives under `components/` (tables, charts, screener builders, knowle
 
 | Path | Description |
 |------|-------------|
-| `specs/architecture/` | Domain-organized architecture hub (platform, indicators, ui, portfolio, data, engines, live-trading, audit, governance) |
-| `specs/architecture/engines/` | Per-engine + REST + schema + roadmap + domain model |
+| `specs/architecture/` | Domain-organized architecture hub (platform, domains, indicators, ui, portfolio, data, live-trading, integrations, audit, governance) |
+| `specs/architecture/domains/` | Cross-cutting contracts: REST, pipeline/engine specs, strategy/screener/artifacts, roadmap |
+| `specs/architecture/platform/` | Foundations + System Domain Model |
 | `specs/IMPLEMENTATION_PROGRESS.md` | Working MVP log + accepted assumptions |
 | `specs/MVP_DEMO_CHECKLIST.md` | Demo acceptance checklist |
 | `specs/architecture/audit/` | This audit pack |

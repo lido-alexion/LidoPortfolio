@@ -7,7 +7,7 @@
 | **Status** | Epics 1–3 done; Epic 4 Liquidity/Tradability V1 calculators done (Strategy wiring deferred); Epic 5–7 partial |
 | **Date** | 2026-07-30 |
 | **Governing decision** | [SD-033](../governance/SPECIFICATION_DECISIONS.md) |
-| **Specs** | [../engines/Indicator-Registry-Specification.md](../engines/Indicator-Registry-Specification.md) · [./09-Indicator-Registry.md](./09-Indicator-Registry.md) |
+| **Specs** | [../domains/Indicator-Registry-Specification.md](../domains/Indicator-Registry-Specification.md) · [./09-Indicator-Registry.md](./09-Indicator-Registry.md) |
 | **As-built** | [./08-Indicator-Architecture-Analysis.md](./08-Indicator-Architecture-Analysis.md) |
 | **Backlog** | PB-054, PB-055, PB-056, PB-057 · TD-19 |
 
@@ -639,7 +639,7 @@ Epic1 Foundation ──► Epic2 Migration ──► Epic3 Admin UI ──┐
 |-------|---------|
 | **Objective** | Written QA checklist for release. |
 | **Description** | Extend or add under `specs/` a short manual script: run screener, save strategy, run evaluation, open Admin Registry, verify Planned vs Active. |
-| **Files likely to change** | New `specs/architecture/engines/Indicator-Registry-QA-Checklist.md` or section in MVP demo. |
+| **Files likely to change** | New `specs/architecture/domains/Indicator-Registry-QA-Checklist.md` or section in MVP demo. |
 | **Dependencies** | Epics 2–3. |
 | **Risks** | None. |
 | **Backward compatibility** | N/A. |

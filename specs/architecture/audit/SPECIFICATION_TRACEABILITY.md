@@ -13,7 +13,7 @@
 
 Mandatory MVP is defined by:
 
-1. `specs/architecture/engines/Implementation-Roadmap.md` §9 Success Criteria  
+1. `specs/architecture/domains/Implementation-Roadmap.md` §9 Success Criteria  
 2. `specs/MVP_DEMO_CHECKLIST.md` acceptance walkthrough  
 3. Accepted scope reductions in `IMPLEMENTATION_PROGRESS.md` (Sanctum, `portfolio_*`, Telegram-only, Strategy deferred, formal Data publish gates deferred)
 
@@ -117,7 +117,7 @@ Full written specs contain aspirational / Stage-2+ requirements. Those are marke
 
 ---
 
-## 7. `engines/Application-Architecture-Specification.md`
+## 7. `domains/Application-Architecture-Specification.md`
 
 | Requirement | Status | Evidence | Deviation |
 |-------------|--------|----------|-----------|
@@ -136,7 +136,7 @@ Full written specs contain aspirational / Stage-2+ requirements. Those are marke
 
 ---
 
-## 8. `engines/Data-Engine-Specification.md`
+## 8. `domains/Data-Engine-Specification.md`
 
 | Requirement | Status | Evidence | Notes |
 |-------------|--------|----------|-------|
@@ -172,7 +172,7 @@ Full written specs contain aspirational / Stage-2+ requirements. Those are marke
 
 ---
 
-## 10. `engines/Evaluation-Engine-Specification.md`
+## 10. `domains/Evaluation-Engine-Specification.md`
 
 | Requirement | Status | Evidence | Deviation |
 |-------------|--------|----------|-----------|
@@ -189,7 +189,7 @@ Full written specs contain aspirational / Stage-2+ requirements. Those are marke
 
 ---
 
-## 11. `engines/Recommendation-Engine-Specification.md`
+## 11. `domains/Recommendation-Engine-Specification.md`
 
 | Requirement | Status | Evidence | Deviation |
 |-------------|--------|----------|-----------|
@@ -206,7 +206,7 @@ Full written specs contain aspirational / Stage-2+ requirements. Those are marke
 
 ---
 
-## 12. `engines/Notification-Engine-Specification.md`
+## 12. `domains/Notification-Engine-Specification.md`
 
 | Requirement | Status | Evidence | Deviation |
 |-------------|--------|----------|-----------|
@@ -220,7 +220,7 @@ Full written specs contain aspirational / Stage-2+ requirements. Those are marke
 
 ---
 
-## 13. `engines/Execution-Engine-Specification.md`
+## 13. `domains/Execution-Engine-Specification.md`
 
 | Requirement | Status | Evidence | Deviation |
 |-------------|--------|----------|-----------|
@@ -234,7 +234,7 @@ Full written specs contain aspirational / Stage-2+ requirements. Those are marke
 
 ---
 
-## 14. `engines/Review-Engine-Specification.md`
+## 14. `domains/Review-Engine-Specification.md`
 
 | Requirement | Status | Evidence | Deviation |
 |-------------|--------|----------|-----------|
@@ -249,7 +249,7 @@ Full written specs contain aspirational / Stage-2+ requirements. Those are marke
 
 ---
 
-## 15. `engines/REST-API-Specification.md`
+## 15. `domains/REST-API-Specification.md`
 
 | Requirement | Status | Evidence | Deviation |
 |-------------|--------|----------|-----------|
@@ -265,7 +265,7 @@ Full written specs contain aspirational / Stage-2+ requirements. Those are marke
 
 ---
 
-## 16. `engines/Database-Schema-Specification.md`
+## 16. `domains/Database-Schema-Specification.md`
 
 | Spec table | Physical | Status |
 |------------|----------|--------|
@@ -285,7 +285,7 @@ Full written specs contain aspirational / Stage-2+ requirements. Those are marke
 
 ---
 
-## 17. `engines/System-Domain-Model.md`
+## 17. `platform/System-Domain-Model.md`
 
 | Rule | Status | Notes |
 |------|--------|-------|
@@ -296,7 +296,7 @@ Full written specs contain aspirational / Stage-2+ requirements. Those are marke
 
 ---
 
-## 18. `engines/Implementation-Roadmap.md`
+## 18. `domains/Implementation-Roadmap.md`
 
 | Milestone | Status | Notes |
 |-----------|--------|-------|

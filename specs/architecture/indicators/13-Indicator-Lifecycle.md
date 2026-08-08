@@ -6,7 +6,7 @@
 | **Version** | 1.0 |
 | **Status** | Implemented (Epics 1–4 partial / Admin UI) |
 | **Date** | 2026-07-30 |
-| **Specs** | [../engines/Indicator-Registry-Specification.md](../engines/Indicator-Registry-Specification.md) · [./09-Indicator-Registry.md](./09-Indicator-Registry.md) |
+| **Specs** | [../domains/Indicator-Registry-Specification.md](../domains/Indicator-Registry-Specification.md) · [./09-Indicator-Registry.md](./09-Indicator-Registry.md) |
 
 ---
 
@@ -103,4 +103,4 @@ Service: `App\Services\Indicators\LiquidityTradabilityCalculator`.
 ## 6. Admin discovery
 
 - UI: `/settings/indicators` and `/settings/indicators/:id` (admin-only)
-- API: see [../engines/Indicator-Registry-API.md](../engines/Indicator-Registry-API.md)
+- API: see [../domains/Indicator-Registry-API.md](../domains/Indicator-Registry-API.md)
