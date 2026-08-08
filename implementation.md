@@ -1215,16 +1215,21 @@ Daily cron (`portfolio:daily-sync`) still refreshes **today** via `storeSnapshot
 
 | Method | Path                             | Purpose                                                       |
 | ------ | -------------------------------- | ------------------------------------------------------------- |
+| GET    | `/api/portfolio/snapshots`       | List materialized snapshots (`from_date`, `to_date`, `limit`; profile-scoped) |
 | POST   | `/api/portfolio/rebuild-history` | Manual full/partial rebuild (`from_date`, optional `to_date`) |
 
 ### Frontend
 
-After transaction save/delete, `notifyPortfolioDashboardRefresh()` → Dashboard reloads `portfolio_growth` (latest 365 days, ascending). If snapshots are empty but transactions exist, `GET /dashboard` triggers a one-time lazy rebuild. **Portfolio Growth** card header always shows **Rebuild history** (browser `confirm` before `POST /portfolio/rebuild-history`).
+After transaction save/delete, `notifyPortfolioDashboardRefresh()` → Dashboard reloads `portfolio_growth` (latest 365 days, ascending). If snapshots are empty but transactions exist, `GET /dashboard` triggers a one-time lazy rebuild. **Portfolio Growth** card header shows **View snapshots** (→ `/portfolio/snapshots`) and **Rebuild history** (browser `confirm` before `POST /portfolio/rebuild-history`).
+
+**F015 — Portfolio Snapshots UI (2026-08-09):** Dedicated page at `/portfolio/snapshots` (sidebar: Portfolio → Portfolio Snapshots). `GET /api/portfolio/snapshots` with range presets (90/180/365 days, All up to 2000 rows). Displays backend `portfolio_value` / `invested_value` only; unrealized P/L and day change are display derivatives. Components: `PortfolioSnapshotsPage`, `PortfolioSnapshotGrowthChart`. Tests: `tests/Feature/PortfolioSnapshotApiTest.php`. No schema changes.
 
 ### Tests
 
 - `tests/Unit/PortfolioHistoricalHoldingsServiceTest.php`
 - `tests/Feature/PortfolioSnapshotRebuildTest.php`
+- `tests/Feature/PortfolioSnapshotApiTest.php`
+- `tests/Feature/DashboardGrowthTest.php`
 
 ### Future snapshot / history changes
 

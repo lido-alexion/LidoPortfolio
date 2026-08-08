@@ -198,6 +198,7 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Refresh dashboard', description: 'Clears the local cache and reloads dashboard + pattern scan data.' },
             { name: 'Sync prices for today', description: 'Admin: pulls latest holdings prices for the current session day.' },
             { name: 'Allocation charts', description: 'Donut / table views of market % and invested % by holding.' },
+            { name: 'Portfolio growth chart', description: '365-day portfolio_value / invested_value trend from materialized snapshots; View snapshots opens the full history page.' },
             { name: 'Market Analytics gauges', description: 'Market Health summary card stays visible; gauge diagnostics are collapsible and explain the score. Diagnostics still include trend, momentum, volatility, risk, sentiment, phase, breadth, and regime. The Market breadth gauge title links to Market Depth.' },
             { name: 'Stocks Above heatmap', description: 'Market-depth view of how many stocks sit above key moving averages.' },
             { name: 'Pattern signals', description: 'Matched pattern names link into the Patterns guide.' },
@@ -208,7 +209,32 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Market phase / sentiment', description: 'Deterministic market regime from the primary benchmark (e.g. Nifty 50); used later by Strategy market gates.' },
             { name: 'Dashboard cache', description: 'Responses are cached per user + portfolio (~24h) for snappy revisits; mutations invalidate it.' },
         ],
-        related: ['trading-os-flow', 'holdings', 'market-depth', 'patterns', 'calendar', 'review'],
+        related: ['trading-os-flow', 'holdings', 'market-depth', 'patterns', 'calendar', 'review', 'portfolio-snapshots'],
+    },
+    {
+        id: 'portfolio-snapshots',
+        keyword: 'portfolio-snapshots',
+        aliases: ['snapshots', 'portfolio-history', 'value-history'],
+        title: 'Portfolio Snapshots',
+        routeLabel: '/portfolio/snapshots',
+        match: (p) => pathIs(p, '/portfolio/snapshots'),
+        summary: 'Daily portfolio value history from backend snapshots (portfolio value, invested value, unrealized P/L).',
+        overview:
+            'Portfolio Snapshots shows the materialized daily history stored in portfolio_portfolio_snapshots. '
+            + 'Each row is rebuilt from transactions and closing prices — not recalculated in the browser. '
+            + 'Use range filters, the growth chart, and the daily table to review history. Rebuild history recalculates all snapshot rows from the ledger.',
+        controls: [
+            { name: 'Range filters', description: '90 / 180 / 365 days or All (up to 2000 rows) — fetches backend snapshots for the active portfolio only.' },
+            { name: 'Refresh', description: 'Reload snapshot data from GET /api/portfolio/snapshots.' },
+            { name: 'Rebuild history', description: 'POST /api/portfolio/rebuild-history — recalculates daily snapshots from transactions and OHLCV.' },
+            { name: 'Daily table', description: 'Newest first: snapshot date, portfolio value, invested value, unrealized P/L, day-over-day portfolio change.' },
+        ],
+        concepts: [
+            { name: 'Portfolio value', description: 'Market value of holdings at each snapshot date (quantity × close on or before that date).' },
+            { name: 'Invested value', description: 'Remaining cost basis for open holdings on that date — not the same as cash balance.' },
+            { name: 'Unrealized P/L', description: 'portfolio_value − invested_value for that snapshot row (display derived from backend fields).' },
+        ],
+        related: ['dashboard', 'transactions', 'holdings', 'cash'],
     },
     {
         id: 'transactions',

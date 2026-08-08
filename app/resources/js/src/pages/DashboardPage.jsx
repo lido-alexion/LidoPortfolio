@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { ROUTES } from '../navigation/routes';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import { usePortfolio } from '../context/PortfolioContext';
@@ -1259,9 +1260,13 @@ export default function DashboardPage() {
             </div>
             <div className="col-12">
                 <div className="card">
-                    <div className="card-header d-flex justify-content-between align-items-center gap-2">
+                    <div className="card-header d-flex justify-content-between align-items-center gap-2 flex-wrap">
                         <span>Portfolio Growth (transaction-aware history)</span>
-                        <button
+                        <div className="d-flex flex-wrap gap-2">
+                            <Link to={ROUTES.PORTFOLIO_SNAPSHOTS} className="btn btn-sm btn-outline-primary">
+                                View snapshots
+                            </Link>
+                            <button
                             type="button"
                             className="btn btn-sm btn-outline-secondary"
                             onClick={requestRebuildPortfolioHistory}
@@ -1269,7 +1274,8 @@ export default function DashboardPage() {
                             title="Recalculate daily portfolio snapshots from transactions and price history"
                         >
                             {rebuildingHistory ? 'Rebuilding…' : 'Rebuild history'}
-                        </button>
+                            </button>
+                        </div>
                     </div>
                     <div className="card-body">
                         {growthData.length === 0 ? (

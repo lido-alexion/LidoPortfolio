@@ -170,11 +170,17 @@ Hub: [specs/architecture/governance/README.md](specs/architecture/governance/REA
 | 4.13 | [specs/architecture/audit/REPOSITORY_OVERVIEW.md](specs/architecture/audit/REPOSITORY_OVERVIEW.md) | Folder map |
 | 4.14 | [specs/architecture/audit/PROJECT_STATISTICS.md](specs/architecture/audit/PROJECT_STATISTICS.md) | Counts / LOC |
 
-### 4.A Historical audits
+### 4.A Feature coverage audits
 
 | Order | Document | Why |
 |------:|----------|-----|
-| 4.15 | [docs/audits/2026-08-08-feature-coverage/](docs/audits/2026-08-08-feature-coverage/) | Pre-implementation V1 feature coverage and gap audit (2026-08-08); **historical baseline only — not current implementation status** |
+| 4.15 | [docs/audits/2026-08-09-feature-coverage/](docs/audits/2026-08-09-feature-coverage/) | **Current post-implementation V1 feature coverage baseline (2026-08-09)** |
+
+### 4.B Historical audits
+
+| Order | Document | Why |
+|------:|----------|-----|
+| 4.16 | [docs/audits/2026-08-08-feature-coverage/](docs/audits/2026-08-08-feature-coverage/) | Pre-implementation V1 feature coverage and gap audit (2026-08-08); **historical baseline only — not current implementation status** |
 
 ---
 

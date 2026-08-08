@@ -11,6 +11,7 @@ export const ROUTES = Object.freeze({
     TRANSACTIONS_PENDING: '/transactions/pending',
     TRANSACTIONS_CLOSED: '/transactions/closed',
     CASH: '/cash',
+    PORTFOLIO_SNAPSHOTS: '/portfolio/snapshots',
     CORPORATE_ACTION: '/corporate-action',
     CANDIDATES: '/candidates',
     EVALUATIONS: '/evaluations',

@@ -49,6 +49,7 @@ import ScreenersPage from './pages/ScreenersPage';
 import ScreenerEditorPage from './pages/ScreenerEditorPage';
 import RecommendationsPage from './pages/RecommendationsPage';
 import CandidatesPage from './pages/CandidatesPage';
+import PortfolioSnapshotsPage from './pages/PortfolioSnapshotsPage';
 import ReviewDashboardPage from './pages/ReviewDashboardPage';
 import NotificationHistoryPage from './pages/NotificationHistoryPage';
 import CashManagementPage from './pages/CashManagementPage';
@@ -84,6 +85,7 @@ function AppRoutes() {
             <Route path="/strategy" element={<StrategyPage />} />
             <Route path="/backtests" element={<BacktestHistoryPage />} />
             <Route path="/backtests/:id" element={<BacktestDetailPage />} />
+            <Route path="/portfolio/snapshots" element={<PortfolioSnapshotsPage />} />
             <Route path="/review" element={<ReviewDashboardPage />} />
             <Route path="/notification-history" element={<NotificationHistoryPage />} />
             <Route path="/patterns" element={<PatternGuidePage />} />
