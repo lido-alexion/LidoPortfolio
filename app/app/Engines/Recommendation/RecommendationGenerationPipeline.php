@@ -139,34 +139,19 @@ class RecommendationGenerationPipeline
         $minCashReservePct = (float) ($portfolioRules['min_cash_reserve_pct'] ?? 0);
         $maxCashDeployPct = (float) ($portfolioRules['max_cash_deployment_pct'] ?? 100);
 
-        // SD-032: consume Market Analysis Engine — never recalculate market metrics here.
+        // SD-032 / F098: consume Market Analysis Engine — never recalculate market metrics here.
         $market = [];
         try {
             $market = $this->marketAnalytics->latest();
         } catch (Throwable) {
             $market = [];
         }
-        $marketMult = (float) ($market['allocation_multiplier'] ?? 1.0);
-        $marketAllowsEntry = (bool) ($market['new_entry_allowed'] ?? true);
-        $marketGates = is_array($config[TradingOsConfig::STRATEGY_MARKET_GATES] ?? null) ? $config[TradingOsConfig::STRATEGY_MARKET_GATES] : [];
-        if (($marketGates['enabled'] ?? false) === true) {
-            $minSentiment = $marketGates['min_sentiment'] ?? null;
-            $allowedPhases = $marketGates['allowed_phases'] ?? null;
-            $sentimentScore = (float) ($market['sentiment']['score'] ?? 50);
-            $phase = (string) ($market['market_phase'] ?? '');
-            if ($minSentiment !== null && $sentimentScore < (float) $minSentiment) {
-                $marketAllowsEntry = false;
-            }
-            if (is_array($allowedPhases) && $allowedPhases !== [] && ! in_array($phase, $allowedPhases, true)) {
-                $marketAllowsEntry = false;
-            }
-            if (isset($marketGates['max_risk_raw']) && is_numeric($market['risk']['raw_risk'] ?? null)) {
-                if ((float) $market['risk']['raw_risk'] > (float) $marketGates['max_risk_raw']) {
-                    $marketAllowsEntry = false;
-                    $marketMult = min($marketMult, 0.5);
-                }
-            }
-        }
+        $marketGates = is_array($config[TradingOsConfig::STRATEGY_MARKET_GATES] ?? null)
+            ? $config[TradingOsConfig::STRATEGY_MARKET_GATES]
+            : [];
+        $gateDecision = MarketGateEvaluator::evaluate($market, $marketGates);
+        $marketMult = (float) $gateDecision['allocation_multiplier'];
+        $marketAllowsEntry = (bool) $gateDecision['allows_entry'];
         $defaultPct = round($defaultPct * $marketMult, 4);
         $maxPct = round($maxPct * $marketMult, 4);
 
@@ -253,6 +238,7 @@ class RecommendationGenerationPipeline
             'allocation_band' => $allocationBand,
             'max_new_positions' => $maxNewPositions,
             'market' => $market,
+            'market_gate_decision' => $gateDecision,
             'market_allows_entry' => $marketAllowsEntry,
             'risk_cfg' => $riskCfg,
             'alloc_cfg' => $allocCfg,
@@ -412,8 +398,10 @@ class RecommendationGenerationPipeline
                 $action = $isHeld ? TradingRecommendation::ACTION_HOLD_POSITION : TradingRecommendation::ACTION_WATCH;
             }
 
-            // Market Analysis gate: block / demote new entries when market phase/risk forbids.
+            // F098: Market gates demote OPEN/INCREASE only; exits and holds remain allowed.
+            $marketGateDemoted = false;
             if (! $marketAllowsEntry && in_array($action, [TradingRecommendation::ACTION_OPEN_POSITION, TradingRecommendation::ACTION_INCREASE_POSITION], true)) {
+                $marketGateDemoted = true;
                 $action = $isHeld ? TradingRecommendation::ACTION_HOLD_POSITION : TradingRecommendation::ACTION_WATCH;
             }
 
@@ -459,6 +447,7 @@ class RecommendationGenerationPipeline
                 'reference_price' => $referencePrice,
                 'opinion' => $opinion,
                 'action' => $action,
+                'market_gate_demoted' => $marketGateDemoted,
                 'plan' => $plan,
                 'position_size' => $positionSize,
                 'priority' => $priority,
@@ -703,6 +692,7 @@ class RecommendationGenerationPipeline
         $strategy = $ctx['strategy'] ?? null;
         $eligibility = $ctx['eligibility'];
         $market = $ctx['market'];
+        $gateDecision = $ctx['market_gate_decision'] ?? MarketGateEvaluator::evaluate($market, []);
         $marketAllowsEntry = $ctx['market_allows_entry'];
         $cashSummary = $ctx['cash_summary'];
         $expiresAt = $ctx['expires_at'];
@@ -770,6 +760,10 @@ class RecommendationGenerationPipeline
                 $draft['target_alloc'],
                 $draft['is_held'],
                 $draft['risk'],
+                (bool) ($draft['market_gate_demoted'] ?? false),
+                is_array($gateDecision['strategy_gates']['block_reasons'] ?? null)
+                    ? $gateDecision['strategy_gates']['block_reasons']
+                    : [],
             );
 
             $evidence = [
@@ -804,9 +798,16 @@ class RecommendationGenerationPipeline
                     'sentiment_score' => $market['sentiment']['score'] ?? null,
                     'sentiment_label' => $market['sentiment']['label'] ?? null,
                     'risk_label' => $market['risk']['label'] ?? null,
-                    'allocation_multiplier' => $market['allocation_multiplier'] ?? 1,
+                    'risk_raw' => $market['risk']['raw_risk'] ?? null,
+                    'base_new_entry_allowed' => $gateDecision['market_analysis']['new_entry_allowed'] ?? true,
+                    'base_allocation_multiplier' => $gateDecision['market_analysis']['allocation_multiplier'] ?? 1,
+                    'effective_new_entry_allowed' => $marketAllowsEntry,
+                    'effective_allocation_multiplier' => $gateDecision['allocation_multiplier'] ?? 1,
                     'new_entry_allowed' => $marketAllowsEntry,
+                    'allocation_multiplier' => $gateDecision['allocation_multiplier'] ?? 1,
                 ],
+                'market_gates' => $gateDecision['strategy_gates'] ?? [],
+                'market_gate_demoted' => (bool) ($draft['market_gate_demoted'] ?? false),
             ];
             if ($capitalAllocationMeta !== null) {
                 $evidence['capital_allocation'] = $capitalAllocationMeta;
@@ -1059,6 +1060,8 @@ class RecommendationGenerationPipeline
         float $targetAlloc,
         bool $isHeld,
         string $risk,
+        bool $marketGateDemoted = false,
+        array $gateBlockReasons = [],
     ): string {
         $parts = [
             "Market: {$opinion['direction']} ({$opinion['strength']}).",
@@ -1066,6 +1069,12 @@ class RecommendationGenerationPipeline
             "Portfolio action: {$action}.",
             "Risk: {$risk}.",
         ];
+        if ($marketGateDemoted) {
+            $reasonText = $gateBlockReasons !== []
+                ? implode('; ', $gateBlockReasons)
+                : 'new entries blocked by market gates';
+            $parts[] = "Market gates demoted entry: {$reasonText}.";
+        }
 
         return implode(' ', $parts);
     }

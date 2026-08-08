@@ -158,6 +158,31 @@ class ScheduleRegistrationTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_decision_pipeline_not_registered_when_schedule_disabled(): void
+    {
+        putenv('TRADING_OS_ENABLED=true');
+        putenv('TRADING_OS_PIPELINE_SCHEDULE=false');
+        $this->refreshScheduleApp();
+
+        $this->assertNull($this->findScheduleEvent('portfolio:decision-pipeline'));
+    }
+
+    public function test_decision_pipeline_registered_when_schedule_enabled(): void
+    {
+        putenv('TRADING_OS_ENABLED=true');
+        putenv('TRADING_OS_PIPELINE_SCHEDULE=true');
+        putenv('TRADING_OS_PIPELINE_TIME=19:15');
+        $this->refreshScheduleApp();
+
+        $event = $this->findScheduleEvent('portfolio:decision-pipeline');
+        $this->assertNotNull($event, 'trading-os-decision-pipeline schedule event must be registered');
+        $this->assertStringContainsString('portfolio:decision-pipeline', (string) $event->command);
+        $this->assertStringContainsString('scheduled', (string) $event->command);
+        $this->assertSame('15 19 * * *', $event->getExpression());
+        $this->assertTrue($event->withoutOverlapping, 'scheduled pipeline must use withoutOverlapping');
+        $this->assertSame(45, $event->expiresAt);
+    }
+
     protected function findUniverseMaintenanceEvent(): ?Event
     {
         return $this->findScheduleEvent('portfolio:run-universe-maintenance');

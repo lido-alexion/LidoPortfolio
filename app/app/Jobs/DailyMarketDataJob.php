@@ -17,9 +17,11 @@ use App\Services\PriceSyncNotificationContext;
 use App\Services\SyncLogService;
 use App\Services\SystemLogService;
 use App\Services\TelegramNotificationService;
+use App\Support\TradingOsConfig;
 use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Artisan;
 
 class DailyMarketDataJob implements ShouldQueue
 {
@@ -156,6 +158,8 @@ class DailyMarketDataJob implements ShouldQueue
                             'expired_count' => $expiredOnRefresh,
                         ]);
                     }
+
+                    $this->runDecisionPipelineAfterSync($runId, $jobName, $syncLog);
                 } else {
                     $dailySyncStatus->markIncomplete($processed, $failed);
                     $summary = "Daily sync finished with {$failed} failure(s) out of {$processed} held stock(s).";
@@ -180,6 +184,34 @@ class DailyMarketDataJob implements ShouldQueue
         } finally {
             $dailySyncStatus->clearInProgress();
             app(AdminOperationalAlertService::class)->syncAndNotify();
+        }
+    }
+
+    protected function runDecisionPipelineAfterSync(string $runId, string $jobName, SyncLogService $syncLog): void
+    {
+        if (! TradingOsConfig::enabled() || ! TradingOsConfig::pipelineRunAfterDailySync()) {
+            return;
+        }
+
+        try {
+            $exitCode = Artisan::call('portfolio:decision-pipeline', [
+                '--trigger' => 'post-sync',
+            ]);
+            $output = trim(Artisan::output());
+            $syncLog->log(
+                $runId,
+                $jobName,
+                $exitCode === 0 ? 'info' : 'warning',
+                'Decision pipeline after daily sync',
+                [
+                    'exit_code' => $exitCode,
+                    'output' => $output !== '' ? $output : null,
+                ],
+            );
+        } catch (\Throwable $e) {
+            $syncLog->log($runId, $jobName, 'error', 'Decision pipeline after daily sync failed', [
+                'failure_reason' => $e->getMessage(),
+            ]);
         }
     }
 }

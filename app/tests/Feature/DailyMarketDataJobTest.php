@@ -3,20 +3,25 @@
 namespace Tests\Feature;
 
 use App\Jobs\DailyMarketDataJob;
+use App\Services\AdminOperationalAlertService;
 use App\Services\AlertExpirationService;
 use App\Services\Alerts\AlertPolicyEvaluationService;
 use App\Services\BenchmarkPriceSyncService;
 use App\Services\DailyMarketSyncService;
 use App\Services\MetricsUpdateService;
+use App\Services\PortfolioCalculationService;
 use App\Services\PriceFetchService;
 use App\Services\SyncLogService;
 use App\Services\SystemLogService;
 use App\Services\TelegramNotificationService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
-use PHPUnit\Framework\TestCase;
+use Tests\TestCase;
 
 class DailyMarketDataJobTest extends TestCase
 {
+    use RefreshDatabase;
+
     protected function tearDown(): void
     {
         Mockery::close();
@@ -27,7 +32,7 @@ class DailyMarketDataJobTest extends TestCase
     {
         $priceFetch = Mockery::mock(PriceFetchService::class);
         $metrics = Mockery::mock(MetricsUpdateService::class);
-        $portfolio = Mockery::mock(\App\Services\PortfolioCalculationService::class);
+        $portfolio = Mockery::mock(PortfolioCalculationService::class);
         $telegram = Mockery::mock(TelegramNotificationService::class);
         $logger = Mockery::mock(SystemLogService::class);
         $syncLog = Mockery::mock(SyncLogService::class);
@@ -38,6 +43,9 @@ class DailyMarketDataJobTest extends TestCase
         $alertExpiration->shouldReceive('latestPortfolioPriceDate')->andReturn('2026-01-01');
         $alertPolicyEvaluation = Mockery::mock(AlertPolicyEvaluationService::class);
         $benchmarkSync = Mockery::mock(BenchmarkPriceSyncService::class);
+        $adminAlerts = Mockery::mock(AdminOperationalAlertService::class);
+        $adminAlerts->shouldReceive('syncAndNotify')->once();
+        $this->app->instance(AdminOperationalAlertService::class, $adminAlerts);
 
         $benchmarkSync->shouldReceive('syncIfNeeded')
             ->once()

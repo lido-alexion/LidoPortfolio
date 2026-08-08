@@ -33,7 +33,7 @@ class DailyDecisionPipeline
     ) {}
 
     /**
-     * @param  array{notify?:bool,review?:bool,skip_data_status?:bool}  $options
+     * @param  array{notify?:bool,review?:bool,skip_data_status?:bool,trigger?:string,sync_run_id?:string|int|null}  $options
      * @return array{pipeline_run: PipelineRun, stages: array<string,mixed>}
      */
     public function run(PortfolioProfile $profile, array $options = []): array
@@ -48,7 +48,13 @@ class DailyDecisionPipeline
             'stages_json' => [],
         ]);
 
-        $stages = [];
+        $stages = [
+            '_meta' => [
+                'trigger' => (string) ($options['trigger'] ?? 'manual'),
+                'sync_run_id' => $options['sync_run_id'] ?? null,
+                'started_at' => now()->toIso8601String(),
+            ],
+        ];
 
         try {
             $stages['data_status'] = $this->data->datasetStatus();
@@ -104,6 +110,7 @@ class DailyDecisionPipeline
             $this->logger->log('daily', 'DailyDecisionPipeline', 'info', 'Pipeline completed', [
                 'profile_id' => $profile->id,
                 'pipeline_run_id' => $pipeline->id,
+                'trigger' => $stages['_meta']['trigger'] ?? 'manual',
                 'stages' => $stages,
             ]);
 
@@ -119,6 +126,7 @@ class DailyDecisionPipeline
             $this->logger->log('daily', 'DailyDecisionPipeline', 'error', 'Pipeline failed: '.$e->getMessage(), [
                 'profile_id' => $profile->id,
                 'pipeline_run_id' => $pipeline->id,
+                'trigger' => $stages['_meta']['trigger'] ?? 'manual',
             ]);
 
             throw $e;

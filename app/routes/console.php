@@ -224,9 +224,13 @@ Schedule::command('portfolio:send-calendar-reminders')
 
 if (TradingOsConfig::enabled() && TradingOsConfig::pipelineScheduleEnabled()) {
     $pipelineTime = TradingOsConfig::pipelineScheduleTime();
-    Schedule::command('portfolio:decision-pipeline')
+    Schedule::command('portfolio:decision-pipeline', [
+        '--trigger' => 'scheduled',
+    ])
         ->dailyAt($pipelineTime)
         ->timezone($timezone)
+        ->when($marketDataSyncDue)
+        ->withoutOverlapping(45)
         ->name('trading-os-decision-pipeline');
 }
 

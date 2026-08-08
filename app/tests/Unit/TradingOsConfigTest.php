@@ -56,4 +56,13 @@ class TradingOsConfigTest extends TestCase
         $this->assertTrue(TradingOsConfig::pipelineScheduleEnabled());
         $this->assertSame('18:30', TradingOsConfig::pipelineScheduleTime());
     }
+
+    public function test_pipeline_after_sync_accessor(): void
+    {
+        config([
+            TradingOsConfig::KEY_PIPELINE.'.run_after_daily_sync' => true,
+        ]);
+
+        $this->assertTrue(TradingOsConfig::pipelineRunAfterDailySync());
+    }
 }
