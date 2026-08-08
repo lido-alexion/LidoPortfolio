@@ -4,6 +4,7 @@
 **Version:** 1.0  
 **Status:** Active  
 **Effective:** 2026-07-25  
+**Scope freeze amended:** 2026-08-09 (SD-035)
 
 Related: [`./SPECIFICATION_DECISIONS.md`](./SPECIFICATION_DECISIONS.md) · [`./PRODUCT_BACKLOG.md`](./PRODUCT_BACKLOG.md) · [`./VERSION_1_BASELINE.md`](./VERSION_1_BASELINE.md) · [`./ARCHITECTURE_REPOSITORY_GOVERNANCE.md`](./ARCHITECTURE_REPOSITORY_GOVERNANCE.md) · Demo [`../../MVP_DEMO_CHECKLIST.md`](../../MVP_DEMO_CHECKLIST.md)
 
@@ -118,6 +119,27 @@ Version 1.0 is **not** automated brokerage, multi-strategy isolation, or a green
 - Strategy UI (`/strategy`) — one editable strategy; Save in place
 - APIs: `/api/v1/strategy*`, `PUT /strategy/screeners`
 
+### Auth & Account Lifecycle (SD-035)
+
+- Self-service **password reset** (token link flow; Sanctum session auth unchanged)
+- Does **not** include JWT, SSO, advanced RBAC, or multi-tenant identity architecture
+
+### Portfolio Ledger (SD-035)
+
+- **Corporate actions** — split and bonus handling, corporate-action sync, apply via UI; maintains holdings/ledger correctness for position-aware recommendations
+- Does **not** include Data Quality Center (detection/resolution), corporate-action **price repair** ops tooling, or hard data publish gates (see deferred items below)
+
+### Screener Authoring (SD-035)
+
+- **Screener backtesting** — historical weekday hit matrix in the screener editor; validates screener eligibility rules referenced by Strategy (SD-030)
+- Current capability only (resumable chunked backtest, persisted hit matrix)
+- Does **not** include benchmark comparison, historical market gates in backtest, intraday simulation, or fees/slippage enhancements beyond current implementation
+
+### Strategy Research (SD-035)
+
+- **Strategy backtesting** — historical paper-portfolio simulation of the pinned active strategy (`BacktestSimulationEngine`, `/backtests`, resumable chunked runs, equity curve and statistics for the current implementation)
+- Does **not** include market gates in strategy backtest, benchmark comparison, intraday stop-loss simulation, or advanced fees/slippage unless already supported in the shipped code
+
 ### Frontend
 
 - TOS pages in main nav: Discovery, Evaluations, Recommendations, Strategy,
@@ -164,6 +186,22 @@ Intentionally **out of Version 1.0** (see backlog for targeting):
 | Frontend | Mandatory TypeScript migration, TanStack Query, AG Grid as platform standards |
 | Markets | Options, crypto, ETF-specific products (beyond equities already supported) |
 | Product | AI assistant, mobile app, Trusted Automation stage |
+
+The following **shipped capabilities** are explicitly **deferred to V2 / future** (SD-035). They remain in the codebase but are **not** part of frozen V1 scope:
+
+| ID | Capability | Notes |
+|----|------------|-------|
+| F003 | User invite flow | Platform admin onboarding |
+| F005 | Session management (list/revoke) | Admin security; partial UI |
+| F014 | Historical holdings reconstruction | Standalone analytics; distinct from V1 portfolio snapshots (F015) |
+| F019 | Bulk CSV import | Transaction data-entry convenience |
+| F042 | Data quality detection/resolution | Data Quality Center admin subsystem |
+| F043 | Corporate action price repair | Ops repair tooling (F020 core corporate actions remain V1) |
+| F060 | Shared screener import | Cross-portfolio screener sharing |
+| F127 | Portfolio alerts (non-TOS) | Alert policies parallel to TOS Telegram notifications |
+| F137 | Recommendation preview API | Strategy analysis / preview tooling |
+| F143 | In-app contextual help | Documentation UX layer |
+| F144 | Knowledge Board | Separate Knowledge product area |
 
 ---
 

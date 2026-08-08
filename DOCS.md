@@ -174,7 +174,7 @@ Hub: [specs/architecture/governance/README.md](specs/architecture/governance/REA
 
 | Order | Document | Why |
 |------:|----------|-----|
-| 4.15 | [docs/audits/2026-08-09-feature-coverage/](docs/audits/2026-08-09-feature-coverage/) | **Current post-implementation V1 feature coverage baseline (2026-08-09)** |
+| 4.15 | [docs/audits/2026-08-09-feature-coverage/](docs/audits/2026-08-09-feature-coverage/) | Post-implementation V1 feature coverage baseline (2026-08-09); **V1 scope formally frozen by [V1-SCOPE-DECISION.md](docs/audits/2026-08-09-feature-coverage/V1-SCOPE-DECISION.md) (SD-035)** |
 
 ### 4.B Historical audits
 

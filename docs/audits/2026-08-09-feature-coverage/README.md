@@ -27,6 +27,16 @@ This audit should be regenerated when implementation changes materially.
 | [SPECIFIED-BUT-UNIMPLEMENTED.md](./SPECIFIED-BUT-UNIMPLEMENTED.md) | V1 gaps and out-of-scope deferrals |
 | [SPECIFICATION-DEVIATIONS.md](./SPECIFICATION-DEVIATIONS.md) | Accepted spec vs code differences |
 | [BACKTEST-COVERAGE.md](./BACKTEST-COVERAGE.md) | Screener and strategy backtest deep dive |
+| [V1-SCOPE-RECOMMENDATIONS.md](./V1-SCOPE-RECOMMENDATIONS.md) | Pre-decision scope recommendations (**superseded by V1-SCOPE-DECISION.md**) |
+| [V1-SCOPE-DECISION.md](./V1-SCOPE-DECISION.md) | **Approved product-owner V1/V2 scope decision (SD-035)** — active governance reference |
+
+---
+
+## Scope decision (SD-035)
+
+The [V1 Scope Decision](./V1-SCOPE-DECISION.md) records the **approved** product-owner classification made **after** this audit. It promotes F004, F020, F058, and F093 to formal V1 and defers eleven capabilities to V2/future. Authoritative scope is in [`MVP_SCOPE.md`](../../specs/architecture/governance/MVP_SCOPE.md) and [`SPECIFICATION_DECISIONS.md`](../../specs/architecture/governance/SPECIFICATION_DECISIONS.md) (SD-035).
+
+The audit metrics below remain the **pre-decision historical baseline** (115 `V1_REQUIRED` rows).
 
 ---
 

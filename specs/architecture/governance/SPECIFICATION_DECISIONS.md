@@ -420,7 +420,7 @@ This register is the authoritative record of **why Version 1.0 differs** from th
 | **Reason for Change** | Investment philosophy was tightly coupled to engine code/config files. Operators could not tune factors, thresholds, or allocation rules without deployments. Historical recommendations could not be attributed to a named strategy version |
 | **Benefits** | Strategy is editable in UI; Recommendation Engine becomes a generic executor; Evaluation emits factor facts only; every recommendation stores strategy version + factor breakdown for explainability and future backtesting; config-driven factors avoid schema churn |
 | **Migration Impact** | Migration `2026_07_26_000009_*`: `portfolio_tos_strategies`, `portfolio_tos_strategy_versions`, recommendation `strategy_version_id` + `strategy_score`. First generate/API call seeds Default Strategy v1 from legacy `trading_os.php` values. Existing recommendations without strategy_version remain readable |
-| **Future Extensions** | Multiple strategies per profile; A/B activation; richer scoring curves; sector/theme caps; backtests against version snapshots |
+| **Future Extensions** | Multiple strategies per profile; A/B activation; richer scoring curves; sector/theme caps; backtests against version snapshots *(note: the **currently shipped** strategy backtesting product is formally V1 per **SD-035**; this bullet refers to **future** enhancements beyond that implementation)* |
 | **Spec** | [`../domains/Strategy-Configuration-Specification.md`](../domains/Strategy-Configuration-Specification.md) |
 | **Supersedes** | SD-007 (Strategy deferred) for V1.1+ — Strategy is now implemented |
 | **Status** | Accepted |
@@ -545,6 +545,7 @@ This register is the authoritative record of **why Version 1.0 differs** from th
 | SD-032 | Introduce Market Analysis Engine | Accepted |
 | SD-033 | Unified Indicator Registry (evolve dual catalogues) | Accepted (design) |
 | SD-034 | Trading Artifact Framework (Indicator / Screener / Strategy artifacts) | Accepted (design) |
+| SD-035 | Formal V1 scope freeze (ambiguous capabilities resolved) | Accepted |
 
 ---
 
@@ -583,6 +584,24 @@ This register is the authoritative record of **why Version 1.0 differs** from th
 | **Spec** | [`../indicators/11-Trading-Artifact-Framework.md`](../indicators/11-Trading-Artifact-Framework.md) · [`../domains/Trading-Artifact-Framework-Specification.md`](../domains/Trading-Artifact-Framework-Specification.md) |
 | **Relationship** | Extends SD-027/028/030/033; does not supersede Indicator Registry — specializes it under a common envelope |
 | **Status** | **Accepted** (design / specification). Implementation phased via PRODUCT_BACKLOG (PB-058+) |
+
+---
+
+### SD-035 — Formal V1 Scope Freeze (Resolve Ambiguous Capabilities)
+
+| Field | Content |
+|-------|---------|
+| **Category** | Governance / Product scope |
+| **Date** | 2026-08-09 |
+| **Original state** | Post-implementation audit (2026-08-09) recorded **15 capabilities** as `V1_SCOPE_AMBIGUOUS` because they were implemented but neither explicitly included nor excluded in `MVP_SCOPE.md`. Formal V1 scope counted **115** governance-aligned required capabilities |
+| **Decision** | Product-owner approval **freezes V1 scope** by promoting **four** ambiguous capabilities to formal V1 and deferring **eleven** to V2/future. This resolves the ambiguity; it does **not** authorize new implementation |
+| **Formally included in V1** | **F004** Password reset — basic account lifecycle (Sanctum unchanged; not JWT/SSO). **F020** Corporate actions — core split/bonus handling and ledger correctness (not F043 price-repair tooling). **F058** Screener backtesting — hit-matrix validation in screener editor for Strategy eligibility screeners (SD-030). **F093** Strategy backtesting — **currently shipped** historical paper-portfolio simulation (`BacktestSimulationEngine`, `/backtests`); supersedes treating this only as an SD-027 “future extension”; future enhancements (benchmark comparison, market gates in backtest, intraday simulation, advanced fees/slippage) remain V2 |
+| **Formally deferred to V2 / future** | **F003** User invite flow; **F005** Session management; **F014** Historical holdings reconstruction; **F019** Bulk CSV import; **F042** Data quality detection/resolution; **F043** Corporate action price repair; **F060** Shared screener import; **F127** Portfolio alerts (non-TOS); **F137** Recommendation preview API; **F143** In-app contextual help; **F144** Knowledge Board |
+| **Rationale** | Capabilities were already implemented; ambiguity was a **documentation/governance** gap, not a missing-work gap. Promotion describes **current** shipped behaviour only |
+| **Implementation impact** | **None** — no code, schema, API, UI, or test changes required by this decision |
+| **Audit relationship** | [2026-08-09 feature coverage audit](../../../docs/audits/2026-08-09-feature-coverage/) preserved as pre-decision baseline; [V1-SCOPE-DECISION.md](../../../docs/audits/2026-08-09-feature-coverage/V1-SCOPE-DECISION.md) records the approved decision |
+| **Spec** | [`./MVP_SCOPE.md`](./MVP_SCOPE.md) § Included Features (SD-035) and § Deferred to V2 / Future |
+| **Status** | **Accepted** (product-owner decision) |
 
 ---
 

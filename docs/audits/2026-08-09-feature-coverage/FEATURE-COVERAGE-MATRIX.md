@@ -52,7 +52,7 @@
 
 V1_SCOPE_AMBIGUOUS rows (15) and V1_OUT_OF_SCOPE rows (29) are excluded from this denominator.
 
-**Weighted effective coverage (optional):** (110 + 0.5×5) ÷ 115 = **97.8%** — partial rows counted at 50%; use only as supplementary metric.
+**Weighted effective coverage (optional):** (115 + 0.5×0) ÷ 115 = **100.0%** — partial rows counted at 50%; use only as supplementary metric.
 
 ### Secondary attributes (not added to row totals)
 

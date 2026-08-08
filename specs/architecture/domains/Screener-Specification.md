@@ -4,7 +4,7 @@
 |-------|-------|
 | **Document** | Screener Specification |
 | **Version** | 1.0 |
-| **Status** | Active (SD-030 / SD-033 / SD-034) |
+| **Status** | Active (SD-030 / SD-033 / SD-034 / SD-035) |
 | **Owner** | Architecture |
 
 ---
@@ -25,7 +25,7 @@ Evaluation facts / OHLCV
 ```
 
 Reusable by: Discovery, Strategies, Watchlists, Alerts, Daily Scan,
-Backtesting (future), Automation (future).
+**Backtesting (V1 — SD-035)**, Automation (future).
 
 ---
 
