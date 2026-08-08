@@ -135,13 +135,41 @@ class ScheduleRegistrationTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_daily_market_sync_skips_non_session_days(): void
+    {
+        Setting::setValue('cron_timezone', 'Asia/Kolkata');
+        $this->refreshScheduleApp();
+
+        $event = $this->findScheduleEvent('portfolio:daily-sync');
+        $this->assertNotNull($event, 'daily-market-data schedule event must be registered');
+
+        Carbon::setTestNow(Carbon::parse('2026-08-08 18:30:00', 'Asia/Kolkata'));
+        $this->assertFalse(
+            \App\Support\TradingCalendar::isScheduledMarketDataDay(timezone: 'Asia/Kolkata'),
+            'Saturday must not run scheduled market-data sync'
+        );
+
+        Carbon::setTestNow(Carbon::parse('2026-08-07 18:30:00', 'Asia/Kolkata'));
+        $this->assertTrue(
+            \App\Support\TradingCalendar::isScheduledMarketDataDay(timezone: 'Asia/Kolkata'),
+            'Friday must allow scheduled market-data sync'
+        );
+
+        Carbon::setTestNow();
+    }
+
     protected function findUniverseMaintenanceEvent(): ?Event
+    {
+        return $this->findScheduleEvent('portfolio:run-universe-maintenance');
+    }
+
+    protected function findScheduleEvent(string $needle): ?Event
     {
         /** @var Schedule $schedule */
         $schedule = app(Schedule::class);
 
         foreach ($schedule->events() as $event) {
-            if (str_contains((string) $event->command, 'portfolio:run-universe-maintenance')) {
+            if (str_contains((string) $event->command, $needle)) {
                 return $event;
             }
         }

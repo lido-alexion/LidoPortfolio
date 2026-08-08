@@ -32,6 +32,26 @@ class TradingCalendar
     }
 
     /**
+     * Whether scheduled market-data jobs (daily sync, benchmark/index prices) should run today.
+     * Uses cron timezone from settings when available.
+     */
+    public static function isScheduledMarketDataDay(?Carbon $at = null, ?string $timezone = null): bool
+    {
+        $tz = $timezone;
+        if ($tz === null || trim($tz) === '') {
+            try {
+                $tz = app(\App\Services\SettingsService::class)->get('cron_timezone', 'Asia/Kolkata') ?? 'Asia/Kolkata';
+            } catch (\Throwable) {
+                $tz = 'Asia/Kolkata';
+            }
+        }
+
+        $day = ($at ?? now())->timezone($tz);
+
+        return self::isEquitySessionDate($day);
+    }
+
+    /**
      * True when an active global trade-holiday calendar event occurs on this date.
      */
     public static function isTradeHoliday(?Carbon $date = null): bool

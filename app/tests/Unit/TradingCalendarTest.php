@@ -71,4 +71,15 @@ class TradingCalendarTest extends TestCase
         $this->assertFalse(TradingCalendar::isEquitySessionDate(Carbon::parse('2026-08-02')));
         $this->assertTrue(TradingCalendar::isEquitySessionDate(Carbon::parse('2026-08-03')));
     }
+
+    public function test_scheduled_market_data_day_skips_weekends_in_cron_timezone(): void
+    {
+        \App\Models\Setting::setValue('cron_timezone', 'Asia/Kolkata');
+
+        $saturday = Carbon::parse('2026-08-08 16:05:00', 'Asia/Kolkata');
+        $this->assertFalse(TradingCalendar::isScheduledMarketDataDay($saturday));
+
+        $friday = Carbon::parse('2026-08-07 16:05:00', 'Asia/Kolkata');
+        $this->assertTrue(TradingCalendar::isScheduledMarketDataDay($friday));
+    }
 }

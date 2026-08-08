@@ -4,7 +4,7 @@
 
 > **Audience:** AI agents and developers authoring portable Indicator / Screener / Strategy JSON **without** reading application source code.
 >
-> **Generated:** 2026-08-06T17:36:23.916Z
+> **Generated:** 2026-08-08T16:54:32.712Z
 > **Deploy download:** `/docs/stox-trading-artifacts-ai-guide.md` (also linked from Screener Registry and Strategy Registry).
 > **Repo copy:** `specs/architecture/domains/StoX-Trading-Artifacts-AI-Guide.md`
 

@@ -189,8 +189,9 @@ class UniversePriceSyncService
     }
 
     /**
-     * True when the most recent prior equity session's maintenance window had
-     * any failed or partial universe-price-sync batch.
+     * True when the last finished universe batch in the prior equity session's
+     * maintenance window ended failed or partial (earlier partials that later
+     * healed do not trigger weekend retry).
      */
     public function priorEquitySessionHadFailures(?Carbon $at = null): bool
     {
@@ -208,13 +209,15 @@ class UniversePriceSyncService
             ->setTime($this->maintenanceEndHour(), $this->maintenanceEndMinute(), 59)
             ->utc();
 
-        return SyncRun::query()
+        $lastRun = SyncRun::query()
             ->where('job_name', SyncLogService::JOB_UNIVERSE_PRICE_SYNC)
-            ->whereIn('status', ['failed', 'partial'])
             ->whereNotNull('finished_at')
             ->where('finished_at', '>=', $windowStart)
             ->where('finished_at', '<=', $windowEnd)
-            ->exists();
+            ->orderByDesc('finished_at')
+            ->first();
+
+        return $lastRun !== null && in_array($lastRun->status, ['failed', 'partial'], true);
     }
 
     public function isMaintenanceWindowDue(?Carbon $at = null): bool
@@ -295,7 +298,7 @@ class UniversePriceSyncService
         );
         if ($this->skipsWeekends()) {
             $windowLabel .= $this->weekendRetryOnPriorFailures()
-                ? ' (weekdays; weekend retry if prior session failed)'
+                ? ' (weekdays; weekend retry if prior session ended failed/partial)'
                 : ' (weekdays only)';
         }
 

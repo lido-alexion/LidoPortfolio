@@ -392,6 +392,42 @@ class UniversePriceSyncServiceTest extends TestCase
         $this->assertTrue($service->isMaintenanceWindowDue($saturday));
     }
 
+    public function test_weekend_maintenance_skipped_when_prior_session_healed_after_partials(): void
+    {
+        config([
+            'portfolio.universe_price_sync.skip_weekends' => true,
+            'portfolio.universe_price_sync.weekend_retry_on_prior_session_failures' => true,
+        ]);
+        Setting::setValue('cron_timezone', 'Asia/Kolkata');
+
+        // Friday: partial batch, then a later success in the same maintenance window.
+        \App\Models\SyncRun::query()->create([
+            'id' => (string) \Illuminate\Support\Str::uuid(),
+            'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+            'status' => 'partial',
+            'started_at' => Carbon::parse('2026-08-07 22:30:00', 'Asia/Kolkata')->utc(),
+            'finished_at' => Carbon::parse('2026-08-07 22:35:00', 'Asia/Kolkata')->utc(),
+            'stocks_processed' => 125,
+            'failures' => 10,
+        ]);
+        \App\Models\SyncRun::query()->create([
+            'id' => (string) \Illuminate\Support\Str::uuid(),
+            'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+            'status' => 'success',
+            'started_at' => Carbon::parse('2026-08-07 22:40:00', 'Asia/Kolkata')->utc(),
+            'finished_at' => Carbon::parse('2026-08-07 22:41:00', 'Asia/Kolkata')->utc(),
+            'stocks_processed' => 125,
+            'failures' => 0,
+        ]);
+
+        $service = app(UniversePriceSyncService::class);
+        $saturday = Carbon::parse('2026-08-08 19:20:00', 'Asia/Kolkata');
+
+        $this->assertFalse($service->priorEquitySessionHadFailures($saturday));
+        $this->assertFalse($service->allowsMaintenanceOnCalendarDay($saturday));
+        $this->assertFalse($service->isMaintenanceWindowDue($saturday));
+    }
+
     public function test_stale_in_progress_lock_fails_orphan_running_sync_runs(): void
     {
         config(['portfolio.universe_price_sync.stale_lock_minutes' => 30]);

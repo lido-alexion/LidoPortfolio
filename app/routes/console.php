@@ -4,6 +4,7 @@ use App\Jobs\DailyMarketDataJob;
 use App\Services\BenchmarkPriceSyncService;
 use App\Services\NotificationScheduleService;
 use App\Services\SettingsService;
+use App\Support\TradingCalendar;
 use App\Support\TradingOsConfig;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -93,20 +94,31 @@ if (! is_string($timezone) || trim($timezone) === '') {
     $timezone = 'Asia/Kolkata';
 }
 
+$marketDataSyncDue = function () use ($timezone): bool {
+    try {
+        return TradingCalendar::isScheduledMarketDataDay(timezone: $timezone);
+    } catch (\Throwable) {
+        return false;
+    }
+};
+
 Schedule::command('portfolio:daily-sync')
     ->dailyAt($cronTime)
     ->timezone($timezone)
+    ->when($marketDataSyncDue)
     ->name('daily-market-data');
 
 Schedule::command('portfolio:sync-benchmark-prices')
     ->dailyAt($cronTime)
     ->timezone($timezone)
+    ->when($marketDataSyncDue)
     ->name('benchmark-price-sync');
 
 if (config('portfolio.indexes.enabled', true)) {
     Schedule::command('portfolio:sync-index-prices', ['--mode' => 'daily'])
         ->dailyAt($cronTime)
         ->timezone($timezone)
+        ->when($marketDataSyncDue)
         ->name('index-price-sync');
 }
 

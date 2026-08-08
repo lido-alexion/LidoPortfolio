@@ -1582,7 +1582,7 @@ const APP_DOCUMENTATION_BASE = [
         match: (p) => pathStarts(p, '/settings/universe-price-sync'),
         summary: 'Admin control of NSE universe OHLCV batch sync, gaps, and depth backfill.',
         overview:
-            'Universe sync deepens and refreshes daily bars for the broader equity universe used by Explorer, Screeners, and Market Analysis. Related pages cover gap-fill failures and ignored gaps. Evening maintenance runs 19:00–23:45 on weekdays; weekends are skipped unless Friday’s window had failed batches (then Saturday/Sunday retry to heal). Provider “rate limit” alerts require real throttle signals — empty provider responses alone are treated as sync failures, not rate limits.',
+            'Universe sync deepens and refreshes daily bars for the broader equity universe used by Explorer, Screeners, and Market Analysis. Related pages cover gap-fill failures and ignored gaps. Evening maintenance runs 19:00–23:45 on weekdays; weekends are skipped unless the prior session’s last maintenance batch ended failed/partial (then Saturday/Sunday retry to heal). Daily holdings/benchmark/index sync also skip weekends and trade holidays. Provider “rate limit” alerts require real throttle signals — empty provider responses alone are treated as sync failures, not rate limits.',
         controls: [
             { name: 'Sync status / controls', description: 'Monitor batch progress, windows, and enablement.' },
             { name: 'Gap failures / ignored gaps', description: 'Drill into symbols that failed fill or were intentionally skipped.' },
@@ -1591,7 +1591,7 @@ const APP_DOCUMENTATION_BASE = [
         concepts: [
             { name: 'Batch executor', description: 'Per-stock provider fetch loop with rate-limit awareness and sync logging.' },
             { name: 'History depth', description: 'Longer windows improve indicators and backtests.' },
-            { name: 'Weekend policy', description: 'No new market bars on Sat/Sun. Scheduler skips unless the prior equity session’s maintenance window had failed/partial universe batches.' },
+            { name: 'Weekend policy', description: 'No new market bars on Sat/Sun. Scheduler skips unless the prior equity session’s last maintenance batch ended failed/partial. Daily holdings/benchmark/index cron skips weekends and trade holidays too.' },
             { name: 'Hung batch recovery', description: 'If a batch is killed mid-run, the in-progress lock auto-clears after ~30 minutes and orphan “running” sync-log rows are marked failed.' },
         ],
         related: ['explorer', 'screener', 'sync-logs'],
@@ -2186,7 +2186,7 @@ const DOC_ENRICHMENTS = {
     },
     'universe-price-sync': {
         overview:
-            'Universe sync health determines quality for Explorer, many Screeners, and market analytics. Treat this page as operational maintenance: monitor drift, investigate gaps, and keep history depth sufficient. Weekday evenings are the normal window; weekends only retry when Friday failed.',
+            'Universe sync health determines quality for Explorer, many Screeners, and market analytics. Treat this page as operational maintenance: monitor drift, investigate gaps, and keep history depth sufficient. Weekday evenings are the normal window; weekends only retry when the prior session’s last batch failed or was partial.',
     },
     users: {
         overview:
