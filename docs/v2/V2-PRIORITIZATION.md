@@ -32,14 +32,16 @@ Scores are comparative tools, not absolute truth. Final ranking uses qualitative
 
 ## Current implementation state (implemented-but-deferred)
 
+*Updated 2026-08-09 for Market Data Quality delivery. Priority rankings below remain historical planning context; F042/F043 are no longer pending V2 implementation.*
+
 | ID | Feature | State | Evidence |
 |----|---------|-------|----------|
 | F003 | User invite flow | **FULLY IMPLEMENTED** | `UserInviteService`, `/invite/:token`, `UserInviteTest` |
 | F005 | Session management | **MOSTLY IMPLEMENTED** | `SessionManagementService`, API + Settings UI; `AuthSessionTest` |
 | F014 | Historical holdings reconstruction | **MOSTLY IMPLEMENTED** | `PortfolioHistoricalHoldingsService`, API; no dedicated UI; unit tests |
 | F019 | Bulk CSV import | **MOSTLY IMPLEMENTED** | `BulkTransactionImport.jsx`, `bulkTransactionCsv.js`; JS unit test only |
-| F042 | Data quality detection/resolution | **MOSTLY IMPLEMENTED** | Data Quality Center admin UI, models, services, jobs; limited automated tests |
-| F043 | Corporate action price repair | **MOSTLY IMPLEMENTED** | `CorporateActionPriceRepairService`, deploy/cpanel scripts, unit test |
+| F042 | Data quality detection/resolution | **COMPLETE** | DQ Center + hardening; `F042_COMPLETE_WITH_NON_BLOCKERS` |
+| F043 | Corporate action price repair | **COMPLETE** | Factor path + F020 single-writer; `F043_COMPLETE` |
 | F060 | Shared screener import | **MOSTLY IMPLEMENTED** | `ScreenerSharedTab.jsx`, `POST /api/screeners/shared/{id}/import`; partial tests |
 | F127 | Portfolio alerts (non-TOS) | **FULLY IMPLEMENTED** | Alert policies UI, evaluation engine, `AlertPolicyTest` + related suite |
 | F137 | Recommendation preview API | **MOSTLY IMPLEMENTED** | `RecommendationPreviewService`, API route, Watchlist panel; **no feature tests** |
@@ -281,7 +283,7 @@ If only **one** initiative starts first:
 
 **Choose F003 + F005 (Account & Access)** when the primary V2 goal is **multi-user deployment** and collaboration prerequisites.
 
-Both can run in parallel with minimal overlap. **Do not start F043 until F042 is formalized.**
+Both can run in parallel with minimal overlap. **Do not start F043 until F042 is formalized.** *(Satisfied — both COMPLETE as of 2026-08-09.)*
 
 ---
 

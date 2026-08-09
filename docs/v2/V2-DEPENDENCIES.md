@@ -2,7 +2,8 @@
 
 **Date:** 2026-08-09  
 **Scope:** Eleven SD-035 deferred capabilities only  
-**V1 frozen:** 119 capabilities — do not re-scope
+**V1 frozen:** 119 capabilities — do not re-scope  
+**Market Data Quality:** F042 + F043 = **COMPLETE** (2026-08-09)
 
 ---
 
@@ -14,8 +15,8 @@
 | **F005** Sessions | V1 Sanctum sessions, F004 password reset | Secure multi-device account lifecycle | `SessionManagementService`, Laravel session store, Settings UI |
 | **F014** Historical holdings | V1 transactions, OHLCV, `PortfolioHistoricalHoldingsService` | As-of analytics UI | Same ledger as F019; distinct from V1 F015 snapshots |
 | **F019** Bulk CSV import | V1 `TransactionWriteService`, holdings calc | Faster portfolio onboarding; patterns for F014 | CSV parser, transaction validation, `BulkTransactionImport.jsx` |
-| **F042** Data quality | V1 OHLCV sync, V1 F020 corporate actions | F043 repair; pipeline data trust | `DataQualityGuardService`, issue/evidence tables, admin UI |
-| **F043** CA price repair | **F042** pending `PriceAdjustmentFactor` handoff (formal V2); V1 F020 applied CAs (CURRENT ops path) | Ops recovery after bad prices | `CorporateActionPriceRepairService`, `CorporateActionPriceAdjustmentService`, deploy scripts; **CURRENT code does not yet consume F042 factors** |
+| **F042** Data quality | V1 OHLCV sync, V1 F020 corporate actions | F043 repair; pipeline data trust | **COMPLETE** — DQ Center, guard, factors + `ohlcv_repair_status=pending` handoff |
+| **F043** CA price repair | **F042** pending `PriceAdjustmentFactor` handoff; V1 F020 applied CAs | Ops recovery after bad prices | **COMPLETE** — consumes `pendingOhlcvRepair()`, preview/apply, single-writer vs F020 apply |
 | **F060** Shared screener import | V1 screeners (SD-030), profile scoping | Cross-portfolio screener reuse | `is_shared` flag, shared tab, import API |
 | **F127** Portfolio alerts | V1 holdings enrichment, daily price sync | Holding monitoring (non-TOS) | `AlertPolicyService`, `AlertPolicyEvaluationService`, `portfolio_alert_policies` |
 | **F137** Recommendation preview | V1 `RecommendationGenerationPipeline` components (read-only) | Research UI, future automation | `RecommendationPreviewService`, analytics API |
@@ -82,18 +83,19 @@ V2 Phase 4 (postpone)
 
 ---
 
-### F042 / F043 / V1 F020 — Market Data Quality
+### F042 / F043 / V1 F020 — Market Data Quality (**DELIVERED**)
 
 | Finding | Detail |
 |---------|--------|
-| V1 F020 scope | Core split/bonus apply — frozen V1 |
-| F042 scope | Detection, issue queue, resolution workflow — admin ops |
-| F043 scope | Price repair scripts — **not** V1 F020 ledger apply |
-| Relationship | F042 detects anomalies; F043 repairs prices; F020 applies user-facing corporate actions (**and** restates OHLCV on successful apply via shared helper) |
-| CURRENT vs formal | CURRENT F043 scans applied F020 CAs only; formal V2 F043 **must also** consume `PriceAdjustmentFactor::pendingOhlcvRepair()` and mark `completed` |
+| V1 F020 scope | Core split/bonus apply — frozen V1; ledger apply retained |
+| F042 scope | Detection, issue queue, resolution workflow — **COMPLETE** |
+| F043 scope | OHLCV repair via F042 factors + F020 CA recovery — **COMPLETE** |
+| Relationship | F042 detects/governs; F043 repairs OHLCV; F020 applies ledger (**and** restates OHLCV only when no matching active F042 factor) |
+| Single-writer invariant | Matching stock+ex-date+action-family: F043 is sole historical OHLCV writer; F020 records `deferred_to_factor` |
+| CURRENT vs formal | F043 consumes `pendingOhlcvRepair()` and marks `completed`; F020 CA recovery retained; double-restatement risk resolved |
 | Legacy bridge | `DataQualityLegacyCorporateActionMigrationService` maps old manual CAs into DQ issues |
-| Recommendation | **F042 must precede F043**; both belong to **Market Data Quality** initiative |
-| F043 standalone? | **No** — repair without DQ governance increases risk for F042-originated anomalies; F020 recovery path alone is insufficient for formal V2 |
+| Recommendation | **Satisfied:** F042 preceded F043; Market Data Quality initiative closed |
+| F043 standalone? | **No** — formal V2 required F042 handoff (delivered) |
 
 ---
 
@@ -177,7 +179,7 @@ V2 Phase 4 (postpone)
 |------------|----------|----------|
 | Invite + admin auth hardening | F003 formal V2 | `UserInviteTest`, admin-only routes |
 | Session list/revoke UI completion | F005 formal V2 | Partial Settings integration |
-| DQ issue lifecycle spec | F042, F043 | Models exist; governance absent |
+| DQ issue lifecycle (F042) + OHLCV repair (F043) | F042, F043 | **COMPLETE** — governance + factor repair + single-writer hardening |
 | Import validation + rollback patterns | F019, F014 | `TransactionWriteService` single write path |
 | Alert policy test coverage + channel boundaries | F127 | Extensive code; clarify vs Telegram |
 | Preview API contract tests | F137 | No PHPUnit feature tests today |

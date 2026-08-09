@@ -2,7 +2,8 @@
 
 **Date:** 2026-08-09  
 **Purpose:** Prevent scope bleed between V1 corporate actions, V2 data-quality governance, and V2 price repair.  
-**Status:** Planning — no code changes authorized by this document.
+**Document role:** Historical F042-era boundary / planning record.  
+**Current delivery:** F042 = **COMPLETE**; F043 = **COMPLETE**. For post-delivery single-writer / delegation semantics, prefer [F043-F042-BOUNDARY.md](./F043-F042-BOUNDARY.md). Do not treat “future F043 / not started” wording below as current status.
 
 ---
 

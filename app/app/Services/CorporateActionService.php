@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\CorporateAction;
 use App\Models\PortfolioProfile;
+use App\Models\PriceAdjustmentFactor;
 use App\Models\Stock;
 use App\Models\Transaction;
 use Illuminate\Support\Collection;
@@ -73,13 +74,40 @@ class CorporateActionService
             return $action;
         });
 
-        $priceAdjustment = $this->priceAdjustment->adjustHistoricalPrices(
-            $stock,
+        // Single OHLCV writer invariant: when an active F042 factor owns this
+        // stock+ex-date+action event, F043 performs historical price repair.
+        // F020 still applies ledger changes above; only OHLCV mutation is skipped.
+        $delegatingFactor = PriceAdjustmentFactor::findActiveOhlcvRepairForEvent(
+            (int) $stock->id,
             $payload['ex_date'],
             $payload['action_type'],
-            $payload['ratio_from'],
-            $payload['ratio_to'],
         );
+
+        if ($delegatingFactor !== null) {
+            $factors = $this->priceAdjustment->factorsForAction(
+                $payload['action_type'],
+                $payload['ratio_from'],
+                $payload['ratio_to'],
+            );
+            $priceAdjustment = [
+                'rows_adjusted' => 0,
+                'price_divisor' => $factors['price_divisor'],
+                'volume_multiplier' => $factors['volume_multiplier'],
+                'adjusted_before_date' => $payload['ex_date'],
+                'deferred_to_factor' => true,
+                'factor_id' => $delegatingFactor->id,
+                'ohlcv_repair_status' => $delegatingFactor->metadata['ohlcv_repair_status'] ?? null,
+                'repair_note' => 'ohlcv_delegated_to_f043_price_adjustment_factor',
+            ];
+        } else {
+            $priceAdjustment = $this->priceAdjustment->adjustHistoricalPrices(
+                $stock,
+                $payload['ex_date'],
+                $payload['action_type'],
+                $payload['ratio_from'],
+                $payload['ratio_to'],
+            );
+        }
 
         $action->update([
             'metadata' => array_merge($action->metadata ?? [], [

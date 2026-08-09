@@ -216,7 +216,31 @@ Sanctum auth. `TradingOsController`: securities, imports, candidates, evaluation
 - **Tests:** PHPUnit coverage under `tests/Unit/DataQuality*`, `tests/Feature/DataQuality*`, including EvaluationEngine AC009 gating (`DataQualityEvaluationGatingTest`).
 - **Compliance:** `docs/v2/F042-FINAL-COMPLIANCE-AUDIT.md` — remaining intentional non-blockers: no unique pending-dedupe index; optional 409 fresh-issue body.
 
-**F043 specification / reconciliation (2026-08-09):** Planning-only docs under `docs/v2/` — `F043-CORPORATE-ACTION-PRICE-REPAIR-SPEC.md`, `F043-IMPLEMENTATION-GAP-MATRIX.md`, `F043-F042-BOUNDARY.md`. No application code/tests/schema changes. CURRENT ops path (`CorporateActionPriceRepairService` + shared adjustment helper + CLI/cPanel) restates OHLCV for applied F020 CAs; formal V2 F043 must also consume F042 `pendingOhlcvRepair()` factors and mark `completed`. Indexed in `DOCS.md` §3.C.
+**F043 specification / reconciliation (2026-08-09):** Planning docs under `docs/v2/` — `F043-CORPORATE-ACTION-PRICE-REPAIR-SPEC.md`, `F043-IMPLEMENTATION-GAP-MATRIX.md`, `F043-F042-BOUNDARY.md`. Indexed in `DOCS.md` §3.C.
+
+**F043 implementation (2026-08-09):** Formal V2 factor-driven OHLCV repair:
+- **Factor path:** `CorporateActionPriceRepairService::scanPendingFactors` / `repairPendingFactors` consumes `PriceAdjustmentFactor::pendingOhlcvRepair()`, validates supported types (`split`, `bonus`, `face_value_split`), previews without mutation, applies with stored `price_divisor`/`volume_multiplier` via `CorporateActionPriceAdjustmentService::adjustHistoricalPricesByDivisors`, wraps each apply in `DB::transaction` + `lockForUpdate`, and sets `metadata.ohlcv_repair_status=completed` with `metadata.ohlcv_repair` audit only after successful row updates.
+- **Ordering / safety:** ascending `effective_ex_date` then id; same stock+ex-date pending duplicates → `ambiguous` (no mutation); completed factors skipped (idempotent).
+- **Ops:** `portfolio:repair-corporate-action-prices` and `deploy/cpanel-repair-corporate-action-prices.php` support `--factors-only` / `factors_only`, `--factor` / `factor`, and retain `--apply` dry-run default. Does **not** change F042 gating, issue status, transactions, or holdings.
+- **Tests:** `tests/Unit/CorporateActionFactorPriceRepairTest.php` (+ existing adjustment/repair unit tests).
+
+**F043 double-restatement hardening (2026-08-09):** Enforced single OHLCV writer per stock+ex-date+action-family event:
+- `PriceAdjustmentFactor::activeOhlcvRepairForEvent` / `findActiveOhlcvRepairForEvent` matches active pending/completed factors (`split`↔`split|face_value_split`, `bonus`↔`bonus`).
+- `CorporateActionService::apply` still mutates ledger; **skips** historical OHLCV when a matching factor exists and records `metadata.price_adjustment.deferred_to_factor`.
+- F043 CA recovery scan uses the same match for `deferred_to_factor` (no CA-path mutation).
+- Tests: `tests/Unit/CorporateActionOhlcvDelegationTest.php` (both execution orders, repeats, mismatch stock/date/type, failed F043 still blocks F020 OHLCV).
+- **Verdict:** `F043_COMPLETE` (remaining non-blockers: admin API deferred; SQLite lock soft / no concurrent race test).
+
+### V2 Market Data Quality — closed (2026-08-09)
+
+| Feature | Status |
+|---------|--------|
+| **F042** | **COMPLETE** (`F042_COMPLETE_WITH_NON_BLOCKERS`) |
+| **F043** | **COMPLETE** (`F043_COMPLETE`) — factor consumption, preview/apply, idempotency, multi-factor, F020/F043 single-writer invariant, double-restatement resolved; F020 ledger + F042 boundary preserved |
+
+**Deferred / non-blocker (F043 — not incomplete):** admin API/UI; scheduled auto-repair; rollback snapshots; dividend/rights/merger; true multi-process concurrency suite.
+
+**Regression snapshot:** F043+delegation+adjustment/repair+F042 **67/67**; recommendation/pipeline/market gates **23/23**; full suite @512M **612** tests (**603** passed, **5** failed, **4** errors — unrelated/pre-existing; suite not fully green). Tracking: `docs/v2/V2-ROADMAP.md`, `DOCS.md` §3.B–3.C.
 
 **Shared API hooks (TD-014):** `resources/js/src/hooks/useApiGet.js` and `useApiMutation.js` wrap the existing axios client (`api.js`); export `getApiErrorMessage()` from `api.js` for TOS/Laravel error text. Adopted on Strategy, Recommendations, and Cash pages as the migration pattern for other screens.
 

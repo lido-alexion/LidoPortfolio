@@ -60,4 +60,54 @@ class PriceAdjustmentFactor extends Model
             ->where('is_active', true)
             ->where('metadata->ohlcv_repair_status', self::REPAIR_STATUS_PENDING);
     }
+
+    /**
+     * Active F042 factors that own OHLCV repair for a corporate-action event
+     * (pending or already completed). Used so F020 / F043 CA recovery do not
+     * restate the same stock+ex-date+action twice.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder<static>  $query
+     * @return \Illuminate\Database\Eloquent\Builder<static>
+     */
+    public function scopeActiveOhlcvRepairForEvent($query, int $stockId, string $exDate, ?string $corporateActionType = null)
+    {
+        $query
+            ->where('stock_id', $stockId)
+            ->whereDate('effective_ex_date', $exDate)
+            ->where('is_active', true)
+            ->where(function ($statusQuery) {
+                $statusQuery
+                    ->where('metadata->ohlcv_repair_status', self::REPAIR_STATUS_PENDING)
+                    ->orWhere('metadata->ohlcv_repair_status', self::REPAIR_STATUS_COMPLETED);
+            });
+
+        if ($corporateActionType !== null && $corporateActionType !== '') {
+            $query->whereIn('action_type', self::factorActionTypesMatchingCorporateAction($corporateActionType));
+        }
+
+        return $query;
+    }
+
+    /**
+     * Map an F020 corporate-action type to F042 factor action_type values that
+     * represent the same OHLCV event.
+     *
+     * @return list<string>
+     */
+    public static function factorActionTypesMatchingCorporateAction(string $corporateActionType): array
+    {
+        return match (strtolower($corporateActionType)) {
+            'split' => ['split', 'face_value_split'],
+            'bonus' => ['bonus'],
+            default => [strtolower($corporateActionType)],
+        };
+    }
+
+    public static function findActiveOhlcvRepairForEvent(int $stockId, string $exDate, ?string $corporateActionType = null): ?self
+    {
+        return static::query()
+            ->activeOhlcvRepairForEvent($stockId, $exDate, $corporateActionType)
+            ->orderBy('id')
+            ->first();
+    }
 }

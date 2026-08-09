@@ -92,12 +92,15 @@ F043 does **not** call F042 resolution APIs.
 
 ## 6. Dual input model (CURRENT vs REQUIRED)
 
-| Input | CURRENT F043 | REQUIRED F043 |
-|-------|--------------|---------------|
-| Applied `CorporateAction` rows | **Yes** (only) | Keep |
-| Pending `PriceAdjustmentFactor` | **No** | **MUST** |
+## Dual-path input model
 
-Both may produce the same OHLCV transform via the shared adjustment math. Factor path should prefer stored `price_divisor` / `volume_multiplier` on the factor row.
+| Input | Behaviour |
+|-------|-----------|
+| Applied `CorporateAction` without matching F042 factor | F020 apply restates OHLCV (unchanged) |
+| Active matching `PriceAdjustmentFactor` (pending or completed) | F020 apply **delegates** OHLCV (`deferred_to_factor` metadata); F043 is sole OHLCV writer |
+| F043 CA recovery scan with matching factor | `STATUS_DEFERRED_TO_FACTOR` — no CA-path mutation |
+
+Event match: `stock_id` + `effective_ex_date`/`ex_date` + action-type family (`split`↔`split|face_value_split`, `bonus`↔`bonus`) via `PriceAdjustmentFactor::activeOhlcvRepairForEvent`.
 
 ---
 

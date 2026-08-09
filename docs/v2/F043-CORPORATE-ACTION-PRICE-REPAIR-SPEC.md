@@ -1,11 +1,21 @@
 # F043 — Corporate Action Price Repair
 
 **Capability ID:** F043  
-**Status:** V2 — specification draft (reconciliation with existing implementation)  
+**Status:** V2 — **implemented** (`F043_COMPLETE` after double-restatement hardening)  
 **Date:** 2026-08-09  
 **Governance:** Deferred from V1 per SD-035 (`MVP_SCOPE.md`)  
 **Prerequisites:** F042 complete (`F042_COMPLETE_WITH_NON_BLOCKERS`)  
 **Related:** V1 F020 (Corporate Actions), V2 F042 (Data Quality)
+
+### Single OHLCV writer invariant
+
+An OHLCV corporate-action event must have exactly one active repair writer.
+When an applicable F042 `PriceAdjustmentFactor` exists for the same stock,
+effective/ex-date, and matching action type (`split`↔`split|face_value_split`,
+`bonus`↔`bonus`), **F043 is the sole historical OHLCV repair path** for that
+event; F020 must preserve its ledger/corporate-action processing without
+performing a duplicate historical price restatement. When no such factor
+exists, F020 retains its existing OHLCV restatement on apply.
 
 ---
 
@@ -32,11 +42,11 @@ It **must** consume the F042 handoff (`PriceAdjustmentFactor` with `ohlcv_repair
 | Scan applied F020 CAs for unadjusted prices | **Yes** — `CorporateActionPriceRepairService::scan` | Keep (legacy / F020 recovery) |
 | Dry-run / apply CLI | **Yes** — Artisan + cPanel | Keep |
 | Continuity-based classification | **Yes** — statuses below | Keep for F020 path |
-| Consume F042 `pendingOhlcvRepair()` factors | **No** | **MUST** |
-| Mark factor `ohlcv_repair_status` after repair | **No** | **MUST** |
-| Preview summary (counts / divisors) | **Partial** — service preview + CLI table | SHOULD expand |
-| Dedicated admin API/UI | **No** | SHOULD (ops queue) |
-| Per-row before/after audit store | **No** | SHOULD (summary audit minimum MUST) |
+| Consume F042 `pendingOhlcvRepair()` factors | **Yes** — `scanPendingFactors` / `repairPendingFactors` | Done |
+| Mark factor `ohlcv_repair_status` after repair | **Yes** — sets `completed` + `metadata.ohlcv_repair` audit | Done |
+| Preview summary (counts / divisors) | **Yes** — + optional samples | Done |
+| Dedicated admin API/UI | **No** | SHOULD (deferred) |
+| Per-row before/after audit store | Summary audit on factor metadata | SHOULD samples in preview; full per-row store deferred |
 
 ### Out of scope
 
@@ -95,8 +105,8 @@ F042 accept
   → F043 sets ohlcv_repair_status = completed (REQUIRED)
 ```
 
-**CURRENT:** F043 never reads factors.  
-**REQUIRED:** Formal V2 F043 closes this gap.
+**CURRENT:** F043 consumes pending factors and marks `completed` after successful apply.  
+F042 still never invokes F043.
 
 ---
 
@@ -416,22 +426,23 @@ Authorization: admin (API) / SETUP_TOKEN (cPanel) / console ops.
 | **F043-R005** Dry-run / scan default; apply opt-in | MUST | CLI/cPanel/service `dryRun` | NO_GAP | Command + deploy script |
 | **F043-R006** Soft idempotency via CA `metadata.price_adjustment.rows_adjusted > 0` | MUST | Implemented for F020 path | NO_GAP | `inspectAction` STATUS_OK |
 | **F043-R007** Continuity classification for applied F020 CAs | MUST | Implemented | NO_GAP | Repair service statuses |
-| **F043-R008** Discover F042 pending factors via `pendingOhlcvRepair()` | MUST | Scope exists; **unused by F043** | IMPLEMENTATION_MISSING | `PriceAdjustmentFactor` |
-| **F043-R009** Apply OHLCV repair from pending factor using stored divisors | MUST | Not implemented | IMPLEMENTATION_MISSING | F042 handoff contract |
-| **F043-R010** Mark factor `ohlcv_repair_status=completed` after successful repair | MUST | Constant exists; **never written** | IMPLEMENTATION_MISSING | Model constants |
-| **F043-R011** Skip completed / inactive factors (idempotent) | MUST | Not implemented | IMPLEMENTATION_MISSING | — |
-| **F043-R012** Do not mutate transactions/holdings | MUST | Repair path does not | NO_GAP | Repair service (F020 apply does ledger — out of F043) |
-| **F043-R013** Do not change F042 issue status / invoke F042 resolution | MUST | No coupling today | NO_GAP | Boundary |
-| **F043-R014** Process multiple repairs ascending by ex-date | MUST | F020 scan orders by ex_date | PARTIAL — factor path missing | Repair `scan` order |
-| **F043-R015** Preview reports rows + divisors without mutation | MUST | `previewAdjustment` + dry-run | PARTIAL — no factor preview | Adjustment + repair services |
-| **F043-R016** Persist repair audit summary on CA metadata | MUST | Implemented on F020 path | PARTIAL — factor path needs audit | Repair `repair()` |
-| **F043-R017** Support ops CLI + cPanel entry points | MUST | Implemented | NO_GAP | Command + deploy script |
-| **F043-R018** Admin preview/apply API | SHOULD | None | IMPLEMENTATION_MISSING | — |
-| **F043-R019** Wrap per-stock apply in DB transaction | SHOULD | Per-row updates only | IMPLEMENTATION_PARTIAL | Adjustment service |
-| **F043-R020** Concurrent lock on factor/CA during apply | SHOULD | None | IMPLEMENTATION_MISSING | — |
-| **F043-R021** Sample before/after values in preview | SHOULD | Counts only | IMPLEMENTATION_MISSING | — |
-| **F043-R022** Map `face_value_split` to split divisor semantics | SHOULD | F020 path uses `split`/`bonus` only | IMPLEMENTATION_PARTIAL | F042 feed types |
-| **F043-R023** `processing` / `failed` repair statuses | COULD | Only pending/completed constants | DEFERRED | Model |
+| **F043-R008** Discover F042 pending factors via `pendingOhlcvRepair()` | MUST | `scanPendingFactors` | NO_GAP | Factor tests |
+| **F043-R009** Apply OHLCV repair from pending factor using stored divisors | MUST | `adjustHistoricalPricesByDivisors` | NO_GAP | Factor tests |
+| **F043-R010** Mark factor `ohlcv_repair_status=completed` after successful repair | MUST | `applyFactorRepair` | NO_GAP | Factor tests |
+| **F043-R011** Skip completed / inactive factors (idempotent) | MUST | Status gates | NO_GAP | Idempotency test |
+| **F043-R012** Do not mutate transactions/holdings | MUST | Factor path does not | NO_GAP | Ledger test |
+| **F043-R013** Do not change F042 issue status / invoke F042 resolution | MUST | No DQ resolution calls | NO_GAP | Boundary + test |
+| **F043-R014** Process multiple repairs ascending by ex-date | MUST | Factor + CA scan order | NO_GAP | Multi-factor test |
+| **F043-R015** Preview reports rows + divisors without mutation | MUST | Scan/dry-run + samples | NO_GAP | Preview test |
+| **F043-R016** Persist repair audit summary | MUST | Factor `ohlcv_repair` + CA metadata | NO_GAP | Apply audit asserts |
+| **F043-R017** Support ops CLI + cPanel entry points | MUST | Extended command/cPanel | NO_GAP | Ops surface |
+| **F043-R026** Single OHLCV writer when active F042 factor matches event | MUST | F020 apply delegates; CA repair `deferred_to_factor` | NO_GAP | `CorporateActionOhlcvDelegationTest` |
+| **F043-R018** Admin preview/apply API | SHOULD | None | DEFERRED | — |
+| **F043-R019** Wrap per-stock apply in DB transaction | SHOULD | Factor `DB::transaction` | NO_GAP | Rollback test |
+| **F043-R020** Concurrent lock on factor during apply | SHOULD | `lockForUpdate` (MySQL) | PARTIAL | SQLite no-op; no concurrent test |
+| **F043-R021** Sample before/after values in preview | SHOULD | `sampleAdjustmentPreview` | NO_GAP | Preview samples |
+| **F043-R022** Map `face_value_split` to split divisor semantics | SHOULD | Supported + stored divisors | NO_GAP | face_value_split test |
+| **F043-R023** `processing` / `failed` repair statuses | COULD | Not added | DEFERRED | Model |
 | **F043-R024** Scheduled auto-repair after accept | COULD | None | DEFERRED | Boundary forbids F042 invoke |
 | **F043-R025** Full OHLCV rollback from snapshots | COULD | None | DEFERRED | No snapshot store |
 
@@ -451,6 +462,9 @@ Authorization: admin (API) / SETUP_TOKEN (cPanel) / console ops.
 | F043-AC010 | Repair processes multiple CAs in ascending ex_date order |
 | F043-AC011 | cPanel/CLI default is scan/dry-run; apply requires explicit flag |
 | F043-AC012 | Completed factor is skipped on re-run (idempotent) |
+| F043-AC013 | When an active matching F042 factor exists, F020 apply skips OHLCV mutation but still applies ledger changes |
+| F043-AC014 | F020-then-F043 and F043-then-F020 produce exactly one OHLCV restatement for the event |
+| F043-AC015 | F043 CA repair scan reports `deferred_to_factor` and does not mutate OHLCV when a matching factor exists |
 
 ---
 
@@ -458,16 +472,16 @@ Authorization: admin (API) / SETUP_TOKEN (cPanel) / console ops.
 
 | Area | Priority | CURRENT |
 |------|----------|---------|
-| Adjustment math split/bonus | MUST | Present (2 unit tests) |
-| Repair dry-run then apply | MUST | Present (1 unit test) |
-| Continuity classification | MUST | Partial (1 suspected_unadjusted test) |
-| Force / ambiguous / metadata-only | SHOULD | Missing |
-| F042 factor consumption | MUST | Missing |
-| Factor completed status | MUST | Missing |
-| Multi-CA ordering | SHOULD | Missing |
-| Idempotent second apply | MUST | Partial (rescan ok) |
+| Adjustment math split/bonus | MUST | Present |
+| Repair dry-run then apply (F020) | MUST | Present |
+| Continuity classification | MUST | Partial |
+| Force / ambiguous / metadata-only | SHOULD | Still thin |
+| F042 factor consumption | MUST | Present (`CorporateActionFactorPriceRepairTest`) |
+| Factor completed status | MUST | Present |
+| Multi-CA / multi-factor ordering | MUST | Present (factor path) |
+| Idempotent second apply | MUST | Present |
 | Authorization API (if added) | MUST | N/A until API |
-| No ledger mutation | MUST | Missing explicit assert |
+| No ledger mutation | MUST | Present |
 
 ---
 
@@ -475,13 +489,14 @@ Authorization: admin (API) / SETUP_TOKEN (cPanel) / console ops.
 
 | Concern | Code |
 |---------|------|
-| Scan / classify / repair CA | `CorporateActionPriceRepairService` |
-| OHLCV math | `CorporateActionPriceAdjustmentService` |
+| Scan / classify / repair CA | `CorporateActionPriceRepairService` (F020 path) |
+| F042 factor scan / preview / apply | `scanPendingFactors`, `repairPendingFactors`, `applyFactorRepair` |
+| OHLCV math (ratio or stored divisors) | `CorporateActionPriceAdjustmentService` |
 | F020 apply also adjusts prices | `CorporateActionService::apply` |
-| CLI | `RepairCorporateActionPricesCommand` |
+| CLI | `RepairCorporateActionPricesCommand` (`--factors-only`, `--factor`, `--apply`) |
 | Prod ops | `deploy/cpanel-repair-corporate-action-prices.php` |
-| F042 pending factors | `PriceAdjustmentFactor::scopePendingOhlcvRepair` — **unread by F043** |
-| Tests | `CorporateActionPriceRepairServiceTest`, `CorporateActionPriceAdjustmentServiceTest` |
+| F042 pending factors | `PriceAdjustmentFactor::scopePendingOhlcvRepair` (consumed) |
+| Tests | `CorporateActionFactorPriceRepairTest`, `CorporateActionPriceRepairServiceTest`, `CorporateActionPriceAdjustmentServiceTest` |
 
 ---
 
@@ -489,13 +504,11 @@ Authorization: admin (API) / SETUP_TOKEN (cPanel) / console ops.
 
 See [F043-IMPLEMENTATION-GAP-MATRIX.md](./F043-IMPLEMENTATION-GAP-MATRIX.md).
 
-Primary gaps:
+Remaining non-blockers:
 
-1. No F042 factor consumption / status completion  
-2. No dedicated repair API/UI  
-3. Thin audit (no actor, no per-row history)  
-4. Limited test coverage for force/ambiguous/multi-factor  
-5. F020 path and F042 path not yet unified under one ops queue  
+1. Admin repair API/UI (SHOULD)  
+2. SQLite `lockForUpdate` no-op (production MySQL OK)  
+3. Pre-existing F020 CA SQLite fixture collisions (not introduced by F043)
 
 ---
 

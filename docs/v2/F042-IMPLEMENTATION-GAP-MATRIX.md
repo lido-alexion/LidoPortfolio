@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-09 (updated post-hardening)  
 **Spec:** [F042-DATA-QUALITY-SPEC.md](./F042-DATA-QUALITY-SPEC.md)  
-**Status:** V2 F042 hardening complete
+**Status:** V2 F042 **COMPLETE** (`F042_COMPLETE_WITH_NON_BLOCKERS`). OHLCV mutation items closed by F043.
 
 ---
 
@@ -13,7 +13,7 @@
 | NO_GAP | 20+ |
 | TEST_MISSING | 0 (F042 suite added) |
 | IMPLEMENTATION_MISSING | 0 (required gaps closed) |
-| DEFERRED_TO_F043 | 3 (unchanged — OHLCV repair) |
+| DEFERRED_TO_F043 / delivered by F043 | 0 open — OHLCV repair + factor consumption delivered in **F043_COMPLETE** |
 | INTENTIONAL_OUT_OF_SCOPE | 4 |
 
 ---
@@ -38,8 +38,8 @@
 | Concurrent resolution 409 | `requirePendingReview` + lock | NO_GAP | `DataQualityApiTest`, unit tests |
 | Detection run ID | evidence payload | NO_GAP | Issue + detection tests |
 | F042 PHPUnit coverage | 35 tests | NO_GAP | Full DataQuality filter |
-| OHLCV repair on accept | Not implemented | DEFERRED_TO_F043 | Boundary tests confirm no mutation |
-| Consume adjustment factors | Not implemented | DEFERRED_TO_F043 | F043 future |
+| OHLCV repair on accept | Intentionally not in F042 | DELIVERED_BY_F043 | F043 consumes pending factors |
+| Consume adjustment factors | F042 writes only; F043 reads/applies | DELIVERED_BY_F043 | `F043_COMPLETE` |
 | Non-CA issue types | Not implemented | INTENTIONAL_OUT_OF_SCOPE | — |
 
 ---

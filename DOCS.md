@@ -147,37 +147,38 @@ Hub: [specs/architecture/governance/README.md](specs/architecture/governance/REA
 | 3.4 | [specs/architecture/governance/VERSION_1_BASELINE.md](specs/architecture/governance/VERSION_1_BASELINE.md) | Frozen baseline |
 | 3.5 | [specs/architecture/governance/PRODUCT_BACKLOG.md](specs/architecture/governance/PRODUCT_BACKLOG.md) | Deferred work / roadmap |
 
-### 3.A V2 planning (deferred scope — not active requirements)
+### 3.A V2 planning (deferred scope — not active V1 requirements)
 
-*Eleven capabilities deferred by SD-035. Planning documents only — do not treat as V1 scope or implementation authorization.*
+*Eleven capabilities deferred by SD-035. Planning documents below; Market Data Quality (F042 + F043) is now **COMPLETE** — see §3.B / §3.C.*
 
 | Order | Document | Why |
 |------:|----------|-----|
-| 3.6 | [docs/v2/V2-PRIORITIZATION.md](docs/v2/V2-PRIORITIZATION.md) | V2 priority scores, initiative grouping, implemented-but-deferred analysis |
+| 3.6 | [docs/v2/V2-PRIORITIZATION.md](docs/v2/V2-PRIORITIZATION.md) | V2 priority scores, initiative grouping, implementation-state table |
 | 3.7 | [docs/v2/V2-DEPENDENCIES.md](docs/v2/V2-DEPENDENCIES.md) | V2 dependency matrix, special analyses, wrong-order risks |
-| 3.8 | [docs/v2/V2-ROADMAP.md](docs/v2/V2-ROADMAP.md) | Recommended V2 phases (no dates) |
+| 3.8 | [docs/v2/V2-ROADMAP.md](docs/v2/V2-ROADMAP.md) | Recommended V2 phases + completion status for delivered tracks |
 
-### 3.B F042 — Data Quality (first V2 initiative — specification)
+### 3.B F042 — Data Quality (**COMPLETE**)
 
-*Formal V2 spec reconciliation for F042. Planning/approval only until implementation phase begins.*
+*V2 Market Data Quality — F042 hardening complete (`F042_COMPLETE_WITH_NON_BLOCKERS`). Specs and historical audits preserved below.*
 
 | Order | Document | Why |
 |------:|----------|-----|
 | 3.9 | [docs/v2/F042-DATA-QUALITY-SPEC.md](docs/v2/F042-DATA-QUALITY-SPEC.md) | F042 requirements, acceptance criteria, workflow, data model |
-| 3.10 | [docs/v2/F042-IMPLEMENTATION-GAP-MATRIX.md](docs/v2/F042-IMPLEMENTATION-GAP-MATRIX.md) | Current implementation vs proposed requirements |
-| 3.11 | [docs/v2/F042-F043-BOUNDARY.md](docs/v2/F042-F043-BOUNDARY.md) | F020 / F042 / F043 responsibility boundaries |
+| 3.10 | [docs/v2/F042-IMPLEMENTATION-GAP-MATRIX.md](docs/v2/F042-IMPLEMENTATION-GAP-MATRIX.md) | Implementation vs requirements (OHLCV repair handed to F043) |
+| 3.11 | [docs/v2/F042-F043-BOUNDARY.md](docs/v2/F042-F043-BOUNDARY.md) | F020 / F042 / F043 responsibility boundaries (historical F042 view) |
 | 3.12 | [docs/v2/F042-POLICY-DECISIONS.md](docs/v2/F042-POLICY-DECISIONS.md) | F042 policy semantics (auto-accept, re-detection, gating, handoff) |
-| 3.13 | [docs/v2/F042-FINAL-COMPLIANCE-AUDIT.md](docs/v2/F042-FINAL-COMPLIANCE-AUDIT.md) | Post-hardening F042 compliance audit (read-only verification) |
+| 3.13 | [docs/v2/F042-FINAL-COMPLIANCE-AUDIT.md](docs/v2/F042-FINAL-COMPLIANCE-AUDIT.md) | Historical post-hardening F042 compliance audit |
 
-### 3.C F043 — Corporate Action Price Repair (specification / reconciliation)
+### 3.C F043 — Corporate Action Price Repair (**COMPLETE**)
 
-*Formal V2 spec reconciliation for F043. Planning only — F043 implementation not started in this phase.*
+*V2 Market Data Quality — F043 complete (`F043_COMPLETE`), including double-restatement / single-writer hardening. Specs and historical audits preserved below.*
 
 | Order | Document | Why |
 |------:|----------|-----|
-| 3.14 | [docs/v2/F043-CORPORATE-ACTION-PRICE-REPAIR-SPEC.md](docs/v2/F043-CORPORATE-ACTION-PRICE-REPAIR-SPEC.md) | F043 requirements, transformation semantics, acceptance criteria |
+| 3.14 | [docs/v2/F043-CORPORATE-ACTION-PRICE-REPAIR-SPEC.md](docs/v2/F043-CORPORATE-ACTION-PRICE-REPAIR-SPEC.md) | F043 requirements, single-writer invariant, acceptance criteria |
 | 3.15 | [docs/v2/F043-IMPLEMENTATION-GAP-MATRIX.md](docs/v2/F043-IMPLEMENTATION-GAP-MATRIX.md) | Current repair code vs formal F043 requirements |
-| 3.16 | [docs/v2/F043-F042-BOUNDARY.md](docs/v2/F043-F042-BOUNDARY.md) | F043-side F020/F042/F043 boundary + F020 OHLCV correction |
+| 3.16 | [docs/v2/F043-F042-BOUNDARY.md](docs/v2/F043-F042-BOUNDARY.md) | F043-side F020/F042/F043 boundary + OHLCV single-writer model |
+| 3.17 | [docs/v2/F043-FINAL-COMPLIANCE-AUDIT.md](docs/v2/F043-FINAL-COMPLIANCE-AUDIT.md) | Historical F043 compliance audit (+ hardening addendum) |
 
 ---
 
