@@ -474,9 +474,7 @@ class BacktestSimulationEngine
             $id = (int) $source['screener_id'];
             $screener = Screener::query()
                 ->where('id', $id)
-                ->where(function ($q) use ($profile) {
-                    $q->where('profile_id', $profile->id)->orWhere('is_shared', true);
-                })
+                ->ownedOrSameUserShared($profile)
                 ->first();
             if (! $screener) {
                 continue;
@@ -517,9 +515,7 @@ class BacktestSimulationEngine
             $seen[$id] = true;
             $screener = Screener::query()
                 ->where('id', $id)
-                ->where(function ($q) use ($profile) {
-                    $q->where('profile_id', $profile->id)->orWhere('is_shared', true);
-                })
+                ->ownedOrSameUserShared($profile)
                 ->first();
             if (! $screener) {
                 continue;

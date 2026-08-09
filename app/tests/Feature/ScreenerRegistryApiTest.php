@@ -107,12 +107,13 @@ class ScreenerRegistryApiTest extends TestCase
             ->assertJsonPath('meta.count', 2);
     }
 
-    public function test_shared_screener_appears_in_registry(): void
+    public function test_shared_screener_appears_in_registry_same_user_only(): void
     {
         $owner = User::factory()->create();
         $ownerProfile = $this->defaultPortfolioFor($owner);
-        $viewer = User::factory()->create();
-        $viewerProfile = $this->defaultPortfolioFor($viewer);
+        $otherProfile = $this->createPortfolioProfile($owner, 'Secondary', false);
+        $stranger = User::factory()->create();
+        $this->defaultPortfolioFor($stranger);
 
         $definition = [
             'root' => [
@@ -130,31 +131,59 @@ class ScreenerRegistryApiTest extends TestCase
             ],
         ];
 
-        $this->actingAs($owner)->postJson('/api/screeners', [
+        $create = $this->actingAs($owner)->withHeader('X-Profile-Id', (string) $ownerProfile->id)->postJson('/api/screeners', [
             'name' => 'Shared Screen',
             'scope' => 'all_equities',
             'definition_json' => $definition,
             'is_shared' => true,
-        ])->assertCreated();
+        ]);
+        $create->assertCreated();
+        $sourceId = (int) $create->json('data.id');
 
-        $list = $this->actingAs($viewer)
+        $list = $this->actingAs($owner)
+            ->withHeader('X-Profile-Id', (string) $otherProfile->id)
             ->getJson('/api/v1/screener-registry?ownership=shared')
             ->assertOk()
             ->json('data');
 
         $this->assertNotEmpty($list);
         $this->assertSame('shared', $list[0]['metadata']['ownership'] ?? null);
+        $this->assertArrayNotHasKey('source_profile', $list[0]['metadata'] ?? []);
+        $this->assertSame($sourceId, (int) ($list[0]['artifact_id'] ?? 0));
 
-        $sourceId = $list[0]['artifact_id'];
-        $this->actingAs($viewer)
+        $this->actingAs($owner)
+            ->withHeader('X-Profile-Id', (string) $otherProfile->id)
+            ->getJson('/api/v1/screener-registry/'.$sourceId)
+            ->assertOk()
+            ->assertJsonPath('data.metadata.ownership', 'shared')
+            ->assertJsonPath('data.metadata.read_only', true);
+
+        $this->actingAs($owner)
+            ->withHeader('X-Profile-Id', (string) $otherProfile->id)
             ->postJson('/api/v1/screener-registry/shared/'.$sourceId.'/import')
             ->assertCreated();
 
         $this->assertTrue(
-            Screener::query()->where('profile_id', $viewerProfile->id)->where('name', 'like', 'Shared Screen%')->exists()
+            Screener::query()->where('profile_id', $otherProfile->id)->where('name', 'like', 'Shared Screen%')->exists()
         );
         $this->assertTrue(
             Screener::query()->where('profile_id', $ownerProfile->id)->where('is_shared', true)->exists()
         );
+
+        $this->actingAs($stranger)
+            ->withHeader('X-Profile-Id', (string) $this->defaultPortfolioFor($stranger)->id)
+            ->getJson('/api/v1/screener-registry?ownership=shared')
+            ->assertOk()
+            ->assertJsonPath('data', []);
+
+        $this->actingAs($stranger)
+            ->withHeader('X-Profile-Id', (string) $this->defaultPortfolioFor($stranger)->id)
+            ->getJson('/api/v1/screener-registry/'.$sourceId)
+            ->assertNotFound();
+
+        $this->actingAs($stranger)
+            ->withHeader('X-Profile-Id', (string) $this->defaultPortfolioFor($stranger)->id)
+            ->postJson('/api/v1/screener-registry/shared/'.$sourceId.'/import')
+            ->assertNotFound();
     }
 }

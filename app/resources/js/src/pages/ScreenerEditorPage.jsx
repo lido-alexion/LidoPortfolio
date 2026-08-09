@@ -1027,10 +1027,10 @@ export default function ScreenerEditorPage() {
                     onChange={(e) => patch({ is_shared: e.target.checked })}
                 />
                 <label className="form-check-label" htmlFor="screener-share">
-                    Share with other portfolios
+                    Share with your other portfolios
                 </label>
                 <div className="form-text">
-                    Listed under Shared screens for other portfolios. Import always creates a private copy.
+                    Listed under Shared screens for your other portfolios (same account). Import always creates a private local copy.
                 </div>
             </div>
             <div className="form-check form-switch mb-2">

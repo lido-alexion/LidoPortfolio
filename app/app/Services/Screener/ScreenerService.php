@@ -81,25 +81,22 @@ class ScreenerService
     public function listSharedForProfile(PortfolioProfile $profile): Collection
     {
         return Screener::query()
-            ->where('is_shared', true)
-            ->where('profile_id', '!=', $profile->id)
-            ->with(['profile:id,name'])
+            ->sharedVisibleTo($profile)
             ->orderBy('name')
             ->get()
             ->map(fn (Screener $s) => $this->formatShared($s));
     }
 
     /**
-     * Copy a shared screener from another portfolio into the active portfolio.
+     * Copy a shared screener from another portfolio of the same user into the active portfolio.
      *
      * @return array<string,mixed>
      */
     public function importShared(PortfolioProfile $profile, int $sourceId): array
     {
         $source = Screener::query()
+            ->sharedVisibleTo($profile)
             ->where('id', $sourceId)
-            ->where('is_shared', true)
-            ->where('profile_id', '!=', $profile->id)
             ->firstOrFail();
 
         $scope = $source->scope === 'watchlist' ? 'holdings' : $source->scope;
@@ -314,14 +311,22 @@ class ScreenerService
     /**
      * @return array<string,mixed>
      */
+    /**
+     * F060 shared-list/detail contract: name + definition/conditions (+ id for import).
+     *
+     * @return array<string,mixed>
+     */
     public function formatShared(Screener $screener): array
     {
-        $row = $this->format($screener);
-        $row['source_profile'] = $screener->relationLoaded('profile') && $screener->profile
-            ? ['id' => $screener->profile->id, 'name' => $screener->profile->name]
-            : null;
+        $definition = is_array($screener->definition_json)
+            ? $screener->definition_json
+            : ['root' => $screener->definition_json];
 
-        return $row;
+        return [
+            'id' => $screener->id,
+            'name' => $screener->name,
+            'definition_json' => $definition,
+        ];
     }
 
     private function uniqueNameForProfile(PortfolioProfile $profile, string $base): string
@@ -331,7 +336,7 @@ class ScreenerService
             $base = 'Imported screener';
         }
         $name = $base;
-        $suffix = 2;
+        $suffix = 1;
         while (Screener::query()->where('profile_id', $profile->id)->where('name', $name)->exists()) {
             $name = $base.' ('.$suffix.')';
             $suffix++;

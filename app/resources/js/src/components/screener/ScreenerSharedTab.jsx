@@ -4,11 +4,6 @@ import api from '../../api';
 import { DataTableCard } from '../DataTable';
 import usePortfolioChanged from '../../hooks/usePortfolioChanged';
 import { showToast } from '../../toast';
-import {
-    ScreenerDescriptionCell,
-    scopeDisplay,
-    scopeLabel,
-} from './screenerTableHelpers';
 
 function validationMessage(error) {
     const errors = error?.response?.data?.errors;
@@ -67,41 +62,6 @@ export default function ScreenerSharedTab() {
             accessorKey: 'name',
         },
         {
-            id: 'source_profile',
-            header: 'From portfolio',
-            accessorFn: (row) => row.source_profile?.name ?? '',
-            cell: ({ row }) => row.original.source_profile?.name || '—',
-        },
-        {
-            id: 'description',
-            header: 'Description',
-            accessorKey: 'description',
-            enableSorting: false,
-            cell: ({ getValue }) => <ScreenerDescriptionCell text={getValue()} />,
-        },
-        {
-            id: 'scope',
-            header: 'Scope',
-            accessorFn: (row) => scopeDisplay(row),
-            cell: ({ row }) => {
-                const rowScope = row.original.scope;
-                if (rowScope === 'watchlist') {
-                    return `${scopeLabel(rowScope)} (pick a watchlist after import)`;
-                }
-                return scopeDisplay(row.original);
-            },
-        },
-        {
-            id: 'max_lookback',
-            header: 'Lookback',
-            meta: { columnMenuLabel: 'Lookback (min sessions)' },
-            accessorKey: 'max_lookback',
-            cell: ({ getValue }) => {
-                const v = getValue();
-                return v != null ? `≥ ${v} sessions` : '—';
-            },
-        },
-        {
             id: 'actions',
             header: 'Actions',
             enableSorting: false,
@@ -119,18 +79,18 @@ export default function ScreenerSharedTab() {
                 </button>
             ),
         },
-    ], [importScreener, importingId]);
+    ], [importingId, importScreener]);
 
     return (
         <DataTableCard
             title="Shared screens"
+            description="Screeners shared from your other portfolios. Import creates a private copy in the active portfolio."
             columns={columns}
             data={screeners}
-            storageKey="screeners-shared-v1"
             loading={loading}
-            emptyMessage="No shared screeners from other portfolios yet."
-            defaultColumnOrder={['name', 'source_profile', 'description', 'scope', 'max_lookback', 'actions']}
-            initialSorting={[{ id: 'name', desc: false }]}
+            storageKey="screeners-shared-v2"
+            getRowId={(row) => String(row.id)}
+            emptyMessage="No shared screeners from your other portfolios yet."
         />
     );
 }

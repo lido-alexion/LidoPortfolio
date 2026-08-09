@@ -115,7 +115,7 @@
       <section class="panel">
         <h2>Overview</h2>
         <p>The Screener Registry turns portfolio screeners into reusable Trading Artifacts. Each screener still uses the same condition tree the run engine executes. The registry adds slug, metadata, artifact_version, definition_hash, and version history.</p>
-<p>Export downloads the Trading Artifact JSON envelope. <strong>Validate</strong> checks the envelope. <strong>Import</strong> stays disabled until validation succeeds, then creates a new screener in the active portfolio. Shared screeners from other portfolios appear read-only and can be copied with Import copy.</p>
+<p>Export downloads the Trading Artifact JSON envelope. <strong>Validate</strong> checks the envelope. <strong>Import</strong> stays disabled until validation succeeds, then creates a new screener in the active portfolio. Shared screeners from <strong>your other portfolios</strong> (same account) appear read-only and can be copied with Import copy — not visible to other users.</p>
 <h2>Importing JSON — start here</h2>
 <p>If Validate or Import reports many field errors, you almost always missed a <strong>mandatory</strong> envelope field or built an empty/invalid <code>definition.root</code> tree. Use the minimum schema below, then expand.</p>
 <h3>Minimum valid envelope (copy/paste starting point)</h3>
@@ -733,7 +733,7 @@
         <dd>Download /docs/stox-trading-artifacts-ai-guide.md — consolidated Indicator + Screener + Strategy + Authoring + Cookbook Markdown for AI agents and offline authoring.</dd>
     
         <dt>Import copy (shared)</dt>
-        <dd>Copy a shared screener from another portfolio into yours (same as Shared screens import).</dd>
+        <dd>Copy a screener shared from one of your other portfolios into the active portfolio (same as Shared screens import).</dd>
     
         <dt>Open editor</dt>
         <dd>Jump to the classic Screener editor to change conditions or run screens after import.</dd>
@@ -771,7 +771,7 @@
         <dd>Runs, schedules, and backtests still use ScreenerRunService and the existing definition tree.</dd>
     
         <dt>Shared → Registry</dt>
-        <dd>is_shared screeners surface in the registry with ownership=shared; copying them creates a local owned artifact.</dd>
+        <dd>is_shared screeners from your other portfolios surface in the registry with ownership=shared; copying them creates a local owned artifact. Other users cannot see them.</dd>
     
         <dt>Version bump</dt>
         <dd>Changing the condition tree (via editor or registry update) increments artifact_version and appends portfolio_screener_versions.</dd>

@@ -493,13 +493,14 @@ const APP_DOCUMENTATION_BASE = [
         controls: [
             { name: 'Create / open screener', description: 'Opens the editor for a new or existing definition.' },
             { name: 'Run / schedule', description: 'Execute now or attach a cron schedule + optional Telegram delivery.' },
-            { name: 'Share across portfolios', description: 'Reuse the same screener definition where supported.' },
+            { name: 'Share across your portfolios', description: 'Mark a screener shared so your other portfolios (same account only) can list and import a private copy. Other users cannot see it.' },
             { name: 'Screener Registry', description: 'Open the registry to export/import Screener JSON. The import schema guide lists mandatory fields (slug, name, definition.root, …) and a minimal working example.' },
             { name: 'Guide tab (editor)', description: 'Plain-language indicator definitions and Investopedia links.' },
         ],
         concepts: [
             { name: 'Eligibility vs scoring', description: 'Screeners admit candidates; Strategy scoring ranks them afterward.' },
             { name: 'Scopes', description: 'Holdings, watchlist, all equities, or index constituents.' },
+            { name: 'Same-account sharing', description: '`is_shared` lists the screener under Shared screens for your other portfolios only — not a global catalog for other users.' },
             { name: 'Factory Minervini Trend Template', description: 'Shipped default screener often referenced by the default Minervini Strategy.' },
             { name: 'Registry vs editor', description: 'The registry manages reusable artifact metadata and JSON I/O; the editor builds conditions and runs screens.' },
         ],
@@ -543,7 +544,7 @@ const APP_DOCUMENTATION_BASE = [
         summary: 'Import/export Screener JSON artifacts — mandatory fields, slug rules, condition tree shape, and version history.',
         overview:
             'The Screener Registry turns portfolio screeners into reusable Trading Artifacts. Each screener still uses the same condition tree the run engine executes. The registry adds slug, metadata, artifact_version, definition_hash, and version history.\n\n'
-            + 'Export downloads the Trading Artifact JSON envelope. **Validate** checks the envelope. **Import** stays disabled until validation succeeds, then creates a new screener in the active portfolio. Shared screeners from other portfolios appear read-only and can be copied with Import copy.\n\n'
+            + 'Export downloads the Trading Artifact JSON envelope. **Validate** checks the envelope. **Import** stays disabled until validation succeeds, then creates a new screener in the active portfolio. Shared screeners from **your other portfolios** (same account) appear read-only and can be copied with Import copy — not visible to other users.\n\n'
             + '## Importing JSON — start here\n\n'
             + 'If Validate or Import reports many field errors, you almost always missed a **mandatory** envelope field or built an empty/invalid `definition.root` tree. Use the minimum schema below, then expand.\n\n'
             + '### Minimum valid envelope (copy/paste starting point)\n\n'
@@ -661,7 +662,7 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Validate', description: 'Check pasted JSON against Trading Artifact Screener rules. On success, a green “Validated successfully” cue appears above Validate/Import and the JSON result panel still shows details. Import stays disabled until this reports ok. Editing the JSON clears validation.' },
             { name: 'Import', description: 'Enabled only after successful Validate. Creates a new screener in this portfolio and shows a success toast (not an inline alert). Mandatory: schema_version, artifact_type, slug, name, metadata, definition.root with ≥1 condition.' },
             { name: 'Download AI authoring guide (.md)', description: 'Download /docs/stox-trading-artifacts-ai-guide.md — consolidated Indicator + Screener + Strategy + Authoring + Cookbook Markdown for AI agents and offline authoring.' },
-            { name: 'Import copy (shared)', description: 'Copy a shared screener from another portfolio into yours (same as Shared screens import).' },
+            { name: 'Import copy (shared)', description: 'Copy a screener shared from one of your other portfolios into the active portfolio (same as Shared screens import).' },
             { name: 'Open editor', description: 'Jump to the classic Screener editor to change conditions or run screens after import.' },
             { name: 'Version history', description: 'On detail for owned screeners, list definition snapshots and change notes.' },
         ],
@@ -697,7 +698,7 @@ const APP_DOCUMENTATION_BASE = [
             },
             {
                 name: 'Shared → Registry',
-                description: 'is_shared screeners surface in the registry with ownership=shared; copying them creates a local owned artifact.',
+                description: 'is_shared screeners from your other portfolios surface in the registry with ownership=shared; copying them creates a local owned artifact. Other users cannot see them.',
             },
             {
                 name: 'Version bump',

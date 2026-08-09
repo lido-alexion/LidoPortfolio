@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -71,6 +72,36 @@ class Screener extends Model
     public function profile(): BelongsTo
     {
         return $this->belongsTo(PortfolioProfile::class, 'profile_id');
+    }
+
+    /**
+     * Shared screeners from other profiles owned by the same user (F060).
+     */
+    public function scopeSharedVisibleTo(Builder $query, PortfolioProfile $profile): Builder
+    {
+        return $query
+            ->where('is_shared', true)
+            ->where('profile_id', '!=', $profile->id)
+            ->whereHas('profile', function (Builder $q) use ($profile) {
+                $q->where('user_id', $profile->user_id);
+            });
+    }
+
+    /**
+     * Own screeners, or same-user shared screeners from other profiles (F060).
+     */
+    public function scopeOwnedOrSameUserShared(Builder $query, PortfolioProfile $profile): Builder
+    {
+        return $query->where(function (Builder $q) use ($profile) {
+            $q->where('profile_id', $profile->id)
+                ->orWhere(function (Builder $inner) use ($profile) {
+                    $inner->where('is_shared', true)
+                        ->where('profile_id', '!=', $profile->id)
+                        ->whereHas('profile', function (Builder $pq) use ($profile) {
+                            $pq->where('user_id', $profile->user_id);
+                        });
+                });
+        });
     }
 
     public function watchlist(): BelongsTo

@@ -192,9 +192,7 @@ class DiscoveryEngine
     {
         $since = Carbon::now()->subHours(max(1, $lookbackHours));
         $screenerIds = Screener::query()
-            ->where(function ($q) use ($profile) {
-                $q->where('profile_id', $profile->id)->orWhere('is_shared', true);
-            })
+            ->ownedOrSameUserShared($profile)
             ->pluck('id');
 
         if ($screenerIds->isEmpty()) {

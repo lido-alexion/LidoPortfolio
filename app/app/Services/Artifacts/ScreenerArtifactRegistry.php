@@ -51,19 +51,11 @@ final class ScreenerArtifactRegistry implements ArtifactRegistryInterface
 
         if ($includeShared) {
             $shared = Screener::query()
-                ->where('is_shared', true)
-                ->where('profile_id', '!=', $profile->id)
-                ->with(['profile:id,name'])
+                ->sharedVisibleTo($profile)
                 ->orderBy('name')
                 ->get();
             foreach ($shared as $screener) {
-                $env = $this->project($screener, [
-                    'ownership' => 'shared',
-                    'read_only' => true,
-                    'source_profile' => $screener->profile
-                        ? ['id' => $screener->profile->id, 'name' => $screener->profile->name]
-                        : null,
-                ]);
+                $env = $this->projectShared($screener);
                 if ($this->matches($env, $filters)) {
                     $out[] = $env;
                 }
@@ -83,10 +75,13 @@ final class ScreenerArtifactRegistry implements ArtifactRegistryInterface
             return null;
         }
         $own = (int) $screener->profile_id === (int) $profile->id;
+        if (! $own) {
+            return $this->projectShared($screener);
+        }
 
         return $this->project($screener, [
-            'ownership' => $own ? 'own' : 'shared',
-            'read_only' => ! $own,
+            'ownership' => 'own',
+            'read_only' => false,
         ]);
     }
 
@@ -208,10 +203,7 @@ final class ScreenerArtifactRegistry implements ArtifactRegistryInterface
     public function meta(PortfolioProfile $profile): array
     {
         $own = Screener::query()->where('profile_id', $profile->id)->count();
-        $shared = Screener::query()
-            ->where('is_shared', true)
-            ->where('profile_id', '!=', $profile->id)
-            ->count();
+        $shared = Screener::query()->sharedVisibleTo($profile)->count();
         $factory = Screener::query()->where('profile_id', $profile->id)->where('is_factory', true)->count();
 
         return [
@@ -224,7 +216,7 @@ final class ScreenerArtifactRegistry implements ArtifactRegistryInterface
             'origins' => [
                 ['id' => 'factory', 'label' => 'Factory'],
                 ['id' => 'user', 'label' => 'User'],
-                ['id' => 'shared', 'label' => 'Shared (other portfolios)'],
+                ['id' => 'shared', 'label' => 'Shared (your other portfolios)'],
             ],
             'statuses' => [
                 ['id' => 'active', 'label' => 'Active'],
@@ -246,9 +238,8 @@ final class ScreenerArtifactRegistry implements ArtifactRegistryInterface
             }
             if ($allowShared) {
                 return Screener::query()
+                    ->sharedVisibleTo($profile)
                     ->where('id', (int) $idOrSlug)
-                    ->where('is_shared', true)
-                    ->where('profile_id', '!=', $profile->id)
                     ->first();
             }
 
@@ -267,8 +258,7 @@ final class ScreenerArtifactRegistry implements ArtifactRegistryInterface
 
         if ($allowShared) {
             $shared = Screener::query()
-                ->where('is_shared', true)
-                ->where('profile_id', '!=', $profile->id)
+                ->sharedVisibleTo($profile)
                 ->where(function ($q) use ($idOrSlug) {
                     $q->where('slug', $idOrSlug)->orWhere('factory_key', $idOrSlug);
                 })
@@ -286,6 +276,37 @@ final class ScreenerArtifactRegistry implements ArtifactRegistryInterface
 
                 return $slug === $idOrSlug || strtolower(str_replace(' ', '_', (string) $s->name)) === strtolower($idOrSlug);
             });
+    }
+
+    /**
+     * F060 shared registry projection: name + definition (+ minimal ownership flags).
+     *
+     * @return array<string, mixed>
+     */
+    private function projectShared(Screener $screener): array
+    {
+        $definition = is_array($screener->definition_json) ? $screener->definition_json : ['root' => $screener->definition_json];
+        if (! isset($definition['root'])) {
+            $definition = ['root' => $definition];
+        }
+        $slug = $screener->slug ?: ($screener->factory_key ?: ('screener_'.$screener->id));
+        $deps = $this->extractIndicatorDeps($definition['root'] ?? []);
+
+        return ArtifactEnvelope::make(
+            ArtifactType::SCREENER,
+            $slug,
+            (string) $screener->name,
+            $definition,
+            [
+                'ownership' => 'shared',
+                'read_only' => true,
+                'storage' => 'portfolio_screeners',
+                'legacy_id' => $screener->id,
+            ],
+            $deps,
+            max(1, (int) ($screener->artifact_version ?? 1)),
+            (string) $screener->id,
+        );
     }
 
     /**

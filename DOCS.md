@@ -149,7 +149,7 @@ Hub: [specs/architecture/governance/README.md](specs/architecture/governance/REA
 
 ### 3.A V2 planning (deferred scope — not active V1 requirements)
 
-*Eleven capabilities deferred by SD-035. Planning documents below; Market Data Quality (F042 + F043) is **COMPLETE** — see §3.B / §3.C. Account & Access: **F003** and **F005** are **COMPLETE** — see §3.D. Monitoring & Alerts (**F127**) is **COMPLETE** (`F127_COMPLETE_WITH_NON_BLOCKERS`) — see §3.E. Portfolio History & Import (**F019**) is **COMPLETE** (`F019_COMPLETE_WITH_NON_BLOCKERS`) — see §3.F. **F014** historical holdings is **COMPLETE** (`F014_COMPLETE_WITH_NON_BLOCKERS`) — see §3.G.*
+*Eleven capabilities deferred by SD-035. Planning documents below; Market Data Quality (F042 + F043) is **COMPLETE** — see §3.B / §3.C. Account & Access: **F003** and **F005** are **COMPLETE** — see §3.D. Monitoring & Alerts (**F127**) is **COMPLETE** (`F127_COMPLETE_WITH_NON_BLOCKERS`) — see §3.E. Portfolio History & Import (**F019**) is **COMPLETE** (`F019_COMPLETE_WITH_NON_BLOCKERS`) — see §3.F. **F014** historical holdings is **COMPLETE** (`F014_COMPLETE_WITH_NON_BLOCKERS`) — see §3.G. **F060** Shared Screener Import is **COMPLETE** (`F060_COMPLETE_WITH_NON_BLOCKERS`) — see §3.H.*
 
 | Order | Document | Why |
 |------:|----------|-----|
@@ -234,6 +234,19 @@ Hub: [specs/architecture/governance/README.md](specs/architecture/governance/REA
 | 3.32 | [docs/v2/F014-BOUNDARY.md](docs/v2/F014-BOUNDARY.md) | Ownership vs ledger / F015 / F019 / F020 / F042 / F043 / F127 |
 | 3.33 | [docs/v2/F014-POLICY-DECISIONS.md](docs/v2/F014-POLICY-DECISIONS.md) | Policy register (PD-F014-01…21) — **closed** |
 | 3.34 | [docs/v2/F014-IMPLEMENTATION-GAP-MATRIX.md](docs/v2/F014-IMPLEMENTATION-GAP-MATRIX.md) | Gaps closed; non-blockers listed |
+
+### 3.H F060 — Shared Screener Import (**COMPLETE**)
+
+*V2 Collaboration. Hardening delivered 2026-08-09: same-user multi-profile sharing only; cross-user discover/read/import/registry/eligibility/Discovery/backtest-pin **denied**; shared responses limited to name + definition; import fork with `(1)`/`(2)` naming; help synced. Verdict: **`F060_COMPLETE_WITH_NON_BLOCKERS`** (residual PD-10 remap, PD-22 404-vs-403).*
+
+**Authoritative:**
+
+| Order | Document | Why |
+|------:|----------|-----|
+| 3.35 | [docs/v2/F060-SHARED-SCREENER-IMPORT-SPEC.md](docs/v2/F060-SHARED-SCREENER-IMPORT-SPEC.md) | DECIDED requirements + delivery ACs (**COMPLETE**) |
+| 3.36 | [docs/v2/F060-BOUNDARY.md](docs/v2/F060-BOUNDARY.md) | V1 vs F060; dual API + eligibility boundary |
+| 3.37 | [docs/v2/F060-POLICY-DECISIONS.md](docs/v2/F060-POLICY-DECISIONS.md) | Policy register — **closed**; delivery noted |
+| 3.38 | [docs/v2/F060-IMPLEMENTATION-GAP-MATRIX.md](docs/v2/F060-IMPLEMENTATION-GAP-MATRIX.md) | Gaps closed; non-blockers listed |
 
 ---
 

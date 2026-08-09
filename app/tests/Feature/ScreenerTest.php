@@ -248,7 +248,12 @@ class ScreenerTest extends TestCase
             ->assertOk()
             ->assertJsonPath('count', 1)
             ->assertJsonPath('data.0.id', $sharedId)
-            ->assertJsonPath('data.0.source_profile.name', $ownerProfile->name);
+            ->assertJsonPath('data.0.name', 'Shared RSI')
+            ->assertJsonPath('data.0.definition_json.root.type', 'group')
+            ->assertJsonMissingPath('data.0.source_profile')
+            ->assertJsonMissingPath('data.0.profile_id')
+            ->assertJsonMissingPath('data.0.schedule_enabled')
+            ->assertJsonMissingPath('data.0.is_shared');
 
         $import = $this->withHeader('X-Profile-Id', (string) $otherProfile->id)
             ->postJson("/api/screeners/shared/{$sharedId}/import");

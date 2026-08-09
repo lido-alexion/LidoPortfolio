@@ -132,9 +132,7 @@ class StrategyEligibilityService
             $screenerId = (int) $source['screener_id'];
             $screener = Screener::query()
                 ->where('id', $screenerId)
-                ->where(function ($q) use ($profile) {
-                    $q->where('profile_id', $profile->id)->orWhere('is_shared', true);
-                })
+                ->ownedOrSameUserShared($profile)
                 ->first();
 
             $name = $screener?->name ?? (string) ($source['screener_name'] ?? 'Screener #'.$screenerId);
@@ -254,9 +252,7 @@ class StrategyEligibilityService
 
             $screener = Screener::query()
                 ->where('id', $screenerId)
-                ->where(function ($q) use ($profile) {
-                    $q->where('profile_id', $profile->id)->orWhere('is_shared', true);
-                })
+                ->ownedOrSameUserShared($profile)
                 ->first();
 
             $name = $screener?->name ?? (string) ($rule['screener_name'] ?? 'Screener #'.$screenerId);

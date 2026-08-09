@@ -225,8 +225,9 @@ export default function ScreenerGuideTab() {
 
                 <h3 className="h6 mt-4">Sharing &amp; import</h3>
                 <p className="small text-muted mb-4">
-                    Turn on <strong>Share with other portfolios</strong> when editing a screener to list it under Shared screens.
-                    Import copies conditions into My screens as a private screener (schedule off; watchlist scope becomes holdings).
+                    Turn on <strong>Share with your other portfolios</strong> when editing a screener to list it under Shared screens
+                    for portfolios on the <em>same account</em> only (not visible to other users).
+                    Import copies conditions into My screens as a private local screener (schedule off; watchlist scope becomes holdings).
                 </p>
 
                 <h3 className="h6 mt-4">Stacked run results</h3>

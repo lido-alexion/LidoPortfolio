@@ -4,7 +4,7 @@
 
 > **Audience:** AI agents and developers authoring portable Indicator / Screener / Strategy JSON **without** reading application source code.
 >
-> **Generated:** 2026-08-09T14:40:03.166Z
+> **Generated:** 2026-08-09T17:28:56.191Z
 > **Deploy download:** `/docs/stox-trading-artifacts-ai-guide.md` (also linked from Screener Registry and Strategy Registry).
 > **Repo copy:** `specs/architecture/domains/StoX-Trading-Artifacts-AI-Guide.md`
 
@@ -659,7 +659,7 @@ Practical tip: treat this page as one step in a larger workflow, not an isolated
 
 The Screener Registry turns portfolio screeners into reusable Trading Artifacts. Each screener still uses the same condition tree the run engine executes. The registry adds slug, metadata, artifact_version, definition_hash, and version history.
 
-Export downloads the Trading Artifact JSON envelope. **Validate** checks the envelope. **Import** stays disabled until validation succeeds, then creates a new screener in the active portfolio. Shared screeners from other portfolios appear read-only and can be copied with Import copy.
+Export downloads the Trading Artifact JSON envelope. **Validate** checks the envelope. **Import** stays disabled until validation succeeds, then creates a new screener in the active portfolio. Shared screeners from **your other portfolios** (same account) appear read-only and can be copied with Import copy — not visible to other users.
 
 ## Importing JSON — start here
 
@@ -1169,7 +1169,7 @@ Practical tip: treat this page as one step in a larger workflow, not an isolated
 - **Validate** — Check pasted JSON against Trading Artifact Screener rules. On success, a green “Validated successfully” cue appears above Validate/Import and the JSON result panel still shows details. Import stays disabled until this reports ok. Editing the JSON clears validation.
 - **Import** — Enabled only after successful Validate. Creates a new screener in this portfolio and shows a success toast (not an inline alert). Mandatory: schema_version, artifact_type, slug, name, metadata, definition.root with ≥1 condition.
 - **Download AI authoring guide (.md)** — Download /docs/stox-trading-artifacts-ai-guide.md — consolidated Indicator + Screener + Strategy + Authoring + Cookbook Markdown for AI agents and offline authoring.
-- **Import copy (shared)** — Copy a shared screener from another portfolio into yours (same as Shared screens import).
+- **Import copy (shared)** — Copy a screener shared from one of your other portfolios into the active portfolio (same as Shared screens import).
 - **Open editor** — Jump to the classic Screener editor to change conditions or run screens after import.
 - **Version history** — On detail for owned screeners, list definition snapshots and change notes.
 - **Typical flow** — Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.
@@ -1184,7 +1184,7 @@ Practical tip: treat this page as one step in a larger workflow, not an isolated
 - **Operator enum** — Condition operators: gt, gte, lt, lte, eq only. Group ops: AND, OR only. NOT, neq, crosses_*, between, etc. are not supported.
 - **Operand shapes** — Indicator `{ indicator, params }` or constant `{ type: "constant", value: <number> }`. No boolean/string/null/date operands.
 - **No execution redesign** — Runs, schedules, and backtests still use ScreenerRunService and the existing definition tree.
-- **Shared → Registry** — is_shared screeners surface in the registry with ownership=shared; copying them creates a local owned artifact.
+- **Shared → Registry** — is_shared screeners from your other portfolios surface in the registry with ownership=shared; copying them creates a local owned artifact. Other users cannot see them.
 - **Version bump** — Changing the condition tree (via editor or registry update) increments artifact_version and appends portfolio_screener_versions.
 - **Active portfolio context** — Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.
 - **Data freshness** — Many analytics depend on cached daily OHLCV and scheduled sync jobs. If numbers look stale, refresh this page and verify sync status in admin tools.
