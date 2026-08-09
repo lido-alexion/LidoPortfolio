@@ -147,6 +147,27 @@ Hub: [specs/architecture/governance/README.md](specs/architecture/governance/REA
 | 3.4 | [specs/architecture/governance/VERSION_1_BASELINE.md](specs/architecture/governance/VERSION_1_BASELINE.md) | Frozen baseline |
 | 3.5 | [specs/architecture/governance/PRODUCT_BACKLOG.md](specs/architecture/governance/PRODUCT_BACKLOG.md) | Deferred work / roadmap |
 
+### 3.A V2 planning (deferred scope — not active requirements)
+
+*Eleven capabilities deferred by SD-035. Planning documents only — do not treat as V1 scope or implementation authorization.*
+
+| Order | Document | Why |
+|------:|----------|-----|
+| 3.6 | [docs/v2/V2-PRIORITIZATION.md](docs/v2/V2-PRIORITIZATION.md) | V2 priority scores, initiative grouping, implemented-but-deferred analysis |
+| 3.7 | [docs/v2/V2-DEPENDENCIES.md](docs/v2/V2-DEPENDENCIES.md) | V2 dependency matrix, special analyses, wrong-order risks |
+| 3.8 | [docs/v2/V2-ROADMAP.md](docs/v2/V2-ROADMAP.md) | Recommended V2 phases (no dates) |
+
+### 3.B F042 — Data Quality (first V2 initiative — specification)
+
+*Formal V2 spec reconciliation for F042. Planning/approval only until implementation phase begins.*
+
+| Order | Document | Why |
+|------:|----------|-----|
+| 3.9 | [docs/v2/F042-DATA-QUALITY-SPEC.md](docs/v2/F042-DATA-QUALITY-SPEC.md) | F042 requirements, acceptance criteria, workflow, data model |
+| 3.10 | [docs/v2/F042-IMPLEMENTATION-GAP-MATRIX.md](docs/v2/F042-IMPLEMENTATION-GAP-MATRIX.md) | Current implementation vs proposed requirements |
+| 3.11 | [docs/v2/F042-F043-BOUNDARY.md](docs/v2/F042-F043-BOUNDARY.md) | F020 / F042 / F043 responsibility boundaries |
+| 3.12 | [docs/v2/F042-POLICY-DECISIONS.md](docs/v2/F042-POLICY-DECISIONS.md) | F042 policy semantics (auto-accept, re-detection, gating, handoff) |
+
 ---
 
 ## 4. Implementation status & audit
@@ -174,13 +195,14 @@ Hub: [specs/architecture/governance/README.md](specs/architecture/governance/REA
 
 | Order | Document | Why |
 |------:|----------|-----|
-| 4.15 | [docs/audits/2026-08-09-feature-coverage/](docs/audits/2026-08-09-feature-coverage/) | Post-implementation V1 feature coverage baseline (2026-08-09); **V1 scope formally frozen by [V1-SCOPE-DECISION.md](docs/audits/2026-08-09-feature-coverage/V1-SCOPE-DECISION.md) (SD-035)** |
+| 4.15 | [docs/audits/2026-08-09-feature-coverage-final/](docs/audits/2026-08-09-feature-coverage-final/) | **Final V1 implementation baseline (2026-08-09)** — frozen scope SD-035; 119/119 strict coverage |
+| 4.16 | [docs/audits/2026-08-09-feature-coverage/](docs/audits/2026-08-09-feature-coverage/) | Post-implementation baseline before scope freeze; V1-SCOPE-DECISION (SD-035) |
 
 ### 4.B Historical audits
 
 | Order | Document | Why |
 |------:|----------|-----|
-| 4.16 | [docs/audits/2026-08-08-feature-coverage/](docs/audits/2026-08-08-feature-coverage/) | Pre-implementation V1 feature coverage and gap audit (2026-08-08); **historical baseline only — not current implementation status** |
+| 4.17 | [docs/audits/2026-08-08-feature-coverage/](docs/audits/2026-08-08-feature-coverage/) | Pre-implementation V1 feature coverage and gap audit (2026-08-08); **historical baseline only** |
 
 ---
 
