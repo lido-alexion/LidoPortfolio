@@ -61,6 +61,7 @@ class InviteAcceptController extends Controller
         $remember = $request->boolean('remember');
 
         Auth::guard('web')->login($user, $remember);
+        Auth::shouldUse('web');
         $request->session()->put('logged_in_at', now()->timestamp);
         $request->session()->regenerate();
 

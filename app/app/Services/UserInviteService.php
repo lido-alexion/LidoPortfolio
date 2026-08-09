@@ -4,8 +4,6 @@ namespace App\Services;
 
 use App\Models\User;
 use App\Models\UserInvite;
-use App\Services\PortfolioProfileService;
-use Carbon\Carbon;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -38,11 +36,13 @@ class UserInviteService
             ->first();
     }
 
-    public function findByToken(string $token): ?UserInvite
+    public function findByToken(string $rawToken): ?UserInvite
     {
         $this->purgeExpired();
 
-        $invite = UserInvite::query()->where('token', $token)->first();
+        $invite = UserInvite::query()
+            ->where('token', $this->hashToken($rawToken))
+            ->first();
 
         if ($invite === null) {
             return null;
@@ -61,7 +61,10 @@ class UserInviteService
         return $invite;
     }
 
-    public function create(User $admin, string $email): UserInvite
+    /**
+     * @return array{invite: UserInvite, raw_token: string}
+     */
+    public function create(User $admin, string $email): array
     {
         $email = $this->normalizeEmail($email);
 
@@ -83,15 +86,27 @@ class UserInviteService
             ]);
         }
 
-        return UserInvite::query()->create([
+        $rawToken = $this->generateRawToken();
+
+        $invite = UserInvite::query()->create([
             'email' => $email,
-            'token' => $this->generateToken(),
+            'token' => $this->hashToken($rawToken),
             'invited_by_user_id' => $admin->id,
             'expires_at' => now()->addHours(self::EXPIRY_HOURS),
         ]);
+
+        return [
+            'invite' => $invite,
+            'raw_token' => $rawToken,
+        ];
     }
 
-    public function regenerate(UserInvite $invite): UserInvite
+    /**
+     * Rotate the invitation bearer credential. Does not extend expires_at.
+     *
+     * @return array{invite: UserInvite, raw_token: string}
+     */
+    public function regenerate(UserInvite $invite): array
     {
         if ($invite->isAccepted()) {
             throw ValidationException::withMessages([
@@ -99,11 +114,14 @@ class UserInviteService
             ]);
         }
 
-        $invite->token = $this->generateToken();
-        $invite->expires_at = now()->addHours(self::EXPIRY_HOURS);
+        $rawToken = $this->generateRawToken();
+        $invite->token = $this->hashToken($rawToken);
         $invite->save();
 
-        return $invite->fresh();
+        return [
+            'invite' => $invite->fresh(),
+            'raw_token' => $rawToken,
+        ];
     }
 
     public function revoke(UserInvite $invite): void
@@ -120,9 +138,9 @@ class UserInviteService
     /**
      * @return array{user: User, invite: UserInvite}
      */
-    public function accept(string $token, string $name, string $password): array
+    public function accept(string $rawToken, string $name, string $password): array
     {
-        $invite = $this->findByToken($token);
+        $invite = $this->findByToken($rawToken);
 
         if ($invite === null) {
             throw ValidationException::withMessages([
@@ -179,13 +197,13 @@ class UserInviteService
     /**
      * @return array<string, mixed>
      */
-    public function toAdminPayload(UserInvite $invite): array
+    public function toAdminPayload(UserInvite $invite, ?string $rawToken = null): array
     {
         $status = $invite->isAccepted()
             ? 'accepted'
             : ($invite->isExpired() ? 'expired' : 'pending');
 
-        $inviteUrl = $this->inviteUrl($invite->token);
+        $includeUrl = $status === 'pending' && $rawToken !== null && $rawToken !== '';
 
         return [
             'id' => $invite->id,
@@ -195,8 +213,9 @@ class UserInviteService
             'accepted_at' => $invite->accepted_at?->toIso8601String(),
             'created_at' => $invite->created_at?->toIso8601String(),
             'invited_by' => $invite->invitedBy?->only(['id', 'name', 'email']),
-            'invite_url' => $status === 'pending' ? $inviteUrl : null,
-            'invite_message' => $status === 'pending' ? $this->composeInviteMessage($invite) : null,
+            'invite_url' => $includeUrl ? $this->inviteUrl($rawToken) : null,
+            'invite_message' => $includeUrl ? $this->composeInviteMessage($invite, $rawToken) : null,
+            'url_available' => $includeUrl,
         ];
     }
 
@@ -212,14 +231,14 @@ class UserInviteService
         ];
     }
 
-    public function inviteUrl(string $token): string
+    public function inviteUrl(string $rawToken): string
     {
-        return rtrim((string) config('app.url'), '/').'/invite/'.$token;
+        return rtrim((string) config('app.url'), '/').'/invite/'.$rawToken;
     }
 
-    public function composeInviteMessage(UserInvite $invite): string
+    public function composeInviteMessage(UserInvite $invite, string $rawToken): string
     {
-        $url = $this->inviteUrl($invite->token);
+        $url = $this->inviteUrl($rawToken);
         $expires = $invite->expires_at?->timezone(config('app.timezone', 'UTC'))->format('D, M j, Y g:i A T');
         $appName = config('app.name', 'Lido Portfolio');
 
@@ -232,12 +251,17 @@ You've been invited to join {$appName}. Use the link below to set your password 
 
 {$url}
 
-This link expires on {$expires} (72 hours from when it was sent).
+This link expires on {$expires} (72 hours from when the invitation was created).
 
-If it has expired, contact your administrator to send a new invite.
+If it has expired or you no longer have the link, contact your administrator for a new invitation URL.
 
 Thank you.
 TEXT;
+    }
+
+    public function hashToken(string $rawToken): string
+    {
+        return hash('sha256', $rawToken);
     }
 
     protected function normalizeEmail(string $email): string
@@ -245,11 +269,12 @@ TEXT;
         return Str::lower(trim($email));
     }
 
-    protected function generateToken(): string
+    protected function generateRawToken(): string
     {
         do {
             $token = Str::random(64);
-        } while (UserInvite::query()->where('token', $token)->exists());
+            $hash = $this->hashToken($token);
+        } while (UserInvite::query()->where('token', $hash)->exists());
 
         return $token;
     }

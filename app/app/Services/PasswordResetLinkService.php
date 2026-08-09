@@ -226,9 +226,10 @@ TEXT;
     {
         do {
             $token = Str::random(64);
+            $inviteHash = hash('sha256', $token);
         } while (
             PasswordResetLink::query()->where('token', $token)->exists()
-            || \App\Models\UserInvite::query()->where('token', $token)->exists()
+            || \App\Models\UserInvite::query()->where('token', $inviteHash)->exists()
         );
 
         return $token;

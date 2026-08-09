@@ -33,15 +33,16 @@ class AuthController extends Controller
         $pendingInvite = $this->invites->pendingForEmail($validated['email']);
         if ($pendingInvite !== null) {
             return response()->json([
-                'message' => 'Use your invite link to set your password before signing in.',
+                'message' => 'An invitation is pending for this email. Please use the invitation link provided by your administrator.',
                 'invite_setup_required' => true,
-                'invite_token' => $pendingInvite->token,
             ], 422);
         }
 
         $remember = $request->boolean('remember');
 
-        if (! Auth::attempt([
+        // Always use the session (web) guard — after auth:sanctum routes the default
+        // driver may be the Sanctum RequestGuard, which does not implement attempt().
+        if (! Auth::guard('web')->attempt([
             'email' => $validated['email'],
             'password' => $validated['password'],
         ], $remember)) {
@@ -51,8 +52,10 @@ class AuthController extends Controller
             ]);
         }
 
+        Auth::shouldUse('web');
+
         /** @var User $user */
-        $user = $request->user();
+        $user = Auth::guard('web')->user();
         $request->session()->put('logged_in_at', now()->timestamp);
         $request->session()->regenerate();
 
@@ -65,7 +68,8 @@ class AuthController extends Controller
 
     public function logout(Request $request): JsonResponse
     {
-        if ($user = $request->user()) {
+        $user = Auth::guard('web')->user() ?? $request->user();
+        if ($user) {
             $this->authAudit->logLogout($user, $request, 'current');
         }
 
@@ -75,6 +79,10 @@ class AuthController extends Controller
             $request->session()->invalidate();
             $request->session()->regenerateToken();
         }
+
+        // Clear Sanctum RequestGuard cache left by auth:sanctum (needed for tests/Octane).
+        Auth::forgetGuards();
+        Auth::shouldUse('web');
 
         return response()->json(['message' => 'Logged out successfully']);
     }

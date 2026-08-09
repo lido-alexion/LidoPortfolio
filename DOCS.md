@@ -149,7 +149,7 @@ Hub: [specs/architecture/governance/README.md](specs/architecture/governance/REA
 
 ### 3.A V2 planning (deferred scope — not active V1 requirements)
 
-*Eleven capabilities deferred by SD-035. Planning documents below; Market Data Quality (F042 + F043) is now **COMPLETE** — see §3.B / §3.C. Account & Access (F003 + F005) specification pack is under §3.D (pre-implementation).*
+*Eleven capabilities deferred by SD-035. Planning documents below; Market Data Quality (F042 + F043) is **COMPLETE** — see §3.B / §3.C. Account & Access: **F003 COMPLETE**; **F005** next — see §3.D.*
 
 | Order | Document | Why |
 |------:|----------|-----|
@@ -180,21 +180,21 @@ Hub: [specs/architecture/governance/README.md](specs/architecture/governance/REA
 | 3.16 | [docs/v2/F043-F042-BOUNDARY.md](docs/v2/F043-F042-BOUNDARY.md) | F043-side F020/F042/F043 boundary + OHLCV single-writer model |
 | 3.17 | [docs/v2/F043-FINAL-COMPLIANCE-AUDIT.md](docs/v2/F043-FINAL-COMPLIANCE-AUDIT.md) | Historical F043 compliance audit (+ hardening addendum) |
 
-### 3.D F003 / F005 — Account & Access (**READY_FOR_IMPLEMENTATION**)
+### 3.D F003 / F005 — Account & Access (**F003 COMPLETE**; **F005 READY_FOR_IMPLEMENTATION**)
 
-*V2 Phase 1 Track A — authoritative specification pack. Product policies closed (PD-004/005/006 DECIDED; PD-012 resolved by PD-006; PD-013 = docs task). **Application hardening not started.***
+*V2 Phase 1 Track A. Product policies closed (PD-004/005/006 **DECIDED**; PD-012 **RESOLVED_BY_PD-006**; PD-013 = docs task; PD-007 **DEFERRED**). **F003** invite hardening delivered and closed as `F003_COMPLIANT_WITH_NON_BLOCKERS`. **F005** PD-006 session revocation hardening has **not** started.*
 
 **Authoritative:**
 
 | Order | Document | Why |
 |------:|----------|-----|
-| 3.18 | [docs/v2/F003-USER-INVITE-SPEC.md](docs/v2/F003-USER-INVITE-SPEC.md) | F003 invite lifecycle, authZ, security, requirements, ACs |
-| 3.19 | [docs/v2/F005-SESSION-MANAGEMENT-SPEC.md](docs/v2/F005-SESSION-MANAGEMENT-SPEC.md) | F005 session list/revoke + PD-006 credential-change semantics |
+| 3.18 | [docs/v2/F003-USER-INVITE-SPEC.md](docs/v2/F003-USER-INVITE-SPEC.md) | F003 invite lifecycle, authZ, security, requirements, ACs (**COMPLETE**) |
+| 3.19 | [docs/v2/F005-SESSION-MANAGEMENT-SPEC.md](docs/v2/F005-SESSION-MANAGEMENT-SPEC.md) | F005 session list/revoke + PD-006 credential-change semantics (**next**) |
 | 3.20 | [docs/v2/F003-F005-BOUNDARY.md](docs/v2/F003-F005-BOUNDARY.md) | Ownership vs V1 auth, F004, profiles, F060; out-of-scope |
 | 3.21 | [docs/v2/F003-F005-POLICY-DECISIONS.md](docs/v2/F003-F005-POLICY-DECISIONS.md) | Final policy register (no open product decisions) |
-| 3.22 | [docs/v2/F003-F005-IMPLEMENTATION-GAP-MATRIX.md](docs/v2/F003-F005-IMPLEMENTATION-GAP-MATRIX.md) | Gap matrix + implementation backlog |
+| 3.22 | [docs/v2/F003-F005-IMPLEMENTATION-GAP-MATRIX.md](docs/v2/F003-F005-IMPLEMENTATION-GAP-MATRIX.md) | Gap matrix + backlog; F003 closed / F005 open |
 
-*No separate historical F003/F005 compliance audit yet — create after hardening if needed (same pattern as F042/F043 audits).*
+*F003 final compliance audit: `F003_COMPLIANT_WITH_NON_BLOCKERS` (chat audit 2026-08-09; non-blockers recorded in the gap matrix). No separate F003 audit markdown file required for closure.*
 
 ---
 

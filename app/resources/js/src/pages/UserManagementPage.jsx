@@ -42,6 +42,7 @@ function LinkActionButtons({
     onRevoke,
     linkLabel,
     messageLabel,
+    regenerateLabel = 'Regenerate',
 }) {
     const canManage = Boolean(onRegenerate || onRevoke);
 
@@ -78,7 +79,7 @@ function LinkActionButtons({
                             disabled={busy}
                             onClick={onRegenerate}
                         >
-                            Regenerate
+                            {regenerateLabel}
                         </button>
                     ) : null}
                     {onRevoke ? (
@@ -97,10 +98,54 @@ function LinkActionButtons({
     );
 }
 
+function IssuedInviteBanner({ invite, onDismiss }) {
+    if (!invite?.invite_url) {
+        return null;
+    }
+
+    return (
+        <div className="alert alert-info mb-3">
+            <div className="d-flex flex-wrap justify-content-between gap-2 align-items-start">
+                <div>
+                    <strong>Active invitation URL</strong>
+                    <p className="small mb-2 mt-1">
+                        Copy and save this URL now. It is shown only after create or regenerate.
+                        Regenerating later will invalidate this URL; the previous link will stop working.
+                        Expiry stays {formatDate(invite.expires_at)} (72 hours from original creation).
+                    </p>
+                    <code className="small d-block text-break mb-2">{invite.invite_url}</code>
+                    <div className="d-flex flex-wrap gap-1">
+                        <button
+                            type="button"
+                            className="btn btn-sm btn-primary"
+                            onClick={() => copyText(invite.invite_url, 'Invitation URL copied')}
+                        >
+                            Copy Invitation URL
+                        </button>
+                        {invite.invite_message ? (
+                            <button
+                                type="button"
+                                className="btn btn-sm btn-outline-secondary"
+                                onClick={() => copyText(invite.invite_message, 'Invite message copied')}
+                            >
+                                Copy message
+                            </button>
+                        ) : null}
+                    </div>
+                </div>
+                {onDismiss ? (
+                    <button type="button" className="btn-close" aria-label="Dismiss" onClick={onDismiss} />
+                ) : null}
+            </div>
+        </div>
+    );
+}
+
 export default function UserManagementPage() {
     const { user: currentUser } = useAuth();
     const [users, setUsers] = useState([]);
     const [invites, setInvites] = useState([]);
+    const [issuedInvite, setIssuedInvite] = useState(null);
     const [resetLinks, setResetLinks] = useState([]);
     const [inviteEmail, setInviteEmail] = useState('');
     const [resetUserId, setResetUserId] = useState('');
@@ -149,9 +194,14 @@ export default function UserManagementPage() {
         setCreatingInvite(true);
         try {
             const res = await api.post('/invites', { email });
+            const created = res.data.data;
             setInviteEmail('');
-            setInvites((prev) => [res.data.data, ...prev]);
-            showToast('Invite created');
+            setIssuedInvite(created);
+            setInvites((prev) => [
+                { ...created, invite_url: null, invite_message: null, url_available: false },
+                ...prev.filter((row) => row.id !== created.id),
+            ]);
+            showToast(res.data.message || 'Invite created — copy the invitation URL now');
         } catch (error) {
             const msg = error?.response?.data?.message
                 || error?.response?.data?.errors?.email?.[0]
@@ -192,13 +242,24 @@ export default function UserManagementPage() {
     };
 
     const regenerateInvite = async (invite) => {
+        const confirmed = window.confirm(
+            'Regenerating the invitation will invalidate the current invitation URL.\n'
+            + 'The previous URL will no longer work.\n\n'
+            + 'Continue?'
+        );
+        if (!confirmed) {
+            return;
+        }
+
         setInviteBusyId(invite.id);
         try {
             const res = await api.post(`/invites/${invite.id}/regenerate`);
+            const updated = res.data.data;
             setInvites((prev) => prev.map((row) => (
-                row.id === invite.id ? res.data.data : row
+                row.id === invite.id ? { ...updated, invite_url: null, invite_message: null, url_available: false } : row
             )));
-            showToast('Invite link regenerated (72 hours)');
+            setIssuedInvite(updated);
+            showToast(res.data.message || 'Invitation URL regenerated — copy the new URL now');
         } catch (error) {
             showToast(error?.response?.data?.message || 'Failed to regenerate invite', 'danger');
         } finally {
@@ -211,6 +272,7 @@ export default function UserManagementPage() {
         try {
             await api.delete(`/invites/${invite.id}`);
             setInvites((prev) => prev.filter((row) => row.id !== invite.id));
+            setIssuedInvite((prev) => (prev?.id === invite.id ? null : prev));
             showToast('Invite revoked');
         } catch (error) {
             showToast(error?.response?.data?.message || 'Failed to revoke invite', 'danger');
@@ -289,8 +351,10 @@ export default function UserManagementPage() {
                     </div>
                     <div className="card-body">
                         <p className="text-muted small">
-                            Create a 72-hour invite link. Copy the message below and send it to the user.
-                            They must set a password before they can sign in.
+                            Create a 72-hour invitation (expiry starts at creation). After create, copy the
+                            invitation URL immediately — it is not stored for later re-copy. Use
+                            <strong> Regenerate Invitation URL</strong> if the link is lost; that invalidates
+                            the previous URL and does not extend the original expiry.
                         </p>
                         <form className="row g-2 align-items-end mb-3" onSubmit={createInvite}>
                             <div className="col-12 col-md-6">
@@ -317,6 +381,10 @@ export default function UserManagementPage() {
                                 </button>
                             </div>
                         </form>
+                        <IssuedInviteBanner
+                            invite={issuedInvite}
+                            onDismiss={() => setIssuedInvite(null)}
+                        />
                         {loadError ? (
                             <div className="alert alert-danger py-2 small">{loadError}</div>
                         ) : null}
@@ -348,12 +416,18 @@ export default function UserManagementPage() {
                                                     <td>{formatDate(invite.expires_at)}</td>
                                                     <td>{formatDate(invite.created_at)}</td>
                                                     <td className="text-end">
+                                                        {invite.status === 'pending' ? (
+                                                            <p className="text-muted small mb-1 text-end">
+                                                                Regenerating invalidates the current invitation URL.
+                                                            </p>
+                                                        ) : null}
                                                         <LinkActionButtons
                                                             busy={busy}
-                                                            url={invite.status === 'pending' ? invite.invite_url : null}
-                                                            message={invite.invite_message}
-                                                            linkLabel="Invite link copied"
+                                                            url={null}
+                                                            message={null}
+                                                            linkLabel="Invitation URL copied"
                                                             messageLabel="Invite message copied"
+                                                            regenerateLabel="Regenerate Invitation URL"
                                                             onRegenerate={canManage ? () => regenerateInvite(invite) : null}
                                                             onRevoke={canManage ? () => revokeInvite(invite) : null}
                                                         />

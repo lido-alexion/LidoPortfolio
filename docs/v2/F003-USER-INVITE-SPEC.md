@@ -1,10 +1,11 @@
 # F003 — User Invite
 
 **Date:** 2026-08-09  
-**Status:** **READY_FOR_IMPLEMENTATION** (policies closed; hardening not started)  
+**Status:** **COMPLETE** (`F003_COMPLIANT_WITH_NON_BLOCKERS`) — PD-004 / PD-005 hardened; compliance audit closed  
 **V2 initiative:** Account & Access Management  
-**Classification:** Deferred from V1 by SD-035; largely implemented in code  
-**Related:** [F003-F005-BOUNDARY.md](./F003-F005-BOUNDARY.md), [F003-F005-POLICY-DECISIONS.md](./F003-F005-POLICY-DECISIONS.md), [F003-F005-IMPLEMENTATION-GAP-MATRIX.md](./F003-F005-IMPLEMENTATION-GAP-MATRIX.md), [F005-SESSION-MANAGEMENT-SPEC.md](./F005-SESSION-MANAGEMENT-SPEC.md)
+**Classification:** Deferred from V1 by SD-035; formally specified and hardened in V2  
+**Related:** [F003-F005-BOUNDARY.md](./F003-F005-BOUNDARY.md), [F003-F005-POLICY-DECISIONS.md](./F003-F005-POLICY-DECISIONS.md), [F003-F005-IMPLEMENTATION-GAP-MATRIX.md](./F003-F005-IMPLEMENTATION-GAP-MATRIX.md), [F005-SESSION-MANAGEMENT-SPEC.md](./F005-SESSION-MANAGEMENT-SPEC.md)  
+**Note:** F005 / PD-006 session revocation remains a separate initiative (not part of F003 closure).
 
 ---
 
@@ -54,15 +55,15 @@ V1 product freeze does **not** mean the invite code is absent — it means invit
 
 ## 4. V2 delta
 
-V2 work for F003 is primarily:
+V2 work for F003 was:
 
 1. **Formal specification** (this document) and gap matrix
-2. **Implement PD-004** — hashed invite tokens + explicit token-rotation UX (DECIDED; not yet implemented)
-3. **Implement PD-005** — separate login vs invitation flows; login must not return invite tokens (DECIDED; not yet implemented)
-4. **F005 / PD-006** owns credential-change session revocation (password change/reset); F003 invite accept has **no** PD-006 revocation requirement
-5. Help/docs sync (**PD-013** is **NOT_A_POLICY_DECISION**) during hardening
+2. **Implement PD-004** — hashed invite tokens + explicit token-rotation UX (**DECIDED**; **delivered**)
+3. **Implement PD-005** — separate login vs invitation flows; login must not return invite tokens (**DECIDED**; **delivered**)
+4. **F005 / PD-006** owns credential-change session revocation (password change/reset); F003 invite accept has **no** PD-006 revocation requirement — **still F005 scope**
+5. Invite help/docs sync during F003 hardening (**delivered** for Users topic); Active-sessions help remains **F005-G014** / PD-013
 
-Core create/accept/regenerate/revoke UX is already production-intent; remaining work is security hardening per PD-004 / PD-005 / PD-006.
+**Current delivery:** F003 hardening and final compliance audit closed as `F003_COMPLIANT_WITH_NON_BLOCKERS`. Documented non-blockers (test gaps, one-way reset/invite collision check, regenerate-on-expired UX) do not reopen MUST requirements.
 
 ---
 
@@ -127,7 +128,7 @@ Table: `portfolio_user_invites` (migration `2026_06_28_000001`).
 |--------|------|
 | `id` | PK |
 | `email` | Normalized lowercase invitee email |
-| `token` | **V2 target:** hash of invite secret (column may be renamed e.g. `token_hash` at implementation). **Current code:** plaintext — gap |
+| `token` | **SHA-256 hash** of invite secret (column kept as `token`; no rename). Raw token never persisted. |
 | `invited_by_user_id` | FK admin |
 | `expires_at` | Expiry (**set on create**; not extended by token rotation) |
 | `accepted_at` | Null until accepted |
@@ -173,12 +174,14 @@ Registration from AuthContext remains invite-only (no open register). Delivery r
 
 ## 11. Security semantics
 
-| Topic | Current (pre-hardening) | V2 stance (PD-004 DECIDED) |
-|-------|-------------------------|----------------------------|
+*Columns below retain the **historical pre-hardening** snapshot (left) vs the **authoritative V2 stance** (right). Post-hardening delivery matches the V2 stance (see Status header).*
+
+| Topic | Historical (pre-hardening) | V2 stance (PD-004 / PD-005) — now delivered |
+|-------|----------------------------|---------------------------------------------|
 | Token entropy | `Str::random(64)` | MUST use cryptographically secure random generation |
 | Storage | Plaintext | MUST store **hash only**; plaintext MUST NOT be persisted |
 | Admin exposure | URL always available from stored plaintext | Raw URL only at create/confirmed regenerate; later access = **token rotation** |
-| Rotation | Regenerates token (and currently resets expiry) | MUST replace hash; invalidate previous URL immediately; MUST NOT extend `expires_at` |
+| Rotation | Regenerates token (and previously reset expiry) | MUST replace hash; invalidate previous URL immediately; MUST NOT extend `expires_at` |
 | Accept lookup | Equality on plaintext token | Hash submitted token; compare to stored hash |
 | Old token after rotate | Invalid after new token stored | MUST fail like any invalid token; no special disclosure |
 | Expiry window | 72h (create; code also on regenerate) | 72h from create (PD-002); rotation does not extend |
@@ -186,8 +189,8 @@ Registration from AuthContext remains invite-only (no open register). Delivery r
 | Replay after revoke/expiry | Token unknown | MUST |
 | Throttle | Guest routes `throttle:login` | MUST retain |
 | Email enumeration (admin) | Explicit errors | Allowed for admin (PD-010) |
-| Login token disclosure | Raw token without password (pre-hardening) | **MUST NOT** return invitation token (**PD-005** DECIDED) |
-| Knowing invitee email alone | Sufficient to obtain token via login today | MUST NOT be sufficient to obtain the bearer credential |
+| Login token disclosure | Raw token without password (pre-hardening) | **MUST NOT** return invitation token (**PD-005**) |
+| Knowing invitee email alone | Sufficient to obtain token via login (pre-hardening) | MUST NOT be sufficient to obtain the bearer credential |
 | Invite credential issuance | Create / list re-copy / regenerate | Create + confirmed regenerate only (PD-004); never via login |
 | Cross-user IDOR on admin invite id | Admin-only routes | MUST retain admin gate |
 
@@ -321,28 +324,27 @@ F005 may follow for device session hygiene of invited users but is not a hard ru
 
 ## 19. Open decisions
 
-**None.** See [F003-F005-POLICY-DECISIONS.md](./F003-F005-POLICY-DECISIONS.md) final register:
+**None** for F003. See [F003-F005-POLICY-DECISIONS.md](./F003-F005-POLICY-DECISIONS.md) final register:
 
 - PD-004 / PD-005 / PD-006 — **DECIDED**
 - PD-012 — **RESOLVED_BY_PD-006**
-- PD-013 — **NOT_A_POLICY_DECISION** (docs during hardening)
+- PD-013 — **NOT_A_POLICY_DECISION**
+- PD-007 — **DEFERRED**
 
-Initiative readiness: **READY_FOR_IMPLEMENTATION** (hardening not started).
+**F003 delivery status:** **COMPLETE** (`F003_COMPLIANT_WITH_NON_BLOCKERS`).  
+**F005:** remains **READY_FOR_IMPLEMENTATION** (PD-006 revoke-others not started).
 
 ---
 
 ## 20. Implementation notes
 
 - Primary service: `App\Services\UserInviteService`
-- **Current mismatches (hardening backlog):**
-  - `token` stored plaintext; `regenerate()` also resets `expires_at` (PD-004 / PD-002)
-  - `AuthController::login` returns `invite_token`; `LoginPage` auto-navigates (PD-005)
-- Target accept path: hash submitted raw token → compare to stored hash → pending + unexpired
-- Target login pending-invite path: non-sensitive flag/message only; never return bearer token; never rotate on login
-- Admin list must not return a recoverable URL from storage after create/regenerate response
-- Invite accept: first session only; **no** PD-006 session-revocation requirement (F003-R024)
-- Tests: `tests/Feature/UserInviteTest.php` — update when implementing
-- Do not modify application code in the specification/policy phase
+- **Delivered (PD-004 / PD-005):** hash-at-rest; regenerate without extending `expires_at`; login does not return `invite_token`; LoginPage shows pending-invite message only
+- Accept path: hash submitted raw token → lookup stored hash → pending + unexpired
+- Admin list does not return a recoverable URL from storage after create/regenerate response
+- Invite accept: first session only; **no** PD-006 session-revocation requirement (F003-R024) — owned by F005
+- Tests: `tests/Feature/UserInviteTest.php` (core ACs; residual test gaps are documented non-blockers)
+- **Deploy migration:** `2026_08_09_120001_harden_portfolio_user_invite_token_hashes` **deletes all pending** invitation rows (intentional; re-issue required). See `implementation.md` and the gap matrix deploy note.
 
 ---
 

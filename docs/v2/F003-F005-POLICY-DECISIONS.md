@@ -1,12 +1,13 @@
 # F003 / F005 Policy Decisions
 
 **Date:** 2026-08-09  
-**Status:** **READY_FOR_IMPLEMENTATION** — all Account & Access product policies closed  
+**Status:** Policies **closed**. **F003 COMPLETE** (`F003_COMPLIANT_WITH_NON_BLOCKERS`); **F005 READY_FOR_IMPLEMENTATION** (PD-006 hardening not started)  
 **Specs:** [F003-USER-INVITE-SPEC.md](./F003-USER-INVITE-SPEC.md), [F005-SESSION-MANAGEMENT-SPEC.md](./F005-SESSION-MANAGEMENT-SPEC.md)  
 **Boundary:** [F003-F005-BOUNDARY.md](./F003-F005-BOUNDARY.md)  
 **Gap matrix / backlog:** [F003-F005-IMPLEMENTATION-GAP-MATRIX.md](./F003-F005-IMPLEMENTATION-GAP-MATRIX.md)
 
-No unresolved **product-policy** decisions remain for F003/F005. Remaining work is **implementation/hardening** (and documentation sync). Application code has **not** been changed by this policy pack.
+No unresolved **product-policy** decisions remain for F003/F005.  
+**Implementation tracking:** F003 PD-004 / PD-005 delivered; F005 PD-006 revoke-others remains the next hardening work. This policy pack itself does not change application code.
 
 ---
 
@@ -17,9 +18,9 @@ No unresolved **product-policy** decisions remain for F003/F005. Remaining work 
 | PD-001 Invite delivery (copy-paste) | **DECIDED** |
 | PD-002 Invite expiry (72h from create; no extend on rotate) | **DECIDED** |
 | PD-003 One pending invite per email | **DECIDED** |
-| PD-004 Invite token hashing + rotation | **DECIDED** |
-| PD-005 Separate login vs invitation flows | **DECIDED** |
-| PD-006 Revoke other sessions on credential change/reset | **DECIDED** |
+| PD-004 Invite token hashing + rotation | **DECIDED** (F003 implemented) |
+| PD-005 Separate login vs invitation flows | **DECIDED** (F003 implemented) |
+| PD-006 Revoke other sessions on credential change/reset | **DECIDED** (F005 owns implementation — **not started**) |
 | PD-007 Admin force-logout of another user | **DEFERRED** (out of this initiative) |
 | PD-008 Session metadata fields | **DECIDED** |
 | PD-009 Multi-device sessions allowed | **DECIDED** |
@@ -32,14 +33,16 @@ No unresolved **product-policy** decisions remain for F003/F005. Remaining work 
 
 ## Summary table (detail)
 
-| Decision | Current behaviour (code) | Approved target | Status |
-|----------|--------------------------|-----------------|--------|
+*“Code at policy time” is the **historical** snapshot when these decisions were recorded (pre-F003 hardening). It is not current delivery status.*
+
+| Decision | Code at policy time (historical) | Approved target | Status |
+|----------|----------------------------------|-----------------|--------|
 | PD-001 | Copy link/message; no Mailer | Keep copy-paste | **DECIDED** |
-| PD-002 | 72h; regenerate also resets expiry today | 72h from **create** only; rotate must not extend | **DECIDED** |
+| PD-002 | 72h; regenerate also reset expiry then | 72h from **create** only; rotate must not extend | **DECIDED** (F003: no extend on rotate) |
 | PD-003 | One pending per email | Keep | **DECIDED** |
-| PD-004 | Plaintext token; re-copy from storage | Hash at rest; later URL = explicit regenerate | **DECIDED** |
-| PD-005 | Login returns `invite_token` | OPTION_C — no token from login | **DECIDED** |
-| PD-006 | Change/reset leave other sessions | OPTION_B — revoke others; keep current/new | **DECIDED** |
+| PD-004 | Plaintext token; re-copy from storage | Hash at rest; later URL = explicit regenerate | **DECIDED** (F003 delivered) |
+| PD-005 | Login returns `invite_token` | OPTION_C — no token from login | **DECIDED** (F003 delivered) |
+| PD-006 | Change/reset leave other sessions | OPTION_B — revoke others; keep current/new | **DECIDED** (F005 pending) |
 | PD-007 | No admin cross-user session kill | Defer | **DEFERRED** |
 | PD-008 | IP / device / UA / activity shown | Keep | **DECIDED** |
 | PD-009 | Multi-device allowed | Keep | **DECIDED** |
@@ -60,7 +63,7 @@ No unresolved **product-policy** decisions remain for F003/F005. Remaining work 
 
 **DECIDED** — Validity is **72 hours from create**. Token regeneration/rotation **MUST NOT** extend or reset `expires_at`.
 
-**Implementation note:** current `UserInviteService::regenerate()` resets expiry — hardening gap (not a new product choice).
+**Implementation note:** At policy time, `UserInviteService::regenerate()` still reset expiry (historical gap). **F003 hardening delivered:** regenerate preserves original `expires_at`.
 
 ---
 
@@ -169,7 +172,7 @@ PD-013 is **documentation/help synchronization** work and is **not** a product p
 - `F005-R013` already says contextual help SHOULD describe those controls  
 - Invite/password help should also reflect PD-004 / PD-005 / PD-006 when those hardenings land  
 
-Handle during F003/F005 implementation/hardening via `appDocumentation.js` (and static docs). Tracked as gap **F005-G014** (and related invite help updates).
+Handle during F003/F005 implementation/hardening via `appDocumentation.js` (and static docs). Invite help updated with F003; Active sessions help remains tracked as gap **F005-G014**.
 
 ---
 

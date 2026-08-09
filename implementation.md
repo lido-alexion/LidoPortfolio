@@ -1274,7 +1274,38 @@ Document in this section and `portfolio-history-rebuild-report.md`.
 
 ## Authentication Architecture (May 2026)
 
-**V2 Account & Access (2026-08-09):** Formal specification pack for deferred **F003** (User Invite) and **F005** (Session Management). Status: **READY_FOR_IMPLEMENTATION** (policies closed; app hardening not started). Start at [`docs/v2/F003-F005-BOUNDARY.md`](docs/v2/F003-F005-BOUNDARY.md); requirements in [`F003-USER-INVITE-SPEC.md`](docs/v2/F003-USER-INVITE-SPEC.md) and [`F005-SESSION-MANAGEMENT-SPEC.md`](docs/v2/F005-SESSION-MANAGEMENT-SPEC.md); policies/gaps/backlog in [`F003-F005-POLICY-DECISIONS.md`](docs/v2/F003-F005-POLICY-DECISIONS.md) and [`F003-F005-IMPLEMENTATION-GAP-MATRIX.md`](docs/v2/F003-F005-IMPLEMENTATION-GAP-MATRIX.md). Indexed in `DOCS.md` §3.D.
+**V2 Account & Access (2026-08-09):** Spec pack for **F003** (User Invite) and **F005** (Session Management) — [`docs/v2/F003-F005-BOUNDARY.md`](docs/v2/F003-F005-BOUNDARY.md), [`F003-USER-INVITE-SPEC.md`](docs/v2/F003-USER-INVITE-SPEC.md), [`F005-SESSION-MANAGEMENT-SPEC.md`](docs/v2/F005-SESSION-MANAGEMENT-SPEC.md), [`F003-F005-POLICY-DECISIONS.md`](docs/v2/F003-F005-POLICY-DECISIONS.md), [`F003-F005-IMPLEMENTATION-GAP-MATRIX.md`](docs/v2/F003-F005-IMPLEMENTATION-GAP-MATRIX.md). Indexed in `DOCS.md` §3.D.
+
+**Current tracking:** **F003 = COMPLETE** (`F003_COMPLIANT_WITH_NON_BLOCKERS`). **F005 = READY_FOR_IMPLEMENTATION** (next; owns PD-006). F003 does **not** implement password-change/reset session revocation.
+
+### F003 — User Invitation Security Hardening (2026-08-09) — COMPLETE
+
+Implemented PD-004 / PD-005 only (not F005 / PD-006).
+
+**Compliance:** Final compliance audit verdict **`F003_COMPLIANT_WITH_NON_BLOCKERS`** — no MUST failures; F003 formally closed; F005 may begin.
+
+**Capabilities**
+- Invitation bearer tokens: CSPRNG raw token; store **SHA-256 hash** only in `portfolio_user_invites.token` (varchar 64, no column rename).
+- Raw URL returned only on create and explicit regenerate; list payloads never reconstruct a URL.
+- Regenerate: same row, replace hash, **preserve original `expires_at`**, old URL invalid; admin confirm UX.
+- Login with pending invite: **no** auth/session/`invite_token`; returns `invite_setup_required` + administrator-link message. SPA shows message only (no `/invite/{token}` navigation).
+- Accept creates user + first session; no F005-style session revocation.
+
+**Migration / deploy (pending invites):** `2026_08_09_120001_harden_portfolio_user_invite_token_hashes`
+
+- **Intentional / destructive for pending rows:** deletes all invitations with `accepted_at` null (pending and expired-unaccepted).
+- Existing pending invitation **URLs no longer work** after this migration runs.
+- Administrators **must re-issue** any still-needed invitations after deploy + migrate.
+- Accepted invitation rows are retained; stored token values are scrambled to random hashes (irreversible; not usable as URLs).
+- `down()` does **not** restore deleted pending invitations. Not zero-downtime data-preserving migration.
+
+**Auth fix (shared login path):** `AuthController` uses `Auth::guard('web')->attempt` and `Auth::forgetGuards()` on logout so Sanctum’s default-driver cache does not break re-login or leave stale identity (tests/Octane). Not F005 revoke-others.
+
+**Tests:** `UserInviteTest` covers hash storage, validate/accept, rotation/expiry, authz, PD-005 login. Related: `AuthSessionTest`, `PasswordResetLinkTest`, `AuthCsrfLoginTest`. Residual AC/test/UX non-blockers are listed in the gap matrix (not MUST failures).
+
+**UI:** `UserManagementPage` — Copy Invitation URL banner vs Regenerate Invitation URL + confirm; `LoginPage` pending-invite message; help in `appDocumentation.js` Users topic.
+
+**Not done (F005 owns):** password-change/reset session revocation (PD-006), admin force-logout (PD-007 deferred), Active sessions help polish (F005-G014).
 
 ### Stack (mandatory)
 

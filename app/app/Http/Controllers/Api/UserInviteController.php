@@ -25,19 +25,21 @@ class UserInviteController extends Controller
             'email' => ['required', 'email', 'max:255'],
         ]);
 
-        $invite = $this->invites->create($request->user(), $validated['email']);
+        $result = $this->invites->create($request->user(), $validated['email']);
 
         return response()->json([
-            'data' => $this->invites->toAdminPayload($invite),
+            'data' => $this->invites->toAdminPayload($result['invite'], $result['raw_token']),
+            'message' => 'Invitation created. Copy and save the invitation URL now — regenerating later will invalidate it.',
         ], 201);
     }
 
     public function regenerate(UserInvite $invite): JsonResponse
     {
-        $invite = $this->invites->regenerate($invite);
+        $result = $this->invites->regenerate($invite);
 
         return response()->json([
-            'data' => $this->invites->toAdminPayload($invite),
+            'data' => $this->invites->toAdminPayload($result['invite'], $result['raw_token']),
+            'message' => 'Invitation URL regenerated. The previous URL no longer works. Copy and save the new URL.',
         ]);
     }
 

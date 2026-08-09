@@ -114,7 +114,7 @@
 
       <section class="panel">
         <h2>Overview</h2>
-        <p>Registration is invite-only. Admins create invite links and password-reset links for existing accounts without requiring the current password.</p>
+        <p>Registration is invite-only. Admins create invite links and password-reset links for existing accounts without requiring the current password. Invitation URLs are shown only when created or regenerated — copy them immediately. Regenerating invalidates the previous URL and does not extend the original 72-hour expiry. Pending invitees must use the administrator-provided link (login will not reveal the invitation URL).</p>
 <p>User management is admin-only and security-sensitive. Keep invite/reset links scoped, time-bound where possible, and aligned with account ownership controls.</p>
 <p>Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).</p>
 
@@ -124,7 +124,10 @@
         <h2>Controls</h2>
         <dl class="doc-list">
         <dt>Create invite</dt>
-        <dd>Generate a link for a new user to set a password and sign in.</dd>
+        <dd>Generate a link for a new user. Copy Invitation URL from the banner right away — the list does not re-show a stored URL.</dd>
+    
+        <dt>Regenerate Invitation URL</dt>
+        <dd>Issues a new URL for a pending invite after confirmation. The old URL stops working; original expiry is unchanged.</dd>
     
         <dt>Password reset link</dt>
         <dd>Issue a reset URL for an existing account.</dd>
@@ -142,6 +145,9 @@
         <dl class="doc-list">
         <dt>Invite-only</dt>
         <dd>There is no public self-registration endpoint for guests.</dd>
+    
+        <dt>Hashed invitation tokens</dt>
+        <dd>Only a hash of the invitation secret is stored. The raw URL is a bearer credential shown once at create/regenerate.</dd>
     
         <dt>Admin role</dt>
         <dd>Gates global settings and ops tools.</dd>

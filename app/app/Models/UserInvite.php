@@ -9,6 +9,9 @@ class UserInvite extends Model
 {
     protected $table = 'portfolio_user_invites';
 
+    /**
+     * `token` stores a SHA-256 hash of the invitation bearer secret (never the raw token).
+     */
     protected $fillable = [
         'email',
         'token',
@@ -16,6 +19,10 @@ class UserInvite extends Model
         'expires_at',
         'accepted_at',
         'user_id',
+    ];
+
+    protected $hidden = [
+        'token',
     ];
 
     protected function casts(): array

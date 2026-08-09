@@ -1,9 +1,25 @@
 # F003 / F005 Implementation Gap Matrix
 
 **Date:** 2026-08-09  
-**Status:** **READY_FOR_IMPLEMENTATION** (policy closed; application hardening not started)  
+**Status:** **F003 COMPLETE** (`F003_COMPLIANT_WITH_NON_BLOCKERS`); **F005 READY_FOR_IMPLEMENTATION** (PD-006 not started)  
 **Initiative:** Account & Access Management (F003 → F005)  
 **Related:** [F003-USER-INVITE-SPEC.md](./F003-USER-INVITE-SPEC.md), [F005-SESSION-MANAGEMENT-SPEC.md](./F005-SESSION-MANAGEMENT-SPEC.md), [F003-F005-BOUNDARY.md](./F003-F005-BOUNDARY.md), [F003-F005-POLICY-DECISIONS.md](./F003-F005-POLICY-DECISIONS.md)
+
+### Delivery summary
+
+| Track | Status |
+|-------|--------|
+| F003 User Invite hardening (PD-004 / PD-005) | **COMPLETE** — compliant with documented non-blockers |
+| F005 Session Management hardening (PD-006) | **NOT started** — next Account & Access work |
+
+### Deploy note — pending-invite migration (operational)
+
+Migration `2026_08_09_120001_harden_portfolio_user_invite_token_hashes`:
+
+- **Intentionally deletes** all pending (`accepted_at` null) invitation rows when moving to hash-only storage.
+- Existing pending invitation **URLs stop working**; administrators **must re-issue** invitations after migrate.
+- Accepted rows keep metadata; their stored token values are scrambled to random hashes (no usable URL).
+- Migration is **destructive for pending rows**; `down()` does not restore them. Not a zero-downtime / reversible data migration.
 
 ### Classification legend
 
@@ -41,7 +57,7 @@ Capabilities already shipped but needing harden/test/docs are **not** “missing
 |-------|-----------|----------|
 | F003 largely shipped | **Yes** | `UserInviteService`, admin + guest APIs, SPA, `UserInviteTest` |
 | F005 mostly shipped | **Yes** | `SessionManagementService`, APIs, Settings Account UI; audit “partial UI” is **outdated** |
-| Highest remaining V2 priority | **Yes** | `V2-PRIORITIZATION.md` score 12 for F003 |
+| Highest remaining V2 priority (at planning) | **Yes (historical)** | Was F003 at score 12; **F003 now COMPLETE** — F005 is next Account & Access work |
 | Unlocks F060 | **Soft yes** | Planning dependency; no hard code gate |
 | No formal V2 pack before this work | **Yes** | No prior `docs/v2/F003-*` / `F005-*` |
 
@@ -54,7 +70,7 @@ Capabilities already shipped but needing harden/test/docs are **not** “missing
 | Sanctum SPA login/logout/me/CSRF | Yes (SD-001) | Shipped | Preserve | None (do not re-scope) |
 | F004 password reset links | Yes (SD-035) | Shipped | Preserve | None |
 | `is_admin` + admin middleware | Yes | Shipped | Preserve | None |
-| Invite-only registration | Deferred from V1; shipped | Full (plaintext tokens) | Formalize + **PD-004 hash/rotation** | Spec done; hashing/rotation **not implemented** |
+| Invite-only registration | Deferred from V1; shipped | **F003 hardening done** (hashed tokens, PD-004/005) | Preserve; F005 still open | Hashing/rotation/login separation **implemented** |
 | Session list / revoke / logout-others | Deferred from V1; shipped | Full API + Settings UI | Formalize + PD-006 + tests/docs | Spec done; PD-006 not implemented; test/docs gaps |
 | RBAC / tenants | Out of V1 | Absent | Out of scope | N/A |
 
@@ -64,26 +80,26 @@ Capabilities already shipped but needing harden/test/docs are **not** “missing
 
 | ID | Feature | Capability | Classification | Existing implementation | Gap | Evidence | Priority |
 |----|---------|------------|----------------|-------------------------|-----|----------|----------|
-| F003-G001 | Invite | Admin create invite | V2_REQUIRED | Implemented; admin-only | Formal AC coverage | `UserInviteController@store`, `UserInviteTest` | P1 |
-| F003-G002 | Invite | List invites (admin) | V2_REQUIRED | Implemented | Formal AC | `listForAdmin`, GET `/api/invites` | P1 |
-| F003-G003 | Invite | Regenerate / rotate token | V2_REQUIRED | Implemented (plaintext rotate; **also resets expiry**) | Target: hash replace + invalidate old URL; **stop resetting `expires_at`**; confirm UX | `regenerate`, POST `…/regenerate` | P0 |
-| F003-G004 | Invite | Revoke pending invite | V2_REQUIRED | Hard delete; blocked if accepted | Formal AC | `revoke` | P1 |
-| F003-G005 | Invite | 72h expiry + purge | V2_REQUIRED | Implemented on create; regenerate currently extends | Align with PD-002/PD-004 (no extend on rotate) | `EXPIRY_HOURS`, `purgeExpired` | P0 |
-| F003-G006 | Invite | Single pending per email | V2_REQUIRED | Enforced in service | Formal AC; regenerate replaces credential on same row | create validation | P1 |
-| F003-G007 | Invite | Reject invite for existing email | V2_REQUIRED | Implemented | Formal AC | create + accept paths | P1 |
-| F003-G008 | Invite | Guest validate token | V2_REQUIRED | GET `/api/invites/{token}` plaintext match | Switch to hash-compare lookup | `InviteAcceptController@show` | P0 |
-| F003-G009 | Invite | Guest accept → user + default portfolio + login | V2_REQUIRED | Implemented (plaintext token) | Hash submitted token before match | `accept`, `PortfolioProfileService` | P0 |
-| F003-G010 | Invite | Copy-paste delivery (no email) | V2_REQUIRED | Implemented | Keep; split Copy vs Regenerate UX per PD-004 | compose message + UI | P1 |
-| F003-G011 | Invite | Login must not return invite token | V2_REQUIRED | **PD-005 DECIDED (OPTION_C)**; code still returns `invite_token`; SPA auto-navigates | Remove token from login; optional `invite_setup_required` + message; update LoginPage | `AuthController::login`, `LoginPage.jsx` | P0 |
-| F003-G012 | Invite | Token at-rest hashing + rotation | V2_REQUIRED | **PD-004 DECIDED**; code still plaintext; list can re-copy URL | Persist hash only; raw URL only at create/confirmed regenerate; no reconstruct | `portfolio_user_invites.token`, admin payload | P0 |
-| F003-G013 | Invite | Non-admin forbidden | V2_REQUIRED | 403 via `admin` middleware | Formal AC | `UserInviteTest` | P1 |
-| F003-G014 | Invite | Invitee non-admin | V2_REQUIRED | Default `is_admin=false` | Formal AC | User create on accept | P1 |
+| F003-G001 | Invite | Admin create invite | V2_REQUIRED | Implemented; admin-only; raw URL once | **DONE** | `UserInviteController@store`, `UserInviteTest` | P1 |
+| F003-G002 | Invite | List invites (admin) | V2_REQUIRED | List without `invite_url` (no reconstruct) | **DONE** | `listForAdmin`, GET `/api/invites` | P1 |
+| F003-G003 | Invite | Regenerate / rotate token | V2_REQUIRED | Hash replace; same row; no expiry extend; confirm UX | **DONE** | `regenerate`, POST `…/regenerate` | P0 |
+| F003-G004 | Invite | Revoke pending invite | V2_REQUIRED | Hard delete; blocked if accepted | **DONE** | `revoke` | P1 |
+| F003-G005 | Invite | 72h expiry + purge | V2_REQUIRED | Expiry from original create; rotate does not extend | **DONE** | `EXPIRY_HOURS`, `purgeExpired` | P0 |
+| F003-G006 | Invite | Single pending per email | V2_REQUIRED | Enforced; regenerate updates same row | **DONE** | create validation | P1 |
+| F003-G007 | Invite | Reject invite for existing email | V2_REQUIRED | Implemented | **DONE** | create + accept paths | P1 |
+| F003-G008 | Invite | Guest validate token | V2_REQUIRED | Lookup by `hash('sha256', raw)` | **DONE** | `InviteAcceptController@show` | P0 |
+| F003-G009 | Invite | Guest accept → user + default portfolio + login | V2_REQUIRED | Hash match; first session; no F005 revoke | **DONE** | `accept`, `PortfolioProfileService` | P0 |
+| F003-G010 | Invite | Copy-paste delivery (no email) | V2_REQUIRED | Copy Invitation URL on issue; no SMTP | **DONE** | compose message + UI | P1 |
+| F003-G011 | Invite | Login must not return invite token | V2_REQUIRED | `invite_setup_required` + message only; SPA no navigate | **DONE** | `AuthController::login`, `LoginPage.jsx` | P0 |
+| F003-G012 | Invite | Token at-rest hashing + rotation | V2_REQUIRED | SHA-256 in `token` column; `$hidden`; migration purge pending | **DONE** | `portfolio_user_invites.token`, admin payload | P0 |
+| F003-G013 | Invite | Non-admin forbidden | V2_REQUIRED | 403 via `admin` middleware | **DONE** | `UserInviteTest` | P1 |
+| F003-G014 | Invite | Invitee non-admin | V2_REQUIRED | Default `is_admin=false` | **DONE** | User create on accept | P1 |
 | F003-G015 | Invite | Open self-registration | OUT_OF_SCOPE | Removed | Keep removed | no `POST /auth/register` | — |
 | F003-G016 | Invite | SMTP invite send | OUT_OF_SCOPE | Absent | Do not add unless product reopens | no Mail classes | — |
-| F003-G017 | Invite | Cross-check token uniqueness vs reset links | V2_SHOULD | Reset gen avoids invite tokens; invite gen does not check reset table | Optional harden collision check (hash domain) | `PasswordResetLinkService` vs `UserInviteService` | P2 |
-| F003-G018 | Invite | Formal V2 specification pack | V2_REQUIRED | Specs created; PD-004 recorded | Maintain as source of truth | this doc + F003 spec | P1 |
-| F003-G019 | Invite | Regenerate UI confirmation / wording | V2_REQUIRED | Current UI uses regenerate/copy patterns without PD-004 warnings | **Regenerate Invitation URL** + pre-warning + confirm; initial **Copy Invitation URL** only | `UserManagementPage.jsx` | P0 |
-| F003-G020 | Invite | Regenerate must not extend expiry | V2_REQUIRED | Current `regenerate()` sets new 72h `expires_at` | Stop silent expiry reset (PD-002/PD-004) | `UserInviteService::regenerate` | P0 |
+| F003-G017 | Invite | Cross-check token uniqueness vs reset links | V2_SHOULD | Reset gen checks hashed invite tokens; invite gen does not check reset table | **PARTIAL** (non-blocker) | `PasswordResetLinkService` | P2 |
+| F003-G018 | Invite | Formal V2 specification pack | V2_REQUIRED | Specs authoritative; implementation aligned | **DONE** | this doc + F003 spec | P1 |
+| F003-G019 | Invite | Regenerate UI confirmation / wording | V2_REQUIRED | Regenerate Invitation URL + warning + confirm; Copy on issue | **DONE** | `UserManagementPage.jsx` | P0 |
+| F003-G020 | Invite | Regenerate must not extend expiry | V2_REQUIRED | `regenerate()` preserves `expires_at` | **DONE** | `UserInviteService::regenerate` | P0 |
 
 ---
 
@@ -114,9 +130,9 @@ Capabilities already shipped but needing harden/test/docs are **not** “missing
 
 | ID | Observation | Severity | Action in this initiative |
 |----|-------------|----------|---------------------------|
-| SEC-001 | Pending-invite login returns raw token without password | High → policy closed | **PD-005** — implement no-token login |
-| SEC-002 | Invite tokens plaintext at rest | Medium → policy closed | **PD-004** — implement hash + rotation |
-| SEC-003 | Password change / reset leave other sessions alive | Medium → policy closed | **PD-006** — implement revoke-others |
+| SEC-001 | Pending-invite login returns raw token without password | High → closed | **PD-005 implemented** — no token on login |
+| SEC-002 | Invite tokens plaintext at rest | Medium → closed | **PD-004 implemented** — SHA-256 hash + rotation |
+| SEC-003 | Password change / reset leave other sessions alive | Medium → policy closed | **PD-006** — implement revoke-others (**F005**, not done) |
 | SEC-004 | Session revoke APIs are self-scoped (good) | Info | Preserve |
 | SEC-005 | No tenant isolation bugs found in invite paths (no tenants) | Info | N/A |
 | SEC-006 | Debug agent auto-login middleware exists when enabled | Ops risk | Outside F003/F005 unless enabled in prod — document only |
@@ -129,13 +145,13 @@ No penetration test performed; items above are from static code inspection only.
 
 | Area | Shipped? | Formal V2 need |
 |------|----------|----------------|
-| F003 core lifecycle | Yes | Security hardening PD-004/005 + UX/tests |
-| F003 token storage | Plaintext today | **PD-004** hash + rotation |
-| F003 login vs invite | Returns token today | **PD-005** separate flows |
-| F003 regenerate expiry | Extends today | Stop extend (PD-002/004) |
+| F003 core lifecycle | Yes | Hardening complete |
+| F003 token storage | SHA-256 hash | **PD-004 done** |
+| F003 login vs invite | Separated (no token) | **PD-005 done** |
+| F003 regenerate expiry | Preserved | **DONE** |
 | F003 email transport | Intentionally no | Out of scope |
 | F005 list/revoke UI+API | Yes | Tests + docs; preserve |
-| F005 password change/reset sessions | Survive today | **PD-006** revoke-others |
+| F005 password change/reset sessions | Survive today | **PD-006** revoke-others (**not implemented**) |
 | F005 admin force logout | No | Deferred PD-007 |
 | Shared V1 auth | Yes | Do not re-scope |
 
@@ -145,48 +161,59 @@ No penetration test performed; items above are from static code inspection only.
 
 | Decision | Status | Implementation complete? |
 |----------|--------|--------------------------|
-| PD-004 | **DECIDED** | **No** |
-| PD-005 | **DECIDED** | **No** |
-| PD-006 | **DECIDED** | **No** |
+| PD-004 | **DECIDED** | **Yes** (F003) |
+| PD-005 | **DECIDED** | **Yes** (F003) |
+| PD-006 | **DECIDED** | **No** (F005) |
 | PD-012 | **RESOLVED_BY_PD-006** | See F005-G010 |
 | PD-013 | **NOT_A_POLICY_DECISION** | See F005-G014 (docs) |
 
 ---
 
-## Implementation backlog (do not implement in this doc session)
+## Implementation backlog
 
 ### F003 — Required hardening
 
 | ID | Capability | Current | Target | Areas | Depends | Priority |
 |----|------------|---------|--------|-------|---------|----------|
-| F003-G012 / G008 / G009 | Hash invite tokens; validate/accept by hash | Plaintext equality | Store hash; compare hash(submitted) | `UserInviteService`, model/migration if rename, accept/show | — | P0 |
-| F003-G003 / G019 | Rotation UX + confirm | Soft regenerate/copy | Regenerate Invitation URL + warning + confirm; Copy only on issue | `UserManagementPage.jsx`, admin API payload | G012 | P0 |
-| F003-G020 / G005 | No expiry extend on rotate | Regenerates sets +72h | Leave `expires_at` unchanged | `UserInviteService::regenerate` | — | P0 |
-| F003-G011 | Login no invite token | Returns `invite_token`; SPA navigates | No token; optional message; LoginPage message only | `AuthController`, `LoginPage.jsx` | PD-005 | P0 |
-| F003 tests | AC coverage for hash/rotate/login | Partial `UserInviteTest` | Extend for PD-004/005 ACs | `UserInviteTest.php` | above | P0 |
+| F003-G012 / G008 / G009 | Hash invite tokens | **DONE** | — | `UserInviteService` | — | — |
+| F003-G003 / G019 | Rotation UX + confirm | **DONE** | — | `UserManagementPage.jsx` | — | — |
+| F003-G020 / G005 | No expiry extend on rotate | **DONE** | — | `UserInviteService::regenerate` | — | — |
+| F003-G011 | Login no invite token | **DONE** | — | `AuthController`, `LoginPage.jsx` | — | — |
+| F003 tests | AC coverage for hash/rotate/login | **DONE** | — | `UserInviteTest.php` | — | — |
 
 ### F003 — Should / documentation
 
 | ID | Capability | Current | Target | Areas | Depends | Priority |
 |----|------------|---------|--------|-------|---------|----------|
-| F003-G017 | Token collision vs reset links | Partial | Optional hash-domain check | Invite + reset services | G012 | P2 |
-| Invite help | Users topic | Pre-PD-004/005 copy | Reflect hash/rotation + no login token | `appDocumentation.js` | harden | P2 |
-| F003-G001–G007, G013–G014 | Core lifecycle | Implemented | Formal AC / preserve | tests | — | P1 |
+| F003-G017 | Token collision vs reset links | **PARTIAL** (reset→invite check only) | Optional invite→reset check | services | — | non-blocker |
+| Invite help | Users topic | **DONE** | — | `appDocumentation.js` | — | — |
+| F003-G001–G007, G013–G014 | Core lifecycle | **DONE** | Preserve | tests | — | — |
+
+### F003 — Documented non-blockers (do not reopen MUST scope)
+
+| Item | Classification | Notes |
+|------|----------------|-------|
+| AC009 / AC010 test coverage | test gap | Behaviour implemented; dedicated tests thin/absent |
+| AC004 portfolio assertion in tests | test gap | `createDefaultForUser` called; test does not assert profile row |
+| AC007 accept-after-revoke assertion | test gap | Revoke deletes row; post-revoke accept not separately asserted |
+| Frontend automated UI tests | test gap | No FE test framework; source + build verification only |
+| F003-G017 one-way collision check | SHOULD residual | Reset generation avoids invite hashes; inverse optional |
+| Regenerate allowed on expired invite row | UX limitation | Preserves `expires_at` (may yield immediately unusable URL) |
 
 ### F005 — Required hardening
 
 | ID | Capability | Current | Target | Areas | Depends | Priority |
 |----|------------|---------|--------|-------|---------|----------|
-| F005-G009 | Password change revoke others | Preserves others | Keep current; revoke others; invalidate other remember-me | `ProfileController`, `SessionManagementService`, User remember_token | PD-006 | P0 |
-| F005-G010 | Reset accept revoke others | Preserves others | Keep new session; revoke others; invalidate other remember-me | `PasswordResetAcceptController` | PD-006 | P0 |
-| F005-G015 (+ AC007–009) | Session tests | Thin DELETE / no PD-006 | Expand AuthSession/Profile/reset tests | PHPUnit | G009/G010 | P1 |
-| F005-G003–G005 | Single/foreign/current revoke tests | Partial | Formal AC | `AuthSessionTest` | — | P1 |
+| F005-G009 | Password change revoke others | Preserves others — **NOT_DELIVERED** | Keep current; revoke others; invalidate other remember-me | `ProfileController`, `SessionManagementService`, User remember_token | PD-006 | P0 |
+| F005-G010 | Reset accept revoke others | Preserves others — **NOT_DELIVERED** | Keep new session; revoke others; invalidate other remember-me | `PasswordResetAcceptController` | PD-006 | P0 |
+| F005-G015 (+ AC007–009) | Session tests | Thin DELETE / no PD-006 — **OPEN** | Expand AuthSession/Profile/reset tests | PHPUnit | G009/G010 | P1 |
+| F005-G003–G005 | Single/foreign/current revoke tests | Partial — **OPEN** | Formal AC | `AuthSessionTest` | — | P1 |
 
 ### F005 — Should / documentation
 
 | ID | Capability | Current | Target | Areas | Depends | Priority |
 |----|------------|---------|--------|-------|---------|----------|
-| F005-G014 | Active sessions help | Missing | Document controls (+ PD-006 note on profile) | `appDocumentation.js` | — | P2 |
+| F005-G014 | Active sessions help | Missing — **OPEN** | Document controls (+ PD-006 note on profile) | `appDocumentation.js` | — | P2 |
 | F005-G001–G008 | List/revoke UI+API | Implemented | Preserve + formal AC | existing | — | P1 |
 
 ### Out of scope / deferred
@@ -202,10 +229,11 @@ No penetration test performed; items above are from static code inspection only.
 
 ### Recommended implementation order
 
-**PHASE 1 — F003:** hash storage → hash validate/accept → regenerate without expiry extend → admin Copy vs Regenerate UX → remove login token disclosure + LoginPage → tests → invite help.
+**PHASE 1 — F003:** **COMPLETE** (`F003_COMPLIANT_WITH_NON_BLOCKERS`). Non-blockers listed above; do not treat as new feature scope.
 
-**PHASE 2 — F005:** password-change revoke-others + remember-me → password-reset revoke-others + remember-me → session tests → Active sessions / profile help.
+**PHASE 2 — F005:** **READY_FOR_IMPLEMENTATION** — password-change revoke-others + remember-me → password-reset revoke-others + remember-me → session tests → Active sessions / profile help.
 
 ---
 
 *End of gap matrix.*
+*F003 closed 2026-08-09 after final compliance audit; F005 remains open.*

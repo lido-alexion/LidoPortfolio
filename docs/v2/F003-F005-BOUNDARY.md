@@ -1,7 +1,7 @@
 # F003 / F005 / V1 Auth Boundary Document
 
 **Date:** 2026-08-09  
-**Status:** **READY_FOR_IMPLEMENTATION** (policy closed; hardening not started)  
+**Status:** **F003 COMPLETE** (`F003_COMPLIANT_WITH_NON_BLOCKERS`); **F005 READY_FOR_IMPLEMENTATION** (PD-006 not started)  
 **Purpose:** Prevent scope bleed between V1 authentication, F003 invite onboarding, F005 session lifecycle, authorization primitives, and F060 collaboration.  
 **Related:** [F003-USER-INVITE-SPEC.md](./F003-USER-INVITE-SPEC.md), [F005-SESSION-MANAGEMENT-SPEC.md](./F005-SESSION-MANAGEMENT-SPEC.md), [F003-F005-POLICY-DECISIONS.md](./F003-F005-POLICY-DECISIONS.md), [F003-F005-IMPLEMENTATION-GAP-MATRIX.md](./F003-F005-IMPLEMENTATION-GAP-MATRIX.md)
 

@@ -39,8 +39,11 @@ export default function LoginPage() {
             navigate(consumeRedirectPath() || '/');
         } catch (error) {
             const data = error?.response?.data;
-            if (data?.invite_setup_required && data?.invite_token) {
-                navigate(`/invite/${data.invite_token}`);
+            if (data?.invite_setup_required) {
+                setMessage(
+                    data?.message
+                    || 'An invitation is pending for this email. Please use the invitation link provided by your administrator.'
+                );
                 return;
             }
             setMessage(data?.message

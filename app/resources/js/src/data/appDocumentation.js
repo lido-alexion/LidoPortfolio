@@ -1962,13 +1962,15 @@ const APP_DOCUMENTATION_BASE = [
         match: (p) => pathStarts(p, '/settings/users'),
         summary: 'Admin invite links, password-reset links, and account administration.',
         overview:
-            'Registration is invite-only. Admins create invite links and password-reset links for existing accounts without requiring the current password.',
+            'Registration is invite-only. Admins create invite links and password-reset links for existing accounts without requiring the current password. Invitation URLs are shown only when created or regenerated — copy them immediately. Regenerating invalidates the previous URL and does not extend the original 72-hour expiry. Pending invitees must use the administrator-provided link (login will not reveal the invitation URL).',
         controls: [
-            { name: 'Create invite', description: 'Generate a link for a new user to set a password and sign in.' },
+            { name: 'Create invite', description: 'Generate a link for a new user. Copy Invitation URL from the banner right away — the list does not re-show a stored URL.' },
+            { name: 'Regenerate Invitation URL', description: 'Issues a new URL for a pending invite after confirmation. The old URL stops working; original expiry is unchanged.' },
             { name: 'Password reset link', description: 'Issue a reset URL for an existing account.' },
         ],
         concepts: [
             { name: 'Invite-only', description: 'There is no public self-registration endpoint for guests.' },
+            { name: 'Hashed invitation tokens', description: 'Only a hash of the invitation secret is stored. The raw URL is a bearer credential shown once at create/regenerate.' },
             { name: 'Admin role', description: 'Gates global settings and ops tools.' },
         ],
         related: ['settings', 'profile'],
