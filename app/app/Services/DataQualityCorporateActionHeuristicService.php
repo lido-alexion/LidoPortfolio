@@ -16,10 +16,12 @@ class DataQualityCorporateActionHeuristicService
     ) {}
 
     /**
-     * @return array{scanned:int, flagged:int}
+     * @return array{scanned:int, flagged:int, detection_run_id:string}
      */
-    public function scanAllStocks(float $minGapPercent = 25.0): array
+    public function scanAllStocks(float $minGapPercent = 25.0, ?string $detectionRunId = null): array
     {
+        $detectionRunId ??= DataQualityIssueService::newDetectionRunId('portfolio:detect-corporate-action-anomalies');
+
         $stocks = Stock::query()
             ->where('is_active', true)
             ->where('is_benchmark', false)
@@ -27,7 +29,7 @@ class DataQualityCorporateActionHeuristicService
 
         $flagged = 0;
         foreach ($stocks as $stock) {
-            if ($this->scanStock($stock, $minGapPercent)) {
+            if ($this->scanStock($stock, $minGapPercent, $detectionRunId)) {
                 $flagged++;
             }
         }
@@ -35,11 +37,14 @@ class DataQualityCorporateActionHeuristicService
         return [
             'scanned' => $stocks->count(),
             'flagged' => $flagged,
+            'detection_run_id' => $detectionRunId,
         ];
     }
 
-    public function scanStock(Stock $stock, float $minGapPercent = 25.0): bool
+    public function scanStock(Stock $stock, float $minGapPercent = 25.0, ?string $detectionRunId = null): bool
     {
+        $detectionRunId ??= DataQualityIssueService::newDetectionRunId('portfolio:detect-corporate-action-anomalies');
+
         $rows = StockPrice::query()
             ->where('stock_id', $stock->id)
             ->orderByDesc('price_date')
@@ -79,7 +84,7 @@ class DataQualityCorporateActionHeuristicService
         $this->issues->createOrRefreshPendingIssueForStock(
             $stock,
             DataQualityIssue::TYPE_CORPORATE_ACTION,
-            'heuristic_gap_detector',
+            DataQualityIssue::DETECTION_METHOD_HEURISTIC_GAP,
             [
                 'detection_source' => 'heuristic',
                 'corporate_action_type' => 'split',
@@ -119,6 +124,7 @@ class DataQualityCorporateActionHeuristicService
                     'captured_at' => now(),
                 ],
             ],
+            $detectionRunId,
         );
 
         return true;

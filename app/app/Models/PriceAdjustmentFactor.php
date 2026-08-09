@@ -7,6 +7,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PriceAdjustmentFactor extends Model
 {
+    public const REPAIR_STATUS_PENDING = 'pending';
+
+    public const REPAIR_STATUS_COMPLETED = 'completed';
+
     protected $table = 'portfolio_price_adjustment_factors';
 
     protected $fillable = [
@@ -48,5 +52,12 @@ class PriceAdjustmentFactor extends Model
     public function issue(): BelongsTo
     {
         return $this->belongsTo(DataQualityIssue::class, 'issue_id');
+    }
+
+    public function scopePendingOhlcvRepair($query)
+    {
+        return $query
+            ->where('is_active', true)
+            ->where('metadata->ohlcv_repair_status', self::REPAIR_STATUS_PENDING);
     }
 }

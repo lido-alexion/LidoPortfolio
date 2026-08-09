@@ -40,11 +40,15 @@ export default function CorporateActionHistoryPage() {
         setSaving(true);
         try {
             if (action === 'reject') {
-                await api.post(`/data-quality/issues/${selected.id}/reject`, { notes: notes.trim() || null });
+                await api.post(`/data-quality/issues/${selected.id}/reject`, {
+                    notes: notes.trim() || null,
+                    re_resolve: true,
+                });
             } else {
                 await api.post(`/data-quality/issues/${selected.id}/accept`, {
                     notes: notes.trim() || null,
                     applied_ratio: ratio.trim() ? Number(ratio) : null,
+                    re_resolve: true,
                 });
             }
             setNotes('');

@@ -167,6 +167,17 @@ Hub: [specs/architecture/governance/README.md](specs/architecture/governance/REA
 | 3.10 | [docs/v2/F042-IMPLEMENTATION-GAP-MATRIX.md](docs/v2/F042-IMPLEMENTATION-GAP-MATRIX.md) | Current implementation vs proposed requirements |
 | 3.11 | [docs/v2/F042-F043-BOUNDARY.md](docs/v2/F042-F043-BOUNDARY.md) | F020 / F042 / F043 responsibility boundaries |
 | 3.12 | [docs/v2/F042-POLICY-DECISIONS.md](docs/v2/F042-POLICY-DECISIONS.md) | F042 policy semantics (auto-accept, re-detection, gating, handoff) |
+| 3.13 | [docs/v2/F042-FINAL-COMPLIANCE-AUDIT.md](docs/v2/F042-FINAL-COMPLIANCE-AUDIT.md) | Post-hardening F042 compliance audit (read-only verification) |
+
+### 3.C F043 — Corporate Action Price Repair (specification / reconciliation)
+
+*Formal V2 spec reconciliation for F043. Planning only — F043 implementation not started in this phase.*
+
+| Order | Document | Why |
+|------:|----------|-----|
+| 3.14 | [docs/v2/F043-CORPORATE-ACTION-PRICE-REPAIR-SPEC.md](docs/v2/F043-CORPORATE-ACTION-PRICE-REPAIR-SPEC.md) | F043 requirements, transformation semantics, acceptance criteria |
+| 3.15 | [docs/v2/F043-IMPLEMENTATION-GAP-MATRIX.md](docs/v2/F043-IMPLEMENTATION-GAP-MATRIX.md) | Current repair code vs formal F043 requirements |
+| 3.16 | [docs/v2/F043-F042-BOUNDARY.md](docs/v2/F043-F042-BOUNDARY.md) | F043-side F020/F042/F043 boundary + F020 OHLCV correction |
 
 ---
 

@@ -17,6 +17,12 @@ class DataQualityIssue extends Model
 
     public const TYPE_CORPORATE_ACTION = 'corporate_action';
 
+    public const DETECTION_METHOD_EXCHANGE_FEED = 'exchange_feed';
+
+    public const DETECTION_METHOD_HEURISTIC_GAP = 'heuristic_gap_detector';
+
+    public const DETECTION_METHOD_LEGACY_MANUAL = 'legacy_manual';
+
     protected $fillable = [
         'stock_id',
         'symbol',

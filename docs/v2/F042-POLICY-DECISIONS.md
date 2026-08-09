@@ -1,7 +1,7 @@
 # F042 Policy Decisions
 
 **Date:** 2026-08-09  
-**Status:** Policy / semantics analysis — no implementation authorized  
+**Status:** Policy decisions — **implemented** in F042 V2 hardening (2026-08-09)  
 **Spec:** [F042-DATA-QUALITY-SPEC.md](./F042-DATA-QUALITY-SPEC.md)  
 **Boundary:** [F042-F043-BOUNDARY.md](./F042-F043-BOUNDARY.md)
 
@@ -13,9 +13,19 @@ This document resolves policy questions raised during F042 specification reconci
 
 ### Decision
 
-**DECISION_REQUIRED** — Recommended policy: **Option 3 — conditional auto-accept only** (see below). Do **not** retain unconditional 15-day auto-accept for all detection methods as a MUST requirement.
+**DECIDED** — Conditional auto-accept only (implemented 2026-08-09).
 
-### Rationale
+### Final policy (implemented)
+
+| Detection path | Auto-accept? |
+|----------------|--------------|
+| `exchange_feed` + `exchange_match=true` + valid ratio + confidence ≥ 1.0 | **Yes**, after `DATA_QUALITY_AUTO_ACCEPT_DAYS` (default 15) |
+| `heuristic_gap_detector` | **Never** |
+| Low confidence / missing ratio / `exchange_match=false` | **Never** |
+
+Configuration: `config/services.php` → `data_quality.auto_accept_days` ← env `DATA_QUALITY_AUTO_ACCEPT_DAYS`.
+
+Command override: `portfolio:auto-resolve-data-quality-issues --days=N`.
 
 Tracing `DataQualityResolutionService::accept()` and `autoAcceptStaleIssues()`:
 
@@ -45,18 +55,16 @@ Accept does **not** mean OHLCV is corrected, portfolio holdings are adjusted (F0
 | False-positive heuristic auto-accepted | Stock unblocked; pipelines use **unchanged wrong OHLCV** | Same until F043 repair run; wrong factor could drive wrong repair |
 | Adjustment factor affects V1 | **No** — nothing reads `PriceAdjustmentFactor` outside DQ services | F043 should read factors |
 | Accept mutates financial data | **No** direct mutation | F043 repair is separate step |
-| Auto-accept after 15 days on all methods | **Yes** — includes low-confidence heuristic gaps | Amplifies above risks |
+| Auto-accept heuristic gaps (pre-hardening) | **Mitigated** — heuristic never auto-accepts |
 
-Unconditional 15-day auto-accept is **unsafe for F042’s stated purpose** (governance before repair): it removes pipeline protection without fixing market data and without human review for high false-positive detection paths.
-
-### Current behaviour
+### Implemented behaviour (2026-08-09)
 
 - Command: `portfolio:auto-resolve-data-quality-issues` (daily 21:15)
-- Default threshold: 15 days (`--days=` overridable)
-- Selects all `pending_review` issues with `detected_at <= cutoff`
-- Calls `accept(..., auto: true)` with `suggested_ratio` — no method/confidence filter
+- Threshold: `DATA_QUALITY_AUTO_ACCEPT_DAYS` (default 15), overridable via `--days=`
+- Eligible only: `detection_method=exchange_feed`, `exchange_match=true`, valid ratio, confidence ≥ 1.0, age ≥ threshold
+- Creates `auto_accepted` resolution with policy metadata; does not mutate OHLCV
 
-### Recommended future behaviour (pending product-owner sign-off)
+### Historical pre-hardening behaviour (superseded)
 
 **Option 3 — Auto-accept only under stricter conditions:**
 
@@ -296,7 +304,7 @@ Matches desired semantics above. No code change required for gating logic — do
 
 | Topic | Status |
 |-------|--------|
-| Auto-accept policy | **DECISION_REQUIRED** (recommended: conditional feed-only) |
+| Auto-accept policy | **DECIDED** (conditional feed-only) |
 | Repeated detection | **DECIDED** (Option B) |
 | Detection run ID | **DECIDED** (SHOULD in evidence payload) |
 | Concurrent resolution | **DECIDED** (pending-queue 409; history re-resolution) |

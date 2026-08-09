@@ -170,8 +170,8 @@ See [F042-F043-BOUNDARY.md](./F042-F043-BOUNDARY.md) for full boundary rules.
 |-------|-------|
 | Requirement | When repeated detection matches an existing **pending** issue (same dedupe key), the system SHALL append new evidence row(s) with a new `captured_at` and SHALL NOT create a second issue. Original detection fields (`suggested_ratio`, `detected_at`, etc.) SHALL remain immutable. The system MAY update `latest_suggested_ratio` if the new observation differs. |
 | Priority | MUST (for V2 hardening) |
-| Existing | **Not implemented** — dedupe returns existing silently |
-| Gap | IMPLEMENTATION_MISSING |
+| Existing | **Implemented** — dedupe + evidence append with row lock |
+| Gap | NO_GAP (tests in `DataQualityIssueServiceTest`) |
 | Policy | **DECIDED** — see [F042-POLICY-DECISIONS.md §2](./F042-POLICY-DECISIONS.md) |
 
 ---
@@ -298,15 +298,15 @@ Accept (manual or auto) in F042 means **all** of the following — traced from `
 
 Accept does **not** mutate raw OHLCV, transactions, or holdings. Pipeline unblock before F043 repair is a **known gap** — pipelines resume using unchanged OHLCV.
 
-### F042-R010 — Auto-accept stale pending issues
+### F042-R010 — Auto-accept stale pending issues (MUST)
 
 | Field | Value |
 |-------|-------|
-| Requirement | **DECISION_REQUIRED** — see [F042-POLICY-DECISIONS.md §1](./F042-POLICY-DECISIONS.md). Current code auto-accepts **all** pending issues after 15 days. **Recommended (not yet MUST):** auto-accept **only** `exchange_feed` issues with `exchange_match=true` after configurable days; **never** auto-accept `heuristic_gap_detector` issues. |
-| Priority | DECISION_REQUIRED (product-owner sign-off before MUST) |
-| Existing | `autoAcceptStaleIssues(15)`, `portfolio:auto-resolve-data-quality-issues`, daily 21:15 |
-| Gap | IMPLEMENTATION_PARTIAL — unconditional auto-accept is unsafe for heuristic false positives |
-| Evidence | `AutoResolveDataQualityIssuesCommand`, `DataQualityResolutionService::autoAcceptStaleIssues` |
+| Requirement | System SHALL auto-accept **only eligible** exchange-feed pending issues after configurable day threshold via scheduled command. Heuristic, low-confidence, missing-ratio, and non-exchange-match issues SHALL remain manual. |
+| Priority | MUST |
+| Existing | **Implemented** — `DataQualityResolutionService::autoAcceptStaleIssues`, `DATA_QUALITY_AUTO_ACCEPT_DAYS` |
+| Gap | NO_GAP (tests in `DataQualityAutoAcceptTest`) |
+| Policy | **DECIDED** — [F042-POLICY-DECISIONS.md §1](./F042-POLICY-DECISIONS.md) |
 
 ### F042-R011 — Adjustment factor metadata on accept (MUST)
 
@@ -324,8 +324,8 @@ Accept does **not** mutate raw OHLCV, transactions, or holdings. Pipeline unbloc
 |-------|-------|
 | Requirement | On accept, adjustment-factor `metadata` SHOULD include an explicit OHLCV repair handoff marker (e.g. `ohlcv_repair_status: pending`). F042 SHALL NOT invoke F043 repair. |
 | Priority | SHOULD |
-| Existing | Metadata has `source`, `detection_method`, `detection_source` only |
-| Gap | IMPLEMENTATION_MISSING |
+| Existing | **Implemented** — `DataQualityAdjustmentFactorService` writes `metadata.ohlcv_repair_status = pending`; queryable via `PriceAdjustmentFactor::scopePendingOhlcvRepair()` |
+| Gap | NO_GAP for marker; factor **consumption** remains F043 |
 | Policy | **DECIDED** — see [F042-POLICY-DECISIONS.md §5](./F042-POLICY-DECISIONS.md) |
 
 ### F042-R012 — Legacy corporate action migration (SHOULD)
@@ -335,7 +335,7 @@ Accept does **not** mutate raw OHLCV, transactions, or holdings. Pipeline unbloc
 | Requirement | System SHOULD support one-off migration of applied legacy F020 corporate actions into accepted DQ issues for unified audit history. |
 | Priority | SHOULD |
 | Existing | `DataQualityLegacyCorporateActionMigrationService`, dry-run default |
-| Gap | TEST_MISSING |
+| Gap | NO_GAP (dry-run feature test in `DataQualityApiTest`) |
 
 ---
 
@@ -396,7 +396,7 @@ Policy: **DECIDED** — [F042-POLICY-DECISIONS.md §6](./F042-POLICY-DECISIONS.m
 | Requirement | All F042 detection results, resolution actions, and admin APIs SHALL require admin authorization. |
 | Priority | MUST |
 | Existing | API middleware + AdminRoute |
-| Gap | TEST_MISSING (no feature tests verifying 403 for non-admin) |
+| Gap | NO_GAP (`DataQualityApiTest` non-admin 403 / unauth 401) |
 
 ---
 
@@ -408,8 +408,8 @@ Policy: **DECIDED** — [F042-POLICY-DECISIONS.md §6](./F042-POLICY-DECISIONS.m
 | GET | `/api/data-quality/issues/unresolved` | Pending queue (limit 200, optional `issue_type`) |
 | GET | `/api/data-quality/issues/history` | Accepted/rejected (limit 400, filters) |
 | GET | `/api/data-quality/issues/{issue}` | Detail + evidence + resolutions |
-| POST | `/api/data-quality/issues/{issue}/accept` | `{ applied_ratio?, notes? }` |
-| POST | `/api/data-quality/issues/{issue}/reject` | `{ notes? }` |
+| POST | `/api/data-quality/issues/{issue}/accept` | `{ applied_ratio?, notes?, re_resolve? }` — history re-resolution requires non-empty `notes` |
+| POST | `/api/data-quality/issues/{issue}/reject` | `{ notes?, re_resolve? }` — history re-resolution requires non-empty `notes` |
 
 **Not exposed via API:** trigger sync/scan/auto-resolve (CLI/cpanel only).
 
@@ -420,7 +420,7 @@ Policy: **DECIDED** — [F042-POLICY-DECISIONS.md §6](./F042-POLICY-DECISIONS.m
 | Requirement | F042 SHALL expose admin JSON endpoints for dashboard, queue, history, detail, accept, and reject. |
 | Priority | MUST |
 | Existing | `DataQualityController` |
-| Gap | TEST_MISSING |
+| Gap | NO_GAP (feature API tests) |
 
 ---
 
@@ -515,18 +515,18 @@ Same as current workflow with these **explicit governance additions**:
 | Area | Status | Notes |
 |------|--------|-------|
 | Deterministic detection (same OHLCV → same issue) | **Partially supported** | Heuristic uses last 2 bars only; feed depends on external payload |
-| Idempotent detection runs | **Partially supported** | Dedupes pending by stock/type/method/ex_date; does not refresh evidence |
-| Duplicate issue prevention | **Supported** | Pending dedupe query |
+| Idempotent detection runs | **Supported** | Dedupes pending by stock/type/method/ex_date; **appends** evidence on re-detect (F042-R004b) |
+| Duplicate issue prevention | **Supported** | Pending dedupe query + row lock; no unique DB index (known non-blocker) |
 | Issue lifecycle transitions | **Supported** | pending → accepted/rejected; re-resolution via supersession |
-| Reproducibility | **Partially supported** | Evidence + payloads stored; no detection run id |
+| Reproducibility | **Supported** | Evidence + payloads + `detection_run_id` in evidence payload |
 | Source traceability | **Supported** | method, source, raw_payload |
 | Before/after OHLCV | **Missing** | F043 |
-| Audit trail | **Supported** | Resolution chain |
+| Audit trail | **Supported** | Resolution chain + auto-accept policy metadata |
 | Profile scoping | **N/A** | Stock-global |
-| Authorization | **Supported** | Admin middleware |
-| Concurrent resolution | **Not explicitly handled** | Pending queue: last-write-wins (undesired). **Required:** 409 on stale pending mutation — [policy §4](./F042-POLICY-DECISIONS.md) |
-| Repeated sync behaviour | **Partially supported** | Re-runs skip duplicate pending; **required:** append evidence (F042-R004b) |
-| Detection run identity | **Missing** | **SHOULD:** run id in evidence payload — [policy §3](./F042-POLICY-DECISIONS.md) |
+| Authorization | **Supported** | Admin middleware (tested) |
+| Concurrent resolution | **Supported** | Pending queue: 409 `DATA_QUALITY_STALE_RESOLUTION` when not `pending_review`; history re-resolution via `re_resolve=true` **requires non-empty notes** |
+| Repeated sync behaviour | **Supported** | Re-runs append evidence; original detection fields immutable |
+| Detection run identity | **Supported (SHOULD)** | `{command}:{uuid}` in evidence payload per invocation |
 
 ---
 
@@ -539,7 +539,8 @@ Same as current workflow with these **explicit governance additions**:
 | Unknown symbol in feed | Error string collected; other rows continue |
 | Accept with invalid ratio | `InvalidArgumentException` (ratio ≤ 0) |
 | Issue without stock on accept | `InvalidArgumentException` from adjustment service |
-| Non-admin API access | 403 via admin middleware (assumed; untested) |
+| Non-admin API access | 403 via admin middleware (tested) |
+| History re-resolution without notes | 422 validation error on `notes` |
 
 ---
 
@@ -555,9 +556,9 @@ Same as current workflow with these **explicit governance additions**:
 | F042-AC006 | Admin can accept with default or modified ratio; reject with notes | F042-R008 |
 | F042-AC007 | Each resolution appends audit row with resolver (manual) or auto flag | F042-R009 |
 | F042-AC008 | Accept creates active adjustment factor; reject deactivates factors for issue | F042-R011 |
-| F042-AC009 | Stocks with pending issues are excluded from evaluation scoring (score 0, reason `data_quality_pending_review`) | F042 guard |
+| F042-AC009 | Stocks with pending issues are excluded from evaluation scoring (score 0, reason `data_quality_pending_review`) | F042 guard / EvaluationEngine |
 | F042-AC010 | Non-admin users cannot access `/api/data-quality/*` | F042-R014 |
-| F042-AC011 | **DECISION_REQUIRED** — If conditional auto-accept adopted: only eligible feed issues auto-accept; heuristic never auto-accepts. If policy unchanged: pending older than threshold → `auto_accepted` | F042-R010 |
+| F042-AC011 | Conditional auto-accept: only eligible `exchange_feed` issues (`exchange_match=true`, valid ratio, confidence ≥ 1.0 / null, age ≥ threshold) auto-accept; heuristic and other ineligible issues never auto-accept | F042-R010 |
 | F042-AC013 | Repeated detection appends evidence without duplicate pending issue | F042-R004b |
 | F042-AC014 | Pending-queue accept/reject returns 409 when issue no longer `pending_review` | Concurrent resolution policy |
 | F042-AC012 | Legacy migration dry-run reports counts without writing | F042-R012 |
@@ -568,13 +569,14 @@ Same as current workflow with these **explicit governance additions**:
 
 | Requirement | Priority | Current |
 |-------------|----------|---------|
-| Unit tests for issue dedupe and evidence attachment | MUST | **Missing** |
-| Unit tests for resolution accept/reject/supersession | MUST | **Missing** |
-| Unit tests for adjustment factor create/deactivate | MUST | **Missing** |
-| Feature tests for admin API auth + accept/reject | MUST | **Missing** |
-| Feature tests for guard integration (evaluation blocked) | SHOULD | **Missing** |
-| Tests for sync/heuristic detection fixtures | SHOULD | **Missing** |
-| Tests for legacy migration dry-run/apply | SHOULD | **Missing** |
+| Unit tests for issue dedupe and evidence attachment | MUST | **Present** (`DataQualityIssueServiceTest`) |
+| Unit tests for resolution accept/reject/supersession | MUST | **Present** (`DataQualityResolutionServiceTest`) |
+| Unit tests for adjustment factor create/deactivate | MUST | **Present** (resolution + auto-accept tests) |
+| Feature tests for admin API auth + accept/reject | MUST | **Present** (`DataQualityApiTest`) |
+| Feature tests for guard integration (evaluation blocked) | SHOULD | **Present** (`DataQualityEvaluationGatingTest`) |
+| Tests for sync/heuristic detection fixtures | SHOULD | **Present** (`DataQualityDetectionTest`) |
+| Tests for legacy migration dry-run/apply | SHOULD | **Present** (dry-run in `DataQualityApiTest`) |
+| History re-resolution notes required | MUST (policy) | **Present** (`DataQualityApiTest`) |
 
 **Note:** F043 tests (`CorporateActionPriceRepairServiceTest`) are **not** F042 coverage.
 
@@ -603,16 +605,20 @@ Same as current workflow with these **explicit governance additions**:
 
 See [F042-IMPLEMENTATION-GAP-MATRIX.md](./F042-IMPLEMENTATION-GAP-MATRIX.md) for full matrix.
 
-**Summary:**
+**Summary (post-hardening / cleanup):**
 
-| Category | Count | Examples |
-|----------|------:|---------|
-| SPEC_MISSING | 1 | No formal spec until this document |
-| TEST_MISSING | 12+ | Entire F042 subsystem untested in PHPUnit |
-| IMPLEMENTATION_PARTIAL | 3 | Dedupe without refresh; unused adjustment factors; auto-accept policy |
-| DOCUMENTATION_MISSING | 2 | Auto-accept threshold; detection ordering |
-| DEFERRED_TO_F043 | 2 | OHLCV repair; before/after price audit |
-| NO_GAP | 8+ | Core detection, resolution, guard, UI |
+| Category | Status |
+|----------|--------|
+| Formal F042 spec | Present (`docs/v2/F042-DATA-QUALITY-SPEC.md`) |
+| PHPUnit coverage | Present (DataQuality* suite + EvaluationEngine AC009 test) |
+| Conditional auto-accept | Implemented |
+| Repeated detection evidence append | Implemented |
+| Detection run ID | Implemented |
+| Concurrent pending 409 | Implemented |
+| History re-resolution notes required | Implemented |
+| F043 handoff marker | Implemented (`ohlcv_repair_status=pending`) |
+| Remaining non-blockers | No unique index on pending dedupe key; optional 409 fresh-issue body not implemented |
+| Deferred to F043 | OHLCV repair; factor consumption |
 
 ---
 
@@ -635,10 +641,10 @@ Full analysis and decision status: **[F042-POLICY-DECISIONS.md](./F042-POLICY-DE
 
 | Topic | Status |
 |-------|--------|
-| Auto-accept | DECISION_REQUIRED (recommended: feed-only conditional) |
+| Auto-accept | **DECIDED** — conditional feed-only (implemented) |
 | Repeated detection | DECIDED → F042-R004b |
 | Detection run ID | DECIDED → SHOULD in evidence payload |
-| Concurrent resolution | DECIDED → pending 409 / history re-resolution |
+| Concurrent resolution | DECIDED → pending 409 / history re-resolution (**notes required**) |
 | F043 handoff | DECIDED → F042-R011b metadata marker |
 | Pipeline gating | DECIDED → §11.A |
 
@@ -652,7 +658,8 @@ Full analysis and decision status: **[F042-POLICY-DECISIONS.md](./F042-POLICY-DE
 |-------------|-----------|
 | Non-CA issue types (missing OHLCV, stale prices, impossible OHLC) | Schema extensible; no detection code |
 | Manual API trigger for sync/scan | Ops convenience |
-| Issue refresh on re-detection (update evidence) | `createOrRefreshPendingIssueForStock` name suggests intent |
+| Issue refresh on re-detection (update evidence) | **Done** — F042-R004b appends evidence; original fields immutable |
+| Unique DB index on pending dedupe key | Known non-blocker — theoretical first-insert race |
 | Profile-scoped issues | Multi-tenant future |
 | Read adjustment factors in analytics | Requires F043 + price pipeline design |
 | Email/admin notifications on new pending issues | No channel today |

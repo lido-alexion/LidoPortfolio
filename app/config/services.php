@@ -37,6 +37,7 @@ return [
 
     'data_quality' => [
         'corporate_actions_feed_url' => env('CORPORATE_ACTIONS_FEED_URL'),
+        'auto_accept_days' => (int) env('DATA_QUALITY_AUTO_ACCEPT_DAYS', 15),
     ],
 
 ];

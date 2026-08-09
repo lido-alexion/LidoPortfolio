@@ -15,7 +15,7 @@
 | **F014** Historical holdings | V1 transactions, OHLCV, `PortfolioHistoricalHoldingsService` | As-of analytics UI | Same ledger as F019; distinct from V1 F015 snapshots |
 | **F019** Bulk CSV import | V1 `TransactionWriteService`, holdings calc | Faster portfolio onboarding; patterns for F014 | CSV parser, transaction validation, `BulkTransactionImport.jsx` |
 | **F042** Data quality | V1 OHLCV sync, V1 F020 corporate actions | F043 repair; pipeline data trust | `DataQualityGuardService`, issue/evidence tables, admin UI |
-| **F043** CA price repair | **F042** issue model; V1 F020 corporate actions | Ops recovery after bad prices | `CorporateActionPriceRepairService`, deploy scripts |
+| **F043** CA price repair | **F042** pending `PriceAdjustmentFactor` handoff (formal V2); V1 F020 applied CAs (CURRENT ops path) | Ops recovery after bad prices | `CorporateActionPriceRepairService`, `CorporateActionPriceAdjustmentService`, deploy scripts; **CURRENT code does not yet consume F042 factors** |
 | **F060** Shared screener import | V1 screeners (SD-030), profile scoping | Cross-portfolio screener reuse | `is_shared` flag, shared tab, import API |
 | **F127** Portfolio alerts | V1 holdings enrichment, daily price sync | Holding monitoring (non-TOS) | `AlertPolicyService`, `AlertPolicyEvaluationService`, `portfolio_alert_policies` |
 | **F137** Recommendation preview | V1 `RecommendationGenerationPipeline` components (read-only) | Research UI, future automation | `RecommendationPreviewService`, analytics API |
@@ -88,11 +88,12 @@ V2 Phase 4 (postpone)
 |---------|--------|
 | V1 F020 scope | Core split/bonus apply — frozen V1 |
 | F042 scope | Detection, issue queue, resolution workflow — admin ops |
-| F043 scope | Price repair scripts — **not** V1 F020 |
-| Relationship | F042 detects anomalies; F043 repairs prices; F020 applies user-facing corporate actions |
+| F043 scope | Price repair scripts — **not** V1 F020 ledger apply |
+| Relationship | F042 detects anomalies; F043 repairs prices; F020 applies user-facing corporate actions (**and** restates OHLCV on successful apply via shared helper) |
+| CURRENT vs formal | CURRENT F043 scans applied F020 CAs only; formal V2 F043 **must also** consume `PriceAdjustmentFactor::pendingOhlcvRepair()` and mark `completed` |
 | Legacy bridge | `DataQualityLegacyCorporateActionMigrationService` maps old manual CAs into DQ issues |
 | Recommendation | **F042 must precede F043**; both belong to **Market Data Quality** initiative |
-| F043 standalone? | **No** — repair without DQ governance increases risk |
+| F043 standalone? | **No** — repair without DQ governance increases risk for F042-originated anomalies; F020 recovery path alone is insufficient for formal V2 |
 
 ---
 

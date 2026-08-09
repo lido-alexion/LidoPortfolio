@@ -34,6 +34,7 @@ class DataQualityAdjustmentFactorService
                 'source' => 'data_quality_center',
                 'detection_method' => $issue->detection_method,
                 'detection_source' => $issue->detection_source,
+                'ohlcv_repair_status' => PriceAdjustmentFactor::REPAIR_STATUS_PENDING,
             ],
         ]);
     }

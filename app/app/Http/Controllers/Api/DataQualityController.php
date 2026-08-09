@@ -7,6 +7,8 @@ use App\Models\DataQualityIssue;
 use App\Services\DataQualityResolutionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class DataQualityController extends Controller
 {
@@ -75,17 +77,27 @@ class DataQualityController extends Controller
 
     public function accept(Request $request, DataQualityIssue $issue): JsonResponse
     {
+        $reResolve = $request->boolean('re_resolve');
         $payload = $request->validate([
             'applied_ratio' => ['nullable', 'numeric', 'gt:0'],
-            'notes' => ['nullable', 'string', 'max:2000'],
+            'notes' => [
+                Rule::requiredIf($reResolve),
+                'nullable',
+                'string',
+                'max:2000',
+            ],
+            're_resolve' => ['sometimes', 'boolean'],
         ]);
+
+        $notes = $this->normalizedNotes($payload['notes'] ?? null, $reResolve);
 
         $updated = $this->resolutions->accept(
             $issue,
             isset($payload['applied_ratio']) ? (float) $payload['applied_ratio'] : null,
-            $payload['notes'] ?? null,
+            $notes,
             auth()->id(),
             false,
+            requirePendingReview: ! $reResolve,
         );
 
         return response()->json(['data' => $updated]);
@@ -93,12 +105,52 @@ class DataQualityController extends Controller
 
     public function reject(Request $request, DataQualityIssue $issue): JsonResponse
     {
+        $reResolve = $request->boolean('re_resolve');
         $payload = $request->validate([
-            'notes' => ['nullable', 'string', 'max:2000'],
+            'notes' => [
+                Rule::requiredIf($reResolve),
+                'nullable',
+                'string',
+                'max:2000',
+            ],
+            're_resolve' => ['sometimes', 'boolean'],
         ]);
 
-        $updated = $this->resolutions->reject($issue, $payload['notes'] ?? null, auth()->id());
+        $notes = $this->normalizedNotes($payload['notes'] ?? null, $reResolve);
+
+        $updated = $this->resolutions->reject(
+            $issue,
+            $notes,
+            auth()->id(),
+            requirePendingReview: ! $reResolve,
+        );
 
         return response()->json(['data' => $updated]);
+    }
+
+    /**
+     * Historical re-resolution requires a non-empty note (F042 policy §4).
+     * Pending-queue mutations may omit notes.
+     */
+    protected function normalizedNotes(mixed $notes, bool $reResolve): ?string
+    {
+        if (! is_string($notes)) {
+            if ($reResolve) {
+                throw ValidationException::withMessages([
+                    'notes' => ['A non-empty note is required when re-resolving a historical issue.'],
+                ]);
+            }
+
+            return null;
+        }
+
+        $trimmed = trim($notes);
+        if ($reResolve && $trimmed === '') {
+            throw ValidationException::withMessages([
+                'notes' => ['A non-empty note is required when re-resolving a historical issue.'],
+            ]);
+        }
+
+        return $trimmed === '' ? null : $trimmed;
     }
 }

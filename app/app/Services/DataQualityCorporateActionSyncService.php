@@ -15,8 +15,9 @@ class DataQualityCorporateActionSyncService
     /**
      * @return array{synced:int, created:int, skipped:int, errors:list<string>}
      */
-    public function syncFromExchangeFeed(?string $feedUrl = null): array
+    public function syncFromExchangeFeed(?string $feedUrl = null, ?string $detectionRunId = null): array
     {
+        $detectionRunId ??= DataQualityIssueService::newDetectionRunId('portfolio:sync-corporate-actions');
         $url = $feedUrl ?: (string) config('services.data_quality.corporate_actions_feed_url', '');
         if ($url === '') {
             return [
@@ -73,7 +74,7 @@ class DataQualityCorporateActionSyncService
             $this->issues->createOrRefreshPendingIssueForStock(
                 $stock,
                 DataQualityIssue::TYPE_CORPORATE_ACTION,
-                'exchange_feed',
+                DataQualityIssue::DETECTION_METHOD_EXCHANGE_FEED,
                 [
                     'detection_source' => $mapped['source'],
                     'corporate_action_type' => $mapped['action_type'],
@@ -100,6 +101,7 @@ class DataQualityCorporateActionSyncService
                         'captured_at' => now(),
                     ],
                 ],
+                $detectionRunId,
             );
             $created++;
         }
@@ -109,6 +111,7 @@ class DataQualityCorporateActionSyncService
             'created' => $created,
             'skipped' => $skipped,
             'errors' => $errors,
+            'detection_run_id' => $detectionRunId,
         ];
     }
 
