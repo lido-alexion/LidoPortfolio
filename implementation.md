@@ -1276,13 +1276,13 @@ Document in this section and `portfolio-history-rebuild-report.md`.
 
 **V2 Account & Access (2026-08-09):** Spec pack for **F003** (User Invite) and **F005** (Session Management) — [`docs/v2/F003-F005-BOUNDARY.md`](docs/v2/F003-F005-BOUNDARY.md), [`F003-USER-INVITE-SPEC.md`](docs/v2/F003-USER-INVITE-SPEC.md), [`F005-SESSION-MANAGEMENT-SPEC.md`](docs/v2/F005-SESSION-MANAGEMENT-SPEC.md), [`F003-F005-POLICY-DECISIONS.md`](docs/v2/F003-F005-POLICY-DECISIONS.md), [`F003-F005-IMPLEMENTATION-GAP-MATRIX.md`](docs/v2/F003-F005-IMPLEMENTATION-GAP-MATRIX.md). Indexed in `DOCS.md` §3.D.
 
-**Current tracking:** **F003 = COMPLETE** (`F003_COMPLIANT_WITH_NON_BLOCKERS`). **F005 = READY_FOR_IMPLEMENTATION** (next; owns PD-006). F003 does **not** implement password-change/reset session revocation.
+**Current tracking:** **F003 = COMPLETE** (`F003_COMPLIANT_WITH_NON_BLOCKERS`). **F005 = COMPLETE** (`F005_COMPLETE_WITH_NON_BLOCKERS`). F003 does **not** own password-change/reset session revocation (that is F005 / PD-006).
 
 ### F003 — User Invitation Security Hardening (2026-08-09) — COMPLETE
 
 Implemented PD-004 / PD-005 only (not F005 / PD-006).
 
-**Compliance:** Final compliance audit verdict **`F003_COMPLIANT_WITH_NON_BLOCKERS`** — no MUST failures; F003 formally closed; F005 may begin.
+**Compliance:** Final compliance audit verdict **`F003_COMPLIANT_WITH_NON_BLOCKERS`** — no MUST failures; F003 formally closed.
 
 **Capabilities**
 - Invitation bearer tokens: CSPRNG raw token; store **SHA-256 hash** only in `portfolio_user_invites.token` (varchar 64, no column rename).
@@ -1305,7 +1305,29 @@ Implemented PD-004 / PD-005 only (not F005 / PD-006).
 
 **UI:** `UserManagementPage` — Copy Invitation URL banner vs Regenerate Invitation URL + confirm; `LoginPage` pending-invite message; help in `appDocumentation.js` Users topic.
 
-**Not done (F005 owns):** password-change/reset session revocation (PD-006), admin force-logout (PD-007 deferred), Active sessions help polish (F005-G014).
+**Out of F003 (delivered under F005):** password-change/reset session revocation (PD-006), Active sessions help (F005-G014). **Still deferred:** admin force-logout (PD-007).
+
+### F005 — Session Management Hardening (2026-08-09) — COMPLETE
+
+Verdict: **`F005_COMPLETE_WITH_NON_BLOCKERS`**. Preserves shipped list/revoke/logout-others; implements **PD-006**.
+
+**PD-006 password change** (`PUT /api/profile/password`): after successful update — keep current session; `SessionManagementService::revokeOtherSessionsForCredentialChange` deletes other DB session rows and rotates `users.remember_token`; response message notes other devices signed out; returns `sessions_removed`. Failed validation does not revoke.
+
+**PD-006 password reset** (`PasswordResetAcceptController::accept`): after F004 accept — rotate `remember_token`, then `login` + `session()->regenerate()`, then `destroyOtherSessions` for all ids except the new session id (token already rotated — do not double-call full revoke helper). Message: other devices signed out. Invalid accept does not revoke.
+
+**Remember-me mechanism (auditable):** Laravel stores one `remember_token` per user. Rotating it invalidates every outstanding remember-me cookie for that account. Surviving session continues via the session cookie. Deleting session rows alone is not sufficient for remember-me.
+
+**Invitation accept:** unchanged — first session only; **no** PD-006 revoke-others (`InviteAcceptController` does not call session revocation).
+
+**Manual F005 (unchanged ownership):** GET `/api/auth/sessions`, DELETE `/api/auth/sessions/{id}`, POST `/api/auth/sessions/logout-others`, current-session logout via AuthController.
+
+**Tests:** `AuthSessionTest`, `ProfileTest` (PD-006 change), `PasswordResetLinkTest` (PD-006 reset), `UserInviteTest` (no `sessions_removed` on accept).
+
+**UI / help:** `ProfilePage` success toast; Settings Active sessions UI unchanged; `appDocumentation.js` Profile + Settings Active sessions concepts.
+
+**Non-blockers:** no frontend automated UI tests (build + source inspection); PHPUnit DELETE-current full cookie logout path is flaky under Sanctum test client — covered by service refuse-current + AuthController logout branch; single `remember_token` means current device’s remember cookie is also invalidated (session cookie remains).
+
+**Not in scope:** PD-007 admin force-logout, PAT/JWT, RBAC, SMTP.
 
 ### Stack (mandatory)
 

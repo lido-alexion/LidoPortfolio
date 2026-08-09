@@ -1482,14 +1482,23 @@ const APP_DOCUMENTATION_BASE = [
         match: (p) => pathIs(p, '/profile'),
         summary: 'Display name, password, and profile photo for your user account.',
         overview:
-            'Update how you appear in the header, change your password, and upload or remove a profile photo. Username (email) is read-only.',
+            'Update how you appear in the header, change your password, and upload or remove a profile photo. Username (email) is read-only. Changing your password keeps this device signed in and automatically signs out other devices.',
         controls: [
             { name: 'Profile photo', description: 'Upload, change, or remove the avatar image.' },
             { name: 'Display name', description: 'Shown next to the avatar in the header menu.' },
-            { name: 'Change password', description: 'Requires current password confirmation.' },
+            {
+                name: 'Change password',
+                description:
+                    'Requires current password confirmation. On success, other devices are signed out automatically; this device stays signed in.',
+            },
         ],
         concepts: [
             { name: 'Session auth', description: 'Sign-in uses Sanctum SPA cookies, not bearer tokens in localStorage.' },
+            {
+                name: 'Credential-change sessions',
+                description:
+                    'A successful password change revokes other browser sessions and invalidates remember-me cookies on other devices (PD-006).',
+            },
         ],
         related: ['portfolios', 'settings'],
     },
@@ -1528,19 +1537,29 @@ const APP_DOCUMENTATION_BASE = [
             && !pathStarts(p, '/settings/screener-registry')
             && !pathStarts(p, '/settings/strategy-registry')
             && !pathStarts(p, '/settings/users'),
-        summary: 'Global (admin), Portfolio, and Account settings — fees, Telegram, sync, and links.',
+        summary: 'Global (admin), Portfolio, and Account settings — fees, Telegram, sync, active sessions, and links.',
         overview:
-            'Settings is the only Administration item in the primary sidebar. Open it for Global (admins), Portfolio, and Account preferences. Admin tools (users, sync logs, data quality, indicator/screener/strategy registries, universe sync, alert policies) are linked from Settings cards — they are not separate sidebar entries.',
+            'Settings is the only Administration item in the primary sidebar. Open it for Global (admins), Portfolio, and Account preferences. On Account, Active sessions lists your signed-in devices so you can revoke one session or log out other devices. Admin tools (users, sync logs, data quality, indicator/screener/strategy registries, universe sync, alert policies) are linked from Settings cards — they are not separate sidebar entries.',
         controls: [
             { name: 'Settings tabs', description: 'Navigate Global / Portfolio / Account sections.' },
             { name: 'Fee components', description: 'Drive auto fees on buy/sell ledger rows.' },
             { name: 'Telegram', description: 'Bot token and chat id for portfolio notifications.' },
             { name: 'Notification history', description: 'Open /notification-history from Portfolio → Alerts & notifications to audit Telegram deliveries.' },
+            {
+                name: 'Active sessions',
+                description:
+                    'Account tab: list devices (IP, browser summary, last activity). Log out other devices keeps this browser signed in. Revoke removes one non-current session; revoking the current session signs you out.',
+            },
             { name: 'Admin shortcuts', description: 'From Global settings: Admin alerts, Sync logs, Universe price sync, Data Quality, Indicator/Screener/Strategy registries.' },
             { name: 'Screener Registry (admin)', description: 'Admin shortcut to Screener artifact import/export and catalogue.' },
             { name: 'Strategy Registry (admin)', description: 'Admin shortcut to Strategy artifact import/export, selection, and catalogue.' },
         ],
         concepts: [
+            {
+                name: 'Manual vs automatic session revoke',
+                description:
+                    'Active sessions controls are manual. Changing your password (or accepting an admin password-reset link) also signs out other devices automatically while keeping the active/new session.',
+            },
             { name: 'Admin vs portfolio scope', description: 'Some tools (users, sync logs, universe sync) are admin-only.' },
             { name: 'Not in sidebar', description: 'Settings sub-pages and registries stay off the primary sidebar; reach them from Settings or parent product pages.' },
         ],

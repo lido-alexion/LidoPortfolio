@@ -64,7 +64,9 @@ export default function ProfilePage() {
             setCurrentPassword('');
             setPassword('');
             setPasswordConfirmation('');
-            showToast('Password updated');
+            showToast(
+                'Password updated. Other devices have been signed out. This device remains signed in.'
+            );
         } catch (error) {
             showToast(validationMessage(error), 'danger');
         } finally {

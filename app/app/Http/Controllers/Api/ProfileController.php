@@ -4,10 +4,11 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\AuthAuditService;
 use App\Services\ProfilePhotoService;
+use App\Services\SessionManagementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -15,6 +16,8 @@ class ProfileController extends Controller
 {
     public function __construct(
         protected ProfilePhotoService $photos,
+        protected SessionManagementService $sessions,
+        protected AuthAuditService $authAudit,
     ) {}
 
     public function show(Request $request): JsonResponse
@@ -56,8 +59,16 @@ class ProfileController extends Controller
         $user->password = $validated['password'];
         $user->save();
 
+        // PD-006: keep this session; revoke others + rotate remember_token.
+        $removed = $this->sessions->revokeOtherSessionsForCredentialChange(
+            $user,
+            $request->session()->getId()
+        );
+        $this->authAudit->logLogout($user, $request, 'others');
+
         return response()->json([
-            'message' => 'Password updated.',
+            'message' => 'Password updated. Other devices have been signed out. This device remains signed in.',
+            'sessions_removed' => $removed,
         ]);
     }
 

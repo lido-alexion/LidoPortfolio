@@ -131,7 +131,8 @@ class UserInviteTest extends TestCase
         ]);
 
         $accept->assertCreated()
-            ->assertJsonPath('user.email', Str::lower($email));
+            ->assertJsonPath('user.email', Str::lower($email))
+            ->assertJsonMissing(['sessions_removed']);
 
         $this->assertStringNotContainsString('"token"', $accept->getContent());
 

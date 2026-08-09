@@ -1,7 +1,7 @@
 # F003 / F005 Implementation Gap Matrix
 
 **Date:** 2026-08-09  
-**Status:** **F003 COMPLETE** (`F003_COMPLIANT_WITH_NON_BLOCKERS`); **F005 READY_FOR_IMPLEMENTATION** (PD-006 not started)  
+**Status:** **F003 COMPLETE** (`F003_COMPLIANT_WITH_NON_BLOCKERS`); **F005 COMPLETE** (`F005_COMPLETE_WITH_NON_BLOCKERS`) — PD-006 delivered  
 **Initiative:** Account & Access Management (F003 → F005)  
 **Related:** [F003-USER-INVITE-SPEC.md](./F003-USER-INVITE-SPEC.md), [F005-SESSION-MANAGEMENT-SPEC.md](./F005-SESSION-MANAGEMENT-SPEC.md), [F003-F005-BOUNDARY.md](./F003-F005-BOUNDARY.md), [F003-F005-POLICY-DECISIONS.md](./F003-F005-POLICY-DECISIONS.md)
 
@@ -10,7 +10,7 @@
 | Track | Status |
 |-------|--------|
 | F003 User Invite hardening (PD-004 / PD-005) | **COMPLETE** — compliant with documented non-blockers |
-| F005 Session Management hardening (PD-006) | **NOT started** — next Account & Access work |
+| F005 Session Management hardening (PD-006) | **COMPLETE** — revoke-others on password change/reset + remember_token rotation; manual F005 preserved |
 
 ### Deploy note — pending-invite migration (operational)
 
@@ -57,7 +57,7 @@ Capabilities already shipped but needing harden/test/docs are **not** “missing
 |-------|-----------|----------|
 | F003 largely shipped | **Yes** | `UserInviteService`, admin + guest APIs, SPA, `UserInviteTest` |
 | F005 mostly shipped | **Yes** | `SessionManagementService`, APIs, Settings Account UI; audit “partial UI” is **outdated** |
-| Highest remaining V2 priority (at planning) | **Yes (historical)** | Was F003 at score 12; **F003 now COMPLETE** — F005 is next Account & Access work |
+| Highest remaining V2 priority (at planning) | **Yes (historical)** | Was F003 then F005; both now **COMPLETE** |
 | Unlocks F060 | **Soft yes** | Planning dependency; no hard code gate |
 | No formal V2 pack before this work | **Yes** | No prior `docs/v2/F003-*` / `F005-*` |
 
@@ -70,8 +70,8 @@ Capabilities already shipped but needing harden/test/docs are **not** “missing
 | Sanctum SPA login/logout/me/CSRF | Yes (SD-001) | Shipped | Preserve | None (do not re-scope) |
 | F004 password reset links | Yes (SD-035) | Shipped | Preserve | None |
 | `is_admin` + admin middleware | Yes | Shipped | Preserve | None |
-| Invite-only registration | Deferred from V1; shipped | **F003 hardening done** (hashed tokens, PD-004/005) | Preserve; F005 still open | Hashing/rotation/login separation **implemented** |
-| Session list / revoke / logout-others | Deferred from V1; shipped | Full API + Settings UI | Formalize + PD-006 + tests/docs | Spec done; PD-006 not implemented; test/docs gaps |
+| Invite-only registration | Deferred from V1; shipped | **F003 hardening done** (hashed tokens, PD-004/005) | Preserve | Hashing/rotation/login separation **implemented** |
+| Session list / revoke / logout-others | Deferred from V1; shipped | Full API + Settings UI + **PD-006** | Preserve | PD-006 **implemented** |
 | RBAC / tenants | Out of V1 | Absent | Out of scope | N/A |
 
 ---
@@ -107,22 +107,22 @@ Capabilities already shipped but needing harden/test/docs are **not** “missing
 
 | ID | Feature | Capability | Classification | Existing implementation | Gap | Evidence | Priority |
 |----|---------|------------|----------------|-------------------------|-----|----------|----------|
-| F005-G001 | Session | List own sessions | V2_REQUIRED | Implemented | Formal AC | GET `/api/auth/sessions` | P1 |
-| F005-G002 | Session | Logout other devices | V2_REQUIRED | Implemented | Formal AC + test exists | POST `…/logout-others`, `AuthSessionTest` | P1 |
-| F005-G003 | Session | Revoke single non-current session | V2_REQUIRED | Implemented | **Feature test thin** for DELETE path | DELETE `/api/auth/sessions/{id}` | P1 |
-| F005-G004 | Session | Revoking current session = logout | V2_REQUIRED | Delegates to logout | Formal AC + test | `logoutSession` | P1 |
-| F005-G005 | Session | Cannot revoke foreign user session | V2_REQUIRED | Scoped by `user_id`; suspicious audit | Formal AC + test | `destroySession`, audit | P1 |
-| F005-G006 | Session | Settings Account UI | V2_REQUIRED | **Present** (Active sessions) | Audit “partial UI” outdated; keep UX polish only | `SettingsPage.jsx` | P1 |
-| F005-G007 | Session | Multi-device allowed | V2_REQUIRED | Allowed by design | Formal AC | implementation.md | P1 |
-| F005-G008 | Session | Device metadata display | V2_REQUIRED | IP + UA heuristic label | Formal AC | `SessionManagementService` | P1 |
-| F005-G009 | Session | Password change revokes others | V2_REQUIRED | **PD-006 DECIDED (OPTION_B)**; code does **not** revoke; no remember-me rotate | Revoke others; keep current; invalidate other remember-me | `ProfileController::updatePassword` | P0 |
-| F005-G010 | Session | F004 accept revokes others | V2_REQUIRED | **PD-006 DECIDED**; code preserves other sessions after reset accept | Revoke other pre-existing; keep new session; invalidate other remember-me | `PasswordResetAcceptController::accept` | P0 |
+| F005-G001 | Session | List own sessions | V2_REQUIRED | Implemented | **DONE** | GET `/api/auth/sessions` | P1 |
+| F005-G002 | Session | Logout other devices | V2_REQUIRED | Implemented | **DONE** | POST `…/logout-others`, `AuthSessionTest` | P1 |
+| F005-G003 | Session | Revoke single non-current session | V2_REQUIRED | Implemented + tested | **DONE** | DELETE `/api/auth/sessions/{id}` | P1 |
+| F005-G004 | Session | Revoking current session = logout | V2_REQUIRED | Delegates to logout when ids match | **DONE** (service refuses current delete; controller logout branch) | `logoutSession` | P1 |
+| F005-G005 | Session | Cannot revoke foreign user session | V2_REQUIRED | Scoped by `user_id`; tested | **DONE** | `destroySession`, audit | P1 |
+| F005-G006 | Session | Settings Account UI | V2_REQUIRED | **Present** (Active sessions) | **DONE** | `SettingsPage.jsx` | P1 |
+| F005-G007 | Session | Multi-device allowed | V2_REQUIRED | Allowed by design | **DONE** | implementation.md | P1 |
+| F005-G008 | Session | Device metadata display | V2_REQUIRED | IP + UA heuristic label | **DONE** | `SessionManagementService` | P1 |
+| F005-G009 | Session | Password change revokes others | V2_REQUIRED | PD-006: keep current; revoke others; rotate `remember_token` | **DONE** | `ProfileController::updatePassword` | P0 |
+| F005-G010 | Session | F004 accept revokes others | V2_REQUIRED | PD-006: keep new; revoke others; rotate `remember_token` | **DONE** | `PasswordResetAcceptController::accept` | P0 |
 | F005-G011 | Session | Admin force-logout other users | DEFERRED | Absent | Leave deferred | no admin session API | P3 |
 | F005-G012 | Session | Refresh tokens / PAT login | OUT_OF_SCOPE | PAT table idle; no refresh | Do not resurrect Bearer login | Sanctum SPA only | — |
 | F005-G013 | Session | Idle lifetime config | V1_EXISTING | `SESSION_LIFETIME` ~30d | Not F005 delta | `config/session.php` | — |
-| F005-G014 | Session | Help docs for Active sessions | V2_SHOULD | Thin / missing in Settings help | **PD-013 NOT_A_POLICY_DECISION** — docs sync during hardening | `appDocumentation.js` | P2 |
-| F005-G015 | Session | Extend `AuthSessionTest` | V2_REQUIRED | Partial (list + logout-others) | Add revoke-one / foreign / current + PD-006 ACs | `AuthSessionTest.php`, `ProfileTest` | P1 |
-| F005-G016 | Session | PD-012 tracking | — | Subsumed | **RESOLVED_BY_PD-006** — use F005-G010 | policy register | — |
+| F005-G014 | Session | Help docs for Active sessions | V2_SHOULD | Settings + Profile help updated | **DONE** | `appDocumentation.js` | P2 |
+| F005-G015 | Session | Extend `AuthSessionTest` | V2_REQUIRED | List/logout-others/revoke/foreign + PD-006 tests | **DONE** | `AuthSessionTest`, `ProfileTest`, `PasswordResetLinkTest` | P1 |
+| F005-G016 | Session | PD-012 tracking | — | Subsumed | **RESOLVED_BY_PD-006** — F005-G010 **DONE** | policy register | — |
 
 ---
 
@@ -132,7 +132,7 @@ Capabilities already shipped but needing harden/test/docs are **not** “missing
 |----|-------------|----------|---------------------------|
 | SEC-001 | Pending-invite login returns raw token without password | High → closed | **PD-005 implemented** — no token on login |
 | SEC-002 | Invite tokens plaintext at rest | Medium → closed | **PD-004 implemented** — SHA-256 hash + rotation |
-| SEC-003 | Password change / reset leave other sessions alive | Medium → policy closed | **PD-006** — implement revoke-others (**F005**, not done) |
+| SEC-003 | Password change / reset leave other sessions alive | Medium → closed | **PD-006 implemented** — revoke others + rotate `remember_token` |
 | SEC-004 | Session revoke APIs are self-scoped (good) | Info | Preserve |
 | SEC-005 | No tenant isolation bugs found in invite paths (no tenants) | Info | N/A |
 | SEC-006 | Debug agent auto-login middleware exists when enabled | Ops risk | Outside F003/F005 unless enabled in prod — document only |
@@ -150,8 +150,8 @@ No penetration test performed; items above are from static code inspection only.
 | F003 login vs invite | Separated (no token) | **PD-005 done** |
 | F003 regenerate expiry | Preserved | **DONE** |
 | F003 email transport | Intentionally no | Out of scope |
-| F005 list/revoke UI+API | Yes | Tests + docs; preserve |
-| F005 password change/reset sessions | Survive today | **PD-006** revoke-others (**not implemented**) |
+| F005 list/revoke UI+API | Yes | Preserved |
+| F005 password change/reset sessions | PD-006 revoke-others | **DONE** |
 | F005 admin force logout | No | Deferred PD-007 |
 | Shared V1 auth | Yes | Do not re-scope |
 
@@ -163,9 +163,9 @@ No penetration test performed; items above are from static code inspection only.
 |----------|--------|--------------------------|
 | PD-004 | **DECIDED** | **Yes** (F003) |
 | PD-005 | **DECIDED** | **Yes** (F003) |
-| PD-006 | **DECIDED** | **No** (F005) |
-| PD-012 | **RESOLVED_BY_PD-006** | See F005-G010 |
-| PD-013 | **NOT_A_POLICY_DECISION** | See F005-G014 (docs) |
+| PD-006 | **DECIDED** | **Yes** (F005) |
+| PD-012 | **RESOLVED_BY_PD-006** | See F005-G010 (**DONE**) |
+| PD-013 | **NOT_A_POLICY_DECISION** | F005-G014 help **DONE** |
 
 ---
 
@@ -204,17 +204,25 @@ No penetration test performed; items above are from static code inspection only.
 
 | ID | Capability | Current | Target | Areas | Depends | Priority |
 |----|------------|---------|--------|-------|---------|----------|
-| F005-G009 | Password change revoke others | Preserves others — **NOT_DELIVERED** | Keep current; revoke others; invalidate other remember-me | `ProfileController`, `SessionManagementService`, User remember_token | PD-006 | P0 |
-| F005-G010 | Reset accept revoke others | Preserves others — **NOT_DELIVERED** | Keep new session; revoke others; invalidate other remember-me | `PasswordResetAcceptController` | PD-006 | P0 |
-| F005-G015 (+ AC007–009) | Session tests | Thin DELETE / no PD-006 — **OPEN** | Expand AuthSession/Profile/reset tests | PHPUnit | G009/G010 | P1 |
-| F005-G003–G005 | Single/foreign/current revoke tests | Partial — **OPEN** | Formal AC | `AuthSessionTest` | — | P1 |
+| F005-G009 | Password change revoke others | **DONE** | — | `ProfileController`, `SessionManagementService` | PD-006 | — |
+| F005-G010 | Reset accept revoke others | **DONE** | — | `PasswordResetAcceptController` | PD-006 | — |
+| F005-G015 (+ AC007–009) | Session / PD-006 tests | **DONE** | — | PHPUnit | — | — |
+| F005-G003–G005 | Single/foreign revoke tests | **DONE** | — | `AuthSessionTest` | — | — |
 
 ### F005 — Should / documentation
 
 | ID | Capability | Current | Target | Areas | Depends | Priority |
 |----|------------|---------|--------|-------|---------|----------|
-| F005-G014 | Active sessions help | Missing — **OPEN** | Document controls (+ PD-006 note on profile) | `appDocumentation.js` | — | P2 |
-| F005-G001–G008 | List/revoke UI+API | Implemented | Preserve + formal AC | existing | — | P1 |
+| F005-G014 | Active sessions help | **DONE** | — | `appDocumentation.js` | — | — |
+| F005-G001–G008 | List/revoke UI+API | **DONE** | Preserve | existing | — | — |
+
+### F005 — Documented non-blockers
+
+| Item | Notes |
+|------|-------|
+| PHPUnit DELETE-current full cookie logout | Controller delegates to logout when ids match; HTTP test client session-id matching is flaky — covered by service refusal + logout message path review |
+| No frontend automated UI tests | Source inspection + production build only |
+| Laravel single `remember_token` | Rotating the column invalidates all remember cookies for the user (including current device’s remember cookie); current **session** cookie remains |
 
 ### Out of scope / deferred
 
@@ -229,11 +237,11 @@ No penetration test performed; items above are from static code inspection only.
 
 ### Recommended implementation order
 
-**PHASE 1 — F003:** **COMPLETE** (`F003_COMPLIANT_WITH_NON_BLOCKERS`). Non-blockers listed above; do not treat as new feature scope.
+**PHASE 1 — F003:** **COMPLETE** (`F003_COMPLIANT_WITH_NON_BLOCKERS`).
 
-**PHASE 2 — F005:** **READY_FOR_IMPLEMENTATION** — password-change revoke-others + remember-me → password-reset revoke-others + remember-me → session tests → Active sessions / profile help.
+**PHASE 2 — F005:** **COMPLETE** (`F005_COMPLETE_WITH_NON_BLOCKERS`) — PD-006 password-change/reset revoke-others + remember_token rotation; manual F005 preserved; help synced.
 
 ---
 
 *End of gap matrix.*
-*F003 closed 2026-08-09 after final compliance audit; F005 remains open.*
+*F003 closed 2026-08-09; F005 PD-006 closed 2026-08-09.*

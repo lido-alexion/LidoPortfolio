@@ -5,7 +5,7 @@
 **V2 initiative:** Account & Access Management  
 **Classification:** Deferred from V1 by SD-035; formally specified and hardened in V2  
 **Related:** [F003-F005-BOUNDARY.md](./F003-F005-BOUNDARY.md), [F003-F005-POLICY-DECISIONS.md](./F003-F005-POLICY-DECISIONS.md), [F003-F005-IMPLEMENTATION-GAP-MATRIX.md](./F003-F005-IMPLEMENTATION-GAP-MATRIX.md), [F005-SESSION-MANAGEMENT-SPEC.md](./F005-SESSION-MANAGEMENT-SPEC.md)  
-**Note:** F005 / PD-006 session revocation remains a separate initiative (not part of F003 closure).
+**Note:** F005 / PD-006 session revocation is a separate initiative (not part of F003 closure); F005 is now **COMPLETE**.
 
 ---
 
@@ -60,8 +60,8 @@ V2 work for F003 was:
 1. **Formal specification** (this document) and gap matrix
 2. **Implement PD-004** — hashed invite tokens + explicit token-rotation UX (**DECIDED**; **delivered**)
 3. **Implement PD-005** — separate login vs invitation flows; login must not return invite tokens (**DECIDED**; **delivered**)
-4. **F005 / PD-006** owns credential-change session revocation (password change/reset); F003 invite accept has **no** PD-006 revocation requirement — **still F005 scope**
-5. Invite help/docs sync during F003 hardening (**delivered** for Users topic); Active-sessions help remains **F005-G014** / PD-013
+4. **F005 / PD-006** owns credential-change session revocation (password change/reset); F003 invite accept has **no** PD-006 revocation requirement — **delivered under F005**
+5. Invite help/docs sync during F003 hardening (**delivered** for Users topic); Active-sessions help **delivered** under F005-G014 / PD-013
 
 **Current delivery:** F003 hardening and final compliance audit closed as `F003_COMPLIANT_WITH_NON_BLOCKERS`. Documented non-blockers (test gaps, one-way reset/invite collision check, regenerate-on-expired UX) do not reopen MUST requirements.
 
@@ -332,7 +332,7 @@ F005 may follow for device session hygiene of invited users but is not a hard ru
 - PD-007 — **DEFERRED**
 
 **F003 delivery status:** **COMPLETE** (`F003_COMPLIANT_WITH_NON_BLOCKERS`).  
-**F005:** remains **READY_FOR_IMPLEMENTATION** (PD-006 revoke-others not started).
+**F005:** **COMPLETE** (`F005_COMPLETE_WITH_NON_BLOCKERS`) — PD-006 delivered outside F003.
 
 ---
 

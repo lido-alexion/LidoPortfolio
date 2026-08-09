@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Settings — StoX docs</title>
-  <meta name="description" content="Global (admin), Portfolio, and Account settings — fees, Telegram, sync, and links.">
+  <meta name="description" content="Global (admin), Portfolio, and Account settings — fees, Telegram, sync, active sessions, and links.">
   <link rel="canonical" href="settings.html">
   <style>
     :root {
@@ -110,11 +110,11 @@
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Settings</h1>
       <p class="muted"><code>settings</code> · screen: <code>/settings</code></p>
-      <p>Global (admin), Portfolio, and Account settings — fees, Telegram, sync, and links.</p>
+      <p>Global (admin), Portfolio, and Account settings — fees, Telegram, sync, active sessions, and links.</p>
 
       <section class="panel">
         <h2>Overview</h2>
-        <p>Settings is the only Administration item in the primary sidebar. Open it for Global (admins), Portfolio, and Account preferences. Admin tools (users, sync logs, data quality, indicator/screener/strategy registries, universe sync, alert policies) are linked from Settings cards — they are not separate sidebar entries.</p>
+        <p>Settings is the only Administration item in the primary sidebar. Open it for Global (admins), Portfolio, and Account preferences. On Account, Active sessions lists your signed-in devices so you can revoke one session or log out other devices. Admin tools (users, sync logs, data quality, indicator/screener/strategy registries, universe sync, alert policies) are linked from Settings cards — they are not separate sidebar entries.</p>
 <p>Settings controls app behavior and data interpretation. Make changes intentionally, especially to fees, telegram, and sync configuration, because they impact multiple workflows downstream.</p>
 <p>Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).</p>
 
@@ -134,6 +134,9 @@
     
         <dt>Notification history</dt>
         <dd>Open /notification-history from Portfolio → Alerts &amp; notifications to audit Telegram deliveries.</dd>
+    
+        <dt>Active sessions</dt>
+        <dd>Account tab: list devices (IP, browser summary, last activity). Log out other devices keeps this browser signed in. Revoke removes one non-current session; revoking the current session signs you out.</dd>
     
         <dt>Admin shortcuts</dt>
         <dd>From Global settings: Admin alerts, Sync logs, Universe price sync, Data Quality, Indicator/Screener/Strategy registries.</dd>
@@ -155,6 +158,9 @@
       <section class="panel">
         <h2>Concepts</h2>
         <dl class="doc-list">
+        <dt>Manual vs automatic session revoke</dt>
+        <dd>Active sessions controls are manual. Changing your password (or accepting an admin password-reset link) also signs out other devices automatically while keeping the active/new session.</dd>
+    
         <dt>Admin vs portfolio scope</dt>
         <dd>Some tools (users, sync logs, universe sync) are admin-only.</dd>
     

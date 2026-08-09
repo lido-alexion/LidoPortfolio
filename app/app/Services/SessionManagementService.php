@@ -2,9 +2,10 @@
 
 namespace App\Services;
 
+use App\Models\User;
 use Carbon\Carbon;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class SessionManagementService
 {
@@ -52,6 +53,32 @@ class SessionManagementService
             ->where('user_id', $userId)
             ->where('id', $sessionId)
             ->delete() > 0;
+    }
+
+    /**
+     * PD-006: revoke every database session except the surviving one, and rotate
+     * the user remember_token so other devices cannot re-authenticate via the
+     * remember-me cookie. Laravel stores a single remember_token per user; rotating
+     * it invalidates all outstanding remember cookies for that account.
+     *
+     * The surviving session (current password-change session, or newly established
+     * reset-accept session) must remain authenticated via its session cookie.
+     */
+    public function revokeOtherSessionsForCredentialChange(User $user, string $survivingSessionId): int
+    {
+        $deleted = $this->destroyOtherSessions($user->id, $survivingSessionId);
+        $this->invalidateRememberToken($user);
+
+        return $deleted;
+    }
+
+    /**
+     * Rotate remember_token so existing remember-me cookies stop working.
+     */
+    public function invalidateRememberToken(User $user): void
+    {
+        $user->setRememberToken(Str::random(60));
+        $user->save();
     }
 
     protected function describeUserAgent(?string $userAgent): string

@@ -1,13 +1,13 @@
 # F003 / F005 Policy Decisions
 
 **Date:** 2026-08-09  
-**Status:** Policies **closed**. **F003 COMPLETE** (`F003_COMPLIANT_WITH_NON_BLOCKERS`); **F005 READY_FOR_IMPLEMENTATION** (PD-006 hardening not started)  
+**Status:** Policies **closed**. **F003 COMPLETE** (`F003_COMPLIANT_WITH_NON_BLOCKERS`); **F005 COMPLETE** (`F005_COMPLETE_WITH_NON_BLOCKERS`)  
 **Specs:** [F003-USER-INVITE-SPEC.md](./F003-USER-INVITE-SPEC.md), [F005-SESSION-MANAGEMENT-SPEC.md](./F005-SESSION-MANAGEMENT-SPEC.md)  
 **Boundary:** [F003-F005-BOUNDARY.md](./F003-F005-BOUNDARY.md)  
 **Gap matrix / backlog:** [F003-F005-IMPLEMENTATION-GAP-MATRIX.md](./F003-F005-IMPLEMENTATION-GAP-MATRIX.md)
 
 No unresolved **product-policy** decisions remain for F003/F005.  
-**Implementation tracking:** F003 PD-004 / PD-005 delivered; F005 PD-006 revoke-others remains the next hardening work. This policy pack itself does not change application code.
+**Implementation tracking:** F003 PD-004 / PD-005 delivered; F005 PD-006 revoke-others delivered. This policy pack records decisions; delivery status lives in the gap matrix / `implementation.md`.
 
 ---
 
@@ -20,7 +20,7 @@ No unresolved **product-policy** decisions remain for F003/F005.
 | PD-003 One pending invite per email | **DECIDED** |
 | PD-004 Invite token hashing + rotation | **DECIDED** (F003 implemented) |
 | PD-005 Separate login vs invitation flows | **DECIDED** (F003 implemented) |
-| PD-006 Revoke other sessions on credential change/reset | **DECIDED** (F005 owns implementation — **not started**) |
+| PD-006 Revoke other sessions on credential change/reset | **DECIDED** (F005 implemented) |
 | PD-007 Admin force-logout of another user | **DEFERRED** (out of this initiative) |
 | PD-008 Session metadata fields | **DECIDED** |
 | PD-009 Multi-device sessions allowed | **DECIDED** |
@@ -42,7 +42,7 @@ No unresolved **product-policy** decisions remain for F003/F005.
 | PD-003 | One pending per email | Keep | **DECIDED** |
 | PD-004 | Plaintext token; re-copy from storage | Hash at rest; later URL = explicit regenerate | **DECIDED** (F003 delivered) |
 | PD-005 | Login returns `invite_token` | OPTION_C — no token from login | **DECIDED** (F003 delivered) |
-| PD-006 | Change/reset leave other sessions | OPTION_B — revoke others; keep current/new | **DECIDED** (F005 pending) |
+| PD-006 | Change/reset leave other sessions | OPTION_B — revoke others; keep current/new | **DECIDED** (F005 delivered) |
 | PD-007 | No admin cross-user session kill | Defer | **DEFERRED** |
 | PD-008 | IP / device / UA / activity shown | Keep | **DECIDED** |
 | PD-009 | Multi-device allowed | Keep | **DECIDED** |
@@ -172,7 +172,7 @@ PD-013 is **documentation/help synchronization** work and is **not** a product p
 - `F005-R013` already says contextual help SHOULD describe those controls  
 - Invite/password help should also reflect PD-004 / PD-005 / PD-006 when those hardenings land  
 
-Handle during F003/F005 implementation/hardening via `appDocumentation.js` (and static docs). Invite help updated with F003; Active sessions help remains tracked as gap **F005-G014**.
+Handle during F003/F005 implementation/hardening via `appDocumentation.js` (and static docs). Invite help updated with F003; Active sessions / password-change help delivered under **F005-G014**.
 
 ---
 

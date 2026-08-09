@@ -1,7 +1,7 @@
 # F005 — Session Management
 
 **Date:** 2026-08-09  
-**Status:** **READY_FOR_IMPLEMENTATION** (policies closed; hardening not started)  
+**Status:** **COMPLETE** (`F005_COMPLETE_WITH_NON_BLOCKERS`) — PD-006 delivered; manual F005 preserved  
 **V2 initiative:** Account & Access Management  
 **Classification:** Deferred from V1 by SD-035; mostly implemented in code  
 **Related:** [F003-F005-BOUNDARY.md](./F003-F005-BOUNDARY.md), [F003-F005-POLICY-DECISIONS.md](./F003-F005-POLICY-DECISIONS.md), [F003-F005-IMPLEMENTATION-GAP-MATRIX.md](./F003-F005-IMPLEMENTATION-GAP-MATRIX.md), [F003-USER-INVITE-SPEC.md](./F003-USER-INVITE-SPEC.md)
@@ -56,10 +56,10 @@ Feature-coverage audits marked F005 `PARTIALLY_IMPLEMENTED` citing partial UI. R
 
 1. Formal specification and acceptance criteria
 2. Strengthen automated tests (especially single-session revoke / foreign id)
-3. **Implement PD-006** — revoke other sessions on password change/reset; keep current/new session (DECIDED; not yet implemented)
-4. Help/docs sync (**PD-013** = documentation task, not a product decision)
+3. **Implement PD-006** — revoke other sessions on password change/reset; keep current/new session — **DONE**
+4. Help/docs sync (**PD-013** = documentation task, not a product decision) — **DONE**
 
-Not a greenfield build. Policy status: **READY_FOR_IMPLEMENTATION**.
+Not a greenfield build. Delivery status: **COMPLETE** (`F005_COMPLETE_WITH_NON_BLOCKERS`).
 
 ---
 
@@ -326,20 +326,19 @@ Portfolio middleware may run on the route group; session rows are account-scoped
 - **PD-007** — **DEFERRED** (admin force-logout)
 - **PD-013** — **NOT_A_POLICY_DECISION** (help sync during hardening)
 
-Initiative readiness: **READY_FOR_IMPLEMENTATION**.
+Initiative delivery: **COMPLETE** (`F005_COMPLETE_WITH_NON_BLOCKERS`).
 
 ---
 
 ## 24. Implementation notes
 
-- Primary service: `App\Services\SessionManagementService` (reuse `destroyOtherSessions` for PD-006)
+- Primary service: `App\Services\SessionManagementService` — `destroyOtherSessions`, `revokeOtherSessionsForCredentialChange`, `invalidateRememberToken`
 - Controllers: `AuthController` session methods; `ProfileController::updatePassword`; F004 `PasswordResetAcceptController::accept` (session outcome only)
-- Remember-me: rotate/invalidate `remember_token` (or equivalent) so other devices cannot stay authenticated via remember cookie
-- UI: `SettingsPage.jsx` Account tab (manual F005); `ProfilePage.jsx` password form (automatic PD-006 side effect)
-- Tests: extend `AuthSessionTest` / `ProfileTest` / password-reset feature tests for AC007–AC009
-- Current gap: password change and reset do **not** revoke other sessions yet
-- Do not modify application code in the specification/policy phase
+- Remember-me: rotate `users.remember_token` (single column per user) so outstanding remember cookies stop working; surviving session uses session cookie
+- UI: `SettingsPage.jsx` Account tab (manual F005); `ProfilePage.jsx` password form (automatic PD-006 messaging)
+- Tests: `AuthSessionTest` / `ProfileTest` / `PasswordResetLinkTest` / invite regression in `UserInviteTest`
 - Keep F005 distinct from invite tokens and from broker session docs
+- Non-blockers: no FE automated UI tests; PHPUnit DELETE-current cookie stickiness under Sanctum test client
 
 ---
 

@@ -75,21 +75,96 @@ class ProfileTest extends TestCase
             'current_password' => 'password123',
             'password' => 'new-password-99',
             'password_confirmation' => 'new-password-99',
-        ])->assertOk();
+        ])
+            ->assertOk()
+            ->assertJsonPath(
+                'message',
+                'Password updated. Other devices have been signed out. This device remains signed in.'
+            );
 
         $user->refresh();
         $this->assertTrue(Hash::check('new-password-99', $user->password));
+        $this->assertAuthenticatedAs($user);
     }
 
     public function test_profile_update_password_rejects_wrong_current_password(): void
     {
-        $this->actingAsPortfolioUser();
+        $user = $this->actingAsPortfolioUser();
+        $otherSessionId = $this->insertOtherSession($user->id);
+        $rememberBefore = 'remember-token-before-fail';
+        $user->setRememberToken($rememberBefore);
+        $user->save();
 
         $this->putJson('/api/profile/password', [
             'current_password' => 'wrong-password',
             'password' => 'new-password-99',
             'password_confirmation' => 'new-password-99',
         ])->assertUnprocessable();
+
+        $this->assertDatabaseHas(config('session.table', 'sessions'), ['id' => $otherSessionId]);
+        $user->refresh();
+        $this->assertSame($rememberBefore, $user->remember_token);
+        $this->assertTrue(Hash::check('password123', $user->password));
+    }
+
+    public function test_password_change_revokes_other_sessions_keeps_current_and_rotates_remember_token(): void
+    {
+        $user = $this->actingAsPortfolioUser();
+        $otherSessionId = $this->insertOtherSession($user->id);
+
+        $oldRemember = 'old-remember-token-value-aaaaaaaa';
+        $user->setRememberToken($oldRemember);
+        $user->save();
+
+        $response = $this->putJson('/api/profile/password', [
+            'current_password' => 'password123',
+            'password' => 'new-password-99',
+            'password_confirmation' => 'new-password-99',
+        ])->assertOk();
+
+        $response->assertJsonPath(
+            'message',
+            'Password updated. Other devices have been signed out. This device remains signed in.'
+        );
+        $this->assertGreaterThanOrEqual(1, (int) $response->json('sessions_removed'));
+
+        $this->assertAuthenticatedAs($user);
+        $this->assertDatabaseMissing(config('session.table', 'sessions'), ['id' => $otherSessionId]);
+
+        $user->refresh();
+        $this->assertTrue(Hash::check('new-password-99', $user->password));
+        $this->assertFalse(Hash::check('password123', $user->password));
+        $this->assertNotSame($oldRemember, $user->remember_token);
+        $this->assertNotEmpty($user->remember_token);
+
+        $this->getJson('/api/auth/me')
+            ->assertOk()
+            ->assertJsonPath('user.email', $user->email);
+
+        $this->postJson('/api/auth/logout')->assertOk();
+        $this->postJson('/api/auth/login', [
+            'email' => $user->email,
+            'password' => 'password123',
+        ])->assertUnprocessable();
+        $this->postJson('/api/auth/login', [
+            'email' => $user->email,
+            'password' => 'new-password-99',
+        ])->assertOk();
+    }
+
+    protected function insertOtherSession(int $userId, ?string $sessionId = null): string
+    {
+        $id = $sessionId ?? Str::random(40);
+        \Illuminate\Support\Facades\DB::table(config('session.table', 'sessions'))->insert([
+            'id' => $id,
+            'user_id' => $userId,
+            'ip_address' => '203.0.113.50',
+            'user_agent' => 'OtherDevice/1.0',
+            'payload' => '',
+            'last_activity' => time(),
+        ]);
+
+        return $id;
     }
 
     public function test_profile_photo_upload_and_delete(): void
