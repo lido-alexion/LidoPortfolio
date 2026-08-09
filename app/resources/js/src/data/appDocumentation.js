@@ -209,7 +209,34 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Market phase / sentiment', description: 'Deterministic market regime from the primary benchmark (e.g. Nifty 50); used later by Strategy market gates.' },
             { name: 'Dashboard cache', description: 'Responses are cached per user + portfolio (~24h) for snappy revisits; mutations invalidate it.' },
         ],
-        related: ['trading-os-flow', 'holdings', 'market-depth', 'patterns', 'calendar', 'review', 'portfolio-snapshots'],
+        related: ['trading-os-flow', 'holdings', 'market-depth', 'patterns', 'calendar', 'review', 'portfolio-snapshots', 'historical-holdings'],
+    },
+    {
+        id: 'historical-holdings',
+        keyword: 'historical-holdings',
+        aliases: ['as-of-holdings', 'historical holdings', 'holdings-as-of'],
+        title: 'Historical Holdings',
+        routeLabel: '/portfolio/historical-holdings',
+        match: (p) => pathIs(p, '/portfolio/historical-holdings'),
+        summary: 'As-of open holdings reconstructed from the transaction ledger for a chosen past date, with valuation and unrealized P/L.',
+        overview:
+            'Historical Holdings (F014) reconstructs open equity positions as of a selected calendar date from the transaction ledger — the same source of truth as live Holdings, but replayed only through that date.\n\n'
+            + 'This page is not live Holdings and not Portfolio Snapshots. Snapshots (F015) are a daily equity-curve cache of portfolio_value / invested_value. Historical Holdings shows the per-stock cross-section on one date.\n\n'
+            + 'Transactions on the selected date are included. Weekends and holidays are allowed; market price uses the latest available close on or before that date (adjusted close when present). Missing prices make valuation incomplete rather than silently zero. Corporate-action history reflects today’s corrected ledger (rebuildable truth), not a pre-correction “belief” state. Cash as-of and realized P/L are not shown here.',
+        controls: [
+            { name: 'As-of date', description: 'Pick any calendar date on or before today (YYYY-MM-DD). Future dates are rejected.' },
+            { name: 'Refresh', description: 'Reload GET /api/portfolio/historical-holdings for the active portfolio.' },
+            { name: 'Holdings table', description: 'Symbol, name, qty, Avg Buy, Invested (fee-exclusive), as-of price, market value, unrealized P/L and unrealized % vs invested — same percentage definition as live Holdings.' },
+            { name: 'Inconsistency warnings', description: 'If historical sells exceed reconstructed quantity, a warning lists affected rows; reconstruction continues and the ledger is not modified.' },
+            { name: 'Incomplete valuation banner', description: 'Shown when one or more holdings lack a price on or before the as-of date; aggregate market/unrealized totals are marked incomplete.' },
+        ],
+        concepts: [
+            { name: 'Ledger reconstruction', description: 'Open qty and fee-exclusive cost basis come from replaying portfolio_transactions ordered by date then id — not from today’s holdings table or snapshot rows.' },
+            { name: 'As-of price', description: 'Latest OHLCV row with price_date ≤ as-of; prefers adjusted_close, else close (F043-repaired data when present).' },
+            { name: 'Unrealized P/L', description: 'market_value − invested_amount; unrealized % = unrealized / invested × 100 when invested > 0 (same as live Holdings).' },
+            { name: 'Vs Portfolio Snapshots', description: 'Snapshots chart daily portfolio totals; Historical Holdings lists stocks open on one date.' },
+        ],
+        related: ['holdings', 'portfolio-snapshots', 'transactions', 'dashboard'],
     },
     {
         id: 'portfolio-snapshots',
@@ -222,7 +249,8 @@ const APP_DOCUMENTATION_BASE = [
         overview:
             'Portfolio Snapshots shows the materialized daily history stored in portfolio_portfolio_snapshots. '
             + 'Each row is rebuilt from transactions and closing prices — not recalculated in the browser. '
-            + 'Use range filters, the growth chart, and the daily table to review history. Rebuild history recalculates all snapshot rows from the ledger.',
+            + 'Use range filters, the growth chart, and the daily table to review history. Rebuild history recalculates all snapshot rows from the ledger. '
+            + 'For a per-stock list on one past date, use Historical Holdings instead.',
         controls: [
             { name: 'Range filters', description: '90 / 180 / 365 days or All (up to 2000 rows) — fetches backend snapshots for the active portfolio only.' },
             { name: 'Refresh', description: 'Reload snapshot data from GET /api/portfolio/snapshots.' },
@@ -234,7 +262,7 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Invested value', description: 'Remaining cost basis for open holdings on that date — not the same as cash balance.' },
             { name: 'Unrealized P/L', description: 'portfolio_value − invested_value for that snapshot row (display derived from backend fields).' },
         ],
-        related: ['dashboard', 'transactions', 'holdings', 'cash'],
+        related: ['dashboard', 'transactions', 'holdings', 'cash', 'historical-holdings'],
     },
     {
         id: 'transactions',
@@ -337,11 +365,11 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Analyse', description: 'Copies an AI-ready prompt (with recent OHLCV) to the clipboard.' },
         ],
         concepts: [
-            { name: 'Average buy / invested', description: 'Cost basis from open buy lots after fees allocation rules.' },
-            { name: 'Unrealized P/L', description: 'Mark-to-market vs latest cached close.' },
+            { name: 'Average buy / invested', description: 'Fee-exclusive cost basis (price × qty) for open lots; fees are shown separately.' },
+            { name: 'Unrealized P/L', description: 'Mark-to-market vs latest cached close; unrealized % = unrealized ÷ invested × 100 when invested > 0.' },
             { name: 'Trailing stop metric', description: 'Shown on holdings; alert policies can act on it — not a separate automatic Telegram spam path.' },
         ],
-        related: ['transactions', 'stock-prices', 'watchlist', 'dashboard'],
+        related: ['transactions', 'stock-prices', 'watchlist', 'dashboard', 'historical-holdings'],
     },
     {
         id: 'stock-prices',

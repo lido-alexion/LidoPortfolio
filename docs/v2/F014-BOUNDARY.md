@@ -1,7 +1,7 @@
 # F014 / Ledger / F015 / F019 / F020 / F042 / F043 Boundary
 
 **Date:** 2026-08-09  
-**Status:** Policies closed — **`READY_FOR_IMPLEMENTATION`** (product surface not yet shipped)  
+**Status:** Hardening delivered — **`F014_COMPLETE_WITH_NON_BLOCKERS`**  
 **Purpose:** Prevent scope bleed between as-of holdings reconstruction, live holdings, snapshot equity history, CSV import, corporate actions, and market-data repair.  
 **Related:** [F014-HISTORICAL-HOLDINGS-SPEC.md](./F014-HISTORICAL-HOLDINGS-SPEC.md), [F014-POLICY-DECISIONS.md](./F014-POLICY-DECISIONS.md), [F014-IMPLEMENTATION-GAP-MATRIX.md](./F014-IMPLEMENTATION-GAP-MATRIX.md)
 

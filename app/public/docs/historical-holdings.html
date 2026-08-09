@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Portfolio (Holdings) — StoX docs</title>
-  <meta name="description" content="Open positions derived from the ledger — qty, cost, P/L, XIRR, and trailing stop.">
-  <link rel="canonical" href="holdings.html">
+  <title>Historical Holdings — StoX docs</title>
+  <meta name="description" content="As-of open holdings reconstructed from the transaction ledger for a chosen past date, with valuation and unrealized P/L.">
+  <link rel="canonical" href="historical-holdings.html">
   <style>
     :root {
       --bg: #0f1419;
@@ -103,19 +103,20 @@
       <p class="muted" style="margin:0">Static HTML — readable without JavaScript or login.</p>
       <div class="nav">
         <a href="index.html">All topics</a>
-        <a href="holdings.html">This topic</a>
+        <a href="historical-holdings.html">This topic</a>
       </div>
     </header>
     
     <article>
-      <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Portfolio (Holdings)</h1>
-      <p class="muted"><code>holdings</code> · screen: <code>/holdings</code></p>
-      <p>Open positions derived from the ledger — qty, cost, P/L, XIRR, and trailing stop.</p>
+      <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Historical Holdings</h1>
+      <p class="muted"><code>historical-holdings</code> · screen: <code>/portfolio/historical-holdings</code></p>
+      <p>As-of open holdings reconstructed from the transaction ledger for a chosen past date, with valuation and unrealized P/L.</p>
 
       <section class="panel">
         <h2>Overview</h2>
-        <p>Holdings show current positions for the active portfolio. Use Simple or Complex views, resizable columns, sell prefill, Analyse prompts, and drill into per-stock OHLCV history.</p>
-<p>Holdings is your live position cockpit. Start with exposure and unrealized risk, then drill into per-stock history when something looks unusual. Complex view is better for diagnostics; simple view is better for fast monitoring.</p>
+        <p>Historical Holdings (F014) reconstructs open equity positions as of a selected calendar date from the transaction ledger — the same source of truth as live Holdings, but replayed only through that date.</p>
+<p>This page is not live Holdings and not Portfolio Snapshots. Snapshots (F015) are a daily equity-curve cache of portfolio_value / invested_value. Historical Holdings shows the per-stock cross-section on one date.</p>
+<p>Transactions on the selected date are included. Weekends and holidays are allowed; market price uses the latest available close on or before that date (adjusted close when present). Missing prices make valuation incomplete rather than silently zero. Corporate-action history reflects today’s corrected ledger (rebuildable truth), not a pre-correction “belief” state. Cash as-of and realized P/L are not shown here.</p>
 <p>Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).</p>
 
       </section>
@@ -123,23 +124,20 @@
       <section class="panel">
         <h2>Controls</h2>
         <dl class="doc-list">
-        <dt>Simple / Complex views</dt>
-        <dd>Toggle density of columns and metrics.</dd>
+        <dt>As-of date</dt>
+        <dd>Pick any calendar date on or before today (YYYY-MM-DD). Future dates are rejected.</dd>
     
-        <dt>Sell</dt>
-        <dd>Prefills a sell transaction from the selected holding.</dd>
+        <dt>Refresh</dt>
+        <dd>Reload GET /api/portfolio/historical-holdings for the active portfolio.</dd>
     
-        <dt>Price history</dt>
-        <dd>Opens OHLCV chart and table for that stock.</dd>
+        <dt>Holdings table</dt>
+        <dd>Symbol, name, qty, Avg Buy, Invested (fee-exclusive), as-of price, market value, unrealized P/L and unrealized % vs invested — same percentage definition as live Holdings.</dd>
     
-        <dt>Analyse</dt>
-        <dd>Copies an AI-ready prompt (with recent OHLCV) to the clipboard.</dd>
+        <dt>Inconsistency warnings</dt>
+        <dd>If historical sells exceed reconstructed quantity, a warning lists affected rows; reconstruction continues and the ledger is not modified.</dd>
     
-        <dt>Column presets and sorting</dt>
-        <dd>Use sorting with complex metrics (unrealized %, latest change %, drawdown from highest close) to quickly surface risk concentration and weak performers.</dd>
-    
-        <dt>Action shortcuts</dt>
-        <dd>Sell, Analyse, and Price history actions are designed for one-click workflow transitions into execution, research, or historical validation.</dd>
+        <dt>Incomplete valuation banner</dt>
+        <dd>Shown when one or more holdings lack a price on or before the as-of date; aggregate market/unrealized totals are marked incomplete.</dd>
     
         <dt>Typical flow</dt>
         <dd>Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.</dd>
@@ -152,17 +150,17 @@
       <section class="panel">
         <h2>Concepts</h2>
         <dl class="doc-list">
-        <dt>Average buy / invested</dt>
-        <dd>Fee-exclusive cost basis (price × qty) for open lots; fees are shown separately.</dd>
+        <dt>Ledger reconstruction</dt>
+        <dd>Open qty and fee-exclusive cost basis come from replaying portfolio_transactions ordered by date then id — not from today’s holdings table or snapshot rows.</dd>
+    
+        <dt>As-of price</dt>
+        <dd>Latest OHLCV row with price_date ≤ as-of; prefers adjusted_close, else close (F043-repaired data when present).</dd>
     
         <dt>Unrealized P/L</dt>
-        <dd>Mark-to-market vs latest cached close; unrealized % = unrealized ÷ invested × 100 when invested &gt; 0.</dd>
+        <dd>market_value − invested_amount; unrealized % = unrealized / invested × 100 when invested &gt; 0 (same as live Holdings).</dd>
     
-        <dt>Trailing stop metric</dt>
-        <dd>Shown on holdings; alert policies can act on it — not a separate automatic Telegram spam path.</dd>
-    
-        <dt>Risk-first reading</dt>
-        <dd>Prioritize trailing-stop pressure, latest close behavior, and concentration before focusing on winners.</dd>
+        <dt>Vs Portfolio Snapshots</dt>
+        <dd>Snapshots chart daily portfolio totals; Historical Holdings lists stocks open on one date.</dd>
     
         <dt>Active portfolio context</dt>
         <dd>Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.</dd>
@@ -176,7 +174,7 @@
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
-          <a href="transactions.html">Transactions</a><a href="stock-prices.html">Stock price history</a><a href="watchlist.html">Watchlist</a><a href="dashboard.html">Dashboard</a><a href="historical-holdings.html">Historical Holdings</a>
+          <a href="holdings.html">Portfolio (Holdings)</a><a href="portfolio-snapshots.html">Portfolio Snapshots</a><a href="transactions.html">Transactions</a><a href="dashboard.html">Dashboard</a>
         </div>
       </section>
     </article>

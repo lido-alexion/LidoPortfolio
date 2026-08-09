@@ -1,7 +1,7 @@
 # F014 Policy Decisions
 
 **Date:** 2026-08-09  
-**Status:** Policies **closed**. Spec pack status: **`READY_FOR_IMPLEMENTATION`**  
+**Status:** Policies **closed**. Initiative delivery: **COMPLETE** (`F014_COMPLETE_WITH_NON_BLOCKERS`)  
 **Spec:** [F014-HISTORICAL-HOLDINGS-SPEC.md](./F014-HISTORICAL-HOLDINGS-SPEC.md)  
 **Boundary:** [F014-BOUNDARY.md](./F014-BOUNDARY.md)  
 **Gap matrix:** [F014-IMPLEMENTATION-GAP-MATRIX.md](./F014-IMPLEMENTATION-GAP-MATRIX.md)
@@ -254,6 +254,7 @@ Help sync and adequate automated tests are **implementation requirements** befor
 |------|--------|
 | 2026-08-09 | Analyst recommendations published (awaiting confirmation) |
 | 2026-08-09 | Product owner confirmed PD-F014-01…21 as recorded in this document |
+| 2026-08-09 | MVP implemented — `F014_COMPLETE_WITH_NON_BLOCKERS` |
 
 ---
 

@@ -1,7 +1,7 @@
 # F014 — Historical Holdings Reconstruction Specification
 
 **Date:** 2026-08-09  
-**Status:** **`READY_FOR_IMPLEMENTATION`** (policies closed 2026-08-09; product surface **not yet implemented**)  
+**Status:** **`F014_COMPLETE_WITH_NON_BLOCKERS`** (policies closed; MVP delivered 2026-08-09)  
 **Initiative:** Portfolio History & Import (Phase 3) — after F019 (`F019_COMPLETE_WITH_NON_BLOCKERS`)  
 **Related:** [F014-BOUNDARY.md](./F014-BOUNDARY.md), [F014-POLICY-DECISIONS.md](./F014-POLICY-DECISIONS.md), [F014-IMPLEMENTATION-GAP-MATRIX.md](./F014-IMPLEMENTATION-GAP-MATRIX.md)
 

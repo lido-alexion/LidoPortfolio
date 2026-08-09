@@ -1,7 +1,7 @@
 # V2 Roadmap (Planning)
 
 **Date:** 2026-08-09  
-**Status:** Active V2 roadmap (no calendar dates). **Market Data Quality track delivered:** F042 + F043 = **COMPLETE**. **Monitoring (F127)** = **COMPLETE** (`F127_COMPLETE_WITH_NON_BLOCKERS`). **Bulk CSV Import (F019)** = **COMPLETE** (`F019_COMPLETE_WITH_NON_BLOCKERS`).  
+**Status:** Active V2 roadmap (no calendar dates). **Market Data Quality track delivered:** F042 + F043 = **COMPLETE**. **Monitoring (F127)** = **COMPLETE** (`F127_COMPLETE_WITH_NON_BLOCKERS`). **Bulk CSV Import (F019)** = **COMPLETE** (`F019_COMPLETE_WITH_NON_BLOCKERS`). **Historical Holdings (F014)** = **COMPLETE** (`F014_COMPLETE_WITH_NON_BLOCKERS`).  
 **V1:** Frozen at 119 capabilities (SD-035) — [final audit](../audits/2026-08-09-feature-coverage-final/)
 
 ---
@@ -89,7 +89,7 @@
 | Order | Feature | Work type |
 |------:|---------|-----------|
 | 1 | **F019** Bulk CSV import | Import validation hardening; PHP feature tests; error reporting |
-| 2 | **F014** Historical holdings reconstruction | Dedicated UI on existing service; as-of analytics UX |
+| 2 | **F014** Historical holdings reconstruction | **COMPLETE** (`F014_COMPLETE_WITH_NON_BLOCKERS`) — as-of API + dedicated page |
 | 3 | **F060** Shared screener import | Formalize V2 after F003; cross-portfolio sharing rules |
 | 4 | **F137** Recommendation preview API | API contract stability; feature tests; document consumers |
 
@@ -126,7 +126,7 @@
 |-------|----------|---------------|-----------------|---------------|
 | **1** | F003, F005, F042 | Account & Access; Market Data Quality | Multi-user readiness + data trust | **F042 COMPLETE**; F003/F005 remaining |
 | **2** | F043, F127 | Market Data Quality (cont.); Monitoring | Safe ops repair + holding alerts | **F043 COMPLETE**; **F127 COMPLETE** (`F127_COMPLETE_WITH_NON_BLOCKERS`) |
-| **3** | F019, F014, F060, F137 | Portfolio History; Collaboration; Platform API | Data onboarding + research tools | **F019 COMPLETE**; F014/F060/F137 remaining |
+| **3** | F019, F014, F060, F137 | Portfolio History; Collaboration; Platform API | Data onboarding + research tools | **F019 + F014 COMPLETE**; F060/F137 remaining |
 | **4** | F143, F144 | Knowledge & Guidance | UX polish (optional / late) | Remaining |
 
 ---
