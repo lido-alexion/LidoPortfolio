@@ -1274,6 +1274,8 @@ Document in this section and `portfolio-history-rebuild-report.md`.
 
 ## Authentication Architecture (May 2026)
 
+**V2 Account & Access (2026-08-09):** Formal specification pack for deferred **F003** (User Invite) and **F005** (Session Management). Status: **READY_FOR_IMPLEMENTATION** (policies closed; app hardening not started). Start at [`docs/v2/F003-F005-BOUNDARY.md`](docs/v2/F003-F005-BOUNDARY.md); requirements in [`F003-USER-INVITE-SPEC.md`](docs/v2/F003-USER-INVITE-SPEC.md) and [`F005-SESSION-MANAGEMENT-SPEC.md`](docs/v2/F005-SESSION-MANAGEMENT-SPEC.md); policies/gaps/backlog in [`F003-F005-POLICY-DECISIONS.md`](docs/v2/F003-F005-POLICY-DECISIONS.md) and [`F003-F005-IMPLEMENTATION-GAP-MATRIX.md`](docs/v2/F003-F005-IMPLEMENTATION-GAP-MATRIX.md). Indexed in `DOCS.md` §3.D.
+
 ### Stack (mandatory)
 
 - **Laravel Sanctum** SPA mode (`bootstrap/app.php` → `statefulApi()`)
