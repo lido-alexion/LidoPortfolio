@@ -1,7 +1,7 @@
 # V2 Roadmap (Planning)
 
 **Date:** 2026-08-09  
-**Status:** Active V2 roadmap (no calendar dates). **Market Data Quality track delivered:** F042 + F043 = **COMPLETE**.  
+**Status:** Active V2 roadmap (no calendar dates). **Market Data Quality track delivered:** F042 + F043 = **COMPLETE**. **Monitoring (F127)** = **COMPLETE** (`F127_COMPLETE_WITH_NON_BLOCKERS`).  
 **V1:** Frozen at 119 capabilities (SD-035) — [final audit](../audits/2026-08-09-feature-coverage-final/)
 
 ---
@@ -71,9 +71,9 @@
 | Feature | Work type | Delivery |
 |---------|-----------|----------|
 | **F043** Corporate action price repair | Factor path + F020 single-writer hardening + tests | **COMPLETE** |
-| **F127** Portfolio alerts (non-TOS) | Spec alignment; harden existing alert framework; clarify vs TOS Telegram | Remaining |
+| **F127** Portfolio alerts (non-TOS) | Spec + policy pack; expire→evaluate daily lifecycle; holding_closed fix; help sync | **COMPLETE** (`F127_COMPLETE_WITH_NON_BLOCKERS`) |
 
-**Rationale:** F043 depends on F042 issue model (satisfied). F127 is fully implemented — V2 is governance + hardening, not greenfield.
+**Rationale:** F043 depends on F042 issue model (satisfied). F127 framework was already shipped; V2 delivered governance + hardening (PD-F127-07 expire→evaluate; manual Run now remains evaluate-only). Intentional non-blockers remain (see F127 gap matrix).
 
 **Prerequisites:** Phase 1 Track B (F042) for F043 — **done**; daily price sync for F127.
 
@@ -124,7 +124,7 @@
 | Phase | Features | Initiative(s) | Primary outcome | Delivery note |
 |-------|----------|---------------|-----------------|---------------|
 | **1** | F003, F005, F042 | Account & Access; Market Data Quality | Multi-user readiness + data trust | **F042 COMPLETE**; F003/F005 remaining |
-| **2** | F043, F127 | Market Data Quality (cont.); Monitoring | Safe ops repair + holding alerts | **F043 COMPLETE**; F127 remaining |
+| **2** | F043, F127 | Market Data Quality (cont.); Monitoring | Safe ops repair + holding alerts | **F043 COMPLETE**; **F127 COMPLETE** (`F127_COMPLETE_WITH_NON_BLOCKERS`) |
 | **3** | F019, F014, F060, F137 | Portfolio History; Collaboration; Platform API | Data onboarding + research tools | Remaining |
 | **4** | F143, F144 | Knowledge & Guidance | UX polish (optional / late) | Remaining |
 
@@ -132,13 +132,13 @@
 
 ## Recommended next V2 initiative
 
-**Market Data Quality (F042 + F043) is complete.** Choose the next track from remaining Phase 1–3 items:
+**Market Data Quality (F042 + F043) and Monitoring (F127) are complete.** Choose the next track from remaining Phase 1–3 items:
 
-- **Phase 1 Track A: Account & Access (F003 + F005)** if multi-user deployment is the top priority.
-- **Phase 2 remainder: F127** if monitoring/alerts hardening is next.
+- **Phase 1 Track A: Account & Access (F003 + F005)** if multi-user deployment is the top priority (check current delivery status — may already be complete).
+- **Phase 2 F127** — **COMPLETE** (`F127_COMPLETE_WITH_NON_BLOCKERS`); daily lifecycle = expire → evaluate → create/reuse; Manual Run now = evaluate-only. Do not reopen deferred non-blockers as blockers.
 - **Phase 3** items (F019 → F014, F060 after F003, F137) per dependency order.
 
-Do **not** reopen F042/F043 core behaviour; deferred F043 non-blockers (admin API, auto-schedule, etc.) are optional later work, not blockers for closing Market Data Quality.
+Do **not** reopen F042/F043/F127 core behaviour; deferred non-blockers on those tracks are optional later work, not blockers for closing the delivered initiatives.
 
 ---
 

@@ -113,6 +113,22 @@ class DailyMarketDataJob implements ShouldQueue
 
                 $metricsUpdate->updateAllTrackedStocks();
 
+                // PD-F127-07: expire trading-day stale alerts BEFORE evaluating policies so a
+                // still-true condition can create a fresh active instance in this same cycle.
+                // Trading-day expiry still runs only on full sync success when the max price date advances.
+                if ($failed === 0) {
+                    $priceDateAfter = $alertExpiration->latestPortfolioPriceDate();
+                    if ($priceDateAfter && (! $priceDateBefore || $priceDateAfter > $priceDateBefore)) {
+                        $expiredOnRefresh = $alertExpiration->expireBeforeTradingDay(
+                            Carbon::parse($priceDateAfter)->startOfDay(),
+                        );
+                        $syncLog->log($runId, $jobName, 'info', 'Alerts expired after new trading day prices', [
+                            'trading_day' => $priceDateAfter,
+                            'expired_count' => $expiredOnRefresh,
+                        ]);
+                    }
+                }
+
                 $policyResult = $alertPolicyEvaluation->evaluateAllProfiles();
                 $syncLog->log($runId, $jobName, 'info', 'Alert policies evaluated', $policyResult);
 
@@ -145,17 +161,6 @@ class DailyMarketDataJob implements ShouldQueue
                     } catch (\Throwable $e) {
                         $syncLog->log($runId, $jobName, 'warning', 'Market depth refresh failed', [
                             'failure_reason' => $e->getMessage(),
-                        ]);
-                    }
-
-                    $priceDateAfter = $alertExpiration->latestPortfolioPriceDate();
-                    if ($priceDateAfter && (! $priceDateBefore || $priceDateAfter > $priceDateBefore)) {
-                        $expiredOnRefresh = $alertExpiration->expireBeforeTradingDay(
-                            Carbon::parse($priceDateAfter)->startOfDay(),
-                        );
-                        $syncLog->log($runId, $jobName, 'info', 'Alerts expired after new trading day prices', [
-                            'trading_day' => $priceDateAfter,
-                            'expired_count' => $expiredOnRefresh,
                         ]);
                     }
 

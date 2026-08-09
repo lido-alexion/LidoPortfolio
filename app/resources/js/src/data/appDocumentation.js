@@ -1572,17 +1572,39 @@ const APP_DOCUMENTATION_BASE = [
         title: 'Alert policies',
         routeLabel: '/settings/alert-policies',
         match: (p) => pathStarts(p, '/settings/alert-policies'),
-        summary: 'Rule builder on holdings — evaluate after sync or on demand.',
+        summary: 'Rule builder on open holdings — evaluate after daily sync (expire then evaluate) or on demand.',
         overview:
-            'Define alert policies with columns, formulas, and constants against holdings. Policies generate alerts (including trailing-stop style metrics) that can notify via Telegram on schedule.',
+            'Define alert policies on current open portfolio holdings using level conditions (holding field + operator + column, formula, or constant). After a successful daily market-data sync with a new trading day, stale alerts expire first, then policies re-evaluate so still-true conditions can create a fresh alert instance. Manual Run now evaluates the active portfolio without redesigning that daily order. Generated alerts appear on the Dashboard; Telegram digests (if you set notification times) may repeat active alerts each slot until expired. Distinct from TOS recommendation Telegram and admin operational alerts.',
         controls: [
-            { name: 'Rule builder', description: 'Compose conditions evaluated against holding metrics.' },
-            { name: 'Evaluate', description: 'Run on demand or after daily sync.' },
+            {
+                name: 'Rule builder',
+                description:
+                    'Compose holdings-only conditions (gt/lt/eq). Missing operands skip alert creation. Policies are scoped to the active portfolio.',
+            },
+            {
+                name: 'Evaluate / Run now',
+                description:
+                    'Runs enabled policies for the active portfolio immediately. Daily sync uses expire-then-evaluate when the price date advances; Run now evaluates without performing trading-day expiry.',
+            },
+            {
+                name: 'Telegram schedules',
+                description:
+                    'Configured under Portfolio settings. Empty schedules mean in-app only. Digests skip weekends/trade holidays and may include the same active alert in every configured slot.',
+            },
         ],
         concepts: [
-            { name: 'Policy vs one-off alert', description: 'Policies are reusable rules; alerts are evaluation outcomes.' },
+            {
+                name: 'Policy vs alert instance',
+                description:
+                    'Policies are reusable rules. Alerts are instances keyed by user/profile/stock/policy. Active duplicates are suppressed; after expiry (ack, clear-all, max age, trading-day refresh, or holding closed), a later evaluation may create a new instance while the condition remains true.',
+            },
+            {
+                name: 'F127 vs other Telegram',
+                description:
+                    'Portfolio alert digests are separate from Trading OS recommendation notifications, India VIX alerts, screener Telegram, and admin ops alerts — they may share the same bot/chat.',
+            },
         ],
-        related: ['notifications', 'holdings', 'settings'],
+        related: ['notifications', 'holdings', 'settings', 'dashboard'],
     },
     {
         id: 'sync-logs',

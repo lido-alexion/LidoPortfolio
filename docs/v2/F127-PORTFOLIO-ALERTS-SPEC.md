@@ -1,9 +1,9 @@
 # F127 — Portfolio Alerts / Monitoring
 
 **Date:** 2026-08-09  
-**Status:** **READY_FOR_IMPLEMENTATION** (product policies closed; hardening not started)  
+**Status:** **COMPLETE** (`F127_COMPLETE_WITH_NON_BLOCKERS`) — PD-F127-07 delivered; policies closed  
 **V2 initiative:** Monitoring & Alerts (Phase 2 remainder after F042/F043)  
-**Classification:** Deferred from V1 by SD-035; **substantially implemented** in code  
+**Classification:** Deferred from V1 by SD-035; shipped + hardened  
 **Related:** [F127-BOUNDARY.md](./F127-BOUNDARY.md), [F127-POLICY-DECISIONS.md](./F127-POLICY-DECISIONS.md), [F127-IMPLEMENTATION-GAP-MATRIX.md](./F127-IMPLEMENTATION-GAP-MATRIX.md)
 
 ---
@@ -19,7 +19,7 @@
 
 Where **CURRENT** and **DECIDED** differ, hardening MUST implement **DECIDED** (see PD-F127-07).
 
-Initiative readiness: **READY_FOR_IMPLEMENTATION**.
+Initiative readiness: **COMPLETE** (`F127_COMPLETE_WITH_NON_BLOCKERS`).
 
 ---
 
@@ -89,30 +89,22 @@ Users configure **alert policies** over **current open portfolio holdings**, the
 | Alerts | `portfolio_alerts`; Dashboard + alerts API |
 | Expiration | ack, expire-all, max-age 100h, trading-day, holding_closed |
 | Telegram digest | `AlertNotificationService`; schedules HH:mm |
-| Daily order | **CURRENT:** evaluate → expire (**DECIDED** changes this — PD-F127-07) |
+| Daily order | **CURRENT (post-hardening):** expire → evaluate when trading-day price date advances on full sync success (**DECIDED** PD-F127-07) |
 
 ---
 
 ## 5. Lifecycle
 
-### CURRENT (shipped until hardened)
+### CURRENT / DECIDED daily lifecycle (PD-F127-07 — implemented)
 
 ```text
-… → evaluate enabled policies → (may duplicate_active)
-  → expire trading-day / other reasons
-  → digest consumes whatever remains active
-```
-
-### DECIDED V2 daily lifecycle (PD-F127-07)
-
-```text
-1. Expire stale/closed alerts
+1. Expire stale/closed alerts (trading-day refresh when price date advances on full sync success)
 2. Evaluate enabled policies against current open holdings
 3. Create / reuse active alerts (instance_key dedup)
 4. Scheduled Telegram digest consumes the resulting active set
 ```
 
-Manual Run now evaluates the active portfolio without inventing a second product model.
+Manual Run now evaluates the active portfolio **without** performing trading-day expiry (intentional; daily order is owned by `DailyMarketDataJob`).
 
 **Re-arm (DECIDED):** After expiration, a later evaluation MAY create a new instance while the condition remains true — no false→true requirement (PD-F127-11).
 
@@ -187,7 +179,7 @@ Manual Run now evaluates the active portfolio without inventing a second product
 | F127-AC007 | Ack requires holding; clear-all expires actives | CURRENT = DECIDED |
 | F127-AC008 | Sold holding expires alerts with `holding_closed` | CURRENT = DECIDED |
 | F127-AC009 | Digests skip non-session days; empty schedules → no digest; active alerts may repeat each slot | CURRENT = DECIDED |
-| F127-AC010 | Daily workflow uses **expire then evaluate** so a still-true condition can yield an active alert in the same cycle after trading-day expiry | **Hardening required** (differs from CURRENT) |
+| F127-AC010 | Daily workflow uses **expire then evaluate** so a still-true condition can yield an active alert in the same cycle after trading-day expiry | **Implemented** + `AlertLifecycleOrderingTest` |
 | F127-AC011 | After expire, later eval may recreate while still true | CURRENT = DECIDED |
 | F127-AC012 | Sanctum SPA auth unchanged | CURRENT |
 | F127-AC013 | No F042/F043 hard dependency in F127 paths | CURRENT = DECIDED |
@@ -206,7 +198,7 @@ Manual Run now evaluates the active portfolio without inventing a second product
 | Re-arm | Implicit after expire (PD-F127-11) |
 | Telegram | Repeated digest of actives (PD-F127-09) |
 | `is_sent` | Legacy/dead — not delivery SoT |
-| Daily order | **DECIDED** expire→evaluate (implement in hardening) |
+| Daily order | **Implemented** expire→evaluate (PD-F127-07) |
 | Concurrency | No invented distributed lock guarantees |
 
 ---
@@ -238,12 +230,15 @@ Soft: F042/F043 price quality only (**PD-F127-18**).
 
 ## 13. Implementation notes (non-normative)
 
-1. Implement **PD-F127-07** ordering change in `DailyMarketDataJob` (and any equivalent path).  
-2. Preserve repeated digests, holdings-only universe, level semantics, implicit re-arm.  
-3. Add/extend tests for AC010 and related.  
-4. Sync contextual help (PD-F127-21).  
-5. Optional non-blocker: numeric-capable condition UX (PD-F127-20).  
-6. Do not remove `is_sent` unless separately scoped and proven safe.
+Delivered 2026-08-09:
+
+1. `DailyMarketDataJob` — trading-day expire before `evaluateAllProfiles` on full sync when price date advances  
+2. `AlertExpirationService::expireForProfileStockIfUnheld` — expire on ledger zero without stale Holding-row check  
+3. Tests: `AlertLifecycleOrderingTest`; repeated digest + empty schedule in `AlertNotificationServiceTest`  
+4. Help: `appDocumentation.js` alert-policies topic  
+5. `is_sent` left in place as legacy/dead  
+
+Non-blockers: no FE test framework; optional `notifications_enabled` UI; optional numeric-only condition picker.
 
 ---
 

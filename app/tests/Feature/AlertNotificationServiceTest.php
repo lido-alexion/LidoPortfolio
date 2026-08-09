@@ -222,4 +222,119 @@ class AlertNotificationServiceTest extends TestCase
         $this->assertTrue($result['skipped']);
         $this->assertSame('trade_holiday', $result['skip_reason'] ?? null);
     }
+
+    public function test_scheduled_notifications_repeat_digest_for_same_active_alert(): void
+    {
+        $user = User::query()->create([
+            'name' => 'Repeat Digest',
+            'email' => 'alert-repeat-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+        $profile = $this->defaultPortfolioFor($user);
+
+        $stock = Stock::query()->create([
+            'symbol' => 'RPTA',
+            'exchange' => 'NSE',
+            'name' => 'Repeat Alert Stock',
+            'is_active' => true,
+            'is_benchmark' => false,
+        ]);
+
+        Holding::query()->create([
+            'profile_id' => $profile->id,
+            'stock_id' => $stock->id,
+            'quantity' => 1,
+            'avg_buy_price' => 100,
+            'invested_amount' => 100,
+            'realized_profit' => 0,
+            'updated_at' => now(),
+        ]);
+
+        Alert::query()->create([
+            'profile_id' => $profile->id,
+            'stock_id' => $stock->id,
+            'alert_type' => 'policy',
+            'message' => 'Still active for RPTA',
+            'is_sent' => false,
+            'created_at' => now(),
+        ]);
+
+        $telegram = $this->createMock(TelegramNotificationService::class);
+        $telegram->expects($this->exactly(2))
+            ->method('sendMessageForProfile')
+            ->with(
+                $this->callback(fn ($p) => $p->id === $profile->id),
+                $this->stringContains('RPTA'),
+            )
+            ->willReturn(true);
+        $this->app->instance(TelegramNotificationService::class, $telegram);
+
+        app(\App\Services\NotificationScheduleService::class)->persistForProfile($profile, ['10:00', '15:00']);
+        app(\App\Services\ProfileSettingsService::class)->update($profile, [
+            'notifications_enabled' => 'true',
+            'telegram_bot_token' => 'token',
+            'telegram_chat_id' => 'chat',
+        ]);
+
+        $first = app(AlertNotificationService::class)->sendScheduledNotificationsAt('10:00');
+        $second = app(AlertNotificationService::class)->sendScheduledNotificationsAt('15:00');
+
+        $this->assertTrue($first['sent']);
+        $this->assertTrue($second['sent']);
+        $this->assertSame(1, $first['alert_count']);
+        $this->assertSame(1, $second['alert_count']);
+        $this->assertNull(Alert::query()->first()->expired_at);
+        $this->assertFalse(Alert::query()->first()->is_sent);
+    }
+
+    public function test_empty_notification_schedule_does_not_send_digest(): void
+    {
+        $user = User::query()->create([
+            'name' => 'No Schedule',
+            'email' => 'alert-nosched-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+        $profile = $this->defaultPortfolioFor($user);
+
+        $stock = Stock::query()->create([
+            'symbol' => 'NOSC',
+            'exchange' => 'NSE',
+            'name' => 'No Schedule Stock',
+            'is_active' => true,
+            'is_benchmark' => false,
+        ]);
+        Holding::query()->create([
+            'profile_id' => $profile->id,
+            'stock_id' => $stock->id,
+            'quantity' => 1,
+            'avg_buy_price' => 100,
+            'invested_amount' => 100,
+            'realized_profit' => 0,
+            'updated_at' => now(),
+        ]);
+        Alert::query()->create([
+            'profile_id' => $profile->id,
+            'stock_id' => $stock->id,
+            'alert_type' => 'policy',
+            'message' => 'In-app only',
+            'is_sent' => false,
+            'created_at' => now(),
+        ]);
+
+        app(\App\Services\NotificationScheduleService::class)->persistForProfile($profile, []);
+        app(\App\Services\ProfileSettingsService::class)->update($profile, [
+            'notifications_enabled' => 'true',
+            'telegram_bot_token' => 'token',
+            'telegram_chat_id' => 'chat',
+        ]);
+
+        $telegram = $this->createMock(TelegramNotificationService::class);
+        $telegram->expects($this->never())->method('sendMessageForProfile');
+        $this->app->instance(TelegramNotificationService::class, $telegram);
+
+        $result = app(AlertNotificationService::class)->sendScheduledNotificationsAt('10:00');
+
+        $this->assertTrue($result['skipped']);
+        $this->assertSame(1, Alert::query()->whereNull('expired_at')->count());
+    }
 }

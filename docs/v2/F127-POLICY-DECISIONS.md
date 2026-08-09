@@ -1,7 +1,7 @@
 # F127 Policy Decisions
 
 **Date:** 2026-08-09  
-**Status:** Policies **closed** for blocking product questions. Initiative readiness: **READY_FOR_IMPLEMENTATION**  
+**Status:** Policies **closed**. Initiative delivery: **COMPLETE** (`F127_COMPLETE_WITH_NON_BLOCKERS`)  
 **Spec:** [F127-PORTFOLIO-ALERTS-SPEC.md](./F127-PORTFOLIO-ALERTS-SPEC.md)  
 **Boundary:** [F127-BOUNDARY.md](./F127-BOUNDARY.md)  
 **Gap matrix:** [F127-IMPLEMENTATION-GAP-MATRIX.md](./F127-IMPLEMENTATION-GAP-MATRIX.md)
@@ -22,7 +22,7 @@ Hardening must implement DECIDED targets; do not treat CURRENT alone as approval
 | PD-F127-04 Universe | **DECIDED** — current open holdings only |
 | PD-F127-05 Level vs edge | **DECIDED** — level only |
 | PD-F127-06 Evaluation frequency | **DECIDED** — daily + manual Run now |
-| PD-F127-07 Daily lifecycle ordering | **DECIDED** — expire → evaluate (**differs from CURRENT**) |
+| PD-F127-07 Daily lifecycle ordering | **DECIDED** — expire → evaluate (implemented; CURRENT matches) |
 | PD-F127-08 Weekend/holiday digests | **DECIDED** — keep skip non-session days |
 | PD-F127-09 Telegram digest semantics | **DECIDED** — repeated digest; `is_sent` legacy/dead |
 | PD-F127-10 Empty notification schedules | **DECIDED** — in-app only; no digest |
@@ -50,7 +50,7 @@ Hardening must implement DECIDED targets; do not treat CURRENT alone as approval
 | PD-F127-04 | Open holdings only | **Keep**; no strategy/index/historical/arbitrary universe | **DECIDED** |
 | PD-F127-05 | Level each eval | **Keep** level; no edge/crossing | **DECIDED** |
 | PD-F127-06 | Daily sync + manual | **Keep**; no intraday/continuous | **DECIDED** |
-| PD-F127-07 | Evaluate → expire | **Expire → evaluate → create/reuse → digest consumes actives** | **DECIDED** |
+| PD-F127-07 | Expire → evaluate → create/reuse → digest consumes actives *(was evaluate → expire pre-hardening)* | **Expire → evaluate → create/reuse → digest consumes actives** | **DECIDED** |
 | PD-F127-08 | Skip digests non-session days | **Keep** | **DECIDED** |
 | PD-F127-09 | Repeat digest every slot; `is_sent` dead | **Keep repeated digest**; `is_sent` legacy/dead | **DECIDED** |
 | PD-F127-10 | Empty schedules → no digest | **Keep** | **DECIDED** |
@@ -126,18 +126,20 @@ Hardening must implement DECIDED targets; do not treat CURRENT alone as approval
 
 ## PD-F127-07 — Daily lifecycle ordering
 
-**Status:** **DECIDED** (**V2 target differs from CURRENT**)
+**Status:** **DECIDED** (**implemented**; CURRENT matches approved target)
 
-**CURRENT:** In `DailyMarketDataJob`, **evaluate** then **expire** (`expireBeforeTradingDay`). Consequence: an already-active condition may yield `duplicate_active`, then trading-day expiry clears actives → a cycle can end with **no** active alert even when the condition remains true.
+**Historical (pre-hardening):** In `DailyMarketDataJob`, **evaluate** then **expire** (`expireBeforeTradingDay`). Consequence: an already-active condition may yield `duplicate_active`, then trading-day expiry clears actives → a cycle can end with **no** active alert even when the condition remains true.
 
-**Approved V2 target:**
+**CURRENT / approved:**
 
 1. Expire stale/closed alerts  
 2. Evaluate enabled policies against current holdings  
 3. Create/reuse active alerts  
 4. Scheduled notification consumes the resulting active alert set  
 
-**Implementation note:** CURRENT ordering remains until hardening implements this DECIDED order. Tests MUST cover the new order.
+Manual Run now remains **evaluate-only** (no trading-day expiry in that path).
+
+**Implementation note:** Delivered in `DailyMarketDataJob` (2026-08-09): on full sync success when the max portfolio price date advances, call `expireBeforeTradingDay` **before** `evaluateAllProfiles`.
 
 ---
 
@@ -259,9 +261,9 @@ Keep contextual help synchronized when hardening is implemented.
 
 ## Blocking decisions
 
-**None remaining** for product policy. Hardening may begin against DECIDED targets (especially PD-F127-07 ordering change).
+**None remaining** for product policy. Hardening delivered against DECIDED targets (including PD-F127-07 ordering). Initiative status: **`F127_COMPLETE_WITH_NON_BLOCKERS`**.
 
 ---
 
 *End of F127 policy decisions.*  
-*Product decisions closed 2026-08-09 → READY_FOR_IMPLEMENTATION.*
+*Product decisions closed 2026-08-09; hardening delivered → F127_COMPLETE_WITH_NON_BLOCKERS.*

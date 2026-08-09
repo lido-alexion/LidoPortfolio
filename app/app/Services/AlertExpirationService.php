@@ -89,20 +89,14 @@ class AlertExpirationService
     }
 
     /**
-     * When a profile no longer holds a stock, expire its alerts for it.
+     * Expire active alerts for a profile/stock after the ledger reaches zero quantity.
+     *
+     * Called from holdings replay when quantity hits zero. Do not consult the holdings
+     * table here — that row is updated only after replay finishes, so a stillHeld check
+     * would incorrectly skip expiration for already-open positions.
      */
     public function expireForProfileStockIfUnheld(PortfolioProfile $profile, Stock $stock): int
     {
-        $stillHeld = Holding::query()
-            ->where('profile_id', $profile->id)
-            ->where('stock_id', $stock->id)
-            ->where('quantity', '>', 0)
-            ->exists();
-
-        if ($stillHeld) {
-            return 0;
-        }
-
         return Alert::query()
             ->where('profile_id', $profile->id)
             ->where('stock_id', $stock->id)

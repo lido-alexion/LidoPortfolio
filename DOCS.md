@@ -149,7 +149,7 @@ Hub: [specs/architecture/governance/README.md](specs/architecture/governance/REA
 
 ### 3.A V2 planning (deferred scope — not active V1 requirements)
 
-*Eleven capabilities deferred by SD-035. Planning documents below; Market Data Quality (F042 + F043) is **COMPLETE** — see §3.B / §3.C. Account & Access: **F003** and **F005** are **COMPLETE** — see §3.D. Monitoring & Alerts (**F127**) formal pack is **READY_FOR_IMPLEMENTATION** — see §3.E.*
+*Eleven capabilities deferred by SD-035. Planning documents below; Market Data Quality (F042 + F043) is **COMPLETE** — see §3.B / §3.C. Account & Access: **F003** and **F005** are **COMPLETE** — see §3.D. Monitoring & Alerts (**F127**) is **COMPLETE** (`F127_COMPLETE_WITH_NON_BLOCKERS`) — see §3.E.*
 
 | Order | Document | Why |
 |------:|----------|-----|
@@ -196,18 +196,18 @@ Hub: [specs/architecture/governance/README.md](specs/architecture/governance/REA
 
 *F003 final compliance audit: `F003_COMPLIANT_WITH_NON_BLOCKERS` (chat audit 2026-08-09; non-blockers recorded in the gap matrix). No separate F003 audit markdown file required for closure. F005 delivery: `F005_COMPLETE_WITH_NON_BLOCKERS` (2026-08-09).*
 
-### 3.E F127 — Portfolio Alerts / Monitoring (**READY_FOR_IMPLEMENTATION**)
+### 3.E F127 — Portfolio Alerts / Monitoring (**COMPLETE**)
 
-*V2 Phase 2 remainder (Monitoring & Alerts). Code framework is substantially shipped; formal V2 pack present. Product policies closed 2026-08-09 (including DECIDED expire→evaluate daily order). Status: `READY_FOR_IMPLEMENTATION` — hardening may begin; do not expand channels/DSL/edge/intraday/`is_system`.*
+*V2 Phase 2 Monitoring & Alerts. Hardening delivered 2026-08-09: expire→evaluate daily order (PD-F127-07), holding_closed expiry fix, repeated Telegram digests preserved, help synced. Verdict: `F127_COMPLETE_WITH_NON_BLOCKERS`.*
 
 **Authoritative:**
 
 | Order | Document | Why |
 |------:|----------|-----|
-| 3.23 | [docs/v2/F127-PORTFOLIO-ALERTS-SPEC.md](docs/v2/F127-PORTFOLIO-ALERTS-SPEC.md) | F127 normative requirements and ACs (**READY_FOR_IMPLEMENTATION**) |
+| 3.23 | [docs/v2/F127-PORTFOLIO-ALERTS-SPEC.md](docs/v2/F127-PORTFOLIO-ALERTS-SPEC.md) | F127 normative requirements and ACs (**COMPLETE**) |
 | 3.24 | [docs/v2/F127-BOUNDARY.md](docs/v2/F127-BOUNDARY.md) | Ownership vs TOS / VIX / ops / screener / F042 / F043; shared Telegram |
-| 3.25 | [docs/v2/F127-POLICY-DECISIONS.md](docs/v2/F127-POLICY-DECISIONS.md) | Policy register (PD-F127-01…21) — blocking decisions **closed** |
-| 3.26 | [docs/v2/F127-IMPLEMENTATION-GAP-MATRIX.md](docs/v2/F127-IMPLEMENTATION-GAP-MATRIX.md) | Gap matrix; P0 = expire→evaluate hardening |
+| 3.25 | [docs/v2/F127-POLICY-DECISIONS.md](docs/v2/F127-POLICY-DECISIONS.md) | Policy register (PD-F127-01…21) — closed |
+| 3.26 | [docs/v2/F127-IMPLEMENTATION-GAP-MATRIX.md](docs/v2/F127-IMPLEMENTATION-GAP-MATRIX.md) | Gap matrix; non-blockers listed |
 
 ---
 

@@ -1,7 +1,7 @@
 # F127 / Adjacent Notifications / Market Data Boundary
 
 **Date:** 2026-08-09  
-**Status:** **READY_FOR_IMPLEMENTATION** — boundary ownership fixed; product policies closed (see [F127-POLICY-DECISIONS.md](./F127-POLICY-DECISIONS.md))  
+**Status:** **COMPLETE** (`F127_COMPLETE_WITH_NON_BLOCKERS`) — boundary fixed; hardening delivered  
 **Purpose:** Prevent scope bleed between F127 portfolio alerts, TOS Telegram, adjacent alert products, and F042/F043 market-data ownership.  
 **Related:** [F127-PORTFOLIO-ALERTS-SPEC.md](./F127-PORTFOLIO-ALERTS-SPEC.md), [F127-POLICY-DECISIONS.md](./F127-POLICY-DECISIONS.md), [F127-IMPLEMENTATION-GAP-MATRIX.md](./F127-IMPLEMENTATION-GAP-MATRIX.md)
 
