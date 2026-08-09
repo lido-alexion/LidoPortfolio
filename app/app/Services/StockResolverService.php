@@ -19,18 +19,7 @@ class StockResolverService
     public function resolve(Request $request, bool $allowCreate = true): Stock
     {
         if ($request->filled('stock_id')) {
-            $stock = Stock::query()
-                ->where('is_benchmark', false)
-                ->where('is_active', true)
-                ->find($request->input('stock_id'));
-
-            if (! $stock) {
-                throw ValidationException::withMessages([
-                    'stock_id' => ['Invalid or inactive stock selected.'],
-                ]);
-            }
-
-            return $stock;
+            return $this->resolveByStockId((int) $request->input('stock_id'));
         }
 
         $request->validate([
@@ -40,8 +29,51 @@ class StockResolverService
             'sector' => ['nullable', 'string', 'max:100'],
         ]);
 
-        $symbol = strtoupper(trim((string) $request->input('symbol')));
-        $exchange = strtoupper((string) $request->input('exchange', 'NSE'));
+        return $this->resolveFromAttributes([
+            'symbol' => $request->input('symbol'),
+            'name' => $request->input('name'),
+            'exchange' => $request->input('exchange'),
+            'isin' => $request->input('isin'),
+            'sector' => $request->input('sector'),
+        ], $allowCreate);
+    }
+
+    public function resolveByStockId(int $stockId): Stock
+    {
+        $stock = Stock::query()
+            ->where('is_benchmark', false)
+            ->where('is_active', true)
+            ->find($stockId);
+
+        if (! $stock) {
+            throw ValidationException::withMessages([
+                'stock_id' => ['Invalid or inactive stock selected.'],
+            ]);
+        }
+
+        return $stock;
+    }
+
+    /**
+     * @param  array{symbol?: string, name?: ?string, exchange?: ?string, isin?: ?string, sector?: ?string, stock_id?: int|null}  $attrs
+     */
+    public function resolveFromAttributes(array $attrs, bool $allowCreate = true): Stock
+    {
+        if (! empty($attrs['stock_id'])) {
+            return $this->resolveByStockId((int) $attrs['stock_id']);
+        }
+
+        $symbol = strtoupper(trim((string) ($attrs['symbol'] ?? '')));
+        $exchange = strtoupper((string) ($attrs['exchange'] ?? 'NSE'));
+        if ($exchange === '') {
+            $exchange = 'NSE';
+        }
+
+        if ($symbol === '') {
+            throw ValidationException::withMessages([
+                'symbol' => ['Symbol is required.'],
+            ]);
+        }
 
         if ($this->resolver->isMalformed($symbol)) {
             throw ValidationException::withMessages([
@@ -63,9 +95,9 @@ class StockResolverService
         $result = $this->validation->validateAndPersist(
             $symbol,
             $exchange,
-            $request->input('name'),
-            $request->input('isin'),
-            $request->input('sector'),
+            $attrs['name'] ?? null,
+            $attrs['isin'] ?? null,
+            $attrs['sector'] ?? null,
         );
 
         if (! $result->valid || ! $result->stock) {

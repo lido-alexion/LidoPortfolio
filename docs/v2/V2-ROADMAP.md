@@ -1,7 +1,7 @@
 # V2 Roadmap (Planning)
 
 **Date:** 2026-08-09  
-**Status:** Active V2 roadmap (no calendar dates). **Market Data Quality track delivered:** F042 + F043 = **COMPLETE**. **Monitoring (F127)** = **COMPLETE** (`F127_COMPLETE_WITH_NON_BLOCKERS`).  
+**Status:** Active V2 roadmap (no calendar dates). **Market Data Quality track delivered:** F042 + F043 = **COMPLETE**. **Monitoring (F127)** = **COMPLETE** (`F127_COMPLETE_WITH_NON_BLOCKERS`). **Bulk CSV Import (F019)** = **COMPLETE** (`F019_COMPLETE_WITH_NON_BLOCKERS`).  
 **V1:** Frozen at 119 capabilities (SD-035) — [final audit](../audits/2026-08-09-feature-coverage-final/)
 
 ---
@@ -72,6 +72,7 @@
 |---------|-----------|----------|
 | **F043** Corporate action price repair | Factor path + F020 single-writer hardening + tests | **COMPLETE** |
 | **F127** Portfolio alerts (non-TOS) | Spec + policy pack; expire→evaluate daily lifecycle; holding_closed fix; help sync | **COMPLETE** (`F127_COMPLETE_WITH_NON_BLOCKERS`) |
+| **F019** Bulk CSV import | All-or-nothing bulk API; PD-14 financial unit; batch/row identity | **COMPLETE** (`F019_COMPLETE_WITH_NON_BLOCKERS`) |
 
 **Rationale:** F043 depends on F042 issue model (satisfied). F127 framework was already shipped; V2 delivered governance + hardening (PD-F127-07 expire→evaluate; manual Run now remains evaluate-only). Intentional non-blockers remain (see F127 gap matrix).
 
@@ -125,7 +126,7 @@
 |-------|----------|---------------|-----------------|---------------|
 | **1** | F003, F005, F042 | Account & Access; Market Data Quality | Multi-user readiness + data trust | **F042 COMPLETE**; F003/F005 remaining |
 | **2** | F043, F127 | Market Data Quality (cont.); Monitoring | Safe ops repair + holding alerts | **F043 COMPLETE**; **F127 COMPLETE** (`F127_COMPLETE_WITH_NON_BLOCKERS`) |
-| **3** | F019, F014, F060, F137 | Portfolio History; Collaboration; Platform API | Data onboarding + research tools | Remaining |
+| **3** | F019, F014, F060, F137 | Portfolio History; Collaboration; Platform API | Data onboarding + research tools | **F019 COMPLETE**; F014/F060/F137 remaining |
 | **4** | F143, F144 | Knowledge & Guidance | UX polish (optional / late) | Remaining |
 
 ---

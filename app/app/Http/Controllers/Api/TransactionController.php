@@ -110,16 +110,23 @@ class TransactionController extends Controller
             }
         }
 
-        $transaction = $this->writes->create($profile, $stock, [
-            'type' => $validated['type'],
-            'quantity' => $validated['quantity'],
-            'price' => $validated['price'],
-            'fees' => $validated['fees'] ?? 0,
-            'transaction_date' => $validated['transaction_date'],
-            'notes' => $validated['notes'] ?? null,
-            'source' => $validated['source'] ?? null,
-            'recommendation_id' => $validated['recommendation_id'] ?? null,
-        ]);
+        $transaction = $this->writes->create(
+            $profile,
+            $stock,
+            [
+                'type' => $validated['type'],
+                'quantity' => $validated['quantity'],
+                'price' => $validated['price'],
+                'fees' => $validated['fees'] ?? 0,
+                'transaction_date' => $validated['transaction_date'],
+                'notes' => $validated['notes'] ?? null,
+                'source' => $validated['source'] ?? null,
+                'recommendation_id' => $validated['recommendation_id'] ?? null,
+            ],
+            softFailSnapshots: true,
+            user: $request->user(),
+            applyCash: true,
+        );
 
         $tos = null;
         if (! empty($validated['recommendation_id'])) {
@@ -135,8 +142,6 @@ class TransactionController extends Controller
                 ];
             }
         }
-
-        $this->cash->applyTradeTransaction($profile, $transaction, $request->user());
 
         return response()->json([
             'data' => $transaction->fresh()->load('stock'),

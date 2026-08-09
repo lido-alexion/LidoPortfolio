@@ -52,10 +52,14 @@ export default function TransactionDateInput({
     describedBy,
     required = false,
     fallbackIso,
+    disabled = false,
 }) {
     const nativeDateInputRef = useRef(null);
 
     const openDatePicker = () => {
+        if (disabled) {
+            return;
+        }
         const el = nativeDateInputRef.current;
         if (!el) {
             return;
@@ -101,6 +105,7 @@ export default function TransactionDateInput({
                 autoComplete="off"
                 placeholder="dd-mmm-yyyy"
                 value={displayValue}
+                disabled={disabled}
                 onChange={(event) => {
                     const next = event.target.value;
                     onDisplayChange(next);
@@ -119,6 +124,7 @@ export default function TransactionDateInput({
                 type="button"
                 className="lido-date-input-btn"
                 onClick={openDatePicker}
+                disabled={disabled}
                 aria-label="Open calendar"
                 title="Open calendar"
             >
@@ -132,6 +138,7 @@ export default function TransactionDateInput({
                 aria-hidden="true"
                 value={isoValue || ''}
                 max={getLocalTodayDateString()}
+                disabled={disabled}
                 onChange={handleNativeDateChange}
             />
         </div>

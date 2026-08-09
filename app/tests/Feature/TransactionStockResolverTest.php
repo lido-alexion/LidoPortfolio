@@ -25,6 +25,11 @@ class TransactionStockResolverTest extends TestCase
 
         $this->actingAs($user);
 
+        $this->postJson('/api/cash/deposit', [
+            'amount' => 100000,
+            'reason' => 'test seed',
+        ])->assertCreated();
+
         $symbol = 'N'.strtoupper(Str::random(4));
 
         $this->mock(StockValidationService::class, function ($mock) {
@@ -82,6 +87,11 @@ class TransactionStockResolverTest extends TestCase
         ]);
 
         $this->actingAs($user);
+
+        $this->postJson('/api/cash/deposit', [
+            'amount' => 100000,
+            'reason' => 'test seed',
+        ])->assertCreated();
 
         $response = $this->postJson('/api/transactions', [
             'symbol' => 'REUSE',

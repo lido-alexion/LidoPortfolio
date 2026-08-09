@@ -90,6 +90,7 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
         ->middleware('throttle:stock-validate');
     Route::get('/stocks', [StockController::class, 'index']);
     Route::get('/stocks/{stock}', [StockController::class, 'show']);
+    Route::post('/transactions/bulk', [\App\Http\Controllers\Api\BulkTransactionImportController::class, 'store']);
     Route::apiResource('transactions', TransactionController::class);
 
     Route::get('/cash', [\App\Http\Controllers\Api\CashController::class, 'summary']);

@@ -248,7 +248,7 @@ const APP_DOCUMENTATION_BASE = [
             'Transactions are the ledger of record. Buys and sells drive holdings, average cost, fees, and FIFO realized P/L. Use Active vs Squared-off views, CSV import, and sell prefill from Portfolio.',
         controls: [
             { name: 'Add transaction', description: 'Record a buy or sell with symbol autocomplete, quantity, price, fees, and date.' },
-            { name: 'Bulk CSV import', description: 'Upload a file, review the table, then save accepted rows.' },
+            { name: 'Bulk CSV import', description: 'Paste CSV (Stock, Quantity, Average Price, Transaction Type), review editable rows (exchange, date defaulting to today, fees), then Save all. The batch commits all-or-nothing via a bulk API — on failure nothing is saved and you can fix and retry the same batch; a completed batch cannot be submitted again.' },
             { name: 'Page tabs', description: 'Switch between Transaction History and Pending Execution (or closed / squared-off views where available).' },
             { name: 'Edit / delete', description: 'Correct ledger rows; deleting a row linked to a recommendation can reopen pending execution.' },
         ],
@@ -2063,7 +2063,7 @@ const DOC_ENRICHMENTS = {
         overview:
             'This is the accounting backbone of the app. Enter transactions carefully because holdings, realized P/L, XIRR, and multiple reports derive from this ledger. Prefer editing incorrect rows instead of adding compensating noise rows unless your accounting policy requires audit-style reversals.',
         controls: [
-            { name: 'CSV import discipline', description: 'After uploading CSV, review each parsed row (type, quantity, price, date, exchange, fees). Correcting import mistakes before save avoids cleanup work later.' },
+            { name: 'CSV import discipline', description: 'After pasting CSV, review each parsed row (type, quantity, price, date, exchange, fees). Save commits the whole batch or nothing — correcting mistakes before save avoids cleanup. A failed import leaves zero new ledger rows; retry after fixing. A successful batch cannot be re-submitted.' },
             { name: 'Sell prefill from holdings', description: 'When launched from Holdings, symbol/type/quantity are prefilled to reduce input errors; still validate price, date, and fee assumptions before saving.' },
         ],
         concepts: [

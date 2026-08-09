@@ -149,7 +149,7 @@ Hub: [specs/architecture/governance/README.md](specs/architecture/governance/REA
 
 ### 3.A V2 planning (deferred scope — not active V1 requirements)
 
-*Eleven capabilities deferred by SD-035. Planning documents below; Market Data Quality (F042 + F043) is **COMPLETE** — see §3.B / §3.C. Account & Access: **F003** and **F005** are **COMPLETE** — see §3.D. Monitoring & Alerts (**F127**) is **COMPLETE** (`F127_COMPLETE_WITH_NON_BLOCKERS`) — see §3.E.*
+*Eleven capabilities deferred by SD-035. Planning documents below; Market Data Quality (F042 + F043) is **COMPLETE** — see §3.B / §3.C. Account & Access: **F003** and **F005** are **COMPLETE** — see §3.D. Monitoring & Alerts (**F127**) is **COMPLETE** (`F127_COMPLETE_WITH_NON_BLOCKERS`) — see §3.E. Portfolio History & Import (**F019**) is **COMPLETE** (`F019_COMPLETE_WITH_NON_BLOCKERS`) — see §3.F. **F014** historical holdings is **`READY_FOR_IMPLEMENTATION`** (policies closed) — see §3.G.*
 
 | Order | Document | Why |
 |------:|----------|-----|
@@ -208,6 +208,32 @@ Hub: [specs/architecture/governance/README.md](specs/architecture/governance/REA
 | 3.24 | [docs/v2/F127-BOUNDARY.md](docs/v2/F127-BOUNDARY.md) | Ownership vs TOS / VIX / ops / screener / F042 / F043; shared Telegram |
 | 3.25 | [docs/v2/F127-POLICY-DECISIONS.md](docs/v2/F127-POLICY-DECISIONS.md) | Policy register (PD-F127-01…21) — closed |
 | 3.26 | [docs/v2/F127-IMPLEMENTATION-GAP-MATRIX.md](docs/v2/F127-IMPLEMENTATION-GAP-MATRIX.md) | Gap matrix; non-blockers listed |
+
+### 3.F F019 — Bulk CSV Import (**COMPLETE**)
+
+*V2 Phase 3 Portfolio History & Import — F019 first (F014 downstream, not started). Hardening delivered 2026-08-09: shared ledger+holdings+cash financial unit (PD-14), all-or-nothing `POST /api/transactions/bulk` with batch/row identity (PD-01/02/03/15/18), frontend bulk flow, tests. Verdict: `F019_COMPLETE_WITH_NON_BLOCKERS`.*
+
+**Authoritative:**
+
+| Order | Document | Why |
+|------:|----------|-----|
+| 3.27 | [docs/v2/F019-BULK-CSV-IMPORT-SPEC.md](docs/v2/F019-BULK-CSV-IMPORT-SPEC.md) | F019 normative requirements, CSV contract, ACs (**COMPLETE**) |
+| 3.28 | [docs/v2/F019-BOUNDARY.md](docs/v2/F019-BOUNDARY.md) | Ownership vs ledger/cash/CRUD/F014/F020 |
+| 3.29 | [docs/v2/F019-POLICY-DECISIONS.md](docs/v2/F019-POLICY-DECISIONS.md) | Policy register (PD-F019-01…22) — **closed** |
+| 3.30 | [docs/v2/F019-IMPLEMENTATION-GAP-MATRIX.md](docs/v2/F019-IMPLEMENTATION-GAP-MATRIX.md) | Gaps closed; non-blockers listed |
+
+### 3.G F014 — Historical Holdings Reconstruction (**READY_FOR_IMPLEMENTATION**)
+
+*V2 Phase 3 Portfolio History — after F019. Product-owner policies closed 2026-08-09 (PD-F014-01…21). Dedicated as-of API + page DECIDED; engine substrate exists; product surface not yet shipped. Status: `READY_FOR_IMPLEMENTATION`.*
+
+**Authoritative:**
+
+| Order | Document | Why |
+|------:|----------|-----|
+| 3.31 | [docs/v2/F014-HISTORICAL-HOLDINGS-SPEC.md](docs/v2/F014-HISTORICAL-HOLDINGS-SPEC.md) | F014 requirements, ACs (**READY_FOR_IMPLEMENTATION**) |
+| 3.32 | [docs/v2/F014-BOUNDARY.md](docs/v2/F014-BOUNDARY.md) | Ownership vs ledger / F015 / F019 / F020 / F042 / F043 / F127 |
+| 3.33 | [docs/v2/F014-POLICY-DECISIONS.md](docs/v2/F014-POLICY-DECISIONS.md) | Policy register (PD-F014-01…21) — **closed** |
+| 3.34 | [docs/v2/F014-IMPLEMENTATION-GAP-MATRIX.md](docs/v2/F014-IMPLEMENTATION-GAP-MATRIX.md) | Gaps remain MISSING/PARTIAL until coded |
 
 ---
 

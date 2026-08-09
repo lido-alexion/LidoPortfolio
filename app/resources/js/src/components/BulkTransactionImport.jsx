@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import api from '../api';
 import NumberInput from './NumberInput';
 import SegmentToggle from './SegmentToggle';
@@ -20,6 +20,13 @@ WELCORP,32,1520.00,BUY
 MBAPL,88,565.27,BUY
 SCHNEIDER,34,1449.53,BUY
 SYRMA,29,1369.80,BUY`;
+
+function createUuid() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    return `00000000-0000-4000-8000-${Date.now().toString(16).padStart(12, '0').slice(-12)}`;
+}
 
 function roundToTwoDecimals(value) {
     const num = Number(value);
@@ -58,28 +65,59 @@ function rowIsValid(row, displayDate) {
     return row.type === 'buy' || row.type === 'sell';
 }
 
+function extractBulkErrors(error) {
+    const data = error?.response?.data;
+    const messages = [];
+    if (data?.errors && typeof data.errors === 'object') {
+        Object.entries(data.errors).forEach(([key, value]) => {
+            const text = Array.isArray(value) ? value[0] : value;
+            if (!text) {
+                return;
+            }
+            const match = /^rows\.(\d+)\.(\w+)$/.exec(key);
+            messages.push({
+                field: key,
+                index: match ? Number(match[1]) : null,
+                message: String(text),
+            });
+        });
+    }
+    if (messages.length === 0 && data?.message) {
+        messages.push({ message: data.message });
+    }
+    return messages;
+}
+
 export default function BulkTransactionImport({ feeComponents, onSaved }) {
     const [step, setStep] = useState('paste');
     const [csvText, setCsvText] = useState('');
     const [parseErrors, setParseErrors] = useState([]);
     const [rows, setRows] = useState([]);
     const [dateDisplays, setDateDisplays] = useState({});
+    const [batchId, setBatchId] = useState(null);
     const [submitting, setSubmitting] = useState(false);
-    const [submitProgress, setSubmitProgress] = useState(null);
+    const [batchStatus, setBatchStatus] = useState(null);
+    const [submitErrors, setSubmitErrors] = useState([]);
+    const submitLockRef = useRef(false);
 
     const buildReviewState = useCallback((parsedRows) => {
         const today = getLocalTodayDateString();
         const displays = {};
         const enriched = parsedRows.map((row) => {
-            displays[row.id] = formatTransactionDateDisplay(today);
+            const id = row.id && String(row.id).includes('-') ? row.id : createUuid();
+            displays[id] = formatTransactionDateDisplay(today);
             return {
                 ...row,
+                id,
                 exchange: 'NSE',
                 transaction_date: today,
             };
         });
         setDateDisplays(displays);
         setRows(enriched);
+        setBatchId(createUuid());
+        setBatchStatus(null);
+        setSubmitErrors([]);
     }, []);
 
     const handleParse = () => {
@@ -93,15 +131,24 @@ export default function BulkTransactionImport({ feeComponents, onSaved }) {
     };
 
     const updateRow = (id, patch) => {
+        if (batchStatus === 'committed' || batchStatus === 'already_committed') {
+            return;
+        }
         setRows((prev) => prev.map((row) => (row.id === id ? { ...row, ...patch } : row)));
     };
 
     const updateRowDate = (id, iso, display) => {
+        if (batchStatus === 'committed' || batchStatus === 'already_committed') {
+            return;
+        }
         setDateDisplays((prev) => ({ ...prev, [id]: display }));
         updateRow(id, { transaction_date: iso });
     };
 
     const removeRow = (id) => {
+        if (batchStatus === 'committed' || batchStatus === 'already_committed') {
+            return;
+        }
         setRows((prev) => prev.filter((row) => row.id !== id));
         setDateDisplays((prev) => {
             const next = { ...prev };
@@ -114,68 +161,90 @@ export default function BulkTransactionImport({ feeComponents, onSaved }) {
         rows.length > 0 && rows.every((row) => rowIsValid(row, dateDisplays[row.id]))
     ), [rows, dateDisplays]);
 
+    const batchCompleted = batchStatus === 'committed' || batchStatus === 'already_committed';
+
     const handleSubmitAll = async () => {
+        if (batchCompleted || submitLockRef.current || submitting) {
+            return;
+        }
         if (!allRowsValid) {
             showToast('Fix invalid rows before submitting.', 'danger');
             return;
         }
-
-        setSubmitting(true);
-        setSubmitProgress({ done: 0, total: rows.length, failed: [] });
-
-        let saved = 0;
-        const failed = [];
-
-        for (let index = 0; index < rows.length; index += 1) {
-            const row = rows[index];
-            const fees = rowFees(row, feeComponents);
-            const iso = parseTransactionDateDisplay(dateDisplays[row.id]) || row.transaction_date;
-
-            try {
-                await api.post('/transactions', {
-                    symbol: row.symbol.trim().toUpperCase(),
-                    exchange: row.exchange,
-                    type: row.type,
-                    quantity: Number(row.quantity),
-                    price: Number(row.price),
-                    fees: fees.total,
-                    transaction_date: iso,
-                });
-                saved += 1;
-            } catch (error) {
-                const message = error?.response?.data?.message
-                    || error?.response?.data?.errors?.quantity?.[0]
-                    || error?.response?.data?.errors?.symbol?.[0]
-                    || `Row ${index + 1} (${row.symbol}) failed.`;
-                failed.push({ symbol: row.symbol, message });
-            }
-
-            setSubmitProgress({ done: index + 1, total: rows.length, failed: [...failed] });
-        }
-
-        setSubmitting(false);
-
-        if (failed.length === 0) {
-            showToast(`Saved ${saved} transaction(s).`, 'success');
-            setStep('paste');
-            setCsvText('');
-            setRows([]);
-            setParseErrors([]);
-            onSaved?.();
-            notifyPortfolioDashboardRefresh();
+        if (!batchId) {
+            showToast('Import batch is missing. Go back and parse the CSV again.', 'danger');
             return;
         }
 
-        showToast(
-            `Saved ${saved} of ${rows.length}. ${failed.length} failed — see details below.`,
-            saved > 0 ? 'warning' : 'danger',
-        );
-        setSubmitProgress({ done: rows.length, total: rows.length, failed });
+        submitLockRef.current = true;
+        setSubmitting(true);
+        setSubmitErrors([]);
+        setBatchStatus('submitting');
+
+        const payloadRows = rows.map((row) => {
+            const fees = rowFees(row, feeComponents);
+            const iso = parseTransactionDateDisplay(dateDisplays[row.id]) || row.transaction_date;
+            return {
+                row_id: row.id,
+                symbol: row.symbol.trim().toUpperCase(),
+                exchange: row.exchange,
+                type: row.type,
+                quantity: Number(row.quantity),
+                price: Number(row.price),
+                fees: fees.total,
+                transaction_date: iso,
+            };
+        });
+
+        try {
+            const response = await api.post('/transactions/bulk', {
+                batch_id: batchId,
+                rows: payloadRows,
+            });
+            const status = response.data?.status || 'committed';
+            setBatchStatus(status);
+            const count = response.data?.row_count ?? rows.length;
+            showToast(
+                status === 'already_committed'
+                    ? `Batch already imported (${count} transaction(s)).`
+                    : `Saved ${count} transaction(s).`,
+                'success',
+            );
+            onSaved?.();
+            notifyPortfolioDashboardRefresh();
+        } catch (error) {
+            setBatchStatus('failed');
+            const errors = extractBulkErrors(error);
+            setSubmitErrors(errors);
+            showToast(
+                error?.response?.data?.message || 'Import failed — no transactions were saved. Fix and retry.',
+                'danger',
+            );
+        } finally {
+            setSubmitting(false);
+            submitLockRef.current = false;
+        }
     };
 
     const handleBack = () => {
+        if (submitting) {
+            return;
+        }
         setStep('paste');
-        setSubmitProgress(null);
+        setBatchStatus(null);
+        setSubmitErrors([]);
+        setBatchId(null);
+    };
+
+    const handleStartNewImport = () => {
+        setStep('paste');
+        setCsvText('');
+        setRows([]);
+        setParseErrors([]);
+        setDateDisplays({});
+        setBatchId(null);
+        setBatchStatus(null);
+        setSubmitErrors([]);
     };
 
     if (step === 'paste') {
@@ -187,7 +256,11 @@ export default function BulkTransactionImport({ feeComponents, onSaved }) {
                         Paste CSV with columns:
                         {' '}
                         <strong>Stock, Quantity, Average Price, Transaction Type</strong>
-                        . Header row is optional.
+                        . Header row is optional. Dates are set on the review step (default today).
+                        Save commits
+                        {' '}
+                        <strong>all rows or nothing</strong>
+                        .
                     </p>
                     <textarea
                         className="form-control font-monospace"
@@ -234,9 +307,23 @@ export default function BulkTransactionImport({ feeComponents, onSaved }) {
                     {rows.length}
                     {' '}
                     row(s)
+                    {batchCompleted ? ' · imported' : ''}
                 </span>
             </div>
             <div className="card-body d-grid gap-3">
+                {batchStatus === 'failed' && (
+                    <div className="alert alert-warning py-2 mb-0 small" role="status">
+                        Import failed — no transactions were committed. Correct the rows and retry
+                        (same batch). Or go back to paste a new CSV (new batch).
+                    </div>
+                )}
+                {batchCompleted && (
+                    <div className="alert alert-success py-2 mb-0 small" role="status">
+                        This batch is committed and cannot be submitted again.
+                        Start a new import to add more transactions.
+                    </div>
+                )}
+
                 <div className="table-responsive">
                     <table className="table table-sm align-middle lido-bulk-import-table mb-0">
                         <thead>
@@ -261,6 +348,7 @@ export default function BulkTransactionImport({ feeComponents, onSaved }) {
                                 const dateInvalid = isTransactionDateInFuture(isoDate)
                                     || !isValidTransactionDate(isoDate);
                                 const valid = rowIsValid(row, displayDate);
+                                const locked = batchCompleted || submitting;
 
                                 return (
                                     <tr key={row.id} className={valid ? '' : 'table-warning'}>
@@ -269,6 +357,7 @@ export default function BulkTransactionImport({ feeComponents, onSaved }) {
                                                 type="text"
                                                 className="form-control form-control-sm"
                                                 value={row.symbol}
+                                                disabled={locked}
                                                 onChange={(e) => updateRow(row.id, {
                                                     symbol: e.target.value.toUpperCase(),
                                                 })}
@@ -282,6 +371,7 @@ export default function BulkTransactionImport({ feeComponents, onSaved }) {
                                                 step="1"
                                                 allowDecimals={false}
                                                 value={row.quantity}
+                                                disabled={locked}
                                                 onChange={(e) => updateRow(row.id, {
                                                     quantity: e.target.value === ''
                                                         ? ''
@@ -297,6 +387,7 @@ export default function BulkTransactionImport({ feeComponents, onSaved }) {
                                                 step="0.05"
                                                 fixedDecimals={2}
                                                 value={row.price}
+                                                disabled={locked}
                                                 onChange={(e) => updateRow(row.id, { price: e.target.value })}
                                                 onBlur={(e) => updateRow(row.id, {
                                                     price: e.target.value === ''
@@ -311,6 +402,7 @@ export default function BulkTransactionImport({ feeComponents, onSaved }) {
                                                 compact
                                                 ariaLabel={`Transaction type ${row.symbol}`}
                                                 value={row.type}
+                                                disabled={locked}
                                                 onChange={(type) => updateRow(row.id, { type })}
                                                 options={[
                                                     { value: 'buy', label: 'Buy' },
@@ -323,6 +415,7 @@ export default function BulkTransactionImport({ feeComponents, onSaved }) {
                                                 compact
                                                 ariaLabel={`Exchange ${row.symbol}`}
                                                 value={row.exchange}
+                                                disabled={locked}
                                                 onChange={(exchange) => updateRow(row.id, { exchange })}
                                                 options={[
                                                     { value: 'NSE', label: 'NSE' },
@@ -337,7 +430,11 @@ export default function BulkTransactionImport({ feeComponents, onSaved }) {
                                                 isoValue={isoDate}
                                                 fallbackIso={row.transaction_date}
                                                 invalid={dateInvalid}
+                                                disabled={locked}
                                                 onDisplayChange={(display) => {
+                                                    if (locked) {
+                                                        return;
+                                                    }
                                                     setDateDisplays((prev) => ({
                                                         ...prev,
                                                         [row.id]: display,
@@ -362,6 +459,7 @@ export default function BulkTransactionImport({ feeComponents, onSaved }) {
                                                 type="button"
                                                 className="btn btn-sm btn-outline-danger"
                                                 onClick={() => removeRow(row.id)}
+                                                disabled={locked}
                                                 aria-label={`Remove ${row.symbol}`}
                                             >
                                                 ×
@@ -374,30 +472,39 @@ export default function BulkTransactionImport({ feeComponents, onSaved }) {
                     </table>
                 </div>
 
-                {submitProgress?.failed?.length > 0 && (
+                {submitErrors.length > 0 && (
                     <ul className="small text-danger mb-0">
-                        {submitProgress.failed.map((item) => (
-                            <li key={`${item.symbol}-${item.message}`}>
-                                {item.symbol}
-                                :
-                                {' '}
-                                {item.message}
+                        {submitErrors.map((item, idx) => (
+                            <li key={`${item.row_id || item.field || 'err'}-${idx}`}>
+                                {item.row_id ? `${item.row_id}: ` : ''}
+                                {item.message || item.field}
                             </li>
                         ))}
                     </ul>
                 )}
 
                 <div className="d-flex flex-wrap gap-2 align-items-center">
-                    <button
-                        type="button"
-                        className="btn btn-primary"
-                        onClick={handleSubmitAll}
-                        disabled={!allRowsValid || submitting}
-                    >
-                        {submitting
-                            ? `Saving… (${submitProgress?.done ?? 0}/${submitProgress?.total ?? rows.length})`
-                            : `Save all (${rows.length})`}
-                    </button>
+                    {!batchCompleted && (
+                        <button
+                            type="button"
+                            className="btn btn-primary"
+                            onClick={handleSubmitAll}
+                            disabled={!allRowsValid || submitting}
+                        >
+                            {submitting
+                                ? 'Saving batch…'
+                                : `Save all (${rows.length})`}
+                        </button>
+                    )}
+                    {batchCompleted && (
+                        <button
+                            type="button"
+                            className="btn btn-primary"
+                            onClick={handleStartNewImport}
+                        >
+                            New import
+                        </button>
+                    )}
                     <button
                         type="button"
                         className="btn btn-outline-secondary"

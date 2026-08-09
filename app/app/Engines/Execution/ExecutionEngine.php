@@ -219,7 +219,7 @@ class ExecutionEngine
             ?? ($recommendation ? 'TOS recommendation #'.$recommendation->id : 'TOS order #'.$order->id);
 
         $transaction = DB::transaction(function () use ($profile, $stock, $side, $quantity, $price, $fees, $date, $notes, $order, $recommendation) {
-            $transaction = $this->writes->insert($profile, $stock, [
+            $transaction = $this->writes->createFinancialUnit($profile, $stock, [
                 'type' => $side,
                 'quantity' => $quantity,
                 'price' => $price,
@@ -228,7 +228,7 @@ class ExecutionEngine
                 'notes' => $notes,
                 'source' => Transaction::SOURCE_RECOMMENDATION,
                 'recommendation_id' => $recommendation?->id,
-            ]);
+            ], user: null, applyCash: true);
 
             OrderTransaction::query()->create([
                 'order_id' => $order->id,
@@ -257,8 +257,7 @@ class ExecutionEngine
             return $transaction;
         });
 
-        $this->writes->applyAfterCreate($profile, $stock, $transaction, softFailSnapshots: true);
-        $this->cash->applyTradeTransaction($profile, $transaction);
+        $this->writes->applyPostCommitSideEffects($profile, $stock, $transaction, softFailSnapshots: true);
 
         $position = Holding::query()
             ->where('profile_id', $profile->id)

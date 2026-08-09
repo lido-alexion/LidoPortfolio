@@ -127,7 +127,7 @@
         <dd>Record a buy or sell with symbol autocomplete, quantity, price, fees, and date.</dd>
     
         <dt>Bulk CSV import</dt>
-        <dd>Upload a file, review the table, then save accepted rows.</dd>
+        <dd>Paste CSV (Stock, Quantity, Average Price, Transaction Type), review editable rows (exchange, date defaulting to today, fees), then Save all. The batch commits all-or-nothing via a bulk API — on failure nothing is saved and you can fix and retry the same batch; a completed batch cannot be submitted again.</dd>
     
         <dt>Page tabs</dt>
         <dd>Switch between Transaction History and Pending Execution (or closed / squared-off views where available).</dd>
@@ -136,7 +136,7 @@
         <dd>Correct ledger rows; deleting a row linked to a recommendation can reopen pending execution.</dd>
     
         <dt>CSV import discipline</dt>
-        <dd>After uploading CSV, review each parsed row (type, quantity, price, date, exchange, fees). Correcting import mistakes before save avoids cleanup work later.</dd>
+        <dd>After pasting CSV, review each parsed row (type, quantity, price, date, exchange, fees). Save commits the whole batch or nothing — correcting mistakes before save avoids cleanup. A failed import leaves zero new ledger rows; retry after fixing. A successful batch cannot be re-submitted.</dd>
     
         <dt>Sell prefill from holdings</dt>
         <dd>When launched from Holdings, symbol/type/quantity are prefilled to reduce input errors; still validate price, date, and fee assumptions before saving.</dd>
