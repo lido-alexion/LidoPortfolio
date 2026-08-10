@@ -1,27 +1,43 @@
 # V2 Dependency Analysis
 
-**Date:** 2026-08-09  
+**Date:** 2026-08-10 (closure housekeeping)  
+**Program status:** **SD-035 V2 = CLOSED**  
+**Authoritative snapshot:** [V2-FINAL-RECONCILIATION.md](./V2-FINAL-RECONCILIATION.md)  
 **Scope:** Eleven SD-035 deferred capabilities only  
 **V1 frozen:** 119 capabilities — do not re-scope  
-**Market Data Quality:** F042 + F043 = **COMPLETE** (2026-08-09)
 
 ---
 
-## Dependency matrix
+## Current dependency status (post-closure)
 
-| Feature | Depends On | Enables | Shared infrastructure |
-|---------|------------|---------|----------------------|
-| **F003** Invite | V1 Sanctum auth, admin role (`is_admin`) | F060 collaboration, multi-user ops | `UserInviteService`, `portfolio_user_invites`, invite SPA routes |
-| **F005** Sessions | V1 Sanctum sessions, F004 password reset | Secure multi-device account lifecycle | `SessionManagementService`, Laravel session store, Settings UI |
-| **F014** Historical holdings | V1 transactions, OHLCV, `PortfolioHistoricalHoldingsService` | As-of analytics UI | Same ledger as F019; distinct from V1 F015 snapshots |
-| **F019** Bulk CSV import | V1 `TransactionWriteService`, holdings calc | Faster portfolio onboarding; patterns for F014 | CSV parser, transaction validation, `BulkTransactionImport.jsx` |
-| **F042** Data quality | V1 OHLCV sync, V1 F020 corporate actions | F043 repair; pipeline data trust | **COMPLETE** — DQ Center, guard, factors + `ohlcv_repair_status=pending` handoff |
-| **F043** CA price repair | **F042** pending `PriceAdjustmentFactor` handoff; V1 F020 applied CAs | Ops recovery after bad prices | **COMPLETE** — consumes `pendingOhlcvRepair()`, preview/apply, single-writer vs F020 apply |
-| **F060** Shared screener import | V1 screeners (SD-030), profile scoping | Cross-portfolio screener reuse | `is_shared` flag, shared tab, import API |
-| **F127** Portfolio alerts | V1 holdings enrichment, daily price sync | Holding monitoring (non-TOS) | `AlertPolicyService`, `AlertPolicyEvaluationService`, `portfolio_alert_policies` |
-| **F137** Recommendation preview | V1 `RecommendationGenerationPipeline` components (read-only) | Research UI, future automation | `RecommendationPreviewService`, analytics API |
-| **F143** Contextual help | V1 pages/routes stable | User onboarding | `appDocumentation.js`, static docs generator |
-| **F144** Knowledge Board | V1 portfolio scoping | Research notes (standalone) | `KnowledgeBoardNoteService`, Tiptap editor, tags |
+| Dependency | Status |
+|------------|--------|
+| F042 → F043 | **Satisfied** (both CLOSED) |
+| F019 → F014 | **Satisfied** (both CLOSED) |
+| F003 → F060 | **Satisfied** (both CLOSED; F060 same-user sharing) |
+| V1 recommendation pipeline → F137 | **Satisfied** (F137 CLOSED over shared decision core) |
+| F143 / F144 formalization | **Completed** (both CLOSED) |
+| Remaining SD-035 dependency blocking work | **None** |
+
+Do **not** invent new dependencies. Historical analysis below is retained for traceability.
+
+---
+
+## Dependency matrix (historical + final)
+
+| Feature | Depends On | Final status | Shared infrastructure |
+|---------|------------|--------------|----------------------|
+| **F003** Invite | V1 Sanctum auth, admin role | **CLOSED** | `UserInviteService`, invites |
+| **F005** Sessions | V1 Sanctum, F004 password reset | **CLOSED** | `SessionManagementService`, Settings UI |
+| **F014** Historical holdings | V1 transactions, OHLCV | **CLOSED** | Ledger; distinct from F015 snapshots |
+| **F019** Bulk CSV import | V1 `TransactionWriteService` | **CLOSED** | Bulk import UI + write path |
+| **F042** Data quality | V1 OHLCV, F020 | **CLOSED** | DQ Center + handoff |
+| **F043** CA price repair | **F042** handoff; F020 | **CLOSED** | Factor repair + single-writer |
+| **F060** Shared screener import | V1 screeners, profile scoping | **CLOSED** | `is_shared`, import fork |
+| **F127** Portfolio alerts | Holdings enrichment, daily sync | **CLOSED** | Alert policies (≠ TOS Telegram) |
+| **F137** Recommendation preview | V1 generation decision logic | **CLOSED** | `decideForSecurity` + preview API |
+| **F143** Contextual help | Stable pages/routes | **CLOSED** | `appDocumentation.js`, static docs |
+| **F144** Knowledge Board | Portfolio scoping | **CLOSED** | Notes/tags/images services |
 
 ---
 
@@ -31,15 +47,17 @@
 |------------|-------------|-------|
 | V1 Sanctum session auth | F003, F005 | SD-001; already V1 |
 | V1 F004 password reset | F005 | Account lifecycle; already V1 |
-| V1 F020 corporate actions | F042, F043 | Core CA apply; V1 — not expanded to F043 scope |
+| V1 F020 corporate actions | F042, F043 | Core CA apply; V1 |
 | V1 transaction ledger | F019, F014 | `TransactionWriteService` SD-021 |
-| V1 OHLCV / daily sync | F042, F127 | `DailyMarketDataJob`, price tables |
-| V1 TOS Telegram notifications | — (distinct) | F127 must remain clearly separate channel/product |
+| V1 OHLCV / daily sync | F042, F127 | Price tables |
+| V1 TOS Telegram notifications | — (distinct) | F127 remains separate channel/product |
 | V1 screener engine | F060 | SD-030 eligibility screeners |
 
 ---
 
-## Dependency graph (implementation order)
+## Dependency graph (historical implementation order)
+
+*Historical planning graph. All nodes CLOSED.*
 
 ```text
 V1 foundations (frozen)
@@ -48,144 +66,89 @@ V1 foundations (frozen)
 ├── F020 corporate actions (core)
 └── TOS pipeline + Telegram notifications
 
-V2 Phase 1 (parallel tracks)
+V2 Phase 1 (parallel tracks) — CLOSED
 ├── F003 ──→ F005          Account & Access
 └── F042                   Market Data Quality (anchor)
 
-V2 Phase 2
+V2 Phase 2 — CLOSED
 ├── F042 ──→ F043          Price repair after DQ governance
 └── F127                   Alert hardening (parallel)
 
-V2 Phase 3
+V2 Phase 3 — CLOSED
 ├── F019 ──→ F014          Import validation → historical holdings UI
 ├── F003 ──→ F060          Account clarity → screener sharing
-└── F137                   Preview API stabilization
+└── F137                   Preview API over shared decision core
 
-V2 Phase 4 (postpone)
+V2 Phase 4 — CLOSED
 ├── F143                   Contextual help formalization
 └── F144                   Knowledge Board formalization
 ```
 
-**Legend:** `A ──→ B` = A should precede or complete before B is formalized as V2.
+**Legend:** `A ──→ B` = historical precedence (now satisfied).
 
 ---
 
-## Special analyses
+## Special analyses (historical; outcomes closed)
 
-### F003 / F005 — Account & Access Management
+### F003 / F005 — Account & Access — **CLOSED**
 
-| Finding | Detail |
-|---------|--------|
-| Shared infrastructure | Sanctum sessions, `AuthController`, admin user management UI, invite + password-reset link patterns |
-| F004 (V1) relationship | Password reset already V1; invites and sessions complete the lifecycle |
-| Recommendation | **Plan F003 and F005 as one V2 initiative** — "Account & Access Management" |
-| Order within initiative | F003 first (invite-only model already production-intent) → F005 session UI hardening |
+Planned as one initiative; F003 then F005. Delivered.
 
----
+### F042 / F043 / V1 F020 — Market Data Quality — **CLOSED**
 
-### F042 / F043 / V1 F020 — Market Data Quality (**DELIVERED**)
+F042 preceded F043; single-writer invariant delivered.
 
-| Finding | Detail |
-|---------|--------|
-| V1 F020 scope | Core split/bonus apply — frozen V1; ledger apply retained |
-| F042 scope | Detection, issue queue, resolution workflow — **COMPLETE** |
-| F043 scope | OHLCV repair via F042 factors + F020 CA recovery — **COMPLETE** |
-| Relationship | F042 detects/governs; F043 repairs OHLCV; F020 applies ledger (**and** restates OHLCV only when no matching active F042 factor) |
-| Single-writer invariant | Matching stock+ex-date+action-family: F043 is sole historical OHLCV writer; F020 records `deferred_to_factor` |
-| CURRENT vs formal | F043 consumes `pendingOhlcvRepair()` and marks `completed`; F020 CA recovery retained; double-restatement risk resolved |
-| Legacy bridge | `DataQualityLegacyCorporateActionMigrationService` maps old manual CAs into DQ issues |
-| Recommendation | **Satisfied:** F042 preceded F043; Market Data Quality initiative closed |
-| F043 standalone? | **No** — formal V2 required F042 handoff (delivered) |
+### F014 / F019 — Portfolio History & Data — **CLOSED**
 
----
+F019 before F014 precedence satisfied.
 
-### F014 / F019 — Portfolio History & Data
+### F060 — Shared Screener Import — **CLOSED**
 
-| Finding | Detail |
-|---------|--------|
-| Shared infra | Transactions, `TransactionWriteService`, holdings recalculation, OHLCV |
-| F019 role | Bulk entry into ledger |
-| F014 role | As-of holdings queries (backend exists) |
-| Overlap | Both touch historical correctness but different UX surfaces |
-| Recommendation | **F019 before F014** — establish import validation framework before promoting historical analytics UI |
-| Independence | Can be separate releases within same initiative |
+Same-user multi-profile sharing; F003 dependency for clarity **satisfied**.
+
+### F127 — Portfolio Alerts — **CLOSED**
+
+Formalized existing framework; did not rebuild notification stack.
+
+### F137 — Recommendation Preview — **CLOSED**
+
+Shared decision core + contract tests delivered.
+
+### F143 / F144 — Knowledge & Guidance — **CLOSED**
+
+Formalization packs completed; runtimes were already shipped.
 
 ---
 
-### F060 — Shared Screener Import
-
-| Finding | Detail |
-|---------|--------|
-| Current state | Works within single user's multiple portfolios (`is_shared`, shared tab) |
-| F003 dependency | Full multi-user collaboration semantics need invite/account clarity |
-| Strategy link | Imported copy feeds SD-030 eligibility screeners |
-| Recommendation | **Postpone formal V2 until F003/F005 complete** unless scope stays single-tenant multi-portfolio |
-
----
-
-### F127 — Portfolio Alerts (non-TOS)
-
-| Finding | Detail |
-|---------|--------|
-| vs TOS Telegram | `NotificationEngine` = recommendation lifecycle events; F127 = holding formula policies |
-| vs pipeline notifications | Pipeline uses Telegram skip/history; alerts use `portfolio_alerts` table |
-| Framework | `AlertPolicyService` + `AlertPolicyEvaluationService` + formula evaluator — **framework exists** |
-| External gap | Email/webhook channels explicitly V1_OUT_OF_SCOPE — do not expand F127 into multi-channel without new governance |
-| Recommendation | Formalize existing framework; **do not rebuild parallel notification stack** |
-
----
-
-### F137 — Recommendation Preview API
-
-| Finding | Detail |
-|---------|--------|
-| Pipeline relationship | Read-only subset of generation logic via `RecommendationPreviewService` |
-| Consumers | Watchlist research panel; potential external API |
-| Tests | No feature tests — V2 hardening priority |
-| Dependency | Stable V1 pipeline behaviour (frozen) |
-| Recommendation | Phase 3 — platform API stabilization, not Phase 1 |
-
----
-
-### F143 / F144 — Knowledge & Guidance
-
-| Finding | Detail |
-|---------|--------|
-| Independence | Separate product areas (help vs notes) |
-| Shared concern | Content maintenance burden |
-| F143 | Tied to V1 page churn — help text must track UI changes |
-| F144 | Standalone research capture |
-| Recommendation | **Group as "Knowledge & Guidance" initiative** but **deliberately postpone to Phase 4** |
-
----
-
-## Wrong-order risks
+## Wrong-order risks (historical lessons — still valid)
 
 | If built too early… | Risk |
 |---------------------|------|
-| **F043 before F042** | Repairs without issue tracking → untraceable price mutations; duplicated ops paths |
-| **F014 UI before F019 validation** | Users import bad CSV then trust as-of analytics → compounded errors |
-| **F060 before F003** | Sharing semantics unclear across users; authorization gaps |
-| **F127 expansion (email/webhook)** | Duplicates deferred V1 notification channels; conflicts with SD-009 Telegram-only |
-| **F137 before pipeline stable** | Preview API churn breaks Watchlist consumers |
-| **F143 formal spec while UI still changing** | Documentation debt multiplied every release |
-| **Rebuilding F127 alert stack** | Wastes existing `AlertPolicy*` investment; parallel to TOS notifications |
+| **F043 before F042** | Untraceable price mutations |
+| **F014 UI before F019 validation** | Bad CSV then trusted as-of analytics |
+| **F060 before F003** | Unclear multi-user sharing AuthZ |
+| **F127 expansion (email/webhook)** | Conflicts with SD-009 Telegram-only |
+| **F137 before pipeline stable** | Preview churn |
+| **F143 formal spec while UI still changing** | Doc debt |
+
+These risks informed sequencing; they are **not** open blockers.
 
 ---
 
-## Technical foundations to complete before V2 features
+## Foundations table (updated)
 
-| Foundation | Precedes | Evidence |
-|------------|----------|----------|
-| Invite + admin auth hardening | F003 formal V2 | `UserInviteTest`, admin-only routes |
-| Session list/revoke UI completion | F005 formal V2 | Partial Settings integration |
-| DQ issue lifecycle (F042) + OHLCV repair (F043) | F042, F043 | **COMPLETE** — governance + factor repair + single-writer hardening |
-| Import validation + rollback patterns | F019, F014 | `TransactionWriteService` single write path |
-| Alert policy test coverage + channel boundaries | F127 | Extensive code; clarify vs Telegram |
-| Preview API contract tests | F137 | No PHPUnit feature tests today |
-| Help content governance process | F143 | 43 topics in `appDocumentation.js` |
-| Corporate-action test fixture fix | F042/F043 hardening | SQLite price collision in CA tests (non-V1 blocker) |
+| Foundation | Precedes | Current note |
+|------------|----------|--------------|
+| Invite + admin auth hardening | F003 | **CLOSED** |
+| Session list/revoke + PD-006 | F005 | **CLOSED** |
+| DQ + OHLCV repair | F042, F043 | **CLOSED** |
+| Import validation patterns | F019, F014 | **CLOSED** |
+| Alert policy boundaries | F127 | **CLOSED** |
+| Preview API contract tests | F137 | **CLOSED** (`F137RecommendationPreviewTest`) |
+| Help content governance | F143 | **CLOSED** (~44 topics; formal pack) |
+| Knowledge Board formalization | F144 | **CLOSED** |
+| Corporate-action SQLite fixture flakiness | Suite hygiene | **Outside SD-035** — maintenance |
 
 ---
 
-*See also: [V2-PRIORITIZATION.md](./V2-PRIORITIZATION.md), [V2-ROADMAP.md](./V2-ROADMAP.md)*
+*See also: [V2-FINAL-RECONCILIATION.md](./V2-FINAL-RECONCILIATION.md), [V2-PRIORITIZATION.md](./V2-PRIORITIZATION.md), [V2-ROADMAP.md](./V2-ROADMAP.md)*

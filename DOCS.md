@@ -147,15 +147,15 @@ Hub: [specs/architecture/governance/README.md](specs/architecture/governance/REA
 | 3.4 | [specs/architecture/governance/VERSION_1_BASELINE.md](specs/architecture/governance/VERSION_1_BASELINE.md) | Frozen baseline |
 | 3.5 | [specs/architecture/governance/PRODUCT_BACKLOG.md](specs/architecture/governance/PRODUCT_BACKLOG.md) | Deferred work / roadmap |
 
-### 3.A V2 planning (deferred scope — not active V1 requirements)
+### 3.A V2 planning (SD-035 — **CLOSED**; not active V1 requirements)
 
-*Eleven capabilities deferred by SD-035. Planning documents below; Market Data Quality (F042 + F043) is **COMPLETE** — see §3.B / §3.C. Account & Access: **F003** and **F005** are **COMPLETE** — see §3.D. Monitoring & Alerts (**F127**) is **COMPLETE** (`F127_COMPLETE_WITH_NON_BLOCKERS`) — see §3.E. Portfolio History & Import (**F019**) is **COMPLETE** (`F019_COMPLETE_WITH_NON_BLOCKERS`) — see §3.F. **F014** historical holdings is **COMPLETE** (`F014_COMPLETE_WITH_NON_BLOCKERS`) — see §3.G. **F060** Shared Screener Import is **COMPLETE** (`F060_COMPLETE_WITH_NON_BLOCKERS`) — see §3.H.*
+***SD-035 V2 = CLOSED.*** All eleven deferred capabilities are complete — authoritative snapshot: [docs/v2/V2-FINAL-RECONCILIATION.md](docs/v2/V2-FINAL-RECONCILIATION.md) (§3.L). Planning docs below retain historical scores/phases; do not treat them as an open backlog. **F042/F043** §3.B–§3.C; **F003/F005** §3.D; **F127** §3.E; **F019** §3.F; **F014** §3.G; **F060** §3.H; **F137** §3.I; **F143** §3.J; **F144** §3.K.
 
 | Order | Document | Why |
 |------:|----------|-----|
-| 3.6 | [docs/v2/V2-PRIORITIZATION.md](docs/v2/V2-PRIORITIZATION.md) | V2 priority scores, initiative grouping, implementation-state table |
-| 3.7 | [docs/v2/V2-DEPENDENCIES.md](docs/v2/V2-DEPENDENCIES.md) | V2 dependency matrix, special analyses, wrong-order risks |
-| 3.8 | [docs/v2/V2-ROADMAP.md](docs/v2/V2-ROADMAP.md) | Recommended V2 phases + completion status for delivered tracks |
+| 3.6 | [docs/v2/V2-PRIORITIZATION.md](docs/v2/V2-PRIORITIZATION.md) | Historical priority scores + final CLOSED state table |
+| 3.7 | [docs/v2/V2-DEPENDENCIES.md](docs/v2/V2-DEPENDENCIES.md) | Dependencies (all satisfied) + historical analysis |
+| 3.8 | [docs/v2/V2-ROADMAP.md](docs/v2/V2-ROADMAP.md) | V2 CLOSED + historical phase delivery record |
 
 ### 3.B F042 — Data Quality (**COMPLETE**)
 
@@ -211,7 +211,7 @@ Hub: [specs/architecture/governance/README.md](specs/architecture/governance/REA
 
 ### 3.F F019 — Bulk CSV Import (**COMPLETE**)
 
-*V2 Phase 3 Portfolio History & Import — F019 first (F014 downstream, not started). Hardening delivered 2026-08-09: shared ledger+holdings+cash financial unit (PD-14), all-or-nothing `POST /api/transactions/bulk` with batch/row identity (PD-01/02/03/15/18), frontend bulk flow, tests. Verdict: `F019_COMPLETE_WITH_NON_BLOCKERS`.*
+*V2 Phase 3 Portfolio History & Import — F019 delivered first; F014 downstream is also **COMPLETE** (see §3.G). Hardening delivered 2026-08-09: shared ledger+holdings+cash financial unit (PD-14), all-or-nothing `POST /api/transactions/bulk` with batch/row identity (PD-01/02/03/15/18), frontend bulk flow, tests. Verdict: `F019_COMPLETE_WITH_NON_BLOCKERS`.*
 
 **Authoritative:**
 
@@ -250,7 +250,7 @@ Hub: [specs/architecture/governance/README.md](specs/architecture/governance/REA
 
 ### 3.I F137 — Recommendation Preview API (**COMPLETE**)
 
-*V2 Phase 3 — last Phase 3 initiative after F060. Delivered 2026-08-10: shared `decideForSecurity` core; cycle-fresh persisted precedence; explicit owned `strategy_id`; canonical BUY/SELL/HOLD_POSITION/WATCH; execution + research sections; read-only preview; Watchlist aligned; `F137RecommendationPreviewTest`. Verdict: **`F137_COMPLETE_WITH_NON_BLOCKERS`**. Do not pull F143/F144 ahead. Do not reopen closed F003/F005/F042/F043/F127/F019/F014/F060.*
+*V2 Phase 3 — last Phase 3 initiative after F060. Delivered 2026-08-10: shared `decideForSecurity` core; cycle-fresh persisted precedence; explicit owned `strategy_id`; canonical BUY/SELL/HOLD_POSITION/WATCH; execution + research sections; read-only preview; Watchlist aligned; `F137RecommendationPreviewTest`. Verdict: **`F137_COMPLETE_WITH_NON_BLOCKERS`**. F143/F144 also **CLOSED** (§3.J–§3.K). Do not reopen closed initiatives.*
 
 **Authoritative:**
 
@@ -260,6 +260,40 @@ Hub: [specs/architecture/governance/README.md](specs/architecture/governance/REA
 | 3.40 | [docs/v2/F137-BOUNDARY.md](docs/v2/F137-BOUNDARY.md) | Shared decision core vs persist lifecycle |
 | 3.41 | [docs/v2/F137-POLICY-DECISIONS.md](docs/v2/F137-POLICY-DECISIONS.md) | PD-F137-01…17 — **DECIDED** + delivered |
 | 3.42 | [docs/v2/F137-IMPLEMENTATION-GAP-MATRIX.md](docs/v2/F137-IMPLEMENTATION-GAP-MATRIX.md) | Closed gaps; non-blockers listed |
+
+### 3.J F143 — In-app Contextual Help (**COMPLETE**)
+
+*V2 Knowledge & Guidance. Spec/reconciliation 2026-08-10: runtime help already shipped (44 topics, header → static `/docs`, generate-on-build). Pack formalizes ownership/CURRENT behaviour; **no mandatory implementation phase**. Verdict: **`F143_COMPLETE_WITH_NON_BLOCKERS`**. Do not reopen closed Phase 3 initiatives. Do not absorb F144.*
+
+**Authoritative:**
+
+| Order | Document | Why |
+|------:|----------|-----|
+| 3.43 | [docs/v2/F143-CONTEXTUAL-HELP-SPEC.md](docs/v2/F143-CONTEXTUAL-HELP-SPEC.md) | CURRENT help flow, coverage, ACs |
+| 3.44 | [docs/v2/F143-BOUNDARY.md](docs/v2/F143-BOUNDARY.md) | Help layer vs feature domains / F144 |
+| 3.45 | [docs/v2/F143-POLICY-DECISIONS.md](docs/v2/F143-POLICY-DECISIONS.md) | No blocking DECISION_REQUIRED |
+| 3.46 | [docs/v2/F143-IMPLEMENTATION-GAP-MATRIX.md](docs/v2/F143-IMPLEMENTATION-GAP-MATRIX.md) | Non-blockers: tests, SPA prose drift, orphan Doc* |
+
+### 3.K F144 — Knowledge Board (**COMPLETE**)
+
+*V2 Knowledge & Guidance. Spec/reconciliation 2026-08-10: runtime Knowledge Board already shipped (notes/tags/images, profile isolation, UI/API/tests). Pack formalizes ownership/CURRENT behaviour; **no mandatory implementation phase**. Verdict: **`F144_COMPLETE_WITH_NON_BLOCKERS`**. Do not reopen closed initiatives. Do not absorb F143/F014/F019/F060/F137.*
+
+**Authoritative:**
+
+| Order | Document | Why |
+|------:|----------|-----|
+| 3.47 | [docs/v2/F144-KNOWLEDGE-BOARD-SPEC.md](docs/v2/F144-KNOWLEDGE-BOARD-SPEC.md) | CURRENT model, APIs, MUST/SHOULD, ACs |
+| 3.48 | [docs/v2/F144-BOUNDARY.md](docs/v2/F144-BOUNDARY.md) | Standalone notes vs ledger/screeners/recs/help |
+| 3.49 | [docs/v2/F144-POLICY-DECISIONS.md](docs/v2/F144-POLICY-DECISIONS.md) | No blocking DECISION_REQUIRED |
+| 3.50 | [docs/v2/F144-IMPLEMENTATION-GAP-MATRIX.md](docs/v2/F144-IMPLEMENTATION-GAP-MATRIX.md) | Non-blockers: note AuthZ tests, image GC, API doc drift |
+
+### 3.L V2 program closure (SD-035)
+
+*All eleven SD-035 V2 initiatives reconciled. Program snapshot: [docs/v2/V2-FINAL-RECONCILIATION.md](docs/v2/V2-FINAL-RECONCILIATION.md) — **V2 CLOSED** (Option A). Remaining items are non-blocking polish only. Do not invent new SD-035 IDs.*
+
+| Order | Document | Why |
+|------:|----------|-----|
+| 3.51 | [docs/v2/V2-FINAL-RECONCILIATION.md](docs/v2/V2-FINAL-RECONCILIATION.md) | Program-level status, dependencies, non-blockers, next phase |
 
 ---
 

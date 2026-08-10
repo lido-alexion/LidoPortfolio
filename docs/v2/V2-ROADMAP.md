@@ -1,145 +1,122 @@
 # V2 Roadmap (Planning)
 
-**Date:** 2026-08-09  
-**Status:** Active V2 roadmap (no calendar dates). **Market Data Quality track delivered:** F042 + F043 = **COMPLETE**. **Monitoring (F127)** = **COMPLETE** (`F127_COMPLETE_WITH_NON_BLOCKERS`). **Bulk CSV Import (F019)** = **COMPLETE** (`F019_COMPLETE_WITH_NON_BLOCKERS`). **Historical Holdings (F014)** = **COMPLETE** (`F014_COMPLETE_WITH_NON_BLOCKERS`).  
+**Date:** 2026-08-10 (closure housekeeping)  
+**Program status:** **SD-035 V2 = CLOSED**  
+**Authoritative snapshot:** [V2-FINAL-RECONCILIATION.md](./V2-FINAL-RECONCILIATION.md)
+
+All **eleven** SD-035 deferred capabilities are formally reconciled and closed. There is **no remaining Phase 1/2/3/4 implementation work under SD-035**. Deferred enhancements and non-blocking polish listed in initiative packs are **not** unfinished SD-035 initiatives.
+
+| Track | Features | Final status |
+|-------|----------|--------------|
+| Account & Access | F003, F005 | **CLOSED** (`F003_COMPLIANT_WITH_NON_BLOCKERS`; `F005_COMPLETE_WITH_NON_BLOCKERS`) |
+| Market Data Quality | F042, F043 | **CLOSED** (`F042_COMPLETE_WITH_NON_BLOCKERS`; `F043_COMPLETE`) |
+| Monitoring | F127 | **CLOSED** (`F127_COMPLETE_WITH_NON_BLOCKERS`) |
+| Portfolio History & Import | F019, F014 | **CLOSED** (`F019_COMPLETE_WITH_NON_BLOCKERS`; `F014_COMPLETE_WITH_NON_BLOCKERS`) |
+| Collaboration | F060 | **CLOSED** (`F060_COMPLETE_WITH_NON_BLOCKERS`) |
+| Recommendation Preview | F137 | **CLOSED** (`F137_COMPLETE_WITH_NON_BLOCKERS`) |
+| Knowledge & Guidance | F143, F144 | **CLOSED** (`F143_COMPLETE_WITH_NON_BLOCKERS`; `F144_COMPLETE_WITH_NON_BLOCKERS`) |
+
 **V1:** Frozen at 119 capabilities (SD-035) — [final audit](../audits/2026-08-09-feature-coverage-final/)
 
 ---
 
-## Delivery status (Market Data Quality)
+## V2 closure (current)
 
-| Feature | Status | Notes |
-|---------|--------|-------|
-| **F042** Data quality detection/resolution | **COMPLETE** (`F042_COMPLETE_WITH_NON_BLOCKERS`) | DQ Center, gating, factors, handoff marker; intentional non-blockers remain |
-| **F043** Corporate action price repair | **COMPLETE** (`F043_COMPLETE`) | Factor consumption, preview/apply, idempotency, multi-factor, F020 single-writer / no double restatement |
-
-**F043 deferred / non-blocker (not incomplete):** admin API/UI; scheduled auto-repair; rollback snapshots; dividend/rights/merger; true multi-process concurrency suite (SQLite lock soft).
-
-**Regression (verified 2026-08-09):** F043+delegation+adjustment/repair+F042 **67/67**; recommendation/pipeline/market gates **23/23**; full suite @512M **612** tests — **603** passed, **5** failed, **4** errors (unrelated/pre-existing; suite not fully green).
+- **Option A — V2 CLOSED** per [V2-FINAL-RECONCILIATION.md](./V2-FINAL-RECONCILIATION.md).  
+- Do **not** start a new SD-035 initiative.  
+- Do **not** invent F145+ from residual polish.  
+- Future work = maintenance / bugfix / separately specified product phases.  
+- Residual items (tests, docs drift, deferred product enhancements such as F014 cash-as-of, F005 admin force-logout, F127 extra channels, F144 sharing) remain **non-blocking / deferred / OOS** as already classified in packs.
 
 ---
 
-## Roadmap principles
+## Roadmap principles (still valid)
 
-1. **Do not reopen V1 scope** — V2 formalizes deferred capabilities only.  
-2. **Most V2 items are already shipped** — V2 work is primarily hardening, specification, and test coverage.  
-3. **Respect dependencies** — especially F042 → F043 (satisfied) and F019 → F014.  
-4. **Avoid duplicate infrastructure** — alerts, notifications, auth, and data-quality paths already exist.  
-5. **Postpone low-leverage fully-shipped features** — F143, F144 until product stabilizes.
-
----
-
-## Phase 1 — Foundational (highest value / enables other V2)
-
-**Parallel tracks:**
-
-### Track A: Account & Access Management
-
-| Feature | Work type |
-|---------|-----------|
-| **F003** User invite flow | Formalize V2 spec; harden token/expiry; align admin UX |
-| **F005** Session management | Complete Settings UI; extend `AuthSessionTest` coverage |
-
-**Rationale:** Multi-user deployment posture (`implementation.md` invite-only registration). Shares Sanctum + admin infrastructure with V1 F004 password reset.
-
-**Prerequisites:** None beyond frozen V1 auth.
-
-**Unlocks:** F060 collaboration semantics; cleaner multi-user ops.
-
-**Risks:** Security regressions on invite/session tokens.
+1. **Do not reopen V1 scope** — V1 remains frozen.  
+2. **SD-035 V2 work was primarily formalization/hardening** of shipped or near-shipped surfaces.  
+3. **Historical dependencies were respected** — F042→F043, F019→F014, F003→F060, V1 pipeline→F137 (all **satisfied**).  
+4. **Avoid duplicate infrastructure** — alerts, notifications, auth, DQ paths already exist.  
+5. **Do not reopen closed initiatives** for optional non-blockers.
 
 ---
 
-### Track B: Market Data Quality (anchor) — **DELIVERED**
+## Historical planning — phases (delivery complete)
 
-| Feature | Work type | Delivery |
-|---------|-----------|----------|
-| **F042** Data quality detection/resolution | Spec + hardening + PHPUnit | **COMPLETE** |
+*The phase structure below is **historical planning context** retained for traceability. Delivery notes reflect final CLOSED status. Do not treat “Phase N work remaining” as current.*
 
-**Rationale:** Highest strategic leverage; complements V1 F020; prerequisite for safe F043.
+### Phase 1 — Foundational (historical)
 
-**Prerequisites:** V1 OHLCV sync, V1 F020 corporate actions.
+#### Track A: Account & Access Management — **DELIVERED / CLOSED**
 
-**Unlocks:** F043 price repair (delivered); improved confidence in pipeline inputs.
+| Feature | Historical work type | Final status |
+|---------|----------------------|--------------|
+| **F003** User invite flow | Formalize V2 spec; harden token/expiry; align admin UX | **CLOSED** |
+| **F005** Session management | Complete Settings UI; extend `AuthSessionTest`; PD-006 | **CLOSED** |
 
-**Risks:** Incorrect auto-resolution corrupts OHLCV — mitigated by conditional auto-accept policy.
+**Historical unlocks:** F060 collaboration semantics; multi-user ops — **satisfied**.
 
----
+#### Track B: Market Data Quality — **DELIVERED / CLOSED**
 
-## Phase 2 — Operations & monitoring (enabled by Phase 1)
+| Feature | Final status |
+|---------|--------------|
+| **F042** Data quality detection/resolution | **CLOSED** (`F042_COMPLETE_WITH_NON_BLOCKERS`) |
+| **F043** Corporate action price repair | **CLOSED** (`F043_COMPLETE`) |
 
-| Feature | Work type | Delivery |
-|---------|-----------|----------|
-| **F043** Corporate action price repair | Factor path + F020 single-writer hardening + tests | **COMPLETE** |
-| **F127** Portfolio alerts (non-TOS) | Spec + policy pack; expire→evaluate daily lifecycle; holding_closed fix; help sync | **COMPLETE** (`F127_COMPLETE_WITH_NON_BLOCKERS`) |
-| **F019** Bulk CSV import | All-or-nothing bulk API; PD-14 financial unit; batch/row identity | **COMPLETE** (`F019_COMPLETE_WITH_NON_BLOCKERS`) |
-
-**Rationale:** F043 depends on F042 issue model (satisfied). F127 framework was already shipped; V2 delivered governance + hardening (PD-F127-07 expire→evaluate; manual Run now remains evaluate-only). Intentional non-blockers remain (see F127 gap matrix).
-
-**Prerequisites:** Phase 1 Track B (F042) for F043 — **done**; daily price sync for F127.
-
-**Unlocks:** Production ops confidence; holding-level monitoring distinct from TOS recs.
-
-**Risks:** F043 price mutation — mitigated by preview/apply, idempotency, single-writer invariant; F127 alert noise / Telegram confusion.
+**F043 deferred / non-blocker (not incomplete SD-035):** admin API/UI; scheduled auto-repair; rollback snapshots; dividend/rights/merger; true multi-process concurrency suite (SQLite lock soft).
 
 ---
 
-## Phase 3 — Portfolio data & platform APIs
+### Phase 2 — Operations & monitoring (historical) — **DELIVERED / CLOSED**
 
-| Order | Feature | Work type |
-|------:|---------|-----------|
-| 1 | **F019** Bulk CSV import | Import validation hardening; PHP feature tests; error reporting |
-| 2 | **F014** Historical holdings reconstruction | **COMPLETE** (`F014_COMPLETE_WITH_NON_BLOCKERS`) — as-of API + dedicated page |
-| 3 | **F060** Shared screener import | Formalize V2 after F003; cross-portfolio sharing rules |
-| 4 | **F137** Recommendation preview API | API contract stability; feature tests; document consumers |
-
-**Rationale:** F019 validation patterns reduce risk before F014 analytics UI. F060 benefits from account initiative. F137 is platform convenience after core V2 stable.
-
-**Prerequisites:** Phase 1 Track A (recommended for F060); frozen V1 pipeline (for F137).
-
-**Unlocks:** Bulk onboarding; portfolio history analytics; screener collaboration; research preview API.
-
-**Risks:** Ledger corruption (F019); scope mapping errors (F060).
+| Feature | Final status |
+|---------|--------------|
+| **F043** | **CLOSED** (see above) |
+| **F127** Portfolio alerts (non-TOS) | **CLOSED** (`F127_COMPLETE_WITH_NON_BLOCKERS`) |
 
 ---
 
-## Phase 4 — Knowledge & guidance (deliberately late)
+### Phase 3 — Portfolio data & platform APIs (historical) — **DELIVERED / CLOSED**
 
-| Feature | Work type |
-|---------|-----------|
-| **F143** In-app contextual help | Content governance process; reduce drift vs UI changes |
-| **F144** Knowledge Board | Formal V2 scope only if Knowledge product is strategic priority |
-
-**Rationale:** Both are **fully implemented**. Formal V2 adds ongoing maintenance obligation. Defer until V1/V2 core churn slows.
-
-**Prerequisites:** Stable page set and navigation.
-
-**Unlocks:** Better onboarding documentation; research capture (already available informally).
-
-**Risks:** Documentation drift; editor/content maintenance cost.
+| Feature | Final status |
+|---------|--------------|
+| **F019** Bulk CSV import | **CLOSED** (`F019_COMPLETE_WITH_NON_BLOCKERS`) |
+| **F014** Historical holdings reconstruction | **CLOSED** (`F014_COMPLETE_WITH_NON_BLOCKERS`) |
+| **F060** Shared screener import | **CLOSED** (`F060_COMPLETE_WITH_NON_BLOCKERS`) |
+| **F137** Recommendation preview API | **CLOSED** (`F137_COMPLETE_WITH_NON_BLOCKERS`) |
 
 ---
 
-## Phase summary
+### Phase 4 — Knowledge & guidance (historical) — **DELIVERED / CLOSED**
 
-| Phase | Features | Initiative(s) | Primary outcome | Delivery note |
-|-------|----------|---------------|-----------------|---------------|
-| **1** | F003, F005, F042 | Account & Access; Market Data Quality | Multi-user readiness + data trust | **F042 COMPLETE**; F003/F005 remaining |
-| **2** | F043, F127 | Market Data Quality (cont.); Monitoring | Safe ops repair + holding alerts | **F043 COMPLETE**; **F127 COMPLETE** (`F127_COMPLETE_WITH_NON_BLOCKERS`) |
-| **3** | F019, F014, F060, F137 | Portfolio History; Collaboration; Platform API | Data onboarding + research tools | **F019 + F014 COMPLETE**; F060/F137 remaining |
-| **4** | F143, F144 | Knowledge & Guidance | UX polish (optional / late) | Remaining |
+| Feature | Final status |
+|---------|--------------|
+| **F143** In-app contextual help | **CLOSED** (`F143_COMPLETE_WITH_NON_BLOCKERS`) — formalization of pre-shipped runtime |
+| **F144** Knowledge Board | **CLOSED** (`F144_COMPLETE_WITH_NON_BLOCKERS`) — formalization of pre-shipped runtime |
 
 ---
 
-## Recommended next V2 initiative
+## Phase summary (final)
 
-**Market Data Quality (F042 + F043) and Monitoring (F127) are complete.** Choose the next track from remaining Phase 1–3 items:
+| Phase | Features | Delivery note (current) |
+|-------|----------|-------------------------|
+| **1** | F003, F005, F042 | **ALL CLOSED** |
+| **2** | F043, F127 | **ALL CLOSED** |
+| **3** | F019, F014, F060, F137 | **ALL CLOSED** |
+| **4** | F143, F144 | **ALL CLOSED** |
 
-- **Phase 1 Track A: Account & Access (F003 + F005)** if multi-user deployment is the top priority (check current delivery status — may already be complete).
-- **Phase 2 F127** — **COMPLETE** (`F127_COMPLETE_WITH_NON_BLOCKERS`); daily lifecycle = expire → evaluate → create/reuse; Manual Run now = evaluate-only. Do not reopen deferred non-blockers as blockers.
-- **Phase 3** items (F019 → F014, F060 after F003, F137) per dependency order.
+---
 
-Do **not** reopen F042/F043/F127 core behaviour; deferred non-blockers on those tracks are optional later work, not blockers for closing the delivered initiatives.
+## Next work (not SD-035)
+
+There is **no “next V2 initiative” under SD-035**.
+
+Recommended posture:
+
+1. Maintenance / bugfix / backlog.  
+2. Optional documentation hygiene outside initiative packs (already largely addressed by this housekeeping).  
+3. Any major new capability → **separate specification exercise**, not an invented continuation of the SD-035 eleven.
+
+Do **not** reopen F042/F043/F127/F003/F005/F019/F014/F060/F137/F143/F144 core behaviour for optional non-blockers.
 
 ---
 
@@ -150,8 +127,8 @@ Do **not** reopen F042/F043/F127 core behaviour; deferred non-blockers on those 
 | V1 capability changes | V1 frozen |
 | Email/webhook notifications | V1_OUT_OF_SCOPE (SD-009 Telegram-only) |
 | F040 hard data publish gates | V1_OUT_OF_SCOPE (PB-001) |
-| New capabilities beyond the 11 | Out of scope for this analysis |
+| New capabilities beyond the 11 | Out of SD-035; require new programme if pursued |
 
 ---
 
-*See also: [V2-PRIORITIZATION.md](./V2-PRIORITIZATION.md), [V2-DEPENDENCIES.md](./V2-DEPENDENCIES.md)*
+*See also: [V2-FINAL-RECONCILIATION.md](./V2-FINAL-RECONCILIATION.md), [V2-PRIORITIZATION.md](./V2-PRIORITIZATION.md), [V2-DEPENDENCIES.md](./V2-DEPENDENCIES.md)*

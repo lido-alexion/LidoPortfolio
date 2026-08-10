@@ -1,19 +1,23 @@
 # V2 Feature Prioritization
 
-**Date:** 2026-08-09  
-**Status:** Planning only — does not modify V1 scope or governance  
-**V1 baseline:** [Final audit](../audits/2026-08-09-feature-coverage-final/) — 119 capabilities frozen (SD-035)  
-**Deferred V2 backlog:** 11 capabilities (SD-035 § Deferred to V2 / Future)
+**Date:** 2026-08-10 (closure housekeeping)  
+**Program status:** **SD-035 V2 = CLOSED**  
+**Authoritative snapshot:** [V2-FINAL-RECONCILIATION.md](./V2-FINAL-RECONCILIATION.md)  
+**Historical note:** Scores, rankings, and “first initiative” recommendations below are **historical planning context** from 2026-08-09. They do **not** authorize new work and must not be read as a live backlog of unfinished SD-035 initiatives.
+
+All eleven SD-035 deferred capabilities are **CLOSED**. The prioritization exercise has **concluded**. Do **not** generate a new priority ranking. Do **not** treat F003/F005/F019/F014/F060/F137/F143/F144 (or F042/F043/F127) as candidates for implementation under SD-035.
+
+**V1 baseline:** [Final audit](../audits/2026-08-09-feature-coverage-final/) — 119 capabilities frozen (SD-035)
 
 ---
 
-## Purpose
+## Purpose (historical)
 
-Recommend priority, sequencing, and grouping for the eleven capabilities explicitly deferred from frozen V1. **No implementation authorized by this document.**
+Originally: recommend priority, sequencing, and grouping for the eleven capabilities deferred from frozen V1. **No new implementation is authorized by this document.** Delivery is complete; see packs + final reconciliation.
 
 ---
 
-## Scoring framework
+## Scoring framework (historical)
 
 | Dimension | Range | Meaning |
 |-----------|------:|---------|
@@ -26,33 +30,33 @@ Recommend priority, sequencing, and grouping for the eleven capabilities explici
 
 **Priority Score** = (Product + Strategic + Leverage + Readiness) − (Complexity + Risk)
 
-Scores are comparative tools, not absolute truth. Final ranking uses qualitative adjustment for dependencies.
+Scores were comparative planning tools, not absolute truth.
 
 ---
 
-## Current implementation state (implemented-but-deferred)
+## Final implementation state (current)
 
-*Updated 2026-08-09 for Market Data Quality delivery. Priority rankings below remain historical planning context; F042/F043 are no longer pending V2 implementation.*
+*Updated 2026-08-10 — all eleven CLOSED. Older “MOSTLY IMPLEMENTED” planning labels are superseded.*
 
-| ID | Feature | State | Evidence |
-|----|---------|-------|----------|
-| F003 | User invite flow | **FULLY IMPLEMENTED** | `UserInviteService`, `/invite/:token`, `UserInviteTest` |
-| F005 | Session management | **MOSTLY IMPLEMENTED** | `SessionManagementService`, API + Settings UI; `AuthSessionTest` |
-| F014 | Historical holdings reconstruction | **MOSTLY IMPLEMENTED** | `PortfolioHistoricalHoldingsService`, API; no dedicated UI; unit tests |
-| F019 | Bulk CSV import | **MOSTLY IMPLEMENTED** | `BulkTransactionImport.jsx`, `bulkTransactionCsv.js`; JS unit test only |
-| F042 | Data quality detection/resolution | **COMPLETE** | DQ Center + hardening; `F042_COMPLETE_WITH_NON_BLOCKERS` |
-| F043 | Corporate action price repair | **COMPLETE** | Factor path + F020 single-writer; `F043_COMPLETE` |
-| F060 | Shared screener import | **MOSTLY IMPLEMENTED** | `ScreenerSharedTab.jsx`, `POST /api/screeners/shared/{id}/import`; partial tests |
-| F127 | Portfolio alerts (non-TOS) | **FULLY IMPLEMENTED** | Alert policies UI, evaluation engine, `AlertPolicyTest` + related suite |
-| F137 | Recommendation preview API | **MOSTLY IMPLEMENTED** | `RecommendationPreviewService`, API route, Watchlist panel; **no feature tests** |
-| F143 | In-app contextual help | **FULLY IMPLEMENTED** | `appDocumentation.js`, 43 topics, static HTML docs pipeline |
-| F144 | Knowledge Board | **FULLY IMPLEMENTED** | Full UI, tags, images, `KnowledgeBoardTest` |
-
-**Retention recommendation:** Do not remove shipped code. V2 work for most items is **formalization, hardening, spec alignment, and test coverage** — not greenfield build.
+| ID | Feature | Final status | Evidence |
+|----|---------|--------------|----------|
+| F003 | User invite flow | **CLOSED** (`F003_COMPLIANT_WITH_NON_BLOCKERS`) | Invite pack + runtime |
+| F005 | Session management | **CLOSED** (`F005_COMPLETE_WITH_NON_BLOCKERS`) | Session pack + Settings UI + PD-006 |
+| F014 | Historical holdings reconstruction | **CLOSED** (`F014_COMPLETE_WITH_NON_BLOCKERS`) | API + dedicated UI + tests |
+| F019 | Bulk CSV import | **CLOSED** (`F019_COMPLETE_WITH_NON_BLOCKERS`) | Bulk API + UI + tests |
+| F042 | Data quality detection/resolution | **CLOSED** (`F042_COMPLETE_WITH_NON_BLOCKERS`) | DQ Center + hardening |
+| F043 | Corporate action price repair | **CLOSED** (`F043_COMPLETE`) | Factor path + single-writer |
+| F060 | Shared screener import | **CLOSED** (`F060_COMPLETE_WITH_NON_BLOCKERS`) | Same-user sharing + import |
+| F127 | Portfolio alerts (non-TOS) | **CLOSED** (`F127_COMPLETE_WITH_NON_BLOCKERS`) | Alert policies + hardening |
+| F137 | Recommendation preview API | **CLOSED** (`F137_COMPLETE_WITH_NON_BLOCKERS`) | Shared decision core + `F137RecommendationPreviewTest` |
+| F143 | In-app contextual help | **CLOSED** (`F143_COMPLETE_WITH_NON_BLOCKERS`) | Formalization of shipped help (~44 topics) |
+| F144 | Knowledge Board | **CLOSED** (`F144_COMPLETE_WITH_NON_BLOCKERS`) | Formalization of shipped Knowledge Board |
 
 ---
 
-## Priority table
+## Priority table (historical planning context)
+
+*Do not re-rank. Retained for traceability of how Phase 1–4 sequencing was chosen.*
 
 | Rank | ID | Feature | Value | Strat. | Leverage | Cplx. | Risk | Ready. | **Score** | Phase |
 |------|----|---------|------:|-------:|---------:|------:|-----:|-------:|----------:|-------|
@@ -68,7 +72,7 @@ Scores are comparative tools, not absolute truth. Final ranking uses qualitative
 | 10 | F014 | Historical holdings reconstruction | 3 | 2 | 2 | 3 | 3 | 4 | **5** | 3 |
 | 11 | F043 | Corporate action price repair | 3 | 3 | 3 | 3 | 5 | 4 | **5** | 2 |
 
-### Qualitative rank adjustments
+### Qualitative rank adjustments (historical)
 
 | Adjustment | Reason |
 |------------|--------|
@@ -80,7 +84,9 @@ Scores are comparative tools, not absolute truth. Final ranking uses qualitative
 
 ---
 
-## Per-feature analysis
+## Per-feature analysis (historical)
+
+*Scoring notes below are planning-era rationale. Final delivery status is in the “Final implementation state” table above and in initiative packs.*
 
 ### F003 — User Invite Flow
 
@@ -93,7 +99,7 @@ Scores are comparative tools, not absolute truth. Final ranking uses qualitative
 | Risk | 3 | Token security, expiry, admin abuse |
 | Readiness | 5 | Full flow + tests |
 
-**Recommendation:** Phase 1 — bundle with F005 as **Account & Access Management**.
+**Historical recommendation:** Phase 1 — bundle with F005 as **Account & Access Management**. **Delivered / CLOSED.**
 
 ---
 
@@ -108,7 +114,7 @@ Scores are comparative tools, not absolute truth. Final ranking uses qualitative
 | Risk | 3 | Session revocation edge cases |
 | Readiness | 4 | `AuthSessionTest` covers list/revoke |
 
-**Recommendation:** Phase 1 with F003 — same initiative.
+**Historical recommendation:** Phase 1 with F003. **Delivered / CLOSED.**
 
 ---
 
@@ -118,12 +124,12 @@ Scores are comparative tools, not absolute truth. Final ranking uses qualitative
 |-----------|------:|-------|
 | Product Value | 3 | As-of holdings analytics; distinct from V1 snapshots (F015) |
 | Strategic | 2 | Portfolio analytics extension |
-| Leverage | 2 | Shares transaction/OHLCV infra with F019 |
-| Complexity | 3 | Backend complete; needs dedicated UI and validation |
-| Risk | 3 | Financial correctness for as-of queries |
-| Readiness | 4 | `PortfolioHistoricalHoldingsServiceTest` |
+| Leverage | 2 | Benefits from solid import validation (F019) |
+| Complexity | 3 | Ledger replay + valuation edge cases |
+| Risk | 3 | Misleading as-of numbers if prices incomplete |
+| Readiness | 4 | Service existed; UI followed in delivery |
 
-**Recommendation:** Phase 3 after F019 import validation patterns.
+**Historical recommendation:** Phase 3 after F019. **Delivered / CLOSED.**
 
 ---
 
@@ -131,14 +137,14 @@ Scores are comparative tools, not absolute truth. Final ranking uses qualitative
 
 | Dimension | Score | Notes |
 |-----------|------:|-------|
-| Product Value | 3 | Faster ledger onboarding |
-| Strategic | 2 | Convenience, not core TOS |
-| Leverage | 2 | Shared validation with transaction write path |
-| Complexity | 2 | UI exists; needs PHP feature tests + edge cases |
-| Risk | 4 | Bad imports corrupt holdings/cash |
-| Readiness | 4 | Component + JS parser test |
+| Product Value | 3 | Onboarding / migration of transaction history |
+| Strategic | 2 | Data platform hygiene |
+| Leverage | 2 | Patterns feed F014 confidence |
+| Complexity | 2 | UI existed; harden all-or-nothing write |
+| Risk | 4 | Ledger corruption on bad import |
+| Readiness | 4 | Frontend + write path matured in delivery |
 
-**Recommendation:** Phase 3 — precede F014 UI if import quality gates are shared.
+**Historical recommendation:** Phase 3 before F014. **Delivered / CLOSED.**
 
 ---
 
@@ -146,14 +152,14 @@ Scores are comparative tools, not absolute truth. Final ranking uses qualitative
 
 | Dimension | Score | Notes |
 |-----------|------:|-------|
-| Product Value | 4 | Ops trust in OHLCV and corporate-action data |
-| Strategic | 5 | Foundational for production hardening |
-| Leverage | 5 | Enables F043; extends V1 F020 corporate actions |
-| Complexity | 4 | Full admin subsystem already shipped |
-| Risk | 4 | Wrong resolution corrupts prices/holdings |
-| Readiness | 4 | UI + services + migrations; sparse PHPUnit coverage |
+| Product Value | 4 | Trust in market data |
+| Strategic | 5 | Production hardening for TOS pipeline |
+| Leverage | 5 | Unlocks F043 safely |
+| Complexity | 4 | Detection + governance UX |
+| Risk | 4 | Wrong accept/reject decisions |
+| Readiness | 4 | DQ Center shipped + hardened |
 
-**Recommendation:** Phase 1 — **Market Data Quality** initiative anchor.
+**Historical recommendation:** Phase 1 parallel track. **Delivered / CLOSED.**
 
 ---
 
@@ -161,14 +167,14 @@ Scores are comparative tools, not absolute truth. Final ranking uses qualitative
 
 | Dimension | Score | Notes |
 |-----------|------:|-------|
-| Product Value | 3 | Ops repair after bad prices |
-| Strategic | 3 | Production maintenance |
-| Leverage | 3 | Depends on F042 issue/evidence model |
-| Complexity | 3 | Services + cpanel scripts exist |
-| Risk | 5 | Direct price/holding mutation |
-| Readiness | 4 | `CorporateActionPriceRepairServiceTest` |
+| Product Value | 3 | Correct adjusted history after CA |
+| Strategic | 3 | Completes Market Data Quality |
+| Leverage | 3 | Depends on F042 handoff |
+| Complexity | 3 | Factor repair + single-writer |
+| Risk | 5 | Incorrect price mutations |
+| Readiness | 4 | Delivered after F042 |
 
-**Recommendation:** Phase 2 — **after F042**; not standalone first.
+**Historical recommendation:** Phase 2 after F042. **Delivered / CLOSED.**
 
 ---
 
@@ -176,14 +182,14 @@ Scores are comparative tools, not absolute truth. Final ranking uses qualitative
 
 | Dimension | Score | Notes |
 |-----------|------:|-------|
-| Product Value | 3 | Cross-portfolio screener reuse |
-| Strategic | 3 | Collaboration within single-user multi-portfolio model |
-| Leverage | 2 | Benefits from F003 account clarity |
-| Complexity | 2 | Import API + tab exist |
-| Risk | 2 | Scope/watchlist mapping errors |
-| Readiness | 4 | Embedded in screener UI |
+| Product Value | 3 | Reuse screeners across portfolios |
+| Strategic | 3 | Collaboration within account |
+| Leverage | 2 | Benefits from F003 clarity |
+| Complexity | 2 | Import fork already existed |
+| Risk | 2 | Scope mapping / AuthZ |
+| Readiness | 4 | Hardened same-user sharing |
 
-**Recommendation:** Phase 3 — after Account & Access formalized.
+**Historical recommendation:** Phase 3. **Delivered / CLOSED.**
 
 ---
 
@@ -191,14 +197,14 @@ Scores are comparative tools, not absolute truth. Final ranking uses qualitative
 
 | Dimension | Score | Notes |
 |-----------|------:|-------|
-| Product Value | 4 | Holding-level monitoring beyond TOS Telegram recs |
-| Strategic | 3 | Parallel alert product |
-| Leverage | 3 | Reuses screener-like formula evaluator |
-| Complexity | 3 | Substantial existing implementation |
-| Risk | 3 | Alert noise, formula errors |
-| Readiness | 5 | Broad test suite |
+| Product Value | 4 | Holding-level alerts beyond TOS |
+| Strategic | 3 | Monitoring completeness |
+| Leverage | 3 | Uses daily sync |
+| Complexity | 3 | Policy evaluation ordering |
+| Risk | 3 | Confusion with Telegram TOS digests |
+| Readiness | 5 | Framework already rich |
 
-**Recommendation:** Phase 2 — **harden and spec** rather than rebuild. Distinct from TOS `NotificationEngine` (Telegram recommendation events).
+**Historical recommendation:** Phase 2. **Delivered / CLOSED.**
 
 ---
 
@@ -206,29 +212,29 @@ Scores are comparative tools, not absolute truth. Final ranking uses qualitative
 
 | Dimension | Score | Notes |
 |-----------|------:|-------|
-| Product Value | 3 | Strategy tuning / research |
-| Strategic | 4 | Platform API for analytics consumers |
-| Leverage | 3 | Uses evaluation + pipeline components read-only |
-| Complexity | 3 | Service exists; needs tests + contract stability |
-| Risk | 2 | Read-only preview |
-| Readiness | 3 | No PHPUnit feature tests |
+| Product Value | 3 | Research UI without persist side effects |
+| Strategic | 4 | Recommendation platform clarity |
+| Leverage | 3 | Shared decision core |
+| Complexity | 3 | Parity with generate path |
+| Risk | 2 | Contract churn |
+| Readiness | 3→5 | Feature tests added in delivery |
 
-**Recommendation:** Phase 3 — after core V2 foundations stable.
+**Historical recommendation:** Phase 3. **Delivered / CLOSED.**
 
 ---
 
-### F143 — In-App Contextual Help
+### F143 — In-app Contextual Help
 
 | Dimension | Score | Notes |
 |-----------|------:|-------|
-| Product Value | 3 | Reduces user error, supports onboarding |
-| Strategic | 2 | Documentation UX |
-| Leverage | 2 | Supports all pages including V1 TOS |
-| Complexity | 2 | System exists; ongoing content maintenance |
-| Risk | 1 | Low runtime risk |
-| Readiness | 5 | 43 topics + static HTML |
+| Product Value | 3 | Operator guidance |
+| Strategic | 2 | UX polish |
+| Leverage | 2 | Low unlock |
+| Complexity | 2 | Content governance |
+| Risk | 1 | Low |
+| Readiness | 5 | Runtime already shipped |
 
-**Recommendation:** Phase 4 — defer formal V2 until product churn slows (maintenance burden).
+**Historical recommendation:** Phase 4 formalization. **CLOSED** (pack only; no mandatory implementation phase).
 
 ---
 
@@ -236,55 +242,55 @@ Scores are comparative tools, not absolute truth. Final ranking uses qualitative
 
 | Dimension | Score | Notes |
 |-----------|------:|-------|
-| Product Value | 3 | Research notes separate from trading workflow |
-| Strategic | 2 | Parallel Knowledge product area |
+| Product Value | 3 | Research capture |
+| Strategic | 2 | Parallel knowledge product |
 | Leverage | 1 | Standalone |
 | Complexity | 3 | Rich editor; content lifecycle |
 | Risk | 2 | Low |
 | Readiness | 5 | Full feature + tests |
 
-**Recommendation:** Phase 4 — lowest strategic leverage; postpone formal V2 scope work.
+**Historical recommendation:** Phase 4 formalization. **CLOSED** (pack only; no mandatory implementation phase).
 
 ---
 
-## V2 initiative table
+## V2 initiative table (historical grouping — all CLOSED)
 
-| Initiative | Features | Priority | Dependencies | Main benefit | Main risk |
-|------------|----------|----------|--------------|--------------|-----------|
-| **Account & Access** | F003, F005 | High | V1 F004 password reset (done) | Multi-user platform readiness | Security/token handling |
-| **Market Data Quality** | F042 → F043 | High | V1 F020 corporate actions, OHLCV sync | Production data trust | Incorrect price repairs |
-| **Portfolio History & Import** | F019 → F014 | Medium | V1 transactions, snapshots | Bulk onboarding + as-of analytics | Ledger corruption on import |
-| **Monitoring & Alerts** | F127 | Medium | Daily price sync job | Holding-level alerts beyond TOS | Duplicate notification confusion with Telegram |
-| **Collaboration** | F060 | Medium | F003 account model | Screener reuse across portfolios | Scope mapping errors |
-| **Recommendation Platform** | F137 | Medium | V1 pipeline stable | Preview API for research UI | API contract churn |
-| **Knowledge & Guidance** | F143, F144 | Low | Product stability | UX and research capture | Documentation drift / maintenance cost |
-
----
-
-## What NOT to build yet (deliberate postponement)
-
-| Feature | Wait because |
-|---------|--------------|
-| **F144 Knowledge Board** | Fully shipped; formal V2 adds maintenance obligation without unlocking other V2 work |
-| **F143 Contextual help** | Fully shipped; content sync cost high while V1 still evolving |
-| **F043 Price repair** | High risk until F042 governance is formalized |
-| **F014 Historical holdings UI** | Backend exists; premature UI before F019 import validation patterns |
-| **F060 Shared screener import** | Already works; low urgency until multi-user/account initiative complete |
+| Initiative | Features | Historical priority | Dependencies | Final status |
+|------------|----------|---------------------|--------------|--------------|
+| **Account & Access** | F003, F005 | High | V1 F004 | **CLOSED** |
+| **Market Data Quality** | F042 → F043 | High | V1 F020 | **CLOSED** |
+| **Portfolio History & Import** | F019 → F014 | Medium | V1 transactions | **CLOSED** |
+| **Monitoring & Alerts** | F127 | Medium | Daily sync | **CLOSED** |
+| **Collaboration** | F060 | Medium | F003 | **CLOSED** |
+| **Recommendation Platform** | F137 | Medium | V1 pipeline | **CLOSED** |
+| **Knowledge & Guidance** | F143, F144 | Low | Product stability | **CLOSED** |
 
 ---
 
-## Final recommendation — first V2 initiative
+## Historical postponement rationale (superseded)
+
+*Planning-era “wait because” notes. All items below are now **CLOSED** as SD-035 initiatives. Residual product polish remains deferred/non-blocking per packs — not unfinished SD-035 work.*
+
+| Feature | Historical wait because | Current |
+|---------|-------------------------|---------|
+| **F144** | Formal V2 adds maintenance obligation | **CLOSED** (formalization done) |
+| **F143** | Content sync cost while V1 evolving | **CLOSED** (formalization done) |
+| **F043** | High risk until F042 formalized | **CLOSED** (after F042) |
+| **F014** | Premature UI before F019 patterns | **CLOSED** (after F019) |
+| **F060** | Low urgency until account initiative | **CLOSED** (after F003) |
+
+---
+
+## Historical recommendation — first V2 initiative (superseded)
 
 ### **Market Data Quality (F042)** — tied with **Account & Access (F003 + F005)** as parallel Phase 1 tracks
 
-If only **one** initiative starts first:
+Planning choice (2026-08-09): start F042 and/or F003+F005; do not start F043 until F042 formalized.
 
-**Choose F042 (Data Quality Center formalization)** when the primary V2 goal is **production hardening** and trust in market data feeding the frozen V1 TOS pipeline.
+**Outcome:** Both Phase 1 tracks and all later phases **delivered**. Sequencing guidance is **historical only**. There is **no first / next V2 initiative** remaining under SD-035.
 
-**Choose F003 + F005 (Account & Access)** when the primary V2 goal is **multi-user deployment** and collaboration prerequisites.
-
-Both can run in parallel with minimal overlap. **Do not start F043 until F042 is formalized.** *(Satisfied — both COMPLETE as of 2026-08-09.)*
+See [V2-FINAL-RECONCILIATION.md](./V2-FINAL-RECONCILIATION.md) and [V2-ROADMAP.md](./V2-ROADMAP.md).
 
 ---
 
-*See also: [V2-DEPENDENCIES.md](./V2-DEPENDENCIES.md), [V2-ROADMAP.md](./V2-ROADMAP.md)*
+*See also: [V2-FINAL-RECONCILIATION.md](./V2-FINAL-RECONCILIATION.md), [V2-DEPENDENCIES.md](./V2-DEPENDENCIES.md), [V2-ROADMAP.md](./V2-ROADMAP.md)*
