@@ -196,6 +196,8 @@ class AlertLifecycleOrderingTest extends TestCase
 
     public function test_daily_market_job_expires_before_evaluating_on_new_trading_day(): void
     {
+        $lifecycleSequence = [];
+
         $priceFetch = Mockery::mock(PriceFetchService::class);
         $metrics = Mockery::mock(MetricsUpdateService::class);
         $portfolio = Mockery::mock(PortfolioCalculationService::class);
@@ -225,11 +227,19 @@ class AlertLifecycleOrderingTest extends TestCase
         $alertExpiration->shouldReceive('expireBeforeTradingDay')
             ->once()
             ->ordered()
-            ->andReturn(1);
+            ->andReturnUsing(function () use (&$lifecycleSequence) {
+                $lifecycleSequence[] = 'expire';
+
+                return 1;
+            });
         $alertPolicyEvaluation->shouldReceive('evaluateAllProfiles')
             ->once()
             ->ordered()
-            ->andReturn(['profiles' => 0, 'policies' => 0, 'generated' => 0, 'skipped' => 0, 'holdings_checked' => 0]);
+            ->andReturnUsing(function () use (&$lifecycleSequence) {
+                $lifecycleSequence[] = 'evaluate';
+
+                return ['profiles' => 0, 'policies' => 0, 'generated' => 0, 'skipped' => 0, 'holdings_checked' => 0];
+            });
 
         $portfolio->shouldReceive('storeSnapshot')->zeroOrMoreTimes();
         $dailySyncStatus->shouldReceive('markSuccessful')->once();
@@ -254,5 +264,7 @@ class AlertLifecycleOrderingTest extends TestCase
             $alertPolicyEvaluation,
             $benchmarkSync,
         );
+
+        $this->assertSame(['expire', 'evaluate'], $lifecycleSequence);
     }
 }

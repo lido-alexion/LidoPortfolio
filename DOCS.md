@@ -295,6 +295,38 @@ Hub: [specs/architecture/governance/README.md](specs/architecture/governance/REA
 |------:|----------|-----|
 | 3.51 | [docs/v2/V2-FINAL-RECONCILIATION.md](docs/v2/V2-FINAL-RECONCILIATION.md) | Program-level status, dependencies, non-blockers, next phase |
 
+### 3.M V2.1 Product Hardening (post–SD-035)
+
+*Stabilization phase after V2 CLOSED. Scope = entire shipped product (V1 + V2). Read-only audit first — no new feature IDs.*
+
+| Order | Document | Why |
+|------:|----------|-----|
+| 3.52 | [docs/v2.1/V2.1-PRODUCT-HARDENING-AUDIT.md](docs/v2.1/V2.1-PRODUCT-HARDENING-AUDIT.md) | Full-suite baseline, capability inventory, shadow features, P0–P2 backlog, execution order |
+| 3.53 | [docs/v2.1/WS-A-TEST-BASELINE-CLEANUP.md](docs/v2.1/WS-A-TEST-BASELINE-CLEANUP.md) | WS-A: PHPUnit baseline stabilized (679/679 green) |
+| 3.54 | [docs/v2.1/WS-B-FINANCIAL-AUTHZ-AUDIT.md](docs/v2.1/WS-B-FINANCIAL-AUTHZ-AUDIT.md) | WS-B: financial AuthZ audit + D1/D2/D5 fixes; soft reservation (D4) |
+| 3.55 | [docs/v2.1/WS-C-SHADOW-FEATURE-INVENTORY.md](docs/v2.1/WS-C-SHADOW-FEATURE-INVENTORY.md) | WS-C: shadow feature inventory + retrospective pack plan (discovery only) |
+| 3.56 | [docs/v2.1/CASH-MANAGEMENT-SPEC.md](docs/v2.1/CASH-MANAGEMENT-SPEC.md) | Cash Management retrospective CURRENT spec (first WS-C pack) |
+| 3.57 | [docs/v2.1/CASH-MANAGEMENT-BOUNDARY.md](docs/v2.1/CASH-MANAGEMENT-BOUNDARY.md) | Ownership vs TransactionWriteService / F019 / F014 / reservations |
+| 3.58 | [docs/v2.1/CASH-MANAGEMENT-POLICY-DECISIONS.md](docs/v2.1/CASH-MANAGEMENT-POLICY-DECISIONS.md) | Policy register (incl. soft reservation DECIDED) |
+| 3.59 | [docs/v2.1/CASH-MANAGEMENT-IMPLEMENTATION-GAP-MATRIX.md](docs/v2.1/CASH-MANAGEMENT-IMPLEMENTATION-GAP-MATRIX.md) | Gap / test / doc matrix post–WS-B |
+| 3.60 | [docs/v2.1/PORTFOLIO-SNAPSHOTS-SPEC.md](docs/v2.1/PORTFOLIO-SNAPSHOTS-SPEC.md) | F015 Portfolio Snapshots retrospective CURRENT spec (WS-C2) |
+| 3.61 | [docs/v2.1/PORTFOLIO-SNAPSHOTS-BOUNDARY.md](docs/v2.1/PORTFOLIO-SNAPSHOTS-BOUNDARY.md) | Ownership vs F014 / ledger / Cash / Dashboard / F019 |
+| 3.62 | [docs/v2.1/PORTFOLIO-SNAPSHOTS-POLICY-DECISIONS.md](docs/v2.1/PORTFOLIO-SNAPSHOTS-POLICY-DECISIONS.md) | Policy register (rebuildable cache SoT; silent-zero CURRENT) |
+| 3.63 | [docs/v2.1/PORTFOLIO-SNAPSHOTS-IMPLEMENTATION-GAP-MATRIX.md](docs/v2.1/PORTFOLIO-SNAPSHOTS-IMPLEMENTATION-GAP-MATRIX.md) | Gap / test / doc matrix for F015 |
+| 3.64 | [docs/v2.1/DASHBOARD-SPEC.md](docs/v2.1/DASHBOARD-SPEC.md) | Dashboard retrospective CURRENT spec (WS-C3) |
+| 3.65 | [docs/v2.1/DASHBOARD-BOUNDARY.md](docs/v2.1/DASHBOARD-BOUNDARY.md) | Presentation vs Cash / F014 / F015 / F137 / Explorer / alerts |
+| 3.66 | [docs/v2.1/DASHBOARD-POLICY-DECISIONS.md](docs/v2.1/DASHBOARD-POLICY-DECISIONS.md) | Policy register (live vs snapshot ownership; client cache) |
+| 3.67 | [docs/v2.1/DASHBOARD-IMPLEMENTATION-GAP-MATRIX.md](docs/v2.1/DASHBOARD-IMPLEMENTATION-GAP-MATRIX.md) | Gap / test / doc matrix for Dashboard |
+| 3.68 | [docs/v2.1/CALENDAR-SPEC.md](docs/v2.1/CALENDAR-SPEC.md) | User Calendar retrospective CURRENT spec (WS-C4) |
+| 3.69 | [docs/v2.1/CALENDAR-BOUNDARY.md](docs/v2.1/CALENDAR-BOUNDARY.md) | Ownership vs TradingCalendar / Dashboard / ledger / F127 |
+| 3.70 | [docs/v2.1/CALENDAR-POLICY-DECISIONS.md](docs/v2.1/CALENDAR-POLICY-DECISIONS.md) | Policy register (user events + admin trade holidays) |
+| 3.71 | [docs/v2.1/CALENDAR-IMPLEMENTATION-GAP-MATRIX.md](docs/v2.1/CALENDAR-IMPLEMENTATION-GAP-MATRIX.md) | Gap / test / doc matrix for User Calendar |
+| 3.72 | [docs/v2.1/EXPLORER-ANALYTICS-SPEC.md](docs/v2.1/EXPLORER-ANALYTICS-SPEC.md) | Explorer / Analytics retrospective CURRENT spec (WS-C5) |
+| 3.73 | [docs/v2.1/EXPLORER-ANALYTICS-BOUNDARY.md](docs/v2.1/EXPLORER-ANALYTICS-BOUNDARY.md) | Ownership vs Dashboard / F015 / F137 / Screeners / DQ / sync |
+| 3.74 | [docs/v2.1/EXPLORER-ANALYTICS-POLICY-DECISIONS.md](docs/v2.1/EXPLORER-ANALYTICS-POLICY-DECISIONS.md) | Policy register (cache-only Explorer; RS formula; SD-031 owners) |
+| 3.75 | [docs/v2.1/EXPLORER-ANALYTICS-IMPLEMENTATION-GAP-MATRIX.md](docs/v2.1/EXPLORER-ANALYTICS-IMPLEMENTATION-GAP-MATRIX.md) | Gap / test / doc matrix for Explorer / Analytics |
+| 3.76 | [docs/v2.1/V2.1-FINAL-RECONCILIATION.md](docs/v2.1/V2.1-FINAL-RECONCILIATION.md) | **V2.1 CLOSED** — hardening + priority packs; V3 candidates unprioritized |
+
 ---
 
 ## 4. Implementation status & audit

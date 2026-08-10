@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api;
 
 use App\Engines\Execution\ExecutionEngine;
 use App\Http\Controllers\Controller;
-use App\Jobs\BackfillHistoricalDataJob;
 use App\Models\Holding;
 use App\Models\Transaction;
 use App\Services\CashManagementService;
@@ -15,7 +14,7 @@ use App\Services\TransactionRealizationService;
 use App\Services\TransactionWriteService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use InvalidArgumentException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class TransactionController extends Controller
@@ -110,37 +109,54 @@ class TransactionController extends Controller
             }
         }
 
-        $transaction = $this->writes->create(
-            $profile,
-            $stock,
-            [
-                'type' => $validated['type'],
-                'quantity' => $validated['quantity'],
-                'price' => $validated['price'],
-                'fees' => $validated['fees'] ?? 0,
-                'transaction_date' => $validated['transaction_date'],
-                'notes' => $validated['notes'] ?? null,
-                'source' => $validated['source'] ?? null,
-                'recommendation_id' => $validated['recommendation_id'] ?? null,
-            ],
-            softFailSnapshots: true,
-            user: $request->user(),
-            applyCash: true,
-        );
+        $input = [
+            'type' => $validated['type'],
+            'quantity' => $validated['quantity'],
+            'price' => $validated['price'],
+            'fees' => $validated['fees'] ?? 0,
+            'transaction_date' => $validated['transaction_date'],
+            'notes' => $validated['notes'] ?? null,
+            'source' => $validated['source'] ?? null,
+            'recommendation_id' => $validated['recommendation_id'] ?? null,
+        ];
 
         $tos = null;
+        // WSB-D3 (low-risk): when linking a recommendation, keep create + completion
+        // inside one DB transaction so cash and reservation convert commit together.
         if (! empty($validated['recommendation_id'])) {
-            $rec = $this->execution->completeRecommendationFromTransaction(
-                $profile,
-                $transaction,
-                $request->user(),
-            );
+            $transaction = DB::transaction(function () use ($profile, $stock, $input, $request) {
+                $tx = $this->writes->createFinancialUnit(
+                    $profile,
+                    $stock,
+                    $input,
+                    $request->user(),
+                    applyCash: true,
+                );
+                $this->execution->completeRecommendationFromTransaction(
+                    $profile,
+                    $tx,
+                    $request->user(),
+                );
+
+                return $tx;
+            });
+            $this->writes->applyPostCommitSideEffects($profile, $stock, $transaction, softFailSnapshots: true);
+            $rec = \App\Models\TradingRecommendation::query()->find((int) $validated['recommendation_id']);
             if ($rec) {
                 $tos = [
                     'recommendation_id' => $rec->id,
                     'recommendation_status' => $rec->status,
                 ];
             }
+        } else {
+            $transaction = $this->writes->create(
+                $profile,
+                $stock,
+                $input,
+                softFailSnapshots: true,
+                user: $request->user(),
+                applyCash: true,
+            );
         }
 
         return response()->json([
@@ -161,7 +177,6 @@ class TransactionController extends Controller
     public function update(Request $request, Transaction $transaction): JsonResponse
     {
         $profile = \activePortfolio();
-        $previousTransactionDate = $transaction->transaction_date;
 
         if (! $request->filled('stock_id') && ! $request->filled('symbol')) {
             $request->merge(['stock_id' => $transaction->stock_id]);
@@ -169,77 +184,59 @@ class TransactionController extends Controller
 
         $stock = $this->stocks->resolve($request, allowCreate: false);
         $validated = $this->validateTransaction($request, $transaction);
-        $validated['stock_id'] = $stock->id;
 
-        if ($validated['type'] === 'sell') {
-            $tempAvailable = $this->holdings->getAvailableQuantity($profile, $stock);
-            $currentQty = (float) $transaction->quantity;
-            $available = $transaction->type === 'sell'
-                ? $tempAvailable + $currentQty
-                : $tempAvailable;
-
-            if ($validated['quantity'] > $available + 0.00001) {
-                throw ValidationException::withMessages([
-                    'quantity' => ['Sell quantity cannot exceed current holding quantity.'],
-                ]);
-            }
+        $input = [
+            'type' => $validated['type'] ?? $transaction->type,
+            'quantity' => $validated['quantity'],
+            'price' => $validated['price'],
+            'fees' => $validated['fees'] ?? 0,
+            'transaction_date' => $validated['transaction_date'],
+            'notes' => $validated['notes'] ?? $transaction->notes,
+        ];
+        if (array_key_exists('source', $validated)) {
+            $input['source'] = $validated['source'];
+        }
+        if (array_key_exists('recommendation_id', $validated)) {
+            $input['recommendation_id'] = $validated['recommendation_id'];
         }
 
-        $transaction->update($validated);
-        $stock = $transaction->stock;
-        $this->holdings->recalculateForProfileStock($profile, $stock);
-        $this->realizations->recalculateForProfileStock($profile, $stock);
-        BackfillHistoricalDataJob::dispatchSync($stock->id, $validated['transaction_date']);
-
-        $this->snapshotRebuild->rebuildAfterTransactionChange(
+        $updated = $this->writes->update(
             $profile,
-            $previousTransactionDate,
-            $validated['transaction_date'],
+            $transaction,
+            $stock,
+            $input,
+            softFailSnapshots: true,
+            user: $request->user(),
+            applyCash: true,
         );
 
-        return response()->json(['data' => $transaction->fresh()->load('stock')]);
+        return response()->json([
+            'data' => $updated->fresh()->load('stock'),
+            'cash' => $this->cash->summary($profile),
+        ]);
     }
 
     public function destroy(Request $request, Transaction $transaction): JsonResponse
     {
         $profile = \activePortfolio();
 
-        if ($transaction->type === 'buy') {
-            try {
-                $this->holdings->assertReplayValidAfterDeleting($profile, $transaction);
-            } catch (InvalidArgumentException) {
-                throw ValidationException::withMessages([
-                    'transaction' => [
-                        'Cannot delete this buy transaction because remaining sell transactions would exceed your holding quantity. Delete the related sell transaction(s) first, then try again.',
-                    ],
-                ]);
-            }
-        }
-
-        $stock = $transaction->stock;
-        $deletedDate = $transaction->transaction_date;
-
         $tosRevert = null;
-        $this->cash->reverseTradeTransaction($profile, $transaction, $request->user());
-
-        $tosRevert = $this->execution->revertLinkedFillBeforeTransactionDelete(
+        $this->writes->delete(
             $profile,
             $transaction,
             $request->user(),
+            function (Transaction $tx) use ($profile, $request, &$tosRevert) {
+                $tosRevert = $this->execution->revertLinkedFillBeforeTransactionDelete(
+                    $profile,
+                    $tx,
+                    $request->user(),
+                );
+            },
+            softFailSnapshots: true,
         );
 
-        $transaction->delete();
-        $this->holdings->recalculateForProfileStock($profile, $stock);
-        $this->realizations->recalculateForProfileStock($profile, $stock);
-
-        $this->snapshotRebuild->rebuildAfterTransactionChange(
-            $profile,
-            $deletedDate,
-            null,
-        );
-
-        $payload = ['message' => 'Transaction deleted'];
-        if ($tosRevert['reverted']) {
+        $payload = ['message' => 'Transaction deleted', 'cash' => $this->cash->summary($profile)];
+        if (is_array($tosRevert) && ($tosRevert['reverted'] ?? false)) {
             $payload['tos'] = [
                 'order_cancelled' => true,
                 'order_id' => $tosRevert['order_id'],

@@ -210,7 +210,10 @@ class UniversePriceSyncServiceTest extends TestCase
             $logger,
         );
 
-        $service->sync(mode: 'daily', processAll: false, batchSize: 1);
+        $result = $service->sync(mode: 'daily', processAll: false, batchSize: 1);
+
+        $this->assertSame(1, $result['processed']);
+        $this->assertSame(1, $result['succeeded']);
     }
 
     public function test_sync_batch_prioritizes_holdings_before_other_stocks(): void

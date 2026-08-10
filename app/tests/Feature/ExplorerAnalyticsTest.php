@@ -136,10 +136,11 @@ class ExplorerAnalyticsTest extends TestCase
         ]);
 
         $dates = [
-            now()->subMonths(12)->subDays(2)->toDateString(),
-            now()->subMonths(6)->subDays(2)->toDateString(),
-            now()->subMonths(3)->subDays(2)->toDateString(),
+            \App\Support\TradingCalendar::normalizeToSessionDate(now()->subMonths(12)->subDays(2))->toDateString(),
+            \App\Support\TradingCalendar::normalizeToSessionDate(now()->subMonths(6)->subDays(2))->toDateString(),
+            \App\Support\TradingCalendar::normalizeToSessionDate(now()->subMonths(3)->subDays(2))->toDateString(),
         ];
+        $latestSession = \App\Support\TradingCalendar::normalizeToSessionDate(now()->subDay())->toDateString();
 
         foreach ([$stock, $bankIndex] as $s) {
             foreach ($dates as $date) {
@@ -155,7 +156,7 @@ class ExplorerAnalyticsTest extends TestCase
             }
             StockPrice::query()->create([
                 'stock_id' => $s->id,
-                'price_date' => now()->subDay()->toDateString(),
+                'price_date' => $latestSession,
                 'close_price' => $s->symbol === 'CACHED' ? 120 : 105,
                 'adjusted_close_price' => $s->symbol === 'CACHED' ? 120 : 105,
                 'provider_source' => 'test',

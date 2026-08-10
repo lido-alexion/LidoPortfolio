@@ -2,6 +2,7 @@
 
 namespace Tests\Unit;
 
+use App\Services\DataQualityGuardService;
 use App\Services\IndexCatalogService;
 use App\Services\RelativeStrengthService;
 use App\Services\StockPriceHistoryService;
@@ -20,7 +21,8 @@ class RelativeStrengthServiceTest extends TestCase
     {
         $history = Mockery::mock(StockPriceHistoryService::class);
         $indexCatalog = Mockery::mock(IndexCatalogService::class);
-        $service = new RelativeStrengthService($history, $indexCatalog);
+        $dataQualityGuard = Mockery::mock(DataQualityGuardService::class);
+        $service = new RelativeStrengthService($history, $indexCatalog, $dataQualityGuard);
         $this->assertInstanceOf(RelativeStrengthService::class, $service);
     }
 }

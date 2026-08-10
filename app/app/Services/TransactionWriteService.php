@@ -49,6 +49,96 @@ class TransactionWriteService
     }
 
     /**
+     * Atomically replace an existing trade's economics (WSB-D1).
+     * Reverse prior cash effect → update ledger → holdings/realizations → apply new cash.
+     *
+     * @param  array<string, mixed>  $input
+     */
+    public function update(
+        PortfolioProfile $profile,
+        Transaction $transaction,
+        Stock $stock,
+        array $input,
+        bool $softFailSnapshots = true,
+        ?User $user = null,
+        bool $applyCash = true,
+    ): Transaction {
+        $previousDate = $transaction->transaction_date?->toDateString()
+            ?? (string) $transaction->getRawOriginal('transaction_date');
+
+        $updated = DB::transaction(function () use ($profile, $transaction, $stock, $input, $user, $applyCash) {
+            return $this->updateFinancialUnit($profile, $transaction, $stock, $input, $user, $applyCash);
+        });
+
+        if (! app()->runningUnitTests()) {
+            $type = strtolower((string) $updated->type);
+            $dateOnly = $updated->transaction_date?->toDateString()
+                ?? (string) $updated->getRawOriginal('transaction_date');
+
+            if ($type === 'buy') {
+                try {
+                    BackfillHistoricalDataJob::dispatchSync($stock->id, $dateOnly);
+                } catch (\Throwable) {
+                    // Buy is saved; price sync can be retried from Holdings → OHLCV → Force sync.
+                }
+            }
+
+            try {
+                $this->snapshots->rebuildAfterTransactionChange(
+                    $profile,
+                    $previousDate,
+                    $dateOnly,
+                );
+            } catch (\Throwable $e) {
+                if (! $softFailSnapshots) {
+                    throw $e;
+                }
+            }
+        }
+
+        return $updated->load('stock');
+    }
+
+    /**
+     * Atomically reverse cash, delete ledger row, and recalculate holdings/realizations (WSB-D2).
+     * Optional $beforeDelete runs inside the same DB transaction (e.g. TOS fill revert).
+     * Snapshots rebuild after commit.
+     *
+     * @param  callable(Transaction): mixed|null  $beforeDelete
+     * @return array{deleted_date: string, stock: Stock, before_delete_result: mixed}
+     */
+    public function delete(
+        PortfolioProfile $profile,
+        Transaction $transaction,
+        ?User $user = null,
+        ?callable $beforeDelete = null,
+        bool $softFailSnapshots = true,
+    ): array {
+        $deletedDate = $transaction->transaction_date?->toDateString()
+            ?? (string) $transaction->getRawOriginal('transaction_date');
+        $stockId = (int) $transaction->stock_id;
+
+        $result = DB::transaction(function () use ($profile, $transaction, $user, $beforeDelete) {
+            return $this->deleteFinancialUnit($profile, $transaction, $user, $beforeDelete);
+        });
+
+        $stock = Stock::query()->findOrFail($stockId);
+        try {
+            $this->snapshots->rebuildAfterTransactionChange($profile, $deletedDate, null);
+        } catch (\Throwable $e) {
+            if (! $softFailSnapshots) {
+                throw $e;
+            }
+        }
+
+        return [
+            'deleted_date' => $deletedDate,
+            'stock' => $stock,
+            'before_delete_result' => $result['before_delete_result'],
+        ];
+    }
+
+    /**
      * Insert + holdings + realizations + optional cash. Caller must wrap in DB::transaction when composing larger units.
      *
      * @param  array<string, mixed>  $input
@@ -67,6 +157,138 @@ class TransactionWriteService
         }
 
         return $transaction;
+    }
+
+    /**
+     * Financial unit for update. Caller must wrap in DB::transaction when composing larger units.
+     *
+     * @param  array<string, mixed>  $input
+     */
+    public function updateFinancialUnit(
+        PortfolioProfile $profile,
+        Transaction $transaction,
+        Stock $stock,
+        array $input,
+        ?User $user = null,
+        bool $applyCash = true,
+    ): Transaction {
+        if ((int) $transaction->profile_id !== (int) $profile->id) {
+            throw ValidationException::withMessages([
+                'transaction' => ['Transaction does not belong to this portfolio.'],
+            ]);
+        }
+
+        $normalized = $this->normalizeCore($input);
+        $oldStockId = (int) $transaction->stock_id;
+        $oldType = strtolower((string) $transaction->type);
+        $oldQty = (float) $transaction->quantity;
+
+        if ($normalized['type'] === 'sell') {
+            $tempAvailable = $this->holdings->getAvailableQuantity($profile, $stock);
+            $available = $tempAvailable;
+            if ($oldStockId === (int) $stock->id && $oldType === 'sell') {
+                $available = $tempAvailable + $oldQty;
+            }
+
+            if ($normalized['quantity'] > $available + 0.00001) {
+                throw ValidationException::withMessages([
+                    'quantity' => ['Sell quantity cannot exceed current holding quantity.'],
+                ]);
+            }
+        }
+
+        if ($applyCash) {
+            $this->cash->reverseTradeTransaction($profile, $transaction, $user);
+        }
+
+        $fill = [
+            'stock_id' => $stock->id,
+            'type' => $normalized['type'],
+            'quantity' => $normalized['quantity'],
+            'price' => $normalized['price'],
+            'fees' => $normalized['fees'],
+            'transaction_date' => $normalized['transaction_date'],
+            'notes' => array_key_exists('notes', $input) ? $normalized['notes'] : $transaction->notes,
+        ];
+        if (array_key_exists('source', $input) || array_key_exists('recommendation_id', $input)) {
+            $fill['source'] = $normalized['source'];
+        }
+        if (array_key_exists('recommendation_id', $input)) {
+            $fill['recommendation_id'] = $normalized['recommendation_id'];
+        }
+
+        $transaction->forceFill($fill)->save();
+
+        $transaction = $transaction->fresh();
+
+        if ($oldStockId !== (int) $stock->id) {
+            $oldStock = Stock::query()->find($oldStockId);
+            if ($oldStock) {
+                $this->applyLedgerDerivedState($profile, $oldStock);
+            }
+        }
+
+        $this->applyLedgerDerivedState($profile, $stock);
+
+        if ($applyCash) {
+            $this->cash->applyTradeTransaction($profile, $transaction, $user);
+        }
+
+        return $transaction;
+    }
+
+    /**
+     * Financial unit for delete. Caller must wrap in DB::transaction when composing larger units.
+     *
+     * @param  callable(Transaction): mixed|null  $beforeDelete
+     * @return array{before_delete_result: mixed, stock: Stock}
+     */
+    public function deleteFinancialUnit(
+        PortfolioProfile $profile,
+        Transaction $transaction,
+        ?User $user = null,
+        ?callable $beforeDelete = null,
+        bool $applyCash = true,
+    ): array {
+        if ((int) $transaction->profile_id !== (int) $profile->id) {
+            throw ValidationException::withMessages([
+                'transaction' => ['Transaction does not belong to this portfolio.'],
+            ]);
+        }
+
+        $stock = $transaction->stock;
+        if (! $stock) {
+            $stock = Stock::query()->findOrFail((int) $transaction->stock_id);
+        }
+
+        if (strtolower((string) $transaction->type) === 'buy') {
+            try {
+                $this->holdings->assertReplayValidAfterDeleting($profile, $transaction);
+            } catch (\InvalidArgumentException) {
+                throw ValidationException::withMessages([
+                    'transaction' => [
+                        'Cannot delete this buy transaction because remaining sell transactions would exceed your holding quantity. Delete the related sell transaction(s) first, then try again.',
+                    ],
+                ]);
+            }
+        }
+
+        if ($applyCash) {
+            $this->cash->reverseTradeTransaction($profile, $transaction, $user);
+        }
+
+        $beforeDeleteResult = null;
+        if ($beforeDelete !== null) {
+            $beforeDeleteResult = $beforeDelete($transaction);
+        }
+
+        $transaction->delete();
+        $this->applyLedgerDerivedState($profile, $stock);
+
+        return [
+            'before_delete_result' => $beforeDeleteResult,
+            'stock' => $stock,
+        ];
     }
 
     /**

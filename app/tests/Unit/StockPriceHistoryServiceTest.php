@@ -8,6 +8,7 @@ use App\Services\IgnoredPriceGapService;
 use App\Services\PortfolioLoggerService;
 use App\Services\PriceFetchService;
 use App\Services\StockPriceHistoryService;
+use App\Support\TradingCalendar;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
@@ -82,9 +83,14 @@ $dates = [];
         $stock = $this->makeStock('GRW');
         $benchmark = $this->makeStock('NIFTY50', true);
 
+        // Anchor and latest rows must land on equity sessions — getCloseOnOrBeforeDate
+        // skips weekend/holiday price_date rows.
+        $anchorDate = TradingCalendar::normalizeToSessionDate(now()->subMonths(1)->subDays(5))->toDateString();
+        $latestDate = TradingCalendar::normalizeToSessionDate(now()->subDay())->toDateString();
+
         StockPrice::query()->create([
             'stock_id' => $stock->id,
-            'price_date' => now()->subMonths(1)->subDays(5)->toDateString(),
+            'price_date' => $anchorDate,
             'close_price' => 100,
             'adjusted_close_price' => 100,
             'provider_source' => 'test',
@@ -93,7 +99,7 @@ $dates = [];
         ]);
         StockPrice::query()->create([
             'stock_id' => $stock->id,
-            'price_date' => now()->subDay()->toDateString(),
+            'price_date' => $latestDate,
             'close_price' => 110,
             'adjusted_close_price' => 110,
             'provider_source' => 'test',
@@ -103,7 +109,7 @@ $dates = [];
 
         StockPrice::query()->create([
             'stock_id' => $benchmark->id,
-            'price_date' => now()->subMonths(1)->subDays(5)->toDateString(),
+            'price_date' => $anchorDate,
             'close_price' => 200,
             'adjusted_close_price' => 200,
             'provider_source' => 'test',
@@ -112,7 +118,7 @@ $dates = [];
         ]);
         StockPrice::query()->create([
             'stock_id' => $benchmark->id,
-            'price_date' => now()->subDay()->toDateString(),
+            'price_date' => $latestDate,
             'close_price' => 210,
             'adjusted_close_price' => 210,
             'provider_source' => 'test',

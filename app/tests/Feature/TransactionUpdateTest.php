@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\Stock;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\CashManagementService;
+use App\Services\TransactionWriteService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -21,6 +23,7 @@ class TransactionUpdateTest extends TestCase
             'password' => 'password123',
         ]);
         $profile = $this->defaultPortfolioFor($user);
+        app(CashManagementService::class)->deposit($profile, 10_000, 'seed', $user);
 
         $stock = Stock::query()->create([
             'symbol' => 'UPD1',
@@ -30,15 +33,19 @@ class TransactionUpdateTest extends TestCase
             'is_benchmark' => false,
         ]);
 
-        $transaction = Transaction::query()->create([
-            'profile_id' => $profile->id,
-            'stock_id' => $stock->id,
-            'type' => 'buy',
-            'quantity' => 5,
-            'price' => 100,
-            'fees' => 0,
-            'transaction_date' => '2026-01-10',
-        ]);
+        $transaction = app(TransactionWriteService::class)->create(
+            $profile,
+            $stock,
+            [
+                'type' => 'buy',
+                'quantity' => 5,
+                'price' => 100,
+                'fees' => 0,
+                'transaction_date' => '2026-01-10',
+            ],
+            user: $user,
+            applyCash: true,
+        );
 
         $this->actingAs($user);
 
@@ -60,6 +67,11 @@ class TransactionUpdateTest extends TestCase
             'id' => $transaction->id,
             'price' => 110,
         ]);
+        $this->assertEqualsWithDelta(
+            9_450.0,
+            app(CashManagementService::class)->balance($profile),
+            0.001,
+        );
     }
 
     public function test_owner_can_delete_their_transaction(): void
@@ -70,6 +82,7 @@ class TransactionUpdateTest extends TestCase
             'password' => 'password123',
         ]);
         $profile = $this->defaultPortfolioFor($user);
+        app(CashManagementService::class)->deposit($profile, 5_000, 'seed', $user);
 
         $stock = Stock::query()->create([
             'symbol' => 'DEL1',
@@ -79,15 +92,19 @@ class TransactionUpdateTest extends TestCase
             'is_benchmark' => false,
         ]);
 
-        $transaction = Transaction::query()->create([
-            'profile_id' => $profile->id,
-            'stock_id' => $stock->id,
-            'type' => 'buy',
-            'quantity' => 2,
-            'price' => 75,
-            'fees' => 0,
-            'transaction_date' => '2026-03-01',
-        ]);
+        $transaction = app(TransactionWriteService::class)->create(
+            $profile,
+            $stock,
+            [
+                'type' => 'buy',
+                'quantity' => 2,
+                'price' => 75,
+                'fees' => 0,
+                'transaction_date' => '2026-03-01',
+            ],
+            user: $user,
+            applyCash: true,
+        );
 
         $this->actingAs($user);
 
@@ -97,6 +114,11 @@ class TransactionUpdateTest extends TestCase
         $this->assertDatabaseMissing('portfolio_transactions', [
             'id' => $transaction->id,
         ]);
+        $this->assertEqualsWithDelta(
+            5_000.0,
+            app(CashManagementService::class)->balance($profile),
+            0.001,
+        );
     }
 
     public function test_cannot_delete_buy_when_orphan_sells_would_remain(): void

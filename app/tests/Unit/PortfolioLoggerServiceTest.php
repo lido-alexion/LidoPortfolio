@@ -38,19 +38,24 @@ class PortfolioLoggerServiceTest extends TestCase
         $settings = Mockery::mock(SettingsService::class);
         $settings->shouldReceive('get')->with('backend_log_level', 'info')->andReturn('debug');
 
+        $logged = false;
         $channel = Mockery::mock();
         $channel->shouldReceive('log')
             ->once()
-            ->withArgs(function (string $level, string $message, array $context) {
-                return $level === 'error'
+            ->withArgs(function (string $level, string $message, array $context) use (&$logged) {
+                $logged = $level === 'error'
                     && str_contains($message, 'NSE failed')
                     && ($context['request_id'] ?? null) === 'test-req-123'
                     && ($context['category'] ?? null) === 'Provider';
+
+                return $logged;
             });
         Log::shouldReceive('channel')->with('provider')->andReturn($channel);
 
         $logger = new PortfolioLoggerService($settings);
         $logger->provider('error', 'NSE failed', ['symbol' => 'INFY']);
+
+        $this->assertTrue($logged);
     }
 
     public function test_log_frontend_payload_sanitizes_secrets(): void
@@ -58,15 +63,18 @@ class PortfolioLoggerServiceTest extends TestCase
         $settings = Mockery::mock(SettingsService::class);
         $settings->shouldReceive('get')->with('backend_log_level', 'info')->andReturn('debug');
 
+        $sanitized = false;
         $channel = Mockery::mock();
         $channel->shouldReceive('log')
             ->once()
-            ->withArgs(function (string $level, string $message, array $context) {
+            ->withArgs(function (string $level, string $message, array $context) use (&$sanitized) {
                 $encoded = json_encode($context);
 
-                return $level === 'error'
+                $sanitized = $level === 'error'
                     && ! str_contains($encoded, 'super-secret')
                     && str_contains($encoded, '[REDACTED]');
+
+                return $sanitized;
             });
         Log::shouldReceive('channel')->with('frontend')->andReturn($channel);
 
@@ -76,5 +84,7 @@ class PortfolioLoggerServiceTest extends TestCase
             'message' => 'token=abc123 failed',
             'extra' => ['password' => 'super-secret'],
         ]);
+
+        $this->assertTrue($sanitized);
     }
 }

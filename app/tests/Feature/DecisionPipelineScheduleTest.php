@@ -90,13 +90,20 @@ class DecisionPipelineScheduleTest extends TestCase
             TradingOsConfig::KEY_PIPELINE.'.run_after_daily_sync' => true,
         ]);
 
+        $pipelineTriggered = false;
         Artisan::shouldReceive('call')
             ->once()
             ->with('portfolio:decision-pipeline', ['--trigger' => 'post-sync'])
-            ->andReturn(0);
+            ->andReturnUsing(function () use (&$pipelineTriggered) {
+                $pipelineTriggered = true;
+
+                return 0;
+            });
         Artisan::shouldReceive('output')->andReturn('OK');
 
         $this->runSuccessfulDailyMarketJob();
+
+        $this->assertTrue($pipelineTriggered);
     }
 
     public function test_successful_daily_sync_does_not_trigger_pipeline_when_hook_disabled(): void
@@ -108,7 +115,12 @@ class DecisionPipelineScheduleTest extends TestCase
 
         Artisan::shouldReceive('call')->never();
 
-        $this->runSuccessfulDailyMarketJob();
+        $syncCompleted = false;
+        $this->runSuccessfulDailyMarketJob(onSuccess: function () use (&$syncCompleted) {
+            $syncCompleted = true;
+        });
+
+        $this->assertTrue($syncCompleted);
     }
 
     public function test_partial_daily_sync_does_not_trigger_pipeline(): void
@@ -120,7 +132,12 @@ class DecisionPipelineScheduleTest extends TestCase
 
         Artisan::shouldReceive('call')->never();
 
-        $this->runPartialDailyMarketJob();
+        $partialStatus = null;
+        $this->runPartialDailyMarketJob(onComplete: function (string $status) use (&$partialStatus) {
+            $partialStatus = $status;
+        });
+
+        $this->assertSame('partial', $partialStatus);
     }
 
     public function test_post_sync_trigger_marks_automatic_daily_guard_on_success(): void
@@ -152,7 +169,7 @@ class DecisionPipelineScheduleTest extends TestCase
         $this->assertSame('post-sync', app(DecisionPipelineScheduleService::class)->lastAutomaticTrigger());
     }
 
-    protected function runSuccessfulDailyMarketJob(): void
+    protected function runSuccessfulDailyMarketJob(?callable $onSuccess = null): void
     {
         $priceFetch = Mockery::mock(PriceFetchService::class);
         $metrics = Mockery::mock(MetricsUpdateService::class);
@@ -197,9 +214,13 @@ class DecisionPipelineScheduleTest extends TestCase
             $alertPolicyEvaluation,
             $benchmarkSync,
         );
+
+        if ($onSuccess !== null) {
+            $onSuccess();
+        }
     }
 
-    protected function runPartialDailyMarketJob(): void
+    protected function runPartialDailyMarketJob(?callable $onComplete = null): void
     {
         $user = User::query()->create([
             'name' => 'Partial Sync User',
@@ -249,7 +270,12 @@ class DecisionPipelineScheduleTest extends TestCase
 
         $syncLog->shouldReceive('beginRun')->once()->andReturn('run-test');
         $syncLog->shouldReceive('log')->atLeast()->once();
-        $syncLog->shouldReceive('completeRun')->once()->with('run-test', 'partial', Mockery::type('array'), Mockery::type('string'));
+        $syncLog->shouldReceive('completeRun')->once()->with('run-test', 'partial', Mockery::type('array'), Mockery::type('string'))
+            ->andReturnUsing(function (string $runId, string $status) use ($onComplete) {
+                if ($onComplete !== null) {
+                    $onComplete($status);
+                }
+            });
 
         $job = new DailyMarketDataJob();
         $job->handle(

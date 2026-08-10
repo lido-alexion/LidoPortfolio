@@ -70,8 +70,17 @@ class ExecutionEngine
             return $recommendation;
         }
 
-        if (! $recommendation->canExecuteManually()
-            && $recommendation->status !== TradingRecommendation::STATUS_EXECUTED) {
+        // WSB-D5: already executed by a different transaction — do not overwrite.
+        if ($recommendation->status === TradingRecommendation::STATUS_EXECUTED) {
+            throw ValidationException::withMessages([
+                'recommendation_id' => [
+                    'Recommendation is already executed by transaction #'
+                    .((int) $recommendation->executed_transaction_id).'.',
+                ],
+            ]);
+        }
+
+        if (! $recommendation->canExecuteManually()) {
             throw ValidationException::withMessages([
                 'recommendation_id' => ['Recommendation is not pending execution (status: '.$recommendation->status.').'],
             ]);
