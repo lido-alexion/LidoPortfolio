@@ -386,6 +386,30 @@ class TradingRecommendation extends Model
         };
     }
 
+    /**
+     * F137 PD-05 — map V1 portfolio actions / legacy types to the public canonical enum.
+     * Does not mutate stored recommendation_type.
+     *
+     * @return 'BUY'|'SELL'|'HOLD_POSITION'|'WATCH'
+     */
+    public static function toF137Canonical(string $v1Action): string
+    {
+        $action = strtoupper(trim($v1Action));
+
+        return match ($action) {
+            self::ACTION_OPEN_POSITION, self::ACTION_INCREASE_POSITION, 'BUY' => 'BUY',
+            self::ACTION_EXIT_POSITION, self::ACTION_REDUCE_POSITION, 'SELL' => 'SELL',
+            self::ACTION_HOLD_POSITION, 'HOLD' => 'HOLD_POSITION',
+            self::ACTION_WATCH => 'WATCH',
+            default => throw new \InvalidArgumentException("Non-canonical V1 recommendation action for F137: {$v1Action}"),
+        };
+    }
+
+    public function asF137Canonical(): string
+    {
+        return self::toF137Canonical($this->portfolioAction());
+    }
+
     public function uiLabel(): string
     {
         $action = $this->portfolioAction();

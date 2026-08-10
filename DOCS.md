@@ -248,6 +248,19 @@ Hub: [specs/architecture/governance/README.md](specs/architecture/governance/REA
 | 3.37 | [docs/v2/F060-POLICY-DECISIONS.md](docs/v2/F060-POLICY-DECISIONS.md) | Policy register — **closed**; delivery noted |
 | 3.38 | [docs/v2/F060-IMPLEMENTATION-GAP-MATRIX.md](docs/v2/F060-IMPLEMENTATION-GAP-MATRIX.md) | Gaps closed; non-blockers listed |
 
+### 3.I F137 — Recommendation Preview API (**COMPLETE**)
+
+*V2 Phase 3 — last Phase 3 initiative after F060. Delivered 2026-08-10: shared `decideForSecurity` core; cycle-fresh persisted precedence; explicit owned `strategy_id`; canonical BUY/SELL/HOLD_POSITION/WATCH; execution + research sections; read-only preview; Watchlist aligned; `F137RecommendationPreviewTest`. Verdict: **`F137_COMPLETE_WITH_NON_BLOCKERS`**. Do not pull F143/F144 ahead. Do not reopen closed F003/F005/F042/F043/F127/F019/F014/F060.*
+
+**Authoritative:**
+
+| Order | Document | Why |
+|------:|----------|-----|
+| 3.39 | [docs/v2/F137-RECOMMENDATION-PREVIEW-SPEC.md](docs/v2/F137-RECOMMENDATION-PREVIEW-SPEC.md) | CURRENT vs TARGET + delivered ACs |
+| 3.40 | [docs/v2/F137-BOUNDARY.md](docs/v2/F137-BOUNDARY.md) | Shared decision core vs persist lifecycle |
+| 3.41 | [docs/v2/F137-POLICY-DECISIONS.md](docs/v2/F137-POLICY-DECISIONS.md) | PD-F137-01…17 — **DECIDED** + delivered |
+| 3.42 | [docs/v2/F137-IMPLEMENTATION-GAP-MATRIX.md](docs/v2/F137-IMPLEMENTATION-GAP-MATRIX.md) | Closed gaps; non-blockers listed |
+
 ---
 
 ## 4. Implementation status & audit

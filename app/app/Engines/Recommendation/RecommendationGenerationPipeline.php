@@ -68,7 +68,8 @@ class RecommendationGenerationPipeline
             $drafts = $this->buildDrafts($ctx);
             $drafts = $this->rankDrafts($drafts, $ctx);
             $allocations = $this->allocateCapital($drafts, $ctx);
-            $created = $this->persistDrafts($drafts, $allocations, $ctx, $profile);
+            $drafts = $this->applyCapitalOutcomes($drafts, $allocations);
+            $created = $this->persistDrafts($drafts, $ctx, $profile);
         });
 
         $this->logger->log('daily', 'RecommendationEngine', 'info', 'Recommendations generated', [
@@ -92,13 +93,148 @@ class RecommendationGenerationPipeline
     }
 
     /**
+     * Shared decision core for one security (F137 / PD-17).
+     * Same path as generate: prepare → drafts → rank → allocate → capital demotion.
+     * Does NOT cancel or persist recommendations.
+     *
+     * @return array{
+     *     available: bool,
+     *     unavailable_reasons: list<array{code: string, message: string}>,
+     *     evaluation_run: ?EvaluationRun,
+     *     strategy_version: ?\App\Models\TradingStrategyVersion,
+     *     draft: ?array<string, mixed>,
+     *     final_action: ?string,
+     *     reasoning: ?string,
+     *     eligibility: ?array<string, mixed>,
+     *     gate_decision: ?array<string, mixed>
+     * }
+     */
+    public function decideForSecurity(
+        PortfolioProfile $profile,
+        int $securityId,
+        ?EvaluationRun $evaluationRun = null,
+        ?\App\Models\TradingStrategyVersion $strategyVersion = null,
+    ): array {
+        $evaluationRun ??= EvaluationRun::query()
+            ->where('profile_id', $profile->id)
+            ->where('status', 'completed')
+            ->orderByDesc('id')
+            ->first();
+
+        if (! $evaluationRun) {
+            return [
+                'available' => false,
+                'unavailable_reasons' => [[
+                    'code' => 'NO_EVALUATION_CYCLE',
+                    'message' => 'No completed evaluation run available for recommendations.',
+                ]],
+                'evaluation_run' => null,
+                'strategy_version' => $strategyVersion,
+                'draft' => null,
+                'final_action' => null,
+                'reasoning' => null,
+                'eligibility' => null,
+                'gate_decision' => null,
+            ];
+        }
+
+        $ctx = $this->prepareContext($profile, $evaluationRun, $strategyVersion);
+        $drafts = $this->buildDrafts($ctx);
+        $drafts = $this->rankDrafts($drafts, $ctx);
+        $allocations = $this->allocateCapital($drafts, $ctx);
+        $drafts = $this->applyCapitalOutcomes($drafts, $allocations);
+
+        $draft = null;
+        foreach ($drafts as $candidate) {
+            if ((int) ($candidate['security_id'] ?? 0) === $securityId) {
+                $draft = $candidate;
+                break;
+            }
+        }
+
+        if ($draft === null) {
+            $eligibility = $ctx['eligibility'] ?? [];
+            $restricted = (bool) ($ctx['eligibility_restricted'] ?? false);
+            $eligibleSet = $ctx['eligible_set'] ?? [];
+            $inResults = false;
+            foreach ($ctx['results'] ?? [] as $result) {
+                if ((int) ($result->candidate?->security_id ?? 0) === $securityId) {
+                    $inResults = true;
+                    break;
+                }
+            }
+
+            $reasons = [];
+            if (! $inResults) {
+                $reasons[] = [
+                    'code' => 'NOT_IN_EVALUATION_CYCLE',
+                    'message' => 'Stock has no evaluation result in the latest completed evaluation cycle.',
+                ];
+            } elseif ($restricted && empty($eligibleSet[$securityId])) {
+                $reasons[] = [
+                    'code' => 'NOT_ELIGIBLE',
+                    'message' => 'Stock is not eligible under the selected strategy screener rules and is not held.',
+                ];
+            } else {
+                $reasons[] = [
+                    'code' => 'NO_RECOMMENDATION_DRAFT',
+                    'message' => 'Shared decision logic produced no recommendation draft for this stock.',
+                ];
+            }
+
+            return [
+                'available' => false,
+                'unavailable_reasons' => $reasons,
+                'evaluation_run' => $evaluationRun,
+                'strategy_version' => $ctx['strategy_version'],
+                'draft' => null,
+                'final_action' => null,
+                'reasoning' => null,
+                'eligibility' => $eligibility,
+                'gate_decision' => $ctx['market_gate_decision'] ?? null,
+            ];
+        }
+
+        $gateDecision = $ctx['market_gate_decision'] ?? MarketGateEvaluator::evaluate($ctx['market'] ?? [], []);
+        $reasoning = $this->buildReasoning(
+            $draft['opinion'],
+            $draft['action'],
+            $draft['current_alloc'],
+            $draft['target_alloc'],
+            $draft['is_held'],
+            $draft['risk'],
+            (bool) ($draft['market_gate_demoted'] ?? false),
+            is_array($gateDecision['strategy_gates']['block_reasons'] ?? null)
+                ? $gateDecision['strategy_gates']['block_reasons']
+                : [],
+        );
+
+        return [
+            'available' => true,
+            'unavailable_reasons' => [],
+            'evaluation_run' => $evaluationRun,
+            'strategy_version' => $ctx['strategy_version'],
+            'draft' => $draft,
+            'final_action' => $draft['action'],
+            'reasoning' => $reasoning,
+            'eligibility' => $ctx['eligibility'] ?? null,
+            'gate_decision' => $gateDecision,
+        ];
+    }
+
+    /**
      * Resolve evaluation run, strategy config, thresholds, market gates/multipliers,
      * cash headroom, eligibility, and current holdings snapshot.
      *
+     * When $strategyVersion is provided (F137), do NOT call ensureActive / seed.
+     *
      * @return array<string, mixed>
      */
-    protected function prepareContext(PortfolioProfile $profile, ?EvaluationRun $evaluationRun): array
-    {
+    protected function prepareContext(
+        PortfolioProfile $profile,
+        ?EvaluationRun $evaluationRun = null,
+        ?\App\Models\TradingStrategyVersion $strategyVersion = null,
+    ): array {
         $evaluationRun ??= EvaluationRun::query()
             ->where('profile_id', $profile->id)
             ->where('status', 'completed')
@@ -112,7 +248,11 @@ class RecommendationGenerationPipeline
             );
         }
 
-        $strategyVersion = $this->strategies->ensureActive($profile);
+        if ($strategyVersion === null) {
+            $strategyVersion = $this->strategies->ensureActive($profile);
+        } else {
+            $strategyVersion->loadMissing('strategy');
+        }
         $strategy = $strategyVersion->strategy;
         $config = $strategyVersion->config_json ?? $this->strategies->defaultConfig();
 
@@ -678,36 +818,20 @@ class RecommendationGenerationPipeline
     }
 
     /**
-     * Apply allocation results to ranked drafts and persist TradingRecommendation rows.
+     * Apply capital allocation outcomes to drafts (OPEN/INCREASE → WATCH when unfunded).
+     * Shared by full generation persist and F137 decideForSecurity (PD-17).
      *
      * @param  list<array<string, mixed>>  $drafts
      * @param  array<int|string, array{allocated_amount: float, quantity: int}>  $allocations
-     * @param  array<string, mixed>  $ctx
-     * @return list<TradingRecommendation>
+     * @return list<array<string, mixed>>
      */
-    protected function persistDrafts(array $drafts, array $allocations, array $ctx, PortfolioProfile $profile): array
+    protected function applyCapitalOutcomes(array $drafts, array $allocations): array
     {
-        $maxConcurrent = $ctx['max_concurrent'];
-        $strategyVersion = $ctx['strategy_version'];
-        $strategy = $ctx['strategy'] ?? null;
-        $eligibility = $ctx['eligibility'];
-        $market = $ctx['market'];
-        $gateDecision = $ctx['market_gate_decision'] ?? MarketGateEvaluator::evaluate($market, []);
-        $marketAllowsEntry = $ctx['market_allows_entry'];
-        $cashSummary = $ctx['cash_summary'];
-        $expiresAt = $ctx['expires_at'];
-
-        $created = [];
-        $persisted = 0;
-        foreach ($drafts as $draft) {
-            if ($persisted >= $maxConcurrent) {
-                break;
-            }
+        foreach ($drafts as &$draft) {
             $action = $draft['action'];
             $plan = $draft['plan'];
             $suggestedAlloc = $draft['suggested_alloc'];
             $positionSize = $draft['position_size'];
-            $suggestedAllocationAmount = null;
             $capitalAllocationMeta = null;
 
             if (in_array($action, [TradingRecommendation::ACTION_OPEN_POSITION, TradingRecommendation::ACTION_INCREASE_POSITION], true)) {
@@ -730,7 +854,6 @@ class RecommendationGenerationPipeline
                         'suggested_investment_amount' => 0.0,
                     ]) : ['capital_allocation' => $capitalAllocationMeta];
                     $positionSize = null;
-                    $suggestedAllocationAmount = 0.0;
                     $suggestedAlloc = $draft['is_held'] ? $draft['current_alloc'] : 0.0;
                 } else {
                     $capitalAllocationMeta = [
@@ -747,7 +870,57 @@ class RecommendationGenerationPipeline
                         $plan['position_after']['quantity_delta'] = $qty;
                     }
                     $positionSize = $amount;
-                    $suggestedAllocationAmount = $amount;
+                }
+            }
+
+            $draft['action'] = $action;
+            $draft['plan'] = $plan;
+            $draft['suggested_alloc'] = $suggestedAlloc;
+            $draft['position_size'] = $positionSize;
+            if ($capitalAllocationMeta !== null) {
+                $draft['capital_allocation'] = $capitalAllocationMeta;
+            }
+        }
+        unset($draft);
+
+        return $drafts;
+    }
+
+    /**
+     * Persist TradingRecommendation rows from drafts that already have capital outcomes applied.
+     *
+     * @param  list<array<string, mixed>>  $drafts
+     * @param  array<string, mixed>  $ctx
+     * @return list<TradingRecommendation>
+     */
+    protected function persistDrafts(array $drafts, array $ctx, PortfolioProfile $profile): array
+    {
+        $maxConcurrent = $ctx['max_concurrent'];
+        $strategyVersion = $ctx['strategy_version'];
+        $strategy = $ctx['strategy'] ?? null;
+        $eligibility = $ctx['eligibility'];
+        $market = $ctx['market'];
+        $gateDecision = $ctx['market_gate_decision'] ?? MarketGateEvaluator::evaluate($market, []);
+        $marketAllowsEntry = $ctx['market_allows_entry'];
+        $cashSummary = $ctx['cash_summary'];
+        $expiresAt = $ctx['expires_at'];
+
+        $created = [];
+        $persisted = 0;
+        foreach ($drafts as $draft) {
+            if ($persisted >= $maxConcurrent) {
+                break;
+            }
+            $action = $draft['action'];
+            $plan = $draft['plan'];
+            $suggestedAlloc = $draft['suggested_alloc'];
+            $positionSize = $draft['position_size'];
+            $suggestedAllocationAmount = null;
+            $capitalAllocationMeta = $draft['capital_allocation'] ?? null;
+
+            if (in_array($action, [TradingRecommendation::ACTION_OPEN_POSITION, TradingRecommendation::ACTION_INCREASE_POSITION], true)) {
+                if (is_array($plan) && isset($plan['suggested_investment_amount'])) {
+                    $suggestedAllocationAmount = (float) $plan['suggested_investment_amount'];
                 }
             } elseif (is_array($plan) && isset($plan['suggested_investment_amount'])) {
                 $suggestedAllocationAmount = (float) $plan['suggested_investment_amount'];

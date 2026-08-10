@@ -399,19 +399,29 @@ const APP_DOCUMENTATION_BASE = [
         title: 'Watchlist',
         routeLabel: '/watchlist',
         match: (p) => pathStarts(p, '/watchlist'),
-        summary: 'Named research lists with prices, pattern scans, and links into Explorer.',
+        summary: 'Named research lists with prices, pattern scans, Recommendation Preview, and links into Explorer.',
         overview:
-            'Maintain multiple watchlists per portfolio. Select a symbol for its price panel (`/watchlist/{SYMBOL}`), scan for patterns, and compare relative strength in Explorer.',
+            'Maintain multiple watchlists per portfolio. Select a symbol for its price panel (`/watchlist/{SYMBOL}`), scan for patterns, and compare relative strength in Explorer. The research panel includes Stock Analytics, Evaluation Profile, and Recommendation Preview (F137) for the portfolio’s selected strategy.',
         controls: [
             { name: 'List switcher / add stock', description: 'Manage lists and quick-add symbols with notes.' },
             { name: 'Scan my watchlist', description: 'Runs pattern detection and can persist icons until prices refresh or expiry.' },
             { name: 'Compare strength', description: 'Deep-links into Explorer relative-strength views.' },
+            {
+                name: 'Recommendation Preview tab',
+                description:
+                    'Shows the execution-grade recommendation for the selected stock under the portfolio’s active strategy (same decision logic as Generate Recommendations). Requires a completed evaluation cycle. When unavailable, lists structured reasons instead of inventing WATCH. Values are BUY / SELL / HOLD_POSITION / WATCH. Score is the strategy overall (0–100); confidence is 0–1 research metadata.',
+            },
         ],
         concepts: [
             { name: 'Persisted pattern scans', description: 'Results stay valid until expiry or newer OHLCV arrives.' },
             { name: 'Holding badge', description: 'Shows when a watched symbol is also an open position.' },
+            {
+                name: 'Recommendation Preview vs Generate',
+                description:
+                    'Preview is read-only: it does not create or cancel recommendations. It uses a current persisted recommendation only when it matches the latest completed evaluation cycle; otherwise it recalculates via the shared decision engine. Watchlist membership is not required for the API.',
+            },
         ],
-        related: ['explorer', 'patterns', 'holdings'],
+        related: ['explorer', 'patterns', 'holdings', 'recommendations', 'strategy'],
     },
     {
         id: 'explorer',

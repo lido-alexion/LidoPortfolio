@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Watchlist — StoX docs</title>
-  <meta name="description" content="Named research lists with prices, pattern scans, and links into Explorer.">
+  <meta name="description" content="Named research lists with prices, pattern scans, Recommendation Preview, and links into Explorer.">
   <link rel="canonical" href="watchlist.html">
   <style>
     :root {
@@ -110,11 +110,11 @@
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Watchlist</h1>
       <p class="muted"><code>watchlist</code> · screen: <code>/watchlist</code></p>
-      <p>Named research lists with prices, pattern scans, and links into Explorer.</p>
+      <p>Named research lists with prices, pattern scans, Recommendation Preview, and links into Explorer.</p>
 
       <section class="panel">
         <h2>Overview</h2>
-        <p>Maintain multiple watchlists per portfolio. Select a symbol for its price panel (<code>/watchlist/{SYMBOL}</code>), scan for patterns, and compare relative strength in Explorer.</p>
+        <p>Maintain multiple watchlists per portfolio. Select a symbol for its price panel (<code>/watchlist/{SYMBOL}</code>), scan for patterns, and compare relative strength in Explorer. The research panel includes Stock Analytics, Evaluation Profile, and Recommendation Preview (F137) for the portfolio’s selected strategy.</p>
 <p>Watchlist is for idea incubation before position entry. Keep lists focused and annotated, then use scan + explorer links to move from curiosity to evidence-backed decisions.</p>
 <p>Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).</p>
 
@@ -131,6 +131,9 @@
     
         <dt>Compare strength</dt>
         <dd>Deep-links into Explorer relative-strength views.</dd>
+    
+        <dt>Recommendation Preview tab</dt>
+        <dd>Shows the execution-grade recommendation for the selected stock under the portfolio’s active strategy (same decision logic as Generate Recommendations). Requires a completed evaluation cycle. When unavailable, lists structured reasons instead of inventing WATCH. Values are BUY / SELL / HOLD_POSITION / WATCH. Score is the strategy overall (0–100); confidence is 0–1 research metadata.</dd>
     
         <dt>List quality</dt>
         <dd>Create themed lists (e.g. breakout, value, earnings week) rather than one giant list to keep signal relevance high.</dd>
@@ -155,6 +158,9 @@
         <dt>Holding badge</dt>
         <dd>Shows when a watched symbol is also an open position.</dd>
     
+        <dt>Recommendation Preview vs Generate</dt>
+        <dd>Preview is read-only: it does not create or cancel recommendations. It uses a current persisted recommendation only when it matches the latest completed evaluation cycle; otherwise it recalculates via the shared decision engine. Watchlist membership is not required for the API.</dd>
+    
         <dt>Research-to-action bridge</dt>
         <dd>Watchlist connects to Explorer, Patterns, and eventually Recommendations via Discovery workflows.</dd>
     
@@ -170,7 +176,7 @@
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
-          <a href="explorer.html">Stock Explorer</a><a href="patterns.html">Patterns</a><a href="holdings.html">Portfolio (Holdings)</a>
+          <a href="explorer.html">Stock Explorer</a><a href="patterns.html">Patterns</a><a href="holdings.html">Portfolio (Holdings)</a><a href="recommendations.html">Recommendations</a><a href="strategy.html">Strategy</a>
         </div>
       </section>
     </article>

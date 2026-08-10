@@ -15,6 +15,7 @@ use Illuminate\Http\Request;
 
 /**
  * SD-031 — Analytics APIs with single-owner payloads.
+ * F137 — recommendation-preview is the authoritative execution-grade contract.
  */
 class AnalyticsArchitectureController extends Controller
 {
@@ -52,21 +53,35 @@ class AnalyticsArchitectureController extends Controller
         return ApiEnvelope::success($this->marketAnalytics->summary($profile));
     }
 
-    public function recommendationPreview(Stock $stock): JsonResponse
+    public function recommendationPreview(Request $request, Stock $stock): JsonResponse
     {
         $profile = \activePortfolio();
+        $strategyId = $request->query('strategy_id');
+        $strategyId = is_numeric($strategyId) ? (int) $strategyId : null;
 
-        return ApiEnvelope::success($this->recommendationPreview->forStock($profile, $stock));
+        $payload = $this->recommendationPreview->forStock($profile, $stock, $strategyId);
+        if ($payload instanceof JsonResponse) {
+            return $payload;
+        }
+
+        return ApiEnvelope::success($payload);
     }
 
-    public function watchlistResearch(Stock $stock): JsonResponse
+    public function watchlistResearch(Request $request, Stock $stock): JsonResponse
     {
         $profile = \activePortfolio();
+        $strategyId = $request->query('strategy_id');
+        $strategyId = is_numeric($strategyId) ? (int) $strategyId : null;
+
+        $preview = $this->recommendationPreview->forStock($profile, $stock, $strategyId);
+        if ($preview instanceof JsonResponse) {
+            return $preview;
+        }
 
         return ApiEnvelope::success([
             'stock_analytics' => $this->stockAnalytics->forStock($stock),
             'evaluation_profile' => $this->evaluationProfiles->forStock($profile, $stock),
-            'recommendation_preview' => $this->recommendationPreview->forStock($profile, $stock),
+            'recommendation_preview' => $preview,
         ]);
     }
 
