@@ -7,11 +7,14 @@
 This folder holds Trading Operating System **requirements, architecture, governance, and audit** documents.  
 Read **top → bottom**. Requirements/architecture come **before** implementation status.
 
+**V3:** [LidoPortfolio-V3-Specification.md](LidoPortfolio-V3-Specification.md) is the source of truth for the next product evolution. V1 architecture under `architecture/` remains historical intent plus shipped baseline.
+
 ---
 
 ## Reading order (specs only)
 
 ```text
+0. LidoPortfolio-V3-Specification.md   V3 product SoT (when doing V3 work)
 1. architecture/platform/       Intent — vision through engine overview + system domain model
 2. architecture/ui/             Pages/flow + sidebar (as needed)
 3. architecture/indicators/     Indicator & artifact architecture
@@ -32,6 +35,7 @@ Read **top → bottom**. Requirements/architecture come **before** implementatio
 specs/
 │
 ├── README.md                          ← this file
+├── LidoPortfolio-V3-Specification.md  【 V3 SoT — not yet implemented 】
 ├── IMPLEMENTATION_PROGRESS.md         【 STATUS 】
 ├── MVP_DEMO_CHECKLIST.md              【 ACCEPTANCE DEMO 】
 │
@@ -108,7 +112,11 @@ specs/
 
 ## Linked checklist (click through)
 
-### Phase A — Requirements & architecture
+### Phase A0 — V3 specification (current product direction)
+
+0. [LidoPortfolio-V3-Specification.md](LidoPortfolio-V3-Specification.md) — **V3 source of truth** (multi-strategy, ownership, lending, ranking, exits, charts). Where it conflicts with V1 engine specs / SD-029, V3 wins for new work.
+
+### Phase A — Requirements & architecture (V1 intent)
 
 1. [architecture/platform/01-Vision.md](architecture/platform/01-Vision.md)  
 2. [architecture/platform/02-Guiding-Principles.md](architecture/platform/02-Guiding-Principles.md)  

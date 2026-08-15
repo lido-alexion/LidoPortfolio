@@ -16,6 +16,7 @@
 | **Full product understanding** | [README.md](README.md) → this file §1 → §2 → §3 | §4–§6 as needed |
 | **Run / develop the app today** | [README.md](README.md) → [implementation.md](implementation.md) | Deploy docs if shipping |
 | **Trading OS intent vs what shipped** | [specs/README.md](specs/README.md) | Governance → Audit |
+| **V3 product specification** | [specs/LidoPortfolio-V3-Specification.md](specs/LidoPortfolio-V3-Specification.md) | Frozen OD-01–OD-10 in §33.1; remaining OPEN in §33.2 |
 | **Authority / conflicts** | [specs/architecture/governance/DOCUMENT_PRECEDENCE.md](specs/architecture/governance/DOCUMENT_PRECEDENCE.md) | — |
 
 **Agents:** User sessions start at **README.md**. Use this file only after that pointer. For day-to-day coding, still use [implementation.md](implementation.md) as the living technical reference.
@@ -326,6 +327,14 @@ Hub: [specs/architecture/governance/README.md](specs/architecture/governance/REA
 | 3.74 | [docs/v2.1/EXPLORER-ANALYTICS-POLICY-DECISIONS.md](docs/v2.1/EXPLORER-ANALYTICS-POLICY-DECISIONS.md) | Policy register (cache-only Explorer; RS formula; SD-031 owners) |
 | 3.75 | [docs/v2.1/EXPLORER-ANALYTICS-IMPLEMENTATION-GAP-MATRIX.md](docs/v2.1/EXPLORER-ANALYTICS-IMPLEMENTATION-GAP-MATRIX.md) | Gap / test / doc matrix for Explorer / Analytics |
 | 3.76 | [docs/v2.1/V2.1-FINAL-RECONCILIATION.md](docs/v2.1/V2.1-FINAL-RECONCILIATION.md) | **V2.1 CLOSED** — hardening + priority packs; V3 candidates unprioritized |
+
+### 3.N Lido Portfolio V3 (specification)
+
+*Authoritative V3 product + architecture specification. Implementation not started. Supersedes V1 one-active-strategy (SD-029) and unfunded→WATCH for V3 work. Open decisions are listed in the document §33.*
+
+| Order | Document | Why |
+|------:|----------|-----|
+| 3.77 | [specs/LidoPortfolio-V3-Specification.md](specs/LidoPortfolio-V3-Specification.md) | V3 SoT: multi-strategy, ownership, capital lending, exits, ranking, charts |
 
 ---
 
