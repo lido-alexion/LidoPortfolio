@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\OperationalAlert;
 use App\Models\SyncRun;
+use App\Support\TradingCalendar;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Schema;
 
@@ -113,7 +114,10 @@ class AdminOperationalAlertService
                 ? ($lastUniverseInWindow ?? $maintenanceWindowStart)
                 : $lastUniverseAt;
 
-            if ($stalenessReferenceAt === null || $stalenessReferenceAt->lt($now->copy()->subMinutes($overdueMinutes))) {
+            if (
+                ! $this->shouldSuppressUniverseOverdueOnClosedSession($now)
+                && ($stalenessReferenceAt === null || $stalenessReferenceAt->lt($now->copy()->subMinutes($overdueMinutes)))
+            ) {
                 $alerts[] = $this->alert(
                     self::KEY_UNIVERSE_SYNC_OVERDUE,
                     'warning',
@@ -153,7 +157,10 @@ class AdminOperationalAlertService
 
         $dailySuccessAt = $this->syncLog->latestSuccessfulFinishedAt(SyncLogService::JOB_DAILY_MARKET_DATA);
         $dailyStaleHours = (int) config('portfolio.operational_alerts.daily_sync_stale_hours', 36);
-        if ($dailySuccessAt === null || $dailySuccessAt->lt($now->copy()->subHours($dailyStaleHours))) {
+        if (
+            ! $this->shouldSuppressDailyOverdueOnClosedSession($now)
+            && ($dailySuccessAt === null || $dailySuccessAt->lt($now->copy()->subHours($dailyStaleHours)))
+        ) {
             $alerts[] = $this->alert(
                 self::KEY_DAILY_SYNC_OVERDUE,
                 'warning',
@@ -516,6 +523,49 @@ class AdminOperationalAlertService
     {
         return $this->universeSync->isWithinMaintenanceHours($now)
             && $this->universeSync->allowsMaintenanceOnCalendarDay($now);
+    }
+
+    /**
+     * Weekend/holiday universe overdue is a false alarm when maintenance is
+     * intentionally skipped because the prior session's last batch succeeded.
+     */
+    protected function shouldSuppressUniverseOverdueOnClosedSession(Carbon $now): bool
+    {
+        return ! $this->universeSync->allowsMaintenanceOnCalendarDay($now);
+    }
+
+    /**
+     * Daily holdings sync does not run on closed sessions. Skip overdue when
+     * the prior equity session's daily run succeeded (typically Friday).
+     */
+    protected function shouldSuppressDailyOverdueOnClosedSession(Carbon $now): bool
+    {
+        if (TradingCalendar::isScheduledMarketDataDay($now, $this->timezone())) {
+            return false;
+        }
+
+        return $this->priorEquitySessionDailySyncSucceeded($now);
+    }
+
+    protected function priorEquitySessionDailySyncSucceeded(Carbon $now): bool
+    {
+        if (! Schema::hasTable('portfolio_sync_runs')) {
+            return false;
+        }
+
+        $priorSession = TradingCalendar::normalizeToSessionDate($now->copy()->subDay());
+        $windowStart = $priorSession->copy()->startOfDay()->utc();
+        $windowEnd = $priorSession->copy()->endOfDay()->utc();
+
+        $lastRun = SyncRun::query()
+            ->where('job_name', SyncLogService::JOB_DAILY_MARKET_DATA)
+            ->whereNotNull('finished_at')
+            ->where('finished_at', '>=', $windowStart)
+            ->where('finished_at', '<=', $windowEnd)
+            ->orderByDesc('finished_at')
+            ->first();
+
+        return $lastRun !== null && $lastRun->status === 'success';
     }
 
     /**
