@@ -4,11 +4,11 @@
 |-------|-------|
 | **Title** | Lido Portfolio V3 Specification |
 | **Status** | Review |
-| **Version** | 0.6 |
+| **Version** | 0.19 |
 | **Owner** | Product Specification / Architecture |
 | **Last Updated** | 2026-08-17 |
 | **Implementation Status** | Not started |
-| **Depends On** | Frozen V3 product decisions (2026-08-14 through 2026-08-17), including OD-01–OD-12; Architecture Impact Report; V1/V2 as-built baseline in `implementation.md` |
+| **Depends On** | Frozen V3 product decisions (2026-08-14 through 2026-08-17), including OD-01–OD-24 and resolved **DEP-TRIM-K**; Architecture Impact Report; V1/V2 as-built baseline in `implementation.md` |
 | **Referenced By** | Future V3 implementation passes |
 | **Related Specifications** | [architecture/domains/Strategy-Configuration-Specification.md](architecture/domains/Strategy-Configuration-Specification.md), [architecture/portfolio/Cash-Management-Specification.md](architecture/portfolio/Cash-Management-Specification.md), [architecture/domains/Recommendation-Engine-Specification.md](architecture/domains/Recommendation-Engine-Specification.md), [architecture/governance/SPECIFICATION_DECISIONS.md](architecture/governance/SPECIFICATION_DECISIONS.md) (SD-026, SD-029, SD-010) |
 
@@ -20,7 +20,7 @@ This is the **authoritative V3 product and architecture specification**. It conv
 
 - **V3 work must follow this document**, not V1 engine specs, where they conflict.
 - V1/V2 specifications remain the historical record of shipped behaviour. They are **not** rewritten here.
-- The Architecture Impact Report is the **as-built baseline**, not the V3 product requirement set. Implementation limitations (for example the ~550-day OHLCV default) are **not** V3 product caps.
+- The Architecture Impact Report is the **as-built baseline**, not the V3 product requirement set. Implementation limitations (for example the V1 ~550-day OHLCV default `HISTORY_DEPTH_TARGET_DAYS`) are **not** V3 product caps. **OD-17 (frozen):** V3 has **no** maximum OHLCV history-depth ceiling.
 - Items marked **OPEN** are unresolved product decisions. Implementers must not invent a resolution.
 - This specification does not implement code, schema, APIs, or UI.
 
@@ -85,7 +85,8 @@ Strategies are **hypotheses / tools** for generating candidate opportunities. Th
 | **Strategy fit score** | How well a stock matches the strategy’s scoring model right now | Final investment ranking; expected return; probability of success |
 | **Historical outcome analysis** | How positions (or simulated positions) at comparable fit levels actually performed | A replacement for fit scoring |
 | **Expected / observed return quality** | Magnitude-aware aggregation of historical returns (see §4, §19, §20) | Hit-rate / “probability of success” alone |
-| **Final ranking** | Ordering of opportunities for capital attention, based on return quality | A sort by fit score |
+| **Final ranking** | Ordering of opportunities for capital attention, based on return quality | A sort by fit score; OD-23 capital fill order |
+| **Capital fill order (OD-23)** | Order in which a strategy’s own valid BUY/INCREASE recs receive capital when return-quality ranking is not computable | V3 return-quality ranking; a presentation of conviction/target-size as rank; a silent fallback to fit-as-rank |
 
 V3 **rejects** ranking by `Strategic Score × Probability` when probability is derived from the same score, and **rejects** treating a 100% historical return and a 10% historical return as equivalent successes.
 
@@ -93,11 +94,11 @@ V3 **rejects** ranking by `Strategic Score × Probability` when probability is d
 
 1. **Portfolio is the account.** One portfolio is one real or paper trading account. Multiple portfolios may exist for hypothesis testing. Broker automation may later constrain how many portfolios can be live; V3 does not implement broker automation (SD-010 remains: manual execution).
 2. **Many strategies may run concurrently in one portfolio.** V3 supersedes the V1 “exactly one active strategy per portfolio” product rule (SD-029).
-3. **Separation of concerns.** Strategy identifies candidates, scores fit, sizes a *target* position from conviction, and emits strategy-specific BUY/SELL/HOLD/EXIT. Portfolio owns cash reserve, common stop-loss, common trailing stop, portfolio position/risk limits, and inter-strategy capital coordination.
+3. **Separation of concerns.** Strategy identifies candidates, scores fit, sizes a *target* position from conviction, and emits strategy-specific BUY/SELL/HOLD/EXIT. Portfolio owns cash reserve (**OD-19** formula in §22), common stop-loss, common trailing stop, portfolio position/risk limits, and inter-strategy capital coordination.
 4. **Ownership fences.** A strategy may not reduce or exit a holding it does not own. Manual holdings are unmanaged until adopted.
 5. **A recommendation can be valid and unfunded or only partially funded.** Lack of full capital must not convert a BUY/INCREASE into WATCH. Partial funding is allowed (OD-05).
 6. **Lending is always an explicit user decision.** Displaying options does not commit capital. The backend is authoritative at approval time.
-7. **Daily close only** for portfolio stop-loss and trailing stop. No intraday low.
+7. **Raw daily `close_price` only** for portfolio stop-loss and trailing stop (**OD-14**). No `adjusted_close_price` for those calculations. No intraday low.
 8. **Horizon is optional** and, when set, is measured in **calendar days** (OD-02). Absence of a horizon is not an expiry event.
 9. **Do not turn current implementation limits into product requirements.**
 10. **Multiple strategies may own the same stock** in one portfolio (OD-01). Position, cost, trailing, exit, allocation, attribution, and corporate-action **ownership** are per owner, not per symbol alone (OD-10). Holdings of the same stock MUST NOT be blended into one portfolio-level position for those purposes.
@@ -105,7 +106,7 @@ V3 **rejects** ranking by `Strategic Score × Probability` when probability is d
 
 ### 1.4 As-built baseline (informational)
 
-V1/V2 today: one active strategy drives generation; strategy `config_json` owns cash reserve, position caps, and exits; unfunded OPEN/INCREASE are demoted to WATCH; holdings have no strategy owner; trailing stop in the exit engine is an unrealized-% proxy; the holdings chart loads bars since first buy; stored OHLCV campaign default is ~550 days. **None of those are V3 requirements.** They are the starting point to change.
+V1/V2 today: one active strategy drives generation; strategy `config_json` owns cash reserve, position caps, and exits; unfunded OPEN/INCREASE are demoted to WATCH; holdings have no strategy owner; trailing stop in the exit engine is an unrealized-% proxy; the holdings chart loads bars since first buy; stored OHLCV campaign default is ~550 days (`HISTORY_DEPTH_TARGET_DAYS`). **None of those are V3 requirements.** They are the starting point to change. **OD-17:** V3 does not replace 550 with another numeric ceiling; it requires **all available** OHLCV history.
 
 ---
 
@@ -137,7 +138,7 @@ A named investment hypothesis attached to a portfolio. It is a tool for:
 
 A strategy does **not** own:
 
-- portfolio cash reserve
+- portfolio cash reserve (**OD-19**; not a strategy setting)
 - common stop-loss
 - common trailing stop
 - portfolio-wide position/risk policy
@@ -164,9 +165,9 @@ V1 aggregates one row per `(profile, stock)`. That uniqueness **must not** be re
 - strategy-owned: `(portfolio, stock, strategy_id)`
 - unmanaged: `(portfolio, stock, unmanaged)` — at most one unmanaged position per stock per portfolio (use a dedicated unmanaged owner key / non-null sentinel so the unique constraint is enforceable)
 
-A holding has quantity, cost basis, owner (strategy or unmanaged), and when strategy-owned: **target amount** (source of truth, OD-12), derived whole-share quantity, filled amount/quantity, and entry date for trailing/stop calculations. These fields MUST NOT be blended across owners of the same symbol. Target quantity is **not** the primary persisted unit.
+A holding has quantity, cost basis, owner (strategy or unmanaged), and when strategy-owned: **target amount** (source of truth, OD-12), derived whole-share quantity, filled amount/quantity, and entry date for trailing/stop calculations. Stop-loss **cost basis** is the weighted-average **actual execution** cost of the current ownership episode (**OD-13**), not first-fill price and not target amount. These fields MUST NOT be blended across owners of the same symbol. Target quantity is **not** the primary persisted unit.
 
-**OD-10 (frozen):** corporate-action quantity follows the **parent holding’s owner**. A CA applicable to a holding identified by `(portfolio, stock, owner)` adjusts **that** owner’s position quantity. It MUST NOT first blend multiple owners of the same stock into one portfolio-level position. Unmanaged parent holdings stay unmanaged. OD-10 does not freeze CA mathematics, cost/trailing/target restatement, or price-series choice (OD-14 remains OPEN).
+**OD-10 (frozen):** corporate-action quantity follows the **parent holding’s owner**. A CA applicable to a holding identified by `(portfolio, stock, owner)` adjusts **that** owner’s position quantity. It MUST NOT first blend multiple owners of the same stock into one portfolio-level position. Unmanaged parent holdings stay unmanaged. OD-10 does not freeze CA mathematics or cost/trailing/target restatement. **OD-14 (frozen)** chooses raw `close_price` for SL/trailing comparison and the OD-12 reference price; that choice does **not** restatement-solve corporate actions.
 
 ### 2.5 Unmanaged holding
 
@@ -208,7 +209,7 @@ Allocation percentages are **user-configured policy**. They are not automaticall
 
 ### 2.10 Available-for-lending capital
 
-The portion of a strategy’s unused allocation that is eligible to be lent under §6 and §8. It is **not** “all cash the strategy could theoretically spend” and **not** “maximum available portfolio cash”.
+The portion of a strategy’s unused allocation that is eligible to be lent under §6 and §8, after the strategy’s **OD-24** minimum retained capital and the other frozen lending constraints. It is **not** “all cash the strategy could theoretically spend” and **not** “maximum available portfolio cash”. It is **not** the OD-19 portfolio cash reserve and **not** OD-20 Unallocated Cash.
 
 Available-for-lending **percentage** and available-for-lending **absolute amount** are the OD-08 ranking keys for a prospective **lender** (a strategy). They MUST NOT be used to choose among outstanding **loans** (that is OD-09).
 
@@ -239,6 +240,10 @@ The execution-level fact that a position (or the recommended quantity) is to be 
 ### 2.16 Exit attribution
 
 The ordered reason recorded for analytics, reporting, and historical evaluation. Precedence is defined in §13. Attribution is not a different broker order type.
+
+### 2.17 Strategy minimum retained capital (OD-24)
+
+The strategy-level accounting amount that MUST be retained as the protected “one opportunity” floor before unused allocation can be treated as available-for-lending. Formula in §5.5. It is **not** a physical cash account, **not** a strategy bank/cash sub-account, **not** another portfolio cash reserve, and **not** `required_cash_reserve` (OD-19).
 
 ---
 
@@ -275,7 +280,7 @@ Portfolio remains the isolation boundary for cash, holdings, transactions, and A
 | Optional horizon | Strategy |
 | Min holdings (recommended) / max holdings (hard) | Strategy |
 | Allocation % | Portfolio policy, per strategy |
-| Cash reserve | Portfolio |
+| Cash reserve (`portfolio_cash_reserve_pct` / `required_cash_reserve`, OD-19) | Portfolio |
 | Stop-loss | Portfolio |
 | Trailing stop | Portfolio |
 | Portfolio-wide position/risk caps | Portfolio |
@@ -290,7 +295,7 @@ Changing allocation percentages is a user policy change. It does not by itself f
 
 ### 3.5 Minimum and maximum holdings
 
-- **Recommended minimum holdings:** advisory. The engine MUST NOT open weak/low-quality names solely to hit the minimum. UI MAY warn when below the recommended minimum.
+- **Recommended minimum holdings:** advisory for **generation**. The engine MUST NOT open weak/low-quality names solely to hit the minimum. UI MAY warn when below the recommended minimum. The configured count is also the **OD-24** divisor for that strategy’s minimum retained capital (§5.5). OD-24 does **not** change this advisory generation rule. The divisor is **recommended** minimum holdings, **not** hard `max_holdings`.
 - **Hard maximum holdings:** a hard cap on the number of **strategy-owned** open names for that strategy. Generation MUST NOT emit a new OPEN that would exceed it. INCREASE of an existing owned name is not a new holding.
 
 Maximum position allocation **derives from diversification**: by default a single name MUST NOT exceed `1 / max_holdings` of **that strategy’s** allocated capital. An optional tighter explicit cap MAY be configured. Portfolio-level max position size, if configured, is a ceiling on **aggregate** portfolio exposure to that symbol (all strategy-owned lots plus unmanaged). The tighter applicable ceiling wins for that owner’s sizing. Strategy A’s RELIANCE and Strategy B’s RELIANCE count as **two** strategy holdings (one each) toward each strategy’s max-holdings cap, and as **one** symbol toward portfolio-level exposure.
@@ -324,6 +329,8 @@ Fit score:
 
 For a strategy, historical outcomes are collected from the **defined backtest corpus only**, bucketed by **fit level** (fit bands). Each outcome has return, holding period, benchmark return, annualized/XIRR return, and a success flag (§19).
 
+**OD-18 (frozen):** annualized return (CAGR/XIRR) MAY be used as **ranking evidence** only when that backtest holding period is **≥ 30 calendar days**. For holding periods **< 30 calendar days**, annualized return MUST NOT contribute to ranking. The outcome’s **simple return** remains a valid backtest outcome. OD-18 does **not** change the §19 success definition.
+
 **OD-03 (frozen): BACKTESTS ONLY.** Ranking statistics MUST use the defined backtest corpus. The user’s **live-trading history MUST NOT** be used as ranking observations. `ReviewEngine` live/ledger outcomes remain observational portfolio review and MUST NOT be fed into ranking.
 
 The current `ReviewEngine` is **not** the V3 ranking engine. Extending the strategy backtest simulator so it can supply a sufficient, defined corpus is in scope for ranking.
@@ -333,6 +340,8 @@ The current `ReviewEngine` is **not** the V3 ranking engine. Extending the strat
 Final ranking MUST be based on **expected / observed return quality** — the magnitude of returns associated with that fit level — not on how often outcomes were merely positive.
 
 A 100% historical return and a 10% historical return are not equivalent successes.
+
+When return quality for ranking uses annualized return / CAGR / XIRR, **OD-18** applies: those annualized figures are ranking evidence only if the backtest holding period is **≥ 30 calendar days**.
 
 “Probability of success” (frequency of passing §19) MAY be reported as a diagnostic. It MUST NOT be the final ranking metric.
 
@@ -349,26 +358,54 @@ Mean, median, and trimmed mean are statistical choices.
 - Trimming is **symmetric**.
 - **Minimum sample size = 15** observations.
 
-If fewer than 15 observations are available for that fit band, the trimmed-mean ranking calculation is **not eligible**. Do not compute a trimmed-mean rank from a smaller sample. Do not silently fall back to ranking by fit score (§4.6).
+If fewer than 15 observations are available for that fit band, the trimmed-mean ranking calculation is **not eligible**. Do not compute a trimmed-mean rank from a smaller sample. Do not silently fall back to **ranking** by fit score (§4.6). Capital fill when ranking is not eligible is **OD-23** (descending conviction / target-size among that strategy’s own valid BUY/INCREASE recs). Fit MAY be used only as that fill-order’s first tie-break; it MUST NOT become the V3 ranking key.
 
 **Procedure (normative):**
 
 1. Collect the backtest return-quality observations for the fit band (`n` values).
-2. If `n < 15`, stop: ranking for this band is not eligible.
+2. If `n < 15`, stop: ranking for this band is not eligible. Do **not** compute `k` as a substitute for eligibility.
 3. Sort the `n` observations in ascending order.
-4. Let `k` be the integer number of observations removed from **each** tail corresponding to 7% of `n`.
-5. Compute the arithmetic mean of the remaining middle observations.
+4. Compute the integer trim count `k` (**DEP-TRIM-K**, frozen):
 
-How 7% of `n` is converted to integer `k` (floor vs round vs ceil) was **not frozen** — see §33.3 dependency **DEP-TRIM-K**. Do not treat an invented `k` rule as product law; the 7%/7%/n≥15 rules above are product law.
+```text
+k = nearest_integer(0.07 × n)
+```
 
-Trimming MUST be deterministic once `k` is defined (same inputs → same output).
+`nearest_integer` means: round to the closest integer; **exact fractional .5 values MUST round upward** (toward +∞). This rule is **not** language/runtime `round()` and MUST NOT use banker's rounding (round-half-to-even) or any other .5 tie behaviour.
+
+For this non-negative domain, the deterministic equivalent is:
+
+```text
+k = floor(0.07 × n + 0.5)
+```
+
+5. Remove **the same** `k` observations from the **lower** tail and **the same** `k` from the **upper** tail.
+6. Compute the arithmetic mean of the remaining middle observations.
+
+Ranking eligibility (`n ≥ 15`) and trim-count calculation (`k` from 7% of `n`) are distinct. Eligibility does not change `k`; `k` does not replace the `n ≥ 15` gate.
+
+**Normative examples** (`0.07 × n` → `k`):
+
+| `n` | `0.07 × n` | `k` |
+|-----|------------|-----|
+| 15 | 1.05 | 1 |
+| 20 | 1.40 | 1 |
+| 25 | 1.75 | 2 |
+| 30 | 2.10 | 2 |
+| 35 | 2.45 | 2 |
+| 50 | 3.50 | 4 |
+| 100 | 7.00 | 7 |
+
+`n = 50` is an exact-.5 case and MUST yield `k = 4` (round upward), not 3.
+
+Trimming MUST be deterministic (same `n` and same sorted observations → same `k` and same mean).
 
 ### 4.5 Strategies without a fixed horizon
 
-- Prefer **XIRR / annualized return** over the actual holding period (§20).
+- Prefer **XIRR / annualized return** over the actual holding period (§20), subject to **OD-18**: annualized/XIRR ranking evidence requires backtest holding period **≥ 30 calendar days**.
 - Do **not** penalise a holding merely because it was held a long time before the thesis began working (lifetime XIRR can be mediocre while recent/windowed performance is strong).
 - Historical evaluation windows MUST be **strategy-configurable**.
-- A configurable **rolling evaluation period** MAY be used for ranking current holdings and for weakest-position selection (§17).
+- A configurable **evaluation window** (strategy-level) MAY be used for ranking current holdings and for weakest-position selection (§17, **OD-16**).
 
 ### 4.6 Ranking pipeline (normative)
 
@@ -377,16 +414,30 @@ Fit score (eligibility + decision thresholds)
     ↓
 Historical outcomes at comparable fit (**backtest corpus only**)
     ↓
-Return-quality aggregation (trimmed mean of returns / annualized returns as specified)
+Return-quality aggregation (trimmed mean of returns / annualized returns as specified; **OD-18:** annualized/CAGR/XIRR ranking evidence only if holding period ≥ 30 calendar days)
     ↓
 Final ranking of opportunities
 ```
 
 Capital allocation among a strategy’s own buy drafts, once ranked, still respects cash, max holdings, staggered entry, partial funding (OD-05), and portfolio caps. Allocator weights MUST follow **ranking order / return quality**, not raw fit score. (V1 `ScorePriorityCapitalAllocator` weighting by fit is **not** V3 behaviour.)
 
-If trimmed-mean ranking is not eligible (`n < 15` for the relevant band, or backtest corpus not yet available), the UI MUST present fit as fit, not as rank. Treating “rank = fit” as a silent fallback is forbidden.
+If trimmed-mean ranking is not eligible (`n < 15` for the relevant band, or backtest corpus not yet available), the UI MUST present fit as fit, not as rank. Treating “rank = fit” as a silent fallback is forbidden. Fit MUST NOT be used as a replacement for return-quality ranking.
 
-Conviction **target sizing** (score bands → target position, subject to caps) remains a strategy function and is **not** the same as ranking. When return-quality ranking is not yet computable, capital **fill order** among that strategy’s own valid BUYs is **OPEN (OD-23)** — implementers MUST NOT label fill-by-fit as V3 ranking.
+Conviction **target sizing** (score bands → target position, subject to caps) remains a strategy function and is **not** the same as ranking.
+
+**OD-23 (frozen):** When return-quality ranking is **not computable** because `n < 15` or the required backtest corpus is unavailable, capital **fill order** among that strategy’s own valid BUY/INCREASE recommendations MUST be **descending conviction / target-size** order (higher conviction / larger conviction-driven target amount first). This is a **capital fill order**, **not** V3 return-quality ranking. MUST NOT label or present conviction/target-size order as the V3 ranking. MUST NOT emit or display a return-quality rank derived from this fill order.
+
+When return-quality ranking **is** computable (`n ≥ 15` and the required backtest corpus is available), the allocator MUST continue to follow **ranking order / return quality** as specified above. OD-23 does **not** change that ranked path.
+
+When conviction / target-size is equal, break ties in this **exact** order:
+
+1. **fit** (higher fit first)
+2. **conviction sub-score** (higher first)
+3. **alphabetical** order of the stock listing symbol
+
+The alphabetical tie-break MUST make the ordering deterministic (same inputs → same fill order).
+
+OD-23 does **not** change OD-05 partial funding, OD-06 atomic reservation, reserve protection, or strategy allocation limits. Unfunded and partially funded BUY/INCREASE remain valid (not WATCH). OD-23 does **not** change **OD-24** or any **DEP-*** item.
 
 ---
 
@@ -394,7 +445,7 @@ Conviction **target sizing** (score bands → target position, subject to caps) 
 
 ### 5.1 Portfolio-level capital
 
-See §22. Physical cash is one pool. Investable capital is what remains after the portfolio cash reserve (and after cash already reserved for pending-execution buys).
+See §22. Physical cash is one pool. Investable capital is what remains after the portfolio cash reserve (`required_cash_reserve` per **OD-19**) and after cash already reserved for pending-execution buys.
 
 ### 5.2 Strategy-level allocation percentages
 
@@ -415,23 +466,51 @@ Enabled strategies receive `allocation_pct` summing to 100% of investable capita
 
 `max(0, allocated − deployed)`
 
-Unused allocation is the starting point for own buys and for lendable surplus. It is not automatically isolated cash.
+Unused allocation is the starting point for own buys and for lendable surplus. It is not automatically isolated cash. It is **not** the Cash UI **Unallocated Cash** bucket (**OD-20**). Unused allocation MAY contain capital above the **OD-24** retained floor; only the surplus above that floor can become available-for-lending (§8.2).
 
 ### 5.3 No permanent isolated cash bucket
 
-A strategy does **not** receive a physical sub-account. All rupees sit in portfolio cash until a buy executes or a reservation is recorded. Allocation is a **constraint and accounting claim**.
+A strategy does **not** receive a physical sub-account. All rupees sit in portfolio cash until a buy executes or a reservation is recorded. Allocation is a **constraint and accounting claim**. The Cash UI **Unallocated Cash** bucket (**OD-20**) is presentation-only over this same pool; it is not a strategy sub-account and not a new ledger.
 
 ### 5.4 Lending of unused allocation
 
 A strategy MAY lend otherwise unused allocation to another strategy, subject to §6–§8. Lending is portfolio-level coordination, not a private side-deal outside the portfolio.
 
-### 5.5 Minimum free capital (“one opportunity”)
+### 5.5 Minimum free capital (“one opportunity”) (OD-24)
 
-A strategy SHOULD retain sufficient **free** unused capital for at least one opportunity, according to configured policy.
+**OD-24 (frozen):** For each strategy, the minimum retained capital MUST be:
 
-That retained amount is **not lendable**.
+```text
+minimum_retained_capital =
+    strategy_capital_allocation
+    ÷
+    recommended_minimum_holdings
+```
 
-The exact formula for “one opportunity” (for example one maximum diversified position vs one minimum position vs a configured rupee amount) remains **OPEN (OD-24)** — this was previously listed as OD-05 before that ID was reassigned to partial funding. The requirement that such a configurable minimum free amount exists, and that lending cannot consume it, is frozen.
+Where:
+
+- `strategy_capital_allocation` is the rupee amount currently allocated to that strategy from the portfolio’s **investable capital** (`investable_capital × allocation_pct`, §22). It is **not** strategy deployed capital, **not** portfolio NAV, **not** total portfolio cash, **not** `required_cash_reserve`, and **not** total portfolio value.
+- `recommended_minimum_holdings` is that strategy’s configured recommended minimum number of holdings/opportunities (§3.5). It is **not** hard `max_holdings`.
+- The result is the capital that the strategy MUST retain as its minimum free capital for **one future opportunity**.
+- In this specification, `minimum_free_capital` (for example in §8.2) **is** `minimum_retained_capital`.
+
+This is a **strategy-level accounting constraint**. It is **not** a physical cash account and MUST NOT create a strategy bank/cash sub-account. It does **not** create another portfolio cash reserve. It does **not** modify `required_cash_reserve` / OD-19. It does **not** modify `available_physical_cash`. It does **not** change the 100% strategy allocation rule. It does **not** change BUY funding, OD-05 partial funding, or OD-06 pending-execution reservation. It does **not** change OD-23 capital fill order or the `n ≥ 15` return-quality ranking path. It is **not** derived from B1/B2 configuration, conviction, fit, target size, or ranking. It is **not** a percentage-based formula.
+
+It applies to unused-allocation / lending eligibility accounting: the strategy MUST retain at least this amount before excess unused allocation can be considered available for lending. Lending MUST NOT consume the retained amount. OD-24 MUST NOT be used to hard-block external/broker withdrawals (OD-21).
+
+Example (normative illustration):
+
+- Investable capital = ₹10,00,000
+- Momentum allocation = 75%
+- Momentum `strategy_capital_allocation` = ₹7,50,000
+- Recommended minimum holdings = 5
+
+```text
+minimum_retained_capital = ₹7,50,000 ÷ 5
+                         = ₹1,50,000
+```
+
+Momentum must retain at least ₹1,50,000 as its protected “one opportunity” amount.
 
 **OD-05 (frozen): PARTIAL FUNDING IS ALLOWED** for deploying a strategy’s **own** available free capital into an OPEN/INCREASE opportunity:
 
@@ -441,7 +520,7 @@ The exact formula for “one opportunity” (for example one maximum diversified
 - Partial funding is the this-cycle executable amount; the persisted **target amount** is unchanged (OD-12). Remaining BUY/INCREASE still follows staggered-entry rules (§12) and OD-11. Do **not** reset the target to the amount funded this cycle.
 - If available free capital is **zero**, the recommendation stays a valid OPEN/INCREASE with `UNFUNDED` and may enter the lending workflow (§7). It still MUST NOT become WATCH.
 
-Partial funding does not waive portfolio reserve, pending-execution reservations, or ownership fences.
+Partial funding does not waive portfolio reserve, pending-execution reservations, or ownership fences. The rupee size of the reserve is `required_cash_reserve` (**OD-19**); OD-05 does not change that formula.
 
 ### 5.6 Atomic capital block and execution-price margin
 
@@ -479,11 +558,15 @@ A this-cycle gap that is entirely unfunded from own cash, and whose atomic_alloc
 
 ### 5.7 Lending limits
 
-Maximum lending (percentage of unused allocation and/or absolute amount) MUST be configurable at portfolio level. Lending cannot use the portfolio cash reserve. Lending cannot use cash reserved for pending execution or already committed-to-lending.
+Maximum lending (percentage of unused allocation and/or absolute amount) MUST be configurable at portfolio level. Lending cannot use the portfolio cash reserve (`required_cash_reserve`, **OD-19**). Lending cannot consume the strategy’s **OD-24** minimum retained capital. Lending cannot use cash reserved for pending execution or already committed-to-lending.
 
 ### 5.8 Allocation stability
 
 The portfolio MUST NOT continuously rewrite strategy `allocation_pct` because the number of today’s signals changed. Signal volume affects recommendations and lending demand, not the policy split.
+
+### 5.9 Capital fill order among a strategy’s own BUY/INCREASE recs (OD-23)
+
+When return-quality ranking is computable (`n ≥ 15` and the required backtest corpus is available), the allocator follows **ranking order / return quality** (§4.6). When it is **not** computable (`n < 15` or corpus unavailable), fill that strategy’s own valid BUY/INCREASE recommendations in **descending conviction / target-size** order, then the OD-23 tie-breaks (fit → conviction sub-score → alphabetical). That sequence is **fill order**, not V3 ranking, and MUST NOT be labelled as ranking. Fit is not a fallback ranking key. OD-05, OD-06, reserve protection, and strategy allocation limits still apply.
 
 ---
 
@@ -560,7 +643,7 @@ A lender strategy MAY request return of borrowed capital when it needs capital f
 - A user-configurable option for **automatic return** MAY exist; it is off unless the user enables it. Frozen governance: default is approval required.
 - Returning capital MAY require the borrower to exit one or more positions if the borrower lacks free cash to repay.
 - The borrower MUST release the **weakest eligible** positions first (§17).
-- “Weakest” MUST NOT be defined as lowest lifetime XIRR, lowest total return, or oldest holding alone. OD-16 remains OPEN; this section does not resolve it.
+- “Weakest” MUST NOT be defined as lowest lifetime XIRR, lowest total return, or oldest holding alone. The exact score is **OD-16** (§17).
 
 ### 6.7 Replenishment
 
@@ -572,7 +655,7 @@ When a strategy consumes its own immediately available capital (including its mi
 - **OD-06** still controls the **amount** recalled: request the minimum required atomic amount (`× 1.01` then ceil to ₹5,000), not exceeding the selected loan’s outstanding principal.
 - Do **not** recall an entire loan merely because it is the oldest if only a smaller amount is required.
 - If the selected loan’s outstanding is less than the remaining replenishment need, continue with the next oldest eligible loan (same FIFO order) until the OD-06 minimum is satisfied or no eligible loans remain. That continuation is FIFO order, not a size-based ranking rule.
-- If a borrower must sell positions as a consequence, §17 and **OD-16** remain applicable. Do not resolve OD-16 here.
+- If a borrower must sell positions as a consequence, rank borrower-owned positions per §17 (**OD-16**).
 
 **Example (normative illustration):** Momentum has ₹12,000 reserved as its minimum opportunity capacity, spends that ₹12,000 on a new opportunity, and the effective lending period has expired. Required back = ₹12,000 → × 1.01 = ₹12,120 → atomic ₹15,000, capped by outstanding principal. If several recall-eligible loans exist, tap the oldest by commitment time first (OD-09) for that ₹15,000 (or less if that loan’s outstanding is smaller).
 
@@ -580,12 +663,12 @@ When a strategy consumes its own immediately available capital (including its mi
 
 1. Effective minimum lending / recall-eligibility period (platform default 14 calendar days, portfolio override, OD-07)
 2. Configurable lending limits
-3. Minimum free capital (not lendable)
+3. Minimum retained capital / one-opportunity floor (**OD-24**; not lendable)
 4. Atomic capital block ₹5,000 with 1% margin then ceil (OD-06)
 5. Explicit user approval (default for lend and recall)
 6. Backend revalidation
 7. No split of one request across lenders
-8. No lending of portfolio reserve
+8. No lending of portfolio reserve (`required_cash_reserve`, OD-19)
 9. No lending of committed or reserved capital
 10. No commitment on display
 11. Partial own-capital funding does not convert OPEN/INCREASE to WATCH (OD-05)
@@ -618,7 +701,7 @@ Strategy detects opportunity
 Strategy generates a normal recommendation (action remains OPEN / INCREASE)
     ↓
 Apply staggered entry (§12) → this-cycle calculated_requirement (amount)
-    (whole-share qty derived from latest daily close; min actionable §12.4)
+    (whole-share qty derived from latest raw close_price; min actionable §12.4)
     ↓
     If this-cycle opportunity < effective min actionable: no new OPEN/INCREASE
     (target amount unchanged)
@@ -717,8 +800,8 @@ A strategy L is eligible to lend amount `A` to borrower B when:
 2. L is enabled in the portfolio
 3. `A` ≥ ₹5,000 and `A` is a multiple of ₹5,000 (OD-06)
 4. L’s **available-for-lending** ≥ `A`
-5. After the loan, L would still hold its minimum free capital
-6. `A` does not include portfolio reserve
+5. After the loan, L would still hold its minimum retained capital (**OD-24**)
+6. `A` does not include portfolio reserve (`required_cash_reserve`, OD-19)
 7. `A` does not include cash reserved for pending-execution or already committed-to-lending
 8. Configurable lending limits would not be exceeded
 9. L has no conflicting in-flight constraint that reduces lendable below `A` at **calculation** time (display); approval will re-check
@@ -739,11 +822,13 @@ available_for_lending =
   )
 ```
 
+`minimum_free_capital` is **`minimum_retained_capital` (OD-24)**: `strategy_capital_allocation ÷ recommended_minimum_holdings` (§5.5). Do **not** substitute `required_cash_reserve`, NAV, total cash, deployed capital, conviction, fit, target size, or ranking.
+
 Do **not** apply the 1% execution margin to lendable surplus. The 1% applies to **requirements** (how much to reserve/borrow/recall), not to how much a lender can offer.
 
 capped by configured lending limits.
 
-**Unused allocation** is defined in §5.2. It is not “all portfolio cash”.
+**Unused allocation** is defined in §5.2. It is not “all portfolio cash”. Portfolio reserve is already excluded because unused allocation is computed from investable capital after `required_cash_reserve` (**OD-19**); do not subtract the reserve a second time here.
 
 **Available-for-lending percentage** (OD-08 **primary** ranking key) =
 
@@ -795,7 +880,7 @@ User sets percentages summing to 100%. Each strategy’s virtual allocated capit
 
 ### 9.3 Unused allocation becomes lendable
 
-Only the surplus above minimum free capital, atomic-aligned, within limits, is lendable. Fully invested strategies have ~0 lendable.
+Only the surplus above minimum retained capital (**OD-24**), atomic-aligned, within limits, is lendable. Fully invested strategies have ~0 lendable.
 
 ### 9.4 Borrower discovers lenders
 
@@ -828,7 +913,7 @@ See §24. Display is a snapshot. Approval is serialised per portfolio capital mu
 
 ### 9.7 Recall across many strategies (OD-09)
 
-Each loan is a discrete outstanding amount with a lender, borrower, **commitment time**, and remaining principal. Replenishment requests the minimum OD-06-aligned amount from loans that are past the **effective** minimum lending period (§6.5, OD-07). If sells are required, weakest borrower-owned positions first (§17); the weakest-position **formula** remains **OPEN (OD-16)**.
+Each loan is a discrete outstanding amount with a lender, borrower, **commitment time**, and remaining principal. Replenishment requests the minimum OD-06-aligned amount from loans that are past the **effective** minimum lending period (§6.5, OD-07). If sells are required, weakest borrower-owned positions first (§17, **OD-16**).
 
 **OD-09 (frozen):** if multiple outstanding **loans** are eligible to repay a replenishment:
 
@@ -873,9 +958,9 @@ Portfolio stop-loss and trailing stop **do** apply to unmanaged holdings (§14�
 ### 10.4 Adoption
 
 - User adopts an unmanaged holding into **exactly one** strategy.
-- After adoption, that strategy owns it; **target amount** SHOULD be initialised from the adopted position’s current monetary value (remaining BUY/INCREASE = 0 unless the user/strategy later raises the target amount). Cost-basis / entry-date merge remains **DEP-ADOPT-MERGE**.
+- After adoption, that strategy owns it; **target amount** SHOULD be initialised from the adopted position’s current monetary value (remaining BUY/INCREASE = 0 unless the user/strategy later raises the target amount). **OD-15 (frozen):** adoption does **not** reset trailing/stop entry date; preserve the existing/original first-buy entry history. Detailed merge mechanics (including cost basis and multi-lot merge behavior) remain **DEP-ADOPT-MERGE**.
 - Adoption MUST be explicit. No silent auto-adopt during generation.
-- If the destination strategy **already** owns that stock, the unmanaged quantity is merged into that strategy’s holding. Cost-basis / entry-date merge rules are **not frozen** — see §33.3 **DEP-ADOPT-MERGE**.
+- If the destination strategy **already** owns that stock, the unmanaged quantity is merged into that strategy’s holding. **OD-15** still applies to the entry-date principle (do not reset to adoption date). Detailed merge mechanics remain **DEP-ADOPT-MERGE**.
 - Adoption into a strategy does **not** disturb another strategy’s existing position in the same stock (OD-01).
 
 ### 10.5 Migration / backfill ownership
@@ -894,7 +979,7 @@ Two or more strategies MAY own the same stock independently.
 |-------|------|
 | Identity | Unique `(portfolio, stock, owner)` where owner is `strategy_id` or the unmanaged sentinel |
 | Cost / qty / **target amount** / filled / entry | Per owner. Target is monetary (OD-12); quantity is derived. |
-| Trailing stop / stop-loss | Per owner’s holding (own entry date and own high-close series) |
+| Trailing stop / stop-loss | Per owner’s holding. Trailing: own entry date and own high-close **window**. All owners use the same raw `close_price` column (**OD-14**); they do not choose different series. Stop-loss `entry_price`: weighted-average actual fill cost of that owner’s current ownership episode (OD-13), not first-fill, not blended across owners. |
 | Strategy EXIT/REDUCE/INCREASE | Only the owning strategy, only its quantity |
 | Corporate-action quantity | Follows the **parent holding’s owner** (OD-10). Do not blend owners first. Do not use pro-rata as the governing rule. |
 | Portfolio exposure cap | Aggregate symbol MV/qty across owners |
@@ -915,13 +1000,13 @@ For every position identified by `(portfolio, stock, owner)`, a corporate action
 
 The governing rule is **parent-owner attachment**, not pro-rata allocation. Pro-rata and parent-owner attachment can differ for rounding, rights issues, broker-posted quantities, and other CA mechanics. Do **not** use pro-rata as the general CA allocation rule.
 
-**Normative quantity-ownership example** (illustrates attachment only; it does not freeze split mathematics, cost restatement, or price series):
+**Normative quantity-ownership example** (illustrates attachment only; it does not freeze split mathematics or cost restatement):
 
 Before: Strategy A = 50, Strategy B = 30, unmanaged = 0.
 
 For a 2:1 split: Strategy A = 100, Strategy B = 60, unmanaged = 0.
 
-**OD-10 does not decide** (leave unspecified, or already OPEN elsewhere):
+**OD-10 does not decide** (leave unspecified):
 
 - split / bonus mathematical formulas
 - rights-issue calculation rules
@@ -929,8 +1014,9 @@ For a 2:1 split: Strategy A = 100, Strategy B = 60, unmanaged = 0.
 - target / filled restatement
 - trailing-high restatement
 - stop-loss price restatement
-- `close_price` vs `adjusted_close_price` (**OD-14 remains OPEN**)
 - merger / demerger treatment (not specified in this document)
+
+**OD-14 (frozen)** uses raw `close_price` for stop-loss comparison, trailing high, trailing current-close comparison, and the OD-12 recommendation/quantity reference price. `adjusted_close_price` is **not** used for those calculations. OD-14 does **not** freeze the restatement items above and MUST NOT be read as using adjusted close to compensate for corporate actions. This specification does not define what `adjusted_close_price` adjusts for.
 
 ---
 
@@ -946,10 +1032,10 @@ For each enabled strategy:
 4. Apply strategy-specific exit rules to **owned holdings only**. If triggered, action = EXIT (attribution = strategy exit).
 5. Apply portfolio stop-loss / trailing stop / horizon to **this strategy’s owned holdings only**, each as its own position even if other strategies hold the same symbol (§13). Higher-precedence attribution wins when several would fire on the same cycle for **that** holding.
 6. Ignore holdings not owned by this strategy (including unmanaged and other strategies’ lots of the same stock).
-7. Apply staggered entry (§12) to OPEN/INCREASE **amounts**, then derive whole-share quantity from the latest daily close (OD-12). Suppress OPEN/INCREASE below the effective minimum actionable amount.
+7. Apply staggered entry (§12) to OPEN/INCREASE **amounts**, then derive whole-share quantity from the latest available raw `close_price` (OD-12 / OD-14). Suppress OPEN/INCREASE below the effective minimum actionable amount.
 8. Apply BUY cooldown (§11.2, **OD-11**) to OPEN/INCREASE only (key = stock + **this** strategy). Another strategy’s BUY of the same stock does not consume, reset, or affect this strategy’s cooldown.
 9. Enforce hard max holdings on new OPEN (this strategy’s name count only).
-10. Compute ranking (§4) from the **backtest corpus** when `n ≥ 15`; do not emit fit-as-rank; do not use live trades.
+10. Compute ranking (§4) from the **backtest corpus** when `n ≥ 15`; do not emit fit-as-rank; do not use live trades. When ranking is not computable (`n < 15` or corpus unavailable), do **not** emit a return-quality rank; capital fill among that strategy’s valid BUY/INCREASE recs uses **OD-23** (descending conviction / target-size, then fit → conviction sub-score → alphabetical). Do not present that fill order as V3 ranking.
 11. Compute own available capital; apply OD-05/OD-06. Set `FUNDED` / `PARTIALLY_FUNDED` / `UNFUNDED`. **Do not demote OPEN/INCREASE to WATCH** for capital reasons.
 12. Persist recommendations. Cancel only **this strategy’s** stale open recs, subject to §11.2 (do not stale-replace a BUY for a pair that is in cooldown; do **not** cancel `pending_execution`; do not clear cooldown). Do **not** cancel other strategies’ recs.
 
@@ -998,7 +1084,7 @@ After the Day 0 opportunity has been generated, **new** OPEN/INCREASE recommenda
 
 ### 11.4 Target amount (OD-12)
 
-Conviction → **target amount** (within diversification and portfolio caps). Quantity is **derived** from that amount using the latest available daily closing price and whole-share flooring (§12.3). The target amount MUST be persisted so later cycles can fill the remainder (§12). Do not persist target quantity as the source of truth.
+Conviction → **target amount** (within diversification and portfolio caps). Quantity is **derived** from that amount using the latest available raw `close_price` and whole-share flooring (§12.3). The target amount MUST be persisted so later cycles can fill the remainder (§12). Do not persist target quantity as the source of truth.
 
 ---
 
@@ -1025,9 +1111,9 @@ Minimum fields:
 - `filled_amount` / filled quantity (filled amount = monetary amount already represented by the filled position)
 - `entry_date` (first fill of this ownership episode)
 
-Do not store target quantity as the authoritative target. A derived quantity MAY be stored for display if it is recomputed from `target_amount` and the latest daily close when generating recommendations.
+Do not store target quantity as the authoritative target. A derived quantity MAY be stored for display if it is recomputed from `target_amount` and the latest available raw `close_price` when generating recommendations.
 
-**Reference price (OD-12):** for recommendation generation and all target/quantity calculations, use the stock’s **latest available daily closing price**. Do **not** use intraday price, expected execution price, previous execution price, broker quote, or estimated future price. Execution price is a separate execution concern and is not specified here. Small differences between last close and actual execution price MUST NOT alter recommendation-generation semantics.
+**Reference price (OD-12, clarified by OD-14):** for recommendation generation and all target/quantity calculations, use the stock’s **latest available raw daily `close_price`**. “Latest available daily closing price” in this specification means that raw `close_price`. Do **not** use `adjusted_close_price`, intraday price, expected execution price, previous execution price, broker quote, or estimated future price. Execution price is a separate execution concern and is not specified here. Small differences between last raw close and actual execution price MUST NOT alter recommendation-generation semantics. Do **not** add an execution-price band; OD-14 does not resolve execution-price behaviour.
 
 Each generation:
 
@@ -1045,11 +1131,13 @@ Each generation:
 If filled amount = ₹5,000 and, after cooldown, current target = ₹12,000 → remaining = ₹7,000.  
 If filled amount = ₹5,000 and current target = ₹8,000 → remaining = ₹3,000.
 
-Then derive whole-share quantity from remaining using the **latest daily close**. If remaining ₹3,000 is below the effective minimum actionable amount, no INCREASE is generated; target stays ₹8,000.
+Then derive whole-share quantity from remaining using the **latest available raw `close_price`**. If remaining ₹3,000 is below the effective minimum actionable amount, no INCREASE is generated; target stays ₹8,000.
 
 Partial first entry (capital, OD-05): target ₹36,000, first-entry 50% = ₹18,000, own free = ₹10,000 → fund ~₹10,000 now; **target remains ₹36,000**. Subsequent INCREASE after OD-11 elapses uses `current_target_amount − filled_amount`.
 
 If current target amount is below the amount already filled, there is **no** BUY/INCREASE for a gap. Existing REDUCE semantics remain governed by applicable recommendation rules. Do not invent an automatic reduce unless strategy reduce rules already fire.
+
+Executed INCREASE fills (after OD-11) update the stop-loss weighted-average execution cost of the current ownership episode (**OD-13**). They do not reset `target_amount` (OD-12) and do not start a new ownership episode.
 
 ### 12.3 Whole-share quantity (OD-12)
 
@@ -1058,12 +1146,14 @@ Fractional shares are **not** supported.
 When converting an amount into quantity, derive the maximum whole-share quantity whose notional value does not materially exceed the intended amount. Normal/default behaviour is to **FLOOR**:
 
 ```text
-quantity = floor(intended_amount / latest_daily_close)
-notional = quantity × latest_daily_close
+quantity = floor(intended_amount / latest_raw_close)
+notional = quantity × latest_raw_close
 residual = intended_amount − notional
 ```
 
-Example: target or slice amount = ₹2,500, last close = ₹600 → 2500/600 = 4.166… → **quantity = 4**, notional = ₹2,400, residual = ₹100. Do **not** force a 5th share (₹3,000) merely to consume the amount.
+where `latest_raw_close` is the latest available daily `close_price` (**OD-14**). Do **not** use `adjusted_close_price`.
+
+Example: target or slice amount = ₹2,500, last raw close = ₹600 → 2500/600 = 4.166… → **quantity = 4**, notional = ₹2,400, residual = ₹100. Do **not** force a 5th share (₹3,000) merely to consume the amount.
 
 Rounding to whole shares MUST **not** change the persisted `target_amount`. In the example the target remains ₹2,500; ₹100 is an unexecuted residual caused by whole-share constraints. Do not silently replace the target with ₹2,400.
 
@@ -1143,26 +1233,49 @@ Do **not** use the V1 trailing_stop unrealized-% proxy.
 
 ### 14.1 Frozen behaviour
 
-- Evaluated on **daily closing price**, not the intraday low.
+- Evaluated on the latest raw daily **`close_price`**, not the intraday low and not `adjusted_close_price` (**OD-14**).
 - **Portfolio-level** common control (not strategy `max_loss` as the account stop).
-- Configurable percentage (today’s profile `default_stoploss_percent` is a migration source, not the V3 owner of strategy JSON).
+- Configurable percentage (today’s profile `default_stoploss_percent` is a migration source for **stop-loss % only**, not the V3 owner of strategy JSON, and **not** the trailing-stop seed — trailing seed is **OD-22**).
 
-**Hit when:** `latest_daily_close ≤ entry_price × (1 − stop_loss_pct/100)`  
-(Entry price = average cost of the position being evaluated, unless a later decision defines first-fill price; do not invent a third definition. Using position average cost is the conservative reading of “from entry” for a stop from purchase.)
+**OD-13 (frozen):** `entry_price` is the **weighted-average execution cost of actual fills** for the **current ownership episode**, per stock + owner. It is **not** the first-fill price.
 
-If average cost vs first-fill price must differ, that is **OPEN (OD-13)**. Until then, use **average cost** of the current ownership episode.
+```text
+average_cost = (sum of actual executed fill value) / (sum of filled quantity)
+stop_price   = average_cost × (1 − stop_loss_pct / 100)
+```
+
+**Hit when:** `latest raw daily close_price ≤ stop_price`
+
+Only **actual executed fills** contribute to `average_cost`. Do **not** use latest raw close, `adjusted_close_price`, recommendation/reference price, atomic reservation (OD-06), unfunded amount, target amount (OD-12), or estimated execution price as the cost basis.
+
+The first fill of the episode establishes the initial average cost. Each subsequent actual fill of the same episode (including INCREASE after OD-11, partial/multiple fills of one recommendation, and OD-05 partial-funded executions) **recalculates** the weighted average. Do **not** keep the stop anchored to the original first-fill price.
+
+**Example:** 50 shares @ ₹100, later INCREASE 50 shares @ ₹120 → average cost = ₹110. With 10% stop-loss, stop = ₹99.
+
+**Ownership episode:** average cost is for the current episode of that `(stock, owner)`. A new episode begins after the previous position has been **fully exited** and a new position is later established. Do not carry the prior episode’s average cost into the new position. Do not blend cost bases across strategy owners of the same stock (OD-01).
+
+Adoption merge mechanics and cost-basis merge remain **DEP-ADOPT-MERGE**. **OD-15 (frozen)** sets the entry-date principle for trailing/stop windows: adoption does **not** reset to adoption date; preserve original first-buy/existing ownership-history entry date. Corporate-action cost restatement remains unspecified under **OD-10**. Do not resolve those here. OD-14’s choice of raw `close_price` does **not** restate average cost, stop price, or trailing high after a corporate action.
 
 ### 14.2 Which holdings
 
-Applies to **every open holding** in the portfolio: each strategy-owned lot and the unmanaged lot, **evaluated independently**. Same symbol, different owners → different entry prices / highs / hits.
+Applies to **every open holding** in the portfolio: each strategy-owned lot and the unmanaged lot, **evaluated independently**. Same symbol, different owners → different **average costs** / highs / hits (OD-01, OD-13) because each owner has its own cost basis and its own trailing **window**. All owners use the **same** raw `close_price` column (**OD-14**); they do not choose different price series.
 
 Rationale (frozen ownership split): stop-loss is a **portfolio** control, not a strategy control. Unmanaged means “not strategy-managed”, not “exempt from account risk”.
 
 Strategy `max_loss` in V1 exit JSON MUST NOT remain the portfolio stop after migration (§25). Strategy-specific risk rules other than the common stop (for example ATR stop) may remain on the strategy.
 
-### 14.3 Close series
+### 14.3 Close series (OD-14)
 
-Whether stop/trailing use `close_price` or `adjusted_close_price` is **OPEN (OD-14)**. Implementation must pick one series consistently once OD-14 is closed. Until then, do not mix series.
+**OD-14 (frozen):** portfolio stop-loss and trailing-stop calculations use raw daily **`close_price`** as the **single consistent** daily comparison series.
+
+- Stop-loss hit test: latest raw `close_price` vs OD-13 `stop_price`.
+- Trailing high: highest raw `close_price` since the applicable entry date.
+- Trailing current-close comparison: latest raw `close_price`.
+- OD-12 reference price for recommendation/quantity: latest available raw `close_price` (consistency clarification; OD-12 amount-based target is unchanged).
+
+`adjusted_close_price` is **not** used for those calculations. Do **not** mix raw and adjusted series. Do **not** use `adjusted_close_price` as a shortcut to compensate for corporate actions. This specification does not define what `adjusted_close_price` adjusts for.
+
+Execution/fill price remains separate from this comparison series. **OD-15 (frozen)** preserves existing/original first-buy entry history on adoption for trailing/stop windows.
 
 ---
 
@@ -1171,24 +1284,34 @@ Whether stop/trailing use `close_price` or `adjusted_close_price` is **OPEN (OD-
 ### 15.1 Frozen behaviour
 
 - Calculated from the **entry date** of the current ownership episode.
-- **Daily closing values only** (no intraday high/low).
-- Track the **highest closing price** on or after entry date.
-- `trailing_stop = highest_close_since_entry × (1 − trailing_pct / 100)`
-- Hit when **latest daily close** is **below** the trailing stop.
+- **Raw daily `close_price` only** (no intraday high/low; no `adjusted_close_price`) (**OD-14**).
+- Track the **highest raw `close_price`** on or after entry date.
+- `trailing_stop = highest_raw_close_since_entry × (1 − trailing_pct / 100)`
+- Hit when the **latest raw `close_price`** is **below** the trailing stop.
+
+Use the **same** raw `close_price` series for the historical highest close and the latest comparison close. Do **not** mix raw and adjusted series.
 
 This matches the V1 **presentation** formula in `HoldingPresentationService`, not the V1 `ExitStrategyEvaluator` unrealized-% proxy. V3 **forbids** the proxy as the trailing-stop definition.
+
+Trailing stop does **not** use OD-13 `entry_price` / average cost. It uses highest raw `close_price` since the applicable **entry date**. OD-13 and OD-14 do not change that structure. OD-14 only names the column.
 
 ### 15.2 Ownership
 
 Same scope as stop-loss: every open holding, **per owner**, including unmanaged. Do not compute a single trailing stop from a blended high across strategies.
 
-Entry date for unmanaged = first buy date of the current position (as V1 presentation already computes). Entry date for strategy-owned = first fill of that ownership episode (adoption date if adopted, not the original unmanaged buy, **unless** OD-15 says otherwise).
+Each owner has its own trailing **window** (own entry date → own high). All owners nevertheless use the **same** raw `close_price` column (**OD-14**). “Per owner close series” does **not** mean different owners may choose `close_price` vs `adjusted_close_price`.
 
-**OD-15:** On adoption, does trailing/stop entry date reset to adoption date or keep the original first buy? Not frozen. Until closed, **reset to adoption date** would change risk vs **keep original** would continue the unmanaged trail. Marked OPEN — do not implement a silent choice beyond storing enough data to support either.
+Entry date for unmanaged = first buy date of the current position (as V1 presentation already computes). Entry date for strategy-owned = first fill of that ownership episode. **OD-15 (frozen):** on adoption from unmanaged, do **not** reset trailing/stop entry date to the adoption date; preserve the existing/original first-buy entry history so adoption does not create a new trailing/stop window.
+
+**OD-15 (frozen):** On adoption, trailing/stop entry date keeps the existing/original first-buy entry history; adoption does **not** reset the window. This preserves risk/age continuity and does not treat administrative adoption as a new purchase.
+
+**OD-02 interaction note:** OD-02 remains frozen (`entry_date + T` calendar days), but this specification does not add a new adoption-specific horizon decision beyond preserving trailing/stop entry-date continuity under OD-15. Any additional adoption-horizon merge detail remains unresolved unless separately frozen.
 
 ### 15.3 Percentage
 
 Portfolio-configurable trailing percentage, independent of stop-loss percentage (they may be set equal by the user).
+
+**OD-22 (frozen):** On V3 migration, seed the **portfolio-level** trailing percentage to **15%**. That 15% is a **migration seed / initial portfolio value**, not a permanently enforced platform default. After migration the user MAY change the portfolio trailing percentage to any supported value. Do **not** copy `default_stoploss_percent` into trailing. Do **not** derive the seed from existing strategy-level trailing/stop configuration (including as-built B1/B2 strategy JSON). Do **not** average, take max/min, or otherwise reconcile strategy-level percentages. Those strategy-level values are **ignored completely** for this migration. Trailing remains a portfolio control (§21), not a strategy setting.
 
 ---
 
@@ -1207,24 +1330,44 @@ Recommendation TTL (`expiry_hours` on the recommendation row) is **not** a posit
 
 Used when a borrower must free cash to return a loan.
 
-Loan **selection** for replenishment is **OD-09** (FIFO by commitment time among recall-eligible loans). This section ranks **positions to sell**, not which loan to tap. Do not resolve OD-16 here.
+Loan **selection** for replenishment is **OD-09** (FIFO by commitment time among recall-eligible loans). This section ranks **positions to sell**, not which loan to tap.
+
+**OD-16 (frozen): weakest-position score**
+
+When recall/replenishment requires selling borrower-owned positions to free cash, rank eligible positions by a **simple windowed percentage return**. The position with the **lowest** score is the weakest and MUST be sold first (subject to repeated application until the cash requirement is met — sell mechanics beyond ranking remain unspecified).
+
+```text
+window_return_pct =
+    (current_reference_price − window_start_reference_price)
+    / window_start_reference_price × 100
+```
+
+- **Evaluation window:** strategy-configurable, in **calendar days** (consistent with OD-02). Each borrower strategy supplies its own weakest-position evaluation window configuration.
+- **Window start:** the daily reference price on the calendar date that is **N calendar days before** the evaluation date, where `N` is that strategy’s configured window length. Use the latest available daily bar on or before each anchor date if the exact calendar date has no bar.
+- **Current reference price:** the latest available daily reference price on the evaluation date (same series rule as window start).
+- **Not** a composite score: do **not** combine momentum, fit score, thesis score, lifetime XIRR, holding age, volatility, or any OD-03 opportunity-ranking metric into this score.
+- **Not** annualised XIRR. This is a recall/replenishment weakest-position metric, not general stock ranking and not OD-18 annualisation policy.
+- This is **not** the OD-03 ranking corpus.
 
 MUST NOT rank weakest as:
 
-- lowest lifetime XIRR, or
-- lowest total return, or
-- oldest holding
+- lowest lifetime XIRR alone
+- lowest total return alone
+- oldest holding alone
 
-**Agreed direction:**
+**Agreed direction (preserved):**
 
-- use a **configurable evaluation window** where appropriate
-- evaluate **recent / current** performance
-- use **strategy-specific** evaluation rules / windows
-- preserve positions whose **current thesis / recent strategy performance is strong**, even if lifetime XIRR is mediocre because the name was dormant for a long time
+- evaluate **recent / current** performance via the configured window
+- strategy-specific evaluation windows are allowed
+- windowed return captures recent weakness without penalising long-dormant names via lifetime metrics alone
 
-The exact weakest-position scoring formula is **OPEN (OD-16)**. Implementation MUST NOT ship an invented formula as if it were frozen. Until OD-16, recall that requires sells MUST block on user-selected positions or remain approval-only with user-chosen names — do not auto-pick with a fake score.
+**Tie-break (deterministic):** if two or more eligible borrower-owned positions have exactly the same `window_return_pct`, rank by **`stock_id` ascending**. No additional investment-quality tie metric.
 
-Eligible positions for forced repayment sells: **borrower-owned** holdings only.
+**Price / reference series (remaining ambiguity):** OD-16 uses `current_reference_price` and `window_start_reference_price` but this specification does **not** yet define which stored price column or lookup rule supplies those values. **OD-14** freezes raw `close_price` for portfolio stop-loss, trailing stop, and OD-12 recommendation/quantity reference only; it does **not** extend to OD-16. Do **not** silently assume `close_price` or `adjusted_close_price` for OD-16 until separately specified. See §33.3 **DEP-WEAKEST-PRICE**.
+
+**Insufficient history (remaining ambiguity):** if fewer than `N` calendar days of reference prices exist for a position, this specification does **not** define a fallback (for example shortening the window, excluding the position, or blocking auto-pick). Do **not** invent a fallback rule here. See §33.3 **DEP-WEAKEST-HISTORY**.
+
+Eligible positions for forced repayment sells: **borrower-owned** holdings only (**OD-01**). Do not sell another strategy’s quantity or unmanaged quantity.
 
 ---
 
@@ -1237,22 +1380,30 @@ Eligible positions for forced repayment sells: **borrower-owned** holdings only.
 | Fit score | Match to hypothesis now |
 | Historical outcome | A completed or simulated completed investment at a fit level |
 | Return | Simple holding-period return |
-| Annualized return / XIRR | Time-aware return (§20) |
+| Annualized return / XIRR | Time-aware return (§20). **OD-18:** used as **ranking evidence** only when backtest holding period ≥ 30 calendar days. Not the same as the §19 opportunity-cost success test. |
 | Benchmark return | NIFTY 50 over the comparable period |
 | Opportunity-cost threshold | Configured annualized hurdle, scaled to the period |
 | Success | §19 boolean |
-| Expected return | Aggregated return quality at a fit band (symmetric 7%/7% trimmed mean, `n ≥ 15`, backtest corpus only) |
+| Expected return | Aggregated return quality at a fit band (symmetric 7%/7% trimmed mean, `n ≥ 15`, backtest corpus only; tail count `k = nearest_integer(0.07 × n)` with exact .5 rounding upward, **DEP-TRIM-K**) |
 | Final ranking | Order by that expected/observed return quality — **not** live-trade outcomes, **not** fit score |
 
 V1 strategy backtest (currently 15d–1y ranges, paper, market gates off) is the **simulator that must supply** the ranking corpus (OD-03). It is not automatically sufficient as shipped (range/depth limits are implementation limitations). Live `ReviewEngine` / ledger sells MUST NOT be mixed into ranking observations.
 
 ### 18.2 History depth
 
-V3 product need: **multi-year** OHLCV for 5Y charts, long-horizon strategies, and historical evaluation.
+**OD-17 (frozen):** V3 must support **all available OHLCV history** for each listed security. There is **no** maximum history-depth ceiling imposed by the V3 product specification.
 
-The current code default `HISTORY_DEPTH_TARGET_DAYS = 550` is an **implementation limitation**, not a V3 cap. V3 requires deepening stored (and/or on-demand provider) history to support 5Y and all-available-history charts and multi-year evaluation. Exact target depth in days is **OPEN (OD-17)** as a number; “more than ~18 months, enough for 5Y when the listing has 5Y” is the product intent.
+- V3 does **not** define a fixed numeric OHLCV history-depth target (not 550 days, not 1,825 days, not any other invented day-count).
+- V3 must support all history that is **actually available** for the security from the data provider, subject to the provider’s available history and the security’s listing/history start date.
+- **5Y** must be supported when the security has 5Y of available history. 5Y is a **chart range**, not a storage ceiling.
+- History **shorter** than 5Y is valid and is **not** an error. A security with less than 5 years of available history legitimately returns its complete available history.
+- History **longer** than 5Y must remain available and MUST NOT be artificially truncated by a V3 product-level maximum. **All** must be able to represent that longer history.
+- Provider limitations and listing/history start dates are **external availability** constraints, not V3 product history ceilings.
+- Stored and/or on-demand provider history MAY be used; V3 does not impose a product-level day-count cap on either path.
 
-Pre-listing stocks show whatever exists; that is not an error (§26).
+The V1/as-built code default `HISTORY_DEPTH_TARGET_DAYS = 550` is an **implementation limitation only**. It is **not** a V3 product requirement, target, or equivalent maximum-depth constant. V3 has **no** equivalent maximum product-depth constant.
+
+Pre-listing stocks and listings with short available history show whatever exists; that is not an error (§26).
 
 ### 18.3 Benchmark
 
@@ -1269,6 +1420,8 @@ An historical outcome is **successful** when **all** of the following hold:
 3. **Annualized** return also beats the configured **opportunity-cost** threshold.
 
 Do not impose a fixed absolute return target across all strategies (no global “must gain X%”).
+
+**OD-18** governs when annualized return/CAGR/XIRR may be used as **ranking evidence**. It does **not** alter this §19 success definition or the §19.1 opportunity-cost formula.
 
 ### 19.1 Opportunity cost
 
@@ -1292,13 +1445,13 @@ where `r` is the configured annualized opportunity-cost rate (default 0.12).
 |-----------|----------------|
 | Fixed-horizon strategy, outcome measured at horizon (or exit if earlier) | Simple return over that **calendar** horizon; also compute annualized for the opportunity-cost test using `T_years = calendar_days / 365` |
 | No-horizon strategy, completed **backtest** holding | Holding-period simple return **and** XIRR / annualized return over the actual period |
-| Weakest-position / windowed evaluation of **current** holdings (recall, §17) | Rolling or configured window return / XIRR — not lifetime XIRR as the sole score. This is **not** the OD-03 ranking corpus. |
-| Opportunity ranking (fit-band expected return) | **Backtest corpus only** (OD-03), trimmed mean per OD-04 |
+| Weakest-position / windowed evaluation of **current** holdings (recall, §17) | **OD-16:** configured-window **simple percentage return** (`window_return_pct`); not lifetime XIRR / total return / age alone; not annualised XIRR; not the OD-03 ranking corpus |
+| Opportunity ranking (fit-band expected return) | **Backtest corpus only** (OD-03), trimmed mean per OD-04. Tail count `k` per **DEP-TRIM-K**. **OD-18:** annualized return/CAGR/XIRR is ranking evidence only when the backtest holding period is **≥ 30 calendar days**. |
 | Benchmark comparison | Simple return of NIFTY 50 over the same start/end dates (or nearest trading days) |
 
 XIRR is appropriate when cash flows are dated (buys, sells, corporate actions). Simple return is appropriate for a single entry/exit over a defined horizon.
 
-Do not annualise very short windows into explosive percentages as a success signal (V1 backtest already refuses CAGR under 30 days). A minimum holding period for annualization is **OPEN (OD-18)** if not reused from that backtest rule; until closed, do not treat 1-day fireworks as ranking evidence.
+**OD-18 (frozen):** For ranking, annualized return/CAGR/XIRR must not be used as ranking evidence for backtest holding periods shorter than **30 calendar days**. This reuses the existing V1 backtest rule that refuses CAGR under 30 days, stated here as **30 calendar days** (not trading sessions). Holding periods **≥ 30 calendar days** MAY contribute annualized return/CAGR/XIRR as ranking evidence. Simple return of shorter (and longer) backtest outcomes remains a valid outcome. OD-18 does **not** change the §19 success definition or the opportunity-cost calculation (`T_years = calendar_days / 365`, OD-02). OD-16 weakest-position scoring remains non-annualised `window_return_pct`. When trimmed-mean ranking is not computable (`n < 15` or corpus missing), capital fill order is **OD-23** (descending conviction / target-size among that strategy’s own valid BUY/INCREASE recs; not V3 ranking; not a fit-as-rank fallback), not OD-18. OD-18 does **not** change the `n ≥ 15` ranked path.
 
 ---
 
@@ -1309,8 +1462,8 @@ These MUST move **out** of strategy `config_json` and onto **portfolio** configu
 | Control | Notes |
 |---------|--------|
 | Stop-loss % | §14 |
-| Trailing stop % | §15 |
-| Portfolio cash reserve | Floor that is not invested and not lent (§22) |
+| Trailing stop % | §15. Portfolio-level. **OD-22:** migrate by seeding **15%**; ignore strategy-level values; user-editable after migration. |
+| Portfolio cash reserve | Floor that is not invested and not lent; rupee amount = `required_cash_reserve` per **OD-19** (§22). **OD-21:** not a hard withdrawal block; a shortfall is a warning condition. |
 | Portfolio max position size / exposure | Ceiling across the account |
 | Other genuinely portfolio-wide risk limits identified in implementation | Must be classified as portfolio, not smuggled back into strategy JSON |
 
@@ -1329,29 +1482,123 @@ Physical cash remains **one** ledger-backed account per portfolio (V1 `portfolio
 | Quantity | Definition |
 |----------|------------|
 | **Total portfolio cash** | Ledger balance |
-| **Portfolio cash reserve** | Configured floor (percentage of cash and/or absolute — **OPEN (OD-19)** for the unit; the *existence* of a non-investable, non-lendable reserve is frozen). Cannot be used for new buys or loans. |
-| **Reserved cash** | Cash reserved for approved **pending-execution buys** (V1 reservation semantics), including OD-06 `atomic_allocation` (which may exceed the eventual fill). Unused reservation after reconciliation returns to available. Must not double-count with CAPITAL_COMMITTED / lent. |
-| **Investable capital** (strategy split base) | `(cash − reserve − pending-execution reserved) + market value of strategy-owned holdings` only. Unmanaged holdings’ market value is **not** part of the 100% strategy split (it is residual account wealth the strategies do not claim). Including holdings MV in the split base is required so an invested strategy is not treated as having unused cash equal to its entire %. Cash-only split is **not** the V3 model. |
+| **Invested Amount** (`total_invested_amount`) | Actual money paid to acquire **currently held** investments (capital invested). Example: ₹80 was paid to acquire the currently held investment → Invested Amount = ₹80. This is **not** current market value and **not** available cash. |
+| **Notional Portfolio Value** (`current_notional_portfolio_value`) | Current market value of the **currently held** investments. Example: ₹80 was invested and those holdings are now worth ₹100 → Invested Amount = ₹80, Notional Portfolio Value = ₹100. This is **not** invested cost/basis and **not** invested amount plus cash. |
+| **Available cash** | Currently available unallocated physical portfolio cash. `available_physical_cash` remains §22.2. This quantity is **not** the OD-19 reserve base and is **not** the OD-20 named **Unallocated Cash** UI bucket. |
+| **Unallocated Cash** | **OD-20 (frozen).** Named Cash-UI bucket for residual portfolio cash after `required_cash_reserve` that is not claimed by strategy unused-allocation accounting. **Presentation-only** over the existing single physical cash pool. Not a separate cash/bank/strategy account, not a new allocation %, not a new reserve, not a new lending pool, not a new withdrawal entitlement, and not a new accounting ledger. Distinct from Available cash / `available_physical_cash`, from pending-execution **Reserved cash** (OD-06), from post-fill reservation leftover, and from strategy unused allocation. Does **not** introduce a new residual-cash formula; it displays the residual already described by this §22 accounting. |
+| **Portfolio cash reserve** (`required_cash_reserve`) | Rupee floor computed per **OD-19** below. Non-investable and non-lendable. Cannot be used for new buys or loans. Distinct from pending-execution **Reserved cash** (OD-06) and from **Unallocated Cash** (OD-20). **OD-21:** physical cash MAY fall below this floor after an external/broker withdrawal; that is a warning condition, not permission to invest or lend the reserve. |
+| **Reserved cash** | Cash reserved for approved **pending-execution buys** (V1 reservation semantics), including OD-06 `atomic_allocation` (which may exceed the eventual fill). Unused reservation after reconciliation returns to available. Must not double-count with CAPITAL_COMMITTED / lent. Must **not** be relabelled as **Unallocated Cash** (OD-20). |
+| **Investable capital** (strategy split base) | `(cash − required_cash_reserve − pending-execution reserved) + market value of strategy-owned holdings` only. Unmanaged holdings’ market value is **not** part of the 100% strategy split (it is residual account wealth the strategies do not claim). Including holdings MV in the split base is required so an invested strategy is not treated as having unused cash equal to its entire %. Cash-only split is **not** the V3 model. `required_cash_reserve` is the OD-19 rupee floor, not a second percentage. |
 | **Strategy allocation** | `investable_capital × allocation_pct` |
-| **Strategy available capital** | Capital the strategy may use **now** for new buys: unused allocation that is actually fundable from physical available cash, plus outstanding **borrowed** amounts, minus amounts it must not spend (already reserved). Cannot invade portfolio reserve. |
+| **Strategy minimum retained capital** (`minimum_retained_capital`, OD-24) | `strategy_capital_allocation ÷ recommended_minimum_holdings`. Strategy-level accounting floor for one future opportunity. Not a physical sub-account, not OD-19, not OD-06 reserved cash, not Unallocated Cash (OD-20). Subtracted in available-for-lending (§8.2). Does not change `available_physical_cash`. |
+| **Strategy available capital** | Capital the strategy may use **now** for new buys: unused allocation that is actually fundable from physical available cash, plus outstanding **borrowed** amounts, minus amounts it must not spend (already reserved). Cannot invade portfolio reserve (`required_cash_reserve`, OD-19). OD-24 does **not** change this BUY-funding definition. |
 | **Committed-to-lending** | Approved but not yet reflected as lent, if those steps are split; otherwise 0 and lent updates on approval |
 | **Capital currently lent** | Outstanding loan principal from this strategy as lender |
 | **Available-for-lending** | §8.2 |
 | **Borrowed capital** | Outstanding loan principal to this strategy as borrower |
 | **Capital required by pending recommendations** | Sum of unfunded BUY gaps (informational). Does **not** reserve cash |
 
+**OD-19 (frozen): portfolio cash reserve unit / formula.**
+
+There is **one** configurable portfolio-level percentage: `portfolio_cash_reserve_pct`. Do **not** define a separate percentage for Invested Amount and another for Notional Portfolio Value. The reserve is a **portfolio-level** control, not a strategy-level setting.
+
+```text
+reserve_base =
+    MAX(
+        total_invested_amount,
+        current_notional_portfolio_value
+    )
+
+required_cash_reserve =
+    reserve_base × portfolio_cash_reserve_pct
+```
+
+Equivalently:
+
+```text
+required_cash_reserve =
+    MAX(
+        total_invested_amount,
+        current_notional_portfolio_value
+    ) × portfolio_cash_reserve_pct
+```
+
+**Behaviour implied by the formula:**
+
+- The reserve cannot fall below the configured percentage of actual invested capital merely because holdings have declined in market value.
+- If current notional portfolio value rises above invested amount, the reserve requirement rises accordingly.
+- `portfolio_cash_reserve_pct` is configurable at portfolio level.
+- The reserve remains non-investable and non-lendable. Partial funding cannot invade it (OD-05).
+
+**The reserve base is not any of the following:**
+
+- a percentage of cash
+- a percentage of portfolio NAV
+- an absolute rupee configuration (the *result* is a rupee amount; the *configured* input is the single percentage)
+- invested amount + available cash
+- “total portfolio value” as invested amount + cash
+- two different percentages combined
+
+If this specification uses **portfolio NAV** elsewhere for accounting/reconciliation (§22.3), that existing NAV concept is **not** redefined here and is **not** the OD-19 reserve base.
+
+**Examples (illustrative only).** The **20%** figure is an example of a configured `portfolio_cash_reserve_pct`. It is **not** a frozen V3 numeric default.
+
+Example A — no appreciation:
+
+- Invested Amount = ₹80
+- Notional Portfolio Value = ₹80
+- `portfolio_cash_reserve_pct` = 20%
+- `reserve_base` = MAX(₹80, ₹80) = ₹80
+- `required_cash_reserve` = ₹80 × 20% = ₹16
+
+Example B — appreciation:
+
+- Invested Amount = ₹80
+- Notional Portfolio Value = ₹100
+- `portfolio_cash_reserve_pct` = 20%
+- `reserve_base` = MAX(₹80, ₹100) = ₹100
+- `required_cash_reserve` = ₹100 × 20% = ₹20
+
+Example C — decline:
+
+- Invested Amount = ₹80
+- Notional Portfolio Value = ₹60
+- `portfolio_cash_reserve_pct` = 20%
+- `reserve_base` = MAX(₹80, ₹60) = ₹80
+- `required_cash_reserve` = ₹80 × 20% = ₹16
+
+**Not decided by OD-19:** pending-execution reservation (OD-06); a new hard-coded numeric default for `portfolio_cash_reserve_pct`; recalculation cadence beyond existing capital-calculation rules; storage/schema representation. Strategy minimum retained capital / one opportunity is **OD-24** (frozen separately; `strategy_capital_allocation ÷ recommended_minimum_holdings`; not this reserve formula; not a second portfolio reserve). Named **Unallocated Cash** UI is **OD-20** (frozen separately; presentation-only; does not change this reserve formula). Withdrawal-into-reserve is **OD-21** (frozen separately: withdrawals MUST NOT be blocked merely because they would leave cash below `required_cash_reserve`; reserve remains non-investable and non-lendable; OD-24 MUST NOT hard-block those withdrawals).
+
 ### 22.2 Available physical cash
 
 `available_physical_cash = max(0, total_cash − pending_execution_reservations)`
 
-Withdrawals remain capped by available physical cash (V1). Portfolio reserve SHOULD also block withdrawals that would breach the reserve **OPEN (OD-21)** (V1 `CashManagementService` does not enforce strategy `min_cash_reserve_pct` on withdraw). Frozen: reserve cannot be lent or invested; whether the user may withdraw into the reserve is not frozen.
+This formula is unchanged. **OD-24** does **not** alter `available_physical_cash`. Do **not** invent a reserve-adjusted withdrawal-cap formula. Pending-execution reserved cash remains excluded here. Withdrawals remain subject to `available_physical_cash` (they cannot spend pending-execution reserved cash). They MUST NOT be further blocked merely because they would leave cash below `required_cash_reserve` (**OD-21**). OD-24 MUST NOT be used to hard-block such external withdrawals.
+
+**OD-21 (frozen): YES.** Withdrawals MUST NOT be blocked merely because they would cause physical portfolio cash to fall below `required_cash_reserve`.
+
+“Withdraw” means taking/transferring cash out of the portfolio/broker cash account, typically to the user’s external bank account. It is **not** a transfer between LidoPortfolio virtual strategy allocations.
+
+LidoPortfolio does not control the broker’s physical cash account. A user can withdraw or transfer money from the actual broker account outside LidoPortfolio. The application MUST represent the resulting cash position rather than pretending that such a withdrawal could not happen. Accounting MUST be allowed to show a **reserve shortfall** (physical cash below `required_cash_reserve`) after an external/manual broker withdrawal.
+
+A reserve shortfall is a **warning/alert condition**, not a hard withdrawal restriction. The user MAY subsequently replenish broker/portfolio cash to restore the reserve.
+
+The application MUST NOT terminate automatic executions or execution recommendations **solely** because portfolio cash is currently below `required_cash_reserve`. Existing independent eligibility rules (including that the reserve cannot be used for new buys or loans) remain unchanged.
+
+Frozen independently of OD-21:
+
+- Reserve (`required_cash_reserve`, OD-19) remains **non-investable and non-lendable**. OD-21 is **not** permission to invest or lend reserve cash. Partial funding still cannot invade the reserve for buys (OD-05).
+- The **Unallocated Cash** UI bucket (OD-20) remains presentation-only and is **not** a withdrawal entitlement.
+- Do not create a withdrawal account, withdrawal ledger, or new cash bucket.
+
+V1 `CashManagementService` did not enforce strategy `min_cash_reserve_pct` on withdraw; OD-21 freezes that product outcome for V3 (allow the shortfall; warn; do not hard-block).
 
 ### 22.3 Consistency rules
 
 - Sum of strategy allocated capital = investable capital as defined above (excludes unmanaged MV).
 - Sum of strategy deployed (owned holdings MV + that strategy’s reserved buys + lent) reconciles to owned holdings MV + reserved + internal loans (loans cancel across lender/borrower).
 - Internal loans do not change **total** portfolio cash; they change claims.
-- Unmanaged MV + strategy allocated capital + (cash reserve + unallocated physical constraints) must be reconcilable to portfolio NAV; do not double-count unmanaged MV inside a strategy %.
+- Unmanaged MV + strategy allocated capital + (cash reserve + unallocated physical constraints) must be reconcilable to portfolio NAV; do not double-count unmanaged MV inside a strategy %. **Portfolio NAV** in this reconciliation is **not** the OD-19 reserve base. OD-19 uses `MAX(total_invested_amount, current_notional_portfolio_value)`, not NAV and not invested amount + available cash. The Cash UI **Unallocated Cash** bucket (**OD-20**) is a presentation of residual cash after `required_cash_reserve` that is not claimed by strategy unused-allocation accounting, as already described here; it does **not** add a new residual-cash formula or a new ledger line.
 
 ---
 
@@ -1416,7 +1663,7 @@ After commitment: `outstanding` → `partially_returned` | `returned` (atomic bl
 The backend is authoritative for:
 
 - capital availability
-- lendable amounts
+- lendable amounts (after the **OD-24** retained floor and existing lending constraints)
 - lending approval
 - committed-to-lending
 - borrower capacity
@@ -1447,14 +1694,15 @@ Non-destructive. Preserve data.
 | Data | Migration behaviour |
 |------|---------------------|
 | Strategies | Keep rows. All previously `active` stay enabled. Drafts/archived unchanged. Multiple enabled allowed going forward. |
-| Strategy `config_json` | Copy scoring, eligibility, thresholds, market gates, strategy-specific exit rules. **Move** `min_cash_reserve_pct`, max deploy, portfolio max position (as portfolio defaults), cash reservation flags to **portfolio** settings. Remove common SL/trailing from strategy exits as *account* controls; keep other exit rules. Do not delete old JSON keys until code no longer reads them; ignore them once V3 owners exist. |
+| Strategy `config_json` | Copy scoring, eligibility, thresholds, market gates, strategy-specific exit rules. **Move** `min_cash_reserve_pct` to portfolio `portfolio_cash_reserve_pct` (**OD-19**), and move max deploy, portfolio max position (as portfolio defaults), cash reservation flags to **portfolio** settings. Remove common SL/trailing from strategy exits as *account* controls; keep other exit rules. Do not delete old JSON keys until code no longer reads them; ignore them once V3 owners exist. The moved cash-reserve percentage is applied with the OD-19 formula; do not keep interpreting it as a V1 percentage of cash. **OD-22:** do **not** move strategy-level trailing/stop percentages into the portfolio trailing seed; ignore those values (including as-built B1/B2). |
 | Holdings | Unmanaged unless safe inference (§10.5). |
 | Manual holdings | Unmanaged. |
 | Recommendations | Keep. Map unfunded-as-WATCH historically as **legacy**; do not rewrite historical actions. New generates use §23. |
 | Transactions | Keep `source` and `recommendation_id`. Backfill owner on new derived holdings only per §10.5. |
 | Cash | Single account unchanged. Opening loans = none. |
-| `default_stoploss_percent` | Becomes portfolio stop-loss %. Trailing %: if only one number existed, **do not invent** a second; copy stop-loss % as initial trailing % **or** leave trailing disabled until the user sets it — **OPEN (OD-22)**. |
-| Factory Minervini | Remains a strategy; its former 20% cash reserve becomes a **portfolio** default if no portfolio reserve exists yet. |
+| `default_stoploss_percent` | Becomes portfolio **stop-loss %** only. It is **not** copied into trailing %. |
+| Portfolio trailing % | **OD-22 (frozen).** Seed the portfolio trailing percentage to **15%**. Existing strategy-level trailing/stop values (as-built B1/B2 code-level configuration) are **ignored completely**. Do not average, max, min, or otherwise reconcile strategy-level percentages. Do not copy stop-loss %. Do not leave trailing disabled as the migration outcome. 15% is a **migration seed**, not a frozen V3 platform default; the portfolio value remains editable after migration. |
+| Factory Minervini | Remains a strategy; its former 20% cash reserve becomes a **portfolio** `portfolio_cash_reserve_pct` seed **if no portfolio reserve exists yet**. That 20% is a **migration seed** of the single OD-19 percentage, not a frozen V3 platform default and not 20% of cash or of NAV. |
 
 No forced sells, no cash wipes, no dropping recommendation history.
 
@@ -1470,7 +1718,7 @@ Holdings / stock performance chart (`PriceVolumeChart`):
 | **5Y** | Add |
 | **All** | Remain as a control, but meaning **changes** |
 
-**All** = all **available stored (and, when synced, provider) history** for that stock, **not** V1 “since first buy of the current position”.
+**All** = all **available stored (and, when synced, provider) history** for that stock, **not** V1 “since first buy of the current position” (**OD-17**). All is **not** limited to 5Y, **not** limited to 550 days, and **not** limited to any other V3 numeric ceiling. If available history is longer than 5Y, All MUST be able to represent that longer history.
 
 V1 `GET /stocks/{id}/prices` via `priceHistoryForHolding` filters `price_date >= firstBuyDate`. That is an implementation behaviour to replace for this chart.
 
@@ -1478,7 +1726,7 @@ If the user selects 5Y (or any range) and less history exists, **show whatever i
 
 `Showing available data from {earliest} to {anchor} (less than selected range).`
 
-Force-sync MAY fetch missing history from providers; lack of data before listing is success with shorter series.
+Force-sync MAY fetch missing history from providers. Lack of data before the security’s listing/history start is success with a shorter series, not an error. Provider availability limits are external, not a V3 product-depth ceiling.
 
 Explorer/index charts are out of scope unless they share the same control component; if they do, 5Y/All semantics SHOULD match.
 
@@ -1492,16 +1740,16 @@ Additive / evolving `/api` and `/api/v1` capabilities (shapes not frozen beyond 
 |------------|--------|
 | List/enable **multiple** strategies per portfolio | Registry `exactly_one_active_per_portfolio` removed |
 | Per-strategy recommendation generate | `strategy_id` required or generate-all-enabled |
-| Holdings include owner, unmanaged flag, **target amount** / filled | Multiple rows per stock when multiple owners (OD-01). CA quantity stays on the parent owner row (OD-10); not blended. Target is amount (OD-12); qty derived from latest daily close. |
+| Holdings include owner, unmanaged flag, **target amount** / filled | Multiple rows per stock when multiple owners (OD-01). CA quantity stays on the parent owner row (OD-10); not blended. Target is amount (OD-12); qty derived from latest raw `close_price` (OD-14). |
 | `POST` adopt holding → one strategy | Merge if that strategy already owns the name (DEP-ADOPT-MERGE) |
-| Portfolio controls GET/PUT | reserve, SL, trailing, max position, lending policy, atomic block ₹5,000, 1% margin, platform/portfolio recall period, **minimum actionable BUY/INCREASE** (platform default ₹5,000 + portfolio override, OD-12) |
+| Portfolio controls GET/PUT | `portfolio_cash_reserve_pct` (OD-19), SL, trailing, max position, lending policy, atomic block ₹5,000, 1% margin, platform/portfolio recall period, **minimum actionable BUY/INCREASE** (platform default ₹5,000 + portfolio override, OD-12). Do **not** expose a separately configured portfolio min-free-capital formula; **OD-24** is derived. |
 | Strategy allocation % GET/PUT | sum-to-100 validation |
 | Recommendation capital_status | FUNDED / PARTIALLY_FUNDED / UNFUNDED; never WATCH-for-cash |
-| Eligible lenders for a rec | ranked by OD-08: lendable % descending, then lendable amount descending; exact ties arbitrary; amounts ₹5,000-aligned after 1.01 |
+| Eligible lenders for a rec | ranked by OD-08: lendable % descending, then lendable amount descending; exact ties arbitrary; amounts ₹5,000-aligned after 1.01; lendable already respects **OD-24** |
 | Approve/reject lending | atomic revalidation |
 | Recall request / approve | effective period = platform default (14d) or portfolio override (OD-07); if several eligible loans, tap oldest by commitment time first (OD-09); amount OD-06 |
-| Capital / loan ledger read APIs | include reservation vs invested reconciliation |
-| Chart prices with `from`/`range=5y\|all` **without** since-buy clamp | |
+| Capital / loan ledger read APIs | include reservation vs invested reconciliation. **Unallocated Cash** (OD-20) MAY appear as a presentation figure derived from existing §22 accounting; it is not a new ledger or cash account. Derived **OD-24** `minimum_retained_capital` MAY be shown as an accounting figure; it is not a cash account. |
+| Chart prices with `from`/`range=5y\|all` **without** since-buy clamp | `5y` remains a supported range. `all` = all available stored/provider history (**OD-17**); no V3 day-count ceiling. Existing `from`/`range` semantics remain. |
 | Notifications hooks for capital/lending/recall | |
 
 Existing generate/review/execute APIs remain for funded path. Breaking change: unfunded buys are no longer WATCH.
@@ -1514,14 +1762,14 @@ Conceptual (no migrations in this phase).
 
 ### 28.1 Portfolio settings / controls
 
-Persist: cash reserve, stop-loss %, trailing %, portfolio max position, lending limits, min free-capital policy, opportunity-cost rate, optional auto-return flag, **platform default recall period** (shipped 14 calendar days), **portfolio recall override**, atomic block **₹5,000**, execution-price margin **1%**, **platform default minimum actionable BUY/INCREASE amount** (shipped **₹5,000**, OD-12), **portfolio minimum-actionable override**.
+Persist: `portfolio_cash_reserve_pct` (**OD-19**; one portfolio-level percentage; `required_cash_reserve` is computed, not a second configured unit), stop-loss %, trailing % (**OD-22:** migrate by seeding **15%** at portfolio level; ignore strategy-level B1/B2 values; 15% is a seed, not a locked platform default), portfolio max position, lending limits, opportunity-cost rate, optional auto-return flag, **platform default recall period** (shipped 14 calendar days), **portfolio recall override**, atomic block **₹5,000**, execution-price margin **1%**, **platform default minimum actionable BUY/INCREASE amount** (shipped **₹5,000**, OD-12), **portfolio minimum-actionable override**. Do **not** persist a separate portfolio **min-free-capital formula** or cash account for **OD-24**; that amount is computed from strategy allocation and recommended minimum holdings (§5.5). Do **not** persist **Unallocated Cash** (OD-20) as a cash account, bank account, or allocation setting; it is presentation-only.
 
 ### 28.2 Strategy
 
 - Allow multiple enabled strategies per `profile_id` (drop application-level exclusive active).
 - `allocation_pct`
 - Strategy-only config; strip portfolio keys from *meaning* (keys may linger unused).
-- Optional horizon in **calendar days**, first_entry_pct (default 50%), buy_cooldown (**1 calendar day**, OD-11), min/max holdings.
+- Optional horizon in **calendar days**, first_entry_pct (default 50%), buy_cooldown (**1 calendar day**, OD-11), min/max holdings. Recommended minimum holdings is the **OD-24** divisor; do not persist a separate min-free-capital rupee setting as the OD-24 source of truth.
 
 ### 28.3 Holdings / positions
 
@@ -1563,14 +1811,17 @@ Append-only capital and ownership events (§31).
 
 | Surface | V3 |
 |---------|-----|
-| **Strategy page** | Eligibility, scoring, thresholds, strategy-specific exits, optional horizon, staggered first-entry % (default 50%), BUY cooldown **1 calendar day** (OD-11; not the OD-07 14-day recall), min/max holdings, conviction bands. **Remove** portfolio cash reserve, common SL/trailing, portfolio-wide cash rules. |
+| **Strategy page** | Eligibility, scoring, thresholds, strategy-specific exits, optional horizon, staggered first-entry % (default 50%), BUY cooldown **1 calendar day** (OD-11; not the OD-07 14-day recall), min/max holdings (recommended minimum is the **OD-24** divisor), conviction bands. **Remove** portfolio cash reserve, common SL/trailing, portfolio-wide cash rules. |
 | **Strategy registry** | Enable multiple strategies; allocation % editor (sum 100). No exclusive activate. |
-| **Portfolio settings** | Reserve, SL, trailing, portfolio caps, lending policy, recall period override (inherit platform 14-day default), opportunity cost, auto-return toggle (default off). Atomic block ₹5,000 and 1% margin are specified product values (display as policy, not as “invest the margin”). **Minimum actionable BUY/INCREASE** inherits platform ₹5,000 unless the portfolio overrides (OD-12; not a strategy setting; not OD-06). |
-| **Holdings** | Owner / Unmanaged; **per-strategy rows** for the same stock (qty 50 vs 30); Adopt; **target amount** vs filled amount (qty derived from latest daily close, OD-12); do not offer strategy sell on unmanaged or on another strategy’s lot. Corporate-action quantity stays on the parent owner (OD-10); unmanaged CA stays unmanaged. |
-| **Recommendations** | Unfunded or partially funded BUY visible with capital status; not WATCH. Lender list. Approval. BUY cooldown **1 calendar day** per stock+strategy (OD-11); does not cancel `pending_execution`. Ranking from backtests when `n ≥ 15`; fit labelled as fit. |
-| **Cash** | Reserve vs available vs reserved (atomic allocation vs post-fill leftover) vs per-strategy allocated / deployed / lendable / lent / borrowed. |
+| **Portfolio settings** | `portfolio_cash_reserve_pct` (OD-19; one percentage; required reserve is computed from MAX(Invested Amount, Notional Portfolio Value)), SL, trailing (**OD-22:** initial migration seed **15%**, then user-editable; not copied from strategy B1/B2 values), portfolio caps, lending policy, recall period override (inherit platform 14-day default), opportunity cost, auto-return toggle (default off). Atomic block ₹5,000 and 1% margin are specified product values (display as policy, not as “invest the margin”). **Minimum actionable BUY/INCREASE** inherits platform ₹5,000 unless the portfolio overrides (OD-12; not a strategy setting; not OD-06). |
+| **Holdings** | Owner / Unmanaged; **per-strategy rows** for the same stock (qty 50 vs 30); Adopt; **target amount** vs filled amount (qty derived from latest raw `close_price`, OD-12 / OD-14); do not offer strategy sell on unmanaged or on another strategy’s lot. Corporate-action quantity stays on the parent owner (OD-10); unmanaged CA stays unmanaged. |
+| **Recommendations** | Unfunded or partially funded BUY visible with capital status; not WATCH. Lender list. Approval. BUY cooldown **1 calendar day** per stock+strategy (OD-11); does not cancel `pending_execution`. Ranking from backtests when `n ≥ 15`; fit labelled as fit. When ranking is not computable (`n < 15` or corpus unavailable), capital fill among that strategy’s own valid BUY/INCREASE recs follows **OD-23** (descending conviction / target-size, then fit → conviction sub-score → alphabetical); that fill order MUST NOT be labelled or presented as V3 ranking. |
+| **Cash** | Required reserve (`required_cash_reserve`, OD-19) vs available vs reserved (atomic allocation vs post-fill leftover) vs named **Unallocated Cash** (**OD-20**; presentation-only residual after reserve not claimed by unused-allocation) vs per-strategy allocated / deployed / **OD-24** retained floor / lendable / lent / borrowed. Unallocated Cash is **not** reserved cash, **not** post-fill reservation leftover, **not** strategy unused allocation, **not** the OD-24 retained floor, **not** a second cash pool, and **not** a withdrawal entitlement. **OD-24** retained capital is an accounting constraint, not a physical sub-account. **OD-21:** external/broker withdrawals MUST NOT be blocked merely because they would leave cash below `required_cash_reserve`, and MUST NOT be hard-blocked by OD-24. |
+| **Dashboard** | When physical portfolio cash is below `required_cash_reserve` (**OD-21**), show a clear warning that the portfolio cash reserve is below the required level and that the user should replenish portfolio/broker cash. Do not invent layout, colour, widget, or workflow details beyond that message. This Dashboard warning is current V3 / **B3** scope. |
 | **Lending / recall** | Eligible lenders only; default sort OD-08 (lendable % descending, then lendable amount descending; exact ties have no product significance). Approve; errors on stale; recall approval; show effective recall period (platform vs portfolio override). Replenishment among eligible loans: oldest commitment time first (OD-09); do not present FIFO as a lender sort. |
-| **Charts** | 5Y; All = full available history; clamp message. |
+| **Charts** | 5Y remains a range; All = all available history (**OD-17**), not capped at 5Y or any V3 day-count. Clamp message when available history is shorter than the selected range. |
+
+**B4 wishlist (future; not current V3 / B3 UI).** A persistent application-wide critical alert/banner for critical portfolio conditions such as a cash-reserve shortfall. Possible future presentation could be a persistent red banner/footer/scrolling alert. That design, colour, placement, and mechanism are **not** frozen and MUST NOT be treated as a current Dashboard requirement. The current requirement is the §29 Dashboard warning only.
 
 ---
 
@@ -1619,11 +1870,11 @@ Conflict register from the Architecture Impact Report, with V3 resolution:
 | 3 | Unfunded OPEN/INCREASE → WATCH | **Superseded.** Valid unfunded or partially funded BUY + capital_status (OD-05). |
 | 4 | All holdings in-scope for the active strategy | **Superseded.** Ownership fences + unmanaged. |
 | 5 | Unique `(profile, stock)` | **Superseded (OD-01).** Unique `(profile, stock, owner)`. Same symbol, multiple strategy lots allowed. |
-| 6 | Two trailing definitions | **Superseded.** Daily highest close from entry (§15). Proxy forbidden. |
+| 6 | Two trailing definitions | **Superseded.** Highest raw `close_price` from entry (§15, OD-14). Proxy forbidden. |
 | 7 | Unordered exit any/all | **Superseded** for cross-mechanism attribution (§13.2). Strategy-internal any/all may remain. |
-| 8 | Fit used as rank and allocator weight | **Superseded.** §4. Ranking from **backtest** trimmed mean (OD-03, OD-04), not live trades, not fit. |
+| 8 | Fit used as rank and allocator weight | **Superseded.** §4. Ranking from **backtest** trimmed mean (OD-03, OD-04), not live trades, not fit. When ranking is not computable, capital fill is **OD-23** (conviction/target-size order), still not fit-as-rank and not presented as V3 ranking. |
 | 9 | Single cash pool + profile-wide stale-cancel | Pool **kept**. Stale-cancel **scoped per strategy**. Lending added as virtual claims. |
-| 10 | Chart since-buy, no 5Y, ~550d storage | Chart **All/5Y** specified. 550d is a limitation to lift (OD-17). |
+| 10 | Chart since-buy, no 5Y, ~550d storage | **Superseded (OD-17).** Chart **5Y** and **All** specified. **All** = all available stored/provider history, not since-buy and not capped at 5Y. V1 ~550-day `HISTORY_DEPTH_TARGET_DAYS` is an as-built limitation only. V3 has **no** maximum history-depth ceiling. |
 | 11 | Paper = backtest only | Multiple portfolios remain for hypothesis testing. Live exclusivity deferred to broker era. |
 
 V1 recommendation evidence `capital_allocation.status = unfunded` with action WATCH is **legacy**. Clients MUST accept V3 capital_status on BUY actions.
@@ -1632,9 +1883,9 @@ V1 recommendation evidence `capital_allocation.status = unfunded` with action WA
 
 ## 33. Decision Log and Open Decisions
 
-### 33.1 Frozen / resolved (OD-01 through OD-12)
+### 33.1 Frozen / resolved (OD-01 through OD-24)
 
-OD-01 through OD-07 were recorded from the 2026-08-14 product-decision session. OD-08 through OD-11 were recorded from the 2026-08-15 product-decision session. OD-12 was recorded from the 2026-08-17 product-decision session. These IDs MUST NOT reappear in §33.2.
+OD-01 through OD-07 were recorded from the 2026-08-14 product-decision session. OD-08 through OD-11 were recorded from the 2026-08-15 product-decision session. OD-12 through OD-24 were recorded from the 2026-08-17 product-decision session. These IDs MUST NOT reappear in §33.2.
 
 | ID | Topic | Decision | Status |
 |----|--------|----------|--------|
@@ -1646,43 +1897,49 @@ OD-01 through OD-07 were recorded from the 2026-08-14 product-decision session. 
 | **OD-06** | Atomic block and execution margin | Atomic block = **₹5,000**. Apply **1%** margin then **ceil** to the next ₹5,000: `atomic_allocation = ceil((calculated_requirement × 1.01) / 5000) × 5000`. This is a **reservation/allocation**, not a mandate to invest the margin. Unused reservation reverts after execution. If atomic requirement exceeds free capital, OD-05 partial funding still applies. | FROZEN |
 | **OD-07** | Recall frequency | **CONFIGURABLE** at platform default and portfolio override. Effective = override if set, else platform default. Shipped default **14 calendar days** remains applicable. Must not be a non-configurable hard-code that ignores settings. | FROZEN |
 | **OD-08** | Default lender selection after eligibility | **FROZEN.** Applies to selecting a prospective **lender** (a strategy) before/when a new loan is created — not to outstanding loans. After existing lender eligibility filters (§8.1), rank eligible lenders: (1) available-for-lending **percentage** descending; (2) if tied, available-for-lending **absolute amount** descending; (3) if both values are still exactly equal, **any** tied eligible lender may be selected (first remaining candidate, or arbitrary/random among exact ties). There is deliberately **no** third business ranking criterion and **no product significance** to which exactly-tied lender is selected. Do **not** use FIFO, oldest loan, largest loan, strategy age, raw portfolio cash, or any other business ranking rule for that third tie-break. Available-for-lending percentage remains the primary ranking metric already defined by this specification. Available-for-lending amount is the explicit secondary ranking criterion. | FROZEN |
-| **OD-09** | Outstanding loan selection for replenishment | **FROZEN.** Operates on existing outstanding **loans**, not prospective lenders. When replenishment requires capital to be recalled and multiple outstanding loans are eligible: (1) filter to loans eligible for recall under existing V3 recall / effective-minimum-period rules (OD-07 / §6.5); (2) select the **oldest eligible outstanding loan first (FIFO)** by commitment time; (3) if two or more eligible loans have exactly the same commitment time, **any** tied loan may be selected (implementation may resolve arbitrarily or deterministically). There is deliberately **no** additional business ranking criterion after FIFO. Do **not** introduce largest loan first, smallest loan first, lender percentage, lender absolute lendable amount, borrower strength, or strategy ranking as loan-selection rules. OD-06 still controls the amount recalled: request the minimum required atomic amount; do **not** recall an entire loan merely because it is the oldest if only a smaller amount is required. OD-07 controls **when** a loan becomes recall-eligible; OD-09 controls **which** eligible loan is selected. If a borrower must sell positions as a consequence, §17 and OD-16 remain applicable; this decision does not resolve OD-16. | FROZEN |
-| **OD-10** | Corporate-action quantity ownership | **FROZEN.** Corporate actions follow the **parent holding’s owner**. For every strategy-owned or unmanaged position identified by `(portfolio, stock, owner)`, a corporate action applicable to that holding MUST adjust **that owner’s** position quantity. If the same stock has multiple strategy owners, the CA MUST NOT first blend those holdings into one portfolio-level position. Strategy-owned parent → CA remains with that owner. Unmanaged parent → CA remains unmanaged and MUST NOT be automatically assigned to a strategy. The governing rule is **parent-owner attachment**, not pro-rata allocation (pro-rata can differ for rounding, rights, broker-posted quantities, and other CA mechanics). OD-10 does **not** freeze split/bonus formulas, rights-issue calculations, cost-basis / average-price / target / filled / trailing-high / stop-loss restatement, `close_price` vs `adjusted_close_price` (**OD-14 remains OPEN**), or merger/demerger treatment. | FROZEN |
+| **OD-09** | Outstanding loan selection for replenishment | **FROZEN.** Operates on existing outstanding **loans**, not prospective lenders. When replenishment requires capital to be recalled and multiple outstanding loans are eligible: (1) filter to loans eligible for recall under existing V3 recall / effective-minimum-period rules (OD-07 / §6.5); (2) select the **oldest eligible outstanding loan first (FIFO)** by commitment time; (3) if two or more eligible loans have exactly the same commitment time, **any** tied loan may be selected (implementation may resolve arbitrarily or deterministically). There is deliberately **no** additional business ranking criterion after FIFO. Do **not** introduce largest loan first, smallest loan first, lender percentage, lender absolute lendable amount, borrower strength, or strategy ranking as loan-selection rules. OD-06 still controls the amount recalled: request the minimum required atomic amount; do **not** recall an entire loan merely because it is the oldest if only a smaller amount is required. OD-07 controls **when** a loan becomes recall-eligible; OD-09 controls **which** eligible loan is selected. If a borrower must sell positions as a consequence, position ranking is **OD-16** (§17); OD-09 does not rank positions. | FROZEN |
+| **OD-10** | Corporate-action quantity ownership | **FROZEN.** Corporate actions follow the **parent holding’s owner**. For every strategy-owned or unmanaged position identified by `(portfolio, stock, owner)`, a corporate action applicable to that holding MUST adjust **that owner’s** position quantity. If the same stock has multiple strategy owners, the CA MUST NOT first blend those holdings into one portfolio-level position. Strategy-owned parent → CA remains with that owner. Unmanaged parent → CA remains unmanaged and MUST NOT be automatically assigned to a strategy. The governing rule is **parent-owner attachment**, not pro-rata allocation (pro-rata can differ for rounding, rights, broker-posted quantities, and other CA mechanics). OD-10 does **not** freeze split/bonus formulas, rights-issue calculations, cost-basis / average-price / target / filled / trailing-high / stop-loss restatement, or merger/demerger treatment. **OD-14** freezes raw `close_price` for SL/trailing comparison and the OD-12 reference price; that does **not** implicitly restatement-solve those CA leftovers and MUST NOT be read as using `adjusted_close_price` to compensate for corporate actions. | FROZEN |
 | **OD-11** | BUY cooldown duration, unit, and clock | **FROZEN.** Duration = **1 calendar day** (not trading sessions). Key = `(stock, strategy)`. Applies to OPEN and INCREASE; does not suppress REDUCE, EXIT, or HOLD. Another strategy’s BUY of the same stock does not consume, reset, or affect this cooldown. Primary purpose: prevent BUY recommendation churn; secondary: space repeated capital deployment. A BUY recommendation **opportunity / generation cycle** starts the cooldown (Day 0 allowed, Day 1 suppressed, Day 2 elapsed). It does **not** start on fill, trade approval, or lending commitment. Fills do not reset it. It is **not** the OD-07 recall period (still configurable, shipped default 14 calendar days). Unapproved BUYs MUST NOT be regenerated during the window; stale-cancel MUST NOT clear cooldown; `pending_execution` MUST NOT be cancelled because of cooldown. First entry remains ~50% of current **target amount**; subsequent INCREASE = `max(0, current_target_amount − filled_amount)`, not a fixed second 50% tranche (OD-12). Target MAY change during cooldown; use latest target amount and filled amount when the window elapses. | FROZEN |
-| **OD-12** | Staggered target primary unit | **FROZEN.** Staggered target primary unit = **monetary amount**. Quantity is derived from the **latest daily closing price** using whole-share rounding (default **floor**; do not materially overshoot). Rounding MUST NOT change the persisted target amount. Minimum actionable BUY/INCREASE amount is configurable at **platform** level with **portfolio-level** override; no strategy override; shipped platform default = **₹5,000**. The minimum applies to the this-cycle opportunity, not the overall target; remaining below the minimum suppresses OPEN/INCREASE without reducing the target. Subsequent INCREASE uses current target amount minus filled amount (OD-11). OD-06 atomic reservation and OD-05 partial funding MUST NOT replace or reset the target amount. Recommendation calculations use latest daily close, not execution price. | FROZEN |
+| **OD-12** | Staggered target primary unit | **FROZEN.** Staggered target primary unit = **monetary amount**. Quantity is derived from the **latest available raw daily `close_price`** (OD-14 consistency clarification of “latest daily closing price”) using whole-share rounding (default **floor**; do not materially overshoot). Rounding MUST NOT change the persisted target amount. Minimum actionable BUY/INCREASE amount is configurable at **platform** level with **portfolio-level** override; no strategy override; shipped platform default = **₹5,000**. The minimum applies to the this-cycle opportunity, not the overall target; remaining below the minimum suppresses OPEN/INCREASE without reducing the target. Subsequent INCREASE uses current target amount minus filled amount (OD-11). OD-06 atomic reservation and OD-05 partial funding MUST NOT replace or reset the target amount. Recommendation calculations use latest raw `close_price`, not execution price and not `adjusted_close_price`. | FROZEN |
+| **OD-13** | Stop-loss reference price | **FROZEN.** Stop-loss `entry_price` = **weighted-average execution cost of actual fills** for the **current ownership episode**, per stock + strategy owner (not first-fill price). `average_cost = (sum of actual executed fill value) / (sum of filled quantity)`. Subsequent INCREASE fills (and other actual fills of the same episode) update the average; the stop is not anchored to the first fill. A new ownership episode (after full exit, then a new position) receives a new cost basis. Do not blend owners (OD-01). Do not use target amount, reservation, last close, or estimated price as cost basis. Trailing stop remains highest raw `close_price` since entry **date** (not OD-13). The hit-test comparison series is OD-14 (raw `close_price`). **OD-15** freezes adoption entry-date continuity for trailing/stop windows without changing OD-13 cost-basis rules. CA cost restatement and adoption merge mechanics remain unspecified (OD-10, DEP-ADOPT-MERGE). | FROZEN |
+| **OD-14** | Daily comparison price series | **FROZEN.** Portfolio stop-loss and trailing-stop calculations use raw `close_price` as the single consistent daily comparison series. The latest raw `close_price` is also the OD-12 reference price for recommendation/quantity calculations. `adjusted_close_price` is not used for these calculations. Corporate-action restatement remains separately governed by OD-10 and is not implicitly resolved by OD-14. Per-owner isolation (OD-01) means each owner has its own trailing window/high; all owners use the same `close_price` column. Execution/fill price remains separate. OD-15 governs adoption entry-date continuity for trailing/stop windows. | FROZEN |
+| **OD-15** | Adoption entry-date continuity for trailing/stop windows | **FROZEN.** For an unmanaged holding adopted into a strategy, adoption does **not** reset the trailing/stop `entry_date` window. Preserve the original first-buy / existing ownership-history entry date; adoption changes owner attribution but is not a new investment purchase. Trailing-high history therefore continues from existing entry history rather than restarting on adoption. This does **not** resolve cost-basis merge mechanics or complete merge behavior when the destination strategy already owns the stock; those remain under DEP-ADOPT-MERGE. OD-13 cost basis and OD-14 raw `close_price` comparison series remain unchanged. | FROZEN |
+| **OD-16** | Weakest-position score formula | **FROZEN.** When recall/replenishment requires selling borrower-owned positions, rank by simple configured-window percentage return: `window_return_pct = (current_reference_price − window_start_reference_price) / window_start_reference_price × 100`. Lowest score = weakest = sell first. Evaluation window is strategy-configurable in calendar days. Not lifetime XIRR, total return, age, fit, thesis, momentum, volatility, or OD-03 ranking. Not annualised XIRR. Tie-break: `stock_id` ascending on exact `window_return_pct` ties. Eligible universe: borrower-owned only (OD-01). Loan tap remains OD-09; recall timing OD-07; amount OD-06. **Remaining gaps (not solved here):** which price column supplies the reference prices (**DEP-WEAKEST-PRICE**); insufficient-history fallback (**DEP-WEAKEST-HISTORY**). OD-14 is not extended to OD-16. | FROZEN |
+| **OD-17** | OHLCV history depth | **FROZEN.** V3 must support **all available OHLCV history** for each listed security. There is **no** maximum history-depth ceiling imposed by the V3 product specification. V3 does **not** define a fixed numeric depth target. 5Y must be supported when the listing has 5Y of available history; 5Y is a chart range, not a storage ceiling. History shorter than 5Y is valid. History longer than 5Y MUST remain available and MUST NOT be truncated by a V3 product-level maximum. **All** = all available stored/provider history. Provider and listing/history-start limits are external availability constraints, not V3 ceilings. The V1/as-built `HISTORY_DEPTH_TARGET_DAYS = 550` is **not** a V3 requirement. Do not introduce 1,825 days or any other invented numeric ceiling. | FROZEN |
+| **OD-18** | Minimum period before annualized return is used in ranking | **FROZEN.** Annualized return (CAGR/XIRR) MAY be used as ranking evidence only when the backtest holding period is **≥ 30 calendar days**. For holding periods **< 30 calendar days**, annualized return MUST NOT contribute to ranking. Simple return remains a valid backtest outcome. Applies to the OD-03 backtest ranking corpus and ranking aggregation. Reuses the V1 backtest “refuses CAGR under 30 days” rule, stated as **30 calendar days** (not trading sessions). Does **not** modify the §19 success definition, OD-02 `T_years` / opportunity-cost formula, OD-04 trimmed mean, OD-16 weakest-position scoring, or OD-23 (fill order when ranking is not computable; OD-23 is frozen separately and is not a ranking rule). | FROZEN |
+| **OD-19** | Portfolio cash reserve unit / formula | **FROZEN.** One configurable portfolio-level percentage: `portfolio_cash_reserve_pct`. `reserve_base = MAX(total_invested_amount, current_notional_portfolio_value)`. `required_cash_reserve = reserve_base × portfolio_cash_reserve_pct`. **Invested Amount** = actual capital paid to acquire currently held investments (not current market value). **Notional Portfolio Value** = current market value of currently held investments (not invested cost). Do **not** use % of cash, % of NAV, an absolute-₹ configuration, invested amount + available cash, or two separate percentages. The reserve remains a **portfolio-level** control, non-investable and non-lendable. Partial funding cannot invade it (OD-05). Does **not** freeze a numeric default for `portfolio_cash_reserve_pct`. Does **not** decide leftover unallocated-cash UI (**OD-20**, frozen separately as presentation-only), withdrawal-into-reserve (**OD-21**, frozen separately: withdrawals MUST NOT be blocked merely because they would leave cash below `required_cash_reserve`). Strategy minimum retained capital is **OD-24** (frozen separately: `strategy_capital_allocation ÷ recommended_minimum_holdings`; not this reserve; not a physical cash account). | FROZEN |
+| **OD-20** | Unallocated cash UI | **FROZEN.** The Cash UI MUST display a named **Unallocated Cash** bucket representing residual portfolio cash after `required_cash_reserve` that is not claimed by strategy unused-allocation accounting. Presentation-only over the existing single physical portfolio cash pool. MUST NOT create a separate cash account, bank account, strategy-owned cash account, new allocation percentage, new reserve, new lending pool, new withdrawal entitlement, or new accounting ledger. MUST NOT invent a new residual-cash formula; it presents the residual already described by §22. Distinct from `required_cash_reserve` (OD-19), `available_physical_cash` / Available cash, pending-execution reserved cash (OD-06), post-fill unused reservation leftover, and strategy unused allocation. Does **not** decide withdrawal-into-reserve (**OD-21**, frozen separately). Strategy min-retained capital is **OD-24** (frozen separately; not Unallocated Cash). Allocation % still sums to 100% of investable capital. | FROZEN |
+| **OD-21** | Withdrawal vs portfolio cash reserve | **FROZEN. YES.** Withdrawals MUST NOT be blocked merely because they would cause physical portfolio cash to fall below `required_cash_reserve`. “Withdraw” means taking/transferring cash out of the portfolio/broker cash account (typically to an external bank account), not a transfer between virtual strategy allocations. LidoPortfolio does not control the broker cash account; the application MUST represent a resulting **reserve shortfall** rather than pretending the withdrawal could not happen. A shortfall is a **warning/alert condition**, not a hard withdrawal restriction. The user MAY replenish broker/portfolio cash later. MUST NOT terminate automatic executions or execution recommendations **solely** because cash is below `required_cash_reserve`. MUST NOT invent a reserve-adjusted withdrawal-cap formula, withdrawal ledger, or new cash bucket. `available_physical_cash` and the OD-19 reserve formula are unchanged. Reserve remains non-investable and non-lendable; OD-21 is not permission to invest or lend reserve cash. Unallocated Cash (OD-20) remains presentation-only and is not a withdrawal entitlement. Dashboard MUST warn when cash is below `required_cash_reserve` and that the user should replenish (current V3 / B3). A persistent application-wide critical banner is **B4 wishlist**, not current UI. OD-24 MUST NOT be used to hard-block those external withdrawals. | FROZEN |
+| **OD-22** | Migrating trailing % when only `default_stoploss_percent` exists | **FROZEN.** Option C: **fixed migration seed**. Portfolio-level trailing percentage is seeded to **15%** on V3 migration. Existing strategy-level trailing/stop values (as-built B1/B2 code-level configuration) are **ignored completely**. Do **not** derive, average, max, min, or otherwise reconcile strategy-level percentages into the portfolio seed. Do **not** copy `default_stoploss_percent` into trailing. Do **not** leave trailing disabled as the migration outcome. 15% is a **migration seed / initial portfolio value**, not a permanently enforced platform default. After migration the portfolio trailing % remains user-editable to any supported value. Trailing remains independent of stop-loss % (§15.3). Does **not** change the trailing-stop formula, OD-14 price series, OD-13 stop-loss cost basis, or OD-15 entry-date continuity. | FROZEN |
+| **OD-23** | Capital fill order among a strategy’s own valid BUY/INCREASE recs when return-quality ranking is not computable | **FROZEN.** Applies when return-quality ranking is not computable because `n < 15` or the required backtest corpus is unavailable. For each strategy’s own valid BUY/INCREASE recommendations, capital fill order MUST be **descending conviction / target-size** order (higher conviction / larger conviction-driven target amount first). This is a **capital fill order**, **not** V3 return-quality ranking. MUST NOT label or present conviction/target-size order as the V3 ranking. MUST NOT change the normal ranked path when `n ≥ 15` (allocator still follows ranking order / return quality). MUST NOT use fit as a replacement for return-quality ranking. Tie-break order MUST be: (1) **fit** (higher fit first); (2) **conviction sub-score** (higher first); (3) **alphabetical** order of the stock listing symbol. The alphabetical tie-break MUST make the ordering deterministic (same inputs → same fill order). OD-05 partial funding, OD-06 atomic reservation, reserve protection, and strategy allocation limits remain unchanged. Does **not** change **OD-24** or any **DEP-*** item. | FROZEN |
+| **OD-24** | Minimum free capital / one opportunity | **FROZEN.** For each strategy, `minimum_retained_capital = strategy_capital_allocation ÷ recommended_minimum_holdings`. `strategy_capital_allocation` is the rupee amount currently allocated to that strategy from the portfolio’s investable capital. `recommended_minimum_holdings` is that strategy’s configured recommended minimum number of holdings/opportunities. The result is the strategy-level protected “one opportunity” amount. It is an accounting constraint, **not** a physical cash account, **not** a strategy bank/cash sub-account, **not** another portfolio cash reserve, and **not** `required_cash_reserve` (OD-19). It does **not** modify `available_physical_cash`, the 100% strategy allocation rule, BUY funding, OD-05 partial funding, OD-06 pending-execution reservation, OD-23 capital fill order, or the `n ≥ 15` return-quality ranking path. It is **not** a percentage-based formula and MUST NOT use portfolio NAV, total portfolio cash, `required_cash_reserve`, total portfolio value, strategy deployed capital, B1/B2 configuration, conviction, fit, target size, or ranking as the base or inputs. It applies to unused-allocation / lending eligibility: the strategy MUST retain at least this amount before excess unused allocation can be considered available-for-lending. Lending MUST NOT consume the retained amount. OD-24 MUST NOT hard-block external/broker withdrawals (OD-21). Example: investable capital ₹10,00,000, Momentum 75% → allocation ₹7,50,000, recommended minimum holdings 5 → retain ₹1,50,000. Does **not** resolve any **DEP-*** item. Does **not** change OD-19, OD-20, OD-21, OD-22, or OD-23. | FROZEN |
 
-Note: before the 2026-08-14 session, **OD-05** meant “minimum free capital / one opportunity formula”. That topic was **not** decided there and is re-homed as **OD-24** so it is not lost.
+Note: before the 2026-08-14 session, **OD-05** meant “minimum free capital / one opportunity formula”. That topic was re-homed as **OD-24** and is now frozen as the formula above.
 
-### 33.2 Open decisions (OD-13 through OD-23, plus OD-24)
+### 33.2 Open decisions
 
-Do not invent resolutions.
-
-| ID | Decision | Notes |
-|----|----------|--------|
-| **OD-13** | Stop-loss reference price: average cost vs first-fill price | Spec tentatively uses average cost until closed. Per owner (OD-01). |
-| **OD-14** | `close_price` vs `adjusted_close_price` for SL/trailing | Must be consistent. Per owner high/close series. |
-| **OD-15** | On adoption, reset trailing/stop entry date or keep original first buy? | |
-| **OD-16** | Exact weakest-position score formula | Direction frozen; formula not. No fake auto-pick until closed. |
-| **OD-17** | Numeric OHLCV depth target for V3 (must support 5Y when listed) | 550 is not the requirement. |
-| **OD-18** | Minimum period before annualized return is used in ranking | Ranking corpus is backtests (OD-03). |
-| **OD-19** | Cash reserve unit: % of cash, % of NAV, absolute ₹, or combination | Reserve existence frozen. |
-| **OD-20** | Whether any residual cash after reserve that is not yet claimed by strategy unused-allocation accounting needs a named “unallocated cash” bucket in the UI | Accounting in §22 is specified; presentation of leftovers is not. |
-| **OD-21** | May the user withdraw cash that would breach the portfolio reserve? | |
-| **OD-22** | Migrating trailing % when only `default_stoploss_percent` exists | |
-| **OD-23** | Capital fill order among a strategy’s own valid BUYs when return-quality ranking is not yet computable (`n < 15` or corpus missing) | Must not be shipped as “rank by fit”. |
-| **OD-24** | Exact formula for “minimum free capital / one opportunity” | Existence of the non-lendable floor is frozen. Previously listed as OD-05 before that ID was reassigned to partial funding. |
+None of **OD-01 through OD-24** remain open. Do not invent new OD identifiers here. Remaining unresolved items are the **open DEP-*** rows in §33.3.2. **DEP-TRIM-K** is frozen (§33.3.1).
 
 ### 33.3 Dependencies arising from frozen decisions (not invented rules)
 
-These are ambiguities created or revealed by OD-01–OD-12. They are **not** silent product law.
+These are ambiguities created or revealed by OD-01–OD-24. Unresolved rows are **not** silent product law. **DEP-TRIM-K** is now frozen; the remaining rows below are still unresolved.
+
+#### 33.3.1 Resolved / frozen dependencies
+
+| ID | Topic | Decision | Status |
+|----|--------|----------|--------|
+| **DEP-TRIM-K** | Integer conversion of 7% × `n` to tail count `k` | **FROZEN.** `k = nearest_integer(0.07 × n)`. Exact fractional **.5** values MUST round **upward**. MUST NOT use banker's rounding or language/runtime `round()` if that can implement a different .5 tie. For this non-negative domain, `k = floor(0.07 × n + 0.5)` is the deterministic equivalent. The **same** `k` is removed from both tails. Does **not** change OD-04’s 7%/7% trimmed mean, the `n ≥ 15` eligibility gate, OD-03, OD-18, OD-23, or OD-24. Ranking eligibility and trim-count calculation remain distinct. Examples: n=15→k=1; n=20→k=1; n=25→k=2; n=30→k=2; n=35→k=2; n=50→k=4; n=100→k=7. | FROZEN |
+
+#### 33.3.2 Remaining unresolved dependencies
 
 | ID | Dependency | Why it exists |
 |----|------------|----------------|
-| **DEP-TRIM-K** | Integer conversion of 7% × `n` to tail count `k` (floor vs round vs ceil) | OD-04 froze 7%/7%/n≥15, not the integerisation of 7% of `n`. |
 | **DEP-PARTIAL-LEND** | Whether a PARTIALLY_FUNDED this-cycle slice also opens a same-cycle lending request for the unfunded remainder | OD-05 allows partial own funding; lending remains for unfunded capital. Combining them on one rec was not specified. |
 | **DEP-PARTIAL-ATOMIC** | Own-capital partial amounts below ₹5,000 (e.g. ₹4,000 free vs ₹18,000 desired) | OD-05 says allocate available free capital; OD-06 forbids lending below ₹5,000. Own-capital partial below one block is allowed; lending that remainder is not. |
-| **DEP-ADOPT-MERGE** | Cost basis and entry date when adopting unmanaged quantity into a strategy that already owns the stock | Follows from OD-01 + adoption. |
+| **DEP-ADOPT-MERGE** | Cost-basis merge and detailed merge mechanics when adopting unmanaged quantity into a strategy that already owns the stock | OD-15 freezes the entry-date principle (no reset on adoption); detailed merge mechanics remain unresolved. |
 | **DEP-RECALL-FLOOR** | Whether a portfolio override may set the effective recall period **shorter** than 14 calendar days | OD-07 makes period configurable; 14 days remains the shipped default. A numeric floor other than “platform range config” was not frozen. |
+| **DEP-WEAKEST-PRICE** | Which stored daily price column / lookup rule supplies `current_reference_price` and `window_start_reference_price` for OD-16 | OD-16 freezes the window-return formula; OD-14 names raw `close_price` only for SL/trailing/OD-12. Do not silently extend OD-14. |
+| **DEP-WEAKEST-HISTORY** | Behaviour when a borrower-owned position lacks `N` calendar days of reference prices for the configured OD-16 window | OD-16 freezes the formula and tie-break only; no insufficient-history fallback was frozen. |
 
 ---
 
@@ -1692,16 +1949,16 @@ Planning order for later passes. Do not implement in this phase.
 
 1. **Schema & domain foundations** — portfolio controls storage; multiple enabled strategies; holding uniqueness `(profile, stock, owner)` (OD-01); CA quantity stays on the parent owner row (OD-10); adoption; `capital_status` including PARTIALLY_FUNDED; loan/request tables; exit attribution column.
 2. **Generation scoping** — per-strategy generate; stale-cancel scoped; unmanaged/other-owner excluded from strategy exits; stop converting unfunded or partial BUY to WATCH (OD-05).
-3. **Portfolio SL / trailing / precedence** — daily close, highest close from **that holding’s** entry; migrate config off strategy JSON.
-4. **Staggered entry + BUY cooldown + partial fill** — persist **target amount** per owner (OD-12); derive whole-share qty from latest daily close (floor); first entry default 50% of current target amount; subsequent INCREASE = current target amount − filled amount; suppress OPEN/INCREASE below effective min actionable (platform ₹5,000 / portfolio override); BUY cooldown **1 calendar day** from the recommendation opportunity (OD-11); OD-05/OD-06 must not replace the target amount.
-5. **Virtual allocation accounting** — % summing to 100; available vs lendable; atomic reservation vs post-fill leftover; no physical sub-accounts.
-6. **Lending workflow** — eligibility; ranking by lendable % then lendable amount then arbitrary exact tie (OD-08); display without commit; OD-06 amounts; atomic approve; failure paths; audit. Do not apply FIFO to lenders.
-7. **Recall / replenishment** — platform default 14 calendar days + portfolio override (OD-07); among eligible loans, oldest commitment time first (OD-09); amount OD-06 (not whole loan merely because it is oldest); approval default; weakest-position **blocked** until OD-16 (user-selected sells).
-8. **History depth & charts** — 5Y + All = full available history; clamp hint; lift 550-day product assumption (OD-17).
-9. **Historical ranking** — backtest corpus only (OD-03); 7%/7% trimmed mean, `n ≥ 15` (OD-04); never ship fit-as-rank; never mix live trades.
-10. **UI / notifications / help** — Strategy vs Portfolio settings split; per-owner holdings; capital states; lender UX; contextual help sync when behaviour ships.
-11. **Migration backfill** — unmanaged default; safe inference; do not merge distinct strategy lots; non-destructive JSON split.
-12. **Tests** — acceptance in §35, especially OD-01 same-symbol lots, OD-10 parent-owner CA attachment, OD-11 1-calendar-day BUY cooldown vs OD-07 recall, OD-12 target amount / whole-share floor / min actionable ₹5,000, OD-05 partial vs WATCH, OD-06 reservation vs fill, OD-08 lender ranking vs OD-09 loan FIFO, §24 races.
+3. **Portfolio SL / trailing / precedence** — raw `close_price` (OD-14) for SL hit test, trailing high, and trailing current close; highest raw close from **that holding’s** entry date; SL `entry_price` = weighted-average **actual fill** cost of the current ownership episode (OD-13), updated on INCREASE fills; migrate config off strategy JSON. **OD-22:** seed portfolio trailing % to **15%**; ignore strategy-level B1/B2 values; do not copy stop-loss %. Do not use `adjusted_close_price` for these. Do not treat OD-14 as CA restatement (OD-10 leftovers).
+4. **Staggered entry + BUY cooldown + partial fill** — persist **target amount** per owner (OD-12); derive whole-share qty from latest available raw `close_price` (floor; OD-14); first entry default 50% of current target amount; subsequent INCREASE = current target amount − filled amount; suppress OPEN/INCREASE below effective min actionable (platform ₹5,000 / portfolio override); BUY cooldown **1 calendar day** from the recommendation opportunity (OD-11); OD-05/OD-06 must not replace the target amount.
+5. **Virtual allocation accounting** — % summing to 100; available vs lendable; `required_cash_reserve` per **OD-19** (`MAX(Invested Amount, Notional Portfolio Value) × portfolio_cash_reserve_pct`); **OD-24** `minimum_retained_capital = strategy_capital_allocation ÷ recommended_minimum_holdings` (strategy-level lending floor; not a physical sub-account; not OD-19); atomic reservation vs post-fill leftover; Cash UI named **Unallocated Cash** bucket (**OD-20**, presentation-only; not a new ledger or formula); no physical sub-accounts.
+6. **Lending workflow** — eligibility; available-for-lending after **OD-24** retained floor; ranking by lendable % then lendable amount then arbitrary exact tie (OD-08); display without commit; OD-06 amounts; atomic approve; failure paths; audit. Do not apply FIFO to lenders. Do not lend the OD-24 retained amount.
+7. **Recall / replenishment** — platform default 14 calendar days + portfolio override (OD-07); among eligible loans, oldest commitment time first (OD-09); amount OD-06 (not whole loan merely because it is oldest); approval default; weakest-position ranking per **OD-16** (`window_return_pct`, lowest first; tie-break `stock_id` ascending). Resolve **DEP-WEAKEST-PRICE** and **DEP-WEAKEST-HISTORY** before auto-pick sells if needed.
+8. **History depth & charts** — Support **all available** OHLCV history with **no** V3 product-level maximum history-depth ceiling (**OD-17**). 5Y range when 5Y exists; All = all available history (may exceed 5Y); clamp hint when shorter; V1 `HISTORY_DEPTH_TARGET_DAYS = 550` is as-built only.
+9. **Historical ranking** — backtest corpus only (OD-03); 7%/7% trimmed mean, `n ≥ 15` (OD-04); tail count **`k = nearest_integer(0.07 × n)`** with exact .5 rounding upward (**DEP-TRIM-K**); annualized/CAGR/XIRR ranking evidence only if holding period **≥ 30 calendar days** (**OD-18**); never ship fit-as-rank; never mix live trades. When ranking is not computable (`n < 15` or corpus unavailable), capital fill among that strategy’s own valid BUY/INCREASE recs is **OD-23** (descending conviction / target-size, then fit → conviction sub-score → alphabetical); do not present that fill order as V3 ranking. The `n ≥ 15` ranked path is unchanged.
+10. **UI / notifications / help** — Strategy vs Portfolio settings split; per-owner holdings; capital states; Cash UI named **Unallocated Cash** (**OD-20**, presentation-only); Dashboard warning when cash is below `required_cash_reserve` (**OD-21**, B3); lender UX; contextual help sync when behaviour ships. Persistent application-wide critical banner remains **B4 wishlist**.
+11. **Migration backfill** — unmanaged default; safe inference; do not merge distinct strategy lots; non-destructive JSON split; portfolio trailing % seed **15%** (**OD-22**), ignoring strategy-level trailing/stop values.
+12. **Tests** — acceptance in §35, especially OD-01 same-symbol lots, OD-10 parent-owner CA attachment, OD-11 1-calendar-day BUY cooldown vs OD-07 recall, OD-12 target amount / whole-share floor / min actionable ₹5,000, OD-13 weighted-average fill cost vs first-fill, OD-14 raw `close_price` for SL/trailing/OD-12 reference, OD-16 weakest `window_return_pct` ranking and tie-break, OD-18 30-calendar-day annualized ranking gate, OD-19 `required_cash_reserve` formula vs % of cash/NAV, OD-20 named Unallocated Cash UI vs reserve/reserved/unused-allocation, OD-21 withdraw-into-reserve allowed with Dashboard shortfall warning (not a buy/lend permission), OD-22 portfolio trailing seed 15% vs copy-from-strategy or copy-from-SL, **OD-23** unranked fill order (conviction/target-size descending, then fit → conviction sub-score → alphabetical; not presented as V3 ranking; `n ≥ 15` path unchanged), **OD-24** `strategy_capital_allocation ÷ recommended_minimum_holdings` retained floor vs OD-19 / physical cash / BUY funding, **DEP-TRIM-K** `k = nearest_integer(0.07 × n)` with .5 upward (n=15→1, n=50→4, n=100→7; not banker's rounding), OD-05 partial vs WATCH, OD-06 reservation vs fill, OD-08 lender ranking vs OD-09 loan FIFO, §24 races.
 
 ---
 
@@ -1713,9 +1970,12 @@ Planning order for later passes. Do not implement in this phase.
 - Final ranking, when present, is not a sort by fit alone and is not `fit × p(fit)`.
 - Ranking observations come **only** from the defined **backtest** corpus (OD-03). Live trades are absent from that corpus.
 - Trimmed mean is symmetric 7% / 7% with `n ≥ 15`. If `n < 15`, trimmed-mean ranking is not computed (OD-04).
+- **DEP-TRIM-K:** `k = nearest_integer(0.07 × n)`; exact .5 rounds upward; same `k` from both tails. Eligibility (`n ≥ 15`) and trim-count (`k`) remain distinct. Examples: n=15→k=1; n=20→k=1; n=25→k=2; n=30→k=2; n=35→k=2; n=50→k=4; n=100→k=7. Do not use banker's rounding.
 - A 100% outcome and a 10% outcome are not scored as equal successes.
-- Success flags require positive return **and** NIFTY 50 beat **and** annualized opportunity-cost beat.
+- Success flags require positive return **and** NIFTY 50 beat **and** annualized opportunity-cost beat (§19; **OD-18 does not change this**).
 - 12% (or configured `r`) is applied as annualized, scaled by **calendar** period length (`T_years = calendar_days / 365`).
+- **OD-18:** backtest holding period **≥ 30 calendar days** → annualized return/CAGR/XIRR MAY be ranking evidence; **< 30 calendar days** → annualized return/CAGR/XIRR MUST NOT be ranking evidence. Simple return remains a valid outcome. Ranking corpus remains backtests only (OD-03). OD-04 trimmed mean unchanged. OD-16 weakest-position scoring unchanged.
+- When ranking is not computable (`n < 15` or corpus unavailable), capital fill among that strategy’s own valid BUY/INCREASE recs is **OD-23**, not a return-quality rank and not fit-as-rank. See §35.16.
 
 ### 35.2 Multi-strategy
 
@@ -1744,18 +2004,18 @@ Planning order for later passes. Do not implement in this phase.
 
 ### 35.5 Staggered entry and target amount (OD-12)
 
-- Persisted target is primarily **amount**, not quantity. Quantity is derived from the **latest available daily closing price**.
+- Persisted target is primarily **amount**, not quantity. Quantity is derived from the **latest available raw daily `close_price`** (OD-14).
 - Fractional shares are not generated. Default conversion is **floor**; do not add a share that would materially overshoot the intended amount (example: ₹2,500 at ₹600 → 4 shares, notional ₹2,400).
 - Whole-share rounding does **not** change the persisted target amount (target stays ₹2,500 in that example).
 - First BUY ≈ configured first-entry % (default 50%) of **current target amount**, then OD-05/OD-06 may reduce this-cycle cash. The 50% rule is first-entry only.
-- Subsequent INCREASE = `current_target_amount − filled_amount`. Example: target ₹10,000, filled ₹5,000; if target later ₹12,000 → remaining ₹7,000; if later ₹8,000 → remaining ₹3,000. Then convert remaining to whole shares at latest daily close.
+- Subsequent INCREASE = `current_target_amount − filled_amount`. Example: target ₹10,000, filled ₹5,000; if target later ₹12,000 → remaining ₹7,000; if later ₹8,000 → remaining ₹3,000. Then convert remaining to whole shares at latest raw `close_price`.
 - Target-amount changes during OD-11 cooldown are kept and used when the window elapses.
 - If current target is below the filled amount, no BUY/INCREASE for a gap.
 - Effective minimum actionable BUY/INCREASE: platform default **₹5,000**; portfolio inherits unless it overrides. No strategy override. Opportunity below the minimum → no new OPEN/INCREASE; **target is not reduced**.
 - Do not emit zero-quantity or immaterial repeated BUY/INCREASE recs solely to consume whole-share residuals.
 - OD-06 atomic reservation does not replace the target amount (example: requirement ₹18,000, reserve ₹20,000, target stays ₹18,000).
 - OD-05 partial funding does not reset the target to the funded slice.
-- Recommendation calculations use latest daily close, not execution price. Execution-price bands are out of OD-12.
+- Recommendation calculations use latest raw `close_price`, not execution price and not `adjusted_close_price`. Execution-price bands are out of OD-12.
 
 ### 35.6 Cooldown
 
@@ -1772,8 +2032,17 @@ Planning order for later passes. Do not implement in this phase.
 - Primary attribution follows strategy exit > stop-loss > trailing > horizon.
 - No horizon configured ⇒ no horizon expiry event.
 - Horizon `T` is calendar days (OD-02).
-- Trailing uses max daily close since **that holding’s** entry × (1 − pct); not unrealized-% proxy; not blended across owners of the same symbol.
-- Stop-loss uses daily close, not intraday low; per holding.
+- Trailing uses max raw `close_price` since **that holding’s** entry date × (1 − pct); not unrealized-% proxy; not blended across owners of the same symbol; **not** OD-13 average cost; **not** `adjusted_close_price`.
+- Stop-loss compares latest raw `close_price` to OD-13 `stop_price`; not intraday low; per holding; **not** `adjusted_close_price`.
+- Stop-loss `entry_price` is weighted-average **actual execution** cost of the current ownership episode (**OD-13**), not first-fill price, not target amount, not reservation, not latest close.
+- First fill sets the initial average cost; a later INCREASE fill at a different price updates the average (example: 50@₹100 then 50@₹120 → ₹110; 10% stop → ₹99).
+- Different strategy owners of the same stock keep independent cost bases and trailing windows (OD-01); all use the same raw `close_price` column (OD-14).
+- After a full exit, a new position is a new ownership episode with a new cost basis.
+- On adoption from unmanaged, trailing/stop entry date preserves existing/original first-buy entry history; adoption does not reset the window or create a new trailing/stop episode (OD-15).
+- Raw `close_price` is used consistently for SL hit test, trailing high, trailing current close, and OD-12 reference price; raw and adjusted series are never mixed (OD-14).
+- `adjusted_close_price` is not used for stop-loss, trailing stop, or OD-12 quantity derivation.
+- OD-10 corporate-action quantity attachment is unchanged; OD-14 does not silently expand CA restatement scope.
+- **OD-22:** portfolio trailing % is seeded to **15%** on migration; strategy-level trailing/stop values are ignored; 15% is not a locked platform default; the user may change the portfolio value afterwards. Trailing formula and OD-14 series are unchanged.
 
 ### 35.8 Lending and atomic capital
 
@@ -1785,33 +2054,104 @@ Planning order for later passes. Do not implement in this phase.
 - Approval revalidation can fail; no commit on failure.
 - Race A then B against the same lender: B fails if capital is gone.
 - Loan/request amounts use OD-06 (×1.01 then ceil to ₹5,000). Examples: ₹23,700 → ₹25,000; ₹25,000 → ₹30,000; ₹19,000 → ₹20,000; ₹4,000 → ₹5,000.
-- The reserved atomic amount is not required to be fully invested; leftover reservation reverts after fill. The 1% is not an auto-invest instruction.
+- The reserved atomic amount is not required to be fully invested; leftover reservation reverts after fill. The 1% is not an auto-invest instruction. That leftover is **not** **Unallocated Cash** (OD-20).
 - No multi-lender split of one request.
-- Reserve and pending-execution reserved cash cannot be lent.
+- Reserve (`required_cash_reserve`, **OD-19**), pending-execution reserved cash, and the strategy’s **OD-24** minimum retained capital cannot be lent.
 - Recall before the **effective** period (platform default 14 calendar days, or portfolio override) is rejected (OD-07).
 - When several outstanding loans are recall-eligible, replenishment taps the **oldest** by commitment time first (**OD-09**). Exact commitment-time ties: any tied loan may be selected. Do not rank loans by size, lender %, lender amount, borrower strength, or strategy ranking.
 - Replenishment requests min needed (OD-06), not necessarily the full selected loan, including when that loan is the oldest.
 - Default recall requires user approval.
 
-### 35.9 Weakest position
+### 35.9 Weakest position (OD-16)
 
-- Auto-ranking does not use lifetime XIRR / total return / age alone.
-- Until OD-16, no invented auto-score silently sells names.
+- When recall/replenishment requires sells, rank **borrower-owned** positions only (OD-01).
+- Weakest score = configured-window simple percentage return: `window_return_pct = (current_reference_price − window_start_reference_price) / window_start_reference_price × 100`.
+- Lowest `window_return_pct` = weakest = sell first.
+- Evaluation window is strategy-configurable in **calendar days**.
+- Do **not** use lifetime XIRR alone, lifetime total return alone, or oldest holding alone.
+- Do **not** use annualised XIRR, fit score, thesis score, momentum, volatility, or OD-03 opportunity ranking as the weakest score.
+- Exact ties on `window_return_pct`: break by **`stock_id` ascending**.
+- Loan selection remains OD-09 FIFO; recall timing OD-07; amount OD-06.
+- Reference price column for OD-16 remains **DEP-WEAKEST-PRICE** (OD-14 is not silently extended).
+- Insufficient window history remains **DEP-WEAKEST-HISTORY** (no invented fallback).
 
 ### 35.10 Charts
 
-- 1M/3M/6M/1Y remain; 5Y exists; All is full available history, not since-buy.
-- Short history + long range ⇒ data shown + clamp message, no error.
+- 1M/3M/6M/1Y remain; **5Y** exists as a range (not a maximum).
+- **All** = all available stored/provider history, not since-buy, **not** limited to 5Y, **not** limited to 550 days or any other V3 numeric ceiling (**OD-17**).
+- History older than 5Y, when available, MUST remain representable under All and MUST NOT be artificially capped by a V3 product maximum.
+- Short history + long requested range ⇒ available data + clamp hint; no error merely because the security has less than 5Y (or less than the selected range).
+- Lack of history before listing/history start is a valid shorter series.
 
 ### 35.11 Migration
 
 - Existing cash, transactions, and recs remain.
 - No forced liquidation.
 - Existing unique `(profile, stock)` holdings become unmanaged or safely inferred; they are not silently split into multi-strategy lots.
+- **OD-22:** portfolio trailing % is seeded to **15%**; existing strategy-level trailing/stop values are ignored; 15% is not a locked platform default.
 
 ### 35.12 Audit
 
 - Every lending approval, rejection, commitment, return, and exit primary reason is persisted and retrievable.
+
+### 35.13 Portfolio cash reserve (OD-19)
+
+- There is exactly **one** configurable portfolio-level percentage: `portfolio_cash_reserve_pct`. It is **not** a strategy setting.
+- `required_cash_reserve = MAX(total_invested_amount, current_notional_portfolio_value) × portfolio_cash_reserve_pct`.
+- **Invested Amount** is actual capital paid to acquire currently held investments, not current market value.
+- **Notional Portfolio Value** is current market value of currently held investments, not invested cost.
+- On decline of market value below invested amount, the reserve does not fall below the configured percentage of invested amount (example: invested ₹80, notional ₹60, 20% → reserve ₹16).
+- On appreciation above invested amount, the reserve requirement rises with notional value (example: invested ₹80, notional ₹100, 20% → reserve ₹20).
+- 20% in those examples is illustrative, not a frozen V3 numeric default.
+- The reserve cannot be used for new buys or loans. Partial funding cannot invade it (OD-05).
+- The reserve is **not** % of cash, **not** % of NAV, **not** an absolute-₹ configuration, and **not** invested amount + available cash.
+- Withdrawal-into-reserve is **OD-21** (frozen: MUST NOT hard-block; warn on Dashboard; reserve remains non-investable and non-lendable). Named **Unallocated Cash** UI is **OD-20** (presentation-only; does not change this reserve formula). Strategy min-retained capital is **OD-24** (frozen separately; not this reserve).
+
+### 35.14 Unallocated Cash UI (OD-20)
+
+- The Cash UI MUST show a named **Unallocated Cash** bucket: residual portfolio cash after `required_cash_reserve` that is not claimed by strategy unused-allocation accounting.
+- The bucket is **presentation-only** over the existing single physical cash pool.
+- It MUST NOT create a separate cash account, bank account, strategy-owned cash account, new allocation %, new reserve, new lending pool, new withdrawal entitlement, or new accounting ledger.
+- It MUST NOT introduce a new residual-cash formula; existing §22 accounting is unchanged.
+- It is **not** `required_cash_reserve`, **not** `available_physical_cash`, **not** pending-execution reserved cash, **not** post-fill reservation leftover, and **not** strategy unused allocation.
+- Withdrawal-into-reserve is **OD-21** (frozen separately; Unallocated Cash is still not a withdrawal entitlement). Strategy min-retained capital is **OD-24** (frozen separately; `strategy_capital_allocation ÷ recommended_minimum_holdings`; not Unallocated Cash; not a physical cash account).
+
+### 35.15 Withdrawal vs cash reserve (OD-21)
+
+- External/broker withdrawals MUST NOT be blocked merely because they would leave physical cash below `required_cash_reserve`.
+- The application MUST represent a reserve shortfall in accounting rather than pretending the withdrawal could not happen.
+- A shortfall is a **warning/alert**, not a hard withdrawal restriction. The user MAY replenish later.
+- Dashboard MUST warn that the reserve is below the required level and that the user should replenish portfolio/broker cash (current V3 / **B3**). Do not invent layout, colour, or widget details.
+- A persistent application-wide critical alert/banner is **B4 wishlist** only; it is not a current UI requirement.
+- MUST NOT terminate automatic executions or execution recommendations **solely** because cash is below `required_cash_reserve`.
+- Reserve remains non-investable and non-lendable. OD-21 is not permission to invest or lend reserve cash. Partial funding still cannot invade the reserve for buys (OD-05).
+- `available_physical_cash` and the OD-19 reserve formula are unchanged. No reserve-adjusted withdrawal-cap formula. No withdrawal ledger or new cash bucket.
+- Unallocated Cash remains presentation-only and is not a withdrawal entitlement (OD-20).
+- OD-24 MUST NOT be used to hard-block such external withdrawals.
+
+### 35.16 Capital fill order when ranking is not computable (OD-23)
+
+- OD-23 applies only when return-quality ranking is not computable because `n < 15` or the required backtest corpus is unavailable.
+- For each strategy’s own valid BUY/INCREASE recommendations, capital fill order MUST be **descending conviction / target-size** (higher conviction / larger conviction-driven target amount first).
+- This is a **capital fill order**, **not** V3 return-quality ranking. MUST NOT label or present conviction/target-size order as the V3 ranking.
+- When `n ≥ 15` and the required backtest corpus is available, the allocator still follows ranking order / return quality. OD-23 MUST NOT change that ranked path.
+- Fit MUST NOT be used as a replacement for return-quality ranking. Fit remains labelled and stored as fit. Treating “rank = fit” remains forbidden.
+- Tie-break order MUST be exactly: (1) **fit** (higher fit first); (2) **conviction sub-score** (higher first); (3) **alphabetical** order of the stock listing symbol.
+- The alphabetical tie-break MUST make the ordering deterministic (same inputs → same fill order).
+- OD-05 partial funding, OD-06 atomic reservation, reserve protection, and strategy allocation limits remain unchanged.
+- OD-24 is frozen separately (§35.17) and is not changed by OD-23. **DEP-TRIM-K** is frozen separately (§4.4 / §33.3.1). Remaining open DEP-* items are unchanged.
+
+### 35.17 Minimum retained capital / one opportunity (OD-24)
+
+- For each strategy, `minimum_retained_capital = strategy_capital_allocation ÷ recommended_minimum_holdings`.
+- `strategy_capital_allocation` is the rupee amount currently allocated from the portfolio’s investable capital, not deployed capital, not NAV, not total cash, not `required_cash_reserve`.
+- `recommended_minimum_holdings` is the strategy’s configured recommended minimum holdings/opportunities, not hard `max_holdings`.
+- The result is the strategy-level protected “one opportunity” amount. Example: investable capital ₹10,00,000, Momentum 75% → ₹7,50,000, recommended minimum holdings 5 → retain ₹1,50,000.
+- It is an accounting constraint, not a physical cash account, not a strategy bank/cash sub-account, and not another portfolio cash reserve.
+- It does not modify `required_cash_reserve` (OD-19), `available_physical_cash`, the 100% allocation rule, BUY funding, OD-05, OD-06, OD-23, or the `n ≥ 15` ranking path.
+- Lending / available-for-lending MUST subtract this floor; lending MUST NOT consume it.
+- OD-24 MUST NOT hard-block external/broker withdrawals (OD-21).
+- **DEP-TRIM-K** is frozen separately and is not changed by OD-24. Remaining open DEP-* items are unchanged.
 
 ---
 
@@ -1820,23 +2160,53 @@ Planning order for later passes. Do not implement in this phase.
 | Do not confuse | With |
 |----------------|------|
 | Fit score | Final rank / expected return |
+| OD-23 capital **fill order** (descending conviction / target-size when ranking is not computable) | V3 return-quality ranking / a label of that fill order as “rank” / a silent fallback to fit-as-rank |
+| OD-23 fill-order tie-break **fit** | Fit used as the fallback V3 ranking key |
+| OD-23 fill-order tie-break order (fit → conviction sub-score → alphabetical) | Ranking order when `n ≥ 15` |
+| Ranking eligibility (`n ≥ 15`) | Trim-count `k` derived from 7% of `n` (**DEP-TRIM-K**) |
+| **DEP-TRIM-K** `k = nearest_integer(0.07 × n)` with exact .5 rounding **upward** | Floor-only `k` / ceil-only `k` / banker's (round-half-to-even) `round()` |
+| **OD-24** `minimum_retained_capital` (`strategy_capital_allocation ÷ recommended_minimum_holdings`) | `required_cash_reserve` (OD-19) / pending-execution reserved cash (OD-06) / Unallocated Cash (OD-20) / a physical strategy cash account |
+| OD-24 strategy-level one-opportunity **accounting floor** | Portfolio-level non-investable reserve / a change to `available_physical_cash` / a BUY-funding cap / OD-23 fill order |
+| OD-24 divisor **recommended minimum holdings** | Hard `max_holdings` / `1 / max_holdings` position cap |
+| Available-for-lending (unused allocation after OD-24 floor and other lending constraints) | Unused allocation in full / OD-19 reserve / Unallocated Cash |
 | WATCH | Unfunded or partially funded BUY |
 | Ranking observations | Live-trading history |
 | Atomic allocation / reservation | Amount that must be invested (includes 1% margin) **or** the position **target amount** (OD-12) |
 | Target **amount** (source of truth) | Derived whole-share quantity / executable notional |
 | OD-12 minimum actionable BUY/INCREASE (platform ₹5,000 / portfolio override) | OD-06 atomic reservation block (₹5,000) |
-| Latest daily closing price (recommendation / target qty, OD-12) | Execution price |
+| Latest raw daily `close_price` (OD-12 reference / target qty; OD-14 SL/trailing comparison) | Execution price / `adjusted_close_price` |
 | First-entry ~50% of current **target amount** | Subsequent INCREASE = current target amount − filled amount |
-| Horizon `T` | Trading sessions |
+| Stop-loss `entry_price` (weighted-average **actual fill** cost, OD-13) | First-fill price / latest close / `adjusted_close_price` |
+| Stop-loss average cost (OD-13) | Target amount / atomic reservation / last close (OD-12 / OD-06) |
+| Trailing stop (highest raw `close_price` since **entry date**, OD-14) | Stop-loss (average cost × (1 − pct)) / `adjusted_close_price` |
+| OD-22 15% portfolio trailing **migration seed** | A permanently enforced platform default / copy of `default_stoploss_percent` / strategy-level B1/B2 trailing values / average-max-min reconciliation of those values |
+| Portfolio-level trailing % (OD-22) | A strategy-level trailing setting |
+| Adoption of unmanaged holding into strategy | A new purchase that resets trailing/stop entry history |
+| OD-15 adoption entry-date continuity | DEP-ADOPT-MERGE cost-basis merge mechanics |
+| OD-16 weakest `window_return_pct` (recall/replenishment) | OD-03 opportunity ranking / annualised XIRR / fit / thesis / momentum |
+| OD-18 30-calendar-day minimum for annualized-return **use in ranking** | §19 annualized opportunity-cost **success** test / OD-02 `T_years` / OD-16 non-annualised weakest return |
+| OD-16 reference prices | OD-14 SL/trailing/OD-12 series (not automatically extended) |
+| V3 all-available OHLCV history (OD-17; no product-depth ceiling) | V1/as-built `HISTORY_DEPTH_TARGET_DAYS = 550` / a fixed numeric V3 depth target / 5Y as a storage maximum |
 | Unique `(portfolio, stock)` | V3 holding identity |
 | Manual / IPO unmanaged quantity | Corporate-action quantity on an existing parent holding (OD-10) |
 | Pro-rata CA allocation | Parent-owner / per-parent-holding CA attachment (OD-10) |
-| OD-10 CA owner attachment | OD-14 `close_price` vs `adjusted_close_price` |
+| OD-10 CA owner attachment | CA cost/trailing-high/stop restatement (not solved by OD-14) |
 | Recommendation expiry (hours) | Strategy horizon |
+| Horizon `T` | Trading sessions |
 | BUY cooldown (1 calendar day, OD-11) | OD-07 lending recall (shipped default 14 calendar days) |
 | BUY cooldown start (recommendation opportunity) | Fill / trade approval / lending commitment |
-| V1 trailing proxy (unrealized %) | V3 trailing (highest close) |
+| V1 trailing proxy (unrealized %) | V3 trailing (highest raw `close_price`, OD-14) |
 | Available cash | Available-for-lending |
+| Available cash / `available_physical_cash` | Named **Unallocated Cash** UI bucket (OD-20; presentation-only residual after reserve not claimed by unused-allocation) |
+| Named **Unallocated Cash** (OD-20) | `required_cash_reserve` / pending-execution reserved cash / post-fill reservation leftover / strategy unused allocation / a physical cash account |
+| Named **Unallocated Cash** (OD-20 presentation) | A new residual-cash formula, ledger, lending pool, or withdrawal entitlement (**OD-21** allows external withdraw even if cash falls below reserve; that is not an Unallocated Cash entitlement) |
+| External/broker withdrawal that leaves cash below `required_cash_reserve` (OD-21; warning, not a hard block) | Permission to invest or lend reserve cash (still forbidden) / automatic halt of executions or recommendations solely due to the shortfall |
+| Current V3 / B3 Dashboard reserve-shortfall warning | B4 wishlist persistent application-wide critical banner (design not frozen) |
+| Available cash / total cash / portfolio NAV | OD-19 reserve base (`MAX(Invested Amount, Notional Portfolio Value)`) |
+| Invested Amount (actual capital paid for currently held investments, OD-19) | Notional Portfolio Value (current market value of currently held investments, OD-19) |
+| `required_cash_reserve` (OD-19 rupee floor) | OD-06 pending-execution reserved cash / `atomic_allocation` |
+| `portfolio_cash_reserve_pct` (one portfolio-level percentage, OD-19) | A second percentage for notional vs invested, or V1 strategy `min_cash_reserve_pct` as a cash-% rule |
+| OD-19 illustrative 20% examples / Factory Minervini migration seed | A frozen V3 numeric default for `portfolio_cash_reserve_pct` |
 | Available-for-lending **percentage** | Available-for-lending **amount** (both are OD-08 lender keys; amount is not raw portfolio cash) |
 | Prospective **lender** (strategy) | Outstanding **loan** |
 | OD-08 lender ranking (% then amount then arbitrary exact tie) | OD-09 loan tap (FIFO by commitment time then arbitrary exact tie) |
@@ -1857,4 +2227,4 @@ Informational for implementers locating V1 code. Not requirements.
 - Presentation trailing (V3-aligned formula): `HoldingPresentationService`
 - Since-buy prices: `priceHistoryForHolding`
 - Chart ranges: `priceVolumeChartTypes.js` (`all`, `1m`, `3m`, `6m`, `1y`)
-- History depth default: `HISTORY_DEPTH_TARGET_DAYS` = 550
+- History depth default: `HISTORY_DEPTH_TARGET_DAYS` = 550 (**as-built / V1 implementation value only**; **not** a V3 product requirement. OD-17: V3 has no equivalent maximum product-depth constant.)
