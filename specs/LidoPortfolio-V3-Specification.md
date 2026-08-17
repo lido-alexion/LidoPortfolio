@@ -4,11 +4,11 @@
 |-------|-------|
 | **Title** | Lido Portfolio V3 Specification |
 | **Status** | Review |
-| **Version** | 0.4 |
+| **Version** | 0.6 |
 | **Owner** | Product Specification / Architecture |
-| **Last Updated** | 2026-08-15 |
+| **Last Updated** | 2026-08-17 |
 | **Implementation Status** | Not started |
-| **Depends On** | Frozen V3 product decisions (2026-08-14 and 2026-08-15), including OD-01–OD-10; Architecture Impact Report; V1/V2 as-built baseline in `implementation.md` |
+| **Depends On** | Frozen V3 product decisions (2026-08-14 through 2026-08-17), including OD-01–OD-12; Architecture Impact Report; V1/V2 as-built baseline in `implementation.md` |
 | **Referenced By** | Future V3 implementation passes |
 | **Related Specifications** | [architecture/domains/Strategy-Configuration-Specification.md](architecture/domains/Strategy-Configuration-Specification.md), [architecture/portfolio/Cash-Management-Specification.md](architecture/portfolio/Cash-Management-Specification.md), [architecture/domains/Recommendation-Engine-Specification.md](architecture/domains/Recommendation-Engine-Specification.md), [architecture/governance/SPECIFICATION_DECISIONS.md](architecture/governance/SPECIFICATION_DECISIONS.md) (SD-026, SD-029, SD-010) |
 
@@ -149,7 +149,7 @@ Multiple strategies MAY be concurrently **enabled** in one portfolio. “Enabled
 
 An immutable-enough configuration snapshot (`TradingStrategyVersion` / `config_json`) referenced by recommendations, holdings adoption events, and evaluation. Saving a strategy still records which version produced a decision. V1 in-place save of the active version may continue as a persistence mechanic; V3 does not require a product-facing version-fork UI.
 
-Strategy version configuration in V3 contains strategy-specific parameters only (eligibility, scoring, thresholds, strategy-specific exits, optional horizon, staggered-entry %, cooldown, min/max holdings, conviction bands). It must **not** contain portfolio-wide cash/risk controls.
+Strategy version configuration in V3 contains strategy-specific parameters only (eligibility, scoring, thresholds, strategy-specific exits, optional horizon, staggered-entry %, BUY cooldown of **1 calendar day** (OD-11), min/max holdings, conviction bands). It must **not** contain portfolio-wide cash/risk controls.
 
 ### 2.4 Holding
 
@@ -164,7 +164,7 @@ V1 aggregates one row per `(profile, stock)`. That uniqueness **must not** be re
 - strategy-owned: `(portfolio, stock, strategy_id)`
 - unmanaged: `(portfolio, stock, unmanaged)` — at most one unmanaged position per stock per portfolio (use a dedicated unmanaged owner key / non-null sentinel so the unique constraint is enforceable)
 
-A holding has quantity, cost basis, owner (strategy or unmanaged), and when strategy-owned: target position, filled quantity, and entry date for trailing/stop calculations. These fields MUST NOT be blended across owners of the same symbol.
+A holding has quantity, cost basis, owner (strategy or unmanaged), and when strategy-owned: **target amount** (source of truth, OD-12), derived whole-share quantity, filled amount/quantity, and entry date for trailing/stop calculations. These fields MUST NOT be blended across owners of the same symbol. Target quantity is **not** the primary persisted unit.
 
 **OD-10 (frozen):** corporate-action quantity follows the **parent holding’s owner**. A CA applicable to a holding identified by `(portfolio, stock, owner)` adjusts **that** owner’s position quantity. It MUST NOT first blend multiple owners of the same stock into one portfolio-level position. Unmanaged parent holdings stay unmanaged. OD-10 does not freeze CA mathematics, cost/trailing/target restatement, or price-series choice (OD-14 remains OPEN).
 
@@ -438,7 +438,7 @@ The exact formula for “one opportunity” (for example one maximum diversified
 - If desired/required capital exceeds currently available free capital, the allocator MAY use the available free capital to take a **partial** position.
 - Example: desired allocation = ₹18,000, available free capital = ₹10,000 → allocate ₹10,000. Do **not** convert the opportunity to WATCH.
 - Capital status remains a separate axis from opportunity direction (§23).
-- Partial funding is the this-cycle executable amount; remaining target still follows staggered-entry rules (§12).
+- Partial funding is the this-cycle executable amount; the persisted **target amount** is unchanged (OD-12). Remaining BUY/INCREASE still follows staggered-entry rules (§12) and OD-11. Do **not** reset the target to the amount funded this cycle.
 - If available free capital is **zero**, the recommendation stays a valid OPEN/INCREASE with `UNFUNDED` and may enter the lending workflow (§7). It still MUST NOT become WATCH.
 
 Partial funding does not waive portfolio reserve, pending-execution reservations, or ownership fences.
@@ -465,7 +465,7 @@ Examples (normative):
 | ₹19,000 | ₹19,190 | ₹20,000 |
 | ₹4,000 | ₹4,040 | ₹5,000 |
 
-**What atomic_allocation is:** a **capital reservation / allocation** amount. It is **not** necessarily the amount ultimately invested.
+**What atomic_allocation is:** a **capital reservation / allocation** amount. It is **not** necessarily the amount ultimately invested. It is **not** the position **target amount** (OD-12). Example: this-cycle requirement ₹18,000 → atomic reservation ₹20,000; the target remains ₹18,000 (or the persisted position target, whichever applies). Do not replace the target with the atomic amount.
 
 **What the 1% margin is not:** it is **not** money that must automatically be invested. It exists so a reservation is large enough if execution occurs above the reference price.
 
@@ -617,9 +617,14 @@ Strategy detects opportunity
     ↓
 Strategy generates a normal recommendation (action remains OPEN / INCREASE)
     ↓
-Apply staggered entry → this-cycle calculated_requirement
+Apply staggered entry (§12) → this-cycle calculated_requirement (amount)
+    (whole-share qty derived from latest daily close; min actionable §12.4)
+    ↓
+    If this-cycle opportunity < effective min actionable: no new OPEN/INCREASE
+    (target amount unchanged)
     ↓
 atomic_allocation = ceil((calculated_requirement × 1.01) / 5000) × 5000
+    (reservation only; does not replace target amount)
     ↓
 Calculate own available free capital
     ↓
@@ -629,7 +634,7 @@ If own free ≥ atomic_allocation:
 If 0 < own free < atomic_allocation:
     allocate own free (partial position, OD-05)
     capital_status = PARTIALLY_FUNDED
-    remaining target persists (§12)
+    remaining **target amount** persists (§12); do not reset target to the funded slice
     optional lending path only for an unfunded remainder whose OD-06 size ≥ ₹5,000
       (whether that remainder opens a capital request this cycle: DEP-PARTIAL-LEND)
 If own free = 0:
@@ -677,7 +682,7 @@ reservation for the buy → manual/broker fill)
 
 The reservation amount is `atomic_allocation` (or the partial own amount). Execution invests shares at the fill price; unused reservation reverts to available capital. The 1% margin is not an instruction to buy more shares.
 
-Sells/exits never enter this lending path. They do not require borrow. BUY cooldown does not apply to them.
+Sells/exits never enter this lending path. They do not require borrow. BUY cooldown does not apply to REDUCE/EXIT/HOLD (**OD-11**). BUY cooldown is **not** the OD-07 lending recall period.
 
 ### 7.3 Required outcomes (no extra async invented)
 
@@ -868,7 +873,7 @@ Portfolio stop-loss and trailing stop **do** apply to unmanaged holdings (§14�
 ### 10.4 Adoption
 
 - User adopts an unmanaged holding into **exactly one** strategy.
-- After adoption, that strategy owns it; target position SHOULD be initialised from current quantity (remaining staggered fill = 0 unless the user/strategy later raises target).
+- After adoption, that strategy owns it; **target amount** SHOULD be initialised from the adopted position’s current monetary value (remaining BUY/INCREASE = 0 unless the user/strategy later raises the target amount). Cost-basis / entry-date merge remains **DEP-ADOPT-MERGE**.
 - Adoption MUST be explicit. No silent auto-adopt during generation.
 - If the destination strategy **already** owns that stock, the unmanaged quantity is merged into that strategy’s holding. Cost-basis / entry-date merge rules are **not frozen** — see §33.3 **DEP-ADOPT-MERGE**.
 - Adoption into a strategy does **not** disturb another strategy’s existing position in the same stock (OD-01).
@@ -888,7 +893,7 @@ Two or more strategies MAY own the same stock independently.
 | Layer | Rule |
 |-------|------|
 | Identity | Unique `(portfolio, stock, owner)` where owner is `strategy_id` or the unmanaged sentinel |
-| Cost / qty / target / filled / entry | Per owner |
+| Cost / qty / **target amount** / filled / entry | Per owner. Target is monetary (OD-12); quantity is derived. |
 | Trailing stop / stop-loss | Per owner’s holding (own entry date and own high-close series) |
 | Strategy EXIT/REDUCE/INCREASE | Only the owning strategy, only its quantity |
 | Corporate-action quantity | Follows the **parent holding’s owner** (OD-10). Do not blend owners first. Do not use pro-rata as the governing rule. |
@@ -941,23 +946,47 @@ For each enabled strategy:
 4. Apply strategy-specific exit rules to **owned holdings only**. If triggered, action = EXIT (attribution = strategy exit).
 5. Apply portfolio stop-loss / trailing stop / horizon to **this strategy’s owned holdings only**, each as its own position even if other strategies hold the same symbol (§13). Higher-precedence attribution wins when several would fire on the same cycle for **that** holding.
 6. Ignore holdings not owned by this strategy (including unmanaged and other strategies’ lots of the same stock).
-7. Apply staggered entry (§12) to OPEN/INCREASE quantities.
-8. Apply BUY cooldown (§11.2) to OPEN/INCREASE only (key = stock + **this** strategy; another strategy’s recent BUY of the same stock does not consume this strategy’s cooldown).
+7. Apply staggered entry (§12) to OPEN/INCREASE **amounts**, then derive whole-share quantity from the latest daily close (OD-12). Suppress OPEN/INCREASE below the effective minimum actionable amount.
+8. Apply BUY cooldown (§11.2, **OD-11**) to OPEN/INCREASE only (key = stock + **this** strategy). Another strategy’s BUY of the same stock does not consume, reset, or affect this strategy’s cooldown.
 9. Enforce hard max holdings on new OPEN (this strategy’s name count only).
 10. Compute ranking (§4) from the **backtest corpus** when `n ≥ 15`; do not emit fit-as-rank; do not use live trades.
 11. Compute own available capital; apply OD-05/OD-06. Set `FUNDED` / `PARTIALLY_FUNDED` / `UNFUNDED`. **Do not demote OPEN/INCREASE to WATCH** for capital reasons.
-12. Persist recommendations. Cancel only **this strategy’s** stale open recs. Do **not** cancel `pending_execution` or other strategies’ recs.
+12. Persist recommendations. Cancel only **this strategy’s** stale open recs, subject to §11.2 (do not stale-replace a BUY for a pair that is in cooldown; do **not** cancel `pending_execution`; do not clear cooldown). Do **not** cancel other strategies’ recs.
 
 Market gates MAY continue to demote OPEN/INCREASE to WATCH/HOLD as **market** policy (F098). That is not a capital demotion. Capital shortage uses UNFUNDED or PARTIALLY_FUNDED, not WATCH.
 
-### 11.2 BUY cooldown
+### 11.2 BUY cooldown (OD-11)
 
-- Applies only to BUY-side actions: OPEN and INCREASE.
-- Keyed by **stock + strategy**.
-- Does **not** apply to REDUCE, EXIT, or HOLD.
-- Duration: **OPEN (OD-11)**; MUST be configurable once set. Product concept is frozen; the number of days is not.
+**OD-11 (frozen).** Primary purpose: prevent repeated BUY **recommendation churn** for the same stock and strategy. Secondary: space repeated capital deployment into that stock/strategy.
 
-Cooldown blocks a new BUY recommendation for that pair until elapsed. It does not block exits.
+This is **not** the lending/borrowing recall period. **OD-07** remains unchanged (configurable; shipped default **14 calendar days**). Do not use 14 days as the BUY cooldown.
+
+**Scope**
+
+- Key: `(stock, strategy)`.
+- Applies to BUY-side actions: **OPEN** and **INCREASE**.
+- Does **not** suppress **REDUCE**, **EXIT**, or **HOLD**.
+- Another strategy buying the same stock has an independent cooldown and does not consume, reset, or otherwise affect this strategy’s cooldown (OD-01).
+
+**Duration and unit:** **1 calendar day** (not trading sessions).
+
+If a BUY recommendation opportunity occurs on calendar **Day 0**:
+
+- **Day 0:** that BUY is allowed.
+- **Day 1:** another BUY recommendation for the same stock+strategy is suppressed by cooldown.
+- **Day 2:** cooldown has elapsed; a new BUY recommendation MAY be generated if all other eligibility rules pass.
+
+**Start:** a BUY recommendation **opportunity / generation cycle** starts the one-calendar-day cooldown for that pair. Cooldown does **not** wait for broker fill, trade approval, or cash reservation. Partial fills and full fills do **not** reset, extend, or restart it. It is not a lending/borrowing clock.
+
+After the Day 0 opportunity has been generated, **new** OPEN/INCREASE recommendations for that pair are suppressed until Day 2. An unapproved BUY MUST NOT simply be regenerated the next calendar day (Day 1) for the same pair.
+
+**Lifecycle (normative)**
+
+- Cooldown only suppresses **new** BUY recommendations during the active window.
+- It MUST NOT cancel, reverse, or otherwise modify an already-approved / `pending_execution` / executing trade.
+- Stale-recommendation cancellation MUST NOT clear, reset, or imply that cooldown has disappeared.
+- While cooldown is active for a pair, generation MUST NOT persist a replacement OPEN/INCREASE for that pair (that is the churn OD-11 exists to prevent). If an unapproved OPEN/INCREASE for that pair still exists, do not stale-replace it with another BUY during the window.
+- `pending_execution` remains governed by its existing lifecycle (§23, §24.3) and MUST NOT be cancelled merely because of cooldown.
 
 ### 11.3 Interaction with existing holdings
 
@@ -967,9 +996,9 @@ Cooldown blocks a new BUY recommendation for that pair until elapsed. It does no
 | Owned by another strategy | No REDUCE/EXIT/INCREASE of **their** lot. This strategy MAY OPEN (or INCREASE **its own** lot) in the same stock (OD-01). |
 | Unmanaged | No strategy trade control; user may adopt into one strategy |
 
-### 11.4 Target quantity
+### 11.4 Target amount (OD-12)
 
-Conviction → target position (within diversification and portfolio caps). Execution plan carries target and this-cycle suggested quantity (staggered). Target must be stored so later cycles can fill the remainder (§12).
+Conviction → **target amount** (within diversification and portfolio caps). Quantity is **derived** from that amount using the latest available daily closing price and whole-share flooring (§12.3). The target amount MUST be persisted so later cycles can fill the remainder (§12). Do not persist target quantity as the source of truth.
 
 ---
 
@@ -977,32 +1006,92 @@ Conviction → target position (within diversification and portfolio caps). Exec
 
 ### 12.1 Frozen behaviour
 
-- First entry is **approximately 50%** of the target position.
-- Later recommendation(s) may fill the remaining target.
-- Target position remains strategy/conviction-driven (and recapped if conviction/caps change).
+- The persisted target for a strategy-owned position is primarily a **monetary amount** (**OD-12**). Quantity is derived; it is not the primary stored unit.
+- First entry is **approximately 50%** of the **current target amount** (default; strategy-configurable; if unset, use 50%).
+- The 50% rule applies to the **first entry only**. It is **not** a fixed-size rule for subsequent INCREASEs.
+- Later recommendation(s) may fill the remaining **amount** after cooldown (OD-11), using **current target amount** and the amount already represented by the **filled** position (§12.2).
+- Target amount remains strategy/conviction-driven (and recapped if conviction/caps change). Target MAY change during an active BUY cooldown; when cooldown elapses, use the latest valid target amount and latest filled position. Do not freeze a second 50% tranche from the original target.
 
-The **default** first-entry fraction is **50%**. The fraction MUST be **strategy-configurable** so 50% is not an unchangeable constant. If unset, use 50%.
+V3 is a personal-use product (possible later use by a small number of friends). Prefer simple, deterministic rules. Small monetary differences from whole-share rounding or from last-close vs later execution price are acceptable. Do not over-engineer penny-level precision, and do not simplify in a way that materially changes intended investment risk. Do **not** add an execution-price band here; execution price is a separate concern.
 
 ### 12.2 Surviving recommendation cycles
 
-Target MUST be persisted on the **strategy-owned position** (or an equivalent strategy-position record), not only on a perishable recommendation row.
+Target **amount** MUST be persisted on the **strategy-owned position** (or an equivalent strategy-position record), not only on a perishable recommendation row.
 
 Minimum fields:
 
-- `target_quantity` and/or `target_allocation_amount` (which unit is primary: **OPEN (OD-12)**; both MAY be stored if kept consistent)
-- `filled_quantity`
+- `target_amount` (source of truth, OD-12)
+- derived whole-share quantity (not primary)
+- `filled_amount` / filled quantity (filled amount = monetary amount already represented by the filled position)
 - `entry_date` (first fill of this ownership episode)
+
+Do not store target quantity as the authoritative target. A derived quantity MAY be stored for display if it is recomputed from `target_amount` and the latest daily close when generating recommendations.
+
+**Reference price (OD-12):** for recommendation generation and all target/quantity calculations, use the stock’s **latest available daily closing price**. Do **not** use intraday price, expected execution price, previous execution price, broker quote, or estimated future price. Execution price is a separate execution concern and is not specified here. Small differences between last close and actual execution price MUST NOT alter recommendation-generation semantics.
 
 Each generation:
 
-- `remaining = max(0, target − filled)`
-- If no position yet: this-cycle `calculated_requirement` = `first_entry_pct × target` (whole shares)
-- If position exists and remaining > 0 and BUY cooldown allows: this-cycle `calculated_requirement` = remaining gap
-- Apply OD-06 to get `atomic_allocation`, then OD-05: if own free capital is less than `atomic_allocation` but greater than zero, **partial-fund this cycle** (allocate available free capital). Do not WATCH. Persist remaining target including the unfunded part of this slice.
+- `remaining_amount = max(0, current_target_amount − filled_amount)`
+- If no position yet: this-cycle intended amount = `first_entry_pct × current_target_amount` (default 50%)
+- If position exists and remaining_amount > 0 and BUY cooldown allows (**OD-11**): this-cycle intended amount = **remaining_amount** (not a preserved second 50% slice)
+- If position exists and remaining_amount > 0 but BUY cooldown is active: do **not** emit a new INCREASE for that pair; target-amount changes still apply when cooldown elapses
+- Convert this-cycle intended amount to whole-share quantity (§12.3)
+- If the actionable opportunity is below the effective minimum (§12.4), do **not** emit OPEN/INCREASE; do **not** reduce `target_amount`
+- Apply OD-06 to get `atomic_allocation` from `calculated_requirement` (the this-cycle intended amount). Atomic reservation does **not** replace `target_amount`
+- Then OD-05: if own free capital is less than `atomic_allocation` but greater than zero, **partial-fund this cycle**. Do not WATCH. Do **not** reset `target_amount` to the funded slice
 
-Partial first entry (example): target implies ₹36,000, first-entry 50% = ₹18,000, own free = ₹10,000 → buy ~₹10,000 now; remaining target includes the unfunded ₹8,000 of the first slice plus the later 50%. Subsequent INCREASE fills remaining subject to cooldown.
+**First-entry example (amount):** target amount = ₹10,000 → first BUY intended ≈ ₹5,000. After that, the next BUY/INCREASE is not another ₹5,000 of the original ₹10,000.
 
-If conviction lowers target below filled, the strategy MAY emit REDUCE; do not invent an automatic reduce unless strategy reduce rules already fire.
+If filled amount = ₹5,000 and, after cooldown, current target = ₹12,000 → remaining = ₹7,000.  
+If filled amount = ₹5,000 and current target = ₹8,000 → remaining = ₹3,000.
+
+Then derive whole-share quantity from remaining using the **latest daily close**. If remaining ₹3,000 is below the effective minimum actionable amount, no INCREASE is generated; target stays ₹8,000.
+
+Partial first entry (capital, OD-05): target ₹36,000, first-entry 50% = ₹18,000, own free = ₹10,000 → fund ~₹10,000 now; **target remains ₹36,000**. Subsequent INCREASE after OD-11 elapses uses `current_target_amount − filled_amount`.
+
+If current target amount is below the amount already filled, there is **no** BUY/INCREASE for a gap. Existing REDUCE semantics remain governed by applicable recommendation rules. Do not invent an automatic reduce unless strategy reduce rules already fire.
+
+### 12.3 Whole-share quantity (OD-12)
+
+Fractional shares are **not** supported.
+
+When converting an amount into quantity, derive the maximum whole-share quantity whose notional value does not materially exceed the intended amount. Normal/default behaviour is to **FLOOR**:
+
+```text
+quantity = floor(intended_amount / latest_daily_close)
+notional = quantity × latest_daily_close
+residual = intended_amount − notional
+```
+
+Example: target or slice amount = ₹2,500, last close = ₹600 → 2500/600 = 4.166… → **quantity = 4**, notional = ₹2,400, residual = ₹100. Do **not** force a 5th share (₹3,000) merely to consume the amount.
+
+Rounding to whole shares MUST **not** change the persisted `target_amount`. In the example the target remains ₹2,500; ₹100 is an unexecuted residual caused by whole-share constraints. Do not silently replace the target with ₹2,400.
+
+Zero-quantity results MUST NOT be emitted as BUY/INCREASE recommendations.
+
+### 12.4 Minimum actionable BUY/INCREASE amount (OD-12)
+
+A configurable **minimum actionable amount** applies to the this-cycle BUY/INCREASE **opportunity**, not to the overall target amount.
+
+```text
+Effective minimum = Portfolio override if set, else Platform default
+Shipped platform default = ₹5,000
+```
+
+No strategy-level override. Portfolio inherits the platform value unless it explicitly overrides.
+
+If the remaining executable opportunity (after first-entry split or subsequent remaining, and after whole-share conversion as applicable) is **below** the effective minimum, do **not** generate a new OPEN/INCREASE. Do **not** reduce `target_amount`.
+
+Example: target ₹10,000, filled ₹8,000, remaining ₹2,000, minimum ₹5,000 → no INCREASE; target stays ₹10,000. If target later becomes ₹14,000 and filled is still ₹8,000, remaining ₹6,000 ≥ ₹5,000 → INCREASE is actionable (subject to OD-11).
+
+Do not create repeated recommendations merely to capture tiny residuals that cannot produce a meaningful transaction. Whole-share residuals below the minimum stay as unfilled target. Do not generate zero-quantity or immaterial BUY/INCREASE recs solely to consume those residuals.
+
+This ₹5,000 default is **not** OD-06. OD-06’s ₹5,000 is the atomic **reservation** block. OD-12’s ₹5,000 is the minimum **actionable recommendation** amount. They happen to share a number; they are different mechanisms.
+
+### 12.5 OD-05 and OD-06 vs target amount
+
+- **OD-06** unchanged: `atomic_allocation` is reservation, not target. Example: requirement ₹18,000 → reserve ₹20,000; target stays ₹18,000 (this-cycle) / persisted position target is unchanged.
+- **OD-05** unchanged: partial funding does not reset the target to the funded amount. Subsequent INCREASE remains subject to OD-11 and current target amount.
 
 ---
 
@@ -1225,7 +1314,7 @@ These MUST move **out** of strategy `config_json` and onto **portfolio** configu
 | Portfolio max position size / exposure | Ceiling across the account |
 | Other genuinely portfolio-wide risk limits identified in implementation | Must be classified as portfolio, not smuggled back into strategy JSON |
 
-**Remain on strategy:** eligibility, scoring, thresholds, strategy-specific exits (not common SL/trailing), market gates, conviction/size bands **within** caps, staggered %, BUY cooldown, optional horizon, recommended min / hard max holdings, first-entry %.
+**Remain on strategy:** eligibility, scoring, thresholds, strategy-specific exits (not common SL/trailing), market gates, conviction/size bands **within** caps, staggered first-entry % (default 50%), BUY cooldown (**1 calendar day**, OD-11), optional horizon, recommended min / hard max holdings. Target **amount** is the position source of truth (OD-12); quantity is derived.
 
 V1 Strategy UI tabs “Portfolio Rules”, “Cash Management”, and common stop/trailing inside “Exit Strategy” MUST be relocated conceptually to Portfolio settings (§29).
 
@@ -1347,7 +1436,7 @@ Serialize capital mutations per portfolio (transaction / lock). Do not rely on U
 
 ### 24.3 Stale generation
 
-A second generate for the same strategy may cancel stale **unapproved** recs for that strategy. It MUST NOT silently drop another strategy’s recs or break outstanding loans.
+A second generate for the same strategy may cancel stale **unapproved** recs for that strategy. It MUST NOT silently drop another strategy’s recs or break outstanding loans. It MUST NOT cancel `pending_execution`. It MUST NOT clear or reset BUY cooldown (OD-11). While cooldown is active for a `(stock, strategy)` pair, it MUST NOT emit a new OPEN/INCREASE for that pair and MUST NOT stale-replace an existing unapproved BUY for that pair with another BUY.
 
 ---
 
@@ -1403,9 +1492,9 @@ Additive / evolving `/api` and `/api/v1` capabilities (shapes not frozen beyond 
 |------------|--------|
 | List/enable **multiple** strategies per portfolio | Registry `exactly_one_active_per_portfolio` removed |
 | Per-strategy recommendation generate | `strategy_id` required or generate-all-enabled |
-| Holdings include owner, unmanaged flag, target/filled | Multiple rows per stock when multiple owners (OD-01). CA quantity stays on the parent owner row (OD-10); not blended. |
+| Holdings include owner, unmanaged flag, **target amount** / filled | Multiple rows per stock when multiple owners (OD-01). CA quantity stays on the parent owner row (OD-10); not blended. Target is amount (OD-12); qty derived from latest daily close. |
 | `POST` adopt holding → one strategy | Merge if that strategy already owns the name (DEP-ADOPT-MERGE) |
-| Portfolio controls GET/PUT | reserve, SL, trailing, max position, lending policy, atomic block ₹5,000, 1% margin, platform/portfolio recall period |
+| Portfolio controls GET/PUT | reserve, SL, trailing, max position, lending policy, atomic block ₹5,000, 1% margin, platform/portfolio recall period, **minimum actionable BUY/INCREASE** (platform default ₹5,000 + portfolio override, OD-12) |
 | Strategy allocation % GET/PUT | sum-to-100 validation |
 | Recommendation capital_status | FUNDED / PARTIALLY_FUNDED / UNFUNDED; never WATCH-for-cash |
 | Eligible lenders for a rec | ranked by OD-08: lendable % descending, then lendable amount descending; exact ties arbitrary; amounts ₹5,000-aligned after 1.01 |
@@ -1425,19 +1514,19 @@ Conceptual (no migrations in this phase).
 
 ### 28.1 Portfolio settings / controls
 
-Persist: cash reserve, stop-loss %, trailing %, portfolio max position, lending limits, min free-capital policy, opportunity-cost rate, optional auto-return flag, **platform default recall period** (shipped 14 calendar days), **portfolio recall override**, atomic block **₹5,000**, execution-price margin **1%**.
+Persist: cash reserve, stop-loss %, trailing %, portfolio max position, lending limits, min free-capital policy, opportunity-cost rate, optional auto-return flag, **platform default recall period** (shipped 14 calendar days), **portfolio recall override**, atomic block **₹5,000**, execution-price margin **1%**, **platform default minimum actionable BUY/INCREASE amount** (shipped **₹5,000**, OD-12), **portfolio minimum-actionable override**.
 
 ### 28.2 Strategy
 
 - Allow multiple enabled strategies per `profile_id` (drop application-level exclusive active).
 - `allocation_pct`
 - Strategy-only config; strip portfolio keys from *meaning* (keys may linger unused).
-- Optional horizon in **calendar days**, first_entry_pct, buy_cooldown, min/max holdings.
+- Optional horizon in **calendar days**, first_entry_pct (default 50%), buy_cooldown (**1 calendar day**, OD-11), min/max holdings.
 
 ### 28.3 Holdings / positions
 
 - `strategy_id` nullable (null/sentinel = unmanaged)
-- `target_quantity` / filled, `entry_date` (per owner)
+- `target_amount` (source of truth, OD-12), derived whole-share quantity, filled amount/qty, `entry_date` (per owner)
 - Unique `(profile_id, stock_id, owner_key)` — **not** `(profile_id, stock_id)` (OD-01)
 - Adoption events table (who, when, from unmanaged, to strategy)
 - Corporate-action quantity adjusts the **existing** owner row (OD-10); do not insert CA shares as a new unmanaged holding when a parent holding exists
@@ -1474,11 +1563,11 @@ Append-only capital and ownership events (§31).
 
 | Surface | V3 |
 |---------|-----|
-| **Strategy page** | Eligibility, scoring, thresholds, strategy-specific exits, optional horizon, staggered %, cooldown, min/max holdings, conviction bands. **Remove** portfolio cash reserve, common SL/trailing, portfolio-wide cash rules. |
+| **Strategy page** | Eligibility, scoring, thresholds, strategy-specific exits, optional horizon, staggered first-entry % (default 50%), BUY cooldown **1 calendar day** (OD-11; not the OD-07 14-day recall), min/max holdings, conviction bands. **Remove** portfolio cash reserve, common SL/trailing, portfolio-wide cash rules. |
 | **Strategy registry** | Enable multiple strategies; allocation % editor (sum 100). No exclusive activate. |
-| **Portfolio settings** | Reserve, SL, trailing, portfolio caps, lending policy, recall period override (inherit platform 14-day default), opportunity cost, auto-return toggle (default off). Atomic block ₹5,000 and 1% margin are specified product values (display as policy, not as “invest the margin”). |
-| **Holdings** | Owner / Unmanaged; **per-strategy rows** for the same stock (qty 50 vs 30); Adopt; target vs filled; do not offer strategy sell on unmanaged or on another strategy’s lot. Corporate-action quantity stays on the parent owner (OD-10); unmanaged CA stays unmanaged. |
-| **Recommendations** | Unfunded or partially funded BUY visible with capital status; not WATCH. Lender list. Approval. Cooldown per stock+strategy. Ranking from backtests when `n ≥ 15`; fit labelled as fit. |
+| **Portfolio settings** | Reserve, SL, trailing, portfolio caps, lending policy, recall period override (inherit platform 14-day default), opportunity cost, auto-return toggle (default off). Atomic block ₹5,000 and 1% margin are specified product values (display as policy, not as “invest the margin”). **Minimum actionable BUY/INCREASE** inherits platform ₹5,000 unless the portfolio overrides (OD-12; not a strategy setting; not OD-06). |
+| **Holdings** | Owner / Unmanaged; **per-strategy rows** for the same stock (qty 50 vs 30); Adopt; **target amount** vs filled amount (qty derived from latest daily close, OD-12); do not offer strategy sell on unmanaged or on another strategy’s lot. Corporate-action quantity stays on the parent owner (OD-10); unmanaged CA stays unmanaged. |
+| **Recommendations** | Unfunded or partially funded BUY visible with capital status; not WATCH. Lender list. Approval. BUY cooldown **1 calendar day** per stock+strategy (OD-11); does not cancel `pending_execution`. Ranking from backtests when `n ≥ 15`; fit labelled as fit. |
 | **Cash** | Reserve vs available vs reserved (atomic allocation vs post-fill leftover) vs per-strategy allocated / deployed / lendable / lent / borrowed. |
 | **Lending / recall** | Eligible lenders only; default sort OD-08 (lendable % descending, then lendable amount descending; exact ties have no product significance). Approve; errors on stale; recall approval; show effective recall period (platform vs portfolio override). Replenishment among eligible loans: oldest commitment time first (OD-09); do not present FIFO as a lender sort. |
 | **Charts** | 5Y; All = full available history; clamp message. |
@@ -1543,9 +1632,9 @@ V1 recommendation evidence `capital_allocation.status = unfunded` with action WA
 
 ## 33. Decision Log and Open Decisions
 
-### 33.1 Frozen / resolved (OD-01 through OD-10)
+### 33.1 Frozen / resolved (OD-01 through OD-12)
 
-OD-01 through OD-07 were recorded from the 2026-08-14 product-decision session. OD-08, OD-09, and OD-10 were recorded from the 2026-08-15 product-decision session. These IDs MUST NOT reappear in §33.2.
+OD-01 through OD-07 were recorded from the 2026-08-14 product-decision session. OD-08 through OD-11 were recorded from the 2026-08-15 product-decision session. OD-12 was recorded from the 2026-08-17 product-decision session. These IDs MUST NOT reappear in §33.2.
 
 | ID | Topic | Decision | Status |
 |----|--------|----------|--------|
@@ -1559,17 +1648,17 @@ OD-01 through OD-07 were recorded from the 2026-08-14 product-decision session. 
 | **OD-08** | Default lender selection after eligibility | **FROZEN.** Applies to selecting a prospective **lender** (a strategy) before/when a new loan is created — not to outstanding loans. After existing lender eligibility filters (§8.1), rank eligible lenders: (1) available-for-lending **percentage** descending; (2) if tied, available-for-lending **absolute amount** descending; (3) if both values are still exactly equal, **any** tied eligible lender may be selected (first remaining candidate, or arbitrary/random among exact ties). There is deliberately **no** third business ranking criterion and **no product significance** to which exactly-tied lender is selected. Do **not** use FIFO, oldest loan, largest loan, strategy age, raw portfolio cash, or any other business ranking rule for that third tie-break. Available-for-lending percentage remains the primary ranking metric already defined by this specification. Available-for-lending amount is the explicit secondary ranking criterion. | FROZEN |
 | **OD-09** | Outstanding loan selection for replenishment | **FROZEN.** Operates on existing outstanding **loans**, not prospective lenders. When replenishment requires capital to be recalled and multiple outstanding loans are eligible: (1) filter to loans eligible for recall under existing V3 recall / effective-minimum-period rules (OD-07 / §6.5); (2) select the **oldest eligible outstanding loan first (FIFO)** by commitment time; (3) if two or more eligible loans have exactly the same commitment time, **any** tied loan may be selected (implementation may resolve arbitrarily or deterministically). There is deliberately **no** additional business ranking criterion after FIFO. Do **not** introduce largest loan first, smallest loan first, lender percentage, lender absolute lendable amount, borrower strength, or strategy ranking as loan-selection rules. OD-06 still controls the amount recalled: request the minimum required atomic amount; do **not** recall an entire loan merely because it is the oldest if only a smaller amount is required. OD-07 controls **when** a loan becomes recall-eligible; OD-09 controls **which** eligible loan is selected. If a borrower must sell positions as a consequence, §17 and OD-16 remain applicable; this decision does not resolve OD-16. | FROZEN |
 | **OD-10** | Corporate-action quantity ownership | **FROZEN.** Corporate actions follow the **parent holding’s owner**. For every strategy-owned or unmanaged position identified by `(portfolio, stock, owner)`, a corporate action applicable to that holding MUST adjust **that owner’s** position quantity. If the same stock has multiple strategy owners, the CA MUST NOT first blend those holdings into one portfolio-level position. Strategy-owned parent → CA remains with that owner. Unmanaged parent → CA remains unmanaged and MUST NOT be automatically assigned to a strategy. The governing rule is **parent-owner attachment**, not pro-rata allocation (pro-rata can differ for rounding, rights, broker-posted quantities, and other CA mechanics). OD-10 does **not** freeze split/bonus formulas, rights-issue calculations, cost-basis / average-price / target / filled / trailing-high / stop-loss restatement, `close_price` vs `adjusted_close_price` (**OD-14 remains OPEN**), or merger/demerger treatment. | FROZEN |
+| **OD-11** | BUY cooldown duration, unit, and clock | **FROZEN.** Duration = **1 calendar day** (not trading sessions). Key = `(stock, strategy)`. Applies to OPEN and INCREASE; does not suppress REDUCE, EXIT, or HOLD. Another strategy’s BUY of the same stock does not consume, reset, or affect this cooldown. Primary purpose: prevent BUY recommendation churn; secondary: space repeated capital deployment. A BUY recommendation **opportunity / generation cycle** starts the cooldown (Day 0 allowed, Day 1 suppressed, Day 2 elapsed). It does **not** start on fill, trade approval, or lending commitment. Fills do not reset it. It is **not** the OD-07 recall period (still configurable, shipped default 14 calendar days). Unapproved BUYs MUST NOT be regenerated during the window; stale-cancel MUST NOT clear cooldown; `pending_execution` MUST NOT be cancelled because of cooldown. First entry remains ~50% of current **target amount**; subsequent INCREASE = `max(0, current_target_amount − filled_amount)`, not a fixed second 50% tranche (OD-12). Target MAY change during cooldown; use latest target amount and filled amount when the window elapses. | FROZEN |
+| **OD-12** | Staggered target primary unit | **FROZEN.** Staggered target primary unit = **monetary amount**. Quantity is derived from the **latest daily closing price** using whole-share rounding (default **floor**; do not materially overshoot). Rounding MUST NOT change the persisted target amount. Minimum actionable BUY/INCREASE amount is configurable at **platform** level with **portfolio-level** override; no strategy override; shipped platform default = **₹5,000**. The minimum applies to the this-cycle opportunity, not the overall target; remaining below the minimum suppresses OPEN/INCREASE without reducing the target. Subsequent INCREASE uses current target amount minus filled amount (OD-11). OD-06 atomic reservation and OD-05 partial funding MUST NOT replace or reset the target amount. Recommendation calculations use latest daily close, not execution price. | FROZEN |
 
 Note: before the 2026-08-14 session, **OD-05** meant “minimum free capital / one opportunity formula”. That topic was **not** decided there and is re-homed as **OD-24** so it is not lost.
 
-### 33.2 Open decisions (OD-11 through OD-23, plus OD-24)
+### 33.2 Open decisions (OD-13 through OD-23, plus OD-24)
 
 Do not invent resolutions.
 
 | ID | Decision | Notes |
 |----|----------|--------|
-| **OD-11** | BUY cooldown duration (and unit) | Concept frozen; number not frozen. Configurable. |
-| **OD-12** | Staggered target stored primarily as quantity or as allocation amount | |
 | **OD-13** | Stop-loss reference price: average cost vs first-fill price | Spec tentatively uses average cost until closed. Per owner (OD-01). |
 | **OD-14** | `close_price` vs `adjusted_close_price` for SL/trailing | Must be consistent. Per owner high/close series. |
 | **OD-15** | On adoption, reset trailing/stop entry date or keep original first buy? | |
@@ -1585,7 +1674,7 @@ Do not invent resolutions.
 
 ### 33.3 Dependencies arising from frozen decisions (not invented rules)
 
-These are ambiguities created or revealed by OD-01–OD-10. They are **not** silent product law.
+These are ambiguities created or revealed by OD-01–OD-12. They are **not** silent product law.
 
 | ID | Dependency | Why it exists |
 |----|------------|----------------|
@@ -1604,7 +1693,7 @@ Planning order for later passes. Do not implement in this phase.
 1. **Schema & domain foundations** — portfolio controls storage; multiple enabled strategies; holding uniqueness `(profile, stock, owner)` (OD-01); CA quantity stays on the parent owner row (OD-10); adoption; `capital_status` including PARTIALLY_FUNDED; loan/request tables; exit attribution column.
 2. **Generation scoping** — per-strategy generate; stale-cancel scoped; unmanaged/other-owner excluded from strategy exits; stop converting unfunded or partial BUY to WATCH (OD-05).
 3. **Portfolio SL / trailing / precedence** — daily close, highest close from **that holding’s** entry; migrate config off strategy JSON.
-4. **Staggered entry + BUY cooldown + partial fill** — persist target/filled per owner; default 50%; OD-05/OD-06 on this-cycle amount; cooldown duration depends on OD-11.
+4. **Staggered entry + BUY cooldown + partial fill** — persist **target amount** per owner (OD-12); derive whole-share qty from latest daily close (floor); first entry default 50% of current target amount; subsequent INCREASE = current target amount − filled amount; suppress OPEN/INCREASE below effective min actionable (platform ₹5,000 / portfolio override); BUY cooldown **1 calendar day** from the recommendation opportunity (OD-11); OD-05/OD-06 must not replace the target amount.
 5. **Virtual allocation accounting** — % summing to 100; available vs lendable; atomic reservation vs post-fill leftover; no physical sub-accounts.
 6. **Lending workflow** — eligibility; ranking by lendable % then lendable amount then arbitrary exact tie (OD-08); display without commit; OD-06 amounts; atomic approve; failure paths; audit. Do not apply FIFO to lenders.
 7. **Recall / replenishment** — platform default 14 calendar days + portfolio override (OD-07); among eligible loans, oldest commitment time first (OD-09); amount OD-06 (not whole loan merely because it is oldest); approval default; weakest-position **blocked** until OD-16 (user-selected sells).
@@ -1612,7 +1701,7 @@ Planning order for later passes. Do not implement in this phase.
 9. **Historical ranking** — backtest corpus only (OD-03); 7%/7% trimmed mean, `n ≥ 15` (OD-04); never ship fit-as-rank; never mix live trades.
 10. **UI / notifications / help** — Strategy vs Portfolio settings split; per-owner holdings; capital states; lender UX; contextual help sync when behaviour ships.
 11. **Migration backfill** — unmanaged default; safe inference; do not merge distinct strategy lots; non-destructive JSON split.
-12. **Tests** — acceptance in §35, especially OD-01 same-symbol lots, OD-10 parent-owner CA attachment (not blended, not pro-rata as the rule), OD-05 partial vs WATCH, OD-06 reservation vs fill, OD-08 lender ranking vs OD-09 loan FIFO, §24 races.
+12. **Tests** — acceptance in §35, especially OD-01 same-symbol lots, OD-10 parent-owner CA attachment, OD-11 1-calendar-day BUY cooldown vs OD-07 recall, OD-12 target amount / whole-share floor / min actionable ₹5,000, OD-05 partial vs WATCH, OD-06 reservation vs fill, OD-08 lender ranking vs OD-09 loan FIFO, §24 races.
 
 ---
 
@@ -1653,17 +1742,30 @@ Planning order for later passes. Do not implement in this phase.
 - It is never persisted as WATCH solely for cash.
 - Telegram/actionability does not treat it as WATCH.
 
-### 35.5 Staggered entry
+### 35.5 Staggered entry and target amount (OD-12)
 
-- First fill ≈ configured first-entry % (default 50%) of target, then OD-05/OD-06 may reduce this-cycle cash.
-- Remaining target is still visible after the recommendation cycle ends.
-- Later INCREASE can fill the remainder.
+- Persisted target is primarily **amount**, not quantity. Quantity is derived from the **latest available daily closing price**.
+- Fractional shares are not generated. Default conversion is **floor**; do not add a share that would materially overshoot the intended amount (example: ₹2,500 at ₹600 → 4 shares, notional ₹2,400).
+- Whole-share rounding does **not** change the persisted target amount (target stays ₹2,500 in that example).
+- First BUY ≈ configured first-entry % (default 50%) of **current target amount**, then OD-05/OD-06 may reduce this-cycle cash. The 50% rule is first-entry only.
+- Subsequent INCREASE = `current_target_amount − filled_amount`. Example: target ₹10,000, filled ₹5,000; if target later ₹12,000 → remaining ₹7,000; if later ₹8,000 → remaining ₹3,000. Then convert remaining to whole shares at latest daily close.
+- Target-amount changes during OD-11 cooldown are kept and used when the window elapses.
+- If current target is below the filled amount, no BUY/INCREASE for a gap.
+- Effective minimum actionable BUY/INCREASE: platform default **₹5,000**; portfolio inherits unless it overrides. No strategy override. Opportunity below the minimum → no new OPEN/INCREASE; **target is not reduced**.
+- Do not emit zero-quantity or immaterial repeated BUY/INCREASE recs solely to consume whole-share residuals.
+- OD-06 atomic reservation does not replace the target amount (example: requirement ₹18,000, reserve ₹20,000, target stays ₹18,000).
+- OD-05 partial funding does not reset the target to the funded slice.
+- Recommendation calculations use latest daily close, not execution price. Execution-price bands are out of OD-12.
 
 ### 35.6 Cooldown
 
-- A second BUY for the same **stock+strategy** is suppressed during cooldown.
-- Another strategy’s BUY of the same stock does not consume this strategy’s cooldown.
-- EXIT/REDUCE for that pair is not suppressed by BUY cooldown.
+- BUY cooldown is **1 calendar day** (OD-11): Day 0 BUY allowed; Day 1 same stock+strategy BUY rec suppressed; Day 2 elapsed.
+- Starts on the BUY **recommendation opportunity / generation cycle**, not on fill, trade approval, or lending commitment.
+- Fills do not reset cooldown. Stale-cancel does not clear cooldown. `pending_execution` is not cancelled because of cooldown.
+- A second **new** BUY rec for the same **stock+strategy** is suppressed during the window, including regenerating an unapproved BUY on Day 1.
+- Another strategy’s BUY of the same stock does not consume, reset, or affect this strategy’s cooldown.
+- EXIT/REDUCE/HOLD for that pair are not suppressed.
+- BUY cooldown is not the OD-07 14-calendar-day lending recall period.
 
 ### 35.7 Exits
 
@@ -1720,13 +1822,19 @@ Planning order for later passes. Do not implement in this phase.
 | Fit score | Final rank / expected return |
 | WATCH | Unfunded or partially funded BUY |
 | Ranking observations | Live-trading history |
-| Atomic allocation / reservation | Amount that must be invested (includes 1% margin) |
+| Atomic allocation / reservation | Amount that must be invested (includes 1% margin) **or** the position **target amount** (OD-12) |
+| Target **amount** (source of truth) | Derived whole-share quantity / executable notional |
+| OD-12 minimum actionable BUY/INCREASE (platform ₹5,000 / portfolio override) | OD-06 atomic reservation block (₹5,000) |
+| Latest daily closing price (recommendation / target qty, OD-12) | Execution price |
+| First-entry ~50% of current **target amount** | Subsequent INCREASE = current target amount − filled amount |
 | Horizon `T` | Trading sessions |
 | Unique `(portfolio, stock)` | V3 holding identity |
 | Manual / IPO unmanaged quantity | Corporate-action quantity on an existing parent holding (OD-10) |
 | Pro-rata CA allocation | Parent-owner / per-parent-holding CA attachment (OD-10) |
 | OD-10 CA owner attachment | OD-14 `close_price` vs `adjusted_close_price` |
 | Recommendation expiry (hours) | Strategy horizon |
+| BUY cooldown (1 calendar day, OD-11) | OD-07 lending recall (shipped default 14 calendar days) |
+| BUY cooldown start (recommendation opportunity) | Fill / trade approval / lending commitment |
 | V1 trailing proxy (unrealized %) | V3 trailing (highest close) |
 | Available cash | Available-for-lending |
 | Available-for-lending **percentage** | Available-for-lending **amount** (both are OD-08 lender keys; amount is not raw portfolio cash) |
