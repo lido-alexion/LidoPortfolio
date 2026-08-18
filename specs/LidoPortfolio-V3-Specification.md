@@ -4,11 +4,11 @@
 |-------|-------|
 | **Title** | Lido Portfolio V3 Specification |
 | **Status** | Review |
-| **Version** | 0.21 |
+| **Version** | 0.22 |
 | **Owner** | Product Specification / Architecture |
 | **Last Updated** | 2026-08-18 |
 | **Implementation Status** | Not started |
-| **Depends On** | Frozen V3 product decisions (2026-08-14 through 2026-08-18), including OD-01–OD-24 and resolved **DEP-TRIM-K**, **DEP-PARTIAL-LEND**, and **DEP-PARTIAL-ATOMIC**; Architecture Impact Report; V1/V2 as-built baseline in `implementation.md` |
+| **Depends On** | Frozen V3 product decisions (2026-08-14 through 2026-08-18), including OD-01–OD-24 and resolved **DEP-TRIM-K**, **DEP-PARTIAL-LEND**, **DEP-PARTIAL-ATOMIC**, and **DEP-ADOPT-MERGE**; Architecture Impact Report; V1/V2 as-built baseline in `implementation.md` |
 | **Referenced By** | Future V3 implementation passes |
 | **Related Specifications** | [architecture/domains/Strategy-Configuration-Specification.md](architecture/domains/Strategy-Configuration-Specification.md), [architecture/portfolio/Cash-Management-Specification.md](architecture/portfolio/Cash-Management-Specification.md), [architecture/domains/Recommendation-Engine-Specification.md](architecture/domains/Recommendation-Engine-Specification.md), [architecture/governance/SPECIFICATION_DECISIONS.md](architecture/governance/SPECIFICATION_DECISIONS.md) (SD-026, SD-029, SD-010) |
 
@@ -187,6 +187,8 @@ Portfolio stop-loss, trailing stop, and that strategy’s own horizon expiry may
 
 Gains and losses on the position are attributed internally to that owning strategy.
 
+**DEP-ADOPT-MERGE:** a holding bought with borrowed capital is owned by the **borrowing** strategy. The lender does **not** co-own that holding.
+
 ### 2.7 Recommendation
 
 A strategy decision about one stock: action, security, target/quantity, fit score, ranking inputs, capital state, and evidence.
@@ -215,13 +217,15 @@ Available-for-lending **percentage** and available-for-lending **absolute amount
 
 ### 2.11 Lent capital
 
-Capital of a lender strategy that has been **committed and transferred as a loan** to a borrower strategy. It remains economically part of the lender’s allocation claim, but is not available for the lender’s new buys until returned.
+Capital of a lender strategy that has been **committed and transferred as a loan** to a borrower strategy. The lender records it as a **loan receivable**. It remains part of the lender’s virtual deployed/allocation **accounting claim** (lent capital), but it is **not** ownership of the borrower’s resulting holding (**DEP-ADOPT-MERGE**). It is not available for the lender’s new buys until returned.
 
 An outstanding loan is a discrete committed amount with a lender, a borrower, a **commitment time**, and remaining principal. OD-09 uses commitment time (FIFO) to select among recall-eligible loans. That operation is not lender ranking.
 
 ### 2.12 Borrowed capital
 
-Capital a borrower strategy has received via an approved loan. It increases the borrower’s immediately usable capital for the funded purpose and remains outstanding until returned (in atomic blocks).
+Capital a borrower strategy has received via an approved loan. It is **deployable borrowed capital**: it increases the borrower’s immediately usable capital for the funded purpose and remains outstanding until returned (in atomic blocks). The borrower records the corresponding **loan obligation**.
+
+Deployable borrowed capital is **not** a change to the configured strategy `allocation_pct` and MUST NOT be treated as permanently increasing that strategy’s policy share (**DEP-ADOPT-MERGE**). Investments funded with it are owned by the **borrowing** strategy.
 
 ### 2.13 Capital request
 
@@ -459,8 +463,10 @@ Enabled strategies receive `allocation_pct` summing to 100% of investable capita
 
 - market value of strategy-owned holdings
 - cash reserved for that strategy’s pending-execution buys
-- capital currently lent out
+- capital currently lent out (loan receivable; **not** ownership of the borrower’s resulting holding — **DEP-ADOPT-MERGE**)
 - capital committed-to-lending (approved, not yet settled into lent — if those are distinct steps, both reduce availability)
+
+Borrowed capital used to fund a buy becomes a **borrower-owned** holding. It does **not** become a lender-owned holding and does **not** change configured `allocation_pct`.
 
 **Strategy unused allocation** =
 
@@ -474,7 +480,7 @@ A strategy does **not** receive a physical sub-account. All rupees sit in portfo
 
 ### 5.4 Lending of unused allocation
 
-A strategy MAY lend otherwise unused allocation to another strategy, subject to §6–§8. Lending is portfolio-level coordination, not a private side-deal outside the portfolio.
+A strategy MAY lend otherwise unused allocation to another strategy, subject to §6–§8. Lending is portfolio-level coordination, not a private side-deal outside the portfolio. **DEP-ADOPT-MERGE:** the borrower owns investments funded with the loan; the lender records a loan receivable. Lending does **not** change configured `allocation_pct`.
 
 ### 5.5 Minimum free capital (“one opportunity”) (OD-24)
 
@@ -662,6 +668,7 @@ A lender strategy MAY request return of borrowed capital when it needs capital f
 - Return/recall **requires user approval by default**.
 - A user-configurable option for **automatic return** MAY exist; it is off unless the user enables it. Frozen governance: default is approval required.
 - Returning capital MAY require the borrower to exit one or more positions if the borrower lacks free cash to repay.
+- Loan repayment is a **loan/capital** transaction. It does **not** transfer stock ownership from the borrower to the lender (**DEP-ADOPT-MERGE**).
 - The borrower MUST release the **weakest eligible** positions first (§17).
 - “Weakest” MUST NOT be defined as lowest lifetime XIRR, lowest total return, or oldest holding alone. The exact score is **OD-16** (§17).
 
@@ -700,6 +707,36 @@ When a strategy consumes its own immediately available capital (including its mi
 - One capital request is fulfilled by **exactly one** lender and one ₹5,000-aligned amount (after OD-06).
 - Sequential loans for **different** recommendations MAY exist (a borrower is not limited to a single lifetime loan).
 - Combining two lenders to fund **one** recommendation is forbidden in V3.
+
+### 6.10 Ownership of lending-funded investments (DEP-ADOPT-MERGE)
+
+**DEP-ADOPT-MERGE (frozen): OPTION A — MERGE INTO BORROWER.**
+
+When inter-strategy lending funds a recommendation:
+
+1. The borrowed capital becomes **deployable borrowed capital** of the **borrowing** strategy for the funded opportunity.
+2. The **borrowing** strategy owns the resulting investment/holding.
+3. The **lending** strategy does **not** acquire ownership of the resulting holding.
+4. The lending strategy records a **loan receivable**.
+5. The borrowing strategy records the corresponding **loan obligation**.
+6. Do **not** introduce fractional/split ownership of a holding based on own-vs-borrowed capital.
+7. The physical cash model remains one portfolio-level cash pool. Do **not** create physical strategy bank accounts or cash buckets.
+8. Loan repayment remains a loan/capital transaction; it does **not** transfer stock ownership.
+9. Borrowed capital is additional deployable capital for the borrowing strategy, but it does **not** change the configured strategy allocation percentage.
+10. Do **not** reinterpret this as permanently increasing the strategy’s configured allocation or as changing the portfolio’s allocation percentages.
+11. OD-24 minimum retained capital remains unchanged.
+12. OD-05, OD-06, **DEP-PARTIAL-LEND**, and **DEP-PARTIAL-ATOMIC** remain unchanged.
+
+Example (normative):
+
+Strategy A lends ₹15,000 to Strategy B.
+
+- Strategy A: loan receivable = ₹15,000; no ownership of the resulting stock.
+- Strategy B: receives ₹15,000 of deployable borrowed capital; the resulting ₹15,000 investment is owned by Strategy B; loan obligation = ₹15,000.
+
+Do **not** model the resulting holding as jointly or fractionally owned by A and B.
+
+This rule is **not** unmanaged-holding adoption and does **not** freeze unmanaged-adoption cost-basis merge when a destination strategy already owns the stock. That leftover remains unspecified.
 
 ---
 
@@ -798,6 +835,7 @@ If revalidation fails:
     ↓
 If revalidation succeeds:
     Commit lending amount (lent / borrowed / committed-to-lending updated)
+    lender records loan receivable; borrower records loan obligation (DEP-ADOPT-MERGE)
     borrowed capital is available **immediately** for the intended funding/execution path (DEP-PARTIAL-LEND)
     capital_status = CAPITAL_COMMITTED then FUNDED for execution purposes
     ↓
@@ -805,6 +843,8 @@ Recommendation is capital-ready
     ↓
 Normal execution workflow (user trade approval → pending_execution → cash
 reservation for the buy → manual/broker fill)
+    resulting holding is owned by the **borrowing** strategy (DEP-ADOPT-MERGE);
+    lender does not acquire stock ownership
 ```
 
 The reservation amount is `atomic_allocation` (or the partial own amount). Execution invests shares at the fill price; unused reservation reverts to available capital. The 1% margin is not an instruction to buy more shares.
@@ -973,7 +1013,7 @@ OD-07 controls **when** a loan becomes recall-eligible. OD-09 controls **which**
 
 ### 9.8 Do not churn policy allocation
 
-Today’s signal count MUST NOT re-spread `allocation_pct`. Lending is the mechanism for **temporary** unused capacity. Permanent mix changes are user edits.
+Today’s signal count MUST NOT re-spread `allocation_pct`. Lending is the mechanism for **temporary** unused capacity. Permanent mix changes are user edits. **DEP-ADOPT-MERGE:** deployable borrowed capital does **not** rewrite configured allocation percentages.
 
 ---
 
@@ -982,6 +1022,8 @@ Today’s signal count MUST NOT re-spread `allocation_pct`. Lending is the mecha
 ### 10.1 Every strategy-generated holding has an owner
 
 When a recommendation (OPEN/INCREASE) is executed, the resulting lots/position MUST be tagged with that recommendation’s strategy. INCREASE adds to **that strategy’s** owned position in the stock, never to another strategy’s lot and never to unmanaged quantity.
+
+**DEP-ADOPT-MERGE (frozen):** if that recommendation was funded in whole or in part by inter-strategy lending, the **borrowing** strategy still owns the resulting holding. Own-capital and borrowed-capital slices of the same execution MUST NOT create fractional or split ownership with the lender. The lender’s claim is the loan receivable, not a share of the stock.
 
 **OD-01:** another strategy may already own the same stock; that is a separate holding.
 
@@ -1002,9 +1044,9 @@ Portfolio stop-loss and trailing stop **do** apply to unmanaged holdings (§14�
 ### 10.4 Adoption
 
 - User adopts an unmanaged holding into **exactly one** strategy.
-- After adoption, that strategy owns it; **target amount** SHOULD be initialised from the adopted position’s current monetary value (remaining BUY/INCREASE = 0 unless the user/strategy later raises the target amount). **OD-15 (frozen):** adoption does **not** reset trailing/stop entry date; preserve the existing/original first-buy entry history. Detailed merge mechanics (including cost basis and multi-lot merge behavior) remain **DEP-ADOPT-MERGE**.
+- After adoption, that strategy owns it; **target amount** SHOULD be initialised from the adopted position’s current monetary value (remaining BUY/INCREASE = 0 unless the user/strategy later raises the target amount). **OD-15 (frozen):** adoption does **not** reset trailing/stop entry date; preserve the existing/original first-buy entry history. Detailed unmanaged-adoption cost-basis and multi-lot merge mechanics remain **unspecified** (this is **not** **DEP-ADOPT-MERGE**).
 - Adoption MUST be explicit. No silent auto-adopt during generation.
-- If the destination strategy **already** owns that stock, the unmanaged quantity is merged into that strategy’s holding. **OD-15** still applies to the entry-date principle (do not reset to adoption date). Detailed merge mechanics remain **DEP-ADOPT-MERGE**.
+- If the destination strategy **already** owns that stock, the unmanaged quantity is merged into that strategy’s holding. **OD-15** still applies to the entry-date principle (do not reset to adoption date). Detailed cost-basis merge mechanics remain **unspecified**.
 - Adoption into a strategy does **not** disturb another strategy’s existing position in the same stock (OD-01).
 
 ### 10.5 Migration / backfill ownership
@@ -1298,7 +1340,7 @@ The first fill of the episode establishes the initial average cost. Each subsequ
 
 **Ownership episode:** average cost is for the current episode of that `(stock, owner)`. A new episode begins after the previous position has been **fully exited** and a new position is later established. Do not carry the prior episode’s average cost into the new position. Do not blend cost bases across strategy owners of the same stock (OD-01).
 
-Adoption merge mechanics and cost-basis merge remain **DEP-ADOPT-MERGE**. **OD-15 (frozen)** sets the entry-date principle for trailing/stop windows: adoption does **not** reset to adoption date; preserve original first-buy/existing ownership-history entry date. Corporate-action cost restatement remains unspecified under **OD-10**. Do not resolve those here. OD-14’s choice of raw `close_price` does **not** restate average cost, stop price, or trailing high after a corporate action.
+Adoption unmanaged-quantity merge mechanics and cost-basis merge remain **unspecified**. **DEP-ADOPT-MERGE** is the lending-funded ownership rule (merge into borrower) and does **not** resolve unmanaged-adoption cost basis. **OD-15 (frozen)** sets the entry-date principle for trailing/stop windows: adoption does **not** reset to adoption date; preserve original first-buy/existing ownership-history entry date. Corporate-action cost restatement remains unspecified under **OD-10**. Do not resolve those here. OD-14’s choice of raw `close_price` does **not** restate average cost, stop price, or trailing high after a corporate action.
 
 ### 14.2 Which holdings
 
@@ -1535,11 +1577,11 @@ Physical cash remains **one** ledger-backed account per portfolio (V1 `portfolio
 | **Investable capital** (strategy split base) | `(cash − required_cash_reserve − pending-execution reserved) + market value of strategy-owned holdings` only. Unmanaged holdings’ market value is **not** part of the 100% strategy split (it is residual account wealth the strategies do not claim). Including holdings MV in the split base is required so an invested strategy is not treated as having unused cash equal to its entire %. Cash-only split is **not** the V3 model. `required_cash_reserve` is the OD-19 rupee floor, not a second percentage. |
 | **Strategy allocation** | `investable_capital × allocation_pct` |
 | **Strategy minimum retained capital** (`minimum_retained_capital`, OD-24) | `strategy_capital_allocation ÷ recommended_minimum_holdings`. Strategy-level accounting floor for one future opportunity. Not a physical sub-account, not OD-19, not OD-06 reserved cash, not Unallocated Cash (OD-20). Subtracted in available-for-lending (§8.2). Does not change `available_physical_cash`. |
-| **Strategy available capital** | Capital the strategy may use **now** for new buys: unused allocation that is actually fundable from physical available cash, plus outstanding **borrowed** amounts, minus amounts it must not spend (already reserved). Cannot invade portfolio reserve (`required_cash_reserve`, OD-19). OD-24 does **not** change this BUY-funding definition. |
+| **Strategy available capital** | Capital the strategy may use **now** for new buys: unused allocation that is actually fundable from physical available cash, plus outstanding **borrowed** amounts (**deployable borrowed capital**), minus amounts it must not spend (already reserved). Cannot invade portfolio reserve (`required_cash_reserve`, OD-19). OD-24 does **not** change this BUY-funding definition. Borrowed capital does **not** change configured `allocation_pct` (**DEP-ADOPT-MERGE**). |
 | **Committed-to-lending** | Approved but not yet reflected as lent, if those steps are split; otherwise 0 and lent updates on approval |
-| **Capital currently lent** | Outstanding loan principal from this strategy as lender |
+| **Capital currently lent** | Outstanding loan principal from this strategy as lender (**loan receivable**; not stock owned by the lender) |
 | **Available-for-lending** | §8.2 |
-| **Borrowed capital** | Outstanding loan principal to this strategy as borrower |
+| **Borrowed capital** | Outstanding loan principal to this strategy as borrower (**loan obligation**; **deployable borrowed capital**, not a change to configured `allocation_pct`). Investments funded with it are **borrower-owned** (**DEP-ADOPT-MERGE**). |
 | **Capital required by pending recommendations** | Sum of unfunded BUY gaps (informational). Does **not** reserve cash |
 
 **OD-19 (frozen): portfolio cash reserve unit / formula.**
@@ -1785,12 +1827,12 @@ Additive / evolving `/api` and `/api/v1` capabilities (shapes not frozen beyond 
 | List/enable **multiple** strategies per portfolio | Registry `exactly_one_active_per_portfolio` removed |
 | Per-strategy recommendation generate | `strategy_id` required or generate-all-enabled |
 | Holdings include owner, unmanaged flag, **target amount** / filled | Multiple rows per stock when multiple owners (OD-01). CA quantity stays on the parent owner row (OD-10); not blended. Target is amount (OD-12); qty derived from latest raw `close_price` (OD-14). |
-| `POST` adopt holding → one strategy | Merge if that strategy already owns the name (DEP-ADOPT-MERGE) |
+| `POST` adopt holding → one strategy | Quantity merges into that strategy’s existing holding if it already owns the name (§10.4). Unmanaged-adoption cost-basis merge remains unspecified. |
 | Portfolio controls GET/PUT | `portfolio_cash_reserve_pct` (OD-19), SL, trailing, max position, lending policy, atomic block ₹5,000, 1% margin, platform/portfolio recall period, **minimum actionable BUY/INCREASE** (platform default ₹5,000 + portfolio override, OD-12). Do **not** expose a separately configured portfolio min-free-capital formula; **OD-24** is derived. |
 | Strategy allocation % GET/PUT | sum-to-100 validation |
 | Recommendation capital_status | FUNDED / PARTIALLY_FUNDED / UNFUNDED; never WATCH-for-cash |
 | Eligible lenders for a rec | ranked by OD-08: lendable % descending, then lendable amount descending; exact ties arbitrary; PARTIALLY_FUNDED remainder loan size **DEP-PARTIAL-ATOMIC** (`ceil(remainder / 5000) × 5000`, no 1%); reservation amounts remain OD-06 1.01+ceil; lendable already respects **OD-24** |
-| Approve/reject lending | atomic revalidation |
+| Approve/reject lending | atomic revalidation; on success, borrower owns the resulting holding; lender records a loan receivable (**DEP-ADOPT-MERGE**); `allocation_pct` unchanged |
 | Recall request / approve | effective period = platform default (14d) or portfolio override (OD-07); if several eligible loans, tap oldest by commitment time first (OD-09); amount OD-06 |
 | Capital / loan ledger read APIs | include reservation vs invested reconciliation. **Unallocated Cash** (OD-20) MAY appear as a presentation figure derived from existing §22 accounting; it is not a new ledger or cash account. Derived **OD-24** `minimum_retained_capital` MAY be shown as an accounting figure; it is not a cash account. |
 | Chart prices with `from`/`range=5y\|all` **without** since-buy clamp | `5y` remains a supported range. `all` = all available stored/provider history (**OD-17**); no V3 day-count ceiling. Existing `from`/`range` semantics remain. |
@@ -1839,6 +1881,8 @@ Indexes: `(profile_id, status)`, `(lender_id, outstanding)`, `(borrower_id)`, `(
 
 Constraints: amount ≥ ₹5,000 and a multiple of ₹5,000; for a PARTIALLY_FUNDED remainder, amount = `ceil(unfunded_remainder / 5000) × 5000` (**DEP-PARTIAL-ATOMIC**). Lender ≠ borrower; one lender per request.
 
+The loan row is a **receivable/obligation**. It is **not** a holding-ownership split. Executed quantity funded by the loan is owned by the **borrower** (**DEP-ADOPT-MERGE**). Do not persist fractional lender/borrower stock ownership. `allocation_pct` is not rewritten by the loan.
+
 `committed_at` is the OD-09 FIFO key for selecting among recall-eligible outstanding loans. Do not invent a separate loan-ranking column for lender % or loan size.
 
 ### 28.6 Exit attribution
@@ -1858,11 +1902,11 @@ Append-only capital and ownership events (§31).
 | **Strategy page** | Eligibility, scoring, thresholds, strategy-specific exits, optional horizon, staggered first-entry % (default 50%), BUY cooldown **1 calendar day** (OD-11; not the OD-07 14-day recall), min/max holdings (recommended minimum is the **OD-24** divisor), conviction bands. **Remove** portfolio cash reserve, common SL/trailing, portfolio-wide cash rules. |
 | **Strategy registry** | Enable multiple strategies; allocation % editor (sum 100). No exclusive activate. |
 | **Portfolio settings** | `portfolio_cash_reserve_pct` (OD-19; one percentage; required reserve is computed from MAX(Invested Amount, Notional Portfolio Value)), SL, trailing (**OD-22:** initial migration seed **15%**, then user-editable; not copied from strategy B1/B2 values), portfolio caps, lending policy, recall period override (inherit platform 14-day default), opportunity cost, auto-return toggle (default off). Atomic block ₹5,000 and 1% margin are specified product values (display as policy, not as “invest the margin”). **Minimum actionable BUY/INCREASE** inherits platform ₹5,000 unless the portfolio overrides (OD-12; not a strategy setting; not OD-06). |
-| **Holdings** | Owner / Unmanaged; **per-strategy rows** for the same stock (qty 50 vs 30); Adopt; **target amount** vs filled amount (qty derived from latest raw `close_price`, OD-12 / OD-14); do not offer strategy sell on unmanaged or on another strategy’s lot. Corporate-action quantity stays on the parent owner (OD-10); unmanaged CA stays unmanaged. |
-| **Recommendations** | Unfunded or partially funded BUY visible with capital status; not WATCH. Lender list, including same-cycle lending for a PARTIALLY_FUNDED remainder (**DEP-PARTIAL-LEND**; no minimum remainder). Loan size = remainder rounded up to the next ₹5,000 block (**DEP-PARTIAL-ATOMIC**; ₹14,000 → ₹15,000). Approval. BUY cooldown **1 calendar day** per stock+strategy (OD-11); does not cancel `pending_execution`. Ranking from backtests when `n ≥ 15`; fit labelled as fit. When ranking is not computable (`n < 15` or corpus unavailable), capital fill among that strategy’s own valid BUY/INCREASE recs follows **OD-23** (descending conviction / target-size, then fit → conviction sub-score → alphabetical); that fill order MUST NOT be labelled or presented as V3 ranking. |
+| **Holdings** | Owner / Unmanaged; **per-strategy rows** for the same stock (qty 50 vs 30); Adopt; **target amount** vs filled amount (qty derived from latest raw `close_price`, OD-12 / OD-14); do not offer strategy sell on unmanaged or on another strategy’s lot. Corporate-action quantity stays on the parent owner (OD-10); unmanaged CA stays unmanaged. Holdings funded by inter-strategy lending show as **borrower-owned**, not lender-owned or jointly owned (**DEP-ADOPT-MERGE**). |
+| **Recommendations** | Unfunded or partially funded BUY visible with capital status; not WATCH. Lender list, including same-cycle lending for a PARTIALLY_FUNDED remainder (**DEP-PARTIAL-LEND**; no minimum remainder). Loan size = remainder rounded up to the next ₹5,000 block (**DEP-PARTIAL-ATOMIC**; ₹14,000 → ₹15,000). Approval. Lending-funded execution is **borrower-owned** (**DEP-ADOPT-MERGE**); do not show the lender as owner of that holding. BUY cooldown **1 calendar day** per stock+strategy (OD-11); does not cancel `pending_execution`. Ranking from backtests when `n ≥ 15`; fit labelled as fit. When ranking is not computable (`n < 15` or corpus unavailable), capital fill among that strategy’s own valid BUY/INCREASE recs follows **OD-23** (descending conviction / target-size, then fit → conviction sub-score → alphabetical); that fill order MUST NOT be labelled or presented as V3 ranking. |
 | **Cash** | Required reserve (`required_cash_reserve`, OD-19) vs available vs reserved (atomic allocation vs post-fill leftover) vs named **Unallocated Cash** (**OD-20**; presentation-only residual after reserve not claimed by unused-allocation) vs per-strategy allocated / deployed / **OD-24** retained floor / lendable / lent / borrowed. Unallocated Cash is **not** reserved cash, **not** post-fill reservation leftover, **not** strategy unused allocation, **not** the OD-24 retained floor, **not** a second cash pool, and **not** a withdrawal entitlement. **OD-24** retained capital is an accounting constraint, not a physical sub-account. **OD-21:** external/broker withdrawals MUST NOT be blocked merely because they would leave cash below `required_cash_reserve`, and MUST NOT be hard-blocked by OD-24. |
 | **Dashboard** | When physical portfolio cash is below `required_cash_reserve` (**OD-21**), show a clear warning that the portfolio cash reserve is below the required level and that the user should replenish portfolio/broker cash. Do not invent layout, colour, widget, or workflow details beyond that message. This Dashboard warning is current V3 / **B3** scope. |
-| **Lending / recall** | Eligible lenders only; default sort OD-08 (lendable % descending, then lendable amount descending; exact ties have no product significance). Approve; errors on stale; recall approval; show effective recall period (platform vs portfolio override). Replenishment among eligible loans: oldest commitment time first (OD-09); do not present FIFO as a lender sort. |
+| **Lending / recall** | Eligible lenders only; default sort OD-08 (lendable % descending, then lendable amount descending; exact ties have no product significance). Approve; errors on stale; recall approval; show effective recall period (platform vs portfolio override). Replenishment among eligible loans: oldest commitment time first (OD-09); do not present FIFO as a lender sort. Approved lending is a loan receivable/obligation; it does **not** move the resulting holding to the lender or split ownership (**DEP-ADOPT-MERGE**). Recall/repayment does **not** transfer stock to the lender. |
 | **Charts** | 5Y remains a range; All = all available history (**OD-17**), not capped at 5Y or any V3 day-count. Clamp message when available history is shorter than the selected range. |
 
 **B4 wishlist (future; not current V3 / B3 UI).** A persistent application-wide critical alert/banner for critical portfolio conditions such as a cash-reserve shortfall. Possible future presentation could be a persistent red banner/footer/scrolling alert. That design, colour, placement, and mechanism are **not** frozen and MUST NOT be treated as a current Dashboard requirement. The current requirement is the §29 Dashboard warning only.
@@ -1895,11 +1939,12 @@ Append-only, attributable (user id, timestamp, portfolio, strategies, amounts, r
 - loan returns (amount, remaining), including which outstanding loan was selected (OD-09 FIFO by commitment time)
 - recall requests and approvals
 - holding adoption
+- lending-funded execution ownership (borrower owns the holding; lender receivable only) (**DEP-ADOPT-MERGE**)
 - corporate-action quantity adjustments per parent owner (OD-10)
 - exit primary attribution
 - allocation % changes
 
-Users and operators MUST be able to reconstruct who lent what to whom, when it became recallable, and why an exit was attributed as it was.
+Users and operators MUST be able to reconstruct who lent what to whom, when it became recallable, why an exit was attributed as it was, and that a lending-funded holding is owned by the borrower rather than the lender.
 
 ---
 
@@ -1917,7 +1962,7 @@ Conflict register from the Architecture Impact Report, with V3 resolution:
 | 6 | Two trailing definitions | **Superseded.** Highest raw `close_price` from entry (§15, OD-14). Proxy forbidden. |
 | 7 | Unordered exit any/all | **Superseded** for cross-mechanism attribution (§13.2). Strategy-internal any/all may remain. |
 | 8 | Fit used as rank and allocator weight | **Superseded.** §4. Ranking from **backtest** trimmed mean (OD-03, OD-04), not live trades, not fit. When ranking is not computable, capital fill is **OD-23** (conviction/target-size order), still not fit-as-rank and not presented as V3 ranking. |
-| 9 | Single cash pool + profile-wide stale-cancel | Pool **kept**. Stale-cancel **scoped per strategy**. Lending added as virtual claims. |
+| 9 | Single cash pool + profile-wide stale-cancel | Pool **kept**. Stale-cancel **scoped per strategy**. Lending added as virtual claims (loan receivable/obligation). Lending-funded holdings are **borrower-owned** (**DEP-ADOPT-MERGE**); the lender does not acquire the stock. |
 | 10 | Chart since-buy, no 5Y, ~550d storage | **Superseded (OD-17).** Chart **5Y** and **All** specified. **All** = all available stored/provider history, not since-buy and not capped at 5Y. V1 ~550-day `HISTORY_DEPTH_TARGET_DAYS` is an as-built limitation only. V3 has **no** maximum history-depth ceiling. |
 | 11 | Paper = backtest only | Multiple portfolios remain for hypothesis testing. Live exclusivity deferred to broker era. |
 
@@ -1945,9 +1990,9 @@ OD-01 through OD-07 were recorded from the 2026-08-14 product-decision session. 
 | **OD-10** | Corporate-action quantity ownership | **FROZEN.** Corporate actions follow the **parent holding’s owner**. For every strategy-owned or unmanaged position identified by `(portfolio, stock, owner)`, a corporate action applicable to that holding MUST adjust **that owner’s** position quantity. If the same stock has multiple strategy owners, the CA MUST NOT first blend those holdings into one portfolio-level position. Strategy-owned parent → CA remains with that owner. Unmanaged parent → CA remains unmanaged and MUST NOT be automatically assigned to a strategy. The governing rule is **parent-owner attachment**, not pro-rata allocation (pro-rata can differ for rounding, rights, broker-posted quantities, and other CA mechanics). OD-10 does **not** freeze split/bonus formulas, rights-issue calculations, cost-basis / average-price / target / filled / trailing-high / stop-loss restatement, or merger/demerger treatment. **OD-14** freezes raw `close_price` for SL/trailing comparison and the OD-12 reference price; that does **not** implicitly restatement-solve those CA leftovers and MUST NOT be read as using `adjusted_close_price` to compensate for corporate actions. | FROZEN |
 | **OD-11** | BUY cooldown duration, unit, and clock | **FROZEN.** Duration = **1 calendar day** (not trading sessions). Key = `(stock, strategy)`. Applies to OPEN and INCREASE; does not suppress REDUCE, EXIT, or HOLD. Another strategy’s BUY of the same stock does not consume, reset, or affect this cooldown. Primary purpose: prevent BUY recommendation churn; secondary: space repeated capital deployment. A BUY recommendation **opportunity / generation cycle** starts the cooldown (Day 0 allowed, Day 1 suppressed, Day 2 elapsed). It does **not** start on fill, trade approval, or lending commitment. Fills do not reset it. It is **not** the OD-07 recall period (still configurable, shipped default 14 calendar days). Unapproved BUYs MUST NOT be regenerated during the window; stale-cancel MUST NOT clear cooldown; `pending_execution` MUST NOT be cancelled because of cooldown. First entry remains ~50% of current **target amount**; subsequent INCREASE = `max(0, current_target_amount − filled_amount)`, not a fixed second 50% tranche (OD-12). Target MAY change during cooldown; use latest target amount and filled amount when the window elapses. | FROZEN |
 | **OD-12** | Staggered target primary unit | **FROZEN.** Staggered target primary unit = **monetary amount**. Quantity is derived from the **latest available raw daily `close_price`** (OD-14 consistency clarification of “latest daily closing price”) using whole-share rounding (default **floor**; do not materially overshoot). Rounding MUST NOT change the persisted target amount. Minimum actionable BUY/INCREASE amount is configurable at **platform** level with **portfolio-level** override; no strategy override; shipped platform default = **₹5,000**. The minimum applies to the this-cycle opportunity, not the overall target; remaining below the minimum suppresses OPEN/INCREASE without reducing the target. Subsequent INCREASE uses current target amount minus filled amount (OD-11). OD-06 atomic reservation and OD-05 partial funding MUST NOT replace or reset the target amount. Recommendation calculations use latest raw `close_price`, not execution price and not `adjusted_close_price`. | FROZEN |
-| **OD-13** | Stop-loss reference price | **FROZEN.** Stop-loss `entry_price` = **weighted-average execution cost of actual fills** for the **current ownership episode**, per stock + strategy owner (not first-fill price). `average_cost = (sum of actual executed fill value) / (sum of filled quantity)`. Subsequent INCREASE fills (and other actual fills of the same episode) update the average; the stop is not anchored to the first fill. A new ownership episode (after full exit, then a new position) receives a new cost basis. Do not blend owners (OD-01). Do not use target amount, reservation, last close, or estimated price as cost basis. Trailing stop remains highest raw `close_price` since entry **date** (not OD-13). The hit-test comparison series is OD-14 (raw `close_price`). **OD-15** freezes adoption entry-date continuity for trailing/stop windows without changing OD-13 cost-basis rules. CA cost restatement and adoption merge mechanics remain unspecified (OD-10, DEP-ADOPT-MERGE). | FROZEN |
+| **OD-13** | Stop-loss reference price | **FROZEN.** Stop-loss `entry_price` = **weighted-average execution cost of actual fills** for the **current ownership episode**, per stock + strategy owner (not first-fill price). `average_cost = (sum of actual executed fill value) / (sum of filled quantity)`. Subsequent INCREASE fills (and other actual fills of the same episode) update the average; the stop is not anchored to the first fill. A new ownership episode (after full exit, then a new position) receives a new cost basis. Do not blend owners (OD-01). Do not use target amount, reservation, last close, or estimated price as cost basis. Trailing stop remains highest raw `close_price` since entry **date** (not OD-13). The hit-test comparison series is OD-14 (raw `close_price`). **OD-15** freezes adoption entry-date continuity for trailing/stop windows without changing OD-13 cost-basis rules. CA cost restatement and unmanaged-adoption cost-basis merge remain unspecified (OD-10). DEP-ADOPT-MERGE is the lending-funded ownership rule (merge into borrower) and does not resolve those leftovers. | FROZEN |
 | **OD-14** | Daily comparison price series | **FROZEN.** Portfolio stop-loss and trailing-stop calculations use raw `close_price` as the single consistent daily comparison series. The latest raw `close_price` is also the OD-12 reference price for recommendation/quantity calculations. `adjusted_close_price` is not used for these calculations. Corporate-action restatement remains separately governed by OD-10 and is not implicitly resolved by OD-14. Per-owner isolation (OD-01) means each owner has its own trailing window/high; all owners use the same `close_price` column. Execution/fill price remains separate. OD-15 governs adoption entry-date continuity for trailing/stop windows. | FROZEN |
-| **OD-15** | Adoption entry-date continuity for trailing/stop windows | **FROZEN.** For an unmanaged holding adopted into a strategy, adoption does **not** reset the trailing/stop `entry_date` window. Preserve the original first-buy / existing ownership-history entry date; adoption changes owner attribution but is not a new investment purchase. Trailing-high history therefore continues from existing entry history rather than restarting on adoption. This does **not** resolve cost-basis merge mechanics or complete merge behavior when the destination strategy already owns the stock; those remain under DEP-ADOPT-MERGE. OD-13 cost basis and OD-14 raw `close_price` comparison series remain unchanged. | FROZEN |
+| **OD-15** | Adoption entry-date continuity for trailing/stop windows | **FROZEN.** For an unmanaged holding adopted into a strategy, adoption does **not** reset the trailing/stop `entry_date` window. Preserve the original first-buy / existing ownership-history entry date; adoption changes owner attribution but is not a new investment purchase. Trailing-high history therefore continues from existing entry history rather than restarting on adoption. This does **not** resolve cost-basis merge mechanics or complete merge behavior when the destination strategy already owns the stock; those remain unspecified. **DEP-ADOPT-MERGE** (frozen separately) is lending-funded holding ownership (merge into borrower), not unmanaged-adoption cost-basis merge. OD-13 cost basis and OD-14 raw `close_price` comparison series remain unchanged. | FROZEN |
 | **OD-16** | Weakest-position score formula | **FROZEN.** When recall/replenishment requires selling borrower-owned positions, rank by simple configured-window percentage return: `window_return_pct = (current_reference_price − window_start_reference_price) / window_start_reference_price × 100`. Lowest score = weakest = sell first. Evaluation window is strategy-configurable in calendar days. Not lifetime XIRR, total return, age, fit, thesis, momentum, volatility, or OD-03 ranking. Not annualised XIRR. Tie-break: `stock_id` ascending on exact `window_return_pct` ties. Eligible universe: borrower-owned only (OD-01). Loan tap remains OD-09; recall timing OD-07; amount OD-06. **Remaining gaps (not solved here):** which price column supplies the reference prices (**DEP-WEAKEST-PRICE**); insufficient-history fallback (**DEP-WEAKEST-HISTORY**). OD-14 is not extended to OD-16. | FROZEN |
 | **OD-17** | OHLCV history depth | **FROZEN.** V3 must support **all available OHLCV history** for each listed security. There is **no** maximum history-depth ceiling imposed by the V3 product specification. V3 does **not** define a fixed numeric depth target. 5Y must be supported when the listing has 5Y of available history; 5Y is a chart range, not a storage ceiling. History shorter than 5Y is valid. History longer than 5Y MUST remain available and MUST NOT be truncated by a V3 product-level maximum. **All** = all available stored/provider history. Provider and listing/history-start limits are external availability constraints, not V3 ceilings. The V1/as-built `HISTORY_DEPTH_TARGET_DAYS = 550` is **not** a V3 requirement. Do not introduce 1,825 days or any other invented numeric ceiling. | FROZEN |
 | **OD-18** | Minimum period before annualized return is used in ranking | **FROZEN.** Annualized return (CAGR/XIRR) MAY be used as ranking evidence only when the backtest holding period is **≥ 30 calendar days**. For holding periods **< 30 calendar days**, annualized return MUST NOT contribute to ranking. Simple return remains a valid backtest outcome. Applies to the OD-03 backtest ranking corpus and ranking aggregation. Reuses the V1 backtest “refuses CAGR under 30 days” rule, stated as **30 calendar days** (not trading sessions). Does **not** modify the §19 success definition, OD-02 `T_years` / opportunity-cost formula, OD-04 trimmed mean, OD-16 weakest-position scoring, or OD-23 (fill order when ranking is not computable; OD-23 is frozen separately and is not a ranking rule). | FROZEN |
@@ -1962,11 +2007,11 @@ Note: before the 2026-08-14 session, **OD-05** meant “minimum free capital / o
 
 ### 33.2 Open decisions
 
-None of **OD-01 through OD-24** remain open. Do not invent new OD identifiers here. Remaining unresolved items are the **open DEP-*** rows in §33.3.2. **DEP-TRIM-K**, **DEP-PARTIAL-LEND**, and **DEP-PARTIAL-ATOMIC** are frozen (§33.3.1).
+None of **OD-01 through OD-24** remain open. Do not invent new OD identifiers here. Remaining unresolved items are the **open DEP-*** rows in §33.3.2. **DEP-TRIM-K**, **DEP-PARTIAL-LEND**, **DEP-PARTIAL-ATOMIC**, and **DEP-ADOPT-MERGE** are frozen (§33.3.1).
 
 ### 33.3 Dependencies arising from frozen decisions (not invented rules)
 
-These are ambiguities created or revealed by OD-01–OD-24. Unresolved rows are **not** silent product law. **DEP-TRIM-K**, **DEP-PARTIAL-LEND**, and **DEP-PARTIAL-ATOMIC** are now frozen; the remaining rows below are still unresolved.
+These are ambiguities created or revealed by OD-01–OD-24. Unresolved rows are **not** silent product law. **DEP-TRIM-K**, **DEP-PARTIAL-LEND**, **DEP-PARTIAL-ATOMIC**, and **DEP-ADOPT-MERGE** are now frozen; the remaining rows below are still unresolved.
 
 #### 33.3.1 Resolved / frozen dependencies
 
@@ -1975,12 +2020,12 @@ These are ambiguities created or revealed by OD-01–OD-24. Unresolved rows are 
 | **DEP-TRIM-K** | Integer conversion of 7% × `n` to tail count `k` | **FROZEN.** `k = nearest_integer(0.07 × n)`. Exact fractional **.5** values MUST round **upward**. MUST NOT use banker's rounding or language/runtime `round()` if that can implement a different .5 tie. For this non-negative domain, `k = floor(0.07 × n + 0.5)` is the deterministic equivalent. The **same** `k` is removed from both tails. Does **not** change OD-04’s 7%/7% trimmed mean, the `n ≥ 15` eligibility gate, OD-03, OD-18, OD-23, or OD-24. Ranking eligibility and trim-count calculation remain distinct. Examples: n=15→k=1; n=20→k=1; n=25→k=2; n=30→k=2; n=35→k=2; n=50→k=4; n=100→k=7. | FROZEN |
 | **DEP-PARTIAL-LEND** | Same-cycle lending after PARTIALLY_FUNDED own capital | **FROZEN.** When a recommendation is PARTIALLY_FUNDED from own available capital and an unfunded remainder exists, that remainder MUST be eligible to open a **same-cycle** lending request. Lending is not deferred merely because partial own-capital funding already occurred. If lending is approved, borrowed capital MUST be available **immediately** for the intended funding/execution path. Minimum requirement to use lending = **NONE**. A remainder below ₹5,000 remains eligible. Excess borrowed capital above the requirement is permitted and remains available. Loan **size** for a non-multiple remainder is **DEP-PARTIAL-ATOMIC**. Example: ₹3,000 additional needed → eligible same-cycle; loan ₹5,000. Example: own ₹4,000, requirement ₹18,000, remainder ₹14,000 → eligible same-cycle; actual loan ₹15,000 (DEP-PARTIAL-ATOMIC). MUST NOT stay UNFUNDED merely because the requirement is below ₹5,000. OD-05, OD-12 target amount, and explicit user approval unchanged. Does **not** create a new cash/loan/allocation account. Does **not** reinterpret ₹5,000 as a minimum recommendation size or minimum remainder. Does **not** change OD-24. | FROZEN |
 | **DEP-PARTIAL-ATOMIC** | Atomic loan size of a same-cycle remainder | **FROZEN.** Round the required borrowed amount **UP** to the next ₹5,000 atomic loan block. Required loan = unfunded remainder. Remainder = this-cycle required/target amount minus allocated own capital, **not** `atomic_allocation` minus own. Actual loan MUST be at least that remainder and MUST use the ₹5,000 atomic loan unit. If the remainder is not an exact multiple of ₹5,000, `loan_amount = ceil(unfunded_remainder / 5000) × 5000`. Exact multiples stay unchanged (₹15,000 → ₹15,000). Examples: ₹3,000 → ₹5,000; ₹14,000 → ₹15,000; ₹15,000 → ₹15,000. Worked example: own ₹4,000, target ₹18,000, remainder ₹14,000 → loan ₹15,000, excess ₹1,000 remains available. There is **no** minimum remainder; a ₹3,000 remainder still uses lending and results in a ₹5,000 loan. This is a **loan-size** rule, not a minimum funding requirement. Do **not** reduce the loan below the remainder merely to preserve denomination. Do **not** reject lending merely because the remainder is below ₹5,000. **DEP-PARTIAL-LEND** unchanged (same-cycle allowed; funds immediately on approval). Not the OD-06 1% reservation formula. Does **not** change OD-05, OD-06, OD-23, OD-24, DEP-TRIM-K, or remaining DEP-*. | FROZEN |
+| **DEP-ADOPT-MERGE** | Ownership of investments funded by inter-strategy lending | **FROZEN. OPTION A — MERGE INTO BORROWER.** When inter-strategy lending funds a recommendation: (1) borrowed capital becomes **deployable borrowed capital** of the **borrowing** strategy for the funded opportunity; (2) the **borrowing** strategy owns the resulting investment/holding; (3) the **lending** strategy does **not** acquire ownership of the resulting holding; (4) the lender records a **loan receivable**; (5) the borrower records the corresponding **loan obligation**; (6) do **not** introduce fractional/split ownership of a holding based on own-vs-borrowed capital; (7) physical cash remains one portfolio-level cash pool — do **not** create physical strategy bank accounts or cash buckets; (8) loan repayment is a loan/capital transaction and does **not** transfer stock ownership; (9) borrowed capital is additional deployable capital for the borrower but does **not** change the configured strategy allocation percentage; (10) do **not** reinterpret this as permanently increasing configured allocation or changing portfolio allocation percentages. Example: Strategy A lends ₹15,000 to Strategy B → A has receivable ₹15,000 and no stock ownership; B has ₹15,000 deployable borrowed capital, owns the resulting ₹15,000 investment, and has obligation ₹15,000. Do **not** model the holding as jointly or fractionally owned by A and B. OD-24, OD-05, OD-06, **DEP-PARTIAL-LEND**, and **DEP-PARTIAL-ATOMIC** unchanged. This is **not** unmanaged-holding adoption and does **not** freeze unmanaged-adoption cost-basis merge. | FROZEN |
 
 #### 33.3.2 Remaining unresolved dependencies
 
 | ID | Dependency | Why it exists |
 |----|------------|----------------|
-| **DEP-ADOPT-MERGE** | Cost-basis merge and detailed merge mechanics when adopting unmanaged quantity into a strategy that already owns the stock | OD-15 freezes the entry-date principle (no reset on adoption); detailed merge mechanics remain unresolved. |
 | **DEP-RECALL-FLOOR** | Whether a portfolio override may set the effective recall period **shorter** than 14 calendar days | OD-07 makes period configurable; 14 days remains the shipped default. A numeric floor other than “platform range config” was not frozen. |
 | **DEP-WEAKEST-PRICE** | Which stored daily price column / lookup rule supplies `current_reference_price` and `window_start_reference_price` for OD-16 | OD-16 freezes the window-return formula; OD-14 names raw `close_price` only for SL/trailing/OD-12. Do not silently extend OD-14. |
 | **DEP-WEAKEST-HISTORY** | Behaviour when a borrower-owned position lacks `N` calendar days of reference prices for the configured OD-16 window | OD-16 freezes the formula and tie-break only; no insufficient-history fallback was frozen. |
@@ -1991,18 +2036,18 @@ These are ambiguities created or revealed by OD-01–OD-24. Unresolved rows are 
 
 Planning order for later passes. Do not implement in this phase.
 
-1. **Schema & domain foundations** — portfolio controls storage; multiple enabled strategies; holding uniqueness `(profile, stock, owner)` (OD-01); CA quantity stays on the parent owner row (OD-10); adoption; `capital_status` including PARTIALLY_FUNDED; loan/request tables; exit attribution column.
+1. **Schema & domain foundations** — portfolio controls storage; multiple enabled strategies; holding uniqueness `(profile, stock, owner)` (OD-01); CA quantity stays on the parent owner row (OD-10); adoption; `capital_status` including PARTIALLY_FUNDED; loan/request tables as receivable/obligation (**DEP-ADOPT-MERGE:** borrower owns lending-funded holdings; lender does not); exit attribution column.
 2. **Generation scoping** — per-strategy generate; stale-cancel scoped; unmanaged/other-owner excluded from strategy exits; stop converting unfunded or partial BUY to WATCH (OD-05).
 3. **Portfolio SL / trailing / precedence** — raw `close_price` (OD-14) for SL hit test, trailing high, and trailing current close; highest raw close from **that holding’s** entry date; SL `entry_price` = weighted-average **actual fill** cost of the current ownership episode (OD-13), updated on INCREASE fills; migrate config off strategy JSON. **OD-22:** seed portfolio trailing % to **15%**; ignore strategy-level B1/B2 values; do not copy stop-loss %. Do not use `adjusted_close_price` for these. Do not treat OD-14 as CA restatement (OD-10 leftovers).
 4. **Staggered entry + BUY cooldown + partial fill** — persist **target amount** per owner (OD-12); derive whole-share qty from latest available raw `close_price` (floor; OD-14); first entry default 50% of current target amount; subsequent INCREASE = current target amount − filled amount; suppress OPEN/INCREASE below effective min actionable (platform ₹5,000 / portfolio override); BUY cooldown **1 calendar day** from the recommendation opportunity (OD-11); OD-05/OD-06 must not replace the target amount.
 5. **Virtual allocation accounting** — % summing to 100; available vs lendable; `required_cash_reserve` per **OD-19** (`MAX(Invested Amount, Notional Portfolio Value) × portfolio_cash_reserve_pct`); **OD-24** `minimum_retained_capital = strategy_capital_allocation ÷ recommended_minimum_holdings` (strategy-level lending floor; not a physical sub-account; not OD-19); atomic reservation vs post-fill leftover; Cash UI named **Unallocated Cash** bucket (**OD-20**, presentation-only; not a new ledger or formula); no physical sub-accounts.
-6. **Lending workflow** — eligibility; available-for-lending after **OD-24** retained floor; ranking by lendable % then lendable amount then arbitrary exact tie (OD-08); display without commit; OD-06 reservation amounts; **DEP-PARTIAL-LEND** same-cycle lending after PARTIALLY_FUNDED (no minimum remainder; funds immediately on approval); **DEP-PARTIAL-ATOMIC** `ceil(remainder / 5000) × 5000` loan size (₹14,000 → ₹15,000); atomic approve; failure paths; audit. Do not apply FIFO to lenders. Do not lend the OD-24 retained amount.
+6. **Lending workflow** — eligibility; available-for-lending after **OD-24** retained floor; ranking by lendable % then lendable amount then arbitrary exact tie (OD-08); display without commit; OD-06 reservation amounts; **DEP-PARTIAL-LEND** same-cycle lending after PARTIALLY_FUNDED (no minimum remainder; funds immediately on approval); **DEP-PARTIAL-ATOMIC** `ceil(remainder / 5000) × 5000` loan size (₹14,000 → ₹15,000); **DEP-ADOPT-MERGE** merge into borrower (loan receivable/obligation; borrower owns the holding; `allocation_pct` unchanged); atomic approve; failure paths; audit. Do not apply FIFO to lenders. Do not lend the OD-24 retained amount.
 7. **Recall / replenishment** — platform default 14 calendar days + portfolio override (OD-07); among eligible loans, oldest commitment time first (OD-09); amount OD-06 (not whole loan merely because it is oldest); approval default; weakest-position ranking per **OD-16** (`window_return_pct`, lowest first; tie-break `stock_id` ascending). Resolve **DEP-WEAKEST-PRICE** and **DEP-WEAKEST-HISTORY** before auto-pick sells if needed.
 8. **History depth & charts** — Support **all available** OHLCV history with **no** V3 product-level maximum history-depth ceiling (**OD-17**). 5Y range when 5Y exists; All = all available history (may exceed 5Y); clamp hint when shorter; V1 `HISTORY_DEPTH_TARGET_DAYS = 550` is as-built only.
 9. **Historical ranking** — backtest corpus only (OD-03); 7%/7% trimmed mean, `n ≥ 15` (OD-04); tail count **`k = nearest_integer(0.07 × n)`** with exact .5 rounding upward (**DEP-TRIM-K**); annualized/CAGR/XIRR ranking evidence only if holding period **≥ 30 calendar days** (**OD-18**); never ship fit-as-rank; never mix live trades. When ranking is not computable (`n < 15` or corpus unavailable), capital fill among that strategy’s own valid BUY/INCREASE recs is **OD-23** (descending conviction / target-size, then fit → conviction sub-score → alphabetical); do not present that fill order as V3 ranking. The `n ≥ 15` ranked path is unchanged.
 10. **UI / notifications / help** — Strategy vs Portfolio settings split; per-owner holdings; capital states; Cash UI named **Unallocated Cash** (**OD-20**, presentation-only); Dashboard warning when cash is below `required_cash_reserve` (**OD-21**, B3); lender UX; contextual help sync when behaviour ships. Persistent application-wide critical banner remains **B4 wishlist**.
 11. **Migration backfill** — unmanaged default; safe inference; do not merge distinct strategy lots; non-destructive JSON split; portfolio trailing % seed **15%** (**OD-22**), ignoring strategy-level trailing/stop values.
-12. **Tests** — acceptance in §35, especially OD-01 same-symbol lots, OD-10 parent-owner CA attachment, OD-11 1-calendar-day BUY cooldown vs OD-07 recall, OD-12 target amount / whole-share floor / min actionable ₹5,000, OD-13 weighted-average fill cost vs first-fill, OD-14 raw `close_price` for SL/trailing/OD-12 reference, OD-16 weakest `window_return_pct` ranking and tie-break, OD-18 30-calendar-day annualized ranking gate, OD-19 `required_cash_reserve` formula vs % of cash/NAV, OD-20 named Unallocated Cash UI vs reserve/reserved/unused-allocation, OD-21 withdraw-into-reserve allowed with Dashboard shortfall warning (not a buy/lend permission), OD-22 portfolio trailing seed 15% vs copy-from-strategy or copy-from-SL, **OD-23** unranked fill order (conviction/target-size descending, then fit → conviction sub-score → alphabetical; not presented as V3 ranking; `n ≥ 15` path unchanged), **OD-24** `strategy_capital_allocation ÷ recommended_minimum_holdings` retained floor vs OD-19 / physical cash / BUY funding, **DEP-TRIM-K** `k = nearest_integer(0.07 × n)` with .5 upward (n=15→1, n=50→4, n=100→7; not banker's rounding), **DEP-PARTIAL-LEND** same-cycle lending after partial own funding (₹3,000 gap still loans ₹5,000; ₹14,000 remainder same-cycle), **DEP-PARTIAL-ATOMIC** remainder rounded up to next ₹5,000 (₹14,000 → ₹15,000 loan, ₹1,000 excess), OD-05 partial vs WATCH, OD-06 reservation vs fill, OD-08 lender ranking vs OD-09 loan FIFO, §24 races.
+12. **Tests** — acceptance in §35, especially OD-01 same-symbol lots, OD-10 parent-owner CA attachment, OD-11 1-calendar-day BUY cooldown vs OD-07 recall, OD-12 target amount / whole-share floor / min actionable ₹5,000, OD-13 weighted-average fill cost vs first-fill, OD-14 raw `close_price` for SL/trailing/OD-12 reference, OD-16 weakest `window_return_pct` ranking and tie-break, OD-18 30-calendar-day annualized ranking gate, OD-19 `required_cash_reserve` formula vs % of cash/NAV, OD-20 named Unallocated Cash UI vs reserve/reserved/unused-allocation, OD-21 withdraw-into-reserve allowed with Dashboard shortfall warning (not a buy/lend permission), OD-22 portfolio trailing seed 15% vs copy-from-strategy or copy-from-SL, **OD-23** unranked fill order (conviction/target-size descending, then fit → conviction sub-score → alphabetical; not presented as V3 ranking; `n ≥ 15` path unchanged), **OD-24** `strategy_capital_allocation ÷ recommended_minimum_holdings` retained floor vs OD-19 / physical cash / BUY funding, **DEP-TRIM-K** `k = nearest_integer(0.07 × n)` with .5 upward (n=15→1, n=50→4, n=100→7; not banker's rounding), **DEP-PARTIAL-LEND** same-cycle lending after partial own funding (₹3,000 gap still loans ₹5,000; ₹14,000 remainder same-cycle), **DEP-PARTIAL-ATOMIC** remainder rounded up to next ₹5,000 (₹14,000 → ₹15,000 loan, ₹1,000 excess), **DEP-ADOPT-MERGE** lending-funded holding owned by borrower not lender (receivable/obligation; `allocation_pct` unchanged; no fractional own-vs-borrowed ownership), OD-05 partial vs WATCH, OD-06 reservation vs fill, OD-08 lender ranking vs OD-09 loan FIFO, §24 races.
 
 ---
 
@@ -2030,6 +2075,10 @@ Planning order for later passes. Do not implement in this phase.
 ### 35.3 Ownership
 
 - Executed strategy buys are owned by that strategy.
+- **DEP-ADOPT-MERGE:** a buy funded in whole or in part by inter-strategy lending is owned by the **borrowing** strategy. The lender records a loan receivable and does **not** own the resulting stock. Do not model joint or fractional own-vs-borrowed ownership.
+- Example: A lends ₹15,000 to B; B’s resulting ₹15,000 investment is owned by B; A has receivable ₹15,000.
+- Loan repayment does not transfer that stock to the lender.
+- Deployable borrowed capital does **not** change configured `allocation_pct`.
 - Two strategies may hold the same stock with independent qty/cost/trailing (example 50 + 30 = 80).
 - Holdings unique key is not `(profile, stock)` alone.
 - Manual adds are unmanaged until adopted.
@@ -2103,6 +2152,7 @@ Planning order for later passes. Do not implement in this phase.
 - Race A then B against the same lender: B fails if capital is gone.
 - Loan/request amounts use OD-06 (×1.01 then ceil to ₹5,000) for **reservation** sizing. Examples: ₹23,700 → ₹25,000; ₹25,000 → ₹30,000; ₹19,000 → ₹20,000; ₹4,000 → ₹5,000. Same-cycle remainder **loan size** is **DEP-PARTIAL-ATOMIC**: `ceil(unfunded_remainder / 5000) × 5000` (₹3,000 → ₹5,000; ₹14,000 → ₹15,000; ₹15,000 → ₹15,000). There is no minimum remainder to use lending.
 - Same-cycle lending after PARTIALLY_FUNDED is required to be eligible (**DEP-PARTIAL-LEND**). Approval makes borrowed capital immediately available. Excess borrowed above the requirement remains available (example: remainder ₹14,000, loan ₹15,000, excess ₹1,000).
+- **DEP-ADOPT-MERGE:** that borrowed capital is deployable capital of the **borrower**. The resulting holding is borrower-owned. The lender has a loan receivable, not stock. `allocation_pct` is unchanged. Repayment does not transfer stock.
 - The reserved atomic amount is not required to be fully invested; leftover reservation reverts after fill. The 1% is not an auto-invest instruction. That leftover is **not** **Unallocated Cash** (OD-20). DEP-PARTIAL-LEND excess borrowed capital is likewise available; it is not a new account.
 - No multi-lender split of one request.
 - Reserve (`required_cash_reserve`, **OD-19**), pending-execution reserved cash, and the strategy’s **OD-24** minimum retained capital cannot be lent.
@@ -2188,7 +2238,7 @@ Planning order for later passes. Do not implement in this phase.
 - Tie-break order MUST be exactly: (1) **fit** (higher fit first); (2) **conviction sub-score** (higher first); (3) **alphabetical** order of the stock listing symbol.
 - The alphabetical tie-break MUST make the ordering deterministic (same inputs → same fill order).
 - OD-05 partial funding, OD-06 atomic reservation, reserve protection, and strategy allocation limits remain unchanged.
-- OD-24 is frozen separately (§35.17) and is not changed by OD-23. **DEP-TRIM-K**, **DEP-PARTIAL-LEND**, and **DEP-PARTIAL-ATOMIC** are frozen separately (§33.3.1). Remaining open DEP-* items are unchanged.
+- OD-24 is frozen separately (§35.17) and is not changed by OD-23. **DEP-TRIM-K**, **DEP-PARTIAL-LEND**, **DEP-PARTIAL-ATOMIC**, and **DEP-ADOPT-MERGE** are frozen separately (§33.3.1). Remaining open DEP-* items are unchanged.
 
 ### 35.17 Minimum retained capital / one opportunity (OD-24)
 
@@ -2200,7 +2250,7 @@ Planning order for later passes. Do not implement in this phase.
 - It does not modify `required_cash_reserve` (OD-19), `available_physical_cash`, the 100% allocation rule, BUY funding, OD-05, OD-06, OD-23, or the `n ≥ 15` ranking path.
 - Lending / available-for-lending MUST subtract this floor; lending MUST NOT consume it.
 - OD-24 MUST NOT hard-block external/broker withdrawals (OD-21).
-- **DEP-TRIM-K**, **DEP-PARTIAL-LEND**, and **DEP-PARTIAL-ATOMIC** are frozen separately and are not changed by OD-24. Remaining open DEP-* items are unchanged.
+- **DEP-TRIM-K**, **DEP-PARTIAL-LEND**, **DEP-PARTIAL-ATOMIC**, and **DEP-ADOPT-MERGE** are frozen separately and are not changed by OD-24. Remaining open DEP-* items are unchanged.
 
 ### 35.18 Same-cycle lending after partial own funding (DEP-PARTIAL-LEND)
 
@@ -2212,6 +2262,7 @@ Planning order for later passes. Do not implement in this phase.
 - Own ₹4,000 + target ₹18,000 → remainder ₹14,000 same-cycle eligible; actual loan ₹15,000; excess ₹1,000; if approved, immediately available.
 - Target amount is unchanged. Lending remains an explicit user decision. No new cash/loan/allocation account.
 - Loan size is **DEP-PARTIAL-ATOMIC** (below).
+- Ownership of the funded holding is **DEP-ADOPT-MERGE** (§35.20): merge into borrower.
 
 ### 35.19 Atomic remainder loan size (DEP-PARTIAL-ATOMIC)
 
@@ -2222,7 +2273,22 @@ Planning order for later passes. Do not implement in this phase.
 - No minimum remainder. Do not reject lending because the remainder is below ₹5,000. Do not reduce the loan below the remainder.
 - This is a loan-size rule, not a minimum funding requirement, and not the OD-06 1% reservation formula.
 - **DEP-PARTIAL-LEND** remains: same-cycle allowed; borrowed capital immediately available after approval.
+- **DEP-ADOPT-MERGE** (below) governs ownership of the resulting holding.
 - Remaining open DEP-* items stay unresolved.
+
+### 35.20 Lending-funded holding ownership (DEP-ADOPT-MERGE)
+
+- OPTION A — MERGE INTO BORROWER.
+- Borrowed capital is **deployable borrowed capital** of the borrowing strategy for the funded opportunity.
+- The borrowing strategy owns the resulting investment/holding. The lending strategy does **not**.
+- Lender records a loan receivable; borrower records the corresponding loan obligation.
+- Do not introduce fractional/split ownership based on own-vs-borrowed capital.
+- Physical cash remains one portfolio-level pool. No physical strategy bank accounts or cash buckets.
+- Loan repayment is a loan/capital transaction and does not transfer stock ownership.
+- Deployable borrowed capital does **not** change configured strategy `allocation_pct` and is not a permanent increase of that strategy’s policy share.
+- Example: A lends ₹15,000 to B → A receivable ₹15,000, no stock; B deployable ₹15,000, owns the ₹15,000 investment, obligation ₹15,000.
+- OD-24, OD-05, OD-06, DEP-PARTIAL-LEND, and DEP-PARTIAL-ATOMIC remain unchanged.
+- Unmanaged-adoption cost-basis merge when the destination already owns the stock remains unspecified.
 
 ---
 
@@ -2259,7 +2325,11 @@ Planning order for later passes. Do not implement in this phase.
 | OD-22 15% portfolio trailing **migration seed** | A permanently enforced platform default / copy of `default_stoploss_percent` / strategy-level B1/B2 trailing values / average-max-min reconciliation of those values |
 | Portfolio-level trailing % (OD-22) | A strategy-level trailing setting |
 | Adoption of unmanaged holding into strategy | A new purchase that resets trailing/stop entry history |
-| OD-15 adoption entry-date continuity | DEP-ADOPT-MERGE cost-basis merge mechanics |
+| OD-15 adoption entry-date continuity | Unspecified unmanaged-adoption cost-basis / multi-lot merge mechanics (not **DEP-ADOPT-MERGE**) |
+| **DEP-ADOPT-MERGE** (lending-funded holding owned by the **borrower**) | Lender-owned holding / joint or fractional own-vs-borrowed stock ownership |
+| Deployable borrowed capital (**DEP-ADOPT-MERGE**) | Configured strategy `allocation_pct` / a permanent increase of the borrower’s policy share |
+| Loan receivable (lender) / loan obligation (borrower) | Ownership of the resulting stock |
+| Loan repayment (capital/loan transaction) | Transfer of the borrower’s stock to the lender |
 | OD-16 weakest `window_return_pct` (recall/replenishment) | OD-03 opportunity ranking / annualised XIRR / fit / thesis / momentum |
 | OD-18 30-calendar-day minimum for annualized-return **use in ranking** | §19 annualized opportunity-cost **success** test / OD-02 `T_years` / OD-16 non-annualised weakest return |
 | OD-16 reference prices | OD-14 SL/trailing/OD-12 series (not automatically extended) |
