@@ -4,11 +4,11 @@
 |-------|-------|
 | **Title** | Lido Portfolio V3 Specification |
 | **Status** | Review |
-| **Version** | 0.19 |
+| **Version** | 0.21 |
 | **Owner** | Product Specification / Architecture |
-| **Last Updated** | 2026-08-17 |
+| **Last Updated** | 2026-08-18 |
 | **Implementation Status** | Not started |
-| **Depends On** | Frozen V3 product decisions (2026-08-14 through 2026-08-17), including OD-01–OD-24 and resolved **DEP-TRIM-K**; Architecture Impact Report; V1/V2 as-built baseline in `implementation.md` |
+| **Depends On** | Frozen V3 product decisions (2026-08-14 through 2026-08-18), including OD-01–OD-24 and resolved **DEP-TRIM-K**, **DEP-PARTIAL-LEND**, and **DEP-PARTIAL-ATOMIC**; Architecture Impact Report; V1/V2 as-built baseline in `implementation.md` |
 | **Referenced By** | Future V3 implementation passes |
 | **Related Specifications** | [architecture/domains/Strategy-Configuration-Specification.md](architecture/domains/Strategy-Configuration-Specification.md), [architecture/portfolio/Cash-Management-Specification.md](architecture/portfolio/Cash-Management-Specification.md), [architecture/domains/Recommendation-Engine-Specification.md](architecture/domains/Recommendation-Engine-Specification.md), [architecture/governance/SPECIFICATION_DECISIONS.md](architecture/governance/SPECIFICATION_DECISIONS.md) (SD-026, SD-029, SD-010) |
 
@@ -225,7 +225,7 @@ Capital a borrower strategy has received via an approved loan. It increases the 
 
 ### 2.13 Capital request
 
-A user-visible request to borrow a specific atomic-aligned amount from **exactly one** eligible lender, typically to fund a specific unfunded recommendation. Displaying a request does not reserve capital.
+A user-visible request to borrow from **exactly one** eligible lender, typically to fund an unfunded recommendation or the unfunded remainder of a **PARTIALLY_FUNDED** recommendation (**DEP-PARTIAL-LEND**). When that request funds a PARTIALLY_FUNDED remainder, the requested **loan amount** is that remainder rounded **up** to the next ₹5,000 atomic loan block when it is not already a multiple (**DEP-PARTIAL-ATOMIC**), and is at least ₹5,000. A remainder below ₹5,000 does **not** make lending ineligible. Displaying a request does not reserve capital.
 
 V3 does **not** allow one recommendation’s funding gap to be split across multiple lenders.
 
@@ -550,11 +550,29 @@ Examples (normative):
 
 **After execution / reconciliation:** unused reserved capital MUST remain or revert to available capital per §22. Actual fills may be above or below the reference price.
 
-**Lending / borrowing / recall** amounts MUST be integer multiples of ₹5,000. Lending cannot be split below the block. Borrowing cannot request less than one block.
+**Lending / borrowing / recall** amounts MUST be integer multiples of ₹5,000. Lending cannot be split below the block. Borrowing cannot request less than one block (₹5,000). **DEP-PARTIAL-LEND** / **DEP-PARTIAL-ATOMIC:** ₹5,000 is the minimum **loan amount**, not a minimum funding requirement and not a minimum unfunded remainder. After partial own funding, the actual loan is the unfunded remainder rounded **up** to the next ₹5,000 block when it is not already an exact multiple.
 
-**Interaction with OD-05:** if `atomic_allocation` is larger than available free capital, **partial funding is allowed**. Allocate the available free capital (this-cycle), keep OPEN/INCREASE, do not convert to WATCH. Own-capital partial amounts are **not** required to be re-ceiled through the 1% formula in a way that exceeds available cash (that would defeat partial funding). Lending of a remainder still cannot be below ₹5,000.
+**Interaction with OD-05:** if `atomic_allocation` is larger than available free capital, **partial funding is allowed**. Allocate the available free capital (this-cycle), keep OPEN/INCREASE, do not convert to WATCH. Own-capital partial amounts are **not** required to be re-ceiled through the 1% formula in a way that exceeds available cash (that would defeat partial funding).
 
-A this-cycle gap that is entirely unfunded from own cash, and whose atomic_allocation is ≥ ₹5,000, may use the lending path. A remainder smaller than one atomic block cannot be filled by lending; the rec stays valid and the leftover stays on the persisted target for later cycles.
+**DEP-PARTIAL-LEND (frozen):** a PARTIALLY_FUNDED this-cycle slice with an unfunded remainder MUST be eligible to open a **same-cycle** lending request. Lending is not deferred merely because partial own-capital funding already occurred. A remainder smaller than one atomic block MUST NOT be treated as ineligible for lending, and the recommendation MUST NOT remain without a lending path merely because the requirement is below ₹5,000. If lending is approved, borrowed capital is available immediately for the intended funding/execution path. The persisted **target amount** is unchanged (OD-12). Lending remains an explicit user decision; approval is authoritative.
+
+**DEP-PARTIAL-ATOMIC (frozen):** when that remainder is eligible for same-cycle lending, the **required** loan is the unfunded remainder. The unfunded remainder is the this-cycle required/target amount minus already allocated own capital (example: target ₹18,000, own ₹4,000 → remainder ₹14,000). It is **not** `atomic_allocation` minus own capital. The **actual** loan MUST be at least that remainder and MUST use the ₹5,000 atomic loan unit. If the remainder is not an exact multiple of ₹5,000, round the loan amount **UP** to the next ₹5,000 block. Do **not** reduce the loan below the remainder merely to preserve the atomic denomination. Do **not** reject lending merely because the remainder is below ₹5,000. This is a **loan-size** rule, not a minimum funding requirement. Excess borrowed capital is permitted and remains available after the intended execution.
+
+```text
+loan_amount = ceil(unfunded_remainder / 5000) × 5000
+```
+
+for `unfunded_remainder > 0`. This is **not** the OD-06 1% reservation formula.
+
+Normative examples:
+
+| Unfunded remainder | Loan |
+|--------------------|------|
+| ₹3,000 | ₹5,000 |
+| ₹14,000 | ₹15,000 |
+| ₹15,000 | ₹15,000 |
+
+Worked example: own capital ₹4,000, target ₹18,000, unfunded remainder ₹14,000 → loan ₹15,000; excess borrowed capital ₹1,000 remains available.
 
 ### 5.7 Lending limits
 
@@ -600,7 +618,9 @@ Lending is allowed. It is never automatic.
 
 The backend MUST revalidate lender capacity atomically at approval:
 
-- requested amount ≥ ₹5,000 and a multiple of ₹5,000 (OD-06)
+- requested amount ≥ ₹5,000 (minimum **loan amount**; not a minimum remainder)
+- requested amount is a multiple of ₹5,000
+- for a PARTIALLY_FUNDED unfunded remainder, requested amount = `ceil(unfunded_remainder / 5000) × 5000` (**DEP-PARTIAL-ATOMIC**)
 - lender still eligible
 - available-for-lending ≥ requested amount
 - portfolio reserve still protected
@@ -689,9 +709,26 @@ When a strategy consumes its own immediately available capital (including its mi
 
 A recommendation that lacks sufficient **own** capital to fund the **full** this-cycle desired amount remains a **valid** recommendation. It MUST NOT be converted to WATCH because it lacks full funding (OD-05).
 
-- If some own free capital is available: **partial funding** — allocate that capital, keep OPEN/INCREASE.
-- If no own free capital is available: `UNFUNDED` OPEN/INCREASE; lending may be offered.
+- If some own free capital is available: **partial funding** — allocate that capital, keep OPEN/INCREASE. Any unfunded remainder MUST be eligible for a **same-cycle** lending request (**DEP-PARTIAL-LEND**). Lending is not deferred merely because partial own-capital funding already occurred.
+- If no own free capital is available: `UNFUNDED` OPEN/INCREASE; lending may be offered. A requirement below ₹5,000 MUST NOT by itself close the lending path.
 - Direction (OPEN/INCREASE) and capital status are separate axes.
+
+**DEP-PARTIAL-LEND (frozen):**
+
+1. Same-cycle lending after partial own funding — **YES**. A `PARTIALLY_FUNDED` recommendation with an unfunded remainder MUST be eligible to open a same-cycle lending request.
+2. When the loan is funded — **immediately after approval**. Borrowed capital MUST then be available for the intended funding/execution path.
+3. Minimum **loan amount** — **₹5,000**. This is the minimum amount **borrowed** when the lending path is used. It is **not** a minimum funding requirement, **not** a minimum recommendation size, and **not** a minimum unfunded remainder.
+4. Minimum requirement to use lending — **NONE**. If the unfunded remainder is below ₹5,000, lending is still allowed; the borrower takes a ₹5,000 loan.
+5. Excess borrowed capital — **permitted** and remains available after the intended requirement is funded.
+
+Examples (normative):
+
+- Requirement ₹3,000 additional capital; lending selected → loan amount = ₹5,000 (**DEP-PARTIAL-ATOMIC**); ₹3,000 used for the requirement; remaining ₹2,000 is legitimate excess available capital. The recommendation MUST NOT remain UNFUNDED merely because the requirement is below ₹5,000.
+- Own capital ₹4,000; target ₹18,000; unfunded remainder ₹14,000 → same-cycle lending (**DEP-PARTIAL-LEND**); actual loan = ₹15,000 (**DEP-PARTIAL-ATOMIC**); excess borrowed capital ₹1,000 remains available. If approved, the borrowed amount is immediately available.
+
+OD-05, target amount (OD-12), and explicit user approval remain unchanged. Do not create a new cash account, loan account, allocation bucket, or accounting concept.
+
+**DEP-PARTIAL-ATOMIC (frozen):** `loan_amount = ceil(unfunded_remainder / 5000) × 5000` for remainder > 0. Required loan = remainder. Remainder = this-cycle required/target amount minus allocated own capital (not `atomic_allocation` minus own). Actual loan ≥ remainder and is a ₹5,000 block. Do not reduce the loan below the remainder. Do not reject lending because the remainder is below ₹5,000. Not a minimum funding requirement. Not the OD-06 1% reservation formula.
 
 ### 7.2 End-to-end flow
 
@@ -718,16 +755,22 @@ If 0 < own free < atomic_allocation:
     allocate own free (partial position, OD-05)
     capital_status = PARTIALLY_FUNDED
     remaining **target amount** persists (§12); do not reset target to the funded slice
-    optional lending path only for an unfunded remainder whose OD-06 size ≥ ₹5,000
-      (whether that remainder opens a capital request this cycle: DEP-PARTIAL-LEND)
+    unfunded remainder MUST be eligible for a same-cycle lending request
+      (DEP-PARTIAL-LEND; not deferred because partial own funding already occurred)
+    unfunded remainder = this-cycle required/target amount − allocated own capital
+      (not atomic_allocation − own; example ₹18,000 − ₹4,000 = ₹14,000)
+    loan_amount = ceil(unfunded_remainder / 5000) × 5000 (DEP-PARTIAL-ATOMIC)
+    if remainder < ₹5,000: still offer lending; loan amount = ₹5,000
+    then continue to Find eligible lenders (same-cycle; DEP-PARTIAL-LEND)
 If own free = 0:
     capital_status = UNFUNDED
     recommendation remains the same BUY/INCREASE action
     ↓
-    Determine required borrowed capital = atomic_allocation of the unfunded gap
+    Determine required borrowed capital for the unfunded gap
     ↓
-    If that amount < ₹5,000:
-        remain UNFUNDED; no lending path
+    If the gap is below ₹5,000:
+        lending path remains open; loan amount = ₹5,000 (minimum loan amount; DEP-PARTIAL-LEND)
+        MUST NOT remain without a lending path merely because the requirement is below ₹5,000
     ↓
     Find eligible lenders
     ↓
@@ -755,6 +798,7 @@ If revalidation fails:
     ↓
 If revalidation succeeds:
     Commit lending amount (lent / borrowed / committed-to-lending updated)
+    borrowed capital is available **immediately** for the intended funding/execution path (DEP-PARTIAL-LEND)
     capital_status = CAPITAL_COMMITTED then FUNDED for execution purposes
     ↓
 Recommendation is capital-ready
@@ -783,7 +827,7 @@ Do not invent periodic jobs that auto-commit lending. Recompute points are: stra
 
 ### 7.4 Execution interaction
 
-- Trade approval MUST NOT move a BUY to `pending_execution` while `capital_status` is `UNFUNDED` or awaiting lending. `PARTIALLY_FUNDED` and `FUNDED` MAY proceed for the allocated slice.
+- Trade approval MUST NOT move a BUY to `pending_execution` while `capital_status` is `UNFUNDED` or awaiting lending. `PARTIALLY_FUNDED` and `FUNDED` MAY proceed for the allocated slice. Same-cycle lending for the unfunded remainder remains available (**DEP-PARTIAL-LEND**) and, once approved, borrowed capital is immediately available for the remaining funding/execution path.
 - Once FUNDED, PARTIALLY_FUNDED, or CAPITAL_COMMITTED, reservation-on-trade-approval applies to the **reserved allocation amount** (atomic_allocation or partial own amount), using portfolio available cash. Borrowed capital is already reflected in accounting so that available cash checks succeed.
 - Double reservation (lending commit + a second reservation of the same rupees without converting state) is forbidden. Implementation MUST keep a single authoritative reserved/lent ledger (§22, §28).
 - After fill, unused reservation (including unused 1% margin) reverts to available capital.
@@ -798,7 +842,7 @@ A strategy L is eligible to lend amount `A` to borrower B when:
 
 1. L ≠ B
 2. L is enabled in the portfolio
-3. `A` ≥ ₹5,000 and `A` is a multiple of ₹5,000 (OD-06)
+3. `A` ≥ ₹5,000 and `A` is a multiple of ₹5,000. For a PARTIALLY_FUNDED remainder, `A = ceil(unfunded_remainder / 5000) × 5000` (**DEP-PARTIAL-ATOMIC**). A remainder below ₹5,000 still requests `A` = ₹5,000. ₹5,000 is not a minimum remainder.
 4. L’s **available-for-lending** ≥ `A`
 5. After the loan, L would still hold its minimum retained capital (**OD-24**)
 6. `A` does not include portfolio reserve (`required_cash_reserve`, OD-19)
@@ -1633,7 +1677,7 @@ Reuse V1 meanings where they still apply:
 |--------|---------|
 | `NOT_APPLICABLE` | REDUCE/EXIT/HOLD/WATCH |
 | `FUNDED` | Own (and/or already borrowed) capital covers this-cycle `atomic_allocation` |
-| `PARTIALLY_FUNDED` | Own free capital > 0 but less than `atomic_allocation`; executable amount is the available free capital (OD-05). Action remains OPEN/INCREASE. |
+| `PARTIALLY_FUNDED` | Own free capital > 0 but less than `atomic_allocation`; executable amount is the available free capital (OD-05). Action remains OPEN/INCREASE. Any unfunded remainder MUST be eligible for a same-cycle lending request (**DEP-PARTIAL-LEND**). Remainder loan size is **DEP-PARTIAL-ATOMIC** (`ceil(remainder / 5000) × 5000`). |
 | `UNFUNDED` | Valid BUY/INCREASE; this-cycle allocated amount is 0; no active lender selection |
 | `AWAITING_LENDER_SELECTION` | Eligible lenders exist; user has not chosen |
 | `AWAITING_LENDING_APPROVAL` | User is in the approval step (if distinct from selection) |
@@ -1745,7 +1789,7 @@ Additive / evolving `/api` and `/api/v1` capabilities (shapes not frozen beyond 
 | Portfolio controls GET/PUT | `portfolio_cash_reserve_pct` (OD-19), SL, trailing, max position, lending policy, atomic block ₹5,000, 1% margin, platform/portfolio recall period, **minimum actionable BUY/INCREASE** (platform default ₹5,000 + portfolio override, OD-12). Do **not** expose a separately configured portfolio min-free-capital formula; **OD-24** is derived. |
 | Strategy allocation % GET/PUT | sum-to-100 validation |
 | Recommendation capital_status | FUNDED / PARTIALLY_FUNDED / UNFUNDED; never WATCH-for-cash |
-| Eligible lenders for a rec | ranked by OD-08: lendable % descending, then lendable amount descending; exact ties arbitrary; amounts ₹5,000-aligned after 1.01; lendable already respects **OD-24** |
+| Eligible lenders for a rec | ranked by OD-08: lendable % descending, then lendable amount descending; exact ties arbitrary; PARTIALLY_FUNDED remainder loan size **DEP-PARTIAL-ATOMIC** (`ceil(remainder / 5000) × 5000`, no 1%); reservation amounts remain OD-06 1.01+ceil; lendable already respects **OD-24** |
 | Approve/reject lending | atomic revalidation |
 | Recall request / approve | effective period = platform default (14d) or portfolio override (OD-07); if several eligible loans, tap oldest by commitment time first (OD-09); amount OD-06 |
 | Capital / loan ledger read APIs | include reservation vs invested reconciliation. **Unallocated Cash** (OD-20) MAY appear as a presentation figure derived from existing §22 accounting; it is not a new ledger or cash account. Derived **OD-24** `minimum_retained_capital` MAY be shown as an accounting figure; it is not a cash account. |
@@ -1793,7 +1837,7 @@ Persist: `portfolio_cash_reserve_pct` (**OD-19**; one portfolio-level percentage
 
 Indexes: `(profile_id, status)`, `(lender_id, outstanding)`, `(borrower_id)`, `(recommendation_id)`.
 
-Constraints: amount ≥ ₹5,000 and multiple of ₹5,000 after OD-06; lender ≠ borrower; one lender per request.
+Constraints: amount ≥ ₹5,000 and a multiple of ₹5,000; for a PARTIALLY_FUNDED remainder, amount = `ceil(unfunded_remainder / 5000) × 5000` (**DEP-PARTIAL-ATOMIC**). Lender ≠ borrower; one lender per request.
 
 `committed_at` is the OD-09 FIFO key for selecting among recall-eligible outstanding loans. Do not invent a separate loan-ranking column for lender % or loan size.
 
@@ -1815,7 +1859,7 @@ Append-only capital and ownership events (§31).
 | **Strategy registry** | Enable multiple strategies; allocation % editor (sum 100). No exclusive activate. |
 | **Portfolio settings** | `portfolio_cash_reserve_pct` (OD-19; one percentage; required reserve is computed from MAX(Invested Amount, Notional Portfolio Value)), SL, trailing (**OD-22:** initial migration seed **15%**, then user-editable; not copied from strategy B1/B2 values), portfolio caps, lending policy, recall period override (inherit platform 14-day default), opportunity cost, auto-return toggle (default off). Atomic block ₹5,000 and 1% margin are specified product values (display as policy, not as “invest the margin”). **Minimum actionable BUY/INCREASE** inherits platform ₹5,000 unless the portfolio overrides (OD-12; not a strategy setting; not OD-06). |
 | **Holdings** | Owner / Unmanaged; **per-strategy rows** for the same stock (qty 50 vs 30); Adopt; **target amount** vs filled amount (qty derived from latest raw `close_price`, OD-12 / OD-14); do not offer strategy sell on unmanaged or on another strategy’s lot. Corporate-action quantity stays on the parent owner (OD-10); unmanaged CA stays unmanaged. |
-| **Recommendations** | Unfunded or partially funded BUY visible with capital status; not WATCH. Lender list. Approval. BUY cooldown **1 calendar day** per stock+strategy (OD-11); does not cancel `pending_execution`. Ranking from backtests when `n ≥ 15`; fit labelled as fit. When ranking is not computable (`n < 15` or corpus unavailable), capital fill among that strategy’s own valid BUY/INCREASE recs follows **OD-23** (descending conviction / target-size, then fit → conviction sub-score → alphabetical); that fill order MUST NOT be labelled or presented as V3 ranking. |
+| **Recommendations** | Unfunded or partially funded BUY visible with capital status; not WATCH. Lender list, including same-cycle lending for a PARTIALLY_FUNDED remainder (**DEP-PARTIAL-LEND**; no minimum remainder). Loan size = remainder rounded up to the next ₹5,000 block (**DEP-PARTIAL-ATOMIC**; ₹14,000 → ₹15,000). Approval. BUY cooldown **1 calendar day** per stock+strategy (OD-11); does not cancel `pending_execution`. Ranking from backtests when `n ≥ 15`; fit labelled as fit. When ranking is not computable (`n < 15` or corpus unavailable), capital fill among that strategy’s own valid BUY/INCREASE recs follows **OD-23** (descending conviction / target-size, then fit → conviction sub-score → alphabetical); that fill order MUST NOT be labelled or presented as V3 ranking. |
 | **Cash** | Required reserve (`required_cash_reserve`, OD-19) vs available vs reserved (atomic allocation vs post-fill leftover) vs named **Unallocated Cash** (**OD-20**; presentation-only residual after reserve not claimed by unused-allocation) vs per-strategy allocated / deployed / **OD-24** retained floor / lendable / lent / borrowed. Unallocated Cash is **not** reserved cash, **not** post-fill reservation leftover, **not** strategy unused allocation, **not** the OD-24 retained floor, **not** a second cash pool, and **not** a withdrawal entitlement. **OD-24** retained capital is an accounting constraint, not a physical sub-account. **OD-21:** external/broker withdrawals MUST NOT be blocked merely because they would leave cash below `required_cash_reserve`, and MUST NOT be hard-blocked by OD-24. |
 | **Dashboard** | When physical portfolio cash is below `required_cash_reserve` (**OD-21**), show a clear warning that the portfolio cash reserve is below the required level and that the user should replenish portfolio/broker cash. Do not invent layout, colour, widget, or workflow details beyond that message. This Dashboard warning is current V3 / **B3** scope. |
 | **Lending / recall** | Eligible lenders only; default sort OD-08 (lendable % descending, then lendable amount descending; exact ties have no product significance). Approve; errors on stale; recall approval; show effective recall period (platform vs portfolio override). Replenishment among eligible loans: oldest commitment time first (OD-09); do not present FIFO as a lender sort. |
@@ -1918,24 +1962,24 @@ Note: before the 2026-08-14 session, **OD-05** meant “minimum free capital / o
 
 ### 33.2 Open decisions
 
-None of **OD-01 through OD-24** remain open. Do not invent new OD identifiers here. Remaining unresolved items are the **open DEP-*** rows in §33.3.2. **DEP-TRIM-K** is frozen (§33.3.1).
+None of **OD-01 through OD-24** remain open. Do not invent new OD identifiers here. Remaining unresolved items are the **open DEP-*** rows in §33.3.2. **DEP-TRIM-K**, **DEP-PARTIAL-LEND**, and **DEP-PARTIAL-ATOMIC** are frozen (§33.3.1).
 
 ### 33.3 Dependencies arising from frozen decisions (not invented rules)
 
-These are ambiguities created or revealed by OD-01–OD-24. Unresolved rows are **not** silent product law. **DEP-TRIM-K** is now frozen; the remaining rows below are still unresolved.
+These are ambiguities created or revealed by OD-01–OD-24. Unresolved rows are **not** silent product law. **DEP-TRIM-K**, **DEP-PARTIAL-LEND**, and **DEP-PARTIAL-ATOMIC** are now frozen; the remaining rows below are still unresolved.
 
 #### 33.3.1 Resolved / frozen dependencies
 
 | ID | Topic | Decision | Status |
 |----|--------|----------|--------|
 | **DEP-TRIM-K** | Integer conversion of 7% × `n` to tail count `k` | **FROZEN.** `k = nearest_integer(0.07 × n)`. Exact fractional **.5** values MUST round **upward**. MUST NOT use banker's rounding or language/runtime `round()` if that can implement a different .5 tie. For this non-negative domain, `k = floor(0.07 × n + 0.5)` is the deterministic equivalent. The **same** `k` is removed from both tails. Does **not** change OD-04’s 7%/7% trimmed mean, the `n ≥ 15` eligibility gate, OD-03, OD-18, OD-23, or OD-24. Ranking eligibility and trim-count calculation remain distinct. Examples: n=15→k=1; n=20→k=1; n=25→k=2; n=30→k=2; n=35→k=2; n=50→k=4; n=100→k=7. | FROZEN |
+| **DEP-PARTIAL-LEND** | Same-cycle lending after PARTIALLY_FUNDED own capital | **FROZEN.** When a recommendation is PARTIALLY_FUNDED from own available capital and an unfunded remainder exists, that remainder MUST be eligible to open a **same-cycle** lending request. Lending is not deferred merely because partial own-capital funding already occurred. If lending is approved, borrowed capital MUST be available **immediately** for the intended funding/execution path. Minimum requirement to use lending = **NONE**. A remainder below ₹5,000 remains eligible. Excess borrowed capital above the requirement is permitted and remains available. Loan **size** for a non-multiple remainder is **DEP-PARTIAL-ATOMIC**. Example: ₹3,000 additional needed → eligible same-cycle; loan ₹5,000. Example: own ₹4,000, requirement ₹18,000, remainder ₹14,000 → eligible same-cycle; actual loan ₹15,000 (DEP-PARTIAL-ATOMIC). MUST NOT stay UNFUNDED merely because the requirement is below ₹5,000. OD-05, OD-12 target amount, and explicit user approval unchanged. Does **not** create a new cash/loan/allocation account. Does **not** reinterpret ₹5,000 as a minimum recommendation size or minimum remainder. Does **not** change OD-24. | FROZEN |
+| **DEP-PARTIAL-ATOMIC** | Atomic loan size of a same-cycle remainder | **FROZEN.** Round the required borrowed amount **UP** to the next ₹5,000 atomic loan block. Required loan = unfunded remainder. Remainder = this-cycle required/target amount minus allocated own capital, **not** `atomic_allocation` minus own. Actual loan MUST be at least that remainder and MUST use the ₹5,000 atomic loan unit. If the remainder is not an exact multiple of ₹5,000, `loan_amount = ceil(unfunded_remainder / 5000) × 5000`. Exact multiples stay unchanged (₹15,000 → ₹15,000). Examples: ₹3,000 → ₹5,000; ₹14,000 → ₹15,000; ₹15,000 → ₹15,000. Worked example: own ₹4,000, target ₹18,000, remainder ₹14,000 → loan ₹15,000, excess ₹1,000 remains available. There is **no** minimum remainder; a ₹3,000 remainder still uses lending and results in a ₹5,000 loan. This is a **loan-size** rule, not a minimum funding requirement. Do **not** reduce the loan below the remainder merely to preserve denomination. Do **not** reject lending merely because the remainder is below ₹5,000. **DEP-PARTIAL-LEND** unchanged (same-cycle allowed; funds immediately on approval). Not the OD-06 1% reservation formula. Does **not** change OD-05, OD-06, OD-23, OD-24, DEP-TRIM-K, or remaining DEP-*. | FROZEN |
 
 #### 33.3.2 Remaining unresolved dependencies
 
 | ID | Dependency | Why it exists |
 |----|------------|----------------|
-| **DEP-PARTIAL-LEND** | Whether a PARTIALLY_FUNDED this-cycle slice also opens a same-cycle lending request for the unfunded remainder | OD-05 allows partial own funding; lending remains for unfunded capital. Combining them on one rec was not specified. |
-| **DEP-PARTIAL-ATOMIC** | Own-capital partial amounts below ₹5,000 (e.g. ₹4,000 free vs ₹18,000 desired) | OD-05 says allocate available free capital; OD-06 forbids lending below ₹5,000. Own-capital partial below one block is allowed; lending that remainder is not. |
 | **DEP-ADOPT-MERGE** | Cost-basis merge and detailed merge mechanics when adopting unmanaged quantity into a strategy that already owns the stock | OD-15 freezes the entry-date principle (no reset on adoption); detailed merge mechanics remain unresolved. |
 | **DEP-RECALL-FLOOR** | Whether a portfolio override may set the effective recall period **shorter** than 14 calendar days | OD-07 makes period configurable; 14 days remains the shipped default. A numeric floor other than “platform range config” was not frozen. |
 | **DEP-WEAKEST-PRICE** | Which stored daily price column / lookup rule supplies `current_reference_price` and `window_start_reference_price` for OD-16 | OD-16 freezes the window-return formula; OD-14 names raw `close_price` only for SL/trailing/OD-12. Do not silently extend OD-14. |
@@ -1952,13 +1996,13 @@ Planning order for later passes. Do not implement in this phase.
 3. **Portfolio SL / trailing / precedence** — raw `close_price` (OD-14) for SL hit test, trailing high, and trailing current close; highest raw close from **that holding’s** entry date; SL `entry_price` = weighted-average **actual fill** cost of the current ownership episode (OD-13), updated on INCREASE fills; migrate config off strategy JSON. **OD-22:** seed portfolio trailing % to **15%**; ignore strategy-level B1/B2 values; do not copy stop-loss %. Do not use `adjusted_close_price` for these. Do not treat OD-14 as CA restatement (OD-10 leftovers).
 4. **Staggered entry + BUY cooldown + partial fill** — persist **target amount** per owner (OD-12); derive whole-share qty from latest available raw `close_price` (floor; OD-14); first entry default 50% of current target amount; subsequent INCREASE = current target amount − filled amount; suppress OPEN/INCREASE below effective min actionable (platform ₹5,000 / portfolio override); BUY cooldown **1 calendar day** from the recommendation opportunity (OD-11); OD-05/OD-06 must not replace the target amount.
 5. **Virtual allocation accounting** — % summing to 100; available vs lendable; `required_cash_reserve` per **OD-19** (`MAX(Invested Amount, Notional Portfolio Value) × portfolio_cash_reserve_pct`); **OD-24** `minimum_retained_capital = strategy_capital_allocation ÷ recommended_minimum_holdings` (strategy-level lending floor; not a physical sub-account; not OD-19); atomic reservation vs post-fill leftover; Cash UI named **Unallocated Cash** bucket (**OD-20**, presentation-only; not a new ledger or formula); no physical sub-accounts.
-6. **Lending workflow** — eligibility; available-for-lending after **OD-24** retained floor; ranking by lendable % then lendable amount then arbitrary exact tie (OD-08); display without commit; OD-06 amounts; atomic approve; failure paths; audit. Do not apply FIFO to lenders. Do not lend the OD-24 retained amount.
+6. **Lending workflow** — eligibility; available-for-lending after **OD-24** retained floor; ranking by lendable % then lendable amount then arbitrary exact tie (OD-08); display without commit; OD-06 reservation amounts; **DEP-PARTIAL-LEND** same-cycle lending after PARTIALLY_FUNDED (no minimum remainder; funds immediately on approval); **DEP-PARTIAL-ATOMIC** `ceil(remainder / 5000) × 5000` loan size (₹14,000 → ₹15,000); atomic approve; failure paths; audit. Do not apply FIFO to lenders. Do not lend the OD-24 retained amount.
 7. **Recall / replenishment** — platform default 14 calendar days + portfolio override (OD-07); among eligible loans, oldest commitment time first (OD-09); amount OD-06 (not whole loan merely because it is oldest); approval default; weakest-position ranking per **OD-16** (`window_return_pct`, lowest first; tie-break `stock_id` ascending). Resolve **DEP-WEAKEST-PRICE** and **DEP-WEAKEST-HISTORY** before auto-pick sells if needed.
 8. **History depth & charts** — Support **all available** OHLCV history with **no** V3 product-level maximum history-depth ceiling (**OD-17**). 5Y range when 5Y exists; All = all available history (may exceed 5Y); clamp hint when shorter; V1 `HISTORY_DEPTH_TARGET_DAYS = 550` is as-built only.
 9. **Historical ranking** — backtest corpus only (OD-03); 7%/7% trimmed mean, `n ≥ 15` (OD-04); tail count **`k = nearest_integer(0.07 × n)`** with exact .5 rounding upward (**DEP-TRIM-K**); annualized/CAGR/XIRR ranking evidence only if holding period **≥ 30 calendar days** (**OD-18**); never ship fit-as-rank; never mix live trades. When ranking is not computable (`n < 15` or corpus unavailable), capital fill among that strategy’s own valid BUY/INCREASE recs is **OD-23** (descending conviction / target-size, then fit → conviction sub-score → alphabetical); do not present that fill order as V3 ranking. The `n ≥ 15` ranked path is unchanged.
 10. **UI / notifications / help** — Strategy vs Portfolio settings split; per-owner holdings; capital states; Cash UI named **Unallocated Cash** (**OD-20**, presentation-only); Dashboard warning when cash is below `required_cash_reserve` (**OD-21**, B3); lender UX; contextual help sync when behaviour ships. Persistent application-wide critical banner remains **B4 wishlist**.
 11. **Migration backfill** — unmanaged default; safe inference; do not merge distinct strategy lots; non-destructive JSON split; portfolio trailing % seed **15%** (**OD-22**), ignoring strategy-level trailing/stop values.
-12. **Tests** — acceptance in §35, especially OD-01 same-symbol lots, OD-10 parent-owner CA attachment, OD-11 1-calendar-day BUY cooldown vs OD-07 recall, OD-12 target amount / whole-share floor / min actionable ₹5,000, OD-13 weighted-average fill cost vs first-fill, OD-14 raw `close_price` for SL/trailing/OD-12 reference, OD-16 weakest `window_return_pct` ranking and tie-break, OD-18 30-calendar-day annualized ranking gate, OD-19 `required_cash_reserve` formula vs % of cash/NAV, OD-20 named Unallocated Cash UI vs reserve/reserved/unused-allocation, OD-21 withdraw-into-reserve allowed with Dashboard shortfall warning (not a buy/lend permission), OD-22 portfolio trailing seed 15% vs copy-from-strategy or copy-from-SL, **OD-23** unranked fill order (conviction/target-size descending, then fit → conviction sub-score → alphabetical; not presented as V3 ranking; `n ≥ 15` path unchanged), **OD-24** `strategy_capital_allocation ÷ recommended_minimum_holdings` retained floor vs OD-19 / physical cash / BUY funding, **DEP-TRIM-K** `k = nearest_integer(0.07 × n)` with .5 upward (n=15→1, n=50→4, n=100→7; not banker's rounding), OD-05 partial vs WATCH, OD-06 reservation vs fill, OD-08 lender ranking vs OD-09 loan FIFO, §24 races.
+12. **Tests** — acceptance in §35, especially OD-01 same-symbol lots, OD-10 parent-owner CA attachment, OD-11 1-calendar-day BUY cooldown vs OD-07 recall, OD-12 target amount / whole-share floor / min actionable ₹5,000, OD-13 weighted-average fill cost vs first-fill, OD-14 raw `close_price` for SL/trailing/OD-12 reference, OD-16 weakest `window_return_pct` ranking and tie-break, OD-18 30-calendar-day annualized ranking gate, OD-19 `required_cash_reserve` formula vs % of cash/NAV, OD-20 named Unallocated Cash UI vs reserve/reserved/unused-allocation, OD-21 withdraw-into-reserve allowed with Dashboard shortfall warning (not a buy/lend permission), OD-22 portfolio trailing seed 15% vs copy-from-strategy or copy-from-SL, **OD-23** unranked fill order (conviction/target-size descending, then fit → conviction sub-score → alphabetical; not presented as V3 ranking; `n ≥ 15` path unchanged), **OD-24** `strategy_capital_allocation ÷ recommended_minimum_holdings` retained floor vs OD-19 / physical cash / BUY funding, **DEP-TRIM-K** `k = nearest_integer(0.07 × n)` with .5 upward (n=15→1, n=50→4, n=100→7; not banker's rounding), **DEP-PARTIAL-LEND** same-cycle lending after partial own funding (₹3,000 gap still loans ₹5,000; ₹14,000 remainder same-cycle), **DEP-PARTIAL-ATOMIC** remainder rounded up to next ₹5,000 (₹14,000 → ₹15,000 loan, ₹1,000 excess), OD-05 partial vs WATCH, OD-06 reservation vs fill, OD-08 lender ranking vs OD-09 loan FIFO, §24 races.
 
 ---
 
@@ -1999,8 +2043,12 @@ Planning order for later passes. Do not implement in this phase.
 
 - OPEN/INCREASE with **zero** own cash remains that action with `UNFUNDED` (or AWAITING_LENDER_SELECTION).
 - OPEN/INCREASE with **some but not all** required capital is `PARTIALLY_FUNDED` (or equivalent evidence) and still OPEN/INCREASE (OD-05). Example: desired ₹18,000, free ₹10,000 → allocate ₹10,000.
+- **DEP-PARTIAL-LEND:** that unfunded remainder MUST be eligible for a same-cycle lending request. Lending is not deferred because partial own funding already occurred. If approved, borrowed capital is available immediately.
+- A remainder or additional requirement below ₹5,000 still may use lending. **DEP-PARTIAL-ATOMIC:** loan = remainder rounded **up** to the next ₹5,000 block. Example: ₹3,000 needed → borrow ₹5,000; ₹3,000 used; ₹2,000 excess remains available. The rec MUST NOT stay UNFUNDED merely because the requirement is below ₹5,000.
+- Example: own ₹4,000, target ₹18,000, remainder ₹14,000 → same-cycle lending; loan ₹15,000; excess ₹1,000 remains available.
 - It is never persisted as WATCH solely for cash.
 - Telegram/actionability does not treat it as WATCH.
+- Target amount is not reset to the funded slice (OD-12).
 
 ### 35.5 Staggered entry and target amount (OD-12)
 
@@ -2053,8 +2101,9 @@ Planning order for later passes. Do not implement in this phase.
 - Display does not reduce lendable balances.
 - Approval revalidation can fail; no commit on failure.
 - Race A then B against the same lender: B fails if capital is gone.
-- Loan/request amounts use OD-06 (×1.01 then ceil to ₹5,000). Examples: ₹23,700 → ₹25,000; ₹25,000 → ₹30,000; ₹19,000 → ₹20,000; ₹4,000 → ₹5,000.
-- The reserved atomic amount is not required to be fully invested; leftover reservation reverts after fill. The 1% is not an auto-invest instruction. That leftover is **not** **Unallocated Cash** (OD-20).
+- Loan/request amounts use OD-06 (×1.01 then ceil to ₹5,000) for **reservation** sizing. Examples: ₹23,700 → ₹25,000; ₹25,000 → ₹30,000; ₹19,000 → ₹20,000; ₹4,000 → ₹5,000. Same-cycle remainder **loan size** is **DEP-PARTIAL-ATOMIC**: `ceil(unfunded_remainder / 5000) × 5000` (₹3,000 → ₹5,000; ₹14,000 → ₹15,000; ₹15,000 → ₹15,000). There is no minimum remainder to use lending.
+- Same-cycle lending after PARTIALLY_FUNDED is required to be eligible (**DEP-PARTIAL-LEND**). Approval makes borrowed capital immediately available. Excess borrowed above the requirement remains available (example: remainder ₹14,000, loan ₹15,000, excess ₹1,000).
+- The reserved atomic amount is not required to be fully invested; leftover reservation reverts after fill. The 1% is not an auto-invest instruction. That leftover is **not** **Unallocated Cash** (OD-20). DEP-PARTIAL-LEND excess borrowed capital is likewise available; it is not a new account.
 - No multi-lender split of one request.
 - Reserve (`required_cash_reserve`, **OD-19**), pending-execution reserved cash, and the strategy’s **OD-24** minimum retained capital cannot be lent.
 - Recall before the **effective** period (platform default 14 calendar days, or portfolio override) is rejected (OD-07).
@@ -2139,7 +2188,7 @@ Planning order for later passes. Do not implement in this phase.
 - Tie-break order MUST be exactly: (1) **fit** (higher fit first); (2) **conviction sub-score** (higher first); (3) **alphabetical** order of the stock listing symbol.
 - The alphabetical tie-break MUST make the ordering deterministic (same inputs → same fill order).
 - OD-05 partial funding, OD-06 atomic reservation, reserve protection, and strategy allocation limits remain unchanged.
-- OD-24 is frozen separately (§35.17) and is not changed by OD-23. **DEP-TRIM-K** is frozen separately (§4.4 / §33.3.1). Remaining open DEP-* items are unchanged.
+- OD-24 is frozen separately (§35.17) and is not changed by OD-23. **DEP-TRIM-K**, **DEP-PARTIAL-LEND**, and **DEP-PARTIAL-ATOMIC** are frozen separately (§33.3.1). Remaining open DEP-* items are unchanged.
 
 ### 35.17 Minimum retained capital / one opportunity (OD-24)
 
@@ -2151,7 +2200,29 @@ Planning order for later passes. Do not implement in this phase.
 - It does not modify `required_cash_reserve` (OD-19), `available_physical_cash`, the 100% allocation rule, BUY funding, OD-05, OD-06, OD-23, or the `n ≥ 15` ranking path.
 - Lending / available-for-lending MUST subtract this floor; lending MUST NOT consume it.
 - OD-24 MUST NOT hard-block external/broker withdrawals (OD-21).
-- **DEP-TRIM-K** is frozen separately and is not changed by OD-24. Remaining open DEP-* items are unchanged.
+- **DEP-TRIM-K**, **DEP-PARTIAL-LEND**, and **DEP-PARTIAL-ATOMIC** are frozen separately and are not changed by OD-24. Remaining open DEP-* items are unchanged.
+
+### 35.18 Same-cycle lending after partial own funding (DEP-PARTIAL-LEND)
+
+- A PARTIALLY_FUNDED recommendation with an unfunded remainder MUST be eligible to open a same-cycle lending request.
+- Lending is not deferred merely because partial own-capital funding already occurred.
+- If lending is approved, borrowed capital MUST be available immediately for the intended funding/execution path.
+- Minimum loan amount = ₹5,000 (amount borrowed). There is no minimum remainder or minimum requirement to use lending.
+- Remainder ₹3,000 → loan ₹5,000 (**DEP-PARTIAL-ATOMIC**); ₹3,000 used; ₹2,000 excess available. MUST NOT stay UNFUNDED because the requirement is below ₹5,000.
+- Own ₹4,000 + target ₹18,000 → remainder ₹14,000 same-cycle eligible; actual loan ₹15,000; excess ₹1,000; if approved, immediately available.
+- Target amount is unchanged. Lending remains an explicit user decision. No new cash/loan/allocation account.
+- Loan size is **DEP-PARTIAL-ATOMIC** (below).
+
+### 35.19 Atomic remainder loan size (DEP-PARTIAL-ATOMIC)
+
+- Required loan = unfunded remainder. Remainder = this-cycle required/target amount minus allocated own capital (not `atomic_allocation` minus own). Actual loan MUST be at least that remainder and MUST be a ₹5,000 atomic block.
+- If the remainder is not an exact multiple of ₹5,000, round **UP** to the next ₹5,000: `loan_amount = ceil(unfunded_remainder / 5000) × 5000`.
+- ₹3,000 → ₹5,000; ₹14,000 → ₹15,000; ₹15,000 → ₹15,000.
+- Own ₹4,000, target ₹18,000, remainder ₹14,000 → loan ₹15,000, excess ₹1,000 remains available.
+- No minimum remainder. Do not reject lending because the remainder is below ₹5,000. Do not reduce the loan below the remainder.
+- This is a loan-size rule, not a minimum funding requirement, and not the OD-06 1% reservation formula.
+- **DEP-PARTIAL-LEND** remains: same-cycle allowed; borrowed capital immediately available after approval.
+- Remaining open DEP-* items stay unresolved.
 
 ---
 
@@ -2174,6 +2245,12 @@ Planning order for later passes. Do not implement in this phase.
 | Atomic allocation / reservation | Amount that must be invested (includes 1% margin) **or** the position **target amount** (OD-12) |
 | Target **amount** (source of truth) | Derived whole-share quantity / executable notional |
 | OD-12 minimum actionable BUY/INCREASE (platform ₹5,000 / portfolio override) | OD-06 atomic reservation block (₹5,000) |
+| **DEP-PARTIAL-LEND** minimum **loan amount** ₹5,000 | A minimum unfunded remainder / minimum recommendation size / a bar that makes a sub-₹5,000 gap ineligible for lending |
+| Same-cycle lending after PARTIALLY_FUNDED (**DEP-PARTIAL-LEND**) | Deferring the remainder to a later cycle merely because own capital already partial-funded |
+| Unfunded remainder ₹14,000 | Actual loan ₹15,000 (**DEP-PARTIAL-ATOMIC** ceil to next ₹5,000 block) |
+| Unfunded remainder (this-cycle required/target amount − allocated own capital) | `atomic_allocation` − own capital (OD-06 reservation gap) |
+| **DEP-PARTIAL-ATOMIC** `ceil(remainder / 5000) × 5000` loan size | OD-06 1% reservation formula / a minimum funding requirement / rejecting remainder < ₹5,000 / lending a ₹14,000 remainder as a ₹14,000 loan |
+| Excess borrowed capital above the this-cycle requirement (permitted, remains available) | A new cash account, loan account, or allocation bucket |
 | Latest raw daily `close_price` (OD-12 reference / target qty; OD-14 SL/trailing comparison) | Execution price / `adjusted_close_price` |
 | First-entry ~50% of current **target amount** | Subsequent INCREASE = current target amount − filled amount |
 | Stop-loss `entry_price` (weighted-average **actual fill** cost, OD-13) | First-fill price / latest close / `adjusted_close_price` |
