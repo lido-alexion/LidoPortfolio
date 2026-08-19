@@ -88,6 +88,39 @@ Lending / available-for-lending / recall / weakest-position; OD-23 ranking/fill;
 
 `tests/Unit/NearestIntegerRupeeTest.php`; `tests/Feature/V3CapitalAccountingTest.php` (OD-24 examples, .5 upward, multi-strategy ₹10,00,000 75/25, withdrawal A/B/C/D, sum-to-100 validation, unmanaged MV excluded).
 
+## V3 Workstream 3 — Substrate enrichment: backtest entry score (2026-08-19)
+
+Authoritative spec: [`specs/LidoPortfolio-V3-Specification.md`](specs/LidoPortfolio-V3-Specification.md) v0.27. Spec file was **not** edited this pass.
+
+### Purpose
+
+V3 return-quality ranking (DEP-FIT-BAND-10) requires grouping historical backtest trade outcomes by the strategy fit/score at BUY entry. The existing `portfolio_backtest_trades` table did not persist the entry-time score. This substrate pass adds it so future backtests populate the column.
+
+### Implemented
+
+- **Migration** `2026_08_19_000002_add_entry_score_to_backtest_trades`: adds `entry_score DECIMAL(8,4) NULL` after `exit_reason` on `portfolio_backtest_trades`. Nullable; existing rows remain NULL.
+- **BacktestTrade model**: `entry_score` added to `$fillable` and `$casts` (float).
+- **Data flow**: `SimulationDayProcessor::processDay()` passes `$draft['score']` (the `overall_score` computed at BUY time) to `PaperTradeExecutor::buy()` as new optional `?float $entryScore` parameter. `buy()` stores it on the open lot (`['entry_score' => $entryScore]`). `closeLots()` carries `$lot['entry_score']` onto the closed-trade array. Partial-lot remainders also preserve `entry_score`. `BacktestPersistenceService::persistOpenLotsAsTrades()` includes `entry_score` from the lot on open-at-end trades.
+- No backtest engine logic changed (entry/exit decisions, position sizing, calendar, CAGR, return_pct, holding_days, prices, quantities, dates, strategy selection, strategy version linkage, open/closed trade semantics).
+- No live recommendation ranking or capital allocation was modified.
+- Entry scores for historical trades are **not** reconstructed. Only newly executed backtests populate the column.
+
+### Tests
+
+`tests/Unit/Backtest/EntryScorePersistenceTest.php` — 8 tests:
+- BUY stores entry_score on open lot (A)
+- BUY without score stores null
+- Entry score survives close (B)
+- Entry score independent of exit-time score (C)
+- Existing trade fields unchanged (D)
+- NULL entry_score valid for legacy lots (E)
+- Partial lot close preserves entry_score on remainder
+- FIFO close uses correct entry_score per lot
+
+### Deliberately not implemented (later WS3 passes)
+
+V3 return-quality ranking, DEP-FIT-BAND-10 fit bands, trimmed-mean ranking, OD-23 fallback ordering, new capital allocator, multi-strategy recommendation generation, partial/unfunded V3 handling, lending, trailing migration, broker execution.
+
 **Architecture specs reorganization (2026-08-06):** Documentation-only moves under `specs/architecture/` (`platform/`, `ui/`, `indicators/`, `portfolio/`, `data/`, `domains/`, `live-trading/`, `integrations/`, `governance/`, `audit/`). Filenames unchanged. `engines/` renamed to `domains/`; `System-Domain-Model.md` lives under `platform/`. Summary: [`specs/architecture/MIGRATION-SUMMARY.md`](specs/architecture/MIGRATION-SUMMARY.md).
 
 **Architecture Repository V1.0 (Frozen):** Structure, governance, naming, and authoring rules are stable — start at [`specs/architecture/platform/README.md`](specs/architecture/platform/README.md) (Platform Architecture) and [`specs/architecture/governance/ARCHITECTURE_REPOSITORY_BASELINE_V1.md`](specs/architecture/governance/ARCHITECTURE_REPOSITORY_BASELINE_V1.md). Extend the repo; do not reorganize it.

@@ -20,6 +20,7 @@ class PaperTradeExecutor
         float $price,
         string $reason,
         string $recommendation,
+        ?float $entryScore = null,
     ): array {
         $qty = (float) floor($qty);
         if ($qty < 1 || $price <= 0) {
@@ -65,7 +66,7 @@ class PaperTradeExecutor
 
         $lots = is_array($this->ctx->get('open_lots', [])) ? $this->ctx->get('open_lots', []) : [];
         $stockLots = is_array($lots[$key] ?? null) ? $lots[$key] : [];
-        $stockLots[] = ['qty' => $qty, 'price' => $price, 'buy_date' => $date];
+        $stockLots[] = ['qty' => $qty, 'price' => $price, 'buy_date' => $date, 'entry_score' => $entryScore];
         $lots[$key] = $stockLots;
         $this->ctx->set('open_lots', $lots);
 
@@ -198,12 +199,13 @@ class PaperTradeExecutor
                     'return_pct' => BacktestMath::clampDecimal12_6($ret),
                     'cagr' => $cagr,
                     'exit_reason' => $exitReason,
+                    'entry_score' => $lot['entry_score'] ?? null,
                     'is_open' => false,
                 ];
                 $remaining -= $take;
                 $left = $lotQty - $take;
                 if ($left > 0.0001) {
-                    $newLots[] = ['qty' => $left, 'price' => $buyPrice, 'buy_date' => $buyDate];
+                    $newLots[] = ['qty' => $left, 'price' => $buyPrice, 'buy_date' => $buyDate, 'entry_score' => $lot['entry_score'] ?? null];
                 }
             }
         }

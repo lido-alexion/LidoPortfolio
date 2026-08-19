@@ -104,6 +104,7 @@ class BacktestPersistenceService
                     'return_pct' => $ret,
                     'cagr' => null,
                     'exit_reason' => 'open_at_end',
+                    'entry_score' => $lot['entry_score'] ?? null,
                     'is_open' => true,
                 ]);
             }

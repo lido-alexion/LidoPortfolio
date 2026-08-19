@@ -23,6 +23,7 @@ class BacktestTrade extends Model
         'return_pct',
         'cagr',
         'exit_reason',
+        'entry_score',
         'is_open',
     ];
 
@@ -35,6 +36,7 @@ class BacktestTrade extends Model
         'profit_loss' => 'float',
         'return_pct' => 'float',
         'cagr' => 'float',
+        'entry_score' => 'float',
         'is_open' => 'boolean',
     ];
 

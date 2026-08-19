@@ -279,6 +279,7 @@ class SimulationDayProcessor
                 (float) $draft['reference_price'],
                 'recommendation',
                 $action,
+                isset($draft['score']) ? (float) $draft['score'] : null,
             );
             if ($result['ok'] ?? false) {
                 $transactions[] = $result['transaction'];
