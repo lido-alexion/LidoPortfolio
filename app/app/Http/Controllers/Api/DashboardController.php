@@ -45,6 +45,16 @@ class DashboardController extends Controller
 
         $benchmark = $this->relativeStrength->benchmarkStock();
         $cash = $this->cash->summary($profile);
+        $capital = null;
+        try {
+            $capital = app(\App\Services\Strategy\PortfolioCapitalAccountingService::class)->snapshot($profile);
+            $cash['available_physical_cash'] = $capital['physical_cash']['available_physical_cash'];
+            $cash['required_cash_reserve'] = $capital['od19']['required_cash_reserve'];
+            $cash['unallocated_cash'] = $capital['od20']['unallocated_cash'];
+            $cash['reserve_shortfall_exists'] = $capital['od19']['reserve_shortfall_exists'];
+        } catch (\Throwable) {
+            $capital = null;
+        }
         $strategy = null;
         try {
             $strategy = $this->strategies->summaryCard($profile);
@@ -76,6 +86,9 @@ class DashboardController extends Controller
             'reserved_cash' => $cash['reserved_cash'],
             'available_investable_cash' => $cash['available_investable_cash'],
             'cash' => $cash,
+            'capital' => $capital,
+            'reserve_shortfall_exists' => (bool) data_get($capital, 'od19.reserve_shortfall_exists', false),
+            'reserve_shortfall_warning' => data_get($capital, 'od21.dashboard_reserve_warning'),
             'strategy' => $strategy,
             'portfolio_analytics' => $portfolioAnalytics,
             'market_analytics' => $marketAnalytics,

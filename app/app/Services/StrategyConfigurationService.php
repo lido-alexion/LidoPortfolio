@@ -483,6 +483,9 @@ class StrategyConfigurationService
                 is_array($config['recommendation_behaviour'] ?? null) ? $config['recommendation_behaviour'] : []
             ),
             'risk' => array_merge($base['risk'], is_array($config['risk'] ?? null) ? $config['risk'] : []),
+            'recommended_minimum_holdings' => array_key_exists('recommended_minimum_holdings', $config)
+                ? $config['recommended_minimum_holdings']
+                : ($base['recommended_minimum_holdings'] ?? null),
         ];
     }
 
@@ -694,6 +697,7 @@ class StrategyConfigurationService
             'tags' => is_array($strategy->tags_json) ? $strategy->tags_json : [],
             'status' => $strategy->status,
             'allocation_pct' => $strategy->allocation_pct !== null ? (float) $strategy->allocation_pct : 100.0,
+            'recommended_minimum_holdings' => $this->recommendedMinimumHoldingsFromConfig($config),
             'is_factory' => (bool) $strategy->is_factory,
             'is_protected' => false,
             'factory_key' => $strategy->factory_key,
@@ -769,5 +773,20 @@ class StrategyConfigurationService
             'weight_total' => $payload['weight_total'],
             'status' => $payload['status'],
         ];
+    }
+
+    /**
+     * OD-24 divisor. Unset / 0 remains unresolved — do not invent a default count.
+     */
+    protected function recommendedMinimumHoldingsFromConfig(array $config): ?int
+    {
+        $raw = $config['recommended_minimum_holdings']
+            ?? ($config['portfolio_rules']['recommended_minimum_holdings'] ?? null);
+        if ($raw === null || $raw === '') {
+            return null;
+        }
+        $n = (int) $raw;
+
+        return $n > 0 ? $n : null;
     }
 }

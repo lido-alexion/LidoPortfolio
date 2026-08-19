@@ -196,6 +196,9 @@ export default function SettingsPage() {
 
         await api.put('/settings', {
             default_stoploss_percent: settings.default_stoploss_percent,
+            portfolio_cash_reserve_pct: settings.portfolio_cash_reserve_pct === ''
+                ? null
+                : settings.portfolio_cash_reserve_pct,
             telegram_bot_token: settings.telegram_bot_token,
             telegram_chat_id: settings.telegram_chat_id,
             notification_schedules: notificationPayload,
@@ -700,6 +703,28 @@ export default function SettingsPage() {
                                     />
                                     <p className="text-muted small mb-0 mt-1">
                                         Applies to holdings in the active portfolio.
+                                    </p>
+                                </div>
+                                <div className="col-12 col-md-4">
+                                    <label className="form-label" htmlFor="settings-cash-reserve">
+                                        Portfolio cash reserve %
+                                    </label>
+                                    <NumberInput
+                                        id="settings-cash-reserve"
+                                        min="0"
+                                        max="100"
+                                        step="0.01"
+                                        value={settings.portfolio_cash_reserve_pct ?? ''}
+                                        onChange={(e) => setSettings({
+                                            ...settings,
+                                            portfolio_cash_reserve_pct: e.target.value,
+                                        })}
+                                    />
+                                    <p className="text-muted small mb-0 mt-1">
+                                        Portfolio-level floor: required reserve = this % of the larger of invested amount
+                                        and current holdings market value. Leave blank for no configured reserve (0).
+                                        This is not a percentage of cash. Withdrawals are not blocked if cash falls below
+                                        the reserve.
                                     </p>
                                 </div>
                                 <div className="col-12">

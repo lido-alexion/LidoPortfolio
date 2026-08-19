@@ -50,15 +50,43 @@ Authoritative spec: [`specs/LidoPortfolio-V3-Specification.md`](specs/LidoPortfo
 
 ### Deliberately not implemented (later workstreams)
 
-OD-23 ranking/fill order, conviction allocation, OD-24 retained capital, cash reserve (OD-19/20), OD-21 withdrawals, lending / partial lending / loan ownership / recall, weakest-position selection, trailing migration (OD-22), broker execution, Dashboard reserve warning, per-strategy recommendation generate-all-enabled, strategy-level capital accounting formulas, holdings split on recalculate, target_amount / adoption workflow, borrowed capital.
+OD-23 ranking/fill order, conviction allocation, lending / partial lending / loan ownership / recall, weakest-position selection, trailing migration (OD-22), broker execution, per-strategy recommendation generate-all-enabled, holdings split on recalculate, target_amount / adoption workflow, borrowed capital. Cash reserve / Unallocated Cash / OD-21 / OD-24 / Dashboard reserve warning / strategy capital formulas are **Workstream 2**.
 
 ### Remaining V3 gap after this workstream
 
-Recommendation generate still uses `ensureActive()` (one strategy). Holdings calculation does not yet attribute lots per owner. `allocation_pct` is unused by capital math. Unique `(profile, stock, owner)` is in schema; live same-symbol multi-owner lots are not produced by the ledger replay yet.
+Recommendation generate still uses `ensureActive()` (one strategy). Holdings calculation does not yet attribute lots per owner. Unique `(profile, stock, owner)` is in schema; live same-symbol multi-owner lots are not produced by the ledger replay yet. Capital math for `allocation_pct` is Workstream 2.
 
 ### Tests
 
 `tests/Feature/V3DomainIdentityTest.php`; `StrategyRegistryApiTest` activate now expects two enabled strategies.
+
+## V3 Workstream 2 — Cash / strategy capital / OD-19 / OD-20 / OD-21 / OD-24 (2026-08-19)
+
+Authoritative spec: [`specs/LidoPortfolio-V3-Specification.md`](specs/LidoPortfolio-V3-Specification.md) v0.26. Spec file was **not** edited. Workstream 1 identity/multi-enable is unchanged.
+
+### Implemented
+
+- Physical cash remains **one** portfolio pool (`portfolio_cash_accounts` / `portfolio_cash_ledger_entries`). No strategy bank accounts. No new cash ledger types or historical rewrite.
+- **OD-19** `available_physical_cash = max(0, total_cash − pending_execution_reservations)` — same formula as V1 `available_investable_cash` (aliased). `required_cash_reserve = MAX(currently held invested amount, current holdings market value) × portfolio_cash_reserve_pct / 100`. Setting lives on the portfolio (`portfolio_settings.portfolio_cash_reserve_pct` via Settings / `PUT /api/v1/capital/reserve-pct`). **Unset = 0** (OD-19 did not freeze a numeric default; factory strategy `min_cash_reserve_pct` 20% is **not** copied as a V3 default this workstream).
+- **Investable capital** = `(cash − required_cash_reserve − pending reserved) + strategy-owned holdings market value`. Unmanaged MV is excluded from the 100% split base.
+- **Strategy capital** = `investable_capital × allocation_pct / 100` using `portfolio_tos_strategies.allocation_pct` only (not score-band `allocation_pct`, not rec `*_allocation_pct`, not holdings market %). `PUT /api/v1/capital/allocations` requires **every enabled strategy** and **sum = 100 ± 0.01**. No auto-normalize, no silent force to 100, no invented unallocated-strategy bucket. Enable of a second strategy still leaves stored values as-is (often 100+100); snapshot reports `allocation_pct_sum` / `allocation_pct_sum_is_100` and computes with stored percentages.
+- **OD-20 Unallocated Cash** is presentation-only: `max(0, available_physical_cash − required_cash_reserve − sum(unused_allocation))`. Not a ledger bucket. Shown on Cash UI and `GET /api/cash` / `GET /api/v1/capital`.
+- **OD-21** withdrawals still cap only at available physical cash (cannot spend pending reservations). They are **not** blocked because cash would fall below `required_cash_reserve`. Dashboard shows B3 warning when shortfall exists. No app-wide B4 banner. Recommendations are not expired/cancelled solely for the shortfall. Recommendation generate still uses V1 `% of cash` `min_cash_reserve_pct` (unchanged this workstream).
+- **OD-24** `minimum_retained_capital = floor(strategy_capital_allocation / recommended_minimum_holdings + 0.5)` via `App\Support\NearestIntegerRupee` (not PHP `round()` / banker's). Strategy-level accounting flag `minimum_retained_capital_is_physical_cash = false`. `recommended_minimum_holdings` is read from strategy `config_json` (top-level or `portfolio_rules`); **0/unset → retained is null** (spec edge case left unresolved; no invented divisor). Editable on Strategy → Portfolio Rules. Recalculation cadence not invented (computed on snapshot).
+- APIs: `GET /api/v1/capital`, `PUT /api/v1/capital/allocations`, `PUT /api/v1/capital/reserve-pct`. Cash summary and Dashboard attach capital snapshot fields. Cash UI: reserve, Unallocated Cash, allocation mixer. Settings: portfolio cash reserve %.
+- Help: `appDocumentation.js` (Dashboard, Cash, Settings, Strategy portfolio rules).
+
+### Database migrations
+
+None. Reserve % uses existing `portfolio_settings`. No new cash tables.
+
+### Deliberately not implemented (later workstreams)
+
+Lending / available-for-lending / recall / weakest-position; OD-23 ranking/fill; recommendation generate for all enabled strategies; holdings lot split on recalculate; broker execution; factory `min_cash_reserve_pct` → portfolio reserve **migration seed**; persistent app-wide shortfall banner (B4); unique inter-strategy split of physical cash beyond the unused-vs-fundable-physical cap on `strategy_available_capital`.
+
+### Tests
+
+`tests/Unit/NearestIntegerRupeeTest.php`; `tests/Feature/V3CapitalAccountingTest.php` (OD-24 examples, .5 upward, multi-strategy ₹10,00,000 75/25, withdrawal A/B/C/D, sum-to-100 validation, unmanaged MV excluded).
 
 **Architecture specs reorganization (2026-08-06):** Documentation-only moves under `specs/architecture/` (`platform/`, `ui/`, `indicators/`, `portfolio/`, `data/`, `domains/`, `live-trading/`, `integrations/`, `governance/`, `audit/`). Filenames unchanged. `engines/` renamed to `domains/`; `System-Domain-Model.md` lives under `platform/`. Summary: [`specs/architecture/MIGRATION-SUMMARY.md`](specs/architecture/MIGRATION-SUMMARY.md).
 

@@ -29,6 +29,7 @@ class SettingsController extends Controller
             'cron_timezone' => ['nullable', 'timezone'],
             'nse_retry_count' => ['nullable', 'integer', 'min:1', 'max:10'],
             'default_stoploss_percent' => ['nullable', 'numeric', 'min:1', 'max:50'],
+            'portfolio_cash_reserve_pct' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'telegram_bot_token' => ['nullable', 'string', 'max:255'],
             'telegram_chat_id' => ['nullable', 'string', 'max:255'],
             'alpha_vantage_api_key' => ['nullable', 'string', 'max:255'],

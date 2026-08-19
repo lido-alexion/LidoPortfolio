@@ -73,6 +73,8 @@ export default function CashManagementPage() {
         formatTransactionDateDisplay(getLocalTodayDateString())
     ));
     const [busy, setBusy] = useState(false);
+    const [allocDraft, setAllocDraft] = useState([]);
+    const [allocBusy, setAllocBusy] = useState(false);
 
     useEffect(() => {
         if (!profileId) {
@@ -98,6 +100,12 @@ export default function CashManagementPage() {
             const nextLedger = Array.isArray(ledgerRes.data?.data) ? ledgerRes.data.data : [];
             setSummary(nextSummary);
             setLedger(nextLedger);
+            const strategies = Array.isArray(nextSummary?.strategies) ? nextSummary.strategies : [];
+            setAllocDraft(strategies.map((row) => ({
+                strategy_id: row.strategy_id,
+                name: row.name,
+                allocation_pct: row.allocation_pct == null ? '' : String(row.allocation_pct),
+            })));
             return { summary: nextSummary, ledger: nextLedger };
         },
     });
@@ -157,7 +165,34 @@ export default function CashManagementPage() {
 
     const reservations = summary?.reservations || [];
     const selectedOp = OPS.find((o) => o.id === op) || OPS[0];
-    const availableCash = Number(summary?.available_investable_cash ?? 0);
+    const availableCash = Number(summary?.available_physical_cash ?? summary?.available_investable_cash ?? 0);
+    const allocSum = allocDraft.reduce((sum, row) => sum + (Number(row.allocation_pct) || 0), 0);
+    const allocSumIs100 = Math.abs(allocSum - 100) <= 0.01;
+
+    const saveAllocations = async () => {
+        if (!allocDraft.length) {
+            showToast('No enabled strategies to allocate', 'danger');
+            return;
+        }
+        setAllocBusy(true);
+        try {
+            await runApiMutation(async () => {
+                await api.put('/v1/capital/allocations', {
+                    allocations: allocDraft.map((row) => ({
+                        strategy_id: row.strategy_id,
+                        allocation_pct: Number(row.allocation_pct),
+                    })),
+                }, { skipErrorToast: true });
+                notifyPortfolioDashboardRefresh();
+                await load();
+            }, {
+                successMessage: 'Strategy allocations saved',
+                errorFallback: 'Could not save allocations. Enabled strategy percentages must sum to 100.',
+            });
+        } finally {
+            setAllocBusy(false);
+        }
+    };
 
     return (
         <div className="container-fluid py-3">
@@ -165,7 +200,9 @@ export default function CashManagementPage() {
                 <div>
                     <h1 className="h3 mb-1">Cash management</h1>
                     <p className="text-muted small mb-0">
-                        Deposit, withdraw, and adjust portfolio cash. Reserved cash is committed to approved buys awaiting execution.
+                        Deposit, withdraw, and adjust portfolio cash. Physical cash is one portfolio pool.
+                        Reserved cash is committed to approved buys awaiting execution. Strategy allocation
+                        percentages are a capital-accounting policy over that same pool — not separate bank accounts.
                     </p>
                 </div>
                 <div className="d-flex gap-2">
@@ -186,6 +223,7 @@ export default function CashManagementPage() {
                                 <div className="card-body">
                                     <div className="text-muted small">Cash balance</div>
                                     <div className="h5 m-0">{money(summary?.cash_balance)}</div>
+                                    <div className="text-muted small mt-1">Physical portfolio cash</div>
                                 </div>
                             </div>
                         </div>
@@ -209,12 +247,54 @@ export default function CashManagementPage() {
                             <div className="card h-100">
                                 <div className="card-body">
                                     <div className="text-muted small">Available cash</div>
-                                    <div className="h5 m-0">{money(summary?.available_investable_cash)}</div>
-                                    <div className="text-muted small mt-1">Balance − reserved</div>
+                                    <div className="h5 m-0">{money(summary?.available_physical_cash ?? summary?.available_investable_cash)}</div>
+                                    <div className="text-muted small mt-1">Balance − reserved (physical)</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="col-12 col-md-4">
+                            <div className="card h-100">
+                                <div className="card-body">
+                                    <div className="text-muted small">Required cash reserve</div>
+                                    <div className="h5 m-0">{money(summary?.required_cash_reserve)}</div>
+                                    <div className="text-muted small mt-1">
+                                        {summary?.portfolio_cash_reserve_pct != null
+                                            ? `${summary.portfolio_cash_reserve_pct}% of max(invested, holdings market value)`
+                                            : 'Portfolio-level; not investable or lendable'}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="col-12 col-md-4">
+                            <div className="card h-100">
+                                <div className="card-body">
+                                    <div className="text-muted small">Unallocated Cash</div>
+                                    <div className="h5 m-0">{money(summary?.unallocated_cash)}</div>
+                                    <div className="text-muted small mt-1">
+                                        Presentation only — residual after reserve not claimed by unused strategy allocation
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="col-12 col-md-4">
+                            <div className="card h-100">
+                                <div className="card-body">
+                                    <div className="text-muted small">Investable capital</div>
+                                    <div className="h5 m-0">{money(summary?.investable_capital)}</div>
+                                    <div className="text-muted small mt-1">
+                                        After reserve and pending reservations, plus strategy-owned holdings
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
+
+                    {summary?.reserve_shortfall_exists ? (
+                        <div className="alert alert-warning" role="alert">
+                            Portfolio cash reserve is below the required level. Replenish portfolio/broker cash.
+                            Withdrawals are still recorded; recommendations are not cancelled solely for this shortfall.
+                        </div>
+                    ) : null}
 
                     {showReservations ? (
                         <div className="card mb-3">
@@ -260,6 +340,94 @@ export default function CashManagementPage() {
                                         </table>
                                     </div>
                                 )}
+                            </div>
+                        </div>
+                    ) : null}
+
+                    {Array.isArray(summary?.strategies) && summary.strategies.length > 0 ? (
+                        <div className="card mb-3">
+                            <div className="card-header">Strategy capital allocation</div>
+                            <div className="card-body">
+                                <p className="text-muted small">
+                                    Each enabled strategy claims a share of investable capital from the same physical cash pool.
+                                    Percentages must sum to 100. They are not normalized automatically.
+                                    Retained capital is an accounting floor, not a cash ledger balance.
+                                </p>
+                                {!summary?.capital?.allocation_pct_sum_is_100 ? (
+                                    <div className="alert alert-secondary py-2">
+                                        Stored enabled allocations currently sum to {summary?.capital?.allocation_pct_sum ?? '—'}.
+                                        Accounting uses the stored percentages as-is until you save a 100% set.
+                                    </div>
+                                ) : null}
+                                <div className="table-responsive">
+                                    <table className="table table-sm align-middle mb-2">
+                                        <thead>
+                                            <tr>
+                                                <th>Strategy</th>
+                                                <th className="text-end" style={{ width: '8rem' }}>Allocation %</th>
+                                                <th className="text-end">Allocated capital</th>
+                                                <th className="text-end">Unused allocation</th>
+                                                <th className="text-end">Retained capital</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {allocDraft.map((row, idx) => {
+                                                const live = (summary.strategies || []).find(
+                                                    (s) => s.strategy_id === row.strategy_id,
+                                                );
+                                                return (
+                                                    <tr key={row.strategy_id}>
+                                                        <td>
+                                                            <div className="fw-semibold">{row.name || `Strategy #${row.strategy_id}`}</div>
+                                                            <div className="text-muted small">
+                                                                Owned MV {money(live?.strategy_owned_market_value)}
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <NumberInput
+                                                                className="form-control form-control-sm text-end"
+                                                                min="0"
+                                                                max="100"
+                                                                step="0.01"
+                                                                value={row.allocation_pct}
+                                                                onChange={(e) => {
+                                                                    const next = [...allocDraft];
+                                                                    next[idx] = {
+                                                                        ...next[idx],
+                                                                        allocation_pct: e.target.value,
+                                                                    };
+                                                                    setAllocDraft(next);
+                                                                }}
+                                                            />
+                                                        </td>
+                                                        <td className="text-end">{money(live?.strategy_capital_allocation)}</td>
+                                                        <td className="text-end">{money(live?.unused_allocation)}</td>
+                                                        <td className="text-end">
+                                                            {live?.minimum_retained_capital == null
+                                                                ? '—'
+                                                                : money(live.minimum_retained_capital)}
+                                                            <div className="text-muted small">Not physical cash</div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div className="d-flex flex-wrap align-items-center gap-2">
+                                    <button
+                                        type="button"
+                                        className="btn btn-sm btn-primary"
+                                        onClick={saveAllocations}
+                                        disabled={allocBusy || !profileId}
+                                    >
+                                        {allocBusy ? 'Saving…' : 'Save allocations'}
+                                    </button>
+                                    <span className={`small ${allocSumIs100 ? 'text-muted' : 'text-danger'}`}>
+                                        Draft sum: {allocSum.toFixed(2)}%
+                                        {allocSumIs100 ? '' : ' — must equal 100 to save'}
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     ) : null}

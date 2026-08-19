@@ -989,6 +989,25 @@ export default function StrategyPage() {
                                 />
                             </div>
                         ))}
+                        <div className="col-md-4">
+                            <label className="form-label" htmlFor="recommended-minimum-holdings">
+                                Recommended minimum holdings
+                            </label>
+                            <NumberInput
+                                id="recommended-minimum-holdings"
+                                step="1"
+                                min="0"
+                                allowDecimals={false}
+                                buttonVariant="secondary"
+                                value={config.portfolio_rules?.recommended_minimum_holdings ?? ''}
+                                onChange={(e) => updatePortfolioRule('recommended_minimum_holdings', e.target.value)}
+                            />
+                            <div className="form-text">
+                                Advisory count for generation, and the divisor for this strategy’s retained capital
+                                (nearest-integer rupees). Leave blank if unset — retained capital is then not computed.
+                                Not a physical cash bucket.
+                            </div>
+                        </div>
                         <div className="col-12"><hr /><div className="fw-semibold small">Behaviour</div></div>
                         {[
                             ['allow_increase_position', 'Allow increase position'],

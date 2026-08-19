@@ -775,6 +775,13 @@ export default function DashboardPage() {
                     <div className="alert alert-warning mb-0">{loadError}</div>
                 </div>
             ) : null}
+            {data.reserve_shortfall_exists && data.reserve_shortfall_warning ? (
+                <div className="col-12">
+                    <div className="alert alert-warning mb-0" role="alert">
+                        {data.reserve_shortfall_warning}
+                    </div>
+                </div>
+            ) : null}
             <div className="col-12 d-flex flex-wrap align-items-center gap-2">
                 <div className="d-flex flex-wrap align-items-center gap-2">
                     <button

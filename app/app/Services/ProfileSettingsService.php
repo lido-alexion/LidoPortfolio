@@ -15,6 +15,7 @@ class ProfileSettingsService
         'notification_schedules' => '[]',
         'indiavix_alert_enabled' => 'true',
         'indiavix_alert_threshold' => '20',
+        'portfolio_cash_reserve_pct' => '',
     ];
 
     /** Internal arming flag — not exposed via settings API defaults list. */

@@ -191,9 +191,9 @@ const APP_DOCUMENTATION_BASE = [
         title: 'Dashboard',
         routeLabel: '/',
         match: (p) => pathIs(p, '/'),
-        summary: 'Portfolio snapshot: value, allocation, market analytics, alerts, calendar, and pattern signals.',
+        summary: 'Portfolio snapshot: value, allocation, market analytics, alerts, calendar, pattern signals, and a cash-reserve shortfall warning when physical cash is below the required reserve.',
         overview:
-            'The Dashboard is the home screen for the active portfolio. It summarises performance, allocation, market context, alerts, upcoming calendar events, and pattern signals on holdings. A client-side cache can show the last load instantly until you refresh.',
+            'The Dashboard is the home screen for the active portfolio. It summarises performance, allocation, market context, alerts, upcoming calendar events, and pattern signals on holdings. A client-side cache can show the last load instantly until you refresh. If physical cash is below the portfolio required cash reserve, a warning appears on this page only — it does not block withdrawals or cancel recommendations by itself.',
         controls: [
             { name: 'Refresh dashboard', description: 'Clears the local cache and reloads dashboard + pattern scan data.' },
             { name: 'Sync prices for today', description: 'Admin: pulls latest holdings prices for the current session day.' },
@@ -203,13 +203,15 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Stocks Above heatmap', description: 'Market-depth view of how many stocks sit above key moving averages.' },
             { name: 'Pattern signals', description: 'Matched pattern names link into the Patterns guide.' },
             { name: 'Calendar card', description: 'Upcoming portfolio events for the next ~31 days.' },
+            { name: 'Cash reserve shortfall warning', description: 'Shown on Dashboard when physical cash is below required_cash_reserve. Withdrawals are still recorded; this is not a hard block and not an app-wide banner.' },
         ],
         concepts: [
             { name: 'Portfolio XIRR', description: 'Money-weighted return for the active portfolio based on cash flows and current value.' },
             { name: 'Market phase / sentiment', description: 'Deterministic market regime from the primary benchmark (e.g. Nifty 50); used later by Strategy market gates.' },
             { name: 'Dashboard cache', description: 'Responses are cached per user + portfolio (~24h) for snappy revisits; mutations invalidate it.' },
+            { name: 'Required cash reserve', description: 'Portfolio-level floor from Settings (portfolio cash reserve %). Rupee amount = that % of the larger of currently held invested amount and current holdings market value. Non-investable and non-lendable. Physical cash may fall below it after a broker withdrawal; Dashboard then warns.' },
         ],
-        related: ['trading-os-flow', 'holdings', 'market-depth', 'patterns', 'calendar', 'review', 'portfolio-snapshots', 'historical-holdings'],
+        related: ['trading-os-flow', 'holdings', 'market-depth', 'patterns', 'calendar', 'review', 'portfolio-snapshots', 'historical-holdings', 'cash', 'settings'],
     },
     {
         id: 'historical-holdings',
@@ -311,23 +313,28 @@ const APP_DOCUMENTATION_BASE = [
     {
         id: 'cash',
         keyword: 'cash',
-        aliases: ['balance', 'deposit', 'withdraw'],
+        aliases: ['balance', 'deposit', 'withdraw', 'unallocated cash', 'cash reserve'],
         title: 'Cash',
         routeLabel: '/cash',
         match: (p) => pathStarts(p, '/cash'),
-        summary: 'Cash balance, reserved capital, available investable cash, and the cash ledger.',
+        summary: 'Physical cash pool, reserved cash, required reserve, Unallocated Cash, strategy capital allocations, and the cash ledger.',
         overview:
-            'Manage portfolio cash independently of stock trades. Balance minus reserved cash is available to fund new recommendations. Deposit, withdraw, and adjust entries appear on the cash account statement.',
+            'Manage portfolio cash independently of stock trades. Physical cash is one portfolio-level pool — strategies do not have bank accounts. Balance minus reserved cash is available physical cash (pending-execution buys). The required cash reserve is a portfolio-level floor from Settings; it is not a separate ledger bucket. Unallocated Cash is a presentation of residual cash after that reserve that is not claimed by strategy unused-allocation accounting — not a new account. Strategy allocation % values split investable capital for accounting; they must sum to 100 to save and are not auto-normalized. Withdrawals cannot spend reserved cash, but they are not blocked merely because cash would fall below the reserve.',
         controls: [
-            { name: 'Deposit / Withdraw / Adjust', description: 'Change cash with amount stepper, optional remarks, and transaction date.' },
+            { name: 'Deposit / Withdraw / Adjust', description: 'Change cash with amount stepper, optional remarks, and transaction date. Withdrawals cannot exceed available physical cash (balance − reserved). They still succeed if cash then sits below the required reserve.' },
             { name: 'Reserved cash', description: 'Expand to see reservations tied to pending-execution buys.' },
-            { name: 'Statement', description: 'Chronological cash ledger for the active portfolio.' },
+            { name: 'Required cash reserve', description: 'Rupee floor from Portfolio Settings → Portfolio cash reserve %. Based on max(invested amount, current holdings market value), not a % of cash.' },
+            { name: 'Unallocated Cash', description: 'Presentation-only residual after the reserve that unused strategy allocation has not claimed. Not a ledger line and not a withdrawal entitlement.' },
+            { name: 'Strategy capital allocation', description: 'Edit enabled-strategy allocation % (must sum to 100 to save). Shows allocated capital, unused allocation, and retained capital (accounting floor, not physical cash).' },
+            { name: 'Statement', description: 'Chronological cash ledger for the active portfolio. Deposit, withdrawal, adjustment, buy, and sell only — retained capital is never posted here.' },
         ],
         concepts: [
-            { name: 'Available investable cash', description: 'Balance − reserved. Withdrawals cannot exceed this amount.' },
-            { name: 'Capital allocation', description: 'The recommendation pipeline funds ideas from available cash; unfunded ideas become Watch.' },
+            { name: 'Available physical cash', description: 'max(0, total cash − pending-execution reservations). Withdrawals cannot exceed this amount.' },
+            { name: 'Investable capital', description: '(cash − required reserve − pending reserved) + market value of strategy-owned holdings. Unmanaged holdings are excluded from the 100% strategy split.' },
+            { name: 'Strategy allocation %', description: 'Policy share of investable capital (TradingStrategy.allocation_pct). Distinct from score-band allocation_pct on the Strategy Capital Allocation tab and from holdings market-value %.' },
+            { name: 'Retained capital', description: 'Per-strategy nearest-integer rupees of allocated capital ÷ recommended minimum holdings. Lending cannot consume it later; it is not a cash bucket.' },
         ],
-        related: ['recommendations', 'pending-execution', 'strategy'],
+        related: ['recommendations', 'pending-execution', 'strategy', 'settings', 'dashboard'],
     },
     {
         id: 'corporate-action',
@@ -910,7 +917,8 @@ const APP_DOCUMENTATION_BASE = [
                 name: 'Portfolio Rules tab',
                 description:
                     'Maximum / Minimum Position Size % — share of portfolio value per idea (compared against suggested allocation %).\n'
-                    + 'Maximum Cash Deployment % / Minimum Cash Reserve % — how much cash may be invested vs kept aside (compared against cash balance).\n'
+                    + 'Maximum Cash Deployment % / Minimum Cash Reserve % — V1 generation-time cash limits compared against cash balance. The V3 portfolio cash reserve (required_cash_reserve) is set under Settings → Portfolio cash reserve % and uses invested/market-value, not % of cash.\n'
+                    + 'Recommended minimum holdings — advisory count for generation (the engine does not open weak names just to hit it). Also the divisor for this strategy’s retained capital (allocated capital ÷ this count, nearest rupee). Leave blank if unset; retained capital is then not computed.\n'
                     + 'Maximum New Positions — cap on fresh Opens per generation cycle.\n'
                     + 'Maximum Exposure Per Stock % — concentration ceiling.\n'
                     + 'Behaviour toggles: Allow increase / partial exit / averaging up / averaging down — permit those action types when other rules would suggest them.',
@@ -969,9 +977,9 @@ const APP_DOCUMENTATION_BASE = [
         ],
         concepts: [
             {
-                name: 'One active strategy per portfolio',
+                name: 'Multiple enabled strategies',
                 description:
-                    'Exactly one strategy is active (selected). Defaults are Minervini Strategy (Minervini Trend Template screener + momentum weights/thresholds). Use Strategy Registry to switch selection; the editor Save still updates the active config in place.',
+                    'A portfolio may enable more than one strategy. Physical cash stays one pool; each enabled strategy has an allocation % of investable capital (Cash page; must sum to 100 to save). Defaults include Minervini Strategy. The editor `?strategy_id=` chooses which definition to edit. Save still updates that strategy in place.',
             },
             {
                 name: 'Registry vs editor',
@@ -1576,13 +1584,14 @@ const APP_DOCUMENTATION_BASE = [
             && !pathStarts(p, '/settings/screener-registry')
             && !pathStarts(p, '/settings/strategy-registry')
             && !pathStarts(p, '/settings/users'),
-        summary: 'Global (admin), Portfolio, and Account settings — fees, Telegram, sync, active sessions, and links.',
+        summary: 'Global (admin), Portfolio, and Account settings — fees, Telegram, cash reserve %, sync, active sessions, and links.',
         overview:
             'Settings is the only Administration item in the primary sidebar. Open it for Global (admins), Portfolio, and Account preferences. On Account, Active sessions lists your signed-in devices so you can revoke one session or log out other devices. Admin tools (users, sync logs, data quality, indicator/screener/strategy registries, universe sync, alert policies) are linked from Settings cards — they are not separate sidebar entries.',
         controls: [
             { name: 'Settings tabs', description: 'Navigate Global / Portfolio / Account sections.' },
             { name: 'Fee components', description: 'Drive auto fees on buy/sell ledger rows.' },
             { name: 'Telegram', description: 'Bot token and chat id for portfolio notifications.' },
+            { name: 'Portfolio cash reserve %', description: 'Portfolio-level OD-19 percentage. Required reserve rupees = this % × max(currently held invested amount, current holdings market value). Leave blank for 0 (no configured reserve). Not a % of cash. Withdrawals are not blocked if cash falls below the resulting rupee floor; Dashboard warns instead.' },
             { name: 'Notification history', description: 'Open /notification-history from Portfolio → Alerts & notifications to audit Telegram deliveries.' },
             {
                 name: 'Active sessions',
@@ -1600,9 +1609,10 @@ const APP_DOCUMENTATION_BASE = [
                     'Active sessions controls are manual. Changing your password (or accepting an admin password-reset link) also signs out other devices automatically while keeping the active/new session.',
             },
             { name: 'Admin vs portfolio scope', description: 'Some tools (users, sync logs, universe sync) are admin-only.' },
+            { name: 'Portfolio cash reserve', description: 'A non-investable, non-lendable rupee floor. It is not a separate bank account and not strategy cash.' },
             { name: 'Not in sidebar', description: 'Settings sub-pages and registries stay off the primary sidebar; reach them from Settings or parent product pages.' },
         ],
-        related: ['alert-policies', 'universe-price-sync', 'data-quality-center', 'indicator-registry', 'screener-registry', 'strategy-registry', 'users', 'notifications'],
+        related: ['alert-policies', 'universe-price-sync', 'data-quality-center', 'indicator-registry', 'screener-registry', 'strategy-registry', 'users', 'notifications', 'cash', 'dashboard'],
     },
     {
         id: 'alert-policies',

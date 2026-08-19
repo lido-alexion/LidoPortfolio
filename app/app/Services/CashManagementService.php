@@ -66,6 +66,7 @@ class CashManagementService
             'cash_balance' => $balance,
             'reserved_cash' => $reserved,
             'available_investable_cash' => round(max(0.0, $balance - $reserved), 4),
+            'available_physical_cash' => round(max(0.0, $balance - $reserved), 4),
         ];
 
         if ($includeReservations) {

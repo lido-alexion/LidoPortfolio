@@ -22,8 +22,20 @@ class CashController extends Controller
             FILTER_VALIDATE_BOOLEAN
         );
 
+        $summary = $this->cash->summary($profile, $includeReservations);
+        $capital = app(\App\Services\Strategy\PortfolioCapitalAccountingService::class)->snapshot($profile);
+        $summary['available_physical_cash'] = $capital['physical_cash']['available_physical_cash'];
+        $summary['required_cash_reserve'] = $capital['od19']['required_cash_reserve'];
+        $summary['portfolio_cash_reserve_pct'] = $capital['od19']['portfolio_cash_reserve_pct'];
+        $summary['reserve_shortfall'] = $capital['od19']['reserve_shortfall'];
+        $summary['reserve_shortfall_exists'] = $capital['od19']['reserve_shortfall_exists'];
+        $summary['unallocated_cash'] = $capital['od20']['unallocated_cash'];
+        $summary['investable_capital'] = $capital['investable_capital'];
+        $summary['strategies'] = $capital['strategies'];
+        $summary['capital'] = $capital;
+
         return response()->json([
-            'data' => $this->cash->summary($profile, $includeReservations),
+            'data' => $summary,
         ]);
     }
 

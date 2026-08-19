@@ -41,6 +41,7 @@ use App\Http\Controllers\Api\V1\ArtifactRegistryController;
 use App\Http\Controllers\Api\V1\IndicatorRegistryController;
 use App\Http\Controllers\Api\V1\ScreenerRegistryController;
 use App\Http\Controllers\Api\V1\StrategyRegistryController;
+use App\Http\Controllers\Api\V1\CapitalAccountingController;
 use App\Http\Controllers\Api\V1\TradingOsController;
 use Illuminate\Support\Facades\Route;
 
@@ -340,6 +341,10 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
     Route::get('/strategy/portfolio-rules', [\App\Http\Controllers\Api\V1\StrategyController::class, 'portfolioRules']);
     Route::get('/strategy/capital-allocation', [\App\Http\Controllers\Api\V1\StrategyController::class, 'capitalAllocation']);
     Route::get('/strategy/recommendation-rules', [\App\Http\Controllers\Api\V1\StrategyController::class, 'recommendationRules']);
+
+    Route::get('/capital', [CapitalAccountingController::class, 'show']);
+    Route::put('/capital/allocations', [CapitalAccountingController::class, 'updateAllocations']);
+    Route::put('/capital/reserve-pct', [CapitalAccountingController::class, 'updateReservePct']);
 
     // Strategy Backtesting & Simulation (historical only; resumable time-budget engine).
     Route::get('/backtests/meta', [\App\Http\Controllers\Api\V1\BacktestController::class, 'meta']);
