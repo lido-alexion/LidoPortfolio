@@ -111,4 +111,9 @@ class PortfolioProfile extends Model
     {
         return $this->hasMany(Screener::class, 'profile_id');
     }
+
+    public function strategies(): HasMany
+    {
+        return $this->hasMany(TradingStrategy::class, 'profile_id');
+    }
 }

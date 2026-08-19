@@ -42,17 +42,42 @@ class HoldingsCalculationService
         $transactions = $this->transactionsForProfileStock($profile, $stock);
         $state = $this->replayTransactions($transactions, $profile, $stock);
 
-        return Holding::query()->updateOrCreate(
-            ['profile_id' => $profile->id, 'stock_id' => $stock->id],
-            [
-                'quantity' => round($state['quantity'], 4),
-                'avg_buy_price' => round($state['avg_buy_price'], 4),
-                'invested_amount' => round($state['invested_amount'], 4),
-                'total_fees' => round($state['total_fees'], 4),
-                'realized_profit' => round($state['realized_profit'], 4),
-                'updated_at' => now(),
-            ],
-        );
+        $existing = Holding::query()
+            ->where('profile_id', $profile->id)
+            ->where('stock_id', $stock->id)
+            ->orderBy('id')
+            ->get();
+
+        $values = [
+            'quantity' => round($state['quantity'], 4),
+            'avg_buy_price' => round($state['avg_buy_price'], 4),
+            'invested_amount' => round($state['invested_amount'], 4),
+            'total_fees' => round($state['total_fees'], 4),
+            'realized_profit' => round($state['realized_profit'], 4),
+            'updated_at' => now(),
+        ];
+
+        if ($existing->count() === 1) {
+            $holding = $existing->first();
+            $holding->fill($values)->save();
+
+            return $holding;
+        }
+
+        if ($existing->isEmpty()) {
+            return Holding::query()->create(array_merge($values, [
+                'profile_id' => $profile->id,
+                'stock_id' => $stock->id,
+                'strategy_id' => null,
+                'owner_key' => Holding::OWNER_UNMANAGED,
+            ]));
+        }
+
+        // Multiple owner rows for the same stock (OD-01) are not split/merged in this workstream.
+        $holding = $existing->first();
+        $holding->fill($values)->save();
+
+        return $holding;
     }
 
     /**

@@ -14,11 +14,11 @@ class StrategyController extends Controller
         protected StrategyConfigurationService $strategies,
     ) {}
 
-    public function active(): JsonResponse
+    public function active(Request $request): JsonResponse
     {
         $profile = \activePortfolio();
 
-        return ApiEnvelope::success($this->strategies->getActiveStrategy($profile));
+        return ApiEnvelope::success($this->strategies->getActiveStrategy($profile, $this->editorStrategyId($request)));
     }
 
     public function summary(): JsonResponse
@@ -32,6 +32,7 @@ class StrategyController extends Controller
     {
         $profile = \activePortfolio();
         $validated = $request->validate([
+            'strategy_id' => 'nullable|integer|min:1',
             'name' => 'nullable|string|max:120',
             'description' => 'nullable|string|max:2000',
             'change_notes' => 'nullable|string|max:1000',
@@ -49,7 +50,8 @@ class StrategyController extends Controller
             'config.risk' => 'nullable|array',
         ]);
 
-        $current = $this->strategies->getActiveStrategy($profile);
+        $strategyId = $this->editorStrategyId($request);
+        $current = $this->strategies->getActiveStrategy($profile, $strategyId);
         $incoming = $validated['config'];
         if (! isset($incoming['indicators']) && isset($incoming['scoring_model'])) {
             $incoming['indicators'] = $incoming['scoring_model'];
@@ -77,6 +79,7 @@ class StrategyController extends Controller
             $validated['name'] ?? null,
             $validated['description'] ?? null,
             $validated['change_notes'] ?? null,
+            $strategyId,
         );
 
         return ApiEnvelope::success($payload);
@@ -93,7 +96,7 @@ class StrategyController extends Controller
             'eligibility_sources.*.display_order' => 'nullable|integer|min:0',
         ]);
 
-        $current = $this->strategies->getActiveStrategy($profile);
+        $current = $this->strategies->getActiveStrategy($profile, $this->editorStrategyId($request));
         $merged = $current['config'] ?? [];
         $merged['eligibility_sources'] = $validated['eligibility_sources'];
 
@@ -103,28 +106,29 @@ class StrategyController extends Controller
             null,
             null,
             'Updated eligibility sources',
+            $this->editorStrategyId($request),
         );
 
         return ApiEnvelope::success($payload);
     }
 
-    public function eligibility(): JsonResponse
+    public function eligibility(Request $request): JsonResponse
     {
-        $data = $this->strategies->getActiveStrategy(\activePortfolio());
+        $data = $this->strategies->getActiveStrategy(\activePortfolio(), $this->editorStrategyId($request));
 
         return ApiEnvelope::success($data['eligibility_sources'] ?? []);
     }
 
-    public function scoring(): JsonResponse
+    public function scoring(Request $request): JsonResponse
     {
-        $data = $this->strategies->getActiveStrategy(\activePortfolio());
+        $data = $this->strategies->getActiveStrategy(\activePortfolio(), $this->editorStrategyId($request));
 
         return ApiEnvelope::success($data['scoring_model'] ?? $data['indicators'] ?? []);
     }
 
-    public function exitStrategy(): JsonResponse
+    public function exitStrategy(Request $request): JsonResponse
     {
-        $data = $this->strategies->getActiveStrategy(\activePortfolio());
+        $data = $this->strategies->getActiveStrategy(\activePortfolio(), $this->editorStrategyId($request));
 
         return ApiEnvelope::success($data['exit_strategy'] ?? []);
     }
@@ -134,38 +138,53 @@ class StrategyController extends Controller
         return ApiEnvelope::success(\App\Engines\Strategy\SupportedIndicators::byCategory());
     }
 
-    public function factors(): JsonResponse
+    public function factors(Request $request): JsonResponse
     {
-        $data = $this->strategies->getActiveStrategy(\activePortfolio());
+        $data = $this->strategies->getActiveStrategy(\activePortfolio(), $this->editorStrategyId($request));
 
         return ApiEnvelope::success($data['indicators'] ?? []);
     }
 
-    public function thresholds(): JsonResponse
+    public function thresholds(Request $request): JsonResponse
     {
-        $data = $this->strategies->getActiveStrategy(\activePortfolio());
+        $data = $this->strategies->getActiveStrategy(\activePortfolio(), $this->editorStrategyId($request));
 
         return ApiEnvelope::success($data['thresholds'] ?? []);
     }
 
-    public function portfolioRules(): JsonResponse
+    public function portfolioRules(Request $request): JsonResponse
     {
-        $data = $this->strategies->getActiveStrategy(\activePortfolio());
+        $data = $this->strategies->getActiveStrategy(\activePortfolio(), $this->editorStrategyId($request));
 
         return ApiEnvelope::success($data['portfolio_rules'] ?? []);
     }
 
-    public function capitalAllocation(): JsonResponse
+    public function capitalAllocation(Request $request): JsonResponse
     {
-        $data = $this->strategies->getActiveStrategy(\activePortfolio());
+        $data = $this->strategies->getActiveStrategy(\activePortfolio(), $this->editorStrategyId($request));
 
         return ApiEnvelope::success($data['capital_allocation'] ?? []);
     }
 
-    public function recommendationRules(): JsonResponse
+    public function recommendationRules(Request $request): JsonResponse
     {
-        $data = $this->strategies->getActiveStrategy(\activePortfolio());
+        $data = $this->strategies->getActiveStrategy(\activePortfolio(), $this->editorStrategyId($request));
 
         return ApiEnvelope::success($data['recommendation_behaviour'] ?? []);
+    }
+
+    /**
+     * UI editor selection — not an exclusive-active domain constraint.
+     */
+    protected function editorStrategyId(Request $request): ?int
+    {
+        $raw = $request->query('strategy_id', $request->input('strategy_id'));
+        if ($raw === null || $raw === '') {
+            return null;
+        }
+
+        $id = (int) $raw;
+
+        return $id > 0 ? $id : null;
     }
 }

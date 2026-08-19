@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import api from '../api';
 import { DataTableCard } from '../components/DataTable';
 import NumberInput from '../components/NumberInput';
@@ -172,6 +172,8 @@ function applyPayload(payload, setMeta, setConfig) {
 }
 
 export default function StrategyPage() {
+    const [searchParams] = useSearchParams();
+    const strategyId = searchParams.get('strategy_id') || '';
     const [section, setSection] = useState('general');
     const [saving, setSaving] = useState(false);
     const [availableScreeners, setAvailableScreeners] = useState([]);
@@ -183,11 +185,14 @@ export default function StrategyPage() {
     const [benchmarkIndexes, setBenchmarkIndexes] = useState([]);
 
     const { loading, reload: load } = useApiGet({
-        deps: [],
+        deps: [strategyId],
         errorFallback: 'Failed to load strategy',
         request: async () => {
             const [{ data }, screenersRes, indexesRes] = await Promise.all([
-                api.get('/v1/strategy', { skipErrorToast: true }),
+                api.get('/v1/strategy', {
+                    params: strategyId ? { strategy_id: strategyId } : {},
+                    skipErrorToast: true,
+                }),
                 api.get('/screeners', { skipErrorToast: true }).catch(() => ({ data: [] })),
                 api.get('/indexes', { skipErrorToast: true }).catch(() => ({ data: {} })),
             ]);
@@ -244,6 +249,7 @@ export default function StrategyPage() {
         try {
             const { ok, data: payload } = await runApiMutation(async () => {
                 const { data } = await api.put('/v1/strategy', {
+                    ...(strategyId ? { strategy_id: Number(strategyId) } : {}),
                     name: meta.name,
                     description: meta.description,
                     config: {

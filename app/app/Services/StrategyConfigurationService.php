@@ -14,8 +14,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Strategy Configuration (SD-027 / SD-028 / SD-029 / SD-030).
- * One editable strategy per portfolio (default Momentum + Minervini eligibility).
+ * Strategy Configuration (SD-027 / SD-028 / SD-030).
+ * A portfolio may have multiple enabled (STATUS_ACTIVE) strategies (V3 identity).
+ * GET /strategy without strategy_id still returns one editor strategy (first enabled, or factory seed).
  * Scoring + portfolio rules; eligibility via Screeners (not duplicated conditions).
  */
 class StrategyConfigurationService
@@ -81,11 +82,6 @@ class StrategyConfigurationService
                 $ver = TradingStrategyVersion::query()->find($factory->active_version_id);
                 if ($ver) {
                     if ($factory->status !== TradingStrategy::STATUS_ACTIVE) {
-                        TradingStrategy::query()
-                            ->where('profile_id', $profile->id)
-                            ->where('id', '!=', $factory->id)
-                            ->where('status', TradingStrategy::STATUS_ACTIVE)
-                            ->update(['status' => TradingStrategy::STATUS_ARCHIVED]);
                         $factory->forceFill(['status' => TradingStrategy::STATUS_ACTIVE])->save();
                     }
                     $this->ensureEligibilityLinked($profile, $ver);
@@ -94,17 +90,13 @@ class StrategyConfigurationService
                 }
             }
 
-            TradingStrategy::query()
-                ->where('profile_id', $profile->id)
-                ->where('status', TradingStrategy::STATUS_ACTIVE)
-                ->update(['status' => TradingStrategy::STATUS_ARCHIVED]);
-
             if (! $factory) {
                 $factory = TradingStrategy::query()->create([
                     'profile_id' => $profile->id,
                     'name' => FactoryMomentumStrategy::NAME,
                     'description' => FactoryMomentumStrategy::DESCRIPTION,
                     'status' => TradingStrategy::STATUS_ACTIVE,
+                    'allocation_pct' => 100,
                     'is_factory' => true,
                     'factory_key' => FactoryMomentumStrategy::FACTORY_KEY,
                     'slug' => 'momentum_strategy',
@@ -118,6 +110,7 @@ class StrategyConfigurationService
                     'name' => FactoryMomentumStrategy::NAME,
                     'description' => FactoryMomentumStrategy::DESCRIPTION,
                     'status' => TradingStrategy::STATUS_ACTIVE,
+                    'allocation_pct' => $factory->allocation_pct ?: 100,
                     'is_factory' => true,
                     'slug' => $factory->slug ?: 'momentum_strategy',
                     'intent' => $factory->intent ?: 'Trade stage-2 trend names with momentum-weighted scoring and explicit exits.',
@@ -162,16 +155,40 @@ class StrategyConfigurationService
         });
     }
 
-    public function getActiveStrategy(PortfolioProfile $profile): array
+    public function getActiveStrategy(PortfolioProfile $profile, ?int $strategyId = null): array
     {
-        $version = $this->ensureActive($profile);
+        $version = $this->resolveEditorVersion($profile, $strategyId);
         $strategy = $version->strategy ?? TradingStrategy::query()->findOrFail($version->strategy_id);
 
         return $this->serializeStrategy($strategy, $version);
     }
 
     /**
-     * Update the single active strategy in place (no version fork, no duplicate).
+     * Editor strategy: optional strategy_id (UI selection), else first enabled, else factory seed.
+     * This is not an exclusive-active domain rule.
+     */
+    public function resolveEditorVersion(PortfolioProfile $profile, ?int $strategyId = null): TradingStrategyVersion
+    {
+        if ($strategyId !== null && $strategyId > 0) {
+            $strategy = TradingStrategy::query()
+                ->where('profile_id', $profile->id)
+                ->where('id', $strategyId)
+                ->with('activeVersion')
+                ->first();
+            if (! $strategy?->activeVersion) {
+                throw ValidationException::withMessages([
+                    'strategy_id' => ['Unknown strategy for this portfolio.'],
+                ]);
+            }
+
+            return $strategy->activeVersion;
+        }
+
+        return $this->ensureActive($profile);
+    }
+
+    /**
+     * Update a strategy in place (no version fork, no duplicate).
      *
      * @param  array<string, mixed>  $config
      */
@@ -181,10 +198,11 @@ class StrategyConfigurationService
         ?string $name = null,
         ?string $description = null,
         ?string $changeNotes = null,
+        ?int $strategyId = null,
     ): array {
         $normalized = $this->normalizeConfig($config);
         $this->validateConfig($normalized);
-        $version = $this->ensureActive($profile);
+        $version = $this->resolveEditorVersion($profile, $strategyId);
         $strategy = TradingStrategy::query()->findOrFail($version->strategy_id);
 
         return DB::transaction(function () use ($strategy, $version, $normalized, $name, $description, $changeNotes) {
@@ -675,6 +693,7 @@ class StrategyConfigurationService
             'summary' => $strategy->summary,
             'tags' => is_array($strategy->tags_json) ? $strategy->tags_json : [],
             'status' => $strategy->status,
+            'allocation_pct' => $strategy->allocation_pct !== null ? (float) $strategy->allocation_pct : 100.0,
             'is_factory' => (bool) $strategy->is_factory,
             'is_protected' => false,
             'factory_key' => $strategy->factory_key,

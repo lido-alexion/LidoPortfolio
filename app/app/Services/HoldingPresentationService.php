@@ -128,6 +128,9 @@ class HoldingPresentationService
         }
 
         $payload = $holding->toArray();
+        $payload['strategy_id'] = $holding->strategy_id !== null ? (int) $holding->strategy_id : null;
+        $payload['owner_key'] = $holding->owner_key ?: Holding::OWNER_UNMANAGED;
+        $payload['is_unmanaged'] = $holding->isUnmanaged();
         $payload['unrealized_profit'] = $unrealizedProfit;
         $payload['unrealized_gain_percent'] = $unrealizedGainPercent;
         $payload['xirr'] = $this->xirr->calculateStockXirr(

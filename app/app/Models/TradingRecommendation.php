@@ -246,6 +246,30 @@ class TradingRecommendation extends Model
         return $this->belongsTo(PortfolioProfile::class, 'profile_id');
     }
 
+    public function strategyVersion(): BelongsTo
+    {
+        return $this->belongsTo(TradingStrategyVersion::class, 'strategy_version_id');
+    }
+
+    public function owningStrategyId(): ?int
+    {
+        if ($this->relationLoaded('strategyVersion')) {
+            $id = $this->strategyVersion?->strategy_id;
+
+            return $id !== null ? (int) $id : null;
+        }
+
+        if ($this->strategy_version_id === null) {
+            return null;
+        }
+
+        $id = TradingStrategyVersion::query()
+            ->where('id', $this->strategy_version_id)
+            ->value('strategy_id');
+
+        return $id !== null ? (int) $id : null;
+    }
+
     public function evaluationResult(): BelongsTo
     {
         return $this->belongsTo(EvaluationResult::class, 'evaluation_result_id');

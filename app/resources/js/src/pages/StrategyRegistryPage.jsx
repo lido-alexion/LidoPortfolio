@@ -148,12 +148,12 @@ export default function StrategyRegistryPage({ adminMode = false }) {
 
     const onActivate = async (row) => {
         const id = row.artifact_id || row.slug;
-        if (!window.confirm(`Select “${row.name}” as this portfolio’s only active strategy?`)) return;
+        if (!window.confirm(`Enable “${row.name}” for this portfolio? Other enabled strategies stay enabled.`)) return;
         setBusy(true);
         setError('');
         try {
             await api.post(`/v1/strategy-registry/${encodeURIComponent(id)}/activate`);
-            showToast(`“${row.name}” is now the active strategy for this portfolio.`);
+            showToast(`“${row.name}” is now enabled for this portfolio.`);
             await load();
         } catch (err) {
             setError(err?.response?.data?.error?.message || err.message || 'Selection failed');
@@ -169,7 +169,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                     <h2 className="h4 mb-1">{adminMode ? 'Strategy Registry (Admin)' : 'Strategy Registry'}</h2>
                     <p className="text-muted small mb-0">
                         Reusable Strategy definitions with metadata, versions, and JSON import/export.
-                        Each portfolio selects exactly one active Strategy. Strategies reference Screeners by registry slug / factory key — they never embed Screener trees.
+                        A portfolio may enable multiple strategies. Strategies reference Screeners by registry slug / factory key — they never embed Screener trees.
                     </p>
                     {countsLabel && <p className="text-muted small mb-0 mt-1">{countsLabel}</p>}
                 </div>
@@ -180,7 +180,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                     {adminMode && (
                         <Link to="/settings/global" className="btn btn-outline-secondary btn-sm">Back to settings</Link>
                     )}
-                    <Link to="/strategy" className="btn btn-outline-primary btn-sm">Edit active Strategy</Link>
+                    <Link to="/strategy" className="btn btn-outline-primary btn-sm">Open Strategy editor</Link>
                 </div>
             </div>
 
@@ -253,7 +253,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                                 <th>Name</th>
                                 <th>Status</th>
                                 <th>Version</th>
-                                <th>Selected</th>
+                                <th>Enabled</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -271,7 +271,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                             {!loading && rows.map((row) => {
                                 const m = row.metadata || {};
                                 const id = row.artifact_id || row.slug;
-                                const selected = !!m.is_selected || m.status === 'active';
+                                const selected = !!m.is_enabled || !!m.is_selected || m.status === 'active';
                                 return (
                                     <tr key={id}>
                                         <td>
@@ -302,11 +302,11 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                                                         disabled={busy}
                                                         onClick={() => onActivate(row)}
                                                     >
-                                                        Select
+                                                        Enable
                                                     </button>
                                                 )}
                                                 {selected && (
-                                                    <Link to="/strategy" className="btn btn-outline-primary btn-sm">
+                                                    <Link to={`/strategy?strategy_id=${encodeURIComponent(id)}`} className="btn btn-outline-primary btn-sm">
                                                         Edit
                                                     </Link>
                                                 )}

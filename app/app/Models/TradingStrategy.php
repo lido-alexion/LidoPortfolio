@@ -26,6 +26,7 @@ class TradingStrategy extends Model
         'summary',
         'tags_json',
         'status',
+        'allocation_pct',
         'is_factory',
         'factory_key',
         'duplicated_from_id',
@@ -38,6 +39,7 @@ class TradingStrategy extends Model
             'profile_id' => 'integer',
             'active_version_id' => 'integer',
             'duplicated_from_id' => 'integer',
+            'allocation_pct' => 'decimal:4',
             'is_factory' => 'boolean',
             'tags_json' => 'array',
         ];
@@ -61,5 +63,15 @@ class TradingStrategy extends Model
     public function duplicatedFrom(): BelongsTo
     {
         return $this->belongsTo(self::class, 'duplicated_from_id');
+    }
+
+    public function holdings(): HasMany
+    {
+        return $this->hasMany(Holding::class, 'strategy_id');
+    }
+
+    public function isEnabled(): bool
+    {
+        return $this->status === self::STATUS_ACTIVE;
     }
 }

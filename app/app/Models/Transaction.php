@@ -103,4 +103,19 @@ class Transaction extends Model
     {
         return $this->belongsTo(TradingRecommendation::class, 'recommendation_id');
     }
+
+    /**
+     * Logical strategy owner when the fill is linked to a recommendation.
+     * Manual / unlinked ledger rows have no strategy identity (unmanaged path).
+     */
+    public function owningStrategyId(): ?int
+    {
+        if ($this->recommendation_id === null) {
+            return null;
+        }
+
+        $this->loadMissing('recommendation.strategyVersion');
+
+        return $this->recommendation?->owningStrategyId();
+    }
 }

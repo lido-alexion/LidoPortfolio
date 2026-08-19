@@ -120,10 +120,11 @@ class StrategyRegistryApiTest extends TestCase
             ->postJson('/api/v1/strategy-registry/'.$created['artifact_id'].'/activate')
             ->assertOk()
             ->assertJsonPath('data.metadata.status', 'active')
-            ->assertJsonPath('data.metadata.is_selected', true);
+            ->assertJsonPath('data.metadata.is_selected', true)
+            ->assertJsonPath('data.metadata.is_enabled', true);
 
         $this->assertSame(
-            1,
+            2,
             TradingStrategy::query()->where('profile_id', $profile->id)->where('status', TradingStrategy::STATUS_ACTIVE)->count()
         );
         $this->assertTrue(
@@ -133,11 +134,26 @@ class StrategyRegistryApiTest extends TestCase
                 ->where('status', TradingStrategy::STATUS_ACTIVE)
                 ->exists()
         );
+        $this->assertTrue(
+            TradingStrategy::query()
+                ->where('profile_id', $profile->id)
+                ->where('factory_key', FactoryMomentumStrategy::FACTORY_KEY)
+                ->where('status', TradingStrategy::STATUS_ACTIVE)
+                ->exists()
+        );
 
         $this->actingAs($user)
             ->getJson('/api/v1/strategy-registry/selection')
             ->assertOk()
+            ->assertJsonPath('data.rule', 'multiple_enabled_per_portfolio')
+            ->assertJsonPath('data.enabled_count', 2)
             ->assertJsonPath('data.selected.slug', 'swing_import_test');
+
+        $this->actingAs($user)
+            ->getJson('/api/v1/strategy-registry/meta')
+            ->assertOk()
+            ->assertJsonPath('data.selection_rule', 'multiple_enabled_per_portfolio')
+            ->assertJsonPath('data.enablement_rule', 'multiple_enabled_per_portfolio');
     }
 
     public function test_rejects_embedded_screener_tree(): void

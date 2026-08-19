@@ -195,7 +195,7 @@ final class StrategyRegistrySupport
     }
 
     /**
-     * Activate exactly one strategy for the portfolio (archives other actives).
+     * Enable a strategy for the portfolio without disabling other enabled strategies.
      */
     public function activate(PortfolioProfile $profile, TradingStrategy $strategy): TradingStrategy
     {
@@ -228,12 +228,6 @@ final class StrategyRegistrySupport
                     'definition_hash' => $this->hashDefinition($config),
                 ])->save();
             }
-
-            TradingStrategy::query()
-                ->where('profile_id', $profile->id)
-                ->where('id', '!=', $strategy->id)
-                ->where('status', TradingStrategy::STATUS_ACTIVE)
-                ->update(['status' => TradingStrategy::STATUS_ARCHIVED]);
 
             TradingStrategyVersion::query()
                 ->where('strategy_id', $strategy->id)

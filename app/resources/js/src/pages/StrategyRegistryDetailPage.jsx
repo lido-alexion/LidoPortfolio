@@ -60,12 +60,12 @@ export default function StrategyRegistryDetailPage({ adminMode = false }) {
     };
 
     const onActivate = async () => {
-        if (!window.confirm(`Select “${env?.name || id}” as this portfolio’s only active strategy?`)) return;
+        if (!window.confirm(`Enable “${env?.name || id}” for this portfolio? Other enabled strategies stay enabled.`)) return;
         setBusy(true);
         setError('');
         try {
             await api.post(`/v1/strategy-registry/${encodeURIComponent(id)}/activate`);
-            showToast('Strategy selected for this portfolio.');
+            showToast('Strategy enabled for this portfolio.');
             await load();
         } catch (err) {
             setError(err?.response?.data?.error?.message || err.message || 'Selection failed');
@@ -75,7 +75,7 @@ export default function StrategyRegistryDetailPage({ adminMode = false }) {
     };
 
     const meta = env?.metadata || {};
-    const selected = !!meta.is_selected || meta.status === 'active';
+    const selected = !!meta.is_enabled || !!meta.is_selected || meta.status === 'active';
 
     return (
         <div className="d-grid gap-3">
@@ -90,11 +90,11 @@ export default function StrategyRegistryDetailPage({ adminMode = false }) {
                 <div className="d-flex flex-wrap gap-2">
                     <Link to={basePath} className="btn btn-outline-secondary btn-sm">Back to registry</Link>
                     {selected && (
-                        <Link to="/strategy" className="btn btn-outline-primary btn-sm">Open editor</Link>
+                        <Link to={`/strategy?strategy_id=${encodeURIComponent(id)}`} className="btn btn-outline-primary btn-sm">Open editor</Link>
                     )}
                     {!selected && (
                         <button type="button" className="btn btn-primary btn-sm" disabled={busy || !env} onClick={onActivate}>
-                            Select as active
+                            Enable
                         </button>
                     )}
                     <button type="button" className="btn btn-outline-secondary btn-sm" onClick={onExport} disabled={!env}>

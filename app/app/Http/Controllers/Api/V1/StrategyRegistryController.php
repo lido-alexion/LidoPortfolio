@@ -11,7 +11,7 @@ use InvalidArgumentException;
 
 /**
  * Strategy Registry HTTP API — reusable Strategy artifacts (SD-034).
- * Does not replace PUT /api/v1/strategy active editor; selection = activate.
+ * PUT /api/v1/strategy remains the editor; optional strategy_id is UI selection, not exclusive-active.
  */
 class StrategyRegistryController extends Controller
 {
@@ -175,11 +175,14 @@ class StrategyRegistryController extends Controller
             return ApiEnvelope::error('NO_PORTFOLIO', 'Active portfolio required.', 422);
         }
         $items = $this->registry->list($profile, ['status' => 'active']);
-        $selected = $items[0] ?? null;
+        $editor = $items[0] ?? null;
 
         return ApiEnvelope::success([
-            'selected' => $selected,
-            'rule' => 'exactly_one_active_per_portfolio',
+            'enabled' => $items,
+            'enabled_count' => count($items),
+            'selected' => $editor,
+            'editor' => $editor,
+            'rule' => StrategyArtifactRegistry::ENABLEMENT_RULE,
         ]);
     }
 }

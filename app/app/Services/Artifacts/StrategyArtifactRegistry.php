@@ -13,11 +13,12 @@ use InvalidArgumentException;
 
 /**
  * Strategy Artifact Registry — envelope I/O over portfolio_tos_strategies (BC).
- * Create/import stores drafts (not activated). Activate selects exactly one active strategy.
+ * Create/import stores drafts (not enabled). Enable (activate) does not disable other enabled strategies.
  * Eligibility refs are Screener slug/factory_key only in export — never embedded trees.
  */
 final class StrategyArtifactRegistry implements ArtifactRegistryInterface
 {
+    public const ENABLEMENT_RULE = 'multiple_enabled_per_portfolio';
     public function __construct(
         private StrategyConfigurationService $strategies,
         private ArtifactValidationService $validator,
@@ -263,7 +264,7 @@ final class StrategyArtifactRegistry implements ArtifactRegistryInterface
     }
 
     /**
-     * Select this strategy as the portfolio's single active strategy.
+     * Enable this strategy. Other enabled strategies in the portfolio remain enabled.
      *
      * @return array<string, mixed>
      */
@@ -327,7 +328,7 @@ final class StrategyArtifactRegistry implements ArtifactRegistryInterface
                 'factory' => $factory,
             ],
             'statuses' => [
-                ['id' => 'active', 'label' => 'Active (selected)'],
+                ['id' => 'active', 'label' => 'Active (enabled)'],
                 ['id' => 'draft', 'label' => 'Draft'],
                 ['id' => 'archived', 'label' => 'Archived'],
             ],
@@ -337,7 +338,8 @@ final class StrategyArtifactRegistry implements ArtifactRegistryInterface
             ],
             'schema_version' => ArtifactType::SCHEMA_VERSION,
             'minimum_engine_version' => ArtifactType::MINIMUM_ENGINE_VERSION,
-            'selection_rule' => 'exactly_one_active_per_portfolio',
+            'selection_rule' => self::ENABLEMENT_RULE,
+            'enablement_rule' => self::ENABLEMENT_RULE,
         ];
     }
 
@@ -433,7 +435,9 @@ final class StrategyArtifactRegistry implements ArtifactRegistryInterface
                 'storage' => 'portfolio_tos_strategies',
                 'legacy_id' => $strategy->id,
                 'legacy_version_id' => $version->id,
+                'is_enabled' => $strategy->status === TradingStrategy::STATUS_ACTIVE,
                 'is_selected' => $strategy->status === TradingStrategy::STATUS_ACTIVE,
+                'allocation_pct' => $strategy->allocation_pct !== null ? (float) $strategy->allocation_pct : 100.0,
             ],
             $deps,
             max(1, (int) $version->version),

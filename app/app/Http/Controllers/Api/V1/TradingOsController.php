@@ -687,6 +687,7 @@ class TradingOsController extends Controller
             'score' => $r->strategy_score ?? ($r->evidence['score'] ?? ($r->market_opinion['score'] ?? null)),
             'strategy_score' => $r->strategy_score !== null ? (float) $r->strategy_score : ($r->evidence['strategy_score'] ?? null),
             'strategy_version_id' => $r->strategy_version_id,
+            'strategy_id' => method_exists($r, 'owningStrategyId') ? $r->owningStrategyId() : null,
             'strategy_version' => $r->evidence['strategy_version'] ?? null,
             'strategy_name' => $r->evidence['strategy_name'] ?? null,
             'factor_breakdown' => $r->evidence['factor_breakdown'] ?? null,
