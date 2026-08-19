@@ -4,11 +4,11 @@
 |-------|-------|
 | **Title** | Lido Portfolio V3 Specification |
 | **Status** | Review |
-| **Version** | 0.26 |
+| **Version** | 0.27 |
 | **Owner** | Product Specification / Architecture |
-| **Last Updated** | 2026-08-18 |
+| **Last Updated** | 2026-08-19 |
 | **Implementation Status** | Not started |
-| **Depends On** | Frozen V3 product decisions (2026-08-14 through 2026-08-18), including OD-01–OD-24 and resolved **DEP-TRIM-K**, **DEP-PARTIAL-LEND**, **DEP-PARTIAL-ATOMIC**, **DEP-ADOPT-MERGE**, **DEP-WEAKEST-PRICE**, **DEP-WEAKEST-HISTORY**, and **DEP-RECALL-FLOOR**; Architecture Impact Report; V1/V2 as-built baseline in `implementation.md` |
+| **Depends On** | Frozen V3 product decisions (2026-08-14 through 2026-08-19), including OD-01–OD-24 and resolved **DEP-TRIM-K**, **DEP-FIT-BAND-10**, **DEP-PARTIAL-LEND**, **DEP-PARTIAL-ATOMIC**, **DEP-ADOPT-MERGE**, **DEP-WEAKEST-PRICE**, **DEP-WEAKEST-HISTORY**, and **DEP-RECALL-FLOOR**; Architecture Impact Report; V1/V2 as-built baseline in `implementation.md` |
 | **Referenced By** | Future V3 implementation passes |
 | **Related Specifications** | [architecture/domains/Strategy-Configuration-Specification.md](architecture/domains/Strategy-Configuration-Specification.md), [architecture/portfolio/Cash-Management-Specification.md](architecture/portfolio/Cash-Management-Specification.md), [architecture/domains/Recommendation-Engine-Specification.md](architecture/domains/Recommendation-Engine-Specification.md), [architecture/governance/SPECIFICATION_DECISIONS.md](architecture/governance/SPECIFICATION_DECISIONS.md) (SD-026, SD-029, SD-010) |
 
@@ -86,7 +86,7 @@ Strategies are **hypotheses / tools** for generating candidate opportunities. Th
 | **Historical outcome analysis** | How positions (or simulated positions) at comparable fit levels actually performed | A replacement for fit scoring |
 | **Expected / observed return quality** | Magnitude-aware aggregation of historical returns (see §4, §19, §20) | Hit-rate / “probability of success” alone |
 | **Final ranking** | Ordering of opportunities for capital attention, based on return quality | A sort by fit score; OD-23 capital fill order |
-| **Capital fill order (OD-23)** | Order in which a strategy’s own valid BUY/INCREASE recs receive capital when return-quality ranking is not computable | V3 return-quality ranking; a presentation of conviction/target-size as rank; a silent fallback to fit-as-rank |
+| **Capital fill order (OD-23)** | Order in which a strategy’s own valid BUY/INCREASE recs receive capital when return-quality ranking is not computable | V3 return-quality ranking; a presentation of target amount as rank; a silent fallback to fit-as-rank |
 
 V3 **rejects** ranking by `Strategic Score × Probability` when probability is derived from the same score, and **rejects** treating a 100% historical return and a 10% historical return as equivalent successes.
 
@@ -331,13 +331,84 @@ Fit score:
 
 ### 4.2 Historical outcome analysis
 
-For a strategy, historical outcomes are collected from the **defined backtest corpus only**, bucketed by **fit level** (fit bands). Each outcome has return, holding period, benchmark return, annualized/XIRR return, and a success flag (§19).
+For a strategy, historical outcomes are collected from the **defined backtest corpus only** (§4.2.1), bucketed by **fit level** (fit bands, §4.2.2). Each outcome has return, holding period, benchmark return, annualized/XIRR return, and a success flag (§19).
 
 **OD-18 (frozen):** annualized return (CAGR/XIRR) MAY be used as **ranking evidence** only when that backtest holding period is **≥ 30 calendar days**. For holding periods **< 30 calendar days**, annualized return MUST NOT contribute to ranking. The outcome’s **simple return** remains a valid backtest outcome. OD-18 does **not** change the §19 success definition.
 
-**OD-03 (frozen): BACKTESTS ONLY.** Ranking statistics MUST use the defined backtest corpus. The user’s **live-trading history MUST NOT** be used as ranking observations. `ReviewEngine` live/ledger outcomes remain observational portfolio review and MUST NOT be fed into ranking.
+**OD-03 (frozen): BACKTESTS ONLY.** Ranking statistics MUST use the defined backtest corpus (§4.2.1). The user’s **live-trading history MUST NOT** be used as ranking observations. `ReviewEngine` live/ledger outcomes remain observational portfolio review and MUST NOT be fed into ranking.
 
 The current `ReviewEngine` is **not** the V3 ranking engine. Extending the strategy backtest simulator so it can supply a sufficient, defined corpus is in scope for ranking.
+
+#### 4.2.1 Defined backtest ranking corpus (OD-03)
+
+The **ranking corpus** for a strategy version is the set of **unique historical trade/opportunity observations** drawn from that strategy version’s **latest completed backtest run**.
+
+**Authoritative run selection (frozen):**
+
+1. For each `strategy_version_id`, use the **latest completed** backtest run only.
+2. That run MUST use the **maximum historical period** supported by the **unique historical market data** available to the system at run time (aligned with **OD-17**: all available OHLCV history; no V3 product-level depth ceiling).
+3. **Previous completed backtest runs** for the same strategy version MUST **NOT** be combined with the latest run when they overlap the same historical period.
+4. Re-running a backtest over the same historical period MUST **NOT** cause the same underlying observations to receive additional statistical weight.
+5. The corpus is defined by **unique observations**, not by the number of times a backtest was executed.
+6. If a later completed backtest **extends** the available historical period, that newer run becomes the authoritative corpus and MAY contain substantially more observations.
+
+**Observation ageing (frozen):**
+
+- Historical observations do **NOT** age out merely because they are old.
+- Do **NOT** introduce observation-age decay, rolling-window expiry, or time-based exclusion of older backtest outcomes from the ranking corpus.
+- More historical data is desirable because a larger population of unique observations reduces sampling error.
+
+**Concepts that MUST NOT be conflated:**
+
+| Concept | Meaning |
+|---------|---------|
+| **Historical data depth** | How much OHLCV / market history is available and simulated in the authoritative backtest run |
+| **Number of unique observations** | Distinct trade/opportunity outcomes in the corpus (the statistical sample `n`) |
+| **Number of backtest executions** | How many completed runs exist; only the latest authoritative run supplies ranking observations |
+
+If no completed backtest exists for the strategy version, or the authoritative run has not yet produced a usable corpus, return-quality ranking is **not computable** and capital fill uses **OD-23**.
+
+#### 4.2.2 Fit bands and adaptive sparsity (**DEP-FIT-BAND-10**, frozen)
+
+Return-quality ranking groups backtest outcomes by **comparable strategy-fit level** using **10-point fit bands** as the normal/default granularity.
+
+**Normal 10-point bands (frozen):**
+
+- Fit score is on the strategy’s 0–100 scale.
+- Default band width = **10 points**.
+- Example band keys: `[0,10)`, `[10,20)`, …, `[90,100]` (exact boundary handling is an implementation detail; bands MUST be deterministic and MUST NOT overlap).
+- A backtest outcome’s band is determined by the **fit score at entry** (or equivalent opportunity-time fit) for that observation.
+- Strategy `capital_allocation.score_bands` are **conviction target-sizing** bands (§4.6). They are **not** ranking fit bands and MUST NOT be substituted for **DEP-FIT-BAND-10** banding.
+
+**Adaptive sparsity handling (frozen):** when a normal 10-point band does not have sufficient observations for trimmed-mean ranking, apply the following **in order** for that sparse band:
+
+1. **Neighboring-band merge (up to two expansions):** merge the sparse band with an **adjacent neighboring** band (implementation chooses left or right neighbor deterministically). Repeat merge expansion **at most twice** for that band lineage. Do **not** perform further band merging beyond this maximum.
+2. **Minimum observation threshold reduction (after merges):** if the merged observation count is still below the normal minimum, reduce the required minimum **once** from **15 → 12**; if still below, reduce **once** from **12 → 10**.
+3. **Hard floor:** do **not** reduce the minimum below **10**.
+4. **Ineligibility:** if the observation count still cannot satisfy the minimum after the permitted merges and threshold reductions, the band (or merged band group) remains **statistically ineligible** for return-quality ranking. Capital fill for opportunities mapped to that fit level uses **OD-23** for that strategy; do **not** silently rank by fit.
+
+**Persistence and audit (frozen):**
+
+- The **resulting fit band** used for aggregation (including any merged band span) MUST be persisted as ranking/audit evidence for each aggregated return-quality result.
+- The **adjustments applied** to reach eligibility (neighbor merges performed, threshold step used: 15, 12, or 10) MUST also be persisted as ranking/audit evidence.
+
+**Ranking statistical confidence (frozen):**
+
+- A **ranking statistical confidence** score MUST be calculated and preserved alongside each fit-band aggregated return-quality result.
+- Confidence is a **diagnostic indicator** of the statistical reliability of that aggregated observation set.
+- Confidence MUST decrease as statistical compromises are introduced, including:
+  - neighbor-band merging;
+  - lowering the observation threshold from 15 to 12;
+  - lowering it further from 12 to 10.
+- Confidence MUST **NOT** be treated as:
+  - a probability of success;
+  - a prediction of future returns;
+  - an input to return-quality calculation;
+  - a recommendation ranking key;
+  - a capital allocation weight;
+  - an eligibility gate (beyond the explicit minimum-`n` rules above);
+  - an OD-23 tie-break.
+- Confidence is **user-facing and audit-facing** at this stage only.
 
 ### 4.3 Return quality, not hit rate
 
@@ -360,16 +431,21 @@ Mean, median, and trimmed mean are statistical choices.
 - Trim **7%** from the **lower** tail.
 - Trim **7%** from the **upper** tail.
 - Trimming is **symmetric**.
-- **Minimum sample size = 15** observations.
+- **Normal minimum sample size = 15** observations per fit band (before **DEP-FIT-BAND-10** adaptive sparsity handling).
 
-If fewer than 15 observations are available for that fit band, the trimmed-mean ranking calculation is **not eligible**. Do not compute a trimmed-mean rank from a smaller sample. Do not silently fall back to **ranking** by fit score (§4.6). Capital fill when ranking is not eligible is **OD-23** (descending conviction / target-size among that strategy’s own valid BUY/INCREASE recs). Fit MAY be used only as that fill-order’s first tie-break; it MUST NOT become the V3 ranking key.
+If a fit band cannot become statistically eligible after the permitted **DEP-FIT-BAND-10** neighbor merges and minimum-threshold reductions (15 → 12 → 10; never below 10), trimmed-mean ranking for that band is **not eligible**. Do not compute a trimmed-mean rank from a smaller sample. Do not silently fall back to **ranking** by fit score (§4.6). Capital fill when return-quality ranking is not computable for an opportunity uses **OD-23** (descending target investment amount among that strategy’s own valid BUY/INCREASE recs). Fit MAY be used only as OD-23’s **second** tie-break (after target amount); it MUST NOT become the V3 ranking key.
 
 **Procedure (normative):**
 
-1. Collect the backtest return-quality observations for the fit band (`n` values).
-2. If `n < 15`, stop: ranking for this band is not eligible. Do **not** compute `k` as a substitute for eligibility.
-3. Sort the `n` observations in ascending order.
-4. Compute the integer trim count `k` (**DEP-TRIM-K**, frozen):
+1. Resolve the opportunity’s fit band using **DEP-FIT-BAND-10** (normal 10-point band, then permitted neighbor merges and minimum-threshold reductions).
+2. Collect the backtest return-quality observations for the **resulting** fit band (`n` unique observations from the authoritative corpus, §4.2.1).
+3. After permitted neighbor merges, let `n` be the observation count for the resulting band. Determine the **effective minimum** `n_min`:
+   - if `n ≥ 15`: `n_min = 15` (normal);
+   - else if `n ≥ 12`: `n_min = 12` (one permitted threshold reduction from 15);
+   - else if `n ≥ 10`: `n_min = 10` (second permitted threshold reduction from 12);
+   - else: stop — return-quality ranking for this band is not eligible. Use **OD-23** for capital fill for opportunities mapped to this band. Do **not** compute `k` as a substitute for eligibility.
+5. Sort the `n` observations in ascending order.
+6. Compute the integer trim count `k` (**DEP-TRIM-K**, frozen):
 
 ```text
 k = nearest_integer(0.07 × n)
@@ -383,10 +459,11 @@ For this non-negative domain, the deterministic equivalent is:
 k = floor(0.07 × n + 0.5)
 ```
 
-5. Remove **the same** `k` observations from the **lower** tail and **the same** `k` from the **upper** tail.
-6. Compute the arithmetic mean of the remaining middle observations.
+7. Remove **the same** `k` observations from the **lower** tail and **the same** `k` from the **upper** tail.
+8. Compute the arithmetic mean of the remaining middle observations.
+9. Persist the resulting fit band, applied **DEP-FIT-BAND-10** adjustments, effective `n_min`, and **ranking statistical confidence** (§4.2.2) as ranking/audit evidence.
 
-Ranking eligibility (`n ≥ 15`) and trim-count calculation (`k` from 7% of `n`) are distinct. Eligibility does not change `k`; `k` does not replace the `n ≥ 15` gate.
+Ranking eligibility (effective `n ≥ n_min` with `n_min ∈ {15, 12, 10}` per **DEP-FIT-BAND-10**) and trim-count calculation (`k` from 7% of `n`) are distinct. Eligibility does not change `k`; `k` does not replace the minimum-`n` gate.
 
 **Normative examples** (`0.07 × n` → `k`):
 
@@ -425,21 +502,22 @@ Final ranking of opportunities
 
 Capital allocation among a strategy’s own buy drafts, once ranked, still respects cash, max holdings, staggered entry, partial funding (OD-05), and portfolio caps. Allocator weights MUST follow **ranking order / return quality**, not raw fit score. (V1 `ScorePriorityCapitalAllocator` weighting by fit is **not** V3 behaviour.)
 
-If trimmed-mean ranking is not eligible (`n < 15` for the relevant band, or backtest corpus not yet available), the UI MUST present fit as fit, not as rank. Treating “rank = fit” as a silent fallback is forbidden. Fit MUST NOT be used as a replacement for return-quality ranking.
+If return-quality ranking is **not computable** for an opportunity (no statistically eligible fit band after **DEP-FIT-BAND-10**, or authoritative backtest corpus unavailable per §4.2.1), the UI MUST present fit as fit, not as rank. Treating “rank = fit” as a silent fallback is forbidden. Fit MUST NOT be used as a replacement for return-quality ranking.
 
 Conviction **target sizing** (score bands → target position, subject to caps) remains a strategy function and is **not** the same as ranking.
 
-**OD-23 (frozen):** When return-quality ranking is **not computable** because `n < 15` or the required backtest corpus is unavailable, capital **fill order** among that strategy’s own valid BUY/INCREASE recommendations MUST be **descending conviction / target-size** order (higher conviction / larger conviction-driven target amount first). This is a **capital fill order**, **not** V3 return-quality ranking. MUST NOT label or present conviction/target-size order as the V3 ranking. MUST NOT emit or display a return-quality rank derived from this fill order.
+**OD-23 (frozen):** When return-quality ranking is **not computable** because the authoritative backtest corpus is unavailable or no fit band is statistically eligible for the opportunity (after **DEP-FIT-BAND-10**), capital **fill order** among that strategy’s own valid BUY/INCREASE recommendations MUST be **descending target investment amount / conviction amount** order (higher target amount first). This is a **capital fill order**, **not** V3 return-quality ranking. MUST NOT label or present target-amount order as the V3 ranking. MUST NOT emit or display a return-quality rank derived from this fill order.
 
-When return-quality ranking **is** computable (`n ≥ 15` and the required backtest corpus is available), the allocator MUST continue to follow **ranking order / return quality** as specified above. OD-23 does **not** change that ranked path.
+When return-quality ranking **is** computable (authoritative corpus available and the opportunity’s fit band is statistically eligible per **DEP-FIT-BAND-10** and OD-04), the allocator MUST continue to follow **ranking order / return quality** as specified above. OD-23 does **not** change that ranked path.
 
-When conviction / target-size is equal, break ties in this **exact** order:
+When target investment amount / conviction amount is equal, break ties in this **exact** order:
 
-1. **fit** (higher fit first)
-2. **conviction sub-score** (higher first)
-3. **alphabetical** order of the stock listing symbol
+1. **fit score** (higher first)
+2. **alphabetical** order of the stock listing symbol (ascending)
 
 The alphabetical tie-break MUST make the ordering deterministic (same inputs → same fill order).
+
+OD-23 does **not** use **ranking statistical confidence** (§4.2.2) as a tie-break. OD-23 does **not** introduce a strategy-configurable conviction sub-score or any new strategy setting for fallback ordering.
 
 OD-23 does **not** change OD-05 partial funding, OD-06 atomic reservation, reserve protection, or strategy allocation limits. Unfunded and partially funded BUY/INCREASE remain valid (not WATCH). OD-23 does **not** change **OD-24** or any **DEP-*** item.
 
@@ -503,7 +581,7 @@ Where:
 - `nearest_integer` means: round to the closest integer; **exact fractional .5 values MUST round upward** (toward +∞). This rule is **not** language/runtime `round()` and MUST NOT use banker's rounding (round-half-to-even) or any other .5 tie behaviour. For this non-negative rupee domain, `floor(value + 0.5)` is the deterministic equivalent, where `value` is the non-negative division result.
 - In this specification, `minimum_free_capital` (for example in §8.2) **is** `minimum_retained_capital`.
 
-This is a **strategy-level accounting constraint**. It is **not** a physical cash account and MUST NOT create a strategy bank/cash sub-account. It does **not** create another portfolio cash reserve. It does **not** modify `required_cash_reserve` / OD-19. It does **not** modify `available_physical_cash`. It does **not** change the 100% strategy allocation rule. It does **not** change BUY funding, OD-05 partial funding, or OD-06 pending-execution reservation. It does **not** change OD-23 capital fill order or the `n ≥ 15` return-quality ranking path. It is **not** derived from B1/B2 configuration, conviction, fit, target size, or ranking. It is **not** a percentage-based formula.
+This is a **strategy-level accounting constraint**. It is **not** a physical cash account and MUST NOT create a strategy bank/cash sub-account. It does **not** create another portfolio cash reserve. It does **not** modify `required_cash_reserve` / OD-19. It does **not** modify `available_physical_cash`. It does **not** change the 100% strategy allocation rule. It does **not** change BUY funding, OD-05 partial funding, or OD-06 pending-execution reservation. It does **not** change OD-23 capital fill order or the return-quality ranking path when computable per **DEP-FIT-BAND-10** and OD-04. It is **not** derived from B1/B2 configuration, conviction, fit, target size, or ranking. It is **not** a percentage-based formula.
 
 It applies to unused-allocation / lending eligibility accounting: the strategy MUST retain at least this amount before excess unused allocation can be considered available for lending. Lending MUST NOT consume the retained amount. OD-24 MUST NOT be used to hard-block external/broker withdrawals (OD-21).
 
@@ -603,7 +681,7 @@ The portfolio MUST NOT continuously rewrite strategy `allocation_pct` because th
 
 ### 5.9 Capital fill order among a strategy’s own BUY/INCREASE recs (OD-23)
 
-When return-quality ranking is computable (`n ≥ 15` and the required backtest corpus is available), the allocator follows **ranking order / return quality** (§4.6). When it is **not** computable (`n < 15` or corpus unavailable), fill that strategy’s own valid BUY/INCREASE recommendations in **descending conviction / target-size** order, then the OD-23 tie-breaks (fit → conviction sub-score → alphabetical). That sequence is **fill order**, not V3 ranking, and MUST NOT be labelled as ranking. Fit is not a fallback ranking key. OD-05, OD-06, reserve protection, and strategy allocation limits still apply.
+When return-quality ranking is computable (authoritative corpus available and opportunity fit band statistically eligible per **DEP-FIT-BAND-10** and OD-04), the allocator follows **ranking order / return quality** (§4.6). When it is **not** computable (corpus unavailable or no statistically eligible band), fill that strategy’s own valid BUY/INCREASE recommendations in **descending target investment amount / conviction amount** order, then OD-23 tie-breaks (fit → alphabetical symbol ascending). That sequence is **fill order**, not V3 ranking, and MUST NOT be labelled as ranking. Fit is not a fallback ranking key. OD-05, OD-06, reserve protection, and strategy allocation limits still apply.
 
 ---
 
@@ -1149,7 +1227,7 @@ For each enabled strategy:
 7. Apply staggered entry (§12) to OPEN/INCREASE **amounts**, then derive whole-share quantity from the latest available raw `close_price` (OD-12 / OD-14). Suppress OPEN/INCREASE below the effective minimum actionable amount.
 8. Apply BUY cooldown (§11.2, **OD-11**) to OPEN/INCREASE only (key = stock + **this** strategy). Another strategy’s BUY of the same stock does not consume, reset, or affect this strategy’s cooldown.
 9. Enforce hard max holdings on new OPEN (this strategy’s name count only).
-10. Compute ranking (§4) from the **backtest corpus** when `n ≥ 15`; do not emit fit-as-rank; do not use live trades. When ranking is not computable (`n < 15` or corpus unavailable), do **not** emit a return-quality rank; capital fill among that strategy’s valid BUY/INCREASE recs uses **OD-23** (descending conviction / target-size, then fit → conviction sub-score → alphabetical). Do not present that fill order as V3 ranking.
+10. Compute ranking (§4) from the **authoritative backtest corpus** (§4.2.1) when return-quality ranking is computable for the opportunity; do not emit fit-as-rank; do not use live trades. When return-quality ranking is **not** computable (corpus unavailable or no statistically eligible fit band after **DEP-FIT-BAND-10**), do **not** emit a return-quality rank; capital fill among that strategy’s valid BUY/INCREASE recs uses **OD-23** (descending target investment amount / conviction amount, then fit → alphabetical symbol). Do not present that fill order as V3 ranking.
 11. Compute own available capital; apply OD-05/OD-06. Set `FUNDED` / `PARTIALLY_FUNDED` / `UNFUNDED`. **Do not demote OPEN/INCREASE to WATCH** for capital reasons.
 12. Persist recommendations. Cancel only **this strategy’s** stale open recs, subject to §11.2 (do not stale-replace a BUY for a pair that is in cooldown; do **not** cancel `pending_execution`; do not clear cooldown). Do **not** cancel other strategies’ recs.
 
@@ -1515,10 +1593,10 @@ Eligible positions for forced repayment sells: **borrower-owned** holdings only 
 | Benchmark return | NIFTY 50 over the comparable period |
 | Opportunity-cost threshold | Configured annualized hurdle, scaled to the period |
 | Success | §19 boolean |
-| Expected return | Aggregated return quality at a fit band (symmetric 7%/7% trimmed mean, `n ≥ 15`, backtest corpus only; tail count `k = nearest_integer(0.07 × n)` with exact .5 rounding upward, **DEP-TRIM-K**) |
+| Expected return | Aggregated return quality at a fit band (symmetric 7%/7% trimmed mean; normal `n_min = 15` with **DEP-FIT-BAND-10** permitted reductions to 12 or 10; backtest corpus only per §4.2.1; tail count `k = nearest_integer(0.07 × n)` with exact .5 rounding upward, **DEP-TRIM-K**; ranking statistical confidence persisted as diagnostic only) |
 | Final ranking | Order by that expected/observed return quality — **not** live-trade outcomes, **not** fit score |
 
-V1 strategy backtest (currently 15d–1y ranges, paper, market gates off) is the **simulator that must supply** the ranking corpus (OD-03). It is not automatically sufficient as shipped (range/depth limits are implementation limitations). Live `ReviewEngine` / ledger sells MUST NOT be mixed into ranking observations.
+V1 strategy backtest (currently 15d–1y selectable ranges in the as-built UI, paper, market gates off) is the **simulator that must supply** the ranking corpus (OD-03). V3 requires the **latest completed** authoritative run to use **maximum available** historical market data (§4.2.1, **OD-17**); shipped range pickers and depth limits are **implementation limitations**, not V3 product caps. Live `ReviewEngine` / ledger sells MUST NOT be mixed into ranking observations.
 
 ### 18.2 History depth
 
@@ -1577,12 +1655,12 @@ where `r` is the configured annualized opportunity-cost rate (default 0.12).
 | Fixed-horizon strategy, outcome measured at horizon (or exit if earlier) | Simple return over that **calendar** horizon; also compute annualized for the opportunity-cost test using `T_years = calendar_days / 365` |
 | No-horizon strategy, completed **backtest** holding | Holding-period simple return **and** XIRR / annualized return over the actual period |
 | Weakest-position / windowed evaluation of **current** holdings (recall, §17) | **OD-16:** configured-window **simple percentage return** (`window_return_pct`); not lifetime XIRR / total return / age alone; not annualised XIRR; not the OD-03 ranking corpus |
-| Opportunity ranking (fit-band expected return) | **Backtest corpus only** (OD-03), trimmed mean per OD-04. Tail count `k` per **DEP-TRIM-K**. **OD-18:** annualized return/CAGR/XIRR is ranking evidence only when the backtest holding period is **≥ 30 calendar days**. |
+| Opportunity ranking (fit-band expected return) | **Authoritative backtest corpus only** (OD-03, §4.2.1), **DEP-FIT-BAND-10** banding, trimmed mean per OD-04. Tail count `k` per **DEP-TRIM-K**. Ranking statistical confidence diagnostic only. **OD-18:** annualized return/CAGR/XIRR is ranking evidence only when the backtest holding period is **≥ 30 calendar days**. |
 | Benchmark comparison | Simple return of NIFTY 50 over the same start/end dates (or nearest trading days) |
 
 XIRR is appropriate when cash flows are dated (buys, sells, corporate actions). Simple return is appropriate for a single entry/exit over a defined horizon.
 
-**OD-18 (frozen):** For ranking, annualized return/CAGR/XIRR must not be used as ranking evidence for backtest holding periods shorter than **30 calendar days**. This reuses the existing V1 backtest rule that refuses CAGR under 30 days, stated here as **30 calendar days** (not trading sessions). Holding periods **≥ 30 calendar days** MAY contribute annualized return/CAGR/XIRR as ranking evidence. Simple return of shorter (and longer) backtest outcomes remains a valid outcome. OD-18 does **not** change the §19 success definition or the opportunity-cost calculation (`T_years = calendar_days / 365`, OD-02). OD-16 weakest-position scoring remains non-annualised `window_return_pct`. When trimmed-mean ranking is not computable (`n < 15` or corpus missing), capital fill order is **OD-23** (descending conviction / target-size among that strategy’s own valid BUY/INCREASE recs; not V3 ranking; not a fit-as-rank fallback), not OD-18. OD-18 does **not** change the `n ≥ 15` ranked path.
+**OD-18 (frozen):** For ranking, annualized return/CAGR/XIRR must not be used as ranking evidence for backtest holding periods shorter than **30 calendar days**. This reuses the existing V1 backtest rule that refuses CAGR under 30 days, stated here as **30 calendar days** (not trading sessions). Holding periods **≥ 30 calendar days** MAY contribute annualized return/CAGR/XIRR as ranking evidence. Simple return of shorter (and longer) backtest outcomes remains a valid outcome. OD-18 does **not** change the §19 success definition or the opportunity-cost calculation (`T_years = calendar_days / 365`, OD-02). OD-16 weakest-position scoring remains non-annualised `window_return_pct`. When return-quality ranking is not computable (authoritative corpus missing or no statistically eligible fit band after **DEP-FIT-BAND-10**), capital fill order is **OD-23** (descending target investment amount / conviction amount among that strategy’s own valid BUY/INCREASE recs; not V3 ranking; not a fit-as-rank fallback), not OD-18.
 
 ---
 
@@ -1948,7 +2026,7 @@ Append-only capital and ownership events (§31).
 | **Strategy registry** | Enable multiple strategies; allocation % editor (sum 100). No exclusive activate. |
 | **Portfolio settings** | `portfolio_cash_reserve_pct` (OD-19; one percentage; required reserve is computed from MAX(Invested Amount, Notional Portfolio Value)), SL, trailing (**OD-22:** initial migration seed **15%**, then user-editable; not copied from strategy B1/B2 values), portfolio caps, lending policy, recall period override (inherit platform 14-day default; override MAY be shorter or longer — **DEP-RECALL-FLOOR**; 14 is not a hard floor), opportunity cost, auto-return toggle (default off). Atomic block ₹5,000 and 1% margin are specified product values (display as policy, not as “invest the margin”). **Minimum actionable BUY/INCREASE** inherits platform ₹5,000 unless the portfolio overrides (OD-12; not a strategy setting; not OD-06). |
 | **Holdings** | Owner / Unmanaged; **per-strategy rows** for the same stock (qty 50 vs 30); Adopt; **target amount** vs filled amount (qty derived from latest raw `close_price`, OD-12 / OD-14); do not offer strategy sell on unmanaged or on another strategy’s lot. Corporate-action quantity stays on the parent owner (OD-10); unmanaged CA stays unmanaged. Holdings funded by inter-strategy lending show as **borrower-owned**, not lender-owned or jointly owned (**DEP-ADOPT-MERGE**). |
-| **Recommendations** | Unfunded or partially funded BUY visible with capital status; not WATCH. Lender list, including same-cycle lending for a PARTIALLY_FUNDED remainder (**DEP-PARTIAL-LEND**; no minimum remainder). Loan size = remainder rounded up to the next ₹5,000 block (**DEP-PARTIAL-ATOMIC**; ₹14,000 → ₹15,000). Approval. Lending-funded execution is **borrower-owned** (**DEP-ADOPT-MERGE**); do not show the lender as owner of that holding. BUY cooldown **1 calendar day** per stock+strategy (OD-11); does not cancel `pending_execution`. Ranking from backtests when `n ≥ 15`; fit labelled as fit. When ranking is not computable (`n < 15` or corpus unavailable), capital fill among that strategy’s own valid BUY/INCREASE recs follows **OD-23** (descending conviction / target-size, then fit → conviction sub-score → alphabetical); that fill order MUST NOT be labelled or presented as V3 ranking. |
+| **Recommendations** | Unfunded or partially funded BUY visible with capital status; not WATCH. Lender list, including same-cycle lending for a PARTIALLY_FUNDED remainder (**DEP-PARTIAL-LEND**; no minimum remainder). Loan size = remainder rounded up to the next ₹5,000 block (**DEP-PARTIAL-ATOMIC**; ₹14,000 → ₹15,000). Approval. Lending-funded execution is **borrower-owned** (**DEP-ADOPT-MERGE**); do not show the lender as owner of that holding. BUY cooldown **1 calendar day** per stock+strategy (OD-11); does not cancel `pending_execution`. Return-quality ranking from authoritative backtest corpus when computable (**DEP-FIT-BAND-10**, OD-04); fit labelled as fit. Ranking statistical confidence shown as diagnostic only; MUST NOT drive rank or allocation. When ranking is not computable (corpus unavailable or no statistically eligible band), capital fill among that strategy’s own valid BUY/INCREASE recs follows **OD-23** (descending target investment amount / conviction amount, then fit → alphabetical symbol); that fill order MUST NOT be labelled or presented as V3 ranking. |
 | **Cash** | Required reserve (`required_cash_reserve`, OD-19) vs available vs reserved (atomic allocation vs post-fill leftover) vs named **Unallocated Cash** (**OD-20**; presentation-only residual after reserve not claimed by unused-allocation) vs per-strategy allocated / deployed / **OD-24** retained floor / lendable / lent / borrowed. Unallocated Cash is **not** reserved cash, **not** post-fill reservation leftover, **not** strategy unused allocation, **not** the OD-24 retained floor, **not** a second cash pool, and **not** a withdrawal entitlement. **OD-24** retained capital is an accounting constraint (nearest integer rupees, §5.5), not a physical sub-account. **OD-21:** external/broker withdrawals MUST NOT be blocked merely because they would leave cash below `required_cash_reserve`, and MUST NOT be hard-blocked by OD-24. |
 | **Dashboard** | When physical portfolio cash is below `required_cash_reserve` (**OD-21**), show a clear warning that the portfolio cash reserve is below the required level and that the user should replenish portfolio/broker cash. Do not invent layout, colour, widget, or workflow details beyond that message. This Dashboard warning is current V3 / **B3** scope. |
 | **Lending / recall** | Eligible lenders only; default sort OD-08 (lendable % descending, then lendable amount descending; exact ties have no product significance). Approve; errors on stale; recall approval; show effective recall period (platform vs portfolio override). Replenishment among eligible loans: oldest commitment time first (OD-09); do not present FIFO as a lender sort. Approved lending is a loan receivable/obligation; it does **not** move the resulting holding to the lender or split ownership (**DEP-ADOPT-MERGE**). Recall/repayment does **not** transfer stock to the lender. |
@@ -2006,7 +2084,7 @@ Conflict register from the Architecture Impact Report, with V3 resolution:
 | 5 | Unique `(profile, stock)` | **Superseded (OD-01).** Unique `(profile, stock, owner)`. Same symbol, multiple strategy lots allowed. |
 | 6 | Two trailing definitions | **Superseded.** Highest raw `close_price` from entry (§15, OD-14). Proxy forbidden. |
 | 7 | Unordered exit any/all | **Superseded** for cross-mechanism attribution (§13.2). Strategy-internal any/all may remain. |
-| 8 | Fit used as rank and allocator weight | **Superseded.** §4. Ranking from **backtest** trimmed mean (OD-03, OD-04), not live trades, not fit. When ranking is not computable, capital fill is **OD-23** (conviction/target-size order), still not fit-as-rank and not presented as V3 ranking. |
+| 8 | Fit used as rank and allocator weight | **Superseded.** §4. Ranking from **authoritative backtest** trimmed mean (OD-03, OD-04, **DEP-FIT-BAND-10**), not live trades, not fit. When ranking is not computable, capital fill is **OD-23** (target-amount order), still not fit-as-rank and not presented as V3 ranking. |
 | 9 | Single cash pool + profile-wide stale-cancel | Pool **kept**. Stale-cancel **scoped per strategy**. Lending added as virtual claims (loan receivable/obligation). Lending-funded holdings are **borrower-owned** (**DEP-ADOPT-MERGE**); the lender does not acquire the stock. |
 | 10 | Chart since-buy, no 5Y, ~550d storage | **Superseded (OD-17).** Chart **5Y** and **All** specified. **All** = all available stored/provider history, not since-buy and not capped at 5Y. V1 ~550-day `HISTORY_DEPTH_TARGET_DAYS` is an as-built limitation only. V3 has **no** maximum history-depth ceiling. |
 | 11 | Paper = backtest only | Multiple portfolios remain for hypothesis testing. Live exclusivity deferred to broker era. |
@@ -2019,14 +2097,14 @@ V1 recommendation evidence `capital_allocation.status = unfunded` with action WA
 
 ### 33.1 Frozen / resolved (OD-01 through OD-24)
 
-OD-01 through OD-07 were recorded from the 2026-08-14 product-decision session. OD-08 through OD-11 were recorded from the 2026-08-15 product-decision session. OD-12 through OD-24 were recorded from the 2026-08-17 product-decision session. These IDs MUST NOT reappear in §33.2.
+OD-01 through OD-07 were recorded from the 2026-08-14 product-decision session. OD-08 through OD-11 were recorded from the 2026-08-15 product-decision session. OD-12 through OD-24 were recorded from the 2026-08-17 product-decision session. **DEP-FIT-BAND-10** and clarifications to **OD-03**, **OD-04**, and **OD-23** were recorded from the 2026-08-19 product-decision session. These IDs MUST NOT reappear in §33.2.
 
 | ID | Topic | Decision | Status |
 |----|--------|----------|--------|
 | **OD-01** | Same stock owned by multiple strategies | **ALLOW.** Two or more strategies in one portfolio may independently own the same stock (e.g. A: RELIANCE 50, B: RELIANCE 30; portfolio 80). Do not model `(portfolio, stock)` as globally unique. Cost, trailing, exit, allocation, and attribution are per owner. | FROZEN |
 | **OD-02** | Horizon / period `T` | **CALENDAR DAYS**, not trading sessions. `T = 30` means 30 calendar days. Opportunity-cost `T_years = calendar_days / 365`. | FROZEN |
-| **OD-03** | Ranking corpus | **BACKTESTS ONLY.** Do not use the user’s live-trading history as ranking observations. | FROZEN |
-| **OD-04** | Trimmed mean | Symmetric **7% lower + 7% upper**. **Minimum sample size = 15**. If `n < 15`, trimmed-mean ranking is not eligible. | FROZEN |
+| **OD-03** | Ranking corpus | **BACKTESTS ONLY.** Do not use the user’s live-trading history as ranking observations. **Authoritative corpus** = unique historical observations from the **latest completed** backtest for each `strategy_version_id`, using **maximum available** historical market data (§4.2.1). Do **not** combine overlapping prior completed runs; do **not** double-weight re-runs over the same period; observations do **not** age out. | FROZEN |
+| **OD-04** | Trimmed mean | Symmetric **7% lower + 7% upper**. **Normal minimum sample size = 15** per fit band; **DEP-FIT-BAND-10** permits neighbor merges (max two) and threshold reductions 15→12→10 (never below 10). If still ineligible, trimmed-mean ranking is not eligible. | FROZEN |
 | **OD-05** | Partial capital funding | **ALLOWED.** If desired capital exceeds available free capital, allocate the available free capital as a partial position. Do **not** convert OPEN/INCREASE to WATCH. Capital status is a separate axis. Consistent with staggered buys. | FROZEN |
 | **OD-06** | Atomic block and execution margin | Atomic block = **₹5,000**. Apply **1%** margin then **ceil** to the next ₹5,000: `atomic_allocation = ceil((calculated_requirement × 1.01) / 5000) × 5000`. This is a **reservation/allocation**, not a mandate to invest the margin. Unused reservation reverts after execution. If atomic requirement exceeds free capital, OD-05 partial funding still applies. | FROZEN |
 | **OD-07** | Recall frequency | **CONFIGURABLE** at platform default and portfolio override. Effective = override if set, else platform default. Shipped default **14 calendar days** remains applicable. Must not be a non-configurable hard-code that ignores settings. **DEP-RECALL-FLOOR** (frozen separately): a portfolio override MAY be shorter or longer than 14 days; 14 days is not a hard floor. | FROZEN |
@@ -2045,14 +2123,14 @@ OD-01 through OD-07 were recorded from the 2026-08-14 product-decision session. 
 | **OD-20** | Unallocated cash UI | **FROZEN.** The Cash UI MUST display a named **Unallocated Cash** bucket representing residual portfolio cash after `required_cash_reserve` that is not claimed by strategy unused-allocation accounting. Presentation-only over the existing single physical portfolio cash pool. MUST NOT create a separate cash account, bank account, strategy-owned cash account, new allocation percentage, new reserve, new lending pool, new withdrawal entitlement, or new accounting ledger. MUST NOT invent a new residual-cash formula; it presents the residual already described by §22. Distinct from `required_cash_reserve` (OD-19), `available_physical_cash` / Available cash, pending-execution reserved cash (OD-06), post-fill unused reservation leftover, and strategy unused allocation. Does **not** decide withdrawal-into-reserve (**OD-21**, frozen separately). Strategy min-retained capital is **OD-24** (frozen separately; not Unallocated Cash). Allocation % still sums to 100% of investable capital. | FROZEN |
 | **OD-21** | Withdrawal vs portfolio cash reserve | **FROZEN. YES.** Withdrawals MUST NOT be blocked merely because they would cause physical portfolio cash to fall below `required_cash_reserve`. “Withdraw” means taking/transferring cash out of the portfolio/broker cash account (typically to an external bank account), not a transfer between virtual strategy allocations. LidoPortfolio does not control the broker cash account; the application MUST represent a resulting **reserve shortfall** rather than pretending the withdrawal could not happen. A shortfall is a **warning/alert condition**, not a hard withdrawal restriction. The user MAY replenish broker/portfolio cash later. MUST NOT terminate automatic executions or execution recommendations **solely** because cash is below `required_cash_reserve`. MUST NOT invent a reserve-adjusted withdrawal-cap formula, withdrawal ledger, or new cash bucket. `available_physical_cash` and the OD-19 reserve formula are unchanged. Reserve remains non-investable and non-lendable; OD-21 is not permission to invest or lend reserve cash. Unallocated Cash (OD-20) remains presentation-only and is not a withdrawal entitlement. Dashboard MUST warn when cash is below `required_cash_reserve` and that the user should replenish (current V3 / B3). A persistent application-wide critical banner is **B4 wishlist**, not current UI. OD-24 MUST NOT be used to hard-block those external withdrawals. | FROZEN |
 | **OD-22** | Migrating trailing % when only `default_stoploss_percent` exists | **FROZEN.** Option C: **fixed migration seed**. Portfolio-level trailing percentage is seeded to **15%** on V3 migration. Existing strategy-level trailing/stop values (as-built B1/B2 code-level configuration) are **ignored completely**. Do **not** derive, average, max, min, or otherwise reconcile strategy-level percentages into the portfolio seed. Do **not** copy `default_stoploss_percent` into trailing. Do **not** leave trailing disabled as the migration outcome. 15% is a **migration seed / initial portfolio value**, not a permanently enforced platform default. After migration the portfolio trailing % remains user-editable to any supported value. Trailing remains independent of stop-loss % (§15.3). Does **not** change the trailing-stop formula, OD-14 price series, OD-13 stop-loss cost basis, or OD-15 entry-date continuity. | FROZEN |
-| **OD-23** | Capital fill order among a strategy’s own valid BUY/INCREASE recs when return-quality ranking is not computable | **FROZEN.** Applies when return-quality ranking is not computable because `n < 15` or the required backtest corpus is unavailable. For each strategy’s own valid BUY/INCREASE recommendations, capital fill order MUST be **descending conviction / target-size** order (higher conviction / larger conviction-driven target amount first). This is a **capital fill order**, **not** V3 return-quality ranking. MUST NOT label or present conviction/target-size order as the V3 ranking. MUST NOT change the normal ranked path when `n ≥ 15` (allocator still follows ranking order / return quality). MUST NOT use fit as a replacement for return-quality ranking. Tie-break order MUST be: (1) **fit** (higher fit first); (2) **conviction sub-score** (higher first); (3) **alphabetical** order of the stock listing symbol. The alphabetical tie-break MUST make the ordering deterministic (same inputs → same fill order). OD-05 partial funding, OD-06 atomic reservation, reserve protection, and strategy allocation limits remain unchanged. Does **not** change **OD-24** or any **DEP-*** item. | FROZEN |
-| **OD-24** | Minimum free capital / one opportunity | **FROZEN.** For each strategy, `minimum_retained_capital = nearest_integer(strategy_capital_allocation / recommended_minimum_holdings)`. Round the division result to the **nearest integer rupee**. Exact fractional **.5** values MUST round **upward**. MUST NOT use banker's rounding or language/runtime `round()` if that can implement a different .5 tie. For this non-negative rupee domain, `floor(value + 0.5)` is the deterministic equivalent, where `value` is the non-negative division result. `strategy_capital_allocation` is the rupee amount currently allocated to that strategy from the portfolio’s investable capital. `recommended_minimum_holdings` is that strategy’s configured recommended minimum number of holdings/opportunities. The result is the strategy-level protected “one opportunity” amount. It is an accounting constraint, **not** a physical cash account, **not** a strategy bank/cash sub-account, **not** another portfolio cash reserve, and **not** `required_cash_reserve` (OD-19). It does **not** modify `available_physical_cash`, the 100% strategy allocation rule, BUY funding, OD-05 partial funding, OD-06 pending-execution reservation, OD-23 capital fill order, or the `n ≥ 15` return-quality ranking path. It is **not** a percentage-based formula and MUST NOT use portfolio NAV, total portfolio cash, `required_cash_reserve`, total portfolio value, strategy deployed capital, B1/B2 configuration, conviction, fit, target size, or ranking as the base or inputs. It applies to unused-allocation / lending eligibility: the strategy MUST retain at least this amount before excess unused allocation can be considered available-for-lending. Lending MUST NOT consume the retained amount. OD-24 MUST NOT hard-block external/broker withdrawals (OD-21). Example: investable capital ₹10,00,000, Momentum 75% → allocation ₹7,50,000, recommended minimum holdings 5 → retain ₹1,50,000. Further examples: ₹7,50,000 / 7 → ₹1,07,143; ₹7,50,000 / 8 → ₹93,750. Does **not** resolve any **DEP-*** item. Does **not** change OD-19, OD-20, OD-21, OD-22, or OD-23. | FROZEN |
+| **OD-23** | Capital fill order among a strategy’s own valid BUY/INCREASE recs when return-quality ranking is not computable | **FROZEN.** Applies when return-quality ranking is not computable because the authoritative backtest corpus is unavailable or no fit band is statistically eligible after **DEP-FIT-BAND-10**. Capital fill order MUST be **descending target investment amount / conviction amount** (higher first). This is a **capital fill order**, **not** V3 return-quality ranking. MUST NOT label or present target-amount order as the V3 ranking. MUST NOT change the normal ranked path when return-quality ranking **is** computable (allocator still follows ranking order / return quality). MUST NOT use fit as a replacement for return-quality ranking. Tie-break order MUST be: (1) **fit score** (higher first); (2) **alphabetical** order of the stock listing symbol (ascending). MUST NOT use ranking statistical confidence or a conviction sub-score. MUST NOT introduce a strategy-configurable conviction sub-score or new strategy setting. The alphabetical tie-break MUST make the ordering deterministic (same inputs → same fill order). OD-05 partial funding, OD-06 atomic reservation, reserve protection, and strategy allocation limits remain unchanged. Does **not** change **OD-24** or any **DEP-*** item. | FROZEN |
+| **OD-24** | Minimum free capital / one opportunity | **FROZEN.** For each strategy, `minimum_retained_capital = nearest_integer(strategy_capital_allocation / recommended_minimum_holdings)`. Round the division result to the **nearest integer rupee**. Exact fractional **.5** values MUST round **upward**. MUST NOT use banker's rounding or language/runtime `round()` if that can implement a different .5 tie. For this non-negative rupee domain, `floor(value + 0.5)` is the deterministic equivalent, where `value` is the non-negative division result. `strategy_capital_allocation` is the rupee amount currently allocated to that strategy from the portfolio’s investable capital. `recommended_minimum_holdings` is that strategy’s configured recommended minimum number of holdings/opportunities. The result is the strategy-level protected “one opportunity” amount. It is an accounting constraint, **not** a physical cash account, **not** a strategy bank/cash sub-account, **not** another portfolio cash reserve, and **not** `required_cash_reserve` (OD-19). It does **not** modify `available_physical_cash`, the 100% strategy allocation rule, BUY funding, OD-05 partial funding, OD-06 pending-execution reservation, OD-23 capital fill order, or the return-quality ranking path when computable per **DEP-FIT-BAND-10** and OD-04. It is **not** a percentage-based formula and MUST NOT use portfolio NAV, total portfolio cash, `required_cash_reserve`, total portfolio value, strategy deployed capital, B1/B2 configuration, conviction, fit, target size, or ranking as the base or inputs. It applies to unused-allocation / lending eligibility: the strategy MUST retain at least this amount before excess unused allocation can be considered available-for-lending. Lending MUST NOT consume the retained amount. OD-24 MUST NOT hard-block external/broker withdrawals (OD-21). Example: investable capital ₹10,00,000, Momentum 75% → allocation ₹7,50,000, recommended minimum holdings 5 → retain ₹1,50,000. Further examples: ₹7,50,000 / 7 → ₹1,07,143; ₹7,50,000 / 8 → ₹93,750. Does **not** resolve any **DEP-*** item. Does **not** change OD-19, OD-20, OD-21, OD-22, or OD-23. | FROZEN |
 
 Note: before the 2026-08-14 session, **OD-05** meant “minimum free capital / one opportunity formula”. That topic was re-homed as **OD-24** and is now frozen as the formula above.
 
 ### 33.2 Open decisions
 
-None of **OD-01 through OD-24** remain open. Do not invent new OD identifiers here. **DEP-TRIM-K**, **DEP-PARTIAL-LEND**, **DEP-PARTIAL-ATOMIC**, **DEP-ADOPT-MERGE**, **DEP-WEAKEST-PRICE**, **DEP-WEAKEST-HISTORY**, and **DEP-RECALL-FLOOR** are frozen (§33.3.1). There are **no** remaining open DEP-* rows in this specification.
+None of **OD-01 through OD-24** remain open. Do not invent new OD identifiers here. **DEP-TRIM-K**, **DEP-FIT-BAND-10**, **DEP-PARTIAL-LEND**, **DEP-PARTIAL-ATOMIC**, **DEP-ADOPT-MERGE**, **DEP-WEAKEST-PRICE**, **DEP-WEAKEST-HISTORY**, and **DEP-RECALL-FLOOR** are frozen (§33.3.1). There are **no** remaining open DEP-* rows in this specification.
 
 ### 33.3 Dependencies arising from frozen decisions (not invented rules)
 
@@ -2062,7 +2140,8 @@ These are ambiguities created or revealed by OD-01–OD-24. Unresolved rows are 
 
 | ID | Topic | Decision | Status |
 |----|--------|----------|--------|
-| **DEP-TRIM-K** | Integer conversion of 7% × `n` to tail count `k` | **FROZEN.** `k = nearest_integer(0.07 × n)`. Exact fractional **.5** values MUST round **upward**. MUST NOT use banker's rounding or language/runtime `round()` if that can implement a different .5 tie. For this non-negative domain, `k = floor(0.07 × n + 0.5)` is the deterministic equivalent. The **same** `k` is removed from both tails. Does **not** change OD-04’s 7%/7% trimmed mean, the `n ≥ 15` eligibility gate, OD-03, OD-18, OD-23, or OD-24. Ranking eligibility and trim-count calculation remain distinct. Examples: n=15→k=1; n=20→k=1; n=25→k=2; n=30→k=2; n=35→k=2; n=50→k=4; n=100→k=7. | FROZEN |
+| **DEP-TRIM-K** | Integer conversion of 7% × `n` to tail count `k` | **FROZEN.** `k = nearest_integer(0.07 × n)`. Exact fractional **.5** values MUST round **upward**. MUST NOT use banker's rounding or language/runtime `round()` if that can implement a different .5 tie. For this non-negative domain, `k = floor(0.07 × n + 0.5)` is the deterministic equivalent. The **same** `k` is removed from both tails. Does **not** change OD-04’s 7%/7% trimmed mean, the minimum-`n` eligibility gate (**DEP-FIT-BAND-10**), OD-03, OD-18, OD-23, or OD-24. Ranking eligibility and trim-count calculation remain distinct. Examples: n=15→k=1; n=20→k=1; n=25→k=2; n=30→k=2; n=35→k=2; n=50→k=4; n=100→k=7. | FROZEN |
+| **DEP-FIT-BAND-10** | Fit-band construction and adaptive sparsity for return-quality ranking | **FROZEN.** Normal/default **10-point** fit bands on the 0–100 strategy fit scale. When sparse: merge with an adjacent neighboring band; **maximum two** neighbor merge expansions; then if still below minimum, reduce required observation count **once** 15→12 and **once** 12→10; **never below 10**; no further merges beyond the two-expansion cap. If still ineligible, band remains statistically ineligible (OD-23 for mapped opportunities). Persist resulting fit band and adjustments as ranking/audit evidence. Compute and persist **ranking statistical confidence** as diagnostic only; confidence MUST decrease with merges and threshold reductions; MUST NOT affect return-quality calculation, ranking order, allocation, eligibility, or OD-23 tie-breaks; MUST NOT be probability of success or future-return prediction. Strategy `score_bands` remain conviction sizing, not ranking bands. Does **not** change OD-04 trimmed-mean formula, **DEP-TRIM-K**, OD-03 corpus rules (§4.2.1), OD-18, OD-23 tie-break order, or OD-24. | FROZEN |
 | **DEP-PARTIAL-LEND** | Same-cycle lending after PARTIALLY_FUNDED own capital | **FROZEN.** When a recommendation is PARTIALLY_FUNDED from own available capital and an unfunded remainder exists, that remainder MUST be eligible to open a **same-cycle** lending request. Lending is not deferred merely because partial own-capital funding already occurred. If lending is approved, borrowed capital MUST be available **immediately** for the intended funding/execution path. Minimum requirement to use lending = **NONE**. A remainder below ₹5,000 remains eligible. Excess borrowed capital above the requirement is permitted and remains available. Loan **size** for a non-multiple remainder is **DEP-PARTIAL-ATOMIC**. Example: ₹3,000 additional needed → eligible same-cycle; loan ₹5,000. Example: own ₹4,000, requirement ₹18,000, remainder ₹14,000 → eligible same-cycle; actual loan ₹15,000 (DEP-PARTIAL-ATOMIC). MUST NOT stay UNFUNDED merely because the requirement is below ₹5,000. OD-05, OD-12 target amount, and explicit user approval unchanged. Does **not** create a new cash/loan/allocation account. Does **not** reinterpret ₹5,000 as a minimum recommendation size or minimum remainder. Does **not** change OD-24. | FROZEN |
 | **DEP-PARTIAL-ATOMIC** | Atomic loan size of a same-cycle remainder | **FROZEN.** Round the required borrowed amount **UP** to the next ₹5,000 atomic loan block. Required loan = unfunded remainder. Remainder = this-cycle required/target amount minus allocated own capital, **not** `atomic_allocation` minus own. Actual loan MUST be at least that remainder and MUST use the ₹5,000 atomic loan unit. If the remainder is not an exact multiple of ₹5,000, `loan_amount = ceil(unfunded_remainder / 5000) × 5000`. Exact multiples stay unchanged (₹15,000 → ₹15,000). Examples: ₹3,000 → ₹5,000; ₹14,000 → ₹15,000; ₹15,000 → ₹15,000. Worked example: own ₹4,000, target ₹18,000, remainder ₹14,000 → loan ₹15,000, excess ₹1,000 remains available. There is **no** minimum remainder; a ₹3,000 remainder still uses lending and results in a ₹5,000 loan. This is a **loan-size** rule, not a minimum funding requirement. Do **not** reduce the loan below the remainder merely to preserve denomination. Do **not** reject lending merely because the remainder is below ₹5,000. **DEP-PARTIAL-LEND** unchanged (same-cycle allowed; funds immediately on approval). Not the OD-06 1% reservation formula. Does **not** change OD-05, OD-06, OD-23, OD-24, DEP-TRIM-K, or other DEP-* rows. | FROZEN |
 | **DEP-ADOPT-MERGE** | Ownership of investments funded by inter-strategy lending | **FROZEN. OPTION A — MERGE INTO BORROWER.** When inter-strategy lending funds a recommendation: (1) borrowed capital becomes **deployable borrowed capital** of the **borrowing** strategy for the funded opportunity; (2) the **borrowing** strategy owns the resulting investment/holding; (3) the **lending** strategy does **not** acquire ownership of the resulting holding; (4) the lender records a **loan receivable**; (5) the borrower records the corresponding **loan obligation**; (6) do **not** introduce fractional/split ownership of a holding based on own-vs-borrowed capital; (7) physical cash remains one portfolio-level cash pool — do **not** create physical strategy bank accounts or cash buckets; (8) loan repayment is a loan/capital transaction and does **not** transfer stock ownership; (9) borrowed capital is additional deployable capital for the borrower but does **not** change the configured strategy allocation percentage; (10) do **not** reinterpret this as permanently increasing configured allocation or changing portfolio allocation percentages. Example: Strategy A lends ₹15,000 to Strategy B → A has receivable ₹15,000 and no stock ownership; B has ₹15,000 deployable borrowed capital, owns the resulting ₹15,000 investment, and has obligation ₹15,000. Do **not** model the holding as jointly or fractionally owned by A and B. OD-24, OD-05, OD-06, **DEP-PARTIAL-LEND**, and **DEP-PARTIAL-ATOMIC** unchanged. This is **not** unmanaged-holding adoption and does **not** freeze unmanaged-adoption cost-basis merge. | FROZEN |
@@ -2088,10 +2167,10 @@ Planning order for later passes. Do not implement in this phase.
 6. **Lending workflow** — eligibility; available-for-lending after **OD-24** retained floor; ranking by lendable % then lendable amount then arbitrary exact tie (OD-08); display without commit; OD-06 reservation amounts; **DEP-PARTIAL-LEND** same-cycle lending after PARTIALLY_FUNDED (no minimum remainder; funds immediately on approval); **DEP-PARTIAL-ATOMIC** `ceil(remainder / 5000) × 5000` loan size (₹14,000 → ₹15,000); **DEP-ADOPT-MERGE** merge into borrower (loan receivable/obligation; borrower owns the holding; `allocation_pct` unchanged); atomic approve; failure paths; audit. Do not apply FIFO to lenders. Do not lend the OD-24 retained amount.
 7. **Recall / replenishment** — platform default 14 calendar days + portfolio override that MAY be shorter or longer (**OD-07**, **DEP-RECALL-FLOOR**; 14 days is not a hard floor); among eligible loans, oldest commitment time first (OD-09); amount OD-06 (not whole loan merely because it is oldest); approval default; weakest-position ranking per **OD-16** (`window_return_pct`, lowest first; tie-break `stock_id` ascending) using raw `close_price` (**DEP-WEAKEST-PRICE**: latest available current close; window start = latest trading day on or before the window-start date, walk backward only). **DEP-WEAKEST-HISTORY:** if a position lacks full `N` history, shorten to available history for that position only; do not exclude it or block selection.
 8. **History depth & charts** — Support **all available** OHLCV history with **no** V3 product-level maximum history-depth ceiling (**OD-17**). 5Y range when 5Y exists; All = all available history (may exceed 5Y); clamp hint when shorter; V1 `HISTORY_DEPTH_TARGET_DAYS = 550` is as-built only.
-9. **Historical ranking** — backtest corpus only (OD-03); 7%/7% trimmed mean, `n ≥ 15` (OD-04); tail count **`k = nearest_integer(0.07 × n)`** with exact .5 rounding upward (**DEP-TRIM-K**); annualized/CAGR/XIRR ranking evidence only if holding period **≥ 30 calendar days** (**OD-18**); never ship fit-as-rank; never mix live trades. When ranking is not computable (`n < 15` or corpus unavailable), capital fill among that strategy’s own valid BUY/INCREASE recs is **OD-23** (descending conviction / target-size, then fit → conviction sub-score → alphabetical); do not present that fill order as V3 ranking. The `n ≥ 15` ranked path is unchanged.
+9. **Historical ranking** — authoritative backtest corpus only (OD-03, §4.2.1); **DEP-FIT-BAND-10** 10-point bands with adaptive sparsity; 7%/7% trimmed mean (OD-04); tail count **`k = nearest_integer(0.07 × n)`** with exact .5 rounding upward (**DEP-TRIM-K**); ranking statistical confidence diagnostic only; annualized/CAGR/XIRR ranking evidence only if holding period **≥ 30 calendar days** (**OD-18**); never ship fit-as-rank; never mix live trades or overlapping prior runs. When return-quality ranking is not computable, capital fill among that strategy’s own valid BUY/INCREASE recs is **OD-23** (descending target investment amount / conviction amount, then fit → alphabetical symbol); do not present that fill order as V3 ranking.
 10. **UI / notifications / help** — Strategy vs Portfolio settings split; per-owner holdings; capital states; Cash UI named **Unallocated Cash** (**OD-20**, presentation-only); Dashboard warning when cash is below `required_cash_reserve` (**OD-21**, B3); lender UX; contextual help sync when behaviour ships. Persistent application-wide critical banner remains **B4 wishlist**.
 11. **Migration backfill** — unmanaged default; safe inference; do not merge distinct strategy lots; non-destructive JSON split; portfolio trailing % seed **15%** (**OD-22**), ignoring strategy-level trailing/stop values.
-12. **Tests** — acceptance in §35, especially OD-01 same-symbol lots, OD-10 parent-owner CA attachment, OD-11 1-calendar-day BUY cooldown vs OD-07 recall, OD-12 target amount / whole-share floor / min actionable ₹5,000, OD-13 weighted-average fill cost vs first-fill, OD-14 raw `close_price` for SL/trailing/OD-12 reference, OD-16 weakest `window_return_pct` ranking and tie-break, OD-18 30-calendar-day annualized ranking gate, OD-19 `required_cash_reserve` formula vs % of cash/NAV, OD-20 named Unallocated Cash UI vs reserve/reserved/unused-allocation, OD-21 withdraw-into-reserve allowed with Dashboard shortfall warning (not a buy/lend permission), OD-22 portfolio trailing seed 15% vs copy-from-strategy or copy-from-SL, **OD-23** unranked fill order (conviction/target-size descending, then fit → conviction sub-score → alphabetical; not presented as V3 ranking; `n ≥ 15` path unchanged), **OD-24** `nearest_integer(strategy_capital_allocation / recommended_minimum_holdings)` retained floor (nearest integer rupee; exact .5 upward; not banker's rounding) vs OD-19 / physical cash / BUY funding, **DEP-TRIM-K** `k = nearest_integer(0.07 × n)` with .5 upward (n=15→1, n=50→4, n=100→7; not banker's rounding), **DEP-PARTIAL-LEND** same-cycle lending after partial own funding (₹3,000 gap still loans ₹5,000; ₹14,000 remainder same-cycle), **DEP-PARTIAL-ATOMIC** remainder rounded up to next ₹5,000 (₹14,000 → ₹15,000 loan, ₹1,000 excess), **DEP-ADOPT-MERGE** lending-funded holding owned by borrower not lender (receivable/obligation; `allocation_pct` unchanged; no fractional own-vs-borrowed ownership), **DEP-WEAKEST-PRICE** OD-16 raw `close_price` (latest available current close; window start on or before, walk backward only; not `adjusted_close_price`; not fill price; OD-14 unchanged), **DEP-WEAKEST-HISTORY** insufficient history shortens to available history for that position only (N=90 with 40 days still eligible; do not exclude or block; do not rewrite configured N), **DEP-RECALL-FLOOR** portfolio recall override may be shorter or longer than the 14-day platform default (14 is not a hard floor), OD-05 partial vs WATCH, OD-06 reservation vs fill, OD-08 lender ranking vs OD-09 loan FIFO, §24 races.
+12. **Tests** — acceptance in §35, especially OD-01 same-symbol lots, OD-10 parent-owner CA attachment, OD-11 1-calendar-day BUY cooldown vs OD-07 recall, OD-12 target amount / whole-share floor / min actionable ₹5,000, OD-13 weighted-average fill cost vs first-fill, OD-14 raw `close_price` for SL/trailing/OD-12 reference, OD-16 weakest `window_return_pct` ranking and tie-break, OD-18 30-calendar-day annualized ranking gate, OD-19 `required_cash_reserve` formula vs % of cash/NAV, OD-20 named Unallocated Cash UI vs reserve/reserved/unused-allocation, OD-21 withdraw-into-reserve allowed with Dashboard shortfall warning (not a buy/lend permission), OD-22 portfolio trailing seed 15% vs copy-from-strategy or copy-from-SL, **OD-23** unranked fill order (target investment amount / conviction amount descending, then fit → alphabetical symbol; not presented as V3 ranking; no conviction sub-score; ranked path unchanged when return-quality ranking is computable), **DEP-FIT-BAND-10** 10-point bands with adaptive sparsity and ranking statistical confidence diagnostic only, authoritative backtest corpus = latest completed run per strategy version (§4.2.1; no overlapping-run merge; observations do not age out), **OD-24** `nearest_integer(strategy_capital_allocation / recommended_minimum_holdings)` retained floor (nearest integer rupee; exact .5 upward; not banker's rounding) vs OD-19 / physical cash / BUY funding, **DEP-TRIM-K** `k = nearest_integer(0.07 × n)` with .5 upward (n=15→1, n=50→4, n=100→7; not banker's rounding), **DEP-PARTIAL-LEND** same-cycle lending after partial own funding (₹3,000 gap still loans ₹5,000; ₹14,000 remainder same-cycle), **DEP-PARTIAL-ATOMIC** remainder rounded up to next ₹5,000 (₹14,000 → ₹15,000 loan, ₹1,000 excess), **DEP-ADOPT-MERGE** lending-funded holding owned by borrower not lender (receivable/obligation; `allocation_pct` unchanged; no fractional own-vs-borrowed ownership), **DEP-WEAKEST-PRICE** OD-16 raw `close_price` (latest available current close; window start on or before, walk backward only; not `adjusted_close_price`; not fill price; OD-14 unchanged), **DEP-WEAKEST-HISTORY** insufficient history shortens to available history for that position only (N=90 with 40 days still eligible; do not exclude or block; do not rewrite configured N), **DEP-RECALL-FLOOR** portfolio recall override may be shorter or longer than the 14-day platform default (14 is not a hard floor), OD-05 partial vs WATCH, OD-06 reservation vs fill, OD-08 lender ranking vs OD-09 loan FIFO, §24 races.
 
 ---
 
@@ -2101,14 +2180,16 @@ Planning order for later passes. Do not implement in this phase.
 
 - Fit score is stored and shown as fit.
 - Final ranking, when present, is not a sort by fit alone and is not `fit × p(fit)`.
-- Ranking observations come **only** from the defined **backtest** corpus (OD-03). Live trades are absent from that corpus.
-- Trimmed mean is symmetric 7% / 7% with `n ≥ 15`. If `n < 15`, trimmed-mean ranking is not computed (OD-04).
-- **DEP-TRIM-K:** `k = nearest_integer(0.07 × n)`; exact .5 rounds upward; same `k` from both tails. Eligibility (`n ≥ 15`) and trim-count (`k`) remain distinct. Examples: n=15→k=1; n=20→k=1; n=25→k=2; n=30→k=2; n=35→k=2; n=50→k=4; n=100→k=7. Do not use banker's rounding.
+- Ranking observations come **only** from the **authoritative backtest** corpus (OD-03, §4.2.1): **latest completed** backtest per `strategy_version_id`, **maximum available** historical market data, **unique observations** only; overlapping prior completed runs are **not** combined; observations do **not** age out.
+- Trimmed mean is symmetric 7% / 7% with normal minimum `n = 15` per fit band (**DEP-FIT-BAND-10** permits neighbor merges and reductions to 12 or 10; never below 10). If a band cannot become statistically eligible, trimmed-mean ranking is not computed for that band (OD-04).
+- **DEP-FIT-BAND-10:** normal 10-point fit bands; up to two adjacent neighbor merges; then permitted minimum reductions 15→12→10; persist resulting band and adjustments; ranking statistical confidence decreases with compromises and is diagnostic only.
+- **DEP-TRIM-K:** `k = nearest_integer(0.07 × n)`; exact .5 rounds upward; same `k` from both tails. Eligibility (effective `n_min` per **DEP-FIT-BAND-10**) and trim-count (`k`) remain distinct. Examples: n=15→k=1; n=20→k=1; n=25→k=2; n=30→k=2; n=35→k=2; n=50→k=4; n=100→k=7. Do not use banker's rounding.
+- Ranking statistical confidence MUST NOT affect return-quality calculation, ranking order, capital allocation, eligibility, or OD-23 tie-breaks. It is not probability of success or a future-return prediction.
 - A 100% outcome and a 10% outcome are not scored as equal successes.
 - Success flags require positive return **and** NIFTY 50 beat **and** annualized opportunity-cost beat (§19; **OD-18 does not change this**).
 - 12% (or configured `r`) is applied as annualized, scaled by **calendar** period length (`T_years = calendar_days / 365`).
 - **OD-18:** backtest holding period **≥ 30 calendar days** → annualized return/CAGR/XIRR MAY be ranking evidence; **< 30 calendar days** → annualized return/CAGR/XIRR MUST NOT be ranking evidence. Simple return remains a valid outcome. Ranking corpus remains backtests only (OD-03). OD-04 trimmed mean unchanged. OD-16 weakest-position scoring unchanged.
-- When ranking is not computable (`n < 15` or corpus unavailable), capital fill among that strategy’s own valid BUY/INCREASE recs is **OD-23**, not a return-quality rank and not fit-as-rank. See §35.16.
+- When return-quality ranking is not computable (corpus unavailable or no statistically eligible fit band), capital fill among that strategy’s own valid BUY/INCREASE recs is **OD-23**, not a return-quality rank and not fit-as-rank. See §35.16.
 
 ### 35.2 Multi-strategy
 
@@ -2274,15 +2355,16 @@ Planning order for later passes. Do not implement in this phase.
 
 ### 35.16 Capital fill order when ranking is not computable (OD-23)
 
-- OD-23 applies only when return-quality ranking is not computable because `n < 15` or the required backtest corpus is unavailable.
-- For each strategy’s own valid BUY/INCREASE recommendations, capital fill order MUST be **descending conviction / target-size** (higher conviction / larger conviction-driven target amount first).
-- This is a **capital fill order**, **not** V3 return-quality ranking. MUST NOT label or present conviction/target-size order as the V3 ranking.
-- When `n ≥ 15` and the required backtest corpus is available, the allocator still follows ranking order / return quality. OD-23 MUST NOT change that ranked path.
+- OD-23 applies only when return-quality ranking is not computable because the authoritative backtest corpus is unavailable or no fit band is statistically eligible after **DEP-FIT-BAND-10**.
+- For each strategy’s own valid BUY/INCREASE recommendations, capital fill order MUST be **descending target investment amount / conviction amount** (higher first).
+- This is a **capital fill order**, **not** V3 return-quality ranking. MUST NOT label or present target-amount order as the V3 ranking.
+- When return-quality ranking **is** computable, the allocator still follows ranking order / return quality. OD-23 MUST NOT change that ranked path.
 - Fit MUST NOT be used as a replacement for return-quality ranking. Fit remains labelled and stored as fit. Treating “rank = fit” remains forbidden.
-- Tie-break order MUST be exactly: (1) **fit** (higher fit first); (2) **conviction sub-score** (higher first); (3) **alphabetical** order of the stock listing symbol.
+- Tie-break order MUST be exactly: (1) **fit score** (higher first); (2) **alphabetical** order of the stock listing symbol (ascending).
+- MUST NOT use ranking statistical confidence or a conviction sub-score as a tie-break. MUST NOT introduce a strategy-configurable conviction sub-score or new strategy setting.
 - The alphabetical tie-break MUST make the ordering deterministic (same inputs → same fill order).
 - OD-05 partial funding, OD-06 atomic reservation, reserve protection, and strategy allocation limits remain unchanged.
-- OD-24 is frozen separately (§35.17) and is not changed by OD-23. **DEP-TRIM-K**, **DEP-PARTIAL-LEND**, **DEP-PARTIAL-ATOMIC**, **DEP-ADOPT-MERGE**, **DEP-WEAKEST-PRICE**, **DEP-WEAKEST-HISTORY**, and **DEP-RECALL-FLOOR** are frozen separately (§33.3.1). There are no remaining open DEP-* items.
+- OD-24 is frozen separately (§35.17) and is not changed by OD-23. **DEP-TRIM-K**, **DEP-FIT-BAND-10**, **DEP-PARTIAL-LEND**, **DEP-PARTIAL-ATOMIC**, **DEP-ADOPT-MERGE**, **DEP-WEAKEST-PRICE**, **DEP-WEAKEST-HISTORY**, and **DEP-RECALL-FLOOR** are frozen separately (§33.3.1). There are no remaining open DEP-* items.
 
 ### 35.17 Minimum retained capital / one opportunity (OD-24)
 
@@ -2292,7 +2374,7 @@ Planning order for later passes. Do not implement in this phase.
 - `recommended_minimum_holdings` is the strategy’s configured recommended minimum holdings/opportunities, not hard `max_holdings`.
 - The result is the strategy-level protected “one opportunity” amount. Example: investable capital ₹10,00,000, Momentum 75% → ₹7,50,000, recommended minimum holdings 5 → retain ₹1,50,000. Further examples: ₹7,50,000 / 7 → ₹1,07,143; ₹7,50,000 / 8 → ₹93,750.
 - It is an accounting constraint, not a physical cash account, not a strategy bank/cash sub-account, and not another portfolio cash reserve.
-- It does not modify `required_cash_reserve` (OD-19), `available_physical_cash`, the 100% allocation rule, BUY funding, OD-05, OD-06, OD-23, or the `n ≥ 15` ranking path.
+- It does not modify `required_cash_reserve` (OD-19), `available_physical_cash`, the 100% allocation rule, BUY funding, OD-05, OD-06, OD-23, or the return-quality ranking path when computable per **DEP-FIT-BAND-10** and OD-04.
 - Lending / available-for-lending MUST subtract this floor; lending MUST NOT consume it.
 - OD-24 MUST NOT hard-block external/broker withdrawals (OD-21).
 - **DEP-TRIM-K**, **DEP-PARTIAL-LEND**, **DEP-PARTIAL-ATOMIC**, **DEP-ADOPT-MERGE**, **DEP-WEAKEST-PRICE**, **DEP-WEAKEST-HISTORY**, and **DEP-RECALL-FLOOR** are frozen separately and are not changed by OD-24. There are no remaining open DEP-* items.
@@ -2381,10 +2463,15 @@ Planning order for later passes. Do not implement in this phase.
 | Do not confuse | With |
 |----------------|------|
 | Fit score | Final rank / expected return |
-| OD-23 capital **fill order** (descending conviction / target-size when ranking is not computable) | V3 return-quality ranking / a label of that fill order as “rank” / a silent fallback to fit-as-rank |
+| OD-23 capital **fill order** (descending target investment amount / conviction amount when ranking is not computable) | V3 return-quality ranking / a label of that fill order as “rank” / a silent fallback to fit-as-rank |
 | OD-23 fill-order tie-break **fit** | Fit used as the fallback V3 ranking key |
-| OD-23 fill-order tie-break order (fit → conviction sub-score → alphabetical) | Ranking order when `n ≥ 15` |
-| Ranking eligibility (`n ≥ 15`) | Trim-count `k` derived from 7% of `n` (**DEP-TRIM-K**) |
+| OD-23 fill-order tie-break order (fit → alphabetical symbol ascending) | Ranking order when return-quality ranking **is** computable |
+| **DEP-FIT-BAND-10** ranking fit bands | Strategy `score_bands` conviction target-sizing bands |
+| Ranking statistical confidence (diagnostic) | Return-quality rank / probability of success / capital allocation weight / OD-23 tie-break |
+| Ranking eligibility (effective `n_min` per **DEP-FIT-BAND-10**: 15, 12, or 10) | Trim-count `k` derived from 7% of `n` (**DEP-TRIM-K**) |
+| **Historical data depth** (OHLCV available in authoritative backtest) | **Number of unique observations** in ranking corpus / **number of backtest executions** |
+| **Latest completed** authoritative backtest per strategy version | Combining overlapping prior completed runs into one corpus |
+| Ranking observations ageing out over time | Valid corpus observations from older history in the authoritative run |
 | **DEP-TRIM-K** `k = nearest_integer(0.07 × n)` with exact .5 rounding **upward** | Floor-only `k` / ceil-only `k` / banker's (round-half-to-even) `round()` |
 | **OD-24** `minimum_retained_capital` (`nearest_integer(strategy_capital_allocation / recommended_minimum_holdings)`) | `required_cash_reserve` (OD-19) / pending-execution reserved cash (OD-06) / Unallocated Cash (OD-20) / a physical strategy cash account |
 | OD-24 nearest-integer **rupee** rounding (exact .5 upward; `floor(value + 0.5)` on the non-negative division result) | Banker's (round-half-to-even) rounding / leaving the division unrounded / applying this rounding to **DEP-TRIM-K** trim count `k` |
