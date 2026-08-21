@@ -14,6 +14,7 @@ use App\Models\Transaction;
 use App\Models\User;
 use App\Services\CashManagementService;
 use App\Services\HoldingsCalculationService;
+use App\Services\Lending\RecommendationLendingCoordinator;
 use App\Services\PortfolioLoggerService;
 use App\Services\TransactionWriteService;
 use Illuminate\Support\Facades\DB;
@@ -32,6 +33,7 @@ class ExecutionEngine
         protected PortfolioLoggerService $logger,
         protected CashManagementService $cash,
         protected RecommendationEngine $recommendation,
+        protected RecommendationLendingCoordinator $lending,
     ) {}
 
     /**
@@ -86,6 +88,8 @@ class ExecutionEngine
             ]);
         }
 
+        $this->lending->assertCanExecute($recommendation);
+
         DB::transaction(function () use ($recommendation, $transaction, $profile) {
             TradingOrder::query()
                 ->where('profile_id', $profile->id)
@@ -111,6 +115,8 @@ class ExecutionEngine
             if (empty($transaction->source)) {
                 $transaction->forceFill(['source' => Transaction::SOURCE_RECOMMENDATION])->save();
             }
+
+            $this->lending->recordExecution($recommendation->fresh(), $transaction);
         });
 
         $this->logger->log('daily', 'ExecutionEngine', 'info', 'Recommendation completed from ledger transaction', [
@@ -223,6 +229,10 @@ class ExecutionEngine
             $recommendation = TradingRecommendation::query()->find($order->recommendation_id);
         }
 
+        if ($recommendation !== null && $recommendation->isActionable()) {
+            $this->lending->assertCanExecute($recommendation);
+        }
+
         $notes = $input['notes']
             ?? $order->notes
             ?? ($recommendation ? 'TOS recommendation #'.$recommendation->id : 'TOS order #'.$order->id);
@@ -261,6 +271,7 @@ class ExecutionEngine
                     'executed_at' => now(),
                     'executed_transaction_id' => $transaction->id,
                 ])->save();
+                $this->lending->recordExecution($recommendation->fresh(), $transaction);
             }
 
             return $transaction;
@@ -439,6 +450,7 @@ class ExecutionEngine
                 'recommendation_id' => ['Approve the recommendation before recording execution.'],
             ]);
         }
+        $this->lending->assertCanExecute($recommendation);
         if ((int) $recommendation->security_id !== (int) $stock->id) {
             throw ValidationException::withMessages([
                 'recommendation_id' => ['Recommendation security does not match order security.'],

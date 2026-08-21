@@ -48,7 +48,13 @@ class TradingRecommendation extends Model
 
     public const ALLOCATION_FUNDED = 'funded';
 
+    public const ALLOCATION_PARTIALLY_FUNDED = 'partially_funded';
+
     public const ALLOCATION_UNFUNDED = 'unfunded';
+
+    public const ALLOCATION_AWAITING_LENDER_SELECTION = 'awaiting_lender_selection';
+
+    public const ALLOCATION_CAPITAL_COMMITTED = 'capital_committed';
 
     public const OPINION_BULLISH = 'Bullish';
 
@@ -293,6 +299,11 @@ class TradingRecommendation extends Model
     public function reviews(): HasMany
     {
         return $this->hasMany(RecommendationReview::class, 'recommendation_id');
+    }
+
+    public function capitalRequests(): HasMany
+    {
+        return $this->hasMany(CapitalRequest::class, 'recommendation_id');
     }
 
     public function executedTransaction(): BelongsTo
@@ -591,6 +602,57 @@ class TradingRecommendation extends Model
     public function requiresCashReservation(): bool
     {
         return in_array($this->orderSide(), ['buy'], true);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function capitalAllocationMeta(): ?array
+    {
+        $plan = is_array($this->execution_plan) ? $this->execution_plan : [];
+        if (isset($plan['capital_allocation']) && is_array($plan['capital_allocation'])) {
+            return $plan['capital_allocation'];
+        }
+        $evidence = is_array($this->evidence) ? $this->evidence : [];
+        if (isset($evidence['capital_allocation']) && is_array($evidence['capital_allocation'])) {
+            return $evidence['capital_allocation'];
+        }
+
+        return null;
+    }
+
+    public function capitalAllocationStatus(): ?string
+    {
+        $meta = $this->capitalAllocationMeta();
+        if ($meta === null || ! isset($meta['status'])) {
+            return null;
+        }
+
+        return (string) $meta['status'];
+    }
+
+    public function capitalTargetAmount(): ?float
+    {
+        $meta = $this->capitalAllocationMeta();
+        if ($meta !== null && isset($meta['target_amount'])) {
+            return (float) $meta['target_amount'];
+        }
+        $plan = is_array($this->execution_plan) ? $this->execution_plan : [];
+        if (isset($plan['target_investment_amount'])) {
+            return (float) $plan['target_investment_amount'];
+        }
+
+        return null;
+    }
+
+    public function ownAllocatedAmount(): ?float
+    {
+        $meta = $this->capitalAllocationMeta();
+        if ($meta !== null && isset($meta['allocated_amount'])) {
+            return (float) $meta['allocated_amount'];
+        }
+
+        return $this->suggestedInvestmentAmount();
     }
 
     public static function initialStatusForAction(string $action): string

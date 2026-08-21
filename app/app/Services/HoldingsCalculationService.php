@@ -65,11 +65,13 @@ class HoldingsCalculationService
         }
 
         if ($existing->isEmpty()) {
+            $strategyId = $this->inferOwnerStrategyId($transactions);
+
             return Holding::query()->create(array_merge($values, [
                 'profile_id' => $profile->id,
                 'stock_id' => $stock->id,
-                'strategy_id' => null,
-                'owner_key' => Holding::OWNER_UNMANAGED,
+                'strategy_id' => $strategyId,
+                'owner_key' => Holding::ownerKeyFor($strategyId),
             ]));
         }
 
@@ -197,11 +199,31 @@ class HoldingsCalculationService
     }
 
     /**
+     * Borrower/recommendation owner when the ledger for this stock is a single strategy.
+     * Manual unlinked buys remain unmanaged.
+     */
+    protected function inferOwnerStrategyId(Collection $transactions): ?int
+    {
+        $ids = [];
+        foreach ($transactions as $transaction) {
+            $sid = $transaction->owningStrategyId();
+            if ($sid === null) {
+                continue;
+            }
+            $ids[(int) $sid] = true;
+        }
+        $keys = array_keys($ids);
+
+        return count($keys) === 1 ? $keys[0] : null;
+    }
+
+    /**
      * @return Collection<int, Transaction>
      */
     public function transactionsForProfileStock(PortfolioProfile $profile, Stock $stock): Collection
     {
         return Transaction::query()
+            ->with(['recommendation.strategyVersion'])
             ->where('profile_id', $profile->id)
             ->where('stock_id', $stock->id)
             ->orderBy('transaction_date')

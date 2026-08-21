@@ -305,8 +305,8 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'History toggle', description: 'Navigate back to full Transaction History.' },
         ],
         concepts: [
-            { name: 'Approval vs execution', description: 'Approve means you accept the idea; execution is the separate ledger write after a real fill.' },
-            { name: 'Cash reservation', description: 'Approving a funded buy can reserve cash until execute, cancel, expire, or reopen.' },
+            { name: 'Approval vs execution', description: 'Approve means you accept the idea; execution is the separate ledger write after a real fill. A capital_committed buy can be approved and then filled the same way as a fully funded buy. Unfunded or awaiting-lender buys never reach this page.' },
+            { name: 'Cash reservation', description: 'Approving a funded buy reserves the own-funded amount until execute, cancel, expire, or reopen. A committed loan is not a second cash reservation and does not deposit cash. One physical cash pool is used for the fill. The borrower strategy owns the resulting holding; the lender does not receive stock.' },
         ],
         related: ['recommendations', 'transactions', 'cash'],
     },
@@ -326,13 +326,14 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Required cash reserve', description: 'Rupee floor from Portfolio Settings → Portfolio cash reserve %. Based on max(invested amount, current holdings market value), not a % of cash.' },
             { name: 'Unallocated Cash', description: 'Presentation-only residual after the reserve that unused strategy allocation has not claimed. Not a ledger line and not a withdrawal entitlement.' },
             { name: 'Strategy capital allocation', description: 'Edit enabled-strategy allocation % (must sum to 100 to save). Shows allocated capital, unused allocation, and retained capital (accounting floor, not physical cash).' },
-            { name: 'Statement', description: 'Chronological cash ledger for the active portfolio. Deposit, withdrawal, adjustment, buy, and sell only — retained capital is never posted here.' },
+            { name: 'Statement', description: 'Chronological cash ledger for the active portfolio. Deposit, withdrawal, adjustment, buy, and sell only — retained capital is never posted here. Inter-strategy loan repayment is not a cash-ledger type yet; it only reduces loan outstanding.' },
         ],
         concepts: [
             { name: 'Available physical cash', description: 'max(0, total cash − pending-execution reservations). Withdrawals cannot exceed this amount.' },
             { name: 'Investable capital', description: '(cash − required reserve − pending reserved) + market value of strategy-owned holdings. Unmanaged holdings are excluded from the 100% strategy split.' },
             { name: 'Strategy allocation %', description: 'Policy share of investable capital (TradingStrategy.allocation_pct). Distinct from score-band allocation_pct on the Strategy Capital Allocation tab and from holdings market-value %.' },
             { name: 'Retained capital', description: 'Per-strategy nearest-integer rupees of allocated capital ÷ recommended minimum holdings. Lending cannot consume it later; it is not a cash bucket.' },
+            { name: 'Loan repayment', description: 'Returning borrowed capital reduces the loan outstanding. Lender lent capital and borrower borrowed capital follow outstanding, not return-row totals. Repayment does not move stock, does not change allocation %, and does not post a cash ledger line (one physical cash pool; no loan-return entry type). Recall is not available yet.' },
         ],
         related: ['recommendations', 'pending-execution', 'strategy', 'settings', 'dashboard'],
     },
@@ -811,11 +812,11 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Approve / Reject / Defer', description: 'Lifecycle actions on actionable recommendations.' },
             { name: 'Review dialog', description: 'Inspect evidence, quantity, and cash impact before deciding.' },
             { name: 'Trade vs insights sections', description: 'Actionable trades are separated from HOLD / WATCH insights.' },
-            { name: 'Generate (when available)', description: 'Runs the recommendation pipeline for the active strategy / profile. Telegram (when enabled) notifies only actionable Open / Increase / Reduce / Exit ideas — not HOLD / WATCH.' },
+            { name: 'Generate (when available)', description: 'Runs the recommendation pipeline independently for every enabled strategy in the portfolio. Telegram (when enabled) notifies only actionable Open / Increase / Reduce / Exit ideas — not HOLD / WATCH.' },
         ],
         concepts: [
-            { name: 'Evidence snapshot', description: 'Eligibility, scoring, exit, market opinion, and capital allocation status travel with the idea.' },
-            { name: 'Unfunded → Watch', description: 'Ideas that cannot be funded from available cash are demoted to Watch.' },
+            { name: 'Evidence snapshot', description: 'Eligibility, scoring, exit, market opinion, ranking source (return-quality or OD-23 fill order), and capital allocation status travel with the idea.' },
+            { name: 'Unfunded / partially funded', description: 'OPEN/INCREASE stays OPEN/INCREASE when own capital cannot cover the full target. Capital status starts as funded, partially_funded, or unfunded. Lack of cash does not convert the idea to Watch. The original target amount is kept; this-cycle allocated amount is recorded separately. A partially funded buy creates a capital request for the remainder (rounded up to ₹5,000) but does not pick a lender. Trade Approve cannot move a partially funded or unfunded buy to pending execution until a lender has committed a loan (status capital_committed). After commitment, you still Approve the trade separately, then record the broker fill. The borrower owns the stock. Loan repayment later reduces outstanding only — it does not transfer stock to the lender. Recall is not implemented yet. Unfunded buys do not auto-create a request; full-gap loan sizing is not decided yet.' },
             { name: 'Reopen', description: 'Undo review decisions back to pending_review when supported.' },
             { name: 'Telegram filter', description: 'HOLD / WATCH stay in-app only; they are not sent as Telegram recommendation alerts.' },
         ],
@@ -846,11 +847,12 @@ const APP_DOCUMENTATION_BASE = [
             + '  E -.->|can force Exit| D\n'
             + '  D --> F[Portfolio Rules + Behaviour flags]\n'
             + '  F --> G[Market Gates - may block new Open/Increase]\n'
-            + '  G --> H[Capital Allocation + Cash Management]\n'
-            + '  H -->|unfunded Open/Increase become Watch| I[Recommendations page]\n'
-            + '  I --> J[Approve]\n'
-            + '  J --> K[Pending Execution]\n'
-            + '  K --> L[Ledger fill]\n'
+            + '  G --> H[Per-strategy return-quality ranking or OD-23 fill order]\n'
+            + '  H --> I[Sequential capital allocation from strategy available capital]\n'
+            + '  I -->|funded / partially funded / unfunded stay Open or Increase| J[Recommendations page]\n'
+            + '  J --> K[Approve]\n'
+            + '  K --> L[Pending Execution]\n'
+            + '  L --> M[Ledger fill]\n'
             + '```\n\n'
             + 'Read Controls below for every tab field (what it means and what number it is compared against). Read Concepts for a scored example of four candidates and three holdings hitting exit rules.',
         controls: [
@@ -927,10 +929,9 @@ const APP_DOCUMENTATION_BASE = [
                 name: 'Capital Allocation tab',
                 description:
                     'Applies only to Open / Increase ideas that survived thresholds, portfolio rules, and market gates.\n'
-                    + 'Allocation method: Proportional by score (stronger scores get more cash), Simple ranking, or Equal weight.\n'
-                    + 'Tie-breaking — secondary key when scores match (higher score / RS / momentum / breakout).\n'
-                    + 'Score bands — map overall-score ranges to target allocation % of portfolio (e.g. 95–100 → 10%).\n'
-                    + 'Compared against: available investable cash (Cash balance − reserved − reserve floor). If cash cannot fund the idea, it is demoted to Watch (unfunded).',
+                    + 'V3 fill order: return-quality ranking from the strategy version’s latest completed backtest when that ranking is computable; otherwise OD-23 capital fill order (target amount descending, then fit, then symbol). Fit score is not the V3 ranking key.\n'
+                    + 'Capital is filled sequentially from that strategy’s strategy available capital (WS2 snapshot). Partial and zero funding keep OPEN/INCREASE and preserve the original target amount.\n'
+                    + 'Score bands still map overall-score ranges to the candidate’s target allocation % of portfolio — that target is separate from the funding pool.',
             },
             {
                 name: 'Exit Strategy — each rule',
@@ -2132,7 +2133,7 @@ const DOC_ENRICHMENTS = {
     },
     cash: {
         overview:
-            'Cash is first-class state in the recommendation engine. Keep this page accurate because available cash directly controls how many recommendations can be funded. The system can demote unfunded ideas to WATCH when cash is insufficient.',
+            'Cash is first-class state in the recommendation engine. Keep this page accurate because available physical cash, after the portfolio reserve and pending-execution reservations, limits how much each enabled strategy can fund. Unfunded or partially funded OPEN/INCREASE ideas stay OPEN/INCREASE; they are not demoted to WATCH.',
         controls: [
             { name: 'Transaction date usage', description: 'Use the intended accounting date for deposits/withdrawals so statement chronology and downstream analytics remain meaningful.' },
             { name: 'Reservation drilldown', description: 'Expand reserved cash to understand which pending executions are consuming capital before adjusting balances.' },
@@ -2239,7 +2240,7 @@ const DOC_ENRICHMENTS = {
             { name: 'Decision hygiene', description: 'Use Defer when more evidence is needed instead of forcing binary approve/reject too early.' },
         ],
         concepts: [
-            { name: 'Lifecycle states', description: 'Recommendations can move through pending_review, pending_execution, executed/cancelled, expired, and reopened paths.' },
+            { name: 'Lifecycle states', description: 'Recommendations can move through pending_review, pending_execution, executed/cancelled, expired, and reopened paths. Buys that still need lending stay in pending_review until capital_committed; Approve is blocked until then. Fully funded buys still go pending_execution on Approve. Sells are unchanged.' },
         ],
     },
     strategy: {

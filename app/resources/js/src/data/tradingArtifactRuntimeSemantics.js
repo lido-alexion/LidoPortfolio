@@ -71,7 +71,7 @@ export const RUNTIME_SEMANTICS_OVERVIEW =
     + '| `thresholds` | Opinion (bull/bear/neutral) + OPEN/WATCH/HOLD/INCREASE/REDUCE/EXIT |\n'
     + '| `exit_strategy` | Can force EXIT on **held** names |\n'
     + '| `market_gates` | After scoring: demote OPEN/INCREASE when blocked; size multipliers |\n'
-    + '| `portfolio_rules` | Position % caps, cash reserve/deploy, max new positions; can demote unfunded buys to WATCH |\n'
+    + '| `portfolio_rules` | Position % caps, max new positions; does **not** demote unfunded buys to WATCH |\n'
     + '| `capital_allocation` | Score bands for allocation % |\n'
     + '\n'
     + 'Discovery itself is **not** limited to the active Strategy eligibility list '
@@ -120,7 +120,7 @@ export const RUNTIME_SEMANTICS_OVERVIEW =
     + '## 7. Portfolio rules\n\n'
     + '- Target size uses something like `min(max_position_size_pct, band_or_default_pct)` - **max always caps** default/band.\n'
     + '- `min_cash_reserve_pct` / `max_cash_deployment_pct` reduce available cash before allocation.\n'
-    + '- If cash cannot fund an OPEN/INCREASE, the draft is typically demoted to **WATCH** (`ALLOCATION_UNFUNDED`) - i.e. rules can **suppress BUY actions**, not only leave a zero-qty BUY.\n'
+    + '- If cash cannot fund an OPEN/INCREASE, the draft stays OPEN/INCREASE with capital status **unfunded** or **partially_funded**. The original target amount is preserved. Do **not** demote to WATCH for capital reasons.\n'
     + '- `max_new_positions_per_cycle` limits how many new opens survive ranking/allocation.\n\n'
     + '---\n\n'
     + '## 8. Indicator parameter defaults (Screeners)\n\n'
@@ -209,7 +209,7 @@ export const COMPLETE_E2E_WALKTHROUGH_MARKDOWN = [
     '11. Import Strategy (draft).',
     '12. Select Strategy (sole active Strategy).',
     '13. Engine execution — Discovery → Evaluation → eligibility UNION → weighted score → exits/gates/thresholds → capital → persist.',
-    '14. Final output — OPEN/INCREASE/REDUCE/EXIT and WATCH/HOLD on Recommendations, subject to cash and gates.',
+    '14. Final output — OPEN/INCREASE/REDUCE/EXIT and WATCH/HOLD on Recommendations. Capital shortage uses funded / partially_funded / unfunded, not WATCH.',
     '',
     '## Where full JSON lives',
     '',
@@ -282,7 +282,7 @@ export const STRATEGY_RUNTIME_POINTER =
     + '- Multiple `eligibility_sources` = **UNION**; `priority` is order only.\n'
     + '- Thresholds use sequential if/else (not exclusive bands); score 82 with defaults is typically **WATCH** (not held) / **HOLD** (held).\n'
     + '- `market_gates` demote OPEN/INCREASE only; exits still run.\n'
-    + '- Portfolio cash rules can demote unfunded buys to **WATCH**.\n\n';
+    + '- Unfunded or partially funded OPEN/INCREASE stay OPEN/INCREASE (capital status is a separate axis; not WATCH).\n\n';
 
 export const INDICATOR_RUNTIME_POINTER =
     '## Runtime notes (defaults vs catalogue)\n\n'

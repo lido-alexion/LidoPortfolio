@@ -70,6 +70,26 @@ class TradingStrategy extends Model
         return $this->hasMany(Holding::class, 'strategy_id');
     }
 
+    public function capitalRequestsAsBorrower(): HasMany
+    {
+        return $this->hasMany(CapitalRequest::class, 'borrower_strategy_id');
+    }
+
+    public function capitalRequestsAsLender(): HasMany
+    {
+        return $this->hasMany(CapitalRequest::class, 'lender_strategy_id');
+    }
+
+    public function loansAsBorrower(): HasMany
+    {
+        return $this->hasMany(CapitalLoan::class, 'borrower_strategy_id');
+    }
+
+    public function loansAsLender(): HasMany
+    {
+        return $this->hasMany(CapitalLoan::class, 'lender_strategy_id');
+    }
+
     public function isEnabled(): bool
     {
         return $this->status === self::STATUS_ACTIVE;

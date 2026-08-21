@@ -9,10 +9,11 @@ use App\Models\DiscoveryRun;
 use App\Models\EvaluationResult;
 use App\Models\EvaluationRun;
 use App\Models\Holding;
+use App\Models\PortfolioProfile;
 use App\Models\Stock;
 use App\Models\StockPrice;
 use App\Models\TradingRecommendation;
-use App\Models\TradingStrategyVersion;
+use App\Models\TradingStrategy;
 use App\Models\User;
 use App\Services\Analytics\MarketAnalyticsService;
 use App\Services\CashManagementService;
@@ -68,6 +69,10 @@ class MarketGateRecommendationTest extends TestCase
         Holding::query()->create([
             'profile_id' => $profile->id,
             'stock_id' => $stock->id,
+            'strategy_id' => TradingStrategy::query()
+                ->where('profile_id', $profile->id)
+                ->where('status', TradingStrategy::STATUS_ACTIVE)
+                ->value('id'),
             'quantity' => 10,
             'avg_buy_price' => 100,
             'invested_amount' => 1000,
@@ -108,6 +113,10 @@ class MarketGateRecommendationTest extends TestCase
         Holding::query()->create([
             'profile_id' => $profile->id,
             'stock_id' => $stock->id,
+            'strategy_id' => TradingStrategy::query()
+                ->where('profile_id', $profile->id)
+                ->where('status', TradingStrategy::STATUS_ACTIVE)
+                ->value('id'),
             'quantity' => 10,
             'avg_buy_price' => 100,
             'invested_amount' => 1000,
@@ -184,7 +193,7 @@ class MarketGateRecommendationTest extends TestCase
         $this->assertLessThan(6.0, (float) $rec->target_allocation_pct);
     }
 
-    public function test_insufficient_cash_demotes_open_independently_of_gates(): void
+    public function test_insufficient_cash_keeps_open_unfunded(): void
     {
         [$profile, $stock, $run] = $this->seedRecommendationFixture([
             'market_gates' => ['enabled' => false],
@@ -201,8 +210,14 @@ class MarketGateRecommendationTest extends TestCase
             ->firstWhere('security_id', $stock->id);
 
         $this->assertNotNull($rec);
-        $this->assertSame(TradingRecommendation::ACTION_WATCH, $rec->recommendation_type);
+        $this->assertSame(TradingRecommendation::ACTION_OPEN_POSITION, $rec->recommendation_type);
         $this->assertSame(TradingRecommendation::ALLOCATION_UNFUNDED, $rec->evidence['capital_allocation']['status'] ?? null);
+        $this->assertEqualsWithDelta(
+            (float) ($rec->evidence['capital_allocation']['target_amount'] ?? 0),
+            (float) ($rec->execution_plan['target_investment_amount'] ?? 0),
+            0.01
+        );
+        $this->assertGreaterThan(0, (float) ($rec->evidence['capital_allocation']['target_amount'] ?? 0));
         $this->assertFalse($rec->evidence['market_gate_demoted'] ?? true);
     }
 
@@ -230,7 +245,7 @@ class MarketGateRecommendationTest extends TestCase
 
     /**
      * @param  array<string, mixed>  $options
-     * @return array{0: \App\Models\PortfolioProfile, 1: Stock, 2: EvaluationRun}
+     * @return array{0: PortfolioProfile, 1: Stock, 2: EvaluationRun}
      */
     protected function seedRecommendationFixture(array $options = []): array
     {

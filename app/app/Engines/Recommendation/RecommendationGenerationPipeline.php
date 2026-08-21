@@ -3,22 +3,28 @@
 namespace App\Engines\Recommendation;
 
 use App\Engines\Recommendation\Allocation\CapitalAllocationStrategy;
-use App\Engines\Recommendation\Allocation\ScorePriorityCapitalAllocator;
-use App\Exceptions\DomainException;
+use App\Engines\Recommendation\Allocation\ReturnQualityCapitalAllocator;
 use App\Engines\Strategy\ExitStrategyEvaluator;
+use App\Exceptions\DomainException;
 use App\Models\EvaluationResult;
 use App\Models\EvaluationRun;
 use App\Models\Holding;
 use App\Models\PortfolioProfile;
 use App\Models\StockPrice;
 use App\Models\TradingRecommendation;
+use App\Models\TradingStrategy;
+use App\Models\TradingStrategyVersion;
+use App\Services\Analytics\MarketAnalyticsService;
 use App\Services\CashManagementService;
+use App\Services\DataQualityGuardService;
 use App\Services\PortfolioCalculationService;
 use App\Services\PortfolioLoggerService;
+use App\Services\Ranking\CapitalFillOrderService;
+use App\Services\Ranking\ReturnQualityRankingService;
+use App\Services\Lending\RecommendationLendingCoordinator;
+use App\Services\Strategy\PortfolioCapitalAccountingService;
 use App\Services\StrategyConfigurationService;
 use App\Services\StrategyEligibilityService;
-use App\Services\Analytics\MarketAnalyticsService;
-use App\Services\DataQualityGuardService;
 use App\Support\TradingOsConfig;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -27,14 +33,16 @@ use Throwable;
 /**
  * TD-002: recommendation generation stages extracted out of RecommendationEngine::generate().
  *
- * Orchestration is staged as:
- * prepareContext → cancelStaleRecommendations → buildDrafts → rankDrafts → allocateCapital → persistDrafts.
- *
- * Behaviour is copied verbatim from the previous inline implementation; no logic changes.
+ * V3 orchestration (per enabled strategy):
+ * snapshot → prepareContext → cancelStaleRecommendations (strategy-scoped)
+ * → buildDrafts → rankDrafts (return-quality or OD-23) → allocateCapital
+ * → applyCapitalOutcomes → persistDrafts.
  */
 class RecommendationGenerationPipeline
 {
     protected CapitalAllocationStrategy $allocator;
+
+    protected RecommendationLendingCoordinator $lending;
 
     public function __construct(
         protected PortfolioCalculationService $portfolio,
@@ -44,9 +52,14 @@ class RecommendationGenerationPipeline
         protected StrategyEligibilityService $eligibility,
         protected MarketAnalyticsService $marketAnalytics,
         protected DataQualityGuardService $dataQualityGuard,
+        protected PortfolioCapitalAccountingService $capitalAccounting,
+        protected ReturnQualityRankingService $returnQualityRanking,
+        protected CapitalFillOrderService $capitalFillOrder,
         ?CapitalAllocationStrategy $allocator = null,
+        ?RecommendationLendingCoordinator $lending = null,
     ) {
-        $this->allocator = $allocator ?? new ScorePriorityCapitalAllocator();
+        $this->allocator = $allocator ?? new ReturnQualityCapitalAllocator;
+        $this->lending = $lending ?? app(RecommendationLendingCoordinator::class);
     }
 
     /**
@@ -54,41 +67,67 @@ class RecommendationGenerationPipeline
      *     recommendations: list<TradingRecommendation>,
      *     batch_id: string,
      *     cash: array{cash_balance: float, reserved_cash: float, available_investable_cash: float},
-     *     strategy: array{version_id: int, version: int, name: string}
+     *     strategy: array{version_id: int, version: int, name: string}|null,
+     *     strategies: list<array{version_id: int, version: int, name: string, strategy_id: int}>
      * }
      */
     public function run(PortfolioProfile $profile, ?EvaluationRun $evaluationRun = null): array
     {
-        $ctx = $this->prepareContext($profile, $evaluationRun);
+        $versions = $this->enabledStrategyVersions($profile);
+        if ($versions === []) {
+            $this->strategies->ensureActive($profile);
+            $versions = $this->enabledStrategyVersions($profile);
+        }
 
+        $snapshot = $this->capitalAccounting->snapshot($profile);
         $created = [];
-        DB::transaction(function () use ($profile, $ctx, &$created) {
-            $this->cancelStaleRecommendations($profile);
+        $strategySummaries = [];
 
-            $drafts = $this->buildDrafts($ctx);
-            $drafts = $this->rankDrafts($drafts, $ctx);
-            $allocations = $this->allocateCapital($drafts, $ctx);
-            $drafts = $this->applyCapitalOutcomes($drafts, $allocations);
-            $created = $this->persistDrafts($drafts, $ctx, $profile);
+        DB::transaction(function () use ($profile, $evaluationRun, $versions, $snapshot, &$created, &$strategySummaries) {
+            foreach ($versions as $strategyVersion) {
+                $ctx = $this->prepareContext($profile, $evaluationRun, $strategyVersion, $snapshot);
+                $strategyId = (int) ($ctx['strategy']?->id ?? 0);
+                $this->cancelStaleRecommendations($profile, $strategyId > 0 ? $strategyId : null);
+
+                $drafts = $this->buildDrafts($ctx);
+                $drafts = $this->rankDrafts($drafts, $ctx);
+                $allocations = $this->allocateCapital($drafts, $ctx);
+                $drafts = $this->applyCapitalOutcomes($drafts, $allocations);
+                $created = array_merge($created, $this->persistDrafts($drafts, $ctx, $profile));
+
+                $strategySummaries[] = [
+                    'strategy_id' => $strategyId,
+                    'version_id' => $ctx['strategy_version']->id,
+                    'version' => $ctx['strategy_version']->version,
+                    'name' => $ctx['strategy']?->name ?? 'Strategy',
+                ];
+            }
         });
+
+        $primary = $strategySummaries[0] ?? null;
+        $cash = [
+            'cash_balance' => (float) ($snapshot['physical_cash']['total_cash'] ?? 0),
+            'reserved_cash' => (float) ($snapshot['physical_cash']['pending_execution_reservations'] ?? 0),
+            'available_investable_cash' => (float) ($snapshot['investable_cash_component'] ?? 0),
+        ];
 
         $this->logger->log('daily', 'RecommendationEngine', 'info', 'Recommendations generated', [
             'profile_id' => $profile->id,
             'count' => count($created),
-            'evaluation_run_id' => $ctx['evaluation_run']->id,
-            'strategy_version_id' => $ctx['strategy_version']->id,
-            'available_investable_cash' => $ctx['available_cash'],
+            'strategy_count' => count($strategySummaries),
+            'evaluation_run_id' => $evaluationRun?->id,
         ]);
 
         return [
             'recommendations' => $created,
-            'batch_id' => 'eval-'.$ctx['evaluation_run']->id.'-'.now()->format('YmdHis'),
-            'cash' => $ctx['cash_summary'],
-            'strategy' => [
-                'version_id' => $ctx['strategy_version']->id,
-                'version' => $ctx['strategy_version']->version,
-                'name' => $ctx['strategy']?->name ?? 'Strategy',
+            'batch_id' => 'eval-'.($evaluationRun?->id ?? 'na').'-'.now()->format('YmdHis'),
+            'cash' => $cash,
+            'strategy' => $primary === null ? null : [
+                'version_id' => $primary['version_id'],
+                'version' => $primary['version'],
+                'name' => $primary['name'],
             ],
+            'strategies' => $strategySummaries,
         ];
     }
 
@@ -101,7 +140,7 @@ class RecommendationGenerationPipeline
      *     available: bool,
      *     unavailable_reasons: list<array{code: string, message: string}>,
      *     evaluation_run: ?EvaluationRun,
-     *     strategy_version: ?\App\Models\TradingStrategyVersion,
+     *     strategy_version: ?TradingStrategyVersion,
      *     draft: ?array<string, mixed>,
      *     final_action: ?string,
      *     reasoning: ?string,
@@ -113,7 +152,7 @@ class RecommendationGenerationPipeline
         PortfolioProfile $profile,
         int $securityId,
         ?EvaluationRun $evaluationRun = null,
-        ?\App\Models\TradingStrategyVersion $strategyVersion = null,
+        ?TradingStrategyVersion $strategyVersion = null,
     ): array {
         $evaluationRun ??= EvaluationRun::query()
             ->where('profile_id', $profile->id)
@@ -138,7 +177,8 @@ class RecommendationGenerationPipeline
             ];
         }
 
-        $ctx = $this->prepareContext($profile, $evaluationRun, $strategyVersion);
+        $snapshot = $this->capitalAccounting->snapshot($profile);
+        $ctx = $this->prepareContext($profile, $evaluationRun, $strategyVersion, $snapshot);
         $drafts = $this->buildDrafts($ctx);
         $drafts = $this->rankDrafts($drafts, $ctx);
         $allocations = $this->allocateCapital($drafts, $ctx);
@@ -226,14 +266,16 @@ class RecommendationGenerationPipeline
      * Resolve evaluation run, strategy config, thresholds, market gates/multipliers,
      * cash headroom, eligibility, and current holdings snapshot.
      *
-     * When $strategyVersion is provided (F137), do NOT call ensureActive / seed.
+     * When $strategyVersion is provided (F137 / per-strategy generate), do NOT call ensureActive / seed.
      *
+     * @param  array<string, mixed>|null  $capitalSnapshot  WS2 snapshot; when null, one snapshot is taken here.
      * @return array<string, mixed>
      */
     protected function prepareContext(
         PortfolioProfile $profile,
         ?EvaluationRun $evaluationRun = null,
-        ?\App\Models\TradingStrategyVersion $strategyVersion = null,
+        ?TradingStrategyVersion $strategyVersion = null,
+        ?array $capitalSnapshot = null,
     ): array {
         $evaluationRun ??= EvaluationRun::query()
             ->where('profile_id', $profile->id)
@@ -298,16 +340,14 @@ class RecommendationGenerationPipeline
         $riskCfg = $config[TradingOsConfig::STRATEGY_RISK] ?? [];
         $allocCfg = $config[TradingOsConfig::STRATEGY_CAPITAL_ALLOCATION] ?? [];
 
-        $cashSummary = $this->cash->summary($profile);
-        $availableCash = (float) $cashSummary['available_investable_cash'];
-        if ($minCashReservePct > 0 && $cashSummary['cash_balance'] > 0) {
-            $reserveFloor = round(((float) $cashSummary['cash_balance']) * ($minCashReservePct / 100.0), 4);
-            $availableCash = max(0.0, $availableCash - $reserveFloor);
-        }
-        if ($maxCashDeployPct < 100) {
-            $cap = round(((float) $cashSummary['cash_balance']) * ($maxCashDeployPct / 100.0), 4);
-            $availableCash = min($availableCash, max(0.0, $cap));
-        }
+        $capitalSnapshot ??= $this->capitalAccounting->snapshot($profile);
+        $strategyId = (int) ($strategy?->id ?? 0);
+        $availableCash = $this->strategyAvailableCapital($capitalSnapshot, $strategyId);
+        $cashSummary = [
+            'cash_balance' => (float) ($capitalSnapshot['physical_cash']['total_cash'] ?? 0),
+            'reserved_cash' => (float) ($capitalSnapshot['physical_cash']['pending_execution_reservations'] ?? 0),
+            'available_investable_cash' => $availableCash,
+        ];
 
         $results = EvaluationResult::query()
             ->where('evaluation_run_id', $evaluationRun->id)
@@ -332,9 +372,16 @@ class RecommendationGenerationPipeline
 
         $heldQty = Holding::query()
             ->where('profile_id', $profile->id)
+            ->where('strategy_id', $strategyId)
             ->where('quantity', '>', 0)
             ->pluck('quantity', 'stock_id')
             ->all();
+
+        $heldQtyInt = [];
+        foreach ($heldQty as $stockId => $qty) {
+            $heldQtyInt[(int) $stockId] = (float) $qty;
+        }
+        $heldQty = $heldQtyInt;
 
         $portfolioValue = 0.0;
         $allocationByStock = [];
@@ -355,6 +402,25 @@ class RecommendationGenerationPipeline
         } catch (Throwable) {
             $portfolioValue = 0.0;
         }
+
+        $scopedAllocation = [];
+        foreach ($heldQty as $stockId => $qty) {
+            $meta = $allocationByStock[$stockId] ?? [];
+            $price = (float) ($meta['latest_close'] ?? 0);
+            if ($price <= 0) {
+                $price = (float) ($this->latestClose($stockId) ?? 0);
+            }
+            $mv = (float) $qty * $price;
+            $pct = $portfolioValue > 0 ? ($mv / $portfolioValue) * 100.0 : 0.0;
+            $scopedAllocation[$stockId] = [
+                'allocation_pct' => $pct,
+                'quantity' => (float) $qty,
+                'market_value' => $mv,
+                'latest_close' => $price,
+                'unrealized_pnl_pct' => $meta['unrealized_pnl_pct'] ?? null,
+            ];
+        }
+        $allocationByStock = $scopedAllocation;
 
         $expiresAt = Carbon::now()->addHours($expiryHours);
 
@@ -384,6 +450,7 @@ class RecommendationGenerationPipeline
             'alloc_cfg' => $allocCfg,
             'cash_summary' => $cashSummary,
             'available_cash' => $availableCash,
+            'capital_snapshot' => $capitalSnapshot,
             'results' => $results,
             'eligibility' => $eligibility,
             'eligible_set' => $eligibleSet,
@@ -398,14 +465,21 @@ class RecommendationGenerationPipeline
     }
 
     /**
-     * Cancel any recommendations still open from a previous generation cycle.
+     * Cancel stale open recommendations for one strategy only (not portfolio-wide).
      */
-    protected function cancelStaleRecommendations(PortfolioProfile $profile): void
+    protected function cancelStaleRecommendations(PortfolioProfile $profile, ?int $strategyId = null): void
     {
-        TradingRecommendation::query()
+        $query = TradingRecommendation::query()
             ->forProfile($profile)
-            ->staleOpen()
-            ->update(['status' => TradingRecommendation::STATUS_CANCELLED]);
+            ->staleOpen();
+
+        if ($strategyId !== null && $strategyId > 0) {
+            $query->whereHas('strategyVersion', function ($q) use ($strategyId) {
+                $q->where('strategy_id', $strategyId);
+            });
+        }
+
+        $query->update(['status' => TradingRecommendation::STATUS_CANCELLED]);
     }
 
     /**
@@ -573,6 +647,7 @@ class RecommendationGenerationPipeline
                 'key' => $index,
                 'result' => $result,
                 'security_id' => $securityId,
+                'symbol' => (string) ($result->candidate?->security?->symbol ?? ''),
                 'score' => $score,
                 'strategy_breakdown' => $scored['breakdown'],
                 'confidence' => $confidence,
@@ -692,6 +767,7 @@ class RecommendationGenerationPipeline
                 'key' => 'screener-exit-'.$securityId,
                 'result' => null,
                 'security_id' => $securityId,
+                'symbol' => (string) ($holdingMeta['symbol'] ?? ''),
                 'score' => 0.0,
                 'strategy_breakdown' => [],
                 'confidence' => 0.7,
@@ -719,7 +795,9 @@ class RecommendationGenerationPipeline
     }
 
     /**
-     * Sort drafts by score, then the configured tie-break rule.
+     * Order OPEN/INCREASE drafts by V3 return-quality ranking when computable,
+     * otherwise OD-23 capital fill order. Non-buy drafts follow after.
+     * Score is not the primary ranking key.
      *
      * @param  list<array<string, mixed>>  $drafts
      * @param  array<string, mixed>  $ctx
@@ -727,50 +805,121 @@ class RecommendationGenerationPipeline
      */
     protected function rankDrafts(array $drafts, array $ctx): array
     {
-        $allocCfg = $ctx['alloc_cfg'];
-        $tieBreak = (string) ($allocCfg['tie_break'] ?? 'highest_score');
-
-        usort($drafts, function (array $a, array $b) use ($tieBreak): int {
-            $scoreCmp = ($b['score'] ?? 0) <=> ($a['score'] ?? 0);
-            if ($scoreCmp !== 0) {
-                return $scoreCmp;
+        $buy = [];
+        $other = [];
+        foreach ($drafts as $draft) {
+            if (in_array($draft['action'] ?? '', [
+                TradingRecommendation::ACTION_OPEN_POSITION,
+                TradingRecommendation::ACTION_INCREASE_POSITION,
+            ], true)) {
+                $buy[] = $draft;
+            } else {
+                $other[] = $draft;
             }
-            if ($tieBreak === 'highest_relative_strength') {
-                return (($b['factor_scores']['relative_strength'] ?? 0) <=> ($a['factor_scores']['relative_strength'] ?? 0));
-            }
-            if ($tieBreak === 'highest_momentum') {
-                $bM = $b['factor_scores']['momentum_score'] ?? $b['factor_scores']['momentum'] ?? 0;
-                $aM = $a['factor_scores']['momentum_score'] ?? $a['factor_scores']['momentum'] ?? 0;
+        }
 
-                return ($bM <=> $aM);
-            }
-            if ($tieBreak === 'highest_breakout') {
-                $bB = $b['factor_scores']['breakout_score'] ?? $b['factor_scores']['pattern_bonus'] ?? 0;
-                $aB = $a['factor_scores']['breakout_score'] ?? $a['factor_scores']['pattern_bonus'] ?? 0;
-
-                return ($bB <=> $aB);
-            }
-
-            return ($b['confidence'] ?? 0) <=> ($a['confidence'] ?? 0);
-        });
-
-        return $drafts;
+        return array_merge($this->orderBuyDrafts($buy, $ctx), $other);
     }
 
     /**
-     * Build buy drafts from ranked candidates and allocate available cash across them.
+     * @param  list<array<string, mixed>>  $buy
+     * @param  array<string, mixed>  $ctx
+     * @return list<array<string, mixed>>
+     */
+    protected function orderBuyDrafts(array $buy, array $ctx): array
+    {
+        if ($buy === []) {
+            return [];
+        }
+
+        $versionId = (int) ($ctx['strategy_version']->id ?? 0);
+        $ranking = $versionId > 0
+            ? $this->returnQualityRanking->rankForStrategyVersion($versionId)
+            : ['computable' => false, 'bands' => [], 'reason' => 'No strategy version'];
+
+        $rankable = [];
+        $fallback = [];
+        foreach ($buy as $draft) {
+            $fit = (float) ($draft['score'] ?? 0);
+            $quality = $this->returnQualityForFit($ranking, $fit);
+            $draft['return_quality'] = $quality;
+            $draft['ranking_computable'] = $quality !== null;
+            $draft['ranking_order_source'] = $quality !== null ? 'return_quality' : 'od23';
+            if ($quality !== null) {
+                $rankable[] = $draft;
+            } else {
+                $fallback[] = $draft;
+            }
+        }
+
+        usort($rankable, function (array $a, array $b): int {
+            $q = ((float) ($b['return_quality'] ?? 0)) <=> ((float) ($a['return_quality'] ?? 0));
+            if ($q !== 0) {
+                return $q;
+            }
+            $fit = ((float) ($b['score'] ?? 0)) <=> ((float) ($a['score'] ?? 0));
+            if ($fit !== 0) {
+                return $fit;
+            }
+
+            return strtoupper((string) ($a['symbol'] ?? '')) <=> strtoupper((string) ($b['symbol'] ?? ''));
+        });
+
+        $fillInput = [];
+        foreach ($fallback as $i => $draft) {
+            $fillInput[] = [
+                'target_amount' => (float) ($draft['plan']['suggested_investment_amount'] ?? $draft['position_size'] ?? 0),
+                'fit_score' => (float) ($draft['score'] ?? 0),
+                'symbol' => (string) ($draft['symbol'] ?? ''),
+                'draft_index' => $i,
+                'draft' => $draft,
+            ];
+        }
+        $orderedFallback = $this->capitalFillOrder->order($fillInput);
+        $fallbackDrafts = [];
+        foreach ($orderedFallback as $row) {
+            $fallbackDrafts[] = $row['draft'];
+        }
+
+        return array_merge($rankable, $fallbackDrafts);
+    }
+
+    /**
+     * @param  array<string, mixed>  $ranking
+     */
+    protected function returnQualityForFit(array $ranking, float $fitScore): ?float
+    {
+        if (! ($ranking['computable'] ?? false)) {
+            return null;
+        }
+
+        foreach ($ranking['bands'] ?? [] as $band) {
+            if (! ($band['eligible'] ?? false)) {
+                continue;
+            }
+            foreach ($band['merged_band_keys'] ?? [] as $key) {
+                if ($this->returnQualityRanking->bandKeyForScore($fitScore) === $key) {
+                    return $band['return_quality'] !== null ? (float) $band['return_quality'] : null;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Allocate strategy_available_capital across already-ordered buy drafts.
      *
      * @param  list<array<string, mixed>>  $drafts
      * @param  array<string, mixed>  $ctx
-     * @return array<int|string, array{allocated_amount: float, quantity: int}>
+     * @return array<int|string, array<string, mixed>>
      */
     protected function allocateCapital(array $drafts, array $ctx): array
     {
         $portfolioValue = $ctx['portfolio_value'];
         $maxPct = $ctx['max_pct'];
         $maxNewPositions = $ctx['max_new_positions'];
-        $allocCfg = $ctx['alloc_cfg'];
-        $availableCash = $ctx['available_cash'];
+        $availableCash = (float) ($ctx['available_cash'] ?? 0);
 
         $buyDrafts = [];
         $maxPositionAmount = $portfolioValue > 0 ? round($portfolioValue * ($maxPct / 100.0), 4) : null;
@@ -795,34 +944,20 @@ class RecommendationGenerationPipeline
                 'reference_price' => (float) ($draft['reference_price'] ?? 0),
                 'action' => $draft['action'],
                 'max_position_amount' => $maxPositionAmount,
+                'symbol' => (string) ($draft['symbol'] ?? ''),
+                'order_source' => (string) ($draft['ranking_order_source'] ?? 'od23'),
             ];
-        }
-
-        $allocStrategy = (string) ($allocCfg['strategy'] ?? 'proportional');
-        if ($allocStrategy === 'equal_weight') {
-            foreach ($buyDrafts as &$bd) {
-                $bd['score'] = 1.0;
-            }
-            unset($bd);
-        } elseif ($allocStrategy === 'simple_ranking') {
-            // Greedy: highest score gets full desired until cash runs out (handled by allocator with extreme weights).
-            $rank = count($buyDrafts);
-            foreach ($buyDrafts as &$bd) {
-                $bd['score'] = (float) $rank;
-                $rank--;
-            }
-            unset($bd);
         }
 
         return $this->allocator->allocate($availableCash, $buyDrafts);
     }
 
     /**
-     * Apply capital allocation outcomes to drafts (OPEN/INCREASE → WATCH when unfunded).
-     * Shared by full generation persist and F137 decideForSecurity (PD-17).
+     * Apply capital allocation outcomes. OPEN/INCREASE stay OPEN/INCREASE when
+     * unfunded or partially funded (OD-05). Target amount is preserved.
      *
      * @param  list<array<string, mixed>>  $drafts
-     * @param  array<int|string, array{allocated_amount: float, quantity: int}>  $allocations
+     * @param  array<int|string, array<string, mixed>>  $allocations
      * @return list<array<string, mixed>>
      */
     protected function applyCapitalOutcomes(array $drafts, array $allocations): array
@@ -838,39 +973,35 @@ class RecommendationGenerationPipeline
                 $alloc = $allocations[$draft['key']] ?? ['allocated_amount' => 0.0, 'quantity' => 0];
                 $qty = (int) ($alloc['quantity'] ?? 0);
                 $amount = round((float) ($alloc['allocated_amount'] ?? 0), 4);
-                $desiredAmount = (float) ($draft['plan']['suggested_investment_amount'] ?? $draft['position_size'] ?? 0);
+                $desiredAmount = (float) ($alloc['target_amount']
+                    ?? $draft['plan']['target_investment_amount']
+                    ?? $draft['plan']['suggested_investment_amount']
+                    ?? $draft['position_size']
+                    ?? 0);
+                $unfunded = (float) ($alloc['unfunded_amount'] ?? max(0.0, $desiredAmount - $amount));
+                $status = $this->mapFundingStatus($alloc, $qty, $amount);
 
-                if ($qty < 1 || $amount <= 0) {
-                    $capitalAllocationMeta = [
-                        'status' => TradingRecommendation::ALLOCATION_UNFUNDED,
-                        'desired_amount' => $desiredAmount,
-                        'allocated_amount' => 0.0,
-                        'quantity' => 0,
-                    ];
-                    $action = TradingRecommendation::ACTION_WATCH;
-                    $plan = is_array($draft['plan']) ? array_merge($draft['plan'], [
-                        'capital_allocation' => $capitalAllocationMeta,
-                        'suggested_quantity' => 0,
-                        'suggested_investment_amount' => 0.0,
-                    ]) : ['capital_allocation' => $capitalAllocationMeta];
-                    $positionSize = null;
-                    $suggestedAlloc = $draft['is_held'] ? $draft['current_alloc'] : 0.0;
-                } else {
-                    $capitalAllocationMeta = [
-                        'status' => TradingRecommendation::ALLOCATION_FUNDED,
-                        'desired_amount' => $desiredAmount,
-                        'allocated_amount' => $amount,
-                        'quantity' => $qty,
-                    ];
-                    $plan = is_array($plan) ? $plan : [];
-                    $plan['suggested_quantity'] = $qty;
-                    $plan['suggested_investment_amount'] = $amount;
-                    $plan['capital_allocation'] = $capitalAllocationMeta;
-                    if (isset($plan['position_after']) && is_array($plan['position_after'])) {
-                        $plan['position_after']['quantity_delta'] = $qty;
-                    }
-                    $positionSize = $amount;
+                $capitalAllocationMeta = [
+                    'status' => $status,
+                    'desired_amount' => $desiredAmount,
+                    'target_amount' => $desiredAmount,
+                    'allocated_amount' => $amount,
+                    'unfunded_amount' => $unfunded,
+                    'quantity' => $qty,
+                    'atomic_reservation' => (float) ($alloc['atomic_reservation'] ?? 0),
+                    'order_source' => (string) ($draft['ranking_order_source'] ?? 'od23'),
+                ];
+
+                $plan = is_array($plan) ? $plan : [];
+                $plan['target_investment_amount'] = $desiredAmount;
+                $plan['suggested_quantity'] = $qty;
+                $plan['suggested_investment_amount'] = $amount;
+                $plan['capital_allocation'] = $capitalAllocationMeta;
+                if (isset($plan['position_after']) && is_array($plan['position_after'])) {
+                    $plan['position_after']['quantity_delta'] = $qty;
                 }
+                $positionSize = $desiredAmount;
+                $suggestedAlloc = $draft['target_alloc'];
             }
 
             $draft['action'] = $action;
@@ -884,6 +1015,22 @@ class RecommendationGenerationPipeline
         unset($draft);
 
         return $drafts;
+    }
+
+    /**
+     * @param  array<string, mixed>  $alloc
+     */
+    protected function mapFundingStatus(array $alloc, int $qty, float $amount): string
+    {
+        $raw = (string) ($alloc['funding_status'] ?? '');
+        if ($raw === 'PARTIALLY_FUNDED') {
+            return TradingRecommendation::ALLOCATION_PARTIALLY_FUNDED;
+        }
+        if ($raw === 'UNFUNDED' || $qty < 1 || $amount <= 0) {
+            return TradingRecommendation::ALLOCATION_UNFUNDED;
+        }
+
+        return TradingRecommendation::ALLOCATION_FUNDED;
     }
 
     /**
@@ -985,8 +1132,15 @@ class RecommendationGenerationPipeline
             if ($capitalAllocationMeta !== null) {
                 $evidence['capital_allocation'] = $capitalAllocationMeta;
             }
+            if (isset($draft['ranking_order_source'])) {
+                $evidence['ranking'] = [
+                    'order_source' => $draft['ranking_order_source'],
+                    'computable' => (bool) ($draft['ranking_computable'] ?? false),
+                    'return_quality' => $draft['return_quality'] ?? null,
+                ];
+            }
 
-            $created[] = TradingRecommendation::query()->create([
+            $rec = TradingRecommendation::query()->create([
                 'profile_id' => $profile->id,
                 'evaluation_result_id' => $draft['result']?->id,
                 'strategy_version_id' => $strategyVersion->id,
@@ -1017,6 +1171,8 @@ class RecommendationGenerationPipeline
                 'expires_at' => $expiresAt,
                 'generated_at' => now(),
             ]);
+            $this->lending->syncAfterGenerated($rec);
+            $created[] = $rec->fresh();
             $persisted++;
         }
 
@@ -1279,5 +1435,41 @@ class RecommendationGenerationPipeline
         }
 
         return TradingRecommendation::RISK_LOW;
+    }
+
+    /**
+     * @return list<TradingStrategyVersion>
+     */
+    protected function enabledStrategyVersions(PortfolioProfile $profile): array
+    {
+        $strategies = TradingStrategy::query()
+            ->where('profile_id', $profile->id)
+            ->where('status', TradingStrategy::STATUS_ACTIVE)
+            ->with('activeVersion')
+            ->orderBy('id')
+            ->get();
+
+        $versions = [];
+        foreach ($strategies as $strategy) {
+            if ($strategy->activeVersion) {
+                $versions[] = $strategy->activeVersion;
+            }
+        }
+
+        return $versions;
+    }
+
+    /**
+     * @param  array<string, mixed>  $snapshot
+     */
+    protected function strategyAvailableCapital(array $snapshot, int $strategyId): float
+    {
+        foreach ($snapshot['strategies'] ?? [] as $row) {
+            if ((int) ($row['strategy_id'] ?? 0) === $strategyId) {
+                return (float) ($row['strategy_available_capital'] ?? 0);
+            }
+        }
+
+        return 0.0;
     }
 }

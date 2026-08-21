@@ -32,6 +32,210 @@ Specs under `specs/` define a seven-engine decision platform. Implementation evo
 
 **Documentation map:** Repository-wide reading order and file tree — [`DOCS.md`](DOCS.md). Specs subtree — [`specs/README.md`](specs/README.md). Architecture hub (domain folders) — [`specs/architecture/README.md`](specs/architecture/README.md). For full ingest: requirements/architecture → governance → audit → this file. New Markdown docs must be indexed in `DOCS.md` (rule: `.cursor/rules/Keep-DOCS-md-ingestion-tree-updated.mdc`).
 
+## WS4 Step 7 — Capital Loan Repayment / Return (2026-08-19)
+
+Authoritative spec: [`specs/LidoPortfolio-V3-Specification.md`](specs/LidoPortfolio-V3-Specification.md) **v0.27**. Spec file was **not** edited.
+
+### Implemented
+
+`App\Services\Lending\CapitalLoanRepaymentService::repay($loan, $amount)` in a DB transaction with `lockForUpdate` on the loan row.
+
+- Rejects `amount <= 0`, amount greater than current `outstanding`, and loans already fully returned (`status = returned` or `outstanding <= 0`).
+- Creates one `CapitalLoanReturn` (`loan_id`, `capital_request_id`, `amount`, `returned_at`).
+- Reduces `CapitalLoan.outstanding` by exactly the returned amount. **`principal` is never changed.**
+- Status after a successful return: `partially_returned` if outstanding remains `> 0`; `returned` if outstanding is exactly `0`.
+- No holding/ownership/stock transfer. No `allocation_pct` change. No strategy cash accounts.
+- `lent_capital` / `borrowed_capital` still come only from `CapitalLoan.outstanding` (WS2). Return rows are not summed.
+
+### Cash ledger
+
+Physical cash is one portfolio pool. Loan commitment never moved cash; repayment is the reverse accounting claim, not a deposit/withdrawal between strategy accounts.
+
+Existing ledger types are only `deposit`, `withdrawal`, `adjustment`, `buy`, `sell`. There is **no** loan-return entry type. This step **does not invent one** and **does not post** repayment to the cash ledger. Physical cash balance is unchanged by `repay()`. Isolated gap: a dedicated loan-return ledger type would need an explicit product decision if repayment should appear on the Cash statement.
+
+### Not started
+
+**Recall**, recall eligibility (OD-07), FIFO loan selection (OD-09), weakest-position sells (OD-16), auto-return jobs, notifications, UI, HTTP repay endpoint, UNFUNDED loan sizing.
+
+Atomic ₹5,000 repayment blocks (spec “returned in atomic blocks”) are **not** enforced here — this step accepts any positive amount ≤ outstanding.
+
+### Tests / help
+
+`tests/Feature/Lending/CapitalLoanRepaymentServiceTest.php`. Cash help: loan repayment concept; statement still lists only existing ledger types.
+
+## WS4 Step 6 — Lending-Aware Trade Execution (2026-08-19)
+
+Authoritative spec: [`specs/LidoPortfolio-V3-Specification.md`](specs/LidoPortfolio-V3-Specification.md) **v0.27**. Spec file was **not** edited.
+
+### Execution flow
+
+Existing path unchanged: trade Approve → `pending_execution` → `POST /api/transactions` (or order execute) → `TransactionWriteService` cash BUY on the **one** physical pool → holdings recalc → `ExecutionEngine::completeRecommendationFromTransaction` → rec `executed`.
+
+`RecommendationLendingCoordinator::assertCanExecute()` is the execution-time gate (same rule as Step 5 pending-execution). `FUNDED` and `capital_committed` may execute. `UNFUNDED`, `partially_funded`, and `awaiting_lender_selection` cannot. Sells skip the buy gate.
+
+`capital_committed` does **not** auto-execute. User still Approves, then records the fill.
+
+### Funding amounts
+
+`CommittedLendingExecutionAmounts`: `own_amount` = WS3 allocated own capital; `borrowed_amount` = committed loan principal; `intended_amount` = own + remainder = **original target** (not own + loan). ₹5,000 ceiling excess stays as outstanding borrowed capital and is **not** invested. OD-06 and `PartialLendingAmountCalculator` are unchanged.
+
+Pending-execution cash reservation remains the **own-funded** suggested amount. The loan is not a second reservation and is not deposited into the ledger.
+
+### Ownership
+
+New holdings created from recommendation-linked ledger rows take `strategy_id` of the **borrower** (recommendation owner). Lender receives no holding. `allocation_pct` is not modified.
+
+### Idempotency / linkage
+
+One request ↔ one loan ↔ one recommendation. Rec `executed_transaction_id` plus `capital_allocation.execution_transaction_id` / `capital_loan_id` / `capital_request_id`. A second fill for the same rec or a second use of the same committed loan is rejected. No extra tables.
+
+### Failure
+
+If the fill fails after the loan is committed, the loan stays **outstanding**. No `CapitalLoanReturn`, no fake deposit, no silent discard. Rec stays `pending_execution` (or never leaves `pending_review` if Approve was blocked).
+
+### Not in this step
+
+Repayment, recall, FIFO recall, weakest-position sells, UI, notifications, jobs, UNFUNDED loan sizing.
+
+### Tests / help
+
+`tests/Feature/Lending/RecommendationLendingExecutionTest.php`, `tests/Unit/Lending/CommittedLendingExecutionAmountsTest.php`. Pending-execution and unfunded help text updated.
+
+## WS4 Step 5 — Recommendation Lifecycle + Lending Integration (2026-08-19)
+
+Authoritative spec: [`specs/LidoPortfolio-V3-Specification.md`](specs/LidoPortfolio-V3-Specification.md) **v0.27**. Spec file was **not** edited.
+
+### Implemented
+
+- After WS3 persist, `RecommendationLendingCoordinator::syncAfterGenerated()` runs. **PARTIALLY_FUNDED** OPEN/INCREASE stays that action; target and own allocation are kept. Remainder `target − own` is sized with `PartialLendingAmountCalculator` (ceil to ₹5,000, **not** OD-06 1%). One `CapitalRequest` is created (`displayed`, no lender). Status in `execution_plan.capital_allocation` becomes `awaiting_lender_selection`.
+- **UNFUNDED** stays OPEN/INCREASE, remains `unfunded`, does **not** create a request, cannot enter `pending_execution`. Loan amount is **not** chosen: `UnfundedLendingAmountCalculator` throws if called.
+- Trade Approve (`RecommendationLifecycleService::recordReview` → `pending_execution`) is blocked until `funded`, `capital_committed`, or a committed loan exists. Legacy recs with no capital-allocation status still approve as before. Sells/exits are unchanged.
+- `CapitalRequestApprovalService` success still creates one `CapitalLoan` (accounting outstanding only), then `markCapitalCommitted()` sets `capital_committed` and stores `capital_loan_id`. **Loan commitment does not execute the trade**, does not write cash ledger rows, does not create holdings, does not change `allocation_pct`, and does not auto-move to `pending_execution`. The user must still Approve the recommendation afterward.
+- Duplicate requests: `CapitalRequestService::createRequest` and the coordinator reuse any active request (`displayed` / `awaiting_approval` / `revalidation_failed` / `committed`).
+
+### Intentionally inactive
+
+Broker execution, repayment, recall, FIFO recall, weakest-position sells, UI, notifications, jobs. WS2 accounting formulas unchanged.
+
+### Unresolved
+
+**UNFUNDED full-gap loan size** remains unresolved (`ceil(gap/5000)×5000` vs `ceil(gap×1.01/5000)×5000`). Isolated behind `UnfundedLendingAmountCalculator`; not used in the live path.
+
+### Tests / help
+
+`tests/Feature/Lending/RecommendationLendingLifecycleTest.php`, `tests/Unit/Lending/UnfundedLendingAmountCalculatorTest.php`. In-app help: unfunded/partially funded + lifecycle Approve gating.
+
+## WS4 Step 4 — Lender Discovery & Approval Substrate (2026-08-19)
+
+Authoritative spec: [`specs/LidoPortfolio-V3-Specification.md`](specs/LidoPortfolio-V3-Specification.md) v0.27. Spec file was **not** edited.
+
+### Implemented
+
+- `LenderEligibilityService` — eligible lenders from WS2 `available_for_lending` (not physical cash, not OD-20 unallocated cash). Borrower excluded. Same profile only. Amount must be ≥ ₹5,000 and a ₹5,000 multiple (`CommittedLoanAmount`). Displayed/awaiting requests do not reduce AFL (Step 2: only outstanding loans).
+- `LenderRankingService` — **OD-08:** available-for-lending **percentage** descending, then **amount** descending. Exact ties: `strategy_id` ascending (deterministic; spec allows any tied lender).
+- `CapitalRequestService::createRequest` — explicit create; status `displayed`; no lender chosen. `eligibleLenders()` delegates to eligibility + ranking.
+- `CapitalRequestApprovalService` — approve/reject in a DB transaction with `lockForUpdate`. Success: one `CapitalLoan` (principal = outstanding = request amount, `committed_at` now, status `outstanding`); request `committed` with `lender_strategy_id`, `approved_at`, `approved_by`. Availability revalidated at approval. Failure: no loan; status `revalidation_failed` when the selected lender is not currently eligible. Reject: `rejected`, no loan. Committed requests cannot be rejected or approved again.
+- HTTP (active portfolio, Sanctum): `GET /api/v1/capital/requests/{id}/lenders`, `POST .../approve` (`lender_strategy_id`), `POST .../reject`.
+
+Committed loans remain **accounting claims only**. No cash ledger, holdings, reservations, or recommendation status changes. Configurable lending-limit settings are not persisted (spec item 8 skipped — no invented limit). UNFUNDED sizing is still not chosen; createRequest requires an already ₹5,000-aligned amount.
+
+### Intentionally inactive
+
+Lifecycle gating, execution, repayment processing, recall, OD-09 FIFO, UI, jobs, notifications, auto-create from recommendations.
+
+### Tests
+
+`tests/Unit/Lending/LenderRankingServiceTest.php`; `tests/Feature/Lending/LenderEligibilityServiceTest.php`; `CapitalRequestServiceTest.php`; `CapitalRequestApprovalServiceTest.php` — 29 tests, 102 assertions.
+
+## WS4 Step 3 — Partial Lending Sizing Substrate (2026-08-19)
+
+Authoritative spec: [`specs/LidoPortfolio-V3-Specification.md`](specs/LidoPortfolio-V3-Specification.md) v0.27. Spec file was **not** edited.
+
+### Implemented
+
+Deterministic **PARTIALLY_FUNDED remainder** loan size only (DEP-PARTIAL-ATOMIC). No capital requests, loans, lifecycle, execution, or accounting changes. The live pipeline does not call this helper yet.
+
+- Remainder = `max(0, target_amount − own_allocated_amount)` — **not** `atomic_allocation − own`.
+- `loan_amount` = `ceil(remainder / 5000) × 5000` via `App\Support\CeilToRupee5000` (integer `intdiv` ceiling). Zero remainder → ₹0. Any positive remainder → at least ₹5,000.
+- API: `App\Services\Lending\PartialLendingAmountCalculator::calculateForRemainder()` and `calculateForPartialRemainder($target, $own)`. No generic `calculateLoanAmount()`.
+- **Not** OD-06: does not use `ReturnQualityCapitalAllocator::atomicAllocation()` (1% then ceil). Example: remainder ₹10,000 → loan ₹10,000; OD-06 would be ₹15,000.
+- **UNFUNDED** full-gap sizing is still unresolved (ceil(gap/5000)×5000 vs OD-06 1.01+ceil). This helper does not size UNFUNDED loans.
+
+### Tests
+
+`tests/Unit/Lending/PartialLendingAmountCalculatorTest.php` — remainder/ceil cases, target−own vs atomic−own, OD-06 independence, no UNFUNDED API.
+
+## WS4 Step 2 — Accounting Substrate (2026-08-19)
+
+Authoritative spec: [`specs/LidoPortfolio-V3-Specification.md`](specs/LidoPortfolio-V3-Specification.md) v0.27. Spec file was **not** edited.
+
+### Implemented
+
+`PortfolioCapitalAccountingService::snapshot()` now reads outstanding `CapitalLoan` rows. Physical cash formula is unchanged. No cash ledger entries, no strategy bank accounts, no lending workflow.
+
+**Formulas**
+
+- `lent_capital` = `SUM(CapitalLoan.outstanding)` where `lender_strategy_id` = strategy (zero outstanding excluded).
+- `borrowed_capital` = `SUM(CapitalLoan.outstanding)` where `borrower_strategy_id` = strategy. Informational only; not a second cash balance; not added to `strategy_available_capital`.
+- Deployed (unchanged structure, lent no longer stubbed): `owned MV + pending_execution_reserved + lent_capital`.
+- Unused: `max(0, strategy_capital_allocation − deployed)`.
+- `strategy_available_capital` = `min(unused, fundablePhysical)` — **OD-24 is not applied** (own-capital BUY funding unchanged).
+- `available_physical_cash` = `max(0, total_cash − pending_execution_reservations)` (WS2 / OD-19).
+- `required_cash_reserve` still comes from OD-19 on investable capital; **not** subtracted again in available-for-lending.
+- `available_for_lending` = `floor_to_₹5000(max(0, unused − OD-24 retained − already_committed_to_lending))`.
+- `floor_to_₹5000` is `App\Support\FloorToRupee5000` (`intdiv` whole rupees). **Not** OD-06 `ceil(requirement × 1.01 / 5000) × 5000`.
+- OD-24 retained unset (`recommended_minimum_holdings` missing) → subtract **0** for lending surplus (same unresolved WS2 edge; no invented divisor).
+- `unallocated_cash` (OD-20) remains presentation-only and is not lendable surplus.
+
+**Lent vs §8.2 `already_lent`:** unused already excludes lent because lent is inside deployed (§5.2). Subtracting lent a second time in available-for-lending would double-count. `already_lent` is applied via deployed/unused only.
+
+**Already committed-to-lending:** Step 1 has request statuses (`displayed`, `awaiting_approval`, `committed`, …) and a loan row whose `outstanding` **is** lent capital. Spec §8.3 says committed-to-lending increases only on successful approval; display/pending UI must not. There is **no** distinct persisted amount for “approved but not yet outstanding principal” (no settlement-pending column). Treating `committed` requests without a loan as committed-to-lending would invent a settlement step. Therefore `already_committed_to_lending` is **always 0.0** this step. Displayed/awaiting requests do not change lent or borrowed.
+
+### Intentionally not implemented
+
+Lender selection / OD-08, approval APIs, auto loan creation, lifecycle gating, execution, cash ledger loan types, repayment processing that would update `outstanding`, recall / FIFO, UI, notifications, jobs. `allocation_pct` is not rewritten. Holdings ownership is not changed by loan rows.
+
+### Tests
+
+`tests/Unit/FloorToRupee5000Test.php` (1 test); `tests/Feature/V3CapitalLendingAccountingTest.php` (11 tests, 87 assertions combined with the unit file).
+
+## WS4 Step 1 — Lending Data Foundation (2026-08-19)
+
+Authoritative spec: [`specs/LidoPortfolio-V3-Specification.md`](specs/LidoPortfolio-V3-Specification.md) v0.27. Spec file was **not** edited.
+
+### Implemented
+
+Persistence only for V3 §28.5 capital requests, loans, and capital returns/repayments.
+
+**Tables**
+
+- `portfolio_tos_capital_requests` — `profile_id`, `borrower_strategy_id`, nullable `lender_strategy_id`, `recommendation_id`, `amount`, `status`, `approved_at`, `approved_by`, timestamps.
+- `portfolio_tos_loans` — `profile_id`, unique `capital_request_id` (one loan / one lender per request), `borrower_strategy_id`, `lender_strategy_id`, `principal`, `outstanding`, `committed_at`, nullable `min_recall_at`, `status`, timestamps.
+- `portfolio_tos_loan_returns` — `loan_id`, optional `capital_request_id`, `amount`, `returned_at`. Capital repayment only (not stock transfer).
+
+**Models:** `CapitalRequest`, `CapitalLoan`, `CapitalLoanReturn`. Status constants match spec §23.5 (`displayed` → `cancelled` on requests; `outstanding` / `partially_returned` / `returned` on loans). Relationships on `TradingStrategy`, `TradingRecommendation`, `PortfolioProfile`.
+
+**Constraints**
+
+- Lender ≠ borrower: model `saving` guard (`InvalidArgumentException`). Not a DB CHECK (not used elsewhere; SQLite tests cannot portably `ALTER TABLE … ADD CHECK`).
+- One lender per request: unique `capital_request_id` on `portfolio_tos_loans`. Request also has a single `lender_strategy_id` column.
+- FKs to `portfolio_profiles`, `portfolio_tos_strategies`, `portfolio_tos_recommendations`, `portfolio_users`.
+- Indexes: `(profile_id, status)` on requests and loans; borrower/lender; `recommendation_id`; `(lender_strategy_id, outstanding)`; `committed_at` (OD-09 FIFO key later).
+
+**₹5,000 / sizing:** no DB or model helper. Spec §28.5 denomination and DEP-PARTIAL-ATOMIC / OD-06 / UNFUNDED full-gap sizing are **not** encoded here.
+
+**`min_recall_at`:** nullable column only. No 14-day default, no portfolio override table, no eligibility math.
+
+Physical cash remains one portfolio pool (`portfolio_cash_accounts` / `portfolio_cash_ledger_entries`). No strategy bank accounts. No cash ledger loan types.
+
+### Intentionally not implemented
+
+Lending/borrowing behaviour, `available_for_lending`, `lent_capital` / `borrowed_capital`, OD-08 ranking, OD-24 lendability, partial/UNFUNDED lending flows, loan sizing service, approval APIs, auto-commit, recommendation lifecycle gating, execution changes, cash accounting, repayment processing, recall / FIFO / weakest-position, UI, notifications, jobs. No rows are auto-created from recommendations.
+
+### Tests
+
+`tests/Feature/V3CapitalLendingFoundationTest.php` — 8 tests, 41 assertions (schema, FKs, lender ≠ borrower, one loan per request, principal/outstanding/`committed_at`, returns, cash pool unchanged).
+
 ## V3 Workstream 1 — Domain identity / multi-strategy foundation (2026-08-19)
 
 Authoritative spec: [`specs/LidoPortfolio-V3-Specification.md`](specs/LidoPortfolio-V3-Specification.md) v0.26 (OD-01–OD-24 and DEP-* frozen). This workstream does **not** change that file.
@@ -119,7 +323,179 @@ V3 return-quality ranking (DEP-FIT-BAND-10) requires grouping historical backtes
 
 ### Deliberately not implemented (later WS3 passes)
 
-V3 return-quality ranking, DEP-FIT-BAND-10 fit bands, trimmed-mean ranking, OD-23 fallback ordering, new capital allocator, multi-strategy recommendation generation, partial/unfunded V3 handling, lending, trailing migration, broker execution.
+OD-23 fallback ordering integration, new capital allocator, multi-strategy recommendation generation, partial/unfunded V3 handling, lending, trailing migration, broker execution.
+
+## V3 Workstream 3 — Return-quality ranking service (2026-08-19)
+
+Authoritative spec: [`specs/LidoPortfolio-V3-Specification.md`](specs/LidoPortfolio-V3-Specification.md) v0.27. Spec file was **not** edited this pass.
+
+### Purpose
+
+Isolated V3 return-quality ranking engine implementing the full ranking pipeline from backtest corpus to trimmed-mean return quality per fit band. Does NOT modify live recommendation ranking, capital allocation, or any WS1/WS2 services.
+
+### Implemented
+
+**Service:** `app/app/Services/Ranking/ReturnQualityRankingService.php`
+
+- **Corpus selection (OD-03):** Latest completed backtest run (`status = completed`, ordered by `completed_at` desc then `id` desc) for a `strategy_version_id`. Only closed trades (`is_open = false`) with non-null `entry_score` and `return_pct`. No cross-strategy/version leakage. Scoped by `backtest_run_id`.
+- **Fit bands (DEP-FIT-BAND-10):** 10-point bands `[0,10)`, `[10,20)`, …, `[90,100]`. Entry score determines band. Adaptive sparsity: up to 2 neighbor-band merges, then min-n reduction 15→12→10. Neighbor selection: prefer adjacent band with more observations; tie → right neighbor (engineering choice, isolated in `selectMergeNeighbor()`).
+- **Trimming (DEP-TRIM-K / OD-04):** `k = floor(0.07 × n + 0.5)`. Same k from both tails. Symmetric trimmed mean of sorted return values. No banker's rounding.
+- **Return metric (OD-18):** Prefer CAGR when `holding_days ≥ 30` and CAGR is non-null; fall back to `return_pct` (simple return). CAGR never used for < 30-day trades. Engineering choice: spec §4.5 says "prefer XIRR/annualized" subject to OD-18; the spec does not prescribe a single metric for the aggregate — CAGR-when-eligible with return_pct fallback is the smallest deterministic policy consistent with the spec.
+- **Confidence (§4.2.2):** 0.0–1.0 diagnostic that decreases with merges and threshold reductions. Purely user/audit-facing. Does NOT affect ranking, allocation, or eligibility.
+- **Ranking-unavailable:** Explicit `computable: false` result when no fit band reaches minimum-n. Does NOT implement OD-23 fallback — that is the next WS3 step.
+- **Determinism:** Explicit sort on return values before trimming. No dependency on DB row order.
+
+### Tests
+
+`tests/Unit/Ranking/ReturnQualityRankingServiceTest.php` — 30 tests:
+
+**Corpus (4):** closed included, open excluded, wrong run excluded, null entry_score excluded.
+**Fit bands (5):** exact boundaries, grouping, sparse merge, adaptive 15→12→10, unavailable below 10.
+**Trimming (9):** k for n=15/20/25/30/35/50/100, symmetric tail removal, n=25 two-tail removal.
+**OD-18 (4):** short trade uses return_pct not CAGR, long trade uses CAGR, null CAGR falls back to return_pct, exactly-30 days uses CAGR.
+**Ranking (8):** higher return quality ahead, deterministic order, insufficient corpus, auditable diagnostics, confidence decreases with compromises, band key coverage, empty corpus, extract return values.
+
+### Engineering choices where spec was genuinely silent
+
+1. **Merge neighbor direction:** When a sparse band has equally-sized left and right neighbors, the service picks the right (higher-fit) neighbor. Isolated in `selectMergeNeighbor()`.
+2. **Return metric for aggregate:** Spec §4.5 says "prefer XIRR/annualized" and OD-18 gates annualized to ≥30 days. The spec does not explicitly say whether the trimmed mean should aggregate CAGR values, return_pct values, or a per-trade choice. The service uses CAGR when OD-18 permits and CAGR is non-null, otherwise return_pct. This is the smallest deterministic policy consistent with the spec. Isolated in `rankingReturnForTrade()`.
+
+### No live code changed
+
+- `RecommendationGenerationPipeline` — untouched
+- `ScorePriorityCapitalAllocator` — untouched
+- All WS1/WS2 services — untouched
+- Specification remains v0.27
+
+## V3 Workstream 3 — OD-23 capital fill order service (2026-08-19)
+
+Authoritative spec: [`specs/LidoPortfolio-V3-Specification.md`](specs/LidoPortfolio-V3-Specification.md) v0.27. Spec file was **not** edited this pass.
+
+### Purpose
+
+Isolated OD-23 capital fill order service. Used ONLY when V3 return-quality ranking is NOT computable. This is a **capital fill order**, NOT V3 ranking. Does not call `ReturnQualityRankingService` and vice versa — the future allocator will connect them.
+
+### Implemented
+
+**Service:** `app/app/Services/Ranking/CapitalFillOrderService.php`
+
+- **OD-23 ordering (frozen):**
+  1. `target_amount` DESC — conviction / target investment amount (maps to recommendation draft `position_size` / `suggested_investment_amount`: the ₹ amount from score-band allocation × portfolio value, capped by max position size)
+  2. `fit_score` DESC — strategy fit score (maps to draft `score`)
+  3. `symbol` ASC — stock listing symbol, case-insensitive alphabetical
+- **Null handling (engineering choice):** `null` target_amount → 0.0 (lowest priority); `null` fit_score → -1.0 (lowest priority within same target). Isolated in `resolveTargetAmount()` / `resolveFitScore()`.
+- **Conviction sub-score:** NOT implemented, NOT reintroduced. Removed from V3 spec per Decision 2.
+- **Immutability:** Input array is not mutated; returns a new sorted array.
+- **Extra data:** Additional keys on candidates are preserved through ordering.
+
+### Tests
+
+`tests/Unit/Ranking/CapitalFillOrderServiceTest.php` — 18 tests:
+
+**Primary key (2):** target amount is primary, higher target before lower regardless of fit.
+**Secondary key (1):** fit is secondary when targets equal.
+**Tertiary key (1):** symbol is final deterministic tie-break.
+**Multi-candidate (1):** 5-candidate exact ordering verification.
+**Determinism (1):** input order does not affect output.
+**No conviction sub-score (1):** extra conviction_sub_score field ignored.
+**Immutability (1):** service does not mutate input.
+**Edge cases (6):** empty list, single candidate, zero target, null target, null fit, extra data preserved.
+**Relationship (1):** fill order service is distinct from ranking service, no ranking keys on output.
+
+### No live code changed
+
+- `RecommendationGenerationPipeline` — untouched
+- `ScorePriorityCapitalAllocator` — untouched
+- All WS1/WS2 services — untouched
+- Specification remains v0.27
+
+## V3 Workstream 3 — V3 capital allocator (2026-08-19)
+
+Authoritative spec: [`specs/LidoPortfolio-V3-Specification.md`](specs/LidoPortfolio-V3-Specification.md) v0.27. Spec file was **not** edited this pass.
+
+### Purpose
+
+V3 sequential capital allocator that consumes pre-ordered candidates (return-quality ranking when computable, OD-23 fill order when unavailable) and produces allocation outcomes. Does NOT mutate recommendations, holdings, transactions, or cash. Does NOT integrate into the live pipeline yet.
+
+### Implemented
+
+**Allocator:** `app/app/Engines/Recommendation/Allocation/ReturnQualityCapitalAllocator.php`
+
+- **Implements `CapitalAllocationStrategy`** interface for drop-in compatibility.
+- **Sequential fill (not proportional):** Candidates are processed in supplied order. First candidate receives as much capital as permitted before any remainder flows to the next. No score-weighted distribution.
+- **Capital pool:** `strategy_available_capital` from WS2 `PortfolioCapitalAccountingService::snapshot()` — `min(unused_allocation, fundablePhysical)`. Allocator does NOT recalculate cash, reserve, or pending reservations.
+- **Target amount source:** `desired_amount` from draft (= `position_size` / `suggested_investment_amount` from `buildExecutionPlan()`, derived from `allocationPctForScore() × portfolioValue` capped by `max_position_size_pct`). The spec (§5.2) defines strategy capital allocation as `investable_capital × allocation_pct / 100` but the target sizing formula (`allocationPctForScore` from score bands) operates on portfolio value in V1. The allocator does NOT change target sizing — it receives the draft's target as input.
+- **OD-05 partial funding:** If available capital is positive but insufficient for target, allocate the maximum executable whole-share amount. Target is preserved. Status = `PARTIALLY_FUNDED`. Not converted to WATCH.
+- **Unfunded:** Zero executable quantity → status = `UNFUNDED`. Target preserved. Not converted to WATCH. No recommendation lifecycle mutation.
+- **OD-06 atomic reservation:** `ceil(requirement × 1.01 / 5000) × 5000`. Computed and reported but does NOT cap own-capital partial funding (per spec: "Own-capital partial amounts are not required to be re-ceiled").
+- **Whole-share quantity:** `floor(fundable / price)`. No fractional shares.
+- **Max-position constraint:** `min(desired, max_position_amount)` when set.
+- **OD-24:** Retained capital is a lending boundary, per spec §5.5: "It does not change BUY funding, OD-05 partial funding, or OD-06 pending-execution reservation." Allocator does NOT subtract OD-24 from available capital for own buys.
+- **No V1 score weighting:** No proportional budget. No score-based share calculation. Candidates processed strictly in supplied order.
+
+### Result contract
+
+Each candidate produces: `target_amount`, `allocated_amount`, `quantity`, `unfunded_amount`, `atomic_reservation`, `funding_status` (FULLY_FUNDED / PARTIALLY_FUNDED / UNFUNDED).
+
+### Tests
+
+`tests/Unit/Recommendation/ReturnQualityCapitalAllocatorTest.php` — 24 tests:
+
+**Sequential (3):** first filled before second, not proportional, remainder flows.
+**Full funding (2):** target funded, limited by available.
+**Partial (3):** partial allocation, target preserved, unfunded remainder preserved.
+**Unfunded (4):** zero capital, target not erased, no WATCH conversion, sub-share unfunded.
+**Ordering (3):** ranking order respected, OD-23 order respected, no V1 score weighting.
+**Strategy capital (1):** uses supplied available capital.
+**Constraints (2):** whole-share, max-position.
+**OD-06 (2):** atomic allocation normative examples, atomic reservation in result.
+**Edge cases (3):** empty drafts, zero price, zero desired.
+**Interface (1):** implements CapitalAllocationStrategy.
+
+### No live code changed
+
+- `ScorePriorityCapitalAllocator` — untouched (V1 tests pass)
+- `RecommendationGenerationPipeline` — untouched in this pass
+- All WS1/WS2 services — untouched
+- Specification remains v0.27
+
+## V3 Workstream 3 — RecommendationGenerationPipeline integration (2026-08-19)
+
+Authoritative spec: [`specs/LidoPortfolio-V3-Specification.md`](specs/LidoPortfolio-V3-Specification.md) v0.27. Spec file was **not** edited this pass.
+
+### Purpose
+
+Integrate completed WS3 ranking, OD-23 fill order, and sequential allocator into live generation — per enabled strategy, using one WS2 capital snapshot. Does not implement lending, recall, trailing, or broker execution.
+
+### Implemented
+
+**Pipeline:** `app/app/Engines/Recommendation/RecommendationGenerationPipeline.php`
+
+- **Multi-strategy:** `run()` lists every `STATUS_ACTIVE` strategy with an active version (seeds factory only when none exist). Each strategy gets its own context, drafts, ranking, allocation, persist, and stale-cancel. Sibling strategies are not disabled.
+- **WS2 snapshot:** `PortfolioCapitalAccountingService::snapshot()` once per generation cycle (and once per `decideForSecurity`). Funding pool is that strategy’s `strategy_available_capital`. V1 `CashManagementService` reserve/deploy haircuts are not re-applied (reserve is already inside WS2).
+- **Holdings:** `held_qty` / `is_held` / current allocation use only that strategy’s owned lots. Unmanaged holdings remain unmanaged and do not count as held for a strategy.
+- **Ranking:** OPEN/INCREASE ordered by `ReturnQualityRankingService` when the opportunity’s fit band is eligible; otherwise `CapitalFillOrderService` (OD-23). Score is not the primary V3 ranking key. Non-buy drafts follow after buy drafts.
+- **Allocator:** `ReturnQualityCapitalAllocator` (default). Candidates are passed in already-chosen order. `desired_amount` remains the existing draft target (`allocationPctForScore` × portfolio value). Strategy available capital is the funding pool only.
+- **Outcomes:** FULLY_FUNDED / PARTIALLY_FUNDED / UNFUNDED. OPEN/INCREASE is **not** converted to WATCH. Original target is stored as `plan.target_investment_amount` and `capital_allocation.target_amount`; this-cycle allocated amount is `suggested_investment_amount`.
+- **Stale cancel:** `whereHas('strategyVersion', strategy_id = this strategy)` — not portfolio-wide.
+- **Constant:** `TradingRecommendation::ALLOCATION_PARTIALLY_FUNDED`.
+
+### Tests
+
+- `tests/Unit/Recommendation/V3PipelineCapitalOutcomesTest.php` — unfunded/partial/full outcomes; return-quality vs OD-23 order; allocator receives supplied order and `strategy_available_capital`.
+- `tests/Feature/V3RecommendationGenerationTest.php` — two enabled strategies; stale cancel scoped; holdings scoped; one snapshot; single-strategy still works; ranking evidence recorded.
+- `MarketGateRecommendationTest` — insufficient cash keeps OPEN + unfunded; strategy-owned holdings for INCREASE/EXIT gate tests.
+
+### Not in this step
+
+Lending / DEP-PARTIAL-LEND requests, recall, weakest-position, trailing, broker execution, redesign of `allocationPctForScore` / score-band targets.
+
+### No unintended redesign
+
+- `PortfolioCapitalAccountingService` — not modified
+- `ScorePriorityCapitalAllocator` — not modified
+- WS1 ownership / TradingStrategy — not modified
+- Specification remains v0.27
 
 **Architecture specs reorganization (2026-08-06):** Documentation-only moves under `specs/architecture/` (`platform/`, `ui/`, `indicators/`, `portfolio/`, `data/`, `domains/`, `live-trading/`, `integrations/`, `governance/`, `audit/`). Filenames unchanged. `engines/` renamed to `domains/`; `System-Domain-Model.md` lives under `platform/`. Summary: [`specs/architecture/MIGRATION-SUMMARY.md`](specs/architecture/MIGRATION-SUMMARY.md).
 
@@ -146,7 +522,7 @@ V3 return-quality ranking, DEP-FIT-BAND-10 fit bands, trimmed-mean ranking, OD-2
 - Config: `config/trading_os.php`.
 - Migrations: `2026_07_25_000002_*` … `000013_*` (market analysis snapshots).
 - Command: `php artisan portfolio:decision-pipeline`.
-- **Cash / capital allocation (SD-026):** Spec: [`specs/architecture/portfolio/Cash-Management-Specification.md`](specs/architecture/portfolio/Cash-Management-Specification.md). `CashManagementService` (balance, reserved from pending_execution buys, available investable cash; `reservationDetails` for breakdown). `RecommendationEngine::generate()` delegates to `RecommendationGenerationPipeline::run()` (TD-002), which allocates available cash via pluggable `CapitalAllocationStrategy` (default `ScorePriorityCapitalAllocator`); unfunded OPEN/INCREASE demoted to WATCH (`evidence.capital_allocation.status=unfunded`); version=4 snapshots cash at generation. Approve buy → `reserveForApproval` (fails if amount exceeds available); cancel/expire/reopen → `releaseReservation`; execute → `convertReservation`. APIs: `GET/POST /api/cash*` (deposit/withdraw/adjust + ledger + reservations).
+- **Cash / capital allocation (SD-026):** Spec: [`specs/architecture/portfolio/Cash-Management-Specification.md`](specs/architecture/portfolio/Cash-Management-Specification.md). `CashManagementService` (balance, reserved from pending_execution buys, available investable cash; `reservationDetails` for breakdown). `RecommendationEngine::generate()` delegates to `RecommendationGenerationPipeline::run()` (TD-002). **V3 WS3 Step 6:** generation runs per enabled strategy; funding pool is WS2 `strategy_available_capital`; default allocator is `ReturnQualityCapitalAllocator`; unfunded/partial OPEN/INCREASE stay OPEN/INCREASE (`ALLOCATION_UNFUNDED` / `ALLOCATION_PARTIALLY_FUNDED`) and are **not** demoted to WATCH. V1 `ScorePriorityCapitalAllocator` remains in tree unused by the live pipeline. Approve buy → `reserveForApproval` (fails if amount exceeds available); cancel/expire/reopen → `releaseReservation`; execute → `convertReservation`. APIs: `GET/POST /api/cash*` (deposit/withdraw/adjust + ledger + reservations).
 - **TD-002 (2026-07-27, code audit remediation):** Extracted `RecommendationEngine::generate()` into `Recommendation\RecommendationGenerationPipeline` with staged orchestration (`prepareContext` → `cancelStaleRecommendations` → `buildDrafts` → `rankDrafts` → `allocateCapital` → `persistDrafts`). No behaviour change.
 - **TD-003 (2026-07-27, code audit remediation):** Separated universe sync orchestration from the per-stock provider fetch loop. New `Services\UniversePrice\UniversePriceBatchExecutor::run()` (built with `PriceFetchService` + `SyncLogService`) owns the batch loop — moved verbatim: per-stock `syncStock`, `PriceSyncNotificationContext::withoutTelegram` wrapper, inter-stock delay, stats accumulation, per-stock `SyncLogService::log` messages. `UniversePriceSyncService` keeps orchestration (enable flag, in-progress lock, maintenance windows, cursor, status, sync-run begin/complete) and delegates the loop via `$this->executor->run(...)`; `looksLikeRateLimit()` stayed on the service (also used by `recentProviderIssues()`). New trailing `?UniversePriceBatchExecutor $executor = null` constructor param defaults to a fresh executor, so existing call sites needed no changes. Public API unchanged; verified via `php vendor/bin/phpunit --filter "UniversePriceSync|HistoryDepthBackfillServiceTest|ScheduleRegistrationTest"` (25/25 passing) plus full suite (400/405 — 5 pre-existing unrelated failures, none touching universe price sync).
 - **TD-004 (2026-07-27, code audit remediation):** Split independent pattern detectors out of `PatternDetectionService` into `Services\PatternDetection\` (`PatternDetectorInterface`, `CandleMetrics`, candlestick single/two/three-bar, chart reversal/continuation). `PatternDetectionService` orchestrates `scanBars()` only; public API unchanged.
@@ -160,7 +536,7 @@ V3 return-quality ranking, DEP-FIT-BAND-10 fit bands, trimmed-mean ranking, OD-2
 - **Strategy + Screeners (SD-027 / SD-028 / SD-029 / SD-030):** Specs: [`Strategy-Configuration-Specification.md`](specs/architecture/domains/Strategy-Configuration-Specification.md), [`Screener-Specification.md`](specs/architecture/domains/Screener-Specification.md). **Screeners** are the sole eligibility engine; Strategies reference them (`eligibility_sources`, `portfolio_tos_strategy_screeners`). Default **Minervini Strategy** (Minervini Trend Template eligibility + momentum scoring). **V3 WS1 (2026-08-19):** SD-029 exclusive-active is no longer enforced — multiple `STATUS_ACTIVE` strategies may coexist; editor `strategy_id` is UI selection. Save still updates `config_json` in place (no Duplicate, no version fork, no factory protection). Scoring weights must sum to 100 after save — **auto-normalised** on Save / `normalizeConfig` (largest-remainder, 2 d.p.; relative proportions kept; UI **Normalise now** preview). Exit Strategy on holdings — including **Screener Exit** (`screener_exit` rule: when enabled + screener selected, any open holding present in that screener’s latest completed run within 72h becomes `EXIT_POSITION`; works for holdings in or outside the evaluation result set). Recommendation evidence: eligibility / scoring / exit (+ `strategy_name`). APIs: `/api/v1/strategy*` (`strategy_id` query optional), `PUT /strategy/screeners` (`POST /strategy/duplicate` removed). UI: General · Eligibility Sources · Scoring Model · Recommendation Thresholds · Exit Strategy · Market Gates · Cash — header card shows name, last modified, eligibility, weight total, exit/market flags (no version / factory badges).
 - **Analytics Architecture (SD-031):** Spec: [`Analytics-Architecture-Specification.md`](specs/architecture/portfolio/Analytics-Architecture-Specification.md). Owners: `StockAnalyticsService`, Evaluation Engine (`EvaluationProfileService`), `PortfolioAnalyticsService`, `MarketAnalyticsService`. Pages: Dashboard (portfolio+market), Watchlist (research tabs), Portfolio/Holdings (positions), Discovery (candidates). APIs: `/api/v1/analytics/*`. Cache tables `000012`. Nav label Holdings → **Portfolio**.
 - **Market Analysis Engine (SD-032):** Spec: [`Market-Analysis-Engine-Specification.md`](specs/architecture/domains/Market-Analysis-Engine-Specification.md). `MarketAnalysisEngine` analyses primary benchmark OHLCV (NIFTY50 via IndexCatalog) into trend/momentum/volatility/risk/drawdown/breadth + sentiment (0–100) + deterministic market phase. Persists `portfolio_tos_market_analytics` (`000013`). APIs: `/api/v1/market-analysis*`. Recommendation applies `allocation_multiplier` / `new_entry_allowed` + optional Strategy `market_gates`. Dashboard Market Analytics: gauge cards (Trend via `TrendGauge` from `trend.score`/`strength`, Momentum, Volatility, Risk, Sentiment, phase, breadth, regime) plus **Stocks Above** market-depth heatmap (`MarketDepthService` / `GET /api/dashboard` → `market_depth`); optional legacy `% above 50/200 DMA` text cards when engine fields are non-null. Top Gainer/Loser sit under Portfolio (after summary cards). Active strategy card removed from Dashboard (configure via `/strategy`). Portfolio Analytics attaches `market_context`. **Gauge colour consistency (2026-07-30):** Sentiment, Market phase, Volatility, and Risk use `HalfDonutShell` `invertScale` so rings read red→green left→right like Trend/Momentum/regime/breadth, while needle + zone labels stay on matching colours (high fear/risk/volatility remain on the red side).
-- **F098 — Market gates in live recommendations (2026-08-08):** Extracted gate evaluation into `Recommendation\MarketGateEvaluator` (deterministic; consumed by `RecommendationGenerationPipeline::prepareContext()`). Combines Market Analysis `new_entry_allowed` / `allocation_multiplier` with optional Strategy `market_gates` (`enabled`, `min_sentiment`, `allowed_phases`, `max_risk_raw`). When blocked: **OPEN / INCREASE** demoted to WATCH (not held) or HOLD (held); **EXIT / REDUCE / HOLD** unchanged. `max_risk_raw` breach also caps multiplier at 0.5×. Evidence now records `market_gates` checks/block reasons, base vs effective entry/multiplier, and `market_gate_demoted`; reasoning includes demotion text. Cash unfunded demotion remains separate (`capital_allocation.status=unfunded`). Tests: `tests/Unit/MarketGateEvaluatorTest.php`, `tests/Feature/MarketGateRecommendationTest.php`. No DB/API/frontend changes.
+- **F098 — Market gates in live recommendations (2026-08-08):** Extracted gate evaluation into `Recommendation\MarketGateEvaluator` (deterministic; consumed by `RecommendationGenerationPipeline::prepareContext()`). Combines Market Analysis `new_entry_allowed` / `allocation_multiplier` with optional Strategy `market_gates` (`enabled`, `min_sentiment`, `allowed_phases`, `max_risk_raw`). When blocked: **OPEN / INCREASE** demoted to WATCH (not held) or HOLD (held); **EXIT / REDUCE / HOLD** unchanged. `max_risk_raw` breach also caps multiplier at 0.5×. Evidence now records `market_gates` checks/block reasons, base vs effective entry/multiplier, and `market_gate_demoted`; reasoning includes demotion text. Cash unfunded demotion is **not** used in V3 (OPEN/INCREASE remain; capital status is a separate axis). Tests: `tests/Unit/MarketGateEvaluatorTest.php`, `tests/Feature/MarketGateRecommendationTest.php`. No DB/API/frontend changes.
 - **F148 / F149 — Pipeline scheduling & post-sync hook (2026-08-08):** Optional scheduled Daily Decision Pipeline (`TRADING_OS_PIPELINE_SCHEDULE=false` default) registered in `routes/console.php` at `TRADING_OS_PIPELINE_TIME` (default `19:00`), portfolio timezone, trading-session `when()` guard, `--trigger=scheduled`, `withoutOverlapping(45)`. Optional post-sync hook (`TRADING_OS_PIPELINE_AFTER_SYNC=false` default) runs `portfolio:decision-pipeline --trigger=post-sync` from `DailyMarketDataJob` only after successful sync (`failed === 0`); sync failure/partial completion does not trigger. `DecisionPipelineScheduleService` enforces once-per-day guard for automatic triggers (scheduled + post-sync share guard; manual/`--force` bypass). **H1/H2 hardening (2026-08-08):** automatic partial-failure retry tracks per-profile success for the portfolio calendar day (`decision_pipeline_auto_success_date` + JSON profile-id list in `portfolio_settings`); automatic retries skip already-successful profiles and only rerun failures; profile markers written only after successful pipeline completion; manual runs never skip on profile markers and do not write automatic profile state. Shared automatic execution lock `trading-os:decision-pipeline:automatic` (2700s, matches scheduler overlap window) acquired at command start for scheduled/post-sync, released in `finally`; lock contention returns success with skip log (not pipeline failure). Global once-per-day guard marked when all profiles in the run have succeeded for the day. `RunDecisionPipelineCommand` accepts `--trigger=manual|scheduled|post-sync` and logs via `PortfolioLoggerService::scheduler()`. `DailyDecisionPipeline` stores trigger in `stages_json._meta`. Tests: `DecisionPipelineScheduleServiceTest`, `DecisionPipelineScheduleTest`, `DecisionPipelineHardeningTest`, `DecisionPipelineRetryVerificationTest`, `ScheduleRegistrationTest` (pipeline rows), fixed `DailyMarketDataJobTest` (Laravel TestCase + AdminOperationalAlertService mock).
 - **Transactions routes:** `/transactions` = Transaction History; `/transactions/pending` = Pending Execution. Toggle navigates between them. Page tabs toggle has no “View” label; uses larger height/font (`.lido-segment-toggle--page-tabs`).
 

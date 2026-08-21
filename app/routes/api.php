@@ -4,45 +4,54 @@ use App\Http\Controllers\Api\AlertController;
 use App\Http\Controllers\Api\AlertPolicyController;
 use App\Http\Controllers\Api\AnalyticsController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\BulkTransactionImportController;
+use App\Http\Controllers\Api\CalendarEventController;
+use App\Http\Controllers\Api\CashController;
+use App\Http\Controllers\Api\CorporateActionController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DataQualityController;
 use App\Http\Controllers\Api\ExplorerAnalyticsController;
 use App\Http\Controllers\Api\FrontendLogController;
+use App\Http\Controllers\Api\HistoricalHoldingsController;
 use App\Http\Controllers\Api\HoldingController;
 use App\Http\Controllers\Api\IndexController;
 use App\Http\Controllers\Api\InviteAcceptController;
-use App\Http\Controllers\Api\PortfolioController;
-use App\Http\Controllers\Api\PortfolioHistoryController;
-use App\Http\Controllers\Api\OperationalAlertController;
-use App\Http\Controllers\Api\PasswordResetAcceptController;
-use App\Http\Controllers\Api\PasswordResetLinkController;
 use App\Http\Controllers\Api\KnowledgeBoardImageController;
 use App\Http\Controllers\Api\KnowledgeBoardNoteController;
 use App\Http\Controllers\Api\KnowledgeBoardTagController;
+use App\Http\Controllers\Api\MarketDepthController;
+use App\Http\Controllers\Api\OperationalAlertController;
+use App\Http\Controllers\Api\PasswordResetAcceptController;
+use App\Http\Controllers\Api\PasswordResetLinkController;
 use App\Http\Controllers\Api\PatternScanController;
+use App\Http\Controllers\Api\PortfolioController;
+use App\Http\Controllers\Api\PortfolioHistoryController;
 use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\ScreenerBacktestController;
+use App\Http\Controllers\Api\ScreenerController;
+use App\Http\Controllers\Api\ScreenerRunController;
 use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\StockController;
 use App\Http\Controllers\Api\StockPriceController;
 use App\Http\Controllers\Api\SyncController;
 use App\Http\Controllers\Api\SyncLogController;
-use App\Http\Controllers\Api\CalendarEventController;
-use App\Http\Controllers\Api\CorporateActionController;
 use App\Http\Controllers\Api\TransactionController;
 use App\Http\Controllers\Api\UniversePriceSyncController;
 use App\Http\Controllers\Api\UserInviteController;
 use App\Http\Controllers\Api\UserManagementController;
-use App\Http\Controllers\Api\ScreenerBacktestController;
-use App\Http\Controllers\Api\ScreenerController;
-use App\Http\Controllers\Api\ScreenerRunController;
+use App\Http\Controllers\Api\V1\AnalyticsArchitectureController;
+use App\Http\Controllers\Api\V1\ArtifactRegistryController;
+use App\Http\Controllers\Api\V1\BacktestController;
+use App\Http\Controllers\Api\V1\CapitalAccountingController;
+use App\Http\Controllers\Api\V1\CapitalLendingController;
+use App\Http\Controllers\Api\V1\IndicatorRegistryController;
+use App\Http\Controllers\Api\V1\MarketAnalysisController;
+use App\Http\Controllers\Api\V1\ScreenerRegistryController;
+use App\Http\Controllers\Api\V1\StrategyController;
+use App\Http\Controllers\Api\V1\StrategyRegistryController;
+use App\Http\Controllers\Api\V1\TradingOsController;
 use App\Http\Controllers\Api\WatchlistController;
 use App\Http\Controllers\Api\WatchlistsController;
-use App\Http\Controllers\Api\V1\ArtifactRegistryController;
-use App\Http\Controllers\Api\V1\IndicatorRegistryController;
-use App\Http\Controllers\Api\V1\ScreenerRegistryController;
-use App\Http\Controllers\Api\V1\StrategyRegistryController;
-use App\Http\Controllers\Api\V1\CapitalAccountingController;
-use App\Http\Controllers\Api\V1\TradingOsController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
@@ -91,15 +100,15 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
         ->middleware('throttle:stock-validate');
     Route::get('/stocks', [StockController::class, 'index']);
     Route::get('/stocks/{stock}', [StockController::class, 'show']);
-    Route::post('/transactions/bulk', [\App\Http\Controllers\Api\BulkTransactionImportController::class, 'store']);
+    Route::post('/transactions/bulk', [BulkTransactionImportController::class, 'store']);
     Route::apiResource('transactions', TransactionController::class);
 
-    Route::get('/cash', [\App\Http\Controllers\Api\CashController::class, 'summary']);
-    Route::get('/cash/reservations', [\App\Http\Controllers\Api\CashController::class, 'reservations']);
-    Route::get('/cash/ledger', [\App\Http\Controllers\Api\CashController::class, 'ledger']);
-    Route::post('/cash/deposit', [\App\Http\Controllers\Api\CashController::class, 'deposit']);
-    Route::post('/cash/withdraw', [\App\Http\Controllers\Api\CashController::class, 'withdraw']);
-    Route::post('/cash/adjust', [\App\Http\Controllers\Api\CashController::class, 'adjust']);
+    Route::get('/cash', [CashController::class, 'summary']);
+    Route::get('/cash/reservations', [CashController::class, 'reservations']);
+    Route::get('/cash/ledger', [CashController::class, 'ledger']);
+    Route::post('/cash/deposit', [CashController::class, 'deposit']);
+    Route::post('/cash/withdraw', [CashController::class, 'withdraw']);
+    Route::post('/cash/adjust', [CashController::class, 'adjust']);
 
     Route::get('/corporate-actions', [CorporateActionController::class, 'index']);
     Route::post('/corporate-actions/preview', [CorporateActionController::class, 'preview']);
@@ -118,7 +127,7 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::get('/stocks/{stock}/prices', [StockPriceController::class, 'index']);
     Route::get('/stocks/{stock}/market-prices', [StockPriceController::class, 'market']);
     Route::get('/dashboard', [DashboardController::class, 'index']);
-    Route::get('/market-depth', [\App\Http\Controllers\Api\MarketDepthController::class, 'show']);
+    Route::get('/market-depth', [MarketDepthController::class, 'show']);
     Route::get('/patterns/scan', [PatternScanController::class, 'index']);
     Route::get('/stocks/{stock}/pattern-scan', [PatternScanController::class, 'stock']);
 
@@ -154,7 +163,7 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
 
     Route::post('/portfolio/rebuild-history', [PortfolioHistoryController::class, 'rebuild']);
     Route::get('/portfolio/snapshots', [PortfolioHistoryController::class, 'snapshots']);
-    Route::get('/portfolio/historical-holdings', [\App\Http\Controllers\Api\HistoricalHoldingsController::class, 'show']);
+    Route::get('/portfolio/historical-holdings', [HistoricalHoldingsController::class, 'show']);
     Route::get('/analytics/portfolio', [AnalyticsController::class, 'portfolio']);
     Route::get('/analytics/stocks/{stock}', [AnalyticsController::class, 'stock']);
     Route::post('/analytics/explore', [ExplorerAnalyticsController::class, 'analyze'])
@@ -312,49 +321,52 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
 
     Route::post('/pipeline/run', [TradingOsController::class, 'pipelineRun']);
 
-    Route::get('/analytics/portfolio', [\App\Http\Controllers\Api\V1\AnalyticsArchitectureController::class, 'portfolio']);
-    Route::get('/analytics/market', [\App\Http\Controllers\Api\V1\AnalyticsArchitectureController::class, 'market']);
-    Route::get('/analytics/dashboard', [\App\Http\Controllers\Api\V1\AnalyticsArchitectureController::class, 'dashboardBundle']);
-    Route::get('/analytics/stocks/{stock}', [\App\Http\Controllers\Api\V1\AnalyticsArchitectureController::class, 'stock']);
-    Route::get('/analytics/stocks/{stock}/evaluation-profile', [\App\Http\Controllers\Api\V1\AnalyticsArchitectureController::class, 'evaluationProfile']);
-    Route::get('/analytics/stocks/{stock}/recommendation-preview', [\App\Http\Controllers\Api\V1\AnalyticsArchitectureController::class, 'recommendationPreview']);
-    Route::get('/analytics/stocks/{stock}/research', [\App\Http\Controllers\Api\V1\AnalyticsArchitectureController::class, 'watchlistResearch']);
+    Route::get('/analytics/portfolio', [AnalyticsArchitectureController::class, 'portfolio']);
+    Route::get('/analytics/market', [AnalyticsArchitectureController::class, 'market']);
+    Route::get('/analytics/dashboard', [AnalyticsArchitectureController::class, 'dashboardBundle']);
+    Route::get('/analytics/stocks/{stock}', [AnalyticsArchitectureController::class, 'stock']);
+    Route::get('/analytics/stocks/{stock}/evaluation-profile', [AnalyticsArchitectureController::class, 'evaluationProfile']);
+    Route::get('/analytics/stocks/{stock}/recommendation-preview', [AnalyticsArchitectureController::class, 'recommendationPreview']);
+    Route::get('/analytics/stocks/{stock}/research', [AnalyticsArchitectureController::class, 'watchlistResearch']);
 
-    Route::get('/market-analysis', [\App\Http\Controllers\Api\V1\MarketAnalysisController::class, 'latest']);
-    Route::get('/market-analysis/sentiment', [\App\Http\Controllers\Api\V1\MarketAnalysisController::class, 'sentiment']);
-    Route::get('/market-analysis/phase', [\App\Http\Controllers\Api\V1\MarketAnalysisController::class, 'phase']);
-    Route::get('/market-analysis/history', [\App\Http\Controllers\Api\V1\MarketAnalysisController::class, 'history']);
-    Route::get('/market-analysis/timeline', [\App\Http\Controllers\Api\V1\MarketAnalysisController::class, 'timeline']);
-    Route::get('/market-analysis/explainability', [\App\Http\Controllers\Api\V1\MarketAnalysisController::class, 'explainability']);
+    Route::get('/market-analysis', [MarketAnalysisController::class, 'latest']);
+    Route::get('/market-analysis/sentiment', [MarketAnalysisController::class, 'sentiment']);
+    Route::get('/market-analysis/phase', [MarketAnalysisController::class, 'phase']);
+    Route::get('/market-analysis/history', [MarketAnalysisController::class, 'history']);
+    Route::get('/market-analysis/timeline', [MarketAnalysisController::class, 'timeline']);
+    Route::get('/market-analysis/explainability', [MarketAnalysisController::class, 'explainability']);
 
-    Route::get('/strategy', [\App\Http\Controllers\Api\V1\StrategyController::class, 'active']);
-    Route::get('/strategy/summary', [\App\Http\Controllers\Api\V1\StrategyController::class, 'summary']);
-    Route::get('/strategy/catalogue', [\App\Http\Controllers\Api\V1\StrategyController::class, 'catalogue']);
-    Route::put('/strategy', [\App\Http\Controllers\Api\V1\StrategyController::class, 'update']);
-    Route::put('/strategy/screeners', [\App\Http\Controllers\Api\V1\StrategyController::class, 'assignScreeners']);
-    Route::get('/strategy/eligibility', [\App\Http\Controllers\Api\V1\StrategyController::class, 'eligibility']);
-    Route::get('/strategy/scoring', [\App\Http\Controllers\Api\V1\StrategyController::class, 'scoring']);
-    Route::get('/strategy/exit', [\App\Http\Controllers\Api\V1\StrategyController::class, 'exitStrategy']);
-    Route::get('/strategy/factors', [\App\Http\Controllers\Api\V1\StrategyController::class, 'factors']);
-    Route::get('/strategy/indicators', [\App\Http\Controllers\Api\V1\StrategyController::class, 'factors']);
-    Route::get('/strategy/thresholds', [\App\Http\Controllers\Api\V1\StrategyController::class, 'thresholds']);
-    Route::get('/strategy/portfolio-rules', [\App\Http\Controllers\Api\V1\StrategyController::class, 'portfolioRules']);
-    Route::get('/strategy/capital-allocation', [\App\Http\Controllers\Api\V1\StrategyController::class, 'capitalAllocation']);
-    Route::get('/strategy/recommendation-rules', [\App\Http\Controllers\Api\V1\StrategyController::class, 'recommendationRules']);
+    Route::get('/strategy', [StrategyController::class, 'active']);
+    Route::get('/strategy/summary', [StrategyController::class, 'summary']);
+    Route::get('/strategy/catalogue', [StrategyController::class, 'catalogue']);
+    Route::put('/strategy', [StrategyController::class, 'update']);
+    Route::put('/strategy/screeners', [StrategyController::class, 'assignScreeners']);
+    Route::get('/strategy/eligibility', [StrategyController::class, 'eligibility']);
+    Route::get('/strategy/scoring', [StrategyController::class, 'scoring']);
+    Route::get('/strategy/exit', [StrategyController::class, 'exitStrategy']);
+    Route::get('/strategy/factors', [StrategyController::class, 'factors']);
+    Route::get('/strategy/indicators', [StrategyController::class, 'factors']);
+    Route::get('/strategy/thresholds', [StrategyController::class, 'thresholds']);
+    Route::get('/strategy/portfolio-rules', [StrategyController::class, 'portfolioRules']);
+    Route::get('/strategy/capital-allocation', [StrategyController::class, 'capitalAllocation']);
+    Route::get('/strategy/recommendation-rules', [StrategyController::class, 'recommendationRules']);
 
     Route::get('/capital', [CapitalAccountingController::class, 'show']);
     Route::put('/capital/allocations', [CapitalAccountingController::class, 'updateAllocations']);
     Route::put('/capital/reserve-pct', [CapitalAccountingController::class, 'updateReservePct']);
+    Route::get('/capital/requests/{capitalRequest}/lenders', [CapitalLendingController::class, 'lenders'])->whereNumber('capitalRequest');
+    Route::post('/capital/requests/{capitalRequest}/approve', [CapitalLendingController::class, 'approve'])->whereNumber('capitalRequest');
+    Route::post('/capital/requests/{capitalRequest}/reject', [CapitalLendingController::class, 'reject'])->whereNumber('capitalRequest');
 
     // Strategy Backtesting & Simulation (historical only; resumable time-budget engine).
-    Route::get('/backtests/meta', [\App\Http\Controllers\Api\V1\BacktestController::class, 'meta']);
-    Route::get('/backtests', [\App\Http\Controllers\Api\V1\BacktestController::class, 'index']);
-    Route::post('/backtests', [\App\Http\Controllers\Api\V1\BacktestController::class, 'store']);
-    Route::get('/backtests/{id}', [\App\Http\Controllers\Api\V1\BacktestController::class, 'show'])->whereNumber('id');
-    Route::post('/backtests/{id}/continue', [\App\Http\Controllers\Api\V1\BacktestController::class, 'continue'])->whereNumber('id');
-    Route::put('/backtests/{id}', [\App\Http\Controllers\Api\V1\BacktestController::class, 'update'])->whereNumber('id');
-    Route::delete('/backtests/{id}', [\App\Http\Controllers\Api\V1\BacktestController::class, 'destroy'])->whereNumber('id');
-    Route::get('/backtests/{id}/timeline', [\App\Http\Controllers\Api\V1\BacktestController::class, 'timeline'])->whereNumber('id');
+    Route::get('/backtests/meta', [BacktestController::class, 'meta']);
+    Route::get('/backtests', [BacktestController::class, 'index']);
+    Route::post('/backtests', [BacktestController::class, 'store']);
+    Route::get('/backtests/{id}', [BacktestController::class, 'show'])->whereNumber('id');
+    Route::post('/backtests/{id}/continue', [BacktestController::class, 'continue'])->whereNumber('id');
+    Route::put('/backtests/{id}', [BacktestController::class, 'update'])->whereNumber('id');
+    Route::delete('/backtests/{id}', [BacktestController::class, 'destroy'])->whereNumber('id');
+    Route::get('/backtests/{id}/timeline', [BacktestController::class, 'timeline'])->whereNumber('id');
 
     // Trading Artifact Registry (SD-034) — additive infrastructure; does not replace screeners/strategy APIs.
     Route::get('/artifacts', [ArtifactRegistryController::class, 'index']);

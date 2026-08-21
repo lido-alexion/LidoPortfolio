@@ -8,6 +8,7 @@ use App\Models\TradingOrder;
 use App\Models\TradingRecommendation;
 use App\Models\User;
 use App\Services\CashManagementService;
+use App\Services\Lending\RecommendationLendingCoordinator;
 use App\Services\PortfolioLoggerService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -19,13 +20,15 @@ use Illuminate\Validation\ValidationException;
  * read/list/history queries for {@see \App\Models\TradingRecommendation}.
  * Generation orchestration lives in {@see RecommendationGenerationPipeline} (TD-002).
  *
- * Behaviour is copied verbatim from the previous inline implementation; no logic changes.
+ * Buy approval to pending_execution is gated by {@see RecommendationLendingCoordinator}
+ * when capital is unfunded or awaiting a committed loan.
  */
 class RecommendationLifecycleService
 {
     public function __construct(
         protected PortfolioLoggerService $logger,
         protected CashManagementService $cash,
+        protected RecommendationLendingCoordinator $lending,
     ) {}
 
     public function recordReview(
@@ -87,6 +90,15 @@ class RecommendationLifecycleService
         $status = $decision === TradingRecommendation::DECISION_APPROVED
             ? TradingRecommendation::STATUS_PENDING_EXECUTION
             : $decision;
+
+        if ($decision === TradingRecommendation::DECISION_APPROVED
+            && ! $this->lending->canEnterPendingExecution($recommendation)) {
+            throw ValidationException::withMessages([
+                'decision' => [
+                    'This recommendation cannot enter pending execution until capital is funded or lending is committed.',
+                ],
+            ]);
+        }
 
         DB::transaction(function () use ($recommendation, $user, $decision, $notes, $status, $profile) {
             RecommendationReview::query()->create([

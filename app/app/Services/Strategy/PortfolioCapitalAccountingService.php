@@ -2,6 +2,7 @@
 
 namespace App\Services\Strategy;
 
+use App\Models\CapitalLoan;
 use App\Models\Holding;
 use App\Models\PortfolioProfile;
 use App\Models\TradingRecommendation;
@@ -10,12 +11,15 @@ use App\Models\TradingStrategyVersion;
 use App\Services\CashManagementService;
 use App\Services\ProfileSettingsService;
 use App\Services\StockQuoteService;
+use App\Support\FloorToRupee5000;
 use App\Support\NearestIntegerRupee;
 use Illuminate\Validation\ValidationException;
 
 /**
- * V3 Workstream 2 — portfolio cash / strategy capital accounting (OD-19 / OD-20 / OD-21 / OD-24).
+ * V3 Workstream 2 + WS4 Step 2 — portfolio cash / strategy capital accounting
+ * (OD-19 / OD-20 / OD-21 / OD-24) plus outstanding lent/borrowed and available_for_lending.
  * Physical cash remains one portfolio pool. Does not create strategy bank accounts.
+ * Does not implement lending workflow, approval, or recall.
  */
 class PortfolioCapitalAccountingService
 {
@@ -149,6 +153,7 @@ class PortfolioCapitalAccountingService
         $investableCapital = $investableCash + $strategyOwnedMvTotal;
 
         $reservedByStrategy = $this->pendingReservedByStrategy($profile);
+        [$lentByStrategy, $borrowedByStrategy] = $this->outstandingLoanCapitalByStrategy($profile);
 
         $enabled = TradingStrategy::query()
             ->where('profile_id', $profile->id)
@@ -169,8 +174,9 @@ class PortfolioCapitalAccountingService
             $allocated = $investableCapital * $pct / 100.0;
             $ownedMv = $strategyOwnedMv[$sid] ?? 0.0;
             $ownReserved = $reservedByStrategy[$sid] ?? 0.0;
-            $lent = 0.0;
-            $borrowed = 0.0;
+            $lent = $lentByStrategy[$sid] ?? 0.0;
+            $borrowed = $borrowedByStrategy[$sid] ?? 0.0;
+            $committedToLending = 0.0;
             $deployed = $ownedMv + $ownReserved + $lent;
             $unused = max(0.0, $allocated - $deployed);
             $unusedSum += $unused;
@@ -181,6 +187,11 @@ class PortfolioCapitalAccountingService
                 $retained = NearestIntegerRupee::round($allocated / $recommendedMin);
             }
 
+            $retainedForLending = $retained !== null ? (float) $retained : 0.0;
+            // unused already excludes lent via deployed (§5.2). Do not subtract lent again
+            // (that would double-count §8.2's already_lent). committed-to-lending: see below.
+            $lendableSurplus = max(0.0, $unused - $retainedForLending - $committedToLending);
+
             $strategies[] = [
                 'strategy_id' => $sid,
                 'name' => $strategy->name,
@@ -190,11 +201,13 @@ class PortfolioCapitalAccountingService
                 'pending_execution_reserved' => round($ownReserved, 4),
                 'lent_capital' => round($lent, 4),
                 'borrowed_capital' => round($borrowed, 4),
+                'already_committed_to_lending' => round($committedToLending, 4),
                 'strategy_deployed_capital' => round($deployed, 4),
                 'unused_allocation' => round($unused, 4),
                 'recommended_minimum_holdings' => $recommendedMin,
                 'minimum_retained_capital' => $retained,
                 'minimum_retained_capital_is_physical_cash' => false,
+                'available_for_lending' => FloorToRupee5000::floor($lendableSurplus),
                 'strategy_available_capital' => round(min($unused, $fundablePhysical), 4),
             ];
         }
@@ -237,6 +250,34 @@ class PortfolioCapitalAccountingService
             'allocation_pct_sum_is_100' => abs($allocationSum - 100.0) <= 0.01,
             'strategies' => $strategies,
         ];
+    }
+
+    /**
+     * Outstanding loan principal grouped by lender and borrower.
+     * Uses CapitalLoan.outstanding only (returned portions already excluded from that column).
+     *
+     * @return array{0: array<int, float>, 1: array<int, float>}
+     */
+    protected function outstandingLoanCapitalByStrategy(PortfolioProfile $profile): array
+    {
+        $lent = [];
+        $borrowed = [];
+        $rows = CapitalLoan::query()
+            ->where('profile_id', $profile->id)
+            ->get(['lender_strategy_id', 'borrower_strategy_id', 'outstanding']);
+
+        foreach ($rows as $loan) {
+            $outstanding = (float) $loan->outstanding;
+            if ($outstanding <= 0) {
+                continue;
+            }
+            $lenderId = (int) $loan->lender_strategy_id;
+            $borrowerId = (int) $loan->borrower_strategy_id;
+            $lent[$lenderId] = ($lent[$lenderId] ?? 0.0) + $outstanding;
+            $borrowed[$borrowerId] = ($borrowed[$borrowerId] ?? 0.0) + $outstanding;
+        }
+
+        return [$lent, $borrowed];
     }
 
     /**

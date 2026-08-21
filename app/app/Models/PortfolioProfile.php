@@ -116,4 +116,14 @@ class PortfolioProfile extends Model
     {
         return $this->hasMany(TradingStrategy::class, 'profile_id');
     }
+
+    public function capitalRequests(): HasMany
+    {
+        return $this->hasMany(CapitalRequest::class, 'profile_id');
+    }
+
+    public function capitalLoans(): HasMany
+    {
+        return $this->hasMany(CapitalLoan::class, 'profile_id');
+    }
 }
