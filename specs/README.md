@@ -7,7 +7,7 @@
 This folder holds Trading Operating System **requirements, architecture, governance, and audit** documents.  
 Read **top → bottom**. Requirements/architecture come **before** implementation status.
 
-**V3:** [LidoPortfolio-V3-Specification.md](LidoPortfolio-V3-Specification.md) is the source of truth for the next product evolution. V1 architecture under `architecture/` remains historical intent plus shipped baseline.
+**V3:** [LidoPortfolio-V3-Specification.md](LidoPortfolio-V3-Specification.md) is the source of truth for the next product evolution (**v0.28**). Recall / capital-resolution build plan: [V3-WS4-Recall-Bridge-Implementation-Delta.md](V3-WS4-Recall-Bridge-Implementation-Delta.md). V1 architecture under this tree remains historical intent plus shipped baseline.
 
 ---
 
@@ -114,7 +114,8 @@ specs/
 
 ### Phase A0 — V3 specification (current product direction)
 
-0. [LidoPortfolio-V3-Specification.md](LidoPortfolio-V3-Specification.md) — **V3 source of truth** (multi-strategy, ownership, lending, ranking, exits, charts). Where it conflicts with V1 engine specs / SD-029, V3 wins for new work.
+0. [LidoPortfolio-V3-Specification.md](LidoPortfolio-V3-Specification.md) — **V3 source of truth** (**v0.28**; multi-strategy, ownership, lending, recall/bridge, ranking, exits, charts). Where it conflicts with V1 engine specs / SD-029, V3 wins for new work.
+0a. [architecture/V3-WS4-Recall-Bridge-Implementation-Delta.md](architecture/V3-WS4-Recall-Bridge-Implementation-Delta.md) — WS4 recall / capital-resolution / Recall Bridge Loan implementation delta (spec-only; next coding pass).
 
 ### Phase A — Requirements & architecture (V1 intent)
 

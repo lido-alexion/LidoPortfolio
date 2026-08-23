@@ -146,7 +146,7 @@ class RecommendationLendingExecutionTest extends TestCase
         $this->assertFalse(Holding::query()->where('stock_id', $rec->security_id)->exists());
     }
 
-    public function test_awaiting_lender_cannot_execute(): void
+    public function test_awaiting_lender_can_execute_at_resolved_actual(): void
     {
         [$user, $profile, $borrower] = $this->twoStrategyPortfolio(1_000_000);
         $rec = $this->makeBuyRecommendation($profile, $borrower, [
@@ -156,14 +156,24 @@ class RecommendationLendingExecutionTest extends TestCase
             'unfunded_amount' => 8000.0,
         ]);
         app(RecommendationLendingCoordinator::class)->syncAfterGenerated($rec);
-        $rec->refresh()->forceFill(['status' => TradingRecommendation::STATUS_PENDING_EXECUTION])->save();
-
+        $rec->refresh();
         $this->assertSame(
             TradingRecommendation::ALLOCATION_AWAITING_LENDER_SELECTION,
             $rec->capitalAllocationStatus()
         );
-        $this->postFill($user, $profile, $rec, 180, 100)->assertStatus(422);
-        $this->assertNull($rec->fresh()->executed_transaction_id);
+        $this->assertTrue(
+            app(RecommendationLendingCoordinator::class)->canEnterPendingExecution($rec)
+        );
+
+        app(RecommendationLifecycleService::class)->recordReview(
+            $profile,
+            $user,
+            $rec->fresh(),
+            TradingRecommendation::DECISION_APPROVED
+        );
+        // Execute at actual funded ₹10k (not original ₹18k target).
+        $this->postFill($user, $profile, $rec, 100, 100)->assertCreated();
+        $this->assertEqualsWithDelta(10000.0, (float) $rec->fresh()->executed_amount, 0.0001);
     }
 
     public function test_same_recommendation_and_loan_cannot_execute_twice(): void
@@ -195,7 +205,10 @@ class RecommendationLendingExecutionTest extends TestCase
             $rec,
             TradingRecommendation::DECISION_APPROVED
         );
-        app(CashManagementService::class)->withdraw($profile, 990000.0, 'drain', $user);
+        // Release reservation so cash can be drained below the fill notional.
+        app(RecommendationLifecycleService::class)->releaseReservation($rec->fresh());
+        $balance = app(CashManagementService::class)->balance($profile);
+        app(CashManagementService::class)->withdraw($profile, max(0.0, $balance - 100.0), 'drain', $user);
 
         $this->postFill($user, $profile, $rec, 180, 100)->assertStatus(422);
 

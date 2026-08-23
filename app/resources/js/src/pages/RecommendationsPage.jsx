@@ -4,6 +4,7 @@ import api from '../api';
 import useApiGet from '../hooks/useApiGet';
 import { runApiMutation } from '../hooks/useApiMutation';
 import { showToast } from '../toast';
+import RecommendationCapitalResolution from '../components/RecommendationCapitalResolution';
 
 const ACTIONABLE = new Set(['OPEN_POSITION', 'INCREASE_POSITION', 'REDUCE_POSITION', 'EXIT_POSITION', 'BUY', 'SELL']);
 
@@ -431,6 +432,10 @@ export default function RecommendationsPage() {
                                         {selected.reserved_amount != null ? ` · reserved now ${Number(selected.reserved_amount).toLocaleString()}` : ''}
                                     </p>
                                 )}
+
+                                {selectedActionable ? (
+                                    <RecommendationCapitalResolution recommendationId={selected.id} />
+                                ) : null}
 
                                 {selected.can_execute_manually && selectedActionable && (
                                     <div className="mb-3">

@@ -99,6 +99,57 @@ class NotificationEngine
         return $this->send($notification);
     }
 
+    /**
+     * Queue + deliver a domain notification (Telegram). Idempotent by key.
+     * Skips silently when an in-flight/delivered row already exists for the key.
+     *
+     * @param  array<string, mixed>  $payloadExtras  merged into payload (must not omit message)
+     */
+    public function notifyDomain(
+        PortfolioProfile $profile,
+        string $notificationType,
+        string $idempotencyKey,
+        string $message,
+        array $payloadExtras = [],
+        ?int $recommendationId = null,
+    ): ?TosNotification {
+        $channel = 'telegram';
+        $existing = TosNotification::query()->where('idempotency_key', $idempotencyKey)->first();
+        if ($existing && in_array($existing->status, ['delivered', 'queued', 'sending'], true)) {
+            return $existing;
+        }
+
+        $chatId = $this->profileSettings->get($profile, 'telegram_chat_id');
+        $payload = array_merge($payloadExtras, [
+            'message' => $message,
+            'notification_type' => $notificationType,
+        ]);
+
+        $notification = $existing ?? TosNotification::query()->create([
+            'profile_id' => $profile->id,
+            'recommendation_id' => $recommendationId,
+            'notification_type' => $notificationType,
+            'channel' => $channel,
+            'recipient' => $chatId,
+            'payload' => $payload,
+            'status' => 'queued',
+            'idempotency_key' => $idempotencyKey,
+            'attempt_count' => 0,
+        ]);
+
+        if ($existing) {
+            $notification->forceFill([
+                'payload' => $payload,
+                'status' => 'queued',
+                'recipient' => $chatId,
+                'notification_type' => $notificationType,
+                'recommendation_id' => $recommendationId,
+            ])->save();
+        }
+
+        return $this->send($notification);
+    }
+
     public function send(TosNotification $notification): TosNotification
     {
         $maxRetries = TradingOsConfig::notificationMaxRetries();

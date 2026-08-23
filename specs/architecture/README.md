@@ -9,6 +9,15 @@ This folder is the **domain-driven architecture hub** for StoX / Lido Portfolio.
 
 ---
 
+## V3 product direction
+
+| Doc | Title |
+|-----|-------|
+| [../LidoPortfolio-V3-Specification.md](../LidoPortfolio-V3-Specification.md) | V3 product SoT (**v0.28**) |
+| [V3-WS4-Recall-Bridge-Implementation-Delta.md](V3-WS4-Recall-Bridge-Implementation-Delta.md) | WS4 recall / capital-resolution / Recall Bridge Loan implementation delta |
+
+---
+
 ## Overview
 
 Architecture specs describe **long-term intent** across platform foundations, business domains, UI, data, integrations, live trading, governance, and audit evidence. They are **not** a claim that every SHALL matches production code — accepted deviations live in [governance/SPECIFICATION_DECISIONS.md](governance/SPECIFICATION_DECISIONS.md).

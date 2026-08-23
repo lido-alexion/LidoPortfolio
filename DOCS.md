@@ -16,7 +16,7 @@
 | **Full product understanding** | [README.md](README.md) → this file §1 → §2 → §3 | §4–§6 as needed |
 | **Run / develop the app today** | [README.md](README.md) → [implementation.md](implementation.md) | Deploy docs if shipping |
 | **Trading OS intent vs what shipped** | [specs/README.md](specs/README.md) | Governance → Audit |
-| **V3 product specification** | [specs/LidoPortfolio-V3-Specification.md](specs/LidoPortfolio-V3-Specification.md) | Frozen OD-01–OD-10 in §33.1; remaining OPEN in §33.2 |
+| **V3 product specification** | [specs/LidoPortfolio-V3-Specification.md](specs/LidoPortfolio-V3-Specification.md) | **v0.28**; OD-01–OD-24 + DEP-* frozen in §33; recall/bridge delta [architecture/V3-WS4-Recall-Bridge-Implementation-Delta.md](specs/architecture/V3-WS4-Recall-Bridge-Implementation-Delta.md) |
 | **Authority / conflicts** | [specs/architecture/governance/DOCUMENT_PRECEDENCE.md](specs/architecture/governance/DOCUMENT_PRECEDENCE.md) | — |
 
 **Agents:** User sessions start at **README.md**. Use this file only after that pointer. For day-to-day coding, still use [implementation.md](implementation.md) as the living technical reference.
@@ -334,7 +334,8 @@ Hub: [specs/architecture/governance/README.md](specs/architecture/governance/REA
 
 | Order | Document | Why |
 |------:|----------|-----|
-| 3.77 | [specs/LidoPortfolio-V3-Specification.md](specs/LidoPortfolio-V3-Specification.md) | V3 SoT: multi-strategy, ownership, capital lending, exits, ranking, charts |
+| 3.77 | [specs/LidoPortfolio-V3-Specification.md](specs/LidoPortfolio-V3-Specification.md) | V3 SoT **v0.28**: multi-strategy, ownership, capital lending, recall/bridge, exits, ranking, charts |
+| 3.77a | [specs/architecture/V3-WS4-Recall-Bridge-Implementation-Delta.md](specs/architecture/V3-WS4-Recall-Bridge-Implementation-Delta.md) | WS4 recall / capital-resolution / Recall Bridge Loan implementation delta (no code yet) |
 
 ---
 

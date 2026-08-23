@@ -313,29 +313,36 @@ const APP_DOCUMENTATION_BASE = [
     {
         id: 'cash',
         keyword: 'cash',
-        aliases: ['balance', 'deposit', 'withdraw', 'unallocated cash', 'cash reserve'],
+        aliases: ['balance', 'deposit', 'withdraw', 'unallocated cash', 'cash reserve', 'recall', 'bridge loan', 'proceeds'],
         title: 'Cash',
         routeLabel: '/cash',
         match: (p) => pathStarts(p, '/cash'),
-        summary: 'Physical cash pool, reserved cash, required reserve, Unallocated Cash, strategy capital allocations, and the cash ledger.',
+        summary: 'Physical cash pool, reserved cash, required reserve, Unallocated Cash, strategy capital allocations, recalls, Recall Bridge Loans, Proceeds from Stock Sale, and the cash ledger.',
         overview:
-            'Manage portfolio cash independently of stock trades. Physical cash is one portfolio-level pool — strategies do not have bank accounts. Balance minus reserved cash is available physical cash (pending-execution buys). The required cash reserve is a portfolio-level floor from Settings; it is not a separate ledger bucket. Unallocated Cash is a presentation of residual cash after that reserve that is not claimed by strategy unused-allocation accounting — not a new account. Strategy allocation % values split investable capital for accounting; they must sum to 100 to save and are not auto-normalized. Withdrawals cannot spend reserved cash, but they are not blocked merely because cash would fall below the reserve.',
+            'Manage portfolio cash independently of stock trades. Physical cash is one portfolio-level pool — strategies do not have bank accounts. Balance minus reserved cash is available physical cash (pending-execution buys). The required cash reserve is a portfolio-level floor from Settings; it is not a separate ledger bucket. Unallocated Cash is a presentation of residual cash after that reserve that is not claimed by strategy unused-allocation accounting — not a new account. Strategy allocation % values split investable capital for accounting; they must sum to 100 to save and are not auto-normalized. Withdrawals cannot spend reserved cash, but they are not blocked merely because cash would fall below the reserve. The Recalls & lending panel shows automated recalls, Recall Bridge Loans, and Proceeds from Stock Sale status.',
         controls: [
             { name: 'Deposit / Withdraw / Adjust', description: 'Change cash with amount stepper, optional remarks, and transaction date. Withdrawals cannot exceed available physical cash (balance − reserved). They still succeed if cash then sits below the required reserve.' },
             { name: 'Reserved cash', description: 'Expand to see reservations tied to pending-execution buys.' },
             { name: 'Required cash reserve', description: 'Rupee floor from Portfolio Settings → Portfolio cash reserve %. Based on max(invested amount, current holdings market value), not a % of cash.' },
             { name: 'Unallocated Cash', description: 'Presentation-only residual after the reserve that unused strategy allocation has not claimed. Not a ledger line and not a withdrawal entitlement.' },
-            { name: 'Strategy capital allocation', description: 'Edit enabled-strategy allocation % (must sum to 100 to save). Shows allocated capital, unused allocation, and retained capital (accounting floor, not physical cash).' },
-            { name: 'Statement', description: 'Chronological cash ledger for the active portfolio. Deposit, withdrawal, adjustment, buy, and sell only — retained capital is never posted here. Inter-strategy loan repayment is not a cash-ledger type yet; it only reduces loan outstanding.' },
+            { name: 'Strategy capital allocation', description: 'Edit enabled-strategy allocation % (must sum to 100 to save). Shows allocated capital, unused allocation, lent, borrowed, and retained capital (accounting floor, not physical cash).' },
+            { name: 'Recalls & lending', description: 'View recalls (lifecycle, settled vs outstanding), Recall Bridge Loans, and Proceeds from Stock Sale. No manual Create Bridge Loan or Mark Available — those are automated.' },
+            { name: 'Statement', description: 'Chronological cash ledger. Kind labels may show Proceeds from Stock Sale or related recall/bridge movements when applicable.' },
         ],
         concepts: [
             { name: 'Available physical cash', description: 'max(0, total cash − pending-execution reservations). Withdrawals cannot exceed this amount.' },
             { name: 'Investable capital', description: '(cash − required reserve − pending reserved) + market value of strategy-owned holdings. Unmanaged holdings are excluded from the 100% strategy split.' },
             { name: 'Strategy allocation %', description: 'Policy share of investable capital (TradingStrategy.allocation_pct). Distinct from score-band allocation_pct on the Strategy Capital Allocation tab and from holdings market-value %.' },
             { name: 'Retained capital', description: 'Per-strategy nearest-integer rupees of allocated capital ÷ recommended minimum holdings. Lending cannot consume it later; it is not a cash bucket.' },
-            { name: 'Loan repayment', description: 'Returning borrowed capital reduces the loan outstanding. Lender lent capital and borrower borrowed capital follow outstanding, not return-row totals. Repayment does not move stock, does not change allocation %, and does not post a cash ledger line (one physical cash pool; no loan-return entry type). Recall is not available yet.' },
+            { name: 'Capital priority', description: 'Funding order: own capital first, then recall eligible lent capital, then borrow if needed. Execute at the actual available amount — not the full target when funding is short.' },
+            { name: 'Recall', description: 'Lender recalling an outstanding loan. Full Recall = entire outstanding. Partial Recall = ₹5,000 multiples only. Eligibility = commitment date + current recall period (Settings). One active recall; follow-up after complete + cooldown floor(period/2).' },
+            { name: 'Immediate settlement (75% rule)', description: 'Target 100% of the recall amount; at least 75% of that recall amount from own cash and/or Recall Bridge Loan is required for immediate settlement. Settles max available up to 100%. Below 75% → Pending — funds being arranged (liquidation / Proceeds from Stock Sale).' },
+            { name: 'Recall Bridge Loan', description: 'Helps fulfil a recall only. Cannot fund investments, cannot itself be recalled, no interest, no ₹5,000 repayment blocks, needs 10% stock cushion. Repaid as funds become available.' },
+            { name: 'Proceeds from Stock Sale', description: 'Sale executed ≠ cash available. After settlement delay, proceeds apply to recall/bridge; partial apply leaves remainder outstanding; excess stays own capital.' },
+            { name: 'Good-faith automation', description: 'Strategies repay and recall according to rules when capital is needed or available. Inter-strategy lending has no interest. There is no auto-return toggle controlling this behaviour.' },
+            { name: 'Loan repayment', description: 'Any amount ≤ outstanding reduces loan outstanding. Does not move stock or change allocation %. Distinct from automated Recall when the lender needs capital back.' },
         ],
-        related: ['recommendations', 'pending-execution', 'strategy', 'settings', 'dashboard'],
+        related: ['recommendations', 'pending-execution', 'strategy', 'settings', 'dashboard', 'notifications'],
     },
     {
         id: 'corporate-action',
@@ -816,7 +823,8 @@ const APP_DOCUMENTATION_BASE = [
         ],
         concepts: [
             { name: 'Evidence snapshot', description: 'Eligibility, scoring, exit, market opinion, ranking source (return-quality or OD-23 fill order), and capital allocation status travel with the idea.' },
-            { name: 'Unfunded / partially funded', description: 'OPEN/INCREASE stays OPEN/INCREASE when own capital cannot cover the full target. Capital status starts as funded, partially_funded, or unfunded. Lack of cash does not convert the idea to Watch. The original target amount is kept; this-cycle allocated amount is recorded separately. A partially funded buy creates a capital request for the remainder (rounded up to ₹5,000) but does not pick a lender. Trade Approve cannot move a partially funded or unfunded buy to pending execution until a lender has committed a loan (status capital_committed). After commitment, you still Approve the trade separately, then record the broker fill. The borrower owns the stock. Loan repayment later reduces outstanding only — it does not transfer stock to the lender. Recall is not implemented yet. Unfunded buys do not auto-create a request; full-gap loan sizing is not decided yet.' },
+            { name: 'Unfunded / partially funded', description: 'OPEN/INCREASE stays OPEN/INCREASE when own capital cannot cover the full target. Capital priority is own → recall → borrow. The UI shows requested vs actual execution amount from capital resolution — e.g. ₹20,000 requested may execute at ₹19,000 if that is what was actually available. Lack of cash does not convert the idea to Watch. A partially funded buy may create a capital request for the remainder (₹5,000 blocks for normal lending) but does not pick a lender. Trade Approve cannot move a partially funded or unfunded buy to pending execution until a lender has committed a loan (status capital_committed). After commitment, Approve the trade separately, then record the broker fill. The borrower owns the stock. Loan repayment later reduces outstanding only. Automated Recall returns capital to the lender when needed.' },
+            { name: 'Capital resolution (detail)', description: 'Recommendation detail shows own capital used, recall requested/received, Recall Bridge Loan used, immediately available, and the actual execution amount. That actual amount is what can be invested — not the original target when funding is short.' },
             { name: 'Reopen', description: 'Undo review decisions back to pending_review when supported.' },
             { name: 'Telegram filter', description: 'HOLD / WATCH stay in-app only; they are not sent as Telegram recommendation alerts.' },
         ],
@@ -1424,7 +1432,7 @@ const APP_DOCUMENTATION_BASE = [
         match: (p) => pathStarts(p, '/notification-history'),
         summary: 'History of Telegram (and related) notifications sent for this portfolio.',
         overview:
-            'Open Notification history from Settings → Portfolio (Alerts & notifications). Inspect outbound messages for this portfolio. Delivery uses Telegram when configured under portfolio settings and alert / schedule rules. Recommendation Telegram messages are sent only for actionable trades (Open / Increase / Reduce / Exit) — HOLD and WATCH insights are not notified.',
+            'Open Notification history from Settings → Portfolio (Alerts & notifications). Inspect outbound messages for this portfolio. Delivery uses Telegram when configured under portfolio settings and alert / schedule rules. Recommendation Telegram messages are sent only for actionable trades (Open / Increase / Reduce / Exit) — HOLD and WATCH insights are not notified. Capital events (Recall requested / pending / settlement / completed, Recall Bridge Loan created or repaid, Proceeds from Stock Sale applied, and meaningful partial capital funding) also appear here when Telegram is enabled.',
         controls: [
             { name: 'History list', description: 'Browse recent messages and delivery status where available.' },
             { name: 'Retry', description: 'Re-attempt a failed delivery when the API supports it.' },
@@ -1433,10 +1441,11 @@ const APP_DOCUMENTATION_BASE = [
         concepts: [
             { name: 'Not a main tab', description: 'Notification history is reached from Portfolio settings, not the primary nav.' },
             { name: 'Telegram-only channel', description: 'Production notifications are Telegram Bot API based.' },
-            { name: 'Actionable only', description: 'Recommendation notify skips HOLD / WATCH; those stay in-app as insights.' },
+            { name: 'Actionable only (recommendations)', description: 'Recommendation notify skips HOLD / WATCH; those stay in-app as insights.' },
+            { name: 'Recall & capital events', description: 'Separate notification types for recalls, Recall Bridge Loans, Proceeds from Stock Sale, and partial funding. Duplicate scheduler runs do not re-send the same event.' },
             { name: 'Schedules', description: 'Calendar reminders, screener results, and alert policies can enqueue messages.' },
         ],
-        related: ['alert-policies', 'calendar', 'settings'],
+        related: ['alert-policies', 'calendar', 'settings', 'cash', 'recommendations'],
     },
     {
         id: 'patterns',
@@ -1593,6 +1602,7 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Fee components', description: 'Drive auto fees on buy/sell ledger rows.' },
             { name: 'Telegram', description: 'Bot token and chat id for portfolio notifications.' },
             { name: 'Portfolio cash reserve %', description: 'Portfolio-level OD-19 percentage. Required reserve rupees = this % × max(currently held invested amount, current holdings market value). Leave blank for 0 (no configured reserve). Not a % of cash. Withdrawals are not blocked if cash falls below the resulting rupee floor; Dashboard warns instead.' },
+            { name: 'Recall period (calendar days)', description: 'Days after a loan is committed before the lender may recall. Blank uses the platform default (14). Changing the period does not reset existing commitment dates — eligibility uses commitment date + the current effective period. Follow-up cooldown is floor(period/2). Saved separately via Save recall period.' },
             { name: 'Notification history', description: 'Open /notification-history from Portfolio → Alerts & notifications to audit Telegram deliveries.' },
             {
                 name: 'Active sessions',
@@ -1611,6 +1621,7 @@ const APP_DOCUMENTATION_BASE = [
             },
             { name: 'Admin vs portfolio scope', description: 'Some tools (users, sync logs, universe sync) are admin-only.' },
             { name: 'Portfolio cash reserve', description: 'A non-investable, non-lendable rupee floor. It is not a separate bank account and not strategy cash.' },
+            { name: 'Recall period', description: 'Rule-driven eligibility for automated recalls. There is no auto-return toggle that controls repayment or recall.' },
             { name: 'Not in sidebar', description: 'Settings sub-pages and registries stay off the primary sidebar; reach them from Settings or parent product pages.' },
         ],
         related: ['alert-policies', 'universe-price-sync', 'data-quality-center', 'indicator-registry', 'screener-registry', 'strategy-registry', 'users', 'notifications', 'cash', 'dashboard'],
@@ -2133,13 +2144,15 @@ const DOC_ENRICHMENTS = {
     },
     cash: {
         overview:
-            'Cash is first-class state in the recommendation engine. Keep this page accurate because available physical cash, after the portfolio reserve and pending-execution reservations, limits how much each enabled strategy can fund. Unfunded or partially funded OPEN/INCREASE ideas stay OPEN/INCREASE; they are not demoted to WATCH.',
+            'Cash is first-class state in the recommendation engine. Keep this page accurate because available physical cash, after the portfolio reserve and pending-execution reservations, limits how much each enabled strategy can fund. Unfunded or partially funded OPEN/INCREASE ideas stay OPEN/INCREASE; they are not demoted to WATCH. Use Recalls & lending to monitor automated recalls, Recall Bridge Loans, and Proceeds from Stock Sale.',
         controls: [
             { name: 'Transaction date usage', description: 'Use the intended accounting date for deposits/withdrawals so statement chronology and downstream analytics remain meaningful.' },
             { name: 'Reservation drilldown', description: 'Expand reserved cash to understand which pending executions are consuming capital before adjusting balances.' },
+            { name: 'Recalls & lending refresh', description: 'Refresh the panel after settlement jobs run to see updated outstanding amounts and Proceeds from Stock Sale status.' },
         ],
         concepts: [
             { name: 'Balance vs available', description: 'Balance is total cash ledger value; available subtracts open reservations and is the true deployable amount.' },
+            { name: 'Sale vs proceeds', description: 'A stock sale for a recall shows as executed first; Proceeds from Stock Sale become available only after the settlement delay.' },
         ],
     },
     'corporate-action': {

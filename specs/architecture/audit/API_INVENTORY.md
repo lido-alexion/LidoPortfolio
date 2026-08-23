@@ -44,6 +44,21 @@ Status: **Implemented** | **Partial** | **Missing** | **Extra (beyond REST draft
 | GET | `/api/v1/review/outcomes` | Recommendation outcomes | Sanctum + portfolio | — | outcomes | Review | **Extra** |
 | POST | `/api/v1/pipeline/run` | Full decision pipeline | Sanctum + portfolio | `notify`, `review` query/body | pipeline_run + stages | Pipeline | **Extra** |
 
+| GET | `/api/v1/capital` | Portfolio capital snapshot | Sanctum + portfolio | — | strategies / OD-19 / OD-20 | Accounting | Implemented |
+| PUT | `/api/v1/capital/allocations` | Update strategy allocations | Sanctum + portfolio | allocations[] | snapshot | Accounting | Implemented |
+| PUT | `/api/v1/capital/reserve-pct` | Portfolio cash reserve % | Sanctum + portfolio | portfolio_cash_reserve_pct | snapshot | Accounting | Implemented |
+| GET/POST | `/api/v1/capital/requests/{id}/…` | Lender list / approve / reject | Sanctum + portfolio | lender_strategy_id? | request + loan | Lending | Implemented |
+| GET/PUT | `/api/v1/capital/recall-period` | Effective recall period (OD-07) | Sanctum + portfolio | portfolio_recall_period_days? | period + cooldown | Recall | Implemented (Phase 3A) |
+| GET/POST | `/api/v1/capital/recalls` | List / request recall | Sanctum + portfolio | loan_id, kind, amount? | recall | Recall | Implemented (Phase 3A) |
+| GET | `/api/v1/capital/recalls/{id}` | Recall detail + bridge/proceeds | Sanctum + portfolio | — | recall detailed | Recall | Implemented (Phase 3A) |
+| GET | `/api/v1/capital/bridge-loans` | List Recall Bridge Loans | Sanctum + portfolio | filters | bridge rows | Recall | Implemented (Phase 3A) |
+| GET | `/api/v1/capital/bridge-loans/{id}` | Bridge detail | Sanctum + portfolio | — | bridge detailed | Recall | Implemented (Phase 3A) |
+| POST | `/api/v1/capital/bridge-loans` | Manual create | Sanctum + portfolio | — | 405 Forbidden | Recall | Rejected by design |
+| GET | `/api/v1/capital/pending-sale-proceeds` | Proceeds from Stock Sale | Sanctum + portfolio | filters | proceeds rows | Recall | Implemented (Phase 3A) |
+| POST | `…/mark-available` | Force availability | Sanctum + portfolio | — | 405 Forbidden | Recall | Rejected by design |
+| POST | `/api/v1/capital/resolve` | Capital resolution plan | Sanctum + portfolio | strategy_id, required_amount | resolution | CapitalResolution | Implemented (Phase 3A) |
+| GET | `/api/v1/recommendations/{id}/capital-resolution` | UI capital-resolution contract | Sanctum + portfolio | — | own/recall/bridge/actual | CapitalResolution | Implemented (Phase 3A) |
+
 **Count:** 29 Trading OS `/api/v1` routes inventoried.
 
 ---

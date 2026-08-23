@@ -11,6 +11,7 @@ import TimeInput, { isValidCronTime } from '../components/TimeInput';
 import { normalizeFeeComponents } from '../utils/feeCalculator';
 import { normalizeExternalStockLinks } from '../utils/externalStockLinks';
 import { showToast } from '../toast';
+import { runApiMutation } from '../hooks/useApiMutation';
 
 function roundToTwoDecimals(value) {
     const num = Number(value);
@@ -79,6 +80,9 @@ export default function SettingsPage() {
     const [telegramTesting, setTelegramTesting] = useState(false);
     const [opsCheckRunning, setOpsCheckRunning] = useState(false);
     const [activeScope, setActiveScope] = useState(() => scopeFromPath(location.pathname, isAdmin));
+    const [recallPeriod, setRecallPeriod] = useState(null);
+    const [recallPeriodDraft, setRecallPeriodDraft] = useState('');
+    const [recallPeriodBusy, setRecallPeriodBusy] = useState(false);
 
     const notificationSchedules = useMemo(
         () => (Array.isArray(settings.notification_schedules)
@@ -127,6 +131,43 @@ export default function SettingsPage() {
         });
     };
 
+    const loadRecallPeriod = async () => {
+        try {
+            const { data } = await api.get('/v1/capital/recall-period', { skipErrorToast: true });
+            const payload = data?.data || null;
+            setRecallPeriod(payload);
+            setRecallPeriodDraft(
+                payload?.portfolio_override_days != null
+                    ? String(payload.portfolio_override_days)
+                    : '',
+            );
+        } catch {
+            setRecallPeriod(null);
+        }
+    };
+
+    const saveRecallPeriod = async () => {
+        setRecallPeriodBusy(true);
+        try {
+            const trimmed = recallPeriodDraft.trim();
+            await runApiMutation(async () => {
+                if (trimmed === '') {
+                    await api.put('/v1/capital/recall-period', { clear_override: true }, { skipErrorToast: true });
+                } else {
+                    await api.put('/v1/capital/recall-period', {
+                        portfolio_recall_period_days: Number(trimmed),
+                    }, { skipErrorToast: true });
+                }
+                await loadRecallPeriod();
+            }, {
+                successMessage: 'Recall period saved',
+                errorFallback: 'Failed to save recall period',
+            });
+        } finally {
+            setRecallPeriodBusy(false);
+        }
+    };
+
     const loadSessions = async () => {
         setSessionsLoading(true);
         try {
@@ -144,7 +185,14 @@ export default function SettingsPage() {
 
     usePortfolioChanged(() => {
         loadSettings();
+        loadRecallPeriod();
     });
+
+    useEffect(() => {
+        if (activeScope === 'portfolio') {
+            loadRecallPeriod();
+        }
+    }, [activeScope, activePortfolio?.id]);
 
     useEffect(() => {
         const nextScope = scopeFromPath(location.pathname, isAdmin);
@@ -726,6 +774,51 @@ export default function SettingsPage() {
                                         This is not a percentage of cash. Withdrawals are not blocked if cash falls below
                                         the reserve.
                                     </p>
+                                </div>
+                                <div className="col-12 col-md-4">
+                                    <label className="form-label" htmlFor="settings-recall-period">
+                                        Recall period (calendar days)
+                                    </label>
+                                    <NumberInput
+                                        id="settings-recall-period"
+                                        min="0"
+                                        max="3650"
+                                        step="1"
+                                        allowDecimals={false}
+                                        value={recallPeriodDraft}
+                                        onChange={(e) => setRecallPeriodDraft(e.target.value)}
+                                        placeholder={
+                                            recallPeriod?.platform_default_days != null
+                                                ? `Default ${recallPeriod.platform_default_days}`
+                                                : '14'
+                                        }
+                                    />
+                                    <p className="text-muted small mb-2 mt-1">
+                                        Days after a loan is committed before the lender strategy may recall.
+                                        Leave blank to use the platform default
+                                        {recallPeriod?.platform_default_days != null
+                                            ? ` (${recallPeriod.platform_default_days})`
+                                            : ''}
+                                        .
+                                        Effective now:
+                                        {' '}
+                                        <strong>{recallPeriod?.effective_period_days ?? '—'}</strong>
+                                        {' '}
+                                        days; follow-up cooldown
+                                        {' '}
+                                        <strong>{recallPeriod?.follow_up_cooldown_days ?? '—'}</strong>
+                                        .
+                                        Changing this does not reset existing loan commitment dates — eligibility uses
+                                        commitment date plus the current period.
+                                    </p>
+                                    <button
+                                        type="button"
+                                        className="btn btn-outline-primary btn-sm"
+                                        onClick={saveRecallPeriod}
+                                        disabled={recallPeriodBusy || !activePortfolio}
+                                    >
+                                        {recallPeriodBusy ? 'Saving…' : 'Save recall period'}
+                                    </button>
                                 </div>
                                 <div className="col-12">
                                     <label className="form-label">Telegram Bot Token</label>

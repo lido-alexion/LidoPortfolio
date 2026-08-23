@@ -56,17 +56,31 @@ class CashController extends Controller
         $profile = \activePortfolio();
         $limit = min(100, max(1, (int) $request->input('limit', 50)));
 
-        $entries = array_map(fn ($e) => [
-            'id' => $e->id,
-            'entry_type' => $e->entry_type,
-            'amount' => (float) $e->amount,
-            'balance_after' => (float) $e->balance_after,
-            'reason' => $e->reason,
-            'entry_date' => optional($e->entry_date)?->toDateString(),
-            'transaction_id' => $e->transaction_id,
-            'recommendation_id' => $e->recommendation_id,
-            'created_at' => optional($e->created_at)?->toIso8601String(),
-        ], $this->cash->recentEntries($profile, $limit));
+        $entries = array_map(function ($e) {
+            $reason = $e->reason;
+            $kind = app(\App\Services\Lending\CapitalRecallPresenter::class)->cashMovementKind($reason);
+
+            return [
+                'id' => $e->id,
+                'entry_type' => $e->entry_type,
+                'amount' => (float) $e->amount,
+                'balance_after' => (float) $e->balance_after,
+                'reason' => $reason,
+                'movement_kind' => $kind,
+                'movement_label' => match ($kind) {
+                    'proceeds_from_stock_sale' => 'Proceeds from Stock Sale',
+                    'recall_bridge_loan' => 'Recall Bridge Loan',
+                    'recall' => 'Recall',
+                    'normal_loan_repayment' => 'Normal loan repayment',
+                    'normal_loan' => 'Normal loan',
+                    default => null,
+                },
+                'entry_date' => optional($e->entry_date)?->toDateString(),
+                'transaction_id' => $e->transaction_id,
+                'recommendation_id' => $e->recommendation_id,
+                'created_at' => optional($e->created_at)?->toIso8601String(),
+            ];
+        }, $this->cash->recentEntries($profile, $limit));
 
         return response()->json(['data' => $entries]);
     }

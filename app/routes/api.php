@@ -44,6 +44,11 @@ use App\Http\Controllers\Api\V1\ArtifactRegistryController;
 use App\Http\Controllers\Api\V1\BacktestController;
 use App\Http\Controllers\Api\V1\CapitalAccountingController;
 use App\Http\Controllers\Api\V1\CapitalLendingController;
+use App\Http\Controllers\Api\V1\CapitalRecallController;
+use App\Http\Controllers\Api\V1\CapitalResolutionController;
+use App\Http\Controllers\Api\V1\PendingSaleProceedsController;
+use App\Http\Controllers\Api\V1\RecallBridgeLoanController;
+use App\Http\Controllers\Api\V1\RecallPeriodController;
 use App\Http\Controllers\Api\V1\IndicatorRegistryController;
 use App\Http\Controllers\Api\V1\MarketAnalysisController;
 use App\Http\Controllers\Api\V1\ScreenerRegistryController;
@@ -357,6 +362,21 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
     Route::get('/capital/requests/{capitalRequest}/lenders', [CapitalLendingController::class, 'lenders'])->whereNumber('capitalRequest');
     Route::post('/capital/requests/{capitalRequest}/approve', [CapitalLendingController::class, 'approve'])->whereNumber('capitalRequest');
     Route::post('/capital/requests/{capitalRequest}/reject', [CapitalLendingController::class, 'reject'])->whereNumber('capitalRequest');
+
+    // V3 WS4 Phase 3A — Recall / Bridge / Proceeds / Capital resolution APIs
+    Route::get('/capital/recall-period', [RecallPeriodController::class, 'show']);
+    Route::put('/capital/recall-period', [RecallPeriodController::class, 'update']);
+    Route::get('/capital/recalls', [CapitalRecallController::class, 'index']);
+    Route::post('/capital/recalls', [CapitalRecallController::class, 'store']);
+    Route::get('/capital/recalls/{recall}', [CapitalRecallController::class, 'show'])->whereNumber('recall');
+    Route::get('/capital/bridge-loans', [RecallBridgeLoanController::class, 'index']);
+    Route::post('/capital/bridge-loans', [RecallBridgeLoanController::class, 'store']);
+    Route::get('/capital/bridge-loans/{bridgeLoan}', [RecallBridgeLoanController::class, 'show'])->whereNumber('bridgeLoan');
+    Route::get('/capital/pending-sale-proceeds', [PendingSaleProceedsController::class, 'index']);
+    Route::get('/capital/pending-sale-proceeds/{proceeds}', [PendingSaleProceedsController::class, 'show'])->whereNumber('proceeds');
+    Route::post('/capital/pending-sale-proceeds/{proceeds}/mark-available', [PendingSaleProceedsController::class, 'markAvailable'])->whereNumber('proceeds');
+    Route::post('/capital/resolve', [CapitalResolutionController::class, 'resolve']);
+    Route::get('/recommendations/{recommendation}/capital-resolution', [CapitalResolutionController::class, 'forRecommendation'])->whereNumber('recommendation');
 
     // Strategy Backtesting & Simulation (historical only; resumable time-budget engine).
     Route::get('/backtests/meta', [BacktestController::class, 'meta']);

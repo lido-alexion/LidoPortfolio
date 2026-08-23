@@ -4,13 +4,13 @@
 |-------|-------|
 | **Title** | Lido Portfolio V3 Specification |
 | **Status** | Review |
-| **Version** | 0.27 |
+| **Version** | 0.28 |
 | **Owner** | Product Specification / Architecture |
-| **Last Updated** | 2026-08-19 |
-| **Implementation Status** | Not started |
-| **Depends On** | Frozen V3 product decisions (2026-08-14 through 2026-08-19), including OD-01–OD-24 and resolved **DEP-TRIM-K**, **DEP-FIT-BAND-10**, **DEP-PARTIAL-LEND**, **DEP-PARTIAL-ATOMIC**, **DEP-ADOPT-MERGE**, **DEP-WEAKEST-PRICE**, **DEP-WEAKEST-HISTORY**, and **DEP-RECALL-FLOOR**; Architecture Impact Report; V1/V2 as-built baseline in `implementation.md` |
+| **Last Updated** | 2026-08-21 |
+| **Implementation Status** | Partially implemented (WS1–WS4 Steps 1–7 substrate in code; recall / Recall Bridge Loan not started) |
+| **Depends On** | Frozen V3 product decisions (2026-08-14 through 2026-08-21), including OD-01–OD-24 and resolved **DEP-TRIM-K**, **DEP-FIT-BAND-10**, **DEP-PARTIAL-LEND**, **DEP-PARTIAL-ATOMIC**, **DEP-ADOPT-MERGE**, **DEP-WEAKEST-PRICE**, **DEP-WEAKEST-HISTORY**, **DEP-RECALL-FLOOR**, **DEP-CAPITAL-PRIORITY**, **DEP-RECALL-SIZE**, **DEP-RECALL-IMMEDIATE-75**, **DEP-RECALL-BRIDGE**, **DEP-RECALL-FOLLOWUP**, and **DEP-SALE-PROCEEDS**; Architecture Impact Report; V1/V2 as-built baseline in `implementation.md` |
 | **Referenced By** | Future V3 implementation passes |
-| **Related Specifications** | [architecture/domains/Strategy-Configuration-Specification.md](architecture/domains/Strategy-Configuration-Specification.md), [architecture/portfolio/Cash-Management-Specification.md](architecture/portfolio/Cash-Management-Specification.md), [architecture/domains/Recommendation-Engine-Specification.md](architecture/domains/Recommendation-Engine-Specification.md), [architecture/governance/SPECIFICATION_DECISIONS.md](architecture/governance/SPECIFICATION_DECISIONS.md) (SD-026, SD-029, SD-010) |
+| **Related Specifications** | [architecture/V3-WS4-Recall-Bridge-Implementation-Delta.md](architecture/V3-WS4-Recall-Bridge-Implementation-Delta.md), [architecture/domains/Strategy-Configuration-Specification.md](architecture/domains/Strategy-Configuration-Specification.md), [architecture/portfolio/Cash-Management-Specification.md](architecture/portfolio/Cash-Management-Specification.md), [architecture/domains/Recommendation-Engine-Specification.md](architecture/domains/Recommendation-Engine-Specification.md), [architecture/governance/SPECIFICATION_DECISIONS.md](architecture/governance/SPECIFICATION_DECISIONS.md) (SD-026, SD-029, SD-010) |
 
 ---
 
@@ -92,17 +92,18 @@ V3 **rejects** ranking by `Strategic Score × Probability` when probability is d
 
 ### 1.3 Architectural principles
 
-1. **Portfolio is the account.** One portfolio is one real or paper trading account. Multiple portfolios may exist for hypothesis testing. Broker automation may later constrain how many portfolios can be live; V3 does not implement broker automation (SD-010 remains: manual execution).
+1. **Portfolio is the account.** One portfolio is one real or paper trading account. Multiple portfolios may exist for hypothesis testing. Broker automation may later constrain how many portfolios can be live; V3 does not require broker automation for capital/lending/recall accounting (SD-010 remains for trade execution modes).
 2. **Many strategies may run concurrently in one portfolio.** V3 supersedes the V1 “exactly one active strategy per portfolio” product rule (SD-029).
 3. **Separation of concerns.** Strategy identifies candidates, scores fit, sizes a *target* position from conviction, and emits strategy-specific BUY/SELL/HOLD/EXIT. Portfolio owns cash reserve (**OD-19** formula in §22), common stop-loss, common trailing stop, portfolio position/risk limits, and inter-strategy capital coordination.
 4. **Ownership fences.** A strategy may not reduce or exit a holding it does not own. Manual holdings are unmanaged until adopted.
 5. **A recommendation can be valid and unfunded or only partially funded.** Lack of full capital must not convert a BUY/INCREASE into WATCH. Partial funding is allowed (OD-05).
-6. **Lending is always an explicit user decision.** Displaying options does not commit capital. The backend is authoritative at approval time.
-7. **Raw daily `close_price` only** for portfolio stop-loss and trailing stop (**OD-14**). No `adjusted_close_price` for those calculations. No intraday low.
-8. **Horizon is optional** and, when set, is measured in **calendar days** (OD-02). Absence of a horizon is not an expiry event.
-9. **Do not turn current implementation limits into product requirements.**
-10. **Multiple strategies may own the same stock** in one portfolio (OD-01). Position, cost, trailing, exit, allocation, attribution, and corporate-action **ownership** are per owner, not per symbol alone (OD-10). Holdings of the same stock MUST NOT be blended into one portfolio-level position for those purposes.
-11. **Ranking statistics use the defined backtest corpus only** (OD-03). Live-trading history is not a ranking observation source.
+6. **Strategies are algorithmic actors acting in good faith.** Inter-strategy lending, recall, Recall Bridge Loans, repayments, and associated accounting are **rule-driven automated processes**. Invalid actions MUST NOT be modelled as realistic deliberate strategy behaviour. Algorithms MUST generate only valid amounts and transitions. Displaying a capital request still does not commit capital until approval/commitment succeeds; the backend remains authoritative.
+7. **Capital-use priority (DEP-CAPITAL-PRIORITY).** When a strategy needs capital for a recommendation: (1) own currently available capital; (2) own capital currently lent to other strategies (recall); (3) borrow someone else’s capital (normal loan). Execute with the maximum capital actually available and close the recommendation at the actual investment amount; do not hold the recommendation open waiting for a residual shortfall.
+8. **Raw daily `close_price` only** for portfolio stop-loss and trailing stop (**OD-14**). No `adjusted_close_price` for those calculations. No intraday low.
+9. **Horizon is optional** and, when set, is measured in **calendar days** (OD-02). Absence of a horizon is not an expiry event.
+10. **Do not turn current implementation limits into product requirements.**
+11. **Multiple strategies may own the same stock** in one portfolio (OD-01). Position, cost, trailing, exit, allocation, attribution, and corporate-action **ownership** are per owner, not per symbol alone (OD-10). Holdings of the same stock MUST NOT be blended into one portfolio-level position for those purposes.
+12. **Ranking statistics use the defined backtest corpus only** (OD-03). Live-trading history is not a ranking observation source.
 
 ### 1.4 As-built baseline (informational)
 
@@ -223,9 +224,11 @@ An outstanding loan is a discrete committed amount with a lender, a borrower, a 
 
 ### 2.12 Borrowed capital
 
-Capital a borrower strategy has received via an approved loan. It is **deployable borrowed capital**: it increases the borrower’s immediately usable capital for the funded purpose and remains outstanding until returned (in atomic blocks). The borrower records the corresponding **loan obligation**.
+Capital a borrower strategy has received via an approved **normal loan**. It is **deployable borrowed capital**: it increases the borrower’s immediately usable capital for the funded purpose and remains outstanding until returned. The borrower records the corresponding **loan obligation**.
 
 Deployable borrowed capital is **not** a change to the configured strategy `allocation_pct` and MUST NOT be treated as permanently increasing that strategy’s policy share (**DEP-ADOPT-MERGE**). Investments funded with it are owned by the **borrowing** strategy.
+
+**Normal-loan repayment** has **no interest**, MUST NOT exceed outstanding principal, and is **not** required to be in ₹5,000 multiples. The ₹5,000 block rule applies to **partial recall sizing** and to **normal-loan creation**, not to voluntary normal repayment (**DEP-RECALL-SIZE**).
 
 ### 2.13 Capital request
 
@@ -248,6 +251,18 @@ The ordered reason recorded for analytics, reporting, and historical evaluation.
 ### 2.17 Strategy minimum retained capital (OD-24)
 
 The strategy-level accounting amount that MUST be retained as the protected “one opportunity” floor before unused allocation can be treated as available-for-lending. Formula in §5.5. The result is rounded to the **nearest integer rupee**. It is **not** a physical cash account, **not** a strategy bank/cash sub-account, **not** another portfolio cash reserve, and **not** `required_cash_reserve` (OD-19).
+
+### 2.18 Recall
+
+A lender-initiated request for return of previously lent **normal-loan** capital. Recall is distinct from voluntary normal repayment. Lifecycle, sizing, immediate-settlement, and pending/held behaviour are defined in §6.
+
+### 2.19 Recall Bridge Loan
+
+A temporary inter-strategy bridge used **only** to help a borrower fulfil a recall before **proceeds from stock sale** become available in the physical cash pool. It MUST NOT fund an investment. It has no interest, no normal-loan recall cooldown, no ₹5,000 multiple restriction, and cannot itself be recalled. Do **not** call this a Soft Loan.
+
+### 2.20 Proceeds from stock sale
+
+Cash that becomes available in the single physical portfolio/broker cash pool after a stock sale executes and broker settlement completes (**DEP-SALE-PROCEEDS**). This is **sale proceeds**, not an investment-return metric. Do **not** label it “Return on stock sale”.
 
 ---
 
@@ -647,7 +662,11 @@ Examples (normative):
 
 **After execution / reconciliation:** unused reserved capital MUST remain or revert to available capital per §22. Actual fills may be above or below the reference price.
 
-**Lending / borrowing / recall** amounts MUST be integer multiples of ₹5,000. Lending cannot be split below the block. Borrowing cannot request less than one block (₹5,000). **DEP-PARTIAL-LEND** / **DEP-PARTIAL-ATOMIC:** ₹5,000 is the minimum **loan amount**, not a minimum funding requirement and not a minimum unfunded remainder. After partial own funding, the actual loan is the unfunded remainder rounded **up** to the next ₹5,000 block when it is not already an exact multiple.
+**Normal-loan creation / borrowing** amounts MUST be integer multiples of ₹5,000 (minimum loan ₹5,000). **DEP-PARTIAL-LEND** / **DEP-PARTIAL-ATOMIC:** ₹5,000 is the minimum **loan amount**, not a minimum funding requirement and not a minimum unfunded remainder. After partial own funding, the actual loan is the unfunded remainder rounded **up** to the next ₹5,000 block when it is not already an exact multiple.
+
+**Recall sizing (DEP-RECALL-SIZE):** a **FULL** recall MAY request the entire outstanding principal regardless of ₹5,000 multiples. A **PARTIAL** recall MUST be in ₹5,000 multiples and MUST NOT exceed outstanding. Recall sizing is **not** the OD-06 1% reservation formula.
+
+**Normal-loan voluntary repayment** and **Recall Bridge Loan** repayment are **not** required to be in ₹5,000 multiples and MUST NOT exceed outstanding.
 
 **Interaction with OD-05:** if `atomic_allocation` is larger than available free capital, **partial funding is allowed**. Allocate the available free capital (this-cycle), keep OPEN/INCREASE, do not convert to WATCH. Own-capital partial amounts are **not** required to be re-ceiled through the 1% formula in a way that exceeds available cash (that would defeat partial funding).
 
@@ -687,23 +706,45 @@ When return-quality ranking is computable (authoritative corpus available and op
 
 ## 6. Inter-Strategy Lending and Recall
 
-### 6.1 Permission to lend
+### 6.0 Capital-use priority and recommendation resolution (DEP-CAPITAL-PRIORITY)
 
-Lending is allowed. It is never automatic.
+When a strategy generates a BUY/INCREASE recommendation requiring capital, capital resolution runs **before** the normal trade-execution mode (§6.16) and follows this order:
 
-- Every lending request is presented to the user.
-- There is **no** automatic exception when the rest of the portfolio is otherwise automated.
-- The user always approves or rejects.
+1. Use the strategy’s **own currently available capital** first.
+2. If there is a shortfall, attempt to recover the strategy’s **own capital currently lent** to other strategies through **recall** (§6.6–§6.15).
+3. If a recall requires immediate funding and the borrower cannot immediately fulfil it from own cash alone, the borrower MAY use a **Recall Bridge Loan** (§6.12) subject to eligibility and the 75% immediate-settlement rule (§6.11).
+4. If the strategy still needs capital after the applicable recall process, **normal inter-strategy borrowing** MAY be considered (§6.1–§6.4, §7).
+5. If the complete recommendation cannot ultimately be funded, **execute with the maximum capital actually available** and **close the recommendation** with the **actual investment amount**. Do **not** hold the old recommendation open waiting for a residual shortfall. Capital that arrives later becomes normal available strategy capital for the **next** recommendation cycle.
+
+Normative example:
+
+- Recommendation = ₹20,000
+- Available own capital = ₹15,000
+- Recall successfully provides ₹4,000
+- Actual investment = ₹19,000; recommendation closes at ₹19,000
+- A later ₹1,000 is **not** applied to reopen that recommendation
+
+### 6.1 Permission to lend (normal loans)
+
+**Normal loans** are the existing inter-strategy lending mechanism used to provide investment capital. Preserve already-established normal-loan rules unless explicitly changed in this version.
+
+- Generating or displaying lender options MUST NOT change committed-to-lending.
+- Commitment happens **only** on approval/commitment success, and only if backend revalidation succeeds.
+- Strategies are algorithmic actors: the automated path generates and commits according to portfolio rules and execution mode (§6.16). Do not design workflows around a strategy deliberately requesting an invalid loan amount.
+- There is **no interest** on normal loans.
+- A borrower **voluntarily repays** when it has sufficient available capital (good-faith rule).
+- A borrower MUST NEVER repay more than outstanding principal.
+- Voluntary repayment is **not** required to be in ₹5,000 multiples (example: outstanding ₹12,000 → repay ₹12,000, not ₹15,000).
 
 ### 6.2 What the user sees
 
 - Only **eligible** lenders are listed (§8).
 - Ineligible strategies MUST NOT appear as selectable lenders.
 - Default order after eligibility filtering (**OD-08**): available-for-lending **percentage** descending, then available-for-lending **absolute amount** descending; if both values are still exactly equal, any tied eligible lender may be selected.
-- The user MAY select another **eligible** lender.
+- The user MAY select another **eligible** lender when the execution mode requires human lender choice.
 - The user MUST NOT be able to select an ineligible lender.
 
-**Available-for-lending percentage** is the primary ranking metric. **Available-for-lending amount** is the secondary ranking metric (OD-08). Neither is “maximum available cash” / raw portfolio cash. FIFO / oldest loan is **not** a lender-ranking rule.
+**Available-for-lending percentage** is the primary ranking metric. **Available-for-lending amount** is the secondary ranking metric (OD-08). Neither is “maximum available portfolio cash”. FIFO / oldest loan is **not** a lender-ranking rule.
 
 ### 6.3 Commitment timing
 
@@ -723,13 +764,13 @@ The backend MUST revalidate lender capacity atomically at approval:
 - portfolio reserve still protected
 - no use of reserved/committed capital
 
-If revalidation fails, approval MUST fail with an explicit error. The user MAY choose another currently eligible lender or reject the request. Frontend eligibility at display time is never authoritative.
+If revalidation fails, approval MUST fail with an explicit error. Frontend eligibility at display time is never authoritative.
 
 Concurrent/stale requests MUST be allowed to fail safely (see §24).
 
-### 6.5 Minimum lending period and recall frequency
+### 6.5 Minimum lending period and recall frequency (OD-07, DEP-RECALL-FLOOR, DEP-RECALL-FOLLOWUP)
 
-Once capital is lent, it MUST NOT be recalled before the **effective** minimum lending / recall-eligibility period.
+Once capital is lent as a **normal loan**, it MUST NOT be recalled before the **effective** minimum lending / recall-eligibility period.
 
 **OD-07 (frozen):** recall frequency is **configurable at two levels**:
 
@@ -746,7 +787,7 @@ The previously frozen **14-day** figure remains applicable as the **shipped plat
 
 Period length is in **calendar days** (consistent with OD-02).
 
-Clock start: the timestamp of successful capital commitment (approval), unless a later settlement timestamp is introduced; do not invent a second clock.
+Clock start: the timestamp of successful capital commitment (approval). Changing the portfolio override later **does not restart** an existing loan’s clock. Existing outstanding loans use the **current** effective portfolio-level setting **dynamically** when evaluating eligibility (elapsed days since `committed_at` compared to the current effective period).
 
 **DEP-RECALL-FLOOR (frozen): OPTION B.** A portfolio-level recall-period override MAY be either **shorter or longer** than the platform’s shipped 14-calendar-day default. Do **not** introduce a separate minimum recall-period value. Do **not** clamp portfolio overrides to 14 days. Do **not** reinterpret 14 days as a minimum.
 
@@ -757,62 +798,67 @@ effective_recall_period =
     else platform_default_recall_period
 ```
 
-The portfolio override is authoritative when set. Examples (normative):
+**DEP-RECALL-FOLLOWUP (frozen):**
 
-- No portfolio override → effective period = 14 days
-- Portfolio override = 7 days → effective period = 7 days
-- Portfolio override = 3 days → effective period = 3 days
-- Portfolio override = 14 days → effective period = 14 days
-- Portfolio override = 21 days → effective period = 21 days
+- Only **one** recall can be active at a time (portfolio-wide among automated recall processes for that portfolio’s strategies).
+- A recall **cannot be cancelled** once requested.
+- A subsequent recall can occur only after: (a) the previous recall is **closed/completed**, AND (b) the **follow-up recall cooldown** has elapsed.
+- Follow-up recall cooldown = `floor(current_effective_recall_period / 2)` calendar days.
 
-### 6.6 Recall
+### 6.6 Recall initiation and sizing (DEP-RECALL-SIZE)
 
-A lender strategy MAY request return of borrowed capital when it needs capital for a new opportunity (replenishment, §6.7) or when the user initiates recall.
+A lender strategy initiates a recall when it needs its previously lent capital (including replenishment under §6.7).
 
 - Recall MUST respect the effective minimum lending period (§6.5). **OD-07** controls **when** a loan becomes recall-eligible.
-- If multiple outstanding loans are recall-eligible, **which loan is selected** is **OD-09** (§6.7, §9.7): oldest eligible loan first (FIFO by commitment time). That is not lender ranking (OD-08).
-- Return/recall **requires user approval by default**.
-- A user-configurable option for **automatic return** MAY exist; it is off unless the user enables it. Frozen governance: default is approval required.
-- Returning capital MAY require the borrower to exit one or more positions if the borrower lacks free cash to repay.
-- Loan repayment is a **loan/capital** transaction. It does **not** transfer stock ownership from the borrower to the lender (**DEP-ADOPT-MERGE**).
-- The borrower MUST release the **weakest eligible** positions first (§17).
-- “Weakest” MUST NOT be defined as lowest lifetime XIRR, lowest total return, or oldest holding alone. The exact score is **OD-16** (§17).
+- If multiple outstanding **normal** loans are recall-eligible, **which loan is selected** is **OD-09** (§6.7, §9.7): oldest eligible loan first (FIFO by commitment time). That is not lender ranking (OD-08).
+- Loan repayment / recall settlement is a **loan/capital** transaction. It does **not** transfer stock ownership from the borrower to the lender (**DEP-ADOPT-MERGE**).
+- If the borrower must free cash by selling, it MUST release the **weakest eligible** positions first (§17, **OD-16**).
+- The automated lender algorithm MUST generate only **valid** recall amounts. Do **not** introduce validation scenarios based on an automated lender intentionally requesting invalid amounts (for example ₹3,000 when a partial recall requires ₹5,000 blocks).
 
-### 6.7 Replenishment
+**DEP-RECALL-SIZE (frozen):**
 
-When a strategy consumes its own immediately available capital (including its minimum-opportunity free capital) on a new opportunity, it SHOULD request the **minimum** required capital back from outstanding loans as soon as recall is eligible.
+| Kind | Amount rule |
+|------|-------------|
+| **FULL recall** | MAY request the **entire outstanding** principal, regardless of ₹5,000 multiples |
+| **PARTIAL recall** | MUST be in ₹5,000 multiples |
+| Cap | Recall amount MUST NEVER exceed outstanding |
+| Not OD-06 | Do **not** apply `× 1.01` then ceil for recall sizing |
 
-- First filter to loans that are eligible for recall under the existing V3 recall / effective-minimum-period rules (§6.5, OD-07).
-- **OD-09 (frozen):** among those eligible outstanding **loans**, select the **oldest** first (**FIFO**) by **commitment time**. If two or more eligible loans have exactly the same commitment time, any tied loan may be selected (implementation may resolve the exact tie arbitrarily or deterministically). There is no additional business ranking after FIFO.
+### 6.7 Replenishment loan selection (OD-09)
+
+When a strategy consumes its own immediately available capital on a new opportunity, it SHOULD request capital back from outstanding normal loans as soon as recall is eligible, subject to §6.0 priority and §6.5–§6.6.
+
+- First filter to loans eligible for recall under §6.5 / OD-07.
+- **OD-09 (frozen):** among those eligible outstanding **loans**, select the **oldest** first (**FIFO**) by **commitment time**. Exact commitment-time ties: any tied loan may be selected.
 - Do **not** introduce largest-loan-first, smallest-loan-first, lender percentage, lender absolute lendable amount, borrower strength, or strategy ranking as loan-selection rules.
-- **OD-06** still controls the **amount** recalled: request the minimum required atomic amount (`× 1.01` then ceil to ₹5,000), not exceeding the selected loan’s outstanding principal.
-- Do **not** recall an entire loan merely because it is the oldest if only a smaller amount is required.
-- If the selected loan’s outstanding is less than the remaining replenishment need, continue with the next oldest eligible loan (same FIFO order) until the OD-06 minimum is satisfied or no eligible loans remain. That continuation is FIFO order, not a size-based ranking rule.
+- Amount recalled follows **DEP-RECALL-SIZE** (full vs partial). Do **not** use OD-06 to size the recall.
+- If the selected loan’s outstanding is less than the remaining replenishment need, continue with the next oldest eligible loan (same FIFO order).
 - If a borrower must sell positions as a consequence, rank borrower-owned positions per §17 (**OD-16**).
-
-**Example (normative illustration):** Momentum has ₹12,000 reserved as its minimum opportunity capacity, spends that ₹12,000 on a new opportunity, and the effective lending period has expired. Required back = ₹12,000 → × 1.01 = ₹12,120 → atomic ₹15,000, capped by outstanding principal. If several recall-eligible loans exist, tap the oldest by commitment time first (OD-09) for that ₹15,000 (or less if that loan’s outstanding is smaller).
 
 ### 6.8 Safeguards (normative list)
 
 1. Effective lending / recall-eligibility period (platform default 14 calendar days, or a shorter or longer portfolio override; **DEP-RECALL-FLOOR**; OD-07)
-2. Configurable lending limits
-3. Minimum retained capital / one-opportunity floor (**OD-24**; not lendable)
-4. Atomic capital block ₹5,000 with 1% margin then ceil (OD-06)
-5. Explicit user approval (default for lend and recall)
-6. Backend revalidation
-7. No split of one request across lenders
+2. Follow-up recall cooldown = `floor(effective_period / 2)` after a recall closes (**DEP-RECALL-FOLLOWUP**); only one active recall
+3. Configurable lending limits
+4. Minimum retained capital / one-opportunity floor (**OD-24**; not lendable)
+5. Atomic capital block ₹5,000 with 1% margin then ceil for **OD-06 reservations** and **normal-loan creation** (not for normal repayment; not for full recall; not for Recall Bridge Loans)
+6. Backend revalidation for normal-loan commitment
+7. No split of one normal capital request across lenders
 8. No lending of portfolio reserve (`required_cash_reserve`, OD-19)
 9. No lending of committed or reserved capital
 10. No commitment on display
 11. Partial own-capital funding does not convert OPEN/INCREASE to WATCH (OD-05)
-12. Default **lender** ranking is available-for-lending % descending, then available-for-lending amount descending, then arbitrary exact tie (OD-08). FIFO is not a lender-ranking rule.
-13. Replenishment **loan** selection among recall-eligible outstanding loans is FIFO by commitment time, then arbitrary exact tie (OD-09). Amount recalled remains OD-06.
+12. Default **lender** ranking is available-for-lending % descending, then available-for-lending amount descending, then arbitrary exact tie (OD-08)
+13. Replenishment **loan** selection among recall-eligible outstanding loans is FIFO by commitment time (OD-09)
+14. Capital-use priority: own → recall → borrow (**DEP-CAPITAL-PRIORITY**)
+15. Recall Bridge Loans cannot fund investments and cannot themselves be recalled (**DEP-RECALL-BRIDGE**)
 
 ### 6.9 Outstanding loans
 
-- One capital request is fulfilled by **exactly one** lender and one ₹5,000-aligned amount (after OD-06).
-- Sequential loans for **different** recommendations MAY exist (a borrower is not limited to a single lifetime loan).
+- One capital request is fulfilled by **exactly one** lender and one ₹5,000-aligned amount for **normal loans** (after DEP-PARTIAL-ATOMIC / OD-06 creation rules as applicable).
+- Sequential loans for **different** recommendations MAY exist.
 - Combining two lenders to fund **one** recommendation is forbidden in V3.
+- Recall Bridge Loans are a distinct instrument (§6.12) and MUST NOT be treated as normal investment loans.
 
 ### 6.10 Ownership of lending-funded investments (DEP-ADOPT-MERGE)
 
@@ -827,22 +873,127 @@ When inter-strategy lending funds a recommendation:
 5. The borrowing strategy records the corresponding **loan obligation**.
 6. Do **not** introduce fractional/split ownership of a holding based on own-vs-borrowed capital.
 7. The physical cash model remains one portfolio-level cash pool. Do **not** create physical strategy bank accounts or cash buckets.
-8. Loan repayment remains a loan/capital transaction; it does **not** transfer stock ownership.
+8. Loan repayment / recall settlement remains a loan/capital transaction; it does **not** transfer stock ownership.
 9. Borrowed capital is additional deployable capital for the borrowing strategy, but it does **not** change the configured strategy allocation percentage.
 10. Do **not** reinterpret this as permanently increasing the strategy’s configured allocation or as changing the portfolio’s allocation percentages.
 11. OD-24 minimum retained capital remains unchanged.
-12. OD-05, OD-06, **DEP-PARTIAL-LEND**, and **DEP-PARTIAL-ATOMIC** remain unchanged.
+12. OD-05, OD-06, **DEP-PARTIAL-LEND**, and **DEP-PARTIAL-ATOMIC** remain unchanged for normal investment loans.
 
-Example (normative):
-
-Strategy A lends ₹15,000 to Strategy B.
-
-- Strategy A: loan receivable = ₹15,000; no ownership of the resulting stock.
-- Strategy B: receives ₹15,000 of deployable borrowed capital; the resulting ₹15,000 investment is owned by Strategy B; loan obligation = ₹15,000.
-
-Do **not** model the resulting holding as jointly or fractionally owned by A and B.
+Example (normative): Strategy A lends ₹15,000 to Strategy B → A has receivable ₹15,000 and no stock ownership; B owns the resulting investment and has obligation ₹15,000.
 
 This rule is **not** unmanaged-holding adoption and does **not** freeze unmanaged-adoption cost-basis merge when a destination strategy already owns the stock. That leftover remains unspecified.
+
+### 6.11 Recall immediate-settlement rule (DEP-RECALL-IMMEDIATE-75)
+
+For a recall amount `R` (the amount requested by this recall, **not** necessarily the loan’s full outstanding unless the recall is full):
+
+```text
+target_settlement     = 100% of R
+minimum_threshold     = 75% of R
+immediate_available   = borrower_own_available_cash
+                      + eligible_recall_bridge_loan_amount
+actual_immediate_pay  = min(R, immediate_available)
+```
+
+- **Target** = 100% of `R`.
+- **Minimum threshold for immediate resolution** = 75% of `R`.
+- The 75% threshold is **not** a target. The borrower SHOULD settle the **maximum** currently available amount up to 100% of `R`.
+- The 75% threshold MAY be satisfied through **any combination** of: borrower own available cash; Recall Bridge Loan; or both.
+- Threshold is calculated against the **recall amount `R`**, not against total outstanding on the loan unless `R` equals that outstanding.
+
+If `immediate_available >= 0.75 × R`:
+
+- Immediately settle `actual_immediate_pay` (maximum available ≤ `R`).
+- Example: R=₹20,000; threshold=₹15,000; own=₹10,000; bridge=₹5,000 → settle ₹15,000 immediately.
+- Example: R=₹20,000; own=₹10,000; bridge=₹8,000 → settle ₹18,000 immediately (not merely ₹15,000).
+
+If `immediate_available < 0.75 × R`:
+
+- Do **not** make an arbitrary small partial settlement that closes the recall.
+- Do **not** take a tiny Recall Bridge Loan merely because some bridge amount is available.
+- Move the recall to **PENDING / HELD**.
+- Proceed to liquidate holdings as necessary (§17).
+- Inform the lender that the recall is pending.
+- The lender continues with whatever capital it currently has.
+- When **proceeds from stock sale** become available, pay the lender as much as possible.
+- The recall remains open until its outstanding recall amount is resolved.
+
+Example: R=₹20,000; threshold=₹15,000; own=₹10,000; bridge eligible=₹2,000 → immediate=₹12,000 < ₹15,000 → PENDING/HELD; do not pay ₹12,000 and close; do not use the ₹2,000 bridge solely to partial-settle.
+
+### 6.12 Recall Bridge Loan (DEP-RECALL-BRIDGE)
+
+**Name:** Recall Bridge Loan. Do **not** use “Soft Loan”.
+
+**Purpose:** temporary bridge so a borrower can satisfy a recall before proceeds from stock sale become available in the physical cash pool.
+
+A Recall Bridge Loan:
+
+- MAY be used **only** to fulfil a recall
+- MUST NOT be used to fund an investment
+- has **no interest**
+- has **no** normal-loan recall cooldown
+- has **no** ₹5,000 multiple restriction
+- **cannot itself be recalled**
+- is repaid voluntarily by the borrower as soon as liquid funds / proceeds become available
+- MAY be repaid in arbitrary amounts/installments
+- MUST be fully repaid when sufficient proceeds become available
+- The borrower MUST act in good faith and repay as soon as it can
+
+**Eligibility:**
+
+1. Compute the bridge shortfall after applying the borrower’s own available cash to the recall: `bridge_need = max(0, R − borrower_own_available_cash)`.
+2. Bridge eligibility applies to that required bridge amount (not automatically to the entire `R`).
+3. The borrower MUST have a **10% cushion** of currently liquidatable stock value: for bridge amount `X`, required liquidatable stock value ≥ `X × 1.10`.
+4. If the borrower cannot support the full `bridge_need` under the cushion rule, compute the **maximum eligible bridge amount** still satisfying the cushion.
+5. The §6.11 75% immediate-settlement test still applies to the **total** of own cash + eligible bridge.
+
+Example: bridge loan ₹5,000 requires liquidatable stock value ≥ ₹5,500.
+
+### 6.13 Stock-sale settlement delay (DEP-SALE-PROCEEDS)
+
+A recall may require stock liquidation. Stock sale execution and broker settlement are **not** instantaneous. V3 assumes approximately **one calendar day** before sale proceeds become physically available in the broker/portfolio cash balance.
+
+Therefore:
+
+- The recall mechanism MUST model this settlement delay.
+- Do **not** assume that executing a stock sale immediately creates available cash.
+- If sufficient immediate funding exists through own cash + Recall Bridge Loan under §6.11, use that path to satisfy the recall immediately.
+- If the 75% threshold cannot be reached, the recall enters PENDING/HELD and liquidation proceeds asynchronously.
+- Once proceeds become available, use them to fulfil outstanding recall and/or Recall Bridge Loan obligations as applicable.
+
+Do **not** create an unconditional rule that every recommendation must be held for one extra day. Preferred behaviour: execute today’s recommendation with today’s actually available capital; resolve recalls independently; treat money arriving tomorrow as newly available capital for the next recommendation cycle.
+
+Terminology: use **Proceeds from stock sale** (not “Return on stock sale”).
+
+### 6.14 Recall lifecycle states
+
+Normative recall lifecycle (implementation MAY store finer sub-statuses, but product meaning is):
+
+| State | Meaning |
+|-------|---------|
+| **eligible** | Loan past effective recall period; may be selected (OD-09) |
+| **requested** | Recall amount `R` created; one active recall rule applies |
+| **immediate_settlement** | Evaluating/settling under §6.11 with own cash ± Recall Bridge Loan |
+| **pending_held** | Immediate available < 75% of `R`; liquidation required |
+| **liquidation** | Weakest-position sells in progress; waiting for proceeds |
+| **settlement** | Applying cash/proceeds to recall / bridge obligations |
+| **completed** | Recall amount resolved; follow-up cooldown starts |
+
+### 6.15 Automatic voluntary repayment of normal loans
+
+A borrower SHOULD voluntarily repay a normal loan when it has sufficient available capital. The existence of an outstanding normal loan means the borrower does not currently have enough free capital to close it. As soon as sufficient capital becomes available: repay the outstanding amount; do not retain borrowed capital unnecessarily. No interest. Never repay more than outstanding principal. Not required to use ₹5,000 multiples.
+
+### 6.16 Execution modes and capital resolution
+
+Capital resolution (§6.0) happens **before** the normal recommendation execution mode:
+
+| Mode | Flow |
+|------|------|
+| **Manual** | Recommendation → user executes externally → user records transaction |
+| **Semi-automatic** | Recommendation → capital resolution → wait for approval → broker execution |
+| **Automatic** | Recommendation → capital resolution → automatic broker execution |
+
+Lending, recalls, Recall Bridge Loans, repayments, and associated accounting movements are automated rule-driven processes. Trade execution still follows the portfolio’s configured mode.
 
 ---
 
@@ -1518,15 +1669,15 @@ Recommendation TTL (`expiry_hours` on the recommendation row) is **not** a posit
 
 ---
 
-## 17. Weakest Position Selection
+## 17. Weakest Position Selection and Recall Liquidation
 
-Used when a borrower must free cash to return a loan.
+Used when a borrower must free cash to settle a recall (or otherwise return lent capital after PENDING/HELD).
 
 Loan **selection** for replenishment is **OD-09** (FIFO by commitment time among recall-eligible loans). This section ranks **positions to sell**, not which loan to tap.
 
 **OD-16 (frozen): weakest-position score**
 
-When recall/replenishment requires selling borrower-owned positions to free cash, rank eligible positions by a **simple windowed percentage return**. The position with the **lowest** score is the weakest and MUST be sold first (subject to repeated application until the cash requirement is met — sell mechanics beyond ranking remain unspecified).
+When recall/replenishment requires selling borrower-owned positions to free cash, rank eligible positions by a **simple windowed percentage return**. The position with the **lowest** score is the weakest and MUST be sold first.
 
 ```text
 window_return_pct =
@@ -1577,6 +1728,22 @@ Example: configured window = 90 calendar days. Position A with 3 years of histor
 Do **not** invent a minimum-history threshold beyond the availability of at least one valid start reference and the existing OD-16 calculation requirements (a valid `current_reference_price` and a valid `window_start_reference_price` for the formula). Lowest `window_return_pct` remains weakest. `stock_id` ascending tie-break, borrower-owned eligibility, OD-07, and OD-09 remain unchanged.
 
 Eligible positions for forced repayment sells: **borrower-owned** holdings only (**OD-01**). Do not sell another strategy’s quantity or unmanaged quantity.
+
+### 17.1 Recall liquidation mechanics (preserved; terminology DEP-SALE-PROCEEDS)
+
+When PENDING/HELD recall settlement requires liquidation:
+
+1. Select weakest positions per **OD-16** (and DEP-WEAKEST-PRICE / DEP-WEAKEST-HISTORY).
+2. **Stock age** is calculated in **calendar days**.
+3. **Holding-period cap** = configured strategy-level value; current default = **3 months**.
+4. Apply the established **0.5% sale buffer** when sizing liquidation.
+5. Liquidate **sequentially** (weakest first).
+6. **Partial position liquidation** is allowed.
+7. **Actual** **proceeds from stock sale** determine the amount ultimately available (after broker settlement delay, §6.13).
+8. **Excess proceeds** remain with the borrower.
+9. There is **no** punitive default merely because portfolio value fell or stock cannot be liquidated immediately; the borrower continues best-faith settlement as funds become available.
+
+Use the term **Proceeds from stock sale**, not “Return on stock sale”.
 
 ---
 
@@ -1956,7 +2123,7 @@ Additive / evolving `/api` and `/api/v1` capabilities (shapes not frozen beyond 
 | Recommendation capital_status | FUNDED / PARTIALLY_FUNDED / UNFUNDED; never WATCH-for-cash |
 | Eligible lenders for a rec | ranked by OD-08: lendable % descending, then lendable amount descending; exact ties arbitrary; PARTIALLY_FUNDED remainder loan size **DEP-PARTIAL-ATOMIC** (`ceil(remainder / 5000) × 5000`, no 1%); reservation amounts remain OD-06 1.01+ceil; lendable already respects **OD-24** |
 | Approve/reject lending | atomic revalidation; on success, borrower owns the resulting holding; lender records a loan receivable (**DEP-ADOPT-MERGE**); `allocation_pct` unchanged |
-| Recall request / approve | effective period = portfolio override if configured, else platform default 14 calendar days (**OD-07**, **DEP-RECALL-FLOOR**; override MAY be shorter or longer; 14 is not a hard floor); if several eligible loans, tap oldest by commitment time first (OD-09); amount OD-06 |
+| Recall / bridge / repayment lifecycle | effective period OD-07/DEP-RECALL-FLOOR (dynamic; no clock restart); OD-09 FIFO; **DEP-RECALL-SIZE**; **DEP-RECALL-IMMEDIATE-75**; **DEP-RECALL-BRIDGE**; **DEP-RECALL-FOLLOWUP**; **DEP-SALE-PROCEEDS**; automated rule-driven |
 | Capital / loan ledger read APIs | include reservation vs invested reconciliation. **Unallocated Cash** (OD-20) MAY appear as a presentation figure derived from existing §22 accounting; it is not a new ledger or cash account. Derived **OD-24** `minimum_retained_capital` MAY be shown as an accounting figure; it is not a cash account. |
 | Chart prices with `from`/`range=5y\|all` **without** since-buy clamp | `5y` remains a supported range. `all` = all available stored/provider history (**OD-17**); no V3 day-count ceiling. Existing `from`/`range` semantics remain. |
 | Notifications hooks for capital/lending/recall | |
@@ -1971,7 +2138,7 @@ Conceptual (no migrations in this phase).
 
 ### 28.1 Portfolio settings / controls
 
-Persist: `portfolio_cash_reserve_pct` (**OD-19**; one portfolio-level percentage; `required_cash_reserve` is computed, not a second configured unit), stop-loss %, trailing % (**OD-22:** migrate by seeding **15%** at portfolio level; ignore strategy-level B1/B2 values; 15% is a seed, not a locked platform default), portfolio max position, lending limits, opportunity-cost rate, optional auto-return flag, **platform default recall period** (shipped 14 calendar days), **portfolio recall override** (**DEP-RECALL-FLOOR:** MAY be shorter or longer than 14 days; 14 is not a hard floor), atomic block **₹5,000**, execution-price margin **1%**, **platform default minimum actionable BUY/INCREASE amount** (shipped **₹5,000**, OD-12), **portfolio minimum-actionable override**. Do **not** persist a separate portfolio **min-free-capital formula** or cash account for **OD-24**; that amount is computed as `nearest_integer(strategy_capital_allocation / recommended_minimum_holdings)` (§5.5). Do **not** persist **Unallocated Cash** (OD-20) as a cash account, bank account, or allocation setting; it is presentation-only.
+Persist: `portfolio_cash_reserve_pct` (**OD-19**; one portfolio-level percentage; `required_cash_reserve` is computed, not a second configured unit), stop-loss %, trailing % (**OD-22:** migrate by seeding **15%** at portfolio level; ignore strategy-level B1/B2 values; 15% is a seed, not a locked platform default), portfolio max position, lending limits, opportunity-cost rate, **platform default recall period** (shipped 14 calendar days), **portfolio recall override** (**DEP-RECALL-FLOOR:** MAY be shorter or longer than 14 days; 14 is not a hard floor), atomic block **₹5,000**, execution-price margin **1%**, **platform default minimum actionable BUY/INCREASE amount** (shipped **₹5,000**, OD-12), **portfolio minimum-actionable override**. Do **not** persist a separate portfolio **min-free-capital formula** or cash account for **OD-24**; that amount is computed as `nearest_integer(strategy_capital_allocation / recommended_minimum_holdings)` (§5.5). Do **not** persist **Unallocated Cash** (OD-20) as a cash account, bank account, or allocation setting; it is presentation-only.
 
 ### 28.2 Strategy
 
@@ -1994,19 +2161,22 @@ Persist: `portfolio_cash_reserve_pct` (**OD-19**; one portfolio-level percentage
 - `capital_status`
 - Do not require new action enum for unfunded BUY
 
-### 28.5 Capital requests / loans
+### 28.5 Capital requests / loans / recalls / bridge loans
 
 - request id, borrower_strategy_id, lender_strategy_id, recommendation_id, amount, status, created_at, approved_at, approved_by
-- loan id, principal, outstanding, committed_at, min_recall_at
-- returns: amount, at, request/loan id
+- **normal loan** id, principal, outstanding, committed_at, loan_kind=`normal`
+- returns: amount, at, request/loan id (any amount ≤ outstanding; not forced to ₹5,000 multiples)
+- **recall** entity/lifecycle: loan_id, recall_amount `R`, kind (full|partial), state (`eligible`/`requested`/`immediate_settlement`/`pending_held`/`liquidation`/`settlement`/`completed`), requested_at, completed_at; enforce one active recall; non-cancellable; follow-up cooldown = `floor(effective_period/2)`
+- **Recall Bridge Loan** entity: distinct from normal loans; purpose=recall_fulfil_only; no interest; no recall cooldown; no ₹5,000 multiple; not recallable; outstanding; linked recall_id; repaid via voluntary installments
+- optional settlement-delay tracking for expected **proceeds from stock sale** availability (~1 calendar day)
 
-Indexes: `(profile_id, status)`, `(lender_id, outstanding)`, `(borrower_id)`, `(recommendation_id)`.
+Indexes: `(profile_id, status)`, `(lender_id, outstanding)`, `(borrower_id)`, `(recommendation_id)`, active-recall uniqueness, bridge-loan outstanding.
 
-Constraints: amount ≥ ₹5,000 and a multiple of ₹5,000; for a PARTIALLY_FUNDED remainder, amount = `ceil(unfunded_remainder / 5000) × 5000` (**DEP-PARTIAL-ATOMIC**). Lender ≠ borrower; one lender per request.
+Constraints: normal-loan amount ≥ ₹5,000 and a multiple of ₹5,000; for a PARTIALLY_FUNDED remainder, amount = `ceil(unfunded_remainder / 5000) × 5000` (**DEP-PARTIAL-ATOMIC**). Lender ≠ borrower; one lender per request. Partial recall multiples of ₹5,000; full recall may equal entire outstanding. Bridge loans have no ₹5,000 multiple constraint.
 
 The loan row is a **receivable/obligation**. It is **not** a holding-ownership split. Executed quantity funded by the loan is owned by the **borrower** (**DEP-ADOPT-MERGE**). Do not persist fractional lender/borrower stock ownership. `allocation_pct` is not rewritten by the loan.
 
-`committed_at` is the OD-09 FIFO key for selecting among recall-eligible outstanding loans. Do not invent a separate loan-ranking column for lender % or loan size.
+`committed_at` is the OD-09 FIFO key for selecting among recall-eligible outstanding **normal** loans. Do not invent a separate loan-ranking column for lender % or loan size. Eligibility uses the **current** effective recall period dynamically (§6.5).
 
 ### 28.6 Exit attribution
 
@@ -2024,12 +2194,12 @@ Append-only capital and ownership events (§31).
 |---------|-----|
 | **Strategy page** | Eligibility, scoring, thresholds, strategy-specific exits, optional horizon, staggered first-entry % (default 50%), BUY cooldown **1 calendar day** (OD-11; not the OD-07 configurable lending recall, shipped default 14 calendar days), min/max holdings (recommended minimum is the **OD-24** divisor), conviction bands. **Remove** portfolio cash reserve, common SL/trailing, portfolio-wide cash rules. |
 | **Strategy registry** | Enable multiple strategies; allocation % editor (sum 100). No exclusive activate. |
-| **Portfolio settings** | `portfolio_cash_reserve_pct` (OD-19; one percentage; required reserve is computed from MAX(Invested Amount, Notional Portfolio Value)), SL, trailing (**OD-22:** initial migration seed **15%**, then user-editable; not copied from strategy B1/B2 values), portfolio caps, lending policy, recall period override (inherit platform 14-day default; override MAY be shorter or longer — **DEP-RECALL-FLOOR**; 14 is not a hard floor), opportunity cost, auto-return toggle (default off). Atomic block ₹5,000 and 1% margin are specified product values (display as policy, not as “invest the margin”). **Minimum actionable BUY/INCREASE** inherits platform ₹5,000 unless the portfolio overrides (OD-12; not a strategy setting; not OD-06). |
+| **Portfolio settings** | `portfolio_cash_reserve_pct` (OD-19; one percentage; required reserve is computed from MAX(Invested Amount, Notional Portfolio Value)), SL, trailing (**OD-22:** initial migration seed **15%**, then user-editable; not copied from strategy B1/B2 values), portfolio caps, lending policy, recall period override (inherit platform 14-day default; override MAY be shorter or longer — **DEP-RECALL-FLOOR**; 14 is not a hard floor), opportunity cost. Atomic block ₹5,000 and 1% margin are specified product values (display as policy, not as “invest the margin”). **Minimum actionable BUY/INCREASE** inherits platform ₹5,000 unless the portfolio overrides (OD-12; not a strategy setting; not OD-06). |
 | **Holdings** | Owner / Unmanaged; **per-strategy rows** for the same stock (qty 50 vs 30); Adopt; **target amount** vs filled amount (qty derived from latest raw `close_price`, OD-12 / OD-14); do not offer strategy sell on unmanaged or on another strategy’s lot. Corporate-action quantity stays on the parent owner (OD-10); unmanaged CA stays unmanaged. Holdings funded by inter-strategy lending show as **borrower-owned**, not lender-owned or jointly owned (**DEP-ADOPT-MERGE**). |
 | **Recommendations** | Unfunded or partially funded BUY visible with capital status; not WATCH. Lender list, including same-cycle lending for a PARTIALLY_FUNDED remainder (**DEP-PARTIAL-LEND**; no minimum remainder). Loan size = remainder rounded up to the next ₹5,000 block (**DEP-PARTIAL-ATOMIC**; ₹14,000 → ₹15,000). Approval. Lending-funded execution is **borrower-owned** (**DEP-ADOPT-MERGE**); do not show the lender as owner of that holding. BUY cooldown **1 calendar day** per stock+strategy (OD-11); does not cancel `pending_execution`. Return-quality ranking from authoritative backtest corpus when computable (**DEP-FIT-BAND-10**, OD-04); fit labelled as fit. Ranking statistical confidence shown as diagnostic only; MUST NOT drive rank or allocation. When ranking is not computable (corpus unavailable or no statistically eligible band), capital fill among that strategy’s own valid BUY/INCREASE recs follows **OD-23** (descending target investment amount / conviction amount, then fit → alphabetical symbol); that fill order MUST NOT be labelled or presented as V3 ranking. |
 | **Cash** | Required reserve (`required_cash_reserve`, OD-19) vs available vs reserved (atomic allocation vs post-fill leftover) vs named **Unallocated Cash** (**OD-20**; presentation-only residual after reserve not claimed by unused-allocation) vs per-strategy allocated / deployed / **OD-24** retained floor / lendable / lent / borrowed. Unallocated Cash is **not** reserved cash, **not** post-fill reservation leftover, **not** strategy unused allocation, **not** the OD-24 retained floor, **not** a second cash pool, and **not** a withdrawal entitlement. **OD-24** retained capital is an accounting constraint (nearest integer rupees, §5.5), not a physical sub-account. **OD-21:** external/broker withdrawals MUST NOT be blocked merely because they would leave cash below `required_cash_reserve`, and MUST NOT be hard-blocked by OD-24. |
 | **Dashboard** | When physical portfolio cash is below `required_cash_reserve` (**OD-21**), show a clear warning that the portfolio cash reserve is below the required level and that the user should replenish portfolio/broker cash. Do not invent layout, colour, widget, or workflow details beyond that message. This Dashboard warning is current V3 / **B3** scope. |
-| **Lending / recall** | Eligible lenders only; default sort OD-08 (lendable % descending, then lendable amount descending; exact ties have no product significance). Approve; errors on stale; recall approval; show effective recall period (platform vs portfolio override). Replenishment among eligible loans: oldest commitment time first (OD-09); do not present FIFO as a lender sort. Approved lending is a loan receivable/obligation; it does **not** move the resulting holding to the lender or split ownership (**DEP-ADOPT-MERGE**). Recall/repayment does **not** transfer stock to the lender. |
+| **Lending / recall** | Eligible lenders only; default sort OD-08. Capital resolution order: own → recall → borrow (**DEP-CAPITAL-PRIORITY**). Show effective recall period (platform vs portfolio override; dynamic on existing loans). Recall lifecycle states including pending/held; lender informed when pending. Recall Bridge Loan visibility (recall-fulfil only; 10% stock cushion). Full vs partial recall sizing (**DEP-RECALL-SIZE**). 75%/100% immediate-settlement display (**DEP-RECALL-IMMEDIATE-75**). Proceeds from stock sale (not “return on stock sale”). Approved lending is a loan receivable/obligation; it does **not** move the resulting holding to the lender (**DEP-ADOPT-MERGE**). Recall/repayment/bridge does **not** transfer stock to the lender. |
 | **Charts** | 5Y remains a range; All = all available history (**OD-17**), not capped at 5Y or any V3 day-count. Clamp message when available history is shorter than the selected range. |
 
 **B4 wishlist (future; not current V3 / B3 UI).** A persistent application-wide critical alert/banner for critical portfolio conditions such as a cash-reserve shortfall. Possible future presentation could be a persistent red banner/footer/scrolling alert. That design, colour, placement, and mechanism are **not** frozen and MUST NOT be treated as a current Dashboard requirement. The current requirement is the §29 Dashboard warning only.
@@ -2043,9 +2213,10 @@ Telegram (and in-app) MUST be able to notify, at least:
 | Event | Why |
 |-------|-----|
 | Capital required (valid unfunded or partially funded BUY) | Actionable; not a WATCH skip |
-| Lending approval needed | User must act; never auto |
-| Recall / return approval needed | Default governance |
-| Lending/recall approval failed (stale capital) | User must pick another lender or reject |
+| Lending commitment / failure (stale capital) | User/operator visibility; backend authoritative |
+| Recall requested / immediate settlement / pending-held | Lender informed; borrower liquidation underway when pending |
+| Recall Bridge Loan created / repaid | Accounting transparency |
+| Proceeds from stock sale applied to recall/bridge | Settlement progress |
 | Capital committed / execution ready | Resume normal pending-execution path |
 | Portfolio SL / trailing / horizon EXIT recs | Risk |
 
@@ -2060,7 +2231,9 @@ Append-only, attributable (user id, timestamp, portfolio, strategies, amounts, r
 - lending request created / displayed snapshot (optional) / approved / rejected / revalidation failed / cancelled
 - capital commitment
 - loan returns (amount, remaining), including which outstanding loan was selected (OD-09 FIFO by commitment time)
-- recall requests and approvals
+- recall lifecycle transitions (requested → immediate_settlement | pending_held → liquidation → settlement → completed)
+- Recall Bridge Loan create / repay events
+- proceeds from stock sale applied to recall and/or bridge obligations
 - holding adoption
 - lending-funded execution ownership (borrower owns the holding; lender receivable only) (**DEP-ADOPT-MERGE**)
 - corporate-action quantity adjustments per parent owner (OD-10)
@@ -2097,7 +2270,7 @@ V1 recommendation evidence `capital_allocation.status = unfunded` with action WA
 
 ### 33.1 Frozen / resolved (OD-01 through OD-24)
 
-OD-01 through OD-07 were recorded from the 2026-08-14 product-decision session. OD-08 through OD-11 were recorded from the 2026-08-15 product-decision session. OD-12 through OD-24 were recorded from the 2026-08-17 product-decision session. **DEP-FIT-BAND-10** and clarifications to **OD-03**, **OD-04**, and **OD-23** were recorded from the 2026-08-19 product-decision session. These IDs MUST NOT reappear in §33.2.
+OD-01 through OD-07 were recorded from the 2026-08-14 product-decision session. OD-08 through OD-11 were recorded from the 2026-08-15 product-decision session. OD-12 through OD-24 were recorded from the 2026-08-17 product-decision session. **DEP-FIT-BAND-10** and clarifications to **OD-03**, **OD-04**, and **OD-23** were recorded from the 2026-08-19 product-decision session. Recall / capital-resolution / Recall Bridge Loan freezes (**DEP-CAPITAL-PRIORITY**, **DEP-RECALL-SIZE**, **DEP-RECALL-IMMEDIATE-75**, **DEP-RECALL-BRIDGE**, **DEP-RECALL-FOLLOWUP**, **DEP-SALE-PROCEEDS**) were recorded from the 2026-08-21 deliberation. These IDs MUST NOT reappear in §33.2.
 
 | ID | Topic | Decision | Status |
 |----|--------|----------|--------|
@@ -2109,14 +2282,14 @@ OD-01 through OD-07 were recorded from the 2026-08-14 product-decision session. 
 | **OD-06** | Atomic block and execution margin | Atomic block = **₹5,000**. Apply **1%** margin then **ceil** to the next ₹5,000: `atomic_allocation = ceil((calculated_requirement × 1.01) / 5000) × 5000`. This is a **reservation/allocation**, not a mandate to invest the margin. Unused reservation reverts after execution. If atomic requirement exceeds free capital, OD-05 partial funding still applies. | FROZEN |
 | **OD-07** | Recall frequency | **CONFIGURABLE** at platform default and portfolio override. Effective = override if set, else platform default. Shipped default **14 calendar days** remains applicable. Must not be a non-configurable hard-code that ignores settings. **DEP-RECALL-FLOOR** (frozen separately): a portfolio override MAY be shorter or longer than 14 days; 14 days is not a hard floor. | FROZEN |
 | **OD-08** | Default lender selection after eligibility | **FROZEN.** Applies to selecting a prospective **lender** (a strategy) before/when a new loan is created — not to outstanding loans. After existing lender eligibility filters (§8.1), rank eligible lenders: (1) available-for-lending **percentage** descending; (2) if tied, available-for-lending **absolute amount** descending; (3) if both values are still exactly equal, **any** tied eligible lender may be selected (first remaining candidate, or arbitrary/random among exact ties). There is deliberately **no** third business ranking criterion and **no product significance** to which exactly-tied lender is selected. Do **not** use FIFO, oldest loan, largest loan, strategy age, raw portfolio cash, or any other business ranking rule for that third tie-break. Available-for-lending percentage remains the primary ranking metric already defined by this specification. Available-for-lending amount is the explicit secondary ranking criterion. | FROZEN |
-| **OD-09** | Outstanding loan selection for replenishment | **FROZEN.** Operates on existing outstanding **loans**, not prospective lenders. When replenishment requires capital to be recalled and multiple outstanding loans are eligible: (1) filter to loans eligible for recall under existing V3 recall / effective-minimum-period rules (OD-07 / §6.5); (2) select the **oldest eligible outstanding loan first (FIFO)** by commitment time; (3) if two or more eligible loans have exactly the same commitment time, **any** tied loan may be selected (implementation may resolve arbitrarily or deterministically). There is deliberately **no** additional business ranking criterion after FIFO. Do **not** introduce largest loan first, smallest loan first, lender percentage, lender absolute lendable amount, borrower strength, or strategy ranking as loan-selection rules. OD-06 still controls the amount recalled: request the minimum required atomic amount; do **not** recall an entire loan merely because it is the oldest if only a smaller amount is required. OD-07 controls **when** a loan becomes recall-eligible; OD-09 controls **which** eligible loan is selected. If a borrower must sell positions as a consequence, position ranking is **OD-16** (§17); OD-09 does not rank positions. | FROZEN |
+| **OD-09** | Outstanding loan selection for replenishment | **FROZEN.** Operates on existing outstanding **loans**, not prospective lenders. When replenishment requires capital to be recalled and multiple outstanding loans are eligible: (1) filter to loans eligible for recall under existing V3 recall / effective-minimum-period rules (OD-07 / §6.5); (2) select the **oldest eligible outstanding loan first (FIFO)** by commitment time; (3) if two or more eligible loans have exactly the same commitment time, **any** tied loan may be selected (implementation may resolve arbitrarily or deterministically). There is deliberately **no** additional business ranking criterion after FIFO. Do **not** introduce largest loan first, smallest loan first, lender percentage, lender absolute lendable amount, borrower strength, or strategy ranking as loan-selection rules. Recall **amount** is governed by **DEP-RECALL-SIZE** (full may equal entire outstanding; partial in ₹5,000 multiples; not OD-06). OD-07 controls **when** a loan becomes recall-eligible; OD-09 controls **which** eligible loan is selected. If a borrower must sell positions as a consequence, position ranking is **OD-16** (§17); OD-09 does not rank positions. Immediate settlement / bridge / pending-held are **DEP-RECALL-IMMEDIATE-75** / **DEP-RECALL-BRIDGE**. | FROZEN |
 | **OD-10** | Corporate-action quantity ownership | **FROZEN.** Corporate actions follow the **parent holding’s owner**. For every strategy-owned or unmanaged position identified by `(portfolio, stock, owner)`, a corporate action applicable to that holding MUST adjust **that owner’s** position quantity. If the same stock has multiple strategy owners, the CA MUST NOT first blend those holdings into one portfolio-level position. Strategy-owned parent → CA remains with that owner. Unmanaged parent → CA remains unmanaged and MUST NOT be automatically assigned to a strategy. The governing rule is **parent-owner attachment**, not pro-rata allocation (pro-rata can differ for rounding, rights, broker-posted quantities, and other CA mechanics). OD-10 does **not** freeze split/bonus formulas, rights-issue calculations, cost-basis / average-price / target / filled / trailing-high / stop-loss restatement, or merger/demerger treatment. **OD-14** freezes raw `close_price` for SL/trailing comparison and the OD-12 reference price; that does **not** implicitly restatement-solve those CA leftovers and MUST NOT be read as using `adjusted_close_price` to compensate for corporate actions. | FROZEN |
 | **OD-11** | BUY cooldown duration, unit, and clock | **FROZEN.** Duration = **1 calendar day** (not trading sessions). Key = `(stock, strategy)`. Applies to OPEN and INCREASE; does not suppress REDUCE, EXIT, or HOLD. Another strategy’s BUY of the same stock does not consume, reset, or affect this cooldown. Primary purpose: prevent BUY recommendation churn; secondary: space repeated capital deployment. A BUY recommendation **opportunity / generation cycle** starts the cooldown (Day 0 allowed, Day 1 suppressed, Day 2 elapsed). It does **not** start on fill, trade approval, or lending commitment. Fills do not reset it. It is **not** the OD-07 recall period (still configurable, shipped default 14 calendar days). Unapproved BUYs MUST NOT be regenerated during the window; stale-cancel MUST NOT clear cooldown; `pending_execution` MUST NOT be cancelled because of cooldown. First entry remains ~50% of current **target amount**; subsequent INCREASE = `max(0, current_target_amount − filled_amount)`, not a fixed second 50% tranche (OD-12). Target MAY change during cooldown; use latest target amount and filled amount when the window elapses. | FROZEN |
 | **OD-12** | Staggered target primary unit | **FROZEN.** Staggered target primary unit = **monetary amount**. Quantity is derived from the **latest available raw daily `close_price`** (OD-14 consistency clarification of “latest daily closing price”) using whole-share rounding (default **floor**; do not materially overshoot). Rounding MUST NOT change the persisted target amount. Minimum actionable BUY/INCREASE amount is configurable at **platform** level with **portfolio-level** override; no strategy override; shipped platform default = **₹5,000**. The minimum applies to the this-cycle opportunity, not the overall target; remaining below the minimum suppresses OPEN/INCREASE without reducing the target. Subsequent INCREASE uses current target amount minus filled amount (OD-11). OD-06 atomic reservation and OD-05 partial funding MUST NOT replace or reset the target amount. Recommendation calculations use latest raw `close_price`, not execution price and not `adjusted_close_price`. | FROZEN |
 | **OD-13** | Stop-loss reference price | **FROZEN.** Stop-loss `entry_price` = **weighted-average execution cost of actual fills** for the **current ownership episode**, per stock + strategy owner (not first-fill price). `average_cost = (sum of actual executed fill value) / (sum of filled quantity)`. Subsequent INCREASE fills (and other actual fills of the same episode) update the average; the stop is not anchored to the first fill. A new ownership episode (after full exit, then a new position) receives a new cost basis. Do not blend owners (OD-01). Do not use target amount, reservation, last close, or estimated price as cost basis. Trailing stop remains highest raw `close_price` since entry **date** (not OD-13). The hit-test comparison series is OD-14 (raw `close_price`). **OD-15** freezes adoption entry-date continuity for trailing/stop windows without changing OD-13 cost-basis rules. CA cost restatement and unmanaged-adoption cost-basis merge remain unspecified (OD-10). DEP-ADOPT-MERGE is the lending-funded ownership rule (merge into borrower) and does not resolve those leftovers. | FROZEN |
 | **OD-14** | Daily comparison price series | **FROZEN.** Portfolio stop-loss and trailing-stop calculations use raw `close_price` as the single consistent daily comparison series. The latest raw `close_price` is also the OD-12 reference price for recommendation/quantity calculations. `adjusted_close_price` is not used for these calculations. Corporate-action restatement remains separately governed by OD-10 and is not implicitly resolved by OD-14. Per-owner isolation (OD-01) means each owner has its own trailing window/high; all owners use the same `close_price` column. Execution/fill price remains separate. OD-15 governs adoption entry-date continuity for trailing/stop windows. | FROZEN |
 | **OD-15** | Adoption entry-date continuity for trailing/stop windows | **FROZEN.** For an unmanaged holding adopted into a strategy, adoption does **not** reset the trailing/stop `entry_date` window. Preserve the original first-buy / existing ownership-history entry date; adoption changes owner attribution but is not a new investment purchase. Trailing-high history therefore continues from existing entry history rather than restarting on adoption. This does **not** resolve cost-basis merge mechanics or complete merge behavior when the destination strategy already owns the stock; those remain unspecified. **DEP-ADOPT-MERGE** (frozen separately) is lending-funded holding ownership (merge into borrower), not unmanaged-adoption cost-basis merge. OD-13 cost basis and OD-14 raw `close_price` comparison series remain unchanged. | FROZEN |
-| **OD-16** | Weakest-position score formula | **FROZEN.** When recall/replenishment requires selling borrower-owned positions, rank by simple configured-window percentage return: `window_return_pct = (current_reference_price − window_start_reference_price) / window_start_reference_price × 100`. Lowest score = weakest = sell first. Evaluation window is strategy-configurable in calendar days. Not lifetime XIRR, total return, age, fit, thesis, momentum, volatility, or OD-03 ranking. Not annualised XIRR. Tie-break: `stock_id` ascending on exact `window_return_pct` ties. Eligible universe: borrower-owned only (OD-01). Loan tap remains OD-09; recall timing OD-07; amount OD-06. Reference prices are **DEP-WEAKEST-PRICE** (frozen separately: Option A, raw `close_price`; latest available current close; window start = latest trading day on or before the window-start date, walk backward only). Insufficient history is **DEP-WEAKEST-HISTORY** (frozen separately: Option A, shorten to available history for that position only; do not exclude or block). OD-14 is unchanged and is not extended by these freezes. | FROZEN |
+| **OD-16** | Weakest-position score formula | **FROZEN.** When recall/replenishment requires selling borrower-owned positions, rank by simple configured-window percentage return: `window_return_pct = (current_reference_price − window_start_reference_price) / window_start_reference_price × 100`. Lowest score = weakest = sell first. Evaluation window is strategy-configurable in calendar days. Not lifetime XIRR, total return, age, fit, thesis, momentum, volatility, or OD-03 ranking. Not annualised XIRR. Tie-break: `stock_id` ascending on exact `window_return_pct` ties. Eligible universe: borrower-owned only (OD-01). Loan tap remains OD-09; recall timing OD-07; amount **DEP-RECALL-SIZE** (not OD-06). Reference prices are **DEP-WEAKEST-PRICE** (frozen separately: Option A, raw `close_price`; latest available current close; window start = latest trading day on or before the window-start date, walk backward only). Insufficient history is **DEP-WEAKEST-HISTORY** (frozen separately: Option A, shorten to available history for that position only; do not exclude or block). OD-14 is unchanged and is not extended by these freezes. | FROZEN |
 | **OD-17** | OHLCV history depth | **FROZEN.** V3 must support **all available OHLCV history** for each listed security. There is **no** maximum history-depth ceiling imposed by the V3 product specification. V3 does **not** define a fixed numeric depth target. 5Y must be supported when the listing has 5Y of available history; 5Y is a chart range, not a storage ceiling. History shorter than 5Y is valid. History longer than 5Y MUST remain available and MUST NOT be truncated by a V3 product-level maximum. **All** = all available stored/provider history. Provider and listing/history-start limits are external availability constraints, not V3 ceilings. The V1/as-built `HISTORY_DEPTH_TARGET_DAYS = 550` is **not** a V3 requirement. Do not introduce 1,825 days or any other invented numeric ceiling. | FROZEN |
 | **OD-18** | Minimum period before annualized return is used in ranking | **FROZEN.** Annualized return (CAGR/XIRR) MAY be used as ranking evidence only when the backtest holding period is **≥ 30 calendar days**. For holding periods **< 30 calendar days**, annualized return MUST NOT contribute to ranking. Simple return remains a valid backtest outcome. Applies to the OD-03 backtest ranking corpus and ranking aggregation. Reuses the V1 backtest “refuses CAGR under 30 days” rule, stated as **30 calendar days** (not trading sessions). Does **not** modify the §19 success definition, OD-02 `T_years` / opportunity-cost formula, OD-04 trimmed mean, OD-16 weakest-position scoring, or OD-23 (fill order when ranking is not computable; OD-23 is frozen separately and is not a ranking rule). | FROZEN |
 | **OD-19** | Portfolio cash reserve unit / formula | **FROZEN.** One configurable portfolio-level percentage: `portfolio_cash_reserve_pct`. `reserve_base = MAX(total_invested_amount, current_notional_portfolio_value)`. `required_cash_reserve = reserve_base × portfolio_cash_reserve_pct`. **Invested Amount** = actual capital paid to acquire currently held investments (not current market value). **Notional Portfolio Value** = current market value of currently held investments (not invested cost). Do **not** use % of cash, % of NAV, an absolute-₹ configuration, invested amount + available cash, or two separate percentages. The reserve remains a **portfolio-level** control, non-investable and non-lendable. Partial funding cannot invade it (OD-05). Does **not** freeze a numeric default for `portfolio_cash_reserve_pct`. Does **not** decide leftover unallocated-cash UI (**OD-20**, frozen separately as presentation-only), withdrawal-into-reserve (**OD-21**, frozen separately: withdrawals MUST NOT be blocked merely because they would leave cash below `required_cash_reserve`). Strategy minimum retained capital is **OD-24** (frozen separately: `nearest_integer(strategy_capital_allocation / recommended_minimum_holdings)`; not this reserve; not a physical cash account). | FROZEN |
@@ -2130,7 +2303,7 @@ Note: before the 2026-08-14 session, **OD-05** meant “minimum free capital / o
 
 ### 33.2 Open decisions
 
-None of **OD-01 through OD-24** remain open. Do not invent new OD identifiers here. **DEP-TRIM-K**, **DEP-FIT-BAND-10**, **DEP-PARTIAL-LEND**, **DEP-PARTIAL-ATOMIC**, **DEP-ADOPT-MERGE**, **DEP-WEAKEST-PRICE**, **DEP-WEAKEST-HISTORY**, and **DEP-RECALL-FLOOR** are frozen (§33.3.1). There are **no** remaining open DEP-* rows in this specification.
+None of **OD-01 through OD-24** remain open. Do not invent new OD identifiers here. Prior DEP-* rows plus **DEP-CAPITAL-PRIORITY**, **DEP-RECALL-SIZE**, **DEP-RECALL-IMMEDIATE-75**, **DEP-RECALL-BRIDGE**, **DEP-RECALL-FOLLOWUP**, and **DEP-SALE-PROCEEDS** are frozen (§33.3.1). There are **no** remaining open DEP-* rows in this specification.
 
 ### 33.3 Dependencies arising from frozen decisions (not invented rules)
 
@@ -2145,9 +2318,16 @@ These are ambiguities created or revealed by OD-01–OD-24. Unresolved rows are 
 | **DEP-PARTIAL-LEND** | Same-cycle lending after PARTIALLY_FUNDED own capital | **FROZEN.** When a recommendation is PARTIALLY_FUNDED from own available capital and an unfunded remainder exists, that remainder MUST be eligible to open a **same-cycle** lending request. Lending is not deferred merely because partial own-capital funding already occurred. If lending is approved, borrowed capital MUST be available **immediately** for the intended funding/execution path. Minimum requirement to use lending = **NONE**. A remainder below ₹5,000 remains eligible. Excess borrowed capital above the requirement is permitted and remains available. Loan **size** for a non-multiple remainder is **DEP-PARTIAL-ATOMIC**. Example: ₹3,000 additional needed → eligible same-cycle; loan ₹5,000. Example: own ₹4,000, requirement ₹18,000, remainder ₹14,000 → eligible same-cycle; actual loan ₹15,000 (DEP-PARTIAL-ATOMIC). MUST NOT stay UNFUNDED merely because the requirement is below ₹5,000. OD-05, OD-12 target amount, and explicit user approval unchanged. Does **not** create a new cash/loan/allocation account. Does **not** reinterpret ₹5,000 as a minimum recommendation size or minimum remainder. Does **not** change OD-24. | FROZEN |
 | **DEP-PARTIAL-ATOMIC** | Atomic loan size of a same-cycle remainder | **FROZEN.** Round the required borrowed amount **UP** to the next ₹5,000 atomic loan block. Required loan = unfunded remainder. Remainder = this-cycle required/target amount minus allocated own capital, **not** `atomic_allocation` minus own. Actual loan MUST be at least that remainder and MUST use the ₹5,000 atomic loan unit. If the remainder is not an exact multiple of ₹5,000, `loan_amount = ceil(unfunded_remainder / 5000) × 5000`. Exact multiples stay unchanged (₹15,000 → ₹15,000). Examples: ₹3,000 → ₹5,000; ₹14,000 → ₹15,000; ₹15,000 → ₹15,000. Worked example: own ₹4,000, target ₹18,000, remainder ₹14,000 → loan ₹15,000, excess ₹1,000 remains available. There is **no** minimum remainder; a ₹3,000 remainder still uses lending and results in a ₹5,000 loan. This is a **loan-size** rule, not a minimum funding requirement. Do **not** reduce the loan below the remainder merely to preserve denomination. Do **not** reject lending merely because the remainder is below ₹5,000. **DEP-PARTIAL-LEND** unchanged (same-cycle allowed; funds immediately on approval). Not the OD-06 1% reservation formula. Does **not** change OD-05, OD-06, OD-23, OD-24, DEP-TRIM-K, or other DEP-* rows. | FROZEN |
 | **DEP-ADOPT-MERGE** | Ownership of investments funded by inter-strategy lending | **FROZEN. OPTION A — MERGE INTO BORROWER.** When inter-strategy lending funds a recommendation: (1) borrowed capital becomes **deployable borrowed capital** of the **borrowing** strategy for the funded opportunity; (2) the **borrowing** strategy owns the resulting investment/holding; (3) the **lending** strategy does **not** acquire ownership of the resulting holding; (4) the lender records a **loan receivable**; (5) the borrower records the corresponding **loan obligation**; (6) do **not** introduce fractional/split ownership of a holding based on own-vs-borrowed capital; (7) physical cash remains one portfolio-level cash pool — do **not** create physical strategy bank accounts or cash buckets; (8) loan repayment is a loan/capital transaction and does **not** transfer stock ownership; (9) borrowed capital is additional deployable capital for the borrower but does **not** change the configured strategy allocation percentage; (10) do **not** reinterpret this as permanently increasing configured allocation or changing portfolio allocation percentages. Example: Strategy A lends ₹15,000 to Strategy B → A has receivable ₹15,000 and no stock ownership; B has ₹15,000 deployable borrowed capital, owns the resulting ₹15,000 investment, and has obligation ₹15,000. Do **not** model the holding as jointly or fractionally owned by A and B. OD-24, OD-05, OD-06, **DEP-PARTIAL-LEND**, and **DEP-PARTIAL-ATOMIC** unchanged. This is **not** unmanaged-holding adoption and does **not** freeze unmanaged-adoption cost-basis merge. | FROZEN |
-| **DEP-WEAKEST-PRICE** | OD-16 reference-price column and lookup | **FROZEN. OPTION A — RAW CLOSE_PRICE.** For OD-16 weakest-position window-return calculations: `current_reference_price` = latest available daily `close_price` at evaluation time. `window_start_reference_price` = `close_price` from the latest available trading day **ON OR BEFORE** the configured OD-16 window-start date. If that date is not a trading day, walk **backward** to the latest available daily OHLCV record on or before that date; do **not** look forward to the next trading day. Do **not** use `adjusted_close_price`. Do **not** use execution/fill price for either reference. The OD-16 formula, lowest-is-weakest ranking, `stock_id` ascending tie-break, borrower-owned eligibility, OD-06 amount, OD-07 recall timing, and OD-09 loan selection remain unchanged. This does **not** modify **OD-14** (raw `close_price` remains the frozen rule for portfolio stop-loss, trailing stop, and OD-12 reference-price calculations only). **DEP-WEAKEST-HISTORY** is frozen separately (Option A, shorten window for that position only). | FROZEN |
-| **DEP-WEAKEST-HISTORY** | Insufficient OD-16 window history | **FROZEN. OPTION A — SHORTEN WINDOW.** When a borrower-owned position lacks sufficient historical daily OHLCV to obtain the normal window-start reference for the configured `N`-calendar-day window: the position remains eligible; use maximum available history up to `N`; `window_start_reference_price` = earliest available valid daily raw `close_price` in that available history; do **not** look forward to manufacture `N`; do **not** use `adjusted_close_price` or fill price; do **not** substitute lifetime return, fit, conviction, volatility, age, or XIRR. Same OD-16 `window_return_pct` formula. Configured `N` remains the maximum and is **not** globally rewritten. Short-history positions are not excluded and MUST NOT block selection. UI/backend MUST NOT present the shortened period as full `N`-day history. Fallback only when history is insufficient. No invented minimum-history threshold beyond at least one valid start reference and existing OD-16 calculation requirements. Example: N=90; 3Y history uses 90 days; 40-day history uses 40 days. Lowest `window_return_pct` remains weakest. `stock_id` ascending tie-break, borrower-owned eligibility, OD-06, OD-07, and OD-09 unchanged. **DEP-WEAKEST-PRICE** unchanged. | FROZEN |
-| **DEP-RECALL-FLOOR** | Whether a portfolio recall override may be shorter than 14 calendar days | **FROZEN. OPTION B.** A portfolio-level recall-period override MAY be either **shorter or longer** than the platform’s shipped 14-calendar-day default. `effective_recall_period = portfolio_recall_period_override if configured else platform_default_recall_period`. Shipped platform default remains **14 calendar days**. 14 days is **not** a hard minimum/floor. Do **not** introduce a separate minimum recall-period value. Do **not** clamp portfolio overrides to 14 days. Do **not** reinterpret 14 days as a minimum. Two-level model unchanged: platform default, then portfolio override (authoritative when set). Examples: no override → 14; override 7 → 7; override 3 → 3; override 14 → 14; override 21 → 21. OD-07 otherwise unchanged (calendar days; clock start = successful capital commitment/approval; cannot recall before effective period). OD-09 FIFO, OD-06 amount, OD-16 weakest-position selection, default user approval, and optional auto-return (off by default) unchanged. | FROZEN |
+| **DEP-WEAKEST-PRICE** | OD-16 reference-price column and lookup | **FROZEN. OPTION A — RAW CLOSE_PRICE.** For OD-16 weakest-position window-return calculations: `current_reference_price` = latest available daily `close_price` at evaluation time. `window_start_reference_price` = `close_price` from the latest available trading day **ON OR BEFORE** the configured OD-16 window-start date. If that date is not a trading day, walk **backward** to the latest available daily OHLCV record on or before that date; do **not** look forward to the next trading day. Do **not** use `adjusted_close_price`. Do **not** use execution/fill price for either reference. The OD-16 formula, lowest-is-weakest ranking, `stock_id` ascending tie-break, borrower-owned eligibility, **DEP-RECALL-SIZE** amount, OD-07 recall timing, and OD-09 loan selection remain unchanged. This does **not** modify **OD-14** (raw `close_price` remains the frozen rule for portfolio stop-loss, trailing stop, and OD-12 reference-price calculations only). **DEP-WEAKEST-HISTORY** is frozen separately (Option A, shorten window for that position only). | FROZEN |
+| **DEP-WEAKEST-HISTORY** | Insufficient OD-16 window history | **FROZEN. OPTION A — SHORTEN WINDOW.** When a borrower-owned position lacks sufficient historical daily OHLCV to obtain the normal window-start reference for the configured `N`-calendar-day window: the position remains eligible; use maximum available history up to `N`; `window_start_reference_price` = earliest available valid daily raw `close_price` in that available history; do **not** look forward to manufacture `N`; do **not** use `adjusted_close_price` or fill price; do **not** substitute lifetime return, fit, conviction, volatility, age, or XIRR. Same OD-16 `window_return_pct` formula. Configured `N` remains the maximum and is **not** globally rewritten. Short-history positions are not excluded and MUST NOT block selection. UI/backend MUST NOT present the shortened period as full `N`-day history. Fallback only when history is insufficient. No invented minimum-history threshold beyond at least one valid start reference and existing OD-16 calculation requirements. Example: N=90; 3Y history uses 90 days; 40-day history uses 40 days. Lowest `window_return_pct` remains weakest. `stock_id` ascending tie-break, borrower-owned eligibility, **DEP-RECALL-SIZE**, OD-07, and OD-09 unchanged. **DEP-WEAKEST-PRICE** unchanged. | FROZEN |
+| **DEP-RECALL-FLOOR** | Whether a portfolio recall override may be shorter than 14 calendar days | **FROZEN. OPTION B.** A portfolio-level recall-period override MAY be either **shorter or longer** than the platform’s shipped 14-calendar-day default. `effective_recall_period = portfolio_recall_period_override if configured else platform_default_recall_period`. Shipped platform default remains **14 calendar days**. 14 days is **not** a hard minimum/floor. Do **not** introduce a separate minimum recall-period value. Do **not** clamp portfolio overrides to 14 days. Do **not** reinterpret 14 days as a minimum. Two-level model unchanged: platform default, then portfolio override (authoritative when set). Examples: no override → 14; override 7 → 7; override 3 → 3; override 14 → 14; override 21 → 21. OD-07 otherwise unchanged (calendar days; clock start = successful capital commitment/approval; cannot recall before effective period; existing loans use current effective period dynamically without clock restart). OD-09 FIFO, **DEP-RECALL-SIZE** amount rules, OD-16 weakest-position selection, and automated recall lifecycle (§6) apply. | FROZEN |
+
+| **DEP-CAPITAL-PRIORITY** | Capital-use order for recommendation funding | **FROZEN.** (1) own currently available capital; (2) recall own capital currently lent to others; (3) borrow via normal loan. Execute with maximum capital actually available and close the recommendation at the actual investment amount. Do not hold the recommendation open for a residual shortfall; later capital feeds the next cycle. Capital resolution precedes execution mode (§6.0, §6.16). | FROZEN |
+| **DEP-RECALL-SIZE** | Full vs partial recall amount rules | **FROZEN.** FULL recall MAY request entire outstanding regardless of ₹5,000 multiples. PARTIAL recall MUST be in ₹5,000 multiples. Never exceed outstanding. Automated lender emits only valid amounts. Do **not** apply OD-06 `×1.01` then ceil to size recalls. Normal voluntary repayment and Recall Bridge Loans are not forced to ₹5,000 multiples. | FROZEN |
+| **DEP-RECALL-IMMEDIATE-75** | Immediate recall settlement threshold | **FROZEN.** For recall amount `R`: target=100% of R; minimum threshold for immediate resolution=75% of R; actual immediate settlement = maximum currently available (own cash + eligible Recall Bridge Loan) up to 100% of R. Threshold is against `R`, not against total loan outstanding unless R equals outstanding. If immediate available < 75% of R: PENDING/HELD; do not tiny-partial-settle; do not take a tiny bridge merely because some eligibility exists; liquidate and settle from proceeds when available. | FROZEN |
+| **DEP-RECALL-BRIDGE** | Recall Bridge Loan | **FROZEN.** Temporary bridge used ONLY to fulfil a recall before proceeds from stock sale are available. Not for investment funding. No interest. No normal-loan recall cooldown. No ₹5,000 multiple restriction. Cannot itself be recalled. Repay voluntarily as liquid funds/proceeds arrive (arbitrary installments; fully repay when sufficient). Eligibility: after own cash applied, bridge_need = max(0, R − own cash); liquidatable stock value ≥ bridge_amount × 1.10; otherwise take maximum cushion-eligible bridge. Do not use the name Soft Loan. | FROZEN |
+| **DEP-RECALL-FOLLOWUP** | One active recall and follow-up cooldown | **FROZEN.** Only one recall active at a time. Recall cannot be cancelled. Subsequent recall only after previous completed AND follow-up cooldown elapsed. Follow-up cooldown = `floor(current_effective_recall_period / 2)` calendar days. Effective period remains OD-07 / DEP-RECALL-FLOOR. | FROZEN |
+| **DEP-SALE-PROCEEDS** | Proceeds from stock sale and settlement delay | **FROZEN.** Terminology: **Proceeds from stock sale** (not "Return on stock sale"). Model ~1 calendar day broker settlement delay before proceeds are physically available. Do not assume sale execution instantly creates available cash. Do not hold every recommendation an extra day unconditionally. Preferred: execute today with today's available capital; resolve recalls independently; next-cycle uses newly arrived capital. Excess liquidation proceeds remain with the borrower. | FROZEN |
 
 #### 33.3.2 Remaining unresolved dependencies
 
@@ -2165,7 +2345,7 @@ Planning order for later passes. Do not implement in this phase.
 4. **Staggered entry + BUY cooldown + partial fill** — persist **target amount** per owner (OD-12); derive whole-share qty from latest available raw `close_price` (floor; OD-14); first entry default 50% of current target amount; subsequent INCREASE = current target amount − filled amount; suppress OPEN/INCREASE below effective min actionable (platform ₹5,000 / portfolio override); BUY cooldown **1 calendar day** from the recommendation opportunity (OD-11); OD-05/OD-06 must not replace the target amount.
 5. **Virtual allocation accounting** — % summing to 100; available vs lendable; `required_cash_reserve` per **OD-19** (`MAX(Invested Amount, Notional Portfolio Value) × portfolio_cash_reserve_pct`); **OD-24** `minimum_retained_capital = nearest_integer(strategy_capital_allocation / recommended_minimum_holdings)` (nearest integer rupee; exact .5 rounds upward; not banker's rounding; strategy-level lending floor; not a physical sub-account; not OD-19); atomic reservation vs post-fill leftover; Cash UI named **Unallocated Cash** bucket (**OD-20**, presentation-only; not a new ledger or formula); no physical sub-accounts.
 6. **Lending workflow** — eligibility; available-for-lending after **OD-24** retained floor; ranking by lendable % then lendable amount then arbitrary exact tie (OD-08); display without commit; OD-06 reservation amounts; **DEP-PARTIAL-LEND** same-cycle lending after PARTIALLY_FUNDED (no minimum remainder; funds immediately on approval); **DEP-PARTIAL-ATOMIC** `ceil(remainder / 5000) × 5000` loan size (₹14,000 → ₹15,000); **DEP-ADOPT-MERGE** merge into borrower (loan receivable/obligation; borrower owns the holding; `allocation_pct` unchanged); atomic approve; failure paths; audit. Do not apply FIFO to lenders. Do not lend the OD-24 retained amount.
-7. **Recall / replenishment** — platform default 14 calendar days + portfolio override that MAY be shorter or longer (**OD-07**, **DEP-RECALL-FLOOR**; 14 days is not a hard floor); among eligible loans, oldest commitment time first (OD-09); amount OD-06 (not whole loan merely because it is oldest); approval default; weakest-position ranking per **OD-16** (`window_return_pct`, lowest first; tie-break `stock_id` ascending) using raw `close_price` (**DEP-WEAKEST-PRICE**: latest available current close; window start = latest trading day on or before the window-start date, walk backward only). **DEP-WEAKEST-HISTORY:** if a position lacks full `N` history, shorten to available history for that position only; do not exclude it or block selection.
+7. **Recall / replenishment / Recall Bridge Loan** — capital priority own→recall→borrow (**DEP-CAPITAL-PRIORITY**); OD-07 / DEP-RECALL-FLOOR period (dynamic on existing loans; no clock restart); one active recall + follow-up cooldown `floor(period/2)` (**DEP-RECALL-FOLLOWUP**); OD-09 FIFO loan tap; **DEP-RECALL-SIZE** full/partial amounts (not OD-06); **DEP-RECALL-IMMEDIATE-75** 75%/100% rule; **DEP-RECALL-BRIDGE** with 10% stock cushion; PENDING/HELD + liquidation; **DEP-SALE-PROCEEDS** ~1-day settlement delay; weakest-position ranking **OD-16** + §17.1 liquidation mechanics (0.5% buffer, sequential, partial sells, holding-period cap default 3 months). Close recommendations at actual funded amount.
 8. **History depth & charts** — Support **all available** OHLCV history with **no** V3 product-level maximum history-depth ceiling (**OD-17**). 5Y range when 5Y exists; All = all available history (may exceed 5Y); clamp hint when shorter; V1 `HISTORY_DEPTH_TARGET_DAYS = 550` is as-built only.
 9. **Historical ranking** — authoritative backtest corpus only (OD-03, §4.2.1); **DEP-FIT-BAND-10** 10-point bands with adaptive sparsity; 7%/7% trimmed mean (OD-04); tail count **`k = nearest_integer(0.07 × n)`** with exact .5 rounding upward (**DEP-TRIM-K**); ranking statistical confidence diagnostic only; annualized/CAGR/XIRR ranking evidence only if holding period **≥ 30 calendar days** (**OD-18**); never ship fit-as-rank; never mix live trades or overlapping prior runs. When return-quality ranking is not computable, capital fill among that strategy’s own valid BUY/INCREASE recs is **OD-23** (descending target investment amount / conviction amount, then fit → alphabetical symbol); do not present that fill order as V3 ranking.
 10. **UI / notifications / help** — Strategy vs Portfolio settings split; per-owner holdings; capital states; Cash UI named **Unallocated Cash** (**OD-20**, presentation-only); Dashboard warning when cash is below `required_cash_reserve` (**OD-21**, B3); lender UX; contextual help sync when behaviour ships. Persistent application-wide critical banner remains **B4 wishlist**.
@@ -2283,8 +2463,14 @@ Planning order for later passes. Do not implement in this phase.
 - Reserve (`required_cash_reserve`, **OD-19**), pending-execution reserved cash, and the strategy’s **OD-24** minimum retained capital cannot be lent.
 - Recall before the **effective** period is rejected (**OD-07**). Effective period = portfolio override if configured, else the shipped platform default of 14 calendar days. A configured override MAY be shorter or longer than 14 days (**DEP-RECALL-FLOOR**; 14 is not a hard floor).
 - When several outstanding loans are recall-eligible, replenishment taps the **oldest** by commitment time first (**OD-09**). Exact commitment-time ties: any tied loan may be selected. Do not rank loans by size, lender %, lender amount, borrower strength, or strategy ranking.
-- Replenishment requests min needed (OD-06), not necessarily the full selected loan, including when that loan is the oldest.
-- Default recall requires user approval.
+- Recall amount follows **DEP-RECALL-SIZE** (FULL may equal entire outstanding; PARTIAL in ₹5,000 multiples; never exceed outstanding; not OD-06).
+- Capital priority own → recall → borrow; close recommendation at actual funded amount (**DEP-CAPITAL-PRIORITY**).
+- Immediate settlement: target 100% of recall amount `R`; minimum threshold 75% of `R`; settle max available up to 100% via own cash + eligible Recall Bridge Loan (**DEP-RECALL-IMMEDIATE-75**). If <75%: PENDING/HELD; no tiny partial; no tiny bridge; liquidate; settle from proceeds.
+- Recall Bridge Loan is recall-fulfil only; 10% liquidatable stock cushion; no interest; not recallable; no ₹5,000 multiple (**DEP-RECALL-BRIDGE**). Never named Soft Loan.
+- Only one active recall; non-cancellable; follow-up cooldown = `floor(effective_period/2)` (**DEP-RECALL-FOLLOWUP**).
+- Existing loans use the current effective recall period dynamically; changing override does not restart clocks.
+- Normal voluntary repayment: no interest; never more than outstanding; not forced to ₹5,000 multiples.
+- Proceeds from stock sale terminology and ~1-day settlement delay (**DEP-SALE-PROCEEDS**).
 
 ### 35.9 Weakest position (OD-16)
 
@@ -2295,7 +2481,7 @@ Planning order for later passes. Do not implement in this phase.
 - Do **not** use lifetime XIRR alone, lifetime total return alone, or oldest holding alone.
 - Do **not** use annualised XIRR, fit score, thesis score, momentum, volatility, or OD-03 opportunity ranking as the weakest score.
 - Exact ties on `window_return_pct`: break by **`stock_id` ascending**.
-- Loan selection remains OD-09 FIFO; recall timing OD-07; amount OD-06.
+- Loan selection remains OD-09 FIFO; recall timing OD-07; amount **DEP-RECALL-SIZE**. Liquidation uses §17.1 (0.5% buffer, sequential, partial sells allowed, holding-period cap default 3 months, excess proceeds stay with borrower).
 - **DEP-WEAKEST-PRICE:** `current_reference_price` = latest available daily `close_price` at evaluation time. `window_start_reference_price` = `close_price` from the latest available trading day **on or before** the configured window-start date (walk backward only; do not look forward). Do not use `adjusted_close_price`. Do not use execution/fill price. OD-14 is unchanged (SL/trailing/OD-12 only).
 - **DEP-WEAKEST-HISTORY:** if a position lacks enough history for the configured `N`-day window, it remains eligible. Use maximum available history up to `N`. `window_start_reference_price` = earliest available valid daily raw `close_price` in that history. Do not exclude the position, do not block selection, do not rewrite configured `N` globally, and do not present the shortened period as full `N`-day history. Same `window_return_pct` formula. Example: N=90; 3Y history uses 90 days; 40-day history uses 40 days.
 
@@ -2441,7 +2627,7 @@ Planning order for later passes. Do not implement in this phase.
 - Configured `N` remains the maximum evaluation window and is not rewritten globally. Example: N=90; 3Y history uses 90 days; 40-day history uses 40 days and is not excluded.
 - UI/backend MUST NOT represent the shortened period as though full `N`-day history existed.
 - Fallback only when history is insufficient. Do not invent a minimum-history threshold beyond at least one valid start reference and existing OD-16 calculation requirements.
-- OD-06, OD-07, OD-09, and **DEP-WEAKEST-PRICE** remain unchanged.
+- **DEP-RECALL-SIZE**, OD-07, OD-09, and **DEP-WEAKEST-PRICE** remain unchanged.
 - **DEP-RECALL-FLOOR** is frozen separately (§35.23) and is not changed by this fallback.
 
 ### 35.23 Portfolio recall-period override vs 14-day default (DEP-RECALL-FLOOR)
@@ -2453,8 +2639,8 @@ Planning order for later passes. Do not implement in this phase.
 - Two-level configuration remains: platform-level default, then portfolio-level override. The portfolio override is authoritative when set.
 - Examples: no override → 14 days; override 7 → 7; override 3 → 3; override 14 → 14; override 21 → 21.
 - OD-07 otherwise unchanged: period is calendar days; clock starts at successful capital commitment/approval; a loan cannot be recalled before the effective period expires.
-- Recall still requires user approval by default. Automatic return remains optional and off by default.
-- OD-09 FIFO among recall-eligible outstanding loans, OD-06 recalled amount, and OD-16 weakest-position selection remain unchanged. Borrower repayment/position-release behaviour remains unchanged.
+- Recall / Recall Bridge Loan / repayment are automated rule-driven processes (§6). Trade execution still follows Manual / Semi-automatic / Automatic modes (§6.16).
+- OD-09 FIFO among recall-eligible outstanding loans, **DEP-RECALL-SIZE** amounts, and OD-16 weakest-position selection remain. Immediate settlement / bridge / pending-held / proceeds rules apply (§6.11–§6.13).
 
 ---
 
@@ -2462,6 +2648,10 @@ Planning order for later passes. Do not implement in this phase.
 
 | Do not confuse | With |
 |----------------|------|
+| Soft Loan (forbidden name) | **Recall Bridge Loan** |
+| Return on stock sale (forbidden name for cash from sells) | **Proceeds from stock sale** |
+| Recall amount R | Total outstanding loan principal (unless the recall is full) |
+| 75% immediate threshold | Target settlement (target is 100%) |
 | Fit score | Final rank / expected return |
 | OD-23 capital **fill order** (descending target investment amount / conviction amount when ranking is not computable) | V3 return-quality ranking / a label of that fill order as “rank” / a silent fallback to fit-as-rank |
 | OD-23 fill-order tie-break **fit** | Fit used as the fallback V3 ranking key |

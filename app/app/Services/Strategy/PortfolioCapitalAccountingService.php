@@ -5,6 +5,7 @@ namespace App\Services\Strategy;
 use App\Models\CapitalLoan;
 use App\Models\Holding;
 use App\Models\PortfolioProfile;
+use App\Models\RecallBridgeLoan;
 use App\Models\TradingRecommendation;
 use App\Models\TradingStrategy;
 use App\Models\TradingStrategyVersion;
@@ -254,7 +255,7 @@ class PortfolioCapitalAccountingService
 
     /**
      * Outstanding loan principal grouped by lender and borrower.
-     * Uses CapitalLoan.outstanding only (returned portions already excluded from that column).
+     * Includes normal CapitalLoan.outstanding and Recall Bridge Loan outstanding.
      *
      * @return array{0: array<int, float>, 1: array<int, float>}
      */
@@ -267,6 +268,21 @@ class PortfolioCapitalAccountingService
             ->get(['lender_strategy_id', 'borrower_strategy_id', 'outstanding']);
 
         foreach ($rows as $loan) {
+            $outstanding = (float) $loan->outstanding;
+            if ($outstanding <= 0) {
+                continue;
+            }
+            $lenderId = (int) $loan->lender_strategy_id;
+            $borrowerId = (int) $loan->borrower_strategy_id;
+            $lent[$lenderId] = ($lent[$lenderId] ?? 0.0) + $outstanding;
+            $borrowed[$borrowerId] = ($borrowed[$borrowerId] ?? 0.0) + $outstanding;
+        }
+
+        $bridges = RecallBridgeLoan::query()
+            ->where('profile_id', $profile->id)
+            ->get(['lender_strategy_id', 'borrower_strategy_id', 'outstanding']);
+
+        foreach ($bridges as $loan) {
             $outstanding = (float) $loan->outstanding;
             if ($outstanding <= 0) {
                 continue;

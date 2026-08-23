@@ -236,6 +236,28 @@ Each endpoint returns only its owned metrics (or an intentional research bundle)
 Recommendations may include `evidence.market_analysis` (phase, sentiment,
 allocation multiplier, entry allowed). Strategy config may include `market_gates`.
 
+### Capital / Recall (V3 WS4 Phase 3A)
+
+Envelope: `ApiEnvelope`. Auth: Sanctum + active portfolio. Controllers are thin over Phase 1–2 domain services.
+
+``` text
+  GET      /api/v1/capital/recall-period
+  PUT      /api/v1/capital/recall-period          body: portfolio_recall_period_days | clear_override
+  GET      /api/v1/capital/recalls               filters: loan_id, state, strategy_id, active, completed, from, to
+  POST     /api/v1/capital/recalls               body: loan_id, kind=full|partial, amount?, lender_strategy_id?
+  GET      /api/v1/capital/recalls/{id}
+  GET      /api/v1/capital/bridge-loans          read-only (Recall Bridge Loan)
+  POST     /api/v1/capital/bridge-loans          405 — automated workflow only
+  GET      /api/v1/capital/bridge-loans/{id}
+  GET      /api/v1/capital/pending-sale-proceeds  Proceeds from Stock Sale
+  GET      /api/v1/capital/pending-sale-proceeds/{id}
+  POST     .../mark-available                     405 — settlement job only
+  POST     /api/v1/capital/resolve                strategy_id, required_amount, recommendation_id?
+  GET      /api/v1/recommendations/{id}/capital-resolution
+```
+
+Terminology: **Recall Bridge Loan**; **Proceeds from Stock Sale**. Eligibility SoT = `committed_at` + current effective period (not `min_recall_at`).
+
 ## Notifications
 
   Method   Endpoint                           Description

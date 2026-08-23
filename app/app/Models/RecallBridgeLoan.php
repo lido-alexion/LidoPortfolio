@@ -4,16 +4,16 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use InvalidArgumentException;
 
 /**
- * Committed inter-strategy **normal** loan receivable/obligation (V3 spec §28.5).
- * Not a holding-ownership split. Recall Bridge Loans use RecallBridgeLoan.
- * min_recall_at is optional denormalized cache only — eligibility is dynamic (v0.28).
+ * Recall Bridge Loan — temporary bridge to fulfil a recall only (DEP-RECALL-BRIDGE).
+ * Not a Soft Loan. Cannot fund investments. Cannot itself be recalled.
+ * No ₹5,000 multiple. No normal-loan recall cooldown.
  */
-class CapitalLoan extends Model
+class RecallBridgeLoan extends Model
 {
-    protected $table = 'portfolio_tos_loans';
+    protected $table = 'portfolio_tos_recall_bridge_loans';
 
     public const STATUS_OUTSTANDING = 'outstanding';
 
@@ -23,13 +23,12 @@ class CapitalLoan extends Model
 
     protected $fillable = [
         'profile_id',
-        'capital_request_id',
+        'capital_recall_id',
         'borrower_strategy_id',
         'lender_strategy_id',
         'principal',
         'outstanding',
         'committed_at',
-        'min_recall_at',
         'status',
     ];
 
@@ -37,13 +36,12 @@ class CapitalLoan extends Model
     {
         return [
             'profile_id' => 'integer',
-            'capital_request_id' => 'integer',
+            'capital_recall_id' => 'integer',
             'borrower_strategy_id' => 'integer',
             'lender_strategy_id' => 'integer',
             'principal' => 'decimal:4',
             'outstanding' => 'decimal:4',
             'committed_at' => 'datetime',
-            'min_recall_at' => 'datetime',
         ];
     }
 
@@ -54,6 +52,9 @@ class CapitalLoan extends Model
                 (int) $loan->lender_strategy_id,
                 (int) $loan->borrower_strategy_id,
             );
+            if ((int) $loan->lender_strategy_id === (int) $loan->borrower_strategy_id) {
+                throw new InvalidArgumentException('Bridge lender must differ from borrower.');
+            }
         });
     }
 
@@ -62,9 +63,9 @@ class CapitalLoan extends Model
         return $this->belongsTo(PortfolioProfile::class, 'profile_id');
     }
 
-    public function capitalRequest(): BelongsTo
+    public function capitalRecall(): BelongsTo
     {
-        return $this->belongsTo(CapitalRequest::class, 'capital_request_id');
+        return $this->belongsTo(CapitalRecall::class, 'capital_recall_id');
     }
 
     public function borrowerStrategy(): BelongsTo
@@ -75,15 +76,5 @@ class CapitalLoan extends Model
     public function lenderStrategy(): BelongsTo
     {
         return $this->belongsTo(TradingStrategy::class, 'lender_strategy_id');
-    }
-
-    public function returns(): HasMany
-    {
-        return $this->hasMany(CapitalLoanReturn::class, 'loan_id');
-    }
-
-    public function recalls(): HasMany
-    {
-        return $this->hasMany(CapitalRecall::class, 'loan_id');
     }
 }

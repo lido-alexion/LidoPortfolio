@@ -164,7 +164,7 @@ class RecommendationLendingLifecycleTest extends TestCase
         );
     }
 
-    public function test_trade_approval_cannot_bypass_lending_gate(): void
+    public function test_trade_approval_allowed_at_resolved_actual_without_waiting_for_residual_lend(): void
     {
         [$user, $profile, $borrower] = $this->twoStrategyPortfolio(1_000_000);
         $rec = $this->makeBuyRecommendation($profile, $borrower, [
@@ -174,19 +174,21 @@ class RecommendationLendingLifecycleTest extends TestCase
             'unfunded_amount' => 8000.0,
         ]);
         app(RecommendationLendingCoordinator::class)->syncAfterGenerated($rec);
+        $rec->refresh();
 
-        try {
-            app(RecommendationLifecycleService::class)->recordReview(
-                $profile,
-                $user,
-                $rec->fresh(),
-                TradingRecommendation::DECISION_APPROVED
-            );
-            $this->fail('Expected ValidationException');
-        } catch (ValidationException $e) {
-            $this->assertSame(TradingRecommendation::STATUS_PENDING_REVIEW, $rec->fresh()->status);
-            $this->assertNull($rec->fresh()->approved_at);
-        }
+        // §6.0: optional residual capital request may exist, but must not block execute-at-actual.
+        $this->assertTrue(app(RecommendationLendingCoordinator::class)->canEnterPendingExecution($rec));
+        $this->assertNotNull(app(RecommendationLendingCoordinator::class)->activeRequestFor($rec));
+        $this->assertEqualsWithDelta(10000.0, (float) $rec->suggestedInvestmentAmount(), 0.0001);
+
+        $updated = app(RecommendationLifecycleService::class)->recordReview(
+            $profile,
+            $user,
+            $rec->fresh(),
+            TradingRecommendation::DECISION_APPROVED
+        );
+        $this->assertSame(TradingRecommendation::STATUS_PENDING_EXECUTION, $updated->status);
+        $this->assertEqualsWithDelta(10000.0, (float) $updated->reserved_amount, 0.0001);
     }
 
     public function test_fully_funded_approval_still_enters_pending_execution(): void

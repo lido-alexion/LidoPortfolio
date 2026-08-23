@@ -32,9 +32,203 @@ Specs under `specs/` define a seven-engine decision platform. Implementation evo
 
 **Documentation map:** Repository-wide reading order and file tree — [`DOCS.md`](DOCS.md). Specs subtree — [`specs/README.md`](specs/README.md). Architecture hub (domain folders) — [`specs/architecture/README.md`](specs/architecture/README.md). For full ingest: requirements/architecture → governance → audit → this file. New Markdown docs must be indexed in `DOCS.md` (rule: `.cursor/rules/Keep-DOCS-md-ingestion-tree-updated.mdc`).
 
+## V3 WS4 gap-closure — live wiring (2026-08-21)
+
+**Status:** Five acceptance-audit integration gaps closed. **§6.0 close-at-actual follow-up (2026-08-22):** residual partial-lend no longer blocks execution of already-funded capital.
+
+### Gaps closed
+
+1. **Live capital resolution** — `RecommendationLendingCoordinator::syncAfterGenerated` calls `applyCapitalResolutionBeforeTradeMode` before partial lending / trade-mode handling. Uses allocator-assigned own (`own_available_override`) then recall; updates `actual_execution_amount` / `suggested_investment_amount`. Manual/Semi/Auto unchanged (still `pending_review` after generation).
+2. **Auto bridge lender** — `RecallBridgeLenderSelector` (lowest strategy id among capacity+cushion winners targeting max settle ≤ R). `RecallBridgeLoanService::create` enforces cushion + lender capacity (context overrides for tests).
+3. **Immediate fulfilment** — `RecallImmediateSettlementService::apply` chains `RecallFulfilmentService::afterImmediateSettlement` after settle/pending. Idempotent skip when recall already past `requested`/`immediate_settlement`. Daily `portfolio:process-recall-settlements` retained.
+4. **§6.15 normal-loan good-faith** — `GoodFaithCapitalLoanRepaymentService` via existing `CapitalLoanRepaymentService`; scheduled with bridge good-faith.
+5. **POST `/api/v1/capital/recalls`** — `RecallService::requestAndProcess` runs create → immediate settlement (auto bridge) → fulfilment; response reflects post-workflow state.
+
+### DEP-CAPITAL-PRIORITY §6.0 close-at-actual (2026-08-22)
+
+After capital resolution with `close_at_actual` and `actual_execution_amount > 0`, `canEnterPendingExecution` allows the recommendation through Manual/Semi/Auto at that amount even if an optional residual capital request remains `awaiting_lender_selection`. Residual lending may still top up later; on commit, executable rises only to `min(requested, own+remainder)` (never own+full ₹5k loan). Example: ₹20k request + ₹15k own + ₹4k recall → **₹19k executable** without waiting for ₹1k.
+
+### Tests
+
+`tests/Feature/Lending/RecallGapClosureTest.php`, `tests/Feature/Lending/CapitalPriorityCloseAtActualTest.php` (+ RecommendationLending / Recall regression).
+
+---
+
+## V3 WS4 Phase 3B-2 — Recall notifications + help sync (2026-08-21)
+
+**Status:** Telegram domain notifications + `appDocumentation.js` sync. No UI redesign.
+
+### Notifications (reuse `NotificationEngine`)
+
+| Event | Type | Idempotency key pattern |
+|-------|------|-------------------------|
+| Recall requested | `recall_requested` | `recall-{id}-requested-telegram` |
+| Pending held | `recall_pending_held` | `recall-{id}-pending_held-telegram` |
+| Settlement batch / completed | `recall_settlement` / `recall_completed` | `recall-{id}-settlement-{settledTotal}-telegram` |
+| Bridge created | `recall_bridge_created` | `bridge-{id}-created-telegram` |
+| Bridge partial / complete | `recall_bridge_partial_repay` / `recall_bridge_completed` | `bridge-{id}-repay-{repaidTotal}-telegram` |
+| Sale initiated | `sale_proceeds_initiated` | `proceeds-{id}-sale-initiated-telegram` |
+| Proceeds applied | `sale_proceeds_applied` | `proceeds-{id}-applied-telegram` |
+| Partial capital resolution | `capital_resolution_partial` | `capital-partial-{rec\|adhoc}-{actual}-telegram` |
+
+Channel: existing Telegram + `notifications_enabled`. Messages via `NotificationMessageComposer`. Emitters: `RecallService`, `RecallBridgeLoanService`, `ProceedsApplicationService`, `RecallLiquidationService`, `CapitalResolutionService`.
+
+### Help
+
+Updated topics: `cash`, `recommendations`, `notifications`, `settings` (+ cash enrichment). Terminology: **Recall Bridge Loan**, **Proceeds from Stock Sale**. Removed “recall not available/implemented”. Documented capital priority, 75% rule, good-faith automation; no auto-return toggle framing.
+
+### Tests
+
+`tests/Feature/Lending/RecallNotificationTest.php`, `tests/js/appDocumentationRecallHelp.test.mjs`.
+
+## V3 WS4 Phase 3B-1 — Recall UI integration (2026-08-21)
+
+**Status:** Minimal UI on existing screens. **Not** in this phase: notifications, help/`appDocumentation` sync, redesign.
+
+### Reused screens
+
+| Screen | Change |
+|--------|--------|
+| `RecommendationsPage` | Capital-resolution block in detail modal (`RecommendationCapitalResolution`) |
+| `CashManagementPage` | Lent/borrowed columns; `CapitalRecallPanel` (recalls / bridge / proceeds); ledger `movement_label` |
+| `SettingsPage` (Portfolio) | Recall period GET/PUT via `/v1/capital/recall-period` |
+
+### New files
+
+- `resources/js/src/utils/capitalRecallUi.js`
+- `resources/js/src/components/RecommendationCapitalResolution.jsx`
+- `resources/js/src/components/CapitalRecallPanel.jsx`
+- `tests/js/capitalRecallUi.test.mjs`
+
+### Auto-return toggle
+
+**None found in the React UI.** No control removed. v0.28 framing is automated/rule-driven in the new Cash panel copy only.
+
+### Terminology
+
+Uses **Recall Bridge Loan** and **Proceeds from Stock Sale** only (no Soft Loan / Return on Stock Sale).
+
+## V3 WS4 Phase 3A — Recall HTTP APIs (2026-08-21)
+
+**Status:** Thin HTTP APIs over Phase 1–2 domain. **Not** in this phase: UI, notifications, help sync.
+
+### Endpoints (`ApiEnvelope`, Sanctum + active portfolio)
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET/PUT | `/api/v1/capital/recall-period` | Effective period; SoT ≠ `min_recall_at` |
+| GET/POST | `/api/v1/capital/recalls` | List / request (domain validation) |
+| GET | `/api/v1/capital/recalls/{id}` | Detail + bridge + proceeds |
+| GET | `/api/v1/capital/bridge-loans` | Read-only Recall Bridge Loan |
+| POST | `/api/v1/capital/bridge-loans` | **405** — workflow only |
+| GET | `/api/v1/capital/pending-sale-proceeds` | Proceeds from Stock Sale |
+| POST | `…/mark-available` | **405** — settlement job only |
+| POST | `/api/v1/capital/resolve` | Run resolution; optional attach to rec |
+| GET | `/api/v1/recommendations/{id}/capital-resolution` | UI contract (actual execution amount) |
+
+### Controllers / presenters
+
+- `CapitalRecallController`, `RecallPeriodController`, `RecallBridgeLoanController`, `PendingSaleProceedsController`, `CapitalResolutionController`
+- `CapitalRecallPresenter`, `CapitalResolutionStatusService`
+- Cash ledger adds `movement_kind` / labels for Proceeds from Stock Sale / bridge / recall
+- Recommendation detail includes `capital_resolution` when detailed
+
+### Docs
+
+- [`specs/architecture/domains/REST-API-Specification.md`](specs/architecture/domains/REST-API-Specification.md)
+- [`specs/architecture/audit/API_INVENTORY.md`](specs/architecture/audit/API_INVENTORY.md)
+
+### Tests
+
+`tests/Feature/Lending/RecallPhase3aApiTest.php` (+ Phase 1/2 + repayment regression).
+
+## V3 WS4 Phase 2 — Recall fulfilment / liquidation / proceeds (2026-08-21)
+
+**Status:** Domain liquidation + proceeds + jobs implemented. **Not** in this phase: HTTP APIs, UI, notifications, help sync.
+
+Authoritative: V3 **v0.28**; [`specs/architecture/V3-WS4-Recall-Bridge-Implementation-Delta.md`](specs/architecture/V3-WS4-Recall-Bridge-Implementation-Delta.md).
+
+### Introduced
+
+| Component | Why |
+|-----------|-----|
+| `SaleBufferCalculator` | Platform-wide **0.5%** buffer (`required` → `target = required + 0.5%`) |
+| `WeakestPositionRanker` | OD-16 `window_return_pct`; default window **90 calendar days** (3 months); DEP-WEAKEST-HISTORY shorten |
+| `RecallLiquidationService` | Weakest-first sells; `applyCash=false`; schedule PendingSaleProceeds |
+| `ProceedsApplicationService` | Release cash + apply to recall or bridge; excess retained |
+| `RecallFulfilmentService` | Continue pending_held / after-immediate → liquidation; `processSettlements` |
+| `GoodFaithBridgeRepaymentService` | Voluntary bridge repay any amount ≤ outstanding when liquid |
+| `portfolio:process-recall-settlements` | Daily 21:30 schedule; idempotent |
+
+### Schema
+
+Migration `2026_08_21_000002_v3_pending_sale_proceeds_phase2.php` adds on `portfolio_tos_pending_sale_proceeds`: `expected_amount`, `obligation_type` (`recall`\|`bridge`), `recall_bridge_loan_id`, `transaction_id`, `cash_released_at`, buffer breakdown columns. `amount` = **actual** proceeds.
+
+### Behaviour notes
+
+- Sale execution ≠ available capital; cash deposited as **Proceeds from Stock Sale** only at `available_at` (~1 day).
+- Actual vs expected: only `amount` (actual) is released/applied.
+- Liquidate only unresolved gaps; skip if pending proceeds already cover.
+- Bridge repayment: no ₹5k blocks; no recall against bridge lender.
+- Same `CapitalRecall` instance continues after partial immediate settlement.
+
+### Tests
+
+`tests/Feature/Lending/RecallPhase2FulfilmentTest.php` (+ Phase 1 + `CapitalLoanRepaymentServiceTest` regression).
+
+## V3 WS4 Phase 1 — Recall / Capital Resolution foundation (2026-08-21)
+
+**Status:** Backend/domain foundation implemented. Liquidation / proceeds / jobs = Phase 2 (see section above). UI / APIs / notifications = Phase 3.
+
+Authoritative: [`specs/LidoPortfolio-V3-Specification.md`](specs/LidoPortfolio-V3-Specification.md) **v0.28**; [`specs/architecture/V3-WS4-Recall-Bridge-Implementation-Delta.md`](specs/architecture/V3-WS4-Recall-Bridge-Implementation-Delta.md).
+
+### Reused
+
+- `CapitalLoan`, `CapitalLoanReturn`, `CapitalRequest`
+- `CapitalLoanRepaymentService` (normal repay any amount ≤ outstanding)
+- `PortfolioCapitalAccountingService` (now also sums Recall Bridge Loan outstanding into lent/borrowed)
+- Strategy available capital from accounting snapshot
+
+### Introduced (why)
+
+| Component | Why |
+|-----------|-----|
+| `CapitalRecall` + `portfolio_tos_capital_recalls` | Persist recall lifecycle/history |
+| `RecallBridgeLoan` + `portfolio_tos_recall_bridge_loans` | Distinct from normal investment loans (no Soft Loan) |
+| `PendingSaleProceeds` | Hook for ~1-day proceeds delay (DEP-SALE-PROCEEDS) |
+| `RecallPeriodResolver` | Dynamic OD-07 period (not `min_recall_at` SoT) |
+| `RecallEligibilityService` | Eligibility + one-active + follow-up cooldown |
+| `RecallAmountCalculator` | FULL/PARTIAL sizing (DEP-RECALL-SIZE) |
+| `RecallService` | Request + state transitions; cancel rejected |
+| `RecallBridgeEligibilityCalculator` / `RecallBridgeLoanService` | Bridge shortfall + 10% cushion; create/repay |
+| `RecallImmediateSettlementEvaluator` / `…Service` | 75%/100% immediate settle vs pending_held |
+| `CapitalResolutionService` | Own → recall → borrow shortfall; close_at_actual |
+| `SaleProceedsAvailabilityService` | Schedule/refresh proceeds availability |
+
+### Behaviour notes
+
+- Eligibility = `committed_at` + **current** portfolio recall period (default 14). Changing period does not restart the clock.
+- Follow-up cooldown = `floor(period/2)` after completed recall.
+- Immediate settle ≥75% of **R**: settle max available ≤100%; remainder of R → `pending_held` (liquidation Phase 2).
+- Below 75%: no tiny partial / no tiny bridge → `pending_held`.
+- Capital resolution sets `close_at_actual=true`, `hold_for_remainder=false`.
+
+### Tests
+
+`tests/Unit/Lending/RecallDomainCalculatorsTest.php`, `tests/Feature/Lending/RecallPhase1FoundationTest.php`, plus existing `CapitalLoanRepaymentServiceTest` regression.
+
+## V3 WS4 — Recall / Capital Resolution / Recall Bridge Loan (spec v0.28, 2026-08-21)
+
+**Status:** Specification complete; Phase 1 + Phase 2 domain code shipped. Phase 3 (APIs/UI/notifications/help) still open.
+
+- Authoritative product SoT: [`specs/LidoPortfolio-V3-Specification.md`](specs/LidoPortfolio-V3-Specification.md) **v0.28**.
+- Implementation delta: [`specs/architecture/V3-WS4-Recall-Bridge-Implementation-Delta.md`](specs/architecture/V3-WS4-Recall-Bridge-Implementation-Delta.md).
+- New frozen DEPs: **DEP-CAPITAL-PRIORITY**, **DEP-RECALL-SIZE**, **DEP-RECALL-IMMEDIATE-75**, **DEP-RECALL-BRIDGE**, **DEP-RECALL-FOLLOWUP**, **DEP-SALE-PROCEEDS**.
+- Terminology: **Recall Bridge Loan** (not Soft Loan); **Proceeds from stock sale** (not Return on stock sale).
+
 ## WS4 Step 7 — Capital Loan Repayment / Return (2026-08-19)
 
-Authoritative spec: [`specs/LidoPortfolio-V3-Specification.md`](specs/LidoPortfolio-V3-Specification.md) **v0.27**. Spec file was **not** edited.
+Authoritative spec: [`specs/LidoPortfolio-V3-Specification.md`](specs/LidoPortfolio-V3-Specification.md) **v0.28** (was written against v0.27; repayment behaviour preserved — any amount ≤ outstanding, not ₹5,000 multiples).
 
 ### Implemented
 
@@ -55,9 +249,9 @@ Existing ledger types are only `deposit`, `withdrawal`, `adjustment`, `buy`, `se
 
 ### Not started
 
-**Recall**, recall eligibility (OD-07), FIFO loan selection (OD-09), weakest-position sells (OD-16), auto-return jobs, notifications, UI, HTTP repay endpoint, UNFUNDED loan sizing.
+**Recall**, recall eligibility (OD-07), FIFO loan selection (OD-09), weakest-position sells (OD-16), Recall Bridge Loan, capital-resolution orchestrator, notifications, UI, HTTP repay endpoint, UNFUNDED loan sizing — see [`specs/architecture/V3-WS4-Recall-Bridge-Implementation-Delta.md`](specs/architecture/V3-WS4-Recall-Bridge-Implementation-Delta.md).
 
-Atomic ₹5,000 repayment blocks (spec “returned in atomic blocks”) are **not** enforced here — this step accepts any positive amount ≤ outstanding.
+Normal repayment is **not** forced to ₹5,000 multiples (aligned with v0.28 **DEP-RECALL-SIZE** / §6.1). Step 7 correctly accepts any positive amount ≤ outstanding.
 
 ### Tests / help
 

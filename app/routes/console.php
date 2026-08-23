@@ -254,6 +254,11 @@ Schedule::command('portfolio:auto-resolve-data-quality-issues')
     ->timezone($timezone)
     ->name('data-quality-auto-resolve');
 
+Schedule::command('portfolio:process-recall-settlements')
+    ->dailyAt('21:30')
+    ->timezone($timezone)
+    ->name('recall-settlements');
+
 Schedule::call(function () {
     if (\Illuminate\Support\Facades\Schema::hasTable('portfolio_sync_runs')) {
         app(\App\Services\SyncLogService::class)->prune();

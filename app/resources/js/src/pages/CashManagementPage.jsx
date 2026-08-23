@@ -13,6 +13,7 @@ import {
     formatTransactionDateDisplay,
     getLocalTodayDateString,
 } from '../utils/transactionDate';
+import CapitalRecallPanel from '../components/CapitalRecallPanel';
 
 const OPS = [
     { id: 'deposit', label: 'Deposit', endpoint: '/cash/deposit', amountPlaceholder: 'Amount deposited' },
@@ -367,6 +368,8 @@ export default function CashManagementPage() {
                                                 <th className="text-end" style={{ width: '8rem' }}>Allocation %</th>
                                                 <th className="text-end">Allocated capital</th>
                                                 <th className="text-end">Unused allocation</th>
+                                                <th className="text-end">Lent</th>
+                                                <th className="text-end">Borrowed</th>
                                                 <th className="text-end">Retained capital</th>
                                             </tr>
                                         </thead>
@@ -402,6 +405,8 @@ export default function CashManagementPage() {
                                                         </td>
                                                         <td className="text-end">{money(live?.strategy_capital_allocation)}</td>
                                                         <td className="text-end">{money(live?.unused_allocation)}</td>
+                                                        <td className="text-end">{money(live?.lent_capital)}</td>
+                                                        <td className="text-end">{money(live?.borrowed_capital)}</td>
                                                         <td className="text-end">
                                                             {live?.minimum_retained_capital == null
                                                                 ? '—'
@@ -431,6 +436,8 @@ export default function CashManagementPage() {
                             </div>
                         </div>
                     ) : null}
+
+                    <CapitalRecallPanel profileId={profileId} />
 
                     <div className="card mb-3">
                         <div className="card-header">Record cash movement</div>
@@ -511,6 +518,7 @@ export default function CashManagementPage() {
                                             <tr>
                                                 <th>Date</th>
                                                 <th>Type</th>
+                                                <th>Kind</th>
                                                 <th className="text-end">Amount</th>
                                                 <th className="text-end">Balance after</th>
                                                 <th>Remarks</th>
@@ -522,6 +530,9 @@ export default function CashManagementPage() {
                                                 <tr key={entry.id}>
                                                     <td className="small">{fmtEntryDate(entry)}</td>
                                                     <td>{entryTypeLabel(entry.entry_type)}</td>
+                                                    <td className="small">
+                                                        {entry.movement_label || entry.movement_kind || '—'}
+                                                    </td>
                                                     <td className={`text-end ${Number(entry.amount) < 0 ? 'text-danger' : Number(entry.amount) > 0 ? 'text-success' : ''}`}>
                                                         {money(entry.amount)}
                                                     </td>

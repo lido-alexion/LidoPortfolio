@@ -55,4 +55,145 @@ class NotificationMessageComposer
         return "✅ Lido Portfolio — {$name}: No active alerts{$timeLabel}.\n\n"
             .'Scheduled notification check — cron is working. Disable “Ping Telegram when clear” in Settings → Global when done testing.';
     }
+
+    /**
+     * @param  array<string, mixed>  $ctx
+     */
+    public function recallRequestedMessage(array $ctx): string
+    {
+        return implode("\n", [
+            'Lido Portfolio — Recall requested',
+            sprintf('Amount: ₹%s (%s)', $this->inr($ctx['amount'] ?? 0), $ctx['kind_label'] ?? 'Recall'),
+            sprintf('Lender: %s', $ctx['lender'] ?? '—'),
+            sprintf('Borrower: %s', $ctx['borrower'] ?? '—'),
+            sprintf('Loan #%s · Recall #%s', $ctx['loan_id'] ?? '—', $ctx['recall_id'] ?? '—'),
+            sprintf('State: %s', $ctx['state_label'] ?? 'Requested'),
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $ctx
+     */
+    public function recallPendingHeldMessage(array $ctx): string
+    {
+        return implode("\n", [
+            'Lido Portfolio — Recall pending',
+            'Funds are being arranged (liquidation / Proceeds from Stock Sale).',
+            'The recall is not completed yet; settlement happens when funds become available.',
+            sprintf('Recall amount: ₹%s', $this->inr($ctx['amount'] ?? 0)),
+            sprintf('Already settled: ₹%s · Outstanding: ₹%s', $this->inr($ctx['settled'] ?? 0), $this->inr($ctx['outstanding'] ?? 0)),
+            sprintf('Lender: %s · Borrower: %s', $ctx['lender'] ?? '—', $ctx['borrower'] ?? '—'),
+            sprintf('Recall #%s', $ctx['recall_id'] ?? '—'),
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $ctx
+     */
+    public function recallSettlementMessage(array $ctx): string
+    {
+        $lines = [
+            'Lido Portfolio — Recall settlement',
+            sprintf('Settled this time: ₹%s', $this->inr($ctx['settled_now'] ?? 0)),
+            sprintf('Total settled: ₹%s · Outstanding: ₹%s', $this->inr($ctx['settled_total'] ?? 0), $this->inr($ctx['outstanding'] ?? 0)),
+            sprintf('State: %s', $ctx['state_label'] ?? 'Settlement'),
+            sprintf('Recall #%s', $ctx['recall_id'] ?? '—'),
+        ];
+        if (! empty($ctx['completed'])) {
+            $lines[] = 'Recall completed.';
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * @param  array<string, mixed>  $ctx
+     */
+    public function recallCompletedMessage(array $ctx): string
+    {
+        return implode("\n", [
+            'Lido Portfolio — Recall completed',
+            sprintf('Recall #%s fully settled (₹%s).', $ctx['recall_id'] ?? '—', $this->inr($ctx['amount'] ?? 0)),
+            sprintf('Lender: %s · Borrower: %s', $ctx['lender'] ?? '—', $ctx['borrower'] ?? '—'),
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $ctx
+     */
+    public function bridgeCreatedMessage(array $ctx): string
+    {
+        return implode("\n", [
+            'Lido Portfolio — Recall Bridge Loan created',
+            sprintf('Amount: ₹%s', $this->inr($ctx['principal'] ?? 0)),
+            sprintf('Borrower: %s · Lender: %s', $ctx['borrower'] ?? '—', $ctx['lender'] ?? '—'),
+            sprintf('Linked recall #%s · Bridge #%s', $ctx['recall_id'] ?? '—', $ctx['bridge_id'] ?? '—'),
+            'Used only to fulfil a recall — not for investing; cannot itself be recalled.',
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $ctx
+     */
+    public function bridgeRepaidMessage(array $ctx): string
+    {
+        $title = ! empty($ctx['completed'])
+            ? 'Lido Portfolio — Recall Bridge Loan repaid'
+            : 'Lido Portfolio — Recall Bridge Loan partial repayment';
+
+        return implode("\n", [
+            $title,
+            sprintf('Repaid this time: ₹%s', $this->inr($ctx['paid'] ?? 0)),
+            sprintf('Outstanding: ₹%s of ₹%s', $this->inr($ctx['outstanding'] ?? 0), $this->inr($ctx['principal'] ?? 0)),
+            sprintf('Borrower: %s · Lender: %s', $ctx['borrower'] ?? '—', $ctx['lender'] ?? '—'),
+            sprintf('Bridge #%s', $ctx['bridge_id'] ?? '—'),
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $ctx
+     */
+    public function saleInitiatedMessage(array $ctx): string
+    {
+        return implode("\n", [
+            'Lido Portfolio — Stock sale for recall/bridge',
+            'Sale executed — Proceeds from Stock Sale are not yet available cash.',
+            sprintf('Expected proceeds: ₹%s', $this->inr($ctx['expected'] ?? 0)),
+            sprintf('Available after: %s', $ctx['available_at'] ?? 'settlement delay'),
+            sprintf('Obligation: %s', $ctx['obligation_label'] ?? 'Recall'),
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $ctx
+     */
+    public function proceedsAppliedMessage(array $ctx): string
+    {
+        return implode("\n", [
+            'Lido Portfolio — Proceeds from Stock Sale applied',
+            'Proceeds are now available and have been applied.',
+            sprintf('Applied: ₹%s', $this->inr($ctx['applied'] ?? 0)),
+            sprintf('To recall: ₹%s · To Recall Bridge Loan: ₹%s', $this->inr($ctx['to_recall'] ?? 0), $this->inr($ctx['to_bridge'] ?? 0)),
+            sprintf('Excess retained as own capital: ₹%s', $this->inr($ctx['excess'] ?? 0)),
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $ctx
+     */
+    public function partialCapitalResolutionMessage(array $ctx): string
+    {
+        return implode("\n", [
+            'Lido Portfolio — Partial capital funding',
+            sprintf('Requested: ₹%s', $this->inr($ctx['requested'] ?? 0)),
+            sprintf('Actual execution amount: ₹%s', $this->inr($ctx['actual'] ?? 0)),
+            sprintf('Unresolved: ₹%s', $this->inr($ctx['unresolved'] ?? 0)),
+            'The recommendation will use only the capital actually available.',
+        ]);
+    }
+
+    private function inr(float|int|string|null $amount): string
+    {
+        return number_format((float) $amount, 0);
+    }
 }

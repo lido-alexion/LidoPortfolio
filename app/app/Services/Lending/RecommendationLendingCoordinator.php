@@ -12,7 +12,7 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * WS4 Steps 5–6 — capital requests, commitment, and execution eligibility.
- * Does not size UNFUNDED loans, repay loans, or create a second cash pool.
+ * Capital resolution (own → recall → borrow) runs before partial lending / trade modes.
  */
 final class RecommendationLendingCoordinator
 {
@@ -20,6 +20,8 @@ final class RecommendationLendingCoordinator
         protected CapitalRequestService $requests,
         protected PartialLendingAmountCalculator $partialAmount,
         protected CommittedLendingExecutionAmounts $executionAmounts,
+        protected CapitalResolutionService $capitalResolution,
+        protected CapitalResolutionStatusService $resolutionStatus,
     ) {}
 
     public function syncAfterGenerated(TradingRecommendation $recommendation): void
@@ -27,6 +29,9 @@ final class RecommendationLendingCoordinator
         if (! $recommendation->requiresCashReservation()) {
             return;
         }
+
+        $this->applyCapitalResolutionBeforeTradeMode($recommendation);
+        $recommendation = $recommendation->fresh() ?? $recommendation;
 
         $status = $recommendation->capitalAllocationStatus();
         if ($status === TradingRecommendation::ALLOCATION_UNFUNDED) {
@@ -40,16 +45,96 @@ final class RecommendationLendingCoordinator
         $this->ensurePartialCapitalRequest($recommendation);
     }
 
+    /**
+     * §6.16 — capital resolution before Manual / Semi-Auto / Auto trade handling.
+     * Updates allocated/suggested amounts to actual_available (never claims unfunded target).
+     */
+    public function applyCapitalResolutionBeforeTradeMode(TradingRecommendation $recommendation): void
+    {
+        $evidence = is_array($recommendation->evidence) ? $recommendation->evidence : [];
+        if (isset($evidence['capital_resolution']['recorded_at'])) {
+            return;
+        }
+
+        $profile = $recommendation->profile()->first();
+        $strategyId = $recommendation->owningStrategyId();
+        if ($profile === null || $strategyId === null) {
+            return;
+        }
+        $strategy = TradingStrategy::query()->find($strategyId);
+        if ($strategy === null) {
+            return;
+        }
+
+        $target = round((float) ($recommendation->capitalTargetAmount() ?? 0), 4);
+        if ($target <= 0.0001) {
+            return;
+        }
+
+        // Preserve allocator-assigned own capital (competition among recommendations).
+        // Capital resolution only adds recalled capital on top; it must not inflate own
+        // from unused strategy capacity after the allocator already constrained the pack.
+        $ownAlready = round((float) ($recommendation->ownAllocatedAmount() ?? 0), 4);
+
+        $result = $this->capitalResolution->resolveForStrategy($profile, $strategy, $target, [
+            'own_available_override' => $ownAlready,
+        ]);
+        $this->resolutionStatus->attachSnapshot($recommendation, $result);
+        $recommendation = $recommendation->fresh() ?? $recommendation;
+
+        $actual = round(min($target, (float) $result['actual_available']), 4);
+        $unfunded = round(max(0.0, $target - $actual), 4);
+
+        if ($actual <= 0.0001) {
+            $status = TradingRecommendation::ALLOCATION_UNFUNDED;
+        } elseif ($unfunded <= 0.0001) {
+            $status = TradingRecommendation::ALLOCATION_FUNDED;
+        } else {
+            $status = TradingRecommendation::ALLOCATION_PARTIALLY_FUNDED;
+        }
+
+        $plan = is_array($recommendation->execution_plan) ? $recommendation->execution_plan : [];
+        $plan['suggested_investment_amount'] = $actual;
+        $plan['target_investment_amount'] = $target;
+        $ca = is_array($plan['capital_allocation'] ?? null) ? $plan['capital_allocation'] : [];
+        $ca = array_merge($ca, [
+            'status' => $status,
+            'desired_amount' => $target,
+            'target_amount' => $target,
+            'allocated_amount' => $actual,
+            'unfunded_amount' => $unfunded,
+            'own_used' => (float) $result['own_used'],
+            'recalled_amount' => (float) $result['recalled_amount'],
+            'borrow_shortfall' => (float) $result['borrow_shortfall'],
+            'actual_execution_amount' => $actual,
+            'close_at_actual' => true,
+            'hold_for_remainder' => false,
+        ]);
+        $plan['capital_allocation'] = $ca;
+        $evidence = is_array($recommendation->evidence) ? $recommendation->evidence : [];
+        $evidence['capital_allocation'] = $ca;
+        $recommendation->forceFill([
+            'execution_plan' => $plan,
+            'evidence' => $evidence,
+            'suggested_allocation_amount' => $actual,
+        ])->save();
+    }
+
     public function ensurePartialCapitalRequest(TradingRecommendation $recommendation): ?CapitalRequest
     {
         $existing = $this->activeRequestFor($recommendation);
         if ($existing !== null) {
+            $meta = $recommendation->capitalAllocationMeta() ?? [];
             $this->patchCapitalAllocation($recommendation, [
                 'status' => $existing->status === CapitalRequest::STATUS_COMMITTED
                     ? TradingRecommendation::ALLOCATION_CAPITAL_COMMITTED
                     : TradingRecommendation::ALLOCATION_AWAITING_LENDER_SELECTION,
                 'capital_request_id' => $existing->id,
                 'own_funding_status' => TradingRecommendation::ALLOCATION_PARTIALLY_FUNDED,
+                'close_at_actual' => (bool) ($meta['close_at_actual'] ?? false),
+                'actual_execution_amount' => $meta['actual_execution_amount']
+                    ?? $recommendation->ownAllocatedAmount(),
+                'hold_for_remainder' => false,
             ]);
 
             return $existing;
@@ -77,12 +162,18 @@ final class RecommendationLendingCoordinator
         }
 
         $request = $this->requests->createRequest($profile, $recommendation, $borrower, $loanAmount);
+        // Keep close_at_actual / actual_execution_amount from capital resolution.
+        // Awaiting lender is an optional top-up path — it must not erase executable actual.
+        $meta = $recommendation->capitalAllocationMeta() ?? [];
         $this->patchCapitalAllocation($recommendation, [
             'status' => TradingRecommendation::ALLOCATION_AWAITING_LENDER_SELECTION,
             'own_funding_status' => TradingRecommendation::ALLOCATION_PARTIALLY_FUNDED,
             'capital_request_id' => $request->id,
             'lending_loan_amount' => $loanAmount,
             'unfunded_remainder' => $this->partialAmount->remainderFromTargetAndOwn($target, $own),
+            'close_at_actual' => (bool) ($meta['close_at_actual'] ?? false),
+            'actual_execution_amount' => $meta['actual_execution_amount'] ?? $own,
+            'hold_for_remainder' => false,
         ]);
 
         return $request;
@@ -97,6 +188,13 @@ final class RecommendationLendingCoordinator
 
         $loan = $request->loan;
         $amounts = $this->executionAmounts->forRecommendation($recommendation, $loan);
+        // Intended = own (post-resolution allocated) + remainder needed, not own + full ₹5k loan.
+        // Never above requested target; excess borrowed stays available, not invested.
+        $executable = round(min(
+            (float) ($amounts['target_amount'] > 0 ? $amounts['target_amount'] : $amounts['intended_amount']),
+            (float) $amounts['intended_amount'],
+        ), 4);
+
         $this->patchCapitalAllocation($recommendation, [
             'status' => TradingRecommendation::ALLOCATION_CAPITAL_COMMITTED,
             'own_funding_status' => TradingRecommendation::ALLOCATION_PARTIALLY_FUNDED,
@@ -105,9 +203,20 @@ final class RecommendationLendingCoordinator
             'target_amount' => $amounts['target_amount'],
             'allocated_amount' => $amounts['own_amount'],
             'borrowed_amount' => $amounts['borrowed_amount'],
-            'intended_execution_amount' => $amounts['intended_amount'],
+            'intended_execution_amount' => $executable,
+            'actual_execution_amount' => $executable,
             'excess_borrowed_amount' => $amounts['excess_borrowed_amount'],
+            'close_at_actual' => true,
+            'hold_for_remainder' => false,
         ]);
+
+        $recommendation = $recommendation->fresh() ?? $recommendation;
+        $plan = is_array($recommendation->execution_plan) ? $recommendation->execution_plan : [];
+        $plan['suggested_investment_amount'] = $executable;
+        $recommendation->forceFill([
+            'execution_plan' => $plan,
+            'suggested_allocation_amount' => $executable,
+        ])->save();
     }
 
     public function assertCanExecute(TradingRecommendation $recommendation): void
@@ -173,7 +282,28 @@ final class RecommendationLendingCoordinator
             return true;
         }
 
+        // DEP-CAPITAL-PRIORITY §6.0: capital resolution closed at actual funded amount.
+        // Optional residual lending (awaiting_lender / partially_funded) must not block
+        // execution of already-funded capital.
+        if ($this->isExecutableAtResolvedActual($recommendation)) {
+            return true;
+        }
+
         return $this->hasCommittedLoan($recommendation);
+    }
+
+    /**
+     * True when capital resolution recorded a positive actual_execution_amount and
+     * marked close_at_actual (do not hold for residual shortfall).
+     */
+    public function isExecutableAtResolvedActual(TradingRecommendation $recommendation): bool
+    {
+        $meta = $recommendation->capitalAllocationMeta() ?? [];
+        if (! (bool) ($meta['close_at_actual'] ?? false)) {
+            return false;
+        }
+
+        return round((float) ($meta['actual_execution_amount'] ?? 0), 4) > 0.0001;
     }
 
     public function activeRequestFor(TradingRecommendation $recommendation): ?CapitalRequest

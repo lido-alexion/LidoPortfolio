@@ -732,6 +732,8 @@ class TradingOsController extends Controller
             'can_execute_manually' => method_exists($r, 'canExecuteManually') ? $r->canExecuteManually() : false,
             'can_cancel_execution' => method_exists($r, 'canCancelExecution') ? $r->canCancelExecution() : false,
             'can_create_order' => method_exists($r, 'canCreateOrder') ? $r->canCreateOrder() : false,
+            'capital_allocation_status' => method_exists($r, 'capitalAllocationStatus') ? $r->capitalAllocationStatus() : null,
+            'capital_target_amount' => method_exists($r, 'capitalTargetAmount') ? $r->capitalTargetAmount() : null,
         ];
 
         if ($detailed) {
@@ -765,6 +767,16 @@ class TradingOsController extends Controller
                 ];
             } else {
                 $payload['execution'] = null;
+            }
+
+            try {
+                $profile = \activePortfolio();
+                if ($profile) {
+                    $payload['capital_resolution'] = app(\App\Services\Lending\CapitalResolutionStatusService::class)
+                        ->forRecommendation($profile, $r);
+                }
+            } catch (\Throwable) {
+                $payload['capital_resolution'] = null;
             }
         }
 
