@@ -1121,6 +1121,42 @@ PowerShell -ExecutionPolicy Bypass -File tests\Feature\api_smoke.ps1
 
 `php artisan test` uses **SQLite in-memory** (`phpunit.xml`); it does not require MySQL. Local browsing and manual testing use MySQL from `.env`.
 
+### Cloud Agent / Linux dev environment (Aug 2026)
+
+The project also runs in a Cursor Cloud Agent VM (Ubuntu 24.04, x86_64). This mirrors the Windows runbook above but with Linux tooling.
+
+**System dependencies** (base image / snapshot):
+
+- **PHP 8.4** with `mbstring xml curl mysql sqlite3 bcmath zip gd intl` (Composer lock pins Symfony 8.0 which requires **PHP ≥ 8.4**, even though `composer.json` says `^8.3`). Installed from `ppa:ondrej/php`.
+- **Composer 2.x**, **Node 22 + npm**, **MySQL 8** (`mysql-server`).
+
+**Per-boot / setup commands (Linux equivalents):**
+
+```bash
+# .env (recreate on fresh checkout; gitignored)
+cd app && cp -n .env.mysql.template .env
+#   set APP_URL=http://127.0.0.1:8001, SESSION_SECURE_COOKIE=false,
+#   SANCTUM_STATEFUL_DOMAINS=localhost,localhost:8001,127.0.0.1,127.0.0.1:8001,
+#   DB_HOST=127.0.0.1 DB_PORT=3306 DB_DATABASE=lido_db DB_USERNAME=lido DB_PASSWORD=lido_dev_pw
+php artisan key:generate --force
+composer install --no-interaction && npm install && npm run build
+
+# MySQL (no systemd in the VM — use the service wrapper)
+sudo service mysql start
+sudo mysql -e "CREATE DATABASE IF NOT EXISTS lido_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+  CREATE USER IF NOT EXISTS 'lido'@'127.0.0.1' IDENTIFIED WITH mysql_native_password BY 'lido_dev_pw';
+  GRANT ALL PRIVILEGES ON lido_db.* TO 'lido'@'127.0.0.1'; FLUSH PRIVILEGES;"
+php artisan migrate --force && php artisan db:seed --force   # DatabaseSeeder is idempotent
+
+# Servers (long-running)
+php artisan serve --host=127.0.0.1 --port=8001   # API + SPA
+npm run dev                                       # optional Vite HMR (built assets work without it)
+```
+
+**Migration fix (Aug 2026):** `2026_08_09_180001_create_portfolio_transaction_import_batches_tables` relied on Laravel's auto-generated index name `portfolio_transaction_import_batch_items_batch_id_sort_order_index` (66 chars), which exceeds MySQL's 64-char identifier limit and aborted a fresh `php artisan migrate` on MySQL. Fixed by giving the index/unique explicit short names (`pf_import_items_batch_sort_idx`, `pf_import_items_batch_row_uq`). SQLite (test DB) never hit this because it does not enforce the 64-char limit.
+
+**Known pre-existing JS test drift:** `tests/js/schedulerTimestamp.test.mjs` (2 cases) expects a 24-hour `05:00:04` time and `(Asia/Kolkata)` label, but `resources/js/src/utils/schedulerTimestamp.js` emits 12-hour time with a `GMT+5:30` label — a test/impl mismatch on `master`, platform-independent, not an environment issue. The other 64 JS tests and all 966 PHP tests pass.
+
 ### Alert policies (Jul 2026)
 
 **V2 F127 (2026-08-09):** Formal pack + hardening — [`docs/v2/F127-PORTFOLIO-ALERTS-SPEC.md`](docs/v2/F127-PORTFOLIO-ALERTS-SPEC.md), [`F127-BOUNDARY.md`](docs/v2/F127-BOUNDARY.md), [`F127-POLICY-DECISIONS.md`](docs/v2/F127-POLICY-DECISIONS.md), [`F127-IMPLEMENTATION-GAP-MATRIX.md`](docs/v2/F127-IMPLEMENTATION-GAP-MATRIX.md). Indexed in `DOCS.md` §3.E. Verdict: **`F127_COMPLETE_WITH_NON_BLOCKERS`**. Final compliance audit: compliant with non-blockers. Tracking cleanup: `V2-ROADMAP.md` and PD-F127-07 CURRENT wording aligned to expire→evaluate (no behaviour change).
