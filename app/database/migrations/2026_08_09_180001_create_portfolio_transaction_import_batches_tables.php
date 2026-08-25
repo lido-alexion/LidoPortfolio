@@ -33,8 +33,8 @@ return new class extends Migration
                 ->cascadeOnDelete();
             $table->timestamps();
 
-            $table->unique(['batch_id', 'row_key']);
-            $table->index(['batch_id', 'sort_order']);
+            $table->unique(['batch_id', 'row_key'], 'pf_import_items_batch_row_uq');
+            $table->index(['batch_id', 'sort_order'], 'pf_import_items_batch_sort_idx');
         });
     }
 
