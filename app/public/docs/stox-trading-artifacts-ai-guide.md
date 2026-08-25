@@ -4,7 +4,7 @@
 
 > **Audience:** AI agents and developers authoring portable Indicator / Screener / Strategy JSON **without** reading application source code.
 >
-> **Generated:** 2026-08-10T13:16:39.015Z
+> **Generated:** 2026-08-25T14:36:34.323Z
 > **Deploy download:** `/docs/stox-trading-artifacts-ai-guide.md` (also linked from Screener Registry and Strategy Registry).
 > **Repo copy:** `specs/architecture/domains/StoX-Trading-Artifacts-AI-Guide.md`
 
@@ -1208,13 +1208,13 @@ Practical tip: treat this page as one step in a larger workflow, not an isolated
 **Keyword:** `strategy-registry`
 **Aliases:** `strategy-artifacts`, `strategy-json`, `import-strategy`, `select-strategy`
 
-**Summary:** Import/export Strategy JSON artifacts — mandatory fields, uniqueness rules, eligibility refs, scoring_model weights, and Select one active strategy per portfolio.
+**Summary:** Import/export Strategy JSON artifacts — mandatory fields, uniqueness rules, eligibility refs, scoring_model weights, and Enable strategies (multiple may be enabled per portfolio).
 
 **UI / docs route label:** `/strategy/registry`
 
-The Strategy Registry turns portfolio strategies into reusable Trading Artifacts. Each portfolio still has **exactly one active Strategy** (selection). The registry adds slug, metadata, artifact_version, definition_hash, and version history on top of the same config the Recommendation engine already uses.
+The Strategy Registry turns portfolio strategies into reusable Trading Artifacts. A portfolio may have **multiple enabled Strategies** at once. The registry adds slug, metadata, artifact_version, definition_hash, and version history on top of the same config the Recommendation engine already uses.
 
-Export downloads the portable Trading Artifact JSON envelope. **Validate** checks the envelope. **Import** stays disabled until validation succeeds, then creates a **draft** — use **Select** to activate it (archives the previous active). Existing Minervini (`momentum_factory`) migrates automatically to slug `momentum_strategy` with eligibility linked to `minervini_trend_template`.
+Export downloads the portable Trading Artifact JSON envelope. **Validate** checks the envelope. **Import** stays disabled until validation succeeds, then creates a **draft** — use **Enable** to turn it on without disabling other enabled strategies. Existing Minervini (`momentum_factory`) migrates automatically to slug `momentum_strategy` with eligibility linked to `minervini_trend_template`.
 
 ## Importing JSON — start here
 
@@ -1300,7 +1300,7 @@ Note: the database stores strategy config in `config_json` on version rows, but 
 | `slug` | One portfolio | Must be unique among that portfolio’s strategies. On Import collision the system may suffix `_import_<hex>` (or create-path may use `_2`, `_3`, …). |
 | `name` | One portfolio | Soft unique — Import may rename to `"… (import)"` if the display name already exists. |
 | `metadata.factory_key` | Built-ins | Stable factory identity (e.g. `momentum_factory`). Not required for user imports. |
-| Active selection | One portfolio | **Exactly one** strategy may be `active` / selected. Import always creates **draft**; **Select** activates and archives the previous active. |
+| Enablement | One portfolio | Multiple strategies may be `active` (enabled) at once. Import always creates **draft**; **Enable** turns that strategy on without disabling others. |
 | `scoring_model[].key` | One envelope | Each catalogue key should appear once; duplicates are collapsed when normalised. |
 | `screener_slug` / `screener_factory_key` | Eligibility row | Identify a Screener in this portfolio (or a factory Screener the system can ensure). Not unique across strategies — many strategies may share the same Screener. |
 
@@ -1326,7 +1326,7 @@ Note: the database stores strategy config in `config_json` on version rows, but 
 | `status` | Optional | Hint: `draft` / `active` / `archived` — Import **always** stores draft regardless |
 | `origin` | Optional | `factory` / `user` / `imported` / … |
 | `factory_key` | Optional | Built-in id, e.g. `momentum_factory` |
-| `is_selected` | Export-only | Whether this row is the active selection; Import ignores it — use **Select** |
+| `is_selected` / `is_enabled` | Export-only | Whether this row is currently enabled (`STATUS_ACTIVE`); Import ignores it — use **Enable**. Multiple strategies may be enabled. |
 | `storage` / `legacy_id` | Export-only | Internal pointers; leave out on hand-written JSON |
 
 **`definition`** — Strategy runtime config. Validate requires scoring; eligibility is strongly recommended for a working Recommendations feed.
@@ -1400,8 +1400,8 @@ Rules:
 2. Start from the minimum example above (or Export an existing working strategy and edit a copy — best for thresholds / exits / gates).
 3. Paste into Strategy Registry → **Validate** and fix every listed path (`$.slug`, `$.definition.scoring_model`, …).
 4. Use **Import** (enabled only after Validate succeeds) — creates a **draft** (does not change Recommendations yet).
-5. Click **Select** on the new row when you want it to drive Recommendations (archives the previous active).
-6. Optionally open **Edit** on the active strategy (`/strategy`) to refine tabs visually and Save.
+5. Click **Enable** on the new row when you want it enabled (other enabled strategies stay enabled).
+6. Optionally open **Edit** (`/strategy?strategy_id=…`) to refine tabs visually and Save.
 
 ### Common validation / import errors
 
@@ -1427,7 +1427,7 @@ See **Trading Artifact Runtime Semantics** (`trading-artifact-runtime`) for the 
 - Multiple `eligibility_sources` = **UNION**; `priority` is order only.
 - Thresholds use sequential if/else (not exclusive bands); score 82 with defaults is typically **WATCH** (not held) / **HOLD** (held).
 - `market_gates` demote OPEN/INCREASE only; exits still run.
-- Portfolio cash rules can demote unfunded buys to **WATCH**.
+- Unfunded or partially funded OPEN/INCREASE stay OPEN/INCREASE (capital status is a separate axis; not WATCH).
 
 ## Optional definition sections (fully usable)
 
@@ -1721,12 +1721,12 @@ Practical tip: treat this page as one step in a larger workflow, not an isolated
 ### Controls
 
 - **Search / filters** — Filter by status (active/draft/archived) and origin (factory/user).
-- **Select** — Make this strategy the portfolio’s only active strategy (archives the previous active). Success shows a toast notification. Recommendations use the selected strategy.
+- **Enable** — Turn this strategy on for the portfolio. Other enabled strategies stay enabled. Success shows a toast. Recommendation generate still uses one editor/default strategy until a later V3 workstream.
 - **Export JSON** — Download the portable Trading Artifact envelope (schema_version, slug, name, metadata, definition with eligibility_sources + scoring_model, dependencies). Best template for a new import — includes thresholds/exits/gates when present.
 - **Validate** — Check pasted JSON against Trading Artifact Strategy rules. On success, a green “Validated successfully” cue appears above Validate/Import and the JSON result panel still shows details. Import stays disabled until this reports ok. Editing the JSON clears validation.
-- **Import** — Enabled only after successful Validate. Creates a draft strategy in this portfolio and shows a success toast (not an inline alert). Does not change Recommendations until Select. Mandatory: schema_version, artifact_type, slug, name, metadata, definition.scoring_model with enabled weights = 100.
+- **Import** — Enabled only after successful Validate. Creates a draft strategy in this portfolio and shows a success toast (not an inline alert). Does not change Recommendations until Enable. Mandatory: schema_version, artifact_type, slug, name, metadata, definition.scoring_model with enabled weights = 100.
 - **Download AI authoring guide (.md)** — Download /docs/stox-trading-artifacts-ai-guide.md — consolidated Indicator + Screener + Strategy + Authoring + Cookbook Markdown for AI agents and offline authoring.
-- **Edit active** — Jump to /strategy to edit the selected strategy’s tabs and Save.
+- **Edit** — Jump to /strategy?strategy_id=… to edit that strategy’s tabs and Save.
 - **Version history** — On detail for owned strategies, list definition snapshots and change notes. Draft definition-hash changes append versions; active editor Save remains in-place BC.
 - **Typical flow** — Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.
 - **Validation and errors** — Form and API validations are shown as inline errors or toast messages. Fix the first reported issue, retry, and re-check dependent sections that consume the same data.
@@ -1735,8 +1735,8 @@ Practical tip: treat this page as one step in a larger workflow, not an isolated
 ### Concepts
 
 - **Slug** — Stable machine id (snake_case: `swing_rs`). Unique per portfolio. Used for uniqueness and selection. Not the display title — that is `name`. Only a–z, 0–9, and underscore after normalisation.
-- **Uniqueness** — slug is unique per portfolio (Import may suffix on collision). name is soft-unique (may get " (import)"). Exactly one active strategy per portfolio. scoring keys should appear once in scoring_model. Screener refs may be shared across strategies.
-- **Exactly one active** — Selection rule: one STATUS_ACTIVE strategy per portfolio drives Recommendation scoring. Import always creates draft; Select activates.
+- **Uniqueness** — slug is unique per portfolio (Import may suffix on collision). name is soft-unique (may get " (import)"). Multiple strategies may be enabled per portfolio. scoring keys should appear once in scoring_model. Screener refs may be shared across strategies.
+- **Multiple enabled strategies** — Enablement rule: more than one STATUS_ACTIVE strategy may exist per portfolio. Import always creates draft; Enable turns a strategy on without archiving others. The editor strategy_id query is UI selection, not exclusive-active.
 - **No Screener duplication** — eligibility_sources reference Screeners by screener_slug / screener_factory_key. Condition trees stay on Screener Registry — never embed root/children on a Strategy.
 - **definition vs config_json** — Import/export JSON uses the field `definition`. Version rows store the same config in `config_json`. Do not invent a `config_json` field on the envelope.
 - **scoring_model vs indicators** — Portable JSON prefers scoring_model. The engine also accepts indicators as an alias; Import normalises both. Enabled weights must sum to 100.
@@ -1933,7 +1933,7 @@ Practical tip: treat this page as one step in a larger workflow, not an isolated
 11. Import Strategy (draft).
 12. Select Strategy (sole active Strategy).
 13. Engine execution — Discovery → Evaluation → eligibility UNION → weighted score → exits/gates/thresholds → capital → persist.
-14. Final output — OPEN/INCREASE/REDUCE/EXIT and WATCH/HOLD on Recommendations, subject to cash and gates.
+14. Final output — OPEN/INCREASE/REDUCE/EXIT and WATCH/HOLD on Recommendations. Capital shortage uses funded / partially_funded / unfunded, not WATCH.
 
 ## Where full JSON lives
 
@@ -2036,7 +2036,7 @@ RecommendationGenerationPipeline
 | `thresholds` | Opinion (bull/bear/neutral) + OPEN/WATCH/HOLD/INCREASE/REDUCE/EXIT |
 | `exit_strategy` | Can force EXIT on **held** names |
 | `market_gates` | After scoring: demote OPEN/INCREASE when blocked; size multipliers |
-| `portfolio_rules` | Position % caps, cash reserve/deploy, max new positions; can demote unfunded buys to WATCH |
+| `portfolio_rules` | Position % caps, max new positions; does **not** demote unfunded buys to WATCH |
 | `capital_allocation` | Score bands for allocation % |
 
 Discovery itself is **not** limited to the active Strategy eligibility list (it merges recent screener hits broadly). Strategy eligibility is enforced in Recommendation.
@@ -2110,7 +2110,7 @@ When `market_gates.enabled` is true and sentiment/phase/risk checks fail entry:
 
 - Target size uses something like `min(max_position_size_pct, band_or_default_pct)` - **max always caps** default/band.
 - `min_cash_reserve_pct` / `max_cash_deployment_pct` reduce available cash before allocation.
-- If cash cannot fund an OPEN/INCREASE, the draft is typically demoted to **WATCH** (`ALLOCATION_UNFUNDED`) - i.e. rules can **suppress BUY actions**, not only leave a zero-qty BUY.
+- If cash cannot fund an OPEN/INCREASE, the draft stays OPEN/INCREASE with capital status **unfunded** or **partially_funded**. The original target amount is preserved. Do **not** demote to WATCH for capital reasons.
 - `max_new_positions_per_cycle` limits how many new opens survive ranking/allocation.
 
 ---

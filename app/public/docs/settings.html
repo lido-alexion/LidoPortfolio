@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Settings — StoX docs</title>
-  <meta name="description" content="Global (admin), Portfolio, and Account settings — fees, Telegram, sync, active sessions, and links.">
+  <meta name="description" content="Global (admin), Portfolio, and Account settings — fees, Telegram, cash reserve %, sync, active sessions, and links.">
   <link rel="canonical" href="settings.html">
   <style>
     :root {
@@ -110,7 +110,7 @@
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Settings</h1>
       <p class="muted"><code>settings</code> · screen: <code>/settings</code></p>
-      <p>Global (admin), Portfolio, and Account settings — fees, Telegram, sync, active sessions, and links.</p>
+      <p>Global (admin), Portfolio, and Account settings — fees, Telegram, cash reserve %, sync, active sessions, and links.</p>
 
       <section class="panel">
         <h2>Overview</h2>
@@ -131,6 +131,18 @@
     
         <dt>Telegram</dt>
         <dd>Bot token and chat id for portfolio notifications.</dd>
+    
+        <dt>Portfolio cash reserve %</dt>
+        <dd>Portfolio-level OD-19 percentage. Required reserve rupees = this % × max(currently held invested amount, current holdings market value). Leave blank for 0 (no configured reserve). Not a % of cash. Withdrawals are not blocked if cash falls below the resulting rupee floor; Dashboard warns instead.</dd>
+    
+        <dt>Portfolio Stop-Loss %</dt>
+        <dd>Independent portfolio-level stop-loss. Uses weighted-average actual fill cost of the current ownership episode; evaluated on raw daily close. Not derived from trailing % or strategy exit JSON.</dd>
+    
+        <dt>Portfolio Trailing Stop %</dt>
+        <dd>Independent portfolio-level trailing stop (default/seed 15%). Peak is maximum raw daily close since the ownership episode began. Not based on unrealized %, not stop-loss %, and not strategy trailing_stop JSON. Strategy-specific exit rules remain separate under Strategy → Exit Strategy.</dd>
+    
+        <dt>Recall period (calendar days)</dt>
+        <dd>Days after a loan is committed before the lender may recall. Blank uses the platform default (14). Changing the period does not reset existing commitment dates — eligibility uses commitment date + the current effective period. Follow-up cooldown is floor(period/2). Saved separately via Save recall period.</dd>
     
         <dt>Notification history</dt>
         <dd>Open /notification-history from Portfolio → Alerts &amp; notifications to audit Telegram deliveries.</dd>
@@ -164,6 +176,15 @@
         <dt>Admin vs portfolio scope</dt>
         <dd>Some tools (users, sync logs, universe sync) are admin-only.</dd>
     
+        <dt>Portfolio cash reserve</dt>
+        <dd>A non-investable, non-lendable rupee floor. It is not a separate bank account and not strategy cash.</dd>
+    
+        <dt>Portfolio risk exits vs strategy exits</dt>
+        <dd>Portfolio Stop-Loss and Portfolio Trailing Stop are common/settings controls. Strategy Exit Strategy rules (including any strategy JSON trailing_stop unrealized-% proxy) are strategy-specific and separate. Exit precedence when both fire: Strategy exit → Portfolio Stop-Loss → Portfolio Trailing Stop → Strategy Horizon.</dd>
+    
+        <dt>Recall period</dt>
+        <dd>Rule-driven eligibility for automated recalls. There is no auto-return toggle that controls repayment or recall.</dd>
+    
         <dt>Not in sidebar</dt>
         <dd>Settings sub-pages and registries stay off the primary sidebar; reach them from Settings or parent product pages.</dd>
     
@@ -179,7 +200,7 @@
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
-          <a href="alert-policies.html">Alert policies</a><a href="universe-price-sync.html">Universe price sync</a><a href="data-quality-center.html">Data Quality Center</a><a href="indicator-registry.html">Indicator Registry</a><a href="screener-registry.html">Screener Registry</a><a href="strategy-registry.html">Strategy Registry</a><a href="users.html">User management</a><a href="notifications.html">Notifications</a>
+          <a href="alert-policies.html">Alert policies</a><a href="universe-price-sync.html">Universe price sync</a><a href="data-quality-center.html">Data Quality Center</a><a href="indicator-registry.html">Indicator Registry</a><a href="screener-registry.html">Screener Registry</a><a href="strategy-registry.html">Strategy Registry</a><a href="users.html">User management</a><a href="notifications.html">Notifications</a><a href="cash.html">Cash</a><a href="dashboard.html">Dashboard</a>
         </div>
       </section>
     </article>

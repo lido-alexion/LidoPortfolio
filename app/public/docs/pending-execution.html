@@ -147,10 +147,10 @@
         <h2>Concepts</h2>
         <dl class="doc-list">
         <dt>Approval vs execution</dt>
-        <dd>Approve means you accept the idea; execution is the separate ledger write after a real fill.</dd>
+        <dd>Approve means you accept the idea; execution is the separate ledger write after a real fill. A capital_committed buy can be approved and then filled the same way as a fully funded buy. Unfunded or awaiting-lender buys never reach this page.</dd>
     
         <dt>Cash reservation</dt>
-        <dd>Approving a funded buy can reserve cash until execute, cancel, expire, or reopen.</dd>
+        <dd>Approving a funded buy reserves the own-funded amount until execute, cancel, expire, or reopen. A committed loan is not a second cash reservation and does not deposit cash. One physical cash pool is used for the fill. The borrower strategy owns the resulting holding; the lender does not receive stock.</dd>
     
         <dt>Queue hygiene</dt>
         <dd>If a recommendation is no longer valid, cancel execution promptly so reserved cash is released and stale intent does not pollute future decisions.</dd>

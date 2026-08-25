@@ -32,6 +32,15 @@ Specs under `specs/` define a seven-engine decision platform. Implementation evo
 
 **Documentation map:** Repository-wide reading order and file tree — [`DOCS.md`](DOCS.md). Specs subtree — [`specs/README.md`](specs/README.md). Architecture hub (domain folders) — [`specs/architecture/README.md`](specs/architecture/README.md). For full ingest: requirements/architecture → governance → audit → this file. New Markdown docs must be indexed in `DOCS.md` (rule: `.cursor/rules/Keep-DOCS-md-ingestion-tree-updated.mdc`).
 
+## Production migrate fix — import-batch index name (2026-08-26)
+
+**Symptom:** `cpanel-migrate.php` failed with MySQL `1059 Identifier name too long` on  
+`portfolio_transaction_import_batch_items_batch_id_sort_order_index` (68 chars; MySQL max 64).
+
+**Fix:** `2026_08_09_180001_create_portfolio_transaction_import_batches_tables.php` now uses short explicit index names (`ptib_profile_batch_idx`, `ptibi_batch_row_uq`, `ptibi_batch_sort_idx`) and drops leftover empty tables from the failed run before recreate so migrate can be re-run safely.
+
+**Ops:** Re-upload that migration file under `lidoportfolio/database/migrations/`, then re-run `cpanel-migrate.php?token=...`.
+
 ## Final V3 Completion Audit (2026-08-24)
 
 **Verdict:** **V3 COMPLETE WITH DEFERRED ITEMS**.

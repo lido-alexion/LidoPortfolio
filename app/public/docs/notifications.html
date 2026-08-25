@@ -114,7 +114,7 @@
 
       <section class="panel">
         <h2>Overview</h2>
-        <p>Open Notification history from Settings → Portfolio (Alerts &amp; notifications). Inspect outbound messages for this portfolio. Delivery uses Telegram when configured under portfolio settings and alert / schedule rules. Recommendation Telegram messages are sent only for actionable trades (Open / Increase / Reduce / Exit) — HOLD and WATCH insights are not notified.</p>
+        <p>Open Notification history from Settings → Portfolio (Alerts &amp; notifications). Inspect outbound messages for this portfolio. Delivery uses Telegram when configured under portfolio settings and alert / schedule rules. Recommendation Telegram messages are sent only for actionable trades (Open / Increase / Reduce / Exit) — HOLD and WATCH insights are not notified. Capital events (Recall requested / pending / settlement / completed, Recall Bridge Loan created or repaid, Proceeds from Stock Sale applied, and meaningful partial capital funding) also appear here when Telegram is enabled.</p>
 <p>Notification history is your message audit trail. Use it to confirm whether expected operational and trading notifications were emitted and to troubleshoot missing deliveries. Missing HOLD/WATCH messages are expected — Telegram recommendation alerts only cover actionable Open / Increase / Reduce / Exit ideas.</p>
 <p>Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).</p>
 
@@ -149,8 +149,11 @@
         <dt>Telegram-only channel</dt>
         <dd>Production notifications are Telegram Bot API based.</dd>
     
-        <dt>Actionable only</dt>
+        <dt>Actionable only (recommendations)</dt>
         <dd>Recommendation notify skips HOLD / WATCH; those stay in-app as insights.</dd>
+    
+        <dt>Recall &amp; capital events</dt>
+        <dd>Separate notification types for recalls, Recall Bridge Loans, Proceeds from Stock Sale, and partial funding. Duplicate scheduler runs do not re-send the same event.</dd>
     
         <dt>Schedules</dt>
         <dd>Calendar reminders, screener results, and alert policies can enqueue messages.</dd>
@@ -167,7 +170,7 @@
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
-          <a href="alert-policies.html">Alert policies</a><a href="calendar.html">Calendar</a><a href="settings.html">Settings</a>
+          <a href="alert-policies.html">Alert policies</a><a href="calendar.html">Calendar</a><a href="settings.html">Settings</a><a href="cash.html">Cash</a><a href="recommendations.html">Recommendations</a>
         </div>
       </section>
     </article>

@@ -8,6 +8,13 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // MySQL identifiers max out at 64 characters. Laravel's default name
+        // `portfolio_transaction_import_batch_items_batch_id_sort_order_index` is 68
+        // and fails with SQLSTATE 1059, leaving empty leftover tables. Drop those
+        // leftovers so a re-run of this still-pending migration can succeed.
+        Schema::dropIfExists('portfolio_transaction_import_batch_items');
+        Schema::dropIfExists('portfolio_transaction_import_batches');
+
         Schema::create('portfolio_transaction_import_batches', function (Blueprint $table) {
             $table->id();
             $table->uuid('batch_key')->unique();
@@ -18,7 +25,7 @@ return new class extends Migration
             $table->timestamp('committed_at')->nullable();
             $table->timestamps();
 
-            $table->index(['profile_id', 'batch_key']);
+            $table->index(['profile_id', 'batch_key'], 'ptib_profile_batch_idx');
         });
 
         Schema::create('portfolio_transaction_import_batch_items', function (Blueprint $table) {
@@ -33,8 +40,8 @@ return new class extends Migration
                 ->cascadeOnDelete();
             $table->timestamps();
 
-            $table->unique(['batch_id', 'row_key']);
-            $table->index(['batch_id', 'sort_order']);
+            $table->unique(['batch_id', 'row_key'], 'ptibi_batch_row_uq');
+            $table->index(['batch_id', 'sort_order'], 'ptibi_batch_sort_idx');
         });
     }
 

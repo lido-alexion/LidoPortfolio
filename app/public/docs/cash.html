@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Cash — StoX docs</title>
-  <meta name="description" content="Cash balance, reserved capital, available investable cash, and the cash ledger.">
+  <meta name="description" content="Physical cash pool, reserved cash, required reserve, Unallocated Cash, strategy capital allocations, recalls, Recall Bridge Loans, Proceeds from Stock Sale, and the cash ledger.">
   <link rel="canonical" href="cash.html">
   <style>
     :root {
@@ -110,12 +110,12 @@
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Cash</h1>
       <p class="muted"><code>cash</code> · screen: <code>/cash</code></p>
-      <p>Cash balance, reserved capital, available investable cash, and the cash ledger.</p>
+      <p>Physical cash pool, reserved cash, required reserve, Unallocated Cash, strategy capital allocations, recalls, Recall Bridge Loans, Proceeds from Stock Sale, and the cash ledger.</p>
 
       <section class="panel">
         <h2>Overview</h2>
-        <p>Manage portfolio cash independently of stock trades. Balance minus reserved cash is available to fund new recommendations. Deposit, withdraw, and adjust entries appear on the cash account statement.</p>
-<p>Cash is first-class state in the recommendation engine. Keep this page accurate because available cash directly controls how many recommendations can be funded. The system can demote unfunded ideas to WATCH when cash is insufficient.</p>
+        <p>Manage portfolio cash independently of stock trades. Physical cash is one portfolio-level pool — strategies do not have bank accounts. Balance minus reserved cash is available physical cash (pending-execution buys). The required cash reserve is a portfolio-level floor from Settings; it is not a separate ledger bucket. Unallocated Cash is a presentation of residual cash after that reserve that is not claimed by strategy unused-allocation accounting — not a new account. Strategy allocation % values split investable capital for accounting; they must sum to 100 to save and are not auto-normalized. Withdrawals cannot spend reserved cash, but they are not blocked merely because cash would fall below the reserve. The Recalls &amp; lending panel shows automated recalls, Recall Bridge Loans, and Proceeds from Stock Sale status.</p>
+<p>Cash is first-class state in the recommendation engine. Keep this page accurate because available physical cash, after the portfolio reserve and pending-execution reservations, limits how much each enabled strategy can fund. Unfunded or partially funded OPEN/INCREASE ideas stay OPEN/INCREASE; they are not demoted to WATCH. Use Recalls &amp; lending to monitor automated recalls, Recall Bridge Loans, and Proceeds from Stock Sale.</p>
 <p>Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).</p>
 
       </section>
@@ -124,19 +124,34 @@
         <h2>Controls</h2>
         <dl class="doc-list">
         <dt>Deposit / Withdraw / Adjust</dt>
-        <dd>Change cash with amount stepper, optional remarks, and transaction date.</dd>
+        <dd>Change cash with amount stepper, optional remarks, and transaction date. Withdrawals cannot exceed available physical cash (balance − reserved). They still succeed if cash then sits below the required reserve.</dd>
     
         <dt>Reserved cash</dt>
         <dd>Expand to see reservations tied to pending-execution buys.</dd>
     
+        <dt>Required cash reserve</dt>
+        <dd>Rupee floor from Portfolio Settings → Portfolio cash reserve %. Based on max(invested amount, current holdings market value), not a % of cash.</dd>
+    
+        <dt>Unallocated Cash</dt>
+        <dd>Presentation-only residual after the reserve that unused strategy allocation has not claimed. Not a ledger line and not a withdrawal entitlement.</dd>
+    
+        <dt>Strategy capital allocation</dt>
+        <dd>Edit enabled-strategy allocation % (must sum to 100 to save). Shows allocated capital, unused allocation, lent, borrowed, and retained capital (accounting floor, not physical cash).</dd>
+    
+        <dt>Recalls &amp; lending</dt>
+        <dd>View recalls (lifecycle, settled vs outstanding), Recall Bridge Loans, and Proceeds from Stock Sale. No manual Create Bridge Loan or Mark Available — those are automated.</dd>
+    
         <dt>Statement</dt>
-        <dd>Chronological cash ledger for the active portfolio.</dd>
+        <dd>Chronological cash ledger. Kind labels may show Proceeds from Stock Sale or related recall/bridge movements when applicable.</dd>
     
         <dt>Transaction date usage</dt>
         <dd>Use the intended accounting date for deposits/withdrawals so statement chronology and downstream analytics remain meaningful.</dd>
     
         <dt>Reservation drilldown</dt>
         <dd>Expand reserved cash to understand which pending executions are consuming capital before adjusting balances.</dd>
+    
+        <dt>Recalls &amp; lending refresh</dt>
+        <dd>Refresh the panel after settlement jobs run to see updated outstanding amounts and Proceeds from Stock Sale status.</dd>
     
         <dt>Typical flow</dt>
         <dd>Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.</dd>
@@ -149,14 +164,44 @@
       <section class="panel">
         <h2>Concepts</h2>
         <dl class="doc-list">
-        <dt>Available investable cash</dt>
-        <dd>Balance − reserved. Withdrawals cannot exceed this amount.</dd>
+        <dt>Available physical cash</dt>
+        <dd>max(0, total cash − pending-execution reservations). Withdrawals cannot exceed this amount.</dd>
     
-        <dt>Capital allocation</dt>
-        <dd>The recommendation pipeline funds ideas from available cash; unfunded ideas become Watch.</dd>
+        <dt>Investable capital</dt>
+        <dd>(cash − required reserve − pending reserved) + market value of strategy-owned holdings. Unmanaged holdings are excluded from the 100% strategy split.</dd>
+    
+        <dt>Strategy allocation %</dt>
+        <dd>Policy share of investable capital (TradingStrategy.allocation_pct). Distinct from score-band allocation_pct on the Strategy Capital Allocation tab and from holdings market-value %.</dd>
+    
+        <dt>Retained capital</dt>
+        <dd>Per-strategy nearest-integer rupees of allocated capital ÷ recommended minimum holdings. Lending cannot consume it later; it is not a cash bucket.</dd>
+    
+        <dt>Capital priority</dt>
+        <dd>Funding order: own capital first, then recall eligible lent capital, then borrow if needed. Execute at the actual available amount — not the full target when funding is short.</dd>
+    
+        <dt>Recall</dt>
+        <dd>Lender recalling an outstanding loan. Full Recall = entire outstanding. Partial Recall = ₹5,000 multiples only. Eligibility = commitment date + current recall period (Settings). One active recall; follow-up after complete + cooldown floor(period/2).</dd>
+    
+        <dt>Immediate settlement (75% rule)</dt>
+        <dd>Target 100% of the recall amount; at least 75% of that recall amount from own cash and/or Recall Bridge Loan is required for immediate settlement. Settles max available up to 100%. Below 75% → Pending — funds being arranged (liquidation / Proceeds from Stock Sale).</dd>
+    
+        <dt>Recall Bridge Loan</dt>
+        <dd>Helps fulfil a recall only. Cannot fund investments, cannot itself be recalled, no interest, no ₹5,000 repayment blocks, needs 10% stock cushion. Repaid as funds become available.</dd>
+    
+        <dt>Proceeds from Stock Sale</dt>
+        <dd>Sale executed ≠ cash available. After settlement delay, proceeds apply to recall/bridge; partial apply leaves remainder outstanding; excess stays own capital.</dd>
+    
+        <dt>Good-faith automation</dt>
+        <dd>Strategies repay and recall according to rules when capital is needed or available. Inter-strategy lending has no interest. There is no auto-return toggle controlling this behaviour.</dd>
+    
+        <dt>Loan repayment</dt>
+        <dd>Any amount ≤ outstanding reduces loan outstanding. Does not move stock or change allocation %. Distinct from automated Recall when the lender needs capital back.</dd>
     
         <dt>Balance vs available</dt>
         <dd>Balance is total cash ledger value; available subtracts open reservations and is the true deployable amount.</dd>
+    
+        <dt>Sale vs proceeds</dt>
+        <dd>A stock sale for a recall shows as executed first; Proceeds from Stock Sale become available only after the settlement delay.</dd>
     
         <dt>Active portfolio context</dt>
         <dd>Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.</dd>
@@ -170,7 +215,7 @@
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
-          <a href="recommendations.html">Recommendations</a><a href="pending-execution.html">Pending Execution</a><a href="strategy.html">Strategy</a>
+          <a href="recommendations.html">Recommendations</a><a href="pending-execution.html">Pending Execution</a><a href="strategy.html">Strategy</a><a href="settings.html">Settings</a><a href="dashboard.html">Dashboard</a><a href="notifications.html">Notifications</a>
         </div>
       </section>
     </article>

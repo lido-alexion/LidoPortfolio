@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Stock price history — StoX docs</title>
-  <meta name="description" content="OHLCV chart and table for a single stock, with optional force sync.">
+  <meta name="description" content="OHLCV chart and table for a single stock, with All vs Since Buy ranges and optional force sync.">
   <link rel="canonical" href="stock-prices.html">
   <style>
     :root {
@@ -110,11 +110,11 @@
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Stock price history</h1>
       <p class="muted"><code>stock-prices</code> · screen: <code>/holdings/:stockId/prices</code></p>
-      <p>OHLCV chart and table for a single stock, with optional force sync.</p>
+      <p>OHLCV chart and table for a single stock, with All vs Since Buy ranges and optional force sync.</p>
 
       <section class="panel">
         <h2>Overview</h2>
-        <p>Inspect daily bars used by charts, indicators, screeners, and pattern detection. Force sync can backfill or refresh from price providers when needed.</p>
+        <p>Inspect daily bars used by charts, indicators, screeners, and pattern detection. Range toggle separates All available instrument history from Since Buy (current position episode). Force sync backfills all available provider/listing history.</p>
 <p>Use this page to validate data quality and behavior over time. It is especially useful before editing rules or acting on detected patterns because you can inspect the exact OHLCV bars behind those outputs.</p>
 <p>Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).</p>
 
@@ -125,6 +125,9 @@
         <dl class="doc-list">
         <dt>Chart / table</dt>
         <dd>Browse historical OHLCV for the selected stock.</dd>
+    
+        <dt>Range: All / Since Buy</dt>
+        <dd>All = all available cached instrument history. Since Buy = current open position episode.</dd>
     
         <dt>Force sync / backfill</dt>
         <dd>Request a fresh pull of history from configured providers.</dd>
@@ -151,6 +154,9 @@
         <dl class="doc-list">
         <dt>Provider fallback</dt>
         <dd>NSE → Yahoo → Alpha Vantage (BSE path uses bhavcopy → Yahoo → AV).</dd>
+    
+        <dt>OD-17 all history</dt>
+        <dd>All is not capped by the old ~550-day V1 depth target; it uses all available provider/listing history in cache.</dd>
     
         <dt>Cached bars</dt>
         <dd>Screeners and pattern scans run on stored daily OHLCV, not live ticks.</dd>

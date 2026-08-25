@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Strategy Registry — StoX docs</title>
-  <meta name="description" content="Import/export Strategy JSON artifacts — mandatory fields, uniqueness rules, eligibility refs, scoring_model weights, and Select one active strategy per portfolio.">
+  <meta name="description" content="Import/export Strategy JSON artifacts — mandatory fields, uniqueness rules, eligibility refs, scoring_model weights, and Enable strategies (multiple may be enabled per portfolio).">
   <link rel="canonical" href="strategy-registry.html">
   <style>
     :root {
@@ -110,12 +110,12 @@
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Strategy Registry</h1>
       <p class="muted"><code>strategy-registry</code> · screen: <code>/strategy/registry</code></p>
-      <p>Import/export Strategy JSON artifacts — mandatory fields, uniqueness rules, eligibility refs, scoring_model weights, and Select one active strategy per portfolio.</p>
+      <p>Import/export Strategy JSON artifacts — mandatory fields, uniqueness rules, eligibility refs, scoring_model weights, and Enable strategies (multiple may be enabled per portfolio).</p>
 
       <section class="panel">
         <h2>Overview</h2>
-        <p>The Strategy Registry turns portfolio strategies into reusable Trading Artifacts. Each portfolio still has <strong>exactly one active Strategy</strong> (selection). The registry adds slug, metadata, artifact_version, definition_hash, and version history on top of the same config the Recommendation engine already uses.</p>
-<p>Export downloads the portable Trading Artifact JSON envelope. <strong>Validate</strong> checks the envelope. <strong>Import</strong> stays disabled until validation succeeds, then creates a <strong>draft</strong> — use <strong>Select</strong> to activate it (archives the previous active). Existing Minervini (<code>momentum_factory</code>) migrates automatically to slug <code>momentum_strategy</code> with eligibility linked to <code>minervini_trend_template</code>.</p>
+        <p>The Strategy Registry turns portfolio strategies into reusable Trading Artifacts. A portfolio may have <strong>multiple enabled Strategies</strong> at once. The registry adds slug, metadata, artifact_version, definition_hash, and version history on top of the same config the Recommendation engine already uses.</p>
+<p>Export downloads the portable Trading Artifact JSON envelope. <strong>Validate</strong> checks the envelope. <strong>Import</strong> stays disabled until validation succeeds, then creates a <strong>draft</strong> — use <strong>Enable</strong> to turn it on without disabling other enabled strategies. Existing Minervini (<code>momentum_factory</code>) migrates automatically to slug <code>momentum_strategy</code> with eligibility linked to <code>minervini_trend_template</code>.</p>
 <h2>Importing JSON — start here</h2>
 <p>If Validate or Import reports many field errors, you almost always missed a <strong>mandatory</strong> envelope field, forgot <code>scoring_model</code>, enabled weights that do not sum to 100, or embedded a Screener condition tree. Strategies reference Screeners by <strong>slug / factory_key only</strong> — never paste <code>definition.root</code> into a Strategy. Use the minimum schema below, then expand.</p>
 <h3>Minimum valid envelope (copy/paste starting point)</h3>
@@ -282,9 +282,9 @@
 <td>Stable factory identity (e.g. <code>momentum_factory</code>). Not required for user imports.</td>
 </tr>
 <tr>
-<td>Active selection</td>
+<td>Enablement</td>
 <td>One portfolio</td>
-<td><strong>Exactly one</strong> strategy may be <code>active</code> / selected. Import always creates <strong>draft</strong>; <strong>Select</strong> activates and archives the previous active.</td>
+<td>Multiple strategies may be <code>active</code> (enabled) at once. Import always creates <strong>draft</strong>; <strong>Enable</strong> turns that strategy on without disabling others.</td>
 </tr>
 <tr>
 <td><code>scoring_model[].key</code></td>
@@ -352,9 +352,9 @@
 <td>Built-in id, e.g. <code>momentum_factory</code></td>
 </tr>
 <tr>
-<td><code>is_selected</code></td>
+<td><code>is_selected</code> / <code>is_enabled</code></td>
 <td>Export-only</td>
-<td>Whether this row is the active selection; Import ignores it — use <strong>Select</strong></td>
+<td>Whether this row is currently enabled (<code>STATUS_ACTIVE</code>); Import ignores it — use <strong>Enable</strong>. Multiple strategies may be enabled.</td>
 </tr>
 <tr>
 <td><code>storage</code> / <code>legacy_id</code></td>
@@ -488,8 +488,8 @@
 <li>Start from the minimum example above (or Export an existing working strategy and edit a copy — best for thresholds / exits / gates).</li>
 <li>Paste into Strategy Registry → <strong>Validate</strong> and fix every listed path (<code>$.slug</code>, <code>$.definition.scoring_model</code>, …).</li>
 <li>Use <strong>Import</strong> (enabled only after Validate succeeds) — creates a <strong>draft</strong> (does not change Recommendations yet).</li>
-<li>Click <strong>Select</strong> on the new row when you want it to drive Recommendations (archives the previous active).</li>
-<li>Optionally open <strong>Edit</strong> on the active strategy (<code>/strategy</code>) to refine tabs visually and Save.</li>
+<li>Click <strong>Enable</strong> on the new row when you want it enabled (other enabled strategies stay enabled).</li>
+<li>Optionally open <strong>Edit</strong> (<code>/strategy?strategy_id=…</code>) to refine tabs visually and Save.</li>
 </ol>
 <h3>Common validation / import errors</h3>
 <table>
@@ -551,7 +551,7 @@
 <li>Multiple <code>eligibility_sources</code> = <strong>UNION</strong>; <code>priority</code> is order only.</li>
 <li>Thresholds use sequential if/else (not exclusive bands); score 82 with defaults is typically <strong>WATCH</strong> (not held) / <strong>HOLD</strong> (held).</li>
 <li><code>market_gates</code> demote OPEN/INCREASE only; exits still run.</li>
-<li>Portfolio cash rules can demote unfunded buys to <strong>WATCH</strong>.</li>
+<li>Unfunded or partially funded OPEN/INCREASE stay OPEN/INCREASE (capital status is a separate axis; not WATCH).</li>
 </ul>
 <h2>Optional definition sections (fully usable)</h2>
 <p>These sections are <strong>runtime-usable today</strong>. Import preserves them via <code>normalizeConfig</code> (Validate focuses hard checks on eligibility + scoring — Export a working Strategy, then edit, for safest authoring). They are <strong>not</strong> “reserved / undocumented.”</p>
@@ -892,8 +892,8 @@
         <dt>Search / filters</dt>
         <dd>Filter by status (active/draft/archived) and origin (factory/user).</dd>
     
-        <dt>Select</dt>
-        <dd>Make this strategy the portfolio’s only active strategy (archives the previous active). Success shows a toast notification. Recommendations use the selected strategy.</dd>
+        <dt>Enable</dt>
+        <dd>Turn this strategy on for the portfolio. Other enabled strategies stay enabled. Success shows a toast. Recommendation generate still uses one editor/default strategy until a later V3 workstream.</dd>
     
         <dt>Export JSON</dt>
         <dd>Download the portable Trading Artifact envelope (schema_version, slug, name, metadata, definition with eligibility_sources + scoring_model, dependencies). Best template for a new import — includes thresholds/exits/gates when present.</dd>
@@ -902,13 +902,13 @@
         <dd>Check pasted JSON against Trading Artifact Strategy rules. On success, a green “Validated successfully” cue appears above Validate/Import and the JSON result panel still shows details. Import stays disabled until this reports ok. Editing the JSON clears validation.</dd>
     
         <dt>Import</dt>
-        <dd>Enabled only after successful Validate. Creates a draft strategy in this portfolio and shows a success toast (not an inline alert). Does not change Recommendations until Select. Mandatory: schema_version, artifact_type, slug, name, metadata, definition.scoring_model with enabled weights = 100.</dd>
+        <dd>Enabled only after successful Validate. Creates a draft strategy in this portfolio and shows a success toast (not an inline alert). Does not change Recommendations until Enable. Mandatory: schema_version, artifact_type, slug, name, metadata, definition.scoring_model with enabled weights = 100.</dd>
     
         <dt>Download AI authoring guide (.md)</dt>
         <dd>Download /docs/stox-trading-artifacts-ai-guide.md — consolidated Indicator + Screener + Strategy + Authoring + Cookbook Markdown for AI agents and offline authoring.</dd>
     
-        <dt>Edit active</dt>
-        <dd>Jump to /strategy to edit the selected strategy’s tabs and Save.</dd>
+        <dt>Edit</dt>
+        <dd>Jump to /strategy?strategy_id=… to edit that strategy’s tabs and Save.</dd>
     
         <dt>Version history</dt>
         <dd>On detail for owned strategies, list definition snapshots and change notes. Draft definition-hash changes append versions; active editor Save remains in-place BC.</dd>
@@ -928,10 +928,10 @@
         <dd>Stable machine id (snake_case: <code>swing_rs</code>). Unique per portfolio. Used for uniqueness and selection. Not the display title — that is <code>name</code>. Only a–z, 0–9, and underscore after normalisation.</dd>
     
         <dt>Uniqueness</dt>
-        <dd>slug is unique per portfolio (Import may suffix on collision). name is soft-unique (may get &quot; (import)&quot;). Exactly one active strategy per portfolio. scoring keys should appear once in scoring_model. Screener refs may be shared across strategies.</dd>
+        <dd>slug is unique per portfolio (Import may suffix on collision). name is soft-unique (may get &quot; (import)&quot;). Multiple strategies may be enabled per portfolio. scoring keys should appear once in scoring_model. Screener refs may be shared across strategies.</dd>
     
-        <dt>Exactly one active</dt>
-        <dd>Selection rule: one STATUS_ACTIVE strategy per portfolio drives Recommendation scoring. Import always creates draft; Select activates.</dd>
+        <dt>Multiple enabled strategies</dt>
+        <dd>Enablement rule: more than one STATUS_ACTIVE strategy may exist per portfolio. Import always creates draft; Enable turns a strategy on without archiving others. The editor strategy_id query is UI selection, not exclusive-active.</dd>
     
         <dt>No Screener duplication</dt>
         <dd>eligibility_sources reference Screeners by screener_slug / screener_factory_key. Condition trees stay on Screener Registry — never embed root/children on a Strategy.</dd>

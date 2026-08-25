@@ -114,7 +114,7 @@
 
       <section class="panel">
         <h2>Overview</h2>
-        <p>This is where final recommended stocks appear after Screeners, Discovery/Evaluation facts, and Strategy filters. Recommendations are generated from Strategy scoring, market opinion, portfolio rules, and capital allocation. Trade recommendations (Open / Increase / Reduce / Exit) can be Approved into pending execution. HOLD / WATCH insights are view-only guidance.</p>
+        <p>This is where final recommended stocks appear after Screeners, Discovery/Evaluation facts, and Strategy filters. Recommendations are generated from Strategy scoring, market opinion, portfolio rules, capital allocation, and portfolio-level stop-loss / trailing / horizon exit precedence. Trade recommendations (Open / Increase / Reduce / Exit) can be Approved into pending execution. HOLD / WATCH insights are view-only guidance.</p>
 <p>Recommendations are decision proposals synthesized from eligibility, scoring, market context, and cash constraints. Read evidence first, action label second; the reasoning is often more important than the headline action.</p>
 <p>Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).</p>
 
@@ -127,13 +127,13 @@
         <dd>Lifecycle actions on actionable recommendations.</dd>
     
         <dt>Review dialog</dt>
-        <dd>Inspect evidence, quantity, and cash impact before deciding.</dd>
+        <dd>Inspect evidence, quantity, cash impact, and (for exits) the primary exit reason before deciding.</dd>
     
         <dt>Trade vs insights sections</dt>
         <dd>Actionable trades are separated from HOLD / WATCH insights.</dd>
     
         <dt>Generate (when available)</dt>
-        <dd>Runs the recommendation pipeline for the active strategy / profile. Telegram (when enabled) notifies only actionable Open / Increase / Reduce / Exit ideas — not HOLD / WATCH.</dd>
+        <dd>Runs the recommendation pipeline independently for every enabled strategy in the portfolio. Telegram (when enabled) notifies only actionable Open / Increase / Reduce / Exit ideas — not HOLD / WATCH.</dd>
     
         <dt>Evidence-first review</dt>
         <dd>Open each review dialog and inspect eligibility/scoring/market/capital evidence before approving or rejecting.</dd>
@@ -153,10 +153,25 @@
         <h2>Concepts</h2>
         <dl class="doc-list">
         <dt>Evidence snapshot</dt>
-        <dd>Eligibility, scoring, exit, market opinion, and capital allocation status travel with the idea.</dd>
+        <dd>Eligibility, scoring, exit, market opinion, ranking source (return-quality or OD-23 fill order), and capital allocation status travel with the idea.</dd>
     
-        <dt>Unfunded → Watch</dt>
-        <dd>Ideas that cannot be funded from available cash are demoted to Watch.</dd>
+        <dt>Primary exit reason</dt>
+        <dd>For EXIT ideas, the API exposes primary_exit_reason / exit_attribution with canonical values: strategy_exit, stop_loss, trailing_stop, horizon_expiry. The UI shows a human label but keeps the canonical value. When multiple mechanisms are true, only the highest-precedence reason is persisted and shown.</dd>
+    
+        <dt>Exit precedence</dt>
+        <dd>When multiple exit mechanisms are true: (1) Strategy exit, (2) Portfolio Stop-Loss, (3) Portfolio Trailing Stop, (4) Strategy Horizon. Strategy-specific exit rules (including any V1 strategy JSON trailing_stop proxy) are separate from portfolio-level SL/trailing controls and count as strategy_exit when they win.</dd>
+    
+        <dt>BUY cooldown (OD-11)</dt>
+        <dd>1 calendar day per (stock, strategy). Starts when an OPEN/INCREASE recommendation is generated — not on broker fill or approval. Day 0 allows that BUY; Day 1 suppresses new OPEN/INCREASE for the same pair; Day 2 elapsed. Does not suppress REDUCE/EXIT/HOLD. Another strategy’s BUY of the same stock has an independent cooldown. Stale-cancel does not clear cooldown and does not replace an unapproved BUY during the window.</dd>
+    
+        <dt>Staggered entry / position target (OD-12)</dt>
+        <dd>Conviction sets a persisted monetary position target on the strategy-owned holding. First entry sizes ~50% of current target (strategy first_entry_pct, default 50%). Later INCREASE uses remaining = max(0, target − filled) after cooldown — not another 50% tranche. This-cycle amount is what the sequential allocator funds; capital-resolution actual execution can be lower. Target is not reduced by partial funding. Below the minimum actionable amount (platform ₹5,000 / portfolio override), no OPEN/INCREASE is emitted.</dd>
+    
+        <dt>Unfunded / partially funded</dt>
+        <dd>OPEN/INCREASE stays OPEN/INCREASE when own capital cannot cover the full target. Capital priority is own → recall → borrow. The UI shows requested vs actual execution amount from capital resolution — e.g. ₹20,000 requested may execute at ₹19,000 if that is what was actually available. Lack of cash does not convert the idea to Watch. A partially funded buy may create a capital request for the remainder (₹5,000 blocks for normal lending) but does not pick a lender. Trade Approve cannot move a partially funded or unfunded buy to pending execution until a lender has committed a loan (status capital_committed). After commitment, Approve the trade separately, then record the broker fill. The borrower owns the stock. Loan repayment later reduces outstanding only. Automated Recall returns capital to the lender when needed.</dd>
+    
+        <dt>Capital resolution (detail)</dt>
+        <dd>Recommendation detail shows own capital used, recall requested/received, Recall Bridge Loan used, immediately available, and the actual execution amount. That actual amount is what can be invested — not the original target when funding is short.</dd>
     
         <dt>Reopen</dt>
         <dd>Undo review decisions back to pending_review when supported.</dd>
@@ -165,7 +180,7 @@
         <dd>HOLD / WATCH stay in-app only; they are not sent as Telegram recommendation alerts.</dd>
     
         <dt>Lifecycle states</dt>
-        <dd>Recommendations can move through pending_review, pending_execution, executed/cancelled, expired, and reopened paths.</dd>
+        <dd>Recommendations can move through pending_review, pending_execution, executed/cancelled, expired, and reopened paths. Buys that still need lending stay in pending_review until capital_committed; Approve is blocked until then. Fully funded buys still go pending_execution on Approve. Sells are unchanged.</dd>
     
         <dt>Active portfolio context</dt>
         <dd>Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.</dd>
@@ -179,7 +194,7 @@
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
-          <a href="trading-os-flow.html">Trading OS pages &amp; flow</a><a href="strategy.html">Strategy</a><a href="pending-execution.html">Pending Execution</a><a href="cash.html">Cash</a><a href="review.html">Review</a>
+          <a href="trading-os-flow.html">Trading OS pages &amp; flow</a><a href="strategy.html">Strategy</a><a href="pending-execution.html">Pending Execution</a><a href="cash.html">Cash</a><a href="review.html">Review</a><a href="settings.html">Settings</a><a href="holdings.html">Portfolio (Holdings)</a>
         </div>
       </section>
     </article>

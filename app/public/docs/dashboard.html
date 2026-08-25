@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Dashboard — StoX docs</title>
-  <meta name="description" content="Portfolio snapshot: value, allocation, market analytics, alerts, calendar, and pattern signals.">
+  <meta name="description" content="Portfolio snapshot: value, allocation, market analytics, alerts, calendar, pattern signals, and a cash-reserve shortfall warning when physical cash is below the required reserve.">
   <link rel="canonical" href="dashboard.html">
   <style>
     :root {
@@ -110,11 +110,11 @@
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Dashboard</h1>
       <p class="muted"><code>dashboard</code> · screen: <code>/</code></p>
-      <p>Portfolio snapshot: value, allocation, market analytics, alerts, calendar, and pattern signals.</p>
+      <p>Portfolio snapshot: value, allocation, market analytics, alerts, calendar, pattern signals, and a cash-reserve shortfall warning when physical cash is below the required reserve.</p>
 
       <section class="panel">
         <h2>Overview</h2>
-        <p>The Dashboard is the home screen for the active portfolio. It summarises performance, allocation, market context, alerts, upcoming calendar events, and pattern signals on holdings. A client-side cache can show the last load instantly until you refresh.</p>
+        <p>The Dashboard is the home screen for the active portfolio. It summarises performance, allocation, market context, alerts, upcoming calendar events, and pattern signals on holdings. A client-side cache can show the last load instantly until you refresh. If physical cash is below the portfolio required cash reserve, a warning appears on this page only — it does not block withdrawals or cancel recommendations by itself.</p>
 <p>Recommended reading order on Dashboard: (1) summary cards for total value and P/L, (2) allocation for concentration risk, (3) market gauges for regime, (4) alerts/patterns for actionable follow-up, and (5) upcoming calendar events. If your view seems old, run Refresh Dashboard to invalidate cache and fetch live API responses.</p>
 <p>Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).</p>
 
@@ -147,6 +147,9 @@
         <dt>Calendar card</dt>
         <dd>Upcoming portfolio events for the next ~31 days.</dd>
     
+        <dt>Cash reserve shortfall warning</dt>
+        <dd>Shown on Dashboard when physical cash is below required_cash_reserve. Withdrawals are still recorded; this is not a hard block and not an app-wide banner.</dd>
+    
         <dt>Portfolio switch impact</dt>
         <dd>Switching portfolio in the header reloads dashboard context; always confirm you are reviewing the intended account before taking actions.</dd>
     
@@ -173,6 +176,9 @@
         <dt>Dashboard cache</dt>
         <dd>Responses are cached per user + portfolio (~24h) for snappy revisits; mutations invalidate it.</dd>
     
+        <dt>Required cash reserve</dt>
+        <dd>Portfolio-level floor from Settings (portfolio cash reserve %). Rupee amount = that % of the larger of currently held invested amount and current holdings market value. Non-investable and non-lendable. Physical cash may fall below it after a broker withdrawal; Dashboard then warns.</dd>
+    
         <dt>Decision context</dt>
         <dd>Dashboard is an orientation page. It helps you decide where to investigate next; it is not intended to execute trades directly.</dd>
     
@@ -188,7 +194,7 @@
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
-          <a href="trading-os-flow.html">Trading OS pages &amp; flow</a><a href="holdings.html">Portfolio (Holdings)</a><a href="market-depth.html">Market depth</a><a href="patterns.html">Patterns</a><a href="calendar.html">Calendar</a><a href="review.html">Review</a><a href="portfolio-snapshots.html">Portfolio Snapshots</a><a href="historical-holdings.html">Historical Holdings</a>
+          <a href="trading-os-flow.html">Trading OS pages &amp; flow</a><a href="holdings.html">Portfolio (Holdings)</a><a href="market-depth.html">Market depth</a><a href="patterns.html">Patterns</a><a href="calendar.html">Calendar</a><a href="review.html">Review</a><a href="portfolio-snapshots.html">Portfolio Snapshots</a><a href="historical-holdings.html">Historical Holdings</a><a href="cash.html">Cash</a><a href="settings.html">Settings</a>
         </div>
       </section>
     </article>

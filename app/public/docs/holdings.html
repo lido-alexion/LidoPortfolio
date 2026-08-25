@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Portfolio (Holdings) — StoX docs</title>
-  <meta name="description" content="Open positions derived from the ledger — qty, cost, P/L, XIRR, and trailing stop.">
+  <meta name="description" content="Open positions derived from the ledger — owner/unmanaged, qty, cost, P/L, XIRR, position target/filled, portfolio stop-loss, and portfolio trailing stop. Unmanaged lots can be Adopted into one strategy.">
   <link rel="canonical" href="holdings.html">
   <style>
     :root {
@@ -110,11 +110,11 @@
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Portfolio (Holdings)</h1>
       <p class="muted"><code>holdings</code> · screen: <code>/holdings</code></p>
-      <p>Open positions derived from the ledger — qty, cost, P/L, XIRR, and trailing stop.</p>
+      <p>Open positions derived from the ledger — owner/unmanaged, qty, cost, P/L, XIRR, position target/filled, portfolio stop-loss, and portfolio trailing stop. Unmanaged lots can be Adopted into one strategy.</p>
 
       <section class="panel">
         <h2>Overview</h2>
-        <p>Holdings show current positions for the active portfolio. Use Simple or Complex views, resizable columns, sell prefill, Analyse prompts, and drill into per-stock OHLCV history.</p>
+        <p>Holdings show current positions for the active portfolio. Use Simple or Complex views, resizable columns, sell prefill, Analyse prompts, and drill into per-stock OHLCV history. Risk columns use portfolio-level stop-loss and trailing settings (not strategy JSON trailing). Strategy-owned lots may show OD-12 position target, filled, and remaining amounts.</p>
 <p>Holdings is your live position cockpit. Start with exposure and unrealized risk, then drill into per-stock history when something looks unusual. Complex view is better for diagnostics; simple view is better for fast monitoring.</p>
 <p>Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).</p>
 
@@ -124,16 +124,22 @@
         <h2>Controls</h2>
         <dl class="doc-list">
         <dt>Simple / Complex views</dt>
-        <dd>Toggle density of columns and metrics.</dd>
+        <dd>Toggle density of columns and metrics. Complex view shows portfolio trailing % from peak raw close, portfolio stop-loss price under Avg Buy, and Target column details (filled / remaining) when a position target exists.</dd>
     
         <dt>Sell</dt>
         <dd>Prefills a sell transaction from the selected holding.</dd>
+    
+        <dt>Adopt</dt>
+        <dd>On unmanaged holdings (Sell menu → Adopt): choose one destination strategy. Sets ownership and initializes position target from invested cost so remaining BUY is 0. Entry/risk history continues (OD-15). Blocked if that strategy already owns the same stock (merge rules unspecified).</dd>
     
         <dt>Price history</dt>
         <dd>Opens OHLCV chart and table for that stock.</dd>
     
         <dt>Analyse</dt>
         <dd>Copies an AI-ready prompt (with recent OHLCV) to the clipboard.</dd>
+    
+        <dt>Target column</dt>
+        <dd>Optional column (hidden by default): position target amount (OD-12), with filled and remaining in Complex view. Target is the intended capital allocation; filled is actual invested cost — not recommendation amounts.</dd>
     
         <dt>Column presets and sorting</dt>
         <dd>Use sorting with complex metrics (unrealized %, latest change %, drawdown from highest close) to quickly surface risk concentration and weak performers.</dd>
@@ -155,11 +161,23 @@
         <dt>Average buy / invested</dt>
         <dd>Fee-exclusive cost basis (price × qty) for open lots; fees are shown separately.</dd>
     
-        <dt>Unrealized P/L</dt>
-        <dd>Mark-to-market vs latest cached close; unrealized % = unrealized ÷ invested × 100 when invested &gt; 0.</dd>
+        <dt>Owner / Unmanaged</dt>
+        <dd>Each open lot is unmanaged or owned by a strategy (<code>owner_key</code>). Manual buys stay unmanaged until Adopt. Corporate-action quantity follows the parent owner (OD-10).</dd>
     
-        <dt>Trailing stop metric</dt>
-        <dd>Shown on holdings; alert policies can act on it — not a separate automatic Telegram spam path.</dd>
+        <dt>Unrealized P/L</dt>
+        <dd>Mark-to-market vs latest cached close; unrealized % = unrealized ÷ invested × 100 when invested &gt; 0. Portfolio trailing stop is not based on unrealized %.</dd>
+    
+        <dt>Position target / filled (OD-12)</dt>
+        <dd>Strategy-owned positions persist a monetary target_amount (conviction sizing). filled_amount is the actual invested cost of the open lot from ledger fills. remaining_target_amount = max(0, target − filled). Partial fills and capital-resolution shortfalls do not reduce the target. First BUY is ~50% of current target (strategy first_entry_pct); later BUYs use remaining after the 1 calendar-day BUY cooldown (OD-11).</dd>
+    
+        <dt>Portfolio Stop-Loss</dt>
+        <dd>Portfolio-level control (Settings → Portfolio Stop-Loss %). Stop price uses the weighted-average actual fill cost of the current ownership episode and is evaluated against raw daily close — not adjusted close or intraday low.</dd>
+    
+        <dt>Portfolio Trailing Stop</dt>
+        <dd>Portfolio-level control (Settings → Portfolio Trailing Stop %), independently configured (default/seed 15%). Peak is the maximum raw daily close since the ownership episode began; trailing stop = peak × (1 − trailing %). Not an unrealized-% proxy, not stop-loss %, and not strategy trailing_stop JSON.</dd>
+    
+        <dt>Highest Close</dt>
+        <dd>Peak raw close for the current ownership episode (owner-scoped when strategy lots are attributable).</dd>
     
         <dt>Risk-first reading</dt>
         <dd>Prioritize trailing-stop pressure, latest close behavior, and concentration before focusing on winners.</dd>
@@ -176,7 +194,7 @@
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
-          <a href="transactions.html">Transactions</a><a href="stock-prices.html">Stock price history</a><a href="watchlist.html">Watchlist</a><a href="dashboard.html">Dashboard</a><a href="historical-holdings.html">Historical Holdings</a>
+          <a href="transactions.html">Transactions</a><a href="stock-prices.html">Stock price history</a><a href="watchlist.html">Watchlist</a><a href="dashboard.html">Dashboard</a><a href="historical-holdings.html">Historical Holdings</a><a href="settings.html">Settings</a><a href="recommendations.html">Recommendations</a><a href="strategy.html">Strategy</a>
         </div>
       </section>
     </article>

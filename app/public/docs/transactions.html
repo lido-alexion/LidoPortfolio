@@ -114,7 +114,7 @@
 
       <section class="panel">
         <h2>Overview</h2>
-        <p>Transactions are the ledger of record. Buys and sells drive holdings, average cost, fees, and FIFO realized P/L. Use Active vs Squared-off views, CSV import, and sell prefill from Portfolio.</p>
+        <p>Transactions are the ledger of record. Buys and sells drive holdings, average cost, fees, and FIFO realized P/L. Use Active vs Squared-off views, CSV import, and sell prefill from Portfolio. Sell rows that came from an EXIT recommendation may show a persisted exit_reason (strategy_exit, stop_loss, trailing_stop, horizon_expiry) — displayed with a human label but not recalculated in the UI.</p>
 <p>This is the accounting backbone of the app. Enter transactions carefully because holdings, realized P/L, XIRR, and multiple reports derive from this ledger. Prefer editing incorrect rows instead of adding compensating noise rows unless your accounting policy requires audit-style reversals.</p>
 <p>Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).</p>
 
@@ -134,6 +134,9 @@
     
         <dt>Edit / delete</dt>
         <dd>Correct ledger rows; deleting a row linked to a recommendation can reopen pending execution.</dd>
+    
+        <dt>Exit reason column</dt>
+        <dd>On sells linked to recommendations, shows the persisted primary exit attribution from the ledger (not recomputed).</dd>
     
         <dt>CSV import discipline</dt>
         <dd>After pasting CSV, review each parsed row (type, quantity, price, date, exchange, fees). Save commits the whole batch or nothing — correcting mistakes before save avoids cleanup. A failed import leaves zero new ledger rows; retry after fixing. A successful batch cannot be re-submitted.</dd>
@@ -161,6 +164,9 @@
         <dt>Auto fees</dt>
         <dd>Fee components (Zerodha-style delivery defaults) can be configured under Settings.</dd>
     
+        <dt>Persisted exit reason</dt>
+        <dd>When a sell fill records an EXIT recommendation, exit_reason is copied from the recommendation’s primary attribution onto portfolio_transactions. Canonical values match §13.2; the UI does not invent or recalculate attribution.</dd>
+    
         <dt>Mutability caution</dt>
         <dd>Editing historical rows can ripple through cost basis and performance metrics. Re-check Holdings and Review pages after major edits.</dd>
     
@@ -176,7 +182,7 @@
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
-          <a href="pending-execution.html">Pending Execution</a><a href="holdings.html">Portfolio (Holdings)</a><a href="corporate-action.html">Corporate actions</a><a href="cash.html">Cash</a>
+          <a href="pending-execution.html">Pending Execution</a><a href="holdings.html">Portfolio (Holdings)</a><a href="corporate-action.html">Corporate actions</a><a href="cash.html">Cash</a><a href="recommendations.html">Recommendations</a>
         </div>
       </section>
     </article>

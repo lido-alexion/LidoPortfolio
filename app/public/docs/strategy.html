@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Strategy — StoX docs</title>
-  <meta name="description" content="One strategy per portfolio — default Minervini; edit tabs and Save.">
+  <meta name="description" content="A portfolio may enable multiple strategies — default Minervini; edit tabs and Save.">
   <link rel="canonical" href="strategy.html">
   <style>
     :root {
@@ -110,12 +110,12 @@
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Strategy</h1>
       <p class="muted"><code>strategy</code> · screen: <code>/strategy</code></p>
-      <p>One strategy per portfolio — default Minervini; edit tabs and Save.</p>
+      <p>A portfolio may enable multiple strategies — default Minervini; edit tabs and Save.</p>
 
       <section class="panel">
         <h2>Overview</h2>
-        <p>Strategy is your decision policy. Each portfolio has exactly one active strategy. It starts as Minervini Strategy (Minervini Trend Template eligibility + momentum scoring). Edit any tab and Save — the active editor still saves in place.</p>
-<p>Use Strategy Registry to import/export JSON, validate packs, browse drafts, and Select which definition is active for this portfolio. Strategies reference Screeners by slug / factory key — they never duplicate Screener condition trees.</p>
+        <p>Strategy is your decision policy. A portfolio may have <strong>multiple enabled strategies</strong> at the same time. It starts with Minervini Strategy (Minervini Trend Template eligibility + momentum scoring). Edit any tab and Save — the editor still saves that strategy in place.</p>
+<p>Use Strategy Registry to import/export JSON, validate packs, browse drafts, and <strong>Enable</strong> a definition for this portfolio without disabling other enabled strategies. The Strategy editor <code>?strategy_id=</code> query is a UI choice of which strategy to edit — not a database rule that only one strategy can be enabled. Strategies reference Screeners by slug / factory key — they never duplicate Screener condition trees.</p>
 <p><strong>AI Strategy Designer</strong> (collapsible panel on this page) does <strong>not</strong> call an LLM. It builds a paste-ready prompt from your style/risk/complexity choices, copies it to the clipboard, and expects you to attach the StoX Trading Artifacts AI Authoring Guide in ChatGPT/Gemini/Claude/etc. Import the resulting Screener/Strategy JSON via the registries after Validate.</p>
 <p>Strategy does not invent stocks and does not rewrite Screener conditions. Screeners admit candidates; Strategy scores them, labels an action, applies portfolio/cash/market limits, and watches holdings for exits.</p>
 <p>Where do finished ideas appear?</p>
@@ -130,11 +130,12 @@ flowchart TD
   E -.-&gt;|can force Exit| D
   D --&gt; F[Portfolio Rules + Behaviour flags]
   F --&gt; G[Market Gates - may block new Open/Increase]
-  G --&gt; H[Capital Allocation + Cash Management]
-  H --&gt;|unfunded Open/Increase become Watch| I[Recommendations page]
-  I --&gt; J[Approve]
-  J --&gt; K[Pending Execution]
-  K --&gt; L[Ledger fill]
+  G --&gt; H[Per-strategy return-quality ranking or OD-23 fill order]
+  H --&gt; I[Sequential capital allocation from strategy available capital]
+  I --&gt;|funded / partially funded / unfunded stay Open or Increase| J[Recommendations page]
+  J --&gt; K[Approve]
+  K --&gt; L[Pending Execution]
+  L --&gt; M[Ledger fill]
 </code></pre>
 <p>Read Controls below for every tab field (what it means and what number it is compared against). Read Concepts for a scored example of four candidates and three holdings hitting exit rules.</p>
 <p>Each portfolio has one editable strategy (default Minervini). Change tabs, Save, then run the decision pipeline from Recommendations to refresh ideas.</p>
@@ -149,12 +150,12 @@ flowchart TD
         <dd>Collapsible panel on /strategy. Fill Investment Style, Risk, Holding Period, Market, Universe, Max Positions, Capital Allocation, Exit Style, Market Preferences, Optimization Priorities, Complexity, Explainability, and optional Additional Constraints. Generate Prompt builds a client-side template (StoX Default Prompt; more templates can be added later), shows it in a read-only textarea, and auto-copies to the clipboard (toast: “AI prompt copied to clipboard.”). Copy Again / Select All / Clear / Reset Defaults are available. Form values persist in browser localStorage. Attach /docs/stox-trading-artifacts-ai-guide.md when pasting into an external AI. No backend LLM call.</dd>
     
         <dt>Strategy Registry</dt>
-        <dd>Open /strategy/registry to export/import Strategy JSON, validate packs, and Select the active strategy for this portfolio.</dd>
+        <dd>Open /strategy/registry to export/import Strategy JSON, validate packs, and Enable strategies for this portfolio (multiple may be enabled).</dd>
     
         <dt>General tab</dt>
         <dd>Name — label for your strategy (default: Minervini Strategy).
 Description — free-text intent notes.
-One active strategy per portfolio: Save overwrites the current active config in place.</dd>
+Save overwrites this strategy’s config in place. Optional <code>?strategy_id=</code> chooses which enabled strategy the editor is showing.</dd>
     
         <dt>Eligibility Sources tab</dt>
         <dd>Assign Screeners that admit stocks into scoring.
@@ -190,17 +191,21 @@ Compared against: the stock’s overall strategy score in this generation cycle.
     
         <dt>Portfolio Rules tab</dt>
         <dd>Maximum / Minimum Position Size % — share of portfolio value per idea (compared against suggested allocation %).
-Maximum Cash Deployment % / Minimum Cash Reserve % — how much cash may be invested vs kept aside (compared against cash balance).
+First entry % (first_entry_pct) — percentage of this strategy’s current position target used for the first BUY. Empty uses the engine default (50%). Valid range when set: 1–100. Later INCREASE uses remaining target after filled, subject to the frozen 1 calendar-day BUY cooldown (OD-11; not configurable here). This is not Portfolio Stop-Loss %, Portfolio Trailing Stop %, or Settings cash reserve.
+Maximum Cash Deployment % / Minimum Cash Reserve % — V1 generation-time cash limits compared against cash balance. The V3 portfolio cash reserve (required_cash_reserve) is set under Settings → Portfolio cash reserve % and uses invested/market-value, not % of cash.
+Recommended minimum holdings — advisory count for generation (the engine does not open weak names just to hit it). Also the divisor for this strategy’s retained capital (allocated capital ÷ this count, nearest rupee). Leave blank if unset; retained capital is then not computed.
 Maximum New Positions — cap on fresh Opens per generation cycle.
 Maximum Exposure Per Stock % — concentration ceiling.
 Behaviour toggles: Allow increase / partial exit / averaging up / averaging down — permit those action types when other rules would suggest them.</dd>
     
         <dt>Capital Allocation tab</dt>
         <dd>Applies only to Open / Increase ideas that survived thresholds, portfolio rules, and market gates.
-Allocation method: Proportional by score (stronger scores get more cash), Simple ranking, or Equal weight.
-Tie-breaking — secondary key when scores match (higher score / RS / momentum / breakout).
-Score bands — map overall-score ranges to target allocation % of portfolio (e.g. 95–100 → 10%).
-Compared against: available investable cash (Cash balance − reserved − reserve floor). If cash cannot fund the idea, it is demoted to Watch (unfunded).</dd>
+V3 fill order: return-quality ranking from the strategy version’s latest completed backtest when that ranking is computable; otherwise OD-23 capital fill order (target amount descending, then fit, then symbol). Fit score is not the V3 ranking key.
+Capital is filled sequentially from that strategy’s strategy available capital (WS2 snapshot). Partial and zero funding keep OPEN/INCREASE and preserve the original target amount.
+Score bands still map overall-score ranges to the candidate’s target allocation % of portfolio — that target is separate from the funding pool.</dd>
+    
+        <dt>Exit Strategy — horizon (calendar days)</dt>
+        <dd>Optional strategy-specific exit horizon (horizon_calendar_days) on the Strategy page Exit Strategy tab. Leave empty for no horizon expiry — the horizon mechanism never fires. When set, use a positive whole number of calendar days. This is not Portfolio Stop-Loss % or Portfolio Trailing Stop % (those remain Settings). Precedence still ends with horizon_expiry after strategy_exit, stop_loss, and trailing_stop.</dd>
     
         <dt>Exit Strategy — each rule</dt>
         <dd>Applies to open holdings. If any enabled rule triggers (mode = any), action is forced to Exit.
@@ -210,7 +215,7 @@ Trend Weakening (Value = trend score max, e.g. 40) — hits when Trend factor sc
 Overall Score Exit (Value = overall score max, e.g. 20) — hits when overall score ≤ Value.
 Maximum Loss (Value = %, e.g. 8) — hits when unrealized P/L % ≤ −Value (vs your cost basis).
 ATR Stop (Value = multiple, e.g. 2) — hits when unrealized % ≤ −(multiple × ATR%).
-Trailing Stop (Value = %, e.g. 10) — V1 proxy: hits when unrealized % ≤ −Value (drawdown from cost; not yet a true peak-trail engine).
+Trailing Stop (Value = %, e.g. 10) — strategy-specific V1 proxy inside Exit Strategy only: hits when unrealized % ≤ −Value (drawdown from cost). This is separate from the portfolio-level Portfolio Trailing Stop % under Settings (peak raw close × trailing %). When both fire, strategy exit wins on precedence.
 Screener Exit (Value = screener picker) — hits when the holding’s stock_id appears in that screener’s latest completed run (~72h).</dd>
     
         <dt>Market Gates tab</dt>
@@ -251,8 +256,11 @@ Save — writes the current config in place. After Save, run the pipeline from R
       <section class="panel">
         <h2>Concepts</h2>
         <dl class="doc-list">
-        <dt>One active strategy per portfolio</dt>
-        <dd>Exactly one strategy is active (selected). Defaults are Minervini Strategy (Minervini Trend Template screener + momentum weights/thresholds). Use Strategy Registry to switch selection; the editor Save still updates the active config in place.</dd>
+        <dt>Strategy vs portfolio risk settings</dt>
+        <dd>horizon_calendar_days and first_entry_pct are strategy configuration (this page). Portfolio Stop-Loss %, Portfolio Trailing Stop %, and cash reserve stay under Settings. The 1-day BUY cooldown is not a Strategy-page control.</dd>
+    
+        <dt>Multiple enabled strategies</dt>
+        <dd>A portfolio may enable more than one strategy. Physical cash stays one pool; each enabled strategy has an allocation % of investable capital (Cash page; must sum to 100 to save). Defaults include Minervini Strategy. The editor <code>?strategy_id=</code> chooses which definition to edit. Save still updates that strategy in place.</dd>
     
         <dt>Registry vs editor</dt>
         <dd>Registry manages reusable JSON artifacts, drafts, and selection. The Strategy page edits the active portfolio strategy. Export never includes portfolio-local Screener ids — only slug / factory_key refs.</dd>

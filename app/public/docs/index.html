@@ -116,10 +116,10 @@
 <a href="overview.html"><strong>App documentation</strong> — <span class="muted">How contextual help works and how to browse topics for every screen.</span></a>
 <a href="authoring-trading-artifacts.html"><strong>Authoring Trading Artifacts</strong> — <span class="muted">End-to-end workflow for humans and AI: Indicator → Screener → Strategy → Validate → Import → Select.</span></a>
 <a href="calendar.html"><strong>Calendar</strong> — <span class="muted">Per-portfolio market events plus global trade holidays, with optional Telegram reminders.</span></a>
-<a href="cash.html"><strong>Cash</strong> — <span class="muted">Cash balance, reserved capital, available investable cash, and the cash ledger.</span></a>
+<a href="cash.html"><strong>Cash</strong> — <span class="muted">Physical cash pool, reserved cash, required reserve, Unallocated Cash, strategy capital allocations, recalls, Recall Bridge Loans, Proceeds from Stock Sale, and the cash ledger.</span></a>
 <a href="corporate-action-history.html"><strong>Corporate Action History</strong> — <span class="muted">Resolved data-quality corporate-action decisions with reversal-ready audit trail.</span></a>
 <a href="corporate-action.html"><strong>Corporate actions</strong> — <span class="muted">Guided stock splits and bonus issues with OHLCV restatement.</span></a>
-<a href="dashboard.html"><strong>Dashboard</strong> — <span class="muted">Portfolio snapshot: value, allocation, market analytics, alerts, calendar, and pattern signals.</span></a>
+<a href="dashboard.html"><strong>Dashboard</strong> — <span class="muted">Portfolio snapshot: value, allocation, market analytics, alerts, calendar, pattern signals, and a cash-reserve shortfall warning when physical cash is below the required reserve.</span></a>
 <a href="data-quality-center.html"><strong>Data Quality Center</strong> — <span class="muted">Admin queue for unresolved market-data anomalies, starting with corporate actions.</span></a>
 <a href="discovery.html"><strong>Discovery</strong> — <span class="muted">Candidates from screeners and patterns, plus long-focused evaluation scores on one page.</span></a>
 <a href="historical-holdings.html"><strong>Historical Holdings</strong> — <span class="muted">As-of open holdings reconstructed from the transaction ledger for a chosen past date, with valuation and unrealized P/L.</span></a>
@@ -131,7 +131,7 @@
 <a href="notifications.html"><strong>Notifications</strong> — <span class="muted">History of Telegram (and related) notifications sent for this portfolio.</span></a>
 <a href="patterns.html"><strong>Patterns</strong> — <span class="muted">Educational chart + candlestick guide with SVG sketches and deep links.</span></a>
 <a href="pending-execution.html"><strong>Pending Execution</strong> — <span class="muted">Approved recommendations waiting for you to record the broker fill.</span></a>
-<a href="holdings.html"><strong>Portfolio (Holdings)</strong> — <span class="muted">Open positions derived from the ledger — qty, cost, P/L, XIRR, and trailing stop.</span></a>
+<a href="holdings.html"><strong>Portfolio (Holdings)</strong> — <span class="muted">Open positions derived from the ledger — owner/unmanaged, qty, cost, P/L, XIRR, position target/filled, portfolio stop-loss, and portfolio trailing stop. Unmanaged lots can be Adopted into one strategy.</span></a>
 <a href="portfolio-snapshots.html"><strong>Portfolio Snapshots</strong> — <span class="muted">Daily portfolio value history from backend snapshots (portfolio value, invested value, unrealized P/L).</span></a>
 <a href="portfolios.html"><strong>Portfolios</strong> — <span class="muted">Create and manage named portfolios; switch the active one from the header.</span></a>
 <a href="profile.html"><strong>Profile</strong> — <span class="muted">Display name, password, and profile photo for your user account.</span></a>
@@ -140,12 +140,12 @@
 <a href="screener.html"><strong>Screener</strong> — <span class="muted">Eligibility engine — condition builders that feed Discovery and Strategy.</span></a>
 <a href="screener-editor.html"><strong>Screener editor</strong> — <span class="muted">Edit conditions, run history, stacked results, and backtests.</span></a>
 <a href="screener-registry.html"><strong>Screener Registry</strong> — <span class="muted">Import/export Screener JSON artifacts — mandatory fields, slug rules, condition tree shape, and version history.</span></a>
-<a href="settings.html"><strong>Settings</strong> — <span class="muted">Global (admin), Portfolio, and Account settings — fees, Telegram, sync, active sessions, and links.</span></a>
+<a href="settings.html"><strong>Settings</strong> — <span class="muted">Global (admin), Portfolio, and Account settings — fees, Telegram, cash reserve %, sync, active sessions, and links.</span></a>
 <a href="explorer.html"><strong>Stock Explorer</strong> — <span class="muted">Universe-cache analytics: price cards, relative strength, charts, normalized gain.</span></a>
-<a href="stock-prices.html"><strong>Stock price history</strong> — <span class="muted">OHLCV chart and table for a single stock, with optional force sync.</span></a>
-<a href="strategy.html"><strong>Strategy</strong> — <span class="muted">One strategy per portfolio — default Minervini; edit tabs and Save.</span></a>
+<a href="stock-prices.html"><strong>Stock price history</strong> — <span class="muted">OHLCV chart and table for a single stock, with All vs Since Buy ranges and optional force sync.</span></a>
+<a href="strategy.html"><strong>Strategy</strong> — <span class="muted">A portfolio may enable multiple strategies — default Minervini; edit tabs and Save.</span></a>
 <a href="backtests.html"><strong>Strategy Backtests</strong> — <span class="muted">Paper-trade the active Strategy over historical dates — runs, progress, trades, timeline, and statistics.</span></a>
-<a href="strategy-registry.html"><strong>Strategy Registry</strong> — <span class="muted">Import/export Strategy JSON artifacts — mandatory fields, uniqueness rules, eligibility refs, scoring_model weights, and Select one active strategy per portfolio.</span></a>
+<a href="strategy-registry.html"><strong>Strategy Registry</strong> — <span class="muted">Import/export Strategy JSON artifacts — mandatory fields, uniqueness rules, eligibility refs, scoring_model weights, and Enable strategies (multiple may be enabled per portfolio).</span></a>
 <a href="sync-logs.html"><strong>Sync logs</strong> — <span class="muted">Admin view of price and maintenance sync log messages.</span></a>
 <a href="trading-artifact-runtime.html"><strong>Trading Artifact Runtime Semantics</strong> — <span class="muted">How StoX combines Strategy scores, eligibility UNION, thresholds, exits, market gates, portfolio rules, param defaults, missing data, and Import normalisation - for AI and humans.</span></a>
 <a href="trading-cookbook.html"><strong>Trading Cookbook</strong> — <span class="muted">Complete investing recipes: philosophy + Screener JSON + Strategy JSON for Minervini, breakout, pullback, mean reversion, and more.</span></a>

@@ -222,7 +222,7 @@ RecommendationGenerationPipeline
 </tr>
 <tr>
 <td><code>portfolio_rules</code></td>
-<td>Position % caps, cash reserve/deploy, max new positions; can demote unfunded buys to WATCH</td>
+<td>Position % caps, max new positions; does <strong>not</strong> demote unfunded buys to WATCH</td>
 </tr>
 <tr>
 <td><code>capital_allocation</code></td>
@@ -287,7 +287,7 @@ RecommendationGenerationPipeline
 <ul>
 <li>Target size uses something like <code>min(max_position_size_pct, band_or_default_pct)</code> - <strong>max always caps</strong> default/band.</li>
 <li><code>min_cash_reserve_pct</code> / <code>max_cash_deployment_pct</code> reduce available cash before allocation.</li>
-<li>If cash cannot fund an OPEN/INCREASE, the draft is typically demoted to <strong>WATCH</strong> (<code>ALLOCATION_UNFUNDED</code>) - i.e. rules can <strong>suppress BUY actions</strong>, not only leave a zero-qty BUY.</li>
+<li>If cash cannot fund an OPEN/INCREASE, the draft stays OPEN/INCREASE with capital status <strong>unfunded</strong> or <strong>partially_funded</strong>. The original target amount is preserved. Do <strong>not</strong> demote to WATCH for capital reasons.</li>
 <li><code>max_new_positions_per_cycle</code> limits how many new opens survive ranking/allocation.</li>
 </ul>
 <hr>
