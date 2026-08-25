@@ -275,19 +275,25 @@ const APP_DOCUMENTATION_BASE = [
         match: (p) => pathIs(p, '/transactions') || pathIs(p, '/transactions/closed'),
         summary: 'Buy/sell ledger — source of truth for holdings, fees, and realized P/L.',
         overview:
-            'Transactions are the ledger of record. Buys and sells drive holdings, average cost, fees, and FIFO realized P/L. Use Active vs Squared-off views, CSV import, and sell prefill from Portfolio.',
+            'Transactions are the ledger of record. Buys and sells drive holdings, average cost, fees, and FIFO realized P/L. Use Active vs Squared-off views, CSV import, and sell prefill from Portfolio. Sell rows that came from an EXIT recommendation may show a persisted exit_reason (strategy_exit, stop_loss, trailing_stop, horizon_expiry) — displayed with a human label but not recalculated in the UI.',
         controls: [
             { name: 'Add transaction', description: 'Record a buy or sell with symbol autocomplete, quantity, price, fees, and date.' },
             { name: 'Bulk CSV import', description: 'Paste CSV (Stock, Quantity, Average Price, Transaction Type), review editable rows (exchange, date defaulting to today, fees), then Save all. The batch commits all-or-nothing via a bulk API — on failure nothing is saved and you can fix and retry the same batch; a completed batch cannot be submitted again.' },
             { name: 'Page tabs', description: 'Switch between Transaction History and Pending Execution (or closed / squared-off views where available).' },
             { name: 'Edit / delete', description: 'Correct ledger rows; deleting a row linked to a recommendation can reopen pending execution.' },
+            { name: 'Exit reason column', description: 'On sells linked to recommendations, shows the persisted primary exit attribution from the ledger (not recomputed).' },
         ],
         concepts: [
             { name: 'Ledger-true holdings', description: 'Holdings are derived from transactions — not edited independently as the source of truth.' },
             { name: 'FIFO realization', description: 'Sells match against earlier buys to compute realized P/L and allocated fees.' },
             { name: 'Auto fees', description: 'Fee components (Zerodha-style delivery defaults) can be configured under Settings.' },
+            {
+                name: 'Persisted exit reason',
+                description:
+                    'When a sell fill records an EXIT recommendation, exit_reason is copied from the recommendation’s primary attribution onto portfolio_transactions. Canonical values match §13.2; the UI does not invent or recalculate attribution.',
+            },
         ],
-        related: ['pending-execution', 'holdings', 'corporate-action', 'cash'],
+        related: ['pending-execution', 'holdings', 'corporate-action', 'cash', 'recommendations'],
     },
     {
         id: 'pending-execution',
@@ -370,21 +376,39 @@ const APP_DOCUMENTATION_BASE = [
         title: 'Portfolio (Holdings)',
         routeLabel: '/holdings',
         match: (p) => pathIs(p, '/holdings'),
-        summary: 'Open positions derived from the ledger — qty, cost, P/L, XIRR, and trailing stop.',
+        summary: 'Open positions derived from the ledger — owner/unmanaged, qty, cost, P/L, XIRR, position target/filled, portfolio stop-loss, and portfolio trailing stop. Unmanaged lots can be Adopted into one strategy.',
         overview:
-            'Holdings show current positions for the active portfolio. Use Simple or Complex views, resizable columns, sell prefill, Analyse prompts, and drill into per-stock OHLCV history.',
+            'Holdings show current positions for the active portfolio. Use Simple or Complex views, resizable columns, sell prefill, Analyse prompts, and drill into per-stock OHLCV history. Risk columns use portfolio-level stop-loss and trailing settings (not strategy JSON trailing). Strategy-owned lots may show OD-12 position target, filled, and remaining amounts.',
         controls: [
-            { name: 'Simple / Complex views', description: 'Toggle density of columns and metrics.' },
+            { name: 'Simple / Complex views', description: 'Toggle density of columns and metrics. Complex view shows portfolio trailing % from peak raw close, portfolio stop-loss price under Avg Buy, and Target column details (filled / remaining) when a position target exists.' },
             { name: 'Sell', description: 'Prefills a sell transaction from the selected holding.' },
+            { name: 'Adopt', description: 'On unmanaged holdings (Sell menu → Adopt): choose one destination strategy. Sets ownership and initializes position target from invested cost so remaining BUY is 0. Entry/risk history continues (OD-15). Blocked if that strategy already owns the same stock (merge rules unspecified).' },
             { name: 'Price history', description: 'Opens OHLCV chart and table for that stock.' },
             { name: 'Analyse', description: 'Copies an AI-ready prompt (with recent OHLCV) to the clipboard.' },
+            { name: 'Target column', description: 'Optional column (hidden by default): position target amount (OD-12), with filled and remaining in Complex view. Target is the intended capital allocation; filled is actual invested cost — not recommendation amounts.' },
         ],
         concepts: [
             { name: 'Average buy / invested', description: 'Fee-exclusive cost basis (price × qty) for open lots; fees are shown separately.' },
-            { name: 'Unrealized P/L', description: 'Mark-to-market vs latest cached close; unrealized % = unrealized ÷ invested × 100 when invested > 0.' },
-            { name: 'Trailing stop metric', description: 'Shown on holdings; alert policies can act on it — not a separate automatic Telegram spam path.' },
+            { name: 'Owner / Unmanaged', description: 'Each open lot is unmanaged or owned by a strategy (`owner_key`). Manual buys stay unmanaged until Adopt. Corporate-action quantity follows the parent owner (OD-10).' },
+            { name: 'Unrealized P/L', description: 'Mark-to-market vs latest cached close; unrealized % = unrealized ÷ invested × 100 when invested > 0. Portfolio trailing stop is not based on unrealized %.' },
+            {
+                name: 'Position target / filled (OD-12)',
+                description:
+                    'Strategy-owned positions persist a monetary target_amount (conviction sizing). filled_amount is the actual invested cost of the open lot from ledger fills. remaining_target_amount = max(0, target − filled). Partial fills and capital-resolution shortfalls do not reduce the target. First BUY is ~50% of current target (strategy first_entry_pct); later BUYs use remaining after the 1 calendar-day BUY cooldown (OD-11).',
+            },
+            {
+                name: 'Portfolio Stop-Loss',
+                description:
+                    'Portfolio-level control (Settings → Portfolio Stop-Loss %). Stop price uses the weighted-average actual fill cost of the current ownership episode and is evaluated against raw daily close — not adjusted close or intraday low.',
+            },
+            {
+                name: 'Portfolio Trailing Stop',
+                description:
+                    'Portfolio-level control (Settings → Portfolio Trailing Stop %), independently configured (default/seed 15%). Peak is the maximum raw daily close since the ownership episode began; trailing stop = peak × (1 − trailing %). Not an unrealized-% proxy, not stop-loss %, and not strategy trailing_stop JSON.',
+            },
+            { name: 'Highest Close', description: 'Peak raw close for the current ownership episode (owner-scoped when strategy lots are attributable).' },
         ],
-        related: ['transactions', 'stock-prices', 'watchlist', 'dashboard', 'historical-holdings'],
+        related: ['transactions', 'stock-prices', 'watchlist', 'dashboard', 'historical-holdings', 'settings', 'recommendations', 'strategy'],
     },
     {
         id: 'stock-prices',
@@ -393,16 +417,18 @@ const APP_DOCUMENTATION_BASE = [
         title: 'Stock price history',
         routeLabel: '/holdings/:stockId/prices',
         match: (p) => /^\/holdings\/[^/]+\/prices/.test(p.replace(/\/$/, '') || '/'),
-        summary: 'OHLCV chart and table for a single stock, with optional force sync.',
+        summary: 'OHLCV chart and table for a single stock, with All vs Since Buy ranges and optional force sync.',
         overview:
-            'Inspect daily bars used by charts, indicators, screeners, and pattern detection. Force sync can backfill or refresh from price providers when needed.',
+            'Inspect daily bars used by charts, indicators, screeners, and pattern detection. Range toggle separates All available instrument history from Since Buy (current position episode). Force sync backfills all available provider/listing history.',
         controls: [
             { name: 'Chart / table', description: 'Browse historical OHLCV for the selected stock.' },
+            { name: 'Range: All / Since Buy', description: 'All = all available cached instrument history. Since Buy = current open position episode.' },
             { name: 'Force sync / backfill', description: 'Request a fresh pull of history from configured providers.' },
             { name: 'Possible patterns', description: 'Patterns detected on the visible window, with links to the Patterns guide.' },
         ],
         concepts: [
             { name: 'Provider fallback', description: 'NSE → Yahoo → Alpha Vantage (BSE path uses bhavcopy → Yahoo → AV).' },
+            { name: 'OD-17 all history', description: 'All is not capped by the old ~550-day V1 depth target; it uses all available provider/listing history in cache.' },
             { name: 'Cached bars', description: 'Screeners and pattern scans run on stored daily OHLCV, not live ticks.' },
         ],
         related: ['holdings', 'patterns', 'universe-price-sync'],
@@ -814,21 +840,41 @@ const APP_DOCUMENTATION_BASE = [
         match: (p) => pathStarts(p, '/recommendations'),
         summary: 'Review trade ideas and market insights — Approve, Reject, or Defer.',
         overview:
-            'This is where final recommended stocks appear after Screeners, Discovery/Evaluation facts, and Strategy filters. Recommendations are generated from Strategy scoring, market opinion, portfolio rules, and capital allocation. Trade recommendations (Open / Increase / Reduce / Exit) can be Approved into pending execution. HOLD / WATCH insights are view-only guidance.',
+            'This is where final recommended stocks appear after Screeners, Discovery/Evaluation facts, and Strategy filters. Recommendations are generated from Strategy scoring, market opinion, portfolio rules, capital allocation, and portfolio-level stop-loss / trailing / horizon exit precedence. Trade recommendations (Open / Increase / Reduce / Exit) can be Approved into pending execution. HOLD / WATCH insights are view-only guidance.',
         controls: [
             { name: 'Approve / Reject / Defer', description: 'Lifecycle actions on actionable recommendations.' },
-            { name: 'Review dialog', description: 'Inspect evidence, quantity, and cash impact before deciding.' },
+            { name: 'Review dialog', description: 'Inspect evidence, quantity, cash impact, and (for exits) the primary exit reason before deciding.' },
             { name: 'Trade vs insights sections', description: 'Actionable trades are separated from HOLD / WATCH insights.' },
             { name: 'Generate (when available)', description: 'Runs the recommendation pipeline independently for every enabled strategy in the portfolio. Telegram (when enabled) notifies only actionable Open / Increase / Reduce / Exit ideas — not HOLD / WATCH.' },
         ],
         concepts: [
             { name: 'Evidence snapshot', description: 'Eligibility, scoring, exit, market opinion, ranking source (return-quality or OD-23 fill order), and capital allocation status travel with the idea.' },
+            {
+                name: 'Primary exit reason',
+                description:
+                    'For EXIT ideas, the API exposes primary_exit_reason / exit_attribution with canonical values: strategy_exit, stop_loss, trailing_stop, horizon_expiry. The UI shows a human label but keeps the canonical value. When multiple mechanisms are true, only the highest-precedence reason is persisted and shown.',
+            },
+            {
+                name: 'Exit precedence',
+                description:
+                    'When multiple exit mechanisms are true: (1) Strategy exit, (2) Portfolio Stop-Loss, (3) Portfolio Trailing Stop, (4) Strategy Horizon. Strategy-specific exit rules (including any V1 strategy JSON trailing_stop proxy) are separate from portfolio-level SL/trailing controls and count as strategy_exit when they win.',
+            },
+            {
+                name: 'BUY cooldown (OD-11)',
+                description:
+                    '1 calendar day per (stock, strategy). Starts when an OPEN/INCREASE recommendation is generated — not on broker fill or approval. Day 0 allows that BUY; Day 1 suppresses new OPEN/INCREASE for the same pair; Day 2 elapsed. Does not suppress REDUCE/EXIT/HOLD. Another strategy’s BUY of the same stock has an independent cooldown. Stale-cancel does not clear cooldown and does not replace an unapproved BUY during the window.',
+            },
+            {
+                name: 'Staggered entry / position target (OD-12)',
+                description:
+                    'Conviction sets a persisted monetary position target on the strategy-owned holding. First entry sizes ~50% of current target (strategy first_entry_pct, default 50%). Later INCREASE uses remaining = max(0, target − filled) after cooldown — not another 50% tranche. This-cycle amount is what the sequential allocator funds; capital-resolution actual execution can be lower. Target is not reduced by partial funding. Below the minimum actionable amount (platform ₹5,000 / portfolio override), no OPEN/INCREASE is emitted.',
+            },
             { name: 'Unfunded / partially funded', description: 'OPEN/INCREASE stays OPEN/INCREASE when own capital cannot cover the full target. Capital priority is own → recall → borrow. The UI shows requested vs actual execution amount from capital resolution — e.g. ₹20,000 requested may execute at ₹19,000 if that is what was actually available. Lack of cash does not convert the idea to Watch. A partially funded buy may create a capital request for the remainder (₹5,000 blocks for normal lending) but does not pick a lender. Trade Approve cannot move a partially funded or unfunded buy to pending execution until a lender has committed a loan (status capital_committed). After commitment, Approve the trade separately, then record the broker fill. The borrower owns the stock. Loan repayment later reduces outstanding only. Automated Recall returns capital to the lender when needed.' },
             { name: 'Capital resolution (detail)', description: 'Recommendation detail shows own capital used, recall requested/received, Recall Bridge Loan used, immediately available, and the actual execution amount. That actual amount is what can be invested — not the original target when funding is short.' },
             { name: 'Reopen', description: 'Undo review decisions back to pending_review when supported.' },
             { name: 'Telegram filter', description: 'HOLD / WATCH stay in-app only; they are not sent as Telegram recommendation alerts.' },
         ],
-        related: ['trading-os-flow', 'strategy', 'pending-execution', 'cash', 'review'],
+        related: ['trading-os-flow', 'strategy', 'pending-execution', 'cash', 'review', 'settings', 'holdings'],
     },
     {
         id: 'strategy',
@@ -927,6 +973,7 @@ const APP_DOCUMENTATION_BASE = [
                 name: 'Portfolio Rules tab',
                 description:
                     'Maximum / Minimum Position Size % — share of portfolio value per idea (compared against suggested allocation %).\n'
+                    + 'First entry % (first_entry_pct) — percentage of this strategy’s current position target used for the first BUY. Empty uses the engine default (50%). Valid range when set: 1–100. Later INCREASE uses remaining target after filled, subject to the frozen 1 calendar-day BUY cooldown (OD-11; not configurable here). This is not Portfolio Stop-Loss %, Portfolio Trailing Stop %, or Settings cash reserve.\n'
                     + 'Maximum Cash Deployment % / Minimum Cash Reserve % — V1 generation-time cash limits compared against cash balance. The V3 portfolio cash reserve (required_cash_reserve) is set under Settings → Portfolio cash reserve % and uses invested/market-value, not % of cash.\n'
                     + 'Recommended minimum holdings — advisory count for generation (the engine does not open weak names just to hit it). Also the divisor for this strategy’s retained capital (allocated capital ÷ this count, nearest rupee). Leave blank if unset; retained capital is then not computed.\n'
                     + 'Maximum New Positions — cap on fresh Opens per generation cycle.\n'
@@ -942,6 +989,11 @@ const APP_DOCUMENTATION_BASE = [
                     + 'Score bands still map overall-score ranges to the candidate’s target allocation % of portfolio — that target is separate from the funding pool.',
             },
             {
+                name: 'Exit Strategy — horizon (calendar days)',
+                description:
+                    'Optional strategy-specific exit horizon (horizon_calendar_days) on the Strategy page Exit Strategy tab. Leave empty for no horizon expiry — the horizon mechanism never fires. When set, use a positive whole number of calendar days. This is not Portfolio Stop-Loss % or Portfolio Trailing Stop % (those remain Settings). Precedence still ends with horizon_expiry after strategy_exit, stop_loss, and trailing_stop.',
+            },
+            {
                 name: 'Exit Strategy — each rule',
                 description:
                     'Applies to open holdings. If any enabled rule triggers (mode = any), action is forced to Exit.\n'
@@ -951,7 +1003,7 @@ const APP_DOCUMENTATION_BASE = [
                     + 'Overall Score Exit (Value = overall score max, e.g. 20) — hits when overall score ≤ Value.\n'
                     + 'Maximum Loss (Value = %, e.g. 8) — hits when unrealized P/L % ≤ −Value (vs your cost basis).\n'
                     + 'ATR Stop (Value = multiple, e.g. 2) — hits when unrealized % ≤ −(multiple × ATR%).\n'
-                    + 'Trailing Stop (Value = %, e.g. 10) — V1 proxy: hits when unrealized % ≤ −Value (drawdown from cost; not yet a true peak-trail engine).\n'
+                    + 'Trailing Stop (Value = %, e.g. 10) — strategy-specific V1 proxy inside Exit Strategy only: hits when unrealized % ≤ −Value (drawdown from cost). This is separate from the portfolio-level Portfolio Trailing Stop % under Settings (peak raw close × trailing %). When both fire, strategy exit wins on precedence.\n'
                     + 'Screener Exit (Value = screener picker) — hits when the holding’s stock_id appears in that screener’s latest completed run (~72h).',
             },
             {
@@ -985,6 +1037,11 @@ const APP_DOCUMENTATION_BASE = [
             },
         ],
         concepts: [
+            {
+                name: 'Strategy vs portfolio risk settings',
+                description:
+                    'horizon_calendar_days and first_entry_pct are strategy configuration (this page). Portfolio Stop-Loss %, Portfolio Trailing Stop %, and cash reserve stay under Settings. The 1-day BUY cooldown is not a Strategy-page control.',
+            },
             {
                 name: 'Multiple enabled strategies',
                 description:
@@ -1602,6 +1659,16 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Fee components', description: 'Drive auto fees on buy/sell ledger rows.' },
             { name: 'Telegram', description: 'Bot token and chat id for portfolio notifications.' },
             { name: 'Portfolio cash reserve %', description: 'Portfolio-level OD-19 percentage. Required reserve rupees = this % × max(currently held invested amount, current holdings market value). Leave blank for 0 (no configured reserve). Not a % of cash. Withdrawals are not blocked if cash falls below the resulting rupee floor; Dashboard warns instead.' },
+            {
+                name: 'Portfolio Stop-Loss %',
+                description:
+                    'Independent portfolio-level stop-loss. Uses weighted-average actual fill cost of the current ownership episode; evaluated on raw daily close. Not derived from trailing % or strategy exit JSON.',
+            },
+            {
+                name: 'Portfolio Trailing Stop %',
+                description:
+                    'Independent portfolio-level trailing stop (default/seed 15%). Peak is maximum raw daily close since the ownership episode began. Not based on unrealized %, not stop-loss %, and not strategy trailing_stop JSON. Strategy-specific exit rules remain separate under Strategy → Exit Strategy.',
+            },
             { name: 'Recall period (calendar days)', description: 'Days after a loan is committed before the lender may recall. Blank uses the platform default (14). Changing the period does not reset existing commitment dates — eligibility uses commitment date + the current effective period. Follow-up cooldown is floor(period/2). Saved separately via Save recall period.' },
             { name: 'Notification history', description: 'Open /notification-history from Portfolio → Alerts & notifications to audit Telegram deliveries.' },
             {
@@ -1621,6 +1688,11 @@ const APP_DOCUMENTATION_BASE = [
             },
             { name: 'Admin vs portfolio scope', description: 'Some tools (users, sync logs, universe sync) are admin-only.' },
             { name: 'Portfolio cash reserve', description: 'A non-investable, non-lendable rupee floor. It is not a separate bank account and not strategy cash.' },
+            {
+                name: 'Portfolio risk exits vs strategy exits',
+                description:
+                    'Portfolio Stop-Loss and Portfolio Trailing Stop are common/settings controls. Strategy Exit Strategy rules (including any strategy JSON trailing_stop unrealized-% proxy) are strategy-specific and separate. Exit precedence when both fire: Strategy exit → Portfolio Stop-Loss → Portfolio Trailing Stop → Strategy Horizon.',
+            },
             { name: 'Recall period', description: 'Rule-driven eligibility for automated recalls. There is no auto-return toggle that controls repayment or recall.' },
             { name: 'Not in sidebar', description: 'Settings sub-pages and registries stay off the primary sidebar; reach them from Settings or parent product pages.' },
         ],

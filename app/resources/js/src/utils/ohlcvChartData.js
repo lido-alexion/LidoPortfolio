@@ -34,6 +34,9 @@ export function subtractCalendarRange(isoDate, timeRange) {
     case '1y':
         date.setFullYear(date.getFullYear() - 1);
         break;
+    case '5y':
+        date.setFullYear(date.getFullYear() - 5);
+        break;
     default:
         return null;
     }

@@ -7,14 +7,17 @@
 This folder holds Trading Operating System **requirements, architecture, governance, and audit** documents.  
 Read **top → bottom**. Requirements/architecture come **before** implementation status.
 
-**V3:** [LidoPortfolio-V3-Specification.md](LidoPortfolio-V3-Specification.md) is the source of truth for the next product evolution (**v0.28**). Recall / capital-resolution build plan: [V3-WS4-Recall-Bridge-Implementation-Delta.md](V3-WS4-Recall-Bridge-Implementation-Delta.md). V1 architecture under this tree remains historical intent plus shipped baseline.
+**V3:** [LidoPortfolio-V3-Specification.md](LidoPortfolio-V3-Specification.md) is the source of truth for V3 product behavior (**v0.28**; **COMPLETE WITH DEFERRED ITEMS**). Recall / capital-resolution build plan (historical + shipped): [architecture/V3-WS4-Recall-Bridge-Implementation-Delta.md](architecture/V3-WS4-Recall-Bridge-Implementation-Delta.md).
+
+**V4 deferred tracking:** [LidoPortfolio-V4-Wishlist.md](LidoPortfolio-V4-Wishlist.md) — persistent wishlist / bugs / debt / spec decisions. **Not** an implementation specification. V1 architecture under this tree remains historical intent plus shipped baseline.
 
 ---
 
 ## Reading order (specs only)
 
 ```text
-0. LidoPortfolio-V3-Specification.md   V3 product SoT (when doing V3 work)
+0. LidoPortfolio-V3-Specification.md   V3 product SoT (frozen COMPLETE WITH DEFERRED)
+0a. LidoPortfolio-V4-Wishlist.md       Post-V3 deferred / wishlist register
 1. architecture/platform/       Intent — vision through engine overview + system domain model
 2. architecture/ui/             Pages/flow + sidebar (as needed)
 3. architecture/indicators/     Indicator & artifact architecture
@@ -35,7 +38,8 @@ Read **top → bottom**. Requirements/architecture come **before** implementatio
 specs/
 │
 ├── README.md                          ← this file
-├── LidoPortfolio-V3-Specification.md  【 V3 SoT — not yet implemented 】
+├── LidoPortfolio-V3-Specification.md  【 V3 SoT — COMPLETE WITH DEFERRED ITEMS 】
+├── LidoPortfolio-V4-Wishlist.md       【 V4 deferred register — not an impl spec 】
 ├── IMPLEMENTATION_PROGRESS.md         【 STATUS 】
 ├── MVP_DEMO_CHECKLIST.md              【 ACCEPTANCE DEMO 】
 │

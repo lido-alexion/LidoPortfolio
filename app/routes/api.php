@@ -120,6 +120,7 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::post('/corporate-actions', [CorporateActionController::class, 'store']);
 
     Route::get('/holdings', [HoldingController::class, 'index']);
+    Route::post('/holdings/{holding}/adopt', [HoldingController::class, 'adopt']);
     Route::get('/watchlists', [WatchlistsController::class, 'index']);
     Route::post('/watchlists', [WatchlistsController::class, 'store']);
     Route::put('/watchlists/{watchlist}', [WatchlistsController::class, 'update']);

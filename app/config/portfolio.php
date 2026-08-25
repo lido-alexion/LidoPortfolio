@@ -91,16 +91,15 @@ return [
     ],
 
     /*
-    | History depth backfill: one re-armable campaign that deepens stored OHLCV
-    | beyond the rolling universe window (default ~18 months) so long-lookback
-    | indicators (SMA200, 52-week high, etc.) have bars at the START of a 1-year
-    | backtest instead of skipping stocks. Runs all day via the scheduler until
-    | a full universe pass completes, then goes idle. Raising the target
-    | re-arms the campaign automatically.
+    | History depth backfill (OD-17): one re-armable campaign that deepens stored
+    | OHLCV to all available provider/listing history (no V3 numeric day ceiling).
+    | Completion is recorded as mode `all_available`. Re-arm with
+    | `portfolio:backfill-history-depth --reset`. Enabled/batch/delay remain
+    | operational knobs; a numeric HISTORY_DEPTH_TARGET_DAYS is not used for
+    | campaign completion.
     */
     'history_depth_backfill' => [
         'enabled' => filter_var(env('HISTORY_DEPTH_BACKFILL_ENABLED', true), FILTER_VALIDATE_BOOL),
-        'target_history_days' => max(365, (int) env('HISTORY_DEPTH_TARGET_DAYS', 550)),
         'batch_size' => max(1, min(200, (int) env('HISTORY_DEPTH_BATCH_SIZE', 25))),
         'delay_ms_between_stocks' => max(0, (int) env('HISTORY_DEPTH_DELAY_MS', 400)),
     ],

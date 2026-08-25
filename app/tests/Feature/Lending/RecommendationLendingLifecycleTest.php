@@ -137,7 +137,7 @@ class RecommendationLendingLifecycleTest extends TestCase
         $this->assertEqualsWithDelta(10000.0, $rec->ownAllocatedAmount(), 0.0001);
     }
 
-    public function test_unfunded_stays_open_and_cannot_enter_pending_execution(): void
+    public function test_unfunded_with_eligible_lender_awaits_selection_and_cannot_enter_pending_execution(): void
     {
         [$user, $profile, $borrower] = $this->twoStrategyPortfolio(1_000_000);
         $rec = $this->makeBuyRecommendation($profile, $borrower, [
@@ -151,8 +151,11 @@ class RecommendationLendingLifecycleTest extends TestCase
         $rec->refresh();
 
         $this->assertSame(TradingRecommendation::ACTION_OPEN_POSITION, $rec->recommendation_type);
-        $this->assertSame(TradingRecommendation::ALLOCATION_UNFUNDED, $rec->capitalAllocationStatus());
-        $this->assertSame(0, CapitalRequest::query()->where('recommendation_id', $rec->id)->count());
+        $this->assertSame(
+            TradingRecommendation::ALLOCATION_AWAITING_LENDER_SELECTION,
+            $rec->capitalAllocationStatus()
+        );
+        $this->assertSame(1, CapitalRequest::query()->where('recommendation_id', $rec->id)->count());
         $this->assertFalse(app(RecommendationLendingCoordinator::class)->canEnterPendingExecution($rec));
 
         $this->expectException(ValidationException::class);

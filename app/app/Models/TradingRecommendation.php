@@ -645,6 +645,26 @@ class TradingRecommendation extends Model
         return null;
     }
 
+    /**
+     * V3 §13.2 / §28.6 primary exit attribution (strategy_exit|stop_loss|trailing_stop|horizon_expiry).
+     */
+    public function primaryExitReason(): ?string
+    {
+        $plan = is_array($this->execution_plan) ? $this->execution_plan : [];
+        if (! empty($plan['primary_exit_reason']) && is_string($plan['primary_exit_reason'])) {
+            return $plan['primary_exit_reason'];
+        }
+        if (isset($plan['exit_attribution']['primary_reason']) && is_string($plan['exit_attribution']['primary_reason'])) {
+            return $plan['exit_attribution']['primary_reason'];
+        }
+        $evidence = is_array($this->evidence) ? $this->evidence : [];
+        if (isset($evidence['exit_attribution']['primary_reason']) && is_string($evidence['exit_attribution']['primary_reason'])) {
+            return $evidence['exit_attribution']['primary_reason'];
+        }
+
+        return null;
+    }
+
     public function ownAllocatedAmount(): ?float
     {
         $meta = $this->capitalAllocationMeta();

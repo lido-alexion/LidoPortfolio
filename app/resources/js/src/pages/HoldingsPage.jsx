@@ -33,6 +33,7 @@ const HOLDINGS_COLUMN_ORDER = [
     'latest_close',
     'unrealized_profit',
     'invested_amount',
+    'target_amount',
     'fees',
     'xirr',
     'highest_close',
@@ -47,6 +48,7 @@ const HOLDINGS_DEFAULT_COLUMN_VISIBILITY = {
     stock_name: false,
     fees: false,
     realized_profit: false,
+    target_amount: false,
 };
 
 function loadHoldingsViewMode() {
@@ -96,7 +98,7 @@ function InvestedTransactionsIcon() {
     );
 }
 
-function buildHoldingsColumns(complex, handleSell, handleCorporateAction) {
+function buildHoldingsColumns(complex, handleSell, handleCorporateAction, handleAdopt) {
     return [
         {
             id: 'stock',
@@ -125,6 +127,11 @@ function buildHoldingsColumns(complex, handleSell, handleCorporateAction) {
                                 name={stockName}
                             />
                         </span>
+                        {row.original.is_unmanaged ? (
+                            <div className="text-muted small">Unmanaged</div>
+                        ) : row.original.owner_key ? (
+                            <div className="text-muted small">{row.original.owner_key}</div>
+                        ) : null}
                         {complex && since && (
                             <div className="text-muted small">Since {since}</div>
                         )}
@@ -152,7 +159,37 @@ function buildHoldingsColumns(complex, handleSell, handleCorporateAction) {
         {
             accessorKey: 'avg_buy_price',
             header: 'Avg Buy',
-            cell: ({ getValue }) => formatTableMoney2(getValue()),
+            cell: ({ row, getValue }) => {
+                const avg = formatTableMoney2(getValue());
+                const s = row.original.summary || {};
+                const fillCost = s.weighted_average_fill_cost != null
+                    ? formatTableMoney2(s.weighted_average_fill_cost)
+                    : null;
+                const stopPrice = formatTableMoney2(s.stop_loss_price);
+                return (
+                    <>
+                        {avg === '—' ? <span className="text-muted">—</span> : avg}
+                        {complex && fillCost && fillCost !== '—' && fillCost !== avg && (
+                            <div className="text-muted small">
+                                Fill WAVG
+                                {' '}
+                                {fillCost}
+                            </div>
+                        )}
+                        {complex && stopPrice !== '—' && s.stoploss_percent != null && (
+                            <div className="text-muted small">
+                                Stop-loss
+                                {' '}
+                                {stopPrice}
+                                {' '}
+                                (
+                                {s.stoploss_percent}
+                                %)
+                            </div>
+                        )}
+                    </>
+                );
+            },
         },
         {
             id: 'latest_close',
@@ -254,6 +291,39 @@ function buildHoldingsColumns(complex, handleSell, handleCorporateAction) {
             },
         },
         {
+            id: 'target_amount',
+            header: 'Target',
+            meta: { columnMenuLabel: 'Position target / filled (OD-12)' },
+            accessorFn: (row) => row.target_amount,
+            cell: ({ row }) => {
+                const target = formatTableMoney2(row.original.target_amount);
+                const filled = formatTableMoney2(row.original.filled_amount);
+                const remaining = formatTableMoney2(row.original.remaining_target_amount);
+                if (target === '—') {
+                    return <span className="text-muted">—</span>;
+                }
+                return (
+                    <>
+                        {target}
+                        {complex && (
+                            <>
+                                <div className="text-muted small">
+                                    Filled
+                                    {' '}
+                                    {filled}
+                                </div>
+                                <div className="text-muted small">
+                                    Remaining
+                                    {' '}
+                                    {remaining}
+                                </div>
+                            </>
+                        )}
+                    </>
+                );
+            },
+        },
+        {
             id: 'fees',
             header: 'Fees',
             accessorFn: (row) => row.total_fees,
@@ -324,11 +394,15 @@ function buildHoldingsColumns(complex, handleSell, handleCorporateAction) {
             cell: ({ row }) => {
                 const s = row.original.summary;
                 const price = formatTableMoney2(s.trailing_stop_price);
+                const trailPct = s.portfolio_trailing_percent ?? null;
                 return (
                     <>
                         {price === '—' ? <span className="text-muted">—</span> : price}
-                        {complex && s.stoploss_percent != null && (
-                            <div className="text-muted small">{s.stoploss_percent}% stop</div>
+                        {complex && trailPct != null && (
+                            <div className="text-muted small">
+                                {trailPct}
+                                % from peak close
+                            </div>
                         )}
                     </>
                 );
@@ -357,6 +431,10 @@ function buildHoldingsColumns(complex, handleSell, handleCorporateAction) {
                                 label: 'Split/Bonus',
                                 onClick: () => handleCorporateAction(row.original),
                             },
+                            ...(row.original.is_unmanaged && handleAdopt ? [{
+                                label: 'Adopt',
+                                onClick: () => handleAdopt(row.original),
+                            }] : []),
                         ]}
                     />
                 );
@@ -370,6 +448,11 @@ export default function HoldingsPage() {
     const [holdings, setHoldings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [viewMode, setViewMode] = useState(loadHoldingsViewMode);
+    const [adoptHolding, setAdoptHolding] = useState(null);
+    const [adoptStrategies, setAdoptStrategies] = useState([]);
+    const [adoptStrategyId, setAdoptStrategyId] = useState('');
+    const [adoptBusy, setAdoptBusy] = useState(false);
+    const [adoptError, setAdoptError] = useState('');
 
     const handleCorporateAction = useCallback((holding) => {
         const stockRow = holding.stock || {};
@@ -384,6 +467,28 @@ export default function HoldingsPage() {
             },
         });
     }, [navigate]);
+
+    const handleAdopt = useCallback(async (holding) => {
+        setAdoptHolding(holding);
+        setAdoptError('');
+        setAdoptStrategyId('');
+        try {
+            const res = await api.get('/v1/strategy-registry');
+            const rows = res.data?.data || [];
+            const enabled = rows.filter((row) => {
+                const meta = row.metadata || {};
+                return meta.is_enabled || row.status === 'active' || meta.status === 'active';
+            });
+            setAdoptStrategies(enabled);
+            const firstId = enabled[0]?.metadata?.legacy_id || enabled[0]?.legacy_id || enabled[0]?.id;
+            if (firstId) {
+                setAdoptStrategyId(String(firstId));
+            }
+        } catch {
+            setAdoptStrategies([]);
+            setAdoptError('Could not load strategies.');
+        }
+    }, []);
 
     const handleSell = useCallback((holding) => {
         const prefill = buildSellPrefillFromHolding(holding);
@@ -408,6 +513,29 @@ export default function HoldingsPage() {
         }
     }, []);
 
+    const handleAdoptConfirm = useCallback(async () => {
+        if (!adoptHolding || !adoptStrategyId) {
+            return;
+        }
+        setAdoptBusy(true);
+        setAdoptError('');
+        try {
+            await api.post(`/holdings/${adoptHolding.id}/adopt`, {
+                strategy_id: Number(adoptStrategyId),
+            });
+            setAdoptHolding(null);
+            await load();
+        } catch (e) {
+            const msg = e?.response?.data?.errors?.strategy_id?.[0]
+                || e?.response?.data?.errors?.holding_id?.[0]
+                || e?.response?.data?.message
+                || 'Adoption failed.';
+            setAdoptError(msg);
+        } finally {
+            setAdoptBusy(false);
+        }
+    }, [adoptHolding, adoptStrategyId, load]);
+
     useEffect(() => { load(); }, [load]);
     usePortfolioChanged(load);
 
@@ -417,12 +545,12 @@ export default function HoldingsPage() {
     })), [holdings]);
 
     const complexColumns = useMemo(
-        () => buildHoldingsColumns(true, handleSell, handleCorporateAction),
-        [handleSell, handleCorporateAction],
+        () => buildHoldingsColumns(true, handleSell, handleCorporateAction, handleAdopt),
+        [handleSell, handleCorporateAction, handleAdopt],
     );
     const simpleColumns = useMemo(
-        () => buildHoldingsColumns(false, handleSell, handleCorporateAction),
-        [handleSell, handleCorporateAction],
+        () => buildHoldingsColumns(false, handleSell, handleCorporateAction, handleAdopt),
+        [handleSell, handleCorporateAction, handleAdopt],
     );
 
     const sharedTableProps = useMemo(() => ({
@@ -494,6 +622,77 @@ export default function HoldingsPage() {
                 </div>
             </div>
         </div>
+            {adoptHolding ? (
+                <div className="modal d-block" tabIndex={-1} role="dialog" style={{ background: 'rgba(0,0,0,0.4)' }}>
+                    <div className="modal-dialog">
+                        <div className="modal-content">
+                            <div className="modal-header">
+                                <h5 className="modal-title">
+                                    Adopt
+                                    {' '}
+                                    {adoptHolding.stock?.symbol || 'holding'}
+                                </h5>
+                                <button
+                                    type="button"
+                                    className="btn-close"
+                                    aria-label="Close"
+                                    onClick={() => setAdoptHolding(null)}
+                                    disabled={adoptBusy}
+                                />
+                            </div>
+                            <div className="modal-body">
+                                <p className="small text-muted">
+                                    Move this unmanaged position into one strategy. Entry history and risk windows stay
+                                    continuous. Adoption into a strategy that already owns this stock is blocked until
+                                    merge rules are specified.
+                                </p>
+                                <label className="form-label" htmlFor="adopt-strategy">
+                                    Destination strategy
+                                </label>
+                                <select
+                                    id="adopt-strategy"
+                                    className="form-select"
+                                    value={adoptStrategyId}
+                                    onChange={(e) => setAdoptStrategyId(e.target.value)}
+                                    disabled={adoptBusy || adoptStrategies.length === 0}
+                                >
+                                    {adoptStrategies.length === 0 ? (
+                                        <option value="">No enabled strategies</option>
+                                    ) : adoptStrategies.map((row) => {
+                                        const id = row.metadata?.legacy_id ?? row.legacy_id ?? row.id;
+                                        return (
+                                            <option key={String(id)} value={String(id)}>
+                                                {row.name || `Strategy #${id}`}
+                                            </option>
+                                        );
+                                    })}
+                                </select>
+                                {adoptError ? (
+                                    <div className="alert alert-danger mt-3 mb-0 py-2 small">{adoptError}</div>
+                                ) : null}
+                            </div>
+                            <div className="modal-footer">
+                                <button
+                                    type="button"
+                                    className="btn btn-outline-secondary"
+                                    onClick={() => setAdoptHolding(null)}
+                                    disabled={adoptBusy}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn btn-primary"
+                                    onClick={handleAdoptConfirm}
+                                    disabled={adoptBusy || !adoptStrategyId}
+                                >
+                                    {adoptBusy ? 'Adopting…' : 'Adopt'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
         </div>
     );
 }

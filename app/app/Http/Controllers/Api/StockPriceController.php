@@ -18,7 +18,12 @@ class StockPriceController extends Controller
 
     public function index(Request $request, Stock $stock): JsonResponse
     {
-        return response()->json($this->presentation->priceHistoryForHolding(\activePortfolio(), $stock));
+        $range = strtolower((string) $request->query('range', 'all'));
+        if (! in_array($range, ['all', 'since_buy'], true)) {
+            $range = 'all';
+        }
+
+        return response()->json($this->presentation->priceHistoryForHolding(\activePortfolio(), $stock, $range));
     }
 
     public function market(Stock $stock): JsonResponse

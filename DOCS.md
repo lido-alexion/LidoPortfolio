@@ -16,7 +16,8 @@
 | **Full product understanding** | [README.md](README.md) → this file §1 → §2 → §3 | §4–§6 as needed |
 | **Run / develop the app today** | [README.md](README.md) → [implementation.md](implementation.md) | Deploy docs if shipping |
 | **Trading OS intent vs what shipped** | [specs/README.md](specs/README.md) | Governance → Audit |
-| **V3 product specification** | [specs/LidoPortfolio-V3-Specification.md](specs/LidoPortfolio-V3-Specification.md) | **v0.28**; OD-01–OD-24 + DEP-* frozen in §33; recall/bridge delta [architecture/V3-WS4-Recall-Bridge-Implementation-Delta.md](specs/architecture/V3-WS4-Recall-Bridge-Implementation-Delta.md) |
+| **V3 product specification** | [specs/LidoPortfolio-V3-Specification.md](specs/LidoPortfolio-V3-Specification.md) | **v0.28**; **V3 COMPLETE WITH DEFERRED ITEMS** (2026-08-24); OD-01–OD-24 + DEP-* frozen in §33; recall/bridge delta [architecture/V3-WS4-Recall-Bridge-Implementation-Delta.md](specs/architecture/V3-WS4-Recall-Bridge-Implementation-Delta.md) |
+| **V4 deferred work** | [specs/LidoPortfolio-V4-Wishlist.md](specs/LidoPortfolio-V4-Wishlist.md) | **Wishlist / deferred register** after V3 freeze — features, bugs, tech debt, spec decisions (not an implementation spec) |
 | **Authority / conflicts** | [specs/architecture/governance/DOCUMENT_PRECEDENCE.md](specs/architecture/governance/DOCUMENT_PRECEDENCE.md) | — |
 
 **Agents:** User sessions start at **README.md**. Use this file only after that pointer. For day-to-day coding, still use [implementation.md](implementation.md) as the living technical reference.
@@ -330,12 +331,13 @@ Hub: [specs/architecture/governance/README.md](specs/architecture/governance/REA
 
 ### 3.N Lido Portfolio V3 (specification)
 
-*Authoritative V3 product + architecture specification. Implementation not started. Supersedes V1 one-active-strategy (SD-029) and unfunded→WATCH for V3 work. Open decisions are listed in the document §33.*
+*Authoritative V3 product + architecture specification (**v0.28**). Implementation status (2026-08-24 final audit): **V3 COMPLETE WITH DEFERRED ITEMS** — living detail in [`implementation.md`](implementation.md). Deferred/unspecified leftovers are tracked in [`specs/LidoPortfolio-V4-Wishlist.md`](specs/LidoPortfolio-V4-Wishlist.md) (not open V3 coding gaps). Supersedes V1 one-active-strategy (SD-029) and unfunded→WATCH for V3 work. Frozen OD/DEP decisions are in the document §33.*
 
 | Order | Document | Why |
 |------:|----------|-----|
 | 3.77 | [specs/LidoPortfolio-V3-Specification.md](specs/LidoPortfolio-V3-Specification.md) | V3 SoT **v0.28**: multi-strategy, ownership, capital lending, recall/bridge, exits, ranking, charts |
-| 3.77a | [specs/architecture/V3-WS4-Recall-Bridge-Implementation-Delta.md](specs/architecture/V3-WS4-Recall-Bridge-Implementation-Delta.md) | WS4 recall / capital-resolution / Recall Bridge Loan implementation delta (no code yet) |
+| 3.77a | [specs/architecture/V3-WS4-Recall-Bridge-Implementation-Delta.md](specs/architecture/V3-WS4-Recall-Bridge-Implementation-Delta.md) | WS4 recall / capital-resolution / Recall Bridge Loan implementation delta (Phase 1–3B-2 + gap-closure **implemented**) |
+| 3.78 | [specs/LidoPortfolio-V4-Wishlist.md](specs/LidoPortfolio-V4-Wishlist.md) | **V4 Wishlist / Deferred Work Register** — post-V3 carry-forward (features, bugs, debt, spec decisions) |
 
 ---
 

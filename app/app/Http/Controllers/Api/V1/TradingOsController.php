@@ -734,6 +734,28 @@ class TradingOsController extends Controller
             'can_create_order' => method_exists($r, 'canCreateOrder') ? $r->canCreateOrder() : false,
             'capital_allocation_status' => method_exists($r, 'capitalAllocationStatus') ? $r->capitalAllocationStatus() : null,
             'capital_target_amount' => method_exists($r, 'capitalTargetAmount') ? $r->capitalTargetAmount() : null,
+            // OD-12 position target (full conviction) vs this-cycle staggered requirement.
+            'position_target_amount' => is_numeric($r->execution_plan['position_target_amount'] ?? null)
+                ? (float) $r->execution_plan['position_target_amount']
+                : (is_numeric($r->evidence['capital_allocation']['position_target_amount'] ?? null)
+                    ? (float) $r->evidence['capital_allocation']['position_target_amount']
+                    : null),
+            'this_cycle_amount' => is_numeric($r->execution_plan['this_cycle_amount'] ?? null)
+                ? (float) $r->execution_plan['this_cycle_amount']
+                : null,
+            'position_filled_amount' => is_numeric($r->execution_plan['filled_amount'] ?? null)
+                ? (float) $r->execution_plan['filled_amount']
+                : null,
+            'remaining_target_amount' => is_numeric($r->execution_plan['remaining_amount'] ?? null)
+                ? (float) $r->execution_plan['remaining_amount']
+                : null,
+            'is_first_entry' => array_key_exists('is_first_entry', is_array($r->execution_plan) ? $r->execution_plan : [])
+                ? (bool) $r->execution_plan['is_first_entry']
+                : null,
+            'primary_exit_reason' => method_exists($r, 'primaryExitReason') ? $r->primaryExitReason() : null,
+            'exit_attribution' => is_array($r->evidence['exit_attribution'] ?? null)
+                ? $r->evidence['exit_attribution']
+                : (is_array($r->execution_plan['exit_attribution'] ?? null) ? $r->execution_plan['exit_attribution'] : null),
         ];
 
         if ($detailed) {
@@ -764,6 +786,7 @@ class TradingOsController extends Controller
                     'fees' => (float) $tx->fees,
                     'type' => $tx->type,
                     'source' => $tx->source,
+                    'exit_reason' => $tx->exit_reason ?? null,
                 ];
             } else {
                 $payload['execution'] = null;

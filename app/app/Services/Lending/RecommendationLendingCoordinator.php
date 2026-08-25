@@ -19,6 +19,7 @@ final class RecommendationLendingCoordinator
     public function __construct(
         protected CapitalRequestService $requests,
         protected PartialLendingAmountCalculator $partialAmount,
+        protected UnfundedLendingAmountCalculator $unfundedAmount,
         protected CommittedLendingExecutionAmounts $executionAmounts,
         protected CapitalResolutionService $capitalResolution,
         protected CapitalResolutionStatusService $resolutionStatus,
@@ -34,6 +35,17 @@ final class RecommendationLendingCoordinator
         $recommendation = $recommendation->fresh() ?? $recommendation;
 
         $status = $recommendation->capitalAllocationStatus();
+        $own = round((float) ($recommendation->ownAllocatedAmount() ?? 0), 4);
+
+        if ($own <= 0.0001 && (
+            $status === TradingRecommendation::ALLOCATION_UNFUNDED
+            || $status === TradingRecommendation::ALLOCATION_AWAITING_LENDER_SELECTION
+        )) {
+            $this->ensureUnfundedCapitalRequest($recommendation);
+
+            return;
+        }
+
         if ($status === TradingRecommendation::ALLOCATION_UNFUNDED) {
             return;
         }
@@ -118,6 +130,73 @@ final class RecommendationLendingCoordinator
             'evidence' => $evidence,
             'suggested_allocation_amount' => $actual,
         ])->save();
+    }
+
+    /**
+     * Zero-own UNFUNDED OPEN/INCREASE: offer lending only when eligible lenders exist.
+     * Loan size is DEP-PARTIAL-ATOMIC on the this-cycle gap. Does not change actual_execution_amount.
+     */
+    public function ensureUnfundedCapitalRequest(TradingRecommendation $recommendation): ?CapitalRequest
+    {
+        $existing = $this->activeRequestFor($recommendation);
+        if ($existing !== null) {
+            $meta = $recommendation->capitalAllocationMeta() ?? [];
+            $this->patchCapitalAllocation($recommendation, [
+                'status' => $existing->status === CapitalRequest::STATUS_COMMITTED
+                    ? TradingRecommendation::ALLOCATION_CAPITAL_COMMITTED
+                    : TradingRecommendation::ALLOCATION_AWAITING_LENDER_SELECTION,
+                'capital_request_id' => $existing->id,
+                'own_funding_status' => TradingRecommendation::ALLOCATION_UNFUNDED,
+                'close_at_actual' => (bool) ($meta['close_at_actual'] ?? false),
+                'actual_execution_amount' => $meta['actual_execution_amount']
+                    ?? $recommendation->ownAllocatedAmount()
+                    ?? 0,
+                'hold_for_remainder' => false,
+            ]);
+
+            return $existing;
+        }
+
+        $target = $recommendation->capitalTargetAmount();
+        $own = round((float) ($recommendation->ownAllocatedAmount() ?? 0), 4);
+        if ($target === null || $target <= 0.0001 || $own > 0.0001) {
+            return null;
+        }
+
+        $gap = round(max(0.0, $target - $own), 4);
+        $loanAmount = $this->unfundedAmount->calculateForUnfundedGap($gap);
+        if ($loanAmount <= 0 || ! CommittedLoanAmount::isValid($loanAmount)) {
+            return null;
+        }
+
+        $borrowerId = $recommendation->owningStrategyId();
+        if ($borrowerId === null) {
+            return null;
+        }
+        $borrower = TradingStrategy::query()->find($borrowerId);
+        $profile = $recommendation->profile()->first();
+        if ($borrower === null || $profile === null) {
+            return null;
+        }
+
+        if ($this->requests->eligibleLendersFor($profile, (int) $borrower->id, $loanAmount) === []) {
+            return null;
+        }
+
+        $request = $this->requests->createRequest($profile, $recommendation, $borrower, $loanAmount);
+        $meta = $recommendation->capitalAllocationMeta() ?? [];
+        $this->patchCapitalAllocation($recommendation, [
+            'status' => TradingRecommendation::ALLOCATION_AWAITING_LENDER_SELECTION,
+            'own_funding_status' => TradingRecommendation::ALLOCATION_UNFUNDED,
+            'capital_request_id' => $request->id,
+            'lending_loan_amount' => $loanAmount,
+            'unfunded_remainder' => $gap,
+            'close_at_actual' => (bool) ($meta['close_at_actual'] ?? false),
+            'actual_execution_amount' => $meta['actual_execution_amount'] ?? $own,
+            'hold_for_remainder' => false,
+        ]);
+
+        return $request;
     }
 
     public function ensurePartialCapitalRequest(TradingRecommendation $recommendation): ?CapitalRequest

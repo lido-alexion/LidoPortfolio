@@ -7,6 +7,7 @@ import AIStrategyPromptBuilder from '../components/strategy/AIStrategyPromptBuil
 import useApiGet from '../hooks/useApiGet';
 import { runApiMutation } from '../hooks/useApiMutation';
 import { showToast } from '../toast';
+import { validateFirstEntryPct, validateHorizonCalendarDays } from '../utils/strategyPageRules';
 
 const SECTIONS = [
     { id: 'general', label: 'General' },
@@ -239,6 +240,19 @@ export default function StrategyPage() {
             return;
         }
 
+        const horizonCheck = validateHorizonCalendarDays(config.portfolio_rules?.horizon_calendar_days);
+        if (!horizonCheck.ok) {
+            showToast(horizonCheck.message, 'danger');
+            setSection('exit');
+            return;
+        }
+        const firstEntryCheck = validateFirstEntryPct(config.portfolio_rules?.first_entry_pct);
+        if (!firstEntryCheck.ok) {
+            showToast(firstEntryCheck.message, 'danger');
+            setSection('portfolio');
+            return;
+        }
+
         const didNormalize = !weightsValid;
         const indicators = redistributeEnabledWeights(config.indicators || []);
         if (didNormalize) {
@@ -256,6 +270,11 @@ export default function StrategyPage() {
                         ...config,
                         indicators,
                         eligibility_sources: config.eligibility_sources,
+                        portfolio_rules: {
+                            ...config.portfolio_rules,
+                            horizon_calendar_days: horizonCheck.persist,
+                            first_entry_pct: firstEntryCheck.persist,
+                        },
                         exit_strategy: config.exit_strategy,
                         market_gates: config.market_gates,
                     },
@@ -1008,6 +1027,27 @@ export default function StrategyPage() {
                                 Not a physical cash bucket.
                             </div>
                         </div>
+                        <div className="col-md-4">
+                            <label className="form-label" htmlFor="first-entry-pct">
+                                First entry %
+                            </label>
+                            <NumberInput
+                                id="first-entry-pct"
+                                step="1"
+                                min="1"
+                                max="100"
+                                allowDecimals={false}
+                                buttonVariant="secondary"
+                                placeholder="50"
+                                value={config.portfolio_rules?.first_entry_pct ?? ''}
+                                onChange={(e) => updatePortfolioRule('first_entry_pct', e.target.value)}
+                            />
+                            <div className="form-text">
+                                Percentage of this strategy’s position target used for the first BUY.
+                                Empty uses the engine default (50%). Later INCREASE uses remaining target after filled.
+                                This is not Portfolio Stop-Loss %, Portfolio Trailing Stop %, or Settings cash reserve.
+                            </div>
+                        </div>
                         <div className="col-12"><hr /><div className="fw-semibold small">Behaviour</div></div>
                         {[
                             ['allow_increase_position', 'Allow increase position'],
@@ -1106,6 +1146,30 @@ export default function StrategyPage() {
                             Exit rules use Evaluation facts on existing holdings. Enable <strong>Screener Exit</strong> and pick a screener —
                             any open holding that appears in that screener&apos;s latest results gets an Exit recommendation.
                             Eligibility condition trees still live in the Screener module.
+                        </p>
+                    </div>
+                    <div className="card card-body py-3">
+                        <label className="form-label" htmlFor="horizon-calendar-days">
+                            Horizon (calendar days)
+                        </label>
+                        <div className="row g-3">
+                            <div className="col-md-4">
+                                <NumberInput
+                                    id="horizon-calendar-days"
+                                    step="1"
+                                    min="1"
+                                    allowDecimals={false}
+                                    buttonVariant="secondary"
+                                    value={config.portfolio_rules?.horizon_calendar_days ?? ''}
+                                    onChange={(e) => updatePortfolioRule('horizon_calendar_days', e.target.value)}
+                                />
+                            </div>
+                        </div>
+                        <p className="form-text mb-0">
+                            Optional strategy exit horizon in calendar days from the ownership episode start.
+                            Leave empty for no horizon expiry — the horizon mechanism never fires unless a positive
+                            integer is set. This is not Portfolio Stop-Loss % or Portfolio Trailing Stop % (those stay
+                            under Settings).
                         </p>
                     </div>
                     <DataTableCard

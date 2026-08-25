@@ -73,6 +73,8 @@ final class FactoryMomentumStrategy
                 'min_cash_reserve_pct' => 20.0,
                 'max_new_positions_per_cycle' => 5,
                 'max_exposure_per_stock_pct' => 10.0,
+                /** OD-12 / §12.1 — first entry as % of current target amount (default 50). */
+                'first_entry_pct' => 50.0,
             ],
             'capital_allocation' => [
                 'strategy' => 'proportional',

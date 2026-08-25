@@ -5,6 +5,7 @@ import useApiGet from '../hooks/useApiGet';
 import { runApiMutation } from '../hooks/useApiMutation';
 import { showToast } from '../toast';
 import RecommendationCapitalResolution from '../components/RecommendationCapitalResolution';
+import { exitAttributionLabel } from '../utils/exitAttributionLabels';
 
 const ACTIONABLE = new Set(['OPEN_POSITION', 'INCREASE_POSITION', 'REDUCE_POSITION', 'EXIT_POSITION', 'BUY', 'SELL']);
 
@@ -384,6 +385,67 @@ export default function RecommendationsPage() {
                                 </p>
                                 {selected.reasoning ? <p className="small">{selected.reasoning}</p> : null}
 
+                                {(selected.position_target_amount != null
+                                    || plan?.position_target_amount != null
+                                    || selected.is_first_entry != null
+                                    || plan?.is_first_entry != null) ? (
+                                    <div className="mb-3">
+                                        <h6>Position target (OD-12)</h6>
+                                        <p className="small mb-1">
+                                            Target ₹
+                                            {selected.position_target_amount
+                                                ?? plan?.position_target_amount
+                                                ?? '—'}
+                                            {' · This cycle ₹'}
+                                            {selected.this_cycle_amount
+                                                ?? plan?.this_cycle_amount
+                                                ?? '—'}
+                                            {' · Filled ₹'}
+                                            {selected.position_filled_amount
+                                                ?? plan?.filled_amount
+                                                ?? '—'}
+                                            {' · Remaining ₹'}
+                                            {selected.remaining_target_amount
+                                                ?? plan?.remaining_amount
+                                                ?? '—'}
+                                        </p>
+                                        <p className="form-text mb-0">
+                                            {(selected.is_first_entry ?? plan?.is_first_entry)
+                                                ? 'First entry: about 50% of current target (strategy first_entry_pct).'
+                                                : 'Subsequent BUY uses remaining target after the 1-day BUY cooldown.'}
+                                            {' '}
+                                            Target is not reduced by partial funding or capital-resolution shortfalls.
+                                        </p>
+                                    </div>
+                                ) : null}
+
+                                {(selected.primary_exit_reason
+                                    || selected.exit_attribution?.primary_reason
+                                    || plan?.primary_exit_reason) ? (
+                                    <div className="mb-3">
+                                        <h6>Primary exit reason</h6>
+                                        <p className="small mb-0">
+                                            <span className="badge text-bg-light border">
+                                                {exitAttributionLabel(
+                                                    selected.primary_exit_reason
+                                                        || selected.exit_attribution?.primary_reason
+                                                        || plan?.primary_exit_reason,
+                                                )}
+                                            </span>
+                                            <span className="text-muted ms-2">
+                                                {selected.primary_exit_reason
+                                                    || selected.exit_attribution?.primary_reason
+                                                    || plan?.primary_exit_reason}
+                                            </span>
+                                        </p>
+                                        <p className="form-text mb-0 mt-1">
+                                            When multiple exit mechanisms are true, only the highest-precedence
+                                            reason is shown (Strategy exit → Portfolio Stop-Loss → Portfolio
+                                            Trailing Stop → Strategy Horizon).
+                                        </p>
+                                    </div>
+                                ) : null}
+
                                 {plan && (
                                     <>
                                         <h6>Execution plan</h6>
@@ -464,6 +526,17 @@ export default function RecommendationsPage() {
                                             {' @ '}
                                             {selected.execution.price}
                                         </p>
+                                        {selected.execution.exit_reason ? (
+                                            <p className="mb-0 text-muted">
+                                                Exit reason:
+                                                {' '}
+                                                {exitAttributionLabel(selected.execution.exit_reason)}
+                                                {' '}
+                                                (
+                                                {selected.execution.exit_reason}
+                                                )
+                                            </p>
+                                        ) : null}
                                     </div>
                                 )}
 

@@ -37,7 +37,8 @@ See V3 §6.0–§6.16 and §17.1. Frozen DEP IDs:
 | Execution | `CommittedLendingExecutionAmounts`, `ExecutionEngine` fill path |
 | Voluntary repay | `CapitalLoanRepaymentService` (any amount ≤ outstanding; lockForUpdate) |
 | Partial loan sizing | `PartialLendingAmountCalculator` (normal loans only) |
-| Weakest ranking (when built) | OD-16 formula already specified; not coded yet |
+| Weakest ranking | `WeakestPositionRanker` (OD-16; engine reads `weakest_position_window_days` from strategy config) |
+| Zero-own UNFUNDED loan size | `UnfundedLendingAmountCalculator` — DEP-PARTIAL-ATOMIC `ceil(gap/5000)×5000` (residual 2026-08-24) |
 
 Do **not** casually change WS2 accounting formulas or invent a second physical cash pool.
 
@@ -53,11 +54,13 @@ Do **not** casually change WS2 accounting formulas or invent a second physical c
 7. Proceeds settlement delay (Phase 2).
 8. Good-faith **bridge** + **normal CapitalLoan** repayment + `portfolio:process-recall-settlements` job.
 9. APIs / UI / notifications / help; POST `/capital/recalls` runs full settlement/fulfilment workflow.
+10. Zero-own UNFUNDED → `AWAITING_LENDER_SELECTION` when eligible lenders exist (2026-08-24 residual).
 
-### Still open (unrelated / undecided)
+### Still open (deferred / undecided — not V3 blockers)
 
-10. Optional cash-ledger entry type for loan/recall/bridge movements (undecided).
-11. `UnfundedLendingAmountCalculator` (explicitly out of scope for recall gap-closure).
+11. Optional cash-ledger entry type for loan/recall/bridge movements (undecided).
+12. Strategy-page UI for weakest-position evaluation window (engine already configurable; §29 does not mandate the control).
+13. Same-stock unmanaged adoption cost-basis merge (spec gap).
 
 ---
 
@@ -130,7 +133,7 @@ Existing `min_recall_at` on `CapitalLoan` may become derived/cache or unused onc
 | Optional auto-return toggle as governance default-off | Good-faith automated repayment/recall lifecycle; toggle framing removed from primary product rule |
 | No bridge / 75% / pending_held / proceeds delay | First-class in §6.11–§6.14 |
 
-UNFUNDED loan sizing remains an **unrelated** open implementation gap (`UnfundedLendingAmountCalculator` throws) — not resolved by this deliberation.
+UNFUNDED zero-own loan sizing is **resolved** separately (2026-08-24 residual): `UnfundedLendingAmountCalculator` uses DEP-PARTIAL-ATOMIC `ceil(gap/5000)×5000` — not OD-06. That was out of scope for this recall/bridge deliberation.
 
 ---
 

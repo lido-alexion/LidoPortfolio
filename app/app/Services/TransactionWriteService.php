@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Jobs\BackfillHistoricalDataJob;
 use App\Models\PortfolioProfile;
 use App\Models\Stock;
+use App\Models\TradingRecommendation;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -298,6 +299,14 @@ class TransactionWriteService
     {
         $normalized = $this->normalizeInput($profile, $stock, $input);
 
+        $exitReason = $normalized['exit_reason'] ?? null;
+        if ($exitReason === null && ! empty($normalized['recommendation_id'])) {
+            $rec = TradingRecommendation::query()->find((int) $normalized['recommendation_id']);
+            if ($rec !== null && strtoupper((string) $normalized['type']) === 'SELL') {
+                $exitReason = $rec->primaryExitReason();
+            }
+        }
+
         return Transaction::query()->create([
             'profile_id' => $profile->id,
             'stock_id' => $stock->id,
@@ -310,6 +319,7 @@ class TransactionWriteService
             'source' => $normalized['source'],
             'recommendation_id' => $normalized['recommendation_id'],
             'corporate_action_id' => $normalized['corporate_action_id'],
+            'exit_reason' => $exitReason,
         ]);
     }
 
@@ -423,7 +433,15 @@ class TransactionWriteService
         if ($recommendationId !== null && $recommendationId <= 0) {
             $recommendationId = null;
         }
-        if ($recommendationId !== null) {
+        // OD-10: bonus (and other CA) rows may carry recommendation_id for parent-owner
+        // attribution without becoming SOURCE_RECOMMENDATION (price-0 bonus rules apply).
+        if ($recommendationId !== null
+            && ! in_array($source, [
+                Transaction::SOURCE_BONUS,
+                Transaction::SOURCE_SPLIT,
+                Transaction::SOURCE_RIGHTS,
+            ], true)
+        ) {
             $source = Transaction::SOURCE_RECOMMENDATION;
         }
 
@@ -481,6 +499,9 @@ class TransactionWriteService
             'source' => $source,
             'recommendation_id' => $recommendationId,
             'corporate_action_id' => $corporateActionId,
+            'exit_reason' => isset($input['exit_reason']) && is_string($input['exit_reason'])
+                ? $input['exit_reason']
+                : null,
         ];
     }
 

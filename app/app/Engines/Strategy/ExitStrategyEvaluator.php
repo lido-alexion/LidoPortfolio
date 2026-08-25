@@ -90,7 +90,10 @@ final class ExitStrategyEvaluator
                     }
                     break;
                 case 'trailing_stop':
-                    // V1: treat as max_loss from peak proxy using unrealized when negative
+                    // V1 STRATEGY-SPECIFIC exit rule: unrealized-% proxy.
+                    // V3 portfolio trailing (§15 / OD-14 / OD-22) is implemented separately in
+                    // App\Services\Risk\PortfolioTrailingStopCalculator and MUST NOT be
+                    // conflated with this path. Phase 2 wires §13.2 precedence for live EXIT.
                     $trail = (float) ($rule['value'] ?? 10);
                     if ($unrealizedPct !== null) {
                         $hit = $unrealizedPct <= -abs($trail);

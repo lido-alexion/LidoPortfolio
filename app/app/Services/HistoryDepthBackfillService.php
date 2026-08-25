@@ -10,16 +10,17 @@ use Illuminate\Support\Collection;
 use Throwable;
 
 /**
- * Deepens stored OHLCV history beyond the rolling universe window (e.g. 365 →
- * 550 days) so long-lookback indicators have bars at the start of a 1-year
- * backtest. One cursor-based campaign over indices + the full equity universe:
- * per stock it fetches only the missing older prefix (providers return nothing
- * before the listing date, which is fine — the cursor moves on). When a full
- * pass completes the campaign records the achieved target and goes idle; the
- * scheduler gate stops running it. Raising target_history_days re-arms it.
+ * Deepens stored OHLCV to **all available** provider/listing history (OD-17).
+ * One cursor-based campaign over indices + the equity universe: per stock it
+ * fetches the missing older prefix (`includePreListingPrefix`). Providers
+ * return nothing before the listing date — counted `already_deep`, not failed.
+ * A full pass records completed mode `all_available` and goes idle. Re-arm
+ * with `--reset` (numeric HISTORY_DEPTH_TARGET_DAYS is not a V3 ceiling).
  */
 class HistoryDepthBackfillService
 {
+    public const TARGET_ALL_AVAILABLE = 'all_available';
+
     public const KEY_CURSOR_STOCK_ID = 'history_depth_cursor_stock_id';
 
     public const KEY_CURSOR_PRIORITY = 'history_depth_cursor_priority';
@@ -55,14 +56,18 @@ class HistoryDepthBackfillService
         return (bool) config('portfolio.history_depth_backfill.enabled', true);
     }
 
-    public function targetHistoryDays(): int
+    /**
+     * @deprecated OD-17 has no numeric product ceiling. Kept for status BC.
+     */
+    public function targetHistoryDays(): string
     {
-        return max(365, (int) config('portfolio.history_depth_backfill.target_history_days', 550));
+        return self::TARGET_ALL_AVAILABLE;
     }
 
     /**
-     * Campaign is complete when a full pass has finished for a target at least
-     * as deep as the currently configured one.
+     * Campaign is complete after one full all-available pass.
+     * Legacy numeric completions (e.g. 550) are treated as incomplete so the
+     * campaign re-arms once to deepen beyond the V1 cap.
      */
     public function isCompleted(): bool
     {
@@ -70,7 +75,7 @@ class HistoryDepthBackfillService
             return false;
         }
 
-        return (int) Setting::getValue(self::KEY_COMPLETED_TARGET_DAYS, '0') >= $this->targetHistoryDays();
+        return (string) Setting::getValue(self::KEY_COMPLETED_TARGET_DAYS, '') === self::TARGET_ALL_AVAILABLE;
     }
 
     /**
@@ -136,9 +141,10 @@ class HistoryDepthBackfillService
 
         return [
             'enabled' => $this->isEnabled(),
-            'target_history_days' => $this->targetHistoryDays(),
+            'target_history_days' => self::TARGET_ALL_AVAILABLE,
+            'target' => self::TARGET_ALL_AVAILABLE,
             'completed_at' => Setting::getValue(self::KEY_COMPLETED_AT) ?: null,
-            'completed_target_days' => (int) Setting::getValue(self::KEY_COMPLETED_TARGET_DAYS, '0'),
+            'completed_target_days' => (string) Setting::getValue(self::KEY_COMPLETED_TARGET_DAYS, ''),
             'indexes_done_at' => Setting::getValue(self::KEY_INDEXES_DONE_AT) ?: null,
             'cursor_stock_id' => $cursor,
             'universe_total' => $universeTotal,
@@ -191,16 +197,14 @@ class HistoryDepthBackfillService
     {
         $batchSize = max(1, $batchSize ?? (int) config('portfolio.history_depth_backfill.batch_size', 25));
         $delayMs = max(0, (int) config('portfolio.history_depth_backfill.delay_ms_between_stocks', 400));
-        $targetDays = $this->targetHistoryDays();
-
         $requiredTo = TradingCalendar::lastRequiredPriceSession();
-        $requiredFrom = $requiredTo->copy()->subDays($targetDays);
+        $requiredFrom = $this->history->allAvailableHistoryFrom();
 
         $runId = $this->syncLog->beginRun(self::JOB_NAME);
 
         $stats = [
             'batch_size' => $batchSize,
-            'target_history_days' => $targetDays,
+            'target_history_days' => self::TARGET_ALL_AVAILABLE,
             'required_from' => $requiredFrom->toDateString(),
             'required_to' => $requiredTo->toDateString(),
             'processed' => 0,
@@ -250,7 +254,7 @@ class HistoryDepthBackfillService
         if ($stats['cycle_completed']) {
             $this->setCursor(0);
             Setting::setValue(self::KEY_COMPLETED_AT, now()->toIso8601String());
-            Setting::setValue(self::KEY_COMPLETED_TARGET_DAYS, (string) $targetDays);
+            Setting::setValue(self::KEY_COMPLETED_TARGET_DAYS, self::TARGET_ALL_AVAILABLE);
         }
 
         $stats['cursor_stock_id'] = (int) Setting::getValue(self::KEY_CURSOR_STOCK_ID, '0');

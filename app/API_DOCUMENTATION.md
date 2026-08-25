@@ -61,9 +61,9 @@ Universe OHLCV sync (CLI): `php artisan portfolio:sync-universe-prices` — `--m
 
 ## Transactions
 
-- `GET /transactions` (auth)
+- `GET /transactions` (auth) — paginated ledger; sell rows may include persisted `exit_reason` (`strategy_exit` | `stop_loss` | `trailing_stop` | `horizon_expiry`) copied from the recommendation primary attribution on fill
 - `POST /transactions` (auth) — provide `stock_id` **or** `symbol` (optional `name`, `exchange`); unknown symbols create a stock master row automatically on buy
-- `GET /transactions/{transaction}` (auth)
+- `GET /transactions/{transaction}` (auth) — includes `exit_reason` when set
 - `PUT /transactions/{transaction}` (auth)
 - `DELETE /transactions/{transaction}` (auth)
 
@@ -85,9 +85,22 @@ Returns growth %, relative strength vs benchmark, chart series, cache/fetch meta
 ## Holdings + Dashboard + Analytics
 
 - `GET /holdings` (auth) — each item includes `stoploss_summary`:
-    - `first_buy_date`, `highest_close_since_buy`, `highest_close_since_buy_date`, `trailing_stop_price`, `stoploss_percent`
-    - `price_row_count`, `has_price_history`, `latest_price_date`
-- `GET /stocks/{stock}/prices` (auth) — OHLCV rows from current position buy date
+    - `first_buy_date`, `highest_close_since_buy`, `highest_close_since_buy_date`
+    - `trailing_stop_price` — from **portfolio trailing %** × peak raw close (owner-scoped episode)
+    - `stop_loss_price` — from **portfolio stop-loss %** × weighted-average actual fill cost (current ownership episode)
+    - `weighted_average_fill_cost`, `stoploss_percent`, `portfolio_trailing_percent`
+    - `latest_close`, `price_row_count`, `has_price_history`, `latest_price_date`, `previous_price_date`, `daily_change_percent`
+    - Portfolio trailing is **not** unrealized-%, **not** `default_stoploss_percent`, and **not** strategy `trailing_stop` JSON
+    - OD-12 fields (strategy-owned lots): `target_amount`, `filled_amount` (actual invested cost), `remaining_target_amount` = max(0, target − filled)
+    - Ownership: `owner_key`, `strategy_id`, `is_unmanaged`
+- `POST /holdings/{id}/adopt` (auth) — body `{ "strategy_id": int }`. Explicit unmanaged → one strategy (§10.4).
+    - Initializes `target_amount` / `filled_amount` from invested cost so remaining BUY/INCREASE is 0
+    - Preserves entry history (OD-15) via HOLD_POSITION attribution (does **not** start OD-11 BUY cooldown)
+    - **422** when destination strategy already owns the same stock (merge cost-basis unspecified — blocked)
+    - Idempotent when the holding is already owned by that strategy
+- `GET /stocks/{stock}/prices` (auth) — OHLCV rows for held stocks with `range=all|since_buy`
+    - `range=all` (default): all available cached history for the instrument (OD-17)
+    - `range=since_buy`: current position episode history (legacy since-buy view)
 - `GET /stocks/{stock}/market-prices` (auth) — all cached OHLCV rows from `portfolio_stock_prices` (no holding required; used by Watchlist)
 - `GET /dashboard` (auth) — `portfolio_growth` uses transaction-aware rebuilt snapshots (up to 365 trading days); `alerts` = active alerts for the portfolio (policy-generated and any legacy rows)
 
@@ -158,8 +171,8 @@ Policy-generated alerts (`alert_type=policy`) include `condition_display`, `acti
 
 ## Settings
 
-- `GET /settings` (auth) — admins receive merged global + active portfolio settings; non-admins receive active portfolio settings plus read-only `cron_timezone`
-- `PUT /settings` (auth) — personal keys (stoploss %, Telegram, notification times) for the active portfolio; global keys (cron, fees, NSE retry, Alpha Vantage key, log level, sync log retention) **admin only** (403 if non-admin sends global fields)
+- `GET /settings` (auth) — admins receive merged global + active portfolio settings; non-admins receive active portfolio settings plus read-only `cron_timezone`. Portfolio risk keys include independent `default_stoploss_percent` (Portfolio Stop-Loss %) and `portfolio_trailing_percent` (Portfolio Trailing Stop %, default/seed **15%** — OD-22). Trailing is not derived from stop-loss % or strategy JSON.
+- `PUT /settings` (auth) — personal keys (stop-loss %, trailing %, Telegram, notification times, cash reserve, etc.) for the active portfolio; global keys (cron, fees, NSE retry, Alpha Vantage key, log level, sync log retention) **admin only** (403 if non-admin sends global fields)
 - `POST /settings/test-telegram` (auth) — body: `telegram_bot_token`, `telegram_chat_id`; sends **active portfolio's** alerts digest or `No active alerts at this time`; does not require `notifications_enabled`
 
 ## Users (admin only)
@@ -174,6 +187,20 @@ Policy-generated alerts (`alert_type=policy`) include `condition_display`, `acti
 - `POST /password-reset-links` (auth, admin) — body: `user_id`; creates 72h link for existing user (one pending per user)
 - `POST /password-reset-links/{id}/regenerate` (auth, admin) — new token and 72h expiry
 - `DELETE /password-reset-links/{id}` (auth, admin) — revoke pending reset link
+
+## Recommendations (Trading OS v1)
+
+- `GET /v1/recommendations` / `GET /v1/recommendations/{id}` (auth) — EXIT rows may include:
+    - `primary_exit_reason` — canonical §13.2 value: `strategy_exit` | `stop_loss` | `trailing_stop` | `horizon_expiry`
+    - `exit_attribution` — persisted attribution object (also under `evidence` / `execution_plan`)
+    - When multiple mechanisms are true, only the highest-precedence reason is the primary attribution
+- OPEN/INCREASE rows may include OD-12 staggered-entry fields:
+    - `position_target_amount` — persisted conviction target (not reduced by partial funding)
+    - `this_cycle_amount` — first-entry % of target or remaining after filled
+    - `position_filled_amount`, `remaining_target_amount`, `is_first_entry`
+    - Allocator / lending still use this-cycle amounts; WS4 `actual_execution_amount` remains authoritative for what can execute
+- Executed sells may expose `execution.exit_reason` from `portfolio_transactions.exit_reason` (persisted copy; not recalculated)
+- BUY cooldown (OD-11): 1 calendar day per `(stock, strategy)` from recommendation `generated_at`; does not affect REDUCE/EXIT
 
 ## Frontend Logs
 

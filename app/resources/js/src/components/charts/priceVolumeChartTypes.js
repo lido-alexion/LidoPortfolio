@@ -1,4 +1,4 @@
-export const DEFAULT_TIME_RANGE = 'all';
+﻿export const DEFAULT_TIME_RANGE = 'all';
 export const DEFAULT_SAMPLING = '1d';
 
 export const TIME_RANGE_OPTIONS = [
@@ -7,6 +7,7 @@ export const TIME_RANGE_OPTIONS = [
     { value: '3m', label: '3M' },
     { value: '6m', label: '6M' },
     { value: '1y', label: '1Y' },
+    { value: '5y', label: '5Y' },
 ];
 
 export const SAMPLING_OPTIONS = [
@@ -24,3 +25,4 @@ export function samplingStepForValue(samplingValue) {
     const option = SAMPLING_OPTIONS.find((item) => item.value === samplingValue);
     return option?.step ?? 1;
 }
+

@@ -1,6 +1,8 @@
 # Technical Debt Register
 
-**Audit date:** 2026-07-25
+**Audit date:** 2026-07-25  
+
+**Post-V3:** Forward-looking scheduling uses [`../../LidoPortfolio-V4-Wishlist.md`](../../LidoPortfolio-V4-Wishlist.md) (`V4-TD-*`). This table remains the V1 freeze audit index; link TD-* from V4 rather than forking statuses.
 
 | ID | Debt item | Reason | Impact | Recommended future work | Priority |
 |----|-----------|--------|--------|-------------------------|----------|

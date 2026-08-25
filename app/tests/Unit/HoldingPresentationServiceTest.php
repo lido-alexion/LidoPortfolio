@@ -86,7 +86,11 @@ class HoldingPresentationServiceTest extends TestCase
 
         $this->assertSame(125.0, (float) $summary['highest_close_since_buy']);
         $this->assertSame('2024-01-15', $summary['highest_close_since_buy_date']);
-        $this->assertSame(112.5, (float) $summary['trailing_stop_price']);
+        // OD-22 default portfolio trailing 15%: 125 × 0.85 = 106.25 (not SL% 10%)
+        $this->assertSame(106.25, (float) $summary['trailing_stop_price']);
+        $this->assertEqualsWithDelta(15.0, (float) $summary['portfolio_trailing_percent'], 0.0001);
+        $this->assertEqualsWithDelta(100.0, (float) $summary['weighted_average_fill_cost'], 0.0001);
+        $this->assertEqualsWithDelta(90.0, (float) $summary['stop_loss_price'], 0.0001); // 10% of 100
         $this->assertTrue($summary['has_price_history']);
     }
 
@@ -262,6 +266,65 @@ class HoldingPresentationServiceTest extends TestCase
 
         $firstBuy = $service->firstBuyDateForCurrentPosition($profile, $stock);
         $this->assertEquals('2025-06-01', $firstBuy->toDateString());
+    }
+
+    public function test_price_history_all_and_since_buy_are_distinct(): void
+    {
+        $service = app(HoldingPresentationService::class);
+
+        $user = User::query()->create([
+            'name' => 'History Range User',
+            'email' => 'history-range-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+        $profile = $this->defaultPortfolioFor($user);
+
+        $stock = Stock::query()->create([
+            'symbol' => 'H'.strtoupper(Str::random(4)),
+            'exchange' => 'NSE',
+            'name' => 'History Range',
+            'is_active' => true,
+            'is_benchmark' => false,
+        ]);
+
+        // 3+ years of available market history.
+        foreach ([
+            '2023-01-03', '2023-07-03', '2024-01-03', '2024-07-03', '2025-01-03', '2025-07-03', '2026-01-03',
+        ] as $date) {
+            StockPrice::query()->create([
+                'stock_id' => $stock->id,
+                'price_date' => $date,
+                'open_price' => 100,
+                'high_price' => 101,
+                'low_price' => 99,
+                'close_price' => 100,
+                'volume' => 100,
+                'data_source' => 'test',
+                'created_at' => now(),
+            ]);
+        }
+
+        // Holding entered recently.
+        Transaction::query()->create([
+            'profile_id' => $profile->id,
+            'stock_id' => $stock->id,
+            'type' => 'buy',
+            'quantity' => 1,
+            'price' => 100,
+            'fees' => 0,
+            'transaction_date' => '2026-01-03',
+        ]);
+
+        $all = $service->priceHistoryForHolding($profile, $stock, 'all');
+        $sinceBuy = $service->priceHistoryForHolding($profile, $stock, 'since_buy');
+
+        $this->assertSame('all', $all['range']);
+        $this->assertSame('since_buy', $sinceBuy['range']);
+        $this->assertSame('2023-01-03', $all['from_date']);
+        $this->assertSame('2026-01-03', $sinceBuy['from_date']);
+        $this->assertGreaterThan($sinceBuy['price_count'], $all['price_count']);
+        $this->assertSame(7, $all['all_price_count']);
+        $this->assertSame(1, $all['since_buy_price_count']);
     }
 }
 

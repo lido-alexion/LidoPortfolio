@@ -3,9 +3,12 @@
 namespace App\Services;
 
 use App\Models\CorporateAction;
+use App\Models\Holding;
 use App\Models\PortfolioProfile;
 use App\Models\PriceAdjustmentFactor;
 use App\Models\Stock;
+use App\Models\TradingRecommendation;
+use App\Models\TradingStrategy;
 use App\Models\Transaction;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -115,7 +118,8 @@ class CorporateActionService
             ]),
         ]);
 
-        $holding = $this->holdings->recalculateForProfileStock($profile, $stock);
+        $holdings = $this->holdings->recalculateOwnerLotsForProfileStock($profile, $stock);
+        $holding = $holdings->first() ?? $this->holdings->recalculateForProfileStock($profile, $stock);
         $this->realizations->recalculateForProfileStock($profile, $stock);
         $this->metricsUpdate->updateStock($stock);
         $this->snapshotRebuild->rebuildAfterTransactionChange(
@@ -126,7 +130,9 @@ class CorporateActionService
 
         return [
             'corporate_action' => $action->fresh()->load('stock'),
+            // BC: single representative row; `holdings` exposes all OD-01 owner lots.
             'holding' => $holding->load('stock'),
+            'holdings' => $holdings->map(fn (Holding $h) => $h->load('stock'))->values()->all(),
             'price_adjustment' => $priceAdjustment,
         ];
     }
@@ -255,10 +261,40 @@ class CorporateActionService
     protected function previewBonus(PortfolioProfile $profile, Stock $stock, array $payload): array
     {
         $bonusFactor = $this->ratioFactor($payload['ratio_from'], $payload['ratio_to']);
-        $eligibleQty = $this->holdings->quantityAsOfDate($profile, $stock, $payload['ex_date']);
-        $bonusQty = round($eligibleQty * $bonusFactor, 4);
+        $byOwner = $this->holdings->quantityAsOfDateByOwner($profile, $stock, $payload['ex_date']);
         $warnings = $this->baseWarnings($profile, $stock, $payload);
         $blockingErrors = [];
+
+        $allocations = [];
+        $eligibleQty = 0.0;
+        $bonusQty = 0.0;
+
+        foreach ($byOwner['quantities'] as $ownerKey => $ownerEligible) {
+            $ownerBonus = round((float) $ownerEligible * $bonusFactor, 4);
+            if ($ownerBonus <= 0.00001) {
+                continue;
+            }
+
+            $eligibleQty += (float) $ownerEligible;
+            $bonusQty += $ownerBonus;
+
+            $recommendationId = null;
+            if ($byOwner['attributable'] && $ownerKey !== Holding::OWNER_UNMANAGED) {
+                $recommendationId = $this->parentRecommendationIdForOwner(
+                    $byOwner['lots'][$ownerKey] ?? collect()
+                );
+            }
+
+            $allocations[] = [
+                'owner_key' => $ownerKey,
+                'eligible_quantity' => round((float) $ownerEligible, 4),
+                'bonus_quantity' => $ownerBonus,
+                'recommendation_id' => $recommendationId,
+            ];
+        }
+
+        $eligibleQty = round($eligibleQty, 4);
+        $bonusQty = round($bonusQty, 4);
 
         if ($eligibleQty <= 0.00001) {
             $blockingErrors[] = 'No shares were held on the record date, so no bonus can be applied.';
@@ -268,6 +304,17 @@ class CorporateActionService
             $blockingErrors[] = 'Bonus quantity rounds to zero.';
         }
 
+        $proposedBuys = array_map(static fn (array $row) => [
+            'transaction_date' => $payload['ex_date'],
+            'type' => 'buy',
+            'quantity' => $row['bonus_quantity'],
+            'price' => 0,
+            'fees' => 0,
+            'owner_key' => $row['owner_key'],
+            'recommendation_id' => $row['recommendation_id'],
+        ], $allocations);
+
+        // BC aggregate row (sum of owner-scoped bonus buys).
         $proposedBuy = [
             'transaction_date' => $payload['ex_date'],
             'type' => 'buy',
@@ -297,9 +344,12 @@ class CorporateActionService
             'ratio_from' => $payload['ratio_from'],
             'ratio_to' => $payload['ratio_to'],
             'ex_date' => $payload['ex_date'],
-            'eligible_quantity' => round($eligibleQty, 4),
+            'eligible_quantity' => $eligibleQty,
             'bonus_quantity' => $bonusQty,
+            'ownership_attributable' => $byOwner['attributable'],
+            'owner_allocations' => $allocations,
             'proposed_buy' => $proposedBuy,
+            'proposed_buys' => $proposedBuys,
             'warnings' => $warnings,
             'blocking_errors' => $blockingErrors,
             'post_state' => [
@@ -309,11 +359,72 @@ class CorporateActionService
             ],
             'price_adjustment' => $pricePreview,
             'metadata' => [
-                'eligible_quantity' => round($eligibleQty, 4),
+                'eligible_quantity' => $eligibleQty,
                 'bonus_quantity' => $bonusQty,
+                'ownership_attributable' => $byOwner['attributable'],
+                'owner_allocations' => $allocations,
                 'proposed_buy' => $proposedBuy,
+                'proposed_buys' => $proposedBuys,
             ],
         ];
+    }
+
+    /**
+     * Reuse a parent buy's recommendation so CA quantity inherits that strategy owner (OD-10).
+     * Does not create a new BUY opportunity (avoids OD-11 cooldown side effects).
+     *
+     * @param  Collection<int, Transaction>  $ownerTxs
+     */
+    protected function parentRecommendationIdForOwner(Collection $ownerTxs): ?int
+    {
+        foreach ($ownerTxs->reverse() as $transaction) {
+            if ($transaction->type === 'buy' && $transaction->recommendation_id !== null) {
+                return (int) $transaction->recommendation_id;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Rare fallback: strategy-owned open qty with no recommendation-linked buy in the lot.
+     * Uses HOLD_POSITION so OD-11 BUY cooldown does not treat this as a new BUY opportunity.
+     */
+    protected function ensureAttributionRecommendation(
+        PortfolioProfile $profile,
+        Stock $stock,
+        string $ownerKey,
+        CorporateAction $action,
+    ): ?int {
+        if ($ownerKey === Holding::OWNER_UNMANAGED || ! str_starts_with($ownerKey, 'strategy:')) {
+            return null;
+        }
+
+        $strategyId = (int) substr($ownerKey, strlen('strategy:'));
+        $strategy = TradingStrategy::query()->with('activeVersion')->find($strategyId);
+        $versionId = $strategy?->active_version_id;
+        if ($versionId === null) {
+            return null;
+        }
+
+        $rec = TradingRecommendation::query()->create([
+            'profile_id' => $profile->id,
+            'security_id' => $stock->id,
+            'strategy_version_id' => $versionId,
+            'recommendation_type' => TradingRecommendation::ACTION_HOLD_POSITION,
+            'status' => TradingRecommendation::STATUS_EXECUTED,
+            'priority' => 0,
+            'strategy_score' => 0,
+            'confidence' => 0,
+            'risk_level' => TradingRecommendation::RISK_MEDIUM,
+            'generated_at' => $action->ex_date,
+            'evidence' => [
+                'corporate_action_attribution' => true,
+                'corporate_action_id' => $action->id,
+            ],
+        ]);
+
+        return (int) $rec->id;
     }
 
     /**
@@ -442,21 +553,62 @@ class CorporateActionService
      *
      * Uses TransactionWriteService::insert (not create) because the caller (apply()) already
      * recalculates holdings/realizations/snapshots afterwards — applyAfterCreate would duplicate that work.
+     *
+     * OD-10: one SOURCE_BONUS buy per parent owner when ownership is attributable; each
+     * strategy-owned bonus reuses (or rarely creates) a recommendation so qty stays on that owner.
+     * Ambiguous/blended ledgers keep a single unmanaged bonus (no invented owners).
      */
     protected function applyBonus(PortfolioProfile $profile, Stock $stock, CorporateAction $action, array $preview): void
     {
-        $buy = $preview['proposed_buy'];
         $ratioLabel = $action->ratio_from.':'.$action->ratio_to;
+        $buys = $preview['proposed_buys'] ?? null;
 
-        $this->writes->insert($profile, $stock, [
-            'type' => 'buy',
-            'quantity' => $buy['quantity'],
-            'price' => 0,
-            'fees' => 0,
-            'transaction_date' => $buy['transaction_date'],
-            'notes' => trim('Bonus '.$ratioLabel.' (corporate action #'.$action->id.')'.($action->notes ? ' — '.$action->notes : '')),
-            'source' => Transaction::SOURCE_BONUS,
-            'corporate_action_id' => $action->id,
-        ]);
+        if (! is_array($buys) || $buys === []) {
+            $buys = [[
+                'transaction_date' => $preview['proposed_buy']['transaction_date'] ?? $action->ex_date?->format('Y-m-d'),
+                'quantity' => $preview['proposed_buy']['quantity'] ?? $preview['bonus_quantity'] ?? 0,
+                'owner_key' => Holding::OWNER_UNMANAGED,
+                'recommendation_id' => null,
+            ]];
+        }
+
+        foreach ($buys as $buy) {
+            $qty = (float) ($buy['quantity'] ?? 0);
+            if ($qty <= 0.00001) {
+                continue;
+            }
+
+            $ownerKey = (string) ($buy['owner_key'] ?? Holding::OWNER_UNMANAGED);
+            $recommendationId = isset($buy['recommendation_id']) ? (int) $buy['recommendation_id'] : null;
+
+            if ($recommendationId === null && $ownerKey !== Holding::OWNER_UNMANAGED) {
+                $recommendationId = $this->ensureAttributionRecommendation(
+                    $profile,
+                    $stock,
+                    $ownerKey,
+                    $action,
+                );
+            }
+
+            $ownerNote = $ownerKey === Holding::OWNER_UNMANAGED
+                ? ''
+                : ' [owner '.$ownerKey.']';
+
+            $this->writes->insert($profile, $stock, [
+                'type' => 'buy',
+                'quantity' => $qty,
+                'price' => 0,
+                'fees' => 0,
+                'transaction_date' => $buy['transaction_date'] ?? $action->ex_date?->format('Y-m-d'),
+                'notes' => trim(
+                    'Bonus '.$ratioLabel.' (corporate action #'.$action->id.')'
+                    .$ownerNote
+                    .($action->notes ? ' — '.$action->notes : '')
+                ),
+                'source' => Transaction::SOURCE_BONUS,
+                'corporate_action_id' => $action->id,
+                'recommendation_id' => $recommendationId,
+            ]);
+        }
     }
 }

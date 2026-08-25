@@ -13,8 +13,10 @@ use Illuminate\Support\Facades\Schema;
  * - Allow multiple enabled strategies per portfolio (application rule only; no unique status constraint existed).
  * - Persist strategy `allocation_pct` (storage only; no sum-100 / capital formula in this workstream).
  * - Holdings unique identity becomes (profile_id, stock_id, owner_key) per OD-01.
- * - Existing holdings are safely inferred to the profile’s single strategy when exactly one strategy exists;
- *   otherwise they remain unmanaged. Quantities, cost, cash, recommendations, and stop/trailing values are not rewritten.
+ * - Historical note: this migration originally inferred ownership when a profile had exactly one
+ *   strategy. That heuristic was superseded by §10.5 lot-level inference in
+ *   `2026_08_24_000004_realign_holding_ownership_backfill_od105`. Quantities, cost, cash, and
+ *   recommendations are not rewritten here.
  */
 return new class extends Migration
 {

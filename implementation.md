@@ -32,6 +32,307 @@ Specs under `specs/` define a seven-engine decision platform. Implementation evo
 
 **Documentation map:** Repository-wide reading order and file tree — [`DOCS.md`](DOCS.md). Specs subtree — [`specs/README.md`](specs/README.md). Architecture hub (domain folders) — [`specs/architecture/README.md`](specs/architecture/README.md). For full ingest: requirements/architecture → governance → audit → this file. New Markdown docs must be indexed in `DOCS.md` (rule: `.cursor/rules/Keep-DOCS-md-ingestion-tree-updated.mdc`).
 
+## Final V3 Completion Audit (2026-08-24)
+
+**Verdict:** **V3 COMPLETE WITH DEFERRED ITEMS**.
+
+Normative, implementable V3 requirements are satisfied in code and covered by regression suites. Remaining items are either **deferred** (B4, broker automation, optional weakest-position window UI) or **spec gaps / product decisions** (same-stock adoption cost-basis merge, CA rights/cost/trailing restatement). Those do **not** keep the project at “READY WITH GAPS.”
+
+### Workstream status (audit)
+
+| Workstream | Status |
+|------------|--------|
+| WS2 capital accounting | COMPLETE |
+| WS3 ranking / allocator / generation | COMPLETE |
+| WS4 lending / recall / bridge / capital priority / zero-own UNFUNDED | COMPLETE |
+| §34.3 portfolio SL / trailing / exit precedence | COMPLETE |
+| §34.4 staggered entry / cooldown / target | COMPLETE |
+| OD-10 CA parent-owner quantity | COMPLETE |
+| OD-17 history depth / charts | COMPLETE |
+| §10.4 adoption / §10.5 backfill | COMPLETE |
+| §29 horizon + first_entry_pct UI | COMPLETE |
+
+### Deferred / unspecified (not mandatory coding)
+
+Tracked canonically in [`specs/LidoPortfolio-V4-Wishlist.md`](specs/LidoPortfolio-V4-Wishlist.md) (created 2026-08-25). Summary:
+
+- Same-stock unmanaged adoption **cost-basis merge** (quantity merge specified; cost math unspecified → currently **422**) — V4-SPEC-001
+- CA rights processing; CA cost / trailing / stop restatement (OD-10 leftovers) — V4-SPEC-002/003
+- **B4** persistent critical banner (wishlist; B3 Dashboard shortfall warning is current) — V4-FEAT-003
+- Broker / live execution automation — V4-FEAT-001
+- Optional Strategy-page UI for OD-16 weakest-position evaluation window — V4-UX-001
+- Optional cash-ledger entry types for loan/recall/bridge movements — V4-SPEC-004
+- `schedulerTimestamp` JS locale test flake — V4-BUG-001
+
+### Documentation / config cleanup in this pass
+
+- Spec header Implementation Status + Last Updated
+- `DOCS.md` V3 section (was “not started” / “no code yet”)
+- WS4 recall-bridge delta stale “not coded” / Unfunded calculator notes
+- OD-17 status line → DONE; CLI re-arm message; unused numeric `target_history_days` config key removed from campaign completion path
+
+## V3 residual — UNFUNDED zero-own lending offer (2026-08-24)
+
+**Status:** **DONE**. Residual WS4 gap only. Does **not** change WS2 accounting, WS3 ranking/allocator, partial-own lending math, recall, Recall Bridge Loan, capital-priority, lender ranking, loan FIFO, adoption, OD-10, OD-17, §34.3, §34.4, or Strategy-page configuration.
+
+### Implemented
+
+When an OPEN/INCREASE is `UNFUNDED` after capital resolution (own free capital = 0) and a positive this-cycle target exists:
+
+- Gap = `this_cycle_target − own` (= this-cycle target when own is 0).
+- Loan size = `ceil(gap / 5000) × 5000` (**DEP-PARTIAL-ATOMIC** via `UnfundedLendingAmountCalculator` / `CeilToRupee5000`). Not OD-06 1% reservation.
+- Eligible lenders queried first (`LenderEligibilityService` through `CapitalRequestService::eligibleLendersFor`).
+- Lenders exist → create existing `CapitalRequest` (`displayed`), status `awaiting_lender_selection`. Rec stays OPEN/INCREASE (not WATCH). `actual_execution_amount` / this-cycle target unchanged (still 0 / original target).
+- No eligible lenders → remain `unfunded`; no capital request.
+- Own capital > 0 keeps the existing partial-own path unchanged. Recall still runs in `applyCapitalResolutionBeforeTradeMode` before any lending offer.
+
+### Tests
+
+`tests/Unit/Lending/UnfundedLendingAmountCalculatorTest.php`; `tests/Feature/Lending/UnfundedZeroOwnLendingTest.php`; lifecycle UNFUNDED-with-lenders assertion updated (now awaits selection, still cannot Approve until committed).
+
+## V3 §29 — Strategy-page `horizon_calendar_days` + `first_entry_pct` (2026-08-24)
+
+**Status:** **DONE**. UI/configuration only. Frozen engines and completed workstreams were not changed (WS2–WS4, §34.3, §34.4 calculators, OD-10, OD-17, §10.4/§10.5).
+
+### Implemented
+
+- **Strategy page:** Exit Strategy tab — optional **Horizon (calendar days)** (`portfolio_rules.horizon_calendar_days`). Empty/unset = no horizon expiry (engine already never fires). Positive integer when set; no invented default.
+- **Strategy page:** Portfolio Rules tab — **First entry %** (`portfolio_rules.first_entry_pct`). Override of factory/engine default **50%**. Empty on save stores null so the engine default applies. Range when set: 1–100. BUY cooldown remains frozen at 1 calendar day and is not exposed.
+- **Persistence:** Existing `PUT /api/v1/strategy` `config.portfolio_rules` (no new API or allowlist). Client validation on Save.
+- **Help:** `appDocumentation.js` Strategy controls/concepts only.
+
+### Explicitly not in this workstream
+
+- `ExitPrecedenceEvaluator`, `StaggeredEntryCalculator`, `BuyCooldownEvaluator`, target/filled, allocator
+- Moving/duplicating portfolio SL / trailing / reserve
+- Same-stock adopt merge, CA rights restatement, B4, broker, weakest-position window UI (see Final V3 Completion Audit)
+
+## V3 §10.5 / §10.4 — Ownership backfill + unmanaged adoption (2026-08-24)
+
+**Status:** **DONE** (P0 next workstream after Final V3 Completion Audit). Does **not** redesign WS2–WS4, §34.3, §34.4, OD-10, or OD-17.
+
+### Phase 1 — §10.5 migration backfill
+
+**Old rule:** `HoldingOwnershipBackfill` assigned every unmanaged holding to the profile’s sole strategy.
+
+**New rule (conservative):** infer strategy S only when every FIFO-remaining contributing buy lot is recommendation-linked to S. No lot evidence → remain unmanaged. Never infer from “exactly one strategy”. Do not merge into an existing strategy-owned row for the same stock. Explicit strategy ownership is preserved by `infer*`. One-shot migration `2026_08_24_000004_realign_holding_ownership_backfill_od105` reverts unattested heuristic tags (no rec-linked buy for that strategy) then re-runs lot-level inference.
+
+### Phase 2 — §10.4 Adopt
+
+- Service: `HoldingAdoptionService` — explicit unmanaged → one strategy
+- API: `POST /api/holdings/{id}/adopt` `{ strategy_id }`
+- UI: Holdings Sell menu → **Adopt** (strategy picker modal)
+- Target init: `target_amount = filled_amount = invested_amount` (remaining BUY = 0)
+- OD-15: attribute unmanaged buys via executed `HOLD_POSITION` (not OPEN/INCREASE → no OD-11 cooldown)
+- Same-stock destination already owned → **422** (merge/cost-basis unspecified — blocked)
+- Audit: `portfolio_holding_adoptions`
+
+### Files
+
+- `app/Services/Strategy/HoldingOwnershipBackfill.php`
+- `app/Services/Ownership/HoldingAdoptionService.php`, `Models/HoldingAdoption.php`
+- Migrations `2026_08_24_000004_*`, `2026_08_24_000005_*`
+- `HoldingController`, `routes/api.php`, `HoldingsPage.jsx`
+- Tests: `HoldingOwnershipBackfillTest`, `HoldingAdoptionTest`; identity test updated
+
+### Tests
+
+Focused: HoldingOwnershipBackfill + V3DomainIdentity (17); HoldingAdoption (5). JS Adopt control assertion in `staggeredEntryUiPhase2.test.mjs`.
+
+---
+
+## V3 OD-10 / §34.1 — Corporate-action quantity follows parent owner (2026-08-24)
+
+**Status:** **DONE** (WS1 residual OD-10). Frozen. Does **not** touch WS4 recall/lending, §34.3, §34.4, or §34.8.
+
+Authoritative: V3 §10.7, §34.1; **OD-10 (frozen).** Parent-owner attachment — not pro-rata — governs CA quantity ownership.
+
+### Root cause (pre-fix)
+
+- **Bonus:** `CorporateActionService::previewBonus` used blended `quantityAsOfDate` (profile+stock replay) and `applyBonus` created a single `SOURCE_BONUS` buy **without** `recommendation_id`, so multi-strategy ledgers collapsed to one unmanaged lot on recalculate.
+- **Split:** In-place transaction rescale already preserved per-row `recommendation_id`; owner isolation held when the ledger was attributable. No split logic change required beyond bonus attribution and shared owner-resolution helper.
+
+### Implemented behaviour
+
+| CA type | Owner resolution |
+|---------|------------------|
+| **Bonus** | `HoldingsCalculationService::quantityAsOfDateByOwner` → per-owner eligible qty → one `SOURCE_BONUS` buy per owner. Strategy-owned bonus reuses the parent lot's latest recommendation-linked buy (`recommendation_id`); rare fallback creates a `HOLD_POSITION` executed rec (does not start OD-11 BUY cooldown). Unmanaged parent → unmanaged bonus. |
+| **Split** | Existing per-transaction rescale; ownership travels with each row's existing `recommendation_id`. |
+| **Ambiguous ledger** | When `partitionTransactionsByOwner` is not attributable (e.g. manual sell with two open strategy owners), bonus stays a **single blended unmanaged** buy — no invented owners. |
+
+`CorporateActionService::apply()` now recalculates via `recalculateOwnerLotsForProfileStock` and returns additive `holdings` (all owner lots) alongside legacy `holding` (first representative row).
+
+`TransactionWriteService::normalizeCore` preserves `SOURCE_BONUS` when `recommendation_id` is present (OD-10 parent-owner attribution without flipping to `SOURCE_RECOMMENDATION`).
+
+### Intentional fallback (unchanged)
+
+- Ledgers that cannot be fully attributed still use one blended `portfolio_holdings` row (`owner_key = unmanaged`).
+- CA cost-basis / trailing-high / stop restatement remain unspecified under OD-10 (not solved here).
+
+### Files
+
+- `app/Services/HoldingsCalculationService.php` — `quantityAsOfDateByOwner`
+- `app/Services/CorporateActionService.php` — per-owner bonus preview/apply; `holdings` in apply response
+- `app/Services/TransactionWriteService.php` — bonus+recommendation source guard
+- `tests/Unit/CorporateActionOd10OwnershipTest.php` — Cases 1–6
+
+### Tests
+
+`tests/Unit/CorporateActionOd10OwnershipTest.php` (6 tests, 41 assertions). Regressions green: CorporateAction suite (32), `HoldingsCalculationServiceTest` (1), `HoldingPresentationServiceTest` + Risk (17), Entry + WS3 generation (18), Lending/Recall (153).
+
+### §34.1 / WS1 status
+
+OD-10 corporate-action parent-owner attribution is **complete** for supported quantity-changing CAs (**bonus**, **split**). WS1 ownership substrate is no longer blocked on OD-10; remaining WS1 gaps (if any) are adoption, ambiguous cross-owner sell policy, and other non-CA items — not CA quantity blending.
+
+---
+
+## V3 §34.8 / OD-17 — History depth & holdings charts (2026-08-24)
+
+**Status:** **DONE** (final audit 2026-08-24). Campaign completion is `all_available`; charts support 5Y / All / Since Buy; no V3 product 550-day ceiling.
+
+- Removed V3 product coupling to the old numeric history-depth ceiling in the history-depth campaign service (`HistoryDepthBackfillService` now marks completion by `all_available` pass mode, not numeric day target).
+- Stock price history API now supports `range=all|since_buy` for held stocks; `all` returns full cached instrument history, while `since_buy` remains a separate current-episode view.
+- Holdings stock history page now exposes explicit **All** vs **Since Buy** toggle and labels their semantics.
+- Force sync for held stocks now requests all-available provider/listing history through `StockPriceHistoryService::fetchAllAvailableHistory`.
+- Config/CLI: unused numeric `HISTORY_DEPTH_TARGET_DAYS` campaign target removed from operational completion messaging; re-arm with `--reset`.
+
+
+
+**Status:** Phase 1 domain + Phase 2 live pipeline / API / UI / help **DONE**.
+
+Authoritative: V3 §11.2 (BUY cooldown), §12 (staggered entry / target), §34.4 item 4; OD-11, OD-12. Does **not** touch §34.3 risk/exit or WS4 lending/recall/capital-resolution ordering.
+
+### Spec rules implemented
+
+| Rule | Implementation |
+|------|----------------|
+| OD-11 BUY cooldown = **1 calendar day** | `BuyCooldownEvaluator` — Day 0 opportunity allowed; Day 1 suppressed; Day 2 elapsed. Key `(stock, strategy)`. |
+| Cooldown clock | Starts on BUY **recommendation generation** (`generated_at`), including cancelled rows. Not fill/approval. |
+| Stale-cancel | Skips OPEN/INCREASE pairs while cooldown active; does not clear cooldown; does not cancel `pending_execution`. |
+| First entry | `first_entry_pct` (strategy `portfolio_rules`, default **50%**) × current **position target amount**. |
+| Subsequent INCREASE | `remaining = max(0, target − filled)` — not a second 50% slice. |
+| Persist target | `portfolio_holdings.target_amount` (strategy-owned / `owner_key`). |
+| Filled amount | `portfolio_holdings.filled_amount` synced from actual `invested_amount` on recalculate; never from target or unfunded allocation. |
+| Whole shares | `WholeShareQuantityCalculator` FLOOR(amount / raw close). |
+| Min actionable | Platform default ₹5,000; portfolio override `minimum_actionable_buy_amount` (OD-12 §12.4). |
+| Allocator | Existing `ReturnQualityCapitalAllocator` receives **this-cycle** amount; `capital_allocation.target_amount` remains this-cycle (lending BC); `position_target_amount` is OD-12 full target. |
+| WS4 capital resolution | Unchanged and downstream of allocation; `actual_execution_amount` remains authoritative for executable cash. |
+
+### Live path
+
+`RecommendationGenerationPipeline`: decide action → `sizeOpenOrIncrease` (cooldown + stagger + floor + min actionable) → rank → allocate → apply outcomes → persist (upsert holding target). SELL/EXIT untouched by cooldown.
+
+### API / UI / help (Phase 2)
+
+- Holdings API: `target_amount`, `filled_amount`, `remaining_target_amount`
+- Recommendations API: `position_target_amount`, `this_cycle_amount`, `position_filled_amount`, `remaining_target_amount`, `is_first_entry`
+- Holdings UI: optional **Target** column (filled / remaining in Complex)
+- Recommendations detail: Position target (OD-12) block
+- `appDocumentation.js`, `API_DOCUMENTATION.md`
+
+### Files
+
+- Services: `app/Services/Entry/{BuyCooldownEvaluator,StaggeredEntryCalculator,WholeShareQuantityCalculator,MinimumActionableAmountResolver,StrategyPositionTargetService}.php`
+- Migration: `2026_08_24_000003_add_target_and_filled_amount_to_portfolio_holdings.php`
+- Pipeline / Holding / HoldingsCalculation / HoldingPresentation / TradingOsController
+- Factory default `portfolio_rules.first_entry_pct = 50`
+- UI: `HoldingsPage.jsx`, `RecommendationsPage.jsx`
+
+### Tests
+
+`tests/Unit/Entry/StaggeredEntryCalculatorsTest.php`; `tests/Feature/Entry/StaggeredEntryPhase1FoundationTest.php`; JS `tests/js/staggeredEntryUiPhase2.test.mjs`.
+
+### Explicitly not in §34.4
+
+- Adoption, broker automation, horizon UI
+- Redesigning WS4 capital resolution or §34.3 SL/trailing
+- ~~Strategy editor UI for `first_entry_pct`~~ — **DONE** (2026-08-24 §29 Strategy-page controls; engine default still 50%)
+
+---
+
+## V3 Phase 3 — Exit / SL / Trailing API·UI·Help sync (2026-08-24)
+
+**Status:** Phase 3 **DONE**. Do **not** begin §34.4 here.
+
+Authoritative: V3 §13–§15, §13.2, §13.5, §34.3; OD-13 / OD-14 / OD-22. Presentation/configuration/docs only — Phase 1 calculators and Phase 2 precedence frozen.
+
+### Implemented
+
+- **Settings:** Existing Portfolio Stop-Loss % and Portfolio Trailing Stop % remain independent (seed trailing **15%**); labels/help clarify independence.
+- **Holdings presentation:** Complex view shows portfolio trailing % from peak raw close; Avg Buy shows stop-loss price (and fill WAVG when distinct) from `stoploss_summary`. Added `weighted_average_fill_cost` to summary payload.
+- **Recommendations API/UI:** Top-level `primary_exit_reason` + `exit_attribution` on serialize; detail modal shows primary exit reason with human labels (canonical values preserved).
+- **Transactions:** History column `Exit reason` from persisted `exit_reason`; recommendation execution block shows `execution.exit_reason` when present.
+- **Help/docs:** `appDocumentation.js`, `API_DOCUMENTATION.md`, this file — portfolio SL/trailing vs strategy-specific exits; §13.2 precedence; strategy JSON `trailing_stop` still documented as strategy-only V1 proxy (not claimed removed).
+
+### Explicitly not in Phase 3
+
+- §34.4 staggered entry / BUY cooldown / target amount / adoption
+- Domain changes to Phase 1/2 or recall/lending
+- ~~Horizon configuration UI~~ — **DONE** (2026-08-24 §29 Strategy-page control; evaluator unchanged)
+- Removing V1 strategy JSON `trailing_stop` proxy
+
+### Tests
+
+`tests/Feature/Risk/PortfolioRiskPhase3PresentationTest.php`; JS `tests/js/exitAttributionLabels.test.mjs`, `tests/js/appDocumentationExitRiskHelp.test.mjs`, `tests/js/portfolioRiskUiPhase3.test.mjs`; plus Phase 1/2 + WS3 + WS4 regression.
+
+---
+
+## V3 Phase 2 — Exit precedence live wiring (2026-08-24)
+
+**Status:** Phase 2 **DONE**. Phase 3 API/UI/help sync **DONE** (see above).
+
+Authoritative: V3 §13–§16, §13.2, §13.5, §28.6, §34.3, §35.7; OD-13 / OD-14 / OD-22. Builds on Phase 1 risk calculators.
+
+### Implemented
+
+- **`ExitPrecedenceEvaluator`** — §13.2 order: `strategy_exit` > `stop_loss` > `trailing_stop` > `horizon_expiry`. Portfolio SL/trailing use Phase 1 calculators; strategy exit remains `ExitStrategyEvaluator` (strategy-specific only). Optional horizon via `horizon_calendar_days` / `portfolio_rules.horizon_calendar_days` / `exit_strategy.horizon_calendar_days` (no invented default).
+- **Live path:** `RecommendationGenerationPipeline::buildDrafts` + `appendPortfolioRiskExitOnlyDrafts` (+ screener-exit path) evaluate precedence per strategy-owned holding; EXIT when any mechanism wins.
+- **Attribution:** `evidence.exit_attribution` + `execution_plan.primary_exit_reason` / `exit_attribution`; `TradingRecommendation::primaryExitReason()`.
+- **§13.5 sell copy:** `portfolio_transactions.exit_reason` (migration `2026_08_24_000002_*`); `TransactionWriteService` copies from recommendation on SELL fill.
+- **Owner isolation:** evaluations use strategy-scoped holdings + Phase 1 ownership episodes.
+
+### Explicitly not in Phase 2
+
+- Phase 3 Settings/help redesign beyond existing Phase 1 fields
+- Staggered entry / BUY cooldown / adoption / recall-lending changes
+- Removing V1 strategy JSON `trailing_stop` proxy from `ExitStrategyEvaluator` (still strategy_exit only)
+
+### Tests
+
+`tests/Unit/Risk/ExitPrecedenceEvaluatorTest.php` (9); `tests/Feature/Risk/ExitPrecedencePipelineTest.php` (2); regression WS3 generation + WS4 Lending green.
+
+---
+
+## V3 Phase 1 — Portfolio SL / Trailing / Exit foundation (2026-08-24)
+
+**Status:** Phase 1 domain foundation **DONE**. Phase 2 (§13.2 live EXIT precedence / attribution) **DONE** (see above).
+
+Authoritative: [`specs/LidoPortfolio-V3-Specification.md`](specs/LidoPortfolio-V3-Specification.md) §13–§15, §21, §34.3, §35.7; OD-13, OD-14, OD-22.
+
+### Implemented
+
+- **`portfolio_trailing_percent`** — portfolio/common setting via `ProfileSettingsService` (default **15%**, OD-22). Independent of `default_stoploss_percent`. Migration `2026_08_24_000001_seed_portfolio_trailing_percent_od22` seeds existing profiles idempotently. Settings API + Settings page expose both %.
+- **Pure calculators:** `App\Services\Risk\PortfolioStopLossCalculator` (OD-13 weighted-average fill cost + stop price; OD-14 raw-close hit test); `PortfolioTrailingStopCalculator` (peak raw close × trailing % — not unrealized-%, not SL %, not strategy JSON).
+- **`OwnershipEpisodeService`** — per-holding entry date, episode fills, peak/latest raw `close_price` scoped by `owner_key` / `strategy_id`.
+- **Holdings attribution:** `HoldingsCalculationService` partitions ledger by recommendation owner when every row is determinable and sells do not oversell that owner; otherwise blended fallback (documented). Same-symbol strategy lots keep independent peaks when buys are recommendation-linked.
+- **Presentation:** `HoldingPresentationService` uses portfolio trailing % and owner-scoped peak/entry; adds `stop_loss_price` / `portfolio_trailing_percent` / `weighted_average_fill_cost` to `stoploss_summary`.
+
+### Explicitly not in Phase 1
+
+- §13.2 exit precedence / live EXIT generation / primary attribution
+- Strategy horizon wiring; adoption workflow; recall/lending changes
+- V1 `ExitStrategyEvaluator` `trailing_stop` unrealized-% proxy left in place (labelled; Phase 2 coexistence)
+
+### Limitation (not invented)
+
+Manual BUY (unmanaged) + EXIT sell linked to a strategy recommendation cannot be owner-split without inventing cross-owner sell rules → blended recalculate (pre-Phase-1 behaviour for that stock).
+
+### Tests
+
+`tests/Unit/Risk/PortfolioRiskCalculatorsTest.php`; `tests/Feature/Risk/PortfolioRiskPhase1FoundationTest.php`; regression: HoldingsCalculation, HoldingPresentation, Lending/WS4, V3RecommendationGeneration, StoplossService.
+
+---
+
 ## V3 WS4 gap-closure — live wiring (2026-08-21)
 
 **Status:** Five acceptance-audit integration gaps closed. **§6.0 close-at-actual follow-up (2026-08-22):** residual partial-lend no longer blocks execution of already-funded capital.
@@ -302,7 +603,7 @@ Authoritative spec: [`specs/LidoPortfolio-V3-Specification.md`](specs/LidoPortfo
 ### Implemented
 
 - After WS3 persist, `RecommendationLendingCoordinator::syncAfterGenerated()` runs. **PARTIALLY_FUNDED** OPEN/INCREASE stays that action; target and own allocation are kept. Remainder `target − own` is sized with `PartialLendingAmountCalculator` (ceil to ₹5,000, **not** OD-06 1%). One `CapitalRequest` is created (`displayed`, no lender). Status in `execution_plan.capital_allocation` becomes `awaiting_lender_selection`.
-- **UNFUNDED** stays OPEN/INCREASE, remains `unfunded`, does **not** create a request, cannot enter `pending_execution`. Loan amount is **not** chosen: `UnfundedLendingAmountCalculator` throws if called.
+- **UNFUNDED** (own = 0 after capital resolution) stays OPEN/INCREASE. If eligible lenders exist, a same-cycle `CapitalRequest` is created with DEP-PARTIAL-ATOMIC loan size and status becomes `awaiting_lender_selection`. If no eligible lenders, it remains `unfunded` with no request. Cannot enter `pending_execution` until a loan is committed (actual execution amount stays 0). See **V3 residual — UNFUNDED zero-own lending offer**.
 - Trade Approve (`RecommendationLifecycleService::recordReview` → `pending_execution`) is blocked until `funded`, `capital_committed`, or a committed loan exists. Legacy recs with no capital-allocation status still approve as before. Sells/exits are unchanged.
 - `CapitalRequestApprovalService` success still creates one `CapitalLoan` (accounting outstanding only), then `markCapitalCommitted()` sets `capital_committed` and stores `capital_loan_id`. **Loan commitment does not execute the trade**, does not write cash ledger rows, does not create holdings, does not change `allocation_pct`, and does not auto-move to `pending_execution`. The user must still Approve the recommendation afterward.
 - Duplicate requests: `CapitalRequestService::createRequest` and the coordinator reuse any active request (`displayed` / `awaiting_approval` / `revalidation_failed` / `committed`).
@@ -313,7 +614,7 @@ Broker execution, repayment, recall, FIFO recall, weakest-position sells, UI, no
 
 ### Unresolved
 
-**UNFUNDED full-gap loan size** remains unresolved (`ceil(gap/5000)×5000` vs `ceil(gap×1.01/5000)×5000`). Isolated behind `UnfundedLendingAmountCalculator`; not used in the live path.
+UNFUNDED full-gap loan size is **resolved** as DEP-PARTIAL-ATOMIC (`ceil(gap/5000)×5000`); OD-06 1% remains reservation-only. See residual UNFUNDED zero-own lending offer (2026-08-24).
 
 ### Tests / help
 
@@ -353,7 +654,7 @@ Deterministic **PARTIALLY_FUNDED remainder** loan size only (DEP-PARTIAL-ATOMIC)
 - `loan_amount` = `ceil(remainder / 5000) × 5000` via `App\Support\CeilToRupee5000` (integer `intdiv` ceiling). Zero remainder → ₹0. Any positive remainder → at least ₹5,000.
 - API: `App\Services\Lending\PartialLendingAmountCalculator::calculateForRemainder()` and `calculateForPartialRemainder($target, $own)`. No generic `calculateLoanAmount()`.
 - **Not** OD-06: does not use `ReturnQualityCapitalAllocator::atomicAllocation()` (1% then ceil). Example: remainder ₹10,000 → loan ₹10,000; OD-06 would be ₹15,000.
-- **UNFUNDED** full-gap sizing is still unresolved (ceil(gap/5000)×5000 vs OD-06 1.01+ceil). This helper does not size UNFUNDED loans.
+- **UNFUNDED** full-gap sizing is **not** this helper; `UnfundedLendingAmountCalculator` now uses the same DEP-PARTIAL-ATOMIC ceil (residual 2026-08-24). This helper still does not size UNFUNDED loans.
 
 ### Tests
 

@@ -9,6 +9,8 @@ class ProfileSettingsService
 {
     public const DEFAULTS = [
         'default_stoploss_percent' => '10',
+        /** OD-22: portfolio trailing % seed / default (independent of stop-loss). */
+        'portfolio_trailing_percent' => '15',
         'telegram_bot_token' => '',
         'telegram_chat_id' => '',
         'notifications_enabled' => 'true',
@@ -16,6 +18,8 @@ class ProfileSettingsService
         'indiavix_alert_enabled' => 'true',
         'indiavix_alert_threshold' => '20',
         'portfolio_cash_reserve_pct' => '',
+        /** OD-12 §12.4 — portfolio override; blank = platform default ₹5,000. */
+        'minimum_actionable_buy_amount' => '',
     ];
 
     /** Internal arming flag — not exposed via settings API defaults list. */

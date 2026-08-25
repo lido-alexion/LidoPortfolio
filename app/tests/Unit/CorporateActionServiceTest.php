@@ -162,7 +162,8 @@ class CorporateActionServiceTest extends TestCase
             ->enrichHolding($profile, $holding)['stoploss_summary'];
 
         $this->assertEquals(60.0, (float) $summary['highest_close_since_buy']);
-        $this->assertEquals(54.0, (float) $summary['trailing_stop_price']);
+        // OD-22 portfolio trailing 15%: 60 × 0.85 = 51 (independent of stop-loss %)
+        $this->assertEquals(51.0, (float) $summary['trailing_stop_price']);
         $this->assertEquals(58.0, (float) $summary['latest_close']);
     }
 

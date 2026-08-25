@@ -22,6 +22,13 @@ use App\Services\PortfolioLoggerService;
 use App\Services\Ranking\CapitalFillOrderService;
 use App\Services\Ranking\ReturnQualityRankingService;
 use App\Services\Lending\RecommendationLendingCoordinator;
+use App\Services\Entry\BuyCooldownEvaluator;
+use App\Services\Entry\MinimumActionableAmountResolver;
+use App\Services\Entry\StaggeredEntryCalculator;
+use App\Services\Entry\StrategyPositionTargetService;
+use App\Services\Entry\WholeShareQuantityCalculator;
+use App\Services\Risk\ExitAttribution;
+use App\Services\Risk\ExitPrecedenceEvaluator;
 use App\Services\Strategy\PortfolioCapitalAccountingService;
 use App\Services\StrategyConfigurationService;
 use App\Services\StrategyEligibilityService;
@@ -44,6 +51,18 @@ class RecommendationGenerationPipeline
 
     protected RecommendationLendingCoordinator $lending;
 
+    protected ExitPrecedenceEvaluator $exitPrecedence;
+
+    protected StaggeredEntryCalculator $staggeredEntry;
+
+    protected BuyCooldownEvaluator $buyCooldown;
+
+    protected StrategyPositionTargetService $positionTargets;
+
+    protected WholeShareQuantityCalculator $wholeShares;
+
+    protected MinimumActionableAmountResolver $minActionable;
+
     public function __construct(
         protected PortfolioCalculationService $portfolio,
         protected PortfolioLoggerService $logger,
@@ -57,9 +76,21 @@ class RecommendationGenerationPipeline
         protected CapitalFillOrderService $capitalFillOrder,
         ?CapitalAllocationStrategy $allocator = null,
         ?RecommendationLendingCoordinator $lending = null,
+        ?ExitPrecedenceEvaluator $exitPrecedence = null,
+        ?StaggeredEntryCalculator $staggeredEntry = null,
+        ?BuyCooldownEvaluator $buyCooldown = null,
+        ?StrategyPositionTargetService $positionTargets = null,
+        ?WholeShareQuantityCalculator $wholeShares = null,
+        ?MinimumActionableAmountResolver $minActionable = null,
     ) {
         $this->allocator = $allocator ?? new ReturnQualityCapitalAllocator;
         $this->lending = $lending ?? app(RecommendationLendingCoordinator::class);
+        $this->exitPrecedence = $exitPrecedence ?? app(ExitPrecedenceEvaluator::class);
+        $this->staggeredEntry = $staggeredEntry ?? app(StaggeredEntryCalculator::class);
+        $this->buyCooldown = $buyCooldown ?? app(BuyCooldownEvaluator::class);
+        $this->positionTargets = $positionTargets ?? app(StrategyPositionTargetService::class);
+        $this->wholeShares = $wholeShares ?? app(WholeShareQuantityCalculator::class);
+        $this->minActionable = $minActionable ?? app(MinimumActionableAmountResolver::class);
     }
 
     /**
@@ -377,6 +408,14 @@ class RecommendationGenerationPipeline
             ->pluck('quantity', 'stock_id')
             ->all();
 
+        $holdingsByStock = Holding::query()
+            ->with('stock')
+            ->where('profile_id', $profile->id)
+            ->where('strategy_id', $strategyId)
+            ->where('quantity', '>', 0)
+            ->get()
+            ->keyBy(fn (Holding $h) => (int) $h->stock_id);
+
         $heldQtyInt = [];
         foreach ($heldQty as $stockId => $qty) {
             $heldQtyInt[(int) $stockId] = (float) $qty;
@@ -425,6 +464,7 @@ class RecommendationGenerationPipeline
         $expiresAt = Carbon::now()->addHours($expiryHours);
 
         return [
+            'profile' => $profile,
             'evaluation_run' => $evaluationRun,
             'strategy_version' => $strategyVersion,
             'strategy' => $strategy,
@@ -458,6 +498,7 @@ class RecommendationGenerationPipeline
             'exit_screener_hits_by_screener' => $exitScreenerHits['by_screener'] ?? [],
             'exit_screener_meta' => $exitScreenerHits['meta'] ?? [],
             'held_qty' => $heldQty,
+            'holdings_by_stock' => $holdingsByStock,
             'portfolio_value' => $portfolioValue,
             'allocation_by_stock' => $allocationByStock,
             'expires_at' => $expiresAt,
@@ -471,7 +512,8 @@ class RecommendationGenerationPipeline
     {
         $query = TradingRecommendation::query()
             ->forProfile($profile)
-            ->staleOpen();
+            ->staleOpen()
+            ->with('strategyVersion');
 
         if ($strategyId !== null && $strategyId > 0) {
             $query->whereHas('strategyVersion', function ($q) use ($strategyId) {
@@ -479,7 +521,26 @@ class RecommendationGenerationPipeline
             });
         }
 
-        $query->update(['status' => TradingRecommendation::STATUS_CANCELLED]);
+        $now = Carbon::now();
+        foreach ($query->get() as $rec) {
+            $recStrategyId = (int) ($rec->strategyVersion?->strategy_id ?? 0);
+            $isBuy = in_array($rec->recommendation_type, [
+                TradingRecommendation::ACTION_OPEN_POSITION,
+                TradingRecommendation::ACTION_INCREASE_POSITION,
+            ], true);
+
+            // OD-11: do not stale-replace a BUY while cooldown is active for the pair.
+            if ($isBuy && $recStrategyId > 0 && $this->positionTargets->isBuyCooldownActive(
+                $profile,
+                (int) $rec->security_id,
+                $recStrategyId,
+                $now,
+            )) {
+                continue;
+            }
+
+            $rec->forceFill(['status' => TradingRecommendation::STATUS_CANCELLED])->save();
+        }
     }
 
     /**
@@ -548,18 +609,53 @@ class RecommendationGenerationPipeline
 
             $screenerExplain = $this->eligibility->explainForSecurity($eligibility, $securityId);
             $exitEval = ['triggered' => false, 'matched' => [], 'status' => 'Not Triggered'];
+            $exitAttribution = null;
             if ($isHeld) {
-                $exitEval = ExitStrategyEvaluator::evaluate(
-                    is_array($config['exit_strategy'] ?? null) ? $config['exit_strategy'] : [],
-                    [
-                        'security_id' => $securityId,
-                        'overall_score' => $score,
-                        'indicator_scores' => is_array($factorScores) ? $factorScores : [],
-                        'indicators' => $result->evidence['indicators'] ?? [],
-                        'unrealized_pnl_pct' => $holdingMeta['unrealized_pnl_pct'] ?? null,
-                        'exit_screener_hits_by_screener' => $ctx['exit_screener_hits_by_screener'] ?? [],
-                    ]
-                );
+                $holding = $ctx['holdings_by_stock'][$securityId] ?? null;
+                if ($holding instanceof Holding) {
+                    $stock = $holding->stock ?? \App\Models\Stock::query()->find($securityId);
+                    if ($stock !== null) {
+                        $precedence = $this->exitPrecedence->evaluate(
+                            $ctx['profile'] ?? $holding->profile,
+                            $holding,
+                            $stock,
+                            is_array($config['exit_strategy'] ?? null) ? $config['exit_strategy'] : [],
+                            [
+                                'security_id' => $securityId,
+                                'overall_score' => $score,
+                                'indicator_scores' => is_array($factorScores) ? $factorScores : [],
+                                'indicators' => $result->evidence['indicators'] ?? [],
+                                'unrealized_pnl_pct' => $holdingMeta['unrealized_pnl_pct'] ?? null,
+                                'exit_screener_hits_by_screener' => $ctx['exit_screener_hits_by_screener'] ?? [],
+                            ],
+                            is_array($config) ? $config : [],
+                        );
+                        $exitEval = $precedence['strategy_exit_eval'];
+                        $exitAttribution = $this->formatExitAttribution($precedence);
+                    }
+                } else {
+                    // Fallback: strategy-exit only when owner holding row is missing.
+                    $exitEval = ExitStrategyEvaluator::evaluate(
+                        is_array($config['exit_strategy'] ?? null) ? $config['exit_strategy'] : [],
+                        [
+                            'security_id' => $securityId,
+                            'overall_score' => $score,
+                            'indicator_scores' => is_array($factorScores) ? $factorScores : [],
+                            'indicators' => $result->evidence['indicators'] ?? [],
+                            'unrealized_pnl_pct' => $holdingMeta['unrealized_pnl_pct'] ?? null,
+                            'exit_screener_hits_by_screener' => $ctx['exit_screener_hits_by_screener'] ?? [],
+                        ]
+                    );
+                    if ($exitEval['triggered'] ?? false) {
+                        $exitAttribution = [
+                            'primary_reason' => ExitAttribution::STRATEGY_EXIT,
+                            'also_true' => [],
+                            'mechanisms' => [
+                                ExitAttribution::STRATEGY_EXIT => ['triggered' => true, 'detail' => $exitEval],
+                            ],
+                        ];
+                    }
+                }
             }
 
             $opinion = $this->buildMarketOpinion(
@@ -590,8 +686,9 @@ class RecommendationGenerationPipeline
                 $allowReduce,
             );
 
-            // Exit strategy overrides: force EXIT when rules trigger.
-            if ($isHeld && ($exitEval['triggered'] ?? false)) {
+            // §13.2: any winning exit mechanism forces EXIT (primary attribution on draft).
+            $exitTriggered = is_array($exitAttribution) && ($exitAttribution['primary_reason'] ?? null) !== null;
+            if ($isHeld && $exitTriggered) {
                 $action = TradingRecommendation::ACTION_EXIT_POSITION;
                 if (is_array($opinion)) {
                     $dir = (string) ($opinion['direction'] ?? '');
@@ -602,8 +699,8 @@ class RecommendationGenerationPipeline
                 }
             }
 
-            // Non-eligible holdings: only emit if exit triggered; otherwise HOLD.
-            if ($isHeld && ! $isEligible && ! ($exitEval['triggered'] ?? false)) {
+            // Non-eligible holdings: only emit if an exit mechanism triggered; otherwise HOLD.
+            if ($isHeld && ! $isEligible && ! $exitTriggered) {
                 $action = TradingRecommendation::ACTION_HOLD_POSITION;
             }
 
@@ -622,7 +719,32 @@ class RecommendationGenerationPipeline
             $plan = null;
             $suggestedAlloc = $currentAlloc;
             $positionSize = null;
-            if (in_array($action, TradingRecommendation::ACTIONABLE_ACTIONS, true)) {
+            if (in_array($action, [TradingRecommendation::ACTION_OPEN_POSITION, TradingRecommendation::ACTION_INCREASE_POSITION], true)) {
+                $sized = $this->sizeOpenOrIncrease(
+                    $ctx,
+                    $action,
+                    $securityId,
+                    $portfolioValue,
+                    $currentAlloc,
+                    $targetAlloc,
+                    $maxPct,
+                    $qtyHeld,
+                    is_numeric($referencePrice) ? (float) $referencePrice : null,
+                    $risk,
+                    $isHeld,
+                );
+                if ($sized === null) {
+                    // OD-11 cooldown or OD-12 below min actionable / zero qty — suppress BUY.
+                    $action = $isHeld ? TradingRecommendation::ACTION_HOLD_POSITION : TradingRecommendation::ACTION_WATCH;
+                    $suggestedAlloc = $isHeld ? $currentAlloc : 0.0;
+                } else {
+                    $plan = $sized['plan'];
+                    $suggestedAlloc = (float) ($plan['suggested_allocation_pct'] ?? $targetAlloc);
+                    $positionSize = (float) ($plan['position_target_amount']
+                        ?? $plan['suggested_investment_amount']
+                        ?? 0);
+                }
+            } elseif (in_array($action, TradingRecommendation::ACTIONABLE_ACTIONS, true)) {
                 $plan = $this->buildExecutionPlan(
                     $action,
                     $portfolioValue,
@@ -641,6 +763,13 @@ class RecommendationGenerationPipeline
                 $suggestedAlloc = $isHeld ? $currentAlloc : 0.0;
             }
 
+            if ($action === TradingRecommendation::ACTION_EXIT_POSITION && is_array($exitAttribution)) {
+                $plan = $this->attachExitAttributionToPlan(
+                    is_array($plan) ? $plan : ['action' => $action],
+                    $exitAttribution,
+                );
+            }
+
             $priority = (int) max(1, min(100, round($score)));
 
             $drafts[] = [
@@ -656,6 +785,7 @@ class RecommendationGenerationPipeline
                 'is_eligible' => $isEligible,
                 'screener_explain' => $screenerExplain,
                 'exit_eval' => $exitEval,
+                'exit_attribution' => $exitAttribution,
                 'current_alloc' => $currentAlloc,
                 'target_alloc' => $targetAlloc,
                 'suggested_alloc' => $suggestedAlloc,
@@ -672,6 +802,7 @@ class RecommendationGenerationPipeline
         }
 
         $drafts = $this->appendScreenerExitOnlyDrafts($drafts, $ctx);
+        $drafts = $this->appendPortfolioRiskExitOnlyDrafts($drafts, $ctx);
 
         return $drafts;
     }
@@ -763,6 +894,48 @@ class RecommendationGenerationPipeline
                 TradingRecommendation::RISK_MEDIUM,
             );
 
+            $holding = $ctx['holdings_by_stock'][$securityId] ?? null;
+            $profile = $ctx['profile'] ?? null;
+            $exitAttribution = [
+                'primary_reason' => ExitAttribution::STRATEGY_EXIT,
+                'also_true' => [],
+                'mechanisms' => [
+                    ExitAttribution::STRATEGY_EXIT => ['triggered' => true, 'detail' => $exitEval],
+                ],
+            ];
+            if ($holding instanceof Holding && $profile instanceof PortfolioProfile) {
+                $stock = $holding->stock ?? \App\Models\Stock::query()->find($securityId);
+                if ($stock !== null) {
+                    $precedence = $this->exitPrecedence->evaluate(
+                        $profile,
+                        $holding,
+                        $stock,
+                        is_array($config['exit_strategy'] ?? null) ? $config['exit_strategy'] : [],
+                        [
+                            'security_id' => $securityId,
+                            'exit_screener_hits_by_screener' => $ctx['exit_screener_hits_by_screener'] ?? [],
+                            'unrealized_pnl_pct' => $holdingMeta['unrealized_pnl_pct'] ?? null,
+                        ],
+                        is_array($config) ? $config : [],
+                    );
+                    // Screener-only path already confirmed strategy screener exit; keep strategy_exit primary
+                    // if strategy mechanism is true, else use full §13.2 primary.
+                    $exitAttribution = $this->formatExitAttribution($precedence);
+                    if (($exitAttribution['primary_reason'] ?? null) === null) {
+                        $exitAttribution = [
+                            'primary_reason' => ExitAttribution::STRATEGY_EXIT,
+                            'also_true' => [],
+                            'mechanisms' => [
+                                ExitAttribution::STRATEGY_EXIT => ['triggered' => true, 'detail' => $exitEval],
+                            ],
+                        ];
+                    }
+                    $exitEval = $precedence['strategy_exit_eval'];
+                }
+            }
+
+            $plan = $this->attachExitAttributionToPlan($plan, $exitAttribution);
+
             $drafts[] = [
                 'key' => 'screener-exit-'.$securityId,
                 'result' => null,
@@ -776,6 +949,7 @@ class RecommendationGenerationPipeline
                 'is_eligible' => $isEligible,
                 'screener_explain' => $this->eligibility->explainForSecurity($eligibility, $securityId),
                 'exit_eval' => $exitEval,
+                'exit_attribution' => $exitAttribution,
                 'current_alloc' => $currentAlloc,
                 'target_alloc' => 0.0,
                 'suggested_alloc' => 0.0,
@@ -792,6 +966,160 @@ class RecommendationGenerationPipeline
         }
 
         return $drafts;
+    }
+
+    /**
+     * EXIT drafts for strategy-owned holdings not already drafted that hit portfolio SL / trailing / horizon
+     * (or remaining strategy exit) per §13.2 — covers holdings outside the evaluation result set.
+     *
+     * @param  list<array<string, mixed>>  $drafts
+     * @param  array<string, mixed>  $ctx
+     * @return list<array<string, mixed>>
+     */
+    protected function appendPortfolioRiskExitOnlyDrafts(array $drafts, array $ctx): array
+    {
+        $profile = $ctx['profile'] ?? null;
+        if (! $profile instanceof PortfolioProfile) {
+            return $drafts;
+        }
+
+        $processed = [];
+        foreach ($drafts as $draft) {
+            $processed[(int) ($draft['security_id'] ?? 0)] = true;
+        }
+
+        $config = is_array($ctx['config'] ?? null) ? $ctx['config'] : [];
+        $heldQty = $ctx['held_qty'] ?? [];
+        $holdingsByStock = $ctx['holdings_by_stock'] ?? collect();
+        $allocationByStock = $ctx['allocation_by_stock'] ?? [];
+        $eligibility = $ctx['eligibility'] ?? [];
+        $eligibleSet = $ctx['eligible_set'] ?? [];
+        $eligibilityRestricted = (bool) ($ctx['eligibility_restricted'] ?? false);
+        $maxPct = (float) ($ctx['max_pct'] ?? 10);
+        $portfolioValue = (float) ($ctx['portfolio_value'] ?? 0);
+
+        foreach ($heldQty as $stockId => $qty) {
+            $securityId = (int) $stockId;
+            $qtyHeld = (float) $qty;
+            if ($securityId < 1 || $qtyHeld <= 0 || isset($processed[$securityId])) {
+                continue;
+            }
+
+            $holding = $holdingsByStock[$securityId] ?? null;
+            if (! $holding instanceof Holding) {
+                continue;
+            }
+            $stock = $holding->stock ?? \App\Models\Stock::query()->find($securityId);
+            if ($stock === null) {
+                continue;
+            }
+
+            $holdingMeta = $allocationByStock[$securityId] ?? [];
+            $precedence = $this->exitPrecedence->evaluate(
+                $profile,
+                $holding,
+                $stock,
+                is_array($config['exit_strategy'] ?? null) ? $config['exit_strategy'] : [],
+                [
+                    'security_id' => $securityId,
+                    'overall_score' => 0.0,
+                    'indicator_scores' => [],
+                    'indicators' => [],
+                    'unrealized_pnl_pct' => $holdingMeta['unrealized_pnl_pct'] ?? null,
+                    'exit_screener_hits_by_screener' => $ctx['exit_screener_hits_by_screener'] ?? [],
+                ],
+                $config,
+            );
+
+            $exitAttribution = $this->formatExitAttribution($precedence);
+            if (($exitAttribution['primary_reason'] ?? null) === null) {
+                continue;
+            }
+
+            $currentAlloc = (float) ($holdingMeta['allocation_pct'] ?? 0);
+            $referencePrice = $holdingMeta['latest_close'] ?? null;
+            if ($referencePrice === null || $referencePrice <= 0) {
+                $referencePrice = $this->latestClose($securityId);
+            }
+            $isEligible = ! $eligibilityRestricted || isset($eligibleSet[$securityId]);
+            $action = TradingRecommendation::ACTION_EXIT_POSITION;
+            $plan = $this->buildExecutionPlan(
+                $action,
+                $portfolioValue,
+                $currentAlloc,
+                0.0,
+                $maxPct,
+                $qtyHeld,
+                is_numeric($referencePrice) ? (float) $referencePrice : null,
+                TradingRecommendation::RISK_MEDIUM,
+            );
+            $plan = $this->attachExitAttributionToPlan($plan, $exitAttribution);
+
+            $drafts[] = [
+                'key' => 'risk-exit-'.$securityId,
+                'result' => null,
+                'security_id' => $securityId,
+                'symbol' => (string) ($stock->symbol ?? ''),
+                'score' => 0.0,
+                'strategy_breakdown' => [],
+                'confidence' => 0.7,
+                'qty_held' => $qtyHeld,
+                'is_held' => true,
+                'is_eligible' => $isEligible,
+                'screener_explain' => $this->eligibility->explainForSecurity($eligibility, $securityId),
+                'exit_eval' => $precedence['strategy_exit_eval'],
+                'exit_attribution' => $exitAttribution,
+                'current_alloc' => $currentAlloc,
+                'target_alloc' => 0.0,
+                'suggested_alloc' => 0.0,
+                'reference_price' => $referencePrice,
+                'opinion' => [
+                    'direction' => 'SELL',
+                    'strength' => 'moderate',
+                    'confidence' => 0.7,
+                    'score' => 0.0,
+                    'evidence' => ['source' => 'exit_precedence', 'primary_reason' => $exitAttribution['primary_reason']],
+                ],
+                'action' => $action,
+                'plan' => $plan,
+                'position_size' => $plan['suggested_investment_amount'] ?? null,
+                'priority' => 85,
+                'risk' => TradingRecommendation::RISK_MEDIUM,
+                'factor_scores' => [],
+            ];
+            $processed[$securityId] = true;
+        }
+
+        return $drafts;
+    }
+
+    /**
+     * @param  array<string, mixed>  $precedence
+     * @return array{primary_reason: ?string, also_true: list<string>, mechanisms: array<string, mixed>}
+     */
+    protected function formatExitAttribution(array $precedence): array
+    {
+        return [
+            'primary_reason' => $precedence['primary_reason'] ?? null,
+            'also_true' => array_values($precedence['also_true'] ?? []),
+            'mechanisms' => $precedence['mechanisms'] ?? [],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $plan
+     * @param  array<string, mixed>  $exitAttribution
+     * @return array<string, mixed>|null
+     */
+    protected function attachExitAttributionToPlan(?array $plan, array $exitAttribution): ?array
+    {
+        if ($plan === null) {
+            return null;
+        }
+        $plan['exit_attribution'] = $exitAttribution;
+        $plan['primary_exit_reason'] = $exitAttribution['primary_reason'] ?? null;
+
+        return $plan;
     }
 
     /**
@@ -974,25 +1302,37 @@ class RecommendationGenerationPipeline
                 $qty = (int) ($alloc['quantity'] ?? 0);
                 $amount = round((float) ($alloc['allocated_amount'] ?? 0), 4);
                 $desiredAmount = (float) ($alloc['target_amount']
+                    ?? $draft['plan']['this_cycle_amount']
                     ?? $draft['plan']['target_investment_amount']
                     ?? $draft['plan']['suggested_investment_amount']
                     ?? $draft['position_size']
                     ?? 0);
+                $positionTarget = (float) ($draft['plan']['position_target_amount']
+                    ?? $draft['position_target_amount']
+                    ?? $desiredAmount);
                 $unfunded = (float) ($alloc['unfunded_amount'] ?? max(0.0, $desiredAmount - $amount));
                 $status = $this->mapFundingStatus($alloc, $qty, $amount);
 
                 $capitalAllocationMeta = [
                     'status' => $status,
+                    // This-cycle requirement (staggered / remaining) — lending remainder uses this (DEP-PARTIAL-*).
                     'desired_amount' => $desiredAmount,
                     'target_amount' => $desiredAmount,
+                    // OD-12 position target (full conviction); not reduced by partial funding.
+                    'position_target_amount' => $positionTarget,
                     'allocated_amount' => $amount,
                     'unfunded_amount' => $unfunded,
                     'quantity' => $qty,
                     'atomic_reservation' => (float) ($alloc['atomic_reservation'] ?? 0),
                     'order_source' => (string) ($draft['ranking_order_source'] ?? 'od23'),
+                    'is_first_entry' => (bool) ($draft['plan']['is_first_entry'] ?? false),
+                    'filled_amount' => (float) ($draft['plan']['filled_amount'] ?? 0),
+                    'remaining_amount' => (float) ($draft['plan']['remaining_amount'] ?? 0),
                 ];
 
                 $plan = is_array($plan) ? $plan : [];
+                $plan['position_target_amount'] = $positionTarget;
+                $plan['this_cycle_amount'] = $desiredAmount;
                 $plan['target_investment_amount'] = $desiredAmount;
                 $plan['suggested_quantity'] = $qty;
                 $plan['suggested_investment_amount'] = $amount;
@@ -1000,7 +1340,7 @@ class RecommendationGenerationPipeline
                 if (isset($plan['position_after']) && is_array($plan['position_after'])) {
                     $plan['position_after']['quantity_delta'] = $qty;
                 }
-                $positionSize = $desiredAmount;
+                $positionSize = $positionTarget;
                 $suggestedAlloc = $draft['target_alloc'];
             }
 
@@ -1103,6 +1443,7 @@ class RecommendationGenerationPipeline
                     'breakdown' => $draft['strategy_breakdown'],
                 ],
                 'exit_strategy' => $draft['exit_eval'] ?? ['status' => 'Not Triggered'],
+                'exit_attribution' => $draft['exit_attribution'] ?? null,
                 'rank' => $draft['result']?->rank,
                 'passed_rules' => $draft['result']?->passed_rules ?? [],
                 'failed_rules' => $draft['result']?->failed_rules ?? [],
@@ -1171,6 +1512,31 @@ class RecommendationGenerationPipeline
                 'expires_at' => $expiresAt,
                 'generated_at' => now(),
             ]);
+
+            // OD-12: persist position target on strategy-owned holding (survives perishable rec rows).
+            if (
+                $strategy instanceof TradingStrategy
+                && in_array($action, [
+                    TradingRecommendation::ACTION_OPEN_POSITION,
+                    TradingRecommendation::ACTION_INCREASE_POSITION,
+                ], true)
+            ) {
+                $positionTarget = (float) ($plan['position_target_amount']
+                    ?? $capitalAllocationMeta['position_target_amount']
+                    ?? 0);
+                if ($positionTarget > 0) {
+                    $stock = \App\Models\Stock::query()->find((int) $draft['security_id']);
+                    if ($stock !== null) {
+                        $this->positionTargets->upsertTargetAmount(
+                            $profile,
+                            $stock,
+                            $strategy,
+                            $positionTarget,
+                        );
+                    }
+                }
+            }
+
             $this->lending->syncAfterGenerated($rec);
             $created[] = $rec->fresh();
             $persisted++;
@@ -1284,6 +1650,106 @@ class RecommendationGenerationPipeline
     /**
      * @return array<string, mixed>
      */
+    /**
+     * OD-11 / OD-12: size OPEN/INCREASE using position target, staggered first entry / remaining,
+     * whole-share floor, and minimum actionable amount. Returns null when BUY must be suppressed.
+     *
+     * @param  array<string, mixed>  $ctx
+     * @return array{plan: array<string, mixed>}|null
+     */
+    protected function sizeOpenOrIncrease(
+        array $ctx,
+        string $action,
+        int $securityId,
+        float $portfolioValue,
+        float $currentAlloc,
+        float $targetAlloc,
+        float $maxPct,
+        float $qtyHeld,
+        ?float $price,
+        string $risk,
+        bool $isHeld,
+    ): ?array {
+        $profile = $ctx['profile'] ?? null;
+        $strategy = $ctx['strategy'] ?? null;
+        if (! $profile instanceof PortfolioProfile || ! $strategy instanceof TradingStrategy) {
+            return null;
+        }
+
+        $strategyId = (int) $strategy->id;
+        if ($this->positionTargets->isBuyCooldownActive($profile, $securityId, $strategyId)) {
+            return null;
+        }
+
+        $capAlloc = min($maxPct, $targetAlloc);
+        $convictionTarget = $portfolioValue > 0
+            ? round($portfolioValue * ($capAlloc / 100.0), 4)
+            : 0.0;
+        if ($convictionTarget <= 0) {
+            return null;
+        }
+
+        $holding = $this->positionTargets->findHolding($profile, $securityId, $strategyId);
+        $hasOpen = $isHeld || $this->positionTargets->hasOpenPosition($holding);
+        $filled = $this->positionTargets->filledAmount($holding);
+
+        // Recap target from current conviction; do not overwrite with this-cycle or allocated.
+        $positionTarget = $convictionTarget;
+        $firstEntryPct = is_numeric($ctx['config']['portfolio_rules']['first_entry_pct'] ?? null)
+            ? (float) $ctx['config']['portfolio_rules']['first_entry_pct']
+            : null;
+
+        $cycle = $this->staggeredEntry->thisCycleIntendedAmount(
+            $positionTarget,
+            $filled,
+            $hasOpen,
+            $firstEntryPct,
+        );
+        $thisCycle = (float) $cycle['this_cycle_amount'];
+        if ($thisCycle <= 0) {
+            return null;
+        }
+
+        $refPrice = $price !== null && $price > 0 ? $price : 0.0;
+        $shares = $this->wholeShares->fromAmount($thisCycle, $refPrice);
+        $qty = (int) $shares['quantity'];
+        $notional = (float) $shares['notional'];
+        if ($qty < 1 || $notional <= 0) {
+            return null;
+        }
+
+        if (! $this->minActionable->isActionable($notional, $profile)) {
+            return null;
+        }
+
+        $suggestedAlloc = $action === TradingRecommendation::ACTION_OPEN_POSITION
+            ? $capAlloc
+            : min($maxPct, max($currentAlloc, $capAlloc));
+
+        $plan = [
+            'action' => $action,
+            'suggested_target_allocation_pct' => round($capAlloc, 4),
+            'suggested_allocation_pct' => round($suggestedAlloc, 4),
+            'risk_explanation' => $this->riskExplanation($action, $risk, $currentAlloc, $capAlloc),
+            'side' => 'buy',
+            'position_target_amount' => round($positionTarget, 4),
+            'this_cycle_amount' => round($notional, 4),
+            'suggested_investment_amount' => round($notional, 4),
+            'target_investment_amount' => round($notional, 4),
+            'suggested_quantity' => $qty,
+            'filled_amount' => round($filled, 4),
+            'remaining_amount' => round((float) $cycle['remaining_amount'], 4),
+            'is_first_entry' => (bool) $cycle['is_first_entry'],
+            'first_entry_pct' => (float) $cycle['first_entry_pct'],
+            'position_after' => [
+                'allocation_pct' => round($suggestedAlloc, 4),
+                'quantity_delta' => $qty,
+            ],
+        ];
+
+        return ['plan' => $plan];
+    }
+
     protected function buildExecutionPlan(
         string $action,
         float $portfolioValue,

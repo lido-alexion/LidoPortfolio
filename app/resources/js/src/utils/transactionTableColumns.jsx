@@ -1,6 +1,7 @@
 import React from 'react';
 import { formatTableInteger, formatTableMoney2, percentChangeColorClass } from './tableFormat';
 import { formatTransactionDateDisplay } from './transactionDate';
+import { exitAttributionLabel } from './exitAttributionLabels';
 
 function sellOnlyMoneyCell(getValue, row) {
     if (row.original.type !== 'sell') {
@@ -75,6 +76,26 @@ export function buildTransactionTableColumns({ onEdit, onDelete, showRealization
     }
 
     columns.push(
+        {
+            accessorKey: 'exit_reason',
+            header: 'Exit reason',
+            meta: { columnMenuLabel: 'Primary exit reason (sells from recommendations)' },
+            cell: ({ row, getValue }) => {
+                if (row.original.type !== 'sell') {
+                    return <span className="text-muted">—</span>;
+                }
+                const value = getValue();
+                if (value == null || value === '') {
+                    return <span className="text-muted">—</span>;
+                }
+                const label = exitAttributionLabel(value);
+                return (
+                    <span title={String(value)}>
+                        {label}
+                    </span>
+                );
+            },
+        },
         {
             accessorKey: 'notes',
             header: 'Notes',

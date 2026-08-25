@@ -12,7 +12,7 @@ class BackfillHistoryDepthCommand extends Command
         {--reset : Restart the campaign from the first stock}
         {--status : Print campaign status without running a batch}';
 
-    protected $description = 'Deepen stored OHLCV history to the configured target (default ~18 months) so 1-year backtests have full indicator lookback';
+    protected $description = 'Deepen stored OHLCV history to all available provider/listing history (OD-17). One campaign pass, then idle until --reset.';
 
     public function handle(HistoryDepthBackfillService $service): int
     {
@@ -36,7 +36,7 @@ class BackfillHistoryDepthCommand extends Command
         if (($stats['skipped'] ?? false) === true) {
             $this->info('Skipped: '.($stats['reason'] ?? 'unknown'));
             if (($stats['reason'] ?? '') === 'completed') {
-                $this->comment('Campaign already complete for the configured target. Use --reset or raise HISTORY_DEPTH_TARGET_DAYS to re-arm.');
+                $this->comment('Campaign already complete for all-available history. Use --reset to re-arm.');
             }
 
             return self::SUCCESS;

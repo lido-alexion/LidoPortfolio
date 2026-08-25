@@ -21,6 +21,7 @@ use App\Models\TradingStrategyVersion;
 use App\Models\User;
 use App\Services\Analytics\MarketAnalyticsService;
 use App\Services\CashManagementService;
+use App\Services\ProfileSettingsService;
 use App\Services\Strategy\PortfolioCapitalAccountingService;
 use App\Services\Strategy\StrategyRegistrySupport;
 use App\Services\StrategyConfigurationService;
@@ -256,6 +257,11 @@ class V3RecommendationGenerationTest extends TestCase
         ]);
 
         $strategyVersion = app(StrategyConfigurationService::class)->ensureActive($profile);
+        app(ProfileSettingsService::class)->set(
+            $profile,
+            \App\Services\Entry\MinimumActionableAmountResolver::SETTING_KEY,
+            '1',
+        );
         $config = $strategyVersion->config_json ?? FactoryMomentumStrategy::config();
         $config['eligibility_sources'] = [];
         $config['thresholds'] = array_merge($config['thresholds'] ?? [], [
@@ -266,8 +272,9 @@ class V3RecommendationGenerationTest extends TestCase
             'exit_position' => 20,
         ]);
         $config['portfolio_rules'] = array_merge($config['portfolio_rules'] ?? [], [
-            'default_position_size_pct' => 6.0,
-            'max_position_size_pct' => 10.0,
+            'default_position_size_pct' => 10.0,
+            'max_position_size_pct' => 15.0,
+            'first_entry_pct' => 50.0,
             'max_new_positions_per_cycle' => 5,
             'min_cash_reserve_pct' => 0,
             'max_cash_deployment_pct' => 100,
@@ -382,7 +389,7 @@ class V3RecommendationGenerationTest extends TestCase
             'reservation_status' => TradingRecommendation::RESERVATION_NONE,
             'reserved_amount' => 0,
             'version' => 4,
-            'generated_at' => now()->subDay(),
+            'generated_at' => now()->subDays(3),
         ]);
     }
 

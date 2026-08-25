@@ -244,6 +244,7 @@ export default function SettingsPage() {
 
         await api.put('/settings', {
             default_stoploss_percent: settings.default_stoploss_percent,
+            portfolio_trailing_percent: settings.portfolio_trailing_percent,
             portfolio_cash_reserve_pct: settings.portfolio_cash_reserve_pct === ''
                 ? null
                 : settings.portfolio_cash_reserve_pct,
@@ -641,11 +642,12 @@ export default function SettingsPage() {
                         </div>
                         <div className="card-body">
                             <p className="text-muted small">
-                                Telegram, stoploss, and notification schedules apply to the
+                                Telegram, Portfolio Stop-Loss %, Portfolio Trailing Stop %, and notification
+                                schedules apply to the
                                 {' '}
                                 <strong>active portfolio</strong>
                                 {' '}
-                                in this tab.
+                                in this tab. Stop-loss and trailing are independent controls.
                             </p>
                             <div className="row g-3">
                                 <div className="col-12">
@@ -730,7 +732,7 @@ export default function SettingsPage() {
                                 </div>
                                 <div className="col-12 col-md-4">
                                     <label className="form-label" htmlFor="settings-stoploss">
-                                        Trailing Stoploss %age
+                                        Portfolio Stop-Loss %
                                     </label>
                                     <NumberInput
                                         id="settings-stoploss"
@@ -750,7 +752,32 @@ export default function SettingsPage() {
                                         })}
                                     />
                                     <p className="text-muted small mb-0 mt-1">
-                                        Applies to holdings in the active portfolio.
+                                        Portfolio stop-loss vs weighted-average fill cost (OD-13). Independent of trailing %.
+                                    </p>
+                                </div>
+                                <div className="col-12 col-md-4">
+                                    <label className="form-label" htmlFor="settings-trailing">
+                                        Portfolio Trailing Stop %
+                                    </label>
+                                    <NumberInput
+                                        id="settings-trailing"
+                                        min="1"
+                                        max="50"
+                                        step="0.05"
+                                        value={settings.portfolio_trailing_percent ?? ''}
+                                        onChange={(e) => setSettings({
+                                            ...settings,
+                                            portfolio_trailing_percent: e.target.value,
+                                        })}
+                                        onBlur={(e) => setSettings({
+                                            ...settings,
+                                            portfolio_trailing_percent: e.target.value === ''
+                                                ? ''
+                                                : roundToTwoDecimals(e.target.value),
+                                        })}
+                                    />
+                                    <p className="text-muted small mb-0 mt-1">
+                                        Peak raw close since entry × (1 − this %). Seeded to 15% (OD-22). Not stop-loss %.
                                     </p>
                                 </div>
                                 <div className="col-12 col-md-4">

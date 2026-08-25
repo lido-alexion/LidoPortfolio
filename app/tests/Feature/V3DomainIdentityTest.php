@@ -114,11 +114,11 @@ class V3DomainIdentityTest extends TestCase
         $this->assertNotSame((int) $second->id, (int) $rec->owningStrategyId());
     }
 
-    public function test_holdings_owner_is_inferred_for_single_strategy_and_qty_is_unchanged(): void
+    public function test_holdings_owner_is_not_inferred_from_single_strategy_without_lot_evidence(): void
     {
         $user = User::factory()->create();
         $profile = $this->defaultPortfolioFor($user);
-        $version = app(StrategyConfigurationService::class)->ensureActive($profile);
+        app(StrategyConfigurationService::class)->ensureActive($profile);
         $stock = $this->makeStock();
 
         $holding = Holding::query()->create([
@@ -135,12 +135,12 @@ class V3DomainIdentityTest extends TestCase
         $this->assertTrue($holding->isUnmanaged());
 
         $updated = app(HoldingOwnershipBackfill::class)->inferForProfileId((int) $profile->id);
-        $this->assertSame(1, $updated);
+        $this->assertSame(0, $updated);
 
         $holding->refresh();
-        $this->assertSame((int) $version->strategy_id, (int) $holding->strategy_id);
-        $this->assertSame(Holding::ownerKeyFor((int) $version->strategy_id), $holding->owner_key);
-        $this->assertFalse($holding->isUnmanaged());
+        $this->assertTrue($holding->isUnmanaged());
+        $this->assertNull($holding->strategy_id);
+        $this->assertSame(Holding::OWNER_UNMANAGED, $holding->owner_key);
         $this->assertEqualsWithDelta(12.5, (float) $holding->quantity, 0.0001);
         $this->assertEqualsWithDelta(100.0, (float) $holding->avg_buy_price, 0.0001);
         $this->assertEqualsWithDelta(1250.0, (float) $holding->invested_amount, 0.0001);

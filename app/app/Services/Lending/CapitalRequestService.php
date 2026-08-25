@@ -76,10 +76,20 @@ final class CapitalRequestService
     {
         $profile = $request->profile()->firstOrFail();
 
-        return $this->eligibility->eligibleLenders(
+        return $this->eligibleLendersFor(
             $profile,
             (int) $request->borrower_strategy_id,
             (float) $request->amount,
         );
+    }
+
+    /**
+     * Eligible lenders for a proposed loan amount before a capital request exists.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function eligibleLendersFor(PortfolioProfile $profile, int $borrowerStrategyId, float $amount): array
+    {
+        return $this->eligibility->eligibleLenders($profile, $borrowerStrategyId, $amount);
     }
 }

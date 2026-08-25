@@ -18,19 +18,20 @@ export default function StockPricesPage() {
     const [payload, setPayload] = useState(null);
     const [error, setError] = useState('');
     const [lastSync, setLastSync] = useState(null);
+    const [range, setRange] = useState('all');
 
     const load = useCallback(async () => {
         setLoading(true);
         setError('');
         try {
-            const res = await api.get(`/stocks/${stockId}/prices`);
+            const res = await api.get(`/stocks/${stockId}/prices`, { params: { range } });
             setPayload(res.data);
         } catch {
             setError('Failed to load price history.');
         } finally {
             setLoading(false);
         }
-    }, [stockId]);
+    }, [stockId, range]);
 
     useEffect(() => { load(); }, [load]);
     usePortfolioChanged(load);
@@ -132,9 +133,12 @@ export default function StockPricesPage() {
             <div className="card">
                 <div className="card-body">
                     <div className="row g-2 small">
-                        <div className="col-md-3"><strong>From buy date:</strong> {payload?.from_date || '—'}</div>
+                        <div className="col-md-3"><strong>All history from:</strong> {payload?.all_from_date || payload?.from_date || '—'}</div>
                         <div className="col-md-3">
-                            <strong>Rows:</strong> {payload?.price_count ?? 0}
+                            <strong>Rows ({range === 'since_buy' ? 'Since Buy' : 'All'}):</strong> {payload?.price_count ?? 0}
+                        </div>
+                        <div className="col-md-3">
+                            <strong>Since Buy from:</strong> {payload?.since_buy_from_date || '—'}
                         </div>
                         <div className="col-md-3">
                             <strong>Status:</strong>{' '}
@@ -148,6 +152,14 @@ export default function StockPricesPage() {
                 </div>
             </div>
 
+            <div className="d-flex gap-2 align-items-center">
+                <div className="btn-group btn-group-sm" role="group" aria-label="Stock history range">
+                    <button type="button" className={`btn ${range === 'all' ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setRange('all')}>All</button>
+                    <button type="button" className={`btn ${range === 'since_buy' ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setRange('since_buy')}>Since Buy</button>
+                </div>
+                <span className="text-muted small">All = all available instrument history; Since Buy = current position episode.</span>
+            </div>
+
             <PriceVolumeChart
                 rows={rows}
                 loading={loading}
@@ -155,13 +167,13 @@ export default function StockPricesPage() {
             />
 
             <DataTableCard
-                title="OHLCV (since buy date)"
+                title={`OHLCV (${range === 'since_buy' ? 'Since Buy' : 'All Available'})`}
                 columns={columns}
                 data={rows}
                 storageKey={`stock-prices-${stockId}`}
                 loading={loading}
                 striped
-                emptyMessage='No historical prices yet. Click "Force sync historical prices" to fetch from buy date.'
+                emptyMessage='No historical prices yet. Click "Force sync historical prices" to fetch all available history.'
             />
         </div>
     );

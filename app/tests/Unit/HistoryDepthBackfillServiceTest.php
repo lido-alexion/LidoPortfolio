@@ -101,7 +101,6 @@ class HistoryDepthBackfillServiceTest extends TestCase
         Carbon::setTestNow('2026-07-21 12:00:00');
         config([
             'portfolio.history_depth_backfill.enabled' => true,
-            'portfolio.history_depth_backfill.target_history_days' => 550,
             'portfolio.history_depth_backfill.delay_ms_between_stocks' => 0,
         ]);
 
@@ -110,6 +109,7 @@ class HistoryDepthBackfillServiceTest extends TestCase
 
         $seen = [];
         $history = Mockery::mock(StockPriceHistoryService::class);
+        $history->shouldReceive('allAvailableHistoryFrom')->andReturn(Carbon::parse('1970-01-01'));
         $history->shouldReceive('fetchMissingHistory')
             ->twice()
             ->withArgs(function (Stock $stock, Carbon $from, Carbon $to, bool $notify, bool $includePreListingPrefix) use (&$seen) {
@@ -136,18 +136,18 @@ class HistoryDepthBackfillServiceTest extends TestCase
         $this->assertNotEmpty(Setting::getValue(HistoryDepthBackfillService::KEY_INDEXES_DONE_AT));
     }
 
-    public function test_campaign_completes_goes_idle_and_rearms_when_target_raised(): void
+    public function test_campaign_completes_goes_idle_and_rearms_on_reset(): void
     {
         Carbon::setTestNow('2026-07-21 12:00:00');
         config([
             'portfolio.history_depth_backfill.enabled' => true,
-            'portfolio.history_depth_backfill.target_history_days' => 550,
             'portfolio.history_depth_backfill.delay_ms_between_stocks' => 0,
         ]);
 
         $this->makeStock('ONLYONE');
 
         $history = Mockery::mock(StockPriceHistoryService::class);
+        $history->shouldReceive('allAvailableHistoryFrom')->andReturn(Carbon::parse('1970-01-01'));
         $history->shouldReceive('fetchMissingHistory')->andReturn([
             'success' => true,
             'cache_hit' => true,
@@ -169,16 +169,10 @@ class HistoryDepthBackfillServiceTest extends TestCase
         $this->assertTrue($again['skipped']);
         $this->assertSame('completed', $again['reason']);
 
-        // Raising the target re-arms the campaign.
-        config(['portfolio.history_depth_backfill.target_history_days' => 730]);
-        $this->assertFalse($service->isCompleted());
-        $this->assertTrue($service->isDue());
-
-        // resetCampaign also re-arms with the same target.
-        config(['portfolio.history_depth_backfill.target_history_days' => 550]);
-        $this->assertTrue($service->isCompleted());
+        // resetCampaign re-arms the all-available pass.
         $service->resetCampaign();
         $this->assertFalse($service->isCompleted());
+        $this->assertTrue($service->isDue());
     }
 
     public function test_cursor_advances_across_batches_and_provider_errors_are_counted(): void
@@ -186,7 +180,6 @@ class HistoryDepthBackfillServiceTest extends TestCase
         Carbon::setTestNow('2026-07-21 12:00:00');
         config([
             'portfolio.history_depth_backfill.enabled' => true,
-            'portfolio.history_depth_backfill.target_history_days' => 550,
             'portfolio.history_depth_backfill.delay_ms_between_stocks' => 0,
         ]);
 
@@ -194,6 +187,7 @@ class HistoryDepthBackfillServiceTest extends TestCase
         $this->makeStock('BBB');
 
         $history = Mockery::mock(StockPriceHistoryService::class);
+        $history->shouldReceive('allAvailableHistoryFrom')->andReturn(Carbon::parse('1970-01-01'));
         $history->shouldReceive('fetchMissingHistory')->andReturn([
             'success' => false,
             'cache_hit' => false,

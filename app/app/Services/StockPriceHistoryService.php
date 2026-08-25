@@ -8,10 +8,37 @@ use App\Support\TradingCalendar;
 use Carbon\Carbon;
 class StockPriceHistoryService
 {
+    /**
+     * OD-17: request start for “all available” history. Not a product depth ceiling —
+     * providers return from listing/history start; remaining prefix is already_deep.
+     */
+    public const ALL_AVAILABLE_HISTORY_FROM = '1970-01-01';
+
     public function __construct(
         protected PortfolioLoggerService $portfolioLogger,
         protected IgnoredPriceGapService $ignoredGaps,
     ) {}
+
+    public function allAvailableHistoryFrom(): Carbon
+    {
+        return Carbon::parse(self::ALL_AVAILABLE_HISTORY_FROM)->startOfDay();
+    }
+
+    /**
+     * Fetch every bar providers will actually return (no V1 550-day product cap).
+     *
+     * @return array<string, mixed>
+     */
+    public function fetchAllAvailableHistory(Stock $stock, bool $notifyTelegramOnFailure = true): array
+    {
+        return $this->fetchMissingHistory(
+            $stock,
+            $this->allAvailableHistoryFrom(),
+            now()->startOfDay(),
+            $notifyTelegramOnFailure,
+            includePreListingPrefix: true,
+        );
+    }
 
     protected function priceFetch(): PriceFetchService
     {

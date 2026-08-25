@@ -8,6 +8,8 @@
 
 Related: [`./MVP_SCOPE.md`](./MVP_SCOPE.md) · [`./SPECIFICATION_DECISIONS.md`](./SPECIFICATION_DECISIONS.md) · [`./ARCHITECTURE_REPOSITORY_GOVERNANCE.md`](./ARCHITECTURE_REPOSITORY_GOVERNANCE.md) · [`../audit/TECHNICAL_DEBT.md`](../audit/TECHNICAL_DEBT.md)
 
+**Post-V3 forward tracking:** After V3 freeze (**COMPLETE WITH DEFERRED ITEMS**), schedule new work via [`../../LidoPortfolio-V4-Wishlist.md`](../../LidoPortfolio-V4-Wishlist.md). This backlog remains a historical V1-deferred index; prefer V4-* IDs that reference PB-* rather than conflicting status updates here.
+
 ---
 
 ## Purpose

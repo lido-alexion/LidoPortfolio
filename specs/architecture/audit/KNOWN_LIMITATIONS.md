@@ -4,6 +4,8 @@
 **Scope:** Limitations present in the current implementation that affect MVP behavior.  
 Excluded: pure future roadmap (broker automation, Strategy product, AI) unless they create an MVP gap.
 
+**Post-V3:** Deferred / wishlist work is tracked in [`../../LidoPortfolio-V4-Wishlist.md`](../../LidoPortfolio-V4-Wishlist.md). Some KL rows may be partially superseded by V3 (see V4-HIST-*); verify before treating as open bugs.
+
 ---
 
 ## Data

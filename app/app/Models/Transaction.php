@@ -50,6 +50,7 @@ class Transaction extends Model
         'corporate_action_id',
         'source',
         'recommendation_id',
+        'exit_reason',
     ];
 
     protected function casts(): array

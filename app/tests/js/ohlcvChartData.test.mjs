@@ -122,3 +122,7 @@ test('buildPriceVolumeChartData handles empty and single row input', () => {
 test('subtractCalendarRange moves back one year', () => {
     assert.equal(subtractCalendarRange('2026-06-15', '1y'), '2025-06-15');
 });
+
+test('subtractCalendarRange moves back five years', () => {
+    assert.equal(subtractCalendarRange('2026-06-15', '5y'), '2021-06-15');
+});
