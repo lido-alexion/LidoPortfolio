@@ -316,7 +316,7 @@ final class IndicatorRegistryFactory
                 'consumers' => $futureConsumers,
                 'status' => IndicatorStatus::ACTIVE,
                 'formula_explanation' => implode("\n", [
-                    'Computed by LiquidityTradabilityCalculator (not EvaluationEngine / Strategy).',
+                    'TechnicalIndicatorService dispatches to LiquidityTradabilityCalculator (not EvaluationEngine / Strategy).',
                     '1) Map relative_turnover → min(100, max(0, relative_turnover × 50)) (1.0 ≈ 50).',
                     '2) Map average_turnover → min(100, log10(turnover+1)/9 × 100).',
                     '3) Map average_volume → min(100, log10(volume+1)/8 × 100).',
@@ -340,7 +340,7 @@ final class IndicatorRegistryFactory
                 'consumers' => $futureConsumers,
                 'status' => IndicatorStatus::ACTIVE,
                 'formula_explanation' => implode("\n", [
-                    'Computed by LiquidityTradabilityCalculator (not EvaluationEngine / Strategy).',
+                    'TechnicalIndicatorService dispatches to LiquidityTradabilityCalculator (not EvaluationEngine / Strategy).',
                     '1) From gap_frequency → 100 × (1 − clamp01(frequency)).',
                     '2) From gap_fill_ratio → 100 × clamp01(ratio).',
                     '3) From circuit_frequency → 100 × (1 − clamp01(frequency)).',

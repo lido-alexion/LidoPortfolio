@@ -37,7 +37,7 @@ Excluded: pure future roadmap (broker automation, Strategy product, AI) unless t
 ## Indicators / Registry
 
 10b. **Dual catalogues (as-built)** — `ScreenerCatalog` + `SupportedIndicators` façades now project Indicator Registry (Epics 1–2); Admin Registry UI and full consumer cutover still pending (SD-033 / PB-055).  
-10c. **Liquidity / Tradability indicators not calculated** — Spec metadata only (PB-057).  
+10c. **Liquidity / Tradability composites are calculated (V4-FEAT-006)** — `TechnicalIndicatorService` dispatches `liquidity_score` / `tradability_score` to `LiquidityTradabilityCalculator` using the existing primary series. Formulas/caps/weights unchanged. Remaining by design: not Strategy-scorable, not Evaluation facts, not in the Screener picker (`screenable: false`). Primaries remain screenable.  
 10d. **Trading Artifact Framework not implemented** (2026-07-30) — SD-034 design only: Screeners/Strategies lack shared artifact envelope (versioning/import-export/AI catalogue). “Strategy Templates” absorbed into Strategy artifacts conceptually; no separate template product. Tracked PB-058+.
 
 ## Recommendation / Position review

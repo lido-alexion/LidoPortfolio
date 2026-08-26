@@ -765,7 +765,8 @@
 </code></pre>
 <hr>
 <h2>Catalogue D — Liquidity / Tradability Composites</h2>
-<p>Active for Discovery / Dashboard / Stock Details / Screener consumers. <strong>Not</strong> strategy-scorable and <strong>not</strong> wired into Recommendation scoring.</p>
+<p>Active for Discovery / Dashboard / Stock Details / Screener <strong>consumers</strong> (Registry metadata). Calculated at runtime by <code>TechnicalIndicatorService</code>, which calls <code>LiquidityTradabilityCalculator</code> with the current primary values (V4-FEAT-006). Formulas, caps, and missing-data behaviour are unchanged: if no component is available the score is null, not a fallback 0/50/100.</p>
+<p><strong>Not</strong> strategy-scorable, <strong>not</strong> Evaluation/Recommendation scoring inputs, and <strong>not</strong> in the Screener picker (<code>screenable: false</code>). Do not add them to Strategy <code>scoring_model</code>.</p>
 <h3>D1 — Identity</h3>
 <table>
 <thead>

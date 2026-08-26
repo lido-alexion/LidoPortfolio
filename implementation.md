@@ -333,7 +333,7 @@ Completion criterion (product owner, 2026-08-26 strict pass): every normative V3
 Tracked in [`specs/LidoPortfolio-V4-Wishlist.md`](specs/LidoPortfolio-V4-Wishlist.md) (strict rewrite 2026-08-26; Product Owner V4/V5 split 2026-08-26):
 
 - **SPEC-001–006:** **DECIDED** 2026-08-26 (simple WAVG adoption merge with final avg to 2 dp half-up; no special rights CA; split/bonus restatement of qty/cost/trailing/stop/target; cash-ledger special types exactly LOAN/RECALL/BRIDGE with signed amount; explicit sell attribution; multi-strategy per broker account). Frozen product rules, **not implemented**. See wishlist §4.
-- **Active V4 FEAT (22):** **V4-FEAT-021 COMPLETE** (2026-08-26); **V4-FEAT-022 COMPLETE** (2026-08-27); **V4-FEAT-005 COMPLETE** (2026-08-27) — Evaluation `market_regime` factor is Market Analysis Bullish=100 / Neutral=50 / Bearish=0. Remaining 19 stay OPEN: broker/live, liquidity, TAF remaining phases, Review/admin/cash/tax polish, dataset versioning, OpenAPI/E2E/controller split/logging/evaluation modules/TOS repos, etc.
+- **Active V4 FEAT (22):** **V4-FEAT-021 COMPLETE** (2026-08-26); **V4-FEAT-022 COMPLETE** (2026-08-27); **V4-FEAT-005 COMPLETE** (2026-08-27); **V4-FEAT-006 COMPLETE** (2026-08-27) — `liquidity_score` / `tradability_score` calculated through TechnicalIndicatorService via existing LiquidityTradabilityCalculator formulas. Remaining 18 stay OPEN: broker/live, TAF remaining phases, Review/admin/cash/tax polish, dataset versioning, OpenAPI/E2E/controller split/logging/evaluation modules/TOS repos, etc.
 - **V5-deferred FEAT (14, still OPEN):** B4 banner, notification channels, indicator-registry cutover, mobile/AI/ML/markets/replay, CI/secrets deploy, Discovery/Evaluation UX polish, TS/grid migration, optional token API. Roadmap only — not implemented.
 
 **Closed in V3 (not V4):** OD-16 Strategy window UI; schedulerTimestamp; DailyMarketDataJobTest; max_position enforcement; all former open V3 bug/TD/UX/HIST active rows.
@@ -361,7 +361,7 @@ Callers pass the already-resolved array into `EvaluationEngine::run($profile, $d
 
 ### Explicitly not in this feature
 
-Broker/GTT, market_regime, liquidity composites, dataset gates, OpenAPI, repos, SPEC-001–006, Evaluation weight redesign, UI redesign, migrations.
+Broker/GTT, market_regime, dataset gates, OpenAPI, repos, SPEC-001–006, Evaluation weight redesign, UI redesign, migrations. Liquidity composites were later wired in V4-FEAT-006 without changing Evaluation.
 
 ## V4-FEAT-022 — Hard dataset publish gate (2026-08-27)
 
@@ -419,6 +419,30 @@ FEAT-021 parameter resolution and FEAT-022 freshness gating are unchanged. Evalu
 ### Explicitly not in this feature
 
 New phases, phase-specific scores, sentiment-as-regime, backtest historical regime, FEAT-006 liquidity, Strategy weight redesign, FEAT-021/022 behaviour changes.
+
+## V4-FEAT-006 — Liquidity & Tradability calculators (2026-08-27)
+
+**Status:** **COMPLETE**. PO rule: keep the existing composite formulas and complete their runtime wiring. Do not redesign formulas, retune thresholds, change component weights, or invent new metrics.
+
+### Runtime gap that was fixed
+
+`LiquidityTradabilityCalculator` already implemented the seven primaries and the two composite methods. `TechnicalIndicatorService` already calculated the primaries. `liquidity_score` and `tradability_score` were Registry-defined but hit `compute()` / `computeSeries()` `default` (null). They are now dispatched like other indicator ids.
+
+### Mechanism
+
+OHLCV → `TechnicalIndicatorService` → primary series (`relative_turnover`, `average_turnover`, `average_volume` / gap + circuit primaries) → `LiquidityTradabilityCalculator::liquidityScore` / `tradabilityScore` per bar → `liquidity_score` / `tradability_score`.
+
+Authoritative formulas remain only in `LiquidityTradabilityCalculator` (Registry `formula_explanation` documents them). Missing/insufficient inputs still return `null` (mean of available mapped components; no invented 0/50/100). Existing caps (e.g. RT×50 clamped 0–100; log maps; tradability clamp01) are unchanged.
+
+Screener picker is unchanged (`screenable: false`). Evaluation / Strategy / Recommendation scoring were **not** changed. FEAT-005 / FEAT-021 / FEAT-022 are untouched.
+
+### Tests
+
+`tests/Unit/Screener/LiquidityTradabilityRuntimeTest.php`; `tests/Unit/Indicators/LiquidityTradabilityCalculatorTest.php` (null/cap assertions).
+
+### Explicitly not in this feature
+
+Formula redesign, Evaluation weights, Strategy scoring, new Screener filters, FEAT-001/002/005/008/009/015/021–023/025–029/032, SPEC-001–006.
 
 ## V3 residual — UNFUNDED zero-own lending offer (2026-08-24)
 

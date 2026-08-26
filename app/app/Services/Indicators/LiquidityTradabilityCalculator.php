@@ -5,9 +5,9 @@ namespace App\Services\Indicators;
 /**
  * OHLCV calculators for Liquidity / Tradability Primaries and Composites.
  *
- * Exposed for Screeners (via TechnicalIndicatorService) and future Discovery /
- * Dashboard / Stock Details consumers. Not wired into Strategy scoring or
- * Recommendation Engine (SD-033 / Epic 4 constraints).
+ * Authoritative formulas for Liquidity / Tradability primaries and composites.
+ * TechnicalIndicatorService dispatches `liquidity_score` / `tradability_score`
+ * here (V4-FEAT-006). Not wired into Strategy scoring or Recommendation Engine.
  */
 final class LiquidityTradabilityCalculator
 {

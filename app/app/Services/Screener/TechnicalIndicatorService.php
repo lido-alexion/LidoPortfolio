@@ -228,6 +228,16 @@ class TechnicalIndicatorService
                 (float) ($params['move_pct'] ?? 9.5),
                 (float) ($params['range_pct'] ?? 0.5),
             ),
+            'liquidity_score' => $this->zipCompositeSeries(
+                ['relative_turnover', 'average_turnover', 'average_volume'],
+                $params,
+                fn (array $parts) => $this->ltCalculator()->liquidityScore($parts),
+            ),
+            'tradability_score' => $this->zipCompositeSeries(
+                ['gap_frequency', 'gap_fill_ratio', 'circuit_frequency', 'circuit_risk'],
+                $params,
+                fn (array $parts) => $this->ltCalculator()->tradabilityScore($parts),
+            ),
             default => array_fill(0, max(0, count($closes)), null),
         };
     }
@@ -304,7 +314,9 @@ class TechnicalIndicatorService
             'gap_frequency',
             'gap_fill_ratio',
             'circuit_frequency',
-            'circuit_risk' => $this->lastOf($this->computeSeries($id, $params)),
+            'circuit_risk',
+            'liquidity_score',
+            'tradability_score' => $this->lastOf($this->computeSeries($id, $params)),
             default => null,
         };
     }
@@ -312,6 +324,37 @@ class TechnicalIndicatorService
     private function ltCalculator(): LiquidityTradabilityCalculator
     {
         return $this->ltCalculator ??= new LiquidityTradabilityCalculator;
+    }
+
+    /**
+     * Per-bar composite from already-wired primary series. Scoring stays in
+     * {@see LiquidityTradabilityCalculator}; this only assembles the dependency map.
+     *
+     * @param  list<string>  $ids
+     * @param  array<string, mixed>  $params
+     * @param  callable(array<string, ?float>): ?float  $score
+     * @return list<?float>
+     */
+    private function zipCompositeSeries(array $ids, array $params, callable $score): array
+    {
+        $parts = [];
+        $n = 0;
+        foreach ($ids as $id) {
+            $series = $this->computeSeries($id, $params);
+            $parts[$id] = $series;
+            $n = max($n, count($series));
+        }
+
+        $out = [];
+        for ($i = 0; $i < $n; $i++) {
+            $snapshot = [];
+            foreach ($ids as $id) {
+                $snapshot[$id] = $parts[$id][$i] ?? null;
+            }
+            $out[$i] = $score($snapshot);
+        }
+
+        return $out;
     }
 
     /**

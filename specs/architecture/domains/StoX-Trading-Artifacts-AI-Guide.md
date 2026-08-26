@@ -4,7 +4,7 @@
 
 > **Audience:** AI agents and developers authoring portable Indicator / Screener / Strategy JSON **without** reading application source code.
 >
-> **Generated:** 2026-08-26T19:48:24.815Z
+> **Generated:** 2026-08-26T20:26:19.816Z
 > **Deploy download:** `/docs/stox-trading-artifacts-ai-guide.md` (also linked from Screener Registry and Strategy Registry).
 > **Repo copy:** `specs/architecture/domains/StoX-Trading-Artifacts-AI-Guide.md`
 
@@ -490,7 +490,9 @@ Use these **keys** in `definition.scoring_model`. Values are **0–100** scores.
 
 ## Catalogue D — Liquidity / Tradability Composites
 
-Active for Discovery / Dashboard / Stock Details / Screener consumers. **Not** strategy-scorable and **not** wired into Recommendation scoring.
+Active for Discovery / Dashboard / Stock Details / Screener **consumers** (Registry metadata). Calculated at runtime by `TechnicalIndicatorService`, which calls `LiquidityTradabilityCalculator` with the current primary values (V4-FEAT-006). Formulas, caps, and missing-data behaviour are unchanged: if no component is available the score is null, not a fallback 0/50/100.
+
+**Not** strategy-scorable, **not** Evaluation/Recommendation scoring inputs, and **not** in the Screener picker (`screenable: false`). Do not add them to Strategy `scoring_model`.
 
 ### D1 — Identity
 

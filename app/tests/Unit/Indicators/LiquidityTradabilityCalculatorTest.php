@@ -120,4 +120,35 @@ class LiquidityTradabilityCalculatorTest extends TestCase
         $this->assertNotNull($trad);
         $this->assertGreaterThan(50.0, $trad);
     }
+
+    public function test_composites_null_when_no_parts_and_cap_mapped_components(): void
+    {
+        $calc = new LiquidityTradabilityCalculator;
+
+        $this->assertNull($calc->liquidityScore([
+            'relative_turnover' => null,
+            'average_turnover' => null,
+            'average_volume' => null,
+        ]));
+        $this->assertNull($calc->liquidityScore([
+            'relative_turnover' => null,
+            'average_turnover' => 0.0,
+            'average_volume' => 0.0,
+        ]));
+        $this->assertNull($calc->tradabilityScore([
+            'gap_frequency' => null,
+            'gap_fill_ratio' => null,
+            'circuit_frequency' => null,
+            'circuit_risk' => null,
+        ]));
+
+        $capped = $calc->liquidityScore(['relative_turnover' => 3.0]);
+        $this->assertEqualsWithDelta(100.0, $capped, 1e-9);
+
+        $tradCapped = $calc->tradabilityScore([
+            'gap_frequency' => 2.0,
+            'circuit_risk' => 150.0,
+        ]);
+        $this->assertEqualsWithDelta(0.0, $tradCapped, 1e-9);
+    }
 }

@@ -5,7 +5,7 @@
 | **V3 Status** | **V3 STRICTLY COMPLETE** (strict register-to-implementation pass 2026-08-26) |
 | **Document type** | Forward-looking V4 register + V5 deferred features (same genuine-new-work pool) |
 | **Created** | 2026-08-25 |
-| **Last reconciled** | 2026-08-27 (V4-FEAT-005 implemented: Evaluation market_regime from Market Analysis) |
+| **Last reconciled** | 2026-08-27 (V4-FEAT-006 implemented: liquidity/tradability composites wired through TechnicalIndicatorService) |
 | **Canonical path** | [`specs/LidoPortfolio-V4-Wishlist.md`](LidoPortfolio-V4-Wishlist.md) |
 | **Related** | [`LidoPortfolio-V3-Specification.md`](LidoPortfolio-V3-Specification.md) · [`../implementation.md`](../implementation.md) |
 
@@ -40,14 +40,14 @@ Living detail: [`implementation.md`](../implementation.md).
 
 ## 2. Genuine V4 features (active V4 scope)
 
-Active V4 feature count: **22** (**19** `OPEN`, **3** `COMPLETE`).
+Active V4 feature count: **22** (**18** `OPEN`, **4** `COMPLETE`).
 
 | ID | Item | Why genuinely V4 | Priority | Status |
 |----|------|------------------|----------|--------|
 | V4-FEAT-001 | Broker / live execution automation | V3 §3 / §32 Decision 11 + SD-010: V3 does **not** require broker automation; manual/semi-auto fill is V3 | P2 | OPEN |
 | V4-FEAT-002 | Advanced orders (GTT / stop / target / partial fills) | Broker-era order types; depends on FEAT-001 | P3 | OPEN |
 | V4-FEAT-005 | Market regime assessment (non-stub) | Not a V3 normative engine; Evaluation stub residual. **PO decision (2026-08-27):** Evaluation consumes MarketAnalysisEngine categorical `market_regime` (Bullish/Neutral/Bearish via existing `regimeFromPhase()`). Numeric Evaluation factor is Bullish→100, Neutral→50, Bearish→0. No new phase/regime calculation; sentiment is not the score. Implemented via `MarketRegimeScoreMapper` in EvaluationEngine (2026-08-27). | P2 | COMPLETE |
-| V4-FEAT-006 | Liquidity & Tradability indicator calculators | Indicator Registry expansion; not V3 SoT | P2 | OPEN |
+| V4-FEAT-006 | Liquidity & Tradability indicator calculators | Indicator Registry expansion; not V3 SoT. **PO decision (2026-08-27):** Keep the existing composite formulas and complete their runtime wiring. Do not redesign formulas, retune thresholds, change weights, or invent new metrics. Implemented via `TechnicalIndicatorService` dispatch to `LiquidityTradabilityCalculator` (2026-08-27). | P2 | COMPLETE |
 | V4-FEAT-008 | Trading Artifact Framework remaining phases | SD-034 residual beyond Screener/Strategy registries shipped in V3 | P2 | OPEN |
 | V4-FEAT-009 | Review reports list UI + deeper metrics | New Review UX beyond V3 Dashboard/API | P3 | OPEN |
 | V4-FEAT-010 | Pipeline ops hardening beyond shipped F148/F149 | F148/F149 schedule hooks are V3-complete; further ops defaults are new | P2 | OPEN |
@@ -130,6 +130,12 @@ Implementation principles:
 **PO decision (2026-08-27):** MarketAnalysisEngine is the authoritative source. Categorical `market_regime` remains Bullish / Neutral / Bearish from existing `regimeFromPhase()`. Evaluation keeps its 0–100 factor model. Frozen numeric mapping: Bullish→100, Neutral→50, Bearish→0. Do not use sentiment. Do not create phase-specific scores (Strong Bull and Recovery are both Bullish → 100).
 
 **Implementation (2026-08-27):** `EvaluationEngine` reads `MarketAnalysisEngine::latest()` once per run and maps the categorical value through `MarketRegimeScoreMapper`. Factor key `market_regime` stores the numeric score; evidence also stores categorical `market_regime` and `market_regime_score`. Unavailable Market Analysis still returns Neutral → 50. Backtest `AsOfFactorScorer` remains a 50 stub (historical leakage). `regimeFromPhase()` is unchanged.
+
+### V4-FEAT-006 — Liquidity & Tradability calculators (COMPLETE)
+
+**PO decision (2026-08-27):** Keep the existing composite formulas and complete their runtime wiring. Do **not** redesign the formulas, retune thresholds, change component weights, or invent new liquidity/tradability metrics. Registry definitions and `LiquidityTradabilityCalculator` remain the source of truth.
+
+**Implementation (2026-08-27):** `TechnicalIndicatorService` `evaluate` / `evaluateSeries` dispatch `liquidity_score` and `tradability_score` to `LiquidityTradabilityCalculator::liquidityScore` / `tradabilityScore`, using the already-wired primary series at each bar. Missing/insufficient inputs still yield `null` (mean of available mapped components; no 0/50/100 fallback). Range 0–100 and existing caps are unchanged. Composites stay `screenable: false` (not in the Screener picker) and are **not** Evaluation/Strategy scoring inputs.
 
 ---
 
