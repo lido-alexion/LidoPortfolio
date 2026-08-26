@@ -52,7 +52,7 @@ class MarketAnalysisEngine
         if (! $forceRefresh && Schema::hasTable('portfolio_tos_market_analytics')) {
             $existing = MarketAnalyticsSnapshot::query()
                 ->where('benchmark_stock_id', $benchmark->id)
-                ->where('as_of_date', $asOf)
+                ->whereDate('as_of_date', $asOf)
                 ->where('computed_at', '>=', now()->subHours(4))
                 ->first();
             if ($existing) {
@@ -245,20 +245,28 @@ class MarketAnalysisEngine
         if (! Schema::hasTable('portfolio_tos_market_analytics')) {
             return;
         }
-        MarketAnalyticsSnapshot::query()->updateOrCreate(
-            [
-                'benchmark_stock_id' => $benchmarkId,
-                'as_of_date' => $asOf,
-            ],
-            [
-                'market_phase' => (string) ($payload['market_phase'] ?? 'Consolidation'),
-                'sentiment_score' => (float) ($payload['sentiment']['score'] ?? 50),
-                'sentiment_label' => $payload['sentiment']['label'] ?? null,
-                'payload_json' => $payload,
-                'explainability_json' => $payload['explainability'] ?? null,
-                'computed_at' => now(),
-            ]
-        );
+        $attributes = [
+            'market_phase' => (string) ($payload['market_phase'] ?? 'Consolidation'),
+            'sentiment_score' => (float) ($payload['sentiment']['score'] ?? 50),
+            'sentiment_label' => $payload['sentiment']['label'] ?? null,
+            'payload_json' => $payload,
+            'explainability_json' => $payload['explainability'] ?? null,
+            'computed_at' => now(),
+        ];
+        $existing = MarketAnalyticsSnapshot::query()
+            ->where('benchmark_stock_id', $benchmarkId)
+            ->whereDate('as_of_date', $asOf)
+            ->first();
+        if ($existing) {
+            $existing->forceFill($attributes)->save();
+
+            return;
+        }
+        MarketAnalyticsSnapshot::query()->create([
+            'benchmark_stock_id' => $benchmarkId,
+            'as_of_date' => $asOf,
+            ...$attributes,
+        ]);
     }
 
     protected function serializeSnapshot(MarketAnalyticsSnapshot $row, bool $cached): array

@@ -49,7 +49,7 @@ final class StrategyCompositeSeed
                     'benchmark' => ['type' => 'string', 'label' => 'Benchmark', 'default' => 'NIFTY50'],
                 ],
                 'depends_on' => ['relative_strength_3m'],
-                'formula_explanation' => 'Maps relative_strength_3m ratio: ≥1.05 → 100; ≥1.0 → 70; else 30. (Strategy lookback/benchmark parameters are UI-persisted; Evaluation currently uses trading_os defaults — TD-19.)',
+                'formula_explanation' => 'Maps Evaluation relative-strength fact (stock return minus benchmark return over Strategy lookback_days when set, else 3-month vs primary/Strategy benchmark): ≥1.05 → 100; ≥1.0 → 70; else 30. Valid Strategy lookback_days and benchmark override Evaluation globals (V4-FEAT-021).',
                 'status' => IndicatorStatus::ACTIVE,
             ],
             [
@@ -128,7 +128,7 @@ final class StrategyCompositeSeed
                 'category' => SupportedIndicators::CATEGORY_MARKET,
                 'registry_category' => IndicatorCategory::MARKET,
                 'display_name' => 'Market Regime',
-                'description' => 'Broad market regime score (neutral stub until dedicated regime model ships).',
+                'description' => 'Broad market regime from Market Analysis (Bullish=100, Neutral=50, Bearish=0).',
                 'supports_maximum' => false,
                 'default_enabled' => true,
                 'default_weight' => 5,
@@ -136,8 +136,8 @@ final class StrategyCompositeSeed
                 'default_maximum' => null,
                 'parameters' => [],
                 'depends_on' => [],
-                'formula_explanation' => 'Stub: constant 50 until a dedicated market regime model ships.',
-                'status' => IndicatorStatus::STUB,
+                'formula_explanation' => 'MarketAnalysisEngine.market_regime via existing regimeFromPhase(): Bullish→100, Neutral→50, Bearish→0. No independent phase/regime calculation.',
+                'status' => IndicatorStatus::ACTIVE,
             ],
             [
                 'key' => SupportedIndicators::SECTOR_STRENGTH,

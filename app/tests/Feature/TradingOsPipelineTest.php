@@ -13,10 +13,12 @@ use App\Services\WatchlistService;
 use App\Support\TradingOsConfig;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Tests\Concerns\MarksDailyDatasetPublished;
 use Tests\TestCase;
 
 class TradingOsPipelineTest extends TestCase
 {
+    use MarksDailyDatasetPublished;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -30,6 +32,7 @@ class TradingOsPipelineTest extends TestCase
             TradingOsConfig::KEY_DISCOVERY.'.include_screener_hits' => false,
             TradingOsConfig::KEY_DISCOVERY.'.include_patterns' => true,
         ]);
+        $this->markDailyDatasetPublished();
     }
 
     public function test_pipeline_produces_ranked_recommendations(): void
@@ -42,6 +45,7 @@ class TradingOsPipelineTest extends TestCase
         ]);
 
         $this->assertSame('completed', $result['pipeline_run']->status);
+        $this->assertTrue($result['stages']['publish_gate']['allowed'] ?? false);
         $this->assertGreaterThanOrEqual(1, $result['stages']['discovery']['candidates']);
         $this->assertGreaterThanOrEqual(1, $result['stages']['evaluation']['results']);
         $this->assertGreaterThanOrEqual(1, $result['stages']['recommendation']['count']);

@@ -2,6 +2,7 @@
 
 namespace App\Services\Backtest;
 
+use App\Engines\Evaluation\EvaluationParameterResolver;
 use App\Engines\Recommendation\Allocation\ScorePriorityCapitalAllocator;
 use App\Engines\Strategy\ExitStrategyEvaluator;
 use App\Models\BacktestRun;
@@ -22,6 +23,7 @@ class SimulationDayProcessor
         protected AsOfFactorScorer $scorer,
         protected EligibilityPrecomputeService $eligibility,
         protected StrategyConfigurationService $strategies,
+        protected EvaluationParameterResolver $parameterResolver,
         ?ScorePriorityCapitalAllocator $allocator = null,
     ) {
         $this->allocator = $allocator ?? new ScorePriorityCapitalAllocator();
@@ -94,7 +96,11 @@ class SimulationDayProcessor
                 continue;
             }
 
-            $eval = $this->scorer->score($stockId, $asOfDate);
+            $eval = $this->scorer->score(
+                $stockId,
+                $asOfDate,
+                $this->parameterResolver->resolve($config),
+            );
             if (! empty($eval['skipped']) && ! $isHeld) {
                 continue;
             }

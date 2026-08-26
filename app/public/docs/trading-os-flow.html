@@ -150,7 +150,7 @@ flowchart TD
         <h2>Controls</h2>
         <dl class="doc-list">
         <dt>Run decision pipeline</dt>
-        <dd>On Recommendations — regenerates ideas using current Screener hits, Discovery/Evaluation facts, and Strategy config.</dd>
+        <dd>On Recommendations — regenerates ideas using current Screener hits, Discovery/Evaluation facts, and Strategy config. Requires a successful market-dataset sync within 24 hours of the pipeline run (72 hours if the pipeline runs on Monday). The check uses timestamps, not calendar dates. If the dataset is older than that window, the pipeline stops before Discovery and does not create evaluation results or recommendations. Existing older prices are not used as a fallback. Exchange holidays are not treated specially.</dd>
     
         <dt>Approve / Reject / Defer</dt>
         <dd>On Recommendations for actionable ideas. Approve moves buys/sells to Pending Execution.</dd>
@@ -166,6 +166,9 @@ flowchart TD
       <section class="panel">
         <h2>Concepts</h2>
         <dl class="doc-list">
+        <dt>Dataset freshness for the pipeline</dt>
+        <dd>The daily decision pipeline runs only when the last successful market-dataset sync is within 24 hours of that run (72 hours if the run is on Monday). The check uses timestamps, not calendar dates, and does not treat exchange holidays specially. If the dataset is too old, Discovery / Evaluation / Recommendations are not created from that run.</dd>
+    
         <dt>Discovery optional to visit</dt>
         <dd>You configure Screener + Strategy and act on Recommendations. Discovery is not listed in the left Market navigation. It still runs inside the decision pipeline (candidates → long-focused factor facts). Opening <code>/candidates</code> is optional unless you are inspecting or debugging. Evaluation scores live on the Discovery table (no separate Evaluations page).</dd>
     

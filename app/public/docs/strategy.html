@@ -178,15 +178,15 @@ N conditions ↗ — opens the Screener editor; Strategy never edits condition t
 On — include factor in the blend; Off disables Weight/Min/Max/Parameters for that row.
 Weight — share of overall score before/after normalisation (e.g. Relative Strength 35 means 35% when the total is already 100).
 Min / Max — soft targets used when scoring that factor (Risk uses Max as a risk cap; Risk Min defaults to 0).
-Compared against: Evaluation factor facts for that stock (RS, RSI/momentum, trend/SMA stack, volume, etc.), not raw rupee prices.</dd>
+Compared against: Evaluation factor facts for that stock (RS, RSI/momentum, trend/SMA stack, volume, etc.), not raw rupee prices. A valid Strategy parameter for rsi_period, lookback_days, sma_fast, sma_slow, atr_period, volume_sma_period, or benchmark overrides the global Evaluation default; missing or invalid values keep the global/default.</dd>
     
         <dt>Scoring Model — parameters by factor</dt>
-        <dd>Relative Strength: lookback_days (sessions) and Benchmark (index dropdown, e.g. NIFTY50) — stock return vs that benchmark.
+        <dd>Relative Strength: lookback_days (sessions) and Benchmark (index dropdown, e.g. NIFTY50) — stock return vs that benchmark. Evaluation uses these when valid; otherwise the existing 3-month vs primary-benchmark path.
 Momentum Score: rsi_period — RSI length for momentum strength.
 Trend Score: sma_fast / sma_slow — SMA lengths for trend stack.
 Volume Score: volume_sma_period — average volume window.
 Risk Score: atr_period — ATR window; higher Risk score is riskier; Max caps acceptable risk.
-Breakout / Market Regime / Sector Strength: may have no parameters (stub or discovery-fed).</dd>
+Breakout / Sector Strength: may have no parameters (discovery-fed or stub). Market Regime has no parameters; its 0–100 score comes from Market Analysis (Bullish=100, Neutral=50, Bearish=0). Scoring weights are separate and are not Evaluation indicator parameters.</dd>
     
         <dt>Recommendation Thresholds tab</dt>
         <dd>Unit: overall score points 0–100 (the Scoring Model blend). Not ₹, not %.

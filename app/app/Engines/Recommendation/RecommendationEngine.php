@@ -33,10 +33,14 @@ class RecommendationEngine
      *     cash: array{cash_balance: float, reserved_cash: float, available_investable_cash: float},
      *     strategy: array{version_id: int, version: int, name: string}
      * }
+     * @param  list<int>|null  $onlyStrategyIds
      */
-    public function generate(PortfolioProfile $profile, ?EvaluationRun $evaluationRun = null): array
-    {
-        return $this->generationPipeline->run($profile, $evaluationRun);
+    public function generate(
+        PortfolioProfile $profile,
+        ?EvaluationRun $evaluationRun = null,
+        ?array $onlyStrategyIds = null,
+    ): array {
+        return $this->generationPipeline->run($profile, $evaluationRun, $onlyStrategyIds);
     }
 
     public function recordReview(

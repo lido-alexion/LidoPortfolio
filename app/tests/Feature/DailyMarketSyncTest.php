@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Setting;
 use App\Models\User;
 use App\Services\DailyMarketSyncService;
 use Carbon\Carbon;
@@ -99,5 +100,30 @@ class DailyMarketSyncTest extends TestCase
             ->getJson('/api/dashboard')
             ->assertOk()
             ->assertJsonMissingPath('daily_market_sync');
+    }
+
+    public function test_mark_incomplete_preserves_last_successful_sync_timestamp(): void
+    {
+        $sync = app(DailyMarketSyncService::class);
+        $sync->markSuccessful();
+        $successfulAt = $sync->lastSuccessfulSyncAt();
+        $this->assertNotNull($successfulAt);
+
+        $sync->markIncomplete(3, 2);
+
+        $this->assertFalse($sync->hasSyncedSuccessfullyToday());
+        $preserved = $sync->lastSuccessfulSyncAt();
+        $this->assertNotNull($preserved);
+        $this->assertTrue($successfulAt->equalTo($preserved));
+    }
+
+    public function test_legacy_incomplete_timestamp_is_not_treated_as_successful_sync(): void
+    {
+        Setting::setValue(
+            DailyMarketSyncService::KEY_SYNCED_AT,
+            Carbon::now('Asia/Kolkata')->toIso8601String().';processed=3;failed=2',
+        );
+
+        $this->assertNull(app(DailyMarketSyncService::class)->lastSuccessfulSyncAt());
     }
 }

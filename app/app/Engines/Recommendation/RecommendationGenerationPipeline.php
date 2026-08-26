@@ -95,6 +95,7 @@ class RecommendationGenerationPipeline
     }
 
     /**
+     * @param  list<int>|null  $onlyStrategyIds
      * @return array{
      *     recommendations: list<TradingRecommendation>,
      *     batch_id: string,
@@ -103,12 +104,25 @@ class RecommendationGenerationPipeline
      *     strategies: list<array{version_id: int, version: int, name: string, strategy_id: int}>
      * }
      */
-    public function run(PortfolioProfile $profile, ?EvaluationRun $evaluationRun = null): array
-    {
+    public function run(
+        PortfolioProfile $profile,
+        ?EvaluationRun $evaluationRun = null,
+        ?array $onlyStrategyIds = null,
+    ): array {
         $versions = $this->enabledStrategyVersions($profile);
         if ($versions === []) {
             $this->strategies->ensureActive($profile);
             $versions = $this->enabledStrategyVersions($profile);
+        }
+        if ($onlyStrategyIds !== null) {
+            $allow = [];
+            foreach ($onlyStrategyIds as $id) {
+                $allow[(int) $id] = true;
+            }
+            $versions = array_values(array_filter(
+                $versions,
+                static fn (TradingStrategyVersion $version) => isset($allow[(int) $version->strategy_id]),
+            ));
         }
 
         $snapshot = $this->capitalAccounting->snapshot($profile);

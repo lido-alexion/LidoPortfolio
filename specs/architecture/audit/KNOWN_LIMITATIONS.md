@@ -10,7 +10,7 @@ Excluded: pure future roadmap (broker automation, Strategy product, AI) unless t
 
 ## Data
 
-1. **No hard publish/validation gate** — Downstream engines consume latest OHLCV even if sync is incomplete; `published` approximates “synced today”.  
+1. **Hard publish gate is pipeline-only (V4-FEAT-022)** — The daily decision pipeline blocks Discovery unless last successful market sync is within 24 hours of the run (72 hours on Monday, timestamp comparison). Standalone Discovery/Evaluation/Recommendation APIs still consume latest OHLCV. `datasetStatus()['published']` still means “synced today” and is inspection-only. Holiday / exchange-calendar freshness is not implemented.  
 2. **No trading calendar entity** — Missing sessions are not productized as Data Engine outputs.  
 3. **Dataset version is a date string** — Not an immutable published snapshot identifier.  
 4. **Pipeline does not sync market data** — It reads status; sync must be run separately (UI/scheduler).
@@ -27,7 +27,7 @@ Excluded: pure future roadmap (broker automation, Strategy product, AI) unless t
 
 ## Evaluation
 
-8. **No market regime assessment** — Spec responsibility unimplemented (stub composite `market_regime` = 50).  
+8. **Market regime in Evaluation is live (V4-FEAT-005); sector strength is still a stub** — Evaluation `market_regime` is MarketAnalysisEngine Bullish=100 / Neutral=50 / Bearish=0. Strategy composite `sector_strength` remains constant 50. Backtest `AsOfFactorScorer` still stubs market regime at 50 (no historical Market Analysis).  
 9. **Rules are hard-coded weighted components** — Not a pluggable rules engine.  
 10. **Thin history UX** — Runs stored, but UI focuses on latest results.  
 10a. **Strategy indicator parameters ignored by Evaluation** (2026-07-30) — Strategy UI persists periods/lookbacks/benchmark but EvaluationEngine reads `trading_os.evaluation`. Tracked TD-19 / PB-054; **not** solved by Indicator Registry Phases 1–3 (SD-033).

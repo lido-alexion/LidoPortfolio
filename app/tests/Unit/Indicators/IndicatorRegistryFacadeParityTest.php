@@ -112,10 +112,11 @@ class IndicatorRegistryFacadeParityTest extends TestCase
         $this->assertArrayHasKey(SupportedIndicators::CATEGORY_RISK, $grouped);
     }
 
-    public function test_stub_status_still_in_strategy_definitions(): void
+    public function test_market_regime_is_active_and_sector_strength_remains_stub(): void
     {
         $registry = (new IndicatorRegistryFactory)->make();
-        $this->assertSame(IndicatorStatus::STUB, $registry->get(SupportedIndicators::MARKET_REGIME)->status);
+        $this->assertSame(IndicatorStatus::ACTIVE, $registry->get(SupportedIndicators::MARKET_REGIME)->status);
+        $this->assertSame(IndicatorStatus::STUB, $registry->get(SupportedIndicators::SECTOR_STRENGTH)->status);
         $this->assertContains(SupportedIndicators::MARKET_REGIME, SupportedIndicators::keys());
     }
 }

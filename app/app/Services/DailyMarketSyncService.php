@@ -149,9 +149,27 @@ class DailyMarketSyncService
     {
         Setting::setValue(self::KEY_SYNC_DATE, $this->todayDateString());
         Setting::setValue(self::KEY_SYNC_SUCCESS, '0');
-        Setting::setValue(
-            self::KEY_SYNCED_AT,
-            Carbon::now($this->syncTimezone())->toIso8601String().";processed={$processed};failed={$failed}",
-        );
+        // Do not overwrite KEY_SYNCED_AT — freshness uses last *successful* sync timestamp.
+    }
+
+    /**
+     * Last successful daily market sync instant, or null if none is recorded.
+     */
+    public function lastSuccessfulSyncAt(): ?Carbon
+    {
+        $raw = Setting::getValue(self::KEY_SYNCED_AT);
+        if (! is_string($raw) || trim($raw) === '') {
+            return null;
+        }
+        // Legacy markIncomplete wrote ISO + ";processed=…;failed=…" — not a success timestamp.
+        if (str_contains($raw, ';processed=')) {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($raw);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }

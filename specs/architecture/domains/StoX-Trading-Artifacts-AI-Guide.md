@@ -4,7 +4,7 @@
 
 > **Audience:** AI agents and developers authoring portable Indicator / Screener / Strategy JSON **without** reading application source code.
 >
-> **Generated:** 2026-08-26T12:01:47.492Z
+> **Generated:** 2026-08-26T19:48:24.815Z
 > **Deploy download:** `/docs/stox-trading-artifacts-ai-guide.md` (also linked from Screener Registry and Strategy Registry).
 > **Repo copy:** `specs/architecture/domains/StoX-Trading-Artifacts-AI-Guide.md`
 
@@ -323,7 +323,7 @@ This page is written for humans and AI agents: every registry **id**, what it me
 
 Screener params are numeric with **default / min / max / step**. Period-like params usually allow **1–400** (RSI/ATR period max **200**; Stochastic `smooth` max **50**; MACD `signal` max **100**; Bollinger `mult` **0.5–5** step **0.1**).
 
-Strategy Composite params are `{ type, label, default }` (often no min/max in metadata) and are UI-persisted on the Strategy; Evaluation may still use trading_os defaults for some inputs (TD-19).
+Strategy Composite params are `{ type, label, default }` (often no min/max in metadata) and are persisted on the Strategy. Evaluation uses a valid Strategy value for `rsi_period`, `lookback_days`, `sma_fast`, `sma_slow`, `atr_period`, `volume_sma_period`, and `benchmark`; otherwise the existing global/default Evaluation configuration is used (V4-FEAT-021). Scoring weights are unchanged.
 
 ---
 
@@ -444,7 +444,7 @@ Use these **keys** in `definition.scoring_model`. Values are **0–100** scores.
 | `trend_score` | `trend` | Trend Score | Price vs SMA stack | 20 | 70 | — |
 | `breakout_score` | `pattern_bonus` | Breakout Score | Pattern/breakout evidence from Discovery | 10 | 75 | — |
 | `volume_score` | `volume` | Volume Score | Volume vs recent average | 8 | 60 | — |
-| `market_regime` | — | Market Regime | Broad market regime (**stub**) | 5 | 60 | — |
+| `market_regime` | — | Market Regime | Market Analysis regime: Bullish=100, Neutral=50, Bearish=0 | 5 | 60 | — |
 | `sector_strength` | — | Sector Strength | Sector RS (**stub**) | 4 | 60 | — |
 | `risk_score` | `risk` | Risk Score | ATR-based risk; **higher = riskier** | 3 | 0 | **40** |
 
@@ -457,7 +457,7 @@ Use these **keys** in `definition.scoring_model`. Values are **0–100** scores.
 | `trend_score` | `sma_fast=20`; `sma_slow=50` | `close`, `sma` | close>fast>slow→100; close>fast→60; else 20 |
 | `breakout_score` | — | `discovery_pattern_count` | min(100, 40+20×count); 0 if none |
 | `volume_score` | `volume_sma_period=20` | `volume_ratio` | ≥1.2→100; ≥0.8→60; else 30 |
-| `market_regime` | — | — | Constant **50** until model ships |
+| `market_regime` | — | MarketAnalysisEngine.market_regime | Bullish→100; Neutral→50; Bearish→0 |
 | `sector_strength` | — | — | Constant **50** until model ships |
 | `risk_score` | `atr_period=14` | `atr`, `close` | clamp((atr/close×100)×10, 0, 100); supports **maximum** gate |
 

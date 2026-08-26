@@ -141,6 +141,9 @@
         <dt>Generate (when available)</dt>
         <dd>Runs the recommendation pipeline independently for every enabled strategy in the portfolio. Telegram (when enabled) notifies only actionable Open / Increase / Reduce / Exit ideas — not HOLD / WATCH.</dd>
     
+        <dt>Run decision pipeline</dt>
+        <dd>Starts the daily decision pipeline (Discovery → Evaluation → Recommendations). Blocked unless the last successful market-dataset sync is within 24 hours of the run (72 hours on Monday). The check uses timestamps, not “synced today”. Older data is not used as a fallback. Exchange holidays are not treated specially.</dd>
+    
         <dt>Evidence-first review</dt>
         <dd>Open each review dialog and inspect eligibility/scoring/market/capital evidence before approving or rejecting.</dd>
     
@@ -158,6 +161,9 @@
       <section class="panel">
         <h2>Concepts</h2>
         <dl class="doc-list">
+        <dt>Dataset freshness</dt>
+        <dd>Run decision pipeline requires the last successful market-dataset sync to be within 24 hours of the run (72 hours on Monday). Timestamp comparison, not “synced today”. Exchange holidays are not treated specially.</dd>
+    
         <dt>Evidence snapshot</dt>
         <dd>Eligibility, scoring, exit, market opinion, ranking source (return-quality or OD-23 fill order), and capital allocation status travel with the idea.</dd>
     

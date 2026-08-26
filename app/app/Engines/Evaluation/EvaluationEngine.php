@@ -2,6 +2,7 @@
 
 namespace App\Engines\Evaluation;
 
+use App\Engines\Market\MarketAnalysisEngine;
 use App\Models\Candidate;
 use App\Models\DiscoveryRun;
 use App\Models\EvaluationResult;
@@ -12,7 +13,6 @@ use App\Models\StockPrice;
 use App\Services\PortfolioLoggerService;
 use App\Services\RelativeStrengthService;
 use App\Services\Screener\TechnicalIndicatorService;
-use App\Support\TradingOsConfig;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -27,12 +27,16 @@ class EvaluationEngine
         protected RelativeStrengthService $relativeStrength,
         protected PortfolioLoggerService $logger,
         protected \App\Services\DataQualityGuardService $dataQualityGuard,
+        protected EvaluationParameterResolver $parameterResolver,
+        protected MarketAnalysisEngine $marketAnalysis,
+        protected MarketRegimeScoreMapper $regimeScores,
     ) {}
 
     /**
+     * @param  array<string, mixed>|null  $evaluationConfig  Resolved EvaluationParameterResolver output; null = globals
      * @return array{run: EvaluationRun, results: list<EvaluationResult>}
      */
-    public function run(PortfolioProfile $profile, ?DiscoveryRun $discoveryRun = null): array
+    public function run(PortfolioProfile $profile, ?DiscoveryRun $discoveryRun = null, ?array $evaluationConfig = null): array
     {
         $discoveryRun ??= DiscoveryRun::query()
             ->where('profile_id', $profile->id)
@@ -44,7 +48,7 @@ class EvaluationEngine
             throw new \RuntimeException('No completed discovery run available for evaluation.');
         }
 
-        $config = TradingOsConfig::evaluation();
+        $config = $evaluationConfig ?? $this->parameterResolver->globals();
         $run = EvaluationRun::query()->create([
             'profile_id' => $profile->id,
             'discovery_run_id' => $discoveryRun->id,
@@ -60,6 +64,12 @@ class EvaluationEngine
             $blockedMap = $this->dataQualityGuard->blockedStockIdMap(
                 $candidates->pluck('security_id')->map(fn ($id) => (int) $id)->all(),
             );
+
+            $marketPayload = $this->marketAnalysis->latest();
+            $marketRegime = is_string($marketPayload['market_regime'] ?? null)
+                ? $marketPayload['market_regime']
+                : 'Neutral';
+            $marketRegimeScore = $this->regimeScores->score($marketRegime);
 
             $scored = [];
             foreach ($candidates as $candidate) {
@@ -79,7 +89,7 @@ class EvaluationEngine
                     continue;
                 }
                 try {
-                    $scored[] = $this->evaluateCandidate($candidate, $config);
+                    $scored[] = $this->evaluateCandidate($candidate, $config, $marketRegime, $marketRegimeScore);
                 } catch (Throwable $candidateError) {
                     $scored[] = [
                         'candidate' => $candidate,
@@ -142,6 +152,7 @@ class EvaluationEngine
                     'evaluated' => $evaluated,
                     'skipped' => max(0, $candidates->count() - $evaluated),
                     'results' => count($results),
+                    'evaluation_parameters' => $this->publicParameters($config),
                 ],
             ])->save();
 
@@ -171,8 +182,12 @@ class EvaluationEngine
      * @param  array<string,mixed>  $config
      * @return array{candidate: Candidate, score: float, confidence: float, evidence: array, passed_rules: list<string>, failed_rules: list<string>}
      */
-    protected function evaluateCandidate(Candidate $candidate, array $config): array
-    {
+    protected function evaluateCandidate(
+        Candidate $candidate,
+        array $config,
+        string $marketRegime,
+        float $marketRegimeScore,
+    ): array {
         /** @var Stock|null $stock */
         $stock = $candidate->security;
         $minBars = (int) ($config['min_bars'] ?? 60);
@@ -215,8 +230,11 @@ class EvaluationEngine
 
         $rs = null;
         try {
-            $rsValues = $this->relativeStrength->calculateForStock($stock);
-            $rs = $rsValues['relative_strength_3m'] ?? null;
+            $lookback = ! empty($config['use_lookback_days']) ? (int) $config['lookback_days'] : null;
+            $benchmarkSymbol = isset($config['benchmark']) && is_string($config['benchmark'])
+                ? $config['benchmark']
+                : null;
+            $rs = $this->relativeStrength->evaluationRelativeStrength($stock, $benchmarkSymbol, $lookback);
         } catch (Throwable) {
             $rs = null;
         }
@@ -315,8 +333,7 @@ class EvaluationEngine
             'trend_score' => $this->safeFloat($trendScore) ?? 0.0,
             'breakout_score' => $this->safeFloat($patternBonus) ?? 0.0,
             'volume_score' => $this->safeFloat($volumeScore) ?? 0.0,
-            // Neutral stubs until dedicated market/sector models ship (SD-028 catalogue).
-            'market_regime' => 50.0,
+            'market_regime' => $marketRegimeScore,
             'sector_strength' => 50.0,
             'risk_score' => $this->safeFloat($riskScore) ?? 0.0,
             // Legacy aliases for older Strategy versions / UI
@@ -350,6 +367,9 @@ class EvaluationEngine
             'evidence' => [
                 'skipped' => false,
                 'scoring_mode' => 'supported_indicator_facts',
+                'evaluation_parameters' => $this->publicParameters($config),
+                'market_regime' => $marketRegime,
+                'market_regime_score' => $marketRegimeScore,
                 'indicators' => [
                     'close' => $this->safeFloat($close),
                     'sma_fast' => $this->safeFloat($smaFast),
@@ -464,5 +484,22 @@ class EvaluationEngine
         }
 
         return $query->orderBy('rank')->get()->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @return array<string, mixed>
+     */
+    protected function publicParameters(array $config): array
+    {
+        return [
+            'rsi_period' => (int) ($config['rsi_period'] ?? 14),
+            'sma_fast' => (int) ($config['sma_fast'] ?? 20),
+            'sma_slow' => (int) ($config['sma_slow'] ?? 50),
+            'atr_period' => (int) ($config['atr_period'] ?? 14),
+            'volume_sma_period' => (int) ($config['volume_sma_period'] ?? 20),
+            'lookback_days' => ! empty($config['use_lookback_days']) ? (int) $config['lookback_days'] : null,
+            'benchmark' => $config['benchmark'] ?? null,
+        ];
     }
 }

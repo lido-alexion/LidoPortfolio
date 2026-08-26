@@ -148,7 +148,7 @@ const APP_DOCUMENTATION_BASE = [
         controls: [
             {
                 name: 'Run decision pipeline',
-                description: 'On Recommendations — regenerates ideas using current Screener hits, Discovery/Evaluation facts, and Strategy config.',
+                description: 'On Recommendations — regenerates ideas using current Screener hits, Discovery/Evaluation facts, and Strategy config. Requires a successful market-dataset sync within 24 hours of the pipeline run (72 hours if the pipeline runs on Monday). The check uses timestamps, not calendar dates. If the dataset is older than that window, the pipeline stops before Discovery and does not create evaluation results or recommendations. Existing older prices are not used as a fallback. Exchange holidays are not treated specially.',
             },
             {
                 name: 'Approve / Reject / Defer',
@@ -156,6 +156,11 @@ const APP_DOCUMENTATION_BASE = [
             },
         ],
         concepts: [
+            {
+                name: 'Dataset freshness for the pipeline',
+                description:
+                    'The daily decision pipeline runs only when the last successful market-dataset sync is within 24 hours of that run (72 hours if the run is on Monday). The check uses timestamps, not calendar dates, and does not treat exchange holidays specially. If the dataset is too old, Discovery / Evaluation / Recommendations are not created from that run.',
+            },
             {
                 name: 'Discovery optional to visit',
                 description:
@@ -849,8 +854,14 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Capital status (list)', description: 'OPEN / INCREASE rows show capital funding badges: Capital required (UNFUNDED), Awaiting lender, Partially funded, and a quieter Funded badge.' },
             { name: 'Select lender', description: 'When status is Awaiting lender (or UNFUNDED with a capital request), expand Select lender on the list or use the detail panel to pick a lender strategy, Approve lender, or Reject — calls existing /v1/capital/requests/{id}/lenders|approve|reject APIs.' },
             { name: 'Generate (when available)', description: 'Runs the recommendation pipeline independently for every enabled strategy in the portfolio. Telegram (when enabled) notifies only actionable Open / Increase / Reduce / Exit ideas — not HOLD / WATCH.' },
+            { name: 'Run decision pipeline', description: 'Starts the daily decision pipeline (Discovery → Evaluation → Recommendations). Blocked unless the last successful market-dataset sync is within 24 hours of the run (72 hours on Monday). The check uses timestamps, not “synced today”. Older data is not used as a fallback. Exchange holidays are not treated specially.' },
         ],
         concepts: [
+            {
+                name: 'Dataset freshness',
+                description:
+                    'Run decision pipeline requires the last successful market-dataset sync to be within 24 hours of the run (72 hours on Monday). Timestamp comparison, not “synced today”. Exchange holidays are not treated specially.',
+            },
             { name: 'Evidence snapshot', description: 'Eligibility, scoring, exit, market opinion, ranking source (return-quality or OD-23 fill order), and capital allocation status travel with the idea.' },
             {
                 name: 'Capital allocation status',
@@ -969,17 +980,17 @@ const APP_DOCUMENTATION_BASE = [
                     + 'On — include factor in the blend; Off disables Weight/Min/Max/Parameters for that row.\n'
                     + 'Weight — share of overall score before/after normalisation (e.g. Relative Strength 35 means 35% when the total is already 100).\n'
                     + 'Min / Max — soft targets used when scoring that factor (Risk uses Max as a risk cap; Risk Min defaults to 0).\n'
-                    + 'Compared against: Evaluation factor facts for that stock (RS, RSI/momentum, trend/SMA stack, volume, etc.), not raw rupee prices.',
+                    + 'Compared against: Evaluation factor facts for that stock (RS, RSI/momentum, trend/SMA stack, volume, etc.), not raw rupee prices. A valid Strategy parameter for rsi_period, lookback_days, sma_fast, sma_slow, atr_period, volume_sma_period, or benchmark overrides the global Evaluation default; missing or invalid values keep the global/default.',
             },
             {
                 name: 'Scoring Model — parameters by factor',
                 description:
-                    'Relative Strength: lookback_days (sessions) and Benchmark (index dropdown, e.g. NIFTY50) — stock return vs that benchmark.\n'
+                    'Relative Strength: lookback_days (sessions) and Benchmark (index dropdown, e.g. NIFTY50) — stock return vs that benchmark. Evaluation uses these when valid; otherwise the existing 3-month vs primary-benchmark path.\n'
                     + 'Momentum Score: rsi_period — RSI length for momentum strength.\n'
                     + 'Trend Score: sma_fast / sma_slow — SMA lengths for trend stack.\n'
                     + 'Volume Score: volume_sma_period — average volume window.\n'
                     + 'Risk Score: atr_period — ATR window; higher Risk score is riskier; Max caps acceptable risk.\n'
-                    + 'Breakout / Market Regime / Sector Strength: may have no parameters (stub or discovery-fed).',
+                    + 'Breakout / Sector Strength: may have no parameters (discovery-fed or stub). Market Regime has no parameters; its 0–100 score comes from Market Analysis (Bullish=100, Neutral=50, Bearish=0). Scoring weights are separate and are not Evaluation indicator parameters.',
             },
             {
                 name: 'Recommendation Thresholds tab',
@@ -1940,7 +1951,7 @@ const APP_DOCUMENTATION_BASE = [
             + '**Uniqueness:** each indicator `id` (also used as artifact `slug`) is globally unique in the registry. Aliases (legacy Strategy keys) resolve to a canonical id.\n\n'
             + '## Parameter conventions (Screenable Primaries)\n\n'
             + 'Screener params are numeric with **default / min / max / step**. Period-like params usually allow **1–400** (RSI/ATR period max **200**; Stochastic `smooth` max **50**; MACD `signal` max **100**; Bollinger `mult` **0.5–5** step **0.1**).\n\n'
-            + 'Strategy Composite params are `{ type, label, default }` (often no min/max in metadata) and are UI-persisted on the Strategy; Evaluation may still use trading_os defaults for some inputs (TD-19).\n\n'
+            + 'Strategy Composite params are `{ type, label, default }` (often no min/max in metadata) and are persisted on the Strategy. Evaluation uses a valid Strategy value for `rsi_period`, `lookback_days`, `sma_fast`, `sma_slow`, `atr_period`, `volume_sma_period`, and `benchmark`; otherwise the existing global/default Evaluation configuration is used (V4-FEAT-021). Scoring weights are unchanged.\n\n'
             + '---\n\n'
             + '## Catalogue A — Screenable Primaries (for Screener JSON)\n\n'
             + 'Use these ids in Screener `left` / `right` operands. Params shown as `name=default (min–max[, step])`.\n\n'
@@ -2042,7 +2053,7 @@ const APP_DOCUMENTATION_BASE = [
             + '| `trend_score` | `trend` | Trend Score | Price vs SMA stack | 20 | 70 | — |\n'
             + '| `breakout_score` | `pattern_bonus` | Breakout Score | Pattern/breakout evidence from Discovery | 10 | 75 | — |\n'
             + '| `volume_score` | `volume` | Volume Score | Volume vs recent average | 8 | 60 | — |\n'
-            + '| `market_regime` | — | Market Regime | Broad market regime (**stub**) | 5 | 60 | — |\n'
+            + '| `market_regime` | — | Market Regime | Market Analysis regime: Bullish=100, Neutral=50, Bearish=0 | 5 | 60 | — |\n'
             + '| `sector_strength` | — | Sector Strength | Sector RS (**stub**) | 4 | 60 | — |\n'
             + '| `risk_score` | `risk` | Risk Score | ATR-based risk; **higher = riskier** | 3 | 0 | **40** |\n'
             + '\n'
@@ -2054,7 +2065,7 @@ const APP_DOCUMENTATION_BASE = [
             + '| `trend_score` | `sma_fast=20`; `sma_slow=50` | `close`, `sma` | close>fast>slow→100; close>fast→60; else 20 |\n'
             + '| `breakout_score` | — | `discovery_pattern_count` | min(100, 40+20×count); 0 if none |\n'
             + '| `volume_score` | `volume_sma_period=20` | `volume_ratio` | ≥1.2→100; ≥0.8→60; else 30 |\n'
-            + '| `market_regime` | — | — | Constant **50** until model ships |\n'
+            + '| `market_regime` | — | MarketAnalysisEngine.market_regime | Bullish→100; Neutral→50; Bearish→0 |\n'
             + '| `sector_strength` | — | — | Constant **50** until model ships |\n'
             + '| `risk_score` | `atr_period=14` | `atr`, `close` | clamp((atr/close×100)×10, 0, 100); supports **maximum** gate |\n'
             + '\n'

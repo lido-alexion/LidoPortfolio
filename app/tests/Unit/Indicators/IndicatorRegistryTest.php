@@ -100,7 +100,7 @@ class IndicatorRegistryTest extends TestCase
             $this->assertContains(IndicatorConsumer::STRATEGY, $def->consumers);
         }
 
-        $this->assertSame(IndicatorStatus::STUB, $registry->get(SupportedIndicators::MARKET_REGIME)->status);
+        $this->assertSame(IndicatorStatus::ACTIVE, $registry->get(SupportedIndicators::MARKET_REGIME)->status);
         $this->assertSame(IndicatorStatus::STUB, $registry->get(SupportedIndicators::SECTOR_STRENGTH)->status);
         $this->assertSame(['rsi'], $registry->get(SupportedIndicators::MOMENTUM_SCORE)->dependsOn);
         $this->assertNotEmpty($registry->get(SupportedIndicators::MOMENTUM_SCORE)->formulaExplanation);

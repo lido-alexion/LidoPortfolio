@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Engines\Data\DataEngine;
 use App\Engines\Discovery\DiscoveryEngine;
 use App\Engines\Evaluation\EvaluationEngine;
+use App\Engines\Evaluation\EvaluationParameterResolver;
 use App\Engines\Execution\ExecutionEngine;
 use App\Engines\Notification\NotificationEngine;
 use App\Engines\Pipeline\DailyDecisionPipeline;
@@ -13,6 +14,7 @@ use App\Engines\Review\ReviewEngine;
 use App\Engines\Support\ApiEnvelope;
 use App\Http\Controllers\Controller;
 use App\Services\StockResolverService;
+use App\Services\StrategyConfigurationService;
 use App\Support\TradingOsConfig;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -31,6 +33,8 @@ class TradingOsController extends Controller
         protected ReviewEngine $review,
         protected DailyDecisionPipeline $pipeline,
         protected StockResolverService $stocks,
+        protected StrategyConfigurationService $strategies,
+        protected EvaluationParameterResolver $parameterResolver,
     ) {}
 
     public function securities(Request $request): JsonResponse
@@ -135,7 +139,10 @@ class TradingOsController extends Controller
         $profile = \activePortfolio();
 
         try {
-            $result = $this->evaluation->run($profile);
+            $version = $this->strategies->ensureActive($profile);
+            $configJson = is_array($version->config_json) ? $version->config_json : [];
+            $resolved = $this->parameterResolver->resolve($configJson);
+            $result = $this->evaluation->run($profile, null, $resolved);
         } catch (\RuntimeException $e) {
             return ApiEnvelope::error('EVALUATION_PRECONDITION', $e->getMessage(), 422);
         }

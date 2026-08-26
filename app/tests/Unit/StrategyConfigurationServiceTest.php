@@ -128,6 +128,44 @@ class StrategyConfigurationServiceTest extends TestCase
         $this->assertEqualsWithDelta((50 / 115) * 100, $afterRs, 0.05);
     }
 
+    public function test_score_weights_ignore_indicator_period_parameters(): void
+    {
+        $svc = app(StrategyConfigurationService::class);
+        $base = $svc->normalizeConfig([]);
+        foreach ($base['indicators'] as &$ind) {
+            if (in_array($ind['key'], [SupportedIndicators::RELATIVE_STRENGTH, SupportedIndicators::TREND_SCORE], true)) {
+                $ind['enabled'] = true;
+                $ind['weight'] = 50;
+                $ind['minimum'] = null;
+                $ind['maximum'] = null;
+            } else {
+                $ind['enabled'] = false;
+            }
+        }
+        unset($ind);
+
+        $withPeriods = $base;
+        foreach ($withPeriods['indicators'] as &$ind) {
+            if ($ind['key'] === SupportedIndicators::TREND_SCORE) {
+                $ind['parameters'] = ['sma_fast' => 5, 'sma_slow' => 200];
+            }
+            if ($ind['key'] === SupportedIndicators::RELATIVE_STRENGTH) {
+                $ind['parameters'] = ['lookback_days' => 10, 'benchmark' => 'SENSEX'];
+            }
+        }
+        unset($ind);
+
+        $facts = [
+            'relative_strength' => 100,
+            'trend_score' => 50,
+        ];
+        $without = $svc->score($facts, $base);
+        $with = $svc->score($facts, $withPeriods);
+
+        $this->assertEqualsWithDelta($without['overall_score'], $with['overall_score'], 0.0001);
+        $this->assertEqualsWithDelta(75.0, $with['overall_score'], 0.01);
+    }
+
     public function test_redistribute_enabled_weights_scales_proportions(): void
     {
         $svc = app(StrategyConfigurationService::class);

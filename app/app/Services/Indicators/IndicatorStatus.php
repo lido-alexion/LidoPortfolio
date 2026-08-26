@@ -10,7 +10,7 @@ final class IndicatorStatus
     /** Implemented and available for declared capabilities. */
     public const ACTIVE = 'active';
 
-    /** Registered but calculation is a neutral stub (e.g. market_regime = 50). */
+    /** Registered but calculation is a neutral stub (e.g. sector_strength = 50). */
     public const STUB = 'stub';
 
     /** Metadata only — no calculator yet. */

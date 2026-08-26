@@ -605,6 +605,12 @@ This register is the authoritative record of **why Version 1.0 differs** from th
 
 ---
 
+### Post-V3 product decisions (not SD-xxx)
+
+V4 Product Owner rules **V4-SPEC-001 through V4-SPEC-006** are recorded in [`../../LidoPortfolio-V4-Wishlist.md`](../../LidoPortfolio-V4-Wishlist.md) §4 (`DECIDED` 2026-08-26; **not implemented**). This register remains the V1.0 intent-vs-implementation SD log. Do **not** copy those six rules here as new SD rows.
+
+---
+
 ## Change control
 
 1. New deviations require a new **SD-xxx** entry (or status change to Superseded/Rejected).  

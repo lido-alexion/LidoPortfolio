@@ -192,7 +192,7 @@
 <p><strong>Uniqueness:</strong> each indicator <code>id</code> (also used as artifact <code>slug</code>) is globally unique in the registry. Aliases (legacy Strategy keys) resolve to a canonical id.</p>
 <h2>Parameter conventions (Screenable Primaries)</h2>
 <p>Screener params are numeric with <strong>default / min / max / step</strong>. Period-like params usually allow <strong>1–400</strong> (RSI/ATR period max <strong>200</strong>; Stochastic <code>smooth</code> max <strong>50</strong>; MACD <code>signal</code> max <strong>100</strong>; Bollinger <code>mult</code> <strong>0.5–5</strong> step <strong>0.1</strong>).</p>
-<p>Strategy Composite params are <code>{ type, label, default }</code> (often no min/max in metadata) and are UI-persisted on the Strategy; Evaluation may still use trading_os defaults for some inputs (TD-19).</p>
+<p>Strategy Composite params are <code>{ type, label, default }</code> (often no min/max in metadata) and are persisted on the Strategy. Evaluation uses a valid Strategy value for <code>rsi_period</code>, <code>lookback_days</code>, <code>sma_fast</code>, <code>sma_slow</code>, <code>atr_period</code>, <code>volume_sma_period</code>, and <code>benchmark</code>; otherwise the existing global/default Evaluation configuration is used (V4-FEAT-021). Scoring weights are unchanged.</p>
 <hr>
 <h2>Catalogue A — Screenable Primaries (for Screener JSON)</h2>
 <p>Use these ids in Screener <code>left</code> / <code>right</code> operands. Params shown as <code>name=default (min–max[, step])</code>.</p>
@@ -658,7 +658,7 @@
 <td><code>market_regime</code></td>
 <td>—</td>
 <td>Market Regime</td>
-<td>Broad market regime (<strong>stub</strong>)</td>
+<td>Market Analysis regime: Bullish=100, Neutral=50, Bearish=0</td>
 <td>5</td>
 <td>60</td>
 <td>—</td>
@@ -725,8 +725,8 @@
 <tr>
 <td><code>market_regime</code></td>
 <td>—</td>
-<td>—</td>
-<td>Constant <strong>50</strong> until model ships</td>
+<td>MarketAnalysisEngine.market_regime</td>
+<td>Bullish→100; Neutral→50; Bearish→0</td>
 </tr>
 <tr>
 <td><code>sector_strength</code></td>

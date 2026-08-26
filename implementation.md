@@ -289,7 +289,7 @@ V3 complete only when: all V3 requirements + V3-related designed features implem
 
 ### Genuine V4 remainder
 
-See [`specs/LidoPortfolio-V4-Wishlist.md`](specs/LidoPortfolio-V4-Wishlist.md): **22** active V4 features (FEAT-001, 002, 005, 006, 008–015, 021–029, 032) and **SPEC-001–006**. Fourteen former V4 FEAT IDs are V5-deferred (prioritization, not implemented) — see that file §3.
+See [`specs/LidoPortfolio-V4-Wishlist.md`](specs/LidoPortfolio-V4-Wishlist.md): **22** active V4 features (FEAT-001, 002, 005, 006, 008–015, 021–029, 032) and **SPEC-001–006 (DECIDED 2026-08-26; not implemented)**. Fourteen former V4 FEAT IDs are V5-deferred (prioritization, not implemented) — see that file §3.
 
 ## Final V3 Closure Audit (2026-08-26)
 
@@ -332,8 +332,8 @@ Completion criterion (product owner, 2026-08-26 strict pass): every normative V3
 
 Tracked in [`specs/LidoPortfolio-V4-Wishlist.md`](specs/LidoPortfolio-V4-Wishlist.md) (strict rewrite 2026-08-26; Product Owner V4/V5 split 2026-08-26):
 
-- **SPEC-001–006:** adoption cost merge; CA rights; CA restatement; optional cash-ledger kinds; cross-owner sell policy; live exclusivity (Decision 11) — still active V4
-- **Active V4 FEAT (22):** broker/live, regime/liquidity, TAF remaining phases, Review/admin/cash/tax polish, Evaluation→Strategy-param wiring (FEAT-021), data-platform gates, OpenAPI/E2E/controller split/logging/evaluation modules/TOS repos, etc.
+- **SPEC-001–006:** **DECIDED** 2026-08-26 (simple WAVG adoption merge with final avg to 2 dp half-up; no special rights CA; split/bonus restatement of qty/cost/trailing/stop/target; cash-ledger special types exactly LOAN/RECALL/BRIDGE with signed amount; explicit sell attribution; multi-strategy per broker account). Frozen product rules, **not implemented**. See wishlist §4.
+- **Active V4 FEAT (22):** **V4-FEAT-021 COMPLETE** (2026-08-26); **V4-FEAT-022 COMPLETE** (2026-08-27); **V4-FEAT-005 COMPLETE** (2026-08-27) — Evaluation `market_regime` factor is Market Analysis Bullish=100 / Neutral=50 / Bearish=0. Remaining 19 stay OPEN: broker/live, liquidity, TAF remaining phases, Review/admin/cash/tax polish, dataset versioning, OpenAPI/E2E/controller split/logging/evaluation modules/TOS repos, etc.
 - **V5-deferred FEAT (14, still OPEN):** B4 banner, notification channels, indicator-registry cutover, mobile/AI/ML/markets/replay, CI/secrets deploy, Discovery/Evaluation UX polish, TS/grid migration, optional token API. Roadmap only — not implemented.
 
 **Closed in V3 (not V4):** OD-16 Strategy window UI; schedulerTimestamp; DailyMarketDataJobTest; max_position enforcement; all former open V3 bug/TD/UX/HIST active rows.
@@ -344,6 +344,81 @@ Tracked in [`specs/LidoPortfolio-V4-Wishlist.md`](specs/LidoPortfolio-V4-Wishlis
 - `DOCS.md` V3 section (was “not started” / “no code yet”)
 - WS4 recall-bridge delta stale “not coded” / Unfunded calculator notes
 - OD-17 status line → DONE; CLI re-arm message; unused numeric `target_history_days` config key removed from campaign completion path
+
+## V4-FEAT-021 — Strategy indicator parameters → EvaluationEngine (2026-08-26)
+
+**Status:** **COMPLETE**. PO rule: for catalogue keys `rsi_period`, `lookback_days`, `sma_fast`, `sma_slow`, `atr_period`, `volume_sma_period`, `benchmark`, a valid Strategy value overrides the global Evaluation configuration; otherwise the existing global/default is used. Scoring weights are unchanged.
+
+### Mechanism
+
+`App\Engines\Evaluation\EvaluationParameterResolver` reads Strategy `config_json` factor `parameters` (does **not** load Strategy rows, does **not** call `normalizeConfig()` so absent keys stay absent). Valid positive integers override period keys; a catalogue-enabled index symbol overrides `benchmark`; otherwise globals from `TradingOsConfig::evaluation()`. Missing lookback keeps the historical 3-month RS path vs primary/resolved benchmark.
+
+Callers pass the already-resolved array into `EvaluationEngine::run($profile, $discoveryRun, $evaluationConfig)`. Pipeline groups enabled strategies by parameter fingerprint and runs one evaluation per group, then generates recommendations for those strategy ids. Standalone `POST /api/v1/evaluation/runs` uses `ensureActive` + the first active Strategy’s resolved params. Backtest `AsOfFactorScorer` receives the same resolved **period** config; its RS path remains a bar proxy (lookback/benchmark not applied there).
+
+### Tests
+
+`tests/Unit/EvaluationParameterResolverTest.php`; `tests/Feature/EvaluationParameterOverrideTest.php`; `StrategyConfigurationServiceTest::test_score_weights_ignore_indicator_period_parameters`.
+
+### Explicitly not in this feature
+
+Broker/GTT, market_regime, liquidity composites, dataset gates, OpenAPI, repos, SPEC-001–006, Evaluation weight redesign, UI redesign, migrations.
+
+## V4-FEAT-022 — Hard dataset publish gate (2026-08-27)
+
+**Status:** **COMPLETE**. **PO clarification (same feature, not a new ID):** Discovery is allowed when the required market dataset was successfully synced within the previous 24 hours of the pipeline run. On Monday the window is 72 hours. Comparison is timestamps vs the pipeline execution instant, not calendar dates. Holiday / exchange-calendar freshness is out of scope (V5). This supersedes the first-pass “synced today” / `published === true` gate.
+
+### Mechanism
+
+`DailyDecisionPipeline::run()` still records `DataEngine::datasetStatus()` (inspection). The gate is `Pipeline\DatasetFreshnessGate`:
+
+1. Pipeline timestamp = `now()` at the start of `DailyDecisionPipeline::run()` (same instant written to `PipelineRun.started_at`). The gate uses this in-memory instant, not a datetime round-tripped from the database.
+2. Last successful sync = `DailyMarketSyncService::lastSuccessfulSyncAt()` (`last_daily_market_sync_at`, ISO-8601). Legacy incomplete values containing `;processed=` are ignored. `markIncomplete()` no longer overwrites that key.
+3. Age in seconds = `max(0, pipeline_ts − synced_ts)`.
+4. Allowed window: **72 hours** if that instant is Monday in the cron/sync timezone (`cron_timezone`, default `Asia/Kolkata`); otherwise **24 hours**. Saturday/Sunday stay 24 hours.
+5. Allow iff `age <= window` (inclusive). Missing timestamp → block.
+
+- Allowed → `publish_gate.allowed=true`, then Discovery → Evaluation → Recommendations as before.
+- Blocked → do not call Discovery/Evaluation/Recommendation. Persist the run as `failed` with `error_message` plus `stages.publish_gate.reason = dataset_not_fresh`, then throw `DomainException` (`DATASET_NOT_FRESH`, 422).
+
+`DataEngine::datasetStatus()['published']` remains “synced today” for dashboard/status APIs. The pipeline **does not** gate on that boolean (a Friday success can still allow Monday’s run if age ≤ 72h).
+
+### Gated vs not gated
+
+**Gated (daily decision pipeline entry points):** `DailyDecisionPipeline::run()` — artisan `portfolio:decision-pipeline` (manual/scheduled/post-sync) and `POST /api/v1/pipeline/run`.
+
+**Not gated:** standalone Discovery/Evaluation/Recommendation APIs, backtests, historical simulation, `GET /api/v1/dataset/status` (inspection only).
+
+### Tests
+
+`tests/Unit/DatasetFreshnessGateTest.php`; `tests/Feature/DatasetPublishGateTest.php`; `DailyMarketSyncTest` last-success timestamp preservation; existing `TradingOsPipelineTest` still marks a recent successful sync.
+
+### Explicitly not in this feature
+
+Holiday / trading-calendar freshness (V5), DataEngine redesign, dataset versioning (FEAT-023), completeness scores, extra freshness rules, broker, SPEC-001–006, FEAT-021 scoring-parameter changes. Daily-sync skip-if-already-synced-today is unchanged.
+
+## V4-FEAT-005 — Evaluation market regime (2026-08-27)
+
+**Status:** **COMPLETE**. Frozen PO rule: MarketAnalysisEngine is the source of categorical `market_regime` (Bullish / Neutral / Bearish via existing `regimeFromPhase()`). Evaluation keeps its 0–100 factor model. Mapping: Bullish→100, Neutral→50, Bearish→0. Sentiment is not the score. No new phase or regime calculation.
+
+### Mechanism
+
+`EvaluationEngine::run()` calls `MarketAnalysisEngine::latest()` **once per evaluation run** (not per candidate). `MarketRegimeScoreMapper` maps only those three labels. Factor key `market_regime` receives the numeric score (existing Strategy/equal-weight contract). Evidence also stores categorical `market_regime` and numeric `market_regime_score`.
+
+Unavailable Market Analysis still returns `market_regime = Neutral` from the engine; the mapper yields 50. Recommendation continues to call `latest()` later in the same daily pipeline; the engine’s existing ~4 hour snapshot cache avoids a second compute when the as-of date matches. Snapshot lookup uses `whereDate` so SQLite datetime storage still hits that cache (same 4-hour policy).
+
+FEAT-021 parameter resolution and FEAT-022 freshness gating are unchanged. Evaluation / Strategy scoring weights are unchanged (`trading_os.evaluation.weights`; Strategy catalogue default weight 5 for this factor).
+
+### Backtest
+
+`AsOfFactorScorer` still stubs `market_regime` at 50.0. Using `latest()` there would leak current market regime into historical as-of dates. Historical Market Analysis is out of scope.
+
+### Tests
+
+`tests/Unit/Evaluation/MarketRegimeScoreMapperTest.php`; `tests/Feature/EvaluationMarketRegimeTest.php`.
+
+### Explicitly not in this feature
+
+New phases, phase-specific scores, sentiment-as-regime, backtest historical regime, FEAT-006 liquidity, Strategy weight redesign, FEAT-021/022 behaviour changes.
 
 ## V3 residual — UNFUNDED zero-own lending offer (2026-08-24)
 
@@ -1284,7 +1359,7 @@ Lending / DEP-PARTIAL-LEND requests, recall, weakest-position, trailing, broker 
 |--------|-------|----------------|
 | Data | `Data\DataEngine` | `portfolio_stocks` / `portfolio_stock_prices` / daily sync |
 | Discovery | `Discovery\DiscoveryEngine` | `portfolio_tos_candidates` (orchestrates PatternScan + Screener) |
-| Evaluation | `Evaluation\EvaluationEngine` | Factor facts only (no Strategy weights) → `portfolio_tos_evaluation_results` |
+| Evaluation | `Evaluation\EvaluationEngine` | Factor facts only (no Strategy weights). **V4-FEAT-005:** `market_regime` numeric fact from MarketAnalysisEngine categorical regime (Bullish=100 / Neutral=50 / Bearish=0) via `MarketRegimeScoreMapper`. Indicator periods / lookback / benchmark from `Evaluation\EvaluationParameterResolver`. |
 | Strategy | `Services\StrategyConfigurationService` | Versioned strategy config (factors, thresholds, rules); consumed by Recommendation |
 | Recommendation | `Recommendation\RecommendationEngine` | Thin façade only (TD-001) — generation delegated to `Recommendation\RecommendationGenerationPipeline` (TD-002: Strategy scoring → Market Opinion → Portfolio Decision → Ranking → Capital Allocation → Trade gen); lifecycle (Approve/Reject/Defer; pending-execution / cancel-execution / expire / reopen; cash reservation; list/history queries) delegated to `Recommendation\RecommendationLifecycleService` (TD-001) |
 | Market Analysis | `Market\MarketAnalysisEngine` | Benchmark OHLCV → market analytics / sentiment / phase (SD-032); façade `MarketAnalyticsService` |
@@ -1292,7 +1367,7 @@ Lending / DEP-PARTIAL-LEND requests, recall, weakest-position, trailing, broker 
 | Execution | `Execution\ExecutionEngine` | Pending execution → ledger transaction (manual or future broker); completion tracking |
 | Review | `Review\ReviewEngine` | Dashboard, outcomes, reports |
 | Backtest | `Services\Backtest\BacktestSimulationEngine` | Historical strategy simulation (paper portfolio; resumable ~20s slices) |
-| Pipeline | `Pipeline\DailyDecisionPipeline` | End-to-end stages |
+| Pipeline | `Pipeline\DailyDecisionPipeline` | End-to-end stages. **V4-FEAT-022:** `DatasetFreshnessGate` — last successful sync age ≤ 24h (72h on Monday, cron timezone) before Discovery. |
 
 ### Config / schema / CLI
 
