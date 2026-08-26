@@ -5,9 +5,17 @@ namespace App\Engines\Strategy;
 /**
  * Evaluate Strategy exit rules against holding facts (SD-030).
  * Rules are declarative — no duplicated Screener engine; uses Evaluation facts.
+ *
+ * V3 (§14–§15, §21, §25): legacy account-level keys `max_loss` and `trailing_stop` are
+ * ignored when present in strategy JSON. Portfolio stop-loss / trailing live on Settings
+ * (PortfolioStopLossCalculator / PortfolioTrailingStopCalculator). Do not treat those
+ * keys as strategy_exit.
  */
 final class ExitStrategyEvaluator
 {
+    /** @var list<string> V1 common-risk keys — ignore; portfolio Settings owns SL/trailing. */
+    public const IGNORED_ACCOUNT_EXIT_KEYS = ['max_loss', 'trailing_stop'];
+
     /**
      * @param  array<string, mixed>  $exitConfig
      * @param  array<string, mixed>  $context  score, indicator_scores, indicators, holding meta
@@ -37,6 +45,9 @@ final class ExitStrategyEvaluator
                 continue;
             }
             $key = (string) ($rule['key'] ?? '');
+            if ($key === '' || in_array($key, self::IGNORED_ACCOUNT_EXIT_KEYS, true)) {
+                continue;
+            }
             $hit = false;
             $detail = null;
 
@@ -73,13 +84,6 @@ final class ExitStrategyEvaluator
                         $detail = 'Close below slow SMA';
                     }
                     break;
-                case 'max_loss':
-                    $maxLoss = (float) ($rule['value'] ?? 8);
-                    if ($unrealizedPct !== null) {
-                        $hit = $unrealizedPct <= -abs($maxLoss);
-                        $detail = "Unrealized PnL {$unrealizedPct}% ≤ -{$maxLoss}%";
-                    }
-                    break;
                 case 'atr_stop':
                     $mult = (float) ($rule['atr_multiple'] ?? $rule['value'] ?? 2);
                     $atrPct = isset($indicators['atr_pct']) ? (float) $indicators['atr_pct'] : null;
@@ -87,17 +91,6 @@ final class ExitStrategyEvaluator
                         $stop = -abs($mult * $atrPct);
                         $hit = $unrealizedPct <= $stop;
                         $detail = "Unrealized {$unrealizedPct}% ≤ ATR stop {$stop}%";
-                    }
-                    break;
-                case 'trailing_stop':
-                    // V1 STRATEGY-SPECIFIC exit rule: unrealized-% proxy.
-                    // V3 portfolio trailing (§15 / OD-14 / OD-22) is implemented separately in
-                    // App\Services\Risk\PortfolioTrailingStopCalculator and MUST NOT be
-                    // conflated with this path. Phase 2 wires §13.2 precedence for live EXIT.
-                    $trail = (float) ($rule['value'] ?? 10);
-                    if ($unrealizedPct !== null) {
-                        $hit = $unrealizedPct <= -abs($trail);
-                        $detail = "Trailing proxy: unrealized {$unrealizedPct}% ≤ -{$trail}%";
                     }
                     break;
                 case 'screener_exit':
@@ -173,25 +166,11 @@ final class ExitStrategyEvaluator
                 'value' => 20,
             ],
             [
-                'key' => 'max_loss',
-                'display_name' => 'Maximum Loss',
-                'description' => 'Unrealized loss exceeds maximum loss %.',
-                'enabled' => true,
-                'value' => 8,
-            ],
-            [
                 'key' => 'atr_stop',
                 'display_name' => 'ATR Stop',
                 'description' => 'Unrealized loss exceeds N × ATR%.',
                 'enabled' => false,
                 'atr_multiple' => 2,
-            ],
-            [
-                'key' => 'trailing_stop',
-                'display_name' => 'Trailing Stop',
-                'description' => 'Trailing stop proxy via unrealized drawdown % (V1).',
-                'enabled' => false,
-                'value' => 10,
             ],
             [
                 'key' => 'screener_exit',
@@ -206,6 +185,8 @@ final class ExitStrategyEvaluator
 
     /**
      * Ensure catalogue exit rules exist while preserving user overrides.
+     * Legacy account-level keys (`max_loss`, `trailing_stop`) are omitted from the
+     * editor catalogue and ignored at evaluate time (V3 §21 / §25).
      *
      * @param  list<array<string, mixed>>  $rules
      * @return list<array<string, mixed>>
@@ -218,7 +199,7 @@ final class ExitStrategyEvaluator
                 continue;
             }
             $key = (string) ($rule['key'] ?? '');
-            if ($key === '') {
+            if ($key === '' || in_array($key, self::IGNORED_ACCOUNT_EXIT_KEYS, true)) {
                 continue;
             }
             $byKey[$key] = $rule;

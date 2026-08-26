@@ -23,6 +23,27 @@ class NotificationMessageComposer
         if ($rec->suggested_position_size) {
             $lines[] = sprintf('Suggested size: ₹%s', number_format((float) $rec->suggested_position_size, 0));
         }
+        $capitalStatus = $rec->capitalAllocationStatus();
+        if (in_array($capitalStatus, [
+            TradingRecommendation::ALLOCATION_UNFUNDED,
+            TradingRecommendation::ALLOCATION_PARTIALLY_FUNDED,
+            TradingRecommendation::ALLOCATION_AWAITING_LENDER_SELECTION,
+        ], true)) {
+            $lines[] = 'Capital: '.$this->capitalStatusLabel($capitalStatus);
+            $target = $rec->capitalTargetAmount();
+            $own = $rec->ownAllocatedAmount();
+            if ($target !== null) {
+                $lines[] = sprintf(
+                    'Target ₹%s · This cycle ₹%s',
+                    $this->inr($target),
+                    $this->inr($own ?? 0)
+                );
+            }
+        }
+        $exitReason = $rec->primaryExitReason();
+        if ($exitReason !== null && $exitReason !== '') {
+            $lines[] = 'Exit reason: '.$this->exitReasonLabel($exitReason);
+        }
         $passed = $rec->evidence['passed_rules'] ?? [];
         if ($passed) {
             $lines[] = 'Passed: '.implode(', ', array_slice($passed, 0, 5));
@@ -190,6 +211,86 @@ class NotificationMessageComposer
             sprintf('Unresolved: ₹%s', $this->inr($ctx['unresolved'] ?? 0)),
             'The recommendation will use only the capital actually available.',
         ]);
+    }
+
+    /**
+     * §30 — capital required for valid UNFUNDED / PARTIALLY_FUNDED / AWAITING_LENDER BUY.
+     *
+     * @param  array<string, mixed>  $ctx
+     */
+    public function capitalRequiredMessage(array $ctx): string
+    {
+        return implode("\n", [
+            'Lido Portfolio — Capital required',
+            sprintf('%s %s', $ctx['action'] ?? 'BUY', $ctx['symbol'] ?? '—'),
+            sprintf('Status: %s', $this->capitalStatusLabel($ctx['status'] ?? '')),
+            sprintf('Target: ₹%s · Available this cycle: ₹%s', $this->inr($ctx['target'] ?? 0), $this->inr($ctx['available'] ?? 0)),
+            'This is an actionable OPEN/INCREASE — not a HOLD/WATCH skip.',
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $ctx
+     */
+    public function lendingCommitmentMessage(array $ctx): string
+    {
+        return implode("\n", [
+            'Lido Portfolio — Lending commitment',
+            sprintf('Loan #%s committed for ₹%s', $ctx['loan_id'] ?? '—', $this->inr($ctx['amount'] ?? 0)),
+            sprintf('Lender: %s · Borrower: %s', $ctx['lender'] ?? '—', $ctx['borrower'] ?? '—'),
+            sprintf('Capital request #%s', $ctx['request_id'] ?? '—'),
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $ctx
+     */
+    public function lendingFailureMessage(array $ctx): string
+    {
+        return implode("\n", [
+            'Lido Portfolio — Lending failure',
+            sprintf('Capital request #%s: %s', $ctx['request_id'] ?? '—', $ctx['reason_label'] ?? 'Failed'),
+            sprintf('Amount: ₹%s', $this->inr($ctx['amount'] ?? 0)),
+            sprintf('Borrower: %s', $ctx['borrower'] ?? '—'),
+            'Capital remains required until a lender commits or own cash is available.',
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $ctx
+     */
+    public function capitalCommittedMessage(array $ctx): string
+    {
+        return implode("\n", [
+            'Lido Portfolio — Capital committed / execution ready',
+            sprintf('%s %s', $ctx['action'] ?? 'BUY', $ctx['symbol'] ?? '—'),
+            sprintf('Executable amount: ₹%s', $this->inr($ctx['executable'] ?? 0)),
+            sprintf('Loan #%s · Request #%s', $ctx['loan_id'] ?? '—', $ctx['request_id'] ?? '—'),
+            'Approve the recommendation, then record the broker fill (loan commitment does not auto-execute).',
+        ]);
+    }
+
+    private function capitalStatusLabel(string $status): string
+    {
+        return match ($status) {
+            TradingRecommendation::ALLOCATION_UNFUNDED => 'Capital required (UNFUNDED)',
+            TradingRecommendation::ALLOCATION_PARTIALLY_FUNDED => 'Partially funded',
+            TradingRecommendation::ALLOCATION_AWAITING_LENDER_SELECTION => 'Awaiting lender selection',
+            TradingRecommendation::ALLOCATION_CAPITAL_COMMITTED => 'Capital committed',
+            TradingRecommendation::ALLOCATION_FUNDED => 'Funded',
+            default => $status !== '' ? $status : 'Unknown',
+        };
+    }
+
+    private function exitReasonLabel(string $reason): string
+    {
+        return match ($reason) {
+            'strategy_exit' => 'Strategy exit',
+            'stop_loss' => 'Portfolio stop-loss',
+            'trailing_stop' => 'Portfolio trailing stop',
+            'horizon_expiry' => 'Horizon expiry',
+            default => $reason,
+        };
     }
 
     private function inr(float|int|string|null $amount): string

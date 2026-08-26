@@ -29,9 +29,9 @@ test('help does not describe portfolio trailing as unrealized-% proxy', () => {
     assert.match(portfolioTrailingConcept[0], /Not an unrealized-% proxy/i);
 });
 
-test('help keeps strategy JSON trailing_stop as strategy-specific (not claimed removed)', () => {
-    assert.match(source, /strategy-specific V1 proxy inside Exit Strategy/i);
-    assert.match(source, /separate from the portfolio-level Portfolio Trailing Stop/i);
+test('help documents that legacy strategy max_loss/trailing_stop are ignored', () => {
+    assert.match(source, /Legacy V1 strategy JSON max_loss \/ trailing_stop are ignored/i);
+    assert.match(source, /Portfolio Stop-Loss % and Portfolio Trailing Stop % live under Settings/i);
 });
 
 test('help documents primary exit attribution canonical values', () => {

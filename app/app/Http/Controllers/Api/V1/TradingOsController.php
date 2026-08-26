@@ -733,6 +733,15 @@ class TradingOsController extends Controller
             'can_cancel_execution' => method_exists($r, 'canCancelExecution') ? $r->canCancelExecution() : false,
             'can_create_order' => method_exists($r, 'canCreateOrder') ? $r->canCreateOrder() : false,
             'capital_allocation_status' => method_exists($r, 'capitalAllocationStatus') ? $r->capitalAllocationStatus() : null,
+            'capital_request_id' => (static function () use ($r): ?int {
+                $meta = method_exists($r, 'capitalAllocationMeta') ? $r->capitalAllocationMeta() : null;
+                if (! is_array($meta) || ! isset($meta['capital_request_id'])) {
+                    return null;
+                }
+                $id = (int) $meta['capital_request_id'];
+
+                return $id > 0 ? $id : null;
+            })(),
             'capital_target_amount' => method_exists($r, 'capitalTargetAmount') ? $r->capitalTargetAmount() : null,
             // OD-12 position target (full conviction) vs this-cycle staggered requirement.
             'position_target_amount' => is_numeric($r->execution_plan['position_target_amount'] ?? null)

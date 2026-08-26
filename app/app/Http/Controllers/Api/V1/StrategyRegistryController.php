@@ -168,6 +168,21 @@ class StrategyRegistryController extends Controller
         }
     }
 
+    public function archive(string $id)
+    {
+        $profile = \activePortfolio();
+        if ($profile === null) {
+            return ApiEnvelope::error('NO_PORTFOLIO', 'Active portfolio required.', 422);
+        }
+        try {
+            $archived = $this->registry->archive($id, $profile);
+
+            return ApiEnvelope::success($archived);
+        } catch (InvalidArgumentException $e) {
+            return ApiEnvelope::error('STRATEGY_ARCHIVE_FAILED', $e->getMessage(), 422);
+        }
+    }
+
     public function selection()
     {
         $profile = \activePortfolio();

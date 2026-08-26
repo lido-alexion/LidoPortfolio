@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api';
 import { DataTableCard } from '../components/DataTable';
 import NumberInput from '../components/NumberInput';
@@ -7,7 +7,12 @@ import AIStrategyPromptBuilder from '../components/strategy/AIStrategyPromptBuil
 import useApiGet from '../hooks/useApiGet';
 import { runApiMutation } from '../hooks/useApiMutation';
 import { showToast } from '../toast';
-import { validateFirstEntryPct, validateHorizonCalendarDays } from '../utils/strategyPageRules';
+import {
+    validateFirstEntryPct,
+    validateHorizonCalendarDays,
+    validateMaxHoldings,
+    validateWeakestPositionWindowDays,
+} from '../utils/strategyPageRules';
 
 const SECTIONS = [
     { id: 'general', label: 'General' },
@@ -18,7 +23,6 @@ const SECTIONS = [
     { id: 'allocation', label: 'Capital Allocation' },
     { id: 'exit', label: 'Exit Strategy' },
     { id: 'market', label: 'Market Gates' },
-    { id: 'cash', label: 'Cash Management' },
 ];
 
 const CATEGORY_ORDER = ['Momentum', 'Trend', 'Volume', 'Market', 'Risk'];
@@ -128,7 +132,6 @@ function emptyConfig() {
         thresholds: {},
         portfolio_rules: {},
         capital_allocation: { strategy: 'proportional', tie_break: 'highest_score', score_bands: [] },
-        cash_rules: {},
         exit_strategy: { enabled: true, mode: 'any', rules: [] },
         market_gates: {
             enabled: false,
@@ -143,6 +146,7 @@ function emptyConfig() {
 
 function applyPayload(payload, setMeta, setConfig) {
     setMeta({
+        id: payload.id ?? payload.strategy_id ?? null,
         name: payload.name || 'Strategy',
         description: payload.description || '',
         modified_at: payload.modified_at,
@@ -164,7 +168,6 @@ function applyPayload(payload, setMeta, setConfig) {
         thresholds: payload.thresholds || payload.config?.thresholds || {},
         portfolio_rules: payload.portfolio_rules || payload.config?.portfolio_rules || {},
         capital_allocation: payload.capital_allocation || payload.config?.capital_allocation || emptyConfig().capital_allocation,
-        cash_rules: payload.cash_rules || payload.config?.cash_rules || {},
         exit_strategy: payload.exit_strategy || payload.config?.exit_strategy || emptyConfig().exit_strategy,
         market_gates: payload.market_gates || payload.config?.market_gates || emptyConfig().market_gates,
         recommendation_behaviour: payload.recommendation_behaviour || payload.config?.recommendation_behaviour || {},
@@ -172,14 +175,32 @@ function applyPayload(payload, setMeta, setConfig) {
     });
 }
 
+function strategyListId(row) {
+    const raw = row?.artifact_id ?? row?.legacy_id ?? row?.id ?? row?.metadata?.legacy_id;
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? String(n) : '';
+}
+
+function strategyListLabel(row) {
+    const name = row?.name || 'Strategy';
+    const status = row?.metadata?.status || row?.status || '';
+    const enabled = row?.metadata?.is_enabled || row?.metadata?.is_selected || status === 'active';
+    if (enabled) return `${name} (enabled)`;
+    if (status === 'draft') return `${name} (draft)`;
+    if (status === 'archived') return `${name} (archived)`;
+    return name;
+}
+
 export default function StrategyPage() {
+    const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const strategyId = searchParams.get('strategy_id') || '';
     const [section, setSection] = useState('general');
     const [saving, setSaving] = useState(false);
     const [availableScreeners, setAvailableScreeners] = useState([]);
+    const [strategyOptions, setStrategyOptions] = useState([]);
     const [meta, setMeta] = useState({
-        name: '', description: '', modified_at: null, status: null,
+        id: null, name: '', description: '', modified_at: null, status: null,
     });
     const [config, setConfig] = useState(emptyConfig);
     const [addScreenerId, setAddScreenerId] = useState('');
@@ -189,15 +210,18 @@ export default function StrategyPage() {
         deps: [strategyId],
         errorFallback: 'Failed to load strategy',
         request: async () => {
-            const [{ data }, screenersRes, indexesRes] = await Promise.all([
+            const [{ data }, screenersRes, indexesRes, registryRes] = await Promise.all([
                 api.get('/v1/strategy', {
                     params: strategyId ? { strategy_id: strategyId } : {},
                     skipErrorToast: true,
                 }),
                 api.get('/screeners', { skipErrorToast: true }).catch(() => ({ data: [] })),
                 api.get('/indexes', { skipErrorToast: true }).catch(() => ({ data: {} })),
+                api.get('/v1/strategy-registry', { skipErrorToast: true }).catch(() => ({ data: { data: [] } })),
             ]);
             applyPayload(data?.data || {}, setMeta, setConfig);
+            const rows = Array.isArray(registryRes.data?.data) ? registryRes.data.data : [];
+            setStrategyOptions(rows);
             const list = Array.isArray(screenersRes?.data?.data)
                 ? screenersRes.data.data
                 : (Array.isArray(screenersRes?.data) ? screenersRes.data : []);
@@ -252,6 +276,18 @@ export default function StrategyPage() {
             setSection('portfolio');
             return;
         }
+        const maxHoldingsCheck = validateMaxHoldings(config.portfolio_rules?.max_holdings);
+        if (!maxHoldingsCheck.ok) {
+            showToast(maxHoldingsCheck.message, 'danger');
+            setSection('portfolio');
+            return;
+        }
+        const weakestWindowCheck = validateWeakestPositionWindowDays(config.weakest_position_window_days);
+        if (!weakestWindowCheck.ok) {
+            showToast(weakestWindowCheck.message, 'danger');
+            setSection('portfolio');
+            return;
+        }
 
         const didNormalize = !weightsValid;
         const indicators = redistributeEnabledWeights(config.indicators || []);
@@ -274,7 +310,9 @@ export default function StrategyPage() {
                             ...config.portfolio_rules,
                             horizon_calendar_days: horizonCheck.persist,
                             first_entry_pct: firstEntryCheck.persist,
+                            max_holdings: maxHoldingsCheck.persist,
                         },
+                        weakest_position_window_days: weakestWindowCheck.persist,
                         exit_strategy: config.exit_strategy,
                         market_gates: config.market_gates,
                     },
@@ -516,10 +554,6 @@ export default function StrategyPage() {
 
     const updateBehaviour = (key, value) => {
         setConfig((prev) => ({ ...prev, recommendation_behaviour: { ...prev.recommendation_behaviour, [key]: value } }));
-    };
-
-    const updateCashRule = (key, value) => {
-        setConfig((prev) => ({ ...prev, cash_rules: { ...prev.cash_rules, [key]: value } }));
     };
 
     const updateBand = (idx, patch) => {
@@ -791,6 +825,12 @@ export default function StrategyPage() {
         return <div className="container-fluid py-3 text-muted">Loading strategy…</div>;
     }
 
+    const selectedStrategyId = strategyId || (meta.id != null ? String(meta.id) : '');
+    const onSelectStrategy = (nextId) => {
+        if (!nextId || nextId === selectedStrategyId) return;
+        navigate(`/strategy?strategy_id=${encodeURIComponent(nextId)}`);
+    };
+
     return (
         <div className="container-fluid py-3">
             <div className="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
@@ -802,6 +842,7 @@ export default function StrategyPage() {
                     </p>
                     <p className="text-muted small mb-0">
                         Screeners select eligible stocks. Strategy scores, allocates, and exits — it does not redefine eligibility rules.
+                        A portfolio may enable multiple strategies at once; use the selector below to choose which one to edit.
                     </p>
                 </div>
                 <div className="d-flex flex-wrap gap-2">
@@ -817,6 +858,36 @@ export default function StrategyPage() {
 
             <div className="card mb-3">
                 <div className="card-body py-3">
+                    <div className="row g-2 align-items-end mb-3">
+                        <div className="col-md-6 col-lg-5">
+                            <label className="form-label mb-1" htmlFor="strategy-editor-select">
+                                Editing strategy
+                            </label>
+                            <select
+                                id="strategy-editor-select"
+                                className="form-select"
+                                value={selectedStrategyId}
+                                onChange={(e) => onSelectStrategy(e.target.value)}
+                                aria-label="Select strategy to edit"
+                            >
+                                {strategyOptions.length === 0 && selectedStrategyId ? (
+                                    <option value={selectedStrategyId}>{meta.name || `Strategy #${selectedStrategyId}`}</option>
+                                ) : null}
+                                {strategyOptions.map((row) => {
+                                    const id = strategyListId(row);
+                                    if (!id) return null;
+                                    return (
+                                        <option key={id} value={id}>{strategyListLabel(row)}</option>
+                                    );
+                                })}
+                            </select>
+                            <div className="form-text">
+                                Choosing another strategy loads it in this editor. Enabling a strategy does not disable others —
+                                manage enablement in{' '}
+                                <Link to="/strategy/registry">Strategy Registry</Link>.
+                            </div>
+                        </div>
+                    </div>
                     <div className="row g-2 align-items-start">
                         <div className="col-md-3">
                             <div className="text-muted small">Strategy Name</div>
@@ -872,7 +943,9 @@ export default function StrategyPage() {
                         <textarea id="strat-desc" className="form-control" rows={3} value={meta.description} onChange={(e) => setMeta({ ...meta, description: e.target.value })} />
                     </div>
                     <p className="col-12 text-muted small mb-0">
-                        Each portfolio has one strategy. It starts as Momentum with Minervini Trend Template eligibility; edit any tab and Save.
+                        A portfolio may enable multiple strategies concurrently. Defaults include Minervini Strategy with
+                        Minervini Trend Template eligibility. Edit any tab and Save — this updates the selected strategy
+                        in place without disabling other enabled strategies.
                     </p>
                 </div>
             )}
@@ -992,8 +1065,6 @@ export default function StrategyPage() {
                         {[
                             ['max_position_size_pct', 'Maximum Position Size %'],
                             ['min_position_size_pct', 'Minimum Position Size %'],
-                            ['max_cash_deployment_pct', 'Maximum Cash Deployment %'],
-                            ['min_cash_reserve_pct', 'Minimum Cash Reserve %'],
                             ['max_new_positions_per_cycle', 'Maximum New Positions'],
                             ['max_exposure_per_stock_pct', 'Maximum Exposure Per Stock %'],
                         ].map(([key, label]) => (
@@ -1028,6 +1099,51 @@ export default function StrategyPage() {
                             </div>
                         </div>
                         <div className="col-md-4">
+                            <label className="form-label" htmlFor="max-holdings">
+                                Hard maximum holdings
+                            </label>
+                            <NumberInput
+                                id="max-holdings"
+                                step="1"
+                                min="1"
+                                allowDecimals={false}
+                                buttonVariant="secondary"
+                                value={config.portfolio_rules?.max_holdings ?? ''}
+                                onChange={(e) => updatePortfolioRule('max_holdings', e.target.value)}
+                            />
+                            <div className="form-text">
+                                Hard cap on strategy-owned open names. Generation will not emit a new OPEN that would
+                                exceed it; INCREASE of an existing name is still allowed. Also caps default single-name
+                                size at 1 ÷ this count of strategy allocated capital (unless Maximum Position Size % is
+                                tighter). Factory default is 10. Leave blank if unset.
+                            </div>
+                        </div>
+                        <div className="col-md-4">
+                            <label className="form-label" htmlFor="weakest-position-window-days">
+                                Weakest-position evaluation window (calendar days)
+                            </label>
+                            <NumberInput
+                                id="weakest-position-window-days"
+                                step="1"
+                                min="1"
+                                allowDecimals={false}
+                                buttonVariant="secondary"
+                                placeholder="90"
+                                value={config.weakest_position_window_days ?? ''}
+                                onChange={(e) => {
+                                    const value = e.target.value;
+                                    setConfig((prev) => ({
+                                        ...prev,
+                                        weakest_position_window_days: value === '' ? '' : Number(value),
+                                    }));
+                                }}
+                            />
+                            <div className="form-text">
+                                OD-16. Used when recall/replenishment ranks borrower-owned positions to sell.
+                                Empty uses the engine default (90 calendar days).
+                            </div>
+                        </div>
+                        <div className="col-md-4">
                             <label className="form-label" htmlFor="first-entry-pct">
                                 First entry %
                             </label>
@@ -1047,6 +1163,17 @@ export default function StrategyPage() {
                                 Empty uses the engine default (50%). Later INCREASE uses remaining target after filled.
                                 This is not Portfolio Stop-Loss %, Portfolio Trailing Stop %, or Settings cash reserve.
                             </div>
+                            <p className="form-text text-muted mb-0 mt-2">
+                                BUY cooldown: 1 calendar day (OD-11; not configurable).
+                            </p>
+                        </div>
+                        <div className="col-12">
+                            <p className="text-muted small mb-0">
+                                Portfolio cash reserve % and common stop-loss / trailing stop live under{' '}
+                                <Link to="/settings/portfolio">Settings → Portfolio</Link>.
+                                Strategy capital allocation % is edited on the{' '}
+                                <Link to="/cash">Cash</Link> page.
+                            </p>
                         </div>
                         <div className="col-12"><hr /><div className="fw-semibold small">Behaviour</div></div>
                         {[
@@ -1169,7 +1296,7 @@ export default function StrategyPage() {
                             Optional strategy exit horizon in calendar days from the ownership episode start.
                             Leave empty for no horizon expiry — the horizon mechanism never fires unless a positive
                             integer is set. This is not Portfolio Stop-Loss % or Portfolio Trailing Stop % (those stay
-                            under Settings).
+                            under Settings). Common account risk controls are configured there — not as Strategy exits.
                         </p>
                     </div>
                     <DataTableCard
@@ -1265,29 +1392,6 @@ export default function StrategyPage() {
                             </div>
                         );
                     })()}
-                </div>
-            )}
-
-            {section === 'cash' && (
-                <div className="card card-body">
-                    <div className="row g-3">
-                        {[
-                            ['reservations_enabled', 'Cash reservations enabled'],
-                            ['reserve_on_approval', 'Reserve on approval'],
-                            ['release_on_execution', 'Release on execution'],
-                            ['release_on_cancellation', 'Release on cancellation'],
-                            ['release_on_expiry', 'Release on expiry'],
-                        ].map(([key, label]) => (
-                            <div className="col-md-6" key={key}>
-                                <StrategySwitch
-                                    id={`cash-${key}`}
-                                    checked={Boolean(config.cash_rules?.[key])}
-                                    onChange={(enabled) => updateCashRule(key, enabled)}
-                                    label={label}
-                                />
-                            </div>
-                        ))}
-                    </div>
                 </div>
             )}
         </div>

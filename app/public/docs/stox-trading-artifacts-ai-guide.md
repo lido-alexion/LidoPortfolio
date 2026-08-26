@@ -4,7 +4,7 @@
 
 > **Audience:** AI agents and developers authoring portable Indicator / Screener / Strategy JSON **without** reading application source code.
 >
-> **Generated:** 2026-08-25T14:36:34.323Z
+> **Generated:** 2026-08-26T11:15:39.556Z
 > **Deploy download:** `/docs/stox-trading-artifacts-ai-guide.md` (also linked from Screener Registry and Strategy Registry).
 > **Repo copy:** `specs/architecture/domains/StoX-Trading-Artifacts-AI-Guide.md`
 
@@ -1214,7 +1214,9 @@ Practical tip: treat this page as one step in a larger workflow, not an isolated
 
 The Strategy Registry turns portfolio strategies into reusable Trading Artifacts. A portfolio may have **multiple enabled Strategies** at once. The registry adds slug, metadata, artifact_version, definition_hash, and version history on top of the same config the Recommendation engine already uses.
 
-Export downloads the portable Trading Artifact JSON envelope. **Validate** checks the envelope. **Import** stays disabled until validation succeeds, then creates a **draft** — use **Enable** to turn it on without disabling other enabled strategies. Existing Minervini (`momentum_factory`) migrates automatically to slug `momentum_strategy` with eligibility linked to `minervini_trend_template`.
+Export downloads the portable Trading Artifact JSON envelope. **Validate** checks the envelope. **Import** stays disabled until validation succeeds, then creates a **draft** — use **Enable** to turn it on without disabling other enabled strategies. Enabled rows show **Allocation %**. An **Allocation** editor (same PUT `/v1/capital/allocations` as Cash) lets you set percentages that must sum to 100.
+
+Existing Minervini (`momentum_factory`) migrates automatically to slug `momentum_strategy` with eligibility linked to `minervini_trend_template`.
 
 ## Importing JSON — start here
 
@@ -1721,7 +1723,10 @@ Practical tip: treat this page as one step in a larger workflow, not an isolated
 ### Controls
 
 - **Search / filters** — Filter by status (active/draft/archived) and origin (factory/user).
-- **Enable** — Turn this strategy on for the portfolio. Other enabled strategies stay enabled. Success shows a toast. Recommendation generate still uses one editor/default strategy until a later V3 workstream.
+- **Enable** — Turn this strategy on for the portfolio. Other enabled strategies stay enabled. Success shows a toast. Recommendation generation runs independently for every enabled strategy.
+- **Allocation % (list)** — Enabled rows show the stored strategy allocation_pct (read-only in the table).
+- **Allocation editor** — Edit enabled-strategy allocation % with a live sum; Save calls PUT /v1/capital/allocations (same as Cash). Client requires sum ≈ 100 before save; server errors are shown.
+- **Archive** — Sets the strategy to archived without changing other enabled strategies. Past holdings/recommendations keep attribution.
 - **Export JSON** — Download the portable Trading Artifact envelope (schema_version, slug, name, metadata, definition with eligibility_sources + scoring_model, dependencies). Best template for a new import — includes thresholds/exits/gates when present.
 - **Validate** — Check pasted JSON against Trading Artifact Strategy rules. On success, a green “Validated successfully” cue appears above Validate/Import and the JSON result panel still shows details. Import stays disabled until this reports ok. Editing the JSON clears validation.
 - **Import** — Enabled only after successful Validate. Creates a draft strategy in this portfolio and shows a success toast (not an inline alert). Does not change Recommendations until Enable. Mandatory: schema_version, artifact_type, slug, name, metadata, definition.scoring_model with enabled weights = 100.
@@ -1735,8 +1740,9 @@ Practical tip: treat this page as one step in a larger workflow, not an isolated
 ### Concepts
 
 - **Slug** — Stable machine id (snake_case: `swing_rs`). Unique per portfolio. Used for uniqueness and selection. Not the display title — that is `name`. Only a–z, 0–9, and underscore after normalisation.
+- **Strategy allocation %** — Policy share of investable capital (TradingStrategy.allocation_pct). Editable on Strategy Registry and Cash; must sum to 100 across enabled strategies. Distinct from score-band allocation_pct on the Strategy Capital Allocation tab.
 - **Uniqueness** — slug is unique per portfolio (Import may suffix on collision). name is soft-unique (may get " (import)"). Multiple strategies may be enabled per portfolio. scoring keys should appear once in scoring_model. Screener refs may be shared across strategies.
-- **Multiple enabled strategies** — Enablement rule: more than one STATUS_ACTIVE strategy may exist per portfolio. Import always creates draft; Enable turns a strategy on without archiving others. The editor strategy_id query is UI selection, not exclusive-active.
+- **Multiple enabled strategies** — Enablement rule: more than one STATUS_ACTIVE strategy may exist per portfolio. Import always creates draft; Enable turns a strategy on without archiving others. Archive sets STATUS_ARCHIVED without changing siblings. The editor strategy_id query is UI selection, not exclusive-active.
 - **No Screener duplication** — eligibility_sources reference Screeners by screener_slug / screener_factory_key. Condition trees stay on Screener Registry — never embed root/children on a Strategy.
 - **definition vs config_json** — Import/export JSON uses the field `definition`. Version rows store the same config in `config_json`. Do not invent a `config_json` field on the envelope.
 - **scoring_model vs indicators** — Portable JSON prefers scoring_model. The engine also accepts indicators as an alias; Import normalises both. Enabled weights must sum to 100.

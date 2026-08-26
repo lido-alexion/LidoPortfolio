@@ -20,6 +20,14 @@ class ProfileSettingsService
         'portfolio_cash_reserve_pct' => '',
         /** OD-12 §12.4 — portfolio override; blank = platform default ₹5,000. */
         'minimum_actionable_buy_amount' => '',
+        /** §19.1 annualized opportunity-cost rate as decimal fraction (default 0.12 = 12%). */
+        'opportunity_cost_rate' => '0.12',
+        /** §3.5 optional portfolio ceiling on aggregate exposure to one symbol; blank = no portfolio ceiling. */
+        'portfolio_max_position_pct' => '',
+        /** §5.7 / §8.2 — optional % of unused_allocation cap on AFL; blank = no % cap. */
+        'max_lending_pct_of_unused' => '',
+        /** §5.7 / §8.2 — optional absolute ₹ ceiling on AFL; blank = no absolute cap. */
+        'max_lending_absolute' => '',
     ];
 
     /** Internal arming flag — not exposed via settings API defaults list. */

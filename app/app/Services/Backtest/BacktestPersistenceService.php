@@ -14,6 +14,10 @@ use Illuminate\Support\Facades\DB;
  */
 class BacktestPersistenceService
 {
+    public function __construct(
+        protected BacktestTradeSuccessAttacher $successAttacher,
+    ) {}
+
     /**
      * @param  list<array<string, mixed>>  $transactions
      * @param  list<array<string, mixed>>  $closedTrades
@@ -21,6 +25,8 @@ class BacktestPersistenceService
      */
     public function persistDayResults(BacktestRun $run, array $transactions, array $closedTrades, array $snapshot): void
     {
+        $closedTrades = $this->successAttacher->attach($run, $closedTrades);
+
         DB::transaction(function () use ($run, $transactions, $closedTrades, $snapshot) {
             foreach ($transactions as $tx) {
                 BacktestTransaction::query()->create([

@@ -98,4 +98,52 @@ class ProfileSettingsTest extends TestCase
         $this->assertSame('10', app(ProfileSettingsService::class)->get($otherProfile, 'default_stoploss_percent'));
         $this->assertNotNull($user);
     }
+
+    public function test_settings_api_persists_v3_portfolio_closure_keys(): void
+    {
+        $this->actingAsPortfolioUser();
+
+        $this->putJson('/api/settings', [
+            'minimum_actionable_buy_amount' => 7500,
+            'opportunity_cost_rate' => 0.15,
+            'portfolio_max_position_pct' => 8.5,
+        ])->assertOk()
+            ->assertJsonPath('data.minimum_actionable_buy_amount', '7500')
+            ->assertJsonPath('data.opportunity_cost_rate', '0.15')
+            ->assertJsonPath('data.portfolio_max_position_pct', '8.5');
+
+        $this->putJson('/api/settings', [
+            'minimum_actionable_buy_amount' => null,
+            'portfolio_max_position_pct' => null,
+        ])->assertOk()
+            ->assertJsonPath('data.minimum_actionable_buy_amount', '')
+            ->assertJsonPath('data.portfolio_max_position_pct', '');
+    }
+
+    public function test_settings_api_persists_max_lending_limits(): void
+    {
+        $this->actingAsPortfolioUser();
+
+        $this->putJson('/api/settings', [
+            'max_lending_pct_of_unused' => 50,
+            'max_lending_absolute' => 10000,
+        ])->assertOk()
+            ->assertJsonPath('data.max_lending_pct_of_unused', '50')
+            ->assertJsonPath('data.max_lending_absolute', '10000');
+
+        $this->putJson('/api/settings', [
+            'max_lending_pct_of_unused' => null,
+            'max_lending_absolute' => null,
+        ])->assertOk()
+            ->assertJsonPath('data.max_lending_pct_of_unused', '')
+            ->assertJsonPath('data.max_lending_absolute', '');
+
+        $this->putJson('/api/settings', [
+            'max_lending_pct_of_unused' => 101,
+        ])->assertStatus(422);
+
+        $this->putJson('/api/settings', [
+            'max_lending_absolute' => -1,
+        ])->assertStatus(422);
+    }
 }

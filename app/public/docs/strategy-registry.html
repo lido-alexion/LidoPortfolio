@@ -115,7 +115,8 @@
       <section class="panel">
         <h2>Overview</h2>
         <p>The Strategy Registry turns portfolio strategies into reusable Trading Artifacts. A portfolio may have <strong>multiple enabled Strategies</strong> at once. The registry adds slug, metadata, artifact_version, definition_hash, and version history on top of the same config the Recommendation engine already uses.</p>
-<p>Export downloads the portable Trading Artifact JSON envelope. <strong>Validate</strong> checks the envelope. <strong>Import</strong> stays disabled until validation succeeds, then creates a <strong>draft</strong> — use <strong>Enable</strong> to turn it on without disabling other enabled strategies. Existing Minervini (<code>momentum_factory</code>) migrates automatically to slug <code>momentum_strategy</code> with eligibility linked to <code>minervini_trend_template</code>.</p>
+<p>Export downloads the portable Trading Artifact JSON envelope. <strong>Validate</strong> checks the envelope. <strong>Import</strong> stays disabled until validation succeeds, then creates a <strong>draft</strong> — use <strong>Enable</strong> to turn it on without disabling other enabled strategies. Enabled rows show <strong>Allocation %</strong>. An <strong>Allocation</strong> editor (same PUT <code>/v1/capital/allocations</code> as Cash) lets you set percentages that must sum to 100.</p>
+<p>Existing Minervini (<code>momentum_factory</code>) migrates automatically to slug <code>momentum_strategy</code> with eligibility linked to <code>minervini_trend_template</code>.</p>
 <h2>Importing JSON — start here</h2>
 <p>If Validate or Import reports many field errors, you almost always missed a <strong>mandatory</strong> envelope field, forgot <code>scoring_model</code>, enabled weights that do not sum to 100, or embedded a Screener condition tree. Strategies reference Screeners by <strong>slug / factory_key only</strong> — never paste <code>definition.root</code> into a Strategy. Use the minimum schema below, then expand.</p>
 <h3>Minimum valid envelope (copy/paste starting point)</h3>
@@ -893,7 +894,16 @@
         <dd>Filter by status (active/draft/archived) and origin (factory/user).</dd>
     
         <dt>Enable</dt>
-        <dd>Turn this strategy on for the portfolio. Other enabled strategies stay enabled. Success shows a toast. Recommendation generate still uses one editor/default strategy until a later V3 workstream.</dd>
+        <dd>Turn this strategy on for the portfolio. Other enabled strategies stay enabled. Success shows a toast. Recommendation generation runs independently for every enabled strategy.</dd>
+    
+        <dt>Allocation % (list)</dt>
+        <dd>Enabled rows show the stored strategy allocation_pct (read-only in the table).</dd>
+    
+        <dt>Allocation editor</dt>
+        <dd>Edit enabled-strategy allocation % with a live sum; Save calls PUT /v1/capital/allocations (same as Cash). Client requires sum ≈ 100 before save; server errors are shown.</dd>
+    
+        <dt>Archive</dt>
+        <dd>Sets the strategy to archived without changing other enabled strategies. Past holdings/recommendations keep attribution.</dd>
     
         <dt>Export JSON</dt>
         <dd>Download the portable Trading Artifact envelope (schema_version, slug, name, metadata, definition with eligibility_sources + scoring_model, dependencies). Best template for a new import — includes thresholds/exits/gates when present.</dd>
@@ -927,11 +937,14 @@
         <dt>Slug</dt>
         <dd>Stable machine id (snake_case: <code>swing_rs</code>). Unique per portfolio. Used for uniqueness and selection. Not the display title — that is <code>name</code>. Only a–z, 0–9, and underscore after normalisation.</dd>
     
+        <dt>Strategy allocation %</dt>
+        <dd>Policy share of investable capital (TradingStrategy.allocation_pct). Editable on Strategy Registry and Cash; must sum to 100 across enabled strategies. Distinct from score-band allocation_pct on the Strategy Capital Allocation tab.</dd>
+    
         <dt>Uniqueness</dt>
         <dd>slug is unique per portfolio (Import may suffix on collision). name is soft-unique (may get &quot; (import)&quot;). Multiple strategies may be enabled per portfolio. scoring keys should appear once in scoring_model. Screener refs may be shared across strategies.</dd>
     
         <dt>Multiple enabled strategies</dt>
-        <dd>Enablement rule: more than one STATUS_ACTIVE strategy may exist per portfolio. Import always creates draft; Enable turns a strategy on without archiving others. The editor strategy_id query is UI selection, not exclusive-active.</dd>
+        <dd>Enablement rule: more than one STATUS_ACTIVE strategy may exist per portfolio. Import always creates draft; Enable turns a strategy on without archiving others. Archive sets STATUS_ARCHIVED without changing siblings. The editor strategy_id query is UI selection, not exclusive-active.</dd>
     
         <dt>No Screener duplication</dt>
         <dd>eligibility_sources reference Screeners by screener_slug / screener_factory_key. Condition trees stay on Screener Registry — never embed root/children on a Strategy.</dd>

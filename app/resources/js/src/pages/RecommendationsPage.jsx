@@ -5,7 +5,15 @@ import useApiGet from '../hooks/useApiGet';
 import { runApiMutation } from '../hooks/useApiMutation';
 import { showToast } from '../toast';
 import RecommendationCapitalResolution from '../components/RecommendationCapitalResolution';
+import RecommendationLenderActions from '../components/RecommendationLenderActions';
 import { exitAttributionLabel } from '../utils/exitAttributionLabels';
+import {
+    capitalAllocationStatusBadgeClass,
+    capitalAllocationStatusLabel,
+    canSelectLenderForStatus,
+    capitalRequestIdFromRecommendation,
+    showsCapitalAllocationStatus,
+} from '../utils/capitalRecallUi';
 
 const ACTIONABLE = new Set(['OPEN_POSITION', 'INCREASE_POSITION', 'REDUCE_POSITION', 'EXIT_POSITION', 'BUY', 'SELL']);
 
@@ -67,7 +75,47 @@ function displayLabel(r) {
     return r.ui_label || r.recommendation_type || '—';
 }
 
-function RecTable({ rows, actionLabel, onOpen }) {
+function CapitalStatusCell({ r, expandedId, onToggleLender, onLenderChanged }) {
+    if (!showsCapitalAllocationStatus(r)) {
+        return <span className="text-muted">—</span>;
+    }
+    const status = r.capital_allocation_status
+        || r.evidence?.capital_allocation?.status
+        || null;
+    const label = capitalAllocationStatusLabel(status);
+    if (!label) {
+        return <span className="text-muted">—</span>;
+    }
+    const requestId = capitalRequestIdFromRecommendation(r);
+    const canLender = Boolean(requestId) && canSelectLenderForStatus(status);
+    return (
+        <div className="d-flex flex-column gap-1 align-items-start">
+            <span className={`badge ${capitalAllocationStatusBadgeClass(status)}`}>{label}</span>
+            {canLender ? (
+                <button
+                    type="button"
+                    className="btn btn-link btn-sm px-0 py-0"
+                    onClick={() => onToggleLender(r.id)}
+                >
+                    {expandedId === r.id ? 'Hide lenders' : 'Select lender'}
+                </button>
+            ) : null}
+            {expandedId === r.id && canLender ? (
+                <div className="w-100" style={{ minWidth: '16rem' }}>
+                    <RecommendationLenderActions
+                        recommendation={r}
+                        onChanged={async () => {
+                            onToggleLender(null);
+                            if (typeof onLenderChanged === 'function') await onLenderChanged(r.id);
+                        }}
+                    />
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
+function RecTable({ rows, actionLabel, onOpen, expandedLenderId, onToggleLender, onLenderChanged }) {
     if (rows.length === 0) {
         return <p className="text-muted small mb-0">None.</p>;
     }
@@ -81,6 +129,7 @@ function RecTable({ rows, actionLabel, onOpen }) {
                         <th>Symbol</th>
                         <th>Opinion</th>
                         <th>Status</th>
+                        <th>Capital</th>
                         <th>Alloc</th>
                         <th>Confidence</th>
                         <th>Generated</th>
@@ -106,6 +155,14 @@ function RecTable({ rows, actionLabel, onOpen }) {
                                 ) : null}
                             </td>
                             <td><span className={`badge ${statusBadge(r.status)}`}>{r.status}</span></td>
+                            <td className="small">
+                                <CapitalStatusCell
+                                    r={r}
+                                    expandedId={expandedLenderId}
+                                    onToggleLender={onToggleLender}
+                                    onLenderChanged={onLenderChanged}
+                                />
+                            </td>
                             <td className="small">
                                 {formatAlloc(r.current_allocation_pct)}
                                 {' → '}
@@ -134,6 +191,7 @@ export default function RecommendationsPage() {
     const [notes, setNotes] = useState('');
     const [busyId, setBusyId] = useState(null);
     const [showAll, setShowAll] = useState(false);
+    const [expandedLenderId, setExpandedLenderId] = useState(null);
 
     const { loading, reload: load } = useApiGet({
         deps: [showAll],
@@ -279,7 +337,17 @@ export default function RecommendationsPage() {
                                 No trade recommendations. Run the decision pipeline when market data is ready.
                             </div>
                         ) : (
-                            <RecTable rows={tradeRecs} actionLabel="Review" onOpen={openDetail} />
+                            <RecTable
+                                rows={tradeRecs}
+                                actionLabel="Review"
+                                onOpen={openDetail}
+                                expandedLenderId={expandedLenderId}
+                                onToggleLender={(id) => setExpandedLenderId((cur) => (id == null ? null : (cur === id ? null : id)))}
+                                onLenderChanged={async (id) => {
+                                    await load();
+                                    await openDetail(id);
+                                }}
+                            />
                         )}
                     </section>
 
@@ -289,7 +357,13 @@ export default function RecommendationsPage() {
                         {insights.length === 0 ? (
                             <div className="border rounded p-3 text-muted small">No insights right now.</div>
                         ) : (
-                            <RecTable rows={insights} actionLabel="View details" onOpen={openDetail} />
+                            <RecTable
+                                rows={insights}
+                                actionLabel="View details"
+                                onOpen={openDetail}
+                                expandedLenderId={null}
+                                onToggleLender={() => {}}
+                            />
                         )}
                     </section>
                 </>
@@ -320,6 +394,22 @@ export default function RecommendationsPage() {
                                     ) : null}
                                     {selected.execution_status ? (
                                         <span className="badge text-bg-light border ms-1">Execution: {selected.execution_status}</span>
+                                    ) : null}
+                                    {showsCapitalAllocationStatus(selected) && capitalAllocationStatusLabel(
+                                        selected.capital_allocation_status
+                                            || selected.evidence?.capital_allocation?.status,
+                                    ) ? (
+                                        <span
+                                            className={`badge ms-1 ${capitalAllocationStatusBadgeClass(
+                                                selected.capital_allocation_status
+                                                    || selected.evidence?.capital_allocation?.status,
+                                            )}`}
+                                        >
+                                            {capitalAllocationStatusLabel(
+                                                selected.capital_allocation_status
+                                                    || selected.evidence?.capital_allocation?.status,
+                                            )}
+                                        </span>
                                     ) : null}
                                     {' · '}
                                     Confidence
@@ -496,7 +586,16 @@ export default function RecommendationsPage() {
                                 )}
 
                                 {selectedActionable ? (
-                                    <RecommendationCapitalResolution recommendationId={selected.id} />
+                                    <>
+                                        <RecommendationLenderActions
+                                            recommendation={selected}
+                                            onChanged={async () => {
+                                                await load();
+                                                await openDetail(selected.id);
+                                            }}
+                                        />
+                                        <RecommendationCapitalResolution recommendationId={selected.id} />
+                                    </>
                                 ) : null}
 
                                 {selected.can_execute_manually && selectedActionable && (

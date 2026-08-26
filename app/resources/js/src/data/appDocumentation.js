@@ -331,14 +331,14 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Reserved cash', description: 'Expand to see reservations tied to pending-execution buys.' },
             { name: 'Required cash reserve', description: 'Rupee floor from Portfolio Settings → Portfolio cash reserve %. Based on max(invested amount, current holdings market value), not a % of cash.' },
             { name: 'Unallocated Cash', description: 'Presentation-only residual after the reserve that unused strategy allocation has not claimed. Not a ledger line and not a withdrawal entitlement.' },
-            { name: 'Strategy capital allocation', description: 'Edit enabled-strategy allocation % (must sum to 100 to save). Shows allocated capital, unused allocation, lent, borrowed, and retained capital (accounting floor, not physical cash).' },
+            { name: 'Strategy capital allocation', description: 'Edit enabled-strategy allocation % (must sum to 100 to save). Also editable on Strategy Registry. Shows allocated capital, unused allocation, lent, borrowed, and retained capital (accounting floor, not physical cash).' },
             { name: 'Recalls & lending', description: 'View recalls (lifecycle, settled vs outstanding), Recall Bridge Loans, and Proceeds from Stock Sale. No manual Create Bridge Loan or Mark Available — those are automated.' },
             { name: 'Statement', description: 'Chronological cash ledger. Kind labels may show Proceeds from Stock Sale or related recall/bridge movements when applicable.' },
         ],
         concepts: [
             { name: 'Available physical cash', description: 'max(0, total cash − pending-execution reservations). Withdrawals cannot exceed this amount.' },
             { name: 'Investable capital', description: '(cash − required reserve − pending reserved) + market value of strategy-owned holdings. Unmanaged holdings are excluded from the 100% strategy split.' },
-            { name: 'Strategy allocation %', description: 'Policy share of investable capital (TradingStrategy.allocation_pct). Distinct from score-band allocation_pct on the Strategy Capital Allocation tab and from holdings market-value %.' },
+            { name: 'Strategy allocation %', description: 'Policy share of investable capital (TradingStrategy.allocation_pct). Distinct from score-band allocation_pct on the Strategy Capital Allocation tab and from holdings market-value %. Editable on Cash and Strategy Registry.' },
             { name: 'Retained capital', description: 'Per-strategy nearest-integer rupees of allocated capital ÷ recommended minimum holdings. Lending cannot consume it later; it is not a cash bucket.' },
             { name: 'Capital priority', description: 'Funding order: own capital first, then recall eligible lent capital, then borrow if needed. Execute at the actual available amount — not the full target when funding is short.' },
             { name: 'Recall', description: 'Lender recalling an outstanding loan. Full Recall = entire outstanding. Partial Recall = ₹5,000 multiples only. Eligibility = commitment date + current recall period (Settings). One active recall; follow-up after complete + cooldown floor(period/2).' },
@@ -845,10 +845,17 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Approve / Reject / Defer', description: 'Lifecycle actions on actionable recommendations.' },
             { name: 'Review dialog', description: 'Inspect evidence, quantity, cash impact, and (for exits) the primary exit reason before deciding.' },
             { name: 'Trade vs insights sections', description: 'Actionable trades are separated from HOLD / WATCH insights.' },
+            { name: 'Capital status (list)', description: 'OPEN / INCREASE rows show capital funding badges: Capital required (UNFUNDED), Awaiting lender, Partially funded, and a quieter Funded badge.' },
+            { name: 'Select lender', description: 'When status is Awaiting lender (or UNFUNDED with a capital request), expand Select lender on the list or use the detail panel to pick a lender strategy, Approve lender, or Reject — calls existing /v1/capital/requests/{id}/lenders|approve|reject APIs.' },
             { name: 'Generate (when available)', description: 'Runs the recommendation pipeline independently for every enabled strategy in the portfolio. Telegram (when enabled) notifies only actionable Open / Increase / Reduce / Exit ideas — not HOLD / WATCH.' },
         ],
         concepts: [
             { name: 'Evidence snapshot', description: 'Eligibility, scoring, exit, market opinion, ranking source (return-quality or OD-23 fill order), and capital allocation status travel with the idea.' },
+            {
+                name: 'Capital allocation status',
+                description:
+                    'API field capital_allocation_status on list and detail. UNFUNDED shows as “Capital required”; AWAITING_LENDER_SELECTION / PARTIALLY_FUNDED / FUNDED / CAPITAL_COMMITTED have matching badges. capital_request_id is exposed when a lending request exists.',
+            },
             {
                 name: 'Primary exit reason',
                 description:
@@ -857,7 +864,7 @@ const APP_DOCUMENTATION_BASE = [
             {
                 name: 'Exit precedence',
                 description:
-                    'When multiple exit mechanisms are true: (1) Strategy exit, (2) Portfolio Stop-Loss, (3) Portfolio Trailing Stop, (4) Strategy Horizon. Strategy-specific exit rules (including any V1 strategy JSON trailing_stop proxy) are separate from portfolio-level SL/trailing controls and count as strategy_exit when they win.',
+                    'When multiple exit mechanisms are true: (1) Strategy exit, (2) Portfolio Stop-Loss, (3) Portfolio Trailing Stop, (4) Strategy Horizon. Strategy-specific exit rules (MA, RS, trend, score, ATR, Screener Exit) count as strategy_exit. Legacy V1 strategy JSON max_loss / trailing_stop are ignored — portfolio Settings owns common SL/trailing.',
             },
             {
                 name: 'BUY cooldown (OD-11)',
@@ -872,7 +879,8 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Unfunded / partially funded', description: 'OPEN/INCREASE stays OPEN/INCREASE when own capital cannot cover the full target. Capital priority is own → recall → borrow. The UI shows requested vs actual execution amount from capital resolution — e.g. ₹20,000 requested may execute at ₹19,000 if that is what was actually available. Lack of cash does not convert the idea to Watch. A partially funded buy may create a capital request for the remainder (₹5,000 blocks for normal lending) but does not pick a lender. Trade Approve cannot move a partially funded or unfunded buy to pending execution until a lender has committed a loan (status capital_committed). After commitment, Approve the trade separately, then record the broker fill. The borrower owns the stock. Loan repayment later reduces outstanding only. Automated Recall returns capital to the lender when needed.' },
             { name: 'Capital resolution (detail)', description: 'Recommendation detail shows own capital used, recall requested/received, Recall Bridge Loan used, immediately available, and the actual execution amount. That actual amount is what can be invested — not the original target when funding is short.' },
             { name: 'Reopen', description: 'Undo review decisions back to pending_review when supported.' },
-            { name: 'Telegram filter', description: 'HOLD / WATCH stay in-app only; they are not sent as Telegram recommendation alerts.' },
+            { name: 'Telegram filter', description: 'HOLD / WATCH stay in-app only; they are not sent as Telegram recommendation alerts. Unfunded OPEN/INCREASE still notify (capital required) — they do not inherit the HOLD/WATCH skip.' },
+            { name: 'Exit attribution on Telegram', description: 'EXIT messages include primary attribution when present (portfolio stop-loss, trailing stop, horizon, or strategy exit).' },
         ],
         related: ['trading-os-flow', 'strategy', 'pending-execution', 'cash', 'review', 'settings', 'holdings'],
     },
@@ -886,7 +894,7 @@ const APP_DOCUMENTATION_BASE = [
         summary: 'A portfolio may enable multiple strategies — default Minervini; edit tabs and Save.',
         overview:
             'Strategy is your decision policy. A portfolio may have **multiple enabled strategies** at the same time. It starts with Minervini Strategy (Minervini Trend Template eligibility + momentum scoring). Edit any tab and Save — the editor still saves that strategy in place.\n\n'
-            + 'Use Strategy Registry to import/export JSON, validate packs, browse drafts, and **Enable** a definition for this portfolio without disabling other enabled strategies. The Strategy editor `?strategy_id=` query is a UI choice of which strategy to edit — not a database rule that only one strategy can be enabled. Strategies reference Screeners by slug / factory key — they never duplicate Screener condition trees.\n\n'
+            + 'Use Strategy Registry (Trading sidebar or the editor link) to import/export JSON, validate packs, browse drafts, and **Enable** a definition for this portfolio without disabling other enabled strategies. The Strategy editor selector / `?strategy_id=` chooses which strategy to edit — not a database rule that only one strategy can be enabled. Strategies reference Screeners by slug / factory key — they never duplicate Screener condition trees.\n\n'
             + '**AI Strategy Designer** (collapsible panel on this page) does **not** call an LLM. It builds a paste-ready prompt from your style/risk/complexity choices, copies it to the clipboard, and expects you to attach the StoX Trading Artifacts AI Authoring Guide in ChatGPT/Gemini/Claude/etc. Import the resulting Screener/Strategy JSON via the registries after Validate.\n\n'
             + 'Strategy does not invent stocks and does not rewrite Screener conditions. Screeners admit candidates; Strategy scores them, labels an action, applies portfolio/cash/market limits, and watches holdings for exits.\n\n'
             + 'Where do finished ideas appear?\n\n'
@@ -918,16 +926,21 @@ const APP_DOCUMENTATION_BASE = [
                     + 'Copy Again / Select All / Clear / Reset Defaults are available. Form values persist in browser localStorage. Attach /docs/stox-trading-artifacts-ai-guide.md when pasting into an external AI. No backend LLM call.',
             },
             {
+                name: 'Strategy selector',
+                description:
+                    'Editing strategy dropdown lists strategies for this portfolio (enabled, draft, archived). Choosing one loads it via `?strategy_id=` — UI selection only; enabling a strategy does not disable others.',
+            },
+            {
                 name: 'Strategy Registry',
                 description:
-                    'Open /strategy/registry to export/import Strategy JSON, validate packs, and Enable strategies for this portfolio (multiple may be enabled).',
+                    'Open /strategy/registry (also listed under Trading in the sidebar) to export/import Strategy JSON, validate packs, and Enable strategies for this portfolio (multiple may be enabled).',
             },
             {
                 name: 'General tab',
                 description:
                     'Name — label for your strategy (default: Minervini Strategy).\n'
                     + 'Description — free-text intent notes.\n'
-                    + 'Save overwrites this strategy’s config in place. Optional `?strategy_id=` chooses which enabled strategy the editor is showing.',
+                    + 'Save overwrites this strategy’s config in place. A portfolio may enable multiple strategies; the selector chooses which definition the editor is showing.',
             },
             {
                 name: 'Eligibility Sources tab',
@@ -974,11 +987,14 @@ const APP_DOCUMENTATION_BASE = [
                 description:
                     'Maximum / Minimum Position Size % — share of portfolio value per idea (compared against suggested allocation %).\n'
                     + 'First entry % (first_entry_pct) — percentage of this strategy’s current position target used for the first BUY. Empty uses the engine default (50%). Valid range when set: 1–100. Later INCREASE uses remaining target after filled, subject to the frozen 1 calendar-day BUY cooldown (OD-11; not configurable here). This is not Portfolio Stop-Loss %, Portfolio Trailing Stop %, or Settings cash reserve.\n'
-                    + 'Maximum Cash Deployment % / Minimum Cash Reserve % — V1 generation-time cash limits compared against cash balance. The V3 portfolio cash reserve (required_cash_reserve) is set under Settings → Portfolio cash reserve % and uses invested/market-value, not % of cash.\n'
+                    + 'BUY cooldown (read-only): 1 calendar day (OD-11; not configurable).\n'
                     + 'Recommended minimum holdings — advisory count for generation (the engine does not open weak names just to hit it). Also the divisor for this strategy’s retained capital (allocated capital ÷ this count, nearest rupee). Leave blank if unset; retained capital is then not computed.\n'
+                    + 'Hard maximum holdings (max_holdings) — hard cap on strategy-owned open names. Generation does not emit a new OPEN that would exceed it; INCREASE of an existing owned name is allowed. Default single-name size is also capped at 1 ÷ max_holdings of that strategy’s allocation unless Maximum Position Size % is tighter. Factory default 10; leave blank if unset.\n'
+                    + 'Weakest-position evaluation window (weakest_position_window_days, OD-16) — calendar-day lookback used when recall/replenishment ranks borrower-owned positions to sell. Stored at strategy config top level (not under portfolio_rules). Positive integer ≥ 1 when set; empty uses the engine default (90). Factory seeds 90.\n'
                     + 'Maximum New Positions — cap on fresh Opens per generation cycle.\n'
                     + 'Maximum Exposure Per Stock % — concentration ceiling.\n'
-                    + 'Behaviour toggles: Allow increase / partial exit / averaging up / averaging down — permit those action types when other rules would suggest them.',
+                    + 'Behaviour toggles: Allow increase / partial exit / averaging up / averaging down — permit those action types when other rules would suggest them.\n'
+                    + 'Portfolio cash reserve % and common stop-loss / trailing stop are under Settings → Portfolio (not this tab). Strategy allocation % is edited on Strategy Registry and Cash.',
             },
             {
                 name: 'Capital Allocation tab',
@@ -1001,10 +1017,9 @@ const APP_DOCUMENTATION_BASE = [
                     + 'Relative Strength Weakening (Value = RS score max, e.g. 40) — hits when RS factor score < Value.\n'
                     + 'Trend Weakening (Value = trend score max, e.g. 40) — hits when Trend factor score < Value.\n'
                     + 'Overall Score Exit (Value = overall score max, e.g. 20) — hits when overall score ≤ Value.\n'
-                    + 'Maximum Loss (Value = %, e.g. 8) — hits when unrealized P/L % ≤ −Value (vs your cost basis).\n'
                     + 'ATR Stop (Value = multiple, e.g. 2) — hits when unrealized % ≤ −(multiple × ATR%).\n'
-                    + 'Trailing Stop (Value = %, e.g. 10) — strategy-specific V1 proxy inside Exit Strategy only: hits when unrealized % ≤ −Value (drawdown from cost). This is separate from the portfolio-level Portfolio Trailing Stop % under Settings (peak raw close × trailing %). When both fire, strategy exit wins on precedence.\n'
-                    + 'Screener Exit (Value = screener picker) — hits when the holding’s stock_id appears in that screener’s latest completed run (~72h).',
+                    + 'Screener Exit (Value = screener picker) — hits when the holding’s stock_id appears in that screener’s latest completed run (~72h).\n'
+                    + 'Common Maximum Loss and V1 Trailing Stop are not Strategy exits — Portfolio Stop-Loss % and Portfolio Trailing Stop % live under Settings.',
             },
             {
                 name: 'Market Gates tab',
@@ -1017,17 +1032,9 @@ const APP_DOCUMENTATION_BASE = [
                     + 'Exits on holdings are not blocked by market gates.',
             },
             {
-                name: 'Cash Management tab',
-                description:
-                    'Reservations enabled — use cash reservations for approved buys.\n'
-                    + 'Reserve on approval — when you Approve an Open/Increase on Recommendations, cash is reserved.\n'
-                    + 'Release on execution / cancellation / expiry — free the reservation when the idea closes.\n'
-                    + 'Compared against: Cash page balance and reserved amounts. Available investable cash drives Capital Allocation.',
-            },
-            {
                 name: 'Page subheader',
                 description:
-                    'Explains that Strategy is only a set of configurations. After Save and running the decision pipeline, recommended stocks appear on the Recommendations tab (/recommendations). Screeners still select eligible stocks; Strategy does not redefine eligibility rules.',
+                    'Explains that Strategy is only a set of configurations. After Save and running the decision pipeline, recommended stocks appear on the Recommendations tab (/recommendations). Screeners still select eligible stocks; Strategy does not redefine eligibility rules. Multiple strategies may be enabled; use the editor selector or Strategy Registry.',
             },
             {
                 name: 'Header card + Save',
@@ -1090,36 +1097,35 @@ const APP_DOCUMENTATION_BASE = [
             {
                 name: 'Worked example — three holdings vs exit rules',
                 description:
-                    'Holding A (HDFC Bank): bought ₹1,500; latest ₹1,360; unrealized ≈ −9.3%. Max Loss Value = 8 → −9.3% ≤ −8% → Maximum Loss triggers → Exit.\n\n'
-                    + 'Holding B (Asian Paints): bought ₹3,000; rallied to ₹3,400 then back to ₹3,050; unrealized vs cost ≈ +1.7%. Trailing Stop Value = 10 (V1 proxy vs cost, not peak): +1.7% is not ≤ −10% → does not trigger. (A true peak-trail would measure the drop from ₹3,400 ≈ −10.3% and might fire; V1 does not — it only looks at unrealized % from cost.)\n\n'
-                    + 'Holding B′ (same Trailing Stop = 10, different path): bought ₹3,000; latest ₹2,650; unrealized ≈ −11.7%. −11.7% ≤ −10% → Trailing Stop (V1) triggers → Exit. This is the same math as Max Loss with Value = 10; use Max Loss for an explicit hard floor and Trailing when you intend a future peak-based trail.\n\n'
-                    + 'Holding C (Tata Motors): close below 50-SMA while still green on P/L. MA Breakdown period = 50 → Moving Average Breakdown triggers → Exit even if score is still moderate.\n\n'
-                    + 'Holding D appears in your “Weakening names” Screener Exit list → Screener Exit triggers → Exit regardless of score.\n\n'
-                    + 'ATR Stop example: ATR% = 3.0, Value/multiple = 2 → stop at −6%. If unrealized = −6.5% → ATR Stop triggers.',
+                    'Holding A (HDFC Bank): bought ₹1,500; latest ₹1,360. With Portfolio Stop-Loss % = 8 under Settings, stop ≈ ₹1,380; raw close ₹1,360 is below stop → portfolio stop-loss EXIT (not a Strategy Maximum Loss rule).\n\n'
+                    + 'Holding B (Asian Paints): peak raw close ₹3,400 then latest ₹3,050. With Portfolio Trailing Stop % = 10, trail ≈ ₹3,060; latest below trail → portfolio trailing EXIT. Strategy Exit Strategy no longer includes a V1 unrealized-% trailing proxy.\n\n'
+                    + 'Holding C (Tata Motors): close below 50-SMA while still green on P/L. MA Breakdown period = 50 → Moving Average Breakdown triggers → strategy_exit even if score is still moderate.\n\n'
+                    + 'Holding D appears in your “Weakening names” Screener Exit list → Screener Exit triggers → strategy_exit regardless of score.\n\n'
+                    + 'ATR Stop example: ATR% = 3.0, Value/multiple = 2 → stop at −6%. If unrealized = −6.5% → ATR Stop triggers as strategy_exit.',
             },
             {
-                name: 'Trailing / max-loss picture',
+                name: 'Portfolio SL / trailing picture',
                 description:
                     '```text\n'
                     + 'Price\n'
-                    + '  |                 * peak (true trail would anchor here)\n'
+                    + '  |                 * peak (portfolio trailing anchors here)\n'
                     + '  |               *\n'
                     + '  |        *----*\n'
                     + '  |      *\n'
-                    + '  |----*  buy @ 1500 -------------------- cost basis\n'
+                    + '  |----*  WAVG fill cost @ 1500 ---------- OD-13 cost basis\n'
                     + '  |                 \\\n'
-                    + '  |                  * latest 1360  (−9.3% vs cost)\n'
+                    + '  |                  * latest close 1360\n'
                     + '  +------------------------------------> time\n'
-                    + 'Max loss 8%: stop line ≈ 1500 × (1−0.08) = 1380\n'
-                    + 'Latest 1360 is below 1380 → Max Loss hit.\n'
+                    + 'Portfolio stop-loss 8%: stop ≈ 1500 × (1−0.08) = 1380\n'
+                    + 'Latest 1360 is below 1380 → portfolio stop_loss attribution.\n'
                     + '```',
             },
             {
                 name: 'After filters — what you see',
                 description:
-                    'Suppose only INFY Open survives cash allocation and HDFC Bank Exit from Max Loss.\n'
+                    'Suppose only INFY Open survives cash allocation and HDFC Bank Exit from portfolio stop-loss.\n'
                     + 'You see both on Recommendations (/recommendations): INFY under trade recommendations (Approve / Reject / Defer), HDFC Bank as Exit.\n'
-                    + 'Approve INFY → Pending Execution (/transactions/pending) with cash reserved if Cash Management says so.\n'
+                    + 'Approve INFY → Pending Execution (/transactions/pending) with cash reserved by the portfolio reservation path.\n'
                     + 'Record the broker fill → Transactions / Holdings update; Review later shows outcomes.\n'
                     + 'RELIANCE/TCS Watch or Hold stay on Recommendations as insights (not Telegram-notified).',
             },
@@ -1224,6 +1230,7 @@ const APP_DOCUMENTATION_BASE = [
             'The Strategy Registry turns portfolio strategies into reusable Trading Artifacts. A portfolio may have **multiple enabled Strategies** at once. '
             + 'The registry adds slug, metadata, artifact_version, definition_hash, and version history on top of the same config the Recommendation engine already uses.\n\n'
             + 'Export downloads the portable Trading Artifact JSON envelope. **Validate** checks the envelope. **Import** stays disabled until validation succeeds, then creates a **draft** — use **Enable** to turn it on without disabling other enabled strategies. '
+            + 'Enabled rows show **Allocation %**. An **Allocation** editor (same PUT `/v1/capital/allocations` as Cash) lets you set percentages that must sum to 100.\n\n'
             + 'Existing Minervini (`momentum_factory`) migrates automatically to slug `momentum_strategy` with eligibility linked to `minervini_trend_template`.\n\n'
             + '## Importing JSON — start here\n\n'
             + 'If Validate or Import reports many field errors, you almost always missed a **mandatory** envelope field, forgot `scoring_model`, enabled weights that do not sum to 100, or embedded a Screener condition tree. '
@@ -1404,7 +1411,10 @@ const APP_DOCUMENTATION_BASE = [
             + STRATEGY_REGISTRY_GUIDE_EXTRAS,
         controls: [
             { name: 'Search / filters', description: 'Filter by status (active/draft/archived) and origin (factory/user).' },
-            { name: 'Enable', description: 'Turn this strategy on for the portfolio. Other enabled strategies stay enabled. Success shows a toast. Recommendation generate still uses one editor/default strategy until a later V3 workstream.' },
+            { name: 'Enable', description: 'Turn this strategy on for the portfolio. Other enabled strategies stay enabled. Success shows a toast. Recommendation generation runs independently for every enabled strategy.' },
+            { name: 'Allocation % (list)', description: 'Enabled rows show the stored strategy allocation_pct (read-only in the table).' },
+            { name: 'Allocation editor', description: 'Edit enabled-strategy allocation % with a live sum; Save calls PUT /v1/capital/allocations (same as Cash). Client requires sum ≈ 100 before save; server errors are shown.' },
+            { name: 'Archive', description: 'Sets the strategy to archived without changing other enabled strategies. Past holdings/recommendations keep attribution.' },
             { name: 'Export JSON', description: 'Download the portable Trading Artifact envelope (schema_version, slug, name, metadata, definition with eligibility_sources + scoring_model, dependencies). Best template for a new import — includes thresholds/exits/gates when present.' },
             { name: 'Validate', description: 'Check pasted JSON against Trading Artifact Strategy rules. On success, a green “Validated successfully” cue appears above Validate/Import and the JSON result panel still shows details. Import stays disabled until this reports ok. Editing the JSON clears validation.' },
             { name: 'Import', description: 'Enabled only after successful Validate. Creates a draft strategy in this portfolio and shows a success toast (not an inline alert). Does not change Recommendations until Enable. Mandatory: schema_version, artifact_type, slug, name, metadata, definition.scoring_model with enabled weights = 100.' },
@@ -1419,6 +1429,11 @@ const APP_DOCUMENTATION_BASE = [
                     'Stable machine id (snake_case: `swing_rs`). Unique per portfolio. Used for uniqueness and selection. Not the display title — that is `name`. Only a–z, 0–9, and underscore after normalisation.',
             },
             {
+                name: 'Strategy allocation %',
+                description:
+                    'Policy share of investable capital (TradingStrategy.allocation_pct). Editable on Strategy Registry and Cash; must sum to 100 across enabled strategies. Distinct from score-band allocation_pct on the Strategy Capital Allocation tab.',
+            },
+            {
                 name: 'Uniqueness',
                 description:
                     'slug is unique per portfolio (Import may suffix on collision). name is soft-unique (may get " (import)"). Multiple strategies may be enabled per portfolio. scoring keys should appear once in scoring_model. Screener refs may be shared across strategies.',
@@ -1426,7 +1441,7 @@ const APP_DOCUMENTATION_BASE = [
             {
                 name: 'Multiple enabled strategies',
                 description:
-                    'Enablement rule: more than one STATUS_ACTIVE strategy may exist per portfolio. Import always creates draft; Enable turns a strategy on without archiving others. The editor strategy_id query is UI selection, not exclusive-active.',
+                    'Enablement rule: more than one STATUS_ACTIVE strategy may exist per portfolio. Import always creates draft; Enable turns a strategy on without archiving others. Archive sets STATUS_ARCHIVED without changing siblings. The editor strategy_id query is UI selection, not exclusive-active.',
             },
             {
                 name: 'No Screener duplication',
@@ -1489,7 +1504,7 @@ const APP_DOCUMENTATION_BASE = [
         match: (p) => pathStarts(p, '/notification-history'),
         summary: 'History of Telegram (and related) notifications sent for this portfolio.',
         overview:
-            'Open Notification history from Settings → Portfolio (Alerts & notifications). Inspect outbound messages for this portfolio. Delivery uses Telegram when configured under portfolio settings and alert / schedule rules. Recommendation Telegram messages are sent only for actionable trades (Open / Increase / Reduce / Exit) — HOLD and WATCH insights are not notified. Capital events (Recall requested / pending / settlement / completed, Recall Bridge Loan created or repaid, Proceeds from Stock Sale applied, and meaningful partial capital funding) also appear here when Telegram is enabled.',
+            'Open Notification history from Settings → Portfolio (Alerts & notifications). Inspect outbound messages for this portfolio. Delivery uses Telegram when configured under portfolio settings and alert / schedule rules. Recommendation Telegram messages are sent only for actionable trades (Open / Increase / Reduce / Exit) — HOLD and WATCH insights are not notified. Unfunded or partially funded OPEN/INCREASE stay actionable and are notified (capital required), including exit attribution for portfolio stop-loss / trailing / horizon. Capital/lending events (capital required, lending commitment/failure, capital committed / execution ready, Recall requested / pending / settlement / completed, Recall Bridge Loan created or repaid, Proceeds from Stock Sale applied, and meaningful partial capital funding) also appear here when Telegram is enabled.',
         controls: [
             { name: 'History list', description: 'Browse recent messages and delivery status where available.' },
             { name: 'Retry', description: 'Re-attempt a failed delivery when the API supports it.' },
@@ -1498,7 +1513,8 @@ const APP_DOCUMENTATION_BASE = [
         concepts: [
             { name: 'Not a main tab', description: 'Notification history is reached from Portfolio settings, not the primary nav.' },
             { name: 'Telegram-only channel', description: 'Production notifications are Telegram Bot API based.' },
-            { name: 'Actionable only (recommendations)', description: 'Recommendation notify skips HOLD / WATCH; those stay in-app as insights.' },
+            { name: 'Actionable only (recommendations)', description: 'Recommendation notify skips HOLD / WATCH; those stay in-app as insights. UNFUNDED / PARTIALLY_FUNDED / AWAITING_LENDER OPEN/INCREASE are actionable and are notified.' },
+            { name: '§30 capital & lending', description: 'Domain events cover capital required, lending commitment or failure (including stale revalidation), capital committed / execution ready, recall lifecycle, Recall Bridge Loan, and proceeds application.' },
             { name: 'Recall & capital events', description: 'Separate notification types for recalls, Recall Bridge Loans, Proceeds from Stock Sale, and partial funding. Duplicate scheduler runs do not re-send the same event.' },
             { name: 'Schedules', description: 'Calendar reminders, screener results, and alert policies can enqueue messages.' },
         ],
@@ -1660,6 +1676,36 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Telegram', description: 'Bot token and chat id for portfolio notifications.' },
             { name: 'Portfolio cash reserve %', description: 'Portfolio-level OD-19 percentage. Required reserve rupees = this % × max(currently held invested amount, current holdings market value). Leave blank for 0 (no configured reserve). Not a % of cash. Withdrawals are not blocked if cash falls below the resulting rupee floor; Dashboard warns instead.' },
             {
+                name: 'Minimum actionable BUY / INCREASE (₹)',
+                description:
+                    'OD-12 this-cycle opportunity floor. Blank uses the platform default ₹5,000. Not the OD-06 atomic reservation block.',
+            },
+            {
+                name: 'Opportunity-cost rate %',
+                description:
+                    'Annualized rate for §19 success (positive return + NIFTY beat + opportunity-cost hurdle). UI shows percent; stored as decimal fraction (12% → 0.12). Default 12%. Closed backtest trades persist NIFTY-comparable `benchmark_return_pct` and `is_success` via SuccessCriteriaEvaluator during simulation.',
+            },
+            {
+                name: 'Portfolio max position size %',
+                description:
+                    'Optional ceiling on single-name size. Generation uses effective max_pct = min(strategy max_position_size_pct, portfolio_max_position_pct if set, 100/max_holdings if set), then market-gate multiplier. Blank = no portfolio ceiling beyond strategy limits (§3.5).',
+            },
+            {
+                name: 'Max lending % of unused allocation',
+                description:
+                    '§5.7 / §8.2 optional portfolio cap on available_for_lending. After lendable surplus (unused − OD-24 retained − already committed), raw is min’d with unused_allocation × this % / 100, then floored to ₹5,000 blocks. Blank = no % cap (backward compatible).',
+            },
+            {
+                name: 'Max lending absolute (₹)',
+                description:
+                    '§5.7 / §8.2 optional absolute ₹ ceiling on available_for_lending. Applied with the % cap when both are set (whichever is tighter), before the ₹5,000 floor. Blank = no absolute cap.',
+            },
+            {
+                name: 'Reservation policy (display only)',
+                description:
+                    'Atomic block ₹5,000 · Execution margin 1% (OD-06) — reservation policy, not a mandate to invest the margin. Not editable here.',
+            },
+            {
                 name: 'Portfolio Stop-Loss %',
                 description:
                     'Independent portfolio-level stop-loss. Uses weighted-average actual fill cost of the current ownership episode; evaluated on raw daily close. Not derived from trailing % or strategy exit JSON.',
@@ -1689,9 +1735,14 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Admin vs portfolio scope', description: 'Some tools (users, sync logs, universe sync) are admin-only.' },
             { name: 'Portfolio cash reserve', description: 'A non-investable, non-lendable rupee floor. It is not a separate bank account and not strategy cash.' },
             {
+                name: 'Configurable lending limits (§5.7)',
+                description:
+                    'Optional portfolio settings max_lending_pct_of_unused and/or max_lending_absolute cap available_for_lending after OD-24 surplus and before the ₹5,000 floor. Defaults empty = full surplus (current behaviour). Does not change OD-19/20/21/24 formulas or lender ranking.',
+            },
+            {
                 name: 'Portfolio risk exits vs strategy exits',
                 description:
-                    'Portfolio Stop-Loss and Portfolio Trailing Stop are common/settings controls. Strategy Exit Strategy rules (including any strategy JSON trailing_stop unrealized-% proxy) are strategy-specific and separate. Exit precedence when both fire: Strategy exit → Portfolio Stop-Loss → Portfolio Trailing Stop → Strategy Horizon.',
+                    'Portfolio Stop-Loss and Portfolio Trailing Stop are common/settings controls. Strategy Exit Strategy keeps strategy-specific rules (MA, RS, trend, score, ATR, Screener Exit). Legacy strategy JSON max_loss / trailing_stop are ignored. Exit precedence when both fire: Strategy exit → Portfolio Stop-Loss → Portfolio Trailing Stop → Strategy Horizon.',
             },
             { name: 'Recall period', description: 'Rule-driven eligibility for automated recalls. There is no auto-return toggle that controls repayment or recall.' },
             { name: 'Not in sidebar', description: 'Settings sub-pages and registries stay off the primary sidebar; reach them from Settings or parent product pages.' },

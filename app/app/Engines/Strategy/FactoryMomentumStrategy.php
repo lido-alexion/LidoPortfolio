@@ -69,8 +69,8 @@ final class FactoryMomentumStrategy
                 'min_position_size_pct' => 2.0,
                 'default_position_size_pct' => 6.0,
                 'allocation_band_pct' => 1.0,
-                'max_cash_deployment_pct' => 80.0,
-                'min_cash_reserve_pct' => 20.0,
+                /** V3 §3.5 — hard cap on strategy-owned open names; also diversifies default max size to 1/max_holdings. */
+                'max_holdings' => 10,
                 'max_new_positions_per_cycle' => 5,
                 'max_exposure_per_stock_pct' => 10.0,
                 /** OD-12 / §12.1 — first entry as % of current target amount (default 50). */
@@ -124,6 +124,8 @@ final class FactoryMomentumStrategy
                 'high_atr_pct' => 4.0,
                 'medium_atr_pct' => 2.0,
             ],
+            /** OD-16 — WeakestPositionRanker evaluation window (calendar days); engine default 90 if unset. */
+            'weakest_position_window_days' => 90,
         ];
     }
 

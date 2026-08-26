@@ -254,6 +254,22 @@ final class StrategyRegistrySupport
         });
     }
 
+    /**
+     * Archive a strategy without changing siblings. Keeps active_version_id for historical attribution.
+     */
+    public function archive(PortfolioProfile $profile, TradingStrategy $strategy): TradingStrategy
+    {
+        if ((int) $strategy->profile_id !== (int) $profile->id) {
+            throw new InvalidArgumentException('Strategy does not belong to the active portfolio.');
+        }
+
+        $strategy->forceFill([
+            'status' => TradingStrategy::STATUS_ARCHIVED,
+        ])->save();
+
+        return $strategy->fresh(['activeVersion']);
+    }
+
     public function ensureRegistryFields(TradingStrategy $strategy, TradingStrategyVersion $version): void
     {
         $config = is_array($version->config_json) ? $version->config_json : [];

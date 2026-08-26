@@ -158,6 +158,70 @@ class V3RecommendationGenerationTest extends TestCase
         $this->assertTrue($rec->evidence['ranking']['computable'] ?? false);
     }
 
+    public function test_max_holdings_blocks_new_open_but_allows_increase(): void
+    {
+        [$profile, $stockA, $run, $strategy] = $this->seedSingleStrategyWithSecondStock();
+        $this->mockMarket();
+        app(CashManagementService::class)->deposit($profile, 500000, 'seed');
+
+        $config = $strategy->activeVersion->config_json ?? [];
+        $config['portfolio_rules'] = array_merge($config['portfolio_rules'] ?? [], [
+            'max_holdings' => 1,
+            'max_new_positions_per_cycle' => 5,
+            'allow_increase_position' => true,
+        ]);
+        $config['recommendation_behaviour'] = array_merge($config['recommendation_behaviour'] ?? [], [
+            'allow_increase_position' => true,
+        ]);
+        $strategy->activeVersion->forceFill(['config_json' => $config])->save();
+
+        Holding::query()->create([
+            'profile_id' => $profile->id,
+            'stock_id' => $stockA->id,
+            'strategy_id' => $strategy->id,
+            'quantity' => 1,
+            'avg_buy_price' => 100,
+            'invested_amount' => 100,
+            'updated_at' => now(),
+        ]);
+
+        $result = app(RecommendationEngine::class)->generate($profile, $run);
+        $recs = collect($result['recommendations']);
+
+        $forHeld = $recs->firstWhere('security_id', $stockA->id);
+        $this->assertNotNull($forHeld);
+        $this->assertSame(TradingRecommendation::ACTION_INCREASE_POSITION, $forHeld->recommendation_type);
+
+        $opensForOther = $recs->filter(
+            fn ($r) => (int) $r->security_id !== (int) $stockA->id
+                && $r->recommendation_type === TradingRecommendation::ACTION_OPEN_POSITION
+        );
+        $this->assertCount(0, $opensForOther);
+    }
+
+    public function test_portfolio_max_position_pct_tightens_effective_max_pct(): void
+    {
+        [$profile, $stock, $run, $strategy] = $this->seedSingleStrategy();
+        $this->mockMarket();
+
+        $config = $strategy->activeVersion->config_json ?? [];
+        $config['portfolio_rules'] = array_merge($config['portfolio_rules'] ?? [], [
+            'max_position_size_pct' => 15.0,
+            'max_holdings' => null,
+        ]);
+        unset($config['portfolio_rules']['max_holdings']);
+        $strategy->activeVersion->forceFill(['config_json' => $config])->save();
+
+        app(ProfileSettingsService::class)->set($profile, 'portfolio_max_position_pct', '8');
+
+        $pipeline = app(RecommendationGenerationPipeline::class);
+        $ref = new ReflectionMethod($pipeline, 'prepareContext');
+        $ref->setAccessible(true);
+        $ctx = $ref->invoke($pipeline, $profile, $run, $strategy->activeVersion);
+
+        $this->assertSame(8.0, (float) $ctx['max_pct']);
+    }
+
     /**
      * @return array{0: PortfolioProfile, 1: Stock, 2: EvaluationRun, 3: TradingStrategy, 4: TradingStrategy}
      */

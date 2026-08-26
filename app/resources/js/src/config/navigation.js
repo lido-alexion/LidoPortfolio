@@ -439,8 +439,8 @@ export const NAVIGATION_CATALOG = [
         favouriteEligible: true,
         kind: 'page',
         permission: null,
-        // Keep Strategies highlighted on registry (internal) routes.
-        match: (p) => pathStartsWith(p, ROUTES.STRATEGY),
+        // Strategies editor only — Registry is its own sidebar item.
+        match: (p) => pathStartsWith(p, ROUTES.STRATEGY) && !pathStartsWith(p, ROUTES.STRATEGY_REGISTRY),
     },
     {
         id: 'strategy-registry',
@@ -449,11 +449,11 @@ export const NAVIGATION_CATALOG = [
         route: ROUTES.STRATEGY_REGISTRY,
         group: 'group-trading',
         order: 31,
-        parent: 'strategies',
+        parent: 'group-trading',
         children: null,
         badge: null,
-        showInSidebar: false,
-        favouriteEligible: false,
+        showInSidebar: true,
+        favouriteEligible: true,
         kind: 'page',
         permission: null,
         match: (p) => pathStartsWith(p, ROUTES.STRATEGY_REGISTRY),

@@ -196,6 +196,64 @@ class V3CapitalLendingAccountingTest extends TestCase
         }
     }
 
+    public function test_max_lending_pct_of_unused_caps_available_for_lending(): void
+    {
+        [$user, $profile] = $this->cashOnlyPortfolio(100_000);
+        $row = $this->capitalJson($user, $profile)['strategies'][0];
+        $this->assertEqualsWithDelta(100_000.0, $row['unused_allocation'], 0.0001);
+        $this->assertEqualsWithDelta(100_000.0, $row['available_for_lending'], 0.0001);
+
+        app(ProfileSettingsService::class)->set($profile, 'max_lending_pct_of_unused', '50');
+
+        $capped = $this->capitalJson($user, $profile)['strategies'][0];
+        $this->assertEqualsWithDelta(100_000.0, $capped['unused_allocation'], 0.0001);
+        $this->assertLessThanOrEqual(50_000.0, $capped['available_for_lending']);
+        $this->assertEqualsWithDelta(50_000.0, $capped['available_for_lending'], 0.0001);
+    }
+
+    public function test_max_lending_absolute_caps_available_for_lending(): void
+    {
+        [$user, $profile] = $this->cashOnlyPortfolio(100_000);
+        app(ProfileSettingsService::class)->set($profile, 'max_lending_absolute', '10000');
+
+        $row = $this->capitalJson($user, $profile)['strategies'][0];
+        $this->assertEqualsWithDelta(100_000.0, $row['unused_allocation'], 0.0001);
+        $this->assertLessThanOrEqual(10_000.0, $row['available_for_lending']);
+        $this->assertEqualsWithDelta(10_000.0, $row['available_for_lending'], 0.0001);
+    }
+
+    public function test_max_lending_caps_apply_before_floor_and_tighter_wins(): void
+    {
+        [$user, $profile] = $this->cashOnlyPortfolio(100_000);
+        $settings = app(ProfileSettingsService::class);
+        $settings->set($profile, 'max_lending_pct_of_unused', '50');
+        $settings->set($profile, 'max_lending_absolute', '15000');
+
+        $row = $this->capitalJson($user, $profile)['strategies'][0];
+        // min(100000, unused*50%=50000, 15000) → floor 15000
+        $this->assertEqualsWithDelta(15_000.0, $row['available_for_lending'], 0.0001);
+
+        $settings->set($profile, 'max_lending_absolute', '12000');
+        $floored = $this->capitalJson($user, $profile)['strategies'][0];
+        // min(..., 12000) → FloorToRupee5000 → 10000 (12000 is not a ₹5k multiple)
+        $this->assertEqualsWithDelta(10_000.0, $floored['available_for_lending'], 0.0001);
+
+        $settings->set($profile, 'max_lending_absolute', '9999');
+        $flooredLow = $this->capitalJson($user, $profile)['strategies'][0];
+        // min(..., 9999) → FloorToRupee5000 → 5000
+        $this->assertEqualsWithDelta(5_000.0, $flooredLow['available_for_lending'], 0.0001);
+    }
+
+    public function test_empty_max_lending_settings_preserve_full_surplus(): void
+    {
+        [$user, $profile] = $this->cashOnlyPortfolio(100_000);
+        app(ProfileSettingsService::class)->set($profile, 'max_lending_pct_of_unused', '');
+        app(ProfileSettingsService::class)->set($profile, 'max_lending_absolute', '');
+
+        $row = $this->capitalJson($user, $profile)['strategies'][0];
+        $this->assertEqualsWithDelta(100_000.0, $row['available_for_lending'], 0.0001);
+    }
+
     public function test_lending_does_not_modify_allocation_pct(): void
     {
         [$user, $profile, $lender, $borrower] = $this->twoStrategyPortfolio(1_000_000);

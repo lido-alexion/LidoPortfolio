@@ -19,6 +19,7 @@ final class CapitalRequestApprovalService
     public function __construct(
         protected LenderEligibilityService $eligibility,
         protected RecommendationLendingCoordinator $lending,
+        protected RecallNotificationService $notifications,
     ) {}
 
     public function approve(CapitalRequest $request, TradingStrategy $lender, User $approver): CapitalLoan
@@ -86,7 +87,7 @@ final class CapitalRequestApprovalService
                     'status' => CapitalRequest::STATUS_REVALIDATION_FAILED,
                 ])->save();
 
-                return ['ok' => false];
+                return ['ok' => false, 'request' => $locked->fresh(), 'profile' => $profile];
             }
 
             $committedAt = now();
@@ -112,21 +113,40 @@ final class CapitalRequestApprovalService
             $locked->setRelation('loan', $loan);
             $this->lending->markCapitalCommitted($locked);
 
-            return ['ok' => true, 'loan' => $loan];
+            return ['ok' => true, 'loan' => $loan, 'request' => $locked->fresh(), 'profile' => $profile];
         });
 
         if (! ($result['ok'] ?? false)) {
+            /** @var CapitalRequest|null $failed */
+            $failed = $result['request'] ?? null;
+            /** @var PortfolioProfile|null $profile */
+            $profile = $result['profile'] ?? null;
+            if ($failed !== null && $profile !== null) {
+                $this->notifications->lendingFailure(
+                    $profile,
+                    $failed,
+                    CapitalRequest::STATUS_REVALIDATION_FAILED,
+                );
+            }
             throw ValidationException::withMessages([
                 'lender_strategy_id' => ['Lender is ineligible or does not have enough available-for-lending at approval time.'],
             ]);
         }
 
-        return $result['loan'];
+        /** @var CapitalLoan $loan */
+        $loan = $result['loan'];
+        /** @var CapitalRequest $committedRequest */
+        $committedRequest = $result['request'];
+        /** @var PortfolioProfile $profile */
+        $profile = $result['profile'];
+        $this->notifications->lendingCommitment($profile, $committedRequest, $loan);
+
+        return $loan;
     }
 
     public function reject(CapitalRequest $request, User $approver): CapitalRequest
     {
-        return DB::transaction(function () use ($request, $approver) {
+        $locked = DB::transaction(function () use ($request, $approver) {
             /** @var CapitalRequest $locked */
             $locked = CapitalRequest::query()
                 ->whereKey($request->id)
@@ -158,5 +178,16 @@ final class CapitalRequestApprovalService
 
             return $locked->fresh();
         });
+
+        $profile = PortfolioProfile::query()->find($locked->profile_id);
+        if ($profile !== null) {
+            $this->notifications->lendingFailure(
+                $profile,
+                $locked,
+                CapitalRequest::STATUS_REJECTED,
+            );
+        }
+
+        return $locked;
     }
 }

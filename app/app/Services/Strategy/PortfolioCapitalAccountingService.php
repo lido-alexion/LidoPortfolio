@@ -167,6 +167,8 @@ class PortfolioCapitalAccountingService
         $unusedSum = 0.0;
         $strategies = [];
         $fundablePhysical = max(0.0, $availablePhysical - $requiredReserve);
+        $maxLendingPct = $this->optionalNumericSetting($profile, 'max_lending_pct_of_unused');
+        $maxLendingAbsolute = $this->optionalNumericSetting($profile, 'max_lending_absolute');
 
         foreach ($enabled as $strategy) {
             $sid = (int) $strategy->id;
@@ -191,7 +193,14 @@ class PortfolioCapitalAccountingService
             $retainedForLending = $retained !== null ? (float) $retained : 0.0;
             // unused already excludes lent via deployed (§5.2). Do not subtract lent again
             // (that would double-count §8.2's already_lent). committed-to-lending: see below.
-            $lendableSurplus = max(0.0, $unused - $retainedForLending - $committedToLending);
+            // §5.7: optional portfolio % / absolute caps apply after surplus, before ₹5k floor.
+            $raw = max(0.0, $unused - $retainedForLending - $committedToLending);
+            if ($maxLendingPct !== null) {
+                $raw = min($raw, $unused * ($maxLendingPct / 100.0));
+            }
+            if ($maxLendingAbsolute !== null) {
+                $raw = min($raw, $maxLendingAbsolute);
+            }
 
             $strategies[] = [
                 'strategy_id' => $sid,
@@ -208,7 +217,7 @@ class PortfolioCapitalAccountingService
                 'recommended_minimum_holdings' => $recommendedMin,
                 'minimum_retained_capital' => $retained,
                 'minimum_retained_capital_is_physical_cash' => false,
-                'available_for_lending' => FloorToRupee5000::floor($lendableSurplus),
+                'available_for_lending' => FloorToRupee5000::floor($raw),
                 'strategy_available_capital' => round(min($unused, $fundablePhysical), 4),
             ];
         }
@@ -335,5 +344,18 @@ class PortfolioCapitalAccountingService
         }
 
         return $n;
+    }
+
+    /**
+     * Blank / unset profile setting → null (no cap). Otherwise non-negative float.
+     */
+    protected function optionalNumericSetting(PortfolioProfile $profile, string $key): ?float
+    {
+        $raw = $this->profileSettings->get($profile, $key, '');
+        if ($raw === null || trim((string) $raw) === '') {
+            return null;
+        }
+
+        return max(0.0, (float) $raw);
     }
 }

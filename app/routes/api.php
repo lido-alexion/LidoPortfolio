@@ -441,6 +441,8 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
         ->where('id', '[A-Za-z0-9_\\-]+');
     Route::post('/strategy-registry/{id}/activate', [StrategyRegistryController::class, 'activate'])
         ->where('id', '[A-Za-z0-9_\\-]+');
+    Route::post('/strategy-registry/{id}/archive', [StrategyRegistryController::class, 'archive'])
+        ->where('id', '[A-Za-z0-9_\\-]+');
 
     Route::middleware('admin')->group(function () {
         Route::get('/indicators', [IndicatorRegistryController::class, 'index']);

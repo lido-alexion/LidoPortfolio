@@ -124,8 +124,17 @@ export default function SettingsPage() {
     const loadSettings = async () => {
         const res = await api.get('/settings');
         const data = res.data.data || {};
+        const rateRaw = data.opportunity_cost_rate;
+        let opportunityCostRatePct = '12';
+        if (rateRaw !== '' && rateRaw != null) {
+            const n = Number(rateRaw);
+            if (!Number.isNaN(n)) {
+                opportunityCostRatePct = String(Math.round(n * 10000) / 100);
+            }
+        }
         setSettings({
             ...data,
+            opportunity_cost_rate_pct: opportunityCostRatePct,
             fee_components: normalizeFeeComponents(data.fee_components),
             external_stock_links: normalizeExternalStockLinks(data.external_stock_links),
         });
@@ -248,10 +257,34 @@ export default function SettingsPage() {
             portfolio_cash_reserve_pct: settings.portfolio_cash_reserve_pct === ''
                 ? null
                 : settings.portfolio_cash_reserve_pct,
+            minimum_actionable_buy_amount: settings.minimum_actionable_buy_amount === ''
+                || settings.minimum_actionable_buy_amount == null
+                ? null
+                : settings.minimum_actionable_buy_amount,
+            opportunity_cost_rate: (() => {
+                const pct = settings.opportunity_cost_rate_pct;
+                if (pct === '' || pct == null) return '0.12';
+                const n = Number(pct);
+                if (Number.isNaN(n)) return '0.12';
+                return String(Math.round((n / 100) * 1e8) / 1e8);
+            })(),
+            portfolio_max_position_pct: settings.portfolio_max_position_pct === ''
+                || settings.portfolio_max_position_pct == null
+                ? null
+                : settings.portfolio_max_position_pct,
+            max_lending_pct_of_unused: settings.max_lending_pct_of_unused === ''
+                || settings.max_lending_pct_of_unused == null
+                ? null
+                : settings.max_lending_pct_of_unused,
+            max_lending_absolute: settings.max_lending_absolute === ''
+                || settings.max_lending_absolute == null
+                ? null
+                : settings.max_lending_absolute,
             telegram_bot_token: settings.telegram_bot_token,
             telegram_chat_id: settings.telegram_chat_id,
             notification_schedules: notificationPayload,
         });
+        await loadSettings();
         setStatus('Portfolio settings saved');
         showToast('Portfolio settings saved');
     };
@@ -801,6 +834,123 @@ export default function SettingsPage() {
                                         This is not a percentage of cash. Withdrawals are not blocked if cash falls below
                                         the reserve.
                                     </p>
+                                </div>
+                                <div className="col-12 col-md-4">
+                                    <label className="form-label" htmlFor="settings-min-actionable-buy">
+                                        Minimum actionable BUY / INCREASE (₹)
+                                    </label>
+                                    <NumberInput
+                                        id="settings-min-actionable-buy"
+                                        min="0"
+                                        step="1"
+                                        allowDecimals={false}
+                                        value={settings.minimum_actionable_buy_amount ?? ''}
+                                        onChange={(e) => setSettings({
+                                            ...settings,
+                                            minimum_actionable_buy_amount: e.target.value,
+                                        })}
+                                        placeholder="5000"
+                                    />
+                                    <p className="text-muted small mb-0 mt-1">
+                                        OD-12 this-cycle opportunity floor. Leave empty for the platform default ₹5,000.
+                                        Not the OD-06 atomic reservation block.
+                                    </p>
+                                </div>
+                                <div className="col-12 col-md-4">
+                                    <label className="form-label" htmlFor="settings-opportunity-cost-rate">
+                                        Opportunity-cost rate %
+                                    </label>
+                                    <NumberInput
+                                        id="settings-opportunity-cost-rate"
+                                        min="0"
+                                        max="100"
+                                        step="0.01"
+                                        value={settings.opportunity_cost_rate_pct ?? '12'}
+                                        onChange={(e) => setSettings({
+                                            ...settings,
+                                            opportunity_cost_rate_pct: e.target.value,
+                                        })}
+                                        placeholder="12"
+                                    />
+                                    <p className="text-muted small mb-0 mt-1">
+                                        Annualized rate used by §19 success (positive return, NIFTY beat, and
+                                        opportunity-cost hurdle). Stored as a decimal fraction (12% → 0.12). Default 12%.
+                                    </p>
+                                </div>
+                                <div className="col-12 col-md-4">
+                                    <label className="form-label" htmlFor="settings-portfolio-max-position">
+                                        Portfolio max position size %
+                                    </label>
+                                    <NumberInput
+                                        id="settings-portfolio-max-position"
+                                        min="0"
+                                        max="100"
+                                        step="0.01"
+                                        value={settings.portfolio_max_position_pct ?? ''}
+                                        onChange={(e) => setSettings({
+                                            ...settings,
+                                            portfolio_max_position_pct: e.target.value,
+                                        })}
+                                        placeholder="Optional"
+                                    />
+                                    <p className="text-muted small mb-0 mt-1">
+                                        Optional ceiling on aggregate exposure to one symbol across owners.
+                                        The tighter of strategy vs portfolio wins (§3.5). Leave blank for no portfolio
+                                        ceiling beyond strategy limits.
+                                    </p>
+                                </div>
+                                <div className="col-12 col-md-4">
+                                    <label className="form-label" htmlFor="settings-max-lending-pct">
+                                        Max lending % of unused allocation
+                                    </label>
+                                    <NumberInput
+                                        id="settings-max-lending-pct"
+                                        min="0"
+                                        max="100"
+                                        step="0.01"
+                                        value={settings.max_lending_pct_of_unused ?? ''}
+                                        onChange={(e) => setSettings({
+                                            ...settings,
+                                            max_lending_pct_of_unused: e.target.value,
+                                        })}
+                                        placeholder="Optional"
+                                    />
+                                    <p className="text-muted small mb-0 mt-1">
+                                        §5.7 / §8.2 optional portfolio cap: after lendable surplus (unused − OD-24
+                                        retained − committed), limit available-for-lending to this % of
+                                        unused_allocation, then apply the ₹5,000 floor. Leave blank for no % cap.
+                                    </p>
+                                </div>
+                                <div className="col-12 col-md-4">
+                                    <label className="form-label" htmlFor="settings-max-lending-absolute">
+                                        Max lending absolute (₹)
+                                    </label>
+                                    <NumberInput
+                                        id="settings-max-lending-absolute"
+                                        min="0"
+                                        step="1"
+                                        allowDecimals={false}
+                                        value={settings.max_lending_absolute ?? ''}
+                                        onChange={(e) => setSettings({
+                                            ...settings,
+                                            max_lending_absolute: e.target.value,
+                                        })}
+                                        placeholder="Optional"
+                                    />
+                                    <p className="text-muted small mb-0 mt-1">
+                                        §5.7 / §8.2 optional absolute ₹ ceiling on available-for-lending (applied with
+                                        the % cap if both are set, before the ₹5,000 floor). Leave blank for no
+                                        absolute cap.
+                                    </p>
+                                </div>
+                                <div className="col-12">
+                                    <div className="border rounded p-3 bg-light">
+                                        <div className="fw-semibold small mb-1">Reservation policy (display only)</div>
+                                        <p className="text-muted small mb-0">
+                                            Atomic block ₹5,000 · Execution margin 1% (OD-06) — reservation policy,
+                                            not a mandate to invest the margin.
+                                        </p>
+                                    </div>
                                 </div>
                                 <div className="col-12 col-md-4">
                                     <label className="form-label" htmlFor="settings-recall-period">

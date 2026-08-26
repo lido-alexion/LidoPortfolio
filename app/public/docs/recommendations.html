@@ -132,6 +132,12 @@
         <dt>Trade vs insights sections</dt>
         <dd>Actionable trades are separated from HOLD / WATCH insights.</dd>
     
+        <dt>Capital status (list)</dt>
+        <dd>OPEN / INCREASE rows show capital funding badges: Capital required (UNFUNDED), Awaiting lender, Partially funded, and a quieter Funded badge.</dd>
+    
+        <dt>Select lender</dt>
+        <dd>When status is Awaiting lender (or UNFUNDED with a capital request), expand Select lender on the list or use the detail panel to pick a lender strategy, Approve lender, or Reject — calls existing /v1/capital/requests/{id}/lenders|approve|reject APIs.</dd>
+    
         <dt>Generate (when available)</dt>
         <dd>Runs the recommendation pipeline independently for every enabled strategy in the portfolio. Telegram (when enabled) notifies only actionable Open / Increase / Reduce / Exit ideas — not HOLD / WATCH.</dd>
     
@@ -155,11 +161,14 @@
         <dt>Evidence snapshot</dt>
         <dd>Eligibility, scoring, exit, market opinion, ranking source (return-quality or OD-23 fill order), and capital allocation status travel with the idea.</dd>
     
+        <dt>Capital allocation status</dt>
+        <dd>API field capital_allocation_status on list and detail. UNFUNDED shows as “Capital required”; AWAITING_LENDER_SELECTION / PARTIALLY_FUNDED / FUNDED / CAPITAL_COMMITTED have matching badges. capital_request_id is exposed when a lending request exists.</dd>
+    
         <dt>Primary exit reason</dt>
         <dd>For EXIT ideas, the API exposes primary_exit_reason / exit_attribution with canonical values: strategy_exit, stop_loss, trailing_stop, horizon_expiry. The UI shows a human label but keeps the canonical value. When multiple mechanisms are true, only the highest-precedence reason is persisted and shown.</dd>
     
         <dt>Exit precedence</dt>
-        <dd>When multiple exit mechanisms are true: (1) Strategy exit, (2) Portfolio Stop-Loss, (3) Portfolio Trailing Stop, (4) Strategy Horizon. Strategy-specific exit rules (including any V1 strategy JSON trailing_stop proxy) are separate from portfolio-level SL/trailing controls and count as strategy_exit when they win.</dd>
+        <dd>When multiple exit mechanisms are true: (1) Strategy exit, (2) Portfolio Stop-Loss, (3) Portfolio Trailing Stop, (4) Strategy Horizon. Strategy-specific exit rules (MA, RS, trend, score, ATR, Screener Exit) count as strategy_exit. Legacy V1 strategy JSON max_loss / trailing_stop are ignored — portfolio Settings owns common SL/trailing.</dd>
     
         <dt>BUY cooldown (OD-11)</dt>
         <dd>1 calendar day per (stock, strategy). Starts when an OPEN/INCREASE recommendation is generated — not on broker fill or approval. Day 0 allows that BUY; Day 1 suppresses new OPEN/INCREASE for the same pair; Day 2 elapsed. Does not suppress REDUCE/EXIT/HOLD. Another strategy’s BUY of the same stock has an independent cooldown. Stale-cancel does not clear cooldown and does not replace an unapproved BUY during the window.</dd>
@@ -177,7 +186,10 @@
         <dd>Undo review decisions back to pending_review when supported.</dd>
     
         <dt>Telegram filter</dt>
-        <dd>HOLD / WATCH stay in-app only; they are not sent as Telegram recommendation alerts.</dd>
+        <dd>HOLD / WATCH stay in-app only; they are not sent as Telegram recommendation alerts. Unfunded OPEN/INCREASE still notify (capital required) — they do not inherit the HOLD/WATCH skip.</dd>
+    
+        <dt>Exit attribution on Telegram</dt>
+        <dd>EXIT messages include primary attribution when present (portfolio stop-loss, trailing stop, horizon, or strategy exit).</dd>
     
         <dt>Lifecycle states</dt>
         <dd>Recommendations can move through pending_review, pending_execution, executed/cancelled, expired, and reopened paths. Buys that still need lending stay in pending_review until capital_committed; Approve is blocked until then. Fully funded buys still go pending_execution on Approve. Sells are unchanged.</dd>

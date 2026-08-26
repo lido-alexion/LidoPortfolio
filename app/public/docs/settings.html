@@ -135,6 +135,24 @@
         <dt>Portfolio cash reserve %</dt>
         <dd>Portfolio-level OD-19 percentage. Required reserve rupees = this % × max(currently held invested amount, current holdings market value). Leave blank for 0 (no configured reserve). Not a % of cash. Withdrawals are not blocked if cash falls below the resulting rupee floor; Dashboard warns instead.</dd>
     
+        <dt>Minimum actionable BUY / INCREASE (₹)</dt>
+        <dd>OD-12 this-cycle opportunity floor. Blank uses the platform default ₹5,000. Not the OD-06 atomic reservation block.</dd>
+    
+        <dt>Opportunity-cost rate %</dt>
+        <dd>Annualized rate for §19 success (positive return + NIFTY beat + opportunity-cost hurdle). UI shows percent; stored as decimal fraction (12% → 0.12). Default 12%. Closed backtest trades persist NIFTY-comparable <code>benchmark_return_pct</code> and <code>is_success</code> via SuccessCriteriaEvaluator during simulation.</dd>
+    
+        <dt>Portfolio max position size %</dt>
+        <dd>Optional ceiling on single-name size. Generation uses effective max_pct = min(strategy max_position_size_pct, portfolio_max_position_pct if set, 100/max_holdings if set), then market-gate multiplier. Blank = no portfolio ceiling beyond strategy limits (§3.5).</dd>
+    
+        <dt>Max lending % of unused allocation</dt>
+        <dd>§5.7 / §8.2 optional portfolio cap on available_for_lending. After lendable surplus (unused − OD-24 retained − already committed), raw is min’d with unused_allocation × this % / 100, then floored to ₹5,000 blocks. Blank = no % cap (backward compatible).</dd>
+    
+        <dt>Max lending absolute (₹)</dt>
+        <dd>§5.7 / §8.2 optional absolute ₹ ceiling on available_for_lending. Applied with the % cap when both are set (whichever is tighter), before the ₹5,000 floor. Blank = no absolute cap.</dd>
+    
+        <dt>Reservation policy (display only)</dt>
+        <dd>Atomic block ₹5,000 · Execution margin 1% (OD-06) — reservation policy, not a mandate to invest the margin. Not editable here.</dd>
+    
         <dt>Portfolio Stop-Loss %</dt>
         <dd>Independent portfolio-level stop-loss. Uses weighted-average actual fill cost of the current ownership episode; evaluated on raw daily close. Not derived from trailing % or strategy exit JSON.</dd>
     
@@ -179,8 +197,11 @@
         <dt>Portfolio cash reserve</dt>
         <dd>A non-investable, non-lendable rupee floor. It is not a separate bank account and not strategy cash.</dd>
     
+        <dt>Configurable lending limits (§5.7)</dt>
+        <dd>Optional portfolio settings max_lending_pct_of_unused and/or max_lending_absolute cap available_for_lending after OD-24 surplus and before the ₹5,000 floor. Defaults empty = full surplus (current behaviour). Does not change OD-19/20/21/24 formulas or lender ranking.</dd>
+    
         <dt>Portfolio risk exits vs strategy exits</dt>
-        <dd>Portfolio Stop-Loss and Portfolio Trailing Stop are common/settings controls. Strategy Exit Strategy rules (including any strategy JSON trailing_stop unrealized-% proxy) are strategy-specific and separate. Exit precedence when both fire: Strategy exit → Portfolio Stop-Loss → Portfolio Trailing Stop → Strategy Horizon.</dd>
+        <dd>Portfolio Stop-Loss and Portfolio Trailing Stop are common/settings controls. Strategy Exit Strategy keeps strategy-specific rules (MA, RS, trend, score, ATR, Screener Exit). Legacy strategy JSON max_loss / trailing_stop are ignored. Exit precedence when both fire: Strategy exit → Portfolio Stop-Loss → Portfolio Trailing Stop → Strategy Horizon.</dd>
     
         <dt>Recall period</dt>
         <dd>Rule-driven eligibility for automated recalls. There is no auto-return toggle that controls repayment or recall.</dd>

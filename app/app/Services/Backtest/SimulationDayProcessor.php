@@ -71,8 +71,6 @@ class SimulationDayProcessor
         $maxPct = (float) ($portfolioRules['max_position_size_pct'] ?? TradingOsConfig::recommendationMaxPositionPct());
         $allocationBand = (float) ($portfolioRules['allocation_band_pct'] ?? TradingOsConfig::recommendationAllocationBandPct());
         $maxNewPositions = (int) ($portfolioRules['max_new_positions_per_cycle'] ?? TradingOsConfig::recommendationMaxNewPositionsPerCycle());
-        $minCashReservePct = (float) ($portfolioRules['min_cash_reserve_pct'] ?? 0);
-        $maxCashDeployPct = (float) ($portfolioRules['max_cash_deployment_pct'] ?? 100);
 
         $riskCfg = $config[TradingOsConfig::STRATEGY_RISK] ?? [];
         $allocCfg = $config[TradingOsConfig::STRATEGY_CAPITAL_ALLOCATION] ?? [];
@@ -80,13 +78,9 @@ class SimulationDayProcessor
         // Simulation: market gates disabled (no historical market analytics series yet).
         $marketAllowsEntry = true;
 
+        // V3: do not invent investable cash from legacy strategy min_cash_reserve_pct /
+        // max_cash_deployment_pct. Portfolio OD-19 reserve is not applied in this sim path.
         $availableCash = $ctx->cash();
-        if ($minCashReservePct > 0) {
-            $availableCash = max(0.0, $availableCash - round($ctx->cash() * ($minCashReservePct / 100.0), 4));
-        }
-        if ($maxCashDeployPct < 100) {
-            $availableCash = min($availableCash, round($ctx->cash() * ($maxCashDeployPct / 100.0), 4));
-        }
 
         $portfolioValue = (float) $valuation['portfolio_value'];
         $symbols = $this->loadSymbols($candidateIds);
@@ -252,11 +246,8 @@ class SimulationDayProcessor
             }
         }
 
-        // Refresh available cash after sells.
+        // Refresh available cash after sells (no V1 strategy cash-% re-reserve).
         $availableCash = $ctx->cash();
-        if ($minCashReservePct > 0) {
-            $availableCash = max(0.0, $availableCash - round($ctx->cash() * ($minCashReservePct / 100.0), 4));
-        }
 
         foreach ($drafts as $draft) {
             if ($executed >= $maxConcurrent) {

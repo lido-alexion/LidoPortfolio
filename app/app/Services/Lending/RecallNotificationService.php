@@ -3,7 +3,9 @@
 namespace App\Services\Lending;
 
 use App\Engines\Notification\NotificationEngine;
+use App\Models\CapitalLoan;
 use App\Models\CapitalRecall;
+use App\Models\CapitalRequest;
 use App\Models\PendingSaleProceeds;
 use App\Models\PortfolioProfile;
 use App\Models\RecallBridgeLoan;
@@ -272,6 +274,143 @@ final class RecallNotificationService
                     'unresolved' => $unresolved,
                 ],
                 $recId,
+            );
+        });
+    }
+
+    /**
+     * §30 — capital required for UNFUNDED / PARTIALLY_FUNDED / AWAITING_LENDER_SELECTION BUY.
+     * Must not be skipped like HOLD/WATCH (those never call this).
+     */
+    public function capitalRequired(PortfolioProfile $profile, TradingRecommendation $recommendation): void
+    {
+        $status = $recommendation->capitalAllocationStatus();
+        if (! in_array($status, [
+            TradingRecommendation::ALLOCATION_UNFUNDED,
+            TradingRecommendation::ALLOCATION_PARTIALLY_FUNDED,
+            TradingRecommendation::ALLOCATION_AWAITING_LENDER_SELECTION,
+        ], true)) {
+            return;
+        }
+        if (! $recommendation->isActionable() || $recommendation->orderSide() !== 'buy') {
+            return;
+        }
+
+        $this->afterCommit(function () use ($profile, $recommendation, $status) {
+            $rec = $recommendation->fresh(['security']) ?? $recommendation;
+            $key = 'capital-required-'.$rec->id.'-'.$status.'-v'.((int) $rec->version).'-telegram';
+            $this->engine->notifyDomain(
+                $profile,
+                'capital_required',
+                $key,
+                $this->composer->capitalRequiredMessage([
+                    'action' => $rec->recommendation_type,
+                    'symbol' => $rec->security?->symbol ?? '#'.$rec->security_id,
+                    'status' => $status,
+                    'target' => $rec->capitalTargetAmount() ?? 0,
+                    'available' => $rec->ownAllocatedAmount() ?? 0,
+                ]),
+                [
+                    'status' => $status,
+                    'target' => $rec->capitalTargetAmount(),
+                    'available' => $rec->ownAllocatedAmount(),
+                ],
+                $rec->id,
+            );
+        });
+    }
+
+    public function lendingCommitment(
+        PortfolioProfile $profile,
+        CapitalRequest $request,
+        CapitalLoan $loan,
+    ): void {
+        $this->afterCommit(function () use ($profile, $request, $loan) {
+            $request = $request->fresh(['borrowerStrategy', 'lenderStrategy']) ?? $request;
+            $key = 'lending-commitment-'.$loan->id.'-telegram';
+            $this->engine->notifyDomain(
+                $profile,
+                'lending_commitment',
+                $key,
+                $this->composer->lendingCommitmentMessage([
+                    'loan_id' => $loan->id,
+                    'request_id' => $request->id,
+                    'amount' => (float) $loan->principal,
+                    'lender' => $this->strategyName($request->lenderStrategy, $request->lender_strategy_id),
+                    'borrower' => $this->strategyName($request->borrowerStrategy, $request->borrower_strategy_id),
+                ]),
+                [
+                    'loan_id' => $loan->id,
+                    'capital_request_id' => $request->id,
+                    'amount' => (float) $loan->principal,
+                ],
+                $request->recommendation_id ? (int) $request->recommendation_id : null,
+            );
+        });
+    }
+
+    public function lendingFailure(
+        PortfolioProfile $profile,
+        CapitalRequest $request,
+        string $reason,
+    ): void {
+        $this->afterCommit(function () use ($profile, $request, $reason) {
+            $request = $request->fresh(['borrowerStrategy']) ?? $request;
+            $key = 'lending-failure-'.$request->id.'-'.$reason.'-telegram';
+            $reasonLabel = match ($reason) {
+                CapitalRequest::STATUS_REJECTED => 'Rejected by lender',
+                CapitalRequest::STATUS_REVALIDATION_FAILED => 'Lender revalidation failed (stale capital)',
+                default => $reason,
+            };
+            $this->engine->notifyDomain(
+                $profile,
+                'lending_failure',
+                $key,
+                $this->composer->lendingFailureMessage([
+                    'request_id' => $request->id,
+                    'amount' => (float) $request->amount,
+                    'borrower' => $this->strategyName($request->borrowerStrategy, $request->borrower_strategy_id),
+                    'reason_label' => $reasonLabel,
+                ]),
+                [
+                    'capital_request_id' => $request->id,
+                    'reason' => $reason,
+                    'amount' => (float) $request->amount,
+                ],
+                $request->recommendation_id ? (int) $request->recommendation_id : null,
+            );
+        });
+    }
+
+    public function capitalCommitted(PortfolioProfile $profile, TradingRecommendation $recommendation): void
+    {
+        if ($recommendation->capitalAllocationStatus() !== TradingRecommendation::ALLOCATION_CAPITAL_COMMITTED) {
+            return;
+        }
+
+        $this->afterCommit(function () use ($profile, $recommendation) {
+            $rec = $recommendation->fresh(['security']) ?? $recommendation;
+            $meta = $rec->capitalAllocationMeta() ?? [];
+            $loanId = $meta['capital_loan_id'] ?? null;
+            $requestId = $meta['capital_request_id'] ?? null;
+            $key = 'capital-committed-'.$rec->id.'-loan-'.($loanId ?? 'none').'-telegram';
+            $this->engine->notifyDomain(
+                $profile,
+                'capital_committed',
+                $key,
+                $this->composer->capitalCommittedMessage([
+                    'action' => $rec->recommendation_type,
+                    'symbol' => $rec->security?->symbol ?? '#'.$rec->security_id,
+                    'executable' => $meta['actual_execution_amount'] ?? $rec->ownAllocatedAmount() ?? 0,
+                    'loan_id' => $loanId ?? '—',
+                    'request_id' => $requestId ?? '—',
+                ]),
+                [
+                    'capital_loan_id' => $loanId,
+                    'capital_request_id' => $requestId,
+                    'executable' => $meta['actual_execution_amount'] ?? null,
+                ],
+                $rec->id,
             );
         });
     }

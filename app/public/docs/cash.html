@@ -136,7 +136,7 @@
         <dd>Presentation-only residual after the reserve that unused strategy allocation has not claimed. Not a ledger line and not a withdrawal entitlement.</dd>
     
         <dt>Strategy capital allocation</dt>
-        <dd>Edit enabled-strategy allocation % (must sum to 100 to save). Shows allocated capital, unused allocation, lent, borrowed, and retained capital (accounting floor, not physical cash).</dd>
+        <dd>Edit enabled-strategy allocation % (must sum to 100 to save). Also editable on Strategy Registry. Shows allocated capital, unused allocation, lent, borrowed, and retained capital (accounting floor, not physical cash).</dd>
     
         <dt>Recalls &amp; lending</dt>
         <dd>View recalls (lifecycle, settled vs outstanding), Recall Bridge Loans, and Proceeds from Stock Sale. No manual Create Bridge Loan or Mark Available — those are automated.</dd>
@@ -171,7 +171,7 @@
         <dd>(cash − required reserve − pending reserved) + market value of strategy-owned holdings. Unmanaged holdings are excluded from the 100% strategy split.</dd>
     
         <dt>Strategy allocation %</dt>
-        <dd>Policy share of investable capital (TradingStrategy.allocation_pct). Distinct from score-band allocation_pct on the Strategy Capital Allocation tab and from holdings market-value %.</dd>
+        <dd>Policy share of investable capital (TradingStrategy.allocation_pct). Distinct from score-band allocation_pct on the Strategy Capital Allocation tab and from holdings market-value %. Editable on Cash and Strategy Registry.</dd>
     
         <dt>Retained capital</dt>
         <dd>Per-strategy nearest-integer rupees of allocated capital ÷ recommended minimum holdings. Lending cannot consume it later; it is not a cash bucket.</dd>

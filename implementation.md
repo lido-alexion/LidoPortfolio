@@ -32,6 +32,26 @@ Specs under `specs/` define a seven-engine decision platform. Implementation evo
 
 **Documentation map:** Repository-wide reading order and file tree — [`DOCS.md`](DOCS.md). Specs subtree — [`specs/README.md`](specs/README.md). Architecture hub (domain folders) — [`specs/architecture/README.md`](specs/architecture/README.md). For full ingest: requirements/architecture → governance → audit → this file. New Markdown docs must be indexed in `DOCS.md` (rule: `.cursor/rules/Keep-DOCS-md-ingestion-tree-updated.mdc`).
 
+## V3 §5.7 configurable lending limits (2026-08-26)
+
+**Status:** **DONE**. Narrow AFL portfolio caps only. Does **not** redesign OD-19/20/21/24, lender ranking, or loan approval beyond reading already-capped `available_for_lending`.
+
+### Ambiguity resolution
+
+- Two optional portfolio settings (either or both; blank = no cap of that kind):
+  - `max_lending_pct_of_unused` — percent of **unused_allocation** (0–100).
+  - `max_lending_absolute` — absolute ₹ ceiling (≥ 0).
+- Default both empty → current behaviour (full surplus after OD-24, then ₹5k floor) — backward compatible.
+- Apply order: `raw = max(0, unused − retained − committed)`; then `if pct set: raw = min(raw, unused × pct/100)`; then `if abs set: raw = min(raw, abs)`; then `available_for_lending = FloorToRupee5000::floor(raw)`.
+- Lent is already excluded via deployed/unused (do not subtract again).
+
+### Surfaces
+
+- `ProfileSettingsService::DEFAULTS` + `SettingsController` validation + Settings → Portfolio `NumberInput`s + help citing §5.7.
+- Cap applied in `PortfolioCapitalAccountingService::snapshot()`.
+- Tests: `V3CapitalLendingAccountingTest` (pct 50 / abs 10000 / both / empty); `ProfileSettingsTest` persistence/validation.
+- `appDocumentation.js` Settings controls/concepts synced.
+
 ## Production migrate fix — import-batch index name (2026-08-26)
 
 **Symptom:** `cpanel-migrate.php` failed with MySQL `1059 Identifier name too long` on  
@@ -39,39 +59,253 @@ Specs under `specs/` define a seven-engine decision platform. Implementation evo
 
 **Fix:** `2026_08_09_180001_create_portfolio_transaction_import_batches_tables.php` now uses short explicit index names (`ptib_profile_batch_idx`, `ptibi_batch_row_uq`, `ptibi_batch_sort_idx`) and drops leftover empty tables from the failed run before recreate so migrate can be re-run safely.
 
+## V3 §30 notification hooks + §19 SuccessCriteriaEvaluator (2026-08-26)
+
+**Status:** Telegram domain + recommendation notify extended. No B4 banner. No lending formula redesign.
+
+### §30 events (Telegram via `NotificationEngine` / `RecallNotificationService`)
+
+| Event | Type | Emitter |
+|-------|------|---------|
+| Capital required (UNFUNDED / PARTIAL / AWAITING_LENDER BUY) | `capital_required` | `RecommendationLendingCoordinator::syncAfterGenerated` |
+| Partial capital resolution (shortfall with actual > 0) | `capital_resolution_partial` | `CapitalResolutionService` (existing) |
+| Lending commitment | `lending_commitment` | `CapitalRequestApprovalService::approve` |
+| Lending failure (reject / revalidation) | `lending_failure` | `CapitalRequestApprovalService` |
+| Capital committed / execution ready | `capital_committed` | `RecommendationLendingCoordinator::markCapitalCommitted` |
+| Recall requested / pending-held / settlement | existing | `RecallService` (Phase 3B-2) |
+| Recall Bridge Loan created / repaid | existing | `RecallBridgeLoanService` |
+| Proceeds from stock sale applied | existing | `ProceedsApplicationService` |
+| OPEN/INCREASE/REDUCE/EXIT recommendations | `recommendation` | `notifyRecommendations` (HOLD/WATCH still skipped) |
+| EXIT with portfolio SL / trailing / horizon | `recommendation` (+ attribution line) | `NotificationMessageComposer::recommendationMessage` |
+
+Unfunded OPEN/INCREASE remain `isActionable()` and **must not** inherit HOLD/WATCH Telegram skip. Messages include capital status / exit attribution when present.
+
+### §19 opportunity-cost / success flags
+
+- Setting `opportunity_cost_rate` remains portfolio source of truth (default `0.12`).
+- `App\Services\Ranking\SuccessCriteriaEvaluator` implements §19 (positive return ∧ NIFTY beat ∧ period opportunity-cost threshold with OD-02 `T_years = calendar_days/365`).
+- **Persisted on closed backtest trades** (`portfolio_backtest_trades`):
+  - `benchmark_return_pct` (nullable decimal; same percent convention as `return_pct`)
+  - `is_success` (nullable boolean; null for open / missing NIFTY bars)
+- Wiring: `BacktestTradeSuccessAttacher` runs inside `BacktestPersistenceService::persistDayResults` — resolves NIFTY50 simple return over buy→sell from `portfolio_stock_prices` via `IndexCatalogService::primaryBenchmarkStock()`, converts trade `return_pct` percent → fraction for the evaluator, then stores flags. Profile from `BacktestRun.profile_id` (fallback strategy→profile). Does **not** change `ReturnQualityRankingService` / OD-23 / WS3 formulas.
+
+### Tests / help
+
+- `tests/Feature/Notification/Section30RecommendationNotifyTest.php` — UNFUNDED OPEN notifies; HOLD/WATCH skip; capital_required domain; EXIT SL attribution.
+- `tests/Unit/Ranking/SuccessCriteriaEvaluatorTest.php` — §19 criteria + profile rate.
+- `tests/Unit/Backtest/BacktestTradeSuccessFlagPersistenceTest.php` — closed trade persists `is_success` / `benchmark_return_pct`; open stays null.
+- `appDocumentation.js` notifications + recommendations + opportunity-cost help synced.
+
 **Ops:** Re-upload that migration file under `lidoportfolio/database/migrations/`, then re-run `cpanel-migrate.php?token=...`.
 
-## Final V3 Completion Audit (2026-08-24)
+## V3 closure — capital badges, registry allocation, portfolio max position (2026-08-26)
 
-**Verdict:** **V3 COMPLETE WITH DEFERRED ITEMS**.
+**Status:** **DONE**. Presentation + existing API wiring + ceiling tighten only. Does **not** redesign WS2 capital formulas, WS3 ranking/allocator, WS4 lending engines, §34.3 calculators, OD-10/17, or §10.4/§10.5.
 
-Normative, implementable V3 requirements are satisfied in code and covered by regression suites. Remaining items are either **deferred** (B4, broker automation, optional weakest-position window UI) or **spec gaps / product decisions** (same-stock adoption cost-basis merge, CA rights/cost/trailing restatement). Those do **not** keep the project at “READY WITH GAPS.”
+### A. Recommendations capital status (V3 §7 / §29)
+
+- List **Capital** column for OPEN/INCREASE: UNFUNDED → “Capital required”, Awaiting lender, Partially funded, quieter Funded badge.
+- API already serialized `capital_allocation_status`; now also exposes `capital_request_id` from capital_allocation meta.
+- `RecommendationLenderActions` calls existing `GET/POST /v1/capital/requests/{id}/lenders|approve|reject` from detail and expandable list action.
+- Helpers in `capitalRecallUi.js` (+ JS tests).
+
+### B. Strategy Registry allocation % editor (§29)
+
+- Enabled rows show `allocation_pct`; **Allocation** section with editable % + live sum; Save uses same `PUT /v1/capital/allocations` as Cash.
+- Cash page editor kept (dual surface OK).
+
+### C. `portfolio_max_position_pct` enforcement (§3.5)
+
+- `RecommendationGenerationPipeline::prepareContext` sets  
+  `effective max_pct = min(strategy max_position_size_pct, portfolio_max_position_pct if set, 100/max_holdings if set)`  
+  before market-gate multiplier.
+- Feature: `V3RecommendationGenerationTest::test_portfolio_max_position_pct_tightens_effective_max_pct`.
+
+### Docs
+
+`appDocumentation.js` — Recommendations capital badges/lender; Strategy Registry Allocation; Settings max-position copy; Cash dual-surface note.
+
+## V3 strict closure — OD-16 window UI + DailyMarketDataJobTest (2026-08-26)
+
+**Status:** **DONE**. Does **not** redesign WS2–WS4, §34.3, OD-10/17, or `WeakestPositionRanker` ranking formula.
+
+### 1. OD-16 Strategy UI (`weakest_position_window_days`)
+
+- Engine already reads top-level `config_json.weakest_position_window_days` via `WeakestPositionRanker::evaluationWindowDays` (default **90**).
+- **Factory:** `FactoryMomentumStrategy` seeds `weakest_position_window_days => 90`.
+- **UI:** Strategy → Portfolio Rules — “Weakest-position evaluation window (calendar days)” next to hard max holdings; persists via existing `PUT /v1/strategy` into the same top-level key.
+- **Validation:** positive integer ≥ 1 when set; empty → `null` (engine default 90). `validateWeakestPositionWindowDays` in `strategyPageRules.js`.
+- **Docs / tests:** `appDocumentation.js` Portfolio Rules help; `strategyPageWsPsA.test.mjs` control assertion. Closes former V4-UX-001 as a V3 surface.
+
+### 2. V4-BUG-004 — `DailyMarketDataJobTest` RefreshDatabase pollution
+
+- Removed `RefreshDatabase` from `tests/Feature/DailyMarketDataJobTest.php` (pure Mockery; no DB). Avoids full-suite `Target class [db.schema] does not exist` container pollution.
+
+## V3 closure — hard max_holdings + legacy strategy cash % retirement (2026-08-26)
+
+**Status:** **DONE**. Does **not** redesign WS2 capital formulas, WS3 ranking/allocator core, WS4 lending, §34.3 calculators, or §34.4 cooldown/entry engines.
+
+### Hard `max_holdings` (V3 §3.5)
+
+- **Factory:** `FactoryMomentumStrategy` seeds `portfolio_rules.max_holdings = 10`.
+- **UI:** Strategy Portfolio Rules — **Hard maximum holdings** next to recommended minimum; positive integer ≥1 when set; empty allowed on save (persist null).
+- **Normalize:** `portfolio_rules` merge already pass-throughs `max_holdings`.
+- **Generation (`RecommendationGenerationPipeline`):**
+  - Counts strategy-owned holdings with qty > 0.
+  - At draft time: if at capacity, demote candidate OPEN → WATCH (INCREASE of owned names unchanged).
+  - After ranking: `enforceMaxHoldingsOpenCap` keeps only remaining slots of ranked OPENs; surplus → WATCH.
+  - `allocateCapital` also skips OPEN that would exceed the cap (alongside `max_new_positions_per_cycle`).
+  - Sizing: `effective max_pct = min(configured max_position_size_pct, 100/max_holdings)` when `max_holdings > 0` (then market-gate multiplier).
+
+### Legacy strategy cash % retirement (V3 §21 / §25)
+
+- **Factory:** no longer seeds `min_cash_reserve_pct` / `max_cash_deployment_pct`.
+- **Backtest (`SimulationDayProcessor`):** no longer subtracts/caps available cash by those V1 strategy percentages.
+- **Pipeline:** removed unused `$minCashReservePct` / `$maxCashDeployPct` assignments.
+
+### Tests
+
+`tests/Feature/V3RecommendationGenerationTest.php` (`test_max_holdings_blocks_new_open_but_allows_increase`); ExitStrategyEvaluator ignored-keys suite; `tests/js/strategyPageWsPsA.test.mjs` max-holdings control.
+
+## WS-PS-A — V3 Strategy Editor Information Architecture (2026-08-26)
+
+**Status:** **DONE**. Product-surface correction only (V3 §21 / §29). Does **not** reopen WS2–WS4, §34.3 calculators, §34.4 entry/cooldown engines, OD-10, OD-17, or §10.4/§10.5.
+
+### Implemented
+
+- **Multi-strategy editor:** Strategy page selector loads portfolio strategies from `GET /v1/strategy-registry` and switches via existing `?strategy_id=` / `PUT` `strategy_id`. Replaced “one strategy per portfolio” copy. Enablement remains non-exclusive.
+- **Strategy Registry discoverability:** Sidebar Trading → **Strategy Registry** (`showInSidebar: true`). Registry Enable/import wording uses Enable / multiple enabled (no exclusive “Select to activate”).
+- **Removed Strategy UI:** Cash Management tab; Portfolio Rules **Minimum Cash Reserve %** and **Maximum Cash Deployment %**; Exit Strategy **Maximum Loss** and V1 **Trailing Stop** proxy.
+- **Kept:** Market Gates, horizon, first_entry_pct, eligibility/scoring/thresholds, strategy-specific exits (MA/RS/trend/score/ATR/screener), conviction bands, recommended min holdings, hard max holdings (see V3 closure note above), position size / exposure / behaviour toggles. BUY cooldown shown as read-only copy (OD-11; not configurable).
+- **Runtime:** `ExitStrategyEvaluator` **ignores** legacy `max_loss` / `trailing_stop` (V3 §14–§15 / §21 / §25). They are omitted from the exit-rule catalogue (`defaultRules` / `mergeWithDefaults`). Portfolio SL/trailing calculators and §13.2 precedence order are unchanged.
+
+### Explicitly not in this workstream
+
+- Discovery nav, opportunity-cost UI, minimum actionable BUY UI, disable/archive API, WS2–WS4, B4, broker. (OD-16 window UI delivered in V3 strict closure.)
+
+### Tests
+
+`tests/Unit/Strategy/ExitStrategyEvaluatorIgnoredAccountKeysTest.php`; `tests/js/strategyPageWsPsA.test.mjs`; help test updated for ignored legacy exits.
+
+## V3 closure — archive + portfolio settings (2026-08-26)
+
+**Status:** **DONE**. Closure of residual V3 §3.1 / §28–§29 portfolio settings surfaces. Does **not** redesign WS2–WS4, §34.3 calculators, OD-10/17, or §10.4/§10.5.
+
+### 1. Strategy archive (V3 §3.1)
+
+- `StrategyRegistrySupport::archive` / `StrategyArtifactRegistry::archive` / `POST /api/v1/strategy-registry/{id}/archive`
+- Sets `TradingStrategy::STATUS_ARCHIVED` without changing siblings; keeps `active_version_id` for historical attribution
+- Strategy Registry UI: **Archive** on enabled rows with confirm copy; Enable remains for non-enabled; Edit stays for enabled
+- Feature: `StrategyRegistryApiTest::test_archive_sets_archived_and_activate_of_another_does_not_unarchive`
+
+### 2–4. Portfolio Settings (OD-12, opportunity-cost, max position, OD-06 display)
+
+Profile keys (via `ProfileSettingsService::DEFAULTS` + Settings validate/update):
+
+| Key | Default | Notes |
+|-----|---------|--------|
+| `minimum_actionable_buy_amount` | `''` (platform ₹5,000) | Already consumed by `MinimumActionableAmountResolver` |
+| `opportunity_cost_rate` | `'0.12'` | Decimal fraction; UI shows %; §19 success via `SuccessCriteriaEvaluator`; closed backtest trades persist `benchmark_return_pct` + `is_success` |
+| `portfolio_max_position_pct` | `''` | Optional; tighter of strategy vs portfolio (§3.5) |
+
+Settings → Portfolio also shows a display-only reservation policy card: Atomic block ₹5,000 · Execution margin 1% (OD-06).
+
+### 5. BUY cooldown copy
+
+Strategy → Portfolio Rules: muted “BUY cooldown: 1 calendar day (OD-11; not configurable).”
+
+### Tests / docs
+
+`StrategyRegistryApiTest` archive case; `strategyPageWsPsA.test.mjs` settings/registry assertions; `appDocumentation.js` Settings + Strategy Registry + Portfolio Rules help.
+
+## V3 technical-debt closure — schedulerTimestamp (2026-08-26)
+
+**Status:** **FIXED** (V4-BUG-001 closed). Does not touch frozen WS2–WS4 / §34 / OD-* engines.
+
+### Root cause
+
+`formatSchedulerTimestamp` originally used a deterministic ops contract (`en-GB`, 24-hour, seconds, shortOffset + IANA in parentheses). A later Settings/sync-UI commit (`adae02a`) switched it to 12-hour AM/PM without seconds and dropped the IANA paren label, while `schedulerTimestamp.test.mjs` still asserted the original contract — producing environment-looking “locale flake” failures (`5:00 AM GMT+5:30` vs `05:00:04 (Asia/Kolkata)`).
+
+### Fix
+
+Restored the original deterministic contract in `app/resources/js/src/utils/schedulerTimestamp.js`:
+- fixed locale `en-GB`
+- 24-hour clock with seconds
+- always append `(<IANA timezone>)`
+- pad hour/minute/second to 2 digits
+
+Tests assert the contract and reject AM/PM drift. Full `npm run test:js` green (107/107).
+
+### Docs
+
+Removed from V4 known-bug / V3 closure carry-forward lists.
+
+## V3 STRICT CLOSURE — register-to-implementation pass (2026-08-26)
+
+**Verdict:** **V3 STRICTLY COMPLETE**.
+
+### Standard (product owner)
+
+V3 complete only when: all V3 requirements + V3-related designed features implemented; **zero** known V3 bugs; **zero** open V3 technical debt / UX polish from the V3 audits; historical register items reconciled; docs consistent; regressions green. V4 may hold only genuine new V4 functionality or genuine unspecified product/spec decisions.
+
+### Implemented / fixed in this pass
+
+| Item | Action |
+|------|--------|
+| OD-16 weakest-position window Strategy UI (was V4-UX-001) | Strategy Portfolio Rules control; factory seed 90; persists `config.weakest_position_window_days` |
+| V4-BUG-004 DailyMarketDataJobTest | Removed unused `RefreshDatabase` (pure Mockery) |
+| Build break `navigation.js` | Restored missing `{` on Strategies nav entry (Vite production build) |
+| V4 register rewrite | Open V3 bugs/TD/UX/HIST removed from active backlog; folded into FEAT/SPEC or closed |
+
+### Genuine V4 remainder
+
+See [`specs/LidoPortfolio-V4-Wishlist.md`](specs/LidoPortfolio-V4-Wishlist.md): FEAT-001+ (broker, B4, mobile, Evaluation wiring as FEAT-021, etc.) and SPEC-001–006 only.
+
+## Final V3 Closure Audit (2026-08-26)
+
+**Verdict:** **V3 STRICTLY COMPLETE**.
+
+Completion criterion (product owner, 2026-08-26 strict pass): every normative V3 requirement is implemented; every V3-related designed surface from the audits is closed; **zero** known V3 bugs; **zero** open V3 technical debt / UX polish carried in the V4 register; historical items archived; docs consistent; regressions green. V4 holds only genuine new functionality or genuine unspecified product/spec decisions.
+
+### Closure pass implemented (2026-08-26)
+
+| ID | Area | Classification | Resolution |
+|----|------|----------------|------------|
+| V3-GAP-01 | Strategy disable/archive (§3.1) | A | `POST …/archive` + Registry Archive UI; siblings unchanged |
+| V3-GAP-02 | Min actionable BUY override (OD-12) | A | Settings Portfolio control → existing resolver |
+| V3-GAP-03 | Hard `max_holdings` (§3.5) | A | Strategy field + generation OPEN gate + 1/N sizing |
+| V3-GAP-04 | Opportunity-cost rate (§19/§28/§29) | A | Portfolio setting + `SuccessCriteriaEvaluator` + persist `is_success` on closed backtest trades |
+| V3-GAP-05 | Portfolio caps / lending policy | A/B | `portfolio_max_position_pct`; §5.7 `max_lending_pct_of_unused` / `max_lending_absolute`; OD-06 policy display |
+| V3-GAP-06 | Legacy strategy cash % | A | Stop factory seed; stop backtest apply; dead pipeline assigns removed |
+| V3-GAP-07 | Discovery nav | C | **Retained** — V3 does not require removal |
+| V3-GAP-08 | Allocation % editor on Registry (§29) | A | Registry sum-100 editor (Cash editor kept) |
+| V3-GAP-09 | Recs capital_status list + lender UX | A | List badges + select/approve/reject via existing APIs |
+| V3-GAP-10 | BUY cooldown display | B | Read-only OD-11 copy on Strategy Portfolio Rules |
+| V3-GAP-16 | Docs status claims | A | Status flipped to **V3 COMPLETE** |
+| V3-GAP-17 | §30 notifications | A | Capital required / lending commitment-failure / committed hooks; HOLD/WATCH still skip |
 
 ### Workstream status (audit)
 
 | Workstream | Status |
 |------------|--------|
-| WS2 capital accounting | COMPLETE |
-| WS3 ranking / allocator / generation | COMPLETE |
+| WS2 capital accounting | COMPLETE (lending-limit cap is a narrow §5.7 addition; OD-19/20/21/24 formulas unchanged) |
+| WS3 ranking / allocator / generation | COMPLETE (`is_success` evidence attached; ranking magnitude formulas unchanged) |
 | WS4 lending / recall / bridge / capital priority / zero-own UNFUNDED | COMPLETE |
 | §34.3 portfolio SL / trailing / exit precedence | COMPLETE |
 | §34.4 staggered entry / cooldown / target | COMPLETE |
 | OD-10 CA parent-owner quantity | COMPLETE |
 | OD-17 history depth / charts | COMPLETE |
 | §10.4 adoption / §10.5 backfill | COMPLETE |
-| §29 horizon + first_entry_pct UI | COMPLETE |
+| §29 product surfaces (registry, settings, capital badges, archive) | COMPLETE |
 
-### Deferred / unspecified (not mandatory coding)
+### True V4 / out-of-V3 only (not V3 gaps)
 
-Tracked canonically in [`specs/LidoPortfolio-V4-Wishlist.md`](specs/LidoPortfolio-V4-Wishlist.md) (created 2026-08-25). Summary:
+Tracked in [`specs/LidoPortfolio-V4-Wishlist.md`](specs/LidoPortfolio-V4-Wishlist.md) (strict rewrite 2026-08-26):
 
-- Same-stock unmanaged adoption **cost-basis merge** (quantity merge specified; cost math unspecified → currently **422**) — V4-SPEC-001
-- CA rights processing; CA cost / trailing / stop restatement (OD-10 leftovers) — V4-SPEC-002/003
-- **B4** persistent critical banner (wishlist; B3 Dashboard shortfall warning is current) — V4-FEAT-003
-- Broker / live execution automation — V4-FEAT-001
-- Optional Strategy-page UI for OD-16 weakest-position evaluation window — V4-UX-001
-- Optional cash-ledger entry types for loan/recall/bridge movements — V4-SPEC-004
-- `schedulerTimestamp` JS locale test flake — V4-BUG-001
+- **SPEC-001–006:** adoption cost merge; CA rights; CA restatement; optional cash-ledger kinds; cross-owner sell policy; live exclusivity (Decision 11)
+- **FEAT:** broker/live, B4 banner, mobile/AI/ML/markets, Evaluation→Strategy-param wiring (FEAT-021), data-platform gates, OpenAPI/CI/E2E, Discovery/Evaluation UX polish, etc.
+
+**Closed in V3 (not V4):** OD-16 Strategy window UI; schedulerTimestamp; DailyMarketDataJobTest; max_position enforcement; all former open V3 bug/TD/UX/HIST active rows.
 
 ### Documentation / config cleanup in this pass
 
@@ -380,10 +614,14 @@ After capital resolution with `close_at_actual` and `actual_execution_amount > 0
 | Sale initiated | `sale_proceeds_initiated` | `proceeds-{id}-sale-initiated-telegram` |
 | Proceeds applied | `sale_proceeds_applied` | `proceeds-{id}-applied-telegram` |
 | Partial capital resolution | `capital_resolution_partial` | `capital-partial-{rec\|adhoc}-{actual}-telegram` |
+| Capital required (UNFUNDED / PARTIAL / AWAITING) | `capital_required` | `capital-required-{recId}-{status}-v{version}-telegram` |
+| Lending commitment | `lending_commitment` | `lending-commitment-{loanId}-telegram` |
+| Lending failure | `lending_failure` | `lending-failure-{requestId}-{reason}-telegram` |
+| Capital committed / execution ready | `capital_committed` | `capital-committed-{recId}-loan-{loanId}-telegram` |
 
-Channel: existing Telegram + `notifications_enabled`. Messages via `NotificationMessageComposer`. Emitters: `RecallService`, `RecallBridgeLoanService`, `ProceedsApplicationService`, `RecallLiquidationService`, `CapitalResolutionService`.
+Channel: existing Telegram + `notifications_enabled`. Messages via `NotificationMessageComposer`. Emitters: `RecallService`, `RecallBridgeLoanService`, `ProceedsApplicationService`, `RecallLiquidationService`, `CapitalResolutionService`, `RecommendationLendingCoordinator`, `CapitalRequestApprovalService`.
 
-### Help
+See also **V3 §30 notification hooks + §19 SuccessCriteriaEvaluator (2026-08-26)** at top of this file.### Help
 
 Updated topics: `cash`, `recommendations`, `notifications`, `settings` (+ cash enrichment). Terminology: **Recall Bridge Loan**, **Proceeds from Stock Sale**. Removed “recall not available/implemented”. Documented capital priority, 75% rule, good-faith automation; no auto-return toggle framing.
 
@@ -686,10 +924,14 @@ Authoritative spec: [`specs/LidoPortfolio-V3-Specification.md`](specs/LidoPortfo
 - `strategy_available_capital` = `min(unused, fundablePhysical)` — **OD-24 is not applied** (own-capital BUY funding unchanged).
 - `available_physical_cash` = `max(0, total_cash − pending_execution_reservations)` (WS2 / OD-19).
 - `required_cash_reserve` still comes from OD-19 on investable capital; **not** subtracted again in available-for-lending.
-- `available_for_lending` = `floor_to_₹5000(max(0, unused − OD-24 retained − already_committed_to_lending))`.
+- `available_for_lending` = `floor_to_₹5000` of capped lendable surplus:
+  - `raw = max(0, unused − OD-24 retained − already_committed_to_lending)`
+  - optional §5.7 portfolio caps (blank = skip): `raw = min(raw, unused × max_lending_pct_of_unused/100)` then `raw = min(raw, max_lending_absolute)`
+  - then `FloorToRupee5000::floor(raw)`
 - `floor_to_₹5000` is `App\Support\FloorToRupee5000` (`intdiv` whole rupees). **Not** OD-06 `ceil(requirement × 1.01 / 5000) × 5000`.
 - OD-24 retained unset (`recommended_minimum_holdings` missing) → subtract **0** for lending surplus (same unresolved WS2 edge; no invented divisor).
 - `unallocated_cash` (OD-20) remains presentation-only and is not lendable surplus.
+- §5.7 settings: `max_lending_pct_of_unused`, `max_lending_absolute` on `ProfileSettingsService` (default empty → full surplus).
 
 **Lent vs §8.2 `already_lent`:** unused already excludes lent because lent is inside deployed (§5.2). Subtracting lent a second time in available-for-lending would double-count. `already_lent` is applied via deployed/unused only.
 
@@ -2018,7 +2260,7 @@ Bulk OHLCV for the **equity universe** (NSE + BSE-only; ISIN deduped). Reuses `p
 
 **Hung batch recovery (Aug 2026):** When the in-progress lock is older than `UNIVERSE_STALE_LOCK_MINUTES` (default 30), `isSyncInProgress()` clears the lock **and** marks orphan `portfolio_sync_runs` still `running` as **failed** (`Abandoned: sync process did not finish…`). Exceptions mid-batch also `completeRun(..., failed)`. Diagnostic `cpanel-schedule-diagnostic.php?clear_in_progress=1` abandons running runs too. Ops overdue/failure checks use **finished** sync runs only (orphan `running` rows no longer look like healthy activity).
 
-**Test-suite stabilization (Jul 2026, with history depth work):** fixed time-of-day flakes that failed between midnight and 05:30 IST — `BenchmarkPriceSyncServiceTest` and `SyncUniversePricesCommandTest` seeded `KEY_LAST_SYNC_DATE` with the UTC date while the service compares in `cron_timezone` (IST); `ExplorerAnalyticsTest` seeded anchor OHLCV rows on raw calendar dates that could land on weekends (now normalized via `TradingCalendar::normalizeToSessionDate`). Also: `TransactionUpdateTest` now fakes `BackfillHistoricalDataJob` (update dispatched a **live provider fetch**), and `RelativeStrengthServiceTest` was updated for the two-arg constructor. Known remaining flake: `DailyMarketDataJobTest::test_daily_job_logs_and_notifies_on_failure` fails only in full-suite order (`Target class [db.schema] does not exist`), passes in isolation — pre-existing.
+**Test-suite stabilization (Jul 2026, with history depth work):** fixed time-of-day flakes that failed between midnight and 05:30 IST — `BenchmarkPriceSyncServiceTest` and `SyncUniversePricesCommandTest` seeded `KEY_LAST_SYNC_DATE` with the UTC date while the service compares in `cron_timezone` (IST); `ExplorerAnalyticsTest` seeded anchor OHLCV rows on raw calendar dates that could land on weekends (now normalized via `TradingCalendar::normalizeToSessionDate`). Also: `TransactionUpdateTest` now fakes `BackfillHistoricalDataJob` (update dispatched a **live provider fetch**), and `RelativeStrengthServiceTest` was updated for the two-arg constructor. **V4-BUG-004 (2026-08-26):** `DailyMarketDataJobTest` no longer uses `RefreshDatabase` (pure Mockery) — removed the full-suite `db.schema` pollution flake.
 
 **Archive OHLCV import (Aug 2026, completed):** One-off merge of external NSE archives into production `portfolio_stock_prices` as `data_source=archive_combined_nse` — **5,327,000** rows inserted (`insertOrIgnore`; existing live bars unchanged). Post-import: ~**67%** of active NSE equities have **5+ years** calendar span; NIFTY50 gaps limited to recent listings (**JIOFIN**, **TMPV**). BSE-only depth unchanged (NSE-only import). Local source folder, normalize/import tooling, and `cpanel-import-historical-ohlcv.php` removed after success.
 

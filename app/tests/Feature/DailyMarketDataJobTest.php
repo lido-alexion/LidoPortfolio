@@ -14,14 +14,15 @@ use App\Services\PriceFetchService;
 use App\Services\SyncLogService;
 use App\Services\SystemLogService;
 use App\Services\TelegramNotificationService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use Tests\TestCase;
 
+/**
+ * Pure Mockery job failure path — no DB. RefreshDatabase was removed (V4-BUG-004)
+ * to avoid full-suite `db.schema` container pollution.
+ */
 class DailyMarketDataJobTest extends TestCase
 {
-    use RefreshDatabase;
-
     protected function tearDown(): void
     {
         Mockery::close();

@@ -131,6 +131,79 @@ export function capitalResolutionStateLabel(state) {
 }
 
 /**
+ * V3 §7 / §29 — capital_allocation_status on OPEN/INCREASE (presentation only).
+ * Accepts API snake_case or allocator UPPER_SNAKE.
+ */
+export function normalizeCapitalAllocationStatus(status) {
+    if (status == null || status === '') return null;
+    return String(status).trim().toLowerCase();
+}
+
+export function capitalAllocationStatusLabel(status) {
+    switch (normalizeCapitalAllocationStatus(status)) {
+        case 'unfunded':
+            return 'Capital required';
+        case 'awaiting_lender_selection':
+            return 'Awaiting lender';
+        case 'partially_funded':
+            return 'Partially funded';
+        case 'funded':
+            return 'Funded';
+        case 'capital_committed':
+            return 'Capital committed';
+        default:
+            return status ? String(status) : null;
+    }
+}
+
+export function capitalAllocationStatusBadgeClass(status) {
+    switch (normalizeCapitalAllocationStatus(status)) {
+        case 'unfunded':
+            return 'text-bg-danger';
+        case 'awaiting_lender_selection':
+            return 'text-bg-warning';
+        case 'partially_funded':
+            return 'text-bg-info';
+        case 'funded':
+            return 'text-bg-light border text-muted';
+        case 'capital_committed':
+            return 'text-bg-success';
+        default:
+            return 'text-bg-secondary';
+    }
+}
+
+/** OPEN / INCREASE (and legacy BUY) show capital funding badges. */
+export function showsCapitalAllocationStatus(recommendationOrAction) {
+    const action = typeof recommendationOrAction === 'string'
+        ? recommendationOrAction
+        : (recommendationOrAction?.portfolio_action
+            || recommendationOrAction?.recommendation_type
+            || '');
+    const upper = String(action || '').toUpperCase();
+    return upper === 'OPEN_POSITION'
+        || upper === 'INCREASE_POSITION'
+        || upper === 'BUY';
+}
+
+export function capitalRequestIdFromRecommendation(rec) {
+    if (!rec || typeof rec !== 'object') return null;
+    if (rec.capital_request_id != null && Number(rec.capital_request_id) > 0) {
+        return Number(rec.capital_request_id);
+    }
+    const meta = rec.evidence?.capital_allocation
+        || rec.execution_plan?.capital_allocation
+        || null;
+    const id = meta?.capital_request_id;
+    return id != null && Number(id) > 0 ? Number(id) : null;
+}
+
+export function canSelectLenderForStatus(status) {
+    const s = normalizeCapitalAllocationStatus(status);
+    return s === 'awaiting_lender_selection' || s === 'unfunded';
+}
+
+/**
  * Pick the headline execution amount for UI (never invent funding).
  */
 export function actualExecutionAmount(resolution) {

@@ -359,9 +359,11 @@ class BacktestSimulationEngine
                 'quantity' => (float) $t->quantity,
                 'profit_loss' => $t->profit_loss !== null ? (float) $t->profit_loss : null,
                 'return_pct' => $t->return_pct !== null ? (float) $t->return_pct : null,
+                'benchmark_return_pct' => $t->benchmark_return_pct !== null ? (float) $t->benchmark_return_pct : null,
                 'cagr' => $t->cagr !== null ? (float) $t->cagr : null,
                 'exit_reason' => $t->exit_reason,
                 'is_open' => (bool) $t->is_open,
+                'is_success' => $t->is_success,
             ])
             ->all();
 

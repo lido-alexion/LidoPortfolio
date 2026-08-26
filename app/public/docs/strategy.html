@@ -115,7 +115,7 @@
       <section class="panel">
         <h2>Overview</h2>
         <p>Strategy is your decision policy. A portfolio may have <strong>multiple enabled strategies</strong> at the same time. It starts with Minervini Strategy (Minervini Trend Template eligibility + momentum scoring). Edit any tab and Save — the editor still saves that strategy in place.</p>
-<p>Use Strategy Registry to import/export JSON, validate packs, browse drafts, and <strong>Enable</strong> a definition for this portfolio without disabling other enabled strategies. The Strategy editor <code>?strategy_id=</code> query is a UI choice of which strategy to edit — not a database rule that only one strategy can be enabled. Strategies reference Screeners by slug / factory key — they never duplicate Screener condition trees.</p>
+<p>Use Strategy Registry (Trading sidebar or the editor link) to import/export JSON, validate packs, browse drafts, and <strong>Enable</strong> a definition for this portfolio without disabling other enabled strategies. The Strategy editor selector / <code>?strategy_id=</code> chooses which strategy to edit — not a database rule that only one strategy can be enabled. Strategies reference Screeners by slug / factory key — they never duplicate Screener condition trees.</p>
 <p><strong>AI Strategy Designer</strong> (collapsible panel on this page) does <strong>not</strong> call an LLM. It builds a paste-ready prompt from your style/risk/complexity choices, copies it to the clipboard, and expects you to attach the StoX Trading Artifacts AI Authoring Guide in ChatGPT/Gemini/Claude/etc. Import the resulting Screener/Strategy JSON via the registries after Validate.</p>
 <p>Strategy does not invent stocks and does not rewrite Screener conditions. Screeners admit candidates; Strategy scores them, labels an action, applies portfolio/cash/market limits, and watches holdings for exits.</p>
 <p>Where do finished ideas appear?</p>
@@ -149,13 +149,16 @@ flowchart TD
         <dt>AI Strategy Designer</dt>
         <dd>Collapsible panel on /strategy. Fill Investment Style, Risk, Holding Period, Market, Universe, Max Positions, Capital Allocation, Exit Style, Market Preferences, Optimization Priorities, Complexity, Explainability, and optional Additional Constraints. Generate Prompt builds a client-side template (StoX Default Prompt; more templates can be added later), shows it in a read-only textarea, and auto-copies to the clipboard (toast: “AI prompt copied to clipboard.”). Copy Again / Select All / Clear / Reset Defaults are available. Form values persist in browser localStorage. Attach /docs/stox-trading-artifacts-ai-guide.md when pasting into an external AI. No backend LLM call.</dd>
     
+        <dt>Strategy selector</dt>
+        <dd>Editing strategy dropdown lists strategies for this portfolio (enabled, draft, archived). Choosing one loads it via <code>?strategy_id=</code> — UI selection only; enabling a strategy does not disable others.</dd>
+    
         <dt>Strategy Registry</dt>
-        <dd>Open /strategy/registry to export/import Strategy JSON, validate packs, and Enable strategies for this portfolio (multiple may be enabled).</dd>
+        <dd>Open /strategy/registry (also listed under Trading in the sidebar) to export/import Strategy JSON, validate packs, and Enable strategies for this portfolio (multiple may be enabled).</dd>
     
         <dt>General tab</dt>
         <dd>Name — label for your strategy (default: Minervini Strategy).
 Description — free-text intent notes.
-Save overwrites this strategy’s config in place. Optional <code>?strategy_id=</code> chooses which enabled strategy the editor is showing.</dd>
+Save overwrites this strategy’s config in place. A portfolio may enable multiple strategies; the selector chooses which definition the editor is showing.</dd>
     
         <dt>Eligibility Sources tab</dt>
         <dd>Assign Screeners that admit stocks into scoring.
@@ -192,11 +195,14 @@ Compared against: the stock’s overall strategy score in this generation cycle.
         <dt>Portfolio Rules tab</dt>
         <dd>Maximum / Minimum Position Size % — share of portfolio value per idea (compared against suggested allocation %).
 First entry % (first_entry_pct) — percentage of this strategy’s current position target used for the first BUY. Empty uses the engine default (50%). Valid range when set: 1–100. Later INCREASE uses remaining target after filled, subject to the frozen 1 calendar-day BUY cooldown (OD-11; not configurable here). This is not Portfolio Stop-Loss %, Portfolio Trailing Stop %, or Settings cash reserve.
-Maximum Cash Deployment % / Minimum Cash Reserve % — V1 generation-time cash limits compared against cash balance. The V3 portfolio cash reserve (required_cash_reserve) is set under Settings → Portfolio cash reserve % and uses invested/market-value, not % of cash.
+BUY cooldown (read-only): 1 calendar day (OD-11; not configurable).
 Recommended minimum holdings — advisory count for generation (the engine does not open weak names just to hit it). Also the divisor for this strategy’s retained capital (allocated capital ÷ this count, nearest rupee). Leave blank if unset; retained capital is then not computed.
+Hard maximum holdings (max_holdings) — hard cap on strategy-owned open names. Generation does not emit a new OPEN that would exceed it; INCREASE of an existing owned name is allowed. Default single-name size is also capped at 1 ÷ max_holdings of that strategy’s allocation unless Maximum Position Size % is tighter. Factory default 10; leave blank if unset.
+Weakest-position evaluation window (weakest_position_window_days, OD-16) — calendar-day lookback used when recall/replenishment ranks borrower-owned positions to sell. Stored at strategy config top level (not under portfolio_rules). Positive integer ≥ 1 when set; empty uses the engine default (90). Factory seeds 90.
 Maximum New Positions — cap on fresh Opens per generation cycle.
 Maximum Exposure Per Stock % — concentration ceiling.
-Behaviour toggles: Allow increase / partial exit / averaging up / averaging down — permit those action types when other rules would suggest them.</dd>
+Behaviour toggles: Allow increase / partial exit / averaging up / averaging down — permit those action types when other rules would suggest them.
+Portfolio cash reserve % and common stop-loss / trailing stop are under Settings → Portfolio (not this tab). Strategy allocation % is edited on Strategy Registry and Cash.</dd>
     
         <dt>Capital Allocation tab</dt>
         <dd>Applies only to Open / Increase ideas that survived thresholds, portfolio rules, and market gates.
@@ -213,10 +219,9 @@ Moving Average Breakdown (Value = SMA period, e.g. 50) — compared against pric
 Relative Strength Weakening (Value = RS score max, e.g. 40) — hits when RS factor score &lt; Value.
 Trend Weakening (Value = trend score max, e.g. 40) — hits when Trend factor score &lt; Value.
 Overall Score Exit (Value = overall score max, e.g. 20) — hits when overall score ≤ Value.
-Maximum Loss (Value = %, e.g. 8) — hits when unrealized P/L % ≤ −Value (vs your cost basis).
 ATR Stop (Value = multiple, e.g. 2) — hits when unrealized % ≤ −(multiple × ATR%).
-Trailing Stop (Value = %, e.g. 10) — strategy-specific V1 proxy inside Exit Strategy only: hits when unrealized % ≤ −Value (drawdown from cost). This is separate from the portfolio-level Portfolio Trailing Stop % under Settings (peak raw close × trailing %). When both fire, strategy exit wins on precedence.
-Screener Exit (Value = screener picker) — hits when the holding’s stock_id appears in that screener’s latest completed run (~72h).</dd>
+Screener Exit (Value = screener picker) — hits when the holding’s stock_id appears in that screener’s latest completed run (~72h).
+Common Maximum Loss and V1 Trailing Stop are not Strategy exits — Portfolio Stop-Loss % and Portfolio Trailing Stop % live under Settings.</dd>
     
         <dt>Market Gates tab</dt>
         <dd>Optional. When Enable market gates is Off, Min sentiment / Allowed phases / Max risk are ignored (and disabled in the UI).
@@ -226,14 +231,8 @@ Allowed phases — block new Open/Increase unless current market phase is checke
 Max risk (raw) — if market raw risk &gt; this, block/shrink new entries.
 Exits on holdings are not blocked by market gates.</dd>
     
-        <dt>Cash Management tab</dt>
-        <dd>Reservations enabled — use cash reservations for approved buys.
-Reserve on approval — when you Approve an Open/Increase on Recommendations, cash is reserved.
-Release on execution / cancellation / expiry — free the reservation when the idea closes.
-Compared against: Cash page balance and reserved amounts. Available investable cash drives Capital Allocation.</dd>
-    
         <dt>Page subheader</dt>
-        <dd>Explains that Strategy is only a set of configurations. After Save and running the decision pipeline, recommended stocks appear on the Recommendations tab (/recommendations). Screeners still select eligible stocks; Strategy does not redefine eligibility rules.</dd>
+        <dd>Explains that Strategy is only a set of configurations. After Save and running the decision pipeline, recommended stocks appear on the Recommendations tab (/recommendations). Screeners still select eligible stocks; Strategy does not redefine eligibility rules. Multiple strategies may be enabled; use the editor selector or Strategy Registry.</dd>
     
         <dt>Header card + Save</dt>
         <dd>Always-visible snapshot: name, last modified, enabled eligibility Screeners, weight total, exit/market flags.
@@ -292,25 +291,23 @@ Ranking for capital: INFY first (highest score), then RELIANCE, then TCS. Only O
 <code>text Symbol    | Score | Band reading --------- | ----- | ------------ IDEA      | 44    | Near Reduce if held; not an Open TCS       | 70    | Watch band RELIANCE  | 82    | Below Open (≥85); Watch/Hold path INFY      | 88    | Crosses Open (≥85); ranks first for capital </code></dd>
     
         <dt>Worked example — three holdings vs exit rules</dt>
-        <dd>Holding A (HDFC Bank): bought ₹1,500; latest ₹1,360; unrealized ≈ −9.3%. Max Loss Value = 8 → −9.3% ≤ −8% → Maximum Loss triggers → Exit.
+        <dd>Holding A (HDFC Bank): bought ₹1,500; latest ₹1,360. With Portfolio Stop-Loss % = 8 under Settings, stop ≈ ₹1,380; raw close ₹1,360 is below stop → portfolio stop-loss EXIT (not a Strategy Maximum Loss rule).
 
-Holding B (Asian Paints): bought ₹3,000; rallied to ₹3,400 then back to ₹3,050; unrealized vs cost ≈ +1.7%. Trailing Stop Value = 10 (V1 proxy vs cost, not peak): +1.7% is not ≤ −10% → does not trigger. (A true peak-trail would measure the drop from ₹3,400 ≈ −10.3% and might fire; V1 does not — it only looks at unrealized % from cost.)
+Holding B (Asian Paints): peak raw close ₹3,400 then latest ₹3,050. With Portfolio Trailing Stop % = 10, trail ≈ ₹3,060; latest below trail → portfolio trailing EXIT. Strategy Exit Strategy no longer includes a V1 unrealized-% trailing proxy.
 
-Holding B′ (same Trailing Stop = 10, different path): bought ₹3,000; latest ₹2,650; unrealized ≈ −11.7%. −11.7% ≤ −10% → Trailing Stop (V1) triggers → Exit. This is the same math as Max Loss with Value = 10; use Max Loss for an explicit hard floor and Trailing when you intend a future peak-based trail.
+Holding C (Tata Motors): close below 50-SMA while still green on P/L. MA Breakdown period = 50 → Moving Average Breakdown triggers → strategy_exit even if score is still moderate.
 
-Holding C (Tata Motors): close below 50-SMA while still green on P/L. MA Breakdown period = 50 → Moving Average Breakdown triggers → Exit even if score is still moderate.
+Holding D appears in your “Weakening names” Screener Exit list → Screener Exit triggers → strategy_exit regardless of score.
 
-Holding D appears in your “Weakening names” Screener Exit list → Screener Exit triggers → Exit regardless of score.
-
-ATR Stop example: ATR% = 3.0, Value/multiple = 2 → stop at −6%. If unrealized = −6.5% → ATR Stop triggers.</dd>
+ATR Stop example: ATR% = 3.0, Value/multiple = 2 → stop at −6%. If unrealized = −6.5% → ATR Stop triggers as strategy_exit.</dd>
     
-        <dt>Trailing / max-loss picture</dt>
-        <dd><code>text Price   |                 * peak (true trail would anchor here)   |               *   |        *----*   |      *   |----*  buy @ 1500 -------------------- cost basis   |                 \   |                  * latest 1360  (−9.3% vs cost)   +------------------------------------&gt; time Max loss 8%: stop line ≈ 1500 × (1−0.08) = 1380 Latest 1360 is below 1380 → Max Loss hit. </code></dd>
+        <dt>Portfolio SL / trailing picture</dt>
+        <dd><code>text Price   |                 * peak (portfolio trailing anchors here)   |               *   |        *----*   |      *   |----*  WAVG fill cost @ 1500 ---------- OD-13 cost basis   |                 \   |                  * latest close 1360   +------------------------------------&gt; time Portfolio stop-loss 8%: stop ≈ 1500 × (1−0.08) = 1380 Latest 1360 is below 1380 → portfolio stop_loss attribution. </code></dd>
     
         <dt>After filters — what you see</dt>
-        <dd>Suppose only INFY Open survives cash allocation and HDFC Bank Exit from Max Loss.
+        <dd>Suppose only INFY Open survives cash allocation and HDFC Bank Exit from portfolio stop-loss.
 You see both on Recommendations (/recommendations): INFY under trade recommendations (Approve / Reject / Defer), HDFC Bank as Exit.
-Approve INFY → Pending Execution (/transactions/pending) with cash reserved if Cash Management says so.
+Approve INFY → Pending Execution (/transactions/pending) with cash reserved by the portfolio reservation path.
 Record the broker fill → Transactions / Holdings update; Review later shows outcomes.
 RELIANCE/TCS Watch or Hold stay on Recommendations as insights (not Telegram-notified).</dd>
     

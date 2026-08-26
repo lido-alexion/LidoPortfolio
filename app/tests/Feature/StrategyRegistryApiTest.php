@@ -185,4 +185,82 @@ class StrategyRegistryApiTest extends TestCase
             ->postJson('/api/v1/strategy-registry/import', $payload)
             ->assertStatus(422);
     }
+
+    public function test_archive_sets_archived_and_activate_of_another_does_not_unarchive(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+
+        $this->actingAs($user)->getJson('/api/v1/strategy-registry')->assertOk();
+
+        $payload = [
+            'schema_version' => '1.0',
+            'artifact_type' => 'strategy',
+            'slug' => 'archive_peer_test',
+            'name' => 'Archive Peer Test',
+            'artifact_version' => 1,
+            'metadata' => [
+                'scope' => 'portfolio',
+                'status' => 'draft',
+                'origin' => 'user',
+                'description' => 'archive test',
+                'intent' => 'test',
+                'summary' => 'test',
+                'tags' => ['test'],
+            ],
+            'definition' => [
+                'eligibility_sources' => [
+                    [
+                        'screener_slug' => MinerviniTrendTemplateScreener::FACTORY_KEY,
+                        'screener_factory_key' => MinerviniTrendTemplateScreener::FACTORY_KEY,
+                        'enabled' => true,
+                        'priority' => 1,
+                    ],
+                ],
+                'scoring_model' => [
+                    ['key' => 'relative_strength', 'enabled' => true, 'weight' => 50, 'minimum' => 70, 'maximum' => null, 'parameters' => []],
+                    ['key' => 'momentum_score', 'enabled' => true, 'weight' => 50, 'minimum' => 60, 'maximum' => null, 'parameters' => []],
+                ],
+            ],
+            'dependencies' => [],
+        ];
+
+        $created = $this->actingAs($user)
+            ->postJson('/api/v1/strategy-registry/import', $payload)
+            ->assertCreated()
+            ->json('data');
+
+        $this->actingAs($user)
+            ->postJson('/api/v1/strategy-registry/'.$created['artifact_id'].'/activate')
+            ->assertOk()
+            ->assertJsonPath('data.metadata.status', 'active');
+
+        $factory = TradingStrategy::query()
+            ->where('profile_id', $profile->id)
+            ->where('factory_key', FactoryMomentumStrategy::FACTORY_KEY)
+            ->firstOrFail();
+        $factoryVersionId = $factory->active_version_id;
+
+        $this->actingAs($user)
+            ->postJson('/api/v1/strategy-registry/'.$factory->id.'/archive')
+            ->assertOk()
+            ->assertJsonPath('data.metadata.status', 'archived')
+            ->assertJsonPath('data.metadata.is_enabled', false);
+
+        $factory->refresh();
+        $this->assertSame(TradingStrategy::STATUS_ARCHIVED, $factory->status);
+        $this->assertSame($factoryVersionId, $factory->active_version_id);
+
+        $this->actingAs($user)
+            ->postJson('/api/v1/strategy-registry/'.$created['artifact_id'].'/activate')
+            ->assertOk()
+            ->assertJsonPath('data.metadata.status', 'active');
+
+        $factory->refresh();
+        $this->assertSame(TradingStrategy::STATUS_ARCHIVED, $factory->status);
+        $this->assertSame($factoryVersionId, $factory->active_version_id);
+
+        $imported = TradingStrategy::query()->where('id', $created['artifact_id'])->firstOrFail();
+        $this->assertSame(TradingStrategy::STATUS_ACTIVE, $imported->status);
+    }
 }

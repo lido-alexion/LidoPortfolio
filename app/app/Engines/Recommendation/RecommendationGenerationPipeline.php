@@ -19,6 +19,7 @@ use App\Services\CashManagementService;
 use App\Services\DataQualityGuardService;
 use App\Services\PortfolioCalculationService;
 use App\Services\PortfolioLoggerService;
+use App\Services\ProfileSettingsService;
 use App\Services\Ranking\CapitalFillOrderService;
 use App\Services\Ranking\ReturnQualityRankingService;
 use App\Services\Lending\RecommendationLendingCoordinator;
@@ -122,6 +123,7 @@ class RecommendationGenerationPipeline
 
                 $drafts = $this->buildDrafts($ctx);
                 $drafts = $this->rankDrafts($drafts, $ctx);
+                $drafts = $this->enforceMaxHoldingsOpenCap($drafts, $ctx);
                 $allocations = $this->allocateCapital($drafts, $ctx);
                 $drafts = $this->applyCapitalOutcomes($drafts, $allocations);
                 $created = array_merge($created, $this->persistDrafts($drafts, $ctx, $profile));
@@ -212,6 +214,7 @@ class RecommendationGenerationPipeline
         $ctx = $this->prepareContext($profile, $evaluationRun, $strategyVersion, $snapshot);
         $drafts = $this->buildDrafts($ctx);
         $drafts = $this->rankDrafts($drafts, $ctx);
+        $drafts = $this->enforceMaxHoldingsOpenCap($drafts, $ctx);
         $allocations = $this->allocateCapital($drafts, $ctx);
         $drafts = $this->applyCapitalOutcomes($drafts, $allocations);
 
@@ -349,8 +352,25 @@ class RecommendationGenerationPipeline
         $maxPct = (float) ($portfolioRules['max_position_size_pct'] ?? TradingOsConfig::recommendationMaxPositionPct());
         $allocationBand = (float) ($portfolioRules['allocation_band_pct'] ?? TradingOsConfig::recommendationAllocationBandPct());
         $maxNewPositions = (int) ($portfolioRules['max_new_positions_per_cycle'] ?? TradingOsConfig::recommendationMaxNewPositionsPerCycle());
-        $minCashReservePct = (float) ($portfolioRules['min_cash_reserve_pct'] ?? 0);
-        $maxCashDeployPct = (float) ($portfolioRules['max_cash_deployment_pct'] ?? 100);
+        $maxHoldings = isset($portfolioRules['max_holdings']) && is_numeric($portfolioRules['max_holdings'])
+            ? (int) $portfolioRules['max_holdings']
+            : 0;
+        if ($maxHoldings < 1) {
+            $maxHoldings = 0;
+        }
+        // V3 §3.5 — diversification default: single name ≤ 1/max_holdings unless tighter max_position_size_pct.
+        if ($maxHoldings > 0) {
+            $maxPct = min($maxPct, 100.0 / $maxHoldings);
+        }
+        // V3 §3.5 — portfolio ceiling: tighter of strategy vs portfolio_max_position_pct wins.
+        $portfolioMaxRaw = app(ProfileSettingsService::class)
+            ->get($profile, 'portfolio_max_position_pct', '');
+        if ($portfolioMaxRaw !== null && $portfolioMaxRaw !== '' && is_numeric($portfolioMaxRaw)) {
+            $portfolioMaxPct = (float) $portfolioMaxRaw;
+            if ($portfolioMaxPct > 0) {
+                $maxPct = min($maxPct, $portfolioMaxPct);
+            }
+        }
 
         // SD-032 / F098: consume Market Analysis Engine — never recalculate market metrics here.
         $market = [];
@@ -483,6 +503,7 @@ class RecommendationGenerationPipeline
             'max_pct' => $maxPct,
             'allocation_band' => $allocationBand,
             'max_new_positions' => $maxNewPositions,
+            'max_holdings' => $maxHoldings,
             'market' => $market,
             'market_gate_decision' => $gateDecision,
             'market_allows_entry' => $marketAllowsEntry,
@@ -685,6 +706,19 @@ class RecommendationGenerationPipeline
                 $allowIncrease,
                 $allowReduce,
             );
+
+            // V3 §3.5 — hard max_holdings: no new OPEN when strategy already at capacity.
+            // INCREASE of an existing owned name remains allowed.
+            $maxHoldings = (int) ($ctx['max_holdings'] ?? 0);
+            $heldNameCount = count($heldQty);
+            if (
+                $maxHoldings > 0
+                && ! $isHeld
+                && $action === TradingRecommendation::ACTION_OPEN_POSITION
+                && $heldNameCount >= $maxHoldings
+            ) {
+                $action = TradingRecommendation::ACTION_WATCH;
+            }
 
             // §13.2: any winning exit mechanism forces EXIT (primary attribution on draft).
             $exitTriggered = is_array($exitAttribution) && ($exitAttribution['primary_reason'] ?? null) !== null;
@@ -1236,6 +1270,44 @@ class RecommendationGenerationPipeline
     }
 
     /**
+     * V3 §3.5 — after ranking, demote excess new OPEN drafts to WATCH so generation
+     * never emits more new names than remaining max_holdings slots.
+     * INCREASE of already-owned names is unchanged.
+     *
+     * @param  list<array<string, mixed>>  $drafts
+     * @param  array<string, mixed>  $ctx
+     * @return list<array<string, mixed>>
+     */
+    protected function enforceMaxHoldingsOpenCap(array $drafts, array $ctx): array
+    {
+        $maxHoldings = (int) ($ctx['max_holdings'] ?? 0);
+        if ($maxHoldings < 1) {
+            return $drafts;
+        }
+
+        $heldCount = count($ctx['held_qty'] ?? []);
+        $slots = max(0, $maxHoldings - $heldCount);
+        $openSeen = 0;
+
+        foreach ($drafts as &$draft) {
+            if (($draft['action'] ?? null) !== TradingRecommendation::ACTION_OPEN_POSITION) {
+                continue;
+            }
+            if ($openSeen >= $slots) {
+                $draft['action'] = TradingRecommendation::ACTION_WATCH;
+                $draft['plan'] = null;
+                $draft['position_size'] = null;
+                $draft['suggested_alloc'] = 0.0;
+            } else {
+                $openSeen++;
+            }
+        }
+        unset($draft);
+
+        return $drafts;
+    }
+
+    /**
      * Allocate strategy_available_capital across already-ordered buy drafts.
      *
      * @param  list<array<string, mixed>>  $drafts
@@ -1247,6 +1319,8 @@ class RecommendationGenerationPipeline
         $portfolioValue = $ctx['portfolio_value'];
         $maxPct = $ctx['max_pct'];
         $maxNewPositions = $ctx['max_new_positions'];
+        $maxHoldings = (int) ($ctx['max_holdings'] ?? 0);
+        $heldCount = count($ctx['held_qty'] ?? []);
         $availableCash = (float) ($ctx['available_cash'] ?? 0);
 
         $buyDrafts = [];
@@ -1257,6 +1331,9 @@ class RecommendationGenerationPipeline
                 continue;
             }
             if ($draft['action'] === TradingRecommendation::ACTION_OPEN_POSITION) {
+                if ($maxHoldings > 0 && ($heldCount + $newOpenCount) >= $maxHoldings) {
+                    continue;
+                }
                 if ($newOpenCount >= $maxNewPositions) {
                     continue;
                 }

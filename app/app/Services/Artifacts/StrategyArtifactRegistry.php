@@ -282,6 +282,24 @@ final class StrategyArtifactRegistry implements ArtifactRegistryInterface
     }
 
     /**
+     * Archive this strategy. Other strategies are unchanged; active_version_id is kept.
+     *
+     * @return array<string, mixed>
+     */
+    public function archive(string $idOrSlug, PortfolioProfile $profile): array
+    {
+        $strategy = $this->findStrategy($profile, $idOrSlug);
+        if (! $strategy) {
+            throw new InvalidArgumentException("Strategy not found: {$idOrSlug}");
+        }
+        $archived = $this->support->archive($profile, $strategy);
+        $version = $archived->activeVersion
+            ?? TradingStrategyVersion::query()->where('strategy_id', $archived->id)->orderByDesc('id')->firstOrFail();
+
+        return $this->project($archived, $version);
+    }
+
+    /**
      * @return list<array<string, mixed>>
      */
     public function listVersions(string $idOrSlug, PortfolioProfile $profile): array

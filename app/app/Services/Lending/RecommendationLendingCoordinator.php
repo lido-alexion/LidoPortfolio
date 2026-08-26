@@ -23,6 +23,7 @@ final class RecommendationLendingCoordinator
         protected CommittedLendingExecutionAmounts $executionAmounts,
         protected CapitalResolutionService $capitalResolution,
         protected CapitalResolutionStatusService $resolutionStatus,
+        protected RecallNotificationService $notifications,
     ) {}
 
     public function syncAfterGenerated(TradingRecommendation $recommendation): void
@@ -42,11 +43,15 @@ final class RecommendationLendingCoordinator
             || $status === TradingRecommendation::ALLOCATION_AWAITING_LENDER_SELECTION
         )) {
             $this->ensureUnfundedCapitalRequest($recommendation);
+            $recommendation = $recommendation->fresh() ?? $recommendation;
+            $this->notifyCapitalRequiredIfNeeded($recommendation);
 
             return;
         }
 
         if ($status === TradingRecommendation::ALLOCATION_UNFUNDED) {
+            $this->notifyCapitalRequiredIfNeeded($recommendation);
+
             return;
         }
         if ($status !== TradingRecommendation::ALLOCATION_PARTIALLY_FUNDED
@@ -55,6 +60,17 @@ final class RecommendationLendingCoordinator
         }
 
         $this->ensurePartialCapitalRequest($recommendation);
+        $recommendation = $recommendation->fresh() ?? $recommendation;
+        $this->notifyCapitalRequiredIfNeeded($recommendation);
+    }
+
+    private function notifyCapitalRequiredIfNeeded(TradingRecommendation $recommendation): void
+    {
+        $profile = $recommendation->profile()->first();
+        if ($profile === null) {
+            return;
+        }
+        $this->notifications->capitalRequired($profile, $recommendation);
     }
 
     /**
@@ -296,6 +312,11 @@ final class RecommendationLendingCoordinator
             'execution_plan' => $plan,
             'suggested_allocation_amount' => $executable,
         ])->save();
+
+        $profile = $recommendation->profile()->first();
+        if ($profile !== null) {
+            $this->notifications->capitalCommitted($profile, $recommendation->fresh() ?? $recommendation);
+        }
     }
 
     public function assertCanExecute(TradingRecommendation $recommendation): void

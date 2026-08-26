@@ -21,10 +21,12 @@ class BacktestTrade extends Model
         'quantity',
         'profit_loss',
         'return_pct',
+        'benchmark_return_pct',
         'cagr',
         'exit_reason',
         'entry_score',
         'is_open',
+        'is_success',
     ];
 
     protected $casts = [
@@ -35,9 +37,11 @@ class BacktestTrade extends Model
         'quantity' => 'float',
         'profit_loss' => 'float',
         'return_pct' => 'float',
+        'benchmark_return_pct' => 'float',
         'cagr' => 'float',
         'entry_score' => 'float',
         'is_open' => 'boolean',
+        'is_success' => 'boolean',
     ];
 
     public function run(): BelongsTo
