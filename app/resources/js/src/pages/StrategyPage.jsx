@@ -4,6 +4,7 @@ import api from '../api';
 import { DataTableCard } from '../components/DataTable';
 import NumberInput from '../components/NumberInput';
 import AIStrategyPromptBuilder from '../components/strategy/AIStrategyPromptBuilder';
+import CreateStrategyPanel, { createdStrategyId } from '../components/strategy/CreateStrategyPanel';
 import useApiGet from '../hooks/useApiGet';
 import { runApiMutation } from '../hooks/useApiMutation';
 import { showToast } from '../toast';
@@ -205,6 +206,8 @@ export default function StrategyPage() {
     const [config, setConfig] = useState(emptyConfig);
     const [addScreenerId, setAddScreenerId] = useState('');
     const [benchmarkIndexes, setBenchmarkIndexes] = useState([]);
+    const [showCreate, setShowCreate] = useState(false);
+    const [lifecycleBusy, setLifecycleBusy] = useState(false);
 
     const { loading, reload: load } = useApiGet({
         deps: [strategyId],
@@ -826,9 +829,61 @@ export default function StrategyPage() {
     }
 
     const selectedStrategyId = strategyId || (meta.id != null ? String(meta.id) : '');
+    const enabledCount = strategyOptions.filter((row) => {
+        const status = row?.metadata?.status || row?.status || '';
+        return Boolean(row?.metadata?.is_enabled || row?.metadata?.is_selected || status === 'active');
+    }).length;
+    const currentStatus = meta.status || '';
+    const currentEnabled = currentStatus === 'active';
+    const canArchive = currentEnabled && enabledCount > 1;
     const onSelectStrategy = (nextId) => {
         if (!nextId || nextId === selectedStrategyId) return;
         navigate(`/strategy?strategy_id=${encodeURIComponent(nextId)}`);
+    };
+
+    const onEnableCurrent = async () => {
+        const id = selectedStrategyId;
+        if (!id) return;
+        if (!window.confirm(`Enable “${meta.name || 'this strategy'}” for this portfolio? Other enabled strategies stay enabled.`)) return;
+        setLifecycleBusy(true);
+        try {
+            await api.post(`/v1/strategy-registry/${encodeURIComponent(id)}/activate`);
+            showToast(`“${meta.name}” is now enabled for this portfolio.`);
+            await load();
+        } catch (err) {
+            showToast(err?.response?.data?.error?.message || err.message || 'Enable failed', 'danger');
+        } finally {
+            setLifecycleBusy(false);
+        }
+    };
+
+    const onArchiveCurrent = async () => {
+        const id = selectedStrategyId;
+        if (!id || !canArchive) return;
+        if (!window.confirm(
+            'Archive this strategy? It will stop generating recommendations. Other enabled strategies stay enabled. Past holdings/recommendations keep their attribution.',
+        )) return;
+        setLifecycleBusy(true);
+        try {
+            await api.post(`/v1/strategy-registry/${encodeURIComponent(id)}/archive`);
+            showToast(`“${meta.name}” archived.`);
+            const remaining = strategyOptions.find((row) => {
+                const rid = strategyListId(row);
+                const status = row?.metadata?.status || '';
+                const enabled = Boolean(row?.metadata?.is_enabled || row?.metadata?.is_selected || status === 'active');
+                return enabled && rid && rid !== String(id);
+            });
+            const nextId = remaining ? strategyListId(remaining) : '';
+            if (nextId) {
+                navigate(`/strategy?strategy_id=${encodeURIComponent(nextId)}`);
+            } else {
+                await load();
+            }
+        } catch (err) {
+            showToast(err?.response?.data?.error?.message || err.message || 'Archive failed', 'danger');
+        } finally {
+            setLifecycleBusy(false);
+        }
     };
 
     return (
@@ -842,11 +897,21 @@ export default function StrategyPage() {
                     </p>
                     <p className="text-muted small mb-0">
                         Screeners select eligible stocks. Strategy scores, allocates, and exits — it does not redefine eligibility rules.
-                        A portfolio may enable multiple strategies at once; use the selector below to choose which one to edit.
+                        A portfolio may enable multiple strategies at once; use the selector below to choose which one to edit,
+                        or Create Strategy to add another from the default configuration.
                     </p>
                 </div>
                 <div className="d-flex flex-wrap gap-2">
                     <Link className="btn btn-outline-secondary btn-sm" to="/strategy/registry">Strategy Registry</Link>
+                    <button
+                        type="button"
+                        id="create-strategy-open"
+                        className="btn btn-outline-primary btn-sm"
+                        disabled={saving || lifecycleBusy}
+                        onClick={() => setShowCreate(true)}
+                    >
+                        Create Strategy
+                    </button>
                     <Link className="btn btn-outline-secondary btn-sm" to="/screeners">Screeners</Link>
                     <Link className="btn btn-outline-secondary btn-sm" to="/recommendations">Recommendations</Link>
                     <button type="button" className="btn btn-outline-secondary btn-sm" onClick={load}>Refresh</button>
@@ -854,6 +919,21 @@ export default function StrategyPage() {
                         {saving ? 'Saving…' : 'Save'}
                     </button>
                 </div>
+            </div>
+
+            <div className={showCreate ? 'mb-3' : ''}>
+            <CreateStrategyPanel
+                open={showCreate}
+                disabled={saving || lifecycleBusy}
+                onClose={() => setShowCreate(false)}
+                onCreated={(created) => {
+                    setShowCreate(false);
+                    const id = createdStrategyId(created);
+                    if (id) {
+                        navigate(`/strategy?strategy_id=${encodeURIComponent(id)}`);
+                    }
+                }}
+            />
             </div>
 
             <div className="card mb-3">
@@ -883,15 +963,49 @@ export default function StrategyPage() {
                             </select>
                             <div className="form-text">
                                 Choosing another strategy loads it in this editor. Enabling a strategy does not disable others —
-                                manage enablement in{' '}
+                                manage enablement here or in{' '}
                                 <Link to="/strategy/registry">Strategy Registry</Link>.
                             </div>
+                        </div>
+                        <div className="col-md-6 col-lg-7 d-flex flex-wrap gap-2 align-items-end">
+                            {!currentEnabled && selectedStrategyId ? (
+                                <button
+                                    type="button"
+                                    id="strategy-editor-enable"
+                                    className="btn btn-primary btn-sm"
+                                    disabled={lifecycleBusy}
+                                    onClick={onEnableCurrent}
+                                >
+                                    Enable
+                                </button>
+                            ) : null}
+                            {currentEnabled ? (
+                                <button
+                                    type="button"
+                                    id="strategy-editor-archive"
+                                    className="btn btn-outline-secondary btn-sm"
+                                    disabled={lifecycleBusy || !canArchive}
+                                    title={!canArchive
+                                        ? 'Enable another strategy before archiving the last enabled one'
+                                        : 'Archive this strategy'}
+                                    onClick={onArchiveCurrent}
+                                >
+                                    Archive
+                                </button>
+                            ) : null}
                         </div>
                     </div>
                     <div className="row g-2 align-items-start">
                         <div className="col-md-3">
                             <div className="text-muted small">Strategy Name</div>
-                            <div className="fw-semibold">{meta.name}</div>
+                            <div className="fw-semibold">
+                                {meta.name}
+                                {currentStatus ? (
+                                    <span className={`badge ms-2 ${currentEnabled ? 'text-bg-success' : currentStatus === 'archived' ? 'text-bg-secondary' : 'text-bg-warning'}`}>
+                                        {currentEnabled ? 'enabled' : currentStatus}
+                                    </span>
+                                ) : null}
+                            </div>
                         </div>
                         <div className="col-md-3">
                             <div className="text-muted small">Last Modified</div>

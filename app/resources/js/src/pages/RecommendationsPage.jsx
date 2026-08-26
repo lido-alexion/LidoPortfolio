@@ -307,7 +307,7 @@ export default function RecommendationsPage() {
                         <input className="form-check-input" type="checkbox" id="showAllRecs" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
                         <label className="form-check-label small" htmlFor="showAllRecs">Show all history</label>
                     </div>
-                    <Link className="btn btn-outline-secondary btn-sm" to="/candidates">Discovery</Link>
+                    <Link className="btn btn-outline-secondary btn-sm" to="/strategy">Strategy</Link>
                     <button type="button" className="btn btn-outline-secondary btn-sm" onClick={load} disabled={loading || running}>Refresh</button>
                     <button type="button" className="btn btn-primary btn-sm" onClick={runPipeline} disabled={running}>
                         {running ? 'Running pipeline…' : 'Run decision pipeline'}

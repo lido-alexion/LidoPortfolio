@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import api from '../api';
 import { appUrl } from '../appBase';
 import ValidationSuccessBanner from '../components/artifacts/ValidationSuccessBanner';
 import NumberInput from '../components/NumberInput';
+import CreateStrategyPanel, { createdStrategyId } from '../components/strategy/CreateStrategyPanel';
 import { showToast } from '../toast';
 import { notifyPortfolioDashboardRefresh } from '../utils/portfolioEvents';
 
@@ -54,6 +55,7 @@ function downloadJson(filename, data) {
  * @param {{ adminMode?: boolean }} props
  */
 export default function StrategyRegistryPage({ adminMode = false }) {
+    const navigate = useNavigate();
     const basePath = adminMode ? '/settings/strategy-registry' : '/strategy/registry';
     const [rows, setRows] = useState([]);
     const [meta, setMeta] = useState(null);
@@ -65,6 +67,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
     const [importText, setImportText] = useState('');
     const [validateResult, setValidateResult] = useState(null);
     const [busy, setBusy] = useState(false);
+    const [showCreate, setShowCreate] = useState(false);
     const [allocDraft, setAllocDraft] = useState([]);
     const [allocBusy, setAllocBusy] = useState(false);
     const [allocError, setAllocError] = useState('');
@@ -121,6 +124,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
 
     const allocSum = allocDraft.reduce((sum, row) => sum + (Number(row.allocation_pct) || 0), 0);
     const allocSumIs100 = Math.abs(allocSum - 100) <= 0.01;
+    const enabledCount = rows.filter(isEnabledRow).length;
 
     const saveAllocations = async () => {
         setAllocError('');
@@ -262,8 +266,8 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                 <div>
                     <h2 className="h4 mb-1">{adminMode ? 'Strategy Registry (Admin)' : 'Strategy Registry'}</h2>
                     <p className="text-muted small mb-0">
-                        Reusable Strategy definitions with metadata, versions, and JSON import/export.
-                        A portfolio may enable multiple strategies. Strategies reference Screeners by registry slug / factory key — they never embed Screener trees.
+                        Manage every strategy for this portfolio: create, enable, edit, and archive.
+                        Multiple strategies may be enabled at the same time. Strategies reference Screeners by registry slug / factory key — they never embed Screener trees.
                     </p>
                     {countsLabel && <p className="text-muted small mb-0 mt-1">{countsLabel}</p>}
                 </div>
@@ -275,8 +279,31 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                         <Link to="/settings/global" className="btn btn-outline-secondary btn-sm">Back to settings</Link>
                     )}
                     <Link to="/strategy" className="btn btn-outline-primary btn-sm">Open Strategy editor</Link>
+                    <button
+                        type="button"
+                        id="create-strategy-open"
+                        className="btn btn-primary btn-sm"
+                        disabled={busy}
+                        onClick={() => setShowCreate(true)}
+                    >
+                        Create Strategy
+                    </button>
                 </div>
             </div>
+
+            <CreateStrategyPanel
+                open={showCreate}
+                disabled={busy}
+                onClose={() => setShowCreate(false)}
+                onCreated={async (created) => {
+                    setShowCreate(false);
+                    const id = createdStrategyId(created);
+                    await load();
+                    if (id) {
+                        navigate(`/strategy?strategy_id=${encodeURIComponent(id)}`);
+                    }
+                }}
+            />
 
             <div className="card">
                 <div className="card-body">
@@ -394,6 +421,9 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                                                 >
                                                     Export
                                                 </button>
+                                                <Link to={`/strategy?strategy_id=${encodeURIComponent(id)}`} className="btn btn-outline-primary btn-sm">
+                                                    Edit
+                                                </Link>
                                                 {!selected && (
                                                     <button
                                                         type="button"
@@ -404,20 +434,18 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                                                         Enable
                                                     </button>
                                                 )}
-                                                {selected && (
-                                                    <>
-                                                        <Link to={`/strategy?strategy_id=${encodeURIComponent(id)}`} className="btn btn-outline-primary btn-sm">
-                                                            Edit
-                                                        </Link>
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-outline-secondary btn-sm"
-                                                            disabled={busy}
-                                                            onClick={() => onArchive(row)}
-                                                        >
-                                                            Archive
-                                                        </button>
-                                                    </>
+                                                {m.status !== 'archived' && (
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-outline-secondary btn-sm"
+                                                        disabled={busy || (selected && enabledCount <= 1)}
+                                                        title={selected && enabledCount <= 1
+                                                            ? 'Enable another strategy before archiving the last enabled one'
+                                                            : 'Archive this strategy'}
+                                                        onClick={() => onArchive(row)}
+                                                    >
+                                                        Archive
+                                                    </button>
                                                 )}
                                             </div>
                                         </td>

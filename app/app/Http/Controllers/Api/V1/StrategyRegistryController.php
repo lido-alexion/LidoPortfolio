@@ -83,6 +83,23 @@ class StrategyRegistryController extends Controller
             return ApiEnvelope::error('NO_PORTFOLIO', 'Active portfolio required.', 422);
         }
         try {
+            $hasDefinition = is_array($request->input('definition'))
+                || is_array($request->input('artifact'));
+            $name = trim((string) $request->input('name', ''));
+            if ($name !== '' && ! $hasDefinition) {
+                $validated = $request->validate([
+                    'name' => 'required|string|max:120',
+                    'description' => 'nullable|string|max:2000',
+                ]);
+                $created = $this->registry->createFromDefault(
+                    $profile,
+                    $validated['name'],
+                    $validated['description'] ?? null,
+                );
+
+                return ApiEnvelope::success($created, [], 201);
+            }
+
             $envelope = $request->all();
             $envelope['artifact_type'] = ArtifactType::STRATEGY;
             $created = $this->registry->create($envelope, $profile);

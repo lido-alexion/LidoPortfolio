@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Strategy Registry — StoX docs</title>
-  <meta name="description" content="Import/export Strategy JSON artifacts — mandatory fields, uniqueness rules, eligibility refs, scoring_model weights, and Enable strategies (multiple may be enabled per portfolio).">
+  <meta name="description" content="Create, enable, archive, and import/export Strategy artifacts — multiple strategies may be enabled per portfolio.">
   <link rel="canonical" href="strategy-registry.html">
   <style>
     :root {
@@ -110,11 +110,11 @@
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Strategy Registry</h1>
       <p class="muted"><code>strategy-registry</code> · screen: <code>/strategy/registry</code></p>
-      <p>Import/export Strategy JSON artifacts — mandatory fields, uniqueness rules, eligibility refs, scoring_model weights, and Enable strategies (multiple may be enabled per portfolio).</p>
+      <p>Create, enable, archive, and import/export Strategy artifacts — multiple strategies may be enabled per portfolio.</p>
 
       <section class="panel">
         <h2>Overview</h2>
-        <p>The Strategy Registry turns portfolio strategies into reusable Trading Artifacts. A portfolio may have <strong>multiple enabled Strategies</strong> at once. The registry adds slug, metadata, artifact_version, definition_hash, and version history on top of the same config the Recommendation engine already uses.</p>
+        <p>The Strategy Registry is the V3 management surface for every strategy in the current portfolio. A portfolio may have <strong>multiple enabled Strategies</strong> at once. Use <strong>Create Strategy</strong> (name + optional description) to add a draft from the default factory configuration, then <strong>Enable</strong> it without disabling other enabled strategies. <strong>Archive</strong> disables generation for that strategy only. The registry also adds slug, metadata, artifact_version, definition_hash, and version history on top of the same config the Recommendation engine already uses.</p>
 <p>Export downloads the portable Trading Artifact JSON envelope. <strong>Validate</strong> checks the envelope. <strong>Import</strong> stays disabled until validation succeeds, then creates a <strong>draft</strong> — use <strong>Enable</strong> to turn it on without disabling other enabled strategies. Enabled rows show <strong>Allocation %</strong>. An <strong>Allocation</strong> editor (same PUT <code>/v1/capital/allocations</code> as Cash) lets you set percentages that must sum to 100.</p>
 <p>Existing Minervini (<code>momentum_factory</code>) migrates automatically to slug <code>momentum_strategy</code> with eligibility linked to <code>minervini_trend_template</code>.</p>
 <h2>Importing JSON — start here</h2>
@@ -890,6 +890,9 @@
       <section class="panel">
         <h2>Controls</h2>
         <dl class="doc-list">
+        <dt>Create Strategy</dt>
+        <dd>Name + optional description. Creates a draft from the default factory configuration (POST <code>/v1/strategy-registry</code>) and opens the editor. JSON import remains available for authored packs.</dd>
+    
         <dt>Search / filters</dt>
         <dd>Filter by status (active/draft/archived) and origin (factory/user).</dd>
     
@@ -903,7 +906,7 @@
         <dd>Edit enabled-strategy allocation % with a live sum; Save calls PUT /v1/capital/allocations (same as Cash). Client requires sum ≈ 100 before save; server errors are shown.</dd>
     
         <dt>Archive</dt>
-        <dd>Sets the strategy to archived without changing other enabled strategies. Past holdings/recommendations keep attribution.</dd>
+        <dd>Sets the strategy to archived without changing other enabled strategies. The last remaining enabled strategy cannot be archived until another is enabled. Past holdings/recommendations keep attribution.</dd>
     
         <dt>Export JSON</dt>
         <dd>Download the portable Trading Artifact envelope (schema_version, slug, name, metadata, definition with eligibility_sources + scoring_model, dependencies). Best template for a new import — includes thresholds/exits/gates when present.</dd>
@@ -918,7 +921,7 @@
         <dd>Download /docs/stox-trading-artifacts-ai-guide.md — consolidated Indicator + Screener + Strategy + Authoring + Cookbook Markdown for AI agents and offline authoring.</dd>
     
         <dt>Edit</dt>
-        <dd>Jump to /strategy?strategy_id=… to edit that strategy’s tabs and Save.</dd>
+        <dd>Jump to /strategy?strategy_id=… to edit that strategy’s tabs and Save. Available for every registry row, not only enabled strategies.</dd>
     
         <dt>Version history</dt>
         <dd>On detail for owned strategies, list definition snapshots and change notes. Draft definition-hash changes append versions; active editor Save remains in-place BC.</dd>

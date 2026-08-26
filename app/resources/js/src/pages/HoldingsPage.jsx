@@ -582,8 +582,10 @@ export default function HoldingsPage() {
                 <h1 className="h3 mb-1">Portfolio</h1>
                 <p className="text-muted small mb-0">
                     Manage existing holdings — allocation, returns, stops, and position actions.
-                    Stock discovery belongs on <Link to="/candidates">Discovery</Link>; research on{' '}
-                    <Link to="/watchlist">Watchlist</Link>.
+                    Research belongs on{' '}
+                    <Link to="/watchlist">Watchlist</Link>
+                    {' '}and{' '}
+                    <Link to="/explorer">Stock Explorer</Link>.
                 </p>
             </div>
         <div className="card">

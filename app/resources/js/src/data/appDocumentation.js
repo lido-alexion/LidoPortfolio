@@ -131,7 +131,7 @@ const APP_DOCUMENTATION_BASE = [
             + 'Cash              Money available               Balance, reserved, available investable\n'
             + 'Dashboard         Portfolio + market snapshot   Value, analytics — not the idea queue\n'
             + '```\n\n'
-            + 'Day-to-day: configure Screener + Strategy, act on Recommendations. Discovery (candidates + evaluation facts) still runs inside the pipeline — open it when inspecting or debugging.\n\n'
+            + 'Day-to-day: configure Screener + Strategy, act on Recommendations. Discovery (candidates + evaluation facts) still runs inside the pipeline — it is **not** in the Market sidebar. Open `/candidates` only when inspecting or debugging.\n\n'
             + 'How a stock becomes a recommendation:\n\n'
             + '```mermaid\n'
             + 'flowchart TD\n'
@@ -159,7 +159,7 @@ const APP_DOCUMENTATION_BASE = [
             {
                 name: 'Discovery optional to visit',
                 description:
-                    'You configure Screener + Strategy and act on Recommendations. Discovery still runs inside the decision pipeline (candidates → long-focused factor facts). Opening Discovery is optional unless you are inspecting or debugging. Evaluation scores live on the Discovery table (no separate Evaluations page).',
+                    'You configure Screener + Strategy and act on Recommendations. Discovery is not listed in the left Market navigation. It still runs inside the decision pipeline (candidates → long-focused factor facts). Opening `/candidates` is optional unless you are inspecting or debugging. Evaluation scores live on the Discovery table (no separate Evaluations page).',
             },
             {
                 name: 'Eligibility vs scoring vs ideas',
@@ -765,9 +765,10 @@ const APP_DOCUMENTATION_BASE = [
         title: 'Discovery',
         routeLabel: '/candidates',
         match: (p) => pathStarts(p, '/candidates') || pathStarts(p, '/evaluations'),
-        summary: 'Candidates from screeners and patterns, plus long-focused evaluation scores on one page.',
+        summary: 'Candidates from screeners and patterns, plus long-focused evaluation scores on one page (not in the Market sidebar).',
         overview:
-            'Discovery lists candidates from the Discovery Engine (Screeners + PatternScan), then the Evaluation Engine measures factor facts for those same rows. Score, confidence, and explanation appear in the Discovery table — there is no separate Evaluations page.\n\n'
+            'Discovery is **not** listed in the left Market navigation in V3. The page at `/candidates` remains for pipeline inspection. '
+            + 'Discovery lists candidates from the Discovery Engine (Screeners + PatternScan), then the Evaluation Engine measures factor facts for those same rows. Score, confidence, and explanation appear in the Discovery table — there is no separate Evaluations page.\n\n'
             + 'How Discovery and Evaluation link:\n\n'
             + '```mermaid\n'
             + 'flowchart TD\n'
@@ -891,10 +892,10 @@ const APP_DOCUMENTATION_BASE = [
         title: 'Strategy',
         routeLabel: '/strategy',
         match: (p) => pathStarts(p, '/strategy') && !pathStarts(p, '/strategy/registry'),
-        summary: 'A portfolio may enable multiple strategies — default Minervini; edit tabs and Save.',
+        summary: 'A portfolio may enable multiple strategies — create, enable, edit, and archive them from Registry or the editor.',
         overview:
-            'Strategy is your decision policy. A portfolio may have **multiple enabled strategies** at the same time. It starts with Minervini Strategy (Minervini Trend Template eligibility + momentum scoring). Edit any tab and Save — the editor still saves that strategy in place.\n\n'
-            + 'Use Strategy Registry (Trading sidebar or the editor link) to import/export JSON, validate packs, browse drafts, and **Enable** a definition for this portfolio without disabling other enabled strategies. The Strategy editor selector / `?strategy_id=` chooses which strategy to edit — not a database rule that only one strategy can be enabled. Strategies reference Screeners by slug / factory key — they never duplicate Screener condition trees.\n\n'
+            'Strategy is your decision policy. A portfolio may have **multiple enabled strategies** at the same time. It starts with Minervini Strategy (Minervini Trend Template eligibility + momentum scoring). Use **Create Strategy** (name + optional description) to add another from the default factory configuration as a draft, then **Enable** it without disabling others. Edit any tab and Save — the editor still saves that strategy in place.\n\n'
+            + 'Use Strategy Registry (Trading sidebar or the editor link) to create strategies, Enable/Archive them, import/export JSON, validate packs, and browse drafts. The Strategy editor selector / `?strategy_id=` chooses which strategy to edit — not a database rule that only one strategy can be enabled. Strategies reference Screeners by slug / factory key — they never duplicate Screener condition trees.\n\n'
             + '**AI Strategy Designer** (collapsible panel on this page) does **not** call an LLM. It builds a paste-ready prompt from your style/risk/complexity choices, copies it to the clipboard, and expects you to attach the StoX Trading Artifacts AI Authoring Guide in ChatGPT/Gemini/Claude/etc. Import the resulting Screener/Strategy JSON via the registries after Validate.\n\n'
             + 'Strategy does not invent stocks and does not rewrite Screener conditions. Screeners admit candidates; Strategy scores them, labels an action, applies portfolio/cash/market limits, and watches holdings for exits.\n\n'
             + 'Where do finished ideas appear?\n\n'
@@ -931,9 +932,19 @@ const APP_DOCUMENTATION_BASE = [
                     'Editing strategy dropdown lists strategies for this portfolio (enabled, draft, archived). Choosing one loads it via `?strategy_id=` — UI selection only; enabling a strategy does not disable others.',
             },
             {
+                name: 'Create Strategy',
+                description:
+                    'On Strategy and Strategy Registry. Enter a name and optional description; the app creates a draft from the default factory configuration (POST `/v1/strategy-registry`) and opens it in the editor. You do not paste JSON to create a normal strategy. Enable it when you want it to generate recommendations — other enabled strategies stay enabled.',
+            },
+            {
+                name: 'Enable / Archive (editor)',
+                description:
+                    'Enable turns the selected draft/archived strategy on without disabling others. Archive sets STATUS_ARCHIVED for the selected enabled strategy; siblings stay enabled. The last remaining enabled strategy cannot be archived until another is enabled. Past holdings/recommendations keep attribution.',
+            },
+            {
                 name: 'Strategy Registry',
                 description:
-                    'Open /strategy/registry (also listed under Trading in the sidebar) to export/import Strategy JSON, validate packs, and Enable strategies for this portfolio (multiple may be enabled).',
+                    'Open /strategy/registry (also listed under Trading in the sidebar) to create, Enable, Archive, export/import Strategy JSON, and validate packs. Multiple strategies may be enabled.',
             },
             {
                 name: 'General tab',
@@ -1052,12 +1063,12 @@ const APP_DOCUMENTATION_BASE = [
             {
                 name: 'Multiple enabled strategies',
                 description:
-                    'A portfolio may enable more than one strategy. Physical cash stays one pool; each enabled strategy has an allocation % of investable capital (Cash page; must sum to 100 to save). Defaults include Minervini Strategy. The editor `?strategy_id=` chooses which definition to edit. Save still updates that strategy in place.',
+                    'A portfolio may enable more than one strategy. Physical cash stays one pool; each enabled strategy has an allocation % of investable capital (Cash page; must sum to 100 to save). Defaults include Minervini Strategy. Create Strategy adds another from the factory defaults. The editor `?strategy_id=` chooses which definition to edit. Save still updates that strategy in place.',
             },
             {
                 name: 'Registry vs editor',
                 description:
-                    'Registry manages reusable JSON artifacts, drafts, and selection. The Strategy page edits the active portfolio strategy. Export never includes portfolio-local Screener ids — only slug / factory_key refs.',
+                    'Registry is the management surface: create from factory defaults, Enable, Archive, allocation %, and JSON import/export. The Strategy page edits one selected strategy. Export never includes portfolio-local Screener ids — only slug / factory_key refs.',
             },
             {
                 name: 'AI Strategy Designer',
@@ -1225,10 +1236,11 @@ const APP_DOCUMENTATION_BASE = [
         title: 'Strategy Registry',
         routeLabel: '/strategy/registry',
         match: (p) => pathStarts(p, '/strategy/registry') || pathStarts(p, '/settings/strategy-registry'),
-        summary: 'Import/export Strategy JSON artifacts — mandatory fields, uniqueness rules, eligibility refs, scoring_model weights, and Enable strategies (multiple may be enabled per portfolio).',
+        summary: 'Create, enable, archive, and import/export Strategy artifacts — multiple strategies may be enabled per portfolio.',
         overview:
-            'The Strategy Registry turns portfolio strategies into reusable Trading Artifacts. A portfolio may have **multiple enabled Strategies** at once. '
-            + 'The registry adds slug, metadata, artifact_version, definition_hash, and version history on top of the same config the Recommendation engine already uses.\n\n'
+            'The Strategy Registry is the V3 management surface for every strategy in the current portfolio. A portfolio may have **multiple enabled Strategies** at once. '
+            + 'Use **Create Strategy** (name + optional description) to add a draft from the default factory configuration, then **Enable** it without disabling other enabled strategies. **Archive** disables generation for that strategy only. '
+            + 'The registry also adds slug, metadata, artifact_version, definition_hash, and version history on top of the same config the Recommendation engine already uses.\n\n'
             + 'Export downloads the portable Trading Artifact JSON envelope. **Validate** checks the envelope. **Import** stays disabled until validation succeeds, then creates a **draft** — use **Enable** to turn it on without disabling other enabled strategies. '
             + 'Enabled rows show **Allocation %**. An **Allocation** editor (same PUT `/v1/capital/allocations` as Cash) lets you set percentages that must sum to 100.\n\n'
             + 'Existing Minervini (`momentum_factory`) migrates automatically to slug `momentum_strategy` with eligibility linked to `minervini_trend_template`.\n\n'
@@ -1410,16 +1422,17 @@ const APP_DOCUMENTATION_BASE = [
             + '\n'
             + STRATEGY_REGISTRY_GUIDE_EXTRAS,
         controls: [
+            { name: 'Create Strategy', description: 'Name + optional description. Creates a draft from the default factory configuration (POST `/v1/strategy-registry`) and opens the editor. JSON import remains available for authored packs.' },
             { name: 'Search / filters', description: 'Filter by status (active/draft/archived) and origin (factory/user).' },
             { name: 'Enable', description: 'Turn this strategy on for the portfolio. Other enabled strategies stay enabled. Success shows a toast. Recommendation generation runs independently for every enabled strategy.' },
             { name: 'Allocation % (list)', description: 'Enabled rows show the stored strategy allocation_pct (read-only in the table).' },
             { name: 'Allocation editor', description: 'Edit enabled-strategy allocation % with a live sum; Save calls PUT /v1/capital/allocations (same as Cash). Client requires sum ≈ 100 before save; server errors are shown.' },
-            { name: 'Archive', description: 'Sets the strategy to archived without changing other enabled strategies. Past holdings/recommendations keep attribution.' },
+            { name: 'Archive', description: 'Sets the strategy to archived without changing other enabled strategies. The last remaining enabled strategy cannot be archived until another is enabled. Past holdings/recommendations keep attribution.' },
             { name: 'Export JSON', description: 'Download the portable Trading Artifact envelope (schema_version, slug, name, metadata, definition with eligibility_sources + scoring_model, dependencies). Best template for a new import — includes thresholds/exits/gates when present.' },
             { name: 'Validate', description: 'Check pasted JSON against Trading Artifact Strategy rules. On success, a green “Validated successfully” cue appears above Validate/Import and the JSON result panel still shows details. Import stays disabled until this reports ok. Editing the JSON clears validation.' },
             { name: 'Import', description: 'Enabled only after successful Validate. Creates a draft strategy in this portfolio and shows a success toast (not an inline alert). Does not change Recommendations until Enable. Mandatory: schema_version, artifact_type, slug, name, metadata, definition.scoring_model with enabled weights = 100.' },
             { name: 'Download AI authoring guide (.md)', description: 'Download /docs/stox-trading-artifacts-ai-guide.md — consolidated Indicator + Screener + Strategy + Authoring + Cookbook Markdown for AI agents and offline authoring.' },
-            { name: 'Edit', description: 'Jump to /strategy?strategy_id=… to edit that strategy’s tabs and Save.' },
+            { name: 'Edit', description: 'Jump to /strategy?strategy_id=… to edit that strategy’s tabs and Save. Available for every registry row, not only enabled strategies.' },
             { name: 'Version history', description: 'On detail for owned strategies, list definition snapshots and change notes. Draft definition-hash changes append versions; active editor Save remains in-place BC.' },
         ],
         concepts: [

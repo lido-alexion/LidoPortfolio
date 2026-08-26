@@ -2,6 +2,7 @@
 
 namespace App\Services\Artifacts;
 
+use App\Engines\Strategy\FactoryMomentumStrategy;
 use App\Models\PortfolioProfile;
 use App\Models\TradingStrategy;
 use App\Models\TradingStrategyVersion;
@@ -133,6 +134,55 @@ final class StrategyArtifactRegistry implements ArtifactRegistryInterface
 
             return $this->project($strategy->fresh(), $version->fresh());
         });
+    }
+
+    /**
+     * Create a user strategy from the factory/default configuration (name + optional description).
+     * Stores as draft; Enable is a separate step. Does not change other strategies.
+     *
+     * @return array<string, mixed>
+     */
+    public function createFromDefault(PortfolioProfile $profile, string $name, ?string $description = null): array
+    {
+        $name = trim($name);
+        if ($name === '') {
+            throw new InvalidArgumentException('Strategy name is required.');
+        }
+
+        $this->strategies->ensureActive($profile);
+        $factory = TradingStrategy::query()
+            ->where('profile_id', $profile->id)
+            ->where('factory_key', FactoryMomentumStrategy::FACTORY_KEY)
+            ->first();
+        if (! $factory) {
+            throw new InvalidArgumentException('Default factory strategy is not available.');
+        }
+
+        $envelope = $this->exportOne((string) $factory->id, $profile);
+        unset($envelope['artifact_id'], $envelope['definition_hash'], $envelope['validation']);
+        $envelope['name'] = $name;
+        $envelope['slug'] = $this->support->uniqueSlug($profile, $this->support->slugify($name, null));
+        $meta = is_array($envelope['metadata'] ?? null) ? $envelope['metadata'] : [];
+        $desc = trim((string) ($description ?? ''));
+        $tags = is_array($meta['tags'] ?? null) ? $meta['tags'] : [];
+        $tags = array_values(array_filter(
+            $tags,
+            fn ($tag) => is_string($tag) && $tag !== 'factory' && $tag !== FactoryMomentumStrategy::FACTORY_KEY
+        ));
+        $envelope['metadata'] = array_merge($meta, [
+            'origin' => ArtifactOrigin::USER,
+            'factory_key' => null,
+            'status' => ArtifactStatus::DRAFT,
+            'description' => $desc,
+            'summary' => $desc !== '' ? $desc : (string) ($meta['summary'] ?? ''),
+            'is_enabled' => false,
+            'is_selected' => false,
+            'legacy_id' => null,
+            'legacy_version_id' => null,
+            'tags' => $tags,
+        ]);
+
+        return $this->create($envelope, $profile);
     }
 
     public function update(string $idOrSlug, array $envelope, ?PortfolioProfile $profile = null): array

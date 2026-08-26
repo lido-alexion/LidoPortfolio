@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Strategy — StoX docs</title>
-  <meta name="description" content="A portfolio may enable multiple strategies — default Minervini; edit tabs and Save.">
+  <meta name="description" content="A portfolio may enable multiple strategies — create, enable, edit, and archive them from Registry or the editor.">
   <link rel="canonical" href="strategy.html">
   <style>
     :root {
@@ -110,12 +110,12 @@
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Strategy</h1>
       <p class="muted"><code>strategy</code> · screen: <code>/strategy</code></p>
-      <p>A portfolio may enable multiple strategies — default Minervini; edit tabs and Save.</p>
+      <p>A portfolio may enable multiple strategies — create, enable, edit, and archive them from Registry or the editor.</p>
 
       <section class="panel">
         <h2>Overview</h2>
-        <p>Strategy is your decision policy. A portfolio may have <strong>multiple enabled strategies</strong> at the same time. It starts with Minervini Strategy (Minervini Trend Template eligibility + momentum scoring). Edit any tab and Save — the editor still saves that strategy in place.</p>
-<p>Use Strategy Registry (Trading sidebar or the editor link) to import/export JSON, validate packs, browse drafts, and <strong>Enable</strong> a definition for this portfolio without disabling other enabled strategies. The Strategy editor selector / <code>?strategy_id=</code> chooses which strategy to edit — not a database rule that only one strategy can be enabled. Strategies reference Screeners by slug / factory key — they never duplicate Screener condition trees.</p>
+        <p>Strategy is your decision policy. A portfolio may have <strong>multiple enabled strategies</strong> at the same time. It starts with Minervini Strategy (Minervini Trend Template eligibility + momentum scoring). Use <strong>Create Strategy</strong> (name + optional description) to add another from the default factory configuration as a draft, then <strong>Enable</strong> it without disabling others. Edit any tab and Save — the editor still saves that strategy in place.</p>
+<p>Use Strategy Registry (Trading sidebar or the editor link) to create strategies, Enable/Archive them, import/export JSON, validate packs, and browse drafts. The Strategy editor selector / <code>?strategy_id=</code> chooses which strategy to edit — not a database rule that only one strategy can be enabled. Strategies reference Screeners by slug / factory key — they never duplicate Screener condition trees.</p>
 <p><strong>AI Strategy Designer</strong> (collapsible panel on this page) does <strong>not</strong> call an LLM. It builds a paste-ready prompt from your style/risk/complexity choices, copies it to the clipboard, and expects you to attach the StoX Trading Artifacts AI Authoring Guide in ChatGPT/Gemini/Claude/etc. Import the resulting Screener/Strategy JSON via the registries after Validate.</p>
 <p>Strategy does not invent stocks and does not rewrite Screener conditions. Screeners admit candidates; Strategy scores them, labels an action, applies portfolio/cash/market limits, and watches holdings for exits.</p>
 <p>Where do finished ideas appear?</p>
@@ -152,8 +152,14 @@ flowchart TD
         <dt>Strategy selector</dt>
         <dd>Editing strategy dropdown lists strategies for this portfolio (enabled, draft, archived). Choosing one loads it via <code>?strategy_id=</code> — UI selection only; enabling a strategy does not disable others.</dd>
     
+        <dt>Create Strategy</dt>
+        <dd>On Strategy and Strategy Registry. Enter a name and optional description; the app creates a draft from the default factory configuration (POST <code>/v1/strategy-registry</code>) and opens it in the editor. You do not paste JSON to create a normal strategy. Enable it when you want it to generate recommendations — other enabled strategies stay enabled.</dd>
+    
+        <dt>Enable / Archive (editor)</dt>
+        <dd>Enable turns the selected draft/archived strategy on without disabling others. Archive sets STATUS_ARCHIVED for the selected enabled strategy; siblings stay enabled. The last remaining enabled strategy cannot be archived until another is enabled. Past holdings/recommendations keep attribution.</dd>
+    
         <dt>Strategy Registry</dt>
-        <dd>Open /strategy/registry (also listed under Trading in the sidebar) to export/import Strategy JSON, validate packs, and Enable strategies for this portfolio (multiple may be enabled).</dd>
+        <dd>Open /strategy/registry (also listed under Trading in the sidebar) to create, Enable, Archive, export/import Strategy JSON, and validate packs. Multiple strategies may be enabled.</dd>
     
         <dt>General tab</dt>
         <dd>Name — label for your strategy (default: Minervini Strategy).
@@ -259,10 +265,10 @@ Save — writes the current config in place. After Save, run the pipeline from R
         <dd>horizon_calendar_days and first_entry_pct are strategy configuration (this page). Portfolio Stop-Loss %, Portfolio Trailing Stop %, and cash reserve stay under Settings. The 1-day BUY cooldown is not a Strategy-page control.</dd>
     
         <dt>Multiple enabled strategies</dt>
-        <dd>A portfolio may enable more than one strategy. Physical cash stays one pool; each enabled strategy has an allocation % of investable capital (Cash page; must sum to 100 to save). Defaults include Minervini Strategy. The editor <code>?strategy_id=</code> chooses which definition to edit. Save still updates that strategy in place.</dd>
+        <dd>A portfolio may enable more than one strategy. Physical cash stays one pool; each enabled strategy has an allocation % of investable capital (Cash page; must sum to 100 to save). Defaults include Minervini Strategy. Create Strategy adds another from the factory defaults. The editor <code>?strategy_id=</code> chooses which definition to edit. Save still updates that strategy in place.</dd>
     
         <dt>Registry vs editor</dt>
-        <dd>Registry manages reusable JSON artifacts, drafts, and selection. The Strategy page edits the active portfolio strategy. Export never includes portfolio-local Screener ids — only slug / factory_key refs.</dd>
+        <dd>Registry is the management surface: create from factory defaults, Enable, Archive, allocation %, and JSON import/export. The Strategy page edits one selected strategy. Export never includes portfolio-local Screener ids — only slug / factory_key refs.</dd>
     
         <dt>AI Strategy Designer</dt>
         <dd>Prompt builder only — no in-app LLM. Generated text instructs an external assistant to obey the StoX AI Authoring Guide / Contract. You still Validate and Import JSON via Screener Registry and Strategy Registry.</dd>

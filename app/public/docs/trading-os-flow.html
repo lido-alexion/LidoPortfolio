@@ -128,7 +128,7 @@ Review            Outcomes                      How ideas performed after decisi
 Cash              Money available               Balance, reserved, available investable
 Dashboard         Portfolio + market snapshot   Value, analytics — not the idea queue
 </code></pre>
-<p>Day-to-day: configure Screener + Strategy, act on Recommendations. Discovery (candidates + evaluation facts) still runs inside the pipeline — open it when inspecting or debugging.</p>
+<p>Day-to-day: configure Screener + Strategy, act on Recommendations. Discovery (candidates + evaluation facts) still runs inside the pipeline — it is <strong>not</strong> in the Market sidebar. Open <code>/candidates</code> only when inspecting or debugging.</p>
 <p>How a stock becomes a recommendation:</p>
 <pre><code>(mermaid diagram)
 flowchart TD
@@ -167,7 +167,7 @@ flowchart TD
         <h2>Concepts</h2>
         <dl class="doc-list">
         <dt>Discovery optional to visit</dt>
-        <dd>You configure Screener + Strategy and act on Recommendations. Discovery still runs inside the decision pipeline (candidates → long-focused factor facts). Opening Discovery is optional unless you are inspecting or debugging. Evaluation scores live on the Discovery table (no separate Evaluations page).</dd>
+        <dd>You configure Screener + Strategy and act on Recommendations. Discovery is not listed in the left Market navigation. It still runs inside the decision pipeline (candidates → long-focused factor facts). Opening <code>/candidates</code> is optional unless you are inspecting or debugging. Evaluation scores live on the Discovery table (no separate Evaluations page).</dd>
     
         <dt>Eligibility vs scoring vs ideas</dt>
         <dd>Screener admits; Discovery/Evaluation measures (long-focused); Strategy scores and filters; Recommendations is where you act.</dd>

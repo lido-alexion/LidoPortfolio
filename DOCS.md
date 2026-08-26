@@ -331,7 +331,7 @@ Hub: [specs/architecture/governance/README.md](specs/architecture/governance/REA
 
 ### 3.N Lido Portfolio V3 (specification)
 
-*Authoritative V3 product + architecture specification (**v0.28**). Implementation status (2026-08-26 strict closure): **V3 STRICTLY COMPLETE** — living detail in [`implementation.md`](implementation.md). Genuine new V4 work and unspecified product/spec decisions only are tracked in [`specs/LidoPortfolio-V4-Wishlist.md`](specs/LidoPortfolio-V4-Wishlist.md). Supersedes V1 one-active-strategy (SD-029) and unfunded→WATCH for V3 work. Frozen OD/DEP decisions are in the document §33.*
+*Authoritative V3 product + architecture specification (**v0.28**). Implementation status (2026-08-26): **V3 STRICTLY COMPLETE**, including post-deploy product-surface closure (Discovery removed from the Market sidebar; strategy Create / Enable / Archive for multiple concurrent strategies). Living detail in [`implementation.md`](implementation.md). Genuine new V4 work and unspecified product/spec decisions only are tracked in [`specs/LidoPortfolio-V4-Wishlist.md`](specs/LidoPortfolio-V4-Wishlist.md). Supersedes V1 one-active-strategy (SD-029) and unfunded→WATCH for V3 work. Frozen OD/DEP decisions are in the document §33.*
 
 | Order | Document | Why |
 |------:|----------|-----|

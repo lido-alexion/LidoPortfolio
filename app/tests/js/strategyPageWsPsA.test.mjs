@@ -115,6 +115,15 @@ test('Strategy Registry exposes allocation % editor and sum-100 save', () => {
     assert.match(registry, /allocSumIs100/);
 });
 
+test('Strategy Registry exposes Create Strategy and Archive for sibling strategies', () => {
+    assert.match(registry, /id="create-strategy-open"/);
+    assert.match(registry, /Create Strategy/);
+    assert.match(registry, /CreateStrategyPanel/);
+    assert.match(registry, /Archive this strategy\?/);
+    assert.match(registry, /last enabled/);
+    assert.match(registry, /to=\{`\/strategy\?strategy_id=/);
+});
+
 test('help docs no longer describe Strategy Cash Management or V1 max_loss/trailing as Strategy exits', () => {
     assert.doesNotMatch(docs, /name: 'Cash Management tab'/);
     assert.doesNotMatch(docs, /strategy-specific V1 proxy inside Exit Strategy/);

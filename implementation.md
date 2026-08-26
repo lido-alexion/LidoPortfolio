@@ -32,6 +32,36 @@ Specs under `specs/` define a seven-engine decision platform. Implementation evo
 
 **Documentation map:** Repository-wide reading order and file tree — [`DOCS.md`](DOCS.md). Specs subtree — [`specs/README.md`](specs/README.md). Architecture hub (domain folders) — [`specs/architecture/README.md`](specs/architecture/README.md). For full ingest: requirements/architecture → governance → audit → this file. New Markdown docs must be indexed in `DOCS.md` (rule: `.cursor/rules/Keep-DOCS-md-ingestion-tree-updated.mdc`).
 
+## V3 product-surface closure — Discovery nav + strategy lifecycle (2026-08-26)
+
+**Status:** **DONE**. Product-surface / strategy-lifecycle only. Does **not** redesign WS2–WS4, §34.3–§34.4, OD-10/17, §10.4/§10.5, B4, or broker.
+
+Post-deployment verification found Discovery still in the Market sidebar and no practical Create / Archive path for a second strategy, so multiple enabled strategies were not usable from the UI.
+
+### A. Discovery navigation
+
+- Catalog entry `id: 'discovery'` (`/candidates`) remains for direct routes, breadcrumbs, and pipeline inspection.
+- **Removed from the left Market sidebar:** `showInSidebar: false`, `favouriteEligible: false` (not a runtime hide).
+- Market still lists Stock Explorer, Patterns, Indices, Calendar, Market Depth.
+- Recommendations toolbar no longer promotes Discovery as a workflow tab.
+
+### B. Multi-strategy user journey
+
+`CREATE → ENABLE → EDIT/SELECT → RUN CONCURRENTLY → ARCHIVE`
+
+- **Create:** `POST /api/v1/strategy-registry` with `{name, description}` (no JSON) clones the factory/default configuration via `StrategyArtifactRegistry::createFromDefault`. Stores a **draft** (`STATUS_DRAFT`), unique slug, `origin=user`, no `factory_key`. UI **Create Strategy** on Strategy Registry and the Strategy editor opens the new draft in the editor.
+- **Enable:** existing `POST /api/v1/strategy-registry/{id}/activate` — non-exclusive.
+- **Edit/select:** editor selector + `?strategy_id=` / `PUT` `strategy_id`. Edit is available for every registry row.
+- **Archive:** existing `POST /api/v1/strategy-registry/{id}/archive` (status transition, not physical delete). UI label is **Archive**. Archiving one strategy does not change siblings. **Cannot archive the last enabled strategy** (API 422 + UI disable) so `ensureActive` does not silently resurrect the factory.
+- Registry is the management surface: all portfolio strategies, status, Create, Edit, Enable, Archive, allocation %. Copy no longer implies exclusive activation.
+- JSON import/validate remains for authored packs; it is not required to create a normal strategy.
+
+### Tests / docs
+
+- PHP: `StrategyRegistryApiTest` create-from-default, two distinct records both enabled, edit B does not modify A, archive sibling, last-enabled archive rejected.
+- JS: `tests/js/v3ProductSurface.test.mjs` + `strategyPageWsPsA.test.mjs` (WS-PS-A intact).
+- Help: `appDocumentation.js` Create Strategy / Archive / Discovery-not-in-sidebar. Sidebar spec notes Discovery as an internal route.
+
 ## V3 §5.7 configurable lending limits (2026-08-26)
 
 **Status:** **DONE**. Narrow AFL portfolio caps only. Does **not** redesign OD-19/20/21/24, lender ranking, or loan approval beyond reading already-capped `available_for_lending`.
@@ -181,7 +211,7 @@ Unfunded OPEN/INCREASE remain `isActionable()` and **must not** inherit HOLD/WAT
 
 ### Explicitly not in this workstream
 
-- Discovery nav, opportunity-cost UI, minimum actionable BUY UI, disable/archive API, WS2–WS4, B4, broker. (OD-16 window UI delivered in V3 strict closure.)
+- Discovery nav, opportunity-cost UI, minimum actionable BUY UI, disable/archive API, WS2–WS4, B4, broker. (OD-16 window UI delivered in V3 strict closure. Discovery nav + Create/Archive UI delivered in the later V3 product-surface closure.)
 
 ### Tests
 
@@ -277,7 +307,7 @@ Completion criterion (product owner, 2026-08-26 strict pass): every normative V3
 | V3-GAP-04 | Opportunity-cost rate (§19/§28/§29) | A | Portfolio setting + `SuccessCriteriaEvaluator` + persist `is_success` on closed backtest trades |
 | V3-GAP-05 | Portfolio caps / lending policy | A/B | `portfolio_max_position_pct`; §5.7 `max_lending_pct_of_unused` / `max_lending_absolute`; OD-06 policy display |
 | V3-GAP-06 | Legacy strategy cash % | A | Stop factory seed; stop backtest apply; dead pipeline assigns removed |
-| V3-GAP-07 | Discovery nav | C | **Retained** — V3 does not require removal |
+| V3-GAP-07 | Discovery nav | C | **Removed from Market sidebar** (`showInSidebar: false`); `/candidates` remains |
 | V3-GAP-08 | Allocation % editor on Registry (§29) | A | Registry sum-100 editor (Cash editor kept) |
 | V3-GAP-09 | Recs capital_status list + lender UX | A | List badges + select/approve/reject via existing APIs |
 | V3-GAP-10 | BUY cooldown display | B | Read-only OD-11 copy on Strategy Portfolio Rules |
@@ -296,7 +326,7 @@ Completion criterion (product owner, 2026-08-26 strict pass): every normative V3
 | OD-10 CA parent-owner quantity | COMPLETE |
 | OD-17 history depth / charts | COMPLETE |
 | §10.4 adoption / §10.5 backfill | COMPLETE |
-| §29 product surfaces (registry, settings, capital badges, archive) | COMPLETE |
+| §29 product surfaces (registry, settings, capital badges, archive, **create-from-default**, Discovery-not-in-sidebar) | COMPLETE |
 
 ### True V4 / out-of-V3 only (not V3 gaps)
 

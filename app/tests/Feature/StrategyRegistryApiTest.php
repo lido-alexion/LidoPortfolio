@@ -263,4 +263,143 @@ class StrategyRegistryApiTest extends TestCase
         $imported = TradingStrategy::query()->where('id', $created['artifact_id'])->firstOrFail();
         $this->assertSame(TradingStrategy::STATUS_ACTIVE, $imported->status);
     }
+
+    public function test_create_from_default_produces_distinct_draft_without_json(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+
+        $this->actingAs($user)->getJson('/api/v1/strategy-registry')->assertOk();
+
+        $factory = TradingStrategy::query()
+            ->where('profile_id', $profile->id)
+            ->where('factory_key', FactoryMomentumStrategy::FACTORY_KEY)
+            ->firstOrFail();
+
+        $created = $this->actingAs($user)
+            ->postJson('/api/v1/strategy-registry', [
+                'name' => 'Strategy B',
+                'description' => 'Second concurrent strategy',
+            ])
+            ->assertCreated()
+            ->json('data');
+
+        $this->assertNotEquals($factory->id, (int) $created['artifact_id']);
+        $this->assertSame('Strategy B', $created['name']);
+        $this->assertSame('draft', $created['metadata']['status']);
+        $this->assertSame('user', $created['metadata']['origin']);
+        $this->assertNull($created['metadata']['factory_key']);
+        $this->assertFalse((bool) ($created['metadata']['is_enabled'] ?? false));
+        $this->assertSame('Second concurrent strategy', $created['metadata']['description']);
+
+        $row = TradingStrategy::query()->whereKey($created['artifact_id'])->firstOrFail();
+        $this->assertSame($profile->id, $row->profile_id);
+        $this->assertSame(TradingStrategy::STATUS_DRAFT, $row->status);
+        $this->assertFalse((bool) $row->is_factory);
+        $this->assertNull($row->factory_key);
+        $this->assertSame(1, TradingStrategy::query()
+            ->where('profile_id', $profile->id)
+            ->where('status', TradingStrategy::STATUS_ACTIVE)
+            ->count());
+    }
+
+    public function test_two_created_strategies_can_be_enabled_and_editing_one_does_not_modify_the_other(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        $this->actingAs($user);
+
+        $this->getJson('/api/v1/strategy-registry')->assertOk();
+
+        $factory = TradingStrategy::query()
+            ->where('profile_id', $profile->id)
+            ->where('factory_key', FactoryMomentumStrategy::FACTORY_KEY)
+            ->firstOrFail();
+        $factoryName = $factory->name;
+
+        $b = $this->postJson('/api/v1/strategy-registry', ['name' => 'Strategy B'])
+            ->assertCreated()
+            ->json('data');
+        $c = $this->postJson('/api/v1/strategy-registry', ['name' => 'Strategy C'])
+            ->assertCreated()
+            ->json('data');
+
+        $this->assertNotEquals($b['artifact_id'], $c['artifact_id']);
+        $this->assertSame(3, TradingStrategy::query()->where('profile_id', $profile->id)->count());
+
+        $this->postJson('/api/v1/strategy-registry/'.$b['artifact_id'].'/activate')
+            ->assertOk()
+            ->assertJsonPath('data.metadata.status', 'active');
+        $this->postJson('/api/v1/strategy-registry/'.$c['artifact_id'].'/activate')
+            ->assertOk()
+            ->assertJsonPath('data.metadata.status', 'active');
+
+        $this->assertSame(
+            3,
+            TradingStrategy::query()->where('profile_id', $profile->id)->where('status', TradingStrategy::STATUS_ACTIVE)->count()
+        );
+        $this->getJson('/api/v1/strategy-registry/selection')
+            ->assertOk()
+            ->assertJsonPath('data.rule', 'multiple_enabled_per_portfolio')
+            ->assertJsonPath('data.enabled_count', 3);
+
+        $payloadB = $this->getJson('/api/v1/strategy?strategy_id='.$b['artifact_id'])
+            ->assertOk()
+            ->json('data');
+        $configB = $payloadB['config'];
+        $configB['thresholds']['open_position'] = 77.0;
+
+        $this->putJson('/api/v1/strategy', [
+            'strategy_id' => (int) $b['artifact_id'],
+            'name' => 'Strategy B edited',
+            'description' => $payloadB['description'] ?? '',
+            'config' => $configB,
+        ])->assertOk();
+
+        $savedB = $this->getJson('/api/v1/strategy?strategy_id='.$b['artifact_id'])->assertOk()->json('data');
+        $savedA = $this->getJson('/api/v1/strategy?strategy_id='.$factory->id)->assertOk()->json('data');
+        $savedC = $this->getJson('/api/v1/strategy?strategy_id='.$c['artifact_id'])->assertOk()->json('data');
+
+        $this->assertSame('Strategy B edited', $savedB['name']);
+        $this->assertEqualsWithDelta(77.0, (float) $savedB['thresholds']['open_position'], 0.0001);
+        $this->assertSame($factoryName, $savedA['name']);
+        $this->assertNotEquals(77.0, (float) $savedA['thresholds']['open_position']);
+        $this->assertSame('Strategy C', $savedC['name']);
+
+        $this->postJson('/api/v1/strategy-registry/'.$b['artifact_id'].'/archive')
+            ->assertOk()
+            ->assertJsonPath('data.metadata.status', 'archived');
+
+        $factory->refresh();
+        $this->assertSame(TradingStrategy::STATUS_ACTIVE, $factory->status);
+        $this->assertSame(
+            TradingStrategy::STATUS_ACTIVE,
+            TradingStrategy::query()->whereKey($c['artifact_id'])->value('status')
+        );
+        $this->assertSame(
+            TradingStrategy::STATUS_ARCHIVED,
+            TradingStrategy::query()->whereKey($b['artifact_id'])->value('status')
+        );
+    }
+
+    public function test_cannot_archive_the_last_enabled_strategy(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+
+        $this->actingAs($user)->getJson('/api/v1/strategy-registry')->assertOk();
+
+        $factory = TradingStrategy::query()
+            ->where('profile_id', $profile->id)
+            ->where('factory_key', FactoryMomentumStrategy::FACTORY_KEY)
+            ->firstOrFail();
+
+        $this->actingAs($user)
+            ->postJson('/api/v1/strategy-registry/'.$factory->id.'/archive')
+            ->assertStatus(422)
+            ->assertJsonPath('error.code', 'STRATEGY_ARCHIVE_FAILED');
+
+        $factory->refresh();
+        $this->assertSame(TradingStrategy::STATUS_ACTIVE, $factory->status);
+    }
 }

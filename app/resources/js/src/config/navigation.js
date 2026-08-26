@@ -305,8 +305,10 @@ export const NAVIGATION_CATALOG = [
         parent: 'group-market',
         children: null,
         badge: null,
-        showInSidebar: true,
-        favouriteEligible: true,
+        // V3: Discovery is not part of the recommendation workflow sidebar.
+        // Direct /candidates remains for pipeline inspection.
+        showInSidebar: false,
+        favouriteEligible: false,
         kind: 'page',
         permission: null,
         match: (p) => pathStartsWith(p, ROUTES.CANDIDATES) || pathStartsWith(p, ROUTES.EVALUATIONS),

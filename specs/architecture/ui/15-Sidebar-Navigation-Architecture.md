@@ -76,6 +76,8 @@ Each catalog entry is a flat **NavItem**:
 
 **Internal routes** (editors, registries, settings tools) stay in the catalog with `showInSidebar: false` so breadcrumbs/titles/active-parent highlighting work without listing them in the sidebar.
 
+**V3 Discovery:** `id: 'discovery'` (`/candidates`) remains in the catalog for direct routes and breadcrumbs, but `showInSidebar: false` and `favouriteEligible: false`. It is **not** part of the Market sidebar. Market still lists Stock Explorer, Patterns, Indices, Calendar, and Market Depth.
+
 ---
 
 ## 3. How to add a page

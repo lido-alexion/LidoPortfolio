@@ -103,6 +103,7 @@ Notification channel interface (old V4-TD-005) is covered by **V4-FEAT-004**.
 | V4-BUG-003 | **FIXED** in V3 closure — max position enforced |
 | V4-BUG-004 | **FIXED** — `DailyMarketDataJobTest` no longer uses RefreshDatabase |
 | V4-UX-001 | **IMPLEMENTED IN V3** — Strategy Portfolio Rules OD-16 window control |
+| Discovery sidebar / strategy create-archive UI | **IMPLEMENTED IN V3** (2026-08-26 product-surface closure) — not V4 |
 | V4-UX-002 | Duplicate of FEAT-003 (B4) — kept only as FEAT-003 |
 | V4-UX-003 | Blocked presentation of SPEC-004 — no separate UX row |
 | V4-TD-001–016 | Reclassified to FEAT-021+ or FEAT-004 / docs; none remain as open V3 debt |
@@ -141,6 +142,7 @@ An item may be marked **COMPLETE** only when: frozen decision (if SPEC), product
 | 2026-08-25 | Initial register from Final V3 Completion Audit + backlog packs |
 | 2026-08-26 | V4-BUG-001 fixed; V4-BUG-003 marked complete |
 | 2026-08-26 | **Strict closure rewrite:** removed open V3 bugs/TD/UX/HIST from active backlog; OD-16 UI + DailyMarketDataJobTest fixed in V3; former TD/UX rows folded into genuine V4 FEAT or SPEC only |
+| 2026-08-26 | V3 product-surface closure: Discovery removed from Market sidebar; strategy Create-from-factory + Archive UI completed in V3 (not added to this register) |
 
 ## Appendix — Former ID map
 

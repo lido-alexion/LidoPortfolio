@@ -96,7 +96,7 @@ export const DOC_PRESENTATION = {
         ],
         behindTheScenes: {
             summary:
-                'Day-to-day you configure Screener + Strategy and act on Recommendations. Discovery (candidates + evaluation) still runs inside the pipeline.',
+                'Day-to-day you configure Screener + Strategy and act on Recommendations. Discovery is not in the Market sidebar; it still runs inside the pipeline.',
             mermaid: `flowchart TD
   A[Screener hits] --> B[Discovery candidates]
   B --> C[Evaluation facts on Discovery]
@@ -121,7 +121,7 @@ export const DOC_PRESENTATION = {
             },
             {
                 q: 'Do I need to open Discovery?',
-                a: 'Usually no. Candidates and evaluation facts still run in the pipeline; open Discovery when inspecting. There is no separate Evaluations page.',
+                a: 'Usually no — and it is not in the left Market navigation. Candidates and evaluation facts still run in the pipeline; open /candidates only when inspecting. There is no separate Evaluations page.',
             },
         ],
     },
@@ -517,7 +517,7 @@ export const DOC_PRESENTATION = {
         callouts: [
             {
                 variant: 'info',
-                body: 'Opening this tab is optional. Discovery and evaluation still run inside the decision pipeline. /evaluations redirects here.',
+                body: 'Discovery is not in the Market sidebar. The /candidates page remains for inspection. Discovery and evaluation still run inside the decision pipeline. /evaluations redirects here.',
             },
             {
                 variant: 'important',

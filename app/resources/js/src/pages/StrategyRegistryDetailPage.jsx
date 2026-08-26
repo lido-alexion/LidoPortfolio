@@ -74,6 +74,23 @@ export default function StrategyRegistryDetailPage({ adminMode = false }) {
         }
     };
 
+    const onArchive = async () => {
+        if (!window.confirm(
+            'Archive this strategy? It will stop generating recommendations. Other enabled strategies stay enabled. Past holdings/recommendations keep their attribution.',
+        )) return;
+        setBusy(true);
+        setError('');
+        try {
+            await api.post(`/v1/strategy-registry/${encodeURIComponent(id)}/archive`);
+            showToast('Strategy archived.');
+            await load();
+        } catch (err) {
+            setError(err?.response?.data?.error?.message || err.message || 'Archive failed');
+        } finally {
+            setBusy(false);
+        }
+    };
+
     const meta = env?.metadata || {};
     const selected = !!meta.is_enabled || !!meta.is_selected || meta.status === 'active';
 
@@ -89,12 +106,20 @@ export default function StrategyRegistryDetailPage({ adminMode = false }) {
                 </div>
                 <div className="d-flex flex-wrap gap-2">
                     <Link to={basePath} className="btn btn-outline-secondary btn-sm">Back to registry</Link>
-                    {selected && (
-                        <Link to={`/strategy?strategy_id=${encodeURIComponent(id)}`} className="btn btn-outline-primary btn-sm">Open editor</Link>
-                    )}
+                    <Link to={`/strategy?strategy_id=${encodeURIComponent(id)}`} className="btn btn-outline-primary btn-sm">Open editor</Link>
                     {!selected && (
                         <button type="button" className="btn btn-primary btn-sm" disabled={busy || !env} onClick={onActivate}>
                             Enable
+                        </button>
+                    )}
+                    {selected && (
+                        <button
+                            type="button"
+                            className="btn btn-outline-secondary btn-sm"
+                            disabled={busy || !env}
+                            onClick={onArchive}
+                        >
+                            Archive
                         </button>
                     )}
                     <button type="button" className="btn btn-outline-secondary btn-sm" onClick={onExport} disabled={!env}>
@@ -116,7 +141,7 @@ export default function StrategyRegistryDetailPage({ adminMode = false }) {
                                 <dt className="col-sm-3">Summary</dt>
                                 <dd className="col-sm-9">{meta.summary || meta.description || '—'}</dd>
                                 <dt className="col-sm-3">Status / origin</dt>
-                                <dd className="col-sm-9">{meta.status || '—'} · {meta.origin || '—'} · {selected ? 'selected' : 'not selected'}</dd>
+                                <dd className="col-sm-9">{meta.status || '—'} · {meta.origin || '—'} · {selected ? 'enabled' : 'not enabled'}</dd>
                                 <dt className="col-sm-3">Definition hash</dt>
                                 <dd className="col-sm-9"><code className="small">{env.definition_hash || '—'}</code></dd>
                                 <dt className="col-sm-3">Tags</dt>

@@ -4,7 +4,7 @@
 
 > **Audience:** AI agents and developers authoring portable Indicator / Screener / Strategy JSON **without** reading application source code.
 >
-> **Generated:** 2026-08-26T11:22:43.853Z
+> **Generated:** 2026-08-26T12:01:47.492Z
 > **Deploy download:** `/docs/stox-trading-artifacts-ai-guide.md` (also linked from Screener Registry and Strategy Registry).
 > **Repo copy:** `specs/architecture/domains/StoX-Trading-Artifacts-AI-Guide.md`
 
@@ -1208,11 +1208,11 @@ Practical tip: treat this page as one step in a larger workflow, not an isolated
 **Keyword:** `strategy-registry`
 **Aliases:** `strategy-artifacts`, `strategy-json`, `import-strategy`, `select-strategy`
 
-**Summary:** Import/export Strategy JSON artifacts — mandatory fields, uniqueness rules, eligibility refs, scoring_model weights, and Enable strategies (multiple may be enabled per portfolio).
+**Summary:** Create, enable, archive, and import/export Strategy artifacts — multiple strategies may be enabled per portfolio.
 
 **UI / docs route label:** `/strategy/registry`
 
-The Strategy Registry turns portfolio strategies into reusable Trading Artifacts. A portfolio may have **multiple enabled Strategies** at once. The registry adds slug, metadata, artifact_version, definition_hash, and version history on top of the same config the Recommendation engine already uses.
+The Strategy Registry is the V3 management surface for every strategy in the current portfolio. A portfolio may have **multiple enabled Strategies** at once. Use **Create Strategy** (name + optional description) to add a draft from the default factory configuration, then **Enable** it without disabling other enabled strategies. **Archive** disables generation for that strategy only. The registry also adds slug, metadata, artifact_version, definition_hash, and version history on top of the same config the Recommendation engine already uses.
 
 Export downloads the portable Trading Artifact JSON envelope. **Validate** checks the envelope. **Import** stays disabled until validation succeeds, then creates a **draft** — use **Enable** to turn it on without disabling other enabled strategies. Enabled rows show **Allocation %**. An **Allocation** editor (same PUT `/v1/capital/allocations` as Cash) lets you set percentages that must sum to 100.
 
@@ -1722,16 +1722,17 @@ Practical tip: treat this page as one step in a larger workflow, not an isolated
 
 ### Controls
 
+- **Create Strategy** — Name + optional description. Creates a draft from the default factory configuration (POST `/v1/strategy-registry`) and opens the editor. JSON import remains available for authored packs.
 - **Search / filters** — Filter by status (active/draft/archived) and origin (factory/user).
 - **Enable** — Turn this strategy on for the portfolio. Other enabled strategies stay enabled. Success shows a toast. Recommendation generation runs independently for every enabled strategy.
 - **Allocation % (list)** — Enabled rows show the stored strategy allocation_pct (read-only in the table).
 - **Allocation editor** — Edit enabled-strategy allocation % with a live sum; Save calls PUT /v1/capital/allocations (same as Cash). Client requires sum ≈ 100 before save; server errors are shown.
-- **Archive** — Sets the strategy to archived without changing other enabled strategies. Past holdings/recommendations keep attribution.
+- **Archive** — Sets the strategy to archived without changing other enabled strategies. The last remaining enabled strategy cannot be archived until another is enabled. Past holdings/recommendations keep attribution.
 - **Export JSON** — Download the portable Trading Artifact envelope (schema_version, slug, name, metadata, definition with eligibility_sources + scoring_model, dependencies). Best template for a new import — includes thresholds/exits/gates when present.
 - **Validate** — Check pasted JSON against Trading Artifact Strategy rules. On success, a green “Validated successfully” cue appears above Validate/Import and the JSON result panel still shows details. Import stays disabled until this reports ok. Editing the JSON clears validation.
 - **Import** — Enabled only after successful Validate. Creates a draft strategy in this portfolio and shows a success toast (not an inline alert). Does not change Recommendations until Enable. Mandatory: schema_version, artifact_type, slug, name, metadata, definition.scoring_model with enabled weights = 100.
 - **Download AI authoring guide (.md)** — Download /docs/stox-trading-artifacts-ai-guide.md — consolidated Indicator + Screener + Strategy + Authoring + Cookbook Markdown for AI agents and offline authoring.
-- **Edit** — Jump to /strategy?strategy_id=… to edit that strategy’s tabs and Save.
+- **Edit** — Jump to /strategy?strategy_id=… to edit that strategy’s tabs and Save. Available for every registry row, not only enabled strategies.
 - **Version history** — On detail for owned strategies, list definition snapshots and change notes. Draft definition-hash changes append versions; active editor Save remains in-place BC.
 - **Typical flow** — Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.
 - **Validation and errors** — Form and API validations are shown as inline errors or toast messages. Fix the first reported issue, retry, and re-check dependent sections that consume the same data.

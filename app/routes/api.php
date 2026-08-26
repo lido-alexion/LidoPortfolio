@@ -424,7 +424,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
     Route::post('/screener-registry/{id}/export', [ScreenerRegistryController::class, 'export'])
         ->where('id', '[A-Za-z0-9_\\-]+');
 
-    // Strategy Registry — reusable Strategy artifacts; one active selection per portfolio.
+    // Strategy Registry — reusable Strategy artifacts; multiple enabled strategies per portfolio.
     Route::get('/strategy-registry/meta', [StrategyRegistryController::class, 'meta']);
     Route::get('/strategy-registry/selection', [StrategyRegistryController::class, 'selection']);
     Route::get('/strategy-registry', [StrategyRegistryController::class, 'index']);

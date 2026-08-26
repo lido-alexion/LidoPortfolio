@@ -263,6 +263,23 @@ final class StrategyRegistrySupport
             throw new InvalidArgumentException('Strategy does not belong to the active portfolio.');
         }
 
+        if ($strategy->status === TradingStrategy::STATUS_ARCHIVED) {
+            return $strategy->fresh(['activeVersion']);
+        }
+
+        if ($strategy->status === TradingStrategy::STATUS_ACTIVE) {
+            $otherEnabled = TradingStrategy::query()
+                ->where('profile_id', $profile->id)
+                ->where('status', TradingStrategy::STATUS_ACTIVE)
+                ->where('id', '!=', $strategy->id)
+                ->exists();
+            if (! $otherEnabled) {
+                throw new InvalidArgumentException(
+                    'Cannot archive the last enabled strategy. Enable another strategy first.'
+                );
+            }
+        }
+
         $strategy->forceFill([
             'status' => TradingStrategy::STATUS_ARCHIVED,
         ])->save();
