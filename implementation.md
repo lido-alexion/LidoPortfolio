@@ -289,7 +289,7 @@ V3 complete only when: all V3 requirements + V3-related designed features implem
 
 ### Genuine V4 remainder
 
-See [`specs/LidoPortfolio-V4-Wishlist.md`](specs/LidoPortfolio-V4-Wishlist.md): FEAT-001+ (broker, B4, mobile, Evaluation wiring as FEAT-021, etc.) and SPEC-001–006 only.
+See [`specs/LidoPortfolio-V4-Wishlist.md`](specs/LidoPortfolio-V4-Wishlist.md): **22** active V4 features (FEAT-001, 002, 005, 006, 008–015, 021–029, 032) and **SPEC-001–006**. Fourteen former V4 FEAT IDs are V5-deferred (prioritization, not implemented) — see that file §3.
 
 ## Final V3 Closure Audit (2026-08-26)
 
@@ -330,10 +330,11 @@ Completion criterion (product owner, 2026-08-26 strict pass): every normative V3
 
 ### True V4 / out-of-V3 only (not V3 gaps)
 
-Tracked in [`specs/LidoPortfolio-V4-Wishlist.md`](specs/LidoPortfolio-V4-Wishlist.md) (strict rewrite 2026-08-26):
+Tracked in [`specs/LidoPortfolio-V4-Wishlist.md`](specs/LidoPortfolio-V4-Wishlist.md) (strict rewrite 2026-08-26; Product Owner V4/V5 split 2026-08-26):
 
-- **SPEC-001–006:** adoption cost merge; CA rights; CA restatement; optional cash-ledger kinds; cross-owner sell policy; live exclusivity (Decision 11)
-- **FEAT:** broker/live, B4 banner, mobile/AI/ML/markets, Evaluation→Strategy-param wiring (FEAT-021), data-platform gates, OpenAPI/CI/E2E, Discovery/Evaluation UX polish, etc.
+- **SPEC-001–006:** adoption cost merge; CA rights; CA restatement; optional cash-ledger kinds; cross-owner sell policy; live exclusivity (Decision 11) — still active V4
+- **Active V4 FEAT (22):** broker/live, regime/liquidity, TAF remaining phases, Review/admin/cash/tax polish, Evaluation→Strategy-param wiring (FEAT-021), data-platform gates, OpenAPI/E2E/controller split/logging/evaluation modules/TOS repos, etc.
+- **V5-deferred FEAT (14, still OPEN):** B4 banner, notification channels, indicator-registry cutover, mobile/AI/ML/markets/replay, CI/secrets deploy, Discovery/Evaluation UX polish, TS/grid migration, optional token API. Roadmap only — not implemented.
 
 **Closed in V3 (not V4):** OD-16 Strategy window UI; schedulerTimestamp; DailyMarketDataJobTest; max_position enforcement; all former open V3 bug/TD/UX/HIST active rows.
 

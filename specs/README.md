@@ -9,7 +9,7 @@ Read **top → bottom**. Requirements/architecture come **before** implementatio
 
 **V3:** [LidoPortfolio-V3-Specification.md](LidoPortfolio-V3-Specification.md) is the source of truth for V3 product behavior (**v0.28**; **V3 STRICTLY COMPLETE** as of 2026-08-26). Recall / capital-resolution build plan (historical + shipped): [architecture/V3-WS4-Recall-Bridge-Implementation-Delta.md](architecture/V3-WS4-Recall-Bridge-Implementation-Delta.md).
 
-**V4:** [LidoPortfolio-V4-Wishlist.md](LidoPortfolio-V4-Wishlist.md) — genuine new V4 features + genuine unresolved product/spec decisions only. Not a V3 deferral bin.
+**V4:** [LidoPortfolio-V4-Wishlist.md](LidoPortfolio-V4-Wishlist.md) — genuine new V4 features + genuine unresolved product/spec decisions, plus V5-deferred FEAT IDs (Product Owner split 2026-08-26). Not a V3 deferral bin.
 
 ---
 
@@ -17,7 +17,7 @@ Read **top → bottom**. Requirements/architecture come **before** implementatio
 
 ```text
 0. LidoPortfolio-V3-Specification.md   V3 product SoT (V3 STRICTLY COMPLETE)
-0a. LidoPortfolio-V4-Wishlist.md       Genuine V4 features + SPEC decisions only
+0a. LidoPortfolio-V4-Wishlist.md       Genuine V4 features + SPEC decisions + V5 deferred FEAT
 1. architecture/platform/       Intent — vision through engine overview + system domain model
 2. architecture/ui/             Pages/flow + sidebar (as needed)
 3. architecture/indicators/     Indicator & artifact architecture
@@ -39,7 +39,7 @@ specs/
 │
 ├── README.md                          ← this file
 ├── LidoPortfolio-V3-Specification.md  【 V3 SoT — V3 STRICTLY COMPLETE 】
-├── LidoPortfolio-V4-Wishlist.md       【 V4 features + SPEC decisions only 】
+├── LidoPortfolio-V4-Wishlist.md       【 V4 features + SPEC + V5 deferred FEAT 】
 ├── IMPLEMENTATION_PROGRESS.md         【 STATUS 】
 ├── MVP_DEMO_CHECKLIST.md              【 ACCEPTANCE DEMO 】
 │
