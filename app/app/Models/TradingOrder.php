@@ -16,6 +16,27 @@ class TradingOrder extends Model
 
     public const STATUS_CANCELLED = 'cancelled';
 
+    public const BROKER_SUBMITTED = 'submitted';
+
+    public const BROKER_OPEN = 'open';
+
+    public const BROKER_PARTIAL = 'partial';
+
+    public const BROKER_FILLED = 'filled';
+
+    public const BROKER_REJECTED = 'rejected';
+
+    public const BROKER_CANCELLED = 'cancelled';
+
+    public const BROKER_UNKNOWN = 'unknown';
+
+    public const IN_FLIGHT_BROKER_STATUSES = [
+        self::BROKER_SUBMITTED,
+        self::BROKER_OPEN,
+        self::BROKER_PARTIAL,
+        self::BROKER_UNKNOWN,
+    ];
+
     protected $fillable = [
         'profile_id',
         'recommendation_id',
@@ -28,6 +49,14 @@ class TradingOrder extends Model
         'status',
         'executed_at',
         'cancelled_at',
+        'broker_provider',
+        'broker_order_id',
+        'broker_status',
+        'filled_quantity',
+        'average_fill_price',
+        'submission_key',
+        'execution_decision_id',
+        'last_broker_sync_at',
     ];
 
     protected function casts(): array
@@ -35,9 +64,18 @@ class TradingOrder extends Model
         return [
             'quantity' => 'decimal:4',
             'limit_price' => 'decimal:4',
+            'filled_quantity' => 'decimal:4',
+            'average_fill_price' => 'decimal:4',
             'executed_at' => 'datetime',
             'cancelled_at' => 'datetime',
+            'last_broker_sync_at' => 'datetime',
         ];
+    }
+
+    public function hasInFlightBrokerOrder(): bool
+    {
+        return is_string($this->broker_status)
+            && in_array($this->broker_status, self::IN_FLIGHT_BROKER_STATUSES, true);
     }
 
     public function profile(): BelongsTo

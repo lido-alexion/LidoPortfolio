@@ -264,3 +264,14 @@ Schedule::call(function () {
         app(\App\Services\SyncLogService::class)->prune();
     }
 })->hourly()->timezone($timezone)->name('sync-log-prune');
+
+Schedule::command('tos:reconcile-broker-orders')
+    ->everyFiveMinutes()
+    ->timezone($timezone)
+    ->name('tos-broker-reconcile');
+
+Schedule::command('tos:submit-automatic-orders')
+    ->everyFiveMinutes()
+    ->timezone($timezone)
+    ->name('tos-broker-automatic');
+

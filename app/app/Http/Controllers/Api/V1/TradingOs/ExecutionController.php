@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api\V1\TradingOs;
 
 use App\Engines\Execution\ExecutionEngine;
+use App\Engines\Execution\ExecutionModeService;
+use App\Engines\Execution\LiveBrokerExecutionService;
 use App\Engines\Support\ApiEnvelope;
 use App\Http\Controllers\Controller;
 use App\Services\StockResolverService;
@@ -16,6 +18,8 @@ class ExecutionController extends Controller
     public function __construct(
         protected ExecutionEngine $execution,
         protected StockResolverService $stocks,
+        protected ExecutionModeService $modes,
+        protected LiveBrokerExecutionService $liveBroker,
     ) {}
 
     public function ordersStore(Request $request): JsonResponse
@@ -147,5 +151,68 @@ class ExecutionController extends Controller
         $positions = $this->execution->listPositions($profile);
 
         return ApiEnvelope::success(array_map(fn ($h) => TradingOsPresenter::position($h), $positions));
+    }
+
+    public function executionModeShow(Request $request): JsonResponse
+    {
+        $profile = \activePortfolio();
+
+        return ApiEnvelope::success($this->modes->snapshot($request->user(), $profile));
+    }
+
+    public function executionModeUpdate(Request $request): JsonResponse
+    {
+        $profile = \activePortfolio();
+        $validated = $request->validate([
+            'execution_mode' => 'required|in:manual,semi_automatic,automatic',
+            'confirm_automatic' => 'nullable|boolean',
+            'totp' => 'nullable|string|max:64',
+            'recovery_code' => 'nullable|string|max:64',
+        ]);
+
+        $updated = $this->modes->changeMode(
+            $request->user(),
+            $profile,
+            $validated['execution_mode'],
+            (bool) ($validated['confirm_automatic'] ?? false),
+            $validated['totp'] ?? null,
+            $validated['recovery_code'] ?? null,
+        );
+
+        return ApiEnvelope::success($this->modes->snapshot($request->user(), $updated));
+    }
+
+    public function submitSelected(Request $request): JsonResponse
+    {
+        $profile = \activePortfolio();
+        $validated = $request->validate([
+            'recommendation_ids' => 'required|array|min:1',
+            'recommendation_ids.*' => 'integer',
+            'totp' => 'nullable|string|max:64',
+            'recovery_code' => 'nullable|string|max:64',
+        ]);
+
+        $results = $this->liveBroker->submitSelected(
+            $request->user(),
+            $profile,
+            $validated['recommendation_ids'],
+            $validated['totp'] ?? null,
+            $validated['recovery_code'] ?? null,
+        );
+
+        return ApiEnvelope::success($results);
+    }
+
+    public function ordersReconcile(int $id): JsonResponse
+    {
+        $profile = \activePortfolio();
+        $order = $this->execution->findOrder($profile, $id);
+        if (! $order) {
+            return ApiEnvelope::error('NOT_FOUND', 'Order not found.', 404);
+        }
+
+        $reconciled = $this->liveBroker->reconcileOrder($profile, $order);
+
+        return ApiEnvelope::success($reconciled);
     }
 }

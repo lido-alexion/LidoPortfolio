@@ -13,6 +13,10 @@
     ],
     "tags": [
         {
+            "name": "admin",
+            "description": "Routes under `/api/v1/admin`."
+        },
+        {
             "name": "analytics",
             "description": "Routes under `/api/v1/analytics`."
         },
@@ -23,6 +27,10 @@
         {
             "name": "backtests",
             "description": "Routes under `/api/v1/backtests`."
+        },
+        {
+            "name": "broker",
+            "description": "Routes under `/api/v1/broker`."
         },
         {
             "name": "candidates",
@@ -47,6 +55,10 @@
         {
             "name": "evaluations",
             "description": "Routes under `/api/v1/evaluations`."
+        },
+        {
+            "name": "execution",
+            "description": "Routes under `/api/v1/execution`."
         },
         {
             "name": "imports",
@@ -109,11 +121,85 @@
             "description": "Routes under `/api/v1/strategy-registry`."
         },
         {
+            "name": "totp",
+            "description": "Routes under `/api/v1/totp`."
+        },
+        {
             "name": "transactions",
             "description": "Routes under `/api/v1/transactions`."
         }
     ],
     "paths": {
+        "/api/v1/admin/users/{user}/automated-execution-entitlement": {
+            "put": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Admin: set automated-execution entitlement",
+                "description": "Per-user, disabled by default. Required for Semi-Automatic and Automatic broker submission. Not inferred from portfolio mode.",
+                "operationId": "put_admin_users_user_automated-execution-entitlement",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "user",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "entitled"
+                                ],
+                                "properties": {
+                                    "entitled": {
+                                        "type": "boolean"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
         "/api/v1/analytics/dashboard": {
             "get": {
                 "tags": [
@@ -1460,6 +1546,224 @@
                 }
             }
         },
+        "/api/v1/broker/kite/callback": {
+            "get": {
+                "tags": [
+                    "broker"
+                ],
+                "summary": "Kite Connect OAuth callback",
+                "description": "Exchanges request_token for an access token and redirects to Settings → Account. Query request_token is not logged.",
+                "operationId": "get_broker_kite_callback",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/broker/kite/disconnect": {
+            "post": {
+                "tags": [
+                    "broker"
+                ],
+                "summary": "Disconnect Kite",
+                "description": "Live route: `POST /api/v1/broker/kite/disconnect`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOs\\BrokerController@disconnect`.",
+                "operationId": "post_broker_kite_disconnect",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/broker/kite/login-url": {
+            "get": {
+                "tags": [
+                    "broker"
+                ],
+                "summary": "Kite Connect login URL",
+                "description": "Live route: `GET /api/v1/broker/kite/login-url`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOs\\BrokerController@kiteLoginUrl`.",
+                "operationId": "get_broker_kite_login-url",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/broker/kite/session": {
+            "post": {
+                "tags": [
+                    "broker"
+                ],
+                "summary": "Complete Kite session from request_token",
+                "description": "Live route: `POST /api/v1/broker/kite/session`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOs\\BrokerController@kiteSession`.",
+                "operationId": "post_broker_kite_session",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "request_token"
+                                ],
+                                "properties": {
+                                    "request_token": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/broker/status": {
+            "get": {
+                "tags": [
+                    "broker"
+                ],
+                "summary": "Zerodha/Kite connection status",
+                "description": "Per-user Kite Connect session. Access tokens are never returned.",
+                "operationId": "get_broker_status",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/candidates": {
             "get": {
                 "tags": [
@@ -2645,6 +2949,183 @@
                 }
             }
         },
+        "/api/v1/execution/mode": {
+            "get": {
+                "tags": [
+                    "execution"
+                ],
+                "summary": "Portfolio execution mode and live-submit blockers",
+                "description": "Manual / semi_automatic / automatic plus entitlement, TOTP, and broker blockers. Mode is per portfolio; entitlement is per user.",
+                "operationId": "get_execution_mode",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "execution"
+                ],
+                "summary": "Change portfolio execution mode",
+                "description": "Manual requires no TOTP. Semi-Automatic and Automatic require entitlement plus a valid TOTP (or recovery) code. Manual→Automatic also requires confirm_automatic. Automatic→Manual does not cancel in-flight broker orders.",
+                "operationId": "put_execution_mode",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "execution_mode"
+                                ],
+                                "properties": {
+                                    "execution_mode": {
+                                        "type": "string",
+                                        "enum": [
+                                            "manual",
+                                            "semi_automatic",
+                                            "automatic"
+                                        ]
+                                    },
+                                    "confirm_automatic": {
+                                        "type": "boolean"
+                                    },
+                                    "totp": {
+                                        "type": "string"
+                                    },
+                                    "recovery_code": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/execution/submit-selected": {
+            "post": {
+                "tags": [
+                    "execution"
+                ],
+                "summary": "Semi-Automatic broker submit",
+                "description": "Explicit Accept/Execute Selected. Server enforces user, portfolio, entitlement, TOTP, eligibility, capital/reservation, and broker session, then submits to Zerodha. Broker acceptance is not a ledger fill.",
+                "operationId": "post_execution_submit-selected",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "recommendation_ids"
+                                ],
+                                "properties": {
+                                    "recommendation_ids": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "integer"
+                                        }
+                                    },
+                                    "totp": {
+                                        "type": "string"
+                                    },
+                                    "recovery_code": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/imports": {
             "post": {
                 "tags": [
@@ -3581,6 +4062,54 @@
                                         "type": "string",
                                         "nullable": true
                                     }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/orders/{id}/reconcile": {
+            "post": {
+                "tags": [
+                    "orders"
+                ],
+                "summary": "Reconcile a broker order",
+                "description": "Polls broker status and applies only newly filled quantity to the ledger. Partial fill does not mark the recommendation executed.",
+                "operationId": "post_orders_id_reconcile",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
                                 }
                             }
                         }
@@ -6569,6 +7098,325 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/totp": {
+            "get": {
+                "tags": [
+                    "totp"
+                ],
+                "summary": "TOTP authenticator status",
+                "description": "Returns whether authenticator TOTP is enabled or pending. Never returns the stored secret after enrollment (V4-FEAT-001).",
+                "operationId": "get_totp",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/totp/begin": {
+            "post": {
+                "tags": [
+                    "totp"
+                ],
+                "summary": "Start TOTP enrollment",
+                "description": "Creates a pending TOTP secret and returns otpauth URL, QR SVG, and secret for authenticator setup. Enrollment is not active until confirm.",
+                "operationId": "post_totp_begin",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/totp/confirm": {
+            "post": {
+                "tags": [
+                    "totp"
+                ],
+                "summary": "Confirm TOTP enrollment",
+                "description": "Activates TOTP after a valid authenticator code. Returns one-time recovery codes. The stored secret is not returned.",
+                "operationId": "post_totp_confirm",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "code"
+                                ],
+                                "properties": {
+                                    "code": {
+                                        "type": "string",
+                                        "description": "Current authenticator code. Never logged."
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/totp/disable": {
+            "post": {
+                "tags": [
+                    "totp"
+                ],
+                "summary": "Disable TOTP",
+                "description": "Requires a valid authenticator or recovery code. Clears secret and remaining recovery codes.",
+                "operationId": "post_totp_disable",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "code"
+                                ],
+                                "properties": {
+                                    "code": {
+                                        "type": "string"
+                                    },
+                                    "recovery": {
+                                        "type": "boolean"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/totp/recover": {
+            "post": {
+                "tags": [
+                    "totp"
+                ],
+                "summary": "Consume a single-use recovery code",
+                "description": "Live route: `POST /api/v1/totp/recover`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOs\\TotpController@recover`.",
+                "operationId": "post_totp_recover",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "code"
+                                ],
+                                "properties": {
+                                    "code": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/totp/verify": {
+            "post": {
+                "tags": [
+                    "totp"
+                ],
+                "summary": "Verify a TOTP or recovery code",
+                "description": "Rate-limited. Replay of a used TOTP inside the validity window is rejected. Recovery codes are single-use when recovery=true.",
+                "operationId": "post_totp_verify",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "code"
+                                ],
+                                "properties": {
+                                    "code": {
+                                        "type": "string"
+                                    },
+                                    "recovery": {
+                                        "type": "boolean"
+                                    }
                                 }
                             }
                         }

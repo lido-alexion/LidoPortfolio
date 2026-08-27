@@ -92,6 +92,17 @@ class ExecutionEngine
             ]);
         }
 
+        $inFlight = TradingOrder::query()
+            ->where('profile_id', $profile->id)
+            ->where('recommendation_id', $recommendation->id)
+            ->get()
+            ->first(fn (TradingOrder $o) => $o->hasInFlightBrokerOrder());
+        if ($inFlight) {
+            throw ValidationException::withMessages([
+                'recommendation_id' => ['A broker order is already in flight for this recommendation.'],
+            ]);
+        }
+
         $this->lending->assertCanExecute($recommendation);
 
         DB::transaction(function () use ($recommendation, $transaction, $profile) {
@@ -120,6 +131,124 @@ class ExecutionEngine
         ]);
 
         return $recommendation->fresh(['security', 'executedTransaction']);
+    }
+
+    /**
+     * Apply filled quantity from the broker. Only the unledgered delta is written.
+     * Partial fills do not mark the recommendation executed unless filled >= order quantity
+     * and $completeRecommendation is true.
+     *
+     * @return array{order: TradingOrder, transaction: ?Transaction, position: ?Holding}
+     */
+    public function applyBrokerFill(
+        PortfolioProfile $profile,
+        TradingOrder $order,
+        float $filledQuantity,
+        float $averagePrice,
+        bool $completeRecommendation = true,
+    ): array {
+        if ((int) $order->profile_id !== (int) $profile->id) {
+            throw ValidationException::withMessages(['order' => ['Order not found for this portfolio.']]);
+        }
+
+        $ledgered = (float) $order->orderTransactions()->sum('quantity');
+        $delta = round($filledQuantity - $ledgered, 4);
+        if ($delta <= 0.0001) {
+            return [
+                'order' => $order->fresh(['security', 'recommendation']),
+                'transaction' => null,
+                'position' => Holding::query()
+                    ->where('profile_id', $profile->id)
+                    ->where('stock_id', $order->security_id)
+                    ->first(),
+            ];
+        }
+
+        $price = $averagePrice > 0 ? $averagePrice : (float) ($order->average_fill_price ?? 0);
+        if ($price <= 0) {
+            throw ValidationException::withMessages(['price' => ['Broker fill price is required.']]);
+        }
+
+        $target = (float) $order->quantity;
+        $shouldComplete = $completeRecommendation && ($ledgered + $delta + 0.0001 >= $target);
+
+        $stock = $order->security ?? Stock::query()->findOrFail($order->security_id);
+        $recommendation = $order->recommendation;
+        if ($recommendation === null && $order->recommendation_id) {
+            $recommendation = TradingRecommendation::query()->find($order->recommendation_id);
+        }
+
+        if ($recommendation !== null && $recommendation->isActionable() && $shouldComplete) {
+            $this->lending->assertCanExecute($recommendation);
+        }
+
+        $transaction = DB::transaction(function () use ($profile, $stock, $order, $delta, $price, $recommendation, $shouldComplete, $target) {
+            $transaction = $this->writes->createFinancialUnit($profile, $stock, [
+                'type' => $order->side,
+                'quantity' => $delta,
+                'price' => $price,
+                'fees' => 0,
+                'transaction_date' => now()->toDateString(),
+                'notes' => $recommendation
+                    ? 'Broker fill for TOS recommendation #'.$recommendation->id
+                    : 'Broker fill for TOS order #'.$order->id,
+                'source' => Transaction::SOURCE_RECOMMENDATION,
+                'recommendation_id' => $recommendation?->id,
+            ], user: null, applyCash: true);
+
+            OrderTransaction::query()->create([
+                'order_id' => $order->id,
+                'transaction_id' => $transaction->id,
+                'execution_price' => $price,
+                'quantity' => $delta,
+                'charges' => 0,
+                'executed_at' => now(),
+            ]);
+
+            $newFilled = round((float) $order->orderTransactions()->sum('quantity'), 4);
+            $order->forceFill([
+                'filled_quantity' => $newFilled,
+                'average_fill_price' => $price,
+            ])->save();
+
+            if ($shouldComplete && $newFilled + 0.0001 >= $target) {
+                $order->forceFill([
+                    'status' => TradingOrder::STATUS_EXECUTED,
+                    'executed_at' => now(),
+                    'broker_status' => TradingOrder::BROKER_FILLED,
+                ])->save();
+
+                if ($recommendation && $recommendation->isActionable() && $recommendation->canExecuteManually()) {
+                    $this->recommendation->markExecuted($recommendation, $transaction);
+                    $this->lending->recordExecution($recommendation->fresh(), $transaction);
+                }
+            } elseif ($recommendation && $recommendation->requiresCashReservation()) {
+                $consumed = round($delta * $price, 4);
+                $reserved = max(0, round((float) $recommendation->reserved_amount - $consumed, 4));
+                $recommendation->forceFill(['reserved_amount' => $reserved])->save();
+            }
+
+            return $transaction;
+        });
+
+        $this->writes->applyPostCommitSideEffects($profile, $stock, $transaction, softFailSnapshots: true);
+
+        $this->logger->event('ExecutionEngine', 'execution.broker_fill_applied', 'info', 'Broker fill applied to ledger', [
+            'profile_id' => $profile->id,
+            'order_id' => $order->id,
+            'transaction_id' => $transaction->id,
+            'quantity' => $delta,
+            'complete' => $shouldComplete,
+        ]);
+
+        return [
+            'order' => $order->fresh(['security', 'recommendation']),
+            'transaction' => $transaction->fresh()->load('stock'),
+            'position' => Holding::query()
+                ->where('profile_id', $profile->id)
+                ->where('stock_id', $stock->id)
+                ->first(),
+        ];
     }
 
     /**
@@ -200,6 +329,12 @@ class ExecutionEngine
         if ($order->status !== TradingOrder::STATUS_PENDING) {
             throw ValidationException::withMessages([
                 'order' => ['Only pending orders can be executed (status: '.$order->status.').'],
+            ]);
+        }
+
+        if ($order->broker_order_id && empty($input['_from_broker_reconcile'])) {
+            throw ValidationException::withMessages([
+                'order' => ['This order is managed by the broker. Fills are applied through reconciliation, not manual execute.'],
             ]);
         }
 

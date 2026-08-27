@@ -333,7 +333,8 @@ Completion criterion (product owner, 2026-08-26 strict pass): every normative V3
 Tracked in [`specs/LidoPortfolio-V4-Wishlist.md`](specs/LidoPortfolio-V4-Wishlist.md) (strict rewrite 2026-08-26; Product Owner V4/V5 split 2026-08-26):
 
 - **SPEC-001–006:** **DECIDED** 2026-08-26 (simple WAVG adoption merge with final avg to 2 dp half-up; no special rights CA; split/bonus restatement of qty/cost/trailing/stop/target; cash-ledger special types exactly LOAN/RECALL/BRIDGE with signed amount; explicit sell attribution; multi-strategy per broker account). Frozen product rules, **not implemented**. See wishlist §4.
-- **Active V4 FEAT (22):** **V4-FEAT-021 COMPLETE** (2026-08-26); **V4-FEAT-022 COMPLETE** (2026-08-27); **V4-FEAT-005 COMPLETE** (2026-08-27); **V4-FEAT-006 COMPLETE** (2026-08-27); **V4-FEAT-023 COMPLETE** (2026-08-27); **V4-FEAT-024 COMPLETE** (2026-08-27); **V4-FEAT-025 COMPLETE** (2026-08-27); **V4-FEAT-026 COMPLETE** (2026-08-27); **V4-FEAT-027 COMPLETE** (2026-08-27) — split Trading OS HTTP controllers + shared React fetch hooks; **V4-FEAT-028 COMPLETE** (2026-08-27) — structured TOS logging + list pagination consistency; **V4-FEAT-029 COMPLETE** (2026-08-27) — pluggable Evaluation factor rules; **V4-FEAT-032 COMPLETE** (2026-08-27) — TOS aggregate repository boundary. Remaining 10 stay OPEN: broker/live, TAF remaining phases, Review/admin/cash/tax polish, etc.
+- **SPEC-007:** **DECIDED** 2026-08-27 (per-portfolio execution modes manual / semi_automatic / automatic; per-user admin automated-execution entitlement; authenticator TOTP required for automated broker submission; Zerodha/Kite first broker; recommendation `executed` remains a ledger fill). Implemented by **V4-FEAT-001**.
+- **Active V4 FEAT (22):** **V4-FEAT-021 COMPLETE** (2026-08-26); **V4-FEAT-022 COMPLETE** (2026-08-27); **V4-FEAT-005 COMPLETE** (2026-08-27); **V4-FEAT-006 COMPLETE** (2026-08-27); **V4-FEAT-023 COMPLETE** (2026-08-27); **V4-FEAT-024 COMPLETE** (2026-08-27); **V4-FEAT-025 COMPLETE** (2026-08-27); **V4-FEAT-026 COMPLETE** (2026-08-27); **V4-FEAT-027 COMPLETE** (2026-08-27) — split Trading OS HTTP controllers + shared React fetch hooks; **V4-FEAT-028 COMPLETE** (2026-08-27) — structured TOS logging + list pagination consistency; **V4-FEAT-029 COMPLETE** (2026-08-27) — pluggable Evaluation factor rules; **V4-FEAT-032 COMPLETE** (2026-08-27) — TOS aggregate repository boundary; **V4-FEAT-001 COMPLETE** (2026-08-27) — live execution modes, TOTP, Zerodha adapter. Remaining 9 stay OPEN: TAF remaining phases, Review/admin/cash/tax polish, etc.
 - **V5-deferred FEAT (14, still OPEN):** B4 banner, notification channels, indicator-registry cutover, mobile/AI/ML/markets/replay, CI/secrets deploy, Discovery/Evaluation UX polish, TS/grid migration, optional token API. Roadmap only — not implemented.
 
 **Closed in V3 (not V4):** OD-16 Strategy window UI; schedulerTimestamp; DailyMarketDataJobTest; max_position enforcement; all former open V3 bug/TD/UX/HIST active rows.
@@ -737,6 +738,43 @@ Pagination still uses `TradingOsPagination` (`page` / `pageSize`, meta `{page,pa
 ### Explicitly not in this feature
 
 Generic `BaseRepository` / CRUD framework, repository-per-model, DTOs, CQRS, event sourcing, OpenAPI/API changes, frontend query-library migration.
+
+## V4-FEAT-001 — Broker / live execution automation (2026-08-27)
+
+**Status:** **COMPLETE**. Product rules: **V4-SPEC-007**. Manual ledger execution is unchanged.
+
+### Frozen product (shipped)
+
+- Per-portfolio `execution_mode`: `manual` (default) / `semi_automatic` / `automatic`.
+- Per-user admin `automated_execution_entitled_at` (off by default). Never inferred from mode.
+- Authenticator **TOTP** (`pragmarx/google2fa`) required for Semi/Auto broker submit; not for Manual. Recovery codes hashed, single-use. Rate limit 5/min. Replay blocked via `verifyKeyNewer`. Secrets never logged.
+- Semi-Automatic: `POST /api/v1/execution/submit-selected` with TOTP. Selection is not execution.
+- Automatic: no per-order UI; pipeline + `tos:submit-automatic-orders`. Enabling Automatic requires TOTP + `confirm_automatic`. Unattended jobs check enrolled TOTP, not a fresh code.
+- Domain: recommendation → execution decision → broker order → fill → ledger. `executed` still means ledger fill (`RecommendationEngine::markExecuted`).
+- Zerodha/Kite only. **Per-user** Kite Connect (encrypted access token). Central shared account was not used because it would mix whose money is traded.
+
+### Engineering
+
+- Idempotency: unique `submission_key`; unknown/in-flight → reconcile, never re-place. Ambiguous HTTP → `broker_status=unknown`.
+- Reconcile every 5 minutes. Partial fill updates broker qty only until terminal full fill (then one ledger write). Reject/cancel with zero fill does not execute the recommendation.
+- FakeBrokerGateway in `testing`. Tests never call Zerodha.
+- Env: `KITE_API_KEY`, `KITE_API_SECRET`, `KITE_REDIRECT_URL`. Tokens expire ~06:00 IST.
+
+### API (`/api/v1`)
+
+TOTP begin/confirm/verify/recover/disable; execution mode GET/PUT; submit-selected; order reconcile; broker status/login/callback/session/disconnect; admin entitlement.
+
+### UI
+
+Settings Portfolio: execution mode. Settings Account: TOTP + Kite. Users admin: entitlement. Pending Execution: Accept / Execute Selected when Semi-Automatic.
+
+### Tests
+
+`tests/Feature/Totp/TotpFlowTest.php`, `tests/Feature/Execution/LiveExecutionFeatureTest.php`, logger redaction, OpenAPI, TOS Vitest (`tos-pending-execution.test.jsx`), TradingOsControllerSplitTest.
+
+### Explicitly not in this feature
+
+GTT/stop/target (FEAT-002), multi-broker marketplace, email OTP, password re-prompt as 2FA.
 
 ## V3 residual — UNFUNDED zero-own lending offer (2026-08-24)
 
@@ -3082,7 +3120,7 @@ See also `DEPLOYMENT_CPANEL.md` § HTTPS.
 
 ### Future authentication changes
 
-Document in this section (PIN / 2FA not implemented; architecture allows future guards).
+Document in this section. Authenticator TOTP for broker execution shipped as V4-FEAT-001; login itself is still password + Sanctum session (no TOTP at login).
 
 ### Tests (multi-portfolio, Jun 2026)
 

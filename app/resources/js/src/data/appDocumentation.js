@@ -307,16 +307,19 @@ const APP_DOCUMENTATION_BASE = [
         title: 'Pending Execution',
         routeLabel: '/transactions/pending',
         match: (p) => pathIs(p, '/transactions/pending'),
-        summary: 'Approved recommendations waiting for you to record the broker fill.',
+        summary: 'Approved recommendations waiting for a fill — manual ledger or broker submit.',
         overview:
-            'After you Approve a BUY or SELL recommendation, it moves here as pending execution. You place the trade at your broker, then complete it in the app (which writes a ledger transaction). Cancel returns the idea to an open state without a fill.',
+            'After you Approve a BUY or SELL recommendation, it moves here as pending execution. In Manual mode, you trade at your broker then record the fill in the app (ledger transaction). In Semi-Automatic mode, selecting rows is not execution — use Accept / Execute Selected with an authenticator code to submit to Zerodha. Automatic mode submits eligible orders without a per-order click. Broker acceptance is not a fill; the recommendation becomes executed only after an actual ledger fill.',
         controls: [
-            { name: 'Execute / Add Transaction', description: 'Opens the transaction form prefilled from the recommendation.' },
-            { name: 'Cancel execution', description: 'Drops pending status and releases any reserved cash for buys.' },
+            { name: 'Execute manually', description: 'Opens the transaction form prefilled from the recommendation. Always available in Manual mode; still works when no Kite account is connected.' },
+            { name: 'Accept / Execute Selected', description: 'Semi-Automatic only. Submits selected eligible recommendations to Zerodha after server checks (entitlement, TOTP, capital, broker session). Not shown as a substitute for Automatic mode.' },
+            { name: 'Authenticator code', description: 'Required on Semi-Automatic submit. Not required for Manual ledger fills.' },
+            { name: 'Cancel execution', description: 'Drops pending status and releases any reserved cash for buys. Does not cancel an in-flight Zerodha order by itself.' },
             { name: 'History toggle', description: 'Navigate back to full Transaction History.' },
         ],
         concepts: [
             { name: 'Approval vs execution', description: 'Approve means you accept the idea; execution is the separate ledger write after a real fill. A capital_committed buy can be approved and then filled the same way as a fully funded buy. Unfunded or awaiting-lender buys never reach this page.' },
+            { name: 'Execution modes', description: 'Per portfolio: Manual (default, no broker submit), Semi-Automatic (explicit Accept / Execute Selected), Automatic (unattended submit). Entitlement is per user and admin-controlled.' },
             { name: 'Cash reservation', description: 'Approving a funded buy reserves the own-funded amount until execute, cancel, expire, or reopen. A committed loan is not a second cash reservation and does not deposit cash. One physical cash pool is used for the fill. The borrower strategy owns the resulting holding; the lender does not receive stock.' },
         ],
         related: ['recommendations', 'transactions', 'cash'],
@@ -1691,11 +1694,14 @@ const APP_DOCUMENTATION_BASE = [
             && !pathStarts(p, '/settings/screener-registry')
             && !pathStarts(p, '/settings/strategy-registry')
             && !pathStarts(p, '/settings/users'),
-        summary: 'Global (admin), Portfolio, and Account settings — fees, Telegram, cash reserve %, sync, active sessions, and links.',
+        summary: 'Global (admin), Portfolio, and Account settings — fees, Telegram, cash reserve %, execution mode, authenticator, Kite, sync, active sessions, and links.',
         overview:
-            'Settings is the only Administration item in the primary sidebar. Open it for Global (admins), Portfolio, and Account preferences. On Account, Active sessions lists your signed-in devices so you can revoke one session or log out other devices. Admin tools (users, sync logs, data quality, indicator/screener/strategy registries, universe sync, alert policies) are linked from Settings cards — they are not separate sidebar entries.',
+            'Settings is the only Administration item in the primary sidebar. Open it for Global (admins), Portfolio, and Account preferences. Portfolio → Execution mode chooses Manual / Semi-Automatic / Automatic for the active portfolio. Account → Authenticator (TOTP) and Zerodha/Kite are required before Semi-Automatic or Automatic broker submission. On Account, Active sessions lists your signed-in devices so you can revoke one session or log out other devices. Admin tools (users, sync logs, data quality, indicator/screener/strategy registries, universe sync, alert policies) are linked from Settings cards — they are not separate sidebar entries.',
         controls: [
             { name: 'Settings tabs', description: 'Navigate Global / Portfolio / Account sections.' },
+            { name: 'Execution mode', description: 'Per active portfolio. New portfolios default to Manual. Semi-Automatic and Automatic require admin entitlement plus a valid authenticator code. Manual → Automatic needs an explicit confirmation checkbox. Automatic → Manual stops future automatic submits and does not cancel broker orders already sent.' },
+            { name: 'Authenticator (TOTP)', description: 'Account tab. Enroll a compatible authenticator (for example Google Authenticator), confirm with a code, and store recovery codes shown once. Required before broker submission in Semi-Automatic or Automatic; not required for Manual fills. Disable requires a current code.' },
+            { name: 'Zerodha / Kite', description: 'Account tab. Connect your own Kite account. Not required for Manual mode. Sessions typically expire around 6:00 AM IST; reconnect if broker submit is blocked.' },
             { name: 'Fee components', description: 'Drive auto fees on buy/sell ledger rows.' },
             { name: 'Telegram', description: 'Bot token and chat id for portfolio notifications.' },
             { name: 'Portfolio cash reserve %', description: 'Portfolio-level OD-19 percentage. Required reserve rupees = this % × max(currently held invested amount, current holdings market value). Leave blank for 0 (no configured reserve). Not a % of cash. Withdrawals are not blocked if cash falls below the resulting rupee floor; Dashboard warns instead.' },
@@ -2211,18 +2217,20 @@ const APP_DOCUMENTATION_BASE = [
         title: 'User management',
         routeLabel: '/settings/users',
         match: (p) => pathStarts(p, '/settings/users'),
-        summary: 'Admin invite links, password-reset links, and account administration.',
+        summary: 'Admin invite links, password-reset links, account administration, and automated-execution entitlement.',
         overview:
-            'Registration is invite-only. Admins create invite links and password-reset links for existing accounts without requiring the current password. Invitation URLs are shown only when created or regenerated — copy them immediately. Regenerating invalidates the previous URL and does not extend the original 72-hour expiry. Pending invitees must use the administrator-provided link (login will not reveal the invitation URL).',
+            'Registration is invite-only. Admins create invite links and password-reset links for existing accounts without requiring the current password. Invitation URLs are shown only when created or regenerated — copy them immediately. Regenerating invalidates the previous URL and does not extend the original 72-hour expiry. Pending invitees must use the administrator-provided link (login will not reveal the invitation URL). Automated broker execution is a separate per-user entitlement (off by default); turning on Semi-Automatic or Automatic on a portfolio does not grant it.',
         controls: [
             { name: 'Create invite', description: 'Generate a link for a new user. Copy Invitation URL from the banner right away — the list does not re-show a stored URL.' },
             { name: 'Regenerate Invitation URL', description: 'Issues a new URL for a pending invite after confirmation. The old URL stops working; original expiry is unchanged.' },
             { name: 'Password reset link', description: 'Issue a reset URL for an existing account.' },
+            { name: 'Allow / revoke auto execution', description: 'Grants or removes the user’s right to use Semi-Automatic and Automatic broker submission. Server-enforced; not inferred from portfolio mode.' },
         ],
         concepts: [
             { name: 'Invite-only', description: 'There is no public self-registration endpoint for guests.' },
             { name: 'Hashed invitation tokens', description: 'Only a hash of the invitation secret is stored. The raw URL is a bearer credential shown once at create/regenerate.' },
             { name: 'Admin role', description: 'Gates global settings and ops tools.' },
+            { name: 'Automated-execution entitlement', description: 'Per user, admin-controlled, disabled by default. Required together with TOTP and a Kite session before Lido will submit broker orders.' },
         ],
         related: ['settings', 'profile'],
     },

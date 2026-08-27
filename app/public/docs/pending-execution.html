@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Pending Execution — StoX docs</title>
-  <meta name="description" content="Approved recommendations waiting for you to record the broker fill.">
+  <meta name="description" content="Approved recommendations waiting for a fill — manual ledger or broker submit.">
   <link rel="canonical" href="pending-execution.html">
   <style>
     :root {
@@ -110,11 +110,11 @@
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Pending Execution</h1>
       <p class="muted"><code>pending-execution</code> · screen: <code>/transactions/pending</code></p>
-      <p>Approved recommendations waiting for you to record the broker fill.</p>
+      <p>Approved recommendations waiting for a fill — manual ledger or broker submit.</p>
 
       <section class="panel">
         <h2>Overview</h2>
-        <p>After you Approve a BUY or SELL recommendation, it moves here as pending execution. You place the trade at your broker, then complete it in the app (which writes a ledger transaction). Cancel returns the idea to an open state without a fill.</p>
+        <p>After you Approve a BUY or SELL recommendation, it moves here as pending execution. In Manual mode, you trade at your broker then record the fill in the app (ledger transaction). In Semi-Automatic mode, selecting rows is not execution — use Accept / Execute Selected with an authenticator code to submit to Zerodha. Automatic mode submits eligible orders without a per-order click. Broker acceptance is not a fill; the recommendation becomes executed only after an actual ledger fill.</p>
 <p>Use this page as an execution queue, not an analysis board. Only approved actionable recommendations appear here. Complete each row after broker fill so your ledger and performance timeline stay aligned with real-world trades.</p>
 <p>Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).</p>
 
@@ -123,11 +123,17 @@
       <section class="panel">
         <h2>Controls</h2>
         <dl class="doc-list">
-        <dt>Execute / Add Transaction</dt>
-        <dd>Opens the transaction form prefilled from the recommendation.</dd>
+        <dt>Execute manually</dt>
+        <dd>Opens the transaction form prefilled from the recommendation. Always available in Manual mode; still works when no Kite account is connected.</dd>
+    
+        <dt>Accept / Execute Selected</dt>
+        <dd>Semi-Automatic only. Submits selected eligible recommendations to Zerodha after server checks (entitlement, TOTP, capital, broker session). Not shown as a substitute for Automatic mode.</dd>
+    
+        <dt>Authenticator code</dt>
+        <dd>Required on Semi-Automatic submit. Not required for Manual ledger fills.</dd>
     
         <dt>Cancel execution</dt>
-        <dd>Drops pending status and releases any reserved cash for buys.</dd>
+        <dd>Drops pending status and releases any reserved cash for buys. Does not cancel an in-flight Zerodha order by itself.</dd>
     
         <dt>History toggle</dt>
         <dd>Navigate back to full Transaction History.</dd>
@@ -148,6 +154,9 @@
         <dl class="doc-list">
         <dt>Approval vs execution</dt>
         <dd>Approve means you accept the idea; execution is the separate ledger write after a real fill. A capital_committed buy can be approved and then filled the same way as a fully funded buy. Unfunded or awaiting-lender buys never reach this page.</dd>
+    
+        <dt>Execution modes</dt>
+        <dd>Per portfolio: Manual (default, no broker submit), Semi-Automatic (explicit Accept / Execute Selected), Automatic (unattended submit). Entitlement is per user and admin-controlled.</dd>
     
         <dt>Cash reservation</dt>
         <dd>Approving a funded buy reserves the own-funded amount until execute, cancel, expire, or reopen. A committed loan is not a second cash reservation and does not deposit cash. One physical cash pool is used for the fill. The borrower strategy owns the resulting holding; the lender does not receive stock.</dd>

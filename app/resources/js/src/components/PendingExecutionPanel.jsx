@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import api from '../api';
 import useApiGet from '../hooks/useApiGet';
 import { runApiMutation } from '../hooks/useApiMutation';
-import { tosList, tosMeta } from '../utils/tosEnvelope';
+import { tosData, tosList, tosMeta } from '../utils/tosEnvelope';
 
 const CANCEL_REASONS = [
     { value: 'price_moved', label: 'Price moved significantly' },
@@ -39,19 +39,30 @@ export default function PendingExecutionPanel({ onExecuteStarted }) {
     const [busyId, setBusyId] = useState(null);
     const [cancelId, setCancelId] = useState(null);
     const [cancelReason, setCancelReason] = useState('other');
+    const [selected, setSelected] = useState({});
+    const [totp, setTotp] = useState('');
+    const [executingSelected, setExecutingSelected] = useState(false);
 
     const { data, loading, reload: load } = useApiGet({
         errorFallback: 'Failed to load pending execution',
         request: async () => {
-            const response = await api.get('/v1/recommendations/pending-execution', { skipErrorToast: true });
+            const [response, modeRes] = await Promise.all([
+                api.get('/v1/recommendations/pending-execution', { skipErrorToast: true }),
+                api.get('/v1/execution/mode', { skipErrorToast: true }).catch(() => null),
+            ]);
             return {
                 rows: tosList(response),
                 cash: tosMeta(response).cash || null,
+                mode: modeRes ? tosData(modeRes) : null,
             };
         },
     });
     const rows = data?.rows ?? [];
     const cash = data?.cash ?? null;
+    const modeSnap = data?.mode ?? null;
+    const isSemi = modeSnap?.execution_mode === 'semi_automatic';
+    const isAutomatic = modeSnap?.execution_mode === 'automatic';
+    const blockers = modeSnap?.blockers || [];
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
@@ -83,6 +94,34 @@ export default function PendingExecutionPanel({ onExecuteStarted }) {
                 },
             },
         });
+    };
+
+    const selectedIds = Object.entries(selected).filter(([, on]) => on).map(([id]) => Number(id));
+
+    const toggleSelected = (id) => {
+        setSelected((prev) => ({ ...prev, [id]: !prev[id] }));
+    };
+
+    const executeSelected = async () => {
+        if (selectedIds.length === 0) {
+            return;
+        }
+        setExecutingSelected(true);
+        try {
+            const { ok } = await runApiMutation(async () => {
+                await api.post('/v1/execution/submit-selected', {
+                    recommendation_ids: selectedIds,
+                    totp,
+                }, { skipErrorToast: true });
+            }, { successMessage: 'Submitted to broker', errorFallback: 'Broker submit failed' });
+            if (ok) {
+                setSelected({});
+                setTotp('');
+                await load();
+            }
+        } finally {
+            setExecutingSelected(false);
+        }
     };
 
     const cancelExecution = async (id) => {
@@ -125,6 +164,41 @@ export default function PendingExecutionPanel({ onExecuteStarted }) {
                     <span>Cash balance: <strong className="text-body">{money(cash.cash_balance)}</strong></span>
                     <span>Reserved: <strong className="text-body">{money(cash.reserved_cash)}</strong></span>
                     <span>Available: <strong className="text-body">{money(cash.available_investable_cash)}</strong></span>
+                    {modeSnap?.execution_mode && (
+                        <span>Mode: <strong className="text-body">{modeSnap.execution_mode.replace('_', ' ')}</strong></span>
+                    )}
+                </div>
+            )}
+            {isAutomatic && (
+                <p className="px-3 pt-2 small text-muted mb-0">
+                    Automatic mode submits eligible orders without a per-order confirmation. In-flight broker orders appear after reconciliation.
+                </p>
+            )}
+            {isSemi && (
+                <div className="px-3 pt-3 d-flex flex-wrap gap-2 align-items-end">
+                    <div>
+                        <label className="form-label small mb-1" htmlFor="semi-totp">Authenticator code</label>
+                        <input
+                            id="semi-totp"
+                            className="form-control form-control-sm"
+                            style={{ maxWidth: 160 }}
+                            inputMode="numeric"
+                            autoComplete="one-time-code"
+                            value={totp}
+                            onChange={(e) => setTotp(e.target.value)}
+                        />
+                    </div>
+                    <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        disabled={executingSelected || selectedIds.length === 0 || blockers.length > 0}
+                        onClick={executeSelected}
+                    >
+                        Accept / Execute Selected
+                    </button>
+                    {blockers.length > 0 && (
+                        <span className="small text-warning">Blocked: {blockers.join(', ')}</span>
+                    )}
                 </div>
             )}
             <div className="card-body p-0">
@@ -144,6 +218,7 @@ export default function PendingExecutionPanel({ onExecuteStarted }) {
                         <table className="table table-sm table-hover mb-0 align-middle">
                             <thead>
                                 <tr>
+                                    {isSemi && <th />}
                                     <th>Stock</th>
                                     <th>Action</th>
                                     <th className="text-end">Qty</th>
@@ -161,6 +236,17 @@ export default function PendingExecutionPanel({ onExecuteStarted }) {
                             <tbody>
                                 {filtered.map((r) => (
                                     <tr key={r.id}>
+                                        {isSemi && (
+                                            <td>
+                                                <input
+                                                    type="checkbox"
+                                                    className="form-check-input"
+                                                    checked={Boolean(selected[r.id])}
+                                                    onChange={() => toggleSelected(r.id)}
+                                                    aria-label={`Select ${r.symbol || r.id}`}
+                                                />
+                                            </td>
+                                        )}
                                         <td>
                                             <strong>{r.symbol}</strong>
                                             <div className="small text-muted text-truncate" style={{ maxWidth: 140 }}>{r.name}</div>

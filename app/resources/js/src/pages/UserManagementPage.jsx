@@ -339,6 +339,36 @@ export default function UserManagementPage() {
         }
     };
 
+    const toggleEntitlement = async (targetUser) => {
+        const next = !targetUser.automated_execution_entitled;
+        setUpdatingId(`ent-${targetUser.id}`);
+        try {
+            const res = await api.put(`/v1/admin/users/${targetUser.id}/automated-execution-entitlement`, {
+                entitled: next,
+            });
+            const updated = res.data?.data || res.data;
+            setUsers((prev) => prev.map((row) => (
+                row.id === updated.id
+                    ? { ...row, automated_execution_entitled: updated.automated_execution_entitled }
+                    : row
+            )));
+            showToast(
+                next
+                    ? `${targetUser.name || targetUser.email} may use Semi-Automatic / Automatic execution`
+                    : `Automated execution entitlement removed for ${targetUser.name || targetUser.email}`,
+            );
+        } catch (error) {
+            showToast(
+                error?.response?.data?.error?.message
+                    || error?.response?.data?.message
+                    || 'Failed to update entitlement',
+                'danger',
+            );
+        } finally {
+            setUpdatingId(null);
+        }
+    };
+
     return (
         <div className="row g-3">
             <div className="col-12">
@@ -536,7 +566,9 @@ export default function UserManagementPage() {
                     <div className="card-header">Existing users</div>
                     <div className="card-body">
                         <p className="text-muted small">
-                            Promote or demote accounts. You cannot change your own role.
+                            Promote or demote accounts, and grant automated broker-execution entitlement.
+                            Entitlement is per user, off by default, and is not implied by a portfolio being in Semi-Automatic or Automatic mode.
+                            You cannot change your own role.
                         </p>
                         {loading ? (
                             <div className="text-muted">Loading users…</div>
@@ -550,6 +582,7 @@ export default function UserManagementPage() {
                                             <th>Name</th>
                                             <th>Email</th>
                                             <th>Role</th>
+                                            <th>Auto execution</th>
                                             <th>Joined</th>
                                             <th />
                                         </tr>
@@ -573,6 +606,13 @@ export default function UserManagementPage() {
                                                             <span className="badge bg-dark">Admin</span>
                                                         ) : (
                                                             <span className="badge bg-secondary">User</span>
+                                                        )}
+                                                    </td>
+                                                    <td>
+                                                        {row.automated_execution_entitled ? (
+                                                            <span className="badge bg-success">Entitled</span>
+                                                        ) : (
+                                                            <span className="badge bg-secondary">Off</span>
                                                         )}
                                                     </td>
                                                     <td>{formatDate(row.created_at)}</td>
@@ -600,6 +640,18 @@ export default function UserManagementPage() {
                                                                             : 'Make admin'}
                                                                 </button>
                                                             ) : null}
+                                                            <button
+                                                                type="button"
+                                                                className="btn btn-sm btn-outline-primary"
+                                                                onClick={() => toggleEntitlement(row)}
+                                                                disabled={busy || updatingId === `ent-${row.id}`}
+                                                            >
+                                                                {updatingId === `ent-${row.id}`
+                                                                    ? 'Saving…'
+                                                                    : row.automated_execution_entitled
+                                                                        ? 'Revoke auto execution'
+                                                                        : 'Allow auto execution'}
+                                                            </button>
                                                         </div>
                                                     </td>
                                                 </tr>

@@ -233,6 +233,14 @@ class PortfolioLoggerService
             'bot_token',
             'csrf',
             'xsrf',
+            'totp',
+            'totp_code',
+            'otp',
+            'recovery_code',
+            'recovery_codes',
+            'request_token',
+            'checksum',
+            'api_secret',
         ] as $needle) {
             if ($normalized === $needle || str_ends_with($normalized, '_'.$needle)) {
                 return true;

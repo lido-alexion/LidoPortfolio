@@ -14,7 +14,15 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
 #[Fillable(['name', 'email', 'password', 'profile_photo_path'])]
-#[Hidden(['password', 'remember_token', 'profile_photo_path'])]
+#[Hidden([
+    'password',
+    'remember_token',
+    'profile_photo_path',
+    'totp_secret',
+    'totp_pending_secret',
+    'totp_recovery_codes',
+    'totp_last_counter',
+])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
@@ -74,6 +82,24 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_admin' => 'boolean',
+            'totp_secret' => 'encrypted',
+            'totp_pending_secret' => 'encrypted',
+            'totp_recovery_codes' => 'encrypted:array',
+            'totp_confirmed_at' => 'datetime',
+            'totp_last_counter' => 'integer',
+            'automated_execution_entitled_at' => 'datetime',
         ];
+    }
+
+    public function totpIsActive(): bool
+    {
+        return $this->totp_confirmed_at !== null
+            && is_string($this->totp_secret)
+            && $this->totp_secret !== '';
+    }
+
+    public function automatedExecutionEntitled(): bool
+    {
+        return $this->automated_execution_entitled_at !== null;
     }
 }

@@ -103,6 +103,8 @@ class AuthController extends Controller
     {
         $payload = $user->toArray();
         $payload['default_portfolio_id'] = $this->portfolios->defaultForUser($user)?->id;
+        $payload['totp_enabled'] = $user->totpIsActive();
+        $payload['automated_execution_entitled'] = $user->automatedExecutionEntitled();
 
         return $payload;
     }

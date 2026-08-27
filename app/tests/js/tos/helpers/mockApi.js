@@ -54,6 +54,12 @@ export function installDefaultTosHandlers({
     delayRecommendationsMs = 0,
     delayCandidatesMs = 0,
     pipelineError = null,
+    executionMode = 'manual',
+    entitled = false,
+    totpEnabled = false,
+    modeBlockers = ['entitlement', 'totp', 'broker'],
+    canSubmitSemiAutomatic = false,
+    canSubmitAutomatic = false,
 } = {}) {
     let recs = recommendations.map((r) => ({ ...r }));
 
@@ -114,6 +120,32 @@ export function installDefaultTosHandlers({
             }
             return axiosOk(apiEnvelope(candidates));
         }
+        if (path === '/v1/recommendations/pending-execution') {
+            return axiosOk(apiEnvelope(recs.filter((r) => r.status === 'pending_execution' || r.can_execute_manually), {
+                cash: { cash_balance: 0, reserved_cash: 0, available_investable_cash: 0 },
+            }));
+        }
+        if (path === '/v1/execution/mode') {
+            return axiosOk(apiEnvelope({
+                execution_mode: executionMode,
+                entitled,
+                totp_enabled: totpEnabled,
+                blockers: modeBlockers,
+                can_submit_semi_automatic: canSubmitSemiAutomatic,
+                can_submit_automatic: canSubmitAutomatic,
+            }));
+        }
+        if (path === '/v1/totp') {
+            return axiosOk(apiEnvelope({ enabled: false, pending: false, confirmed_at: null }));
+        }
+        if (path === '/v1/broker/status') {
+            return axiosOk(apiEnvelope({
+                configured: false,
+                connected: false,
+                usable: false,
+                provider: 'kite',
+            }));
+        }
         throw new Error(`Unexpected GET ${path}`);
     });
 
@@ -146,6 +178,12 @@ export function installDefaultTosHandlers({
         }
         if (path === '/auth/logout') {
             return axiosOk({ ok: true });
+        }
+        if (path === '/v1/execution/submit-selected') {
+            return axiosOk(apiEnvelope((body?.recommendation_ids || []).map((id) => ({
+                recommendation_id: id,
+                outcome: 'submitted',
+            }))));
         }
         throw new Error(`Unexpected POST ${path}`);
     });

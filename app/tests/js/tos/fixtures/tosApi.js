@@ -90,6 +90,22 @@ export const OPEN_BUY_RECOMMENDATION = {
     reviews: [],
 };
 
+export const PENDING_BUY_RECOMMENDATION = {
+    ...OPEN_BUY_RECOMMENDATION,
+    id: 51,
+    status: 'pending_execution',
+    lifecycle_status: 'pending_execution',
+    review_status: 'approved',
+    execution_status: 'pending',
+    can_review: false,
+    can_execute_manually: true,
+    suggested_quantity: 10,
+    suggested_investment_amount: 14505,
+    reserved_amount: 14505,
+    order_side: 'buy',
+    ui_label: 'Open',
+};
+
 export const HOLD_INSIGHT = {
     id: 42,
     security_id: 8,

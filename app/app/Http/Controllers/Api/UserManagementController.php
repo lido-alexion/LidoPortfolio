@@ -15,9 +15,18 @@ class UserManagementController extends Controller
         $users = User::query()
             ->orderBy('name')
             ->orderBy('email')
-            ->get(['id', 'name', 'email', 'is_admin', 'created_at']);
+            ->get(['id', 'name', 'email', 'is_admin', 'automated_execution_entitled_at', 'created_at']);
 
-        return response()->json(['data' => $users]);
+        return response()->json([
+            'data' => $users->map(fn (User $user) => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'is_admin' => (bool) $user->is_admin,
+                'automated_execution_entitled' => $user->automatedExecutionEntitled(),
+                'created_at' => $user->created_at,
+            ]),
+        ]);
     }
 
     public function updateAdmin(Request $request, User $user): JsonResponse

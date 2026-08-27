@@ -60,6 +60,21 @@ export async function installTosApiMocks(page, { recommendations = [OPEN_BUY_REC
         if (path.endsWith('/api/logs/frontend')) {
             return json(route, { ok: true });
         }
+        if (path.endsWith('/api/v1/execution/mode') && method === 'GET') {
+            return json(route, apiEnvelope({
+                execution_mode: 'manual',
+                entitled: false,
+                totp_enabled: false,
+                blockers: ['entitlement', 'totp', 'broker'],
+                can_submit_semi_automatic: false,
+                can_submit_automatic: false,
+            }));
+        }
+        if (path.endsWith('/api/v1/recommendations/pending-execution') && method === 'GET') {
+            return json(route, apiEnvelope(recs.filter((r) => r.status === 'pending_execution' || r.can_execute_manually), {
+                cash: { cash_balance: 0, reserved_cash: 0, available_investable_cash: 0 },
+            }));
+        }
 
         return json(route, { success: false, error: { code: 'UNMOCKED', message: `${method} ${path}` } }, 501);
     });

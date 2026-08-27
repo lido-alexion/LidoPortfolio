@@ -5,7 +5,7 @@
 | **V3 Status** | **V3 STRICTLY COMPLETE** (strict register-to-implementation pass 2026-08-26) |
 | **Document type** | Forward-looking V4 register + V5 deferred features (same genuine-new-work pool) |
 | **Created** | 2026-08-25 |
-| **Last reconciled** | 2026-08-27 (V4-FEAT-032 implemented: TOS aggregate repository boundary) |
+| **Last reconciled** | 2026-08-27 (V4-FEAT-001 COMPLETE: TOTP + execution modes + Zerodha adapter) |
 | **Canonical path** | [`specs/LidoPortfolio-V4-Wishlist.md`](LidoPortfolio-V4-Wishlist.md) |
 | **Related** | [`LidoPortfolio-V3-Specification.md`](LidoPortfolio-V3-Specification.md) · [`../implementation.md`](../implementation.md) |
 
@@ -14,7 +14,7 @@
 This register holds **only**:
 
 1. **Genuine new post-V3 functionality** that was not part of V3 normative scope (active V4 FEAT IDs and V5-deferred FEAT IDs), **or**
-2. **Genuine V4 product/spec decisions** for rules V3 never froze. **V4-SPEC-001 through V4-SPEC-006 are now FROZEN Product Owner decisions** (2026-08-26). Frozen means the rule is specified, **not** that the behaviour is implemented.
+2. **Genuine V4 product/spec decisions** for rules V3 never froze. **V4-SPEC-001 through V4-SPEC-007 are now FROZEN Product Owner decisions**. Frozen means the rule is specified, **not** that the behaviour is implemented.
 
 It is **not** a deferral bin for V3 bugs, V3 technical debt, V3 UX polish, or historical notes.
 
@@ -40,11 +40,11 @@ Living detail: [`implementation.md`](../implementation.md).
 
 ## 2. Genuine V4 features (active V4 scope)
 
-Active V4 feature count: **22** (**10** `OPEN`, **12** `COMPLETE`).
+Active V4 feature count: **22** (**9** `OPEN`, **13** `COMPLETE`).
 
 | ID | Item | Why genuinely V4 | Priority | Status |
 |----|------|------------------|----------|--------|
-| V4-FEAT-001 | Broker / live execution automation | V3 §3 / §32 Decision 11 + SD-010: V3 does **not** require broker automation; manual/semi-auto fill is V3 | P2 | OPEN |
+| V4-FEAT-001 | Broker / live execution automation | V3 §3 / §32 Decision 11 + SD-010: V3 does **not** require broker automation; manual/semi-auto fill is V3. **Product rule frozen as V4-SPEC-007**. Implemented 2026-08-27: per-portfolio modes, per-user entitlement, authenticator TOTP, Zerodha/Kite adapter, broker order lifecycle, fake-broker tests. | P2 | COMPLETE |
 | V4-FEAT-002 | Advanced orders (GTT / stop / target / partial fills) | Broker-era order types; depends on FEAT-001 | P3 | OPEN |
 | V4-FEAT-005 | Market regime assessment (non-stub) | Not a V3 normative engine; Evaluation stub residual. **PO decision (2026-08-27):** Evaluation consumes MarketAnalysisEngine categorical `market_regime` (Bullish/Neutral/Bearish via existing `regimeFromPhase()`). Numeric Evaluation factor is Bullish→100, Neutral→50, Bearish→0. No new phase/regime calculation; sentiment is not the score. Implemented via `MarketRegimeScoreMapper` in EvaluationEngine (2026-08-27). | P2 | COMPLETE |
 | V4-FEAT-006 | Liquidity & Tradability indicator calculators | Indicator Registry expansion; not V3 SoT. **PO decision (2026-08-27):** Keep the existing composite formulas and complete their runtime wiring. Do not redesign formulas, retune thresholds, change weights, or invent new metrics. Implemented via `TechnicalIndicatorService` dispatch to `LiquidityTradabilityCalculator` (2026-08-27). | P2 | COMPLETE |
@@ -171,13 +171,13 @@ This is identity/attribution, not an OHLCV snapshot copy or a generic versioning
 
 ## 4. Genuine V4 specification decisions (frozen PO rules — not implemented)
 
-These **6** IDs remain the V4 specification register (separate from the 22 active V4 features and from V5). The Product Owner resolved all six on **2026-08-26**.
+These **7** IDs are the V4 specification register (separate from the 22 active V4 features and from V5). SPEC-001–006 were resolved **2026-08-26**. **V4-SPEC-007** (broker execution modes) was recovered and frozen **2026-08-27**.
 
 **Status:** `DECIDED` — the rule is frozen. **Not** `COMPLETE`. V3 did **not** implement these rules. Do not treat V3’s current safe behaviour (below) as the V4 target.
 
 Canonical home for these rules is **this file** (`V4-SPEC-*`). Do **not** duplicate them as new V1 `SD-xxx` rows or as V3 `OD-*` / `DEP-*` (V3 remains frozen). V1 governance pointer: [`architecture/governance/SPECIFICATION_DECISIONS.md`](architecture/governance/SPECIFICATION_DECISIONS.md) (post-V3 note).
 
-### Product philosophy (binds all six)
+### Product philosophy (binds SPEC-001–006 accounting rules; SPEC-007 is live-execution)
 
 The application is primarily for **personal use** and a small number of trusted friends. Public/commercial use is a distant possibility, not the current design target.
 
@@ -195,6 +195,7 @@ The application is primarily for **personal use** and a small number of trusted 
 | V4-SPEC-004 | Cash-ledger special movements are exactly LOAN, RECALL, BRIDGE; signed amount sets cash direction | DECIDED |
 | V4-SPEC-005 | Ambiguous cross-owner sells require explicit Strategy/owner attribution; never guess | DECIDED |
 | V4-SPEC-006 | One live broker account may hold many Lido Strategies; broker = aggregate, Lido = logical ownership | DECIDED |
+| V4-SPEC-007 | Per-portfolio execution mode (manual / semi_automatic / automatic); per-user admin entitlement; authenticator TOTP required for automated broker submission; Zerodha/Kite first broker; fill ≠ executed | DECIDED |
 
 ---
 
@@ -274,7 +275,69 @@ The application is primarily for **personal use** and a small number of trusted 
 | **Current V3 behaviour** | Multi-portfolio paper/manual continues. No live broker automation (SD-010). |
 | **PO decision** | A **single live broker account may contain multiple Lido Strategies**. Do **not** impose one-broker-account / one-Strategy. |
 | **Frozen rule** | Example: Broker Account → Momentum owns Reliance 100; Value owns Reliance 50. **Broker** = actual aggregate holdings and executions. **Lido** = logical Strategy ownership and attribution. The broker does not need to understand Lido Strategy ownership. Live orders/executions therefore need sufficient **Lido-side** Strategy attribution. |
-| **Implementation implications** | Unblocks design of V4-FEAT-001 / FEAT-002; those FEATs remain `OPEN`. Do not implement broker automation in this documentation task. Do not require broker-side strategy tags. |
+| **Implementation implications** | Unblocks V4-FEAT-001 / FEAT-002 design. Do not require broker-side strategy tags. Live-mode semantics are **V4-SPEC-007**. FEAT-001 is implemented; GTT/stop/target remain FEAT-002. |
+
+---
+
+### V4-SPEC-007 — Broker execution modes, entitlement, and domain separation
+
+| Field | Content |
+|-------|---------|
+| **Status** | **DECIDED** (2026-08-27). Recovered from prior Product Owner discussion. TOTP mechanism frozen the same day. **Implemented by V4-FEAT-001** (2026-08-27). SPEC remains the product rule; FEAT-001 is the shipped behaviour. |
+| **Why V3 left it** | SD-010 / §32 Decision 11: V3 is manual/semi-auto *ledger fill*; broker automation was future. V3 §6.16 named Manual / Semi-automatic / Automatic modes but did not freeze ownership, entitlement, 2FA, or fill-vs-executed semantics. |
+| **Current V3 behaviour (unchanged for Manual)** | Approve → `pending_execution` → user records broker fill → ledger transaction → `RecommendationEngine::markExecuted()`. |
+| **Initial broker** | **Zerodha / Kite** (first concrete adapter only; not a multi-broker marketplace). |
+
+#### Frozen product decisions (authoritative)
+
+**Execution modes (exactly one per portfolio):** `manual` (default for new portfolios), `semi_automatic`, `automatic`. An entitled user may use different modes on different portfolios.
+
+- **Manual.** Lido does **not** submit orders to the broker. The user trades externally and may record/reconcile the fill with the existing manual execution path. Manual must remain fully usable without Zerodha configuration. **TOTP is not required.**
+- **Semi-automatic.** The user must **explicitly confirm** before broker submission. Viewing, selecting, or reviewing is **not** confirmation. The confirming action is **Accept / Execute Selected**. Lido then submits the corresponding order(s) to Zerodha. Broker state is tracked; fills are reconciled into the local ledger.
+- **Automatic.** Eligible recommendations are submitted **without per-order user acceptance**. Per-recommendation approval is not required once Automatic is legitimately enabled. Eligibility, authorization, TOTP enrollment, mode, capital/reservation, and other existing execution checks still apply. The user may later review/revoke/cancel where broker state permits. A **filled** broker order cannot be undone merely by changing application mode.
+
+**Entitlement (separate from mode):** Automated-execution entitlement is **per user/account**, **disabled by default**, **admin-controlled**. It never grants another user permission. Semi-Automatic and Automatic broker submission are blocked unless the current user has entitlement. Mode is not itself authorization.
+
+**2FA / TOTP:** Automated broker submission **must** be blocked server-side unless authenticator **TOTP** is enrolled and active. Compatible apps such as Google Authenticator are acceptable. **Password re-prompt is not a substitute. Email OTP is not used.** Enrollment, possession proof, recovery codes, disable/revoke, and rate-limited verification are required. Secrets and recovery codes must never be logged. Hiding UI is insufficient.
+
+- Semi-Automatic submit requires a valid TOTP (or unused recovery code) on the submit request.
+- Automatic unattended submit requires enrolled+active TOTP (no per-order prompt). Enabling Automatic requires a valid TOTP on that mode-change request.
+
+**Mode transitions:** Manual → Semi-Automatic / Automatic must respect entitlement and security prerequisites. Manual → Automatic requires **explicit confirmation**. Automatic → Manual is allowed. Downgrade is **non-destructive**: it prevents future automatic submissions and does **not** implicitly cancel broker orders already submitted.
+
+**Domain separation (do not collapse):**
+
+Recommendation → execution decision → broker order → broker execution/fill → transaction / portfolio reconciliation.
+
+- recommendation ≠ broker order
+- broker order ≠ fill
+- fill ≠ transaction
+- `TradingRecommendation.status = executed` continues to mean an **actual ledger fill** (existing V3/V4-FEAT-024 semantics). Broker **acceptance** alone must **not** mark a recommendation executed. Partial fill must **not** become a full execution.
+
+Broker state is authoritative for the broker-order lifecycle. Existing capital/reservation/lending/authorization must not be bypassed.
+
+#### Engineering decisions (not product forks)
+
+These may change without a Product Owner round-trip unless they alter capability, financial behaviour, security posture, or eligibility:
+
+- Schema (`execution_mode`, TOTP columns, `portfolio_broker_connections`, broker fields on `portfolio_tos_orders`, `portfolio_tos_execution_decisions`)
+- TOTP library: `pragmarx/google2fa` + `bacon/bacon-qr-code`; encrypted secret; hashed recovery codes; `verifyKeyNewer` replay window; 5 attempts/minute
+- Per-user Kite Connect (app `KITE_API_KEY`/`KITE_API_SECRET`; encrypted per-user access token). A shared central Zerodha account would mix whose money is at risk and would conflict with frozen cross-user isolation
+- Kite access tokens expire ~06:00 IST; Automatic only submits while a usable session exists
+- Idempotency: local unique `submission_key`; if status is unknown/in-flight, poll and **do not** place again. Kite has no first-class idempotency key; `tag` is informational
+- Reconciliation: poll every 5 minutes (`tos:reconcile-broker-orders`); Automatic sweep `tos:submit-automatic-orders`; pipeline hook after recommendation generation
+- Order default: Kite regular MARKET CNC (delivery)
+- Exact `/api/v1` paths, OpenAPI overlays, and Settings/Pending Execution layout
+
+#### Remaining unspecified (do not invent as product)
+
+- GTT / stop / target / advanced order types (**V4-FEAT-002**)
+- Multi-broker marketplace
+- Exact stale-recommendation auto-cancel policy beyond existing expire/cancel APIs
+
+#### Implementation implications
+
+V4-FEAT-001 implements the frozen rules above. Do not implement GTT/stop/target (FEAT-002). Do not change frozen V3 accounting. SPEC-007 `DECIDED` is the product rule; FEAT-001 `COMPLETE` is the shipped behaviour.
 
 ---
 
@@ -319,7 +382,7 @@ A SPEC is **DECIDED** when the Product Owner has frozen the rule in this registe
 
 An item may be marked **COMPLETE** only when: frozen decision (if SPEC), **production behaviour**, focused tests, V3 regressions green, and `implementation.md` updated — without inventing unspecified math.
 
-Moving a FEAT from V4 to V5 does **not** satisfy acceptance. Freezing V4-SPEC-001–006 does **not** mark any FEAT `COMPLETE`. V5 rows stay `OPEN` until the capability is actually implemented.
+Moving a FEAT from V4 to V5 does **not** satisfy acceptance. Freezing V4-SPEC-001–007 does **not** mark any FEAT `COMPLETE`. V5 rows stay `OPEN` until the capability is actually implemented.
 
 ---
 
@@ -347,6 +410,7 @@ Moving a FEAT from V4 to V5 does **not** satisfy acceptance. Freezing V4-SPEC-00
 | 2026-08-27 | **V4-FEAT-025 COMPLETE:** OpenAPI 3.0.3 contract for all live `/api/v1` routes at `app/openapi/v1.json` (122 operations). Tests: `OpenApiV1ContractTest`. |
 | 2026-08-27 | **V4-FEAT-026 COMPLETE:** Vitest TOS UI smoke + one Playwright Chromium path. Commands: `npm run test:js:tos`, `npm run test:e2e:tos`. |
 | 2026-08-27 | **V4-FEAT-027 COMPLETE:** Split `TradingOsController` by engine; shared `TradingOsPresenter` + `useApiGet`/`runApiMutation` on remaining TOS pages. API wire contract unchanged. Tests: `TradingOsControllerSplitTest`, OpenAPI, Vitest/Playwright TOS smoke. |
+| 2026-08-27 | **V4-SPEC-007 TOTP frozen + V4-FEAT-001 COMPLETE:** Authenticator TOTP is the 2FA mechanism. Modes, entitlement, Kite adapter, broker lifecycle, OpenAPI, and tests shipped. Remaining unspecified is GTT/FEAT-002 and multi-broker, not TOTP. |
 
 ## Appendix — Former ID map
 

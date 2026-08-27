@@ -11,12 +11,28 @@ class PortfolioProfile extends Model
 {
     use SoftDeletes;
 
+    public const EXECUTION_MODE_MANUAL = 'manual';
+
+    public const EXECUTION_MODE_SEMI_AUTOMATIC = 'semi_automatic';
+
+    public const EXECUTION_MODE_AUTOMATIC = 'automatic';
+
+    public const EXECUTION_MODES = [
+        self::EXECUTION_MODE_MANUAL,
+        self::EXECUTION_MODE_SEMI_AUTOMATIC,
+        self::EXECUTION_MODE_AUTOMATIC,
+    ];
+
     protected $table = 'portfolio_profiles';
 
     protected $fillable = [
         'user_id',
         'name',
         'is_default',
+    ];
+
+    protected $attributes = [
+        'execution_mode' => self::EXECUTION_MODE_MANUAL,
     ];
 
     protected function casts(): array
@@ -26,6 +42,20 @@ class PortfolioProfile extends Model
             'is_default' => 'boolean',
             'deleted_at' => 'datetime',
         ];
+    }
+
+    public function executionMode(): string
+    {
+        $mode = (string) ($this->execution_mode ?: self::EXECUTION_MODE_MANUAL);
+
+        return in_array($mode, self::EXECUTION_MODES, true)
+            ? $mode
+            : self::EXECUTION_MODE_MANUAL;
+    }
+
+    public function isManualExecution(): bool
+    {
+        return $this->executionMode() === self::EXECUTION_MODE_MANUAL;
     }
 
     public function resolveRouteBinding($value, $field = null)

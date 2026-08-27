@@ -554,6 +554,153 @@ final class V1OperationOverlays
                 'successStatus' => '200',
                 'noBody' => true,
             ],
+            'GET /api/v1/totp' => [
+                'summary' => 'TOTP authenticator status',
+                'description' => 'Returns whether authenticator TOTP is enabled or pending. Never returns the stored secret after enrollment (V4-FEAT-001).',
+                'successStatus' => '200',
+                'noBody' => true,
+            ],
+            'POST /api/v1/totp/begin' => [
+                'summary' => 'Start TOTP enrollment',
+                'description' => 'Creates a pending TOTP secret and returns otpauth URL, QR SVG, and secret for authenticator setup. Enrollment is not active until confirm.',
+                'successStatus' => '200',
+                'noBody' => true,
+            ],
+            'POST /api/v1/totp/confirm' => [
+                'summary' => 'Confirm TOTP enrollment',
+                'description' => 'Activates TOTP after a valid authenticator code. Returns one-time recovery codes. The stored secret is not returned.',
+                'requestBody' => $json([
+                    'type' => 'object',
+                    'required' => ['code'],
+                    'properties' => [
+                        'code' => ['type' => 'string', 'description' => 'Current authenticator code. Never logged.'],
+                    ],
+                ]),
+                'successStatus' => '200',
+            ],
+            'POST /api/v1/totp/verify' => [
+                'summary' => 'Verify a TOTP or recovery code',
+                'description' => 'Rate-limited. Replay of a used TOTP inside the validity window is rejected. Recovery codes are single-use when recovery=true.',
+                'requestBody' => $json([
+                    'type' => 'object',
+                    'required' => ['code'],
+                    'properties' => [
+                        'code' => ['type' => 'string'],
+                        'recovery' => ['type' => 'boolean'],
+                    ],
+                ]),
+                'successStatus' => '200',
+            ],
+            'POST /api/v1/totp/recover' => [
+                'summary' => 'Consume a single-use recovery code',
+                'requestBody' => $json([
+                    'type' => 'object',
+                    'required' => ['code'],
+                    'properties' => [
+                        'code' => ['type' => 'string'],
+                    ],
+                ]),
+                'successStatus' => '200',
+            ],
+            'POST /api/v1/totp/disable' => [
+                'summary' => 'Disable TOTP',
+                'description' => 'Requires a valid authenticator or recovery code. Clears secret and remaining recovery codes.',
+                'requestBody' => $json([
+                    'type' => 'object',
+                    'required' => ['code'],
+                    'properties' => [
+                        'code' => ['type' => 'string'],
+                        'recovery' => ['type' => 'boolean'],
+                    ],
+                ]),
+                'successStatus' => '200',
+            ],
+            'GET /api/v1/execution/mode' => [
+                'summary' => 'Portfolio execution mode and live-submit blockers',
+                'description' => 'Manual / semi_automatic / automatic plus entitlement, TOTP, and broker blockers. Mode is per portfolio; entitlement is per user.',
+                'successStatus' => '200',
+                'noBody' => true,
+            ],
+            'PUT /api/v1/execution/mode' => [
+                'summary' => 'Change portfolio execution mode',
+                'description' => 'Manual requires no TOTP. Semi-Automatic and Automatic require entitlement plus a valid TOTP (or recovery) code. Manual→Automatic also requires confirm_automatic. Automatic→Manual does not cancel in-flight broker orders.',
+                'requestBody' => $json([
+                    'type' => 'object',
+                    'required' => ['execution_mode'],
+                    'properties' => [
+                        'execution_mode' => ['type' => 'string', 'enum' => ['manual', 'semi_automatic', 'automatic']],
+                        'confirm_automatic' => ['type' => 'boolean'],
+                        'totp' => ['type' => 'string'],
+                        'recovery_code' => ['type' => 'string'],
+                    ],
+                ]),
+                'successStatus' => '200',
+            ],
+            'POST /api/v1/execution/submit-selected' => [
+                'summary' => 'Semi-Automatic broker submit',
+                'description' => 'Explicit Accept/Execute Selected. Server enforces user, portfolio, entitlement, TOTP, eligibility, capital/reservation, and broker session, then submits to Zerodha. Broker acceptance is not a ledger fill.',
+                'requestBody' => $json([
+                    'type' => 'object',
+                    'required' => ['recommendation_ids'],
+                    'properties' => [
+                        'recommendation_ids' => ['type' => 'array', 'items' => ['type' => 'integer']],
+                        'totp' => ['type' => 'string'],
+                        'recovery_code' => ['type' => 'string'],
+                    ],
+                ]),
+                'successStatus' => '200',
+            ],
+            'POST /api/v1/orders/{id}/reconcile' => [
+                'summary' => 'Reconcile a broker order',
+                'description' => 'Polls broker status and applies only newly filled quantity to the ledger. Partial fill does not mark the recommendation executed.',
+                'successStatus' => '200',
+                'noBody' => true,
+            ],
+            'GET /api/v1/broker/status' => [
+                'summary' => 'Zerodha/Kite connection status',
+                'description' => 'Per-user Kite Connect session. Access tokens are never returned.',
+                'successStatus' => '200',
+                'noBody' => true,
+            ],
+            'GET /api/v1/broker/kite/login-url' => [
+                'summary' => 'Kite Connect login URL',
+                'successStatus' => '200',
+                'noBody' => true,
+            ],
+            'GET /api/v1/broker/kite/callback' => [
+                'summary' => 'Kite Connect OAuth callback',
+                'description' => 'Exchanges request_token for an access token and redirects to Settings → Account. Query request_token is not logged.',
+                'successStatus' => '200',
+                'noBody' => true,
+            ],
+            'POST /api/v1/broker/kite/session' => [
+                'summary' => 'Complete Kite session from request_token',
+                'requestBody' => $json([
+                    'type' => 'object',
+                    'required' => ['request_token'],
+                    'properties' => [
+                        'request_token' => ['type' => 'string'],
+                    ],
+                ]),
+                'successStatus' => '200',
+            ],
+            'POST /api/v1/broker/kite/disconnect' => [
+                'summary' => 'Disconnect Kite',
+                'successStatus' => '200',
+                'noBody' => true,
+            ],
+            'PUT /api/v1/admin/users/{user}/automated-execution-entitlement' => [
+                'summary' => 'Admin: set automated-execution entitlement',
+                'description' => 'Per-user, disabled by default. Required for Semi-Automatic and Automatic broker submission. Not inferred from portfolio mode.',
+                'requestBody' => $json([
+                    'type' => 'object',
+                    'required' => ['entitled'],
+                    'properties' => [
+                        'entitled' => ['type' => 'boolean'],
+                    ],
+                ]),
+                'successStatus' => '200',
+            ],
         ];
     }
 }

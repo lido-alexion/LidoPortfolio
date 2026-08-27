@@ -137,13 +137,17 @@ class PortfolioLoggerServiceTest extends TestCase
                     && ($context['event'] ?? null) === 'notification.delivery_failed'
                     && ($context['bot_token'] ?? null) === '[REDACTED]'
                     && ($context['nested']['access_token'] ?? null) === '[REDACTED]'
+                    && ($context['nested']['totp_code'] ?? null) === '[REDACTED]'
+                    && ($context['nested']['recovery_codes'] ?? null) === '[REDACTED]'
                     && ($context['nested']['recommendation_id'] ?? null) === 12
                     && is_string($context['detail'] ?? null)
                     && str_contains($context['detail'], 'token=[REDACTED]')
                     && ! str_contains($encoded, 'super-secret-bot')
                     && ! str_contains($encoded, 'atk-live')
                     && ! str_contains($encoded, 'Bearer xyz')
-                    && ! str_contains($encoded, 'abc123-live');
+                    && ! str_contains($encoded, 'abc123-live')
+                    && ! str_contains($encoded, '123456')
+                    && ! str_contains($encoded, 'ABCD');
 
                 return $sanitized;
             });
@@ -158,6 +162,8 @@ class PortfolioLoggerServiceTest extends TestCase
                 'access_token' => 'atk-live',
                 'authorization' => 'Bearer xyz',
                 'recommendation_id' => 12,
+                'totp_code' => '123456',
+                'recovery_codes' => ['ABCD'],
             ],
         ]);
 

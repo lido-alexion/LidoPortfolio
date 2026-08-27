@@ -54,6 +54,8 @@ use App\Http\Controllers\Api\V1\MarketAnalysisController;
 use App\Http\Controllers\Api\V1\ScreenerRegistryController;
 use App\Http\Controllers\Api\V1\StrategyController;
 use App\Http\Controllers\Api\V1\StrategyRegistryController;
+use App\Http\Controllers\Api\V1\TradingOs\AdminExecutionEntitlementController as TradingOsAdminEntitlementController;
+use App\Http\Controllers\Api\V1\TradingOs\BrokerController as TradingOsBrokerController;
 use App\Http\Controllers\Api\V1\TradingOs\DataController as TradingOsDataController;
 use App\Http\Controllers\Api\V1\TradingOs\DiscoveryController as TradingOsDiscoveryController;
 use App\Http\Controllers\Api\V1\TradingOs\EvaluationController as TradingOsEvaluationController;
@@ -62,6 +64,7 @@ use App\Http\Controllers\Api\V1\TradingOs\NotificationController as TradingOsNot
 use App\Http\Controllers\Api\V1\TradingOs\PipelineController as TradingOsPipelineController;
 use App\Http\Controllers\Api\V1\TradingOs\RecommendationController as TradingOsRecommendationController;
 use App\Http\Controllers\Api\V1\TradingOs\ReviewController as TradingOsReviewController;
+use App\Http\Controllers\Api\V1\TradingOs\TotpController as TradingOsTotpController;
 use App\Http\Controllers\Api\WatchlistController;
 use App\Http\Controllers\Api\WatchlistsController;
 use Illuminate\Support\Facades\Route;
@@ -325,6 +328,27 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
     Route::post('/orders/{id}/cancel', [TradingOsExecutionController::class, 'ordersCancel'])->whereNumber('id');
     Route::get('/transactions', [TradingOsExecutionController::class, 'transactionsIndex']);
     Route::get('/positions', [TradingOsExecutionController::class, 'positionsIndex']);
+    Route::get('/execution/mode', [TradingOsExecutionController::class, 'executionModeShow']);
+    Route::put('/execution/mode', [TradingOsExecutionController::class, 'executionModeUpdate']);
+    Route::post('/execution/submit-selected', [TradingOsExecutionController::class, 'submitSelected']);
+    Route::post('/orders/{id}/reconcile', [TradingOsExecutionController::class, 'ordersReconcile'])->whereNumber('id');
+
+    Route::get('/totp', [TradingOsTotpController::class, 'status']);
+    Route::post('/totp/begin', [TradingOsTotpController::class, 'begin']);
+    Route::post('/totp/confirm', [TradingOsTotpController::class, 'confirm']);
+    Route::post('/totp/verify', [TradingOsTotpController::class, 'verify']);
+    Route::post('/totp/recover', [TradingOsTotpController::class, 'recover']);
+    Route::post('/totp/disable', [TradingOsTotpController::class, 'disable']);
+
+    Route::get('/broker/status', [TradingOsBrokerController::class, 'status']);
+    Route::get('/broker/kite/login-url', [TradingOsBrokerController::class, 'kiteLoginUrl']);
+    Route::get('/broker/kite/callback', [TradingOsBrokerController::class, 'kiteCallback']);
+    Route::post('/broker/kite/session', [TradingOsBrokerController::class, 'kiteSession']);
+    Route::post('/broker/kite/disconnect', [TradingOsBrokerController::class, 'disconnect']);
+
+    Route::middleware('admin')->group(function () {
+        Route::put('/admin/users/{user}/automated-execution-entitlement', [TradingOsAdminEntitlementController::class, 'update']);
+    });
 
     Route::post('/reviews/generate', [TradingOsReviewController::class, 'reviewsGenerate']);
     Route::get('/reviews', [TradingOsReviewController::class, 'reviewsIndex']);

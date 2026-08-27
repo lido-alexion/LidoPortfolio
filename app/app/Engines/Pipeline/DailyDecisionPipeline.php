@@ -7,6 +7,7 @@ use App\Engines\Discovery\DiscoveryEngine;
 use App\Engines\Evaluation\EvaluationEngine;
 use App\Engines\Evaluation\EvaluationParameterResolver;
 use App\Engines\Execution\ExecutionEngine;
+use App\Engines\Execution\LiveBrokerExecutionService;
 use App\Engines\Notification\NotificationEngine;
 use App\Engines\Recommendation\RecommendationEngine;
 use App\Engines\Review\ReviewEngine;
@@ -37,6 +38,7 @@ class DailyDecisionPipeline
         protected EvaluationParameterResolver $parameterResolver,
         protected StrategyConfigurationService $strategies,
         protected DatasetFreshnessGate $datasetFreshness,
+        protected LiveBrokerExecutionService $liveBroker,
     ) {}
 
     /**
@@ -114,6 +116,12 @@ class DailyDecisionPipeline
                 'count' => count($allRecs),
                 'batch_id' => $lastBatchId,
             ];
+
+            if ($profile->executionMode() === PortfolioProfile::EXECUTION_MODE_AUTOMATIC) {
+                $stages['broker_automatic'] = $this->liveBroker->submitAutomaticForProfile($profile->fresh(['user']));
+            } else {
+                $stages['broker_automatic'] = ['skipped' => true, 'reason' => 'mode_'.$profile->executionMode()];
+            }
 
             if ($notify && count($allRecs) > 0) {
                 $notifications = $this->notification->notifyRecommendations($profile, $allRecs);

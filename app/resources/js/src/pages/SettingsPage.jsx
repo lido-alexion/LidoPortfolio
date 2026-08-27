@@ -12,6 +12,9 @@ import { normalizeFeeComponents } from '../utils/feeCalculator';
 import { normalizeExternalStockLinks } from '../utils/externalStockLinks';
 import { showToast } from '../toast';
 import { runApiMutation } from '../hooks/useApiMutation';
+import TotpSettingsPanel from '../components/TotpSettingsPanel';
+import BrokerConnectionPanel from '../components/BrokerConnectionPanel';
+import ExecutionModePanel from '../components/ExecutionModePanel';
 
 function roundToTwoDecimals(value) {
     const num = Number(value);
@@ -650,6 +653,7 @@ export default function SettingsPage() {
 
             {activeScope === 'portfolio' && (
                 <>
+                    <ExecutionModePanel />
                     <div className="card">
                         <div className="card-header">Alerts &amp; notifications</div>
                         <div className="card-body d-flex flex-wrap gap-2">
@@ -1048,6 +1052,8 @@ export default function SettingsPage() {
 
             {activeScope === 'account' && (
                 <div className="d-grid gap-3">
+                    <TotpSettingsPanel />
+                    <BrokerConnectionPanel />
                     <div className="card lido-settings-admin-card">
                         <div className="card-header">Management</div>
                         <div className="card-body d-flex flex-wrap gap-2">
