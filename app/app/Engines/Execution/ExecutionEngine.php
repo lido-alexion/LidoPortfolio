@@ -23,6 +23,7 @@ use Illuminate\Validation\ValidationException;
 /**
  * Execution Engine — pending execution → ledger transaction (manual or future broker).
  * Does not approve recommendations; that is RecommendationEngine.
+ * Does not write recommendation `executed` status; that is RecommendationEngine::markExecuted (V4-FEAT-024).
  * Ledger fills go through TransactionWriteService (same path as POST /api/transactions).
  */
 class ExecutionEngine
@@ -100,17 +101,7 @@ class ExecutionEngine
                     'executed_at' => now(),
                 ]);
 
-            $executedAmount = round(
-                ((float) $transaction->quantity * (float) $transaction->price) + (float) ($transaction->fees ?? 0),
-                4,
-            );
-            $this->recommendation->convertReservation($recommendation, $executedAmount);
-
-            $recommendation->forceFill([
-                'status' => TradingRecommendation::STATUS_EXECUTED,
-                'executed_at' => now(),
-                'executed_transaction_id' => $transaction->id,
-            ])->save();
+            $this->recommendation->markExecuted($recommendation, $transaction);
 
             if (empty($transaction->source)) {
                 $transaction->forceFill(['source' => Transaction::SOURCE_RECOMMENDATION])->save();
@@ -264,13 +255,7 @@ class ExecutionEngine
             ])->save();
 
             if ($recommendation && $recommendation->isActionable()) {
-                $executedAmount = round($quantity * $price + $fees, 4);
-                $this->recommendation->convertReservation($recommendation, $executedAmount);
-                $recommendation->forceFill([
-                    'status' => TradingRecommendation::STATUS_EXECUTED,
-                    'executed_at' => now(),
-                    'executed_transaction_id' => $transaction->id,
-                ])->save();
+                $this->recommendation->markExecuted($recommendation, $transaction);
                 $this->lending->recordExecution($recommendation->fresh(), $transaction);
             }
 

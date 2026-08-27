@@ -2,6 +2,7 @@
  * Generate crawlable static HTML documentation from APP_DOCUMENTATION.
  * Output: app/public/docs/{keyword}.html + index.html
  *         + stox-trading-artifacts-ai-guide.md (AI download pack)
+ *         + openapi-v1.json (copy of app/openapi/v1.json when present)
  *
  * Usage: node scripts/generate-static-docs.mjs
  */
@@ -516,10 +517,17 @@ async function main() {
             `Topics: ${APP_DOCUMENTATION.length}`,
             'Open index.html or any {keyword}.html — no JavaScript required.',
             `AI download pack: ${AI_GUIDE_BASENAME}`,
+            'OpenAPI /api/v1 contract: openapi-v1.json (canonical source: app/openapi/v1.json; regenerate with php artisan openapi:v1)',
             '',
         ].join('\n'),
         'utf8',
     );
+
+    const openApiSrc = path.join(appRoot, 'openapi', 'v1.json');
+    const openApiDest = path.join(outDir, 'openapi-v1.json');
+    if (fs.existsSync(openApiSrc)) {
+        fs.copyFileSync(openApiSrc, openApiDest);
+    }
 
     console.log(
         `Static docs written to ${outDir} (${APP_DOCUMENTATION.length} topics, ${written.size} html files + index + ${AI_GUIDE_BASENAME})`,

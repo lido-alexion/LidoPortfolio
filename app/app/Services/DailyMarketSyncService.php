@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Engines\Data\DatasetVersionLedger;
 use App\Jobs\DailyMarketDataJob;
 use App\Models\Setting;
 use Carbon\Carbon;
@@ -21,6 +22,7 @@ class DailyMarketSyncService
 
     public function __construct(
         protected SettingsService $settings,
+        protected DatasetVersionLedger $datasetVersions,
     ) {}
 
     public function syncTimezone(): string
@@ -140,9 +142,20 @@ class DailyMarketSyncService
 
     public function markSuccessful(): void
     {
-        Setting::setValue(self::KEY_SYNC_DATE, $this->todayDateString());
+        $this->recordSuccessfulSyncAt(Carbon::now($this->syncTimezone()));
+    }
+
+    /**
+     * Record a successful dataset sync at an explicit instant (tests + markSuccessful).
+     * Creates a new immutable dataset version. Does not mutate earlier versions.
+     */
+    public function recordSuccessfulSyncAt(Carbon $syncedAt): void
+    {
+        $tz = $this->syncTimezone();
+        Setting::setValue(self::KEY_SYNC_DATE, $syncedAt->copy()->timezone($tz)->toDateString());
         Setting::setValue(self::KEY_SYNC_SUCCESS, '1');
-        Setting::setValue(self::KEY_SYNCED_AT, Carbon::now($this->syncTimezone())->toIso8601String());
+        Setting::setValue(self::KEY_SYNCED_AT, $syncedAt->copy()->timezone($tz)->toIso8601String());
+        $this->datasetVersions->recordSuccessfulSync($syncedAt, $tz);
     }
 
     public function markIncomplete(int $processed, int $failed): void
@@ -150,6 +163,7 @@ class DailyMarketSyncService
         Setting::setValue(self::KEY_SYNC_DATE, $this->todayDateString());
         Setting::setValue(self::KEY_SYNC_SUCCESS, '0');
         // Do not overwrite KEY_SYNCED_AT — freshness uses last *successful* sync timestamp.
+        // Do not create or activate a dataset version — incomplete sync is not a published dataset.
     }
 
     /**

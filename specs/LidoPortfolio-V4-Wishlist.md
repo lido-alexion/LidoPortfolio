@@ -5,7 +5,7 @@
 | **V3 Status** | **V3 STRICTLY COMPLETE** (strict register-to-implementation pass 2026-08-26) |
 | **Document type** | Forward-looking V4 register + V5 deferred features (same genuine-new-work pool) |
 | **Created** | 2026-08-25 |
-| **Last reconciled** | 2026-08-27 (V4-FEAT-006 implemented: liquidity/tradability composites wired through TechnicalIndicatorService) |
+| **Last reconciled** | 2026-08-27 (V4-FEAT-026 implemented: Vitest TOS UI smoke + one Playwright path) |
 | **Canonical path** | [`specs/LidoPortfolio-V4-Wishlist.md`](LidoPortfolio-V4-Wishlist.md) |
 | **Related** | [`LidoPortfolio-V3-Specification.md`](LidoPortfolio-V3-Specification.md) · [`../implementation.md`](../implementation.md) |
 
@@ -40,7 +40,7 @@ Living detail: [`implementation.md`](../implementation.md).
 
 ## 2. Genuine V4 features (active V4 scope)
 
-Active V4 feature count: **22** (**18** `OPEN`, **4** `COMPLETE`).
+Active V4 feature count: **22** (**14** `OPEN`, **8** `COMPLETE`).
 
 | ID | Item | Why genuinely V4 | Priority | Status |
 |----|------|------------------|----------|--------|
@@ -58,10 +58,10 @@ Active V4 feature count: **22** (**18** `OPEN`, **4** `COMPLETE`).
 | V4-FEAT-015 | Tax reporting / attribution / benchmarks | New product surface | P3 | OPEN |
 | V4-FEAT-021 | Strategy indicator params → EvaluationEngine wiring | EvaluationEngine is a separate TOS path from V3 Strategy fit/scoring; wiring is a V4 Evaluation design choice (was TD-19 / V4-BUG-002 / V4-TD-001). **PO decision (2026-08-26):** Strategy catalogue parameters are authoritative — a valid Strategy value overrides global Evaluation config; otherwise the existing global/default is used. Keys: `rsi_period`, `lookback_days`, `sma_fast`, `sma_slow`, `atr_period`, `volume_sma_period`, `benchmark`. Implemented via `EvaluationParameterResolver` (2026-08-26). | P1 | COMPLETE |
 | V4-FEAT-022 | Hard dataset publish / validation gate | Pre-discovery data-platform hardening (was V4-TD-002). **PO clarification (2026-08-27) — correction of the same feature, not a new ID:** Discovery is allowed when the required market dataset was successfully synced within the previous 24 hours of the pipeline run. On Monday, the allowed freshness window is 72 hours. The comparison is based strictly on timestamps, not calendar dates. Holiday-aware freshness / trading-calendar handling is out of scope (deferred to V5). Supersedes the earlier `published === true` / “synced today” gate. Implemented via `DatasetFreshnessGate` in `DailyDecisionPipeline` (2026-08-27). | P1 | COMPLETE |
-| V4-FEAT-023 | Immutable dataset versioning | Data-platform hardening (was V4-TD-003) | P2 | OPEN |
-| V4-FEAT-024 | Recommendation `markExecuted` ownership refactor | Architecture cleanup (was V4-TD-004) | P3 | OPEN |
-| V4-FEAT-025 | OpenAPI for `/api/v1` | Machine-readable contract (was V4-TD-006) | P3 | OPEN |
-| V4-FEAT-026 | Vitest / E2E smoke for TOS UI | New test harness (was V4-TD-007) | P2 | OPEN |
+| V4-FEAT-023 | Immutable dataset versioning | Data-platform hardening (was V4-TD-003). **Implemented (2026-08-27):** a successful daily market sync appends an insert-only `portfolio_tos_dataset_versions` row with a unique `version_key`; DiscoveryRun records that key; later syncs create a new row and do not mutate earlier identity. Failed/incomplete syncs create no version. FEAT-022 freshness remains last-successful-sync timestamp + 24h/72h Monday. | P2 | COMPLETE |
+| V4-FEAT-024 | Recommendation `markExecuted` ownership refactor | Architecture cleanup (was V4-TD-004). **Implemented (2026-08-27):** `RecommendationLifecycleService::markExecuted()` (façade `RecommendationEngine::markExecuted`) writes executed status + converts reservation. `ExecutionEngine` orchestrates fill and calls that method inside the existing DB transaction. API/status/idempotency unchanged. | P3 | COMPLETE |
+| V4-FEAT-025 | OpenAPI for `/api/v1` | Machine-readable contract (was V4-TD-006). **Implemented (2026-08-27):** OpenAPI 3.0.3 at `app/openapi/v1.json` covers all live `/api/v1` routes (122 operations) as they behave today. No API redesign, no Swagger UI. | P3 | COMPLETE |
+| V4-FEAT-026 | Vitest / E2E smoke for TOS UI | New test harness (was V4-TD-007). **Implemented (2026-08-27):** Vitest + jsdom smoke for Recommendations/Discovery chrome, loading/empty/error, Review→Approve, pipeline freshness error; one Playwright Chromium path with intercepted `/api/v1`. | P2 | COMPLETE |
 | V4-FEAT-027 | Split TradingOsController / shared React hooks | Maintainability (was V4-TD-008/009) | P3 | OPEN |
 | V4-FEAT-028 | Structured logging / pagination consistency | Platform hardening (was V4-TD-010/011) | P3 | OPEN |
 | V4-FEAT-029 | Pluggable Evaluation rules modules | Evaluation architecture (was V4-TD-012) | P3 | OPEN |
@@ -136,6 +136,36 @@ Implementation principles:
 **PO decision (2026-08-27):** Keep the existing composite formulas and complete their runtime wiring. Do **not** redesign the formulas, retune thresholds, change component weights, or invent new liquidity/tradability metrics. Registry definitions and `LiquidityTradabilityCalculator` remain the source of truth.
 
 **Implementation (2026-08-27):** `TechnicalIndicatorService` `evaluate` / `evaluateSeries` dispatch `liquidity_score` and `tradability_score` to `LiquidityTradabilityCalculator::liquidityScore` / `tradabilityScore`, using the already-wired primary series at each bar. Missing/insufficient inputs still yield `null` (mean of available mapped components; no 0/50/100 fallback). Range 0–100 and existing caps are unchanged. Composites stay `screenable: false` (not in the Screener picker) and are **not** Evaluation/Strategy scoring inputs.
+
+### V4-FEAT-023 — Immutable dataset versioning (COMPLETE)
+
+**Requirement (from V4-TD-003 / PB-002 / TD-13):** Replace the soft date-string `dataset_version` (`ohlcv-{latest_price_date}`) with a reproducible published snapshot identity so historical decision runs remain attributable to the dataset they consumed.
+
+**Implementation (2026-08-27):** Successful `DailyMarketSyncService::markSuccessful()` / `recordSuccessfulSyncAt()` appends an insert-only row in `portfolio_tos_dataset_versions` via `DatasetVersionLedger`. Identity is `version_key` = `ds-{YmdHis}-{YYYYMMDD|none}` in `cron_timezone` (suffix `-2`, `-3`, … on same-instant collision). Descriptive stats (`latest_price_date`, `price_bars`, `securities_active`) are frozen at insert time. Rows cannot be updated or deleted.
+
+`DataEngine::currentDatasetVersion()` returns the current successful `version_key` (or `none`). `DiscoveryEngine` already stamps `DiscoveryRun.dataset_version` from that value; Evaluation/Recommendation stay linked through the discovery run. Later successful syncs create a distinct version and retarget only the current pointer (`last_successful_dataset_version_key`). Incomplete/failed syncs do not create a version and do not change the current pointer or last-success timestamp.
+
+FEAT-022 is unchanged: the pipeline freshness gate still uses `lastSuccessfulSyncAt()` and the 24h / Monday-72h timestamp rule. A version row does not bypass a stale timestamp.
+
+This is identity/attribution, not an OHLCV snapshot copy or a generic versioning framework.
+
+### V4-FEAT-024 — Recommendation `markExecuted` ownership (COMPLETE)
+
+**Requirement (from V4-TD-004 / TD-02 / PB-014 / SD-018):** ExecutionEngine must not write recommendation `executed` status; route that transition through `RecommendationEngine::markExecuted()`.
+
+**Implementation (2026-08-27):** `RecommendationLifecycleService::markExecuted()` converts the cash reservation and writes `status=executed`, `executed_at`, and `executed_transaction_id`. `RecommendationEngine` forwards. `ExecutionEngine::completeRecommendationFromTransaction` and `executeOrder` call it inside the existing fill transaction. Fill preconditions, order status, lending `recordExecution`, and HTTP APIs are unchanged.
+
+### V4-FEAT-025 — OpenAPI for `/api/v1` (COMPLETE)
+
+**Requirement (from V4-TD-006):** Provide a machine-readable OpenAPI contract for the existing `/api/v1` API surface.
+
+**Implementation (2026-08-27):** Canonical OpenAPI **3.0.3** document at `app/openapi/v1.json`, generated from live Laravel routes (`php artisan openapi:v1`). All 122 `/api/v1` operations are present; non-v1 routes are excluded. Auth is documented as Sanctum SPA cookies (`laravel_session`) plus optional `X-Profile-Id`. Overlay metadata records known request/response shapes from source; undocumented POST/PUT bodies stay generic (`additionalProperties: true`). Validation: JSON parse + `V1DocumentBuilder::assertValidDocument` + `openapi:v1 --check` + `OpenApiV1ContractTest`. Static-docs copy: `app/public/docs/openapi-v1.json`. No Swagger UI, no dedicated serve endpoint, no API behaviour change.
+
+### V4-FEAT-026 — Vitest / E2E smoke for TOS UI (COMPLETE)
+
+**Requirement (from V4-TD-007 / TD-12 / PB-032):** Smoke Vitest plus one Playwright path for TOS pages so UI regressions are not invisible behind backend-only tests.
+
+**Implementation (2026-08-27):** Vitest (`npm run test:js:tos`) renders Recommendations and Discovery with mocked `/api/v1` envelopes. Playwright (`npm run test:e2e:tos`) loads the real App in Chromium via a Vite harness and intercepts APIs (no live backend). Existing `node --test` files remain; `npm run test:js` runs both.
 
 ---
 
@@ -312,6 +342,10 @@ Moving a FEAT from V4 to V5 does **not** satisfy acceptance. Freezing V4-SPEC-00
 | 2026-08-27 | **V4-FEAT-022 COMPLETE (correction):** `DatasetFreshnessGate` compares last successful sync timestamp to pipeline `started_at`. Tests: `DatasetFreshnessGateTest`, `DatasetPublishGateTest`. |
 | 2026-08-27 | **V4-FEAT-005 PO decision:** Evaluation consumes MarketAnalysisEngine categorical `market_regime` (Bullish/Neutral/Bearish); numeric factor is 100/50/0. No new regime calculation; sentiment unused. Feature remains **OPEN** until implementation is verified. |
 | 2026-08-27 | **V4-FEAT-005 COMPLETE:** `EvaluationEngine` maps `MarketAnalysisEngine::latest()['market_regime']` via `MarketRegimeScoreMapper`. Tests: `MarketRegimeScoreMapperTest`, `EvaluationMarketRegimeTest`. |
+| 2026-08-27 | **V4-FEAT-023 COMPLETE:** Successful market sync records an insert-only `portfolio_tos_dataset_versions` row; DiscoveryRun stores that `version_key`; failed/incomplete syncs create none. FEAT-022 freshness unchanged. Tests: `DatasetVersioningTest`. |
+| 2026-08-27 | **V4-FEAT-024 COMPLETE:** `RecommendationEngine::markExecuted()` / `RecommendationLifecycleService` own the executed-status write; ExecutionEngine orchestrates fill only. Tests: `RecommendationMarkExecutedTest`. |
+| 2026-08-27 | **V4-FEAT-025 COMPLETE:** OpenAPI 3.0.3 contract for all live `/api/v1` routes at `app/openapi/v1.json` (122 operations). Tests: `OpenApiV1ContractTest`. |
+| 2026-08-27 | **V4-FEAT-026 COMPLETE:** Vitest TOS UI smoke + one Playwright Chromium path. Commands: `npm run test:js:tos`, `npm run test:e2e:tos`. |
 
 ## Appendix — Former ID map
 

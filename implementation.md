@@ -6,7 +6,7 @@ Living reference for Lido Portfolio. **Update this file whenever code changes.**
 ## Agent / documentation policy (May 2026)
 
 - Do not use or recreate `design_doc.md` or removed phase/report/spec files.
-- **Canonical docs:** `implementation.md` (technical), **`debugging.md`** (production debug hooks & agent runbook), `README.md` (quick start + **Features** overview), **`deploy/DEPLOY.md`** (production deploy & updates), **`.cursor/skills/deploy-cpanel/SKILL.md`** (agent deploy workflow), `DEPLOYMENT_VALIDATION_PLAN.md`, `portfolio-history-rebuild-report.md`, `app/API_DOCUMENTATION.md`.
+- **Canonical docs:** `implementation.md` (technical), **`debugging.md`** (production debug hooks & agent runbook), `README.md` (quick start + **Features** overview), **`deploy/DEPLOY.md`** (production deploy & updates), **`.cursor/skills/deploy-cpanel/SKILL.md`** (agent deploy workflow), `DEPLOYMENT_VALIDATION_PLAN.md`, `portfolio-history-rebuild-report.md`, `app/API_DOCUMENTATION.md`, **`app/openapi/v1.json`** (`/api/v1` OpenAPI 3.0.3).
 - Cursor rule `.cursor/rules/Always-update-implementation-details-in-implementation-md-file.mdc` enforces: read this file first; update it after code changes.
 - Cursor rule `.cursor/rules/Keep-contextual-help-docs-in-sync.mdc` enforces keeping in-app contextual help (`appDocumentation.js` + routing links) updated for every feature add/change/delete.
 - Persistent instructions across sessions: project rules in `.cursor/rules/` (`alwaysApply: true`) + optional User Rules in Cursor Settings.
@@ -333,7 +333,7 @@ Completion criterion (product owner, 2026-08-26 strict pass): every normative V3
 Tracked in [`specs/LidoPortfolio-V4-Wishlist.md`](specs/LidoPortfolio-V4-Wishlist.md) (strict rewrite 2026-08-26; Product Owner V4/V5 split 2026-08-26):
 
 - **SPEC-001–006:** **DECIDED** 2026-08-26 (simple WAVG adoption merge with final avg to 2 dp half-up; no special rights CA; split/bonus restatement of qty/cost/trailing/stop/target; cash-ledger special types exactly LOAN/RECALL/BRIDGE with signed amount; explicit sell attribution; multi-strategy per broker account). Frozen product rules, **not implemented**. See wishlist §4.
-- **Active V4 FEAT (22):** **V4-FEAT-021 COMPLETE** (2026-08-26); **V4-FEAT-022 COMPLETE** (2026-08-27); **V4-FEAT-005 COMPLETE** (2026-08-27); **V4-FEAT-006 COMPLETE** (2026-08-27) — `liquidity_score` / `tradability_score` calculated through TechnicalIndicatorService via existing LiquidityTradabilityCalculator formulas. Remaining 18 stay OPEN: broker/live, TAF remaining phases, Review/admin/cash/tax polish, dataset versioning, OpenAPI/E2E/controller split/logging/evaluation modules/TOS repos, etc.
+- **Active V4 FEAT (22):** **V4-FEAT-021 COMPLETE** (2026-08-26); **V4-FEAT-022 COMPLETE** (2026-08-27); **V4-FEAT-005 COMPLETE** (2026-08-27); **V4-FEAT-006 COMPLETE** (2026-08-27); **V4-FEAT-023 COMPLETE** (2026-08-27); **V4-FEAT-024 COMPLETE** (2026-08-27); **V4-FEAT-025 COMPLETE** (2026-08-27); **V4-FEAT-026 COMPLETE** (2026-08-27) — Vitest TOS UI smoke + one Playwright path. Remaining 14 stay OPEN: broker/live, TAF remaining phases, Review/admin/cash/tax polish, controller split/logging/evaluation modules/TOS repos, etc.
 - **V5-deferred FEAT (14, still OPEN):** B4 banner, notification channels, indicator-registry cutover, mobile/AI/ML/markets/replay, CI/secrets deploy, Discovery/Evaluation UX polish, TS/grid migration, optional token API. Roadmap only — not implemented.
 
 **Closed in V3 (not V4):** OD-16 Strategy window UI; schedulerTimestamp; DailyMarketDataJobTest; max_position enforcement; all former open V3 bug/TD/UX/HIST active rows.
@@ -394,7 +394,7 @@ Broker/GTT, market_regime, dataset gates, OpenAPI, repos, SPEC-001–006, Evalua
 
 ### Explicitly not in this feature
 
-Holiday / trading-calendar freshness (V5), DataEngine redesign, dataset versioning (FEAT-023), completeness scores, extra freshness rules, broker, SPEC-001–006, FEAT-021 scoring-parameter changes. Daily-sync skip-if-already-synced-today is unchanged.
+Holiday / trading-calendar freshness (V5), DataEngine redesign, completeness scores, extra freshness rules, broker, SPEC-001–006, FEAT-021 scoring-parameter changes. Daily-sync skip-if-already-synced-today is unchanged. Dataset versioning is V4-FEAT-023 (separate; does not change this gate).
 
 ## V4-FEAT-005 — Evaluation market regime (2026-08-27)
 
@@ -443,6 +443,116 @@ Screener picker is unchanged (`screenable: false`). Evaluation / Strategy / Reco
 ### Explicitly not in this feature
 
 Formula redesign, Evaluation weights, Strategy scoring, new Screener filters, FEAT-001/002/005/008/009/015/021–023/025–029/032, SPEC-001–006.
+
+## V4-FEAT-023 — Immutable dataset versioning (2026-08-27)
+
+**Status:** **COMPLETE**. A successful market-dataset sync produces an identifiable immutable version. Downstream Discovery/decision-pipeline runs record which version they consumed. Later syncs create a new version and do not mutate earlier identity. Failed/incomplete syncs do not create or activate a successful version. FEAT-022 freshness is unchanged (last successful sync timestamp; 24h weekday / 72h Monday in `cron_timezone`; inclusive; no holiday calendar).
+
+### Why the date-string was not enough
+
+`DataEngine::currentDatasetVersion()` previously returned `ohlcv-{max(price_date)}` (or `ohlcv-none`). That label is not unique per successful sync, and it can be recomputed from live OHLCV after later mutations. Historical `DiscoveryRun.dataset_version` stored that string, but it was not a published snapshot identity (PB-002 / TD-13).
+
+### Mechanism
+
+`DailyMarketSyncService::markSuccessful()` delegates to `recordSuccessfulSyncAt()`:
+
+1. Write the existing success settings (`last_daily_market_sync_date`, `_success`, `_at`) — same freshness timestamp FEAT-022 uses.
+2. `DatasetVersionLedger::recordSuccessfulSync()` inserts one row into `portfolio_tos_dataset_versions` and points `last_successful_dataset_version_key` at the new `version_key`.
+
+`version_key` format: `ds-{YmdHis}-{YYYYMMDD|none}` in the sync timezone. Same-instant collisions append `-2`, `-3`, …. Descriptive columns (`latest_price_date`, `price_bars`, `securities_active`) are captured at insert time and then frozen. The Eloquent model rejects update/delete.
+
+`markIncomplete()` still does not overwrite `last_daily_market_sync_at` and does not insert or retarget a version.
+
+`DataEngine::currentDatasetVersion()` returns the current ledger key (`none` if none exists). `DiscoveryEngine::run()` continues to stamp `DiscoveryRun.dataset_version` from that value. Evaluation/Recommendation are not given their own version columns; they remain attributable via `discovery_run_id`.
+
+The daily decision pipeline still gates on `DatasetFreshnessGate` timestamps. A version row does not make a stale dataset admissible. `datasetStatus()['published']` remains “synced today” for inspection.
+
+This is **identity/attribution**, not a copy of OHLCV bars. Live `portfolio_stock_prices` rows remain upserted by later syncs. Reconstructing exact historical bars from a version key is out of scope.
+
+### Tests
+
+`tests/Feature/DatasetVersioningTest.php` (create, immutability, distinct later version, failed/incomplete create none, DiscoveryRun stamp, historical link preserved, FEAT-022 stale/OHLCV bypass still blocked). Existing `DatasetFreshnessGateTest`, `DatasetPublishGateTest`, `DailyMarketSyncTest` remain green.
+
+### Explicitly not in this feature
+
+OHLCV snapshot copies, content hashes, generic versioning framework, DataEngine redesign, holiday/exchange calendar (V5), FEAT-021/022 behaviour changes, broker/Strategy/Evaluation/UI, SPEC-001–006.
+
+## V4-FEAT-024 — Recommendation `markExecuted` ownership (2026-08-27)
+
+**Status:** **COMPLETE**. Architecture cleanup (SD-018 / TD-02 / PB-014). Execution still orchestrates the fill; Recommendation owns writing `executed` status.
+
+### Old ownership
+
+`ExecutionEngine` wrote `TradingRecommendation` `status=executed`, `executed_at`, and `executed_transaction_id` directly inside `completeRecommendationFromTransaction` and `executeOrder`, immediately after `RecommendationEngine::convertReservation()`. Controllers (`POST /api/transactions`) and APIs were unchanged entry points and still are.
+
+### New ownership
+
+`RecommendationLifecycleService::markExecuted($recommendation, $transaction)` converts the reservation and writes the executed fields. `RecommendationEngine::markExecuted()` is the façade. `ExecutionEngine` calls that method inside the existing fill `DB::transaction` (order status, lending `recordExecution`, transaction source still Execution-owned). Preconditions (pending execution, security match, same-tx idempotency, already-executed-by-other-tx, `canExecuteManually`, lending `assertCanExecute`) stay on ExecutionEngine so error messages and API contracts are unchanged.
+
+`markExecuted` does **not** open its own transaction, so it remains part of the caller’s atomic fill unit (including TransactionController’s create+complete wrapper).
+
+Revert-on-delete (`revertLinkedFillBeforeTransactionDelete`) still returns a rec to `pending_execution` from ExecutionEngine — inverse of fill, out of this feature’s scope.
+
+### Tests
+
+`tests/Feature/RecommendationMarkExecutedTest.php`. Existing `FinancialIntegrityHardeningTest`, `RecommendationLendingExecutionTest`, `TradingOsPipelineTest` remain green.
+
+### Explicitly not in this feature
+
+Broker automation, advanced orders, API redesign, formula changes, dataset freshness/versioning, Evaluation, SPEC-001–006.
+
+## V4-FEAT-025 — OpenAPI for `/api/v1` (2026-08-27)
+
+**Status:** **COMPLETE**. Machine-readable contract for the existing `/api/v1` surface. Documentation only — no API redesign, no behaviour change, no Swagger UI.
+
+### Canonical document
+
+- OpenAPI **3.0.3** at [`app/openapi/v1.json`](app/openapi/v1.json) (Laravel app root; 122 operations).
+- Regenerated from live routes: `php artisan openapi:v1` (from `app/`). `--check` fails if the file is missing or stale.
+- Builder: `App\Support\OpenApi\V1DocumentBuilder` + overlays `V1OperationOverlays`. Paths come from Laravel’s router (`api/v1` prefix). Overlay keys that are not live routes fail tests.
+- Delivery copy: `app/public/docs/openapi-v1.json` (written by `openapi:v1`; also copied after `scripts/generate-static-docs.mjs` wipes `public/docs/`). No dedicated HTTP endpoint; no Swagger UI (the repo has no existing interactive API explorer).
+
+### What it documents
+
+All authenticated `/api/v1` routes (Sanctum SPA cookie `laravel_session` + `active.portfolio`). Header `X-Profile-Id` (alias `X-Portfolio-Id` / query `portfolio_id`). Success/error `ApiEnvelope` plus Laravel `{message, errors}` 422. Admin indicator routes marked `x-stox-admin` with 403.
+
+V4 behaviour appears only where it is already on the wire: dataset `dataset_version` (FEAT-023), pipeline `DATASET_NOT_FRESH` (FEAT-022), evaluation Strategy parameter resolution + market_regime 100/50/0 (FEAT-021 / FEAT-005), order execute → `markExecuted` (FEAT-024). Login and ledger fill remain on legacy `/api` and are **not** v1 paths.
+
+POST/PUT bodies without a source-derived overlay are documented as optional JSON objects with `additionalProperties: true` (no invented fields). Default success status is 200 unless an overlay records the controller’s actual 201/202/405.
+
+### Tests / validation
+
+`tests/Feature/OpenApiV1ContractTest.php`: file exists, parses, OpenAPI 3.0.3, live route keys ≡ spec keys, no non-`/api/v1` paths, Sanctum + admin flags, V4 spot-checks, overlay keys ⊆ live routes, `openapi:v1 --check`. Structural validation is `V1DocumentBuilder::assertValidDocument` (no OpenAPI Composer package in the project).
+
+### Explicitly not in this feature
+
+API redesign, Swagger UI, documenting `/api` (non-v1) as v1, a GET endpoint solely to serve the spec, SPEC-001–006.
+
+## V4-FEAT-026 — Vitest / E2E smoke for TOS UI (2026-08-27)
+
+**Status:** **COMPLETE**. Smoke coverage only — not a frontend-framework migration and not comprehensive UI tests.
+
+Existing `node --test tests/js/*.test.mjs` helpers stay. New **Vitest + jsdom + Testing Library** suite covers TOS pages with mocked `/api/v1` (fixtures match `TradingOsController` envelopes). One **Playwright Chromium** path mounts the real `App` via a Vite harness and intercepts APIs (no Laravel, no live market, no secrets).
+
+### Commands (from `app/`)
+
+```powershell
+npm run test:js:tos      # Vitest TOS smoke
+npm run test:e2e:tos     # one Playwright path (first time: npx playwright install chromium)
+npm run test:js          # existing node:test files + Vitest TOS smoke
+npm run test:js:unit     # node:test files only
+```
+
+### Coverage
+
+- Shell: session-restore copy; authenticated header/sidebar + Recommendations chrome.
+- Recommendations: loading, INFY fixture, empty, API error toast, Review → Approve, pipeline `DATASET_NOT_FRESH` 422.
+- Discovery (`/candidates`): candidate list, empty, Evidence modal.
+- Playwright: Chromium Recommendations Review → Approve.
+
+### Explicitly not in this feature
+
+Full page coverage, replacing node:test, Swagger, live backend E2E, SPEC-001–006.
 
 ## V3 residual — UNFUNDED zero-own lending offer (2026-08-24)
 
@@ -1385,10 +1495,10 @@ Lending / DEP-PARTIAL-LEND requests, recall, weakest-position, trailing, broker 
 | Discovery | `Discovery\DiscoveryEngine` | `portfolio_tos_candidates` (orchestrates PatternScan + Screener) |
 | Evaluation | `Evaluation\EvaluationEngine` | Factor facts only (no Strategy weights). **V4-FEAT-005:** `market_regime` numeric fact from MarketAnalysisEngine categorical regime (Bullish=100 / Neutral=50 / Bearish=0) via `MarketRegimeScoreMapper`. Indicator periods / lookback / benchmark from `Evaluation\EvaluationParameterResolver`. |
 | Strategy | `Services\StrategyConfigurationService` | Versioned strategy config (factors, thresholds, rules); consumed by Recommendation |
-| Recommendation | `Recommendation\RecommendationEngine` | Thin façade only (TD-001) — generation delegated to `Recommendation\RecommendationGenerationPipeline` (TD-002: Strategy scoring → Market Opinion → Portfolio Decision → Ranking → Capital Allocation → Trade gen); lifecycle (Approve/Reject/Defer; pending-execution / cancel-execution / expire / reopen; cash reservation; list/history queries) delegated to `Recommendation\RecommendationLifecycleService` (TD-001) |
+| Recommendation | `Recommendation\RecommendationEngine` | Thin façade only (TD-001) — generation delegated to `Recommendation\RecommendationGenerationPipeline` (TD-002); lifecycle (Approve/Reject/Defer; pending-execution / cancel-execution / expire / reopen; **V4-FEAT-024 `markExecuted`**; cash reservation; list/history queries) delegated to `Recommendation\RecommendationLifecycleService` |
 | Market Analysis | `Market\MarketAnalysisEngine` | Benchmark OHLCV → market analytics / sentiment / phase (SD-032); façade `MarketAnalyticsService` |
 | Notification | `Notification\NotificationEngine` | Telegram + `portfolio_tos_notifications`; message text delegated to `Services\Notification\NotificationMessageComposer` (TD-005). Recommendation Telegram notify skips informational HOLD / WATCH (`isActionable()` / `ACTIONABLE_ACTIONS` only). |
-| Execution | `Execution\ExecutionEngine` | Pending execution → ledger transaction (manual or future broker); completion tracking |
+| Execution | `Execution\ExecutionEngine` | Pending execution → ledger transaction (manual or future broker); does **not** write recommendation `executed` status (calls `RecommendationEngine::markExecuted`) |
 | Review | `Review\ReviewEngine` | Dashboard, outcomes, reports |
 | Backtest | `Services\Backtest\BacktestSimulationEngine` | Historical strategy simulation (paper portfolio; resumable ~20s slices) |
 | Pipeline | `Pipeline\DailyDecisionPipeline` | End-to-end stages. **V4-FEAT-022:** `DatasetFreshnessGate` — last successful sync age ≤ 24h (72h on Monday, cron timezone) before Discovery. |
@@ -1403,7 +1513,7 @@ Lending / DEP-PARTIAL-LEND requests, recall, weakest-position, trailing, broker 
 - **TD-003 (2026-07-27, code audit remediation):** Separated universe sync orchestration from the per-stock provider fetch loop. New `Services\UniversePrice\UniversePriceBatchExecutor::run()` (built with `PriceFetchService` + `SyncLogService`) owns the batch loop — moved verbatim: per-stock `syncStock`, `PriceSyncNotificationContext::withoutTelegram` wrapper, inter-stock delay, stats accumulation, per-stock `SyncLogService::log` messages. `UniversePriceSyncService` keeps orchestration (enable flag, in-progress lock, maintenance windows, cursor, status, sync-run begin/complete) and delegates the loop via `$this->executor->run(...)`; `looksLikeRateLimit()` stayed on the service (also used by `recentProviderIssues()`). New trailing `?UniversePriceBatchExecutor $executor = null` constructor param defaults to a fresh executor, so existing call sites needed no changes. Public API unchanged; verified via `php vendor/bin/phpunit --filter "UniversePriceSync|HistoryDepthBackfillServiceTest|ScheduleRegistrationTest"` (25/25 passing) plus full suite (400/405 — 5 pre-existing unrelated failures, none touching universe price sync).
 - **TD-004 (2026-07-27, code audit remediation):** Split independent pattern detectors out of `PatternDetectionService` into `Services\PatternDetection\` (`PatternDetectorInterface`, `CandleMetrics`, candlestick single/two/three-bar, chart reversal/continuation). `PatternDetectionService` orchestrates `scanBars()` only; public API unchanged.
 - **TD-005 (2026-07-27, code audit remediation):** Separated notification message composition from dispatch via `Services\Notification\NotificationMessageComposer`. `NotificationEngine` and `AlertNotificationService` keep queue/dispatch only. **(2026-07-28)** `notifyRecommendations` only queues Telegram for actionable types (`OPEN_POSITION` / `INCREASE_POSITION` / `REDUCE_POSITION` / `EXIT_POSITION`, plus legacy BUY/SELL via `isActionable()`); HOLD / WATCH insights are skipped.
-- **TD-001 (2026-07-27, code audit remediation):** Split lifecycle out of `RecommendationEngine` into `Recommendation\RecommendationLifecycleService`. Engine is a thin façade over generation pipeline + lifecycle service; public APIs unchanged.
+- **TD-001 (2026-07-27, code audit remediation):** Split lifecycle out of `RecommendationEngine` into `Recommendation\RecommendationLifecycleService`. Engine is a thin façade over generation pipeline + lifecycle service; public APIs unchanged. **V4-FEAT-024 (2026-08-27):** `markExecuted` added here; ExecutionEngine no longer writes recommendation `executed` status.
 - **TD-006 (2026-07-27, code audit remediation):** Extracted duplicated `TradingRecommendation` query patterns into Eloquent local scopes on the model (no Repositories layer — SD-013 deferred). Scopes: `forProfile`, `pendingExecution`, `openForReview`, `withCashReservation`, `actionableTypes`, `openList`, `staleOpen`; status constants `OPEN_LIST_STATUSES`, `STALE_OPEN_STATUSES`. Callers updated in `RecommendationLifecycleService`, `CashManagementService`, `RecommendationGenerationPipeline`, `RecommendationPreviewService`, `ReviewEngine`, `ExecutionEngine`, `TradingOsController`, `TransactionController`, `NotificationEngine`. Behaviour unchanged.
 - **TD-007 (2026-07-27, code audit remediation):** Added `Support\TradingOsConfig` — typed accessors and `KEY_*` path constants for all `trading_os` config sections. Replaced scattered `config('trading_os....')` at call sites: `RunDecisionPipelineCommand`, `DailyDecisionPipeline`, `TradingOsController`, `routes/console.php`, and engine config reads (`DiscoveryEngine`, `EvaluationEngine`, `NotificationEngine`, `ReviewEngine`, `MarketAnalysisEngine` — one-line delegation only). No config file redesign.
 - **TD-011 (2026-07-27, code audit remediation):** Centralised recommendation pipeline thresholds and domain strings. `TradingRecommendation` gains action (`ACTION_*`), risk (`RISK_*`), capital allocation (`ALLOCATION_*`), market opinion (`OPINION_*`, `STRENGTH_*`), and legacy `STATUS_ACTIVE_LEGACY` constants. `RecommendationGenerationPipeline::prepareContext()` reads strategy JSON via `TradingOsConfig::STRATEGY_*` / `THRESHOLD_*` keys and falls back to `trading_os.recommendation.*` getters (expanded in `config/trading_os.php`: `very_strong_high/low`, `max_concurrent_recommendations`, `max_new_positions_per_cycle`). Generation/lifecycle logic uses named constants instead of inline magic strings; behaviour unchanged.
@@ -1418,7 +1528,7 @@ Lending / DEP-PARTIAL-LEND requests, recall, weakest-position, trailing, broker 
 
 ### REST `/api/v1` (additive)
 
-Sanctum auth. `TradingOsController`: securities, imports, candidates, evaluations, recommendations (`/review` with `approved|accepted|rejected|deferred`, `/pending-execution`, `/cancel-execution`, `/expire`, `/reopen`), notifications, orders (BC), review dashboard/outcomes, pipeline. Ledger create: `POST /api/transactions` (+ optional `recommendation_id`).
+Sanctum auth. Machine-readable contract: [`app/openapi/v1.json`](app/openapi/v1.json) (OpenAPI 3.0.3, V4-FEAT-025). `TradingOsController`: securities, imports, candidates, evaluations, recommendations (`/review` with `approved|accepted|rejected|deferred`, `/pending-execution`, `/cancel-execution`, `/expire`, `/reopen`), notifications, orders (BC), review dashboard/outcomes, pipeline. Ledger create: `POST /api/transactions` (+ optional `recommendation_id`).
 
 ### Frontend
 
@@ -1792,7 +1902,9 @@ php artisan stocks:sync              # NSE equity master CSV import
 php artisan portfolio:sync-universe-prices --mode=backfill --all   # one-time ~1y OHLCV for full NSE universe
 php artisan portfolio:sync-universe-prices --mode=daily            # one batch of universe incremental sync
 php artisan test                     # PHPUnit (uses sqlite in-memory)
-npm run test:js                      # frontend unit tests
+npm run test:js                      # node:test + Vitest TOS smoke
+npm run test:js:tos                  # Vitest TOS UI smoke only
+npm run test:e2e:tos                 # one Playwright TOS path (npx playwright install chromium once)
 npm run build                        # production JS/CSS bundle
 
 # API smoke (server must be on :8001)

@@ -36,6 +36,12 @@ deploy/deploy-table.md
 deploy/deploy-manifest.json
 deploy/*trace*.log
 
+# Playwright / Vitest artifacts
+app/playwright-report/
+app/test-results/
+app/blob-report/
+app/playwright/.cache/
+
 # Local one-off debug / investigation artifacts (keep on disk, do not commit)
 app/scripts/
 app/storage/debug-bhavcopy/

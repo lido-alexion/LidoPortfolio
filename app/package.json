@@ -6,8 +6,11 @@
         "docs:static": "node scripts/generate-static-docs.mjs",
         "build": "node scripts/generate-static-docs.mjs && vite build",
         "dev": "vite",
-        "test:js": "node --test tests/js/*.test.mjs",
-        "test:js:auth": "node --test tests/js/auth-redirect.test.mjs"
+        "test:js": "node --test tests/js/*.test.mjs && vitest run",
+        "test:js:unit": "node --test tests/js/*.test.mjs",
+        "test:js:auth": "node --test tests/js/auth-redirect.test.mjs",
+        "test:js:tos": "vitest run",
+        "test:e2e:tos": "playwright test --config tests/e2e/playwright.config.js"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.0",
@@ -15,7 +18,13 @@
         "concurrently": "^9.0.1",
         "laravel-vite-plugin": "^3.1",
         "tailwindcss": "^4.0.0",
-        "vite": "^8.0.0"
+        "vite": "^8.0.0",
+        "vitest": "^3.2.4",
+        "jsdom": "^26.1.0",
+        "@testing-library/react": "^16.3.0",
+        "@testing-library/user-event": "^14.6.1",
+        "@testing-library/jest-dom": "^6.6.3",
+        "@playwright/test": "^1.55.0"
     },
     "dependencies": {
         "@dnd-kit/core": "^6.3.1",

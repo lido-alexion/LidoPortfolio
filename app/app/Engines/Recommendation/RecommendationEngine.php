@@ -6,6 +6,7 @@ use App\Models\EvaluationRun;
 use App\Models\PortfolioProfile;
 use App\Models\RecommendationReview;
 use App\Models\TradingRecommendation;
+use App\Models\Transaction;
 use App\Models\User;
 
 /**
@@ -14,8 +15,8 @@ use App\Models\User;
  * Generation orchestration (TD-002) is delegated to {@see RecommendationGenerationPipeline}
  * (prepare → cancel stale → draft → rank → allocate capital → persist).
  *
- * Lifecycle (approve/reject/expire/reservations/queries) is delegated to
- * {@see RecommendationLifecycleService} (TD-001). This class only forwards calls and
+ * Lifecycle (approve/reject/expire/markExecuted/reservations/queries) is delegated to
+ * {@see RecommendationLifecycleService} (TD-001, V4-FEAT-024). This class only forwards calls and
  * preserves the previous public method signatures so callers (TradingOsController,
  * ExecutionEngine, DailyDecisionPipeline) require no changes.
  */
@@ -75,6 +76,14 @@ class RecommendationEngine
     public function convertReservation(TradingRecommendation $r, float $executedAmount): void
     {
         $this->lifecycleService->convertReservation($r, $executedAmount);
+    }
+
+    /**
+     * Record that a ledger fill completed this recommendation (V4-FEAT-024).
+     */
+    public function markExecuted(TradingRecommendation $recommendation, Transaction $transaction): TradingRecommendation
+    {
+        return $this->lifecycleService->markExecuted($recommendation, $transaction);
     }
 
     /**

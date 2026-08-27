@@ -6,6 +6,7 @@ use App\Models\PortfolioProfile;
 use App\Models\RecommendationReview;
 use App\Models\TradingOrder;
 use App\Models\TradingRecommendation;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Services\CashManagementService;
 use App\Services\Lending\RecommendationLendingCoordinator;
@@ -197,6 +198,29 @@ class RecommendationLifecycleService
             'executed_amount' => round($executedAmount, 4),
             'reserved_amount' => 0,
         ])->save();
+    }
+
+    /**
+     * V4-FEAT-024 — Recommendation owns the executed-status transition.
+     * Converts the cash reservation and writes executed status/ids.
+     * Callers must already have validated that this fill may complete the recommendation.
+     * Does not open its own transaction so it can run inside ExecutionEngine's fill unit.
+     */
+    public function markExecuted(TradingRecommendation $recommendation, Transaction $transaction): TradingRecommendation
+    {
+        $executedAmount = round(
+            ((float) $transaction->quantity * (float) $transaction->price) + (float) ($transaction->fees ?? 0),
+            4,
+        );
+        $this->convertReservation($recommendation, $executedAmount);
+
+        $recommendation->forceFill([
+            'status' => TradingRecommendation::STATUS_EXECUTED,
+            'executed_at' => now(),
+            'executed_transaction_id' => $transaction->id,
+        ])->save();
+
+        return $recommendation;
     }
 
     /**

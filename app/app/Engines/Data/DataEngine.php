@@ -19,6 +19,7 @@ class DataEngine
     public function __construct(
         protected DailyMarketSyncService $dailySync,
         protected PortfolioLoggerService $logger,
+        protected DatasetVersionLedger $datasetVersions,
     ) {}
 
     public function datasetStatus(): array
@@ -40,9 +41,7 @@ class DataEngine
 
     public function currentDatasetVersion(): string
     {
-        $date = StockPrice::query()->max('price_date');
-
-        return $date ? 'ohlcv-'.$date : 'ohlcv-none';
+        return $this->datasetVersions->currentVersionKey();
     }
 
     /**
