@@ -1,8 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import api from '../api';
-import { showToast } from '../toast';
+import useApiGet from '../hooks/useApiGet';
+import { runApiMutation } from '../hooks/useApiMutation';
+import { tosList, tosMeta } from '../utils/tosEnvelope';
 
 const CANCEL_REASONS = [
     { value: 'price_moved', label: 'Price moved significantly' },
@@ -33,32 +35,23 @@ function fmtDate(iso) {
  */
 export default function PendingExecutionPanel({ onExecuteStarted }) {
     const navigate = useNavigate();
-    const [rows, setRows] = useState([]);
-    const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [busyId, setBusyId] = useState(null);
     const [cancelId, setCancelId] = useState(null);
     const [cancelReason, setCancelReason] = useState('other');
-    const [cash, setCash] = useState(null);
 
-    const load = useCallback(async () => {
-        setLoading(true);
-        try {
-            const { data } = await api.get('/v1/recommendations/pending-execution');
-            setRows(Array.isArray(data?.data) ? data.data : []);
-            setCash(data?.meta?.cash || null);
-        } catch (e) {
-            showToast(e?.response?.data?.error?.message || e.message || 'Failed to load pending execution', 'danger');
-            setRows([]);
-            setCash(null);
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        load();
-    }, [load]);
+    const { data, loading, reload: load } = useApiGet({
+        errorFallback: 'Failed to load pending execution',
+        request: async () => {
+            const response = await api.get('/v1/recommendations/pending-execution', { skipErrorToast: true });
+            return {
+                rows: tosList(response),
+                cash: tosMeta(response).cash || null,
+            };
+        },
+    });
+    const rows = data?.rows ?? [];
+    const cash = data?.cash ?? null;
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
@@ -95,14 +88,15 @@ export default function PendingExecutionPanel({ onExecuteStarted }) {
     const cancelExecution = async (id) => {
         setBusyId(id);
         try {
-            await api.post(`/v1/recommendations/${id}/cancel-execution`, {
-                reason: cancelReason || 'other',
-            });
-            showToast('Execution cancelled', 'success');
-            setCancelId(null);
-            await load();
-        } catch (e) {
-            showToast(e?.response?.data?.error?.message || e.message || 'Cancel failed', 'danger');
+            const { ok } = await runApiMutation(async () => {
+                await api.post(`/v1/recommendations/${id}/cancel-execution`, {
+                    reason: cancelReason || 'other',
+                }, { skipErrorToast: true });
+            }, { successMessage: 'Execution cancelled', errorFallback: 'Cancel failed' });
+            if (ok) {
+                setCancelId(null);
+                await load();
+            }
         } finally {
             setBusyId(null);
         }

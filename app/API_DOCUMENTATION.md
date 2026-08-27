@@ -4,6 +4,8 @@ Base URL: `/api`
 
 **`/api/v1` machine-readable contract (V4-FEAT-025):** [`openapi/v1.json`](openapi/v1.json) (OpenAPI 3.0.3). Regenerated with `php artisan openapi:v1`. A copy is also at [`public/docs/openapi-v1.json`](public/docs/openapi-v1.json). This file remains the human notes for legacy `/api` (non-v1) routes.
 
+**TOS list pagination (V4-FEAT-028):** `GET /api/v1/securities`, `/price-bars`, `/recommendations`, `/orders`, `/transactions`, `/notifications`, `/reviews` accept `page` (default 1) and `pageSize` (alias `per_page`). Response `meta` includes `{page, pageSize, total, lastPage}`. Max page size 200 (price-bars 500). Candidates, evaluations, positions, and pending-execution are not paginated.
+
 ## Auth (session cookies — no Bearer token)
 
 Uses Laravel Sanctum SPA mode. Browser must send cookies (`credentials: include`). Call `GET /sanctum/csrf-cookie` before login.

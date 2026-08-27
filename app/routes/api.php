@@ -54,7 +54,14 @@ use App\Http\Controllers\Api\V1\MarketAnalysisController;
 use App\Http\Controllers\Api\V1\ScreenerRegistryController;
 use App\Http\Controllers\Api\V1\StrategyController;
 use App\Http\Controllers\Api\V1\StrategyRegistryController;
-use App\Http\Controllers\Api\V1\TradingOsController;
+use App\Http\Controllers\Api\V1\TradingOs\DataController as TradingOsDataController;
+use App\Http\Controllers\Api\V1\TradingOs\DiscoveryController as TradingOsDiscoveryController;
+use App\Http\Controllers\Api\V1\TradingOs\EvaluationController as TradingOsEvaluationController;
+use App\Http\Controllers\Api\V1\TradingOs\ExecutionController as TradingOsExecutionController;
+use App\Http\Controllers\Api\V1\TradingOs\NotificationController as TradingOsNotificationController;
+use App\Http\Controllers\Api\V1\TradingOs\PipelineController as TradingOsPipelineController;
+use App\Http\Controllers\Api\V1\TradingOs\RecommendationController as TradingOsRecommendationController;
+use App\Http\Controllers\Api\V1\TradingOs\ReviewController as TradingOsReviewController;
 use App\Http\Controllers\Api\WatchlistController;
 use App\Http\Controllers\Api\WatchlistsController;
 use Illuminate\Support\Facades\Route;
@@ -286,46 +293,46 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
 | Auth: Sanctum session (existing SPA) rather than JWT.
 */
 Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
-    Route::get('/securities', [TradingOsController::class, 'securities']);
-    Route::get('/securities/{id}', [TradingOsController::class, 'securityShow'])->whereNumber('id');
-    Route::get('/price-bars', [TradingOsController::class, 'priceBars']);
-    Route::get('/dataset/status', [TradingOsController::class, 'datasetStatus']);
-    Route::post('/imports', [TradingOsController::class, 'importsStore']);
-    Route::get('/imports/{id}', [TradingOsController::class, 'importsShow']);
+    Route::get('/securities', [TradingOsDataController::class, 'securities']);
+    Route::get('/securities/{id}', [TradingOsDataController::class, 'securityShow'])->whereNumber('id');
+    Route::get('/price-bars', [TradingOsDataController::class, 'priceBars']);
+    Route::get('/dataset/status', [TradingOsDataController::class, 'datasetStatus']);
+    Route::post('/imports', [TradingOsDataController::class, 'importsStore']);
+    Route::get('/imports/{id}', [TradingOsDataController::class, 'importsShow']);
 
-    Route::post('/discovery/runs', [TradingOsController::class, 'discoveryRunsStore']);
-    Route::get('/candidates', [TradingOsController::class, 'candidates']);
+    Route::post('/discovery/runs', [TradingOsDiscoveryController::class, 'discoveryRunsStore']);
+    Route::get('/candidates', [TradingOsDiscoveryController::class, 'candidates']);
 
-    Route::post('/evaluation/runs', [TradingOsController::class, 'evaluationRunsStore']);
-    Route::get('/evaluations', [TradingOsController::class, 'evaluations']);
+    Route::post('/evaluation/runs', [TradingOsEvaluationController::class, 'evaluationRunsStore']);
+    Route::get('/evaluations', [TradingOsEvaluationController::class, 'evaluations']);
 
-    Route::post('/recommendations/generate', [TradingOsController::class, 'recommendationsGenerate']);
-    Route::get('/recommendations', [TradingOsController::class, 'recommendationsIndex']);
-    Route::get('/recommendations/pending-execution', [TradingOsController::class, 'recommendationsPendingExecution']);
-    Route::get('/recommendations/{id}', [TradingOsController::class, 'recommendationsShow'])->whereNumber('id');
-    Route::post('/recommendations/{id}/review', [TradingOsController::class, 'recommendationsReview'])->whereNumber('id');
-    Route::post('/recommendations/{id}/reopen', [TradingOsController::class, 'recommendationsReopen'])->whereNumber('id');
-    Route::post('/recommendations/{id}/cancel-execution', [TradingOsController::class, 'recommendationsCancelExecution'])->whereNumber('id');
-    Route::post('/recommendations/{id}/expire', [TradingOsController::class, 'recommendationsExpire'])->whereNumber('id');
-    Route::get('/recommendations/{id}/reviews', [TradingOsController::class, 'recommendationsReviewHistory'])->whereNumber('id');
+    Route::post('/recommendations/generate', [TradingOsRecommendationController::class, 'recommendationsGenerate']);
+    Route::get('/recommendations', [TradingOsRecommendationController::class, 'recommendationsIndex']);
+    Route::get('/recommendations/pending-execution', [TradingOsRecommendationController::class, 'recommendationsPendingExecution']);
+    Route::get('/recommendations/{id}', [TradingOsRecommendationController::class, 'recommendationsShow'])->whereNumber('id');
+    Route::post('/recommendations/{id}/review', [TradingOsRecommendationController::class, 'recommendationsReview'])->whereNumber('id');
+    Route::post('/recommendations/{id}/reopen', [TradingOsRecommendationController::class, 'recommendationsReopen'])->whereNumber('id');
+    Route::post('/recommendations/{id}/cancel-execution', [TradingOsRecommendationController::class, 'recommendationsCancelExecution'])->whereNumber('id');
+    Route::post('/recommendations/{id}/expire', [TradingOsRecommendationController::class, 'recommendationsExpire'])->whereNumber('id');
+    Route::get('/recommendations/{id}/reviews', [TradingOsRecommendationController::class, 'recommendationsReviewHistory'])->whereNumber('id');
 
-    Route::get('/notifications', [TradingOsController::class, 'notificationsIndex']);
-    Route::post('/notifications/{id}/retry', [TradingOsController::class, 'notificationsRetry'])->whereNumber('id');
+    Route::get('/notifications', [TradingOsNotificationController::class, 'notificationsIndex']);
+    Route::post('/notifications/{id}/retry', [TradingOsNotificationController::class, 'notificationsRetry'])->whereNumber('id');
 
-    Route::post('/orders', [TradingOsController::class, 'ordersStore']);
-    Route::get('/orders', [TradingOsController::class, 'ordersIndex']);
-    Route::post('/orders/{id}/execute', [TradingOsController::class, 'ordersExecute'])->whereNumber('id');
-    Route::post('/orders/{id}/cancel', [TradingOsController::class, 'ordersCancel'])->whereNumber('id');
-    Route::get('/transactions', [TradingOsController::class, 'transactionsIndex']);
-    Route::get('/positions', [TradingOsController::class, 'positionsIndex']);
+    Route::post('/orders', [TradingOsExecutionController::class, 'ordersStore']);
+    Route::get('/orders', [TradingOsExecutionController::class, 'ordersIndex']);
+    Route::post('/orders/{id}/execute', [TradingOsExecutionController::class, 'ordersExecute'])->whereNumber('id');
+    Route::post('/orders/{id}/cancel', [TradingOsExecutionController::class, 'ordersCancel'])->whereNumber('id');
+    Route::get('/transactions', [TradingOsExecutionController::class, 'transactionsIndex']);
+    Route::get('/positions', [TradingOsExecutionController::class, 'positionsIndex']);
 
-    Route::post('/reviews/generate', [TradingOsController::class, 'reviewsGenerate']);
-    Route::get('/reviews', [TradingOsController::class, 'reviewsIndex']);
-    Route::get('/reviews/{id}', [TradingOsController::class, 'reviewsShow'])->whereNumber('id');
-    Route::get('/review/dashboard', [TradingOsController::class, 'reviewDashboard']);
-    Route::get('/review/outcomes', [TradingOsController::class, 'reviewOutcomes']);
+    Route::post('/reviews/generate', [TradingOsReviewController::class, 'reviewsGenerate']);
+    Route::get('/reviews', [TradingOsReviewController::class, 'reviewsIndex']);
+    Route::get('/reviews/{id}', [TradingOsReviewController::class, 'reviewsShow'])->whereNumber('id');
+    Route::get('/review/dashboard', [TradingOsReviewController::class, 'reviewDashboard']);
+    Route::get('/review/outcomes', [TradingOsReviewController::class, 'reviewOutcomes']);
 
-    Route::post('/pipeline/run', [TradingOsController::class, 'pipelineRun']);
+    Route::post('/pipeline/run', [TradingOsPipelineController::class, 'pipelineRun']);
 
     Route::get('/analytics/portfolio', [AnalyticsArchitectureController::class, 'portfolio']);
     Route::get('/analytics/market', [AnalyticsArchitectureController::class, 'market']);

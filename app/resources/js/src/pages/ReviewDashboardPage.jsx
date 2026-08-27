@@ -1,8 +1,10 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
-import { showToast } from '../toast';
+import useApiGet from '../hooks/useApiGet';
+import { runApiMutation } from '../hooks/useApiMutation';
 import { formatInrCompactWhole } from '../utils/tableFormat';
+import { tosData, tosList } from '../utils/tosEnvelope';
 
 function fmtPct(v) {
     if (v == null || Number.isNaN(Number(v))) return '—';
@@ -15,47 +17,39 @@ function fmtNum(v) {
 }
 
 export default function ReviewDashboardPage() {
-    const [dash, setDash] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [orders, setOrders] = useState([]);
-
-    const load = useCallback(async () => {
-        setLoading(true);
-        try {
+    const { data, loading, reload: load } = useApiGet({
+        errorFallback: 'Failed to load review dashboard',
+        request: async () => {
             const [d, o] = await Promise.all([
-                api.get('/v1/review/dashboard'),
-                api.get('/v1/orders'),
+                api.get('/v1/review/dashboard', { skipErrorToast: true }),
+                api.get('/v1/orders', { skipErrorToast: true }),
             ]);
-            setDash(d.data?.data || null);
-            setOrders(Array.isArray(o.data?.data) ? o.data.data : []);
-        } catch (e) {
-            showToast(e?.response?.data?.error?.message || e.message || 'Failed to load review dashboard', 'danger');
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
-    useEffect(() => { load(); }, [load]);
+            return {
+                dash: tosData(d),
+                orders: tosList(o),
+            };
+        },
+    });
+    const dash = data?.dash ?? null;
+    const orders = data?.orders ?? [];
 
     const executePending = async (orderId) => {
         const price = window.prompt('Execution price');
         if (!price) return;
-        try {
-            await api.post(`/v1/orders/${orderId}/execute`, { price: Number(price) });
-            showToast('Transaction added', 'success');
+        const { ok } = await runApiMutation(async () => {
+            await api.post(`/v1/orders/${orderId}/execute`, { price: Number(price) }, { skipErrorToast: true });
+        }, { successMessage: 'Transaction added', errorFallback: 'Execute failed' });
+        if (ok) {
             await load();
-        } catch (e) {
-            showToast(e?.response?.data?.error?.message || e.message || 'Execute failed', 'danger');
         }
     };
 
     const cancelPending = async (orderId) => {
-        try {
-            await api.post(`/v1/orders/${orderId}/cancel`);
-            showToast('Order cancelled', 'success');
+        const { ok } = await runApiMutation(async () => {
+            await api.post(`/v1/orders/${orderId}/cancel`, null, { skipErrorToast: true });
+        }, { successMessage: 'Order cancelled', errorFallback: 'Cancel failed' });
+        if (ok) {
             await load();
-        } catch (e) {
-            showToast(e?.response?.data?.error?.message || e.message || 'Cancel failed', 'danger');
         }
     };
 

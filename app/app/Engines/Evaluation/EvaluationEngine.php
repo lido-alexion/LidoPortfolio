@@ -9,7 +9,9 @@ use App\Models\EvaluationResult;
 use App\Models\EvaluationRun;
 use App\Models\PortfolioProfile;
 use App\Models\Stock;
-use App\Models\StockPrice;
+use App\Repositories\Tos\DiscoveryCandidateRepository;
+use App\Repositories\Tos\EvaluationResultRepository;
+use App\Repositories\Tos\MarketDataRepository;
 use App\Services\PortfolioLoggerService;
 use App\Services\RelativeStrengthService;
 use App\Services\Screener\TechnicalIndicatorService;
@@ -18,6 +20,7 @@ use Throwable;
 
 /**
  * Evaluation Engine — measurable factor facts only (SD-027).
+ * Orchestrates run/candidate lifecycle; factor formulas live in EvaluationFactorRule modules (V4-FEAT-029).
  * Does not apply Strategy weights or produce recommendation decisions.
  */
 class EvaluationEngine
@@ -30,6 +33,10 @@ class EvaluationEngine
         protected EvaluationParameterResolver $parameterResolver,
         protected MarketAnalysisEngine $marketAnalysis,
         protected MarketRegimeScoreMapper $regimeScores,
+        protected EvaluationFactorRuleSet $factorRules,
+        protected DiscoveryCandidateRepository $discoveryCandidates,
+        protected EvaluationResultRepository $evaluationResults,
+        protected MarketDataRepository $marketData,
     ) {}
 
     /**
@@ -38,11 +45,7 @@ class EvaluationEngine
      */
     public function run(PortfolioProfile $profile, ?DiscoveryRun $discoveryRun = null, ?array $evaluationConfig = null): array
     {
-        $discoveryRun ??= DiscoveryRun::query()
-            ->where('profile_id', $profile->id)
-            ->where('status', 'completed')
-            ->orderByDesc('id')
-            ->first();
+        $discoveryRun ??= $this->discoveryCandidates->latestCompleted($profile);
 
         if (! $discoveryRun) {
             throw new \RuntimeException('No completed discovery run available for evaluation.');
@@ -57,10 +60,7 @@ class EvaluationEngine
         ]);
 
         try {
-            $candidates = Candidate::query()
-                ->where('discovery_run_id', $discoveryRun->id)
-                ->with('security')
-                ->get();
+            $candidates = $this->discoveryCandidates->forDiscoveryRun($discoveryRun->id);
             $blockedMap = $this->dataQualityGuard->blockedStockIdMap(
                 $candidates->pluck('security_id')->map(fn ($id) => (int) $id)->all(),
             );
@@ -104,10 +104,12 @@ class EvaluationEngine
                         'passed_rules' => [],
                         'failed_rules' => ['evaluation_error'],
                     ];
-                    $this->logger->log('daily', 'EvaluationEngine', 'warning', 'Candidate evaluation failed', [
+                    $this->logger->event('EvaluationEngine', 'evaluation.candidate_failed', 'warning', 'Candidate evaluation failed', [
+                        'profile_id' => $profile->id,
+                        'evaluation_run_id' => $run->id,
                         'candidate_id' => $candidate->id,
                         'security_id' => $candidate->security_id,
-                        'error' => $candidateError->getMessage(),
+                        'exception' => $candidateError->getMessage(),
                     ]);
                 }
             }
@@ -156,9 +158,10 @@ class EvaluationEngine
                 ],
             ])->save();
 
-            $this->logger->log('daily', 'EvaluationEngine', 'info', 'Evaluation run completed', [
+            $this->logger->event('EvaluationEngine', 'evaluation.completed', 'info', 'Evaluation run completed', [
                 'profile_id' => $profile->id,
-                'run_id' => $run->id,
+                'evaluation_run_id' => $run->id,
+                'discovery_run_id' => $discoveryRun->id,
                 'results' => count($results),
             ]);
 
@@ -170,8 +173,11 @@ class EvaluationEngine
                 'error_message' => $e->getMessage(),
             ])->save();
 
-            $this->logger->log('daily', 'EvaluationEngine', 'error', 'Evaluation failed: '.$e->getMessage(), [
-                'run_id' => $run->id,
+            $this->logger->event('EvaluationEngine', 'evaluation.failed', 'error', 'Evaluation failed', [
+                'profile_id' => $profile->id,
+                'evaluation_run_id' => $run->id,
+                'discovery_run_id' => $discoveryRun->id,
+                'exception' => $e->getMessage(),
             ]);
 
             throw $e;
@@ -239,120 +245,39 @@ class EvaluationEngine
             $rs = null;
         }
 
-        $weights = $config['weights'] ?? [];
-        $trendScore = 0.0;
-        if ($close !== null && $smaFast !== null && $smaSlow !== null) {
-            if ($close > $smaFast && $smaFast > $smaSlow) {
-                $trendScore = 100.0;
-                $passed[] = 'uptrend_sma_stack';
-            } elseif ($close > $smaFast) {
-                $trendScore = 60.0;
-                $passed[] = 'price_above_sma_fast';
-            } else {
-                $trendScore = 20.0;
-                $failed[] = 'price_below_sma_fast';
-            }
-        } else {
-            $failed[] = 'sma_unavailable';
-        }
-
-        $momentumScore = 50.0;
-        if ($rsi !== null) {
-            if ($rsi >= 45 && $rsi <= 70) {
-                $momentumScore = 100.0;
-                $passed[] = 'rsi_healthy';
-            } elseif ($rsi > 70) {
-                $momentumScore = 55.0;
-                $failed[] = 'rsi_overbought';
-            } elseif ($rsi < 30) {
-                $momentumScore = 35.0;
-                $failed[] = 'rsi_oversold';
-            } else {
-                $momentumScore = 50.0;
-            }
-        } else {
-            $failed[] = 'rsi_unavailable';
-        }
-
-        $rsScore = 50.0;
-        if ($rs !== null) {
-            if ($rs >= 1.05) {
-                $rsScore = 100.0;
-                $passed[] = 'rs_outperform';
-            } elseif ($rs >= 1.0) {
-                $rsScore = 70.0;
-                $passed[] = 'rs_inline';
-            } else {
-                $rsScore = 30.0;
-                $failed[] = 'rs_underperform';
-            }
-        } else {
-            $failed[] = 'rs_unavailable';
-        }
-
-        $volumeScore = 50.0;
-        if ($volumeRatio !== null) {
-            if ($volumeRatio >= 1.2) {
-                $volumeScore = 100.0;
-                $passed[] = 'volume_expansion';
-            } elseif ($volumeRatio >= 0.8) {
-                $volumeScore = 60.0;
-            } else {
-                $volumeScore = 30.0;
-                $failed[] = 'volume_weak';
-            }
-        }
-
-        $patternBonus = 0.0;
+        $closeF = $this->safeFloat($close);
+        $atrF = $this->safeFloat($atr);
+        $atrPct = ($closeF && $atrF && $closeF > 0) ? round(($atrF / $closeF) * 100, 4) : null;
         $patterns = $candidate->evidence['patterns'] ?? [];
         $patternCount = is_array($patterns) ? count($patterns) : 0;
-        if ($patternCount > 0) {
-            $patternBonus = min(100.0, 40.0 + ($patternCount * 20.0));
-            $passed[] = 'pattern_present';
-        } else {
-            $failed[] = 'no_pattern';
-        }
 
-        $atrPct = ($close && $atr && $close > 0) ? round(($atr / $close) * 100, 4) : null;
-        // Risk fact: higher ATR% → higher risk score (0–100). Strategy may invert/weight.
-        $riskScore = 50.0;
-        if ($atrPct !== null) {
-            $riskScore = round(max(0.0, min(100.0, $atrPct * 10.0)), 4);
-            if ($riskScore <= 20) {
-                $passed[] = 'risk_contained';
-            } elseif ($riskScore >= 40) {
-                $failed[] = 'risk_elevated';
-            }
-        } else {
-            $failed[] = 'atr_unavailable';
-        }
+        $context = new EvaluationFactorContext(
+            close: $closeF,
+            smaFast: $this->safeFloat($smaFast),
+            smaSlow: $this->safeFloat($smaSlow),
+            rsi: $this->safeFloat($rsi),
+            atr: $atrF,
+            atrPct: $this->safeFloat($atrPct),
+            volumeRatio: $this->safeFloat($volumeRatio),
+            priceVsSma: $this->safeFloat($priceVsSma),
+            relativeStrength: $this->safeFloat($rs),
+            marketRegime: $marketRegime,
+            marketRegimeScore: $marketRegimeScore,
+            patternCount: $patternCount,
+        );
 
-        $factorScores = [
-            'relative_strength' => $this->safeFloat($rsScore) ?? 0.0,
-            'momentum_score' => $this->safeFloat($momentumScore) ?? 0.0,
-            'trend_score' => $this->safeFloat($trendScore) ?? 0.0,
-            'breakout_score' => $this->safeFloat($patternBonus) ?? 0.0,
-            'volume_score' => $this->safeFloat($volumeScore) ?? 0.0,
-            'market_regime' => $marketRegimeScore,
-            'sector_strength' => 50.0,
-            'risk_score' => $this->safeFloat($riskScore) ?? 0.0,
-            // Legacy aliases for older Strategy versions / UI
-            'momentum' => $this->safeFloat($momentumScore) ?? 0.0,
-            'trend' => $this->safeFloat($trendScore) ?? 0.0,
-            'pattern_bonus' => $this->safeFloat($patternBonus) ?? 0.0,
-            'volume' => $this->safeFloat($volumeScore) ?? 0.0,
-            'risk' => $this->safeFloat($riskScore) ?? 0.0,
-        ];
+        [$factorScores, $passed, $failed] = $this->applyFactorRules($context);
 
-        // Equal-weight mean of catalogue scores for list ranking only (not Strategy score).
-        $catalogueKeys = [
-            'relative_strength', 'momentum_score', 'trend_score', 'breakout_score',
-            'volume_score', 'market_regime', 'sector_strength', 'risk_score',
-        ];
+        $catalogueKeys = EvaluationFactorRuleSet::CATALOGUE_KEYS;
         $present = [];
         foreach ($catalogueKeys as $k) {
             if (isset($factorScores[$k]) && $factorScores[$k] !== null) {
                 $present[] = $factorScores[$k];
+            }
+        }
+        foreach ($factorScores as $k => $value) {
+            if (! in_array($k, $catalogueKeys, true) && ! $this->isLegacyAlias($k) && $value !== null) {
+                $present[] = $value;
             }
         }
         $score = $present !== []
@@ -401,13 +326,7 @@ class EvaluationEngine
         }
 
         // Cap history for shared-hosting memory/time; ~18 months of sessions is enough for SMA50/RS.
-        $limit = 400;
-        $rows = StockPrice::query()
-            ->where('stock_id', $stock->id)
-            ->whereNotNull('close_price')
-            ->orderByDesc('price_date')
-            ->limit($limit)
-            ->get(['open_price', 'high_price', 'low_price', 'close_price', 'volume']);
+        $rows = $this->marketData->recentClosePriceRows($stock->id, 400);
 
         $bars = [];
         foreach ($rows->reverse()->values() as $row) {
@@ -425,6 +344,55 @@ class EvaluationEngine
         }
 
         return $bars;
+    }
+
+    /**
+     * @return array{0: array<string, float>, 1: list<string>, 2: list<string>}
+     */
+    protected function applyFactorRules(EvaluationFactorContext $context): array
+    {
+        $byKey = [];
+        $aliases = [];
+        $passed = [];
+        $failed = [];
+        foreach ($this->factorRules->all() as $rule) {
+            $result = $rule->evaluate($context);
+            $byKey[$result->key] = $this->safeFloat($result->score) ?? 0.0;
+            foreach ($result->aliases as $alias => $value) {
+                $aliases[(string) $alias] = $this->safeFloat($value) ?? 0.0;
+            }
+            $passed = array_merge($passed, $result->passed);
+            $failed = array_merge($failed, $result->failed);
+        }
+
+        $factorScores = [];
+        foreach (EvaluationFactorRuleSet::CATALOGUE_KEYS as $key) {
+            if (array_key_exists($key, $byKey)) {
+                $factorScores[$key] = $byKey[$key];
+            }
+        }
+        foreach ($byKey as $key => $value) {
+            if (! array_key_exists($key, $factorScores)) {
+                $factorScores[$key] = $value;
+            }
+        }
+        foreach (['momentum', 'trend', 'pattern_bonus', 'volume', 'risk'] as $alias) {
+            if (array_key_exists($alias, $aliases)) {
+                $factorScores[$alias] = $aliases[$alias];
+            }
+        }
+        foreach ($aliases as $alias => $value) {
+            if (! array_key_exists($alias, $factorScores)) {
+                $factorScores[$alias] = $value;
+            }
+        }
+
+        return [$factorScores, $passed, $failed];
+    }
+
+    protected function isLegacyAlias(string $key): bool
+    {
+        return in_array($key, ['momentum', 'trend', 'pattern_bonus', 'volume', 'risk'], true);
     }
 
     /**
@@ -467,23 +435,7 @@ class EvaluationEngine
      */
     public function listResults(?int $evaluationRunId = null, ?PortfolioProfile $profile = null): array
     {
-        $query = EvaluationResult::query()->with(['candidate.security', 'evaluationRun']);
-
-        if ($evaluationRunId) {
-            $query->where('evaluation_run_id', $evaluationRunId);
-        } elseif ($profile) {
-            $latest = EvaluationRun::query()
-                ->where('profile_id', $profile->id)
-                ->where('status', 'completed')
-                ->orderByDesc('id')
-                ->value('id');
-            if (! $latest) {
-                return [];
-            }
-            $query->where('evaluation_run_id', $latest);
-        }
-
-        return $query->orderBy('rank')->get()->all();
+        return $this->evaluationResults->listResults($evaluationRunId, $profile);
     }
 
     /**

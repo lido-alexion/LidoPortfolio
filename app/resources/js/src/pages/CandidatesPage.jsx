@@ -1,10 +1,13 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
 import PatternSketch from '../components/PatternSketch';
+import useApiGet from '../hooks/useApiGet';
+import { runApiMutation } from '../hooks/useApiMutation';
 import { showToast } from '../toast';
 import { categoryLabel, PATTERN_BY_ID } from '../utils/patternDetection';
 import { patternGuideLink } from '../utils/patternGuideLinks';
+import { tosList } from '../utils/tosEnvelope';
 
 function formatPct(v) {
     if (v == null || Number.isNaN(Number(v))) return '—';
@@ -80,8 +83,6 @@ function DiscoveryReasonCell({ candidate }) {
 }
 
 export default function CandidatesPage() {
-    const [items, setItems] = useState([]);
-    const [loading, setLoading] = useState(true);
     const [source, setSource] = useState('');
     const [search, setSearch] = useState('');
     const [selected, setSelected] = useState(null);
@@ -89,24 +90,18 @@ export default function CandidatesPage() {
     const [runningDiscovery, setRunningDiscovery] = useState(false);
     const [runningEval, setRunningEval] = useState(false);
 
-    const load = useCallback(async () => {
-        setLoading(true);
-        try {
+    const { data, loading, reload: load } = useApiGet({
+        deps: [source, search],
+        errorFallback: 'Failed to load candidates',
+        request: async () => {
             const params = {};
             if (source) params.source = source;
             if (search.trim()) params.search = search.trim();
-            const { data } = await api.get('/v1/candidates', { params });
-            setItems(Array.isArray(data?.data) ? data.data : []);
-        } catch (e) {
-            showToast(e?.response?.data?.error?.message || e.message || 'Failed to load candidates', 'danger');
-        } finally {
-            setLoading(false);
-        }
-    }, [source, search]);
-
-    useEffect(() => {
-        load();
-    }, [load]);
+            const response = await api.get('/v1/candidates', { params, skipErrorToast: true });
+            return tosList(response);
+        },
+    });
+    const items = Array.isArray(data) ? data : [];
 
     const sources = useMemo(() => {
         const set = new Set(items.map((i) => i.source).filter(Boolean));
@@ -118,10 +113,10 @@ export default function CandidatesPage() {
     const runDiscovery = async () => {
         setRunningDiscovery(true);
         try {
-            await api.post('/v1/discovery/runs');
+            await api.post('/v1/discovery/runs', null, { skipErrorToast: true });
             showToast('Discovery run completed', 'success');
             try {
-                await api.post('/v1/evaluation/runs');
+                await api.post('/v1/evaluation/runs', null, { skipErrorToast: true });
                 showToast('Evaluation completed', 'success');
             } catch (evalErr) {
                 showToast(
@@ -143,17 +138,12 @@ export default function CandidatesPage() {
     const runEvaluation = async () => {
         setRunningEval(true);
         try {
-            await api.post('/v1/evaluation/runs');
-            showToast('Evaluation completed', 'success');
-            await load();
-        } catch (e) {
-            showToast(
-                e?.response?.data?.error?.message
-                    || e?.response?.data?.message
-                    || e.message
-                    || 'Evaluation failed',
-                'danger',
-            );
+            const { ok } = await runApiMutation(async () => {
+                await api.post('/v1/evaluation/runs', null, { skipErrorToast: true });
+            }, { successMessage: 'Evaluation completed', errorFallback: 'Evaluation failed' });
+            if (ok) {
+                await load();
+            }
         } finally {
             setRunningEval(false);
         }

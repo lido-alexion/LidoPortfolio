@@ -4,8 +4,7 @@ namespace App\Engines\Data;
 
 use App\Models\DatasetVersion;
 use App\Models\Setting;
-use App\Models\Stock;
-use App\Models\StockPrice;
+use App\Repositories\Tos\MarketDataRepository;
 use Carbon\Carbon;
 
 /**
@@ -21,18 +20,20 @@ class DatasetVersionLedger
 
     public const NONE = 'none';
 
+    public function __construct(
+        protected MarketDataRepository $marketData,
+    ) {}
+
     public function recordSuccessfulSync(Carbon $syncedAt, string $timezone): DatasetVersion
     {
-        $latestPriceDate = $this->normalizeDate(StockPrice::query()->max('price_date'));
+        $counts = $this->marketData->inspectionCounts();
+        $latestPriceDate = $this->normalizeDate($counts['latest_price_date']);
         $version = DatasetVersion::query()->create([
             'version_key' => $this->allocateVersionKey($syncedAt, $latestPriceDate, $timezone),
             'synced_at' => $syncedAt,
             'latest_price_date' => $latestPriceDate,
-            'price_bars' => (int) StockPrice::query()->count(),
-            'securities_active' => (int) Stock::query()
-                ->where('is_active', true)
-                ->where('is_benchmark', false)
-                ->count(),
+            'price_bars' => (int) $counts['price_bars'],
+            'securities_active' => (int) $counts['securities_active'],
             'created_at' => now(),
         ]);
 

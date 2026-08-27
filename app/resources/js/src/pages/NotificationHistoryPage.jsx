@@ -1,7 +1,9 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
-import { showToast } from '../toast';
+import useApiGet from '../hooks/useApiGet';
+import { runApiMutation } from '../hooks/useApiMutation';
+import { tosList } from '../utils/tosEnvelope';
 
 function statusClass(status) {
     switch (status) {
@@ -14,32 +16,25 @@ function statusClass(status) {
 }
 
 export default function NotificationHistoryPage() {
-    const [items, setItems] = useState([]);
-    const [loading, setLoading] = useState(true);
     const [busyId, setBusyId] = useState(null);
-
-    const load = useCallback(async () => {
-        setLoading(true);
-        try {
-            const { data } = await api.get('/v1/notifications');
-            setItems(Array.isArray(data?.data) ? data.data : []);
-        } catch (e) {
-            showToast(e?.response?.data?.error?.message || e.message || 'Failed to load notifications', 'danger');
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
-    useEffect(() => { load(); }, [load]);
+    const { data, loading, reload: load } = useApiGet({
+        errorFallback: 'Failed to load notifications',
+        request: async () => {
+            const response = await api.get('/v1/notifications', { skipErrorToast: true });
+            return tosList(response);
+        },
+    });
+    const items = Array.isArray(data) ? data : [];
 
     const retry = async (id) => {
         setBusyId(id);
         try {
-            await api.post(`/v1/notifications/${id}/retry`);
-            showToast('Retry attempted', 'success');
-            await load();
-        } catch (e) {
-            showToast(e?.response?.data?.error?.message || e.message || 'Retry failed', 'danger');
+            const { ok } = await runApiMutation(async () => {
+                await api.post(`/v1/notifications/${id}/retry`, null, { skipErrorToast: true });
+            }, { successMessage: 'Retry attempted', errorFallback: 'Retry failed' });
+            if (ok) {
+                await load();
+            }
         } finally {
             setBusyId(null);
         }

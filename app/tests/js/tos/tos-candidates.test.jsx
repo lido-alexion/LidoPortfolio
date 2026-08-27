@@ -25,6 +25,27 @@ describe('Discovery TOS smoke', () => {
         expect(await screen.findByText(/No candidates yet/i)).toBeInTheDocument();
     });
 
+    it('shows loading then candidate data', async () => {
+        installDefaultTosHandlers({
+            candidates: [DISCOVERY_CANDIDATE],
+            delayCandidatesMs: 80,
+        });
+        renderTosApp({ route: '/candidates' });
+
+        expect(screen.getByText('Loading…')).toBeInTheDocument();
+        expect(await screen.findByText('INFY')).toBeInTheDocument();
+        expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
+    });
+
+    it('surfaces a candidates API failure as a toast and does not crash', async () => {
+        installDefaultTosHandlers({ failCandidates: true });
+        renderTosApp({ route: '/candidates' });
+
+        expect(await screen.findByRole('alert')).toHaveTextContent(/Candidates unavailable|Failed to load candidates/i);
+        expect(screen.getAllByRole('heading', { name: 'Discovery' }).length).toBeGreaterThan(0);
+        expect(screen.getByText(/No candidates yet/i)).toBeInTheDocument();
+    });
+
     it('opens candidate evidence without crashing', async () => {
         const user = userEvent.setup();
         installDefaultTosHandlers({ candidates: [DISCOVERY_CANDIDATE] });

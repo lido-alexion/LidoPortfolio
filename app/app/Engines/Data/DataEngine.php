@@ -5,6 +5,7 @@ namespace App\Engines\Data;
 use App\Models\Stock;
 use App\Models\StockPrice;
 use App\Models\SyncRun;
+use App\Repositories\Tos\MarketDataRepository;
 use App\Services\DailyMarketSyncService;
 use App\Services\PortfolioLoggerService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -20,21 +21,20 @@ class DataEngine
         protected DailyMarketSyncService $dailySync,
         protected PortfolioLoggerService $logger,
         protected DatasetVersionLedger $datasetVersions,
+        protected MarketDataRepository $marketData,
     ) {}
 
     public function datasetStatus(): array
     {
         $sync = $this->dailySync->status();
-        $securityCount = Stock::query()->where('is_active', true)->where('is_benchmark', false)->count();
-        $priceCount = StockPrice::query()->count();
-        $latestPriceDate = StockPrice::query()->max('price_date');
+        $counts = $this->marketData->inspectionCounts();
 
         return [
             'published' => (bool) ($sync['synced_today'] ?? false),
             'dataset_version' => $this->currentDatasetVersion(),
-            'securities_active' => $securityCount,
-            'price_bars' => $priceCount,
-            'latest_price_date' => $latestPriceDate,
+            'securities_active' => $counts['securities_active'],
+            'price_bars' => $counts['price_bars'],
+            'latest_price_date' => $counts['latest_price_date'],
             'daily_sync' => $sync,
         ];
     }
@@ -47,47 +47,22 @@ class DataEngine
     /**
      * @return LengthAwarePaginator<int, Stock>
      */
-    public function listSecurities(?string $search = null, int $pageSize = 50): LengthAwarePaginator
+    public function listSecurities(?string $search = null, int $pageSize = 50, int $page = 1): LengthAwarePaginator
     {
-        $pageSize = max(1, min($pageSize, 200));
-        $query = Stock::query()
-            ->where('is_benchmark', false)
-            ->orderBy('symbol');
-
-        if ($search !== null && trim($search) !== '') {
-            $like = '%'.addcslashes(trim($search), '%_\\').'%';
-            $query->where(function ($q) use ($like) {
-                $q->where('symbol', 'like', $like)
-                    ->orWhere('name', 'like', $like);
-            });
-        }
-
-        return $query->paginate($pageSize);
+        return $this->marketData->paginateSecurities($search, $pageSize, $page);
     }
 
     public function securityDetails(int $id): ?Stock
     {
-        return Stock::query()->find($id);
+        return $this->marketData->findSecurity($id);
     }
 
     /**
      * @return LengthAwarePaginator<int, StockPrice>
      */
-    public function queryPriceBars(int $securityId, ?string $from = null, ?string $to = null, int $pageSize = 100): LengthAwarePaginator
+    public function queryPriceBars(int $securityId, ?string $from = null, ?string $to = null, int $pageSize = 100, int $page = 1): LengthAwarePaginator
     {
-        $pageSize = max(1, min($pageSize, 500));
-        $query = StockPrice::query()
-            ->where('stock_id', $securityId)
-            ->orderByDesc('price_date');
-
-        if ($from) {
-            $query->whereDate('price_date', '>=', $from);
-        }
-        if ($to) {
-            $query->whereDate('price_date', '<=', $to);
-        }
-
-        return $query->paginate($pageSize);
+        return $this->marketData->paginatePriceBars($securityId, $from, $to, $pageSize, $page);
     }
 
     /**
@@ -97,7 +72,7 @@ class DataEngine
      */
     public function triggerImport(bool $force = false): array
     {
-        $this->logger->log('daily', 'DataEngine', 'info', 'Import trigger requested', [
+        $this->logger->event('DataEngine', 'data.import_requested', 'info', 'Import trigger requested', [
             'force' => $force,
         ]);
 

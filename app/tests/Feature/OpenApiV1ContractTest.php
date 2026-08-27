@@ -27,6 +27,8 @@ class OpenApiV1ContractTest extends TestCase
         $this->assertArrayHasKey('EnvelopeSuccess', $spec['components']['schemas']);
         $this->assertArrayHasKey('EnvelopeError', $spec['components']['schemas']);
         $this->assertArrayHasKey('DatasetStatusData', $spec['components']['schemas']);
+        $this->assertArrayHasKey('PaginationMeta', $spec['components']['schemas']);
+        $this->assertArrayHasKey('EnvelopePaginated', $spec['components']['schemas']);
         app(V1DocumentBuilder::class)->assertValidDocument($spec);
     }
 
@@ -111,6 +113,20 @@ class OpenApiV1ContractTest extends TestCase
 
         $review = $spec['paths']['/api/v1/recommendations/{id}/review']['post'];
         $this->assertContains('approved', $review['requestBody']['content']['application/json']['schema']['properties']['decision']['enum']);
+
+        $paginated = $spec['paths']['/api/v1/recommendations']['get'];
+        $this->assertSame('#/components/schemas/EnvelopePaginated', $paginated['responses']['200']['content']['application/json']['schema']['$ref']);
+        $paramNames = array_map(
+            static fn (array $p) => $p['name'] ?? $p['$ref'] ?? '',
+            $paginated['parameters'] ?? [],
+        );
+        $this->assertContains('page', $paramNames);
+        $this->assertContains('pageSize', $paramNames);
+        $this->assertContains('per_page', $paramNames);
+        $this->assertSame('#/components/schemas/EnvelopePaginated', $spec['paths']['/api/v1/securities']['get']['responses']['200']['content']['application/json']['schema']['$ref']);
+        $this->assertNotSame('#/components/schemas/EnvelopePaginated', $spec['paths']['/api/v1/candidates']['get']['responses']['200']['content']['application/json']['schema']['$ref']);
+        $this->assertStringContainsString('not paginated', $spec['paths']['/api/v1/candidates']['get']['description']);
+        $this->assertStringContainsString('pageSize', $spec['info']['description']);
     }
 
     public function test_openapi_v1_artisan_check_passes(): void

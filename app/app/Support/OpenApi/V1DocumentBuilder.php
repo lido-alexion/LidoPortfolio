@@ -59,6 +59,7 @@ class V1DocumentBuilder
                     '`GET /api/v1/dataset/status` `data.dataset_version` is the current immutable dataset version key (V4-FEAT-023), or `none`. `data.published` still means successfully synced today (inspection only; the pipeline does not gate on that boolean).',
                     '`POST /api/v1/evaluation/runs` resolves Strategy catalogue indicator parameters over Evaluation globals (V4-FEAT-021). Evaluation `market_regime` is Bullish→100 / Neutral→50 / Bearish→0 from Market Analysis (V4-FEAT-005).',
                     'Recording a ledger fill that completes a recommendation still goes through `POST /api/transactions` (legacy `/api`, not `/api/v1`). Recommendation `executed` status is owned by RecommendationEngine::markExecuted (V4-FEAT-024).',
+                    'Paginated TOS lists (V4-FEAT-028) accept `page` (default 1) and `pageSize` (alias `per_page`). Meta is `{page, pageSize, total, lastPage}`. Maximum page size is 200 except `GET /price-bars` (500). Defaults match the previous implicit first-page caps. Not paginated (intentionally bounded): candidates, evaluations, positions, pending-execution, review dashboard/outcomes.',
                 ]),
                 'version' => '1.0.0',
             ],
@@ -485,6 +486,31 @@ class V1DocumentBuilder
                             'type' => 'object',
                             'properties' => [
                                 'data' => ['$ref' => '#/components/schemas/DatasetStatusData'],
+                            ],
+                        ],
+                    ],
+                ],
+                'PaginationMeta' => [
+                    'type' => 'object',
+                    'required' => ['page', 'pageSize', 'total', 'lastPage'],
+                    'properties' => [
+                        'page' => ['type' => 'integer', 'minimum' => 1, 'description' => 'Current 1-based page.'],
+                        'pageSize' => ['type' => 'integer', 'minimum' => 1, 'description' => 'Items per page after clamp.'],
+                        'total' => ['type' => 'integer', 'minimum' => 0, 'description' => 'Total matching rows.'],
+                        'lastPage' => ['type' => 'integer', 'minimum' => 1, 'description' => 'Last 1-based page (1 when total is 0).'],
+                    ],
+                ],
+                'EnvelopePaginated' => [
+                    'allOf' => [
+                        ['$ref' => '#/components/schemas/EnvelopeSuccess'],
+                        [
+                            'type' => 'object',
+                            'properties' => [
+                                'data' => [
+                                    'type' => 'array',
+                                    'items' => ['type' => 'object', 'additionalProperties' => true],
+                                ],
+                                'meta' => ['$ref' => '#/components/schemas/PaginationMeta'],
                             ],
                         ],
                     ],

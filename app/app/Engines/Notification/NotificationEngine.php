@@ -5,11 +5,13 @@ namespace App\Engines\Notification;
 use App\Models\PortfolioProfile;
 use App\Models\TosNotification;
 use App\Models\TradingRecommendation;
+use App\Repositories\Tos\NotificationQueryRepository;
 use App\Services\Notification\NotificationMessageComposer;
 use App\Services\PortfolioLoggerService;
 use App\Services\ProfileSettingsService;
 use App\Services\TelegramNotificationService;
 use App\Support\TradingOsConfig;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 /**
  * Notification Engine — delivery only; never mutates recommendation content.
@@ -22,6 +24,7 @@ class NotificationEngine
         protected ProfileSettingsService $profileSettings,
         protected PortfolioLoggerService $logger,
         protected NotificationMessageComposer $composer,
+        protected NotificationQueryRepository $notifications,
     ) {}
 
     /**
@@ -60,7 +63,7 @@ class NotificationEngine
         $channel = 'telegram';
         $key = 'rec-'.$rec->id.'-'.$channel.'-v'.$rec->version;
 
-        $existing = TosNotification::query()->where('idempotency_key', $key)->first();
+        $existing = $this->notifications->findByIdempotencyKey($key);
         if ($existing && in_array($existing->status, ['delivered', 'queued', 'sending'], true)) {
             return $existing;
         }
@@ -114,7 +117,7 @@ class NotificationEngine
         ?int $recommendationId = null,
     ): ?TosNotification {
         $channel = 'telegram';
-        $existing = TosNotification::query()->where('idempotency_key', $idempotencyKey)->first();
+        $existing = $this->notifications->findByIdempotencyKey($idempotencyKey);
         if ($existing && in_array($existing->status, ['delivered', 'queued', 'sending'], true)) {
             return $existing;
         }
@@ -170,8 +173,10 @@ class NotificationEngine
                 'last_error' => $e->getMessage(),
             ])->save();
 
-            $this->logger->log('daily', 'NotificationEngine', 'error', 'Delivery exception: '.$e->getMessage(), [
+            $this->logger->event('NotificationEngine', 'notification.delivery_failed', 'error', 'Delivery exception', [
                 'notification_id' => $notification->id,
+                'profile_id' => $notification->profile_id,
+                'exception' => $e->getMessage(),
             ]);
 
             return $notification->fresh();
@@ -196,10 +201,7 @@ class NotificationEngine
 
     public function retry(PortfolioProfile $profile, int $notificationId): ?TosNotification
     {
-        $notification = TosNotification::query()
-            ->where('profile_id', $profile->id)
-            ->where('id', $notificationId)
-            ->first();
+        $notification = $this->notifications->findForProfile($profile, $notificationId);
 
         if (! $notification) {
             return null;
@@ -216,15 +218,15 @@ class NotificationEngine
     }
 
     /**
-     * @return list<TosNotification>
+     * @return LengthAwarePaginator<int, TosNotification>
      */
+    public function paginateHistory(PortfolioProfile $profile, int $page = 1, int $pageSize = 50): LengthAwarePaginator
+    {
+        return $this->notifications->paginateHistory($profile, $page, $pageSize);
+    }
+
     public function history(PortfolioProfile $profile, int $limit = 50): array
     {
-        return TosNotification::query()
-            ->where('profile_id', $profile->id)
-            ->orderByDesc('id')
-            ->limit($limit)
-            ->get()
-            ->all();
+        return $this->paginateHistory($profile, 1, $limit)->items();
     }
 }

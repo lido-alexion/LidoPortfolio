@@ -50,7 +50,9 @@ export function installDefaultTosHandlers({
     recommendations = [OPEN_BUY_RECOMMENDATION],
     candidates = [DISCOVERY_CANDIDATE],
     failRecommendations = false,
+    failCandidates = false,
     delayRecommendationsMs = 0,
+    delayCandidatesMs = 0,
     pipelineError = null,
 } = {}) {
     let recs = recommendations.map((r) => ({ ...r }));
@@ -96,6 +98,20 @@ export function installDefaultTosHandlers({
             return axiosOk(apiEnvelope(CAPITAL_RESOLUTION));
         }
         if (path === '/v1/candidates') {
+            if (failCandidates) {
+                throw axiosError('Candidates unavailable', {
+                    status: 500,
+                    body: {
+                        success: false,
+                        error: { code: 'SERVER_ERROR', message: 'Candidates unavailable' },
+                    },
+                });
+            }
+            if (delayCandidatesMs > 0) {
+                await new Promise((resolve) => {
+                    setTimeout(resolve, delayCandidatesMs);
+                });
+            }
             return axiosOk(apiEnvelope(candidates));
         }
         throw new Error(`Unexpected GET ${path}`);

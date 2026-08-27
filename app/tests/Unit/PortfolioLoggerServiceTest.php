@@ -87,4 +87,80 @@ class PortfolioLoggerServiceTest extends TestCase
 
         $this->assertTrue($sanitized);
     }
+
+    public function test_event_includes_stable_event_and_engine_context(): void
+    {
+        $settings = Mockery::mock(SettingsService::class);
+        $settings->shouldReceive('get')->with('backend_log_level', 'info')->andReturn('debug');
+
+        $logged = false;
+        $channel = Mockery::mock();
+        $channel->shouldReceive('log')
+            ->once()
+            ->withArgs(function (string $level, string $message, array $context) use (&$logged) {
+                $logged = $level === 'info'
+                    && $message === 'Pipeline completed'
+                    && ($context['event'] ?? null) === 'pipeline.completed'
+                    && ($context['engine'] ?? null) === 'DailyDecisionPipeline'
+                    && ($context['category'] ?? null) === 'DailyDecisionPipeline'
+                    && ($context['profile_id'] ?? null) === 9
+                    && ($context['pipeline_run_id'] ?? null) === 41
+                    && ($context['dataset_version'] ?? null) === 'ds-test';
+
+                return $logged;
+            });
+        Log::shouldReceive('channel')->with('daily')->andReturn($channel);
+
+        $logger = new PortfolioLoggerService($settings);
+        $logger->event('DailyDecisionPipeline', 'pipeline.completed', 'info', 'Pipeline completed', [
+            'profile_id' => 9,
+            'pipeline_run_id' => 41,
+            'dataset_version' => 'ds-test',
+        ]);
+
+        $this->assertTrue($logged);
+    }
+
+    public function test_event_redacts_nested_tokens_and_does_not_emit_secrets(): void
+    {
+        $settings = Mockery::mock(SettingsService::class);
+        $settings->shouldReceive('get')->with('backend_log_level', 'info')->andReturn('debug');
+
+        $sanitized = false;
+        $channel = Mockery::mock();
+        $channel->shouldReceive('log')
+            ->once()
+            ->withArgs(function (string $level, string $message, array $context) use (&$sanitized) {
+                $encoded = json_encode($context);
+                $sanitized = $level === 'error'
+                    && $message === 'Delivery exception'
+                    && ($context['event'] ?? null) === 'notification.delivery_failed'
+                    && ($context['bot_token'] ?? null) === '[REDACTED]'
+                    && ($context['nested']['access_token'] ?? null) === '[REDACTED]'
+                    && ($context['nested']['recommendation_id'] ?? null) === 12
+                    && is_string($context['detail'] ?? null)
+                    && str_contains($context['detail'], 'token=[REDACTED]')
+                    && ! str_contains($encoded, 'super-secret-bot')
+                    && ! str_contains($encoded, 'atk-live')
+                    && ! str_contains($encoded, 'Bearer xyz')
+                    && ! str_contains($encoded, 'abc123-live');
+
+                return $sanitized;
+            });
+        Log::shouldReceive('channel')->with('daily')->andReturn($channel);
+
+        $logger = new PortfolioLoggerService($settings);
+        $logger->event('NotificationEngine', 'notification.delivery_failed', 'error', 'Delivery exception', [
+            'profile_id' => 1,
+            'bot_token' => 'super-secret-bot',
+            'detail' => 'token=abc123-live failed',
+            'nested' => [
+                'access_token' => 'atk-live',
+                'authorization' => 'Bearer xyz',
+                'recommendation_id' => 12,
+            ],
+        ]);
+
+        $this->assertTrue($sanitized);
+    }
 }

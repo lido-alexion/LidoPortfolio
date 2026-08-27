@@ -47,7 +47,9 @@ class RunDecisionPipelineCommand extends Command
             if ($lock === null) {
                 $this->info('Decision pipeline skipped (another automatic execution is in progress).');
                 $logger->scheduler('info', 'Decision pipeline skipped (automatic lock held)', [
+                    'event' => 'pipeline.command_skipped',
                     'trigger' => $trigger,
+                    'reason' => 'automatic_lock_held',
                 ]);
 
                 return self::SUCCESS;
@@ -75,7 +77,9 @@ class RunDecisionPipelineCommand extends Command
                 $scheduleGuard->lastAutomaticTrigger() ?? 'unknown',
             ));
             $logger->scheduler('info', 'Decision pipeline skipped (automatic already ran today)', [
+                'event' => 'pipeline.command_skipped',
                 'trigger' => $trigger,
+                'reason' => 'already_ran_today',
                 'last_trigger' => $scheduleGuard->lastAutomaticTrigger(),
             ]);
 
@@ -101,6 +105,7 @@ class RunDecisionPipelineCommand extends Command
         $failed = 0;
         $skippedSuccessful = 0;
         $logger->scheduler('info', 'Decision pipeline command started', [
+            'event' => 'pipeline.command_started',
             'trigger' => $trigger,
             'profile_count' => $profiles->count(),
             'forced' => $force,
@@ -144,6 +149,7 @@ class RunDecisionPipelineCommand extends Command
         }
 
         $logger->scheduler($failed > 0 ? 'error' : 'info', 'Decision pipeline command finished', [
+            'event' => 'pipeline.command_finished',
             'trigger' => $trigger,
             'failed_profiles' => $failed,
             'skipped_successful_profiles' => $skippedSuccessful,

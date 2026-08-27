@@ -10,10 +10,12 @@ use App\Models\StockPrice;
 use App\Models\TradingOrder;
 use App\Models\TradingRecommendation;
 use App\Models\Transaction;
+use App\Repositories\Tos\ReviewReportRepository;
 use App\Services\PortfolioCalculationService;
 use App\Services\PortfolioLoggerService;
 use App\Support\TradingOsConfig;
 use Carbon\Carbon;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -24,6 +26,7 @@ class ReviewEngine
     public function __construct(
         protected PortfolioCalculationService $portfolio,
         protected PortfolioLoggerService $logger,
+        protected ReviewReportRepository $reports,
     ) {}
 
     /**
@@ -358,7 +361,7 @@ class ReviewEngine
             }
         });
 
-        $this->logger->log('daily', 'ReviewEngine', 'info', 'Review report generated', [
+        $this->logger->event('ReviewEngine', 'review.generated', 'info', 'Review report generated', [
             'profile_id' => $profile->id,
             'report_id' => $report->id,
         ]);
@@ -367,25 +370,23 @@ class ReviewEngine
     }
 
     /**
+     * @return LengthAwarePaginator<int, ReviewReport>
+     */
+    public function paginateReports(PortfolioProfile $profile, int $page = 1, int $pageSize = 20): LengthAwarePaginator
+    {
+        return $this->reports->paginateReports($profile, $page, $pageSize);
+    }
+
+    /**
      * @return list<ReviewReport>
      */
     public function listReports(PortfolioProfile $profile, int $limit = 20): array
     {
-        return ReviewReport::query()
-            ->with('metrics')
-            ->where('profile_id', $profile->id)
-            ->orderByDesc('id')
-            ->limit($limit)
-            ->get()
-            ->all();
+        return $this->paginateReports($profile, 1, $limit)->items();
     }
 
     public function findReport(PortfolioProfile $profile, int $id): ?ReviewReport
     {
-        return ReviewReport::query()
-            ->with('metrics')
-            ->where('profile_id', $profile->id)
-            ->where('id', $id)
-            ->first();
+        return $this->reports->findForProfile($profile, $id);
     }
 }

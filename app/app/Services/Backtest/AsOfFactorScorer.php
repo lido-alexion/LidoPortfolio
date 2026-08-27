@@ -7,7 +7,11 @@ use App\Services\Screener\TechnicalIndicatorService;
 
 /**
  * As-of evaluation factor scorer for historical simulation.
- * Mirrors EvaluationEngine::evaluateCandidate facts without live Discovery patterns.
+ * Mirrors EvaluationEngine catalogue facts without live Discovery patterns
+ * and without live MarketAnalysisEngine (V4-FEAT-005/029: using latest() here
+ * would leak current regime into historical as-of dates).
+ * Intentionally does not use EvaluationFactorRuleSet — pass/fail/confidence
+ * and breakout/regime stubs differ from live Evaluation.
  */
 class AsOfFactorScorer
 {

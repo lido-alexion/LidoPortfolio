@@ -10,6 +10,7 @@ use App\Models\Screener;
 use App\Models\ScreenerRun;
 use App\Models\ScreenerRunHit;
 use App\Models\Watchlist;
+use App\Repositories\Tos\DiscoveryCandidateRepository;
 use App\Services\PatternScanService;
 use App\Services\PortfolioLoggerService;
 use App\Support\TradingOsConfig;
@@ -28,6 +29,7 @@ class DiscoveryEngine
         protected DataEngine $data,
         protected PortfolioLoggerService $logger,
         protected \App\Services\DataQualityGuardService $dataQualityGuard,
+        protected DiscoveryCandidateRepository $candidates,
     ) {}
 
     /**
@@ -99,9 +101,10 @@ class DiscoveryEngine
                 ],
             ])->save();
 
-            $this->logger->log('daily', 'DiscoveryEngine', 'info', 'Discovery run completed', [
+            $this->logger->event('DiscoveryEngine', 'discovery.completed', 'info', 'Discovery run completed', [
                 'profile_id' => $profile->id,
-                'run_id' => $run->id,
+                'discovery_run_id' => $run->id,
+                'dataset_version' => $run->dataset_version,
                 'candidates' => count($candidates),
             ]);
 
@@ -113,9 +116,11 @@ class DiscoveryEngine
                 'error_message' => $e->getMessage(),
             ])->save();
 
-            $this->logger->log('daily', 'DiscoveryEngine', 'error', 'Discovery run failed: '.$e->getMessage(), [
+            $this->logger->event('DiscoveryEngine', 'discovery.failed', 'error', 'Discovery run failed', [
                 'profile_id' => $profile->id,
-                'run_id' => $run->id,
+                'discovery_run_id' => $run->id,
+                'dataset_version' => $run->dataset_version,
+                'exception' => $e->getMessage(),
             ]);
 
             throw $e;
@@ -300,34 +305,7 @@ class DiscoveryEngine
         ?string $source = null,
         ?string $search = null,
     ): array {
-        $query = Candidate::query()->with(['security', 'discoveryRun', 'evaluationResult']);
-
-        if ($discoveryRunId) {
-            $query->where('discovery_run_id', $discoveryRunId);
-        } elseif ($profile) {
-            $latest = DiscoveryRun::query()
-                ->where('profile_id', $profile->id)
-                ->where('status', 'completed')
-                ->orderByDesc('id')
-                ->value('id');
-            if (! $latest) {
-                return [];
-            }
-            $query->where('discovery_run_id', $latest);
-        }
-
-        if ($source !== null && trim($source) !== '') {
-            $query->where('source', trim($source));
-        }
-
-        if ($search !== null && trim($search) !== '') {
-            $like = '%'.addcslashes(trim($search), '%_\\').'%';
-            $query->whereHas('security', function ($q) use ($like) {
-                $q->where('symbol', 'like', $like)->orWhere('name', 'like', $like);
-            });
-        }
-
-        $items = $query->orderBy('id')->get()->all();
+        $items = $this->candidates->listFiltered($discoveryRunId, $profile, $source, $search)->all();
 
         // Prefer evaluation rank when present (latest result via Candidate::evaluationResult).
         usort($items, function (Candidate $a, Candidate $b) {

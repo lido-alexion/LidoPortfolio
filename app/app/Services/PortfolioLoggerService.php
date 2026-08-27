@@ -82,6 +82,18 @@ class PortfolioLoggerService
         $this->log(self::CHANNEL_APP, 'Security', $level, $message, $context);
     }
 
+    /**
+     * TOS/platform structured event. Stable `event` + `engine` context fields.
+     * Keep messages human-readable; put identifiers in $context, not the message string.
+     */
+    public function event(string $engine, string $event, string $level, string $message, array $context = []): void
+    {
+        $this->log(self::CHANNEL_APP, $engine, $level, $message, array_merge([
+            'event' => $event,
+            'engine' => $engine,
+        ], $context));
+    }
+
     public function alertPolicy(string $level, string $message, array $context = []): void
     {
         $this->log(self::CHANNEL_APP, 'AlertPolicy', $level, $message, $context);
@@ -150,19 +162,83 @@ class PortfolioLoggerService
      */
     protected function sanitizeContext(array $context): array
     {
-        $json = json_encode($context);
-        if ($json === false) {
+        try {
+            json_encode($context, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
             return ['context' => 'unserializable'];
         }
 
-        $redacted = preg_replace(
-            '/(password|token|secret|authorization|cookie|api[_-]?key)["\']?\s*[:=]\s*["\']?[^"\',\s}]+/i',
-            '$1":"[REDACTED]"',
-            $json,
-        ) ?? $json;
+        return $this->redactSensitiveInStrings($this->redactSensitiveKeys($context));
+    }
 
-        $decoded = json_decode($redacted, true);
+    /**
+     * Redact secrets interpolated into string values (e.g. `token=abc`), not JSON keys.
+     *
+     * @param  array<string, mixed>  $value
+     * @return array<string, mixed>
+     */
+    protected function redactSensitiveInStrings(array $value): array
+    {
+        $out = [];
+        foreach ($value as $key => $item) {
+            if (is_array($item)) {
+                $out[$key] = $this->redactSensitiveInStrings($item);
+            } elseif (is_string($item) && $item !== '[REDACTED]') {
+                $out[$key] = preg_replace(
+                    '/(password|token|secret|authorization|cookie|api[_-]?key)\s*[:=]\s*\S+/i',
+                    '$1=[REDACTED]',
+                    $item,
+                ) ?? $item;
+            } else {
+                $out[$key] = $item;
+            }
+        }
 
-        return is_array($decoded) ? $decoded : ['context' => Str::limit($redacted, 5000)];
+        return $out;
+    }
+
+    /**
+     * @param  array<string, mixed>  $value
+     * @return array<string, mixed>
+     */
+    protected function redactSensitiveKeys(array $value): array
+    {
+        $out = [];
+        foreach ($value as $key => $item) {
+            if (is_string($key) && $this->isSensitiveKey($key)) {
+                $out[$key] = '[REDACTED]';
+                continue;
+            }
+            $out[$key] = is_array($item) ? $this->redactSensitiveKeys($item) : $item;
+        }
+
+        return $out;
+    }
+
+    protected function isSensitiveKey(string $key): bool
+    {
+        $normalized = strtolower(str_replace(['-', ' '], '_', $key));
+
+        foreach ([
+            'password',
+            'passwd',
+            'secret',
+            'token',
+            'authorization',
+            'cookie',
+            'api_key',
+            'apikey',
+            'access_token',
+            'refresh_token',
+            'bot_token',
+            'csrf',
+            'xsrf',
+        ] as $needle) {
+            if ($normalized === $needle || str_ends_with($normalized, '_'.$needle)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

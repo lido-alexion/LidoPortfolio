@@ -333,7 +333,7 @@ Completion criterion (product owner, 2026-08-26 strict pass): every normative V3
 Tracked in [`specs/LidoPortfolio-V4-Wishlist.md`](specs/LidoPortfolio-V4-Wishlist.md) (strict rewrite 2026-08-26; Product Owner V4/V5 split 2026-08-26):
 
 - **SPEC-001–006:** **DECIDED** 2026-08-26 (simple WAVG adoption merge with final avg to 2 dp half-up; no special rights CA; split/bonus restatement of qty/cost/trailing/stop/target; cash-ledger special types exactly LOAN/RECALL/BRIDGE with signed amount; explicit sell attribution; multi-strategy per broker account). Frozen product rules, **not implemented**. See wishlist §4.
-- **Active V4 FEAT (22):** **V4-FEAT-021 COMPLETE** (2026-08-26); **V4-FEAT-022 COMPLETE** (2026-08-27); **V4-FEAT-005 COMPLETE** (2026-08-27); **V4-FEAT-006 COMPLETE** (2026-08-27); **V4-FEAT-023 COMPLETE** (2026-08-27); **V4-FEAT-024 COMPLETE** (2026-08-27); **V4-FEAT-025 COMPLETE** (2026-08-27); **V4-FEAT-026 COMPLETE** (2026-08-27) — Vitest TOS UI smoke + one Playwright path. Remaining 14 stay OPEN: broker/live, TAF remaining phases, Review/admin/cash/tax polish, controller split/logging/evaluation modules/TOS repos, etc.
+- **Active V4 FEAT (22):** **V4-FEAT-021 COMPLETE** (2026-08-26); **V4-FEAT-022 COMPLETE** (2026-08-27); **V4-FEAT-005 COMPLETE** (2026-08-27); **V4-FEAT-006 COMPLETE** (2026-08-27); **V4-FEAT-023 COMPLETE** (2026-08-27); **V4-FEAT-024 COMPLETE** (2026-08-27); **V4-FEAT-025 COMPLETE** (2026-08-27); **V4-FEAT-026 COMPLETE** (2026-08-27); **V4-FEAT-027 COMPLETE** (2026-08-27) — split Trading OS HTTP controllers + shared React fetch hooks; **V4-FEAT-028 COMPLETE** (2026-08-27) — structured TOS logging + list pagination consistency; **V4-FEAT-029 COMPLETE** (2026-08-27) — pluggable Evaluation factor rules; **V4-FEAT-032 COMPLETE** (2026-08-27) — TOS aggregate repository boundary. Remaining 10 stay OPEN: broker/live, TAF remaining phases, Review/admin/cash/tax polish, etc.
 - **V5-deferred FEAT (14, still OPEN):** B4 banner, notification channels, indicator-registry cutover, mobile/AI/ML/markets/replay, CI/secrets deploy, Discovery/Evaluation UX polish, TS/grid migration, optional token API. Roadmap only — not implemented.
 
 **Closed in V3 (not V4):** OD-16 Strategy window UI; schedulerTimestamp; DailyMarketDataJobTest; max_position enforcement; all former open V3 bug/TD/UX/HIST active rows.
@@ -532,7 +532,7 @@ API redesign, Swagger UI, documenting `/api` (non-v1) as v1, a GET endpoint sole
 
 **Status:** **COMPLETE**. Smoke coverage only — not a frontend-framework migration and not comprehensive UI tests.
 
-Existing `node --test tests/js/*.test.mjs` helpers stay. New **Vitest + jsdom + Testing Library** suite covers TOS pages with mocked `/api/v1` (fixtures match `TradingOsController` envelopes). One **Playwright Chromium** path mounts the real `App` via a Vite harness and intercepts APIs (no Laravel, no live market, no secrets).
+Existing `node --test tests/js/*.test.mjs` helpers stay. New **Vitest + jsdom + Testing Library** suite covers TOS pages with mocked `/api/v1` (fixtures match `TradingOsPresenter` / ApiEnvelope). One **Playwright Chromium** path mounts the real `App` via a Vite harness and intercepts APIs (no Laravel, no live market, no secrets).
 
 ### Commands (from `app/`)
 
@@ -553,6 +553,190 @@ npm run test:js:unit     # node:test files only
 ### Explicitly not in this feature
 
 Full page coverage, replacing node:test, Swagger, live backend E2E, SPEC-001–006.
+
+## V4-FEAT-027 — Split TradingOsController / shared React hooks (2026-08-27)
+
+**Status:** **COMPLETE**. Internal maintainability refactor. **API wire contract unchanged** (same URLs, methods, auth, status codes, envelopes, validation errors). Not a product redesign; no Redux/Zustand/TanStack Query/TypeScript/repository layer.
+
+### Backend
+
+The former `App\Http\Controllers\Api\V1\TradingOsController` monolith is replaced by engine-aligned thin adapters under `App\Http\Controllers\Api\V1\TradingOs\`:
+
+| Controller | Routes |
+|------------|--------|
+| `DataController` | securities, price-bars, dataset/status, imports |
+| `DiscoveryController` | discovery runs, candidates |
+| `EvaluationController` | evaluation runs, evaluations |
+| `RecommendationController` | recommendations (generate/list/show/review/reopen/cancel/expire/history/pending-execution) |
+| `NotificationController` | notifications list/retry |
+| `ExecutionController` | orders, v1 transactions list, positions |
+| `ReviewController` | reviews, review dashboard/outcomes |
+| `PipelineController` | `POST /pipeline/run` |
+
+Shared HTTP mapping (candidate/evaluation/recommendation/position JSON) lives in `TradingOsPresenter` so split controllers do not duplicate wire shape. `TradingOsHttp::validationError()` maps `ValidationException` to the existing `VALIDATION_ERROR` envelope. Controllers still call existing engines/services; Evaluation still locally maps `RuntimeException` → `EVALUATION_PRECONDITION` 422. `routes/api.php` path strings are unchanged.
+
+OpenAPI was regenerated (`php artisan openapi:v1`, still 122 operations). Overlay keys and HTTP paths are the same; default operation descriptions now name the split controller classes (not a wire change).
+
+### Frontend
+
+Did not invent a second query library. Adopted existing TD-014 hooks:
+
+- `useApiGet` + `runApiMutation` on Discovery (`CandidatesPage`), Pending Execution, Review dashboard, and Notification history (Recommendations already used them).
+- `utils/tosEnvelope.js` (`tosList` / `tosData` / `tosMeta`) for the repeated `{success, data, meta}` unwrap.
+
+### Tests
+
+`tests/Feature/TradingOsControllerSplitTest.php` (route → controller mapping, Sanctum + `active.portfolio`, representative success/validation/404/`EVALUATION_PRECONDITION`/`DATASET_NOT_FRESH` envelopes). FEAT-026 Vitest/Playwright smoke updated/extended (Discovery loading/error). Commands: `npm run test:js:tos`, `npm run test:e2e:tos`, `npm run test:js`.
+
+## V4-FEAT-028 — Structured logging / pagination consistency (2026-08-27)
+
+**Status:** **COMPLETE**. Platform hardening (was V4-TD-010/011, original audit TD-17/TD-18). **No product redesign.** Does not add a logging framework, observability stack, repository layer (V4-FEAT-032), or TanStack Query/TypeScript (V5-FEAT-035). FEAT-021–027 semantics are unchanged.
+
+### Structured logging
+
+Reuse `App\Services\PortfolioLoggerService` (Laravel `Log` channels). New helper:
+
+`event(string $engine, string $event, string $level, string $message, array $context = [])`
+
+Convention:
+
+- Stable **event** names (dot-separated) and **engine** class-ish identifiers in context — not interpolated into the message.
+- Identifiers (`profile_id`, `pipeline_run_id`, `discovery_run_id`, `evaluation_run_id`, `dataset_version`, `recommendation_id`, `report_id`, counts) are context fields.
+- Failures use `exception` (message string) at `error`; per-candidate evaluation issues at `warning`.
+- Do not log request/response bodies, secrets, tokens, or auth headers.
+- `sanitizeContext` redacts sensitive **keys** (password, token, secret, authorization, cookie, api_key, access_token, refresh_token, bot_token, csrf, xsrf, and `*_token` suffixes) then applies the existing JSON regex redaction.
+
+Applied TOS/platform events (existing log sites only; not “log everything”):
+
+| Event | Engine | Level |
+|-------|--------|-------|
+| `pipeline.completed` / `pipeline.failed` | DailyDecisionPipeline | info / error |
+| `pipeline.command_started` / `finished` / `skipped` | RunDecisionPipelineCommand (scheduler channel) | info |
+| `discovery.completed` / `discovery.failed` | DiscoveryEngine | info / error |
+| `evaluation.completed` / `failed` / `candidate_failed` | EvaluationEngine | info / error / warning |
+| `recommendation.generated` / `reviewed` / `execution_cancelled` / `reopened` | RecommendationEngine | info |
+| `execution.ledger_completed` / `order_pending` / `order_executed` / `order_cancelled` / `fill_reverted` | ExecutionEngine | info |
+| `notification.delivery_failed` | NotificationEngine | error |
+| `data.import_requested` | DataEngine | info |
+| `review.generated` | ReviewEngine | info |
+
+Pipeline completion logs counts/ids, **not** the full `stages_json` blob. Daily market sync job logging remains `SyncLogService` / `SystemLogService`.
+
+### Pagination
+
+Helper: `App\Support\TradingOsPagination`.
+
+- **Request:** `page` (default 1), `pageSize` (alias `per_page`). Invalid/zero page size → endpoint default.
+- **Meta:** `{page, pageSize, total, lastPage}` (additive on the existing `ApiEnvelope`).
+- **Max page size:** 200, except price-bars **500**.
+- **DB-level** `paginate()` — not PHP slice after `get()`.
+- **Defaults** match the previous implicit first-page caps: recommendations 100, orders 50, transactions 100, notifications 50, reviews 20, securities 50, price-bars 100.
+
+**Paginated (normalized):** `GET /api/v1/securities`, `/price-bars`, `/recommendations`, `/orders`, `/transactions`, `/notifications`, `/reviews`.
+
+**Not paginated (intentionally bounded / extra meta):** `/candidates` (latest discovery run + rank sort), `/evaluations` (latest evaluation run), `/positions` (open holdings), `/recommendations/pending-execution` (`meta.cash`; cap 100), review dashboard/outcomes.
+
+**Compatibility:** `data` remains an array of items. Default page 1 + former cap ≈ the previous truncated first page. Extra meta keys are additive. Empty paginated lists now include pagination meta (candidates still `meta: {}`). SPA `tosList` still reads `data`.
+
+OpenAPI 3.0.3 updated (`EnvelopePaginated` / `PaginationMeta`; `php artisan openapi:v1`).
+
+### Tests
+
+- `tests/Unit/TradingOsPaginationTest.php`, `tests/Unit/PortfolioLoggerServiceTest.php` (event keys + nested token redaction)
+- `tests/Feature/TradingOsPaginationConsistencyTest.php` (default/page/max/empty/filter/auth)
+- `TradingOsControllerSplitTest` empty-list meta; `TradingOsPipelineTest` `pipeline.completed` context; `OpenApiV1ContractTest`
+
+### Explicitly not in this feature
+
+Universal pagination of every `/api/v1` list (capital/analytics/registries), candidate DB pagination-by-rank, a generic repository layer, frontend page-size pickers, request/response body logging.
+
+## V4-FEAT-029 — Pluggable Evaluation rules modules (2026-08-27)
+
+**Status:** **COMPLETE**. Internal architecture refactor (was V4-TD-012). **Scoring behaviour unchanged.** Does not retune formulas, weights, Strategy parameter semantics (V4-FEAT-021), market-regime mapping (V4-FEAT-005), `sector_strength` stub, API envelopes, or backtest as-of scoring.
+
+### Abstraction
+
+- `EvaluationFactorRule` — `key()` + `evaluate(EvaluationFactorContext): EvaluationFactorResult`
+- `EvaluationFactorContext` — immutable, already-resolved inputs (indicators, RS, run-level regime score, pattern count). Rules do not query the DB or Market Analysis.
+- `EvaluationFactorResult` — numeric score, pass/fail tags, optional legacy aliases (`momentum`, `trend`, `pattern_bonus`, `volume`, `risk`)
+- `EvaluationFactorRuleSet` — ordered list from the container
+
+### Registration
+
+`App\Providers\EvaluationServiceProvider` tags default rule classes (`evaluation.factor_rules`) and binds `EvaluationFactorRuleSet` as a singleton. Tag order is the pass/fail tag order (trend → momentum → RS → volume → breakout → regime → sector stub → risk).
+
+To add a future factor: create a stateless rule class, append it to `EvaluationServiceProvider::defaultRuleClasses()`, keep the catalogue key stable. Do not add a switch in `EvaluationEngine`.
+
+### Current modules (`Engines/Evaluation/Rules/`)
+
+| Class | Factor key | Notes |
+|-------|------------|-------|
+| `TrendScoreRule` | `trend_score` | SMA stack; alias `trend` |
+| `MomentumScoreRule` | `momentum_score` | RSI bands; alias `momentum` |
+| `RelativeStrengthRule` | `relative_strength` | 1.05 / 1.0 thresholds |
+| `VolumeScoreRule` | `volume_score` | volume ratio; null is score 50 with **no** fail tag; alias `volume` |
+| `BreakoutScoreRule` | `breakout_score` | discovery pattern count; alias `pattern_bonus` |
+| `MarketRegimeRule` | `market_regime` | uses context score only (Bullish 100 / Neutral 50 / Bearish 0) |
+| `SectorStrengthRule` | `sector_strength` | still stub **50** |
+| `RiskScoreRule` | `risk_score` | ATR% × 10 capped 0–100; alias `risk` |
+
+### What stays in `EvaluationEngine`
+
+Run/candidate lifecycle, discovery precondition (`RuntimeException` → API `EVALUATION_PRECONDITION` 422), data-quality skip, insufficient-history skip, **one** `MarketAnalysisEngine::latest()` per run, bar load, **one** indicator/RS snapshot per candidate, equal-weight mean of registered catalogue facts (not Strategy weights — those remain unused here as before), evidence assembly, persistence, ranking.
+
+`trading_os.evaluation.weights` is still not applied inside Evaluation (list rank is equal-weight mean of factor facts). Strategy scoring continues to apply catalogue weights later.
+
+### Backtest
+
+`AsOfFactorScorer` stays separate: historical bars only, RS proxy, breakout/regime/sector stubs at 50, **no** `latest()`. Live rules must not run inside as-of simulation.
+
+### Tests
+
+`tests/Unit/Evaluation/EvaluationFactorRulesTest.php`; `EvaluationFactorRuleSetTest.php`; `tests/Feature/EvaluationFactorRulesArchitectureTest.php`; `AsOfFactorScorerHistoricalSafetyTest.php`; existing `EvaluationParameterOverrideTest`, `EvaluationMarketRegimeTest`, `DataQualityEvaluationGatingTest`.
+
+### Explicitly not in this feature
+
+Repository layer (V4-FEAT-032, completed separately), plugin filesystem loading, DB-backed rule registry, formula/weight changes, replacing `sector_strength`, wiring live Market Analysis into backtest, controller rewrite, OpenAPI changes.
+
+## V4-FEAT-032 — Repository layer for TOS aggregates (2026-08-27)
+
+**Status:** **COMPLETE**. Internal maintainability refactor (was V4-TD-015). **No product or API behavior change.** Not a generic repository framework, not CQRS, not a domain-model rewrite, not a repository-per-model migration. V5-FEAT-035 (TanStack Query / TypeScript) remains separate.
+
+### Boundary
+
+Concrete classes under `App\Repositories\Tos` (constructor-injected; no `BaseRepository`, no repository interfaces, no extra service-provider tagging). Repositories own query construction, scopes, DB-level `paginate()`, and simple lookups. Engines/services keep orchestration, validation, lifecycle, calculations, and side effects.
+
+| Class | Aggregate | Callers |
+|-------|-----------|---------|
+| `MarketDataRepository` | Securities list/search, price-bars, dataset inspection counts, recent close rows for Evaluation | `DataEngine`, `DatasetVersionLedger` (counts only), `EvaluationEngine::loadBars` |
+| `DiscoveryCandidateRepository` | Latest completed discovery, candidate list/filter/search, candidates for a run | `DiscoveryEngine`, `EvaluationEngine` |
+| `EvaluationResultRepository` | Latest completed evaluation run id, ranked result list | `EvaluationEngine` |
+| `RecommendationQueryRepository` | Profile list/filter/paginate, open-for-review, pending-execution, find, review history | `RecommendationLifecycleService` |
+| `NotificationQueryRepository` | History paginate, find by profile, find by idempotency key | `NotificationEngine` |
+| `ExecutionQueryRepository` | Orders paginate/find, transactions paginate, open positions | `ExecutionEngine` |
+| `ReviewReportRepository` | Review-report paginate/find | `ReviewEngine` |
+
+Pagination still uses `TradingOsPagination` (`page` / `pageSize`, meta `{page,pageSize,total,lastPage}`, max 200, price-bars 500, DB `paginate()`). Repositories clamp via `TradingOsPagination::clampPage` / `clampPageSize` — not a second pagination implementation.
+
+### Intentionally still in engines/services
+
+- `DatasetVersionLedger` insert-only version identity (FEAT-023); historical rows stay immutable.
+- Discovery sourcing (watchlists, screeners, patterns, holdings) and PHP rank `usort` in `DiscoveryEngine::listCandidates`.
+- Evaluation factor rules (must not query DB/repos), `MarketAnalysisEngine::latest()` once per run, scoring, `EvaluationResult` persistence, `RuntimeException` precondition.
+- `RecommendationLifecycleService::expireStale()` and all status transitions / reservations / `markExecuted` (FEAT-024).
+- Recommendation generation pipeline queries and rec `create`.
+- Execution create/execute/cancel, holdings recalculate-then-list, ledger writes.
+- Review dashboard/outcomes aggregations and report generate.
+- Notification send/retry and `TosNotification::create`.
+- Data import trigger and `SyncRun` history.
+
+### Tests
+
+`tests/Feature/Tos/TosRepositoryQueryTest.php` (filter/sort/scope/pagination/joins/not-found/engine delegation including expire-stale). Regression: DatasetVersioning, DatasetFreshness, EvaluationParameter/MarketRegime/Factor, RecommendationMarkExecuted, OpenApiV1Contract, TradingOsPipeline, pagination, controller split.
+
+### Explicitly not in this feature
+
+Generic `BaseRepository` / CRUD framework, repository-per-model, DTOs, CQRS, event sourcing, OpenAPI/API changes, frontend query-library migration.
 
 ## V3 residual — UNFUNDED zero-own lending offer (2026-08-24)
 
@@ -717,7 +901,7 @@ Authoritative: V3 §11.2 (BUY cooldown), §12 (staggered entry / target), §34.4
 
 - Services: `app/Services/Entry/{BuyCooldownEvaluator,StaggeredEntryCalculator,WholeShareQuantityCalculator,MinimumActionableAmountResolver,StrategyPositionTargetService}.php`
 - Migration: `2026_08_24_000003_add_target_and_filled_amount_to_portfolio_holdings.php`
-- Pipeline / Holding / HoldingsCalculation / HoldingPresentation / TradingOsController
+- Pipeline / Holding / HoldingsCalculation / HoldingPresentation / Trading OS V1 HTTP (`App\Http\Controllers\Api\V1\TradingOs\*`)
 - Factory default `portfolio_rules.first_entry_pct = 50`
 - UI: `HoldingsPage.jsx`, `RecommendationsPage.jsx`
 
@@ -1491,15 +1675,15 @@ Lending / DEP-PARTIAL-LEND requests, recall, weakest-position, trailing, broker 
 
 | Engine | Class | Owns / wraps |
 |--------|-------|----------------|
-| Data | `Data\DataEngine` | `portfolio_stocks` / `portfolio_stock_prices` / daily sync |
-| Discovery | `Discovery\DiscoveryEngine` | `portfolio_tos_candidates` (orchestrates PatternScan + Screener) |
-| Evaluation | `Evaluation\EvaluationEngine` | Factor facts only (no Strategy weights). **V4-FEAT-005:** `market_regime` numeric fact from MarketAnalysisEngine categorical regime (Bullish=100 / Neutral=50 / Bearish=0) via `MarketRegimeScoreMapper`. Indicator periods / lookback / benchmark from `Evaluation\EvaluationParameterResolver`. |
+| Data | `Data\DataEngine` | `portfolio_stocks` / `portfolio_stock_prices` / daily sync. **V4-FEAT-032:** list/find/paginate + inspection counts via `Repositories\Tos\MarketDataRepository`. |
+| Discovery | `Discovery\DiscoveryEngine` | `portfolio_tos_candidates` (orchestrates PatternScan + Screener). **V4-FEAT-032:** candidate list/filter via `DiscoveryCandidateRepository`; rank sort stays in the engine. |
+| Evaluation | `Evaluation\EvaluationEngine` | Factor facts only (no Strategy weights). **V4-FEAT-029:** factor formulas in `Evaluation\Rules\*` via `EvaluationFactorRuleSet`. **V4-FEAT-005:** `market_regime` numeric fact from MarketAnalysisEngine categorical regime (Bullish=100 / Neutral=50 / Bearish=0) via `MarketRegimeScoreMapper` (once per run). Indicator periods / lookback / benchmark from `Evaluation\EvaluationParameterResolver`. **V4-FEAT-032:** result list + bar load queries via `EvaluationResultRepository` / `MarketDataRepository`; rules remain DB-unaware. |
 | Strategy | `Services\StrategyConfigurationService` | Versioned strategy config (factors, thresholds, rules); consumed by Recommendation |
-| Recommendation | `Recommendation\RecommendationEngine` | Thin façade only (TD-001) — generation delegated to `Recommendation\RecommendationGenerationPipeline` (TD-002); lifecycle (Approve/Reject/Defer; pending-execution / cancel-execution / expire / reopen; **V4-FEAT-024 `markExecuted`**; cash reservation; list/history queries) delegated to `Recommendation\RecommendationLifecycleService` |
+| Recommendation | `Recommendation\RecommendationEngine` | Thin façade only (TD-001) — generation delegated to `Recommendation\RecommendationGenerationPipeline` (TD-002); lifecycle (Approve/Reject/Defer; pending-execution / cancel-execution / expire / reopen; **V4-FEAT-024 `markExecuted`**; cash reservation; list/history queries) delegated to `Recommendation\RecommendationLifecycleService`. **V4-FEAT-032:** list/find/paginate via `RecommendationQueryRepository`; `expireStale` stays in the lifecycle service. |
 | Market Analysis | `Market\MarketAnalysisEngine` | Benchmark OHLCV → market analytics / sentiment / phase (SD-032); façade `MarketAnalyticsService` |
-| Notification | `Notification\NotificationEngine` | Telegram + `portfolio_tos_notifications`; message text delegated to `Services\Notification\NotificationMessageComposer` (TD-005). Recommendation Telegram notify skips informational HOLD / WATCH (`isActionable()` / `ACTIONABLE_ACTIONS` only). |
-| Execution | `Execution\ExecutionEngine` | Pending execution → ledger transaction (manual or future broker); does **not** write recommendation `executed` status (calls `RecommendationEngine::markExecuted`) |
-| Review | `Review\ReviewEngine` | Dashboard, outcomes, reports |
+| Notification | `Notification\NotificationEngine` | Telegram + `portfolio_tos_notifications`; message text delegated to `Services\Notification\NotificationMessageComposer` (TD-005). Recommendation Telegram notify skips informational HOLD / WATCH (`isActionable()` / `ACTIONABLE_ACTIONS` only). **V4-FEAT-032:** history/find via `NotificationQueryRepository`. |
+| Execution | `Execution\ExecutionEngine` | Pending execution → ledger transaction (manual or future broker); does **not** write recommendation `executed` status (calls `RecommendationEngine::markExecuted`). **V4-FEAT-032:** order/transaction/position list queries via `ExecutionQueryRepository`. |
+| Review | `Review\ReviewEngine` | Dashboard, outcomes, reports. **V4-FEAT-032:** report list/find via `ReviewReportRepository`; dashboard aggregations stay in the engine. |
 | Backtest | `Services\Backtest\BacktestSimulationEngine` | Historical strategy simulation (paper portfolio; resumable ~20s slices) |
 | Pipeline | `Pipeline\DailyDecisionPipeline` | End-to-end stages. **V4-FEAT-022:** `DatasetFreshnessGate` — last successful sync age ≤ 24h (72h on Monday, cron timezone) before Discovery. |
 
@@ -1518,7 +1702,7 @@ Lending / DEP-PARTIAL-LEND requests, recall, weakest-position, trailing, broker 
 - **TD-007 (2026-07-27, code audit remediation):** Added `Support\TradingOsConfig` — typed accessors and `KEY_*` path constants for all `trading_os` config sections. Replaced scattered `config('trading_os....')` at call sites: `RunDecisionPipelineCommand`, `DailyDecisionPipeline`, `TradingOsController`, `routes/console.php`, and engine config reads (`DiscoveryEngine`, `EvaluationEngine`, `NotificationEngine`, `ReviewEngine`, `MarketAnalysisEngine` — one-line delegation only). No config file redesign.
 - **TD-011 (2026-07-27, code audit remediation):** Centralised recommendation pipeline thresholds and domain strings. `TradingRecommendation` gains action (`ACTION_*`), risk (`RISK_*`), capital allocation (`ALLOCATION_*`), market opinion (`OPINION_*`, `STRENGTH_*`), and legacy `STATUS_ACTIVE_LEGACY` constants. `RecommendationGenerationPipeline::prepareContext()` reads strategy JSON via `TradingOsConfig::STRATEGY_*` / `THRESHOLD_*` keys and falls back to `trading_os.recommendation.*` getters (expanded in `config/trading_os.php`: `very_strong_high/low`, `max_concurrent_recommendations`, `max_new_positions_per_cycle`). Generation/lifecycle logic uses named constants instead of inline magic strings; behaviour unchanged.
 - **TD-013 (deferred / not implemented):** Guide asks for DTOs/value objects for service contracts. Accepted governance **SD-013** defers repositories/DTOs. Introducing DTOs now would conflict with that decision and expand beyond incremental extraction. Revisit only if SD-013 is superseded.
-- **TD-014 (2026-07-27, code audit remediation — frontend):** Centralised duplicated page-level API load/mutation patterns without a second HTTP client. Extended `api.js` with exported `getApiErrorMessage()` (TOS `error.message`, Laravel validation, existing interceptor logic). New hooks: `hooks/useApiGet.js` (loading + reload + toast on failure) and `hooks/useApiMutation.js` (`runApiMutation` + `useApiMutation` busy helper). Migrated proof pages: `StrategyPage`, `RecommendationsPage`, `CashManagementPage` — all use `skipErrorToast: true` on hook-driven calls to avoid double toasts from the axios interceptor. Routes and UI unchanged; remaining pages can adopt the same hooks incrementally.
+- **TD-014 (2026-07-27, code audit remediation — frontend):** Centralised duplicated page-level API load/mutation patterns without a second HTTP client. Extended `api.js` with exported `getApiErrorMessage()` (TOS `error.message`, Laravel validation, existing interceptor logic). New hooks: `hooks/useApiGet.js` (loading + reload + toast on failure) and `hooks/useApiMutation.js` (`runApiMutation` + `useApiMutation` busy helper). Migrated proof pages: `StrategyPage`, `RecommendationsPage`, `CashManagementPage` — all use `skipErrorToast: true` on hook-driven calls to avoid double toasts from the axios interceptor. Routes and UI unchanged. **V4-FEAT-027 (2026-08-27):** Discovery, Pending Execution, Review dashboard, and Notification history adopted the same hooks plus `utils/tosEnvelope.js`.
 - **Strategy + Screeners (SD-027 / SD-028 / SD-029 / SD-030):** Specs: [`Strategy-Configuration-Specification.md`](specs/architecture/domains/Strategy-Configuration-Specification.md), [`Screener-Specification.md`](specs/architecture/domains/Screener-Specification.md). **Screeners** are the sole eligibility engine; Strategies reference them (`eligibility_sources`, `portfolio_tos_strategy_screeners`). Default **Minervini Strategy** (Minervini Trend Template eligibility + momentum scoring). **V3 WS1 (2026-08-19):** SD-029 exclusive-active is no longer enforced — multiple `STATUS_ACTIVE` strategies may coexist; editor `strategy_id` is UI selection. Save still updates `config_json` in place (no Duplicate, no version fork, no factory protection). Scoring weights must sum to 100 after save — **auto-normalised** on Save / `normalizeConfig` (largest-remainder, 2 d.p.; relative proportions kept; UI **Normalise now** preview). Exit Strategy on holdings — including **Screener Exit** (`screener_exit` rule: when enabled + screener selected, any open holding present in that screener’s latest completed run within 72h becomes `EXIT_POSITION`; works for holdings in or outside the evaluation result set). Recommendation evidence: eligibility / scoring / exit (+ `strategy_name`). APIs: `/api/v1/strategy*` (`strategy_id` query optional), `PUT /strategy/screeners` (`POST /strategy/duplicate` removed). UI: General · Eligibility Sources · Scoring Model · Recommendation Thresholds · Exit Strategy · Market Gates · Cash — header card shows name, last modified, eligibility, weight total, exit/market flags (no version / factory badges).
 - **Analytics Architecture (SD-031):** Spec: [`Analytics-Architecture-Specification.md`](specs/architecture/portfolio/Analytics-Architecture-Specification.md). Owners: `StockAnalyticsService`, Evaluation Engine (`EvaluationProfileService`), `PortfolioAnalyticsService`, `MarketAnalyticsService`. Pages: Dashboard (portfolio+market), Watchlist (research tabs), Portfolio/Holdings (positions), Discovery (candidates). APIs: `/api/v1/analytics/*`. Cache tables `000012`. Nav label Holdings → **Portfolio**.
 - **Market Analysis Engine (SD-032):** Spec: [`Market-Analysis-Engine-Specification.md`](specs/architecture/domains/Market-Analysis-Engine-Specification.md). `MarketAnalysisEngine` analyses primary benchmark OHLCV (NIFTY50 via IndexCatalog) into trend/momentum/volatility/risk/drawdown/breadth + sentiment (0–100) + deterministic market phase. Persists `portfolio_tos_market_analytics` (`000013`). APIs: `/api/v1/market-analysis*`. Recommendation applies `allocation_multiplier` / `new_entry_allowed` + optional Strategy `market_gates`. Dashboard Market Analytics: gauge cards (Trend via `TrendGauge` from `trend.score`/`strength`, Momentum, Volatility, Risk, Sentiment, phase, breadth, regime) plus **Stocks Above** market-depth heatmap (`MarketDepthService` / `GET /api/dashboard` → `market_depth`); optional legacy `% above 50/200 DMA` text cards when engine fields are non-null. Top Gainer/Loser sit under Portfolio (after summary cards). Active strategy card removed from Dashboard (configure via `/strategy`). Portfolio Analytics attaches `market_context`. **Gauge colour consistency (2026-07-30):** Sentiment, Market phase, Volatility, and Risk use `HalfDonutShell` `invertScale` so rings read red→green left→right like Trend/Momentum/regime/breadth, while needle + zone labels stay on matching colours (high fear/risk/volatility remain on the red side).
@@ -1528,7 +1712,7 @@ Lending / DEP-PARTIAL-LEND requests, recall, weakest-position, trailing, broker 
 
 ### REST `/api/v1` (additive)
 
-Sanctum auth. Machine-readable contract: [`app/openapi/v1.json`](app/openapi/v1.json) (OpenAPI 3.0.3, V4-FEAT-025). `TradingOsController`: securities, imports, candidates, evaluations, recommendations (`/review` with `approved|accepted|rejected|deferred`, `/pending-execution`, `/cancel-execution`, `/expire`, `/reopen`), notifications, orders (BC), review dashboard/outcomes, pipeline. Ledger create: `POST /api/transactions` (+ optional `recommendation_id`).
+Sanctum auth. Machine-readable contract: [`app/openapi/v1.json`](app/openapi/v1.json) (OpenAPI 3.0.3, V4-FEAT-025; pagination meta V4-FEAT-028). **V4-FEAT-027:** TOS `/api/v1` HTTP is split by engine under `App\Http\Controllers\Api\V1\TradingOs\{Data,Discovery,Evaluation,Recommendation,Notification,Execution,Review,Pipeline}Controller`. Wire JSON mapping is `TradingOsPresenter`. **V4-FEAT-032:** engines load TOS aggregates through `App\Repositories\Tos\*`; HTTP contract unchanged. Routes/methods/auth unchanged: securities, imports, candidates, evaluations, recommendations (`/review` with `approved|accepted|rejected|deferred`, `/pending-execution`, `/cancel-execution`, `/expire`, `/reopen`), notifications, orders (BC), review dashboard/outcomes, pipeline. List pagination (`page` / `pageSize`, meta `{page,pageSize,total,lastPage}`) on securities, price-bars, recommendations, orders, transactions, notifications, reviews — see V4-FEAT-028. Ledger create: `POST /api/transactions` (+ optional `recommendation_id`).
 
 ### Frontend
 
@@ -1693,7 +1877,7 @@ Sanctum auth. Machine-readable contract: [`app/openapi/v1.json`](app/openapi/v1.
 
 **Regression snapshot:** F043+delegation+adjustment/repair+F042 **67/67**; recommendation/pipeline/market gates **23/23**; full suite @512M **612** tests (**603** passed, **5** failed, **4** errors — unrelated/pre-existing; suite not fully green). Tracking: `docs/v2/V2-ROADMAP.md`, `DOCS.md` §3.B–3.C.
 
-**Shared API hooks (TD-014):** `resources/js/src/hooks/useApiGet.js` and `useApiMutation.js` wrap the existing axios client (`api.js`); export `getApiErrorMessage()` from `api.js` for TOS/Laravel error text. Adopted on Strategy, Recommendations, and Cash pages as the migration pattern for other screens.
+**Shared API hooks (TD-014 / V4-FEAT-027):** `resources/js/src/hooks/useApiGet.js` and `useApiMutation.js` wrap the existing axios client (`api.js`); export `getApiErrorMessage()` from `api.js` for TOS/Laravel error text. Adopted on Strategy, Recommendations, Cash, Discovery (`CandidatesPage`), Pending Execution, Review dashboard, and Notification history. Envelope unwrap helper: `utils/tosEnvelope.js`. Not TanStack Query (V5-FEAT-035).
 
 **Cash UI (2026-07-25):** Full cash management lives on `/cash`: cash balance, **Reserved cash** (with expandable reservation details), and Available cash (balance − reserved), plus deposit / withdraw / adjust via shared `NumberInput` (₹1 steps), optional remarks, transaction date (`TransactionDateInput`, default today), and cash account statement. Dashboard no longer shows Available Cash / Cash reserved cards. Withdrawals cannot exceed available investable cash (UI + API). Ledger stores `entry_date` (migration `000008`).
 
@@ -1707,7 +1891,7 @@ Sanctum auth. Machine-readable contract: [`app/openapi/v1.json`](app/openapi/v1.
 
 **TD-009 (2026-07-27, code audit remediation):** `CorporateActionService::applyBonus` was calling raw `Transaction::query()->create([...])` with price 0, bypassing `TransactionWriteService` (the SD-021 single write path). Fixed: `TransactionWriteService::normalizeInput`/`insert` now accept an optional `corporate_action_id` (persisted on create) and force price to `0` when `source` is `Transaction::SOURCE_BONUS` (all other sources still require price > 0). `CorporateActionService` now has `TransactionWriteService` injected; `applyBonus($profile, $stock, $action, $preview)` calls `$this->writes->insert(...)` (not `create()`/`applyAfterCreate`) since `apply()` already recalculates holdings/realizations/metrics/snapshots after the DB transaction — using `create()` would double-apply. `applySplit`'s `Transaction::update()` (quantity/price rescale + `corporate_action_id` backfill) is unchanged — this TD is scoped to **creates** only. Verified via `php vendor/bin/phpunit --filter "CorporateAction|Transaction"`: all Corporate Action / Transaction Write / Execution Engine tests pass (2 pre-existing failures in `TransactionStockResolverTest` are unrelated — missing cash-balance seeding for a cash-management feature added in a later, unrelated commit).
 
-**TD-010 (2026-07-27, code audit remediation):** Adopted a minimal exception contract for business-rule failures without a broad rewrite. New `App\Exceptions\DomainException` (message + `errorCode` + `httpStatus`, default 422) for domain preconditions; keep `ValidationException` for input/field validation (e.g. `RecommendationLifecycleService` review/approve — unchanged). Global API render in `bootstrap/app.php` maps uncaught `DomainException` on `api/*` to `ApiEnvelope::error(code, message, status)`. Converted one `RuntimeException` in `RecommendationGenerationPipeline::prepareContext()` (“No completed evaluation run…”) → `DomainException` with code `RECOMMENDATION_PRECONDITION` so `POST /api/v1/recommendations/generate` returns 422 instead of 500. **Not converted (intentional):** `EvaluationEngine` still throws `RuntimeException`; `TradingOsController::evaluationRunsStore()` catches it locally as `EVALUATION_PRECONDITION` — migrate when that path is touched. Approved engine behaviour unchanged.
+**TD-010 (2026-07-27, code audit remediation):** Adopted a minimal exception contract for business-rule failures without a broad rewrite. New `App\Exceptions\DomainException` (message + `errorCode` + `httpStatus`, default 422) for domain preconditions; keep `ValidationException` for input/field validation (e.g. `RecommendationLifecycleService` review/approve — unchanged). Global API render in `bootstrap/app.php` maps uncaught `DomainException` on `api/*` to `ApiEnvelope::error(code, message, status)`. Converted one `RuntimeException` in `RecommendationGenerationPipeline::prepareContext()` (“No completed evaluation run…”) → `DomainException` with code `RECOMMENDATION_PRECONDITION` so `POST /api/v1/recommendations/generate` returns 422 instead of 500. **Not converted (intentional):** `EvaluationEngine` still throws `RuntimeException`; `TradingOs\EvaluationController::evaluationRunsStore()` catches it locally as `EVALUATION_PRECONDITION` (V4-FEAT-027 moved the catch with the controller split; mapping unchanged). Approved engine behaviour unchanged.
 
 **Undo review / fill:** `POST /api/v1/recommendations/{id}/reopen` returns Approve/Reject/Defer to `pending_review`. Deleting a Transactions row linked by `recommendation_id` returns the recommendation to `pending_execution`.
 

@@ -17,8 +17,8 @@ use App\Models\User;
  *
  * Lifecycle (approve/reject/expire/markExecuted/reservations/queries) is delegated to
  * {@see RecommendationLifecycleService} (TD-001, V4-FEAT-024). This class only forwards calls and
- * preserves the previous public method signatures so callers (TradingOsController,
- * ExecutionEngine, DailyDecisionPipeline) require no changes.
+ * preserves the previous public method signatures so callers (Trading OS HTTP
+ * controllers, ExecutionEngine, DailyDecisionPipeline) require no changes.
  */
 class RecommendationEngine
 {
@@ -141,6 +141,21 @@ class RecommendationEngine
         ?array $types = null,
     ): array {
         return $this->lifecycleService->listForProfile($profile, $statuses, $limit, $types);
+    }
+
+    /**
+     * @param  list<string>|null  $statuses
+     * @param  list<string>|null  $types
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator<int, TradingRecommendation>
+     */
+    public function paginateForProfile(
+        PortfolioProfile $profile,
+        ?array $statuses = null,
+        int $page = 1,
+        int $pageSize = 100,
+        ?array $types = null,
+    ) {
+        return $this->lifecycleService->paginateForProfile($profile, $statuses, $page, $pageSize, $types);
     }
 
     /**

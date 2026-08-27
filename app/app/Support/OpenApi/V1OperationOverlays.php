@@ -28,6 +28,14 @@ final class V1OperationOverlays
             'schema' => ['type' => $type],
         ];
 
+        $pageParams = static function (int $defaultPageSize, int $maxPageSize = 200) use ($q): array {
+            return [
+                $q('page', 'integer', '1-based page number (default 1).'),
+                $q('pageSize', 'integer', "Page size (default {$defaultPageSize}, maximum {$maxPageSize}). Alias: per_page."),
+                $q('per_page', 'integer', 'Alias of pageSize.'),
+            ];
+        };
+
         $envError = static fn (string $code, string $description): array => [
             'description' => $description,
             'content' => [
@@ -110,12 +118,14 @@ final class V1OperationOverlays
             ],
             'GET /api/v1/recommendations' => [
                 'summary' => 'List recommendations',
-                'parameters' => [
+                'description' => 'Paginated (V4-FEAT-028). Default pageSize 100 (the previous implicit cap). Query `page` / `pageSize` (alias `per_page`); meta `{page, pageSize, total, lastPage}`. Filtering/open-default statuses unchanged. `GET /recommendations/pending-execution` is not paginated.',
+                'parameters' => array_merge([
                     $q('status', 'string', 'Comma-separated statuses. If omitted and open=1 (default) and all is not set, uses OPEN_LIST_STATUSES.'),
                     $q('open', 'boolean', 'Default true when status/all are absent.'),
                     $q('all', 'boolean', 'If true, do not default to open statuses.'),
-                ],
+                ], $pageParams(100)),
                 'successStatus' => '200',
+                'successRef' => '#/components/schemas/EnvelopePaginated',
                 'noBody' => true,
             ],
             'GET /api/v1/recommendations/pending-execution' => [
@@ -175,6 +185,7 @@ final class V1OperationOverlays
             ],
             'GET /api/v1/candidates' => [
                 'summary' => 'List discovery candidates',
+                'description' => 'Latest completed discovery run for the portfolio (optional discovery_run_id). Intentionally bounded (strategy max_candidates); not paginated (V4-FEAT-028). Rank-sorted in PHP after Evaluation.',
                 'parameters' => [
                     $q('discovery_run_id', 'integer', 'Optional run id; otherwise latest completed for the portfolio.'),
                     $q('source', 'string', 'Filter by candidate source.'),
@@ -185,6 +196,7 @@ final class V1OperationOverlays
             ],
             'GET /api/v1/evaluations' => [
                 'summary' => 'List evaluation results',
+                'description' => 'Latest evaluation run (optional evaluation_run_id). Intentionally bounded to that run; not paginated (V4-FEAT-028).',
                 'parameters' => [
                     $q('evaluation_run_id', 'integer', 'Optional evaluation run id.'),
                 ],
@@ -193,26 +205,59 @@ final class V1OperationOverlays
             ],
             'GET /api/v1/securities' => [
                 'summary' => 'List securities',
-                'parameters' => [
+                'description' => 'Paginated (V4-FEAT-028). Default pageSize 50, maximum 200. Meta `{page, pageSize, total, lastPage}`.',
+                'parameters' => array_merge([
                     $q('search', 'string', 'Symbol/name filter.'),
-                    $q('pageSize', 'integer', 'Page size (alias per_page).'),
-                    $q('per_page', 'integer', 'Page size alias.'),
-                    $q('page', 'integer', 'Page number.'),
-                ],
+                ], $pageParams(50)),
                 'successStatus' => '200',
+                'successRef' => '#/components/schemas/EnvelopePaginated',
                 'noBody' => true,
             ],
             'GET /api/v1/price-bars' => [
                 'summary' => 'Query OHLCV bars',
-                'parameters' => [
+                'description' => 'Paginated (V4-FEAT-028). Default pageSize 100, maximum 500. Meta `{page, pageSize, total, lastPage}`.',
+                'parameters' => array_merge([
                     $q('security_id', 'integer', 'Required stock id (alias securityId).', true),
                     $q('securityId', 'integer', 'Alias of security_id.'),
                     $q('from', 'string', 'From date.'),
                     $q('to', 'string', 'To date.'),
-                    $q('pageSize', 'integer', 'Page size.'),
-                    $q('page', 'integer', 'Page number.'),
-                ],
+                ], $pageParams(100, 500)),
                 'successStatus' => '200',
+                'successRef' => '#/components/schemas/EnvelopePaginated',
+                'noBody' => true,
+            ],
+            'GET /api/v1/orders' => [
+                'summary' => 'List TOS orders',
+                'description' => 'Paginated (V4-FEAT-028). Default pageSize 50 (previous implicit cap), maximum 200. Optional status filter preserved.',
+                'parameters' => array_merge([
+                    $q('status', 'string', 'Optional order status filter (pending, executed, cancelled).'),
+                ], $pageParams(50)),
+                'successStatus' => '200',
+                'successRef' => '#/components/schemas/EnvelopePaginated',
+                'noBody' => true,
+            ],
+            'GET /api/v1/transactions' => [
+                'summary' => 'List TOS ledger transactions for the active portfolio',
+                'description' => 'Paginated (V4-FEAT-028). Default pageSize 100 (previous implicit cap), maximum 200. Distinct from legacy `GET /api/transactions`.',
+                'parameters' => $pageParams(100),
+                'successStatus' => '200',
+                'successRef' => '#/components/schemas/EnvelopePaginated',
+                'noBody' => true,
+            ],
+            'GET /api/v1/notifications' => [
+                'summary' => 'List TOS notification history',
+                'description' => 'Paginated (V4-FEAT-028). Default pageSize 50 (previous implicit cap), maximum 200.',
+                'parameters' => $pageParams(50),
+                'successStatus' => '200',
+                'successRef' => '#/components/schemas/EnvelopePaginated',
+                'noBody' => true,
+            ],
+            'GET /api/v1/reviews' => [
+                'summary' => 'List review reports',
+                'description' => 'Paginated (V4-FEAT-028). Default pageSize 20 (previous implicit cap), maximum 200. Dashboard/outcomes remain unpaginated aggregates.',
+                'parameters' => $pageParams(20),
+                'successStatus' => '200',
+                'successRef' => '#/components/schemas/EnvelopePaginated',
                 'noBody' => true,
             ],
             'POST /api/v1/orders' => [

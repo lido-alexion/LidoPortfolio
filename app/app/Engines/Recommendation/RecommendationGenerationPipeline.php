@@ -158,7 +158,7 @@ class RecommendationGenerationPipeline
             'available_investable_cash' => (float) ($snapshot['investable_cash_component'] ?? 0),
         ];
 
-        $this->logger->log('daily', 'RecommendationEngine', 'info', 'Recommendations generated', [
+        $this->logger->event('RecommendationEngine', 'recommendation.generated', 'info', 'Recommendations generated', [
             'profile_id' => $profile->id,
             'count' => count($created),
             'strategy_count' => count($strategySummaries),

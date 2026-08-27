@@ -1,6 +1,6 @@
 /**
  * Representative /api/v1 payloads for TOS UI smoke tests.
- * Shapes follow TradingOsController serializeRecommendation / serializeCandidate + ApiEnvelope.
+ * Shapes follow TradingOsPresenter serializeRecommendation / serializeCandidate + ApiEnvelope.
  */
 
 export const TEST_USER = {

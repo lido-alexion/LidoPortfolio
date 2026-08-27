@@ -145,11 +145,16 @@ class DailyDecisionPipeline
                 'stages_json' => $stages,
             ])->save();
 
-            $this->logger->log('daily', 'DailyDecisionPipeline', 'info', 'Pipeline completed', [
+            $this->logger->event('DailyDecisionPipeline', 'pipeline.completed', 'info', 'Pipeline completed', [
                 'profile_id' => $profile->id,
                 'pipeline_run_id' => $pipeline->id,
                 'trigger' => $stages['_meta']['trigger'] ?? 'manual',
-                'stages' => $stages,
+                'dataset_version' => $stages['data_status']['dataset_version'] ?? null,
+                'discovery_run_id' => $stages['discovery']['run_id'] ?? null,
+                'candidates' => $stages['discovery']['candidates'] ?? null,
+                'evaluation_run_id' => $stages['evaluation']['run_id'] ?? null,
+                'evaluation_results' => $stages['evaluation']['results'] ?? null,
+                'recommendation_count' => $stages['recommendation']['count'] ?? null,
             ]);
 
             return ['pipeline_run' => $pipeline->fresh(), 'stages' => $stages];
@@ -161,10 +166,11 @@ class DailyDecisionPipeline
                 'error_message' => $e->getMessage(),
             ])->save();
 
-            $this->logger->log('daily', 'DailyDecisionPipeline', 'error', 'Pipeline failed: '.$e->getMessage(), [
+            $this->logger->event('DailyDecisionPipeline', 'pipeline.failed', 'error', 'Pipeline failed', [
                 'profile_id' => $profile->id,
                 'pipeline_run_id' => $pipeline->id,
                 'trigger' => $stages['_meta']['trigger'] ?? 'manual',
+                'exception' => $e->getMessage(),
             ]);
 
             throw $e;

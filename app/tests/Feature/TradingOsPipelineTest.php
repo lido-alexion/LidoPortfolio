@@ -12,6 +12,7 @@ use App\Models\WatchlistItem;
 use App\Services\WatchlistService;
 use App\Support\TradingOsConfig;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Tests\Concerns\MarksDailyDatasetPublished;
 use Tests\TestCase;
@@ -290,6 +291,42 @@ class TradingOsPipelineTest extends TestCase
         $this->assertSame((string) $scoreA, (string) $scoreB);
         $this->assertSame('completed', $a['pipeline_run']->status);
         $this->assertSame('completed', $b['pipeline_run']->status);
+    }
+
+    public function test_pipeline_completed_emits_structured_event_context(): void
+    {
+        [, $profile] = $this->seedWatchlistWithTrend();
+
+        $records = [];
+        Log::listen(function ($event) use (&$records): void {
+            $records[] = $event;
+        });
+
+        $result = app(DailyDecisionPipeline::class)->run($profile, [
+            'notify' => false,
+            'review' => false,
+        ]);
+
+        $this->assertSame('completed', $result['pipeline_run']->status);
+
+        $match = collect($records)->first(function ($event) {
+            $context = is_array($event->context ?? null) ? $event->context : [];
+
+            return ($event->level ?? null) === 'info'
+                && ($event->message ?? null) === 'Pipeline completed'
+                && ($context['event'] ?? null) === 'pipeline.completed';
+        });
+        $this->assertNotNull($match, 'Expected pipeline.completed structured log event');
+        $context = $match->context;
+        $this->assertSame($profile->id, $context['profile_id'] ?? null);
+        $this->assertSame($result['pipeline_run']->id, $context['pipeline_run_id'] ?? null);
+        $this->assertArrayHasKey('dataset_version', $context);
+        $this->assertArrayHasKey('discovery_run_id', $context);
+        $this->assertArrayHasKey('recommendation_count', $context);
+        $this->assertArrayHasKey('evaluation_run_id', $context);
+        $encoded = json_encode($context);
+        $this->assertStringNotContainsString('password', strtolower($encoded));
+        $this->assertStringNotContainsString('authorization', strtolower($encoded));
     }
 
     /**

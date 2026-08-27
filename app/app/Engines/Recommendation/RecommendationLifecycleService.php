@@ -8,6 +8,7 @@ use App\Models\TradingOrder;
 use App\Models\TradingRecommendation;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Repositories\Tos\RecommendationQueryRepository;
 use App\Services\CashManagementService;
 use App\Services\Lending\RecommendationLendingCoordinator;
 use App\Services\PortfolioLoggerService;
@@ -30,6 +31,7 @@ class RecommendationLifecycleService
         protected PortfolioLoggerService $logger,
         protected CashManagementService $cash,
         protected RecommendationLendingCoordinator $lending,
+        protected RecommendationQueryRepository $recommendations,
     ) {}
 
     public function recordReview(
@@ -128,7 +130,8 @@ class RecommendationLifecycleService
             }
         });
 
-        $this->logger->log('daily', 'RecommendationEngine', 'info', 'Recommendation reviewed', [
+        $this->logger->event('RecommendationEngine', 'recommendation.reviewed', 'info', 'Recommendation reviewed', [
+            'profile_id' => $profile->id,
             'recommendation_id' => $recommendation->id,
             'decision' => $decision,
             'status' => $status,
@@ -282,7 +285,8 @@ class RecommendationLifecycleService
             $this->releaseReservation($recommendation);
         });
 
-        $this->logger->log('daily', 'RecommendationEngine', 'info', 'Recommendation execution cancelled', [
+        $this->logger->event('RecommendationEngine', 'recommendation.execution_cancelled', 'info', 'Recommendation execution cancelled', [
+            'profile_id' => $profile->id,
             'recommendation_id' => $recommendation->id,
             'reason' => $reason,
             'user_id' => $user->id,
@@ -417,7 +421,8 @@ class RecommendationLifecycleService
             $this->releaseReservation($recommendation);
         });
 
-        $this->logger->log('daily', 'RecommendationEngine', 'info', 'Recommendation reopened for review', [
+        $this->logger->event('RecommendationEngine', 'recommendation.reopened', 'info', 'Recommendation reopened for review', [
+            'profile_id' => $profile->id,
             'recommendation_id' => $recommendation->id,
             'from_status' => $fromStatus,
             'user_id' => $user->id,
@@ -439,6 +444,21 @@ class RecommendationLifecycleService
     /**
      * @param  list<string>|null  $statuses
      * @param  list<string>|null  $types
+     * @return \Illuminate\Database\Eloquent\Builder<TradingRecommendation>
+     */
+    protected function profileListQuery(
+        PortfolioProfile $profile,
+        ?array $statuses = null,
+        ?array $types = null,
+    ) {
+        $this->expireStale($profile);
+
+        return $this->recommendations->profileListQuery($profile, $statuses, $types);
+    }
+
+    /**
+     * @param  list<string>|null  $statuses
+     * @param  list<string>|null  $types
      * @return list<TradingRecommendation>
      */
     public function listForProfile(
@@ -447,37 +467,27 @@ class RecommendationLifecycleService
         int $limit = 100,
         ?array $types = null,
     ): array {
-        $this->expireStale($profile);
-
-        $query = TradingRecommendation::query()
-            ->with(['security', 'evaluationResult', 'reviews'])
-            ->forProfile($profile);
-
-        if ($statuses !== null && $statuses !== []) {
-            $query->whereIn('status', $statuses);
-        }
-
-        if ($types !== null && $types !== []) {
-            $upper = array_map('strtoupper', $types);
-            $actionableWithLegacy = [...TradingRecommendation::ACTIONABLE_ACTIONS, 'BUY', 'SELL'];
-            if ($upper === array_map('strtoupper', $actionableWithLegacy)) {
-                $query->actionableTypes();
-            } else {
-                $query->where(function ($q) use ($upper) {
-                    foreach ($upper as $i => $t) {
-                        $method = $i === 0 ? 'whereRaw' : 'orWhereRaw';
-                        $q->{$method}('UPPER(recommendation_type) = ?', [$t]);
-                    }
-                });
-            }
-        }
-
-        return $query
-            ->orderByDesc('priority')
-            ->orderByDesc('id')
+        return $this->profileListQuery($profile, $statuses, $types)
             ->limit($limit)
             ->get()
             ->all();
+    }
+
+    /**
+     * @param  list<string>|null  $statuses
+     * @param  list<string>|null  $types
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator<int, TradingRecommendation>
+     */
+    public function paginateForProfile(
+        PortfolioProfile $profile,
+        ?array $statuses = null,
+        int $page = 1,
+        int $pageSize = 100,
+        ?array $types = null,
+    ) {
+        $this->expireStale($profile);
+
+        return $this->recommendations->paginateForProfile($profile, $statuses, $page, $pageSize, $types);
     }
 
     /**
@@ -487,16 +497,7 @@ class RecommendationLifecycleService
     {
         $this->expireStale($profile);
 
-        return TradingRecommendation::query()
-            ->with(['security', 'evaluationResult', 'reviews'])
-            ->forProfile($profile)
-            ->openForReview()
-            ->actionableTypes()
-            ->orderByDesc('priority')
-            ->orderByDesc('id')
-            ->limit(100)
-            ->get()
-            ->all();
+        return $this->recommendations->listOpenForReview($profile);
     }
 
     /**
@@ -508,16 +509,7 @@ class RecommendationLifecycleService
     {
         $this->expireStale($profile);
 
-        return TradingRecommendation::query()
-            ->with(['security', 'evaluationResult', 'reviews'])
-            ->forProfile($profile)
-            ->pendingExecution()
-            ->actionableTypes()
-            ->orderByDesc('priority')
-            ->orderByDesc('id')
-            ->limit($limit)
-            ->get()
-            ->all();
+        return $this->recommendations->listPendingExecution($profile, $limit);
     }
 
     /** @deprecated use listOpenForReview */
@@ -528,17 +520,7 @@ class RecommendationLifecycleService
 
     public function findForProfile(PortfolioProfile $profile, int $id): ?TradingRecommendation
     {
-        return TradingRecommendation::query()
-            ->with([
-                'security',
-                'evaluationResult.candidate',
-                'reviews.user',
-                'orders',
-                'executedTransaction.stock',
-            ])
-            ->forProfile($profile)
-            ->where('id', $id)
-            ->first();
+        return $this->recommendations->findForProfile($profile, $id);
     }
 
     /**
@@ -554,11 +536,6 @@ class RecommendationLifecycleService
      */
     public function reviewHistory(TradingRecommendation $recommendation): array
     {
-        return RecommendationReview::query()
-            ->with('user')
-            ->where('recommendation_id', $recommendation->id)
-            ->orderByDesc('id')
-            ->get()
-            ->all();
+        return $this->recommendations->reviewHistory($recommendation);
     }
 }

@@ -5,7 +5,7 @@
 | **V3 Status** | **V3 STRICTLY COMPLETE** (strict register-to-implementation pass 2026-08-26) |
 | **Document type** | Forward-looking V4 register + V5 deferred features (same genuine-new-work pool) |
 | **Created** | 2026-08-25 |
-| **Last reconciled** | 2026-08-27 (V4-FEAT-026 implemented: Vitest TOS UI smoke + one Playwright path) |
+| **Last reconciled** | 2026-08-27 (V4-FEAT-032 implemented: TOS aggregate repository boundary) |
 | **Canonical path** | [`specs/LidoPortfolio-V4-Wishlist.md`](LidoPortfolio-V4-Wishlist.md) |
 | **Related** | [`LidoPortfolio-V3-Specification.md`](LidoPortfolio-V3-Specification.md) · [`../implementation.md`](../implementation.md) |
 
@@ -40,7 +40,7 @@ Living detail: [`implementation.md`](../implementation.md).
 
 ## 2. Genuine V4 features (active V4 scope)
 
-Active V4 feature count: **22** (**14** `OPEN`, **8** `COMPLETE`).
+Active V4 feature count: **22** (**10** `OPEN`, **12** `COMPLETE`).
 
 | ID | Item | Why genuinely V4 | Priority | Status |
 |----|------|------------------|----------|--------|
@@ -62,10 +62,10 @@ Active V4 feature count: **22** (**14** `OPEN`, **8** `COMPLETE`).
 | V4-FEAT-024 | Recommendation `markExecuted` ownership refactor | Architecture cleanup (was V4-TD-004). **Implemented (2026-08-27):** `RecommendationLifecycleService::markExecuted()` (façade `RecommendationEngine::markExecuted`) writes executed status + converts reservation. `ExecutionEngine` orchestrates fill and calls that method inside the existing DB transaction. API/status/idempotency unchanged. | P3 | COMPLETE |
 | V4-FEAT-025 | OpenAPI for `/api/v1` | Machine-readable contract (was V4-TD-006). **Implemented (2026-08-27):** OpenAPI 3.0.3 at `app/openapi/v1.json` covers all live `/api/v1` routes (122 operations) as they behave today. No API redesign, no Swagger UI. | P3 | COMPLETE |
 | V4-FEAT-026 | Vitest / E2E smoke for TOS UI | New test harness (was V4-TD-007). **Implemented (2026-08-27):** Vitest + jsdom smoke for Recommendations/Discovery chrome, loading/empty/error, Review→Approve, pipeline freshness error; one Playwright Chromium path with intercepted `/api/v1`. | P2 | COMPLETE |
-| V4-FEAT-027 | Split TradingOsController / shared React hooks | Maintainability (was V4-TD-008/009) | P3 | OPEN |
-| V4-FEAT-028 | Structured logging / pagination consistency | Platform hardening (was V4-TD-010/011) | P3 | OPEN |
-| V4-FEAT-029 | Pluggable Evaluation rules modules | Evaluation architecture (was V4-TD-012) | P3 | OPEN |
-| V4-FEAT-032 | Repository layer for TOS aggregates | Architecture (was V4-TD-015) | P3 | OPEN |
+| V4-FEAT-027 | Split TradingOsController / shared React hooks | Maintainability (was V4-TD-008/009). **Implemented (2026-08-27):** TOS `/api/v1` HTTP split by engine under `App\Http\Controllers\Api\V1\TradingOs\*`; wire JSON in `TradingOsPresenter`. Frontend adopted existing `useApiGet` / `runApiMutation` on Discovery, Pending Execution, Review, Notifications (not TanStack Query). Routes/envelopes unchanged. | P3 | COMPLETE |
+| V4-FEAT-028 | Structured logging / pagination consistency | Platform hardening (was V4-TD-010/011). **Implemented (2026-08-27):** `PortfolioLoggerService::event()` with stable event names + structured identifiers on TOS pipeline/discovery/evaluation/recommendation/execution/notification/data/review logs; key redaction for secrets. `TradingOsPagination` (`page`/`pageSize`, meta `{page,pageSize,total,lastPage}`, max 200 / price-bars 500) on securities, price-bars, recommendations, orders, transactions, notifications, reviews. Candidates/evaluations/positions/pending-execution stay bounded and unpaginated. OpenAPI updated. | P3 | COMPLETE |
+| V4-FEAT-029 | Pluggable Evaluation rules modules | Evaluation architecture (was V4-TD-012). **Implemented (2026-08-27):** `EvaluationFactorRule` modules registered via `EvaluationServiceProvider`; `EvaluationEngine` orchestrates context + equal-weight aggregation. Formulas/weights/FEAT-005/021/API unchanged. `AsOfFactorScorer` stays historical-safe (no live Market Analysis). | P3 | COMPLETE |
+| V4-FEAT-032 | Repository layer for TOS aggregates | Architecture (was V4-TD-015). **Implemented (2026-08-27):** focused `App\Repositories\Tos\*` classes own TOS aggregate list/find/paginate queries. Engines keep orchestration, lifecycle, scoring, and writes. No generic repository framework. API/OpenAPI unchanged. | P3 | COMPLETE |
 
 ---
 
@@ -346,6 +346,7 @@ Moving a FEAT from V4 to V5 does **not** satisfy acceptance. Freezing V4-SPEC-00
 | 2026-08-27 | **V4-FEAT-024 COMPLETE:** `RecommendationEngine::markExecuted()` / `RecommendationLifecycleService` own the executed-status write; ExecutionEngine orchestrates fill only. Tests: `RecommendationMarkExecutedTest`. |
 | 2026-08-27 | **V4-FEAT-025 COMPLETE:** OpenAPI 3.0.3 contract for all live `/api/v1` routes at `app/openapi/v1.json` (122 operations). Tests: `OpenApiV1ContractTest`. |
 | 2026-08-27 | **V4-FEAT-026 COMPLETE:** Vitest TOS UI smoke + one Playwright Chromium path. Commands: `npm run test:js:tos`, `npm run test:e2e:tos`. |
+| 2026-08-27 | **V4-FEAT-027 COMPLETE:** Split `TradingOsController` by engine; shared `TradingOsPresenter` + `useApiGet`/`runApiMutation` on remaining TOS pages. API wire contract unchanged. Tests: `TradingOsControllerSplitTest`, OpenAPI, Vitest/Playwright TOS smoke. |
 
 ## Appendix — Former ID map
 

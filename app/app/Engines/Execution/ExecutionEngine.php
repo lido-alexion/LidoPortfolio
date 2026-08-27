@@ -12,11 +12,13 @@ use App\Models\TradingOrder;
 use App\Models\TradingRecommendation;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Repositories\Tos\ExecutionQueryRepository;
 use App\Services\CashManagementService;
 use App\Services\HoldingsCalculationService;
 use App\Services\Lending\RecommendationLendingCoordinator;
 use App\Services\PortfolioLoggerService;
 use App\Services\TransactionWriteService;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -35,6 +37,7 @@ class ExecutionEngine
         protected CashManagementService $cash,
         protected RecommendationEngine $recommendation,
         protected RecommendationLendingCoordinator $lending,
+        protected ExecutionQueryRepository $executionQueries,
     ) {}
 
     /**
@@ -110,7 +113,7 @@ class ExecutionEngine
             $this->lending->recordExecution($recommendation->fresh(), $transaction);
         });
 
-        $this->logger->log('daily', 'ExecutionEngine', 'info', 'Recommendation completed from ledger transaction', [
+        $this->logger->event('ExecutionEngine', 'execution.ledger_completed', 'info', 'Recommendation completed from ledger transaction', [
             'recommendation_id' => $recommendation->id,
             'transaction_id' => $transaction->id,
             'user_id' => $user?->id,
@@ -160,7 +163,8 @@ class ExecutionEngine
         });
 
         if (! $executeNow) {
-            $this->logger->log('daily', 'ExecutionEngine', 'info', 'Order created pending', [
+            $this->logger->event('ExecutionEngine', 'execution.order_pending', 'info', 'Order created pending', [
+                'profile_id' => $profile->id,
                 'order_id' => $order->id,
                 'symbol' => $stock->symbol,
             ]);
@@ -269,7 +273,8 @@ class ExecutionEngine
             ->where('stock_id', $stock->id)
             ->first();
 
-        $this->logger->log('daily', 'ExecutionEngine', 'info', 'Order executed', [
+        $this->logger->event('ExecutionEngine', 'execution.order_executed', 'info', 'Order executed', [
+            'profile_id' => $profile->id,
             'order_id' => $order->id,
             'transaction_id' => $transaction->id,
             'side' => $side,
@@ -300,7 +305,8 @@ class ExecutionEngine
             'cancelled_at' => now(),
         ])->save();
 
-        $this->logger->log('daily', 'ExecutionEngine', 'info', 'Order cancelled', [
+        $this->logger->event('ExecutionEngine', 'execution.order_cancelled', 'info', 'Order cancelled', [
+            'profile_id' => $profile->id,
             'order_id' => $order->id,
         ]);
 
@@ -379,7 +385,8 @@ class ExecutionEngine
             }
         });
 
-        $this->logger->log('daily', 'ExecutionEngine', 'info', 'TOS fill reverted before transaction delete', [
+        $this->logger->event('ExecutionEngine', 'execution.fill_reverted', 'info', 'TOS fill reverted before transaction delete', [
+            'profile_id' => $profile->id,
             'transaction_id' => $transaction->id,
             'order_id' => $order?->id,
             'recommendation_id' => $recommendationId,
@@ -394,11 +401,7 @@ class ExecutionEngine
 
     public function findOrder(PortfolioProfile $profile, int $id): ?TradingOrder
     {
-        return TradingOrder::query()
-            ->with(['security', 'recommendation', 'orderTransactions'])
-            ->where('profile_id', $profile->id)
-            ->where('id', $id)
-            ->first();
+        return $this->executionQueries->findOrder($profile, $id);
     }
 
     /**
@@ -446,23 +449,19 @@ class ExecutionEngine
     }
 
     /**
+     * @return LengthAwarePaginator<int, TradingOrder>
+     */
+    public function paginateOrders(PortfolioProfile $profile, int $page = 1, int $pageSize = 50, ?string $status = null): LengthAwarePaginator
+    {
+        return $this->executionQueries->paginateOrders($profile, $page, $pageSize, $status);
+    }
+
+    /**
      * @return list<TradingOrder>
      */
     public function listOrders(PortfolioProfile $profile, int $limit = 50, ?string $status = null): array
     {
-        $query = TradingOrder::query()
-            ->with(['security', 'recommendation'])
-            ->where('profile_id', $profile->id);
-
-        if ($status) {
-            $query->where('status', $status);
-        }
-
-        return $query
-            ->orderByDesc('id')
-            ->limit($limit)
-            ->get()
-            ->all();
+        return $this->paginateOrders($profile, 1, $limit, $status)->items();
     }
 
     /**
@@ -472,13 +471,15 @@ class ExecutionEngine
     {
         $this->holdings->recalculateForProfile($profile);
 
-        return Holding::query()
-            ->with('stock')
-            ->where('profile_id', $profile->id)
-            ->where('quantity', '>', 0)
-            ->orderBy('stock_id')
-            ->get()
-            ->all();
+        return $this->executionQueries->listOpenPositions($profile);
+    }
+
+    /**
+     * @return LengthAwarePaginator<int, Transaction>
+     */
+    public function paginateTransactions(PortfolioProfile $profile, int $page = 1, int $pageSize = 100): LengthAwarePaginator
+    {
+        return $this->executionQueries->paginateTransactions($profile, $page, $pageSize);
     }
 
     /**
@@ -486,13 +487,6 @@ class ExecutionEngine
      */
     public function listTransactions(PortfolioProfile $profile, int $limit = 100): array
     {
-        return Transaction::query()
-            ->with('stock')
-            ->where('profile_id', $profile->id)
-            ->orderByDesc('transaction_date')
-            ->orderByDesc('id')
-            ->limit($limit)
-            ->get()
-            ->all();
+        return $this->paginateTransactions($profile, 1, $limit)->items();
     }
 }

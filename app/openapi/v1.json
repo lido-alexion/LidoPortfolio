@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Stox /api/v1",
-        "description": "Machine-readable contract for the existing Stox (Stox by Lido Alexion) `/api/v1` HTTP API.\n\nThis documents current behaviour. It is not an API redesign.\n\nAuthentication is Laravel Sanctum **SPA session cookies**, not JWT and not a Bearer token in localStorage. Login lives on the legacy `/api/auth/*` surface (outside `/api/v1`). Call `GET /sanctum/csrf-cookie` (or `GET /api/auth/csrf-token`) before cookie-authenticated mutating requests.\n\nPortfolio-scoped routes resolve the active portfolio from header `X-Profile-Id` (legacy alias `X-Portfolio-Id`), query `portfolio_id`, or the user default portfolio.\n\nSuccessful `/api/v1` JSON uses `ApiEnvelope`: `{success: true, data, meta}`. Domain failures use `{success: false, error: {code, message}, meta}`. Laravel validation may still return the framework 422 `{message, errors}` shape.\n\nStandalone Discovery / Evaluation / Recommendation endpoints are **not** gated by dataset freshness. `POST /api/v1/pipeline/run` **is** gated (V4-FEAT-022): last successful market sync must be ≤ 24 hours old, or ≤ 72 hours when the pipeline instant is Monday in `cron_timezone`. A missing/stale timestamp returns envelope error `DATASET_NOT_FRESH` (422) and does not run Discovery.\n\n`GET /api/v1/dataset/status` `data.dataset_version` is the current immutable dataset version key (V4-FEAT-023), or `none`. `data.published` still means successfully synced today (inspection only; the pipeline does not gate on that boolean).\n\n`POST /api/v1/evaluation/runs` resolves Strategy catalogue indicator parameters over Evaluation globals (V4-FEAT-021). Evaluation `market_regime` is Bullish→100 / Neutral→50 / Bearish→0 from Market Analysis (V4-FEAT-005).\n\nRecording a ledger fill that completes a recommendation still goes through `POST /api/transactions` (legacy `/api`, not `/api/v1`). Recommendation `executed` status is owned by RecommendationEngine::markExecuted (V4-FEAT-024).",
+        "description": "Machine-readable contract for the existing Stox (Stox by Lido Alexion) `/api/v1` HTTP API.\n\nThis documents current behaviour. It is not an API redesign.\n\nAuthentication is Laravel Sanctum **SPA session cookies**, not JWT and not a Bearer token in localStorage. Login lives on the legacy `/api/auth/*` surface (outside `/api/v1`). Call `GET /sanctum/csrf-cookie` (or `GET /api/auth/csrf-token`) before cookie-authenticated mutating requests.\n\nPortfolio-scoped routes resolve the active portfolio from header `X-Profile-Id` (legacy alias `X-Portfolio-Id`), query `portfolio_id`, or the user default portfolio.\n\nSuccessful `/api/v1` JSON uses `ApiEnvelope`: `{success: true, data, meta}`. Domain failures use `{success: false, error: {code, message}, meta}`. Laravel validation may still return the framework 422 `{message, errors}` shape.\n\nStandalone Discovery / Evaluation / Recommendation endpoints are **not** gated by dataset freshness. `POST /api/v1/pipeline/run` **is** gated (V4-FEAT-022): last successful market sync must be ≤ 24 hours old, or ≤ 72 hours when the pipeline instant is Monday in `cron_timezone`. A missing/stale timestamp returns envelope error `DATASET_NOT_FRESH` (422) and does not run Discovery.\n\n`GET /api/v1/dataset/status` `data.dataset_version` is the current immutable dataset version key (V4-FEAT-023), or `none`. `data.published` still means successfully synced today (inspection only; the pipeline does not gate on that boolean).\n\n`POST /api/v1/evaluation/runs` resolves Strategy catalogue indicator parameters over Evaluation globals (V4-FEAT-021). Evaluation `market_regime` is Bullish→100 / Neutral→50 / Bearish→0 from Market Analysis (V4-FEAT-005).\n\nRecording a ledger fill that completes a recommendation still goes through `POST /api/transactions` (legacy `/api`, not `/api/v1`). Recommendation `executed` status is owned by RecommendationEngine::markExecuted (V4-FEAT-024).\n\nPaginated TOS lists (V4-FEAT-028) accept `page` (default 1) and `pageSize` (alias `per_page`). Meta is `{page, pageSize, total, lastPage}`. Maximum page size is 200 except `GET /price-bars` (500). Defaults match the previous implicit first-page caps. Not paginated (intentionally bounded): candidates, evaluations, positions, pending-execution, review dashboard/outcomes.",
         "version": "1.0.0"
     },
     "servers": [
@@ -1466,7 +1466,7 @@
                     "candidates"
                 ],
                 "summary": "List discovery candidates",
-                "description": "Live route: `GET /api/v1/candidates`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOsController@candidates`.",
+                "description": "Latest completed discovery run for the portfolio (optional discovery_run_id). Intentionally bounded (strategy max_candidates); not paginated (V4-FEAT-028). Rank-sorted in PHP after Evaluation.",
                 "operationId": "get_candidates",
                 "parameters": [
                     {
@@ -2602,7 +2602,7 @@
                     "evaluations"
                 ],
                 "summary": "List evaluation results",
-                "description": "Live route: `GET /api/v1/evaluations`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOsController@evaluations`.",
+                "description": "Latest evaluation run (optional evaluation_run_id). Intentionally bounded to that run; not paginated (V4-FEAT-028).",
                 "operationId": "get_evaluations",
                 "parameters": [
                     {
@@ -2717,7 +2717,7 @@
                     "imports"
                 ],
                 "summary": "GET importsShow",
-                "description": "Live route: `GET /api/v1/imports/{id}`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOsController@importsShow`.",
+                "description": "Live route: `GET /api/v1/imports/{id}`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOs\\DataController@importsShow`.",
                 "operationId": "get_imports_id",
                 "parameters": [
                     {
@@ -3144,12 +3144,39 @@
                 "tags": [
                     "notifications"
                 ],
-                "summary": "GET notificationsIndex",
-                "description": "Live route: `GET /api/v1/notifications`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOsController@notificationsIndex`.",
+                "summary": "List TOS notification history",
+                "description": "Paginated (V4-FEAT-028). Default pageSize 50 (previous implicit cap), maximum 200.",
                 "operationId": "get_notifications",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "required": false,
+                        "description": "1-based page number (default 1).",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "pageSize",
+                        "in": "query",
+                        "required": false,
+                        "description": "Page size (default 50, maximum 200). Alias: per_page.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "required": false,
+                        "description": "Alias of pageSize.",
+                        "schema": {
+                            "type": "integer"
+                        }
                     }
                 ],
                 "responses": {
@@ -3158,7 +3185,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                    "$ref": "#/components/schemas/EnvelopePaginated"
                                 }
                             }
                         }
@@ -3185,7 +3212,7 @@
                     "notifications"
                 ],
                 "summary": "POST notificationsRetry",
-                "description": "Live route: `POST /api/v1/notifications/{id}/retry`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOsController@notificationsRetry`.",
+                "description": "Live route: `POST /api/v1/notifications/{id}/retry`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOs\\NotificationController@notificationsRetry`.",
                 "operationId": "post_notifications_id_retry",
                 "parameters": [
                     {
@@ -3244,12 +3271,48 @@
                 "tags": [
                     "orders"
                 ],
-                "summary": "GET ordersIndex",
-                "description": "Live route: `GET /api/v1/orders`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOsController@ordersIndex`.",
+                "summary": "List TOS orders",
+                "description": "Paginated (V4-FEAT-028). Default pageSize 50 (previous implicit cap), maximum 200. Optional status filter preserved.",
                 "operationId": "get_orders",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "required": false,
+                        "description": "Optional order status filter (pending, executed, cancelled).",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "required": false,
+                        "description": "1-based page number (default 1).",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "pageSize",
+                        "in": "query",
+                        "required": false,
+                        "description": "Page size (default 50, maximum 200). Alias: per_page.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "required": false,
+                        "description": "Alias of pageSize.",
+                        "schema": {
+                            "type": "integer"
+                        }
                     }
                 ],
                 "responses": {
@@ -3258,7 +3321,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                    "$ref": "#/components/schemas/EnvelopePaginated"
                                 }
                             }
                         }
@@ -3392,7 +3455,7 @@
                     "orders"
                 ],
                 "summary": "POST ordersCancel",
-                "description": "Live route: `POST /api/v1/orders/{id}/cancel`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOsController@ordersCancel`.",
+                "description": "Live route: `POST /api/v1/orders/{id}/cancel`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOs\\ExecutionController@ordersCancel`.",
                 "operationId": "post_orders_id_cancel",
                 "parameters": [
                     {
@@ -3617,7 +3680,7 @@
                     "positions"
                 ],
                 "summary": "GET positionsIndex",
-                "description": "Live route: `GET /api/v1/positions`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOsController@positionsIndex`.",
+                "description": "Live route: `GET /api/v1/positions`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOs\\ExecutionController@positionsIndex`.",
                 "operationId": "get_positions",
                 "parameters": [
                     {
@@ -3657,7 +3720,7 @@
                     "price-bars"
                 ],
                 "summary": "Query OHLCV bars",
-                "description": "Live route: `GET /api/v1/price-bars`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOsController@priceBars`.",
+                "description": "Paginated (V4-FEAT-028). Default pageSize 100, maximum 500. Meta `{page, pageSize, total, lastPage}`.",
                 "operationId": "get_price-bars",
                 "parameters": [
                     {
@@ -3700,19 +3763,28 @@
                         }
                     },
                     {
-                        "name": "pageSize",
+                        "name": "page",
                         "in": "query",
                         "required": false,
-                        "description": "Page size.",
+                        "description": "1-based page number (default 1).",
                         "schema": {
                             "type": "integer"
                         }
                     },
                     {
-                        "name": "page",
+                        "name": "pageSize",
                         "in": "query",
                         "required": false,
-                        "description": "Page number.",
+                        "description": "Page size (default 100, maximum 500). Alias: per_page.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "required": false,
+                        "description": "Alias of pageSize.",
                         "schema": {
                             "type": "integer"
                         }
@@ -3724,7 +3796,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                    "$ref": "#/components/schemas/EnvelopePaginated"
                                 }
                             }
                         }
@@ -3751,7 +3823,7 @@
                     "recommendations"
                 ],
                 "summary": "List recommendations",
-                "description": "Live route: `GET /api/v1/recommendations`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOsController@recommendationsIndex`.",
+                "description": "Paginated (V4-FEAT-028). Default pageSize 100 (the previous implicit cap). Query `page` / `pageSize` (alias `per_page`); meta `{page, pageSize, total, lastPage}`. Filtering/open-default statuses unchanged. `GET /recommendations/pending-execution` is not paginated.",
                 "operationId": "get_recommendations",
                 "parameters": [
                     {
@@ -3783,6 +3855,33 @@
                         "schema": {
                             "type": "boolean"
                         }
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "required": false,
+                        "description": "1-based page number (default 1).",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "pageSize",
+                        "in": "query",
+                        "required": false,
+                        "description": "Page size (default 100, maximum 200). Alias: per_page.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "required": false,
+                        "description": "Alias of pageSize.",
+                        "schema": {
+                            "type": "integer"
+                        }
                     }
                 ],
                 "responses": {
@@ -3791,7 +3890,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                    "$ref": "#/components/schemas/EnvelopePaginated"
                                 }
                             }
                         }
@@ -3898,7 +3997,7 @@
                     "recommendations"
                 ],
                 "summary": "GET recommendationsShow",
-                "description": "Live route: `GET /api/v1/recommendations/{id}`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOsController@recommendationsShow`.",
+                "description": "Live route: `GET /api/v1/recommendations/{id}`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOs\\RecommendationController@recommendationsShow`.",
                 "operationId": "get_recommendations_id",
                 "parameters": [
                     {
@@ -3946,7 +4045,7 @@
                     "recommendations"
                 ],
                 "summary": "Cancel pending execution",
-                "description": "Live route: `POST /api/v1/recommendations/{id}/cancel-execution`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOsController@recommendationsCancelExecution`.",
+                "description": "Live route: `POST /api/v1/recommendations/{id}/cancel-execution`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOs\\RecommendationController@recommendationsCancelExecution`.",
                 "operationId": "post_recommendations_id_cancel-execution",
                 "parameters": [
                     {
@@ -4014,7 +4113,7 @@
                     "recommendations"
                 ],
                 "summary": "Manually expire a recommendation",
-                "description": "Live route: `POST /api/v1/recommendations/{id}/expire`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOsController@recommendationsExpire`.",
+                "description": "Live route: `POST /api/v1/recommendations/{id}/expire`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOs\\RecommendationController@recommendationsExpire`.",
                 "operationId": "post_recommendations_id_expire",
                 "parameters": [
                     {
@@ -4079,7 +4178,7 @@
                     "recommendations"
                 ],
                 "summary": "Reopen for review",
-                "description": "Live route: `POST /api/v1/recommendations/{id}/reopen`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOsController@recommendationsReopen`.",
+                "description": "Live route: `POST /api/v1/recommendations/{id}/reopen`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOs\\RecommendationController@recommendationsReopen`.",
                 "operationId": "post_recommendations_id_reopen",
                 "parameters": [
                     {
@@ -4144,7 +4243,7 @@
                     "recommendations"
                 ],
                 "summary": "Approve, reject, or defer a recommendation",
-                "description": "Live route: `POST /api/v1/recommendations/{id}/review`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOsController@recommendationsReview`.",
+                "description": "Live route: `POST /api/v1/recommendations/{id}/review`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOs\\RecommendationController@recommendationsReview`.",
                 "operationId": "post_recommendations_id_review",
                 "parameters": [
                     {
@@ -4243,7 +4342,7 @@
                     "recommendations"
                 ],
                 "summary": "GET recommendationsReviewHistory",
-                "description": "Live route: `GET /api/v1/recommendations/{id}/reviews`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOsController@recommendationsReviewHistory`.",
+                "description": "Live route: `GET /api/v1/recommendations/{id}/reviews`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOs\\RecommendationController@recommendationsReviewHistory`.",
                 "operationId": "get_recommendations_id_reviews",
                 "parameters": [
                     {
@@ -4339,7 +4438,7 @@
                     "review"
                 ],
                 "summary": "GET reviewDashboard",
-                "description": "Live route: `GET /api/v1/review/dashboard`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOsController@reviewDashboard`.",
+                "description": "Live route: `GET /api/v1/review/dashboard`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOs\\ReviewController@reviewDashboard`.",
                 "operationId": "get_review_dashboard",
                 "parameters": [
                     {
@@ -4379,7 +4478,7 @@
                     "review"
                 ],
                 "summary": "GET reviewOutcomes",
-                "description": "Live route: `GET /api/v1/review/outcomes`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOsController@reviewOutcomes`.",
+                "description": "Live route: `GET /api/v1/review/outcomes`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOs\\ReviewController@reviewOutcomes`.",
                 "operationId": "get_review_outcomes",
                 "parameters": [
                     {
@@ -4418,12 +4517,39 @@
                 "tags": [
                     "reviews"
                 ],
-                "summary": "GET reviewsIndex",
-                "description": "Live route: `GET /api/v1/reviews`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOsController@reviewsIndex`.",
+                "summary": "List review reports",
+                "description": "Paginated (V4-FEAT-028). Default pageSize 20 (previous implicit cap), maximum 200. Dashboard/outcomes remain unpaginated aggregates.",
                 "operationId": "get_reviews",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "required": false,
+                        "description": "1-based page number (default 1).",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "pageSize",
+                        "in": "query",
+                        "required": false,
+                        "description": "Page size (default 20, maximum 200). Alias: per_page.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "required": false,
+                        "description": "Alias of pageSize.",
+                        "schema": {
+                            "type": "integer"
+                        }
                     }
                 ],
                 "responses": {
@@ -4432,7 +4558,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                    "$ref": "#/components/schemas/EnvelopePaginated"
                                 }
                             }
                         }
@@ -4459,7 +4585,7 @@
                     "reviews"
                 ],
                 "summary": "Generate a review report",
-                "description": "Live route: `POST /api/v1/reviews/generate`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOsController@reviewsGenerate`.",
+                "description": "Live route: `POST /api/v1/reviews/generate`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOs\\ReviewController@reviewsGenerate`.",
                 "operationId": "post_reviews_generate",
                 "parameters": [
                     {
@@ -4517,7 +4643,7 @@
                     "reviews"
                 ],
                 "summary": "GET reviewsShow",
-                "description": "Live route: `GET /api/v1/reviews/{id}`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOsController@reviewsShow`.",
+                "description": "Live route: `GET /api/v1/reviews/{id}`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOs\\ReviewController@reviewsShow`.",
                 "operationId": "get_reviews_id",
                 "parameters": [
                     {
@@ -5073,7 +5199,7 @@
                     "securities"
                 ],
                 "summary": "List securities",
-                "description": "Live route: `GET /api/v1/securities`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOsController@securities`.",
+                "description": "Paginated (V4-FEAT-028). Default pageSize 50, maximum 200. Meta `{page, pageSize, total, lastPage}`.",
                 "operationId": "get_securities",
                 "parameters": [
                     {
@@ -5089,10 +5215,19 @@
                         }
                     },
                     {
+                        "name": "page",
+                        "in": "query",
+                        "required": false,
+                        "description": "1-based page number (default 1).",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
                         "name": "pageSize",
                         "in": "query",
                         "required": false,
-                        "description": "Page size (alias per_page).",
+                        "description": "Page size (default 50, maximum 200). Alias: per_page.",
                         "schema": {
                             "type": "integer"
                         }
@@ -5101,16 +5236,7 @@
                         "name": "per_page",
                         "in": "query",
                         "required": false,
-                        "description": "Page size alias.",
-                        "schema": {
-                            "type": "integer"
-                        }
-                    },
-                    {
-                        "name": "page",
-                        "in": "query",
-                        "required": false,
-                        "description": "Page number.",
+                        "description": "Alias of pageSize.",
                         "schema": {
                             "type": "integer"
                         }
@@ -5122,7 +5248,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                    "$ref": "#/components/schemas/EnvelopePaginated"
                                 }
                             }
                         }
@@ -5149,7 +5275,7 @@
                     "securities"
                 ],
                 "summary": "GET securityShow",
-                "description": "Live route: `GET /api/v1/securities/{id}`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOsController@securityShow`.",
+                "description": "Live route: `GET /api/v1/securities/{id}`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOs\\DataController@securityShow`.",
                 "operationId": "get_securities_id",
                 "parameters": [
                     {
@@ -6455,12 +6581,39 @@
                 "tags": [
                     "transactions"
                 ],
-                "summary": "GET transactionsIndex",
-                "description": "Live route: `GET /api/v1/transactions`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOsController@transactionsIndex`.",
+                "summary": "List TOS ledger transactions for the active portfolio",
+                "description": "Paginated (V4-FEAT-028). Default pageSize 100 (previous implicit cap), maximum 200. Distinct from legacy `GET /api/transactions`.",
                 "operationId": "get_transactions",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "required": false,
+                        "description": "1-based page number (default 1).",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "pageSize",
+                        "in": "query",
+                        "required": false,
+                        "description": "Page size (default 100, maximum 200). Alias: per_page.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "required": false,
+                        "description": "Alias of pageSize.",
+                        "schema": {
+                            "type": "integer"
+                        }
                     }
                 ],
                 "responses": {
@@ -6469,7 +6622,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                    "$ref": "#/components/schemas/EnvelopePaginated"
                                 }
                             }
                         }
@@ -6658,6 +6811,59 @@
                         "properties": {
                             "data": {
                                 "$ref": "#/components/schemas/DatasetStatusData"
+                            }
+                        }
+                    }
+                ]
+            },
+            "PaginationMeta": {
+                "type": "object",
+                "required": [
+                    "page",
+                    "pageSize",
+                    "total",
+                    "lastPage"
+                ],
+                "properties": {
+                    "page": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "Current 1-based page."
+                    },
+                    "pageSize": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "Items per page after clamp."
+                    },
+                    "total": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Total matching rows."
+                    },
+                    "lastPage": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "Last 1-based page (1 when total is 0)."
+                    }
+                }
+            },
+            "EnvelopePaginated": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/EnvelopeSuccess"
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "data": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "additionalProperties": true
+                                }
+                            },
+                            "meta": {
+                                "$ref": "#/components/schemas/PaginationMeta"
                             }
                         }
                     }
