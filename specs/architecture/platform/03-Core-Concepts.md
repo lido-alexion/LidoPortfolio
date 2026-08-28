@@ -169,8 +169,9 @@ Owner: Architecture / shared platform module (Indicator Registry).
 Umbrella registry API over Indicator, Screener, and Strategy artifact
 registries: list/search, validate, import/export, dependency resolution.
 
-Owner: Architecture / Trading Artifact Framework (SD-034). Design only until
-implemented.
+Owner: Architecture / Trading Artifact Framework (SD-034). Umbrella
+`ArtifactRegistry` (list/validate/import/export) **shipped**. Remaining TAF
+(immutable published versions, sharing, extra AI draft UX) is **V5 V4-FEAT-008**.
 
 ------------------------------------------------------------------------
 

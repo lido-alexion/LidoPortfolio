@@ -31,7 +31,7 @@ Formats are optimized for:
 | Import / export | Portable envelope + package; remap ids; pin versions |
 | Long-term BC | `schema_version`, additive fields, forbidden removals without major bump |
 
-**This document is design only.** No application code, migrations, or runtime parsers are implied.
+**This document specifies the portable JSON formats.** Runtime package I/O uses this envelope via `ArtifactRegistry` (shipped). It does **not** imply a dedicated standalone JSON-parser product. Remaining TAF (immutable published versions, sharing/distribution, extra AI draft-from-schema UX) is **V5 V4-FEAT-008**.
 
 ## Non-negotiables
 

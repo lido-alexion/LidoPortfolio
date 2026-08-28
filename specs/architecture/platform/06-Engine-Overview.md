@@ -285,3 +285,5 @@ See [../indicators/11-Trading-Artifact-Framework.md](../indicators/11-Trading-Ar
 
 Not a pipeline stage engine — a platform framework over existing capabilities.
 “Strategy Template” is absorbed as factory/imported Strategy artifacts.
+
+**2026-08-28:** Envelope, registries, and package I/O are **shipped**. Remaining SD-034 work is **V5 V4-FEAT-008**, not active V4.

@@ -88,19 +88,20 @@ Independent freeze audit (2026-07-25): [`architecture/audit/`](./architecture/au
 | 2026-07-30 | Epic 1 | Indicator Registry **foundation** coded: `App\Services\Indicators\*` + factory seed + unit tests; no consumer cutover; calculators untouched |
 | 2026-07-30 | Epic 2 | Indicator Registry **migration**: ScreenerCatalog + SupportedIndicators façades; seeds SoT; min-bars helper; validator; façade parity tests; no calc/UI changes |
 | 2026-07-30 | SD-034 | Trading Artifact Framework **design** accepted (docs only): shared envelope for Indicator / Screener / Strategy; absorb Strategy Templates; preserve `definition_json` / `config_json`; PB-058/059/060 |
+| 2026-08-28 | V4-FEAT-008 | TAF **remainder** deferred to V5 (PO). Envelope/registries/package I/O/Create-Enable-Archive/AI docs already shipped; do not treat as unimplemented. |
 
 ---
 
 ## Remaining gaps (post-MVP / future — not blocking)
 
 - Indicator Registry Admin UI + later phases (PB-055+; Epics 1–2 metadata/façades landed)
-- Trading Artifact Framework implementation (PB-058+; SD-034 design only)
+- Trading Artifact Framework **remainder** (V5 **V4-FEAT-008**): immutable published versions, sharing/distribution, extra AI draft UX, dependency dashboards, rollback, bundle UI, fork workflows. Envelope/registries/package I/O already shipped.
 - Wire Strategy indicator parameters into Evaluation (PB-054 / TD-19)
 - Liquidity / Tradability indicator calculators (PB-057)
 - Dedicated Discovery Engine Specification document
 - Email / webhook / SMS / push channels
 - Automated broker execution (Zerodha, GTT, …)
-- Multi-strategy isolation / A-B comparison (factory + single active custom ships; Strategy artifact library designed under SD-034)
+- Multi-strategy Create/Enable/Archive shipped in V3; remaining TAF library/binding dual-UX is **V5 V4-FEAT-008**
 - OpenAPI for `/api/v1`
 - Formal Data Engine publish/validation gates & trading calendar product
 - Pluggable evaluation rules / multi-benchmark market analysis / constituent breadth V2

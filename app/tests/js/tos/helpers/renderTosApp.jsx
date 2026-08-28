@@ -11,6 +11,9 @@ import { SidebarProvider } from '../../../../resources/js/src/context/SidebarCon
 import { ThemeProvider } from '../../../../resources/js/src/context/ThemeContext.jsx';
 import CandidatesPage from '../../../../resources/js/src/pages/CandidatesPage.jsx';
 import RecommendationsPage from '../../../../resources/js/src/pages/RecommendationsPage.jsx';
+import ReviewDashboardPage from '../../../../resources/js/src/pages/ReviewDashboardPage.jsx';
+import ReviewReportDetailPage from '../../../../resources/js/src/pages/ReviewReportDetailPage.jsx';
+import ReviewReportsListPage from '../../../../resources/js/src/pages/ReviewReportsListPage.jsx';
 import { TEST_USER } from '../fixtures/tosApi.js';
 
 function TosRoutes() {
@@ -18,6 +21,9 @@ function TosRoutes() {
         <Routes>
             <Route path="/recommendations" element={<RecommendationsPage />} />
             <Route path="/candidates" element={<CandidatesPage />} />
+            <Route path="/review/reports/:id" element={<ReviewReportDetailPage />} />
+            <Route path="/review/reports" element={<ReviewReportsListPage />} />
+            <Route path="/review" element={<ReviewDashboardPage />} />
         </Routes>
     );
 }

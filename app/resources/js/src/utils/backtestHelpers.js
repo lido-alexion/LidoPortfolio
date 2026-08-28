@@ -26,6 +26,86 @@ export function parseTagsInput(raw) {
         .filter(Boolean);
 }
 
+export class DuplicateBacktestInputError extends Error {
+    constructor(message) {
+        super(message);
+        this.name = 'DuplicateBacktestInputError';
+    }
+}
+
+function isoDateOnly(value) {
+    if (value == null || value === '') {
+        return '';
+    }
+    return String(value).slice(0, 10);
+}
+
+/**
+ * Build POST /v1/backtests payload to start a NEW simulation from a history row's
+ * stored inputs (period dates, capital, notes, tags). Omits strategy_version_id so
+ * the engine resolves the current Strategy via ensureActive. Does not copy name,
+ * trades, statistics, or snapshots.
+ *
+ * @param {object} run
+ * @param {string} sessionToken
+ * @returns {{
+ *   from_date: string,
+ *   to_date: string,
+ *   initial_capital: number,
+ *   tags: string[],
+ *   session_token: string,
+ *   range_key?: string,
+ *   notes?: string,
+ * }}
+ */
+export function duplicateBacktestPayload(run, sessionToken) {
+    const fromDate = isoDateOnly(run?.from_date);
+    const toDate = isoDateOnly(run?.to_date);
+    if (!fromDate || !toDate) {
+        throw new DuplicateBacktestInputError(
+            'Cannot duplicate this backtest: the original run is missing period dates.',
+        );
+    }
+
+    const capital = Number(run?.initial_capital);
+    if (!Number.isFinite(capital) || capital < 1000) {
+        throw new DuplicateBacktestInputError(
+            'Cannot duplicate this backtest: the original run is missing a valid initial capital.',
+        );
+    }
+
+    const token = String(sessionToken || '').trim();
+    if (!token) {
+        throw new DuplicateBacktestInputError(
+            'Cannot duplicate this backtest: a session token is required.',
+        );
+    }
+
+    const tags = Array.isArray(run?.tags)
+        ? run.tags
+            .filter((tag) => typeof tag === 'string' && tag.trim() !== '')
+            .map((tag) => tag.trim())
+        : [];
+
+    const payload = {
+        from_date: fromDate,
+        to_date: toDate,
+        initial_capital: capital,
+        tags,
+        session_token: token,
+    };
+
+    if (run?.range_key) {
+        payload.range_key = String(run.range_key);
+    }
+
+    if (run?.notes != null) {
+        payload.notes = String(run.notes);
+    }
+
+    return payload;
+}
+
 export function formatBacktestStage(stage) {
     const labels = {
         PREPARING: 'Preparing eligibility',

@@ -2,7 +2,9 @@ import { vi } from 'vitest';
 import {
     CAPITAL_RESOLUTION,
     DISCOVERY_CANDIDATE,
+    EMPTY_REVIEW_DASHBOARD,
     OPEN_BUY_RECOMMENDATION,
+    SAMPLE_REVIEW_REPORT,
     TEST_PORTFOLIO,
     TEST_USER,
     apiEnvelope,
@@ -60,10 +62,17 @@ export function installDefaultTosHandlers({
     modeBlockers = ['entitlement', 'totp', 'broker'],
     canSubmitSemiAutomatic = false,
     canSubmitAutomatic = false,
+    reviews = [],
+    reviewsMeta = null,
+    getReviews = null,
+    reviewById = null,
+    reviewDashboard = EMPTY_REVIEW_DASHBOARD,
+    generatedReport = SAMPLE_REVIEW_REPORT,
+    generateError = null,
 } = {}) {
     let recs = recommendations.map((r) => ({ ...r }));
 
-    apiMock.get.mockImplementation(async (url) => {
+    apiMock.get.mockImplementation(async (url, config) => {
         const path = pathOf(url);
         if (path === '/auth/me') {
             return axiosOk({ user: TEST_USER });
@@ -146,11 +155,56 @@ export function installDefaultTosHandlers({
                 provider: 'kite',
             }));
         }
+        if (path === '/v1/reviews') {
+            if (getReviews) {
+                const payload = await getReviews(config);
+                return axiosOk(apiEnvelope(payload.items, payload.meta));
+            }
+            const page = Number(config?.params?.page) || 1;
+            const pageSize = Number(config?.params?.pageSize) || 20;
+            const meta = reviewsMeta ?? {
+                page,
+                pageSize,
+                total: reviews.length,
+                lastPage: 1,
+            };
+            return axiosOk(apiEnvelope(reviews, meta));
+        }
+        const reviewMatch = path.match(/^\/v1\/reviews\/(\d+)$/);
+        if (reviewMatch) {
+            const id = Number(reviewMatch[1]);
+            const report = (reviewById && reviewById[id])
+                || reviews.find((row) => Number(row.id) === id)
+                || (Number(generatedReport?.id) === id ? generatedReport : null);
+            if (!report) {
+                throw axiosError('Review report not found.', {
+                    status: 404,
+                    body: { success: false, error: { code: 'NOT_FOUND', message: 'Review report not found.' } },
+                });
+            }
+            return axiosOk(apiEnvelope(report));
+        }
+        if (path === '/v1/review/dashboard') {
+            return axiosOk(apiEnvelope(reviewDashboard));
+        }
+        if (path === '/v1/orders') {
+            return axiosOk(apiEnvelope([]));
+        }
         throw new Error(`Unexpected GET ${path}`);
     });
 
-    apiMock.post.mockImplementation(async (url, body) => {
+    apiMock.post.mockImplementation(async (url, body, config) => {
         const path = pathOf(url);
+        if (path === '/v1/reviews/generate') {
+            if (generateError) {
+                throw generateError;
+            }
+            void config;
+            return axiosOk(apiEnvelope({
+                report: generatedReport,
+                metrics: generatedReport?.metrics ?? [],
+            }), { status: 201 });
+        }
         if (path === '/v1/pipeline/run') {
             if (pipelineError) {
                 throw pipelineError;

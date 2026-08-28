@@ -4,11 +4,11 @@
 |-------|-------|
 | **Document** | 11 — Trading Artifact Framework |
 | **Version** | 1.0 |
-| **Status** | Accepted design (SD-034) — **not implemented** |
+| **Status** | Accepted design (SD-034) — **infrastructure implemented**; remaining phases are **V5 (V4-FEAT-008)** |
 | **Owner** | Architecture |
 | **Depends On** | 03 Core Concepts, 04 System Architecture, 06 Engine Overview, [09 Indicator Registry](./09-Indicator-Registry.md), Screener Spec, Strategy Configuration Spec |
 | **Engine spec** | [../domains/Trading-Artifact-Framework-Specification.md](../domains/Trading-Artifact-Framework-Specification.md) |
-| **JSON formats** | [../domains/Trading-Artifact-JSON-Specification.md](../domains/Trading-Artifact-JSON-Specification.md) (design only) |
+| **JSON formats** | [../domains/Trading-Artifact-JSON-Specification.md](../domains/Trading-Artifact-JSON-Specification.md) (canonical format; runtime envelope I/O shipped) |
 
 ---
 
@@ -18,7 +18,7 @@ Define a **reusable Trading Artifact Framework** that elevates Indicators, Scree
 
 This supersedes the narrower “Strategy Template” idea: templates are one use of **Strategy artifacts**, not a separate product line.
 
-**This document is architecture intent only.** No code changes are implied until a release implements SD-034 phases.
+**This document is architecture intent.** Phases 1–2 style infrastructure (envelope, package I/O, Indicator/Screener/Strategy registries, Create/Enable/Archive, AI authoring/runtime docs) **shipped**. Remaining SD-034 work is **V5 V4-FEAT-008** (immutable published versions vs Save-in-place, sharing/distribution, extra AI draft UX, dependency dashboards, rollback, bundle UI, fork workflows) — **not** an active V4 implementation target. Do not treat shipped registries as unimplemented.
 
 ---
 
@@ -37,6 +37,8 @@ We need one framework so that:
 - Artifacts share **metadata, lifecycle, versioning, validation, import/export, registry, and dependency** patterns
 - AI assistants can **discover, propose, validate, and package** artifacts safely
 - Future sharing (export packs, community libraries) does not require redesign
+
+**2026-08-28 status:** Envelope, package I/O, Indicator/Screener/Strategy registries, Create/Enable/Archive, and AI authoring/runtime docs are **shipped**. The table above is the pre-implementation gap. Remaining work is **V5 V4-FEAT-008**, not active V4.
 
 ---
 
@@ -172,17 +174,17 @@ Indicator Registry **is** the Indicator specialization of this framework.
 
 # 10. Roadmap Summary
 
-| Phase | Outcome |
-|------:|---------|
-| 0 | Specs + SD-034 (this document set) |
-| 1 | Shared envelope schema + documentation alignment (no behaviour change) |
-| 2 | Screener artifact metadata / export-import (keep `definition_json`) |
-| 3 | Strategy artifact library + portfolio binding (preserve active Save UX initially) |
-| 4 | Cross-artifact dependency resolver + validation orchestration |
-| 5 | AI catalogue APIs + validate-before-activate for generated drafts |
-| 6 | Optional sharing / pack distribution (out of V1.x) |
+| Phase | Outcome | Status (2026-08-28) |
+|------:|---------|---------------------|
+| 0 | Specs + SD-034 (this document set) | Done |
+| 1 | Shared envelope schema + documentation alignment (no behaviour change) | **Shipped** (envelope / validation) |
+| 2 | Screener artifact metadata / export-import (keep `definition_json`) | **Shipped** (Screener Registry + package I/O) |
+| 3 | Strategy artifact library + portfolio binding (preserve active Save UX initially) | **Partial:** Strategy Registry + Create/Enable/Archive shipped; remaining dual library/binding UX and immutable published versions are **V5 V4-FEAT-008** |
+| 4 | Cross-artifact dependency resolver + validation orchestration | **Partial:** umbrella `ArtifactRegistry` + validate/import/export shipped; remaining dependency dashboards / rollback are **V5 V4-FEAT-008** |
+| 5 | AI catalogue APIs + validate-before-activate for generated drafts | **Partial:** AI authoring/runtime docs + prompt builder shipped; extra draft-from-schema catalogue UX is **V5 V4-FEAT-008** |
+| 6 | Optional sharing / pack distribution (out of V1.x) | **V5 V4-FEAT-008** |
 
-Indicator Registry implementation (PB-055+) proceeds **in parallel** as the Indicator track; Framework phases must not block Registry Epics 1–3.
+Indicator Registry implementation (PB-055+) proceeds **in parallel** as the Indicator track; Framework phases must not block Registry Epics 1–3. Remaining TAF work is **not** an active V4 target.
 
 ---
 

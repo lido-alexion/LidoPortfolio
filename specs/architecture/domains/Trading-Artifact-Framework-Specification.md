@@ -25,7 +25,7 @@ Specify a **Trading Artifact Framework**: a shared model and set of platform cap
 
 **Absorbed proposal:** “Strategy Templates” are **not** a separate subsystem. A template is a Strategy artifact with `origin=factory|imported` used as a fork source.
 
-**Implementation status:** Documentation / design only. No code changes are implied until a release implements SD-034 phases.
+**Implementation status:** **Infrastructure shipped** (envelope/validation, package I/O, Indicator/Screener/Strategy registries, Create/Enable/Archive, AI authoring/runtime docs). Remaining SD-034 phases (immutable published versions vs Save-in-place, sharing/distribution, extra AI draft-from-schema UX, dependency dashboards, rollback, bundle UI, fork workflows) are **V5 V4-FEAT-008**, not an active V4 implementation target. Do not treat shipped registries as unimplemented.
 
 ---
 
@@ -762,17 +762,17 @@ Exact migrations are **out of scope** for this design doc.
 
 # 18. Phased Delivery (Spec-level)
 
-| Phase | Deliverable | Behaviour change? |
-|------:|-------------|-------------------|
-| 0 | This spec + architecture 11 + SD-034 | No |
-| 1 | Shared JSON Schemas + docs alignment (Indicator AI fields plan) | No |
-| 2 | Screener artifact metadata + export/import | Additive APIs |
-| 3 | Strategy library + binding (Save UX preserved) | Additive |
-| 4 | Umbrella ArtifactRegistry + dependency resolver | Additive |
-| 5 | AI catalogue + draft-from-schema validation UX | Additive |
-| 6 | Sharing/distribution hardening | Later |
+| Phase | Deliverable | Behaviour change? | Status (2026-08-28) |
+|------:|-------------|-------------------|---------------------|
+| 0 | This spec + architecture 11 + SD-034 | No | Done |
+| 1 | Shared JSON Schemas + docs alignment (Indicator AI fields plan) | No | **Shipped** (envelope) |
+| 2 | Screener artifact metadata + export/import | Additive APIs | **Shipped** |
+| 3 | Strategy library + binding (Save UX preserved) | Additive | **Partial** — Strategy Registry + V3 Create/Enable/Archive shipped; remaining library/binding dual-UX is **V5 V4-FEAT-008** |
+| 4 | Umbrella ArtifactRegistry + dependency resolver | Additive | **Partial** — `ArtifactRegistry` + I/O shipped; remaining resolver dashboards/rollback are **V5 V4-FEAT-008** |
+| 5 | AI catalogue + draft-from-schema validation UX | Additive | **Partial** — authoring/runtime docs shipped; extra catalogue UX is **V5 V4-FEAT-008** |
+| 6 | Sharing/distribution hardening | Later | **V5 V4-FEAT-008** |
 
-Parallel: Indicator Registry PB-055+ (SD-033) remains on its own plan ([../indicators/10-Indicator-Registry-Implementation-Plan.md](../indicators/10-Indicator-Registry-Implementation-Plan.md)).
+Parallel: Indicator Registry PB-055+ (SD-033) remains on its own plan ([../indicators/10-Indicator-Registry-Implementation-Plan.md](../indicators/10-Indicator-Registry-Implementation-Plan.md)). Remaining TAF work is **not** an active V4 target.
 
 ---
 

@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Review — StoX docs</title>
-  <meta name="description" content="Live observational dashboard for recommendations, insights, and recent review decisions.">
-  <link rel="canonical" href="review.html">
+  <title>Review reports — StoX docs</title>
+  <meta name="description" content="Stored point-in-time ReviewEngine reports — list, detail, and Generate.">
+  <link rel="canonical" href="review-reports.html">
   <style>
     :root {
       --bg: #0f1419;
@@ -103,19 +103,19 @@
       <p class="muted" style="margin:0">Static HTML — readable without JavaScript or login.</p>
       <div class="nav">
         <a href="index.html">All topics</a>
-        <a href="review.html">This topic</a>
+        <a href="review-reports.html">This topic</a>
       </div>
     </header>
     
     <article>
-      <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Review</h1>
-      <p class="muted"><code>review</code> · screen: <code>/review</code></p>
-      <p>Live observational dashboard for recommendations, insights, and recent review decisions.</p>
+      <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Review reports</h1>
+      <p class="muted"><code>review-reports</code> · screen: <code>/review/reports/:id</code></p>
+      <p>Stored point-in-time ReviewEngine reports — list, detail, and Generate.</p>
 
       <section class="panel">
         <h2>Overview</h2>
-        <p>Review (<code>/review</code>) is the live observational dashboard: how recommendations and insights look after decisions and fills — actionable outcomes, insight outcomes, orders, and recent review decisions. It is the last stage after Recommendations → Pending Execution → Transactions. These live numbers are not stored ReviewEngine reports. Open Reports for point-in-time snapshots.</p>
-<p>Review closes the learning loop. Use it to evaluate whether recommendation quality is improving over time and to identify recurring misses that require screener/strategy adjustments. Use Reports for stored ReviewEngine snapshots; do not treat live dashboard cards as those report values.</p>
+        <p>Review reports (<code>/review/reports</code>) lists persisted ReviewEngine snapshots. Values are stored at generation time. They are not the live Review dashboard and are not recalculated in the browser. Open a row or use Open for <code>/review/reports/{id}</code>. Generate exists only on this list. There is no delete, no list filter, and no extra sort. <code>recommendation_accepted</code> is shown as Accepted (not executed) because it counts actionable recommendations in pending_execution or accepted; executed counts are separate.</p>
+<p>Treat each report as a frozen ReviewEngine snapshot. Display persisted keys only; do not invent drawdown, slippage, tax lots, attribution, or benchmarks here.</p>
 <p>Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).</p>
 
       </section>
@@ -123,17 +123,20 @@
       <section class="panel">
         <h2>Controls</h2>
         <dl class="doc-list">
-        <dt>Reports</dt>
-        <dd>Opens <code>/review/reports</code> — stored ReviewEngine reports. Sidebar stays a single Review entry; there is no second Review nav item.</dd>
+        <dt>Generate</dt>
+        <dd>POST <code>/api/v1/reviews/generate</code>. Optional From / To dates are sent as <code>period_start</code> / <code>period_end</code> query parameters, not a JSON body. Leave both empty to keep the existing 90-day default.</dd>
     
-        <dt>Outcome tables</dt>
-        <dd>Browse actionable vs insight outcomes and linked orders on this live dashboard.</dd>
+        <dt>Open / row click</dt>
+        <dd>Opens the stored report detail. Detail has Back to reports.</dd>
     
-        <dt>Recent decisions</dt>
-        <dd>Audit trail of Approve / Reject / Defer activity.</dd>
+        <dt>Pagination</dt>
+        <dd>Uses the existing API <code>page</code> / <code>pageSize</code> (default 20). No extra filters.</dd>
     
-        <dt>Outcome segmentation</dt>
-        <dd>Compare actionable trade outcomes separately from HOLD/WATCH insights to avoid mixing fundamentally different intent types.</dd>
+        <dt>Review sidebar</dt>
+        <dd>Sidebar stays a single Review entry to <code>/review</code>. Stored report numbers are not the live dashboard cards.</dd>
+    
+        <dt>Empty state Generate</dt>
+        <dd>When there are no reports (<code>total === 0</code>), Generate remains available on this page including in the empty state.</dd>
     
         <dt>Typical flow</dt>
         <dd>Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.</dd>
@@ -146,14 +149,17 @@
       <section class="panel">
         <h2>Concepts</h2>
         <dl class="doc-list">
-        <dt>Closed loop</dt>
-        <dd>Review completes the Trading OS loop after execution.</dd>
+        <dt>Stored snapshot</dt>
+        <dd>Header, metric cards, remaining metric table, and methodology come from the persisted report. Methodology strings are shown as stored.</dd>
     
-        <dt>Live vs stored</dt>
-        <dd>This page is live. Stored report values live on Review reports (<code>/review/reports</code>) and must not be mixed with these cards without that distinction.</dd>
+        <dt>Accepted (not executed)</dt>
+        <dd>The persisted key <code>recommendation_accepted</code> is labelled Accepted (not executed). Executed recommendations use <code>recommendation_executed</code>.</dd>
     
-        <dt>Feedback loop</dt>
-        <dd>Insights from Review should feed back into strategy tuning and risk controls, not remain as passive reporting. Review still must not feed strategy ranking (OD-03).</dd>
+        <dt>OD-03 / SPEC-001</dt>
+        <dd>Review does not feed strategy ranking. Reports do not introduce FIFO/LIFO/tax-lot accounting.</dd>
+    
+        <dt>No frontend formulas</dt>
+        <dd>XIRR and percents follow live-dashboard formatting conventions, with labels that mark values as coming from the stored report.</dd>
     
         <dt>Active portfolio context</dt>
         <dd>Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.</dd>
@@ -167,7 +173,7 @@
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
-          <a href="review-reports.html">Review reports</a><a href="trading-os-flow.html">Trading OS pages &amp; flow</a><a href="recommendations.html">Recommendations</a><a href="pending-execution.html">Pending Execution</a><a href="dashboard.html">Dashboard</a>
+          <a href="review.html">Review</a><a href="trading-os-flow.html">Trading OS pages &amp; flow</a><a href="recommendations.html">Recommendations</a><a href="pending-execution.html">Pending Execution</a>
         </div>
       </section>
     </article>

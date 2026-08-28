@@ -289,7 +289,7 @@ V3 complete only when: all V3 requirements + V3-related designed features implem
 
 ### Genuine V4 remainder
 
-See [`specs/LidoPortfolio-V4-Wishlist.md`](specs/LidoPortfolio-V4-Wishlist.md): **22** active V4 features (FEAT-001, 002, 005, 006, 008–015, 021–029, 032) and **SPEC-001–006 (DECIDED 2026-08-26)**. **SPEC-001, SPEC-002, SPEC-003, SPEC-004, and SPEC-005 implemented 2026-08-28**. SPEC-006 remains unimplemented. Fourteen former V4 FEAT IDs are V5-deferred (prioritization, not implemented) — see that file §3.
+See [`specs/LidoPortfolio-V4-Wishlist.md`](specs/LidoPortfolio-V4-Wishlist.md): **21** active V4 features (FEAT-001, 002, 005, 006, 009–015, 021–029, 032) and **SPEC-001–006 (DECIDED 2026-08-26)**. **SPEC-001, SPEC-002, SPEC-003, SPEC-004, and SPEC-005 implemented 2026-08-28**. SPEC-006 remains unimplemented. **Fifteen** former V4 FEAT IDs are V5-deferred (prioritization, not implemented) — including **V4-FEAT-008** (TAF remainder, 2026-08-28). The 2026-08-26 split created a **22**-item active V4 register; FEAT-008 is the historical 22nd row, now V5. See that file §3.
 
 ## Final V3 Closure Audit (2026-08-26)
 
@@ -334,8 +334,8 @@ Tracked in [`specs/LidoPortfolio-V4-Wishlist.md`](specs/LidoPortfolio-V4-Wishlis
 
 - **SPEC-001–006:** **DECIDED** 2026-08-26. **SPEC-001 implemented 2026-08-28** (same-stock WAVG merge). **SPEC-002 implemented 2026-08-28** (rights are not a CA; exercise = normal purchase). **SPEC-003 implemented 2026-08-28** (split/bonus restatement of qty/cost/avg/stop/trailing; rupee target preserved). **SPEC-004 implemented 2026-08-28** (cash-ledger LOAN / RECALL / BRIDGE with signed amounts). **SPEC-005 implemented 2026-08-28** (explicit cross-owner SELL attribution). SPEC-006 remains a frozen product rule, **not implemented**. See wishlist §4.
 - **SPEC-007:** **DECIDED** 2026-08-27 (per-portfolio execution modes manual / semi_automatic / automatic; per-user admin automated-execution entitlement; authenticator TOTP required for automated broker submission; Zerodha/Kite first broker; recommendation `executed` remains a ledger fill). Implemented by **V4-FEAT-001**.
-- **Active V4 FEAT (22):** **V4-FEAT-021 COMPLETE** (2026-08-26); **V4-FEAT-022 COMPLETE** (2026-08-27); **V4-FEAT-005 COMPLETE** (2026-08-27); **V4-FEAT-006 COMPLETE** (2026-08-27); **V4-FEAT-023 COMPLETE** (2026-08-27); **V4-FEAT-024 COMPLETE** (2026-08-27); **V4-FEAT-025 COMPLETE** (2026-08-27); **V4-FEAT-026 COMPLETE** (2026-08-27); **V4-FEAT-027 COMPLETE** (2026-08-27) — split Trading OS HTTP controllers + shared React fetch hooks; **V4-FEAT-028 COMPLETE** (2026-08-27) — structured TOS logging + list pagination consistency; **V4-FEAT-029 COMPLETE** (2026-08-27) — pluggable Evaluation factor rules; **V4-FEAT-032 COMPLETE** (2026-08-27) — TOS aggregate repository boundary; **V4-FEAT-001 COMPLETE** (2026-08-27) — live execution modes, TOTP, Zerodha adapter; **V4-FEAT-002 COMPLETE** (2026-08-28) — GTT Target / Stop-Loss; **V4-FEAT-010 COMPLETE** (2026-08-28) — unattended production pipeline + Automatic execution via Laravel `schedule:run`. Remaining 7 stay OPEN: TAF remaining phases, Review/admin/cash/tax polish, etc.
-- **V5-deferred FEAT (14, still OPEN):** B4 banner, notification channels, indicator-registry cutover, mobile/AI/ML/markets/replay, CI/secrets deploy, Discovery/Evaluation UX polish, TS/grid migration, optional token API. Roadmap only — not implemented.
+- **Active V4 FEAT (21):** **V4-FEAT-021 COMPLETE** (2026-08-26); **V4-FEAT-022 COMPLETE** (2026-08-27); **V4-FEAT-005 COMPLETE** (2026-08-27); **V4-FEAT-006 COMPLETE** (2026-08-27); **V4-FEAT-023 COMPLETE** (2026-08-27); **V4-FEAT-024 COMPLETE** (2026-08-27); **V4-FEAT-025 COMPLETE** (2026-08-27); **V4-FEAT-026 COMPLETE** (2026-08-27); **V4-FEAT-027 COMPLETE** (2026-08-27) — split Trading OS HTTP controllers + shared React fetch hooks; **V4-FEAT-028 COMPLETE** (2026-08-27) — structured TOS logging + list pagination consistency; **V4-FEAT-029 COMPLETE** (2026-08-27) — pluggable Evaluation factor rules; **V4-FEAT-032 COMPLETE** (2026-08-27) — TOS aggregate repository boundary; **V4-FEAT-001 COMPLETE** (2026-08-27) — live execution modes, TOTP, Zerodha adapter; **V4-FEAT-002 COMPLETE** (2026-08-28) — GTT Target / Stop-Loss; **V4-FEAT-010 COMPLETE** (2026-08-28) — unattended production pipeline + Automatic execution via Laravel `schedule:run`; **V4-FEAT-009 COMPLETE** (2026-08-28) — Review reports list/detail UI over existing Review APIs; **V4-FEAT-014 COMPLETE** (2026-08-28) — Backtest history Duplicate as a new simulation from stored inputs + current Strategy. Remaining **4** stay OPEN: admin/cash/tax polish (011–013, 015). **V4-FEAT-008** (TAF remainder) moved to V5 on 2026-08-28 — shipped TAF infrastructure is not unimplemented.
+- **V5-deferred FEAT (15, still OPEN):** B4 banner, notification channels, indicator-registry cutover, **TAF remaining phases (FEAT-008)**, mobile/AI/ML/markets/replay, CI/secrets deploy, Discovery/Evaluation UX polish, TS/grid migration, optional token API. Roadmap only — remainder not implemented; shipped TAF registries/I/O stay shipped.
 
 **Closed in V3 (not V4):** OD-16 Strategy window UI; schedulerTimestamp; DailyMarketDataJobTest; max_position enforcement; all former open V3 bug/TD/UX/HIST active rows.
 
@@ -936,6 +936,72 @@ Tax lots, multi-broker marketplace, a second Advanced Orders entitlement.
 ### Explicitly not in this feature
 
 Email operational alerts, V5 notification architecture, new scheduler/worker frameworks, new cPanel scripts, live-portfolio exclusivity (SPEC-006), execution-mode redesign.
+
+## V4-FEAT-008 — Trading Artifact Framework remainder deferred to V5 (2026-08-28)
+
+**Status:** `OPEN`, **V5-deferred / out of active V4**. Docs/register correction only — **no application-code change**. Do **not** invent a new V4 TAF slice.
+
+**Already shipped (do not treat as unimplemented):** artifact envelope / validation; package import/export (`/api/v1/artifacts*`); Indicator, Screener, and Strategy registries; Create / Enable / Archive; AI authoring/runtime documentation; V3 multi-strategy surfaces. See **Trading Artifact Registry infrastructure** below.
+
+**Deferred to V5 (remainder of SD-034):** immutable published versions vs Save-in-place as a first-class library/binding model; dual library vs binding UX beyond current registries; extra AI draft-from-schema catalogue UX beyond shipped docs/prompt builder; sharing / pack distribution, dependency dashboards, rollback, bundle UI, fork workflows.
+
+Active V4 after this move: **21** (**15** COMPLETE, **6** OPEN). V5-deferred: **15**. Historical 22-item active V4 register (2026-08-26): FEAT-008 is the row that moved. **V4-FEAT-009** later completed the Review reports UI (2026-08-28); see that section.
+
+## V4-FEAT-009 — Review reports list / detail (2026-08-28)
+
+**Status:** **COMPLETE**. Frozen UX over existing ReviewEngine APIs. No ReviewEngine, migration, pipeline, or Review API contract changes.
+
+### Routes and navigation
+
+- Live observational dashboard remains `/review` (`ReviewDashboardPage`).
+- List `/review/reports`; detail `/review/reports/:id`.
+- Sidebar stays a **single** Review entry (`/review`). The live dashboard has a **Reports** control. Detail has **Back to reports**.
+
+### List
+
+`GET /api/v1/reviews` with existing `page` / `pageSize` (default 20). No filters or sorting. Empty when `total === 0` includes Generate. Columns: ID, Period, Generated at, Status, stored portfolio value, stored XIRR. Row click and Open go to detail. Values are not recomputed in React.
+
+### Detail
+
+`GET /api/v1/reviews/{id}`. Unknown id uses existing API 404 plus navigation back to the list. Header: report id, period start/end, generated at, status. Named metric cards from persisted keys (portfolio snapshot, win rate, average gain/loss, profit factor, expectancy, **Accepted (not executed)** = `recommendation_accepted`, Executed). Remaining persisted keys in a table with frozen human labels. `summary_json.methodology` shown as stored strings.
+
+`recommendation_accepted` remains pending_execution + accepted; executed is `recommendation_executed`.
+
+### Generate
+
+List page only. `POST /api/v1/reviews/generate`. Optional From/To are `period_start` / `period_end` **query parameters**, not a JSON body. Both empty keeps the existing 90-day ReviewEngine default. Success navigates to the returned report id when present.
+
+### Help
+
+In-app topics `review` (live dashboard) and `review-reports` (list/detail). Static HTML via `npm run docs:static`.
+
+### Tests
+
+`app/tests/js/tos/tos-review-reports.test.jsx`; `app/tests/js/tos/review-reports.test.js`. Existing Review/pipeline/pagination/OpenAPI/financial-integrity PHP tests unchanged.
+
+### Explicitly not in this feature
+
+Drawdown, execution quality, slippage, tax reporting, tax lots, attribution, benchmarks, ranking, new ReviewEngine formulas, methodology rewrites, pipeline generation changes, Review API changes, DELETE, list filtering/sorting.
+
+## V4-FEAT-014 — Backtest Duplicate (2026-08-28)
+
+**Status:** **COMPLETE**. Frozen product rule: Duplicate on a Backtest History row starts a **new** simulation from that row’s stored **inputs** (period dates, initial capital, notes, tags) against the **current Strategy**. It does **not** copy completed trades, trade results, statistics, portfolio snapshots, or the original run’s stored Strategy snapshot/version. This is backtest duplication only — Strategy Duplicate / version-fork stays removed.
+
+### Mechanism
+
+No new endpoint. History Duplicate reuses `POST /api/v1/backtests` and `startBacktest()`. `duplicateBacktestPayload()` sends `from_date`, `to_date`, `range_key`, `initial_capital`, `notes`, `tags`, and `session_token`. `strategy_version_id` and `name` are omitted so `BacktestSimulationEngine::start()` resolves the current Strategy via `ensureActive()` and auto-names the new run. Explicit dates are required because sending only `range_key` would recompute “now minus range” and change the period.
+
+If the original row lacks period dates or a valid initial capital (min 1000), Duplicate stops with an error toast and does not invent values.
+
+New / Open / Continue / Delete / metadata edit are unchanged.
+
+### Tests
+
+`app/tests/Feature/Backtest/BacktestDuplicateTest.php`; `app/tests/js/tos/backtest-duplicate.test.jsx`; `app/tests/js/backtestDuplicate.test.mjs`. Existing Unit Backtest tests and TOS Vitest suite (including Review) unchanged in behavior.
+
+### Explicitly not in this feature
+
+New backtest API, Strategy Duplicate/version-fork, copying result/output state, Review / TAF / live execution / ranking / tax / accounting, history delete/filter/benchmark UX.
 
 ## V3 residual — UNFUNDED zero-own lending offer (2026-08-24)
 
@@ -1969,7 +2035,7 @@ Sanctum auth. Machine-readable contract: [`app/openapi/v1.json`](app/openapi/v1.
 
 **Indicator Registry design (2026-07-30, SD-033):** Target evolution — unified metadata/discovery Registry; preserve TI + Evaluation + Strategy scoring; types Primary/Composite/Metric; Admin Indicator Registry UI; planned Liquidity/Tradability indicators (metadata only). Specs: [`specs/architecture/indicators/09-Indicator-Registry.md`](specs/architecture/indicators/09-Indicator-Registry.md), [`specs/architecture/domains/Indicator-Registry-Specification.md`](specs/architecture/domains/Indicator-Registry-Specification.md). Strategy-param→Evaluation wiring tracked separately (TD-19 / PB-054). Implementation plan: [`specs/architecture/indicators/10-Indicator-Registry-Implementation-Plan.md`](specs/architecture/indicators/10-Indicator-Registry-Implementation-Plan.md). Indexed in `DOCS.md` §2.6b–d / §2.14l.
 
-**Trading Artifact Framework (2026-07-30, SD-034 — design only, no code):** Supersedes the narrower “Strategy Template” idea. Shared envelope for **Indicator**, **Screener**, and **Strategy** artifacts (metadata, lifecycle, versioning, validation, import/export, dependencies, AI catalogues). Preserves Screener `definition_json` and Strategy `config_json` cores; Indicator Registry is the Indicator specialization. Specs: [`specs/architecture/indicators/11-Trading-Artifact-Framework.md`](specs/architecture/indicators/11-Trading-Artifact-Framework.md), [`specs/architecture/domains/Trading-Artifact-Framework-Specification.md`](specs/architecture/domains/Trading-Artifact-Framework-Specification.md). Backlog: PB-058+. Indexed in `DOCS.md` §2.6e / §2.14m.
+**Trading Artifact Framework (SD-034):** Shared envelope for **Indicator**, **Screener**, and **Strategy** artifacts. **Shipped:** envelope/validation, package I/O, Indicator/Screener/Strategy registries, Create/Enable/Archive, AI authoring/runtime docs, V3 multi-strategy surfaces (see Registry infrastructure notes below). **Not shipped / V5 V4-FEAT-008 (2026-08-28):** immutable published versions vs Save-in-place as a first-class model, sharing/distribution, extra AI draft-from-schema catalogue UX, dependency dashboards, rollback, bundle UI, fork workflows. Do not treat shipped registries as unimplemented. Specs: [`specs/architecture/indicators/11-Trading-Artifact-Framework.md`](specs/architecture/indicators/11-Trading-Artifact-Framework.md), [`specs/architecture/domains/Trading-Artifact-Framework-Specification.md`](specs/architecture/domains/Trading-Artifact-Framework-Specification.md). Backlog remainder: PB-058+ / V4-FEAT-008. Indexed in `DOCS.md` §2.6e / §2.14n.
 
 **Indicator Registry Epic 1 (2026-07-30):** Foundation landed — **metadata only, no behaviour change**. New package `App\Services\Indicators\*` (`IndicatorRegistry`, `IndicatorDefinition`, type/category/status/consumer/capability constants, `IndicatorRegistryFactory` seeds from catalogues + Stock Analytics metrics + planned Liquidity/Tradability entries). Bound as singleton in `AppServiceProvider`. Unit tests: `tests/Unit/Indicators/IndicatorRegistryTest.php`. Screener/Strategy/Evaluation/Recommendation/Dashboard **unchanged**.
 
@@ -1996,7 +2062,7 @@ Sanctum auth. Machine-readable contract: [`app/openapi/v1.json`](app/openapi/v1.
 
 **Recommended follow-ups:** Epic 5 consumer cutover (surface scores on Stock Details/Dashboard); optional Evaluation facts with default-off; TD-19 Strategy param→Evaluation wiring; universe/benchmark relative turnover; official circuit feed if available.
 
-**Trading Artifact JSON (2026-07-30, design only):** Declarative portable formats for Indicator / Screener / Strategy — `specs/architecture/domains/Trading-Artifact-JSON-Specification.md` plus worked examples under `specs/architecture/domains/artifacts/examples/`. Defines `schema_version`, `minimum_engine_version`, `artifact_version`, validation rules, and extension/BC policy. No runtime implementation.
+**Trading Artifact JSON (2026-07-30, format spec):** Declarative portable formats for Indicator / Screener / Strategy — `specs/architecture/domains/Trading-Artifact-JSON-Specification.md` plus worked examples under `specs/architecture/domains/artifacts/examples/`. Defines `schema_version`, `minimum_engine_version`, `artifact_version`, validation rules, and extension/BC policy. Runtime package I/O uses this envelope via `ArtifactRegistry` (shipped). Remaining TAF (immutable published versions, sharing, extra AI draft UX) is **V5 V4-FEAT-008**.
 
 **Trading Artifact Registry infrastructure (2026-07-30):** SD-034 Phase 1–2 style landing — `App\Services\Artifacts\*` (envelope, validation, package I/O) with `IndicatorArtifactRegistry`, `ScreenerArtifactRegistry`, `StrategyArtifactRegistry`, umbrella `ArtifactRegistry`. HTTP: `/api/v1/artifacts*`. Indicator create/update → `portfolio_trading_artifact_drafts` only (SD-028; no TI mutation). Screener CRUD maps to existing `ScreenerService`. Strategy create = draft (not activated); active update uses existing `updateActiveConfig`. **Does not** change Screener run, Strategy score, or Recommendation behaviour. Migrate guide: `specs/architecture/domains/Trading-Artifact-Registry-Migration.md`.
 

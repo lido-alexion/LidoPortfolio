@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { ROUTES } from '../navigation/routes';
 import api from '../api';
 import useApiGet from '../hooks/useApiGet';
 import { runApiMutation } from '../hooks/useApiMutation';
@@ -65,10 +66,12 @@ export default function ReviewDashboardPage() {
                 <div>
                     <h1 className="h3 mb-1">Review</h1>
                     <p className="text-muted small mb-0">
-                        Actionable portfolio decisions (trade recommendations), orders, and market-insight outcomes.
+                        Live observational dashboard for recommendations, insights, and recent decisions.
+                        Stored ReviewEngine reports are on Reports — those numbers are not this live snapshot.
                     </p>
                 </div>
                 <div className="d-flex gap-2">
+                    <Link className="btn btn-outline-secondary btn-sm" to={ROUTES.REVIEW_REPORTS}>Reports</Link>
                     <Link className="btn btn-outline-secondary btn-sm" to="/recommendations">Recommendations</Link>
                     <Link className="btn btn-outline-secondary btn-sm" to="/notification-history">Notifications</Link>
                     <button type="button" className="btn btn-outline-secondary btn-sm" onClick={load} disabled={loading}>Refresh</button>

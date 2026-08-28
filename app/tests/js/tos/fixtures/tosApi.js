@@ -164,6 +164,58 @@ export const PIPELINE_STAGES = {
     recommendation: { count: 2 },
 };
 
+export const EMPTY_REVIEW_DASHBOARD = {
+    portfolio: {},
+    actionable_counts: {},
+    informational_counts: {},
+    outcomes: [],
+    informational_outcomes: [],
+    recent_reviews: [],
+};
+
+export function reviewMetric(metric_name, metric_value) {
+    return { metric_name, metric_value };
+}
+
+export const SAMPLE_REVIEW_REPORT = {
+    id: 12,
+    period_start: '2026-01-01',
+    period_end: '2026-03-31',
+    generated_at: '2026-04-01T10:00:00.000000Z',
+    status: 'completed',
+    summary_json: {
+        methodology: {
+            win_rate: 'Share of sell transactions with realized_pl > 0 in period',
+            profit_factor: 'Sum gains / sum abs losses on sells',
+            expectancy: 'Net realized P/L / closed sells',
+            acceptance_rate: '(Accepted + Executed) / decided recommendations in period',
+        },
+    },
+    metrics: [
+        reviewMetric('portfolio_value', 1500000),
+        reviewMetric('invested_value', 1200000),
+        reviewMetric('unrealized_profit', 80000),
+        reviewMetric('realized_profit', 25000),
+        reviewMetric('xirr', 0.1234),
+        reviewMetric('win_rate_pct', 55.5),
+        reviewMetric('average_gain', 12000),
+        reviewMetric('average_loss', 4000),
+        reviewMetric('profit_factor', 1.75),
+        reviewMetric('expectancy', 3500),
+        reviewMetric('recommendation_accepted', 3),
+        reviewMetric('recommendation_executed', 2),
+        reviewMetric('sells_closed', 8),
+        reviewMetric('recommendation_count', 10),
+        reviewMetric('actionable_recommendation_count', 7),
+        reviewMetric('informational_recommendation_count', 3),
+        reviewMetric('recommendation_rejected', 1),
+        reviewMetric('recommendation_deferred', 0),
+        reviewMetric('recommendation_pending_review', 1),
+        reviewMetric('informational_published', 3),
+        reviewMetric('recommendation_acceptance_rate_pct', 62.5),
+    ],
+};
+
 export function apiEnvelope(data, meta = {}) {
     return { success: true, data, meta };
 }

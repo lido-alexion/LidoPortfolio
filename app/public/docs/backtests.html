@@ -118,6 +118,7 @@
 <p>Strategy Backtests require at least one <strong>enabled eligibility Screener</strong> on the Strategy (same union rules as live Recommendations). Without eligibility sources, Start is rejected.</p>
 <p>Each run is chunked across HTTP requests (time-budgeted server slices ~20s). The UI polls <strong>Continue</strong> until the run completes or fails. Session continuity uses a browser token (<code>lido_strategy_backtest_session</code> in localStorage) so eligibility precompute can resume safely.</p>
 <p>Open a completed run for portfolio growth chart, per-stock trade timeline matrix, trades/transactions tables, daily snapshots, and the full statistics grid (return %, CAGR, drawdown, win rate, holding periods, utilization, etc.).</p>
+<p><strong>Duplicate</strong> on a history row starts a <strong>new</strong> simulation from that row’s stored period dates, initial capital, notes, and tags, using the <strong>current Strategy</strong> (the same resolution as New Backtest). It does not copy completed trades, statistics, snapshots, or the original run’s stored Strategy version.</p>
 <p>Backtests complement — but do not replace — Screener backtests on the Screener editor (those test eligibility rules only). Strategy backtests exercise the full Strategy policy on a paper portfolio.</p>
 <p>Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).</p>
 
@@ -133,7 +134,10 @@
         <dd>After Start, the client POSTs /v1/backtests/{id}/continue while continued=true (up to ~2000 slices). Navigate to the detail page automatically when completed.</dd>
     
         <dt>Open / Delete</dt>
-        <dd>History table actions. Delete is permanent. Duplicate is reserved for a future release.</dd>
+        <dd>History table actions. Open goes to the run detail. Delete permanently removes that run and its trades, snapshots, and statistics.</dd>
+    
+        <dt>Duplicate</dt>
+        <dd>Starts a new Strategy Backtest via the existing POST /v1/backtests create path. The new run keeps the original from_date, to_date, range_key, initial capital, notes, and tags, and runs against the current Strategy (strategy_version_id is omitted so the server resolves ensureActive). Completed trades, trade results, statistics, and portfolio snapshots are not copied. Duplicate does not revive Strategy version-fork. If the original row is missing period dates or a valid initial capital, Duplicate stops and reports the gap instead of inventing values.</dd>
     
         <dt>Detail — Save name / notes / tags</dt>
         <dd>PUT /v1/backtests/{id} updates metadata without re-running simulation.</dd>

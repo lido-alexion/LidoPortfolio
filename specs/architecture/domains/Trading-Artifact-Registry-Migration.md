@@ -5,7 +5,7 @@
 | **Document** | Trading Artifact Registry Migration |
 | **Version** | 1.0 |
 | **Date** | 2026-07-30 |
-| **Status** | Implementation landed (infrastructure phase) |
+| **Status** | Implementation landed (infrastructure phase). Remaining TAF is **V5 V4-FEAT-008**. |
 | **Spec** | [./Trading-Artifact-Framework-Specification.md](./Trading-Artifact-Framework-Specification.md) · [./Trading-Artifact-JSON-Specification.md](./Trading-Artifact-JSON-Specification.md) |
 
 ---

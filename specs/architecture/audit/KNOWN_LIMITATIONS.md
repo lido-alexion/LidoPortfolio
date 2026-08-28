@@ -38,7 +38,7 @@ Excluded: pure future roadmap (broker automation, Strategy product, AI) unless t
 
 10b. **Dual catalogues (as-built)** — `ScreenerCatalog` + `SupportedIndicators` façades now project Indicator Registry (Epics 1–2); Admin Registry UI and full consumer cutover still pending (SD-033 / PB-055).  
 10c. **Liquidity / Tradability composites are calculated (V4-FEAT-006)** — `TechnicalIndicatorService` dispatches `liquidity_score` / `tradability_score` to `LiquidityTradabilityCalculator` using the existing primary series. Formulas/caps/weights unchanged. Remaining by design: not Strategy-scorable, not Evaluation facts, not in the Screener picker (`screenable: false`). Primaries remain screenable.  
-10d. **Trading Artifact Framework not implemented** (2026-07-30) — SD-034 design only: Screeners/Strategies lack shared artifact envelope (versioning/import-export/AI catalogue). “Strategy Templates” absorbed into Strategy artifacts conceptually; no separate template product. Tracked PB-058+.
+10d. **Trading Artifact Framework remainder is V5 (V4-FEAT-008)** (updated 2026-08-28) — Envelope/validation, package import/export, Indicator/Screener/Strategy registries, Create/Enable/Archive, and AI authoring/runtime docs are **shipped**. Remaining SD-034 work (immutable published versions vs Save-in-place, sharing/distribution, extra AI draft-from-schema UX, dependency dashboards, rollback, bundle UI, fork workflows) is **not** an active V4 target. Do not treat shipped registries as unimplemented. Tracked as V5 **V4-FEAT-008** / PB-058+ remainder.
 
 ## Recommendation / Position review
 

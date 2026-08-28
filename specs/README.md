@@ -9,7 +9,7 @@ Read **top → bottom**. Requirements/architecture come **before** implementatio
 
 **V3:** [LidoPortfolio-V3-Specification.md](LidoPortfolio-V3-Specification.md) is the source of truth for V3 product behavior (**v0.28**; **V3 STRICTLY COMPLETE** as of 2026-08-26). Recall / capital-resolution build plan (historical + shipped): [architecture/V3-WS4-Recall-Bridge-Implementation-Delta.md](architecture/V3-WS4-Recall-Bridge-Implementation-Delta.md).
 
-**V4:** [LidoPortfolio-V4-Wishlist.md](LidoPortfolio-V4-Wishlist.md) — genuine new V4 features, frozen V4-SPEC-001–007 (PO decisions; FEAT-001 implements SPEC-007; SPEC-001 same-stock adoption merge and SPEC-003 split/bonus restatement implemented 2026-08-28), **V4-FEAT-010 COMPLETE** (unattended production pipeline), plus V5-deferred FEAT IDs (Product Owner split 2026-08-26). Not a V3 deferral bin.
+**V4:** [LidoPortfolio-V4-Wishlist.md](LidoPortfolio-V4-Wishlist.md) — genuine new V4 features (**21** active: **17** COMPLETE / **4** OPEN), frozen V4-SPEC-001–007 (PO decisions; FEAT-001 implements SPEC-007; SPEC-001 same-stock adoption merge and SPEC-003 split/bonus restatement implemented 2026-08-28), **V4-FEAT-010 COMPLETE** (unattended production pipeline), **V4-FEAT-009 COMPLETE** (Review reports), **V4-FEAT-014 COMPLETE** (Backtest Duplicate), plus **15** V5-deferred FEAT IDs (Product Owner splits 2026-08-26 and **2026-08-28 V4-FEAT-008** TAF remainder). Shipped TAF registries/I/O stay shipped. Not a V3 deferral bin.
 
 ---
 

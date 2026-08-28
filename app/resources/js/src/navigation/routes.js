@@ -23,6 +23,7 @@ export const ROUTES = Object.freeze({
     MARKET_DEPTH: '/market-depth',
     RECOMMENDATIONS: '/recommendations',
     REVIEW: '/review',
+    REVIEW_REPORTS: '/review/reports',
     STRATEGY: '/strategy',
     STRATEGY_REGISTRY: '/strategy/registry',
     BACKTESTS: '/backtests',
@@ -90,4 +91,11 @@ export function screenerEditorPath(screenerId) {
  */
 export function backtestDetailPath(id) {
     return `${ROUTES.BACKTESTS}/${id}`;
+}
+
+/**
+ * @param {string|number} id
+ */
+export function reviewReportDetailPath(id) {
+    return `${ROUTES.REVIEW_REPORTS}/${id}`;
 }

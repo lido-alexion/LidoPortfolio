@@ -127,7 +127,7 @@ const APP_DOCUMENTATION_BASE = [
             + 'Recommendations   Final ideas                   Open/Increase/Reduce/Exit + HOLD/WATCH; Approve\n'
             + 'Pending Exec.     Approved, not filled yet      Queue + optional cash reservation\n'
             + 'Transactions      Ledger fills                  Buys/sells (holdings source of truth)\n'
-            + 'Review            Outcomes                      How ideas performed after decisions/fills\n'
+            + 'Review            Live outcomes + stored reports Dashboard; stored reports at /review/reports\n'
             + 'Cash              Money available               Balance, reserved, available investable\n'
             + 'Dashboard         Portfolio + market snapshot   Value, analytics — not the idea queue\n'
             + '```\n\n'
@@ -186,6 +186,7 @@ const APP_DOCUMENTATION_BASE = [
             'recommendations',
             'pending-execution',
             'review',
+            'review-reports',
             'cash',
         ],
     },
@@ -1191,6 +1192,7 @@ const APP_DOCUMENTATION_BASE = [
             + 'Strategy Backtests require at least one **enabled eligibility Screener** on the Strategy (same union rules as live Recommendations). Without eligibility sources, Start is rejected.\n\n'
             + 'Each run is chunked across HTTP requests (time-budgeted server slices ~20s). The UI polls **Continue** until the run completes or fails. Session continuity uses a browser token (`lido_strategy_backtest_session` in localStorage) so eligibility precompute can resume safely.\n\n'
             + 'Open a completed run for portfolio growth chart, per-stock trade timeline matrix, trades/transactions tables, daily snapshots, and the full statistics grid (return %, CAGR, drawdown, win rate, holding periods, utilization, etc.).\n\n'
+            + '**Duplicate** on a history row starts a **new** simulation from that row’s stored period dates, initial capital, notes, and tags, using the **current Strategy** (the same resolution as New Backtest). It does not copy completed trades, statistics, snapshots, or the original run’s stored Strategy version.\n\n'
             + 'Backtests complement — but do not replace — Screener backtests on the Screener editor (those test eligibility rules only). Strategy backtests exercise the full Strategy policy on a paper portfolio.',
         controls: [
             {
@@ -1203,7 +1205,11 @@ const APP_DOCUMENTATION_BASE = [
             },
             {
                 name: 'Open / Delete',
-                description: 'History table actions. Delete is permanent. Duplicate is reserved for a future release.',
+                description: 'History table actions. Open goes to the run detail. Delete permanently removes that run and its trades, snapshots, and statistics.',
+            },
+            {
+                name: 'Duplicate',
+                description: 'Starts a new Strategy Backtest via the existing POST /v1/backtests create path. The new run keeps the original from_date, to_date, range_key, initial capital, notes, and tags, and runs against the current Strategy (strategy_version_id is omitted so the server resolves ensureActive). Completed trades, trade results, statistics, and portfolio snapshots are not copied. Duplicate does not revive Strategy version-fork. If the original row is missing period dates or a valid initial capital, Duplicate stops and reports the gap instead of inventing values.',
             },
             {
                 name: 'Detail — Save name / notes / tags',
@@ -1516,18 +1522,43 @@ const APP_DOCUMENTATION_BASE = [
         aliases: ['outcomes', 'performance-review'],
         title: 'Review',
         routeLabel: '/review',
-        match: (p) => pathStarts(p, '/review'),
-        summary: 'Outcomes dashboard for recommendations, insights, and recent review decisions.',
+        match: (p) => pathIs(p, '/review'),
+        summary: 'Live observational dashboard for recommendations, insights, and recent review decisions.',
         overview:
-            'Review summarises how recommendations and insights performed after decisions and fills — actionable outcomes, insight outcomes, orders, and recent review decisions. It is the last stage after Recommendations → Pending Execution → Transactions.',
+            'Review (`/review`) is the live observational dashboard: how recommendations and insights look after decisions and fills — actionable outcomes, insight outcomes, orders, and recent review decisions. It is the last stage after Recommendations → Pending Execution → Transactions. These live numbers are not stored ReviewEngine reports. Open Reports for point-in-time snapshots.',
         controls: [
-            { name: 'Outcome tables', description: 'Browse actionable vs insight outcomes and linked orders.' },
+            { name: 'Reports', description: 'Opens `/review/reports` — stored ReviewEngine reports. Sidebar stays a single Review entry; there is no second Review nav item.' },
+            { name: 'Outcome tables', description: 'Browse actionable vs insight outcomes and linked orders on this live dashboard.' },
             { name: 'Recent decisions', description: 'Audit trail of Approve / Reject / Defer activity.' },
         ],
         concepts: [
             { name: 'Closed loop', description: 'Review completes the Trading OS loop after execution.' },
+            { name: 'Live vs stored', description: 'This page is live. Stored report values live on Review reports (`/review/reports`) and must not be mixed with these cards without that distinction.' },
         ],
-        related: ['trading-os-flow', 'recommendations', 'pending-execution', 'dashboard'],
+        related: ['review-reports', 'trading-os-flow', 'recommendations', 'pending-execution', 'dashboard'],
+    },
+    {
+        id: 'review-reports',
+        keyword: 'review-reports',
+        aliases: ['stored-reports', 'review-engine-reports', 'review-report'],
+        title: 'Review reports',
+        routeLabel: '/review/reports/:id',
+        match: (p) => pathStarts(p, '/review/reports'),
+        summary: 'Stored point-in-time ReviewEngine reports — list, detail, and Generate.',
+        overview:
+            'Review reports (`/review/reports`) lists persisted ReviewEngine snapshots. Values are stored at generation time. They are not the live Review dashboard and are not recalculated in the browser. Open a row or use Open for `/review/reports/{id}`. Generate exists only on this list. There is no delete, no list filter, and no extra sort. `recommendation_accepted` is shown as Accepted (not executed) because it counts actionable recommendations in pending_execution or accepted; executed counts are separate.',
+        controls: [
+            { name: 'Generate', description: 'POST `/api/v1/reviews/generate`. Optional From / To dates are sent as `period_start` / `period_end` query parameters, not a JSON body. Leave both empty to keep the existing 90-day default.' },
+            { name: 'Open / row click', description: 'Opens the stored report detail. Detail has Back to reports.' },
+            { name: 'Pagination', description: 'Uses the existing API `page` / `pageSize` (default 20). No extra filters.' },
+            { name: 'Review sidebar', description: 'Sidebar stays a single Review entry to `/review`. Stored report numbers are not the live dashboard cards.' },
+        ],
+        concepts: [
+            { name: 'Stored snapshot', description: 'Header, metric cards, remaining metric table, and methodology come from the persisted report. Methodology strings are shown as stored.' },
+            { name: 'Accepted (not executed)', description: 'The persisted key `recommendation_accepted` is labelled Accepted (not executed). Executed recommendations use `recommendation_executed`.' },
+            { name: 'OD-03 / SPEC-001', description: 'Review does not feed strategy ranking. Reports do not introduce FIFO/LIFO/tax-lot accounting.' },
+        ],
+        related: ['review', 'trading-os-flow', 'recommendations', 'pending-execution'],
     },
     {
         id: 'notifications',
@@ -2452,12 +2483,22 @@ const DOC_ENRICHMENTS = {
     },
     review: {
         overview:
-            'Review closes the learning loop. Use it to evaluate whether recommendation quality is improving over time and to identify recurring misses that require screener/strategy adjustments.',
+            'Review closes the learning loop. Use it to evaluate whether recommendation quality is improving over time and to identify recurring misses that require screener/strategy adjustments. Use Reports for stored ReviewEngine snapshots; do not treat live dashboard cards as those report values.',
         controls: [
             { name: 'Outcome segmentation', description: 'Compare actionable trade outcomes separately from HOLD/WATCH insights to avoid mixing fundamentally different intent types.' },
         ],
         concepts: [
-            { name: 'Feedback loop', description: 'Insights from Review should feed back into strategy tuning and risk controls, not remain as passive reporting.' },
+            { name: 'Feedback loop', description: 'Insights from Review should feed back into strategy tuning and risk controls, not remain as passive reporting. Review still must not feed strategy ranking (OD-03).' },
+        ],
+    },
+    'review-reports': {
+        overview:
+            'Treat each report as a frozen ReviewEngine snapshot. Display persisted keys only; do not invent drawdown, slippage, tax lots, attribution, or benchmarks here.',
+        controls: [
+            { name: 'Empty state Generate', description: 'When there are no reports (`total === 0`), Generate remains available on this page including in the empty state.' },
+        ],
+        concepts: [
+            { name: 'No frontend formulas', description: 'XIRR and percents follow live-dashboard formatting conventions, with labels that mark values as coming from the stored report.' },
         ],
     },
     notifications: {

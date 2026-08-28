@@ -52,6 +52,8 @@ import CandidatesPage from './pages/CandidatesPage';
 import PortfolioSnapshotsPage from './pages/PortfolioSnapshotsPage';
 import HistoricalHoldingsPage from './pages/HistoricalHoldingsPage';
 import ReviewDashboardPage from './pages/ReviewDashboardPage';
+import ReviewReportsListPage from './pages/ReviewReportsListPage';
+import ReviewReportDetailPage from './pages/ReviewReportDetailPage';
 import NotificationHistoryPage from './pages/NotificationHistoryPage';
 import CashManagementPage from './pages/CashManagementPage';
 import StrategyPage from './pages/StrategyPage';
@@ -88,6 +90,8 @@ function AppRoutes() {
             <Route path="/backtests/:id" element={<BacktestDetailPage />} />
             <Route path="/portfolio/historical-holdings" element={<HistoricalHoldingsPage />} />
             <Route path="/portfolio/snapshots" element={<PortfolioSnapshotsPage />} />
+            <Route path="/review/reports/:id" element={<ReviewReportDetailPage />} />
+            <Route path="/review/reports" element={<ReviewReportsListPage />} />
             <Route path="/review" element={<ReviewDashboardPage />} />
             <Route path="/notification-history" element={<NotificationHistoryPage />} />
             <Route path="/patterns" element={<PatternGuidePage />} />

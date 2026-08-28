@@ -336,4 +336,4 @@ Recommendation / Strategy / Portfolio Analytics / Dashboard consume both.
 Runtime results (ScreenerRun, Recommendation, EvaluationResult) are **not**
 artifacts; they may reference artifact versions for explainability.
 
-Design only — see [../domains/Trading-Artifact-Framework-Specification.md](../domains/Trading-Artifact-Framework-Specification.md).
+Envelope/registries/package I/O **shipped**. Remaining TAF is **V5 V4-FEAT-008** — see [../domains/Trading-Artifact-Framework-Specification.md](../domains/Trading-Artifact-Framework-Specification.md).

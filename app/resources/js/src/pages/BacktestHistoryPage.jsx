@@ -7,6 +7,7 @@ import { backtestDetailPath } from '../navigation/routes';
 import {
     BACKTEST_DURATION_NOTICE,
     backtestStatusBadgeClass,
+    duplicateBacktestPayload,
     formatBacktestStage,
     getOrCreateBacktestSessionToken,
     isBacktestInProgress,
@@ -135,6 +136,25 @@ export default function BacktestHistoryPage() {
         }
     };
 
+    const finishStartedRun = async (result, { closeModal = false } = {}) => {
+        const run = result.run;
+        if (!run?.id) {
+            throw new Error('Backtest did not return a run id.');
+        }
+        if (run.status === 'failed') {
+            showToast(run.error_message || 'Backtest failed', 'danger');
+        } else if (result.completed || run.status === 'completed') {
+            showToast('Backtest completed', 'success');
+        } else {
+            showToast('Backtest is still running — open the run to resume.', 'warning');
+        }
+        if (closeModal) {
+            setShowModal(false);
+        }
+        await load();
+        navigate(backtestDetailPath(run.id));
+    };
+
     const onStart = async (event) => {
         event.preventDefault();
         setStarting(true);
@@ -149,30 +169,30 @@ export default function BacktestHistoryPage() {
                 session_token: getOrCreateBacktestSessionToken(),
             };
             const result = await startBacktest(payload, setActiveRun);
-            const run = result.run;
-            if (!run?.id) {
-                throw new Error('Backtest did not return a run id.');
-            }
-            if (run.status === 'failed') {
-                showToast(run.error_message || 'Backtest failed', 'danger');
-                setShowModal(false);
-                await load();
-                navigate(backtestDetailPath(run.id));
-                return;
-            }
-            if (result.completed || run.status === 'completed') {
-                showToast('Backtest completed', 'success');
-                setShowModal(false);
-                await load();
-                navigate(backtestDetailPath(run.id));
-                return;
-            }
-            showToast('Backtest is still running — open the run to resume.', 'warning');
-            setShowModal(false);
-            await load();
-            navigate(backtestDetailPath(run.id));
+            await finishStartedRun(result, { closeModal: true });
         } catch (e) {
             showToast(e?.response?.data?.error?.message || e.message || 'Failed to start backtest', 'danger');
+        } finally {
+            setStarting(false);
+            setActiveRun(null);
+        }
+    };
+
+    const onDuplicate = async (run) => {
+        let payload;
+        try {
+            payload = duplicateBacktestPayload(run, getOrCreateBacktestSessionToken());
+        } catch (e) {
+            showToast(e.message || 'Cannot duplicate this backtest', 'danger');
+            return;
+        }
+        setStarting(true);
+        setActiveRun(null);
+        try {
+            const result = await startBacktest(payload, setActiveRun);
+            await finishStartedRun(result);
+        } catch (e) {
+            showToast(e?.response?.data?.error?.message || e.message || 'Failed to duplicate backtest', 'danger');
         } finally {
             setStarting(false);
             setActiveRun(null);
@@ -252,8 +272,9 @@ export default function BacktestHistoryPage() {
                                             <button
                                                 type="button"
                                                 className="btn btn-outline-secondary btn-sm"
-                                                disabled
-                                                title="Coming soon"
+                                                disabled={starting}
+                                                title="Start a new simulation with this run’s dates, capital, notes, and tags using the current Strategy"
+                                                onClick={() => onDuplicate(run)}
                                             >
                                                 Duplicate
                                             </button>

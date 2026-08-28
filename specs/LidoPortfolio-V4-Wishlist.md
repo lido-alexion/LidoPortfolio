@@ -5,7 +5,7 @@
 | **V3 Status** | **V3 STRICTLY COMPLETE** (strict register-to-implementation pass 2026-08-26) |
 | **Document type** | Forward-looking V4 register + V5 deferred features (same genuine-new-work pool) |
 | **Created** | 2026-08-25 |
-| **Last reconciled** | 2026-08-28 (V4-FEAT-010 implemented: unattended production pipeline + Automatic execution via `schedule:run`) |
+| **Last reconciled** | 2026-08-28 (V4-FEAT-014 Backtest Duplicate COMPLETE) |
 | **Canonical path** | [`specs/LidoPortfolio-V4-Wishlist.md`](LidoPortfolio-V4-Wishlist.md) |
 | **Related** | [`LidoPortfolio-V3-Specification.md`](LidoPortfolio-V3-Specification.md) · [`../implementation.md`](../implementation.md) |
 
@@ -40,7 +40,7 @@ Living detail: [`implementation.md`](../implementation.md).
 
 ## 2. Genuine V4 features (active V4 scope)
 
-Active V4 feature count: **22** (**7** `OPEN`, **15** `COMPLETE`).
+Active V4 feature count: **21** (**4** `OPEN`, **17** `COMPLETE`). The former 22-item active V4 register moved **V4-FEAT-008** to V5 on 2026-08-28 (ID unchanged).
 
 | ID | Item | Why genuinely V4 | Priority | Status |
 |----|------|------------------|----------|--------|
@@ -48,13 +48,12 @@ Active V4 feature count: **22** (**7** `OPEN`, **15** `COMPLETE`).
 | V4-FEAT-002 | Advanced orders (GTT / stop / target / partial fills) | Broker-era order types; depends on FEAT-001. **Implemented 2026-08-28:** one GTT Target **or** Stop-Loss per Strategy position; Strategy-derived prices; Manual never auto-places; Semi-Automatic explicit place; Automatic Stop-Loss after automated BUY fill; material BUY/SELL/CA sync; modify or cancel+replace; `needs_attention` + retry; partial GTT fill via existing ledger then later sync; zero position clears orphans. Same automated-execution entitlement and TOTP as FEAT-001. | P3 | COMPLETE |
 | V4-FEAT-005 | Market regime assessment (non-stub) | Not a V3 normative engine; Evaluation stub residual. **PO decision (2026-08-27):** Evaluation consumes MarketAnalysisEngine categorical `market_regime` (Bullish/Neutral/Bearish via existing `regimeFromPhase()`). Numeric Evaluation factor is Bullish→100, Neutral→50, Bearish→0. No new phase/regime calculation; sentiment is not the score. Implemented via `MarketRegimeScoreMapper` in EvaluationEngine (2026-08-27). | P2 | COMPLETE |
 | V4-FEAT-006 | Liquidity & Tradability indicator calculators | Indicator Registry expansion; not V3 SoT. **PO decision (2026-08-27):** Keep the existing composite formulas and complete their runtime wiring. Do not redesign formulas, retune thresholds, change weights, or invent new metrics. Implemented via `TechnicalIndicatorService` dispatch to `LiquidityTradabilityCalculator` (2026-08-27). | P2 | COMPLETE |
-| V4-FEAT-008 | Trading Artifact Framework remaining phases | SD-034 residual beyond Screener/Strategy registries shipped in V3 | P2 | OPEN |
-| V4-FEAT-009 | Review reports list UI + deeper metrics | New Review UX beyond V3 Dashboard/API | P3 | OPEN |
+| V4-FEAT-009 | Review reports list UI + deeper metrics | New Review UX beyond V3 Dashboard/API. **Implemented 2026-08-28:** live dashboard stays `/review`; list `/review/reports` and detail `/review/reports/:id`; single sidebar Review entry plus a Reports control on the live dashboard. List uses `GET /api/v1/reviews` (`page` / `pageSize`, default 20), stored portfolio value and XIRR, row click and Open. Detail uses `GET /api/v1/reviews/{id}` persisted metrics (no frontend formulas); `recommendation_accepted` is labelled **Accepted (not executed)**. Generate on the list only via `POST /api/v1/reviews/generate` query params (`period_start` / `period_end`; both empty keeps the existing 90-day default). No DELETE, filters, new endpoints, ReviewEngine, or pipeline changes. | P3 | COMPLETE |
 | V4-FEAT-010 | Pipeline Operations / Unattended Production Execution | **PO frozen 2026-08-28:** (1) Daily Decision Pipeline runs fully unattended in production via Laravel `schedule:run` (no human trigger). (2) One effective pipeline run per portfolio calendar day (scheduler may fire repeatedly; existing F148/F149 lock + once-per-day guard). (3) Pipeline / broker-reconcile / automatic-submit failures stay visible in-app and send Telegram via existing ops alerts (6-hour cooldown; no email; no V5 multi-channel). (4) Laravel scheduler is the sole production scheduling mechanism — no dedicated cPanel one-shot scripts. Implemented 2026-08-28: pipeline schedule + post-sync hook default **on**; `tos:reconcile-broker-orders` and `tos:submit-automatic-orders` remain every five minutes with `withoutOverlapping`. | P2 | COMPLETE |
 | V4-FEAT-011 | Stocks admin SPA surface | Admin product expansion; not V3 | P3 | OPEN |
 | V4-FEAT-012 | Admin force-logout of other users (PD-007) | Auth product expansion; not V3 | P3 | OPEN |
 | V4-FEAT-013 | Cash-as-of / export / compare polish | F014 residual polish; not V3 | P3 | OPEN |
-| V4-FEAT-014 | Backtest history “Duplicate” action | New UX convenience; not V3 | P3 | OPEN |
+| V4-FEAT-014 | Backtest history “Duplicate” action | New UX convenience; not V3. **Implemented 2026-08-28:** Duplicate on a history row starts a **new** simulation via existing `POST /api/v1/backtests` using that row’s stored `from_date` / `to_date`, initial capital, notes, and tags, against the **current Strategy** (`strategy_version_id` omitted → `ensureActive`). Does not copy trades, statistics, snapshots, or the original run’s stored Strategy version. Does not revive Strategy Duplicate/version-fork. Missing period dates or valid capital stops instead of inventing values. | P3 | COMPLETE |
 | V4-FEAT-015 | Tax reporting / attribution / benchmarks | New product surface | P3 | OPEN |
 | V4-FEAT-021 | Strategy indicator params → EvaluationEngine wiring | EvaluationEngine is a separate TOS path from V3 Strategy fit/scoring; wiring is a V4 Evaluation design choice (was TD-19 / V4-BUG-002 / V4-TD-001). **PO decision (2026-08-26):** Strategy catalogue parameters are authoritative — a valid Strategy value overrides global Evaluation config; otherwise the existing global/default is used. Keys: `rsi_period`, `lookback_days`, `sma_fast`, `sma_slow`, `atr_period`, `volume_sma_period`, `benchmark`. Implemented via `EvaluationParameterResolver` (2026-08-26). | P1 | COMPLETE |
 | V4-FEAT-022 | Hard dataset publish / validation gate | Pre-discovery data-platform hardening (was V4-TD-002). **PO clarification (2026-08-27) — correction of the same feature, not a new ID:** Discovery is allowed when the required market dataset was successfully synced within the previous 24 hours of the pipeline run. On Monday, the allowed freshness window is 72 hours. The comparison is based strictly on timestamps, not calendar dates. Holiday-aware freshness / trading-calendar handling is out of scope (deferred to V5). Supersedes the earlier `published === true` / “synced today” gate. Implemented via `DatasetFreshnessGate` in `DailyDecisionPipeline` (2026-08-27). | P1 | COMPLETE |
@@ -82,17 +81,30 @@ Disable the unattended pipeline only with `TRADING_OS_PIPELINE_SCHEDULE=false`.
 
 ---
 
+### V4-FEAT-009 — Review reports list / detail (COMPLETE 2026-08-28)
+
+Frozen UX, implemented as specified:
+
+- Routes: live `/review`; list `/review/reports`; detail `/review/reports/:id`. One sidebar Review item. Reports control on the live dashboard. Detail has Back to reports.
+- List: existing `GET /api/v1/reviews` pagination (`page` / `pageSize`, default 20). No filters or sorting. Empty when `total === 0` includes Generate.
+- Detail: existing `GET /api/v1/reviews/{id}`; 404 uses the existing API and returns to the list. Persisted metric cards and remaining-key table; `recommendation_accepted` = **Accepted (not executed)**. Methodology from `summary_json.methodology` as stored.
+- Generate: list only; `POST /api/v1/reviews/generate` with optional `period_start` / `period_end` query parameters (not a JSON body). Both empty preserves the existing 90-day default.
+- Out of scope (unchanged): drawdown, execution quality, slippage, tax reporting, tax lots, attribution, benchmarks, ranking, ReviewEngine formulas/methodology, pipeline, Review API, DELETE, list filtering/sorting.
+
+---
+
 ## 3. V5 deferred features (moved from V4)
 
-Product Owner decision (2026-08-26): these **14** items are **V5 scope**, not active V4. They remain genuine post-V3 work. IDs, names, rationale, and priorities are unchanged.
+Product Owner decisions: **2026-08-26** (original 14 IDs) and **2026-08-28** (**V4-FEAT-008**). These **15** items are **V5 scope**, not active V4. They remain genuine post-V3 work. IDs, names, rationale, and priorities are unchanged.
 
-This is a **roadmap / prioritization** decision, **not** a claim that the underlying capability is implemented. Status remains `OPEN`. **Do not mark these COMPLETE** because they moved.
+This is a **roadmap / prioritization** decision, **not** a claim that the underlying capability is implemented. Status remains `OPEN`. **Do not mark these COMPLETE** because they moved. **Do not treat shipped TAF registries/import-export as unimplemented** because FEAT-008 moved — only the *remainder* is V5.
 
 | ID | Item | Why genuinely V4 (original rationale) | Priority | Status |
 |----|------|---------------------------------------|----------|--------|
 | V4-FEAT-003 | B4 persistent app-wide critical banner | V3 §29: **B4 is explicit wishlist**; B3 Dashboard reserve warning is current V3 | P2 | OPEN |
 | V4-FEAT-004 | Notification channel abstraction + email/webhook | V3 §30 requires Telegram/in-app capability (shipped); multi-channel is new | P2 | OPEN |
 | V4-FEAT-007 | Indicator Registry deeper versioning / remaining cutover | SD-033 residual beyond V3 registries already shipped | P2 | OPEN |
+| V4-FEAT-008 | Trading Artifact Framework remaining phases | SD-034 residual **beyond shipped** envelope, package I/O, Indicator/Screener/Strategy registries, Create/Enable/Archive, AI authoring/runtime docs, and V3 multi-strategy surfaces. **PO 2026-08-28:** remainder is V5, not active V4. Do **not** invent a new V4 TAF slice. Shipped infrastructure stays shipped. | P2 | OPEN |
 | V4-FEAT-016 | Mobile application | New client | TBD | OPEN |
 | V4-FEAT-017 | AI assistant (non-decision) | New assistive surface | TBD | OPEN |
 | V4-FEAT-018 | ML scoring models | Optional non-deterministic path; V3 is deterministic | TBD | OPEN |
@@ -106,6 +118,27 @@ This is a **roadmap / prioritization** decision, **not** a claim that the underl
 | V4-FEAT-036 | Optional JWT/token API for non-SPA clients | Auth expansion; Sanctum SPA is V3 (was V4-UX-007 / TD-016 drift → docs reconciled) | TBD | OPEN |
 
 Notification channel interface (old V4-TD-005) is covered by **V4-FEAT-004** (now V5-classified; still OPEN).
+
+### V4-FEAT-008 — TAF remainder deferred to V5 (2026-08-28)
+
+**Status:** `OPEN`, **V5-deferred**. **Not** `COMPLETE`. ID unchanged. This is roadmap/prioritization, not an implementation claim for the remainder, and **not** a claim that shipped TAF infrastructure is unimplemented.
+
+**Already shipped (keep recorded as implemented):**
+
+- Artifact envelope / validation (`App\Services\Artifacts\*`)
+- Package import/export (`/api/v1/artifacts*`)
+- Indicator, Screener, and Strategy registries
+- Create / Enable / Archive and existing V3 multi-strategy surfaces
+- AI authoring / runtime documentation (in-app topics + `stox-trading-artifacts-ai-guide.md`)
+
+**Deferred to V5 (remainder of SD-034 — do not implement as V4):**
+
+- Immutable published versions vs Save-in-place as a first-class library/binding model
+- Dual library vs portfolio-binding UX beyond current registries
+- Extra AI draft-from-schema catalogue UX beyond shipped docs / prompt builder
+- Sharing / pack distribution, dependency dashboards, rollback, bundle UI, fork workflows (architecture phases 5–6 leftovers)
+
+Do **not** invent a new V4 TAF slice.
 
 ### V4-FEAT-021 — PO parameter-authority rule (COMPLETE)
 
@@ -184,7 +217,7 @@ This is identity/attribution, not an OHLCV snapshot copy or a generic versioning
 
 ## 4. Genuine V4 specification decisions (frozen PO rules — implementation on each SPEC row)
 
-These **7** IDs are the V4 specification register (separate from the 22 active V4 features and from V5). SPEC-001–006 were resolved **2026-08-26**. **V4-SPEC-007** (broker execution modes) was recovered and frozen **2026-08-27**.
+These **7** IDs are the V4 specification register (separate from the **21** active V4 features and from V5). SPEC-001–006 were resolved **2026-08-26**. **V4-SPEC-007** (broker execution modes) was recovered and frozen **2026-08-27**.
 
 **Status:** `DECIDED` — the rule is frozen. **Not** `COMPLETE`. Implementation is recorded on the SPEC row: **SPEC-001, SPEC-002, SPEC-003, SPEC-004, and SPEC-005 are implemented**; SPEC-006 is not. **SPEC-007** is implemented by FEAT-001. Do not treat V3’s current safe behaviour (below) as the V4 target.
 
@@ -430,6 +463,9 @@ Moving a FEAT from V4 to V5 does **not** satisfy acceptance. Freezing V4-SPEC-00
 | 2026-08-28 | **V4-SPEC-005 implemented:** Ambiguous cross-owner SELLs require `owner_key` / `strategy_id` / recommendation; never FIFO, proportional, or largest-lot. Single-owner and identified fills stamp `owner_key`. Historical ambiguous rows still blend on recalc. SPEC remains **DECIDED**. |
 | 2026-08-28 | **V4-SPEC-002 implemented:** Rights issues are not a corporate-action type. Preview/apply of `rights` is 422 with no holdings/ledger/OHLCV mutation. Exercised shares are a normal purchase at the subscription price. SPEC remains **DECIDED**. SPEC-006 not in this slice. |
 | 2026-08-28 | **V4-FEAT-010 COMPLETE:** Unattended production Daily Decision Pipeline + Automatic execution via Laravel `schedule:run` only. Frozen: one effective run per portfolio calendar day; in-app + Telegram ops failures (no email); no new cPanel scripts. Tests: `V4Feat010UnattendedOpsTest`, `ScheduleRegistrationTest`. |
+| 2026-08-28 | **Product Owner V4-FEAT-008 → V5:** Trading Artifact Framework *remainder* is out of active V4. Shipped envelope, package I/O, Indicator/Screener/Strategy registries, Create/Enable/Archive, AI authoring/runtime docs, and V3 multi-strategy surfaces stay shipped. Do not invent a new V4 TAF slice. ID unchanged; status stays `OPEN` (not COMPLETE). Active V4 is **21** (**15** COMPLETE, **6** OPEN). V5-deferred is **15**. |
+| 2026-08-28 | **V4-FEAT-009 COMPLETE:** Review reports list `/review/reports` and detail `/review/reports/:id`. Live `/review` kept. Single sidebar Review item. Stored ReviewEngine metrics only; Generate on the list with query-param dates. Tests: `tests/js/tos/tos-review-reports.test.jsx`, `tests/js/tos/review-reports.test.js`. Active V4 is **21** (**16** COMPLETE, **5** OPEN: 011–015). |
+| 2026-08-28 | **V4-FEAT-014 COMPLETE:** Backtest history Duplicate starts a new simulation from stored period/capital/notes/tags against the current Strategy via existing `POST /api/v1/backtests`. No result-state copy; no new endpoint; no Strategy Duplicate. Tests: `tests/Feature/Backtest/BacktestDuplicateTest.php`, `tests/js/tos/backtest-duplicate.test.jsx`, `tests/js/backtestDuplicate.test.mjs`. Active V4 is **21** (**17** COMPLETE, **4** OPEN: 011–013, 015). |
 
 ## Appendix — Former ID map
 

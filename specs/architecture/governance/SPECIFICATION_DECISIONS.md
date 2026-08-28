@@ -544,7 +544,7 @@ This register is the authoritative record of **why Version 1.0 differs** from th
 | SD-031 | Analytics Ownership Model (four categories / page questions) | Accepted |
 | SD-032 | Introduce Market Analysis Engine | Accepted |
 | SD-033 | Unified Indicator Registry (evolve dual catalogues) | Accepted (design) |
-| SD-034 | Trading Artifact Framework (Indicator / Screener / Strategy artifacts) | Accepted (design) |
+| SD-034 | Trading Artifact Framework (Indicator / Screener / Strategy artifacts) | Accepted (design); infrastructure shipped; remainder V5 V4-FEAT-008 |
 | SD-035 | Formal V1 scope freeze (ambiguous capabilities resolved) | Accepted |
 
 ---
@@ -583,7 +583,7 @@ This register is the authoritative record of **why Version 1.0 differs** from th
 | **Trade-offs** | Migration to bindings/versions; temporary dual UX (Save-in-place vs library) |
 | **Spec** | [`../indicators/11-Trading-Artifact-Framework.md`](../indicators/11-Trading-Artifact-Framework.md) · [`../domains/Trading-Artifact-Framework-Specification.md`](../domains/Trading-Artifact-Framework-Specification.md) |
 | **Relationship** | Extends SD-027/028/030/033; does not supersede Indicator Registry — specializes it under a common envelope |
-| **Status** | **Accepted** (design / specification). Implementation phased via PRODUCT_BACKLOG (PB-058+) |
+| **Status** | **Accepted** (design / specification). **Infrastructure shipped** (envelope, registries, package I/O, Create/Enable/Archive, AI docs). Remaining phases (immutable published versions, dual library/binding UX, sharing, extra AI draft UX) are **V5 V4-FEAT-008**, not active V4. |
 
 ---
 

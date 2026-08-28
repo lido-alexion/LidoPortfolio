@@ -89,7 +89,7 @@ Business-domain and pipeline contracts: REST API, application architecture, eval
 | [08-Indicator-Architecture-Analysis.md](indicators/08-Indicator-Architecture-Analysis.md) | Indicator Architecture Analysis (as-built) |
 | [09-Indicator-Registry.md](indicators/09-Indicator-Registry.md) | Indicator Registry (target) |
 | [10-Indicator-Registry-Implementation-Plan.md](indicators/10-Indicator-Registry-Implementation-Plan.md) | Indicator Registry Implementation Plan |
-| [11-Trading-Artifact-Framework.md](indicators/11-Trading-Artifact-Framework.md) | Trading Artifact Framework |
+| [11-Trading-Artifact-Framework.md](indicators/11-Trading-Artifact-Framework.md) | Trading Artifact Framework (infra shipped; remainder V5 V4-FEAT-008) |
 | [13-Indicator-Lifecycle.md](indicators/13-Indicator-Lifecycle.md) | Indicator Lifecycle |
 | [14-Indicator-Registry-Diagrams.md](indicators/14-Indicator-Registry-Diagrams.md) | Indicator Registry Diagrams |
 
