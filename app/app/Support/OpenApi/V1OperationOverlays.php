@@ -238,7 +238,7 @@ final class V1OperationOverlays
             ],
             'GET /api/v1/transactions' => [
                 'summary' => 'List TOS ledger transactions for the active portfolio',
-                'description' => 'Paginated (V4-FEAT-028). Default pageSize 100 (previous implicit cap), maximum 200. Distinct from legacy `GET /api/transactions`.',
+                'description' => 'Paginated (V4-FEAT-028). Default pageSize 100 (previous implicit cap), maximum 200. Distinct from legacy `GET /api/transactions`. Ledger rows may include `owner_key` when SELL attribution was stored (V4-SPEC-005).',
                 'parameters' => $pageParams(100),
                 'successStatus' => '200',
                 'successRef' => '#/components/schemas/EnvelopePaginated',
@@ -686,6 +686,55 @@ final class V1OperationOverlays
             ],
             'POST /api/v1/broker/kite/disconnect' => [
                 'summary' => 'Disconnect Kite',
+                'successStatus' => '200',
+                'noBody' => true,
+            ],
+            'GET /api/v1/protections' => [
+                'summary' => 'List Strategy position GTT protections',
+                'description' => 'V4-FEAT-002. At most one open Target or Stop-Loss per Strategy position. Filter by holding_id or stock_id. Broker acceptance is not a fill.',
+                'parameters' => [
+                    $q('holding_id', 'integer', 'Optional holding id.'),
+                    $q('stock_id', 'integer', 'Optional stock id.'),
+                ],
+                'successStatus' => '200',
+                'noBody' => true,
+            ],
+            'GET /api/v1/protections/{id}' => [
+                'summary' => 'Show one position protection',
+                'description' => 'Scoped to the active portfolio. Includes state (pending, active, synchronizing, needs_attention, cancelled, reconciled).',
+                'successStatus' => '200',
+                'noBody' => true,
+            ],
+            'POST /api/v1/protections' => [
+                'summary' => 'Place or replace GTT Target or Stop-Loss',
+                'description' => 'Semi-Automatic attended placement. Requires automated-execution entitlement, TOTP, and a usable Kite session. Price is taken from Strategy target (target_amount/quantity) or stop (OD-13). Placing one type replaces the other. Does not write ledger, cash, capital, or lending. Manual mode is rejected.',
+                'requestBody' => $json([
+                    'type' => 'object',
+                    'required' => ['holding_id', 'type'],
+                    'properties' => [
+                        'holding_id' => ['type' => 'integer'],
+                        'type' => ['type' => 'string', 'enum' => ['target', 'stop']],
+                        'totp' => ['type' => 'string', 'nullable' => true, 'description' => 'Authenticator code. Never logged.'],
+                        'recovery_code' => ['type' => 'string', 'nullable' => true, 'description' => 'Single-use recovery code. Never logged.'],
+                    ],
+                ]),
+                'successStatus' => '201',
+            ],
+            'POST /api/v1/protections/{id}/cancel' => [
+                'summary' => 'Cancel broker protection for a Strategy position',
+                'description' => 'Semi-Automatic attended cancel. Cancels the broker GTT when known. Does not create a ledger fill.',
+                'requestBody' => $json([
+                    'type' => 'object',
+                    'properties' => [
+                        'totp' => ['type' => 'string', 'nullable' => true],
+                        'recovery_code' => ['type' => 'string', 'nullable' => true],
+                    ],
+                ]),
+                'successStatus' => '200',
+            ],
+            'POST /api/v1/protections/{id}/reconcile' => [
+                'summary' => 'Reconcile one GTT protection with the broker',
+                'description' => 'Ingests GTT fills through the existing ledger path, then retries synchronization. Partial GTT sells are filled first; remaining quantity is synchronized on a later cycle. Ambiguous broker outcomes do not place a duplicate.',
                 'successStatus' => '200',
                 'noBody' => true,
             ],

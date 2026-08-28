@@ -14,6 +14,7 @@ use App\Services\CorporateActionService;
 use App\Services\HoldingsCalculationService;
 use App\Services\Risk\OwnershipEpisodeService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -23,6 +24,12 @@ use Tests\TestCase;
 class CorporateActionOd10OwnershipTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Http::preventStrayRequests();
+    }
 
     public function test_case1_single_owner_bonus_unchanged(): void
     {

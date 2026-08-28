@@ -14,7 +14,8 @@ use Illuminate\Support\Collection;
  * Ownership-episode helpers for portfolio SL / trailing (Phase 1).
  *
  * Filters ledger activity to a known owner when strategy_id / owner_key is set.
- * Does not invent adoption cost-basis merge rules.
+ * Same-stock adoption merge (V4-SPEC-001) attributes unmanaged fills onto the
+ * destination Strategy owner; first-buy / trailing then follow that owner’s episode.
  */
 final class OwnershipEpisodeService
 {

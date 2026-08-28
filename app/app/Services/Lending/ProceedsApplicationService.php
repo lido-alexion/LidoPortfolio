@@ -119,7 +119,7 @@ final class ProceedsApplicationService
         if ($pay <= 0) {
             return 0.0;
         }
-        $this->bridges->repay($bridge, $pay);
+        $this->bridges->repay($bridge, $pay, postCash: false);
 
         return $pay;
     }
@@ -139,7 +139,7 @@ final class ProceedsApplicationService
         if ($loan && (float) $loan->outstanding > 0) {
             $loanPay = round(min($pay, (float) $loan->outstanding), 4);
             if ($loanPay > 0) {
-                $this->repayments->repay($loan, $loanPay);
+                $this->repayments->repay($loan, $loanPay, postCash: false);
             }
         }
 

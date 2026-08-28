@@ -123,6 +123,166 @@ class KiteBrokerGateway implements BrokerGateway
         return new BrokerOrderSnapshot($brokerOrderId, 'cancelled', 0, 0, null, 'CANCELLED');
     }
 
+    public function placeGtt(BrokerGttRequest $request): BrokerSubmission
+    {
+        return $this->submitGtt('POST', '/gtt/triggers', $request, null);
+    }
+
+    public function modifyGtt(int $userId, string $brokerGttId, BrokerGttRequest $request): BrokerSubmission
+    {
+        return $this->submitGtt('PUT', '/gtt/triggers/'.$brokerGttId, $request, $brokerGttId);
+    }
+
+    public function fetchGtt(int $userId, string $brokerGttId): ?BrokerGttSnapshot
+    {
+        $token = $this->accessToken($userId);
+        try {
+            $response = Http::timeout(20)
+                ->withHeaders($this->headers($token))
+                ->get(rtrim((string) config('broker.kite.api_base'), '/').'/gtt/triggers/'.$brokerGttId);
+        } catch (ConnectionException) {
+            return null;
+        }
+
+        if (! $response->successful()) {
+            return null;
+        }
+
+        $row = data_get($response->json(), 'data');
+        if (! is_array($row)) {
+            return null;
+        }
+
+        return $this->mapGttSnapshot($brokerGttId, $row);
+    }
+
+    public function cancelGtt(int $userId, string $brokerGttId): BrokerGttSnapshot
+    {
+        $token = $this->accessToken($userId);
+        try {
+            $response = Http::timeout(20)
+                ->withHeaders($this->headers($token))
+                ->delete(rtrim((string) config('broker.kite.api_base'), '/').'/gtt/triggers/'.$brokerGttId);
+        } catch (ConnectionException $e) {
+            throw new BrokerAmbiguousException('Kite GTT cancel timed out.', 0, $e);
+        }
+
+        if ($response->status() >= 500) {
+            throw new BrokerAmbiguousException('Kite GTT cancel returned HTTP '.$response->status());
+        }
+
+        $fetched = $this->fetchGtt($userId, $brokerGttId);
+        if ($fetched) {
+            return $fetched;
+        }
+
+        if (! $response->successful()) {
+            throw new DomainException('Kite could not cancel the GTT.', 'BROKER_CANCEL_FAILED', 422);
+        }
+
+        return new BrokerGttSnapshot($brokerGttId, 'cancelled', 0, 0, 0, null, null, 'CANCELLED');
+    }
+
+    protected function submitGtt(string $method, string $path, BrokerGttRequest $request, ?string $existingId): BrokerSubmission
+    {
+        $token = $this->accessToken($request->userId);
+        $payload = [
+            'type' => 'single',
+            'condition' => json_encode([
+                'exchange' => $request->exchange ?: 'NSE',
+                'tradingsymbol' => $request->symbol,
+                'trigger_values' => [(float) $request->triggerPrice],
+                'last_price' => (float) $request->lastPrice,
+            ]),
+            'orders' => json_encode([[
+                'exchange' => $request->exchange ?: 'NSE',
+                'tradingsymbol' => $request->symbol,
+                'product' => $request->product ?? 'CNC',
+                'order_type' => 'LIMIT',
+                'transaction_type' => strtoupper($request->side) === 'BUY' ? 'BUY' : 'SELL',
+                'quantity' => (int) max(1, round($request->quantity)),
+                'price' => round($request->triggerPrice, 2),
+            ]]),
+        ];
+
+        try {
+            $pending = Http::timeout(20)
+                ->withHeaders($this->headers($token))
+                ->asForm();
+            $url = rtrim((string) config('broker.kite.api_base'), '/').$path;
+            $response = strtoupper($method) === 'PUT'
+                ? $pending->put($url, $payload)
+                : $pending->post($url, $payload);
+        } catch (ConnectionException $e) {
+            throw new BrokerAmbiguousException('Kite GTT '.$method.' timed out.', 0, $e);
+        }
+
+        if ($response->status() >= 500) {
+            throw new BrokerAmbiguousException('Kite GTT '.$method.' returned HTTP '.$response->status());
+        }
+
+        $json = $response->json();
+        if (! is_array($json) || ($json['status'] ?? '') !== 'success') {
+            $message = is_array($json) ? (string) ($json['message'] ?? 'Kite rejected the GTT.') : 'Kite rejected the GTT.';
+            $this->logger->event('KiteBrokerGateway', 'broker.gtt_rejected', 'warning', 'Kite GTT rejected', [
+                'user_id' => $request->userId,
+                'http_status' => $response->status(),
+                'protection_type' => $request->protectionType,
+            ]);
+
+            throw new DomainException($message, 'BROKER_REJECTED', 422);
+        }
+
+        $triggerId = (string) data_get($json, 'data.trigger_id', $existingId ?? '');
+        if ($triggerId === '') {
+            throw new BrokerAmbiguousException('Kite accepted GTT without a trigger id.');
+        }
+
+        $this->logger->event('KiteBrokerGateway', 'broker.gtt_submitted', 'info', 'Kite GTT submitted', [
+            'user_id' => $request->userId,
+            'broker_gtt_id' => $triggerId,
+            'protection_type' => $request->protectionType,
+        ]);
+
+        return new BrokerSubmission($triggerId, 'submitted');
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     */
+    protected function mapGttSnapshot(string $brokerGttId, array $row): BrokerGttSnapshot
+    {
+        $raw = strtolower((string) ($row['status'] ?? ''));
+        $condition = is_array($row['condition'] ?? null) ? $row['condition'] : [];
+        $orders = is_array($row['orders'] ?? null) ? $row['orders'] : [];
+        $firstOrder = is_array($orders[0] ?? null) ? $orders[0] : [];
+        $qty = (float) ($firstOrder['quantity'] ?? $row['quantity'] ?? 0);
+        $triggerValues = $condition['trigger_values'] ?? [];
+        $trigger = (float) (is_array($triggerValues) ? ($triggerValues[0] ?? 0) : 0);
+        $filled = (float) ($firstOrder['filled_quantity'] ?? $row['filled_quantity'] ?? 0);
+        $avg = isset($firstOrder['average_price']) ? (float) $firstOrder['average_price'] : null;
+        $childId = isset($firstOrder['order_id']) ? (string) $firstOrder['order_id'] : null;
+
+        $status = match ($raw) {
+            'active' => 'active',
+            'triggered' => $filled > 0.0001 && $filled + 0.0001 < $qty ? 'triggered' : 'triggered',
+            'cancelled', 'canceled', 'disabled', 'expired' => 'cancelled',
+            'rejected' => 'rejected',
+            default => 'unknown',
+        };
+
+        return new BrokerGttSnapshot(
+            $brokerGttId,
+            $status,
+            $qty,
+            $trigger,
+            $filled,
+            $avg !== null && $avg > 0 ? $avg : null,
+            $childId,
+            strtoupper($raw),
+        );
+    }
+
     /**
      * @return array<string, string>
      */

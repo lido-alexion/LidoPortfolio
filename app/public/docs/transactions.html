@@ -114,7 +114,7 @@
 
       <section class="panel">
         <h2>Overview</h2>
-        <p>Transactions are the ledger of record. Buys and sells drive holdings, average cost, fees, and FIFO realized P/L. Use Active vs Squared-off views, CSV import, and sell prefill from Portfolio. Sell rows that came from an EXIT recommendation may show a persisted exit_reason (strategy_exit, stop_loss, trailing_stop, horizon_expiry) — displayed with a human label but not recalculated in the UI.</p>
+        <p>Transactions are the ledger of record. Buys and sells drive holdings, average cost, fees, and FIFO realized P/L. Use Active vs Squared-off views, CSV import, and sell prefill from Portfolio. When more than one owner holds the same stock, a sell must name the Strategy or unmanaged lot — Lido does not guess. Sell rows that came from an EXIT recommendation may show a persisted exit_reason (strategy_exit, stop_loss, trailing_stop, horizon_expiry) — displayed with a human label but not recalculated in the UI.</p>
 <p>This is the accounting backbone of the app. Enter transactions carefully because holdings, realized P/L, XIRR, and multiple reports derive from this ledger. Prefer editing incorrect rows instead of adding compensating noise rows unless your accounting policy requires audit-style reversals.</p>
 <p>Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).</p>
 
@@ -124,10 +124,10 @@
         <h2>Controls</h2>
         <dl class="doc-list">
         <dt>Add transaction</dt>
-        <dd>Record a buy or sell with symbol autocomplete, quantity, price, fees, and date.</dd>
+        <dd>Record a buy or sell with symbol autocomplete, quantity, price, fees, and date. Sells that could affect more than one owner show an Owner control (Strategy or Unmanaged). Holdings → Sell prefills that owner.</dd>
     
         <dt>Bulk CSV import</dt>
-        <dd>Paste CSV (Stock, Quantity, Average Price, Transaction Type), review editable rows (exchange, date defaulting to today, fees), then Save all. The batch commits all-or-nothing via a bulk API — on failure nothing is saved and you can fix and retry the same batch; a completed batch cannot be submitted again.</dd>
+        <dd>Paste CSV (Stock, Quantity, Average Price, Transaction Type, optional Owner as unmanaged or strategy:{id}), review editable rows (exchange, date defaulting to today, fees), then Save all. The batch commits all-or-nothing via a bulk API — on failure nothing is saved and you can fix and retry the same batch; a completed batch cannot be submitted again. Ambiguous sells without Owner are rejected.</dd>
     
         <dt>Page tabs</dt>
         <dd>Switch between Transaction History and Pending Execution (or closed / squared-off views where available).</dd>
@@ -160,6 +160,9 @@
     
         <dt>FIFO realization</dt>
         <dd>Sells match against earlier buys to compute realized P/L and allocated fees.</dd>
+    
+        <dt>Sell owner attribution</dt>
+        <dd>If exactly one owner holds the stock, that lot is used. If a recommendation or Owner field identifies the Strategy/unmanaged lot, that owner is used. If more than one owner could be affected and none is identified, the sell is rejected — not split, FIFO’d, or taken from the largest lot. Quantity cannot exceed that owner’s holding even if another owner has more shares. A sell does not move leftover shares to a different owner.</dd>
     
         <dt>Auto fees</dt>
         <dd>Fee components (Zerodha-style delivery defaults) can be configured under Settings.</dd>

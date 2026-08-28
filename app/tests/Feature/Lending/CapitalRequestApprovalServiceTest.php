@@ -45,6 +45,7 @@ class CapitalRequestApprovalServiceTest extends TestCase
         $request = app(CapitalRequestService::class)->createRequest($profile, $rec, $borrower, 50_000);
         $ledgerBefore = CashLedgerEntry::query()->where('profile_id', $profile->id)->count();
         $holdingsBefore = Holding::query()->where('profile_id', $profile->id)->count();
+        $cashBefore = app(CashManagementService::class)->balance($profile);
 
         $loan = app(CapitalRequestApprovalService::class)->approve($request, $lender, $user);
 
@@ -62,14 +63,30 @@ class CapitalRequestApprovalServiceTest extends TestCase
         $this->assertSame((int) $user->id, (int) $request->approved_by);
         $this->assertNotNull($request->approved_at);
         $this->assertSame($recStatus, $rec->fresh()->status);
+        $this->assertEqualsWithDelta($cashBefore, app(CashManagementService::class)->balance($profile), 0.0001);
         $this->assertSame(
-            $ledgerBefore,
+            $ledgerBefore + 2,
             CashLedgerEntry::query()->where('profile_id', $profile->id)->count()
         );
         $this->assertSame($holdingsBefore, Holding::query()->where('profile_id', $profile->id)->count());
-        $this->assertSame(
-            ['deposit'],
+        $this->assertEqualsCanonicalizing(
+            ['deposit', 'loan'],
             CashLedgerEntry::query()->where('profile_id', $profile->id)->pluck('entry_type')->unique()->values()->all()
+        );
+        $this->assertEqualsWithDelta(
+            0.0,
+            (float) CashLedgerEntry::query()
+                ->where('profile_id', $profile->id)
+                ->where('entry_type', CashLedgerEntry::TYPE_LOAN)
+                ->sum('amount'),
+            0.0001
+        );
+        $this->assertSame(
+            0,
+            CashLedgerEntry::query()
+                ->where('profile_id', $profile->id)
+                ->whereIn('entry_type', [CashLedgerEntry::TYPE_BUY, CashLedgerEntry::TYPE_SELL])
+                ->count()
         );
     }
 

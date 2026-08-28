@@ -5,6 +5,7 @@ namespace App\Engines\Execution;
 use App\Engines\Recommendation\RecommendationEngine;
 use App\Exceptions\DomainException;
 use App\Models\ExecutionDecision;
+use App\Models\Holding;
 use App\Models\PortfolioProfile;
 use App\Models\Stock;
 use App\Models\TradingOrder;
@@ -363,8 +364,10 @@ class LiveBrokerExecutionService
 
         if ($terminalFilled) {
             $this->execution->applyBrokerFill($profile, $order->fresh(), $filled, (float) ($snapshot->averagePrice ?? 0));
+            $this->maybeAutoProtectAfterBuy($profile, $order);
         } elseif ($terminalUnfilled && $filled > 0.0001) {
             $this->execution->applyBrokerFill($profile, $order->fresh(), $filled, (float) ($snapshot->averagePrice ?? 0), completeRecommendation: false);
+            $this->maybeAutoProtectAfterBuy($profile, $order);
             if ($order->fresh()->status === TradingOrder::STATUS_PENDING) {
                 $order->forceFill([
                     'status' => TradingOrder::STATUS_CANCELLED,
@@ -388,6 +391,36 @@ class LiveBrokerExecutionService
         ]);
 
         return $order->fresh(['security', 'recommendation']);
+    }
+
+    protected function maybeAutoProtectAfterBuy(PortfolioProfile $profile, TradingOrder $order): void
+    {
+        if (strtolower((string) $order->side) !== 'buy') {
+            return;
+        }
+        if ($order->order_type === 'gtt_protection') {
+            return;
+        }
+        $holding = Holding::query()
+            ->where('profile_id', $profile->id)
+            ->where('stock_id', $order->security_id)
+            ->whereNotNull('strategy_id')
+            ->where('quantity', '>', 0)
+            ->orderByDesc('id')
+            ->first();
+        if (! $holding) {
+            return;
+        }
+        try {
+            app(\App\Services\Protection\PositionProtectionService::class)
+                ->afterAutomaticBuyFill($profile, $holding);
+        } catch (\Throwable $e) {
+            $this->logger->event('LiveBrokerExecutionService', 'protection.automatic_failed', 'warning', 'Automatic GTT protection failed after buy fill', [
+                'profile_id' => $profile->id,
+                'holding_id' => $holding->id,
+                'reason' => $e instanceof \App\Exceptions\DomainException ? $e->errorCode() : 'protection_failed',
+            ]);
+        }
     }
 
     protected function ensurePendingExecution(

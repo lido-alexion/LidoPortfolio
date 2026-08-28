@@ -14,6 +14,13 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
+/**
+ * Split / bonus apply for the active portfolio (F020).
+ *
+ * V4-SPEC-003: after OD-10 quantity ownership, restate cost/average (via the
+ * existing ledger path), trailing (OHLCV ratio), derived stop (OD-13 fill cost),
+ * and preserve OD-12 rupee target_amount so economic price levels stay equivalent.
+ */
 class CorporateActionService
 {
     public function __construct(
@@ -45,13 +52,25 @@ class CorporateActionService
      */
     public function apply(PortfolioProfile $profile, Stock $stock, array $input): array
     {
+        $payload = $this->normalizeInput($input);
+        $existing = $this->findAppliedAction($profile, $stock, $payload);
+        if ($existing !== null) {
+            return $this->presentAppliedState(
+                $profile,
+                $stock,
+                $existing,
+                ($existing->metadata ?? [])['price_adjustment'] ?? [],
+                idempotent: true,
+            );
+        }
+
         $preview = $this->preview($profile, $stock, $input);
 
         if (! empty($preview['blocking_errors'])) {
             throw new InvalidArgumentException(implode(' ', $preview['blocking_errors']));
         }
 
-        $payload = $this->normalizeInput($input);
+        $priorTargets = $this->snapshotTargetAmounts($profile, $stock);
         $userId = auth()->id();
 
         $action = DB::transaction(function () use ($profile, $stock, $payload, $preview, $userId) {
@@ -119,7 +138,7 @@ class CorporateActionService
         ]);
 
         $holdings = $this->holdings->recalculateOwnerLotsForProfileStock($profile, $stock);
-        $holding = $holdings->first() ?? $this->holdings->recalculateForProfileStock($profile, $stock);
+        $this->restoreTargetAmounts($holdings, $priorTargets);
         $this->realizations->recalculateForProfileStock($profile, $stock);
         $this->metricsUpdate->updateStock($stock);
         $this->snapshotRebuild->rebuildAfterTransactionChange(
@@ -128,12 +147,99 @@ class CorporateActionService
             $payload['ex_date'],
         );
 
+        try {
+            app(\App\Services\Protection\PositionProtectionService::class)
+                ->afterCorporateAction($profile, $stock);
+        } catch (\Throwable) {
+            // SPEC-003 restatement must stay applied even if GTT sync fails.
+        }
+
+        return $this->presentAppliedState(
+            $profile,
+            $stock,
+            $action,
+            $priceAdjustment,
+            idempotent: false,
+            holdings: $holdings,
+        );
+    }
+
+    /**
+     * Same profile + stock + action_type + ex-date already applied → do not mutate again.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    protected function findAppliedAction(PortfolioProfile $profile, Stock $stock, array $payload): ?CorporateAction
+    {
+        return CorporateAction::query()
+            ->where('profile_id', $profile->id)
+            ->where('stock_id', $stock->id)
+            ->where('action_type', $payload['action_type'])
+            ->whereDate('ex_date', $payload['ex_date'])
+            ->whereNotNull('applied_at')
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    /**
+     * OD-12 target_amount is a rupee capital target. SPEC-003 restates price levels
+     * (qty / avg / stop / trailing) via the ledger + OHLCV ratio; the rupee target
+     * stays so remaining BUY rupees (and implied share remaining at the new price) stay equivalent.
+     *
+     * @return array<string, mixed>
+     */
+    protected function snapshotTargetAmounts(PortfolioProfile $profile, Stock $stock): array
+    {
+        return Holding::query()
+            ->where('profile_id', $profile->id)
+            ->where('stock_id', $stock->id)
+            ->where('quantity', '>', 0)
+            ->get()
+            ->mapWithKeys(fn (Holding $holding) => [
+                (string) ($holding->owner_key ?: Holding::OWNER_UNMANAGED) => $holding->target_amount,
+            ])
+            ->all();
+    }
+
+    /**
+     * @param  Collection<int, Holding>  $holdings
+     * @param  array<string, mixed>  $priorTargets
+     */
+    protected function restoreTargetAmounts(Collection $holdings, array $priorTargets): void
+    {
+        foreach ($holdings as $holding) {
+            $key = (string) ($holding->owner_key ?: Holding::OWNER_UNMANAGED);
+            if (! array_key_exists($key, $priorTargets)) {
+                continue;
+            }
+            $holding->target_amount = $priorTargets[$key];
+            $holding->save();
+        }
+    }
+
+    /**
+     * @param  Collection<int, Holding>|null  $holdings
+     * @param  array<string, mixed>  $priceAdjustment
+     * @return array<string, mixed>
+     */
+    protected function presentAppliedState(
+        PortfolioProfile $profile,
+        Stock $stock,
+        CorporateAction $action,
+        array $priceAdjustment,
+        bool $idempotent,
+        ?Collection $holdings = null,
+    ): array {
+        $holdings ??= $this->holdings->recalculateOwnerLotsForProfileStock($profile, $stock);
+        $holding = $holdings->first() ?? $this->holdings->recalculateForProfileStock($profile, $stock);
+
         return [
             'corporate_action' => $action->fresh()->load('stock'),
             // BC: single representative row; `holdings` exposes all OD-01 owner lots.
             'holding' => $holding->load('stock'),
             'holdings' => $holdings->map(fn (Holding $h) => $h->load('stock'))->values()->all(),
             'price_adjustment' => $priceAdjustment,
+            'idempotent' => $idempotent,
         ];
     }
 

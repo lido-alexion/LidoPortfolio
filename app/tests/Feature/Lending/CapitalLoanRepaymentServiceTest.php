@@ -57,12 +57,20 @@ class CapitalLoanRepaymentServiceTest extends TestCase
         $this->assertSame(1, CapitalLoanReturn::query()->where('loan_id', $loan->id)->count());
         $this->assertEqualsWithDelta($cashBefore, app(CashManagementService::class)->balance($profile), 0.0001);
         $this->assertSame(
-            $ledgerBefore,
+            $ledgerBefore + 2,
             CashLedgerEntry::query()->where('profile_id', $profile->id)->count()
         );
-        $this->assertSame(
-            ['deposit'],
+        $this->assertEqualsCanonicalizing(
+            ['deposit', 'loan'],
             CashLedgerEntry::query()->where('profile_id', $profile->id)->pluck('entry_type')->unique()->values()->all()
+        );
+        $this->assertEqualsWithDelta(
+            0.0,
+            (float) CashLedgerEntry::query()
+                ->where('profile_id', $profile->id)
+                ->where('entry_type', CashLedgerEntry::TYPE_LOAN)
+                ->sum('amount'),
+            0.0001
         );
     }
 

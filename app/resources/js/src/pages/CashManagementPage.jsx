@@ -33,6 +33,9 @@ function entryTypeLabel(type) {
         case 'adjustment': return 'Adjustment';
         case 'buy': return 'Buy';
         case 'sell': return 'Sell';
+        case 'loan': return 'Loan';
+        case 'recall': return 'Recall';
+        case 'bridge': return 'Bridge';
         default: return type || '—';
     }
 }

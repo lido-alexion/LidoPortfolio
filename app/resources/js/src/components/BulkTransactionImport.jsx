@@ -184,7 +184,7 @@ export default function BulkTransactionImport({ feeComponents, onSaved }) {
         const payloadRows = rows.map((row) => {
             const fees = rowFees(row, feeComponents);
             const iso = parseTransactionDateDisplay(dateDisplays[row.id]) || row.transaction_date;
-            return {
+            const payload = {
                 row_id: row.id,
                 symbol: row.symbol.trim().toUpperCase(),
                 exchange: row.exchange,
@@ -194,6 +194,13 @@ export default function BulkTransactionImport({ feeComponents, onSaved }) {
                 fees: fees.total,
                 transaction_date: iso,
             };
+            if (row.owner_key) {
+                payload.owner_key = row.owner_key;
+            }
+            if (row.strategy_id) {
+                payload.strategy_id = row.strategy_id;
+            }
+            return payload;
         });
 
         try {
@@ -256,7 +263,12 @@ export default function BulkTransactionImport({ feeComponents, onSaved }) {
                         Paste CSV with columns:
                         {' '}
                         <strong>Stock, Quantity, Average Price, Transaction Type</strong>
-                        . Header row is optional. Dates are set on the review step (default today).
+                        , optional fifth column
+                        {' '}
+                        <strong>Owner</strong>
+                        {' '}
+                        (`unmanaged` or `strategy:ID`) when more than one owner holds the stock.
+                        Header row is optional. Dates are set on the review step (default today).
                         Save commits
                         {' '}
                         <strong>all rows or nothing</strong>

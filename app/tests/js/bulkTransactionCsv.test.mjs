@@ -49,3 +49,18 @@ test('normalizeBulkTransactionType normalizes buy and sell', () => {
     assert.equal(normalizeBulkTransactionType('sell'), 'sell');
     assert.equal(normalizeBulkTransactionType('x'), null);
 });
+
+test('parseBulkTransactionCsv parses optional owner column', () => {
+    const { rows, errors } = parseBulkTransactionCsv('INFY,10,1500.50,SELL,unmanaged');
+
+    assert.deepEqual(errors, []);
+    assert.equal(rows[0].owner_key, 'unmanaged');
+});
+
+test('parseBulkTransactionCsv maps numeric owner to strategy key', () => {
+    const { rows, errors } = parseBulkTransactionCsv('INFY,10,1500.50,SELL,12');
+
+    assert.deepEqual(errors, []);
+    assert.equal(rows[0].owner_key, 'strategy:12');
+    assert.equal(rows[0].strategy_id, 12);
+});

@@ -5,7 +5,7 @@
 | **V3 Status** | **V3 STRICTLY COMPLETE** (strict register-to-implementation pass 2026-08-26) |
 | **Document type** | Forward-looking V4 register + V5 deferred features (same genuine-new-work pool) |
 | **Created** | 2026-08-25 |
-| **Last reconciled** | 2026-08-27 (V4-FEAT-001 COMPLETE: TOTP + execution modes + Zerodha adapter) |
+| **Last reconciled** | 2026-08-28 (V4-SPEC-005 implemented: explicit cross-owner SELL attribution) |
 | **Canonical path** | [`specs/LidoPortfolio-V4-Wishlist.md`](LidoPortfolio-V4-Wishlist.md) |
 | **Related** | [`LidoPortfolio-V3-Specification.md`](LidoPortfolio-V3-Specification.md) · [`../implementation.md`](../implementation.md) |
 
@@ -14,7 +14,7 @@
 This register holds **only**:
 
 1. **Genuine new post-V3 functionality** that was not part of V3 normative scope (active V4 FEAT IDs and V5-deferred FEAT IDs), **or**
-2. **Genuine V4 product/spec decisions** for rules V3 never froze. **V4-SPEC-001 through V4-SPEC-007 are now FROZEN Product Owner decisions**. Frozen means the rule is specified, **not** that the behaviour is implemented.
+2. **Genuine V4 product/spec decisions** for rules V3 never froze. **V4-SPEC-001 through V4-SPEC-007 are now FROZEN Product Owner decisions**. Frozen means the rule is specified. Implementation is separate: **SPEC-007** is implemented by FEAT-001; **SPEC-001** same-stock adoption merge, **SPEC-003** split/bonus restatement, **SPEC-004** cash-ledger LOAN/RECALL/BRIDGE, and **SPEC-005** explicit cross-owner SELL attribution are implemented 2026-08-28; **SPEC-002 and SPEC-006** remain unimplemented.
 
 It is **not** a deferral bin for V3 bugs, V3 technical debt, V3 UX polish, or historical notes.
 
@@ -24,7 +24,7 @@ It is **not** a deferral bin for V3 bugs, V3 technical debt, V3 UX polish, or hi
 
 ### Status values
 
-`OPEN` · `BLOCKED` (waiting on a SPEC decision) · `DECIDED` (PO rule frozen; **not** implemented) · `COMPLETE` (implemented in production)
+`OPEN` · `BLOCKED` (waiting on a SPEC decision) · `DECIDED` (PO rule frozen; implementation is recorded on the SPEC row — SPEC-001, SPEC-003, SPEC-004, and SPEC-005 are implemented, SPEC-002/006 are not) · `COMPLETE` (implemented in production)
 
 A SPEC may be `DECIDED` while related FEAT rows stay `OPEN`. Do **not** mark a FEAT `COMPLETE` because its prerequisite SPEC is frozen.
 
@@ -40,12 +40,12 @@ Living detail: [`implementation.md`](../implementation.md).
 
 ## 2. Genuine V4 features (active V4 scope)
 
-Active V4 feature count: **22** (**9** `OPEN`, **13** `COMPLETE`).
+Active V4 feature count: **22** (**8** `OPEN`, **14** `COMPLETE`).
 
 | ID | Item | Why genuinely V4 | Priority | Status |
 |----|------|------------------|----------|--------|
 | V4-FEAT-001 | Broker / live execution automation | V3 §3 / §32 Decision 11 + SD-010: V3 does **not** require broker automation; manual/semi-auto fill is V3. **Product rule frozen as V4-SPEC-007**. Implemented 2026-08-27: per-portfolio modes, per-user entitlement, authenticator TOTP, Zerodha/Kite adapter, broker order lifecycle, fake-broker tests. | P2 | COMPLETE |
-| V4-FEAT-002 | Advanced orders (GTT / stop / target / partial fills) | Broker-era order types; depends on FEAT-001 | P3 | OPEN |
+| V4-FEAT-002 | Advanced orders (GTT / stop / target / partial fills) | Broker-era order types; depends on FEAT-001. **Implemented 2026-08-28:** one GTT Target **or** Stop-Loss per Strategy position; Strategy-derived prices; Manual never auto-places; Semi-Automatic explicit place; Automatic Stop-Loss after automated BUY fill; material BUY/SELL/CA sync; modify or cancel+replace; `needs_attention` + retry; partial GTT fill via existing ledger then later sync; zero position clears orphans. Same automated-execution entitlement and TOTP as FEAT-001. | P3 | COMPLETE |
 | V4-FEAT-005 | Market regime assessment (non-stub) | Not a V3 normative engine; Evaluation stub residual. **PO decision (2026-08-27):** Evaluation consumes MarketAnalysisEngine categorical `market_regime` (Bullish/Neutral/Bearish via existing `regimeFromPhase()`). Numeric Evaluation factor is Bullish→100, Neutral→50, Bearish→0. No new phase/regime calculation; sentiment is not the score. Implemented via `MarketRegimeScoreMapper` in EvaluationEngine (2026-08-27). | P2 | COMPLETE |
 | V4-FEAT-006 | Liquidity & Tradability indicator calculators | Indicator Registry expansion; not V3 SoT. **PO decision (2026-08-27):** Keep the existing composite formulas and complete their runtime wiring. Do not redesign formulas, retune thresholds, change weights, or invent new metrics. Implemented via `TechnicalIndicatorService` dispatch to `LiquidityTradabilityCalculator` (2026-08-27). | P2 | COMPLETE |
 | V4-FEAT-008 | Trading Artifact Framework remaining phases | SD-034 residual beyond Screener/Strategy registries shipped in V3 | P2 | OPEN |
@@ -173,7 +173,7 @@ This is identity/attribution, not an OHLCV snapshot copy or a generic versioning
 
 These **7** IDs are the V4 specification register (separate from the 22 active V4 features and from V5). SPEC-001–006 were resolved **2026-08-26**. **V4-SPEC-007** (broker execution modes) was recovered and frozen **2026-08-27**.
 
-**Status:** `DECIDED` — the rule is frozen. **Not** `COMPLETE`. V3 did **not** implement these rules. Do not treat V3’s current safe behaviour (below) as the V4 target.
+**Status:** `DECIDED` — the rule is frozen. **Not** `COMPLETE`. Implementation is recorded on the SPEC row: **SPEC-001, SPEC-003, SPEC-004, and SPEC-005 are implemented**; SPEC-002 and SPEC-006 are not. **SPEC-007** is implemented by FEAT-001. Do not treat V3’s current safe behaviour (below) as the V4 target.
 
 Canonical home for these rules is **this file** (`V4-SPEC-*`). Do **not** duplicate them as new V1 `SD-xxx` rows or as V3 `OD-*` / `DEP-*` (V3 remains frozen). V1 governance pointer: [`architecture/governance/SPECIFICATION_DECISIONS.md`](architecture/governance/SPECIFICATION_DECISIONS.md) (post-V3 note).
 
@@ -192,8 +192,8 @@ The application is primarily for **personal use** and a small number of trusted 
 | V4-SPEC-001 | Same-stock adoption merge uses simple weighted-average cost; one Strategy position; no lot accounting; final avg rounded to 2 dp half-up | DECIDED |
 | V4-SPEC-002 | Do not model rights issues as a special CA; exercised shares are a normal purchase | DECIDED |
 | V4-SPEC-003 | For splits and bonuses only, apply the ratio to qty, cost/avg, trailing high, stop, and target | DECIDED |
-| V4-SPEC-004 | Cash-ledger special movements are exactly LOAN, RECALL, BRIDGE; signed amount sets cash direction | DECIDED |
-| V4-SPEC-005 | Ambiguous cross-owner sells require explicit Strategy/owner attribution; never guess | DECIDED |
+| V4-SPEC-004 | Cash-ledger special movements are exactly LOAN, RECALL, BRIDGE; signed amount sets cash direction | DECIDED (implemented 2026-08-28) |
+| V4-SPEC-005 | Ambiguous cross-owner sells require explicit Strategy/owner attribution; never guess | DECIDED (implemented 2026-08-28) |
 | V4-SPEC-006 | One live broker account may hold many Lido Strategies; broker = aggregate, Lido = logical ownership | DECIDED |
 | V4-SPEC-007 | Per-portfolio execution mode (manual / semi_automatic / automatic); per-user admin entitlement; authenticator TOTP required for automated broker submission; Zerodha/Kite first broker; fill ≠ executed | DECIDED |
 
@@ -203,14 +203,14 @@ The application is primarily for **personal use** and a small number of trusted 
 
 | Field | Content |
 |-------|---------|
-| **Status** | **DECIDED** (2026-08-26). Not implemented. |
+| **Status** | **DECIDED** (2026-08-26). **Implemented 2026-08-28** (same-stock adopt merge; the previous 422 “merge unspecified” path is gone). SPEC remains the product rule. |
 | **Why V3 left it** | §10.4 requires merge when the destination Strategy already owns the symbol; cost math was never frozen (OD-15 = entry-date continuity only). This is **not** DEP-ADOPT-MERGE (lending-funded ownership). |
-| **Current V3 behaviour** | **422** reject; no invented weighted average. That V3 safety remains until V4 implements this rule. |
+| **Current V3 behaviour** | Historically **422** until this implementation. Production now merges per the frozen rule below. |
 | **PO decision** | Use a **simple weighted-average merge**. Portfolio-level accounting, not tax-lot accounting. |
 | **Frozen rule** | When an unmanaged holding is adopted into a Strategy that already owns the same stock: combine quantities; combine total cost; compute weighted-average cost; treat the result as **one** Strategy position. **Do not** introduce FIFO, LIFO, tax lots, or separate lot accounting. |
 | **Example** | Existing Strategy 50 @ ₹1,000 = ₹50,000. Unmanaged 100 @ ₹1,200 = ₹120,000. Result: **150 shares**, total cost **₹170,000**, unrounded average ₹1,133.333…, stored/resulting average cost **₹1,133.33**. |
 | **Implementation clarification (rounding)** | Calculate the weighted-average cost from the available source values. **Do not** round the individual source values before the calculation. Round **only** the final resulting average cost. Final average cost is rounded to **exactly 2 decimal places** using **normal half-up** rounding. Frozen wording: final weighted-average cost rounded to 2 decimal places using half-up rounding; source values are not rounded before calculation. **Do not** introduce additional rounding policy. |
-| **Implementation implications** | V4 may now implement this merge instead of 422. Do not invent extra lot or tax semantics. Related FEAT rows stay `OPEN`. Still **DECIDED**, not `COMPLETE`. |
+| **Implementation implications** | **Implemented 2026-08-28:** same-stock adopt no longer 422s. `HoldingAdoptionService` attributes unmanaged buys (HOLD_POSITION) and recalculates owner lots so quantities and total cost combine; final `avg_buy_price` is 2 dp half-up; destination `target_amount` is preserved (OD-12); destination ownership episode/entry date is preserved (OD-15). Still **DECIDED**, not a new FEAT row. |
 
 ---
 
@@ -231,12 +231,12 @@ The application is primarily for **personal use** and a small number of trusted 
 
 | Field | Content |
 |-------|---------|
-| **Status** | **DECIDED** (2026-08-26). Not implemented. |
+| **Status** | **DECIDED** (2026-08-26). **Implemented 2026-08-28** (split/bonus restatement of qty, cost/average, trailing, stop; OD-12 rupee target preserved). SPEC remains the product rule. |
 | **Why V3 left it** | Explicit OD-10 leftover: cost / trailing-high / stop / target restatement after CA. |
-| **Current V3 behaviour** | Ownership attachment only (quantity follows parent owner). OD-14 raw `close_price` does **not** restate cost, stop, or trailing high. |
+| **Current V3 behaviour** | Historically ownership attachment (quantity) plus F020 ledger/OHLCV paths without an explicit Strategy-position restatement contract. Production now also restates per the frozen rule below. |
 | **PO decision** | For corporate actions **already supported** (splits and bonuses), apply the appropriate ratio **consistently** to quantity, cost / average price, trailing high, stop-loss, and target. |
 | **Frozen rule** | Example **1:2 split:** 100 shares @ ₹100 → 200 shares @ ₹50. A trailing high of ₹150 becomes ₹75; stop and target scale the same way. **Do not** expand this into a generalized corporate-action accounting engine. Rights, mergers, demergers, etc. are **outside** this rule (rights: V4-SPEC-002). |
-| **Implementation implications** | V4 may implement split/bonus restatement of those five fields. Do not build a generic CA math subsystem. V3 quantity-ownership (OD-10) stays; this decision adds restatement **on top** of that ownership rule, and only when V4 implements it. Related FEAT rows stay `OPEN`. |
+| **Implementation implications** | **Implemented 2026-08-28:** `CorporateActionService` keeps the existing split/bonus ledger semantics; after apply, cost/average follow the restated ledger, trailing follows restated OHLCV, stop follows OD-13 fill cost, and OD-12 `target_amount` (rupees) is preserved so implied remaining shares scale at the new price. Duplicate same stock+type+ex-date apply is idempotent. Still **DECIDED**, not a new FEAT row. |
 
 ---
 
@@ -244,12 +244,12 @@ The application is primarily for **personal use** and a small number of trusted 
 
 | Field | Content |
 |-------|---------|
-| **Status** | **DECIDED** (2026-08-26). Not implemented. |
+| **Status** | **DECIDED** (2026-08-26). **Implemented 2026-08-28** (cash-ledger `loan` / `recall` / `bridge` with signed amounts on the existing physical pool). SPEC remains the product rule. |
 | **Why V3 left it** | §22 / DEP-ADOPT-MERGE: capital tables were sufficient; dedicated ledger kinds were never required. |
-| **Current V3 behaviour** | No dedicated loan/recall/bridge cash-ledger kinds. |
+| **Current V3 behaviour** | Historically no dedicated loan/recall/bridge cash-ledger kinds. Production now posts them per the frozen rule below. |
 | **PO decision** | Use **dedicated cash-ledger entry types** for relevant loan, recall, bridge, and corresponding money movements so the money trail is understandable. |
 | **Frozen rule** | Use **exactly three** semantic special-movement transaction types: **LOAN**, **RECALL**, **BRIDGE**. The amount is **signed** and determines cash direction: **positive** = money enters trading cash; **negative** = money leaves trading cash. **Do not** create separate directional types (`LOAN_IN`, `LOAN_OUT`, `RECALL_IN`, `RECALL_OUT`, `BRIDGE_IN`, `BRIDGE_OUT`). An optional note/reference may provide human context; it is **not** part of the accounting logic. Frozen wording: LOAN, RECALL, BRIDGE are the three semantic special-movement types; signed amount determines cash direction. Prefer simplicity over exhaustive accounting semantics. **Do not** turn this into a full accounting or tax ledger. |
-| **Implementation implications** | V4 may add these three ledger kinds with signed amounts. Do not enumerate a chart of accounts beyond this set. V4-UX-003 remains a historical note (no separate UX row). Related FEAT rows stay `OPEN`. Still **DECIDED**, not `COMPLETE`. |
+| **Implementation implications** | **Implemented 2026-08-28:** `CashManagementService` posts `loan` / `recall` / `bridge` through the existing ledger. Intra-portfolio events post both signs so physical cash is unchanged. Delayed Proceeds from Stock Sale post a single positive `recall` or `bridge`. No directional types, no new cash endpoints, no chart of accounts. V4-UX-003 remains a historical note (no separate UX row). Related FEAT rows stay `OPEN`. Still **DECIDED**, not a new FEAT row. |
 
 ---
 
@@ -257,12 +257,12 @@ The application is primarily for **personal use** and a small number of trusted 
 
 | Field | Content |
 |-------|---------|
-| **Status** | **DECIDED** (2026-08-26). Not implemented. |
+| **Status** | **DECIDED** (2026-08-26). **Implemented 2026-08-28** (write-path explicit SELL attribution; historical ambiguous rows still blend on recalc). SPEC remains the product rule. |
 | **Why V3 left it** | Spec left some cross-owner sell edges conservative. |
 | **Current V3 behaviour** | Conservative unmanaged / attributable paths; no invented proportional split. |
 | **PO decision** | Require **explicit attribution** whenever a sell cannot be unambiguously attributed. Goal: trustworthy Strategy-level performance, not maximum automation. |
 | **Frozen rule** | If a sell is unambiguously attributable to an owner/Strategy, use that attribution. If multiple owners/Strategies could legitimately be affected and the transaction does **not** identify the owner, **do not guess** — require the user to specify the Strategy/owner. **Do not** use proportional allocation, largest-position, oldest-position, FIFO, or any other automatic attribution rule. |
-| **Implementation implications** | V4 may add an explicit-attribution prompt/API when ambiguous. Do not auto-allocate. Related FEAT rows stay `OPEN`. |
+| **Implementation implications** | **Implemented 2026-08-28:** new SELL writes persist `owner_key` on `portfolio_transactions`. One open owner, `recommendation_id`, or explicit `owner_key`/`strategy_id` is enough. Multiple open owners without an identifier return 422. Quantity is gated on that owner’s holding. Broker/GTT/recall fills pass the identified owner. Historical rows without `owner_key` still use the V3 blended recalc fallback. Related FEAT rows stay `OPEN`. Still **DECIDED**, not a new FEAT row. |
 
 ---
 
@@ -275,7 +275,7 @@ The application is primarily for **personal use** and a small number of trusted 
 | **Current V3 behaviour** | Multi-portfolio paper/manual continues. No live broker automation (SD-010). |
 | **PO decision** | A **single live broker account may contain multiple Lido Strategies**. Do **not** impose one-broker-account / one-Strategy. |
 | **Frozen rule** | Example: Broker Account → Momentum owns Reliance 100; Value owns Reliance 50. **Broker** = actual aggregate holdings and executions. **Lido** = logical Strategy ownership and attribution. The broker does not need to understand Lido Strategy ownership. Live orders/executions therefore need sufficient **Lido-side** Strategy attribution. |
-| **Implementation implications** | Unblocks V4-FEAT-001 / FEAT-002 design. Do not require broker-side strategy tags. Live-mode semantics are **V4-SPEC-007**. FEAT-001 is implemented; GTT/stop/target remain FEAT-002. |
+| **Implementation implications** | Unblocks V4-FEAT-001 / FEAT-002 design. Do not require broker-side strategy tags. Live-mode semantics are **V4-SPEC-007**. FEAT-001 and FEAT-002 are implemented. |
 
 ---
 
@@ -331,13 +331,13 @@ These may change without a Product Owner round-trip unless they alter capability
 
 #### Remaining unspecified (do not invent as product)
 
-- GTT / stop / target / advanced order types (**V4-FEAT-002**)
+- GTT / stop / target / advanced order types (**V4-FEAT-002**, implemented 2026-08-28)
 - Multi-broker marketplace
 - Exact stale-recommendation auto-cancel policy beyond existing expire/cancel APIs
 
 #### Implementation implications
 
-V4-FEAT-001 implements the frozen rules above. Do not implement GTT/stop/target (FEAT-002). Do not change frozen V3 accounting. SPEC-007 `DECIDED` is the product rule; FEAT-001 `COMPLETE` is the shipped behaviour.
+V4-FEAT-001 implements the frozen SPEC-007 rules above. GTT/stop/target is **V4-FEAT-002** (COMPLETE 2026-08-28). Do not change frozen V3 accounting. SPEC-007 `DECIDED` is the product rule; FEAT-001 `COMPLETE` is the shipped live-execution behaviour.
 
 ---
 
@@ -410,7 +410,11 @@ Moving a FEAT from V4 to V5 does **not** satisfy acceptance. Freezing V4-SPEC-00
 | 2026-08-27 | **V4-FEAT-025 COMPLETE:** OpenAPI 3.0.3 contract for all live `/api/v1` routes at `app/openapi/v1.json` (122 operations). Tests: `OpenApiV1ContractTest`. |
 | 2026-08-27 | **V4-FEAT-026 COMPLETE:** Vitest TOS UI smoke + one Playwright Chromium path. Commands: `npm run test:js:tos`, `npm run test:e2e:tos`. |
 | 2026-08-27 | **V4-FEAT-027 COMPLETE:** Split `TradingOsController` by engine; shared `TradingOsPresenter` + `useApiGet`/`runApiMutation` on remaining TOS pages. API wire contract unchanged. Tests: `TradingOsControllerSplitTest`, OpenAPI, Vitest/Playwright TOS smoke. |
-| 2026-08-27 | **V4-SPEC-007 TOTP frozen + V4-FEAT-001 COMPLETE:** Authenticator TOTP is the 2FA mechanism. Modes, entitlement, Kite adapter, broker lifecycle, OpenAPI, and tests shipped. Remaining unspecified is GTT/FEAT-002 and multi-broker, not TOTP. |
+| 2026-08-28 | **V4-SPEC-001 implemented:** Same-stock unmanaged → Strategy adoption merges into one position (combined qty/cost; final average 2 dp half-up). Destination `target_amount` unchanged. Previous 422 “merge unspecified” path removed. SPEC remains **DECIDED**. |
+| 2026-08-28 | **V4-SPEC-003 implemented:** Split/bonus restates Strategy quantity, cost/average, trailing high, and stop. OD-12 rupee `target_amount` preserved. Duplicate same-day apply is idempotent. SPEC remains **DECIDED**. FEAT-002 / SPEC-004 / SPEC-005 not in this slice. |
+| 2026-08-28 | **V4-FEAT-002 COMPLETE:** Broker GTT Target / Stop-Loss on Strategy positions. Frozen rules: one active protection; Strategy-derived prices; Manual/Semi/Automatic as specified; material BUY/SELL/CA sync; `needs_attention` without rolling back the position; partial GTT fill via existing ledger then later sync. Tests: `AdvancedOrdersFeatureTest`. |
+| 2026-08-28 | **V4-SPEC-004 implemented:** Cash-ledger special movements are exactly `loan` / `recall` / `bridge` with signed amounts. Intra-portfolio events net to zero on the physical pool. Delayed Proceeds from Stock Sale post as recall/bridge, not deposit. SPEC remains **DECIDED**. SPEC-005 not in this slice. |
+| 2026-08-28 | **V4-SPEC-005 implemented:** Ambiguous cross-owner SELLs require `owner_key` / `strategy_id` / recommendation; never FIFO, proportional, or largest-lot. Single-owner and identified fills stamp `owner_key`. Historical ambiguous rows still blend on recalc. SPEC remains **DECIDED**. |
 
 ## Appendix — Former ID map
 

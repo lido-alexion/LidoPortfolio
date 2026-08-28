@@ -146,7 +146,7 @@ Legacy `/api` surface (active portfolio; Sanctum):
   -------- --------------------- --------------------------------
   GET      /api/cash             Balance, reserved, available (`?include_reservations=1` optional)
   GET      /api/cash/reservations Active reservation breakdown
-  GET      /api/cash/ledger      Recent ledger entries
+  GET      /api/cash/ledger      Recent ledger entries (`entry_type` includes deposit/withdrawal/adjustment/buy/sell and V4-SPEC-004 `loan`/`recall`/`bridge`; amount is signed)
   POST     /api/cash/deposit     `{ amount, remarks?, transaction_date? }`
   POST     /api/cash/withdraw    `{ amount, remarks?, transaction_date? }` (≤ available)
   POST     /api/cash/adjust      `{ amount, remarks?, transaction_date? }` (reason/remarks optional)

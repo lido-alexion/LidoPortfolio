@@ -9,6 +9,11 @@ import SegmentToggle from '../components/SegmentToggle';
 import { formatTransactionDateDisplay } from '../utils/transactionDate';
 import { buildSellPrefillFromHolding } from '../utils/sellTransactionPrefill';
 import {
+    protectionMenuItems,
+    protectionStateLabel,
+    protectionTypeLabel,
+} from '../utils/positionProtection';
+import {
     formatInrWhole,
     formatLtpDrawdownLabel,
     formatSignedPercent2,
@@ -98,7 +103,7 @@ function InvestedTransactionsIcon() {
     );
 }
 
-function buildHoldingsColumns(complex, handleSell, handleCorporateAction, handleAdopt) {
+function buildHoldingsColumns(complex, handleSell, handleCorporateAction, handleAdopt, protectionCtx) {
     return [
         {
             id: 'stock',
@@ -131,6 +136,13 @@ function buildHoldingsColumns(complex, handleSell, handleCorporateAction, handle
                             <div className="text-muted small">Unmanaged</div>
                         ) : row.original.owner_key ? (
                             <div className="text-muted small">{row.original.owner_key}</div>
+                        ) : null}
+                        {!row.original.is_unmanaged && protectionCtx?.protectionByHoldingId?.[row.original.id] ? (
+                            <div className="text-muted small">
+                                {protectionTypeLabel(protectionCtx.protectionByHoldingId[row.original.id].protection_type)}
+                                {' · '}
+                                {protectionStateLabel(protectionCtx.protectionByHoldingId[row.original.id].state)}
+                            </div>
                         ) : null}
                         {complex && since && (
                             <div className="text-muted small">Since {since}</div>
@@ -435,6 +447,14 @@ function buildHoldingsColumns(complex, handleSell, handleCorporateAction, handle
                                 label: 'Adopt',
                                 onClick: () => handleAdopt(row.original),
                             }] : []),
+                            ...protectionMenuItems({
+                                executionMode: protectionCtx?.executionMode,
+                                holding: row.original,
+                                protection: protectionCtx?.protectionByHoldingId?.[row.original.id],
+                                onPlaceTarget: () => protectionCtx?.onPlace?.(row.original, 'target'),
+                                onPlaceStop: () => protectionCtx?.onPlace?.(row.original, 'stop'),
+                                onCancel: () => protectionCtx?.onCancel?.(protectionCtx.protectionByHoldingId[row.original.id]),
+                            }),
                         ]}
                     />
                 );
@@ -453,6 +473,12 @@ export default function HoldingsPage() {
     const [adoptStrategyId, setAdoptStrategyId] = useState('');
     const [adoptBusy, setAdoptBusy] = useState(false);
     const [adoptError, setAdoptError] = useState('');
+    const [executionMode, setExecutionMode] = useState('manual');
+    const [protections, setProtections] = useState([]);
+    const [protectionPrompt, setProtectionPrompt] = useState(null);
+    const [protectionTotp, setProtectionTotp] = useState('');
+    const [protectionBusy, setProtectionBusy] = useState(false);
+    const [protectionError, setProtectionError] = useState('');
 
     const handleCorporateAction = useCallback((holding) => {
         const stockRow = holding.stock || {};
@@ -508,6 +534,17 @@ export default function HoldingsPage() {
         try {
             const holdingsRes = await api.get('/holdings');
             setHoldings(holdingsRes.data.data || []);
+            try {
+                const [modeRes, protRes] = await Promise.all([
+                    api.get('/v1/execution/mode'),
+                    api.get('/v1/protections'),
+                ]);
+                setExecutionMode(modeRes.data?.data?.execution_mode || 'manual');
+                setProtections(protRes.data?.data || []);
+            } catch {
+                setExecutionMode('manual');
+                setProtections([]);
+            }
         } finally {
             setLoading(false);
         }
@@ -536,6 +573,53 @@ export default function HoldingsPage() {
         }
     }, [adoptHolding, adoptStrategyId, load]);
 
+    const protectionByHoldingId = useMemo(() => {
+        const map = {};
+        protections.forEach((row) => {
+            if (row.holding_id && ['pending', 'active', 'synchronizing', 'needs_attention'].includes(row.state)) {
+                map[row.holding_id] = row;
+            }
+        });
+        return map;
+    }, [protections]);
+
+    const openProtectionPrompt = useCallback((action, holding, protection) => {
+        setProtectionError('');
+        setProtectionTotp('');
+        setProtectionPrompt({ action, holding, protection });
+    }, []);
+
+    const handleProtectionConfirm = useCallback(async () => {
+        if (!protectionPrompt) {
+            return;
+        }
+        setProtectionBusy(true);
+        setProtectionError('');
+        try {
+            const body = { totp: protectionTotp || undefined };
+            if (protectionPrompt.action === 'cancel') {
+                await api.post(`/v1/protections/${protectionPrompt.protection.id}/cancel`, body);
+            } else {
+                await api.post('/v1/protections', {
+                    holding_id: protectionPrompt.holding.id,
+                    type: protectionPrompt.action,
+                    totp: protectionTotp || undefined,
+                });
+            }
+            setProtectionPrompt(null);
+            setProtectionTotp('');
+            await load();
+        } catch (e) {
+            setProtectionError(
+                e?.response?.data?.error?.message
+                || e?.response?.data?.message
+                || 'Could not update broker protection.',
+            );
+        } finally {
+            setProtectionBusy(false);
+        }
+    }, [protectionPrompt, protectionTotp, load]);
+
     useEffect(() => { load(); }, [load]);
     usePortfolioChanged(load);
 
@@ -544,13 +628,25 @@ export default function HoldingsPage() {
         summary: h.stoploss_summary || {},
     })), [holdings]);
 
+    const protectionCtx = useMemo(() => ({
+        executionMode,
+        protectionByHoldingId,
+        onPlace: (holding, type) => openProtectionPrompt(type, holding, protectionByHoldingId[holding.id]),
+        onCancel: (protection) => {
+            if (protection) {
+                const holding = holdings.find((h) => h.id === protection.holding_id);
+                openProtectionPrompt('cancel', holding, protection);
+            }
+        },
+    }), [executionMode, protectionByHoldingId, openProtectionPrompt, holdings]);
+
     const complexColumns = useMemo(
-        () => buildHoldingsColumns(true, handleSell, handleCorporateAction, handleAdopt),
-        [handleSell, handleCorporateAction, handleAdopt],
+        () => buildHoldingsColumns(true, handleSell, handleCorporateAction, handleAdopt, protectionCtx),
+        [handleSell, handleCorporateAction, handleAdopt, protectionCtx],
     );
     const simpleColumns = useMemo(
-        () => buildHoldingsColumns(false, handleSell, handleCorporateAction, handleAdopt),
-        [handleSell, handleCorporateAction, handleAdopt],
+        () => buildHoldingsColumns(false, handleSell, handleCorporateAction, handleAdopt, protectionCtx),
+        [handleSell, handleCorporateAction, handleAdopt, protectionCtx],
     );
 
     const sharedTableProps = useMemo(() => ({
@@ -644,9 +740,10 @@ export default function HoldingsPage() {
                             </div>
                             <div className="modal-body">
                                 <p className="small text-muted">
-                                    Move this unmanaged position into one strategy. Entry history and risk windows stay
-                                    continuous. Adoption into a strategy that already owns this stock is blocked until
-                                    merge rules are specified.
+                                    Move this unmanaged position into one strategy. If that strategy already owns the
+                                    stock, quantities and cost are combined into one position (weighted-average cost).
+                                    The strategy’s existing target is kept. Entry history and risk windows stay
+                                    continuous.
                                 </p>
                                 <label className="form-label" htmlFor="adopt-strategy">
                                     Destination strategy
@@ -689,6 +786,68 @@ export default function HoldingsPage() {
                                     disabled={adoptBusy || !adoptStrategyId}
                                 >
                                     {adoptBusy ? 'Adopting…' : 'Adopt'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
+            {protectionPrompt ? (
+                <div className="modal d-block" tabIndex={-1} role="dialog" style={{ background: 'rgba(0,0,0,0.4)' }}>
+                    <div className="modal-dialog">
+                        <div className="modal-content">
+                            <div className="modal-header">
+                                <h5 className="modal-title">
+                                    {protectionPrompt.action === 'cancel'
+                                        ? 'Cancel broker protection'
+                                        : protectionPrompt.action === 'target'
+                                            ? 'Place GTT Target'
+                                            : 'Place GTT Stop-Loss'}
+                                </h5>
+                                <button
+                                    type="button"
+                                    className="btn-close"
+                                    aria-label="Close"
+                                    onClick={() => setProtectionPrompt(null)}
+                                    disabled={protectionBusy}
+                                />
+                            </div>
+                            <div className="modal-body">
+                                <p className="small text-muted">
+                                    {protectionPrompt.action === 'cancel'
+                                        ? 'Cancels the broker GTT. This is not a fill and does not change the holding.'
+                                        : 'Uses the Strategy target or stop already shown for this position. Only one of Target or Stop-Loss can be active; placing one replaces the other.'}
+                                </p>
+                                <label className="form-label" htmlFor="protection-totp">Authenticator code</label>
+                                <input
+                                    id="protection-totp"
+                                    className="form-control"
+                                    inputMode="numeric"
+                                    autoComplete="one-time-code"
+                                    value={protectionTotp}
+                                    onChange={(e) => setProtectionTotp(e.target.value)}
+                                    disabled={protectionBusy}
+                                />
+                                {protectionError ? (
+                                    <div className="alert alert-danger mt-3 mb-0 py-2 small">{protectionError}</div>
+                                ) : null}
+                            </div>
+                            <div className="modal-footer">
+                                <button
+                                    type="button"
+                                    className="btn btn-outline-secondary"
+                                    onClick={() => setProtectionPrompt(null)}
+                                    disabled={protectionBusy}
+                                >
+                                    Back
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn btn-primary"
+                                    onClick={handleProtectionConfirm}
+                                    disabled={protectionBusy}
+                                >
+                                    {protectionBusy ? 'Submitting…' : 'Confirm'}
                                 </button>
                             </div>
                         </div>

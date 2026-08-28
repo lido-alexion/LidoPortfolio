@@ -230,6 +230,19 @@ class RecommendationLendingExecutionTest extends TestCase
             'is_active' => true,
             'is_benchmark' => false,
         ]);
+        $open = TradingRecommendation::query()->create([
+            'profile_id' => $profile->id,
+            'security_id' => $stock->id,
+            'strategy_version_id' => $borrower->active_version_id,
+            'recommendation_type' => TradingRecommendation::ACTION_OPEN_POSITION,
+            'status' => TradingRecommendation::STATUS_PENDING_EXECUTION,
+            'priority' => 1,
+            'strategy_score' => 80,
+            'confidence' => 0.8,
+            'risk_level' => 'medium',
+            'execution_plan' => ['suggested_quantity' => 10],
+            'generated_at' => now(),
+        ]);
         $this->actingAs($user)->withProfileHeader($user, $profile)
             ->postJson('/api/transactions', [
                 'stock_id' => $stock->id,
@@ -238,6 +251,7 @@ class RecommendationLendingExecutionTest extends TestCase
                 'price' => 50,
                 'fees' => 0,
                 'transaction_date' => now()->toDateString(),
+                'recommendation_id' => $open->id,
             ])
             ->assertCreated();
 

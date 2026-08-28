@@ -28,6 +28,7 @@ test('active help documents capital priority and 75% rule', () => {
     assert.match(source, /recall period/i);
 });
 
-test('active help does not present auto-return toggle as recall control', () => {
-    assert.match(source, /no auto-return toggle/i);
+test('active help documents SPEC-004 loan recall bridge cash types', () => {
+    assert.match(source, /Special cash-ledger types are exactly loan, recall, and bridge/);
+    assert.match(source, /positive = money entered trading cash/);
 });

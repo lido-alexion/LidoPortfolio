@@ -10,12 +10,19 @@ use App\Services\CorporateActionService;
 use App\Services\HoldingsCalculationService;
 use App\Services\TransactionRealizationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class CorporateActionServiceTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Http::preventStrayRequests();
+    }
 
     public function test_split_scales_multiple_buys_and_partial_sell_preserving_economics(): void
     {

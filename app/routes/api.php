@@ -62,6 +62,7 @@ use App\Http\Controllers\Api\V1\TradingOs\EvaluationController as TradingOsEvalu
 use App\Http\Controllers\Api\V1\TradingOs\ExecutionController as TradingOsExecutionController;
 use App\Http\Controllers\Api\V1\TradingOs\NotificationController as TradingOsNotificationController;
 use App\Http\Controllers\Api\V1\TradingOs\PipelineController as TradingOsPipelineController;
+use App\Http\Controllers\Api\V1\TradingOs\ProtectionController as TradingOsProtectionController;
 use App\Http\Controllers\Api\V1\TradingOs\RecommendationController as TradingOsRecommendationController;
 use App\Http\Controllers\Api\V1\TradingOs\ReviewController as TradingOsReviewController;
 use App\Http\Controllers\Api\V1\TradingOs\TotpController as TradingOsTotpController;
@@ -332,6 +333,12 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
     Route::put('/execution/mode', [TradingOsExecutionController::class, 'executionModeUpdate']);
     Route::post('/execution/submit-selected', [TradingOsExecutionController::class, 'submitSelected']);
     Route::post('/orders/{id}/reconcile', [TradingOsExecutionController::class, 'ordersReconcile'])->whereNumber('id');
+
+    Route::get('/protections', [TradingOsProtectionController::class, 'index']);
+    Route::post('/protections', [TradingOsProtectionController::class, 'store']);
+    Route::get('/protections/{id}', [TradingOsProtectionController::class, 'show'])->whereNumber('id');
+    Route::post('/protections/{id}/cancel', [TradingOsProtectionController::class, 'cancel'])->whereNumber('id');
+    Route::post('/protections/{id}/reconcile', [TradingOsProtectionController::class, 'reconcile'])->whereNumber('id');
 
     Route::get('/totp', [TradingOsTotpController::class, 'status']);
     Route::post('/totp/begin', [TradingOsTotpController::class, 'begin']);

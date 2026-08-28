@@ -7,6 +7,7 @@ use App\Models\Transaction;
 use App\Models\TransactionImportBatch;
 use App\Models\TransactionImportBatchItem;
 use App\Models\User;
+use App\Services\Ownership\SellAttributionService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -19,7 +20,7 @@ class BulkTransactionImportService
         protected TransactionWriteService $writes,
         protected StockResolverService $stocks,
         protected CashManagementService $cash,
-        protected HoldingsCalculationService $holdings,
+        protected SellAttributionService $attribution,
     ) {}
 
     /**
@@ -145,6 +146,7 @@ class BulkTransactionImportService
         $seenRowIds = [];
         $prepared = [];
         $virtualQty = [];
+        $virtualOwner = [];
         $cashBalance = $this->cash->balance($profile);
 
         foreach ($rows as $index => $row) {
@@ -182,22 +184,43 @@ class BulkTransactionImportService
                 throw $this->mapRowValidation($index, $rowId, $e);
             }
 
+            if (! empty($row['owner_key'])) {
+                $normalized['owner_key'] = $row['owner_key'];
+            }
+            if (isset($row['strategy_id']) && $row['strategy_id'] !== '' && $row['strategy_id'] !== null) {
+                $normalized['strategy_id'] = $row['strategy_id'];
+            }
+
             $stockId = (int) $stock->id;
             if (! array_key_exists($stockId, $virtualQty)) {
-                $virtualQty[$stockId] = $this->holdings->getAvailableQuantity($profile, $stock);
+                $open = $this->attribution->openOwnerQuantities($profile, $stock);
+                $virtualOwner[$stockId] = $open;
+                $virtualQty[$stockId] = array_sum($open);
             }
 
             if ($normalized['type'] === 'sell') {
-                if ($normalized['quantity'] > $virtualQty[$stockId] + 0.00001) {
-                    throw $this->rowException(
-                        $index,
-                        $rowId,
-                        'quantity',
-                        'Sell quantity cannot exceed current holding quantity.',
+                try {
+                    $resolved = $this->attribution->resolveForSell(
+                        $profile,
+                        $stock,
+                        $normalized,
+                        $normalized['quantity'],
+                        null,
+                        $virtualOwner[$stockId],
                     );
+                } catch (ValidationException $e) {
+                    throw $this->mapRowValidation($index, $rowId, $e);
                 }
+                $normalized['owner_key'] = $resolved['owner_key'];
+                $ownerKey = $resolved['owner_key'];
+                $virtualOwner[$stockId][$ownerKey] = ($virtualOwner[$stockId][$ownerKey] ?? 0.0)
+                    - $normalized['quantity'];
                 $virtualQty[$stockId] -= $normalized['quantity'];
             } else {
+                $ownerKey = $this->attribution->ownerKeyForBuy($profile, $normalized);
+                $normalized['owner_key'] = $ownerKey;
+                $virtualOwner[$stockId][$ownerKey] = ($virtualOwner[$stockId][$ownerKey] ?? 0.0)
+                    + $normalized['quantity'];
                 $virtualQty[$stockId] += $normalized['quantity'];
             }
 

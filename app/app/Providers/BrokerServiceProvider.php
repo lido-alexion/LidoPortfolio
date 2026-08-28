@@ -12,6 +12,7 @@ class BrokerServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(FakeBrokerGateway::class);
+        $this->app->singleton(\App\Services\Protection\PositionProtectionService::class);
 
         if ($this->app->environment('testing')) {
             $this->app->singleton(BrokerGateway::class, fn ($app) => $app->make(FakeBrokerGateway::class));

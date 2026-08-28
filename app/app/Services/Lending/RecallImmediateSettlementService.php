@@ -28,6 +28,7 @@ final class RecallImmediateSettlementService
         protected RecallService $recalls,
         protected RecallBridgeLenderSelector $bridgeLenderSelector,
         protected RecallFulfilmentService $fulfilment,
+        protected SpecialCashMovementService $specialCash,
     ) {}
 
     /**
@@ -181,8 +182,11 @@ final class RecallImmediateSettlementService
 
             /** @var CapitalLoan $loan */
             $loan = CapitalLoan::query()->whereKey($recall->loan_id)->lockForUpdate()->firstOrFail();
-            $this->repayments->repay($loan, $settle);
+            $this->repayments->repay($loan, $settle, false);
             $recall = $this->recalls->applySettlementAmount($recall->fresh(), $settle);
+            if ($settle > 0.0001) {
+                $this->specialCash->postRecallSettlement($profile, $recall, $settle);
+            }
 
             if ((float) $recall->outstanding_recall_amount > 0.0001
                 && $recall->state !== CapitalRecall::STATE_COMPLETED) {

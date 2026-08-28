@@ -6,6 +6,10 @@ Base URL: `/api`
 
 **TOS list pagination (V4-FEAT-028):** `GET /api/v1/securities`, `/price-bars`, `/recommendations`, `/orders`, `/transactions`, `/notifications`, `/reviews` accept `page` (default 1) and `pageSize` (alias `per_page`). Response `meta` includes `{page, pageSize, total, lastPage}`. Max page size 200 (price-bars 500). Candidates, evaluations, positions, and pending-execution are not paginated.
 
+**V4-SPEC-004 cash-ledger LOAN / RECALL / BRIDGE (2026-08-28):** `GET /cash/ledger` `entry_type` may be `loan`, `recall`, or `bridge` in addition to `deposit`, `withdrawal`, `adjustment`, `buy`, `sell`. Amount is signed (positive = cash in, negative = cash out). Intra-strategy transfers post both signs so physical cash is unchanged. Delayed Proceeds from Stock Sale post as `recall` or `bridge`, not `deposit`. No new cash mutation endpoints.
+
+**Advanced broker orders (V4-FEAT-002):** `GET/POST /api/v1/protections`, `GET /api/v1/protections/{id}`, `POST /api/v1/protections/{id}/cancel`, `POST /api/v1/protections/{id}/reconcile`. One open GTT Target **or** Stop-Loss per Strategy position. Place/cancel are Semi-Automatic attended actions (existing automated-execution entitlement + TOTP + Kite). Prices are Strategy-derived (`target_amount / quantity` or OD-13 stop). Does not write ledger/cash/capital/lending. OpenAPI: [`openapi/v1.json`](openapi/v1.json).
+
 ## Auth (session cookies — no Bearer token)
 
 Uses Laravel Sanctum SPA mode. Browser must send cookies (`credentials: include`). Call `GET /sanctum/csrf-cookie` before login.
@@ -65,10 +69,10 @@ Universe OHLCV sync (CLI): `php artisan portfolio:sync-universe-prices` — `--m
 
 ## Transactions
 
-- `GET /transactions` (auth) — paginated ledger; sell rows may include persisted `exit_reason` (`strategy_exit` | `stop_loss` | `trailing_stop` | `horizon_expiry`) copied from the recommendation primary attribution on fill
-- `POST /transactions` (auth) — provide `stock_id` **or** `symbol` (optional `name`, `exchange`); unknown symbols create a stock master row automatically on buy
+- `GET /transactions` (auth) — paginated ledger; sell rows may include persisted `exit_reason` (`strategy_exit` | `stop_loss` | `trailing_stop` | `horizon_expiry`) copied from the recommendation primary attribution on fill; rows may include `owner_key` (`unmanaged` | `strategy:{id}`) when attribution is stored (V4-SPEC-005)
+- `POST /transactions` (auth) — provide `stock_id` **or** `symbol` (optional `name`, `exchange`); unknown symbols create a stock master row automatically on buy. Sells accept optional `owner_key` (`unmanaged` | `strategy:{id}`) and/or `strategy_id`. When more than one owner holds the stock and the request does not identify the owner (no `owner_key` / `strategy_id` / `recommendation_id`, and it is not a single open lot), the API returns 422 — it does not guess. Quantity is checked against the selected owner's holding, not the portfolio total.
 - `GET /transactions/{transaction}` (auth) — includes `exit_reason` when set
-- `PUT /transactions/{transaction}` (auth)
+- `PUT /transactions/{transaction}` (auth) — same sell attribution rules as POST (`owner_key` / `strategy_id`)
 - `DELETE /transactions/{transaction}` (auth)
 
 ## Exploratory Analytics
@@ -97,11 +101,15 @@ Returns growth %, relative strength vs benchmark, chart series, cache/fetch meta
     - Portfolio trailing is **not** unrealized-%, **not** `default_stoploss_percent`, and **not** strategy `trailing_stop` JSON
     - OD-12 fields (strategy-owned lots): `target_amount`, `filled_amount` (actual invested cost), `remaining_target_amount` = max(0, target − filled)
     - Ownership: `owner_key`, `strategy_id`, `is_unmanaged`
-- `POST /holdings/{id}/adopt` (auth) — body `{ "strategy_id": int }`. Explicit unmanaged → one strategy (§10.4).
-    - Initializes `target_amount` / `filled_amount` from invested cost so remaining BUY/INCREASE is 0
-    - Preserves entry history (OD-15) via HOLD_POSITION attribution (does **not** start OD-11 BUY cooldown)
-    - **422** when destination strategy already owns the same stock (merge cost-basis unspecified — blocked)
+- `POST /holdings/{id}/adopt` (auth) — body `{ "strategy_id": int }`. Explicit unmanaged → one strategy (§10.4 / V4-SPEC-001).
+    - When the destination does **not** already own the stock: initializes `target_amount` / `filled_amount` from invested cost so remaining BUY/INCREASE is 0
+    - When the destination **already** owns the stock: merges into **one** Strategy position (combined quantity and total cost; final average cost to 2 decimal places, half-up). Destination `target_amount` is unchanged (OD-12)
+    - Preserves destination ownership episode / entry history (OD-15) via HOLD_POSITION attribution (does **not** start OD-11 BUY cooldown)
     - Idempotent when the holding is already owned by that strategy
+    - **422** for invalid strategy, already strategy-owned holding adopted into a *different* strategy, or zero quantity — not for same-stock merge
+- `POST /corporate-actions/preview` (auth) — body `{ action_type: split|bonus, ratio_from, ratio_to, ex_date, notes?, split_scope? }`. Preview ledger/OHLCV restatement.
+- `POST /corporate-actions` (auth) — apply. Split restates in-place qty/price; bonus inserts ₹0 `SOURCE_BONUS` rows (no cash). V4-SPEC-003: Strategy position qty/cost/average/stop/trailing restated; OD-12 `target_amount` (rupees) preserved. Same stock+type+ex-date already applied is idempotent (no second mutation). **422** for invalid ratio/type/date or blocking preview errors.
+- `GET /corporate-actions` (auth) — applied history; optional `stock_id`
 - `GET /stocks/{stock}/prices` (auth) — OHLCV rows for held stocks with `range=all|since_buy`
     - `range=all` (default): all available cached history for the instrument (OD-17)
     - `range=since_buy`: current position episode history (legacy since-buy view)

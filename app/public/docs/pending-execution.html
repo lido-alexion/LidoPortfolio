@@ -156,10 +156,10 @@
         <dd>Approve means you accept the idea; execution is the separate ledger write after a real fill. A capital_committed buy can be approved and then filled the same way as a fully funded buy. Unfunded or awaiting-lender buys never reach this page.</dd>
     
         <dt>Execution modes</dt>
-        <dd>Per portfolio: Manual (default, no broker submit), Semi-Automatic (explicit Accept / Execute Selected), Automatic (unattended submit). Entitlement is per user and admin-controlled.</dd>
+        <dd>Per portfolio: Manual (default, no broker submit and no automatic GTT protection), Semi-Automatic (explicit Accept / Execute Selected; GTT Target or Stop-Loss is also an explicit Holdings action), Automatic (unattended submit; Stop-Loss GTT is placed after an automated BUY fill without a per-order click). Entitlement is per user and admin-controlled. There is no separate Advanced Orders entitlement.</dd>
     
         <dt>Cash reservation</dt>
-        <dd>Approving a funded buy reserves the own-funded amount until execute, cancel, expire, or reopen. A committed loan is not a second cash reservation and does not deposit cash. One physical cash pool is used for the fill. The borrower strategy owns the resulting holding; the lender does not receive stock.</dd>
+        <dd>Approving a funded buy reserves the own-funded amount until execute, cancel, expire, or reopen. A committed loan is not a second cash reservation and does not deposit extra cash. Signed Loan ledger rows for the commitment net to zero on the one physical pool. The borrower strategy owns the resulting holding; the lender does not receive stock.</dd>
     
         <dt>Queue hygiene</dt>
         <dd>If a recommendation is no longer valid, cancel execution promptly so reserved cash is released and stale intent does not pollute future decisions.</dd>

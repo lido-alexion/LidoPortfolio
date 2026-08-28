@@ -17,7 +17,8 @@ use Illuminate\Validation\ValidationException;
 /**
  * V3 §10.4 explicit unmanaged → strategy adoption.
  *
- * Does not invent cost-basis merge when the destination already owns the stock.
+ * Same-stock merge (V4-SPEC-001): weighted-average cost, one Strategy position,
+ * destination target_amount and ownership episode preserved (OD-12 / OD-15).
  * Attribution uses HOLD_POSITION (not OPEN/INCREASE) so OD-11 BUY cooldown is unchanged.
  */
 final class HoldingAdoptionService
@@ -78,16 +79,18 @@ final class HoldingAdoptionService
             ->where('id', '!=', $holding->id)
             ->where('quantity', '>', 0)
             ->first();
-        if ($existingDest !== null) {
-            throw ValidationException::withMessages([
-                'strategy_id' => [
-                    'Adoption into a strategy that already owns this stock is not available. '
-                    .'Cost-basis and multi-lot merge rules are unspecified (V3 §10.4 / OD-15).',
-                ],
-            ]);
-        }
+        $isMerge = $existingDest !== null;
+        $preservedTarget = $isMerge ? $existingDest->target_amount : null;
 
-        return DB::transaction(function () use ($profile, $holding, $strategy, $user, $destKey) {
+        $result = DB::transaction(function () use (
+            $profile,
+            $holding,
+            $strategy,
+            $user,
+            $destKey,
+            $isMerge,
+            $preservedTarget,
+        ) {
             $stock = $holding->stock ?? $holding->stock()->firstOrFail();
             $rec = $this->ensureAttributionRecommendation($profile, $holding, $strategy);
             $this->attributeUnmanagedBuys($profile, $holding, (int) $rec->id);
@@ -104,32 +107,59 @@ final class HoldingAdoptionService
                 ]);
             }
 
-            $invested = round(max(0.0, (float) $adopted->invested_amount), 4);
-            $adopted->target_amount = $invested;
-            $adopted->filled_amount = $invested;
+            if ($isMerge) {
+                $qty = (float) $adopted->quantity;
+                if ($qty > 0.00001) {
+                    $adopted->avg_buy_price = $this->roundAverageCost((float) $adopted->invested_amount / $qty);
+                }
+                $adopted->target_amount = $preservedTarget;
+            } else {
+                $invested = round(max(0.0, (float) $adopted->invested_amount), 4);
+                $adopted->target_amount = $invested;
+                $adopted->filled_amount = $invested;
+            }
+
             $adopted->updated_at = now();
             $adopted->save();
-            $holding = $adopted;
 
             $adoption = $this->recordAudit(
                 $profile,
-                $holding,
+                $adopted,
                 $strategy,
                 $user,
                 idempotent: false,
                 recommendationId: (int) $rec->id,
+                sameStockMerge: $isMerge,
             );
 
             Log::info('holding.adopted', [
                 'profile_id' => $profile->id,
-                'holding_id' => $holding->id,
-                'stock_id' => $holding->stock_id,
+                'holding_id' => $adopted->id,
+                'stock_id' => $adopted->stock_id,
                 'to_strategy_id' => $strategy->id,
                 'adoption_id' => $adoption->id,
+                'same_stock_merge' => $isMerge,
             ]);
 
-            return ['holding' => $holding, 'adoption' => $adoption, 'idempotent' => false];
+            return ['holding' => $adopted, 'adoption' => $adoption, 'idempotent' => false];
         });
+
+        try {
+            app(\App\Services\Protection\PositionProtectionService::class)
+                ->afterAdoption($profile, $result['holding']);
+        } catch (\Throwable) {
+            // Adoption must stay applied even if GTT sync fails.
+        }
+
+        return $result;
+    }
+
+    /**
+     * Final average cost only: 2 decimal places, half-up. Inputs are not rounded first.
+     */
+    public function roundAverageCost(float $value): float
+    {
+        return round($value, 2, PHP_ROUND_HALF_UP);
     }
 
     protected function ensureAttributionRecommendation(
@@ -182,6 +212,7 @@ final class HoldingAdoptionService
         ?User $user,
         bool $idempotent,
         ?int $recommendationId = null,
+        bool $sameStockMerge = false,
     ): HoldingAdoption {
         return HoldingAdoption::query()->create([
             'profile_id' => $profile->id,
@@ -198,7 +229,7 @@ final class HoldingAdoptionService
             'idempotent' => $idempotent,
             'evidence_json' => [
                 'od15_entry_history_preserved' => true,
-                'merge_blocked_when_dest_owns_stock' => true,
+                'same_stock_merge' => $sameStockMerge,
             ],
         ]);
     }

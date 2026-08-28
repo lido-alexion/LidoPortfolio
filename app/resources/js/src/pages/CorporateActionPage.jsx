@@ -198,8 +198,8 @@ export default function CorporateActionPage() {
                             <div className="col-12">
                                 <p className="small text-muted mb-0">
                                     {actionType === 'split'
-                                        ? 'Example 1:2 split multiplies quantity by 2 and divides price by 2 on selected transactions.'
-                                        : 'Example 1:1 bonus adds one zero-cost buy share per share held on the record date (Indian tax style).'}
+                                        ? 'Example 1:2 split multiplies quantity by 2 and divides price by 2. Cost basis is preserved; average cost, stop, and trailing scale with the ratio. Position target (rupees) is kept so remaining BUY stays economically equivalent.'
+                                        : 'Example 1:1 bonus adds one zero-cost share per share held on the record date (Indian tax style). Total invested cost is unchanged; average cost, stop, and trailing scale with the new quantity.'}
                                 </p>
                             </div>
                         </div>

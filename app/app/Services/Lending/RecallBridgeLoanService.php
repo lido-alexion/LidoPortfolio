@@ -26,6 +26,7 @@ final class RecallBridgeLoanService
         protected RecallNotificationService $notifications,
         protected PortfolioCapitalAccountingService $accounting,
         protected StockQuoteService $quotes,
+        protected SpecialCashMovementService $specialCash,
     ) {}
 
     /**
@@ -78,6 +79,8 @@ final class RecallBridgeLoanService
             ->orderBy('id')
             ->first();
         if ($existing !== null && abs((float) $existing->principal - $amount) <= 0.0001) {
+            $this->specialCash->postBridgeDisbursement($profile, $existing);
+
             return $existing;
         }
         if ($existing !== null) {
@@ -127,14 +130,15 @@ final class RecallBridgeLoanService
             'committed_at' => now(),
             'status' => RecallBridgeLoan::STATUS_OUTSTANDING,
         ]);
+        $this->specialCash->postBridgeDisbursement($profile, $loan);
         $this->notifications->bridgeCreated($profile, $loan);
 
         return $loan;
     }
 
-    public function repay(RecallBridgeLoan $loan, float $amount): RecallBridgeLoan
+    public function repay(RecallBridgeLoan $loan, float $amount, bool $postCash = true): RecallBridgeLoan
     {
-        return DB::transaction(function () use ($loan, $amount) {
+        return DB::transaction(function () use ($loan, $amount, $postCash) {
             /** @var RecallBridgeLoan $locked */
             $locked = RecallBridgeLoan::query()->whereKey($loan->id)->lockForUpdate()->firstOrFail();
             $amount = round($amount, 4);
@@ -169,6 +173,9 @@ final class RecallBridgeLoanService
 
             $fresh = $locked->fresh();
             $profile = PortfolioProfile::query()->find($fresh->profile_id);
+            if ($profile && $postCash) {
+                $this->specialCash->postBridgeRepayment($profile, $fresh, $amount, $newOutstanding);
+            }
             if ($profile) {
                 $this->notifications->bridgeRepaid($profile, $fresh, $amount);
             }

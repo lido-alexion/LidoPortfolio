@@ -58,7 +58,7 @@ Do **not** casually change WS2 accounting formulas or invent a second physical c
 
 ### Still open (deferred / undecided — not V3 blockers)
 
-11. Optional cash-ledger entry type for loan/recall/bridge movements (undecided).
+11. Optional cash-ledger entry type for loan/recall/bridge movements — **implemented as V4-SPEC-004** (2026-08-28).
 12. Strategy-page UI for weakest-position evaluation window (engine already configurable; §29 does not mandate the control).
 13. Same-stock unmanaged adoption cost-basis merge (spec gap).
 

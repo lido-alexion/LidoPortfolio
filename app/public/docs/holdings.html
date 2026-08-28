@@ -127,10 +127,16 @@
         <dd>Toggle density of columns and metrics. Complex view shows portfolio trailing % from peak raw close, portfolio stop-loss price under Avg Buy, and Target column details (filled / remaining) when a position target exists.</dd>
     
         <dt>Sell</dt>
-        <dd>Prefills a sell transaction from the selected holding.</dd>
+        <dd>Prefills a sell transaction from the selected holding, including that row’s owner (Strategy or unmanaged) so a multi-owner stock is not sold from the wrong lot.</dd>
     
         <dt>Adopt</dt>
-        <dd>On unmanaged holdings (Sell menu → Adopt): choose one destination strategy. Sets ownership and initializes position target from invested cost so remaining BUY is 0. Entry/risk history continues (OD-15). Blocked if that strategy already owns the same stock (merge rules unspecified).</dd>
+        <dd>On unmanaged holdings (Sell menu → Adopt): choose one destination strategy. If that strategy does not already own the stock, ownership is set and position target is initialized from invested cost so remaining BUY is 0. If it already owns the stock, quantities and total cost are combined into one Strategy position; the final average cost is rounded to 2 decimal places (half-up) and the destination target_amount is left unchanged. Entry/risk history continues (OD-15). Attribution is HOLD_POSITION (not OPEN/INCREASE), so BUY cooldown is not started.</dd>
+    
+        <dt>Place GTT Target / Stop-Loss</dt>
+        <dd>On Strategy-owned lots in Semi-Automatic mode (Sell menu). Places one broker GTT using the Strategy target (target_amount ÷ quantity) or portfolio stop-loss price. Only one protection can be active; placing Target replaces Stop-Loss and vice versa. Requires authenticator code, Kite session, and automated-execution entitlement. Manual mode never auto-places. Automatic mode places Stop-Loss after an automated BUY fill without a per-order click; Holdings shows status only.</dd>
+    
+        <dt>Cancel protection</dt>
+        <dd>Semi-Automatic only. Cancels the broker GTT. Not a fill and does not change the holding, cash, or recommendation status.</dd>
     
         <dt>Price history</dt>
         <dd>Opens OHLCV chart and table for that stock.</dd>
@@ -162,7 +168,7 @@
         <dd>Fee-exclusive cost basis (price × qty) for open lots; fees are shown separately.</dd>
     
         <dt>Owner / Unmanaged</dt>
-        <dd>Each open lot is unmanaged or owned by a strategy (<code>owner_key</code>). Manual buys stay unmanaged until Adopt. Corporate-action quantity follows the parent owner (OD-10).</dd>
+        <dd>Each open lot is unmanaged or owned by a strategy (<code>owner_key</code>). Manual buys stay unmanaged until Adopt. Corporate-action quantity follows the parent owner (OD-10). Splits and bonuses also restate that owner’s cost, average, stop, and trailing (V4-SPEC-003) without blending owners. Sells that could hit more than one lot require an explicit owner (V4-SPEC-005).</dd>
     
         <dt>Unrealized P/L</dt>
         <dd>Mark-to-market vs latest cached close; unrealized % = unrealized ÷ invested × 100 when invested &gt; 0. Portfolio trailing stop is not based on unrealized %.</dd>
@@ -178,6 +184,9 @@
     
         <dt>Highest Close</dt>
         <dd>Peak raw close for the current ownership episode (owner-scoped when strategy lots are attributable).</dd>
+    
+        <dt>Broker protection (GTT)</dt>
+        <dd>Optional Zerodha GTT Target or Stop-Loss attached to a Strategy position (not unmanaged lots). Status: pending, active, synchronizing, needs attention, cancelled, reconciled. Missing Strategy target or stop blocks placement and marks needs attention without rolling back the position. Broker acceptance is not execution; a GTT fill is booked through the existing ledger path. After a split/bonus, protection is synchronized to the restated quantity and prices.</dd>
     
         <dt>Risk-first reading</dt>
         <dd>Prioritize trailing-stop pressure, latest close behavior, and concentration before focusing on winners.</dd>

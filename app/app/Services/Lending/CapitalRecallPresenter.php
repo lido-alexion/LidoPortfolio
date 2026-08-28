@@ -4,6 +4,7 @@ namespace App\Services\Lending;
 
 use App\Models\CapitalLoan;
 use App\Models\CapitalRecall;
+use App\Models\CashLedgerEntry;
 use App\Models\PendingSaleProceeds;
 use App\Models\RecallBridgeLoan;
 use App\Models\TradingStrategy;
@@ -180,13 +181,25 @@ final class CapitalRecallPresenter
     }
 
     /**
-     * Classify cash-ledger reasons for UI history (no parallel ledger).
+     * Classify cash-ledger rows for UI history (no parallel ledger).
+     * Prefer V4-SPEC-004 entry_type; reason remains human context (e.g. Proceeds from Stock Sale).
      */
-    public function cashMovementKind(?string $reason): string
+    public function cashMovementKind(?string $reason, ?string $entryType = null): string
     {
         $r = strtolower((string) $reason);
         if (str_contains($r, 'proceeds from stock sale')) {
             return 'proceeds_from_stock_sale';
+        }
+        if ($entryType === CashLedgerEntry::TYPE_LOAN) {
+            return (str_contains($r, 'return') || str_contains($r, 'repayment'))
+                ? 'normal_loan_repayment'
+                : 'normal_loan';
+        }
+        if ($entryType === CashLedgerEntry::TYPE_RECALL) {
+            return 'recall';
+        }
+        if ($entryType === CashLedgerEntry::TYPE_BRIDGE) {
+            return 'recall_bridge_loan';
         }
         if (str_contains($r, 'recall bridge') || str_contains($r, 'bridge loan')) {
             return 'recall_bridge_loan';

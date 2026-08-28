@@ -64,6 +64,30 @@ class Holding extends Model
             : self::OWNER_UNMANAGED;
     }
 
+    public static function strategyIdFromOwnerKey(?string $ownerKey): ?int
+    {
+        if ($ownerKey === null || $ownerKey === '' || $ownerKey === self::OWNER_UNMANAGED) {
+            return null;
+        }
+
+        if (preg_match('/^strategy:(\d+)$/', $ownerKey, $matches) !== 1) {
+            return null;
+        }
+
+        $id = (int) $matches[1];
+
+        return $id > 0 ? $id : null;
+    }
+
+    public static function isValidOwnerKey(?string $ownerKey): bool
+    {
+        if ($ownerKey === self::OWNER_UNMANAGED) {
+            return true;
+        }
+
+        return self::strategyIdFromOwnerKey($ownerKey) !== null;
+    }
+
     public function isUnmanaged(): bool
     {
         return $this->strategy_id === null || $this->owner_key === self::OWNER_UNMANAGED;

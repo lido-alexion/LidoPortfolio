@@ -4,22 +4,27 @@ namespace App\Services\Lending;
 
 use App\Models\CapitalLoan;
 use App\Models\CapitalLoanReturn;
+use App\Models\PortfolioProfile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
  * WS4 Step 7 — explicit repayment of an outstanding CapitalLoan.
  *
- * Accounting-only: creates CapitalLoanReturn and reduces outstanding.
- * Does not move stock, change allocation_pct, or post cash-ledger rows
- * (no loan-return entry type exists on the single physical cash pool).
- * Does not implement recall.
+ * Creates CapitalLoanReturn and reduces outstanding. Does not move stock
+ * or change allocation_pct. V4-SPEC-004 posts signed LOAN cash rows that
+ * net to zero on the single physical pool unless $postCash is false
+ * (caller already posted RECALL/BRIDGE for the same money movement).
  */
 final class CapitalLoanRepaymentService
 {
-    public function repay(CapitalLoan $loan, float $amount): CapitalLoanReturn
+    public function __construct(
+        protected SpecialCashMovementService $specialCash,
+    ) {}
+
+    public function repay(CapitalLoan $loan, float $amount, bool $postCash = true): CapitalLoanReturn
     {
-        return DB::transaction(function () use ($loan, $amount) {
+        return DB::transaction(function () use ($loan, $amount, $postCash) {
             /** @var CapitalLoan $locked */
             $locked = CapitalLoan::query()
                 ->whereKey($loan->id)
@@ -60,13 +65,20 @@ final class CapitalLoanRepaymentService
                     : CapitalLoan::STATUS_PARTIALLY_RETURNED,
             ])->save();
 
-            return CapitalLoanReturn::query()->create([
+            $row = CapitalLoanReturn::query()->create([
                 'loan_id' => $locked->id,
                 'capital_request_id' => $locked->capital_request_id,
                 'amount' => $amount,
                 'returned_at' => now(),
                 'created_at' => now(),
             ]);
+
+            if ($postCash) {
+                $profile = PortfolioProfile::query()->findOrFail($locked->profile_id);
+                $this->specialCash->postLoanRepayment($profile, $locked, $row);
+            }
+
+            return $row;
         });
     }
 }

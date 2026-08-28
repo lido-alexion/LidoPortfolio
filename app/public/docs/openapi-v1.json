@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Stox /api/v1",
-        "description": "Machine-readable contract for the existing Stox (Stox by Lido Alexion) `/api/v1` HTTP API.\n\nThis documents current behaviour. It is not an API redesign.\n\nAuthentication is Laravel Sanctum **SPA session cookies**, not JWT and not a Bearer token in localStorage. Login lives on the legacy `/api/auth/*` surface (outside `/api/v1`). Call `GET /sanctum/csrf-cookie` (or `GET /api/auth/csrf-token`) before cookie-authenticated mutating requests.\n\nPortfolio-scoped routes resolve the active portfolio from header `X-Profile-Id` (legacy alias `X-Portfolio-Id`), query `portfolio_id`, or the user default portfolio.\n\nSuccessful `/api/v1` JSON uses `ApiEnvelope`: `{success: true, data, meta}`. Domain failures use `{success: false, error: {code, message}, meta}`. Laravel validation may still return the framework 422 `{message, errors}` shape.\n\nStandalone Discovery / Evaluation / Recommendation endpoints are **not** gated by dataset freshness. `POST /api/v1/pipeline/run` **is** gated (V4-FEAT-022): last successful market sync must be ≤ 24 hours old, or ≤ 72 hours when the pipeline instant is Monday in `cron_timezone`. A missing/stale timestamp returns envelope error `DATASET_NOT_FRESH` (422) and does not run Discovery.\n\n`GET /api/v1/dataset/status` `data.dataset_version` is the current immutable dataset version key (V4-FEAT-023), or `none`. `data.published` still means successfully synced today (inspection only; the pipeline does not gate on that boolean).\n\n`POST /api/v1/evaluation/runs` resolves Strategy catalogue indicator parameters over Evaluation globals (V4-FEAT-021). Evaluation `market_regime` is Bullish→100 / Neutral→50 / Bearish→0 from Market Analysis (V4-FEAT-005).\n\nRecording a ledger fill that completes a recommendation still goes through `POST /api/transactions` (legacy `/api`, not `/api/v1`). Recommendation `executed` status is owned by RecommendationEngine::markExecuted (V4-FEAT-024).\n\nPaginated TOS lists (V4-FEAT-028) accept `page` (default 1) and `pageSize` (alias `per_page`). Meta is `{page, pageSize, total, lastPage}`. Maximum page size is 200 except `GET /price-bars` (500). Defaults match the previous implicit first-page caps. Not paginated (intentionally bounded): candidates, evaluations, positions, pending-execution, review dashboard/outcomes.",
+        "description": "Machine-readable contract for the existing Stox (Stox by Lido Alexion) `/api/v1` HTTP API.\n\nThis documents current behaviour. It is not an API redesign.\n\nAuthentication is Laravel Sanctum **SPA session cookies**, not JWT and not a Bearer token in localStorage. Login lives on the legacy `/api/auth/*` surface (outside `/api/v1`). Call `GET /sanctum/csrf-cookie` (or `GET /api/auth/csrf-token`) before cookie-authenticated mutating requests.\n\nPortfolio-scoped routes resolve the active portfolio from header `X-Profile-Id` (legacy alias `X-Portfolio-Id`), query `portfolio_id`, or the user default portfolio.\n\nSuccessful `/api/v1` JSON uses `ApiEnvelope`: `{success: true, data, meta}`. Domain failures use `{success: false, error: {code, message}, meta}`. Laravel validation may still return the framework 422 `{message, errors}` shape.\n\nStandalone Discovery / Evaluation / Recommendation endpoints are **not** gated by dataset freshness. `POST /api/v1/pipeline/run` **is** gated (V4-FEAT-022): last successful market sync must be ≤ 24 hours old, or ≤ 72 hours when the pipeline instant is Monday in `cron_timezone`. A missing/stale timestamp returns envelope error `DATASET_NOT_FRESH` (422) and does not run Discovery.\n\n`GET /api/v1/dataset/status` `data.dataset_version` is the current immutable dataset version key (V4-FEAT-023), or `none`. `data.published` still means successfully synced today (inspection only; the pipeline does not gate on that boolean).\n\n`POST /api/v1/evaluation/runs` resolves Strategy catalogue indicator parameters over Evaluation globals (V4-FEAT-021). Evaluation `market_regime` is Bullish→100 / Neutral→50 / Bearish→0 from Market Analysis (V4-FEAT-005).\n\nRecording a ledger fill that completes a recommendation still goes through `POST /api/transactions` (legacy `/api`, not `/api/v1`). Sells that could affect more than one owner require `owner_key` or `strategy_id` (V4-SPEC-005); a linked `recommendation_id` identifies the Strategy. Recommendation `executed` status is owned by RecommendationEngine::markExecuted (V4-FEAT-024).\n\nPaginated TOS lists (V4-FEAT-028) accept `page` (default 1) and `pageSize` (alias `per_page`). Meta is `{page, pageSize, total, lastPage}`. Maximum page size is 200 except `GET /price-bars` (500). Defaults match the previous implicit first-page caps. Not paginated (intentionally bounded): candidates, evaluations, positions, pending-execution, review dashboard/outcomes.\n\nStrategy-position GTT Target / Stop-Loss (V4-FEAT-002): `GET/POST /api/v1/protections`, `POST /protections/{id}/cancel`, `POST /protections/{id}/reconcile`. Only one open protection per Strategy position. Prices come from Strategy `target_amount/quantity` or OD-13 stop. Broker acceptance is not a fill.",
         "version": "1.0.0"
     },
     "servers": [
@@ -91,6 +91,10 @@
         {
             "name": "price-bars",
             "description": "Routes under `/api/v1/price-bars`."
+        },
+        {
+            "name": "protections",
+            "description": "Routes under `/api/v1/protections`."
         },
         {
             "name": "recommendations",
@@ -4346,6 +4350,302 @@
                 }
             }
         },
+        "/api/v1/protections": {
+            "get": {
+                "tags": [
+                    "protections"
+                ],
+                "summary": "List Strategy position GTT protections",
+                "description": "V4-FEAT-002. At most one open Target or Stop-Loss per Strategy position. Filter by holding_id or stock_id. Broker acceptance is not a fill.",
+                "operationId": "get_protections",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "holding_id",
+                        "in": "query",
+                        "required": false,
+                        "description": "Optional holding id.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "stock_id",
+                        "in": "query",
+                        "required": false,
+                        "description": "Optional stock id.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "protections"
+                ],
+                "summary": "Place or replace GTT Target or Stop-Loss",
+                "description": "Semi-Automatic attended placement. Requires automated-execution entitlement, TOTP, and a usable Kite session. Price is taken from Strategy target (target_amount/quantity) or stop (OD-13). Placing one type replaces the other. Does not write ledger, cash, capital, or lending. Manual mode is rejected.",
+                "operationId": "post_protections",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "holding_id",
+                                    "type"
+                                ],
+                                "properties": {
+                                    "holding_id": {
+                                        "type": "integer"
+                                    },
+                                    "type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "target",
+                                            "stop"
+                                        ]
+                                    },
+                                    "totp": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "description": "Authenticator code. Never logged."
+                                    },
+                                    "recovery_code": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "description": "Single-use recovery code. Never logged."
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/protections/{id}": {
+            "get": {
+                "tags": [
+                    "protections"
+                ],
+                "summary": "Show one position protection",
+                "description": "Scoped to the active portfolio. Includes state (pending, active, synchronizing, needs_attention, cancelled, reconciled).",
+                "operationId": "get_protections_id",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/protections/{id}/cancel": {
+            "post": {
+                "tags": [
+                    "protections"
+                ],
+                "summary": "Cancel broker protection for a Strategy position",
+                "description": "Semi-Automatic attended cancel. Cancels the broker GTT when known. Does not create a ledger fill.",
+                "operationId": "post_protections_id_cancel",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "totp": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "recovery_code": {
+                                        "type": "string",
+                                        "nullable": true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/protections/{id}/reconcile": {
+            "post": {
+                "tags": [
+                    "protections"
+                ],
+                "summary": "Reconcile one GTT protection with the broker",
+                "description": "Ingests GTT fills through the existing ledger path, then retries synchronization. Partial GTT sells are filled first; remaining quantity is synchronized on a later cycle. Ambiguous broker outcomes do not place a duplicate.",
+                "operationId": "post_protections_id_reconcile",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/recommendations": {
             "get": {
                 "tags": [
@@ -7430,7 +7730,7 @@
                     "transactions"
                 ],
                 "summary": "List TOS ledger transactions for the active portfolio",
-                "description": "Paginated (V4-FEAT-028). Default pageSize 100 (previous implicit cap), maximum 200. Distinct from legacy `GET /api/transactions`.",
+                "description": "Paginated (V4-FEAT-028). Default pageSize 100 (previous implicit cap), maximum 200. Distinct from legacy `GET /api/transactions`. Ledger rows may include `owner_key` when SELL attribution was stored (V4-SPEC-005).",
                 "operationId": "get_transactions",
                 "parameters": [
                     {

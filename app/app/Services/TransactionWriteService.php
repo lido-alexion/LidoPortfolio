@@ -8,6 +8,7 @@ use App\Models\Stock;
 use App\Models\TradingRecommendation;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\Ownership\SellAttributionService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -25,6 +26,7 @@ class TransactionWriteService
         protected TransactionRealizationService $realizations,
         protected PortfolioSnapshotRebuildService $snapshots,
         protected CashManagementService $cash,
+        protected SellAttributionService $attribution,
     ) {}
 
     /**
@@ -45,6 +47,7 @@ class TransactionWriteService
         });
 
         $this->applyPostCommitSideEffects($profile, $stock, $transaction, $softFailSnapshots);
+        $this->notifyProtectionAfterTrade($profile, $stock, $transaction);
 
         return $transaction->load('stock');
     }
@@ -66,6 +69,11 @@ class TransactionWriteService
     ): Transaction {
         $previousDate = $transaction->transaction_date?->toDateString()
             ?? (string) $transaction->getRawOriginal('transaction_date');
+
+        $oldType = strtolower((string) $transaction->type);
+        $oldQty = (float) $transaction->quantity;
+        $oldPrice = (float) $transaction->price;
+        $oldStockId = (int) $transaction->stock_id;
 
         $updated = DB::transaction(function () use ($profile, $transaction, $stock, $input, $user, $applyCash) {
             return $this->updateFinancialUnit($profile, $transaction, $stock, $input, $user, $applyCash);
@@ -97,6 +105,17 @@ class TransactionWriteService
             }
         }
 
+        $material = in_array(strtolower((string) $updated->type), ['buy', 'sell'], true)
+            && (
+                $oldType !== strtolower((string) $updated->type)
+                || abs($oldQty - (float) $updated->quantity) > 0.0001
+                || abs($oldPrice - (float) $updated->price) > 0.0001
+                || $oldStockId !== (int) $updated->stock_id
+            );
+        if ($material) {
+            $this->notifyProtectionAfterTrade($profile, $stock, $updated);
+        }
+
         return $updated->load('stock');
     }
 
@@ -118,6 +137,8 @@ class TransactionWriteService
         $deletedDate = $transaction->transaction_date?->toDateString()
             ?? (string) $transaction->getRawOriginal('transaction_date');
         $stockId = (int) $transaction->stock_id;
+        $deletedType = strtolower((string) $transaction->type);
+        $deletedSource = $transaction->source;
 
         $result = DB::transaction(function () use ($profile, $transaction, $user, $beforeDelete) {
             return $this->deleteFinancialUnit($profile, $transaction, $user, $beforeDelete);
@@ -130,6 +151,10 @@ class TransactionWriteService
             if (! $softFailSnapshots) {
                 throw $e;
             }
+        }
+
+        if (in_array($deletedType, ['buy', 'sell'], true)) {
+            $this->notifyProtectionAfterTrade($profile, $stock, type: $deletedType, source: $deletedSource);
         }
 
         return [
@@ -179,24 +204,8 @@ class TransactionWriteService
             ]);
         }
 
-        $normalized = $this->normalizeCore($input);
+        $normalized = $this->normalizeInput($profile, $stock, $input, $transaction);
         $oldStockId = (int) $transaction->stock_id;
-        $oldType = strtolower((string) $transaction->type);
-        $oldQty = (float) $transaction->quantity;
-
-        if ($normalized['type'] === 'sell') {
-            $tempAvailable = $this->holdings->getAvailableQuantity($profile, $stock);
-            $available = $tempAvailable;
-            if ($oldStockId === (int) $stock->id && $oldType === 'sell') {
-                $available = $tempAvailable + $oldQty;
-            }
-
-            if ($normalized['quantity'] > $available + 0.00001) {
-                throw ValidationException::withMessages([
-                    'quantity' => ['Sell quantity cannot exceed current holding quantity.'],
-                ]);
-            }
-        }
 
         if ($applyCash) {
             $this->cash->reverseTradeTransaction($profile, $transaction, $user);
@@ -210,6 +219,7 @@ class TransactionWriteService
             'fees' => $normalized['fees'],
             'transaction_date' => $normalized['transaction_date'],
             'notes' => array_key_exists('notes', $input) ? $normalized['notes'] : $transaction->notes,
+            'owner_key' => $normalized['owner_key'],
         ];
         if (array_key_exists('source', $input) || array_key_exists('recommendation_id', $input)) {
             $fill['source'] = $normalized['source'];
@@ -320,6 +330,7 @@ class TransactionWriteService
             'recommendation_id' => $normalized['recommendation_id'],
             'corporate_action_id' => $normalized['corporate_action_id'],
             'exit_reason' => $exitReason,
+            'owner_key' => $normalized['owner_key'],
         ]);
     }
 
@@ -379,19 +390,27 @@ class TransactionWriteService
 
     /**
      * @param  array<string, mixed>  $input
-     * @return array{type: string, quantity: float, price: float, fees: float, transaction_date: string, notes: ?string, source: string, recommendation_id: ?int, corporate_action_id: ?int}
+     * @return array{type: string, quantity: float, price: float, fees: float, transaction_date: string, notes: ?string, source: string, recommendation_id: ?int, corporate_action_id: ?int, owner_key: string}
      */
-    public function normalizeInput(PortfolioProfile $profile, Stock $stock, array $input): array
-    {
+    public function normalizeInput(
+        PortfolioProfile $profile,
+        Stock $stock,
+        array $input,
+        ?Transaction $existing = null,
+    ): array {
         $normalized = $this->normalizeCore($input);
 
         if ($normalized['type'] === 'sell') {
-            $available = $this->holdings->getAvailableQuantity($profile, $stock);
-            if ($normalized['quantity'] > $available + 0.00001) {
-                throw ValidationException::withMessages([
-                    'quantity' => ['Sell quantity cannot exceed current holding quantity.'],
-                ]);
-            }
+            $resolved = $this->attribution->resolveForSell(
+                $profile,
+                $stock,
+                $input,
+                $normalized['quantity'],
+                $existing,
+            );
+            $normalized['owner_key'] = $resolved['owner_key'];
+        } else {
+            $normalized['owner_key'] = $this->attribution->ownerKeyForBuy($profile, $input);
         }
 
         return $normalized;
@@ -513,5 +532,25 @@ class TransactionWriteService
         }
 
         return round($notional - $fees, 4);
+    }
+
+    protected function notifyProtectionAfterTrade(
+        PortfolioProfile $profile,
+        Stock $stock,
+        ?Transaction $transaction = null,
+        ?string $type = null,
+        ?string $source = null,
+    ): void {
+        $type = strtolower((string) ($type ?? $transaction?->type ?? ''));
+        $source = $source ?? $transaction?->source;
+        if (! in_array($type, ['buy', 'sell'], true)) {
+            return;
+        }
+        try {
+            app(\App\Services\Protection\PositionProtectionService::class)
+                ->afterCommittedFill($profile, $stock, $type, $source);
+        } catch (\Throwable) {
+            // Protection sync must not undo a committed ledger write.
+        }
     }
 }

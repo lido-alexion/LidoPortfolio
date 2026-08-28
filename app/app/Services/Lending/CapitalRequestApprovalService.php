@@ -20,6 +20,7 @@ final class CapitalRequestApprovalService
         protected LenderEligibilityService $eligibility,
         protected RecommendationLendingCoordinator $lending,
         protected RecallNotificationService $notifications,
+        protected SpecialCashMovementService $specialCash,
     ) {}
 
     public function approve(CapitalRequest $request, TradingStrategy $lender, User $approver): CapitalLoan
@@ -112,6 +113,7 @@ final class CapitalRequestApprovalService
 
             $locked->setRelation('loan', $loan);
             $this->lending->markCapitalCommitted($locked);
+            $this->specialCash->postLoanDisbursement($profile, $loan);
 
             return ['ok' => true, 'loan' => $loan, 'request' => $locked->fresh(), 'profile' => $profile];
         });

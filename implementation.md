@@ -289,7 +289,7 @@ V3 complete only when: all V3 requirements + V3-related designed features implem
 
 ### Genuine V4 remainder
 
-See [`specs/LidoPortfolio-V4-Wishlist.md`](specs/LidoPortfolio-V4-Wishlist.md): **22** active V4 features (FEAT-001, 002, 005, 006, 008–015, 021–029, 032) and **SPEC-001–006 (DECIDED 2026-08-26; not implemented)**. Fourteen former V4 FEAT IDs are V5-deferred (prioritization, not implemented) — see that file §3.
+See [`specs/LidoPortfolio-V4-Wishlist.md`](specs/LidoPortfolio-V4-Wishlist.md): **22** active V4 features (FEAT-001, 002, 005, 006, 008–015, 021–029, 032) and **SPEC-001–006 (DECIDED 2026-08-26)**. **SPEC-001, SPEC-003, SPEC-004, and SPEC-005 implemented 2026-08-28**. SPEC-002 and SPEC-006 remain unimplemented. Fourteen former V4 FEAT IDs are V5-deferred (prioritization, not implemented) — see that file §3.
 
 ## Final V3 Closure Audit (2026-08-26)
 
@@ -332,9 +332,9 @@ Completion criterion (product owner, 2026-08-26 strict pass): every normative V3
 
 Tracked in [`specs/LidoPortfolio-V4-Wishlist.md`](specs/LidoPortfolio-V4-Wishlist.md) (strict rewrite 2026-08-26; Product Owner V4/V5 split 2026-08-26):
 
-- **SPEC-001–006:** **DECIDED** 2026-08-26 (simple WAVG adoption merge with final avg to 2 dp half-up; no special rights CA; split/bonus restatement of qty/cost/trailing/stop/target; cash-ledger special types exactly LOAN/RECALL/BRIDGE with signed amount; explicit sell attribution; multi-strategy per broker account). Frozen product rules, **not implemented**. See wishlist §4.
+- **SPEC-001–006:** **DECIDED** 2026-08-26. **SPEC-001 implemented 2026-08-28** (same-stock WAVG merge). **SPEC-003 implemented 2026-08-28** (split/bonus restatement of qty/cost/avg/stop/trailing; rupee target preserved). **SPEC-004 implemented 2026-08-28** (cash-ledger LOAN / RECALL / BRIDGE with signed amounts). **SPEC-005 implemented 2026-08-28** (explicit cross-owner SELL attribution). SPEC-002 and SPEC-006 remain frozen product rules, **not implemented**. See wishlist §4.
 - **SPEC-007:** **DECIDED** 2026-08-27 (per-portfolio execution modes manual / semi_automatic / automatic; per-user admin automated-execution entitlement; authenticator TOTP required for automated broker submission; Zerodha/Kite first broker; recommendation `executed` remains a ledger fill). Implemented by **V4-FEAT-001**.
-- **Active V4 FEAT (22):** **V4-FEAT-021 COMPLETE** (2026-08-26); **V4-FEAT-022 COMPLETE** (2026-08-27); **V4-FEAT-005 COMPLETE** (2026-08-27); **V4-FEAT-006 COMPLETE** (2026-08-27); **V4-FEAT-023 COMPLETE** (2026-08-27); **V4-FEAT-024 COMPLETE** (2026-08-27); **V4-FEAT-025 COMPLETE** (2026-08-27); **V4-FEAT-026 COMPLETE** (2026-08-27); **V4-FEAT-027 COMPLETE** (2026-08-27) — split Trading OS HTTP controllers + shared React fetch hooks; **V4-FEAT-028 COMPLETE** (2026-08-27) — structured TOS logging + list pagination consistency; **V4-FEAT-029 COMPLETE** (2026-08-27) — pluggable Evaluation factor rules; **V4-FEAT-032 COMPLETE** (2026-08-27) — TOS aggregate repository boundary; **V4-FEAT-001 COMPLETE** (2026-08-27) — live execution modes, TOTP, Zerodha adapter. Remaining 9 stay OPEN: TAF remaining phases, Review/admin/cash/tax polish, etc.
+- **Active V4 FEAT (22):** **V4-FEAT-021 COMPLETE** (2026-08-26); **V4-FEAT-022 COMPLETE** (2026-08-27); **V4-FEAT-005 COMPLETE** (2026-08-27); **V4-FEAT-006 COMPLETE** (2026-08-27); **V4-FEAT-023 COMPLETE** (2026-08-27); **V4-FEAT-024 COMPLETE** (2026-08-27); **V4-FEAT-025 COMPLETE** (2026-08-27); **V4-FEAT-026 COMPLETE** (2026-08-27); **V4-FEAT-027 COMPLETE** (2026-08-27) — split Trading OS HTTP controllers + shared React fetch hooks; **V4-FEAT-028 COMPLETE** (2026-08-27) — structured TOS logging + list pagination consistency; **V4-FEAT-029 COMPLETE** (2026-08-27) — pluggable Evaluation factor rules; **V4-FEAT-032 COMPLETE** (2026-08-27) — TOS aggregate repository boundary; **V4-FEAT-001 COMPLETE** (2026-08-27) — live execution modes, TOTP, Zerodha adapter; **V4-FEAT-002 COMPLETE** (2026-08-28) — GTT Target / Stop-Loss. Remaining 8 stay OPEN: TAF remaining phases, Review/admin/cash/tax polish, etc.
 - **V5-deferred FEAT (14, still OPEN):** B4 banner, notification channels, indicator-registry cutover, mobile/AI/ML/markets/replay, CI/secrets deploy, Discovery/Evaluation UX polish, TS/grid migration, optional token API. Roadmap only — not implemented.
 
 **Closed in V3 (not V4):** OD-16 Strategy window UI; schedulerTimestamp; DailyMarketDataJobTest; max_position enforcement; all former open V3 bug/TD/UX/HIST active rows.
@@ -508,7 +508,7 @@ Broker automation, advanced orders, API redesign, formula changes, dataset fresh
 
 ### Canonical document
 
-- OpenAPI **3.0.3** at [`app/openapi/v1.json`](app/openapi/v1.json) (Laravel app root; 122 operations).
+- OpenAPI **3.0.3** at [`app/openapi/v1.json`](app/openapi/v1.json) (Laravel app root; regenerated with live `/api/v1` routes, including V4-FEAT-002 protections).
 - Regenerated from live routes: `php artisan openapi:v1` (from `app/`). `--check` fails if the file is missing or stale.
 - Builder: `App\Support\OpenApi\V1DocumentBuilder` + overlays `V1OperationOverlays`. Paths come from Laravel’s router (`api/v1` prefix). Overlay keys that are not live routes fail tests.
 - Delivery copy: `app/public/docs/openapi-v1.json` (written by `openapi:v1`; also copied after `scripts/generate-static-docs.mjs` wipes `public/docs/`). No dedicated HTTP endpoint; no Swagger UI (the repo has no existing interactive API explorer).
@@ -739,6 +739,87 @@ Pagination still uses `TradingOsPagination` (`page` / `pageSize`, meta `{page,pa
 
 Generic `BaseRepository` / CRUD framework, repository-per-model, DTOs, CQRS, event sourcing, OpenAPI/API changes, frontend query-library migration.
 
+## V4-SPEC-001 — Same-stock adoption weighted-average merge (2026-08-28)
+
+**Status:** **DECIDED** product rule, **implemented**. Not a new V4-FEAT row. SPEC-003/004/005 and FEAT-002 are unchanged.
+
+When an unmanaged holding is adopted into a Strategy that already owns the same stock, `HoldingAdoptionService` no longer 422s. Unmanaged buys are attributed with HOLD_POSITION (OD-11). `HoldingsCalculationService` recalculates owner lots so quantity and total cost combine into the destination Strategy row. Final `avg_buy_price` is 2 decimal places, half-up, from unrounded combined cost / quantity. Destination `target_amount` is preserved (OD-12). Destination ownership episode / first-buy date is preserved when destination fills predate the unmanaged lot (OD-15). No new BUY transaction, cash movement, or lending consumption.
+
+If the unmanaged lot’s first buy is **earlier** than the destination episode, attributing those fills onto the destination owner can extend first-buy backward (it does **not** reset to today). That edge is not a new tax-lot rule.
+
+Non-conflict adopt (destination does not own the symbol) still initializes target from invested cost.
+
+### Files
+
+- `app/Services/Ownership/HoldingAdoptionService.php`
+- `app/Http/Controllers/Api/HoldingController.php` (API shape unchanged)
+- `resources/js/src/pages/HoldingsPage.jsx`, `resources/js/src/data/appDocumentation.js`
+- `tests/Feature/HoldingAdoptionTest.php`
+
+### Tests
+
+`tests/Feature/HoldingAdoptionTest.php` (worked example 50@1000 + 100@1200 → 150 / 170000 / 1133.33; inputs not rounded first; target preserved; other owners untouched; zero qty; cross-strategy; idempotent; foreign portfolio).
+
+## V4-SPEC-004 — Cash-ledger LOAN / RECALL / BRIDGE (2026-08-28)
+
+**Status:** **DECIDED** product rule, **implemented**. Not a new V4-FEAT row. SPEC-002/005/006 and related FEAT rows stay OPEN.
+
+Dedicated cash-ledger types `loan`, `recall`, and `bridge` sit on the existing `portfolio_cash_ledger_entries` table and go through `CashManagementService::post()`. Amount is **signed**: positive enters trading cash, negative leaves. There are no `LOAN_IN` / `LOAN_OUT` (etc.) types. Notes are human context only.
+
+Intra-portfolio loan / recall / bridge events post the same type twice (credit then debit) so the **physical cash pool is unchanged**. Delayed Proceeds from Stock Sale (SELL was booked with `applyCash=false`) post a **single positive** `recall` or `bridge` instead of `deposit`. Applying those proceeds to outstanding claims does **not** post a second special movement. Direct `CapitalLoan` inserts (test/accounting rows) still do not invent cash rows.
+
+Does not create synthetic BUY/SELL, does not change holdings, does not add a cash mutation API, and did not implement SPEC-005 (SPEC-005 is a later slice).
+
+### Files
+
+- `app/Models/CashLedgerEntry.php`, `app/Services/CashManagementService.php`
+- `app/Services/Lending/SpecialCashMovementService.php`
+- Wired from `CapitalRequestApprovalService`, `CapitalLoanRepaymentService`, `RecallImmediateSettlementService`, `RecallBridgeLoanService`, `SaleProceedsAvailabilityService`, `ProceedsApplicationService`
+- Cash UI labels + `GET /api/cash/ledger` `entry_type` / `movement_kind`
+
+### Tests
+
+`tests/Feature/Lending/V4Spec004CashLedgerSpecialMovementsTest.php` plus existing cash-ledger, capital/lending, financial-integrity, live-execution, and advanced-order regressions.
+
+## V4-SPEC-005 — Explicit cross-owner SELL attribution (2026-08-28)
+
+**Status:** **DECIDED** product rule, **implemented**. Not a new V4-FEAT row. SPEC-002/006 and related FEAT rows stay OPEN.
+
+New SELL writes must be attributable to one owner. If exactly one open lot exists, or the request already identifies the owner (`recommendation_id`, `owner_key`, or `strategy_id`), that owner is used and persisted on `portfolio_transactions.owner_key`. If two or more owners hold the stock and the transaction does not identify the owner, the write returns 422 — no FIFO, proportional, largest, or oldest guess. Quantity is checked against that owner’s holding, not the portfolio sum. Unmanaged is a first-class owner (`unmanaged`). A SELL does not transfer leftover shares to another owner and does not create synthetic BUY/SELL or new cash types.
+
+Broker/live fills and GTT protection fills pass the recommendation Strategy or the protection `owner_key`. Recall liquidation sells the ranked borrower lot with that lot’s `owner_key` (the previous post-sell ownership patch is gone). Recommendation `executed` still means an actual fill.
+
+Historical ledger rows without `owner_key` keep the V3 blended recalc fallback. Tax lots are not introduced.
+
+### Files
+
+- `app/Services/Ownership/SellAttributionService.php`
+- `app/Services/TransactionWriteService.php`, `HoldingsCalculationService.php`, `BulkTransactionImportService.php`
+- `app/Engines/Execution/ExecutionEngine.php`, `app/Services/Protection/PositionProtectionService.php`, `app/Services/Lending/RecallLiquidationService.php`
+- `app/Http/Controllers/Api/TransactionController.php`, `BulkTransactionImportController.php`
+- Transactions / Holdings UI + `sellTransactionPrefill.js`
+
+### Tests
+
+`tests/Feature/V4Spec005SellAttributionTest.php` plus holdings, financial-integrity, live-execution, advanced-orders, lending/capital, and recommendation-execution regressions.
+
+## V4-SPEC-003 — Split/bonus Strategy-position restatement (2026-08-28)
+
+**Status:** **DECIDED** product rule, **implemented**. Not a new V4-FEAT row. SPEC-004 is implemented separately; SPEC-005 is a later slice; FEAT-002 is unchanged.
+
+On top of OD-10 parent-owner quantity: `CorporateActionService::apply` restates the affected position so it stays economically equivalent.
+
+- **Split:** existing F020 in-place `qty × (ratio_to/ratio_from)`, `price ÷ factor`. Invested cost unchanged; average cost falls with quantity. No new ledger row.
+- **Bonus:** existing ₹0 `SOURCE_BONUS` buy (no cash). Invested cost unchanged; average cost falls with the extra quantity.
+- **Trailing:** historical OHLCV before ex-date is divided by the existing price divisor (split: factor; bonus: `1 + factor`). First-buy date is not reset to the CA date.
+- **Stop:** derived from OD-13 weighted-average fill cost after restatement (portfolio SL %). Not a broker GTT.
+- **Target:** OD-12 `target_amount` is a **rupee** capital target and is preserved (implied remaining shares scale at the new price).
+- Same stock + type + ex-date already applied is **idempotent** (no second mutation).
+
+### Tests
+
+`tests/Unit/CorporateActionSpec003RestatementTest.php` plus existing CorporateAction / OD-10 / financial-integrity / live-execution regressions.
+
 ## V4-FEAT-001 — Broker / live execution automation (2026-08-27)
 
 **Status:** **COMPLETE**. Product rules: **V4-SPEC-007**. Manual ledger execution is unchanged.
@@ -775,6 +856,40 @@ Settings Portfolio: execution mode. Settings Account: TOTP + Kite. Users admin: 
 ### Explicitly not in this feature
 
 GTT/stop/target (FEAT-002), multi-broker marketplace, email OTP, password re-prompt as 2FA.
+
+## V4-FEAT-002 — Advanced broker orders (2026-08-28)
+
+**Status:** **COMPLETE**. Frozen product rules in `specs/LidoPortfolio-V4-Wishlist.md` V4-FEAT-002. Builds on FEAT-001 / FEAT-024 / SPEC-001 / SPEC-003. SPEC-004 and SPEC-005 are implemented separately. Does not implement any other V4 FEAT.
+
+### Frozen product (shipped)
+
+- One active broker protection per Strategy position: **GTT Target** or **GTT Stop-Loss**. Placing one replaces the other.
+- Prices are Strategy-derived only: Target = `target_amount / quantity`; Stop = OD-13 weighted-average fill × (1 − portfolio SL %). No independent broker-order price. Missing/invalid price → do not place/sync, keep the position, `needs_attention`. Never use a stale broker price.
+- **Manual:** no automatic GTT; explicit place is rejected (`EXECUTION_MODE_MANUAL`).
+- **Semi-Automatic:** user-triggered `POST /api/v1/protections` with TOTP. A fill does not silently place protection.
+- **Automatic:** Stop-Loss is placed after an automated BUY fill. No extra per-order approval. Same automated-execution entitlement as FEAT-001 (no second entitlement).
+- Material BUY/SELL and SPEC-003 corporate-action restatement synchronize the existing GTT (modify if the broker supports it, else cancel + replace). Non-material changes (notes-only) do not.
+- Sync failure retries on `tos:reconcile-broker-orders`; persistent failure → `needs_attention`. The underlying BUY/SELL/CA is not rolled back.
+- Ambiguous broker responses persist `broker_status=unknown` and must not place a duplicate.
+- Partial GTT SELL: existing ledger fill path first; remaining quantity is synchronized on the **next** reconcile cycle.
+- Position qty → 0: fill first, then cancel remaining GTT and mark `reconciled`. No orphans. `executed` still means an actual ledger fill (FEAT-024).
+- SPEC-001 merged destination lot is the only attach point; unmanaged lots are not protected.
+
+### Engineering
+
+- Table `portfolio_tos_position_protections` / model `PositionProtection`. States: pending, active, synchronizing, needs_attention, cancelled, reconciled.
+- `BrokerGateway` GTT methods; `FakeBrokerGateway` in tests; Kite `POST/PUT/DELETE/GET /gtt/triggers`.
+- `PositionProtectionService` + `ProtectionTriggerPriceResolver`. Hooks: `TransactionWriteService` (material buy/sell), `LiveBrokerExecutionService` (automatic Stop after BUY), `CorporateActionService` (after restatement), `HoldingAdoptionService` (destination lot only), `tos:reconcile-broker-orders`.
+- API: `GET/POST /api/v1/protections`, `GET /protections/{id}`, `POST /protections/{id}/cancel`, `POST /protections/{id}/reconcile`.
+- UI: Holdings Sell menu Place/Cancel in Semi-Automatic; status badge for Strategy lots. Automatic shows status only. Manual does not offer Place.
+
+### Tests
+
+`tests/Feature/Execution/AdvancedOrdersFeatureTest.php`; Vitest `tests/js/tos/position-protection.test.js`.
+
+### Explicitly not in this feature
+
+Tax lots, multi-broker marketplace, a second Advanced Orders entitlement.
 
 ## V3 residual — UNFUNDED zero-own lending offer (2026-08-24)
 
@@ -827,9 +942,9 @@ When an OPEN/INCREASE is `UNFUNDED` after capital resolution (own free capital =
 - Service: `HoldingAdoptionService` — explicit unmanaged → one strategy
 - API: `POST /api/holdings/{id}/adopt` `{ strategy_id }`
 - UI: Holdings Sell menu → **Adopt** (strategy picker modal)
-- Target init: `target_amount = filled_amount = invested_amount` (remaining BUY = 0)
+- Target init (destination does **not** already own the stock): `target_amount = filled_amount = invested_amount` (remaining BUY = 0)
 - OD-15: attribute unmanaged buys via executed `HOLD_POSITION` (not OPEN/INCREASE → no OD-11 cooldown)
-- Same-stock destination already owned → **422** (merge/cost-basis unspecified — blocked)
+- Same-stock destination already owned: **V4-SPEC-001 merge** (2026-08-28) — one Strategy position; combined qty/cost; final `avg_buy_price` 2 dp half-up; destination `target_amount` unchanged
 - Audit: `portfolio_holding_adoptions`
 
 ### Files
@@ -872,7 +987,7 @@ Authoritative: V3 §10.7, §34.1; **OD-10 (frozen).** Parent-owner attachment �
 ### Intentional fallback (unchanged)
 
 - Ledgers that cannot be fully attributed still use one blended `portfolio_holdings` row (`owner_key = unmanaged`).
-- CA cost-basis / trailing-high / stop restatement remain unspecified under OD-10 (not solved here).
+- **V4-SPEC-003 (2026-08-28):** split/bonus now restate cost/average (ledger path), trailing high (OHLCV ratio), derived stop (OD-13), and preserve OD-12 rupee `target_amount`. Rights remain SPEC-002 (no special CA).
 
 ### Files
 
@@ -1030,7 +1145,7 @@ Authoritative: [`specs/LidoPortfolio-V3-Specification.md`](specs/LidoPortfolio-V
 
 ### Limitation (not invented)
 
-Manual BUY (unmanaged) + EXIT sell linked to a strategy recommendation cannot be owner-split without inventing cross-owner sell rules → blended recalculate (pre-Phase-1 behaviour for that stock).
+Manual BUY (unmanaged) + EXIT sell linked to a strategy recommendation that does not own the shares is **rejected** on new writes (V4-SPEC-005) rather than blending. Historical rows without `owner_key` may still blend on recalc.
 
 ### Tests
 
@@ -1140,7 +1255,7 @@ Uses **Recall Bridge Loan** and **Proceeds from Stock Sale** only (no Soft Loan 
 
 - `CapitalRecallController`, `RecallPeriodController`, `RecallBridgeLoanController`, `PendingSaleProceedsController`, `CapitalResolutionController`
 - `CapitalRecallPresenter`, `CapitalResolutionStatusService`
-- Cash ledger adds `movement_kind` / labels for Proceeds from Stock Sale / bridge / recall
+- Cash ledger `movement_kind` / labels for Proceeds from Stock Sale / bridge / recall (V4-SPEC-004 now also sets `entry_type` to `loan`/`recall`/`bridge`)
 - Recommendation detail includes `capital_resolution` when detailed
 
 ### Docs
@@ -1176,7 +1291,7 @@ Migration `2026_08_21_000002_v3_pending_sale_proceeds_phase2.php` adds on `portf
 
 ### Behaviour notes
 
-- Sale execution ≠ available capital; cash deposited as **Proceeds from Stock Sale** only at `available_at` (~1 day).
+- Sale execution ≠ available capital; cash is released as **Proceeds from Stock Sale** only at `available_at` (~1 day). V4-SPEC-004 posts that inflow as signed `recall` or `bridge` (not `deposit`).
 - Actual vs expected: only `amount` (actual) is released/applied.
 - Liquidate only unresolved gaps; skip if pending proceeds already cover.
 - Bridge repayment: no ₹5k blocks; no recall against bridge lender.
@@ -1253,9 +1368,9 @@ Authoritative spec: [`specs/LidoPortfolio-V3-Specification.md`](specs/LidoPortfo
 
 ### Cash ledger
 
-Physical cash is one portfolio pool. Loan commitment never moved cash; repayment is the reverse accounting claim, not a deposit/withdrawal between strategy accounts.
+Physical cash is one portfolio pool. Loan commitment never moved net cash; repayment is the reverse accounting claim, not a deposit/withdrawal between strategy accounts.
 
-Existing ledger types are only `deposit`, `withdrawal`, `adjustment`, `buy`, `sell`. There is **no** loan-return entry type. This step **does not invent one** and **does not post** repayment to the cash ledger. Physical cash balance is unchanged by `repay()`. Isolated gap: a dedicated loan-return ledger type would need an explicit product decision if repayment should appear on the Cash statement.
+**V4-SPEC-004 (2026-08-28):** dedicated `loan` / `recall` / `bridge` ledger types now exist. Commitment and voluntary repayment post signed `loan` pairs that **net to zero** on the physical pool so the Cash statement shows the trail. Physical cash balance is still unchanged by `repay()`.
 
 ### Not started
 
@@ -1265,7 +1380,7 @@ Normal repayment is **not** forced to ₹5,000 multiples (aligned with v0.28 **D
 
 ### Tests / help
 
-`tests/Feature/Lending/CapitalLoanRepaymentServiceTest.php`. Cash help: loan repayment concept; statement still lists only existing ledger types.
+`tests/Feature/Lending/CapitalLoanRepaymentServiceTest.php`. Cash help: loan repayment concept; statement lists V4-SPEC-004 `loan` / `recall` / `bridge` in addition to deposit/withdrawal/adjustment/buy/sell.
 
 ## WS4 Step 6 — Lending-Aware Trade Execution (2026-08-19)
 
@@ -1283,7 +1398,7 @@ Existing path unchanged: trade Approve → `pending_execution` → `POST /api/tr
 
 `CommittedLendingExecutionAmounts`: `own_amount` = WS3 allocated own capital; `borrowed_amount` = committed loan principal; `intended_amount` = own + remainder = **original target** (not own + loan). ₹5,000 ceiling excess stays as outstanding borrowed capital and is **not** invested. OD-06 and `PartialLendingAmountCalculator` are unchanged.
 
-Pending-execution cash reservation remains the **own-funded** suggested amount. The loan is not a second reservation and is not deposited into the ledger.
+Pending-execution cash reservation remains the **own-funded** suggested amount. The loan is not a second reservation and is not deposited as extra cash; V4-SPEC-004 `loan` rows for commitment net to zero on the pool.
 
 ### Ownership
 

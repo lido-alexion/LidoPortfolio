@@ -95,6 +95,7 @@ export function parseBulkTransactionCsv(text) {
         const quantity = parsePositiveInteger(cells[1]);
         const price = parsePositivePrice(cells[2]);
         const type = normalizeBulkTransactionType(cells[3]);
+        const ownerRaw = cells.length >= 5 ? String(cells[4] || '').trim() : '';
 
         if (!symbol) {
             errors.push(`Line ${lineNumber}: stock symbol is required.`);
@@ -113,13 +114,24 @@ export function parseBulkTransactionCsv(text) {
             continue;
         }
 
-        rows.push({
+        const row = {
             id: createRowId(),
             symbol,
             quantity,
             price,
             type,
-        });
+        };
+        if (ownerRaw) {
+            if (/^\d+$/.test(ownerRaw)) {
+                row.strategy_id = Number(ownerRaw);
+                row.owner_key = `strategy:${ownerRaw}`;
+            } else {
+                row.owner_key = ownerRaw.toLowerCase() === 'unmanaged'
+                    ? 'unmanaged'
+                    : ownerRaw;
+            }
+        }
+        rows.push(row);
     }
 
     if (rows.length === 0 && errors.length === 0) {

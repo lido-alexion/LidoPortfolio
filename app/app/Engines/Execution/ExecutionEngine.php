@@ -146,6 +146,7 @@ class ExecutionEngine
         float $filledQuantity,
         float $averagePrice,
         bool $completeRecommendation = true,
+        ?string $ownerKey = null,
     ): array {
         if ((int) $order->profile_id !== (int) $profile->id) {
             throw ValidationException::withMessages(['order' => ['Order not found for this portfolio.']]);
@@ -182,7 +183,7 @@ class ExecutionEngine
             $this->lending->assertCanExecute($recommendation);
         }
 
-        $transaction = DB::transaction(function () use ($profile, $stock, $order, $delta, $price, $recommendation, $shouldComplete, $target) {
+        $transaction = DB::transaction(function () use ($profile, $stock, $order, $delta, $price, $recommendation, $shouldComplete, $target, $ownerKey) {
             $transaction = $this->writes->createFinancialUnit($profile, $stock, [
                 'type' => $order->side,
                 'quantity' => $delta,
@@ -194,6 +195,7 @@ class ExecutionEngine
                     : 'Broker fill for TOS order #'.$order->id,
                 'source' => Transaction::SOURCE_RECOMMENDATION,
                 'recommendation_id' => $recommendation?->id,
+                'owner_key' => $this->fillOwnerKey($recommendation, $ownerKey),
             ], user: null, applyCash: true);
 
             OrderTransaction::query()->create([
@@ -232,6 +234,15 @@ class ExecutionEngine
         });
 
         $this->writes->applyPostCommitSideEffects($profile, $stock, $transaction, softFailSnapshots: true);
+
+        try {
+            if ($order->order_type !== 'gtt_protection') {
+                app(\App\Services\Protection\PositionProtectionService::class)
+                    ->afterCommittedFill($profile, $stock, (string) $order->side, $transaction->source);
+            }
+        } catch (\Throwable) {
+            // Protection sync must not roll back a committed fill.
+        }
 
         $this->logger->event('ExecutionEngine', 'execution.broker_fill_applied', 'info', 'Broker fill applied to ledger', [
             'profile_id' => $profile->id,
@@ -377,6 +388,7 @@ class ExecutionEngine
                 'notes' => $notes,
                 'source' => Transaction::SOURCE_RECOMMENDATION,
                 'recommendation_id' => $recommendation?->id,
+                'owner_key' => $this->fillOwnerKey($recommendation, null),
             ], user: null, applyCash: true);
 
             OrderTransaction::query()->create([
@@ -532,6 +544,24 @@ class ExecutionEngine
             'order_id' => $order?->id,
             'recommendation_id' => $recommendationId,
         ];
+    }
+
+    /**
+     * Stamp ledger owner from an explicit GTT/protection key or the recommendation's Strategy.
+     */
+    protected function fillOwnerKey(?TradingRecommendation $recommendation, ?string $ownerKey): ?string
+    {
+        $explicit = is_string($ownerKey) ? trim($ownerKey) : '';
+        if ($explicit !== '' && Holding::isValidOwnerKey($explicit)) {
+            return $explicit;
+        }
+
+        $strategyId = $recommendation?->owningStrategyId();
+        if ($strategyId !== null && $strategyId > 0) {
+            return Holding::ownerKeyFor($strategyId);
+        }
+
+        return null;
     }
 
     public function findOrder(PortfolioProfile $profile, int $id): ?TradingOrder

@@ -44,6 +44,7 @@ import {
     parseTransactionDateDisplay,
 } from '../utils/transactionDate';
 import { buildTransactionTableColumns } from '../utils/transactionTableColumns';
+import { ownerLabelFromKey } from '../utils/sellTransactionPrefill';
 
 
 
@@ -59,6 +60,7 @@ const emptyForm = () => ({
     transaction_date: getLocalTodayDateString(),
     notes: '',
     recommendation_id: null,
+    owner_key: '',
 });
 
 
@@ -128,6 +130,8 @@ export default function TransactionsPage() {
     const [loading, setLoading] = useState(true);
 
     const [form, setForm] = useState(emptyForm());
+
+    const [sellLots, setSellLots] = useState([]);
 
     const [selectedStock, setSelectedStock] = useState(null);
 
@@ -217,6 +221,7 @@ export default function TransactionsPage() {
             quantity: prefill.quantity,
             price: prefill.price != null && prefill.price > 0 ? roundToTwoDecimals(prefill.price) : '',
             transaction_date: getLocalTodayDateString(),
+            owner_key: prefill.owner_key || '',
         });
 
         navigate('/transactions', { replace: true, state: {} });
@@ -228,6 +233,58 @@ export default function TransactionsPage() {
             });
         });
     }, [location.state, navigate]);
+
+    const sellStockId = Number(form.stock_id || selectedStock?.id || 0);
+
+    useEffect(() => {
+        if (form.type !== 'sell' || !sellStockId) {
+            setSellLots([]);
+            return undefined;
+        }
+        let cancelled = false;
+        api.get('/holdings')
+            .then((res) => {
+                if (cancelled) {
+                    return;
+                }
+                const lots = (res.data?.data || []).filter(
+                    (h) => Number(h.stock_id) === sellStockId && Number(h.quantity) > 0,
+                );
+                setSellLots(lots);
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setSellLots([]);
+                }
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [form.type, sellStockId]);
+
+    const ownerOptions = useMemo(() => {
+        const map = new Map();
+        sellLots.forEach((h) => {
+            const key = h.owner_key || 'unmanaged';
+            map.set(key, {
+                owner_key: key,
+                quantity: Number(h.quantity) || 0,
+            });
+        });
+        if (form.owner_key && !map.has(form.owner_key)) {
+            map.set(form.owner_key, { owner_key: form.owner_key, quantity: 0 });
+        }
+        return [...map.values()];
+    }, [sellLots, form.owner_key]);
+
+    useEffect(() => {
+        if (form.type !== 'sell' || form.recommendation_id || form.owner_key) {
+            return;
+        }
+        if (ownerOptions.length === 1) {
+            setForm((prev) => (prev.owner_key ? prev : { ...prev, owner_key: ownerOptions[0].owner_key }));
+        }
+    }, [form.type, form.recommendation_id, form.owner_key, ownerOptions]);
 
     useEffect(() => {
         if (!location.state?.focusAddForm) {
@@ -354,6 +411,11 @@ export default function TransactionsPage() {
 
         const payload = { ...buildPayload(), transaction_date: txDate };
 
+        if (!form.id && form.type === 'sell' && !form.recommendation_id && ownerOptions.length > 1 && !form.owner_key) {
+            showToast('This sell could affect more than one owner. Choose the Strategy or unmanaged lot.', 'danger');
+            return;
+        }
+
 
 
         if (!form.id && !isSymbolValidated) {
@@ -429,6 +491,10 @@ export default function TransactionsPage() {
             base.source = 'recommendation';
         }
 
+        if (form.type === 'sell' && form.owner_key) {
+            base.owner_key = form.owner_key;
+        }
+
         if (form.id) {
             return { ...base, stock_id: form.stock_id };
         }
@@ -479,6 +545,7 @@ export default function TransactionsPage() {
 
             notes: tx.notes || '',
             recommendation_id: null,
+            owner_key: tx.owner_key || '',
         });
 
         setSelectedStock(tx.stock || null);
@@ -528,6 +595,7 @@ export default function TransactionsPage() {
             price: prefill.price != null && prefill.price !== '' ? roundToTwoDecimals(prefill.price) : '',
             notes: prefill.notes || '',
             recommendation_id: prefill.recommendation_id || null,
+            owner_key: '',
         });
         setSymbolValidation({ valid: true, stock, source: 'recommendation' });
         requestAnimationFrame(() => {
@@ -1016,7 +1084,11 @@ export default function TransactionsPage() {
                                             ariaLabel="Transaction type"
                                             className="lido-transaction-type-toggle"
                                             value={form.type}
-                                            onChange={(type) => setForm({ ...form, type })}
+                                            onChange={(type) => setForm({
+                                                ...form,
+                                                type,
+                                                owner_key: type === 'sell' ? form.owner_key : '',
+                                            })}
                                             options={[
                                                 { value: 'buy', label: 'Buy' },
                                                 { value: 'sell', label: 'Sell' },
@@ -1126,7 +1198,11 @@ export default function TransactionsPage() {
                                         ariaLabel="Transaction type"
                                         className="lido-transaction-type-toggle"
                                         value={form.type}
-                                        onChange={(type) => setForm({ ...form, type })}
+                                        onChange={(type) => setForm({
+                                            ...form,
+                                            type,
+                                            owner_key: type === 'sell' ? form.owner_key : '',
+                                        })}
                                         options={[
                                             { value: 'buy', label: 'Buy' },
                                             { value: 'sell', label: 'Sell' },
@@ -1134,6 +1210,30 @@ export default function TransactionsPage() {
                                     />
                                 </div>
                             )}
+
+                            {form.type === 'sell' && !form.recommendation_id && ownerOptions.length > 1 ? (
+                                <div>
+                                    <label className="form-label" htmlFor="tx-owner-key">Owner</label>
+                                    <select
+                                        id="tx-owner-key"
+                                        className="form-select"
+                                        value={form.owner_key || ''}
+                                        onChange={(e) => setForm({ ...form, owner_key: e.target.value })}
+                                        required
+                                    >
+                                        <option value="">Select Strategy or unmanaged lot</option>
+                                        {ownerOptions.map((lot) => (
+                                            <option key={lot.owner_key} value={lot.owner_key}>
+                                                {ownerLabelFromKey(lot.owner_key)}
+                                                {lot.quantity > 0 ? ` (${lot.quantity})` : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <div className="form-text">
+                                        More than one owner holds this stock. The sell is attributed only to the owner you select.
+                                    </div>
+                                </div>
+                            ) : null}
 
                             <div>
                                 <label className="form-label" htmlFor="tx-quantity">Quantity</label>

@@ -51,6 +51,7 @@ class Transaction extends Model
         'source',
         'recommendation_id',
         'exit_reason',
+        'owner_key',
     ];
 
     protected function casts(): array
@@ -106,17 +107,19 @@ class Transaction extends Model
     }
 
     /**
-     * Logical strategy owner when the fill is linked to a recommendation.
-     * Manual / unlinked ledger rows have no strategy identity (unmanaged path).
+     * Logical strategy owner: recommendation first, then persisted owner_key (V4-SPEC-005).
+     * Unmanaged / unlinked rows return null.
      */
     public function owningStrategyId(): ?int
     {
-        if ($this->recommendation_id === null) {
-            return null;
+        if ($this->recommendation_id !== null) {
+            $this->loadMissing('recommendation.strategyVersion');
+            $fromRec = $this->recommendation?->owningStrategyId();
+            if ($fromRec !== null) {
+                return $fromRec;
+            }
         }
 
-        $this->loadMissing('recommendation.strategyVersion');
-
-        return $this->recommendation?->owningStrategyId();
+        return Holding::strategyIdFromOwnerKey($this->owner_key);
     }
 }

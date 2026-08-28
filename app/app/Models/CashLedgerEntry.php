@@ -21,12 +21,28 @@ class CashLedgerEntry extends Model
 
     public const TYPE_SELL = 'sell';
 
+    /** V4-SPEC-004 special-movement types. Sign determines cash direction. */
+    public const TYPE_LOAN = 'loan';
+
+    public const TYPE_RECALL = 'recall';
+
+    public const TYPE_BRIDGE = 'bridge';
+
+    public const SPECIAL_TYPES = [
+        self::TYPE_LOAN,
+        self::TYPE_RECALL,
+        self::TYPE_BRIDGE,
+    ];
+
     public const TYPES = [
         self::TYPE_DEPOSIT,
         self::TYPE_WITHDRAWAL,
         self::TYPE_ADJUSTMENT,
         self::TYPE_BUY,
         self::TYPE_SELL,
+        self::TYPE_LOAN,
+        self::TYPE_RECALL,
+        self::TYPE_BRIDGE,
     ];
 
     protected $fillable = [

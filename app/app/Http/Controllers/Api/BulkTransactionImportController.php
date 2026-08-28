@@ -31,6 +31,8 @@ class BulkTransactionImportController extends Controller
             'rows.*.fees' => ['nullable', 'numeric', 'gte:0'],
             'rows.*.transaction_date' => ['required', 'date', 'before_or_equal:today'],
             'rows.*.notes' => ['nullable', 'string', 'max:1000'],
+            'rows.*.owner_key' => ['nullable', 'string', 'max:64'],
+            'rows.*.strategy_id' => ['nullable', 'integer', 'min:1'],
         ]);
 
         $result = $this->imports->commit(

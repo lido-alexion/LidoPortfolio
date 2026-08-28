@@ -118,6 +118,8 @@ class TransactionController extends Controller
             'notes' => $validated['notes'] ?? null,
             'source' => $validated['source'] ?? null,
             'recommendation_id' => $validated['recommendation_id'] ?? null,
+            'owner_key' => $validated['owner_key'] ?? null,
+            'strategy_id' => $validated['strategy_id'] ?? null,
         ];
 
         $tos = null;
@@ -199,6 +201,12 @@ class TransactionController extends Controller
         if (array_key_exists('recommendation_id', $validated)) {
             $input['recommendation_id'] = $validated['recommendation_id'];
         }
+        if (array_key_exists('owner_key', $validated)) {
+            $input['owner_key'] = $validated['owner_key'];
+        }
+        if (array_key_exists('strategy_id', $validated)) {
+            $input['strategy_id'] = $validated['strategy_id'];
+        }
 
         $updated = $this->writes->update(
             $profile,
@@ -267,6 +275,8 @@ class TransactionController extends Controller
             'notes' => ['nullable', 'string', 'max:1000'],
             'source' => ['nullable', 'string', 'in:'.implode(',', Transaction::SOURCES)],
             'recommendation_id' => ['nullable', 'integer'],
+            'owner_key' => ['nullable', 'string', 'max:64'],
+            'strategy_id' => ['nullable', 'integer', 'min:1'],
         ]);
     }
 }

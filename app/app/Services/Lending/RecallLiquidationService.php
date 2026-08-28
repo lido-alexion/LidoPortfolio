@@ -157,24 +157,12 @@ final class RecallLiquidationService
                         'transaction_date' => $soldAt->toDateString(),
                         'notes' => 'Recall liquidation — Proceeds from Stock Sale (pending settlement)',
                         'source' => Transaction::SOURCE_OTHER,
+                        'owner_key' => $holding->owner_key ?: Holding::ownerKeyFor((int) $borrower->id),
                     ],
                     softFailSnapshots: true,
                     user: null,
                     applyCash: false,
                 );
-
-                // Preserve borrower ownership on remaining lot after blended recalculate
-                $holdingFresh = Holding::query()
-                    ->where('profile_id', $profile->id)
-                    ->where('stock_id', $holding->stock_id)
-                    ->orderBy('id')
-                    ->first();
-                if ($holdingFresh && $holdingFresh->strategy_id === null) {
-                    $holdingFresh->forceFill([
-                        'strategy_id' => $borrower->id,
-                        'owner_key' => Holding::ownerKeyFor((int) $borrower->id),
-                    ])->save();
-                }
 
                 $pending = $this->proceeds->scheduleForObligation(
                     profile: $profile,

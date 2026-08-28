@@ -32,7 +32,8 @@ and approval can reason about real capital without over-committing cash.
 ## Cash Balance
 
 Ledger-backed balance on `portfolio_cash_accounts.balance`. Updated only
-via cash ledger posts (deposit, withdrawal, adjustment, buy, sell).
+via cash ledger posts (deposit, withdrawal, adjustment, buy, sell, and
+V4-SPEC-004 loan / recall / bridge).
 
 ## Reserved Cash
 
@@ -63,6 +64,11 @@ to transaction / recommendation / user.
 | `adjustment` | + or −   | Manual correction (**reason required**) |
 | `buy`        | −        | Buy transaction applied to cash |
 | `sell`       | +        | Sell transaction applied to cash |
+| `loan`       | + or −   | V4-SPEC-004: capital loan disbursement/repayment trail. Sign is cash direction. Intra-portfolio posts both signs so the physical pool is unchanged. |
+| `recall`     | + or −   | V4-SPEC-004: recall settlement trail, or delayed Proceeds from Stock Sale for a recall obligation (single positive). |
+| `bridge`     | + or −   | V4-SPEC-004: Recall Bridge Loan trail, or delayed proceeds for a bridge obligation (single positive). |
+
+Do **not** use directional types (`loan_in`, `loan_out`, …). Optional `reason` is human context, not a chart of accounts.
 
 Insufficient balance (resulting balance &lt; 0) is rejected.
 

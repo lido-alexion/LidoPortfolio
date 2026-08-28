@@ -280,10 +280,10 @@ const APP_DOCUMENTATION_BASE = [
         match: (p) => pathIs(p, '/transactions') || pathIs(p, '/transactions/closed'),
         summary: 'Buy/sell ledger — source of truth for holdings, fees, and realized P/L.',
         overview:
-            'Transactions are the ledger of record. Buys and sells drive holdings, average cost, fees, and FIFO realized P/L. Use Active vs Squared-off views, CSV import, and sell prefill from Portfolio. Sell rows that came from an EXIT recommendation may show a persisted exit_reason (strategy_exit, stop_loss, trailing_stop, horizon_expiry) — displayed with a human label but not recalculated in the UI.',
+            'Transactions are the ledger of record. Buys and sells drive holdings, average cost, fees, and FIFO realized P/L. Use Active vs Squared-off views, CSV import, and sell prefill from Portfolio. When more than one owner holds the same stock, a sell must name the Strategy or unmanaged lot — Lido does not guess. Sell rows that came from an EXIT recommendation may show a persisted exit_reason (strategy_exit, stop_loss, trailing_stop, horizon_expiry) — displayed with a human label but not recalculated in the UI.',
         controls: [
-            { name: 'Add transaction', description: 'Record a buy or sell with symbol autocomplete, quantity, price, fees, and date.' },
-            { name: 'Bulk CSV import', description: 'Paste CSV (Stock, Quantity, Average Price, Transaction Type), review editable rows (exchange, date defaulting to today, fees), then Save all. The batch commits all-or-nothing via a bulk API — on failure nothing is saved and you can fix and retry the same batch; a completed batch cannot be submitted again.' },
+            { name: 'Add transaction', description: 'Record a buy or sell with symbol autocomplete, quantity, price, fees, and date. Sells that could affect more than one owner show an Owner control (Strategy or Unmanaged). Holdings → Sell prefills that owner.' },
+            { name: 'Bulk CSV import', description: 'Paste CSV (Stock, Quantity, Average Price, Transaction Type, optional Owner as unmanaged or strategy:{id}), review editable rows (exchange, date defaulting to today, fees), then Save all. The batch commits all-or-nothing via a bulk API — on failure nothing is saved and you can fix and retry the same batch; a completed batch cannot be submitted again. Ambiguous sells without Owner are rejected.' },
             { name: 'Page tabs', description: 'Switch between Transaction History and Pending Execution (or closed / squared-off views where available).' },
             { name: 'Edit / delete', description: 'Correct ledger rows; deleting a row linked to a recommendation can reopen pending execution.' },
             { name: 'Exit reason column', description: 'On sells linked to recommendations, shows the persisted primary exit attribution from the ledger (not recomputed).' },
@@ -291,6 +291,7 @@ const APP_DOCUMENTATION_BASE = [
         concepts: [
             { name: 'Ledger-true holdings', description: 'Holdings are derived from transactions — not edited independently as the source of truth.' },
             { name: 'FIFO realization', description: 'Sells match against earlier buys to compute realized P/L and allocated fees.' },
+            { name: 'Sell owner attribution', description: 'If exactly one owner holds the stock, that lot is used. If a recommendation or Owner field identifies the Strategy/unmanaged lot, that owner is used. If more than one owner could be affected and none is identified, the sell is rejected — not split, FIFO’d, or taken from the largest lot. Quantity cannot exceed that owner’s holding even if another owner has more shares. A sell does not move leftover shares to a different owner.' },
             { name: 'Auto fees', description: 'Fee components (Zerodha-style delivery defaults) can be configured under Settings.' },
             {
                 name: 'Persisted exit reason',
@@ -319,8 +320,8 @@ const APP_DOCUMENTATION_BASE = [
         ],
         concepts: [
             { name: 'Approval vs execution', description: 'Approve means you accept the idea; execution is the separate ledger write after a real fill. A capital_committed buy can be approved and then filled the same way as a fully funded buy. Unfunded or awaiting-lender buys never reach this page.' },
-            { name: 'Execution modes', description: 'Per portfolio: Manual (default, no broker submit), Semi-Automatic (explicit Accept / Execute Selected), Automatic (unattended submit). Entitlement is per user and admin-controlled.' },
-            { name: 'Cash reservation', description: 'Approving a funded buy reserves the own-funded amount until execute, cancel, expire, or reopen. A committed loan is not a second cash reservation and does not deposit cash. One physical cash pool is used for the fill. The borrower strategy owns the resulting holding; the lender does not receive stock.' },
+            { name: 'Execution modes', description: 'Per portfolio: Manual (default, no broker submit and no automatic GTT protection), Semi-Automatic (explicit Accept / Execute Selected; GTT Target or Stop-Loss is also an explicit Holdings action), Automatic (unattended submit; Stop-Loss GTT is placed after an automated BUY fill without a per-order click). Entitlement is per user and admin-controlled. There is no separate Advanced Orders entitlement.' },
+            { name: 'Cash reservation', description: 'Approving a funded buy reserves the own-funded amount until execute, cancel, expire, or reopen. A committed loan is not a second cash reservation and does not deposit extra cash. Signed Loan ledger rows for the commitment net to zero on the one physical pool. The borrower strategy owns the resulting holding; the lender does not receive stock.' },
         ],
         related: ['recommendations', 'transactions', 'cash'],
     },
@@ -341,7 +342,7 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Unallocated Cash', description: 'Presentation-only residual after the reserve that unused strategy allocation has not claimed. Not a ledger line and not a withdrawal entitlement.' },
             { name: 'Strategy capital allocation', description: 'Edit enabled-strategy allocation % (must sum to 100 to save). Also editable on Strategy Registry. Shows allocated capital, unused allocation, lent, borrowed, and retained capital (accounting floor, not physical cash).' },
             { name: 'Recalls & lending', description: 'View recalls (lifecycle, settled vs outstanding), Recall Bridge Loans, and Proceeds from Stock Sale. No manual Create Bridge Loan or Mark Available — those are automated.' },
-            { name: 'Statement', description: 'Chronological cash ledger. Kind labels may show Proceeds from Stock Sale or related recall/bridge movements when applicable.' },
+            { name: 'Statement', description: 'Chronological cash ledger. Types include deposit, withdrawal, adjustment, buy, sell, and V4-SPEC-004 special movements Loan / Recall / Bridge. Amount is signed: positive enters trading cash, negative leaves. Intra-strategy loan/recall/bridge transfers post both signs so the physical pool is unchanged. Delayed Proceeds from Stock Sale post as Recall or Bridge (not Deposit). Kind labels still show Proceeds from Stock Sale when that is the note.' },
         ],
         concepts: [
             { name: 'Available physical cash', description: 'max(0, total cash − pending-execution reservations). Withdrawals cannot exceed this amount.' },
@@ -354,7 +355,8 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Recall Bridge Loan', description: 'Helps fulfil a recall only. Cannot fund investments, cannot itself be recalled, no interest, no ₹5,000 repayment blocks, needs 10% stock cushion. Repaid as funds become available.' },
             { name: 'Proceeds from Stock Sale', description: 'Sale executed ≠ cash available. After settlement delay, proceeds apply to recall/bridge; partial apply leaves remainder outstanding; excess stays own capital.' },
             { name: 'Good-faith automation', description: 'Strategies repay and recall according to rules when capital is needed or available. Inter-strategy lending has no interest. There is no auto-return toggle controlling this behaviour.' },
-            { name: 'Loan repayment', description: 'Any amount ≤ outstanding reduces loan outstanding. Does not move stock or change allocation %. Distinct from automated Recall when the lender needs capital back.' },
+            { name: 'Loan repayment', description: 'Any amount ≤ outstanding reduces loan outstanding. Does not move stock or change allocation %. The cash statement records signed Loan rows that net to zero on the physical pool. Distinct from automated Recall when the lender needs capital back.' },
+            { name: 'Loan / Recall / Bridge cash types', description: 'Special cash-ledger types are exactly loan, recall, and bridge. Sign is the accounting: positive = money entered trading cash; negative = money left. There are no LOAN_IN / LOAN_OUT (etc.) types. Notes are human context only. Not a tax or chart-of-accounts ledger.' },
         ],
         related: ['recommendations', 'pending-execution', 'strategy', 'settings', 'dashboard', 'notifications'],
     },
@@ -365,15 +367,16 @@ const APP_DOCUMENTATION_BASE = [
         title: 'Corporate actions',
         routeLabel: '/corporate-action',
         match: (p) => pathStarts(p, '/corporate-action'),
-        summary: 'Guided stock splits and bonus issues with OHLCV restatement.',
+        summary: 'Guided stock splits and bonus issues with quantity, cost, stop/trailing, and OHLCV restatement.',
         overview:
-            'Apply splits and bonus issues so holdings quantities/prices and historical OHLCV stay consistent. Preview before applying.',
+            'Apply splits and bonus issues so holdings quantities, cost basis, average cost, stop, trailing, and historical OHLCV stay economically consistent. Preview before applying. Position target (rupees) is kept; this is not a new market BUY.',
         controls: [
             { name: 'Split / Bonus wizards', description: 'Choose stock, ratios, and effective date; preview then apply.' },
         ],
         concepts: [
-            { name: 'OHLCV restatement', description: 'Historical prices are adjusted so charts and indicators remain comparable after the action.' },
-            { name: 'Bonus ledger', description: 'Bonus shares are recorded as zero-price ledger rows linked to the corporate action.' },
+            { name: 'OHLCV restatement', description: 'Historical prices before the ex-date are adjusted so charts, trailing high, and indicators remain comparable after the action.' },
+            { name: 'Position restatement (V4-SPEC-003)', description: 'For splits and bonuses, quantity, invested cost, average cost, stop-loss price, and trailing high are restated so the Strategy position stays economically equivalent. OD-12 target_amount (rupees) is kept; implied remaining shares scale at the new price. Entry date is not reset to the corporate-action date. Not a new BUY/OPEN.' },
+            { name: 'Bonus ledger', description: 'Bonus shares are recorded as zero-price ledger rows linked to the corporate action (no cash movement). Quantity stays with the parent owner (OD-10).' },
         ],
         related: ['transactions', 'holdings'],
     },
@@ -389,15 +392,17 @@ const APP_DOCUMENTATION_BASE = [
             'Holdings show current positions for the active portfolio. Use Simple or Complex views, resizable columns, sell prefill, Analyse prompts, and drill into per-stock OHLCV history. Risk columns use portfolio-level stop-loss and trailing settings (not strategy JSON trailing). Strategy-owned lots may show OD-12 position target, filled, and remaining amounts.',
         controls: [
             { name: 'Simple / Complex views', description: 'Toggle density of columns and metrics. Complex view shows portfolio trailing % from peak raw close, portfolio stop-loss price under Avg Buy, and Target column details (filled / remaining) when a position target exists.' },
-            { name: 'Sell', description: 'Prefills a sell transaction from the selected holding.' },
-            { name: 'Adopt', description: 'On unmanaged holdings (Sell menu → Adopt): choose one destination strategy. Sets ownership and initializes position target from invested cost so remaining BUY is 0. Entry/risk history continues (OD-15). Blocked if that strategy already owns the same stock (merge rules unspecified).' },
+            { name: 'Sell', description: 'Prefills a sell transaction from the selected holding, including that row’s owner (Strategy or unmanaged) so a multi-owner stock is not sold from the wrong lot.' },
+            { name: 'Adopt', description: 'On unmanaged holdings (Sell menu → Adopt): choose one destination strategy. If that strategy does not already own the stock, ownership is set and position target is initialized from invested cost so remaining BUY is 0. If it already owns the stock, quantities and total cost are combined into one Strategy position; the final average cost is rounded to 2 decimal places (half-up) and the destination target_amount is left unchanged. Entry/risk history continues (OD-15). Attribution is HOLD_POSITION (not OPEN/INCREASE), so BUY cooldown is not started.' },
+            { name: 'Place GTT Target / Stop-Loss', description: 'On Strategy-owned lots in Semi-Automatic mode (Sell menu). Places one broker GTT using the Strategy target (target_amount ÷ quantity) or portfolio stop-loss price. Only one protection can be active; placing Target replaces Stop-Loss and vice versa. Requires authenticator code, Kite session, and automated-execution entitlement. Manual mode never auto-places. Automatic mode places Stop-Loss after an automated BUY fill without a per-order click; Holdings shows status only.' },
+            { name: 'Cancel protection', description: 'Semi-Automatic only. Cancels the broker GTT. Not a fill and does not change the holding, cash, or recommendation status.' },
             { name: 'Price history', description: 'Opens OHLCV chart and table for that stock.' },
             { name: 'Analyse', description: 'Copies an AI-ready prompt (with recent OHLCV) to the clipboard.' },
             { name: 'Target column', description: 'Optional column (hidden by default): position target amount (OD-12), with filled and remaining in Complex view. Target is the intended capital allocation; filled is actual invested cost — not recommendation amounts.' },
         ],
         concepts: [
             { name: 'Average buy / invested', description: 'Fee-exclusive cost basis (price × qty) for open lots; fees are shown separately.' },
-            { name: 'Owner / Unmanaged', description: 'Each open lot is unmanaged or owned by a strategy (`owner_key`). Manual buys stay unmanaged until Adopt. Corporate-action quantity follows the parent owner (OD-10).' },
+            { name: 'Owner / Unmanaged', description: 'Each open lot is unmanaged or owned by a strategy (`owner_key`). Manual buys stay unmanaged until Adopt. Corporate-action quantity follows the parent owner (OD-10). Splits and bonuses also restate that owner’s cost, average, stop, and trailing (V4-SPEC-003) without blending owners. Sells that could hit more than one lot require an explicit owner (V4-SPEC-005).' },
             { name: 'Unrealized P/L', description: 'Mark-to-market vs latest cached close; unrealized % = unrealized ÷ invested × 100 when invested > 0. Portfolio trailing stop is not based on unrealized %.' },
             {
                 name: 'Position target / filled (OD-12)',
@@ -415,6 +420,7 @@ const APP_DOCUMENTATION_BASE = [
                     'Portfolio-level control (Settings → Portfolio Trailing Stop %), independently configured (default/seed 15%). Peak is the maximum raw daily close since the ownership episode began; trailing stop = peak × (1 − trailing %). Not an unrealized-% proxy, not stop-loss %, and not strategy trailing_stop JSON.',
             },
             { name: 'Highest Close', description: 'Peak raw close for the current ownership episode (owner-scoped when strategy lots are attributable).' },
+            { name: 'Broker protection (GTT)', description: 'Optional Zerodha GTT Target or Stop-Loss attached to a Strategy position (not unmanaged lots). Status: pending, active, synchronizing, needs attention, cancelled, reconciled. Missing Strategy target or stop blocks placement and marks needs attention without rolling back the position. Broker acceptance is not execution; a GTT fill is booked through the existing ledger path. After a split/bonus, protection is synchronized to the restated quantity and prices.' },
         ],
         related: ['transactions', 'stock-prices', 'watchlist', 'dashboard', 'historical-holdings', 'settings', 'recommendations', 'strategy'],
     },
@@ -2318,7 +2324,7 @@ const DOC_ENRICHMENTS = {
             { name: 'Preview-first workflow', description: 'Use preview to verify quantities, price restatements, warnings, and impacted transaction scope before applying irreversible changes.' },
         ],
         concepts: [
-            { name: 'Historical continuity', description: 'OHLCV restatement ensures charts and indicators remain comparable before vs after split/bonus events.' },
+            { name: 'Historical continuity', description: 'OHLCV restatement plus V4-SPEC-003 position restatement (qty, cost, average, stop, trailing; rupee target kept) keeps Strategy positions economically equivalent after split/bonus.' },
         ],
     },
     holdings: {

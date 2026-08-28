@@ -5,7 +5,6 @@ namespace App\Services\Lending;
 use App\Models\PendingSaleProceeds;
 use App\Models\PortfolioProfile;
 use App\Models\TradingStrategy;
-use App\Services\CashManagementService;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -19,7 +18,7 @@ final class SaleProceedsAvailabilityService
     public const SETTLEMENT_DELAY_DAYS = 1;
 
     public function __construct(
-        protected CashManagementService $cash,
+        protected SpecialCashMovementService $specialCash,
     ) {}
 
     public function schedule(
@@ -99,7 +98,7 @@ final class SaleProceedsAvailabilityService
 
     /**
      * Release sell cash into the physical pool once (idempotent).
-     * Prefer applying the linked sell transaction; fall back to deposit labelled as Proceeds from Stock Sale.
+     * V4-SPEC-004: posts signed RECALL or BRIDGE (not deposit). SELL was recorded with applyCash=false.
      */
     public function releaseCashIfDue(PendingSaleProceeds $row, ?CarbonInterface $asOf = null): PendingSaleProceeds
     {
@@ -119,13 +118,7 @@ final class SaleProceedsAvailabilityService
             }
 
             $profile = PortfolioProfile::query()->findOrFail($locked->profile_id);
-            // Always release the *actual* Proceeds from Stock Sale amount (may differ from expected/TX notional).
-            $this->cash->deposit(
-                $profile,
-                (float) $locked->amount,
-                'Proceeds from Stock Sale'
-                    .($locked->transaction_id ? ' (tx #'.$locked->transaction_id.')' : ''),
-            );
+            $this->specialCash->postProceedsRelease($profile, $locked);
 
             $locked->forceFill(['cash_released_at' => now()])->save();
 

@@ -58,7 +58,7 @@ class CashController extends Controller
 
         $entries = array_map(function ($e) {
             $reason = $e->reason;
-            $kind = app(\App\Services\Lending\CapitalRecallPresenter::class)->cashMovementKind($reason);
+            $kind = app(\App\Services\Lending\CapitalRecallPresenter::class)->cashMovementKind($reason, $e->entry_type);
 
             return [
                 'id' => $e->id,

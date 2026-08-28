@@ -240,8 +240,9 @@ class RecommendationLendingLifecycleTest extends TestCase
         $this->assertSame(TradingRecommendation::ALLOCATION_CAPITAL_COMMITTED, $rec->capitalAllocationStatus());
         $this->assertTrue(app(RecommendationLendingCoordinator::class)->canEnterPendingExecution($rec));
         $this->assertSame((int) $loan->id, (int) $rec->capitalAllocationMeta()['capital_loan_id']);
+        // V4-SPEC-004: intra-portfolio loan posts two signed `loan` rows; physical cash is unchanged.
         $this->assertSame(
-            $ledgerBefore,
+            $ledgerBefore + 2,
             CashLedgerEntry::query()->where('profile_id', $profile->id)->count()
         );
         $this->assertSame($holdingsBefore, Holding::query()->where('profile_id', $profile->id)->count());

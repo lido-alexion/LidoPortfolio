@@ -257,12 +257,13 @@ class HoldingsCalculationService
     /**
      * Partition ledger rows by owner when attribution is determinable.
      *
-     * Buy: recommendation → strategy owner; else unmanaged.
-     * Sell: recommendation owner when present; else the sole open owner lot if exactly one
-     * has quantity; otherwise not attributable (do not invent a rule).
+     * Buy: persisted owner_key, else recommendation → strategy owner, else unmanaged.
+     * Sell: persisted owner_key, else recommendation owner, else the sole open owner lot
+     * if exactly one has quantity; otherwise not attributable (do not invent a rule).
      *
-     * A sell that would oversell its resolved owner lot is not attributable (e.g. EXIT rec
+     * A sell that would oversell its resolved owner lot is not attributable (legacy EXIT rec
      * owned by strategy B against a manual unmanaged BUY) — fall back to blended replay.
+     * New writes (V4-SPEC-005) reject that case instead of blending.
      *
      * @param  Collection<int, Transaction>  $transactions
      * @return array{attributable: bool, lots: array<string, Collection<int, Transaction>>}
@@ -319,6 +320,10 @@ class HoldingsCalculationService
      */
     protected function resolveTransactionOwnerKey(Transaction $transaction, array $openQty): ?string
     {
+        if (Holding::isValidOwnerKey($transaction->owner_key)) {
+            return (string) $transaction->owner_key;
+        }
+
         $strategyId = $transaction->owningStrategyId();
         if ($strategyId !== null) {
             return Holding::ownerKeyFor((int) $strategyId);

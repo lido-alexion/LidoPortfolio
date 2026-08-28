@@ -142,7 +142,7 @@
         <dd>View recalls (lifecycle, settled vs outstanding), Recall Bridge Loans, and Proceeds from Stock Sale. No manual Create Bridge Loan or Mark Available — those are automated.</dd>
     
         <dt>Statement</dt>
-        <dd>Chronological cash ledger. Kind labels may show Proceeds from Stock Sale or related recall/bridge movements when applicable.</dd>
+        <dd>Chronological cash ledger. Types include deposit, withdrawal, adjustment, buy, sell, and V4-SPEC-004 special movements Loan / Recall / Bridge. Amount is signed: positive enters trading cash, negative leaves. Intra-strategy loan/recall/bridge transfers post both signs so the physical pool is unchanged. Delayed Proceeds from Stock Sale post as Recall or Bridge (not Deposit). Kind labels still show Proceeds from Stock Sale when that is the note.</dd>
     
         <dt>Transaction date usage</dt>
         <dd>Use the intended accounting date for deposits/withdrawals so statement chronology and downstream analytics remain meaningful.</dd>
@@ -195,7 +195,10 @@
         <dd>Strategies repay and recall according to rules when capital is needed or available. Inter-strategy lending has no interest. There is no auto-return toggle controlling this behaviour.</dd>
     
         <dt>Loan repayment</dt>
-        <dd>Any amount ≤ outstanding reduces loan outstanding. Does not move stock or change allocation %. Distinct from automated Recall when the lender needs capital back.</dd>
+        <dd>Any amount ≤ outstanding reduces loan outstanding. Does not move stock or change allocation %. The cash statement records signed Loan rows that net to zero on the physical pool. Distinct from automated Recall when the lender needs capital back.</dd>
+    
+        <dt>Loan / Recall / Bridge cash types</dt>
+        <dd>Special cash-ledger types are exactly loan, recall, and bridge. Sign is the accounting: positive = money entered trading cash; negative = money left. There are no LOAN_IN / LOAN_OUT (etc.) types. Notes are human context only. Not a tax or chart-of-accounts ledger.</dd>
     
         <dt>Balance vs available</dt>
         <dd>Balance is total cash ledger value; available subtracts open reservations and is the true deployable amount.</dd>

@@ -200,6 +200,106 @@ class CashManagementService
     }
 
     /**
+     * V4-SPEC-004: signed LOAN / RECALL / BRIDGE. Positive enters trading cash; negative leaves.
+     * Optional reason is human context only. Does not invent directional *_IN / *_OUT types.
+     */
+    public function postLoan(
+        PortfolioProfile $profile,
+        float $signedAmount,
+        ?string $reason = null,
+        ?User $user = null,
+        ?string $entryDate = null,
+        ?int $transactionId = null,
+        ?int $recommendationId = null,
+    ): CashLedgerEntry {
+        return $this->postSpecialMovement(
+            $profile,
+            CashLedgerEntry::TYPE_LOAN,
+            $signedAmount,
+            $reason,
+            $user,
+            $entryDate,
+            $transactionId,
+            $recommendationId,
+        );
+    }
+
+    public function postRecall(
+        PortfolioProfile $profile,
+        float $signedAmount,
+        ?string $reason = null,
+        ?User $user = null,
+        ?string $entryDate = null,
+        ?int $transactionId = null,
+        ?int $recommendationId = null,
+    ): CashLedgerEntry {
+        return $this->postSpecialMovement(
+            $profile,
+            CashLedgerEntry::TYPE_RECALL,
+            $signedAmount,
+            $reason,
+            $user,
+            $entryDate,
+            $transactionId,
+            $recommendationId,
+        );
+    }
+
+    public function postBridge(
+        PortfolioProfile $profile,
+        float $signedAmount,
+        ?string $reason = null,
+        ?User $user = null,
+        ?string $entryDate = null,
+        ?int $transactionId = null,
+        ?int $recommendationId = null,
+    ): CashLedgerEntry {
+        return $this->postSpecialMovement(
+            $profile,
+            CashLedgerEntry::TYPE_BRIDGE,
+            $signedAmount,
+            $reason,
+            $user,
+            $entryDate,
+            $transactionId,
+            $recommendationId,
+        );
+    }
+
+    public function postSpecialMovement(
+        PortfolioProfile $profile,
+        string $type,
+        float $signedAmount,
+        ?string $reason = null,
+        ?User $user = null,
+        ?string $entryDate = null,
+        ?int $transactionId = null,
+        ?int $recommendationId = null,
+    ): CashLedgerEntry {
+        if (! in_array($type, CashLedgerEntry::SPECIAL_TYPES, true)) {
+            throw ValidationException::withMessages([
+                'entry_type' => ['Special cash movement type must be loan, recall, or bridge.'],
+            ]);
+        }
+        if (round($signedAmount, 4) == 0.0) {
+            throw ValidationException::withMessages([
+                'amount' => ['Special cash movement amount cannot be zero.'],
+            ]);
+        }
+
+        return $this->post(
+            $profile,
+            $type,
+            round($signedAmount, 4),
+            $reason,
+            $user,
+            $transactionId,
+            $recommendationId,
+            $entryDate,
+        );
+    }
+
+    /**
      * Apply a buy/sell ledger transaction to cash (actual outflow/inflow).
      */
     public function applyTradeTransaction(
