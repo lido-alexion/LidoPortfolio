@@ -142,7 +142,7 @@
         <dd>Runs the recommendation pipeline independently for every enabled strategy in the portfolio. Telegram (when enabled) notifies only actionable Open / Increase / Reduce / Exit ideas — not HOLD / WATCH.</dd>
     
         <dt>Run decision pipeline</dt>
-        <dd>Starts the daily decision pipeline (Discovery → Evaluation → Recommendations). Blocked unless the last successful market-dataset sync is within 24 hours of the run (72 hours on Monday). The check uses timestamps, not “synced today”. Older data is not used as a fallback. Exchange holidays are not treated specially.</dd>
+        <dd>Starts the daily decision pipeline (Discovery → Evaluation → Recommendations). In production this also runs unattended once per portfolio calendar day via Laravel schedule:run (default 19:00 after daily sync) — you do not need to click it for Automatic mode. Manual Run still works anytime. Blocked unless the last successful market-dataset sync is within 24 hours of the run (72 hours on Monday). The check uses timestamps, not “synced today”. Older data is not used as a fallback. Exchange holidays are not treated specially.</dd>
     
         <dt>Evidence-first review</dt>
         <dd>Open each review dialog and inspect eligibility/scoring/market/capital evidence before approving or rejecting.</dd>

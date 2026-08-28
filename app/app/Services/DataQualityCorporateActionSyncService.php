@@ -133,6 +133,9 @@ class DataQualityCorporateActionSyncService
         }
 
         $normalizedType = match (true) {
+            // V4-SPEC-002: rights are not a corporate-action type and must not
+            // enter the data-quality CA queue as split/bonus.
+            str_contains($typeRaw, 'right') => null,
             str_contains($typeRaw, 'bonus') => 'bonus',
             str_contains($typeRaw, 'face') => 'face_value_split',
             str_contains($typeRaw, 'split') => 'split',

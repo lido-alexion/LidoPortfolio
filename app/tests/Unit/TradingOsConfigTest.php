@@ -57,6 +57,15 @@ class TradingOsConfigTest extends TestCase
         $this->assertSame('18:30', TradingOsConfig::pipelineScheduleTime());
     }
 
+    public function test_pipeline_schedule_defaults_on_when_keys_omitted(): void
+    {
+        config([TradingOsConfig::KEY_PIPELINE => []]);
+
+        $this->assertTrue(TradingOsConfig::pipelineScheduleEnabled());
+        $this->assertTrue(TradingOsConfig::pipelineRunAfterDailySync());
+        $this->assertSame('19:00', TradingOsConfig::pipelineScheduleTime());
+    }
+
     public function test_pipeline_after_sync_accessor(): void
     {
         config([

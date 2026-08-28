@@ -150,7 +150,7 @@ flowchart TD
         <h2>Controls</h2>
         <dl class="doc-list">
         <dt>Run decision pipeline</dt>
-        <dd>On Recommendations — regenerates ideas using current Screener hits, Discovery/Evaluation facts, and Strategy config. Requires a successful market-dataset sync within 24 hours of the pipeline run (72 hours if the pipeline runs on Monday). The check uses timestamps, not calendar dates. If the dataset is older than that window, the pipeline stops before Discovery and does not create evaluation results or recommendations. Existing older prices are not used as a fallback. Exchange holidays are not treated specially.</dd>
+        <dd>On Recommendations — regenerates ideas using current Screener hits, Discovery/Evaluation facts, and Strategy config. Production also runs this unattended once per portfolio calendar day via Laravel schedule:run (you can still run it manually). Requires a successful market-dataset sync within 24 hours of the pipeline run (72 hours if the pipeline runs on Monday). The check uses timestamps, not calendar dates. If the dataset is older than that window, the pipeline stops before Discovery and does not create evaluation results or recommendations. Existing older prices are not used as a fallback. Exchange holidays are not treated specially.</dd>
     
         <dt>Approve / Reject / Defer</dt>
         <dd>On Recommendations for actionable ideas. Approve moves buys/sells to Pending Execution.</dd>

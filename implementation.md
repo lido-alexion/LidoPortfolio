@@ -289,7 +289,7 @@ V3 complete only when: all V3 requirements + V3-related designed features implem
 
 ### Genuine V4 remainder
 
-See [`specs/LidoPortfolio-V4-Wishlist.md`](specs/LidoPortfolio-V4-Wishlist.md): **22** active V4 features (FEAT-001, 002, 005, 006, 008–015, 021–029, 032) and **SPEC-001–006 (DECIDED 2026-08-26)**. **SPEC-001, SPEC-003, SPEC-004, and SPEC-005 implemented 2026-08-28**. SPEC-002 and SPEC-006 remain unimplemented. Fourteen former V4 FEAT IDs are V5-deferred (prioritization, not implemented) — see that file §3.
+See [`specs/LidoPortfolio-V4-Wishlist.md`](specs/LidoPortfolio-V4-Wishlist.md): **22** active V4 features (FEAT-001, 002, 005, 006, 008–015, 021–029, 032) and **SPEC-001–006 (DECIDED 2026-08-26)**. **SPEC-001, SPEC-002, SPEC-003, SPEC-004, and SPEC-005 implemented 2026-08-28**. SPEC-006 remains unimplemented. Fourteen former V4 FEAT IDs are V5-deferred (prioritization, not implemented) — see that file §3.
 
 ## Final V3 Closure Audit (2026-08-26)
 
@@ -332,9 +332,9 @@ Completion criterion (product owner, 2026-08-26 strict pass): every normative V3
 
 Tracked in [`specs/LidoPortfolio-V4-Wishlist.md`](specs/LidoPortfolio-V4-Wishlist.md) (strict rewrite 2026-08-26; Product Owner V4/V5 split 2026-08-26):
 
-- **SPEC-001–006:** **DECIDED** 2026-08-26. **SPEC-001 implemented 2026-08-28** (same-stock WAVG merge). **SPEC-003 implemented 2026-08-28** (split/bonus restatement of qty/cost/avg/stop/trailing; rupee target preserved). **SPEC-004 implemented 2026-08-28** (cash-ledger LOAN / RECALL / BRIDGE with signed amounts). **SPEC-005 implemented 2026-08-28** (explicit cross-owner SELL attribution). SPEC-002 and SPEC-006 remain frozen product rules, **not implemented**. See wishlist §4.
+- **SPEC-001–006:** **DECIDED** 2026-08-26. **SPEC-001 implemented 2026-08-28** (same-stock WAVG merge). **SPEC-002 implemented 2026-08-28** (rights are not a CA; exercise = normal purchase). **SPEC-003 implemented 2026-08-28** (split/bonus restatement of qty/cost/avg/stop/trailing; rupee target preserved). **SPEC-004 implemented 2026-08-28** (cash-ledger LOAN / RECALL / BRIDGE with signed amounts). **SPEC-005 implemented 2026-08-28** (explicit cross-owner SELL attribution). SPEC-006 remains a frozen product rule, **not implemented**. See wishlist §4.
 - **SPEC-007:** **DECIDED** 2026-08-27 (per-portfolio execution modes manual / semi_automatic / automatic; per-user admin automated-execution entitlement; authenticator TOTP required for automated broker submission; Zerodha/Kite first broker; recommendation `executed` remains a ledger fill). Implemented by **V4-FEAT-001**.
-- **Active V4 FEAT (22):** **V4-FEAT-021 COMPLETE** (2026-08-26); **V4-FEAT-022 COMPLETE** (2026-08-27); **V4-FEAT-005 COMPLETE** (2026-08-27); **V4-FEAT-006 COMPLETE** (2026-08-27); **V4-FEAT-023 COMPLETE** (2026-08-27); **V4-FEAT-024 COMPLETE** (2026-08-27); **V4-FEAT-025 COMPLETE** (2026-08-27); **V4-FEAT-026 COMPLETE** (2026-08-27); **V4-FEAT-027 COMPLETE** (2026-08-27) — split Trading OS HTTP controllers + shared React fetch hooks; **V4-FEAT-028 COMPLETE** (2026-08-27) — structured TOS logging + list pagination consistency; **V4-FEAT-029 COMPLETE** (2026-08-27) — pluggable Evaluation factor rules; **V4-FEAT-032 COMPLETE** (2026-08-27) — TOS aggregate repository boundary; **V4-FEAT-001 COMPLETE** (2026-08-27) — live execution modes, TOTP, Zerodha adapter; **V4-FEAT-002 COMPLETE** (2026-08-28) — GTT Target / Stop-Loss. Remaining 8 stay OPEN: TAF remaining phases, Review/admin/cash/tax polish, etc.
+- **Active V4 FEAT (22):** **V4-FEAT-021 COMPLETE** (2026-08-26); **V4-FEAT-022 COMPLETE** (2026-08-27); **V4-FEAT-005 COMPLETE** (2026-08-27); **V4-FEAT-006 COMPLETE** (2026-08-27); **V4-FEAT-023 COMPLETE** (2026-08-27); **V4-FEAT-024 COMPLETE** (2026-08-27); **V4-FEAT-025 COMPLETE** (2026-08-27); **V4-FEAT-026 COMPLETE** (2026-08-27); **V4-FEAT-027 COMPLETE** (2026-08-27) — split Trading OS HTTP controllers + shared React fetch hooks; **V4-FEAT-028 COMPLETE** (2026-08-27) — structured TOS logging + list pagination consistency; **V4-FEAT-029 COMPLETE** (2026-08-27) — pluggable Evaluation factor rules; **V4-FEAT-032 COMPLETE** (2026-08-27) — TOS aggregate repository boundary; **V4-FEAT-001 COMPLETE** (2026-08-27) — live execution modes, TOTP, Zerodha adapter; **V4-FEAT-002 COMPLETE** (2026-08-28) — GTT Target / Stop-Loss; **V4-FEAT-010 COMPLETE** (2026-08-28) — unattended production pipeline + Automatic execution via Laravel `schedule:run`. Remaining 7 stay OPEN: TAF remaining phases, Review/admin/cash/tax polish, etc.
 - **V5-deferred FEAT (14, still OPEN):** B4 banner, notification channels, indicator-registry cutover, mobile/AI/ML/markets/replay, CI/secrets deploy, Discovery/Evaluation UX polish, TS/grid migration, optional token API. Roadmap only — not implemented.
 
 **Closed in V3 (not V4):** OD-16 Strategy window UI; schedulerTimestamp; DailyMarketDataJobTest; max_position enforcement; all former open V3 bug/TD/UX/HIST active rows.
@@ -762,7 +762,7 @@ Non-conflict adopt (destination does not own the symbol) still initializes targe
 
 ## V4-SPEC-004 — Cash-ledger LOAN / RECALL / BRIDGE (2026-08-28)
 
-**Status:** **DECIDED** product rule, **implemented**. Not a new V4-FEAT row. SPEC-002/005/006 and related FEAT rows stay OPEN.
+**Status:** **DECIDED** product rule, **implemented**. Not a new V4-FEAT row. SPEC-006 and related FEAT rows stay OPEN.
 
 Dedicated cash-ledger types `loan`, `recall`, and `bridge` sit on the existing `portfolio_cash_ledger_entries` table and go through `CashManagementService::post()`. Amount is **signed**: positive enters trading cash, negative leaves. There are no `LOAN_IN` / `LOAN_OUT` (etc.) types. Notes are human context only.
 
@@ -783,7 +783,7 @@ Does not create synthetic BUY/SELL, does not change holdings, does not add a cas
 
 ## V4-SPEC-005 — Explicit cross-owner SELL attribution (2026-08-28)
 
-**Status:** **DECIDED** product rule, **implemented**. Not a new V4-FEAT row. SPEC-002/006 and related FEAT rows stay OPEN.
+**Status:** **DECIDED** product rule, **implemented**. Not a new V4-FEAT row. SPEC-006 and related FEAT rows stay OPEN.
 
 New SELL writes must be attributable to one owner. If exactly one open lot exists, or the request already identifies the owner (`recommendation_id`, `owner_key`, or `strategy_id`), that owner is used and persisted on `portfolio_transactions.owner_key`. If two or more owners hold the stock and the transaction does not identify the owner, the write returns 422 — no FIFO, proportional, largest, or oldest guess. Quantity is checked against that owner’s holding, not the portfolio sum. Unmanaged is a first-class owner (`unmanaged`). A SELL does not transfer leftover shares to another owner and does not create synthetic BUY/SELL or new cash types.
 
@@ -819,6 +819,27 @@ On top of OD-10 parent-owner quantity: `CorporateActionService::apply` restates 
 ### Tests
 
 `tests/Unit/CorporateActionSpec003RestatementTest.php` plus existing CorporateAction / OD-10 / financial-integrity / live-execution regressions.
+
+## V4-SPEC-002 — Rights issues are not a corporate-action type (2026-08-28)
+
+**Status:** **DECIDED** product rule, **implemented**. Not a new V4-FEAT row. SPEC-006 remains unimplemented.
+
+Rights announcements do not change existing holdings and do not create entitlements or a rights CA type. `POST /api/corporate-actions/preview` and `POST /api/corporate-actions` reject `action_type` values that are rights (`rights`, `rights_issue`, `rights-issue`, case-insensitive) with 422. Holdings quantity/cost, cash, OHLCV, and `portfolio_corporate_actions` are unchanged. The Corporate Action UI stays split/bonus only and tells the user to record exercised shares as a normal buy.
+
+If the user exercises and receives shares, record a **normal purchase** at the actual subscription price (`POST /api/transactions` BUY). Cash decreases, quantity increases, and average cost follows the existing WAVG ledger path — no special rights math. A `source=rights` buy is still a paid purchase (price must be > 0); with a `recommendation_id` it becomes `SOURCE_RECOMMENDATION` like any other attributed buy. GTT protections synchronize after a rights-tagged buy the same way they do after a material BUY (bonus/split still skip). Exchange-feed rights rows are not queued as data-quality CA issues.
+
+Split/bonus (SPEC-003), cash LOAN/RECALL/BRIDGE (SPEC-004), SELL attribution (SPEC-005), live `executed` = fill (FEAT-001 / SPEC-007), and GTT lifecycle (FEAT-002) are unchanged. Mergers/demergers remain out of scope.
+
+### Files
+
+- `app/Services/CorporateActionService.php`, `app/Http/Controllers/Api/CorporateActionController.php`
+- `app/Services/DataQualityCorporateActionSyncService.php`
+- `app/Services/TransactionWriteService.php`, `app/Services/Protection/PositionProtectionService.php`
+- `resources/js/src/pages/CorporateActionPage.jsx`, `resources/js/src/data/appDocumentation.js`
+
+### Tests
+
+`tests/Feature/V4Spec002RightsIssuesTest.php` plus DataQualityDetection (rights skipped), AdvancedOrders (rights buy syncs GTT), and existing CorporateAction / OD-10 / SPEC-003 / financial-integrity / live-execution regressions.
 
 ## V4-FEAT-001 — Broker / live execution automation (2026-08-27)
 
@@ -890,6 +911,31 @@ GTT/stop/target (FEAT-002), multi-broker marketplace, email OTP, password re-pro
 ### Explicitly not in this feature
 
 Tax lots, multi-broker marketplace, a second Advanced Orders entitlement.
+
+## V4-FEAT-010 — Pipeline Operations / Unattended Production Execution (2026-08-28)
+
+**Status:** **COMPLETE**. Frozen product rules in `specs/LidoPortfolio-V4-Wishlist.md` V4-FEAT-010. Makes FEAT-001 Automatic mode operational end-to-end in production. Does not change the decision algorithm, execution modes, TOTP, `executed` = fill, GTT, or reservation/capital rules.
+
+### Frozen product (shipped)
+
+1. **Unattended daily pipeline.** Production cron continues to invoke `php artisan schedule:run` every minute. That is the **sole** production scheduler. The existing `portfolio:decision-pipeline --trigger=scheduled` event is **on by default** (`TRADING_OS_PIPELINE_SCHEDULE`, default `true`). Set the env var to `false` to disable. No dedicated cPanel one-shot scripts.
+2. **One effective run per portfolio calendar day.** Scheduler ticks may overlap or repeat; `DecisionPipelineScheduleService` once-per-day + per-profile success markers + cache lock `trading-os:decision-pipeline:automatic` (2700s) plus Laravel `withoutOverlapping(45)` prevent a second *effective* decision run. Partial failures retry remaining profiles; successful profiles are not re-run. Manual / `--force` still bypass the automatic skip.
+3. **In-app + Telegram on operational failures.** Pipeline, `tos:reconcile-broker-orders`, and `tos:submit-automatic-orders` unexpected failures persist as operational alerts (`decision_pipeline_failed`, `broker_reconcile_failed`, `automatic_submit_failed`) and notify admins via existing `sendAdminOperationalAlert` (6-hour Telegram cooldown). No email. No V5 multi-channel work. Gate-blocked Automatic submit (entitlement / TOTP / Kite / Manual mode) is **not** treated as a failure.
+4. **Automatic execution stays on the existing path.** After a successful pipeline, Automatic portfolios still submit via `DailyDecisionPipeline` → `LiveBrokerExecutionService::submitAutomaticForProfile` (FEAT-001 gates). The scheduler also runs `tos:submit-automatic-orders` and `tos:reconcile-broker-orders` every five minutes with `withoutOverlapping(5)`. Duplicate broker placement is still prevented by `submission_key` / in-flight checks.
+
+### Engineering
+
+- Defaults: `config/trading_os.php` `pipeline.schedule_enabled` and `run_after_daily_sync` default **true**; `TradingOsConfig` fallbacks match.
+- Commands record/clear durable failures in `portfolio_settings.unattended_ops_failures` and call `AdminOperationalAlertService::syncAndNotify()` immediately (hourly `portfolio:check-operational-alerts` still re-evaluates).
+- Messages are sanitized (no tokens, TOTP, request bodies, broker credentials).
+
+### Tests
+
+`tests/Feature/V4Feat010UnattendedOpsTest.php`, `ScheduleRegistrationTest`, `TradingOsConfigTest` default accessors, existing H1/H2 `DecisionPipelineHardeningTest` / `DecisionPipelineScheduleTest`.
+
+### Explicitly not in this feature
+
+Email operational alerts, V5 notification architecture, new scheduler/worker frameworks, new cPanel scripts, live-portfolio exclusivity (SPEC-006), execution-mode redesign.
 
 ## V3 residual — UNFUNDED zero-own lending offer (2026-08-24)
 
@@ -987,7 +1033,7 @@ Authoritative: V3 §10.7, §34.1; **OD-10 (frozen).** Parent-owner attachment �
 ### Intentional fallback (unchanged)
 
 - Ledgers that cannot be fully attributed still use one blended `portfolio_holdings` row (`owner_key = unmanaged`).
-- **V4-SPEC-003 (2026-08-28):** split/bonus now restate cost/average (ledger path), trailing high (OHLCV ratio), derived stop (OD-13), and preserve OD-12 rupee `target_amount`. Rights remain SPEC-002 (no special CA).
+- **V4-SPEC-003 (2026-08-28):** split/bonus now restate cost/average (ledger path), trailing high (OHLCV ratio), derived stop (OD-13), and preserve OD-12 rupee `target_amount`. Rights remain SPEC-002 (no special CA; exercise = normal purchase, implemented 2026-08-28).
 
 ### Files
 
@@ -1860,7 +1906,7 @@ Lending / DEP-PARTIAL-LEND requests, recall, weakest-position, trailing, broker 
 - **Analytics Architecture (SD-031):** Spec: [`Analytics-Architecture-Specification.md`](specs/architecture/portfolio/Analytics-Architecture-Specification.md). Owners: `StockAnalyticsService`, Evaluation Engine (`EvaluationProfileService`), `PortfolioAnalyticsService`, `MarketAnalyticsService`. Pages: Dashboard (portfolio+market), Watchlist (research tabs), Portfolio/Holdings (positions), Discovery (candidates). APIs: `/api/v1/analytics/*`. Cache tables `000012`. Nav label Holdings → **Portfolio**.
 - **Market Analysis Engine (SD-032):** Spec: [`Market-Analysis-Engine-Specification.md`](specs/architecture/domains/Market-Analysis-Engine-Specification.md). `MarketAnalysisEngine` analyses primary benchmark OHLCV (NIFTY50 via IndexCatalog) into trend/momentum/volatility/risk/drawdown/breadth + sentiment (0–100) + deterministic market phase. Persists `portfolio_tos_market_analytics` (`000013`). APIs: `/api/v1/market-analysis*`. Recommendation applies `allocation_multiplier` / `new_entry_allowed` + optional Strategy `market_gates`. Dashboard Market Analytics: gauge cards (Trend via `TrendGauge` from `trend.score`/`strength`, Momentum, Volatility, Risk, Sentiment, phase, breadth, regime) plus **Stocks Above** market-depth heatmap (`MarketDepthService` / `GET /api/dashboard` → `market_depth`); optional legacy `% above 50/200 DMA` text cards when engine fields are non-null. Top Gainer/Loser sit under Portfolio (after summary cards). Active strategy card removed from Dashboard (configure via `/strategy`). Portfolio Analytics attaches `market_context`. **Gauge colour consistency (2026-07-30):** Sentiment, Market phase, Volatility, and Risk use `HalfDonutShell` `invertScale` so rings read red→green left→right like Trend/Momentum/regime/breadth, while needle + zone labels stay on matching colours (high fear/risk/volatility remain on the red side).
 - **F098 — Market gates in live recommendations (2026-08-08):** Extracted gate evaluation into `Recommendation\MarketGateEvaluator` (deterministic; consumed by `RecommendationGenerationPipeline::prepareContext()`). Combines Market Analysis `new_entry_allowed` / `allocation_multiplier` with optional Strategy `market_gates` (`enabled`, `min_sentiment`, `allowed_phases`, `max_risk_raw`). When blocked: **OPEN / INCREASE** demoted to WATCH (not held) or HOLD (held); **EXIT / REDUCE / HOLD** unchanged. `max_risk_raw` breach also caps multiplier at 0.5×. Evidence now records `market_gates` checks/block reasons, base vs effective entry/multiplier, and `market_gate_demoted`; reasoning includes demotion text. Cash unfunded demotion is **not** used in V3 (OPEN/INCREASE remain; capital status is a separate axis). Tests: `tests/Unit/MarketGateEvaluatorTest.php`, `tests/Feature/MarketGateRecommendationTest.php`. No DB/API/frontend changes.
-- **F148 / F149 — Pipeline scheduling & post-sync hook (2026-08-08):** Optional scheduled Daily Decision Pipeline (`TRADING_OS_PIPELINE_SCHEDULE=false` default) registered in `routes/console.php` at `TRADING_OS_PIPELINE_TIME` (default `19:00`), portfolio timezone, trading-session `when()` guard, `--trigger=scheduled`, `withoutOverlapping(45)`. Optional post-sync hook (`TRADING_OS_PIPELINE_AFTER_SYNC=false` default) runs `portfolio:decision-pipeline --trigger=post-sync` from `DailyMarketDataJob` only after successful sync (`failed === 0`); sync failure/partial completion does not trigger. `DecisionPipelineScheduleService` enforces once-per-day guard for automatic triggers (scheduled + post-sync share guard; manual/`--force` bypass). **H1/H2 hardening (2026-08-08):** automatic partial-failure retry tracks per-profile success for the portfolio calendar day (`decision_pipeline_auto_success_date` + JSON profile-id list in `portfolio_settings`); automatic retries skip already-successful profiles and only rerun failures; profile markers written only after successful pipeline completion; manual runs never skip on profile markers and do not write automatic profile state. Shared automatic execution lock `trading-os:decision-pipeline:automatic` (2700s, matches scheduler overlap window) acquired at command start for scheduled/post-sync, released in `finally`; lock contention returns success with skip log (not pipeline failure). Global once-per-day guard marked when all profiles in the run have succeeded for the day. `RunDecisionPipelineCommand` accepts `--trigger=manual|scheduled|post-sync` and logs via `PortfolioLoggerService::scheduler()`. `DailyDecisionPipeline` stores trigger in `stages_json._meta`. Tests: `DecisionPipelineScheduleServiceTest`, `DecisionPipelineScheduleTest`, `DecisionPipelineHardeningTest`, `DecisionPipelineRetryVerificationTest`, `ScheduleRegistrationTest` (pipeline rows), fixed `DailyMarketDataJobTest` (Laravel TestCase + AdminOperationalAlertService mock).
+- **F148 / F149 — Pipeline scheduling & post-sync hook (2026-08-08; unattended defaults V4-FEAT-010 2026-08-28):** Daily Decision Pipeline is registered on Laravel `schedule:run` (`TRADING_OS_PIPELINE_SCHEDULE` **defaults true**; set `false` to disable) at `TRADING_OS_PIPELINE_TIME` (default `19:00`), portfolio timezone, trading-session `when()` guard, `--trigger=scheduled`, `withoutOverlapping(45)`. Post-sync hook (`TRADING_OS_PIPELINE_AFTER_SYNC` **defaults true**) runs `portfolio:decision-pipeline --trigger=post-sync` from `DailyMarketDataJob` only after successful sync (`failed === 0`); sync failure/partial completion does not trigger. `DecisionPipelineScheduleService` enforces once-per-day guard for automatic triggers (scheduled + post-sync share guard; manual/`--force` bypass). **H1/H2 hardening (2026-08-08):** automatic partial-failure retry tracks per-profile success for the portfolio calendar day (`decision_pipeline_auto_success_date` + JSON profile-id list in `portfolio_settings`); automatic retries skip already-successful profiles and only rerun failures; profile markers written only after successful pipeline completion; manual runs never skip on profile markers and do not write automatic profile state. Shared automatic execution lock `trading-os:decision-pipeline:automatic` (2700s, matches scheduler overlap window) acquired at command start for scheduled/post-sync, released in `finally`; lock contention returns success with skip log (not pipeline failure). Global once-per-day guard marked when all profiles in the run have succeeded for the day. `RunDecisionPipelineCommand` accepts `--trigger=manual|scheduled|post-sync` and logs via `PortfolioLoggerService::scheduler()`. `DailyDecisionPipeline` stores trigger in `stages_json._meta`. Tests: `DecisionPipelineScheduleServiceTest`, `DecisionPipelineScheduleTest`, `DecisionPipelineHardeningTest`, `DecisionPipelineRetryVerificationTest`, `ScheduleRegistrationTest` (pipeline rows), `V4Feat010UnattendedOpsTest`, fixed `DailyMarketDataJobTest` (Laravel TestCase + AdminOperationalAlertService mock).
 - **Transactions routes:** `/transactions` = Transaction History; `/transactions/pending` = Pending Execution. Toggle navigates between them. Page tabs toggle has no “View” label; uses larger height/font (`.lido-segment-toggle--page-tabs`).
 
 ### REST `/api/v1` (additive)

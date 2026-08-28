@@ -6,7 +6,9 @@ use App\Engines\Execution\LiveBrokerExecutionService;
 use App\Models\PortfolioProfile;
 use App\Models\PositionProtection;
 use App\Models\TradingOrder;
+use App\Services\AdminOperationalAlertService;
 use Illuminate\Console\Command;
+use Throwable;
 
 class ReconcileBrokerOrdersCommand extends Command
 {
@@ -14,7 +16,7 @@ class ReconcileBrokerOrdersCommand extends Command
 
     protected $description = 'Reconcile in-flight Zerodha/Kite broker orders and GTT protection into local fills';
 
-    public function handle(LiveBrokerExecutionService $live): int
+    public function handle(LiveBrokerExecutionService $live, AdminOperationalAlertService $opsAlerts): int
     {
         $query = PortfolioProfile::query();
         if ($id = $this->option('profile')) {
@@ -34,13 +36,35 @@ class ReconcileBrokerOrdersCommand extends Command
 
         $count = 0;
         $protections = 0;
+        $errors = [];
         $protectionService = app(\App\Services\Protection\PositionProtectionService::class);
         foreach ($query->get() as $profile) {
-            $count += $live->reconcileOpenForProfile($profile);
-            $protections += $protectionService->reconcileOpenForProfile($profile);
+            try {
+                $count += $live->reconcileOpenForProfile($profile);
+                $protections += $protectionService->reconcileOpenForProfile($profile);
+            } catch (Throwable $e) {
+                $errors[] = sprintf('profile #%d: %s', $profile->id, $e->getMessage());
+                $this->error(sprintf('Broker reconcile failed for profile #%d: %s', $profile->id, $e->getMessage()));
+            }
         }
 
         $this->info("Reconciled {$count} broker order(s) and {$protections} protection(s).");
+
+        if ($errors !== []) {
+            $opsAlerts->recordUnattendedFailure(
+                AdminOperationalAlertService::KEY_BROKER_RECONCILE_FAILED,
+                'Broker reconciliation failed',
+                'Unattended broker reconciliation failed. '.implode('; ', $errors),
+                ['failed_profiles' => count($errors)],
+            );
+            $opsAlerts->syncAndNotify();
+
+            return self::FAILURE;
+        }
+
+        if ($opsAlerts->clearUnattendedFailure(AdminOperationalAlertService::KEY_BROKER_RECONCILE_FAILED)) {
+            $opsAlerts->syncAndNotify();
+        }
 
         return self::SUCCESS;
     }

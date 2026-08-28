@@ -9,7 +9,7 @@ class CheckOperationalAlertsCommand extends Command
 {
     protected $signature = 'portfolio:check-operational-alerts';
 
-    protected $description = 'Evaluate sync health and notify admins via Telegram when issues are detected';
+    protected $description = 'Evaluate sync and unattended-ops health and notify admins via Telegram when issues are detected';
 
     public function handle(AdminOperationalAlertService $alerts): int
     {

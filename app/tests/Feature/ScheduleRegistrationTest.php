@@ -14,6 +14,15 @@ class ScheduleRegistrationTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function tearDown(): void
+    {
+        putenv('TRADING_OS_ENABLED');
+        putenv('TRADING_OS_PIPELINE_SCHEDULE');
+        putenv('TRADING_OS_PIPELINE_TIME');
+        Carbon::setTestNow();
+        parent::tearDown();
+    }
+
     protected function refreshScheduleApp(): void
     {
         $this->refreshApplication();
@@ -158,6 +167,21 @@ class ScheduleRegistrationTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_decision_pipeline_registered_by_default_for_unattended_production(): void
+    {
+        putenv('TRADING_OS_ENABLED');
+        putenv('TRADING_OS_PIPELINE_SCHEDULE');
+        putenv('TRADING_OS_PIPELINE_TIME');
+        $this->refreshScheduleApp();
+
+        $event = $this->findScheduleEvent('portfolio:decision-pipeline');
+        $this->assertNotNull($event, 'V4-FEAT-010: daily pipeline must be on Laravel schedule:run by default');
+        $this->assertStringContainsString('scheduled', (string) $event->command);
+        $this->assertTrue($event->withoutOverlapping);
+        $this->assertSame(45, $event->expiresAt);
+        $this->assertSame('0 19 * * *', $event->getExpression());
+    }
+
     public function test_decision_pipeline_not_registered_when_schedule_disabled(): void
     {
         putenv('TRADING_OS_ENABLED=true');
@@ -181,6 +205,23 @@ class ScheduleRegistrationTest extends TestCase
         $this->assertSame('15 19 * * *', $event->getExpression());
         $this->assertTrue($event->withoutOverlapping, 'scheduled pipeline must use withoutOverlapping');
         $this->assertSame(45, $event->expiresAt);
+    }
+
+    public function test_broker_reconcile_and_automatic_submit_are_scheduled_without_overlapping(): void
+    {
+        $this->refreshScheduleApp();
+
+        $reconcile = $this->findScheduleEvent('tos:reconcile-broker-orders');
+        $this->assertNotNull($reconcile, 'tos:reconcile-broker-orders must be on Laravel schedule:run');
+        $this->assertTrue($reconcile->withoutOverlapping);
+        $this->assertSame(5, $reconcile->expiresAt);
+        $this->assertSame('*/5 * * * *', $reconcile->getExpression());
+
+        $submit = $this->findScheduleEvent('tos:submit-automatic-orders');
+        $this->assertNotNull($submit, 'tos:submit-automatic-orders must be on Laravel schedule:run');
+        $this->assertTrue($submit->withoutOverlapping);
+        $this->assertSame(5, $submit->expiresAt);
+        $this->assertSame('*/5 * * * *', $submit->getExpression());
     }
 
     protected function findUniverseMaintenanceEvent(): ?Event

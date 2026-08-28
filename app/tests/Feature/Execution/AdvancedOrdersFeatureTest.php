@@ -20,6 +20,7 @@ use App\Services\CashManagementService;
 use App\Services\CorporateActionService;
 use App\Services\Ownership\HoldingAdoptionService;
 use App\Services\Security\TotpService;
+use App\Services\Protection\PositionProtectionService;
 use App\Services\StrategyConfigurationService;
 use App\Services\TransactionWriteService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -257,6 +258,53 @@ class AdvancedOrdersFeatureTest extends TestCase
             'notes' => 'non-material notes only',
         ]);
         $this->assertSame($afterSell, $fake->gttModifyCalls);
+        $this->assertSame(1, PositionProtection::query()->open()->count());
+    }
+
+    public function test_rights_tagged_buy_synchronizes_protection_like_a_purchase(): void
+    {
+        [$user, $profile, $holding] = $this->readyStrategyPosition();
+        $this->setMode($user, $profile, PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC);
+        $this->place($holding, 'stop', $user)->assertCreated();
+        $fake = app(FakeBrokerGateway::class);
+        $modifies = $fake->gttModifyCalls;
+
+        $stock = Stock::query()->find($holding->stock_id);
+        $buyTx = Transaction::query()->where('stock_id', $stock->id)->where('type', 'buy')->first();
+        $tx = app(TransactionWriteService::class)->create($profile, $stock, [
+            'type' => 'buy',
+            'quantity' => 4,
+            'price' => 50,
+            'fees' => 0,
+            'transaction_date' => now()->toDateString(),
+            'source' => Transaction::SOURCE_RIGHTS,
+            'recommendation_id' => $buyTx->recommendation_id,
+        ]);
+        $this->assertSame(Transaction::SOURCE_RECOMMENDATION, $tx->source);
+        $this->assertGreaterThan($modifies, $fake->gttModifyCalls);
+
+        $afterPurchase = $fake->gttModifyCalls;
+        $strategyLot = $holding->fresh();
+        $strategyLot->forceFill([
+            'quantity' => (float) $strategyLot->quantity + 2,
+            'invested_amount' => (float) $strategyLot->invested_amount + 100,
+        ])->save();
+        app(PositionProtectionService::class)->afterCommittedFill(
+            $profile,
+            $stock,
+            'buy',
+            Transaction::SOURCE_RIGHTS,
+        );
+        $this->assertGreaterThan($afterPurchase, $fake->gttModifyCalls);
+
+        $afterRights = $fake->gttModifyCalls;
+        app(PositionProtectionService::class)->afterCommittedFill(
+            $profile,
+            $stock,
+            'buy',
+            Transaction::SOURCE_BONUS,
+        );
+        $this->assertSame($afterRights, $fake->gttModifyCalls);
         $this->assertSame(1, PositionProtection::query()->open()->count());
     }
 

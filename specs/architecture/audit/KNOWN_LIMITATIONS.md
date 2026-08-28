@@ -74,8 +74,8 @@ Excluded: pure future roadmap (broker automation, Strategy product, AI) unless t
 
 ## Platform / ops
 
-23. **Pipeline schedule off by default** — `TRADING_OS_PIPELINE_SCHEDULE` false.  
-24. **`run_after_daily_sync` not wired** — Config dead.  
+23. **~~Pipeline schedule off by default~~** — Closed by **V4-FEAT-010** (2026-08-28): `TRADING_OS_PIPELINE_SCHEDULE` defaults **true**; disable with `false`.  
+24. **~~`run_after_daily_sync` not wired~~** — Obsolete; F149 wired the hook; **V4-FEAT-010** defaults it **on**.  
 25. **No OpenAPI for `/api/v1`**.  
 26. **No Vitest / E2E UI tests** for TOS pages.  
 27. **Sanctum not JWT** — Clients expecting Bearer tokens need SPA cookie flow.  

@@ -16,6 +16,10 @@ class FakeBrokerGateway implements BrokerGateway
 
     public bool $nextPlaceRejected = false;
 
+    public bool $nextPlaceThrows = false;
+
+    public bool $nextFetchThrows = false;
+
     /** @var array<string, BrokerOrderSnapshot> */
     public array $orders = [];
 
@@ -56,6 +60,8 @@ class FakeBrokerGateway implements BrokerGateway
         $this->placed = [];
         $this->nextPlaceAmbiguous = false;
         $this->nextPlaceRejected = false;
+        $this->nextPlaceThrows = false;
+        $this->nextFetchThrows = false;
         $this->orders = [];
         $this->gttPlaceCalls = 0;
         $this->gttModifyCalls = 0;
@@ -101,6 +107,11 @@ class FakeBrokerGateway implements BrokerGateway
         $this->placeCalls++;
         $this->placed[] = $request;
 
+        if ($this->nextPlaceThrows) {
+            $this->nextPlaceThrows = false;
+            throw new \RuntimeException('Simulated broker outage.');
+        }
+
         if ($this->nextPlaceAmbiguous) {
             $this->nextPlaceAmbiguous = false;
             throw new BrokerAmbiguousException('Simulated broker timeout after place.');
@@ -121,6 +132,11 @@ class FakeBrokerGateway implements BrokerGateway
 
     public function fetchOrder(int $userId, string $brokerOrderId): ?BrokerOrderSnapshot
     {
+        if ($this->nextFetchThrows) {
+            $this->nextFetchThrows = false;
+            throw new \RuntimeException('Simulated broker fetch outage.');
+        }
+
         return $this->orders[$brokerOrderId] ?? null;
     }
 

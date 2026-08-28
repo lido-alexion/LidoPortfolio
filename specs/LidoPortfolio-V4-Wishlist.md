@@ -5,7 +5,7 @@
 | **V3 Status** | **V3 STRICTLY COMPLETE** (strict register-to-implementation pass 2026-08-26) |
 | **Document type** | Forward-looking V4 register + V5 deferred features (same genuine-new-work pool) |
 | **Created** | 2026-08-25 |
-| **Last reconciled** | 2026-08-28 (V4-SPEC-005 implemented: explicit cross-owner SELL attribution) |
+| **Last reconciled** | 2026-08-28 (V4-FEAT-010 implemented: unattended production pipeline + Automatic execution via `schedule:run`) |
 | **Canonical path** | [`specs/LidoPortfolio-V4-Wishlist.md`](LidoPortfolio-V4-Wishlist.md) |
 | **Related** | [`LidoPortfolio-V3-Specification.md`](LidoPortfolio-V3-Specification.md) · [`../implementation.md`](../implementation.md) |
 
@@ -14,7 +14,7 @@
 This register holds **only**:
 
 1. **Genuine new post-V3 functionality** that was not part of V3 normative scope (active V4 FEAT IDs and V5-deferred FEAT IDs), **or**
-2. **Genuine V4 product/spec decisions** for rules V3 never froze. **V4-SPEC-001 through V4-SPEC-007 are now FROZEN Product Owner decisions**. Frozen means the rule is specified. Implementation is separate: **SPEC-007** is implemented by FEAT-001; **SPEC-001** same-stock adoption merge, **SPEC-003** split/bonus restatement, **SPEC-004** cash-ledger LOAN/RECALL/BRIDGE, and **SPEC-005** explicit cross-owner SELL attribution are implemented 2026-08-28; **SPEC-002 and SPEC-006** remain unimplemented.
+2. **Genuine V4 product/spec decisions** for rules V3 never froze. **V4-SPEC-001 through V4-SPEC-007 are now FROZEN Product Owner decisions**. Frozen means the rule is specified. Implementation is separate: **SPEC-007** is implemented by FEAT-001; **SPEC-001** same-stock adoption merge, **SPEC-003** split/bonus restatement, **SPEC-004** cash-ledger LOAN/RECALL/BRIDGE, **SPEC-005** explicit cross-owner SELL attribution, and **SPEC-002** rights-are-not-a-CA (exercise = normal purchase) are implemented 2026-08-28; **SPEC-006** remains unimplemented.
 
 It is **not** a deferral bin for V3 bugs, V3 technical debt, V3 UX polish, or historical notes.
 
@@ -24,7 +24,7 @@ It is **not** a deferral bin for V3 bugs, V3 technical debt, V3 UX polish, or hi
 
 ### Status values
 
-`OPEN` · `BLOCKED` (waiting on a SPEC decision) · `DECIDED` (PO rule frozen; implementation is recorded on the SPEC row — SPEC-001, SPEC-003, SPEC-004, and SPEC-005 are implemented, SPEC-002/006 are not) · `COMPLETE` (implemented in production)
+`OPEN` · `BLOCKED` (waiting on a SPEC decision) · `DECIDED` (PO rule frozen; implementation is recorded on the SPEC row — SPEC-001, SPEC-002, SPEC-003, SPEC-004, and SPEC-005 are implemented, SPEC-006 is not) · `COMPLETE` (implemented in production)
 
 A SPEC may be `DECIDED` while related FEAT rows stay `OPEN`. Do **not** mark a FEAT `COMPLETE` because its prerequisite SPEC is frozen.
 
@@ -40,7 +40,7 @@ Living detail: [`implementation.md`](../implementation.md).
 
 ## 2. Genuine V4 features (active V4 scope)
 
-Active V4 feature count: **22** (**8** `OPEN`, **14** `COMPLETE`).
+Active V4 feature count: **22** (**7** `OPEN`, **15** `COMPLETE`).
 
 | ID | Item | Why genuinely V4 | Priority | Status |
 |----|------|------------------|----------|--------|
@@ -50,7 +50,7 @@ Active V4 feature count: **22** (**8** `OPEN`, **14** `COMPLETE`).
 | V4-FEAT-006 | Liquidity & Tradability indicator calculators | Indicator Registry expansion; not V3 SoT. **PO decision (2026-08-27):** Keep the existing composite formulas and complete their runtime wiring. Do not redesign formulas, retune thresholds, change weights, or invent new metrics. Implemented via `TechnicalIndicatorService` dispatch to `LiquidityTradabilityCalculator` (2026-08-27). | P2 | COMPLETE |
 | V4-FEAT-008 | Trading Artifact Framework remaining phases | SD-034 residual beyond Screener/Strategy registries shipped in V3 | P2 | OPEN |
 | V4-FEAT-009 | Review reports list UI + deeper metrics | New Review UX beyond V3 Dashboard/API | P3 | OPEN |
-| V4-FEAT-010 | Pipeline ops hardening beyond shipped F148/F149 | F148/F149 schedule hooks are V3-complete; further ops defaults are new | P2 | OPEN |
+| V4-FEAT-010 | Pipeline Operations / Unattended Production Execution | **PO frozen 2026-08-28:** (1) Daily Decision Pipeline runs fully unattended in production via Laravel `schedule:run` (no human trigger). (2) One effective pipeline run per portfolio calendar day (scheduler may fire repeatedly; existing F148/F149 lock + once-per-day guard). (3) Pipeline / broker-reconcile / automatic-submit failures stay visible in-app and send Telegram via existing ops alerts (6-hour cooldown; no email; no V5 multi-channel). (4) Laravel scheduler is the sole production scheduling mechanism — no dedicated cPanel one-shot scripts. Implemented 2026-08-28: pipeline schedule + post-sync hook default **on**; `tos:reconcile-broker-orders` and `tos:submit-automatic-orders` remain every five minutes with `withoutOverlapping`. | P2 | COMPLETE |
 | V4-FEAT-011 | Stocks admin SPA surface | Admin product expansion; not V3 | P3 | OPEN |
 | V4-FEAT-012 | Admin force-logout of other users (PD-007) | Auth product expansion; not V3 | P3 | OPEN |
 | V4-FEAT-013 | Cash-as-of / export / compare polish | F014 residual polish; not V3 | P3 | OPEN |
@@ -66,6 +66,19 @@ Active V4 feature count: **22** (**8** `OPEN`, **14** `COMPLETE`).
 | V4-FEAT-028 | Structured logging / pagination consistency | Platform hardening (was V4-TD-010/011). **Implemented (2026-08-27):** `PortfolioLoggerService::event()` with stable event names + structured identifiers on TOS pipeline/discovery/evaluation/recommendation/execution/notification/data/review logs; key redaction for secrets. `TradingOsPagination` (`page`/`pageSize`, meta `{page,pageSize,total,lastPage}`, max 200 / price-bars 500) on securities, price-bars, recommendations, orders, transactions, notifications, reviews. Candidates/evaluations/positions/pending-execution stay bounded and unpaginated. OpenAPI updated. | P3 | COMPLETE |
 | V4-FEAT-029 | Pluggable Evaluation rules modules | Evaluation architecture (was V4-TD-012). **Implemented (2026-08-27):** `EvaluationFactorRule` modules registered via `EvaluationServiceProvider`; `EvaluationEngine` orchestrates context + equal-weight aggregation. Formulas/weights/FEAT-005/021/API unchanged. `AsOfFactorScorer` stays historical-safe (no live Market Analysis). | P3 | COMPLETE |
 | V4-FEAT-032 | Repository layer for TOS aggregates | Architecture (was V4-TD-015). **Implemented (2026-08-27):** focused `App\Repositories\Tos\*` classes own TOS aggregate list/find/paginate queries. Engines keep orchestration, lifecycle, scoring, and writes. No generic repository framework. API/OpenAPI unchanged. | P3 | COMPLETE |
+
+---
+
+### V4-FEAT-010 — frozen production operations (2026-08-28)
+
+These four Product Owner decisions are **frozen** and **implemented**:
+
+1. **Unattended daily pipeline.** Production must not require a human to trigger the Daily Decision Pipeline. Automatic execution mode is operational end-to-end.
+2. **One effective pipeline run per portfolio calendar day.** `schedule:run` may fire repeatedly; locking/idempotency prevent a second effective decision run for the same portfolio/day. Multiple decision runs per day are not introduced.
+3. **Operational failures: in-app + Telegram.** Pipeline, broker reconciliation, and automatic-order submission failures remain visible in-app and notify Telegram via existing infrastructure. **No email.** **No V5 multi-channel work.**
+4. **Laravel `schedule:run` only.** Production cron continues to invoke `php artisan schedule:run` every minute. That is the sole production scheduler. **No dedicated cPanel one-shot scripts. No second scheduler/worker framework.**
+
+Disable the unattended pipeline only with `TRADING_OS_PIPELINE_SCHEDULE=false`.
 
 ---
 
@@ -169,11 +182,11 @@ This is identity/attribution, not an OHLCV snapshot copy or a generic versioning
 
 ---
 
-## 4. Genuine V4 specification decisions (frozen PO rules — not implemented)
+## 4. Genuine V4 specification decisions (frozen PO rules — implementation on each SPEC row)
 
 These **7** IDs are the V4 specification register (separate from the 22 active V4 features and from V5). SPEC-001–006 were resolved **2026-08-26**. **V4-SPEC-007** (broker execution modes) was recovered and frozen **2026-08-27**.
 
-**Status:** `DECIDED` — the rule is frozen. **Not** `COMPLETE`. Implementation is recorded on the SPEC row: **SPEC-001, SPEC-003, SPEC-004, and SPEC-005 are implemented**; SPEC-002 and SPEC-006 are not. **SPEC-007** is implemented by FEAT-001. Do not treat V3’s current safe behaviour (below) as the V4 target.
+**Status:** `DECIDED` — the rule is frozen. **Not** `COMPLETE`. Implementation is recorded on the SPEC row: **SPEC-001, SPEC-002, SPEC-003, SPEC-004, and SPEC-005 are implemented**; SPEC-006 is not. **SPEC-007** is implemented by FEAT-001. Do not treat V3’s current safe behaviour (below) as the V4 target.
 
 Canonical home for these rules is **this file** (`V4-SPEC-*`). Do **not** duplicate them as new V1 `SD-xxx` rows or as V3 `OD-*` / `DEP-*` (V3 remains frozen). V1 governance pointer: [`architecture/governance/SPECIFICATION_DECISIONS.md`](architecture/governance/SPECIFICATION_DECISIONS.md) (post-V3 note).
 
@@ -190,7 +203,7 @@ The application is primarily for **personal use** and a small number of trusted 
 | ID | Frozen rule (one line) | Status |
 |----|------------------------|--------|
 | V4-SPEC-001 | Same-stock adoption merge uses simple weighted-average cost; one Strategy position; no lot accounting; final avg rounded to 2 dp half-up | DECIDED |
-| V4-SPEC-002 | Do not model rights issues as a special CA; exercised shares are a normal purchase | DECIDED |
+| V4-SPEC-002 | Do not model rights issues as a special CA; exercised shares are a normal purchase | DECIDED (implemented 2026-08-28) |
 | V4-SPEC-003 | For splits and bonuses only, apply the ratio to qty, cost/avg, trailing high, stop, and target | DECIDED |
 | V4-SPEC-004 | Cash-ledger special movements are exactly LOAN, RECALL, BRIDGE; signed amount sets cash direction | DECIDED (implemented 2026-08-28) |
 | V4-SPEC-005 | Ambiguous cross-owner sells require explicit Strategy/owner attribution; never guess | DECIDED (implemented 2026-08-28) |
@@ -218,12 +231,12 @@ The application is primarily for **personal use** and a small number of trusted 
 
 | Field | Content |
 |-------|---------|
-| **Status** | **DECIDED** (2026-08-26). Not implemented as a rights-issue feature — by design there is **no** special rights CA to build. |
+| **Status** | **DECIDED** (2026-08-26). **Implemented 2026-08-28** (explicit reject of rights as a CA; exercise path is the existing normal purchase). SPEC remains the product rule. |
 | **Why V3 left it** | OD-10 freezes parent-owner **quantity** only; rights formulas were not decided. |
 | **Current V3 behaviour** | Apply path: **split/bonus only**. |
 | **PO decision** | **Do not** model rights issues as a special corporate-action operation. |
 | **Frozen rule** | Existing holdings are **not** automatically changed because of a rights issue. Do **not** create or manage rights entitlements. If the user actually exercises the rights and receives additional shares, record those shares as a **normal purchase** at the actual subscription price. Do **not** introduce special rights-issue cost-basis or valuation mathematics. |
-| **Implementation implications** | Do not add a rights-issue CA type, entitlement ledger, or rights valuation engine. V3 split/bonus apply path is unchanged by this decision. Mergers/demergers are out of scope here. |
+| **Implementation implications** | **Implemented 2026-08-28:** preview/apply of `action_type` rights (including `rights_issue`) returns 422 and mutates nothing. Exchange-feed rights rows are not queued as CA anomalies. Exercised shares use the existing BUY write path (cash, quantity, WAVG). A `source=rights` buy is a paid purchase, not zero-cost CA, and synchronizes GTT like any other buy. Split/bonus apply path unchanged. Mergers/demergers remain out of scope. Still **DECIDED**, not a new FEAT row. |
 
 ---
 
@@ -415,6 +428,8 @@ Moving a FEAT from V4 to V5 does **not** satisfy acceptance. Freezing V4-SPEC-00
 | 2026-08-28 | **V4-FEAT-002 COMPLETE:** Broker GTT Target / Stop-Loss on Strategy positions. Frozen rules: one active protection; Strategy-derived prices; Manual/Semi/Automatic as specified; material BUY/SELL/CA sync; `needs_attention` without rolling back the position; partial GTT fill via existing ledger then later sync. Tests: `AdvancedOrdersFeatureTest`. |
 | 2026-08-28 | **V4-SPEC-004 implemented:** Cash-ledger special movements are exactly `loan` / `recall` / `bridge` with signed amounts. Intra-portfolio events net to zero on the physical pool. Delayed Proceeds from Stock Sale post as recall/bridge, not deposit. SPEC remains **DECIDED**. SPEC-005 not in this slice. |
 | 2026-08-28 | **V4-SPEC-005 implemented:** Ambiguous cross-owner SELLs require `owner_key` / `strategy_id` / recommendation; never FIFO, proportional, or largest-lot. Single-owner and identified fills stamp `owner_key`. Historical ambiguous rows still blend on recalc. SPEC remains **DECIDED**. |
+| 2026-08-28 | **V4-SPEC-002 implemented:** Rights issues are not a corporate-action type. Preview/apply of `rights` is 422 with no holdings/ledger/OHLCV mutation. Exercised shares are a normal purchase at the subscription price. SPEC remains **DECIDED**. SPEC-006 not in this slice. |
+| 2026-08-28 | **V4-FEAT-010 COMPLETE:** Unattended production Daily Decision Pipeline + Automatic execution via Laravel `schedule:run` only. Frozen: one effective run per portfolio calendar day; in-app + Telegram ops failures (no email); no new cPanel scripts. Tests: `V4Feat010UnattendedOpsTest`, `ScheduleRegistrationTest`. |
 
 ## Appendix — Former ID map
 

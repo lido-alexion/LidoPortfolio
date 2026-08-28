@@ -148,6 +148,9 @@
         <dt>Data safety gate</dt>
         <dd>Stocks with pending corporate-action anomalies are excluded from data-driven engines until reviewed.</dd>
     
+        <dt>Rights issues skipped</dt>
+        <dd>Exchange-feed rows typed as rights (or rights issue) are not queued as corporate-action anomalies. Rights do not auto-change holdings; subscribed shares are a normal purchase.</dd>
+    
         <dt>Raw OHLCV immutability</dt>
         <dd>The subsystem stores adjustment factors for analytics usage and keeps raw market bars intact for audit.</dd>
     

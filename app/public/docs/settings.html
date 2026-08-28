@@ -127,7 +127,7 @@
         <dd>Navigate Global / Portfolio / Account sections.</dd>
     
         <dt>Execution mode</dt>
-        <dd>Per active portfolio. New portfolios default to Manual. Semi-Automatic and Automatic require admin entitlement plus a valid authenticator code. Manual → Automatic needs an explicit confirmation checkbox. Automatic → Manual stops future automatic submits and does not cancel broker orders already sent.</dd>
+        <dd>Per active portfolio. New portfolios default to Manual. Semi-Automatic and Automatic require admin entitlement plus a valid authenticator code. Manual → Automatic needs an explicit confirmation checkbox. Automatic → Manual stops future automatic submits and does not cancel broker orders already sent. Automatic mode is unattended in production: after the scheduled daily pipeline, eligible orders submit without a per-order click (Laravel schedule:run; existing TOTP enrollment and Kite session are still required).</dd>
     
         <dt>Authenticator (TOTP)</dt>
         <dd>Account tab. Enroll a compatible authenticator (for example Google Authenticator), confirm with a code, and store recovery codes shown once. Required before broker submission in Semi-Automatic or Automatic; not required for Manual fills. Disable requires a current code.</dd>

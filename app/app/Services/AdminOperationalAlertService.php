@@ -7,6 +7,7 @@ use App\Models\SyncRun;
 use App\Support\TradingCalendar;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class AdminOperationalAlertService
 {
@@ -25,6 +26,21 @@ class AdminOperationalAlertService
     public const KEY_STOCK_MASTER_FAILED = 'stock_master_failed';
 
     public const KEY_SCHEDULER_INACTIVE = 'scheduler_inactive';
+
+    public const KEY_DECISION_PIPELINE_FAILED = 'decision_pipeline_failed';
+
+    public const KEY_BROKER_RECONCILE_FAILED = 'broker_reconcile_failed';
+
+    public const KEY_AUTOMATIC_SUBMIT_FAILED = 'automatic_submit_failed';
+
+    public const SETTING_UNATTENDED_FAILURES = 'unattended_ops_failures';
+
+    /** @var list<string> */
+    public const UNATTENDED_FAILURE_KEYS = [
+        self::KEY_DECISION_PIPELINE_FAILED,
+        self::KEY_BROKER_RECONCILE_FAILED,
+        self::KEY_AUTOMATIC_SUBMIT_FAILED,
+    ];
 
     public function __construct(
         protected SyncLogService $syncLog,
@@ -229,6 +245,19 @@ class AdminOperationalAlertService
                     'last_activity_at' => $lastActivity?->toIso8601String(),
                     'threshold_hours' => $schedulerDeadHours,
                 ],
+            );
+        }
+
+        foreach ($this->unattendedFailures() as $key => $row) {
+            if (! in_array($key, self::UNATTENDED_FAILURE_KEYS, true) || ! is_array($row)) {
+                continue;
+            }
+            $alerts[] = $this->alert(
+                $key,
+                (string) ($row['severity'] ?? 'critical'),
+                (string) ($row['title'] ?? 'Unattended operation failed'),
+                (string) ($row['message'] ?? 'An unattended operation failed.'),
+                is_array($row['context'] ?? null) ? $row['context'] : [],
             );
         }
 
@@ -479,17 +508,127 @@ class AdminOperationalAlertService
     }
 
     /**
+     * Persist a durable unattended-ops failure so hourly evaluation and
+     * immediate syncAndNotify() keep in-app + Telegram visibility.
+     *
+     * @param  array<string, mixed>  $context
+     */
+    public function recordUnattendedFailure(string $key, string $title, string $message, array $context = []): void
+    {
+        if (! in_array($key, self::UNATTENDED_FAILURE_KEYS, true)) {
+            return;
+        }
+
+        $failures = $this->unattendedFailures();
+        $failures[$key] = [
+            'severity' => 'critical',
+            'title' => $title,
+            'message' => $this->sanitizeOpsMessage($message),
+            'context' => $this->sanitizeOpsContext($context),
+            'recorded_at' => now()->toIso8601String(),
+        ];
+        $this->storeUnattendedFailures($failures);
+    }
+
+    public function clearUnattendedFailure(string $key): bool
+    {
+        $failures = $this->unattendedFailures();
+        if (! isset($failures[$key])) {
+            return false;
+        }
+
+        unset($failures[$key]);
+        $this->storeUnattendedFailures($failures);
+
+        return true;
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    public function unattendedFailures(): array
+    {
+        $raw = $this->settings->get(self::SETTING_UNATTENDED_FAILURES, '');
+        if (! is_string($raw) || trim($raw) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($raw, true);
+        if (! is_array($decoded)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($decoded as $key => $row) {
+            if (is_string($key) && is_array($row) && in_array($key, self::UNATTENDED_FAILURE_KEYS, true)) {
+                $out[$key] = $row;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  array<string, array<string, mixed>>  $failures
+     */
+    protected function storeUnattendedFailures(array $failures): void
+    {
+        \App\Models\Setting::setValue(
+            self::SETTING_UNATTENDED_FAILURES,
+            $failures === [] ? null : json_encode($failures),
+        );
+    }
+
+    protected function sanitizeOpsMessage(string $message): string
+    {
+        $message = preg_replace(
+            '/(?i)(token|secret|password|totp|otp|authorization|api[_-]?key|access_token|request.?body)[^\s]*/',
+            '[redacted]',
+            $message,
+        ) ?? $message;
+        $message = preg_replace('/\s+/', ' ', $message) ?? $message;
+
+        return Str::limit(trim($message), 400);
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     * @return array<string, scalar|null>
+     */
+    protected function sanitizeOpsContext(array $context): array
+    {
+        $clean = [];
+        foreach ($context as $key => $value) {
+            if (! is_string($key) || preg_match('/token|secret|password|totp|otp|authorization|credential|request.?body/i', $key)) {
+                continue;
+            }
+            if (is_scalar($value) || $value === null) {
+                $clean[$key] = $value;
+            }
+        }
+
+        return $clean;
+    }
+
+    /**
      * @param  array<string, mixed>  $definition
      */
     protected function formatTelegramMessage(array $definition): string
     {
         $severity = strtoupper((string) ($definition['severity'] ?? 'warning'));
 
+        $review = match ($definition['key'] ?? '') {
+            self::KEY_DECISION_PIPELINE_FAILED,
+            self::KEY_BROKER_RECONCILE_FAILED,
+            self::KEY_AUTOMATIC_SUBMIT_FAILED => 'Review: Settings → Admin operational alerts',
+            default => 'Review: Settings → Universe price sync',
+        };
+
         return implode("\n", [
             'Lido Portfolio — ops alert',
             "[{$severity}] {$definition['title']}",
             (string) $definition['message'],
-            'Review: Settings → Universe price sync',
+            $review,
         ]);
     }
 

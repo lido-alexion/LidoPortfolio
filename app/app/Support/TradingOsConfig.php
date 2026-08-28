@@ -134,7 +134,7 @@ final class TradingOsConfig
 
     public static function pipelineScheduleEnabled(): bool
     {
-        return (bool) config(self::KEY_PIPELINE.'.schedule_enabled', false);
+        return (bool) config(self::KEY_PIPELINE.'.schedule_enabled', true);
     }
 
     public static function pipelineScheduleTime(): string
@@ -146,7 +146,7 @@ final class TradingOsConfig
 
     public static function pipelineRunAfterDailySync(): bool
     {
-        return (bool) config(self::KEY_PIPELINE.'.run_after_daily_sync', false);
+        return (bool) config(self::KEY_PIPELINE.'.run_after_daily_sync', true);
     }
 
     /** Fallback when strategy config_json omits threshold values (TD-011). */

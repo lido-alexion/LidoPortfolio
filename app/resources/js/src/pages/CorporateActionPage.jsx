@@ -136,6 +136,14 @@ export default function CorporateActionPage() {
                 <h1 className="h5 mb-0">Corporate action</h1>
                 <Link to="/holdings" className="btn btn-sm btn-outline-secondary ms-auto">Back to holdings</Link>
             </div>
+            <div className="col-12">
+                <p className="small text-muted mb-0">
+                    This page applies stock splits and bonus issues only. A rights issue does not change existing holdings.
+                    If you subscribed and received shares, record them as a normal buy on{' '}
+                    <Link to="/transactions">Transactions</Link>
+                    {' '}at the actual subscription price.
+                </p>
+            </div>
 
             <div className="col-12 col-lg-7">
                 <div className="card">

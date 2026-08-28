@@ -17,6 +17,7 @@ class Transaction extends Model
 
     public const SOURCE_BONUS = 'bonus';
 
+    /** Historical / optional purchase tag. V4-SPEC-002: not a corporate-action type. */
     public const SOURCE_RIGHTS = 'rights';
 
     public const SOURCE_SPLIT = 'split';

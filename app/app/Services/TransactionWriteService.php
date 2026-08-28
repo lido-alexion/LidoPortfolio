@@ -452,13 +452,14 @@ class TransactionWriteService
         if ($recommendationId !== null && $recommendationId <= 0) {
             $recommendationId = null;
         }
-        // OD-10: bonus (and other CA) rows may carry recommendation_id for parent-owner
+        // OD-10: bonus/split CA rows may carry recommendation_id for parent-owner
         // attribution without becoming SOURCE_RECOMMENDATION (price-0 bonus rules apply).
+        // V4-SPEC-002: source=rights is a purchase, not a CA — with a recommendation
+        // it is a normal SOURCE_RECOMMENDATION buy at the subscription price.
         if ($recommendationId !== null
             && ! in_array($source, [
                 Transaction::SOURCE_BONUS,
                 Transaction::SOURCE_SPLIT,
-                Transaction::SOURCE_RIGHTS,
             ], true)
         ) {
             $source = Transaction::SOURCE_RECOMMENDATION;

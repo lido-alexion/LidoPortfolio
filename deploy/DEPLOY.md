@@ -23,7 +23,7 @@ This is the **canonical** deploy guide (verified May 2026). Use it for first dep
 | Tables | `portfolio_*` prefix (same DB as other Lido apps) |
 | Auth | Sanctum session cookies (HTTPS required) |
 
-**Scheduler:** cron runs `artisan schedule:run` every minute. Daily sync uses `dispatchSync()` — no queue worker required on cPanel.
+**Scheduler:** cron runs `artisan schedule:run` every minute. That is the **sole** production scheduling mechanism (V4-FEAT-010). The daily decision pipeline, broker reconciliation (`tos:reconcile-broker-orders`), and automatic-order submission (`tos:submit-automatic-orders`) are Laravel schedule events — no dedicated cPanel one-shot scripts. Daily sync uses `dispatchSync()` — no queue worker required on cPanel.
 
 ---
 
@@ -254,7 +254,7 @@ cPanel → **Cron Jobs** → every minute:
 * * * * * /usr/local/bin/php /home/USER/public_html/lidoportfolio/artisan schedule:run >> /dev/null 2>&1
 ```
 
-Use the PHP 8.4 binary path shown in cPanel if different.
+Use the PHP 8.4 binary path shown in cPanel if different. Do **not** add a separate cron or cPanel script for the daily pipeline — `schedule:run` already registers it (default 19:00 in the portfolio timezone on trading-session days). Set `TRADING_OS_PIPELINE_SCHEDULE=false` in `.env` only if you must disable unattended pipeline runs.
 
 ### H. Smoke test
 

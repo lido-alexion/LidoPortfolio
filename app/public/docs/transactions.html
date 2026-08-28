@@ -124,7 +124,7 @@
         <h2>Controls</h2>
         <dl class="doc-list">
         <dt>Add transaction</dt>
-        <dd>Record a buy or sell with symbol autocomplete, quantity, price, fees, and date. Sells that could affect more than one owner show an Owner control (Strategy or Unmanaged). Holdings → Sell prefills that owner.</dd>
+        <dd>Record a buy or sell with symbol autocomplete, quantity, price, fees, and date. Sells that could affect more than one owner show an Owner control (Strategy or Unmanaged). Holdings → Sell prefills that owner. Exercised rights shares are recorded here as a normal buy at the subscription price — not on the Corporate action page.</dd>
     
         <dt>Bulk CSV import</dt>
         <dd>Paste CSV (Stock, Quantity, Average Price, Transaction Type, optional Owner as unmanaged or strategy:{id}), review editable rows (exchange, date defaulting to today, fees), then Save all. The batch commits all-or-nothing via a bulk API — on failure nothing is saved and you can fix and retry the same batch; a completed batch cannot be submitted again. Ambiguous sells without Owner are rejected.</dd>

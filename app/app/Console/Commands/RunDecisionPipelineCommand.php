@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Engines\Pipeline\DailyDecisionPipeline;
 use App\Models\PortfolioProfile;
+use App\Services\AdminOperationalAlertService;
 use App\Services\DecisionPipelineScheduleService;
 use App\Services\PortfolioLoggerService;
 use App\Support\TradingOsConfig;
@@ -25,6 +26,7 @@ class RunDecisionPipelineCommand extends Command
         DailyDecisionPipeline $pipeline,
         DecisionPipelineScheduleService $scheduleGuard,
         PortfolioLoggerService $logger,
+        AdminOperationalAlertService $opsAlerts,
     ): int {
         if (! TradingOsConfig::enabled()) {
             $this->warn('Trading OS is disabled (TRADING_OS_ENABLED=false).');
@@ -57,7 +59,7 @@ class RunDecisionPipelineCommand extends Command
         }
 
         try {
-            return $this->runPipeline($pipeline, $scheduleGuard, $logger, $trigger, $force, $isAutomatic);
+            return $this->runPipeline($pipeline, $scheduleGuard, $logger, $opsAlerts, $trigger, $force, $isAutomatic);
         } finally {
             $lock?->release();
         }
@@ -67,6 +69,7 @@ class RunDecisionPipelineCommand extends Command
         DailyDecisionPipeline $pipeline,
         DecisionPipelineScheduleService $scheduleGuard,
         PortfolioLoggerService $logger,
+        AdminOperationalAlertService $opsAlerts,
         string $trigger,
         bool $force,
         bool $isAutomatic,
@@ -104,6 +107,7 @@ class RunDecisionPipelineCommand extends Command
 
         $failed = 0;
         $skippedSuccessful = 0;
+        $failureMessages = [];
         $logger->scheduler('info', 'Decision pipeline command started', [
             'event' => 'pipeline.command_started',
             'trigger' => $trigger,
@@ -139,6 +143,7 @@ class RunDecisionPipelineCommand extends Command
                 ));
             } catch (Throwable $e) {
                 $failed++;
+                $failureMessages[] = sprintf('profile #%d: %s', $profile->id, $e->getMessage());
                 $this->error('  Failed: '.$e->getMessage());
             }
         }
@@ -155,6 +160,42 @@ class RunDecisionPipelineCommand extends Command
             'skipped_successful_profiles' => $skippedSuccessful,
         ]);
 
+        $this->syncUnattendedPipelineAlert($opsAlerts, $failed, $failureMessages, $trigger);
+
         return $failed > 0 ? self::FAILURE : self::SUCCESS;
+    }
+
+    /**
+     * @param  list<string>  $failureMessages
+     */
+    protected function syncUnattendedPipelineAlert(
+        AdminOperationalAlertService $opsAlerts,
+        int $failed,
+        array $failureMessages,
+        string $trigger,
+    ): void {
+        if ($failed > 0) {
+            $opsAlerts->recordUnattendedFailure(
+                AdminOperationalAlertService::KEY_DECISION_PIPELINE_FAILED,
+                'Daily decision pipeline failed',
+                sprintf(
+                    '%d portfolio(s) failed during the %s pipeline run. %s',
+                    $failed,
+                    $trigger,
+                    implode('; ', $failureMessages),
+                ),
+                [
+                    'trigger' => $trigger,
+                    'failed_profiles' => $failed,
+                ],
+            );
+            $opsAlerts->syncAndNotify();
+
+            return;
+        }
+
+        if ($opsAlerts->clearUnattendedFailure(AdminOperationalAlertService::KEY_DECISION_PIPELINE_FAILED)) {
+            $opsAlerts->syncAndNotify();
+        }
     }
 }

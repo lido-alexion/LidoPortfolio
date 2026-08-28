@@ -42,6 +42,36 @@ class DataQualityDetectionTest extends TestCase
         $this->assertSame($result['detection_run_id'], $issue->evidences->first()->evidence_payload['detection_run_id'] ?? null);
     }
 
+    public function test_exchange_feed_skips_rights_issues(): void
+    {
+        $stock = $this->createDataQualityStock('RELIANCE');
+        config(['services.data_quality.corporate_actions_feed_url' => 'https://example.test/ca.json']);
+        Http::fake([
+            'https://example.test/ca.json' => Http::response([
+                [
+                    'symbol' => 'RELIANCE',
+                    'action_type' => 'rights',
+                    'ratio' => '1:1',
+                    'ex_date' => '2026-05-01',
+                ],
+                [
+                    'symbol' => 'RELIANCE',
+                    'type' => 'rights_issue',
+                    'ratio' => '3:1',
+                    'ex_date' => '2026-06-01',
+                ],
+            ], 200),
+        ]);
+
+        $result = app(DataQualityCorporateActionSyncService::class)->syncFromExchangeFeed();
+
+        $this->assertSame(2, $result['synced']);
+        $this->assertSame(0, $result['created']);
+        $this->assertSame(2, $result['skipped']);
+        $this->assertSame(0, DataQualityIssue::query()->count());
+        $this->assertSame('RELIANCE', $stock->symbol);
+    }
+
     public function test_heuristic_detection_creates_pending_issue_with_run_id(): void
     {
         $stock = $this->createDataQualityStock('GAP');

@@ -165,7 +165,9 @@ class PositionProtectionService
         if (! in_array($type, ['buy', 'sell'], true)) {
             return;
         }
-        if (in_array($source, ['bonus', 'split', 'rights'], true)) {
+        // V4-SPEC-002: rights-tagged buys are purchases (subscription price),
+        // not corporate-action restatement. Only bonus/split skip GTT sync.
+        if (in_array($source, ['bonus', 'split'], true)) {
             return;
         }
 

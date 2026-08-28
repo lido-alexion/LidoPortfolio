@@ -107,8 +107,8 @@ Returns growth %, relative strength vs benchmark, chart series, cache/fetch meta
     - Preserves destination ownership episode / entry history (OD-15) via HOLD_POSITION attribution (does **not** start OD-11 BUY cooldown)
     - Idempotent when the holding is already owned by that strategy
     - **422** for invalid strategy, already strategy-owned holding adopted into a *different* strategy, or zero quantity — not for same-stock merge
-- `POST /corporate-actions/preview` (auth) — body `{ action_type: split|bonus, ratio_from, ratio_to, ex_date, notes?, split_scope? }`. Preview ledger/OHLCV restatement.
-- `POST /corporate-actions` (auth) — apply. Split restates in-place qty/price; bonus inserts ₹0 `SOURCE_BONUS` rows (no cash). V4-SPEC-003: Strategy position qty/cost/average/stop/trailing restated; OD-12 `target_amount` (rupees) preserved. Same stock+type+ex-date already applied is idempotent (no second mutation). **422** for invalid ratio/type/date or blocking preview errors.
+- `POST /corporate-actions/preview` (auth) — body `{ action_type: split|bonus, ratio_from, ratio_to, ex_date, notes?, split_scope? }`. Preview ledger/OHLCV restatement. **422** if `action_type` is a rights issue (V4-SPEC-002: not a CA type; record exercised shares as a normal purchase).
+- `POST /corporate-actions` (auth) — apply. Split restates in-place qty/price; bonus inserts ₹0 `SOURCE_BONUS` rows (no cash). V4-SPEC-003: Strategy position qty/cost/average/stop/trailing restated; OD-12 `target_amount` (rupees) preserved. Same stock+type+ex-date already applied is idempotent (no second mutation). **422** for rights (`action_type` rights / rights_issue), invalid ratio/type/date, or blocking preview errors. Holdings, cash, OHLCV, and the CA table are unchanged on a rights rejection.
 - `GET /corporate-actions` (auth) — applied history; optional `stock_id`
 - `GET /stocks/{stock}/prices` (auth) — OHLCV rows for held stocks with `range=all|since_buy`
     - `range=all` (default): all available cached history for the instrument (OD-17)

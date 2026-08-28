@@ -21,6 +21,7 @@ use App\Services\PriceFetchService;
 use App\Services\SyncLogService;
 use App\Services\SystemLogService;
 use App\Services\TelegramNotificationService;
+use App\Support\TradingOsConfig;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -196,6 +197,8 @@ class AlertLifecycleOrderingTest extends TestCase
 
     public function test_daily_market_job_expires_before_evaluating_on_new_trading_day(): void
     {
+        config([TradingOsConfig::KEY_PIPELINE.'.run_after_daily_sync' => false]);
+
         $lifecycleSequence = [];
 
         $priceFetch = Mockery::mock(PriceFetchService::class);

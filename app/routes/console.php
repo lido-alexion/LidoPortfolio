@@ -268,10 +268,12 @@ Schedule::call(function () {
 Schedule::command('tos:reconcile-broker-orders')
     ->everyFiveMinutes()
     ->timezone($timezone)
+    ->withoutOverlapping(5)
     ->name('tos-broker-reconcile');
 
 Schedule::command('tos:submit-automatic-orders')
     ->everyFiveMinutes()
     ->timezone($timezone)
+    ->withoutOverlapping(5)
     ->name('tos-broker-automatic');
 

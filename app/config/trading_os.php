@@ -60,8 +60,9 @@ return [
     ],
 
     'pipeline' => [
-        'run_after_daily_sync' => env('TRADING_OS_PIPELINE_AFTER_SYNC', false),
-        'schedule_enabled' => env('TRADING_OS_PIPELINE_SCHEDULE', false),
+        // V4-FEAT-010: unattended production defaults. Set env to false to disable.
+        'run_after_daily_sync' => env('TRADING_OS_PIPELINE_AFTER_SYNC', true),
+        'schedule_enabled' => env('TRADING_OS_PIPELINE_SCHEDULE', true),
         'schedule_time' => env('TRADING_OS_PIPELINE_TIME', '19:00'),
     ],
 

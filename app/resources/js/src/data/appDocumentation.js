@@ -148,7 +148,7 @@ const APP_DOCUMENTATION_BASE = [
         controls: [
             {
                 name: 'Run decision pipeline',
-                description: 'On Recommendations — regenerates ideas using current Screener hits, Discovery/Evaluation facts, and Strategy config. Requires a successful market-dataset sync within 24 hours of the pipeline run (72 hours if the pipeline runs on Monday). The check uses timestamps, not calendar dates. If the dataset is older than that window, the pipeline stops before Discovery and does not create evaluation results or recommendations. Existing older prices are not used as a fallback. Exchange holidays are not treated specially.',
+                description: 'On Recommendations — regenerates ideas using current Screener hits, Discovery/Evaluation facts, and Strategy config. Production also runs this unattended once per portfolio calendar day via Laravel schedule:run (you can still run it manually). Requires a successful market-dataset sync within 24 hours of the pipeline run (72 hours if the pipeline runs on Monday). The check uses timestamps, not calendar dates. If the dataset is older than that window, the pipeline stops before Discovery and does not create evaluation results or recommendations. Existing older prices are not used as a fallback. Exchange holidays are not treated specially.',
             },
             {
                 name: 'Approve / Reject / Defer',
@@ -282,7 +282,7 @@ const APP_DOCUMENTATION_BASE = [
         overview:
             'Transactions are the ledger of record. Buys and sells drive holdings, average cost, fees, and FIFO realized P/L. Use Active vs Squared-off views, CSV import, and sell prefill from Portfolio. When more than one owner holds the same stock, a sell must name the Strategy or unmanaged lot — Lido does not guess. Sell rows that came from an EXIT recommendation may show a persisted exit_reason (strategy_exit, stop_loss, trailing_stop, horizon_expiry) — displayed with a human label but not recalculated in the UI.',
         controls: [
-            { name: 'Add transaction', description: 'Record a buy or sell with symbol autocomplete, quantity, price, fees, and date. Sells that could affect more than one owner show an Owner control (Strategy or Unmanaged). Holdings → Sell prefills that owner.' },
+            { name: 'Add transaction', description: 'Record a buy or sell with symbol autocomplete, quantity, price, fees, and date. Sells that could affect more than one owner show an Owner control (Strategy or Unmanaged). Holdings → Sell prefills that owner. Exercised rights shares are recorded here as a normal buy at the subscription price — not on the Corporate action page.' },
             { name: 'Bulk CSV import', description: 'Paste CSV (Stock, Quantity, Average Price, Transaction Type, optional Owner as unmanaged or strategy:{id}), review editable rows (exchange, date defaulting to today, fees), then Save all. The batch commits all-or-nothing via a bulk API — on failure nothing is saved and you can fix and retry the same batch; a completed batch cannot be submitted again. Ambiguous sells without Owner are rejected.' },
             { name: 'Page tabs', description: 'Switch between Transaction History and Pending Execution (or closed / squared-off views where available).' },
             { name: 'Edit / delete', description: 'Correct ledger rows; deleting a row linked to a recommendation can reopen pending execution.' },
@@ -363,20 +363,21 @@ const APP_DOCUMENTATION_BASE = [
     {
         id: 'corporate-action',
         keyword: 'corporate-action',
-        aliases: ['split', 'bonus'],
+        aliases: ['split', 'bonus', 'rights', 'rights-issue'],
         title: 'Corporate actions',
         routeLabel: '/corporate-action',
         match: (p) => pathStarts(p, '/corporate-action'),
-        summary: 'Guided stock splits and bonus issues with quantity, cost, stop/trailing, and OHLCV restatement.',
+        summary: 'Guided stock splits and bonus issues with quantity, cost, stop/trailing, and OHLCV restatement. Rights issues are not applied here.',
         overview:
-            'Apply splits and bonus issues so holdings quantities, cost basis, average cost, stop, trailing, and historical OHLCV stay economically consistent. Preview before applying. Position target (rupees) is kept; this is not a new market BUY.',
+            'Apply splits and bonus issues so holdings quantities, cost basis, average cost, stop, trailing, and historical OHLCV stay economically consistent. Preview before applying. Position target (rupees) is kept; this is not a new market BUY. Rights issues do not change existing holdings — if you exercised and received shares, record a normal buy on Transactions at the subscription price.',
         controls: [
-            { name: 'Split / Bonus wizards', description: 'Choose stock, ratios, and effective date; preview then apply.' },
+            { name: 'Split / Bonus wizards', description: 'Choose stock, ratios, and effective date; preview then apply. There is no rights-issue wizard.' },
         ],
         concepts: [
             { name: 'OHLCV restatement', description: 'Historical prices before the ex-date are adjusted so charts, trailing high, and indicators remain comparable after the action.' },
             { name: 'Position restatement (V4-SPEC-003)', description: 'For splits and bonuses, quantity, invested cost, average cost, stop-loss price, and trailing high are restated so the Strategy position stays economically equivalent. OD-12 target_amount (rupees) is kept; implied remaining shares scale at the new price. Entry date is not reset to the corporate-action date. Not a new BUY/OPEN.' },
             { name: 'Bonus ledger', description: 'Bonus shares are recorded as zero-price ledger rows linked to the corporate action (no cash movement). Quantity stays with the parent owner (OD-10).' },
+            { name: 'Rights issues (V4-SPEC-002)', description: 'A rights announcement does not change existing holdings and does not create entitlements. If you subscribe and receive shares, record them as a normal purchase at the actual subscription price — same cash, quantity, and weighted-average cost as any other buy. There is no special rights cost-basis math.' },
         ],
         related: ['transactions', 'holdings'],
     },
@@ -863,7 +864,7 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Capital status (list)', description: 'OPEN / INCREASE rows show capital funding badges: Capital required (UNFUNDED), Awaiting lender, Partially funded, and a quieter Funded badge.' },
             { name: 'Select lender', description: 'When status is Awaiting lender (or UNFUNDED with a capital request), expand Select lender on the list or use the detail panel to pick a lender strategy, Approve lender, or Reject — calls existing /v1/capital/requests/{id}/lenders|approve|reject APIs.' },
             { name: 'Generate (when available)', description: 'Runs the recommendation pipeline independently for every enabled strategy in the portfolio. Telegram (when enabled) notifies only actionable Open / Increase / Reduce / Exit ideas — not HOLD / WATCH.' },
-            { name: 'Run decision pipeline', description: 'Starts the daily decision pipeline (Discovery → Evaluation → Recommendations). Blocked unless the last successful market-dataset sync is within 24 hours of the run (72 hours on Monday). The check uses timestamps, not “synced today”. Older data is not used as a fallback. Exchange holidays are not treated specially.' },
+            { name: 'Run decision pipeline', description: 'Starts the daily decision pipeline (Discovery → Evaluation → Recommendations). In production this also runs unattended once per portfolio calendar day via Laravel schedule:run (default 19:00 after daily sync) — you do not need to click it for Automatic mode. Manual Run still works anytime. Blocked unless the last successful market-dataset sync is within 24 hours of the run (72 hours on Monday). The check uses timestamps, not “synced today”. Older data is not used as a fallback. Exchange holidays are not treated specially.' },
         ],
         concepts: [
             {
@@ -1705,7 +1706,7 @@ const APP_DOCUMENTATION_BASE = [
             'Settings is the only Administration item in the primary sidebar. Open it for Global (admins), Portfolio, and Account preferences. Portfolio → Execution mode chooses Manual / Semi-Automatic / Automatic for the active portfolio. Account → Authenticator (TOTP) and Zerodha/Kite are required before Semi-Automatic or Automatic broker submission. On Account, Active sessions lists your signed-in devices so you can revoke one session or log out other devices. Admin tools (users, sync logs, data quality, indicator/screener/strategy registries, universe sync, alert policies) are linked from Settings cards — they are not separate sidebar entries.',
         controls: [
             { name: 'Settings tabs', description: 'Navigate Global / Portfolio / Account sections.' },
-            { name: 'Execution mode', description: 'Per active portfolio. New portfolios default to Manual. Semi-Automatic and Automatic require admin entitlement plus a valid authenticator code. Manual → Automatic needs an explicit confirmation checkbox. Automatic → Manual stops future automatic submits and does not cancel broker orders already sent.' },
+            { name: 'Execution mode', description: 'Per active portfolio. New portfolios default to Manual. Semi-Automatic and Automatic require admin entitlement plus a valid authenticator code. Manual → Automatic needs an explicit confirmation checkbox. Automatic → Manual stops future automatic submits and does not cancel broker orders already sent. Automatic mode is unattended in production: after the scheduled daily pipeline, eligible orders submit without a per-order click (Laravel schedule:run; existing TOTP enrollment and Kite session are still required).' },
             { name: 'Authenticator (TOTP)', description: 'Account tab. Enroll a compatible authenticator (for example Google Authenticator), confirm with a code, and store recovery codes shown once. Required before broker submission in Semi-Automatic or Automatic; not required for Manual fills. Disable requires a current code.' },
             { name: 'Zerodha / Kite', description: 'Account tab. Connect your own Kite account. Not required for Manual mode. Sessions typically expire around 6:00 AM IST; reconnect if broker submit is blocked.' },
             { name: 'Fee components', description: 'Drive auto fees on buy/sell ledger rows.' },
@@ -1850,14 +1851,15 @@ const APP_DOCUMENTATION_BASE = [
         title: 'Admin operational alerts',
         routeLabel: '/settings/admin-alerts',
         match: (p) => pathStarts(p, '/settings/admin-alerts'),
-        summary: 'Admin inbox for operational issues (sync, maintenance, data health).',
-        overview: 'Review and acknowledge system operational alerts that are separate from portfolio trading alert policies. Universe and daily-sync overdue alerts stay quiet on weekends and trade holidays when the prior session’s last run succeeded (typically Friday). They still fire if that last run failed or was partial, because weekend retry is then expected.',
+        summary: 'Admin inbox for operational issues (sync, unattended pipeline, broker jobs, data health).',
+        overview: 'Review and acknowledge system operational alerts that are separate from portfolio trading alert policies. Universe and daily-sync overdue alerts stay quiet on weekends and trade holidays when the prior session’s last run succeeded (typically Friday). They still fire if that last run failed or was partial, because weekend retry is then expected. Unattended Daily Decision Pipeline, broker reconciliation, and Automatic-order submission failures also appear here and notify Telegram (existing admin bot; 6-hour cooldown so a every-minute schedule:run cannot spam). There is no email operational-alert channel.',
         controls: [
             { name: 'Alert inbox', description: 'Acknowledge or clear operational alerts.' },
         ],
         concepts: [
-            { name: 'Ops vs trading alerts', description: 'Operational alerts concern infrastructure/data health; alert policies concern holdings rules.' },
+            { name: 'Ops vs trading alerts', description: 'Operational alerts concern infrastructure/data health and unattended pipeline/broker jobs; alert policies concern holdings rules.' },
             { name: 'Weekend overdue silence', description: 'If Friday’s last universe batch and daily holdings sync succeeded, Sat/Sun overdue Telegram is suppressed. Failed Friday runs still alert because weekend retry should run.' },
+            { name: 'Unattended pipeline (V4-FEAT-010)', description: 'Production cron only needs php artisan schedule:run every minute. The daily pipeline, broker reconcile, and Automatic submit are Laravel schedule events (one effective pipeline decision per portfolio calendar day). Failures stay in this inbox and Telegram; they are not emailed.' },
         ],
         related: ['sync-logs', 'universe-price-sync'],
     },
@@ -1902,6 +1904,7 @@ const APP_DOCUMENTATION_BASE = [
         concepts: [
             { name: 'Detection vs resolution', description: 'Detector output is immutable; resolution decisions are append-only audit events that can be reversed later.' },
             { name: 'Data safety gate', description: 'Stocks with pending corporate-action anomalies are excluded from data-driven engines until reviewed.' },
+            { name: 'Rights issues skipped', description: 'Exchange-feed rows typed as rights (or rights issue) are not queued as corporate-action anomalies. Rights do not auto-change holdings; subscribed shares are a normal purchase.' },
             { name: 'Raw OHLCV immutability', description: 'The subsystem stores adjustment factors for analytics usage and keeps raw market bars intact for audit.' },
         ],
         related: ['corporate-action-history', 'corporate-action', 'universe-price-sync', 'sync-logs'],
@@ -2325,6 +2328,7 @@ const DOC_ENRICHMENTS = {
         ],
         concepts: [
             { name: 'Historical continuity', description: 'OHLCV restatement plus V4-SPEC-003 position restatement (qty, cost, average, stop, trailing; rupee target kept) keeps Strategy positions economically equivalent after split/bonus.' },
+            { name: 'Rights are not a CA', description: 'Preview/apply of action_type=rights is rejected. Record exercised shares as a normal buy on Transactions at the subscription price (V4-SPEC-002).' },
         ],
     },
     holdings: {

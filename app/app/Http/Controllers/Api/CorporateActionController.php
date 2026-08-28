@@ -9,6 +9,7 @@ use App\Services\CorporateActionService;
 use App\Services\StockResolverService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 
 class CorporateActionController extends Controller
@@ -82,6 +83,13 @@ class CorporateActionController extends Controller
      */
     protected function validatePayload(Request $request): array
     {
+        $actionType = (string) $request->input('action_type', '');
+        if (CorporateActionService::isRightsActionType($actionType)) {
+            throw ValidationException::withMessages([
+                'action_type' => [CorporateActionService::RIGHTS_NOT_SUPPORTED_MESSAGE],
+            ]);
+        }
+
         return $request->validate([
             'stock_id' => ['nullable', 'exists:portfolio_stocks,id'],
             'symbol' => ['nullable', 'string', 'max:20'],

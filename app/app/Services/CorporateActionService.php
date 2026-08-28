@@ -20,9 +20,14 @@ use InvalidArgumentException;
  * V4-SPEC-003: after OD-10 quantity ownership, restate cost/average (via the
  * existing ledger path), trailing (OHLCV ratio), derived stop (OD-13 fill cost),
  * and preserve OD-12 rupee target_amount so economic price levels stay equivalent.
+ *
+ * V4-SPEC-002: rights issues are not a corporate-action type. Existing holdings
+ * are not mutated for a rights announcement; exercised shares are a normal purchase.
  */
 class CorporateActionService
 {
+    public const RIGHTS_NOT_SUPPORTED_MESSAGE = 'Rights issues are not a corporate-action type. Holdings are not changed for a rights announcement. If you exercised rights, record the shares as a normal purchase at the subscription price.';
+
     public function __construct(
         protected HoldingsCalculationService $holdings,
         protected TransactionRealizationService $realizations,
@@ -243,6 +248,13 @@ class CorporateActionService
         ];
     }
 
+    public static function isRightsActionType(?string $actionType): bool
+    {
+        $normalized = strtolower(preg_replace('/[\s_\-]+/', '', (string) $actionType) ?? '');
+
+        return $normalized !== '' && str_starts_with($normalized, 'right');
+    }
+
     /**
      * @param  array<string, mixed>  $input
      * @return array{
@@ -256,7 +268,10 @@ class CorporateActionService
      */
     protected function normalizeInput(array $input): array
     {
-        $actionType = (string) ($input['action_type'] ?? '');
+        $actionType = strtolower(trim((string) ($input['action_type'] ?? '')));
+        if (self::isRightsActionType($actionType)) {
+            throw new InvalidArgumentException(self::RIGHTS_NOT_SUPPORTED_MESSAGE);
+        }
         if (! in_array($actionType, ['split', 'bonus'], true)) {
             throw new InvalidArgumentException('action_type must be split or bonus.');
         }
