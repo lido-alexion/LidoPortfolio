@@ -611,6 +611,9 @@ export default function SettingsPage() {
                                     <Link to="/settings/admin-alerts" className="btn btn-outline-warning btn-sm">
                                         Admin alerts
                                     </Link>
+                                    <Link to="/settings/stocks" className="btn btn-outline-secondary btn-sm">
+                                        Stocks catalogue
+                                    </Link>
                                     <Link to="/settings/sync-logs" className="btn btn-outline-secondary btn-sm">
                                         View sync logs
                                     </Link>

@@ -30,6 +30,7 @@ import GapFillFailuresPage from './pages/GapFillFailuresPage';
 import IgnoredPriceGapsPage from './pages/IgnoredPriceGapsPage';
 import CorporateActionHistoryPage from './pages/CorporateActionHistoryPage';
 import UserManagementPage from './pages/UserManagementPage';
+import StocksAdminPage from './pages/StocksAdminPage';
 import AdminAlertsPage from './pages/AdminAlertsPage';
 import AdminRoute from './components/AdminRoute';
 import StockExplorerPage from './pages/StockExplorerPage';
@@ -169,6 +170,11 @@ function AppRoutes() {
             <Route path="/settings/universe-price-sync/ignored-gaps" element={(
                 <AdminRoute>
                     <IgnoredPriceGapsPage />
+                </AdminRoute>
+            )} />
+            <Route path="/settings/stocks" element={(
+                <AdminRoute>
+                    <StocksAdminPage />
                 </AdminRoute>
             )} />
             <Route

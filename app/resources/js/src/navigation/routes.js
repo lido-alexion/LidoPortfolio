@@ -37,6 +37,7 @@ export const ROUTES = Object.freeze({
     SETTINGS_ACCOUNT: '/settings/account',
     SETTINGS_ALERT_POLICIES: '/settings/alert-policies',
     SETTINGS_USERS: '/settings/users',
+    SETTINGS_STOCKS: '/settings/stocks',
     SETTINGS_SYNC_LOGS: '/settings/sync-logs',
     SETTINGS_DATA_QUALITY: '/settings/data-quality',
     SETTINGS_INDICATORS: '/settings/indicators',

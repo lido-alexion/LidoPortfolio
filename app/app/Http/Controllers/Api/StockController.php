@@ -145,11 +145,10 @@ class StockController extends Controller
         $validated = $request->validate([
             'name' => ['sometimes', 'string', 'max:255'],
             'sector' => ['nullable', 'string', 'max:100'],
-            'is_active' => ['sometimes', 'boolean'],
         ]);
 
         $stock->update($validated);
 
-        return response()->json(['data' => $stock->fresh()]);
+        return response()->json(['data' => $this->equityUniverse->formatStockForApi($stock->fresh())]);
     }
 }

@@ -197,7 +197,7 @@ class WatchlistService
     {
         $this->assertWatchlistBelongsToProfile($watchlist);
 
-        if ($stock->is_benchmark || ! $stock->is_active) {
+        if ($stock->is_benchmark || ! $stock->isEffectivelyActive()) {
             throw ValidationException::withMessages([
                 'stock_id' => ['This stock cannot be added to the watchlist.'],
             ]);

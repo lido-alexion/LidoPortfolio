@@ -1731,10 +1731,11 @@ const APP_DOCUMENTATION_BASE = [
             && !pathStarts(p, '/settings/indicators')
             && !pathStarts(p, '/settings/screener-registry')
             && !pathStarts(p, '/settings/strategy-registry')
+            && !pathStarts(p, '/settings/stocks')
             && !pathStarts(p, '/settings/users'),
         summary: 'Global (admin), Portfolio, and Account settings — fees, Telegram, cash reserve %, execution mode, authenticator, Kite, sync, active sessions, and links.',
         overview:
-            'Settings is the only Administration item in the primary sidebar. Open it for Global (admins), Portfolio, and Account preferences. Portfolio → Execution mode chooses Manual / Semi-Automatic / Automatic for the active portfolio. Account → Authenticator (TOTP) and Zerodha/Kite are required before Semi-Automatic or Automatic broker submission. On Account, Active sessions lists your signed-in devices so you can revoke one session or log out other devices. Admin tools (users, sync logs, data quality, indicator/screener/strategy registries, universe sync, alert policies) are linked from Settings cards — they are not separate sidebar entries.',
+            'Settings is the only Administration item in the primary sidebar. Open it for Global (admins), Portfolio, and Account preferences. Portfolio → Execution mode chooses Manual / Semi-Automatic / Automatic for the active portfolio. Account → Authenticator (TOTP) and Zerodha/Kite are required before Semi-Automatic or Automatic broker submission. On Account, Active sessions lists your signed-in devices so you can revoke one session or log out other devices. Admin tools (users, stocks catalogue, sync logs, data quality, indicator/screener/strategy registries, universe sync, alert policies) are linked from Settings cards — they are not separate sidebar entries.',
         controls: [
             { name: 'Settings tabs', description: 'Navigate Global / Portfolio / Account sections.' },
             { name: 'Execution mode', description: 'Per active portfolio. New portfolios default to Manual. Semi-Automatic and Automatic require admin entitlement plus a valid authenticator code. Manual → Automatic needs an explicit confirmation checkbox. Automatic → Manual stops future automatic submits and does not cancel broker orders already sent. Automatic mode is unattended in production: after the scheduled daily pipeline, eligible orders submit without a per-order click (Laravel schedule:run; existing TOTP enrollment and Kite session are still required).' },
@@ -1815,7 +1816,7 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Recall period', description: 'Rule-driven eligibility for automated recalls. There is no auto-return toggle that controls repayment or recall.' },
             { name: 'Not in sidebar', description: 'Settings sub-pages and registries stay off the primary sidebar; reach them from Settings or parent product pages.' },
         ],
-        related: ['alert-policies', 'universe-price-sync', 'data-quality-center', 'indicator-registry', 'screener-registry', 'strategy-registry', 'users', 'notifications', 'cash', 'dashboard'],
+        related: ['alert-policies', 'universe-price-sync', 'data-quality-center', 'indicator-registry', 'screener-registry', 'strategy-registry', 'users', 'stocks-admin', 'notifications', 'cash', 'dashboard'],
     },
     {
         id: 'alert-policies',
@@ -2273,6 +2274,28 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Automated-execution entitlement', description: 'Per user, admin-controlled, disabled by default. Required together with TOTP and a Kite session before Lido will submit broker orders.' },
         ],
         related: ['settings', 'profile'],
+    },
+    {
+        id: 'stocks-admin',
+        keyword: 'stocks-admin',
+        aliases: ['stocks-catalogue', 'stock-master-admin'],
+        title: 'Stocks catalogue (admin)',
+        routeLabel: '/settings/stocks',
+        match: (p) => pathStarts(p, '/settings/stocks'),
+        summary: 'Admin-only catalogue to review stock-master rows and set admin availability overrides.',
+        overview:
+            'Lists non-benchmark `portfolio_stocks` with server-side search and pagination. **System** (`is_active`) reflects stock-master/provider feed state. **Admin override** (`admin_deactivated`) blocks effective availability without changing feed state. **Effective** availability is `is_active AND NOT admin_deactivated`. Activate clears the override only; Deactivate sets the override only. Neither action creates or deletes stocks. Universe price sync remains on Settings → Universe price sync.',
+        controls: [
+            { name: 'Search', description: 'Debounced symbol/name search against the admin catalogue API.' },
+            { name: 'Status filter', description: 'All, effectively active, system inactive, or admin deactivated.' },
+            { name: 'Activate', description: 'Clears `admin_deactivated` for the row. Does not force the symbol into the exchange feed.' },
+            { name: 'Deactivate', description: 'Sets `admin_deactivated`. Survives stock-master sync and provider validation.' },
+        ],
+        concepts: [
+            { name: 'System vs admin state', description: '`is_active` is owned by stock-master sync and provider validation. `admin_deactivated` is written only by admin activate/deactivate actions.' },
+            { name: 'Public stock APIs unchanged', description: 'Transactions autocomplete and `/api/stocks/search` still return effectively active stocks only.' },
+        ],
+        related: ['settings', 'universe-price-sync', 'sync-logs'],
     },
 ];
 

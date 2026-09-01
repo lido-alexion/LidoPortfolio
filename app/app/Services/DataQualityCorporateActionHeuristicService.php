@@ -23,8 +23,8 @@ class DataQualityCorporateActionHeuristicService
         $detectionRunId ??= DataQualityIssueService::newDetectionRunId('portfolio:detect-corporate-action-anomalies');
 
         $stocks = Stock::query()
-            ->where('is_active', true)
             ->where('is_benchmark', false)
+            ->effectivelyActive()
             ->get(['id', 'symbol']);
 
         $flagged = 0;

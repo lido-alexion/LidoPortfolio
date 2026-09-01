@@ -31,6 +31,7 @@ use App\Http\Controllers\Api\ScreenerBacktestController;
 use App\Http\Controllers\Api\ScreenerController;
 use App\Http\Controllers\Api\ScreenerRunController;
 use App\Http\Controllers\Api\SettingsController;
+use App\Http\Controllers\Api\AdminStockController;
 use App\Http\Controllers\Api\StockController;
 use App\Http\Controllers\Api\StockPriceController;
 use App\Http\Controllers\Api\SyncController;
@@ -224,6 +225,10 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::post('/settings/test-telegram', [SettingsController::class, 'testTelegram']);
 
     Route::middleware('admin')->group(function () {
+        Route::get('/admin/stocks', [AdminStockController::class, 'index']);
+        Route::post('/stocks/{stock}/activate', [AdminStockController::class, 'activate']);
+        Route::post('/stocks/{stock}/deactivate', [AdminStockController::class, 'deactivate']);
+
         Route::post('/stocks', [StockController::class, 'store']);
         Route::put('/stocks/{stock}', [StockController::class, 'update']);
 

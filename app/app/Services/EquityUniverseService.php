@@ -72,6 +72,8 @@ class EquityUniverseService
     {
         $payload = $stock->toArray();
         $payload['exchange_label'] = $this->exchangeLabel($stock);
+        $payload['admin_deactivated'] = $stock->isAdminDeactivated();
+        $payload['effective_active'] = $stock->isEffectivelyActive();
 
         return $payload;
     }
@@ -172,8 +174,8 @@ class EquityUniverseService
         $nseIsins = $this->activeNseIsins();
 
         $query = Stock::query()
-            ->where('is_active', true)
             ->where('is_benchmark', false)
+            ->effectivelyActive()
             ->where(function (Builder $builder) use ($nseIsins) {
                 $builder->where('exchange', 'NSE')
                     ->orWhere(function (Builder $bseOnly) use ($nseIsins) {
@@ -293,7 +295,7 @@ class EquityUniverseService
 
         $query = Stock::query()
             ->where('is_benchmark', false)
-            ->where('is_active', true);
+            ->effectivelyActive();
 
         $exchangeFilter = $exchangeFilter ? strtoupper($exchangeFilter) : null;
 
@@ -325,6 +327,26 @@ class EquityUniverseService
         }
 
         return $query;
+    }
+
+    /**
+     * Admin catalogue over non-benchmark equities (all listing states).
+     */
+    public function adminCatalogueQuery(?string $status = null): Builder
+    {
+        $query = Stock::query()
+            ->where('is_benchmark', false)
+            ->orderBy('symbol')
+            ->orderBy('exchange');
+
+        $status = strtolower(trim((string) ($status ?? 'all')));
+
+        return match ($status) {
+            'active' => $query->effectivelyActive(),
+            'inactive' => $query->where('is_active', false),
+            'admin_deactivated' => $query->where('admin_deactivated', true),
+            default => $query,
+        };
     }
 
     public function resolveCanonicalStock(string $symbol, string $exchange): ?Stock

@@ -2676,7 +2676,6 @@ Portfolio-scoped OHLCV technical screens (cached `portfolio_stock_prices` only �
 ## Pending Improvements
 
 - Add CI workflow for backend tests and frontend build checks.
-- **Stocks admin UI (open):** Stocks tab removed from SPA (May 2026). Backend `GET/POST/PUT /api/stocks` and `portfolio_stocks` table remain. Reintroduce a Stocks screen later if master-data management is needed outside Transactions.
 
 ## Wishlist (deferred — no implementation yet)
 
@@ -2687,7 +2686,6 @@ Portfolio-scoped OHLCV technical screens (cached `portfolio_stock_prices` only �
 
 | Item                        | Status   | Notes                                                                                              |
 | --------------------------- | -------- | -------------------------------------------------------------------------------------------------- |
-| Stocks tab / master UI      | Deferred | Master data via `stocks:sync` + Transactions autocomplete; no dedicated Stocks admin SPA tab.      |
 | BSE master sync             | Optional | Enable `BSE_STOCK_MASTER_ENABLED=true` and `BSE_EQUITY_CSV_URL` when BSE CSV source is configured. |
 | Single-folder deploy        | Wishlist | See § Wishlist; depends on secrets handling; keep `lidoportfolio/` + `portfolio/` for now.         |
 | Production secrets / `.env` | Wishlist | Harden before nested Laravel under `portfolio/`; see `deploy/DEPLOY.md` §2.2.                      |
@@ -2850,7 +2848,7 @@ Migration `2026_05_29_000001_extend_portfolio_stocks_master.php` adds provider s
 | `name`, `isin`, `sector`               | Display / metadata                                   |
 | `bse_scrip_code`                       | BSE numeric scrip code (`FinInstrmId` in UDiFF bhavcopy) |
 | `yahoo_symbol`, `alpha_vantage_symbol` | Provider-specific symbols                            |
-| `is_active`, `is_benchmark`, `is_dual_listed` | Listing / NIFTY row / also on BSE (same ISIN) |
+| `is_active`, `admin_deactivated`, `is_benchmark`, `is_dual_listed` | `is_active` = system/feed listing state; `admin_deactivated` = explicit admin override (`effective_active = is_active AND NOT admin_deactivated`); benchmark rows ignore admin override |
 | `series` | NSE listing series (`EQ`, `BE`, `BZ`); used to build NSE provider trade symbol |
 | `last_verified_at`                     | Last provider or sync verification                   |
 
@@ -3015,9 +3013,14 @@ Bulk OHLCV for the **equity universe** (NSE + BSE-only; ISIN deduped). Reuses `p
 
 | Method       | Path                                     | Purpose                                 |
 | ------------ | ---------------------------------------- | --------------------------------------- |
-| GET          | `/api/stocks/search?q=&exchange=&limit=` | Local master autocomplete (min 2 chars) |
+| GET          | `/api/stocks/search?q=&exchange=&limit=` | Local master autocomplete (min 2 chars; effectively active only) |
 | POST         | `/api/stocks/validate`                   | Explicit validation + persist           |
-| GET/POST/PUT | `/api/stocks`                            | List / create (validated) / update      |
+| GET/POST/PUT | `/api/stocks`                            | List / create (validated) / update (metadata only on PUT) |
+| GET          | `/api/admin/stocks` (admin)              | Paginated catalogue with status filter (`all`, `active`, `inactive`, `admin_deactivated`) |
+| POST         | `/api/stocks/{id}/activate` (admin)      | Clears `admin_deactivated`; does not change `is_active` |
+| POST         | `/api/stocks/{id}/deactivate` (admin)    | Sets `admin_deactivated`; does not change `is_active` |
+
+**V4-FEAT-011 Stocks admin SPA (2026-09-01):** Admin page `/settings/stocks` — searchable, paginated catalogue of non-benchmark `portfolio_stocks` with system vs admin vs effective status columns. Activate/Deactivate use dedicated admin endpoints only. Public `/api/stocks` and `/api/stocks/search` continue to return effectively active equities only. Transaction `resolveCanonicalStock()` / `resolveByStockId()` keep raw `is_active` semantics. Stock-master sync and provider validation may still update `is_active` but never write `admin_deactivated`.
 
 ### Autocomplete UX
 
