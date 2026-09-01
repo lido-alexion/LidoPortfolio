@@ -3,7 +3,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { MemoryRouter } from 'react-router-dom';
-import { render } from '@testing-library/react';
+import { act, render } from '@testing-library/react';
 import StocksAdminPage from '../../resources/js/src/pages/StocksAdminPage.jsx';
 
 const apiGet = vi.fn();
@@ -99,23 +99,25 @@ describe('StocksAdminPage (V4-FEAT-011)', () => {
     });
 
     it('debounces search input', async () => {
-        vi.useFakeTimers();
         mockCatalogueResponse([sampleStock]);
         renderPage();
         await screen.findByText('INFY');
 
+        vi.useFakeTimers();
         apiGet.mockClear();
         mockCatalogueResponse([sampleStock]);
 
         fireEvent.change(screen.getByTestId('stocks-admin-search'), { target: { value: 'inf' } });
-        vi.advanceTimersByTime(299);
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(299);
+        });
         expect(apiGet).not.toHaveBeenCalled();
 
-        vi.advanceTimersByTime(1);
-        await waitFor(() => {
-            expect(apiGet).toHaveBeenCalledWith('/admin/stocks', {
-                params: { page: 1, per_page: 25, q: 'inf', status: 'all' },
-            });
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(1);
+        });
+        expect(apiGet).toHaveBeenCalledWith('/admin/stocks', {
+            params: { page: 1, per_page: 25, q: 'inf', status: 'all' },
         });
         vi.useRealTimers();
     });

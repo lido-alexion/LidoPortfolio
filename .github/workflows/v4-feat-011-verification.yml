@@ -1,0 +1,65 @@
+name: V4 FEAT-011 Verification
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v4-feat-011-verification-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify Stocks Admin SPA
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: app
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: curl, fileinfo, mbstring, pdo_sqlite, xml
+          coverage: none
+          tools: composer
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare Laravel test environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          php artisan config:clear
+
+      - name: Run StockAdminTest
+        run: php artisan test --filter=StockAdminTest
+
+      - name: Run StockSearchTest
+        run: php artisan test --filter=StockSearchTest
+
+      - name: Run EquityUniverseServiceTest
+        run: php artisan test --filter=EquityUniverseServiceTest
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install npm dependencies
+        run: npm ci --registry=https://registry.npmjs.org
+
+      - name: Run Stocks Admin frontend test
+        run: npx vitest run tests/js/stocksAdmin.test.jsx

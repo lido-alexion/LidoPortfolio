@@ -23,6 +23,11 @@ beforeEach(() => {
     resetApiMock();
     window.localStorage.clear();
     window.sessionStorage.clear();
+    globalThis.ResizeObserver = vi.fn().mockImplementation(() => ({
+        observe: vi.fn(),
+        unobserve: vi.fn(),
+        disconnect: vi.fn(),
+    }));
     window.matchMedia = vi.fn().mockImplementation((query) => ({
         matches: String(query).includes('min-width: 1200px'),
         media: query,
