@@ -5,7 +5,7 @@
 | **V3 Status** | **V3 STRICTLY COMPLETE** (strict register-to-implementation pass 2026-08-26) |
 | **Document type** | Forward-looking V4 register + V5 deferred features (same genuine-new-work pool) |
 | **Created** | 2026-08-25 |
-| **Last reconciled** | 2026-08-28 (V4-FEAT-014 Backtest Duplicate COMPLETE) |
+| **Last reconciled** | 2026-09-02 (V4-FEAT-011 Stocks admin SPA VERIFIED COMPLETE) |
 | **Canonical path** | [`specs/LidoPortfolio-V4-Wishlist.md`](LidoPortfolio-V4-Wishlist.md) |
 | **Related** | [`LidoPortfolio-V3-Specification.md`](LidoPortfolio-V3-Specification.md) · [`../implementation.md`](../implementation.md) |
 
@@ -50,7 +50,7 @@ Active V4 feature count: **21** (**3** `OPEN`, **18** `COMPLETE`). The former 22
 | V4-FEAT-006 | Liquidity & Tradability indicator calculators | Indicator Registry expansion; not V3 SoT. **PO decision (2026-08-27):** Keep the existing composite formulas and complete their runtime wiring. Do not redesign formulas, retune thresholds, change weights, or invent new metrics. Implemented via `TechnicalIndicatorService` dispatch to `LiquidityTradabilityCalculator` (2026-08-27). | P2 | COMPLETE |
 | V4-FEAT-009 | Review reports list UI + deeper metrics | New Review UX beyond V3 Dashboard/API. **Implemented 2026-08-28:** live dashboard stays `/review`; list `/review/reports` and detail `/review/reports/:id`; single sidebar Review entry plus a Reports control on the live dashboard. List uses `GET /api/v1/reviews` (`page` / `pageSize`, default 20), stored portfolio value and XIRR, row click and Open. Detail uses `GET /api/v1/reviews/{id}` persisted metrics (no frontend formulas); `recommendation_accepted` is labelled **Accepted (not executed)**. Generate on the list only via `POST /api/v1/reviews/generate` query params (`period_start` / `period_end`; both empty keeps the existing 90-day default). No DELETE, filters, new endpoints, ReviewEngine, or pipeline changes. | P3 | COMPLETE |
 | V4-FEAT-010 | Pipeline Operations / Unattended Production Execution | **PO frozen 2026-08-28:** (1) Daily Decision Pipeline runs fully unattended in production via Laravel `schedule:run` (no human trigger). (2) One effective pipeline run per portfolio calendar day (scheduler may fire repeatedly; existing F148/F149 lock + once-per-day guard). (3) Pipeline / broker-reconcile / automatic-submit failures stay visible in-app and send Telegram via existing ops alerts (6-hour cooldown; no email; no V5 multi-channel). (4) Laravel scheduler is the sole production scheduling mechanism — no dedicated cPanel one-shot scripts. Implemented 2026-08-28: pipeline schedule + post-sync hook default **on**; `tos:reconcile-broker-orders` and `tos:submit-automatic-orders` remain every five minutes with `withoutOverlapping`. | P2 | COMPLETE |
-| V4-FEAT-011 | Stocks admin SPA surface | Admin product expansion; not V3 | P3 | COMPLETE |
+| V4-FEAT-011 | Stocks admin SPA surface | Admin product expansion; not V3. **Verified complete 2026-09-02:** `/settings/stocks` searchable/paginated admin catalogue; separate `admin_deactivated` override; dedicated Activate/Deactivate actions; raw feed state preserved; no manual add/delete. Focused PHP and Vitest suites passed in GitHub Actions run `33544994802`. | P3 | COMPLETE |
 | V4-FEAT-012 | Admin force-logout of other users (PD-007) | Auth product expansion; not V3 | P3 | OPEN |
 | V4-FEAT-013 | Cash-as-of / export / compare polish | F014 residual polish; not V3 | P3 | OPEN |
 | V4-FEAT-014 | Backtest history “Duplicate” action | New UX convenience; not V3. **Implemented 2026-08-28:** Duplicate on a history row starts a **new** simulation via existing `POST /api/v1/backtests` using that row’s stored `from_date` / `to_date`, initial capital, notes, and tags, against the **current Strategy** (`strategy_version_id` omitted → `ensureActive`). Does not copy trades, statistics, snapshots, or the original run’s stored Strategy version. Does not revive Strategy Duplicate/version-fork. Missing period dates or valid capital stops instead of inventing values. | P3 | COMPLETE |
@@ -65,6 +65,17 @@ Active V4 feature count: **21** (**3** `OPEN`, **18** `COMPLETE`). The former 22
 | V4-FEAT-028 | Structured logging / pagination consistency | Platform hardening (was V4-TD-010/011). **Implemented (2026-08-27):** `PortfolioLoggerService::event()` with stable event names + structured identifiers on TOS pipeline/discovery/evaluation/recommendation/execution/notification/data/review logs; key redaction for secrets. `TradingOsPagination` (`page`/`pageSize`, meta `{page,pageSize,total,lastPage}`, max 200 / price-bars 500) on securities, price-bars, recommendations, orders, transactions, notifications, reviews. Candidates/evaluations/positions/pending-execution stay bounded and unpaginated. OpenAPI updated. | P3 | COMPLETE |
 | V4-FEAT-029 | Pluggable Evaluation rules modules | Evaluation architecture (was V4-TD-012). **Implemented (2026-08-27):** `EvaluationFactorRule` modules registered via `EvaluationServiceProvider`; `EvaluationEngine` orchestrates context + equal-weight aggregation. Formulas/weights/FEAT-005/021/API unchanged. `AsOfFactorScorer` stays historical-safe (no live Market Analysis). | P3 | COMPLETE |
 | V4-FEAT-032 | Repository layer for TOS aggregates | Architecture (was V4-TD-015). **Implemented (2026-08-27):** focused `App\Repositories\Tos\*` classes own TOS aggregate list/find/paginate queries. Engines keep orchestration, lifecycle, scoring, and writes. No generic repository framework. API/OpenAPI unchanged. | P3 | COMPLETE |
+
+---
+
+### V4-FEAT-011 — Stocks admin SPA (VERIFIED COMPLETE 2026-09-02)
+
+- Admin route `/settings/stocks` provides a searchable, server-paginated catalogue of non-benchmark stocks, including system, admin-override, and effective availability states.
+- Dedicated admin Activate/Deactivate actions write only `admin_deactivated`; stock-master sync and provider validation retain ownership of raw `is_active`.
+- Public stock index/search return effectively active rows only. Transaction resolution and BSE/NSE ISIN deduplication retain the frozen raw-state behavior.
+- No manual stock-add or delete control was introduced.
+- Verification: manual GitHub Actions run [`33544994802`](https://github.com/lido-alexion/LidoPortfolio/actions/runs/33544994802) passed `StockAdminTest`, `StockSearchTest`, `EquityUniverseServiceTest`, and `stocksAdmin.test.jsx` on PHP 8.4 / Node 22 with an isolated in-memory SQLite database.
+- The focused FEAT-011 workflow does **not** complete V5-deferred `V4-FEAT-030`, whose broader PHPUnit + frontend-build CI scope remains `OPEN`.
 
 ---
 
@@ -466,6 +477,7 @@ Moving a FEAT from V4 to V5 does **not** satisfy acceptance. Freezing V4-SPEC-00
 | 2026-08-28 | **Product Owner V4-FEAT-008 → V5:** Trading Artifact Framework *remainder* is out of active V4. Shipped envelope, package I/O, Indicator/Screener/Strategy registries, Create/Enable/Archive, AI authoring/runtime docs, and V3 multi-strategy surfaces stay shipped. Do not invent a new V4 TAF slice. ID unchanged; status stays `OPEN` (not COMPLETE). Active V4 is **21** (**15** COMPLETE, **6** OPEN). V5-deferred is **15**. |
 | 2026-08-28 | **V4-FEAT-009 COMPLETE:** Review reports list `/review/reports` and detail `/review/reports/:id`. Live `/review` kept. Single sidebar Review item. Stored ReviewEngine metrics only; Generate on the list with query-param dates. Tests: `tests/js/tos/tos-review-reports.test.jsx`, `tests/js/tos/review-reports.test.js`. Active V4 is **21** (**16** COMPLETE, **5** OPEN: 011–015). |
 | 2026-08-28 | **V4-FEAT-014 COMPLETE:** Backtest history Duplicate starts a new simulation from stored period/capital/notes/tags against the current Strategy via existing `POST /api/v1/backtests`. No result-state copy; no new endpoint; no Strategy Duplicate. Tests: `tests/Feature/Backtest/BacktestDuplicateTest.php`, `tests/js/tos/backtest-duplicate.test.jsx`, `tests/js/backtestDuplicate.test.mjs`. Active V4 is **21** (**17** COMPLETE, **4** OPEN: 011–013, 015). |
+| 2026-09-02 | **V4-FEAT-011 VERIFIED COMPLETE:** Stocks admin SPA frozen behavior passed `StockAdminTest`, `StockSearchTest`, `EquityUniverseServiceTest`, and `stocksAdmin.test.jsx` in manual GitHub Actions run `33544994802` (PHP 8.4, Node 22, isolated in-memory SQLite). Active V4 is **21** (**18** COMPLETE, **3** OPEN: 012, 013, 015). Focused verification workflow does not close V5-deferred FEAT-030. |
 
 ## Appendix — Former ID map
 
