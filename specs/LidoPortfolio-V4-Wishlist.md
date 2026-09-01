@@ -5,7 +5,7 @@
 | **V3 Status** | **V3 STRICTLY COMPLETE** (strict register-to-implementation pass 2026-08-26) |
 | **Document type** | Forward-looking V4 register + V5 deferred features (same genuine-new-work pool) |
 | **Created** | 2026-08-25 |
-| **Last reconciled** | 2026-09-02 (V4-FEAT-011 Stocks admin SPA VERIFIED COMPLETE) |
+| **Last reconciled** | 2026-09-02 (V4 closed; FEAT-012, 013, 015 deferred to V5) |
 | **Canonical path** | [`specs/LidoPortfolio-V4-Wishlist.md`](LidoPortfolio-V4-Wishlist.md) |
 | **Related** | [`LidoPortfolio-V3-Specification.md`](LidoPortfolio-V3-Specification.md) · [`../implementation.md`](../implementation.md) |
 
@@ -40,7 +40,7 @@ Living detail: [`implementation.md`](../implementation.md).
 
 ## 2. Genuine V4 features (active V4 scope)
 
-Active V4 feature count: **21** (**3** `OPEN`, **18** `COMPLETE`). The former 22-item active V4 register moved **V4-FEAT-008** to V5 on 2026-08-28 (ID unchanged).
+Active V4 feature count: **18** (**0** `OPEN`, **18** `COMPLETE`). **V4 is closed.** The former 22-item active V4 register moved **V4-FEAT-008** to V5 on 2026-08-28, followed by **V4-FEAT-012, V4-FEAT-013, and V4-FEAT-015** on 2026-09-02 (IDs unchanged; deferred items remain `OPEN`).
 
 | ID | Item | Why genuinely V4 | Priority | Status |
 |----|------|------------------|----------|--------|
@@ -51,10 +51,7 @@ Active V4 feature count: **21** (**3** `OPEN`, **18** `COMPLETE`). The former 22
 | V4-FEAT-009 | Review reports list UI + deeper metrics | New Review UX beyond V3 Dashboard/API. **Implemented 2026-08-28:** live dashboard stays `/review`; list `/review/reports` and detail `/review/reports/:id`; single sidebar Review entry plus a Reports control on the live dashboard. List uses `GET /api/v1/reviews` (`page` / `pageSize`, default 20), stored portfolio value and XIRR, row click and Open. Detail uses `GET /api/v1/reviews/{id}` persisted metrics (no frontend formulas); `recommendation_accepted` is labelled **Accepted (not executed)**. Generate on the list only via `POST /api/v1/reviews/generate` query params (`period_start` / `period_end`; both empty keeps the existing 90-day default). No DELETE, filters, new endpoints, ReviewEngine, or pipeline changes. | P3 | COMPLETE |
 | V4-FEAT-010 | Pipeline Operations / Unattended Production Execution | **PO frozen 2026-08-28:** (1) Daily Decision Pipeline runs fully unattended in production via Laravel `schedule:run` (no human trigger). (2) One effective pipeline run per portfolio calendar day (scheduler may fire repeatedly; existing F148/F149 lock + once-per-day guard). (3) Pipeline / broker-reconcile / automatic-submit failures stay visible in-app and send Telegram via existing ops alerts (6-hour cooldown; no email; no V5 multi-channel). (4) Laravel scheduler is the sole production scheduling mechanism — no dedicated cPanel one-shot scripts. Implemented 2026-08-28: pipeline schedule + post-sync hook default **on**; `tos:reconcile-broker-orders` and `tos:submit-automatic-orders` remain every five minutes with `withoutOverlapping`. | P2 | COMPLETE |
 | V4-FEAT-011 | Stocks admin SPA surface | Admin product expansion; not V3. **Verified complete 2026-09-02:** `/settings/stocks` searchable/paginated admin catalogue; separate `admin_deactivated` override; dedicated Activate/Deactivate actions; raw feed state preserved; no manual add/delete. Focused PHP and Vitest suites passed in GitHub Actions run `33544994802`. | P3 | COMPLETE |
-| V4-FEAT-012 | Admin force-logout of other users (PD-007) | Auth product expansion; not V3 | P3 | OPEN |
-| V4-FEAT-013 | Cash-as-of / export / compare polish | F014 residual polish; not V3 | P3 | OPEN |
 | V4-FEAT-014 | Backtest history “Duplicate” action | New UX convenience; not V3. **Implemented 2026-08-28:** Duplicate on a history row starts a **new** simulation via existing `POST /api/v1/backtests` using that row’s stored `from_date` / `to_date`, initial capital, notes, and tags, against the **current Strategy** (`strategy_version_id` omitted → `ensureActive`). Does not copy trades, statistics, snapshots, or the original run’s stored Strategy version. Does not revive Strategy Duplicate/version-fork. Missing period dates or valid capital stops instead of inventing values. | P3 | COMPLETE |
-| V4-FEAT-015 | Tax reporting / attribution / benchmarks | New product surface | P3 | OPEN |
 | V4-FEAT-021 | Strategy indicator params → EvaluationEngine wiring | EvaluationEngine is a separate TOS path from V3 Strategy fit/scoring; wiring is a V4 Evaluation design choice (was TD-19 / V4-BUG-002 / V4-TD-001). **PO decision (2026-08-26):** Strategy catalogue parameters are authoritative — a valid Strategy value overrides global Evaluation config; otherwise the existing global/default is used. Keys: `rsi_period`, `lookback_days`, `sma_fast`, `sma_slow`, `atr_period`, `volume_sma_period`, `benchmark`. Implemented via `EvaluationParameterResolver` (2026-08-26). | P1 | COMPLETE |
 | V4-FEAT-022 | Hard dataset publish / validation gate | Pre-discovery data-platform hardening (was V4-TD-002). **PO clarification (2026-08-27) — correction of the same feature, not a new ID:** Discovery is allowed when the required market dataset was successfully synced within the previous 24 hours of the pipeline run. On Monday, the allowed freshness window is 72 hours. The comparison is based strictly on timestamps, not calendar dates. Holiday-aware freshness / trading-calendar handling is out of scope (deferred to V5). Supersedes the earlier `published === true` / “synced today” gate. Implemented via `DatasetFreshnessGate` in `DailyDecisionPipeline` (2026-08-27). | P1 | COMPLETE |
 | V4-FEAT-023 | Immutable dataset versioning | Data-platform hardening (was V4-TD-003). **Implemented (2026-08-27):** a successful daily market sync appends an insert-only `portfolio_tos_dataset_versions` row with a unique `version_key`; DiscoveryRun records that key; later syncs create a new row and do not mutate earlier identity. Failed/incomplete syncs create no version. FEAT-022 freshness remains last-successful-sync timestamp + 24h/72h Monday. | P2 | COMPLETE |
@@ -106,7 +103,7 @@ Frozen UX, implemented as specified:
 
 ## 3. V5 deferred features (moved from V4)
 
-Product Owner decisions: **2026-08-26** (original 14 IDs) and **2026-08-28** (**V4-FEAT-008**). These **15** items are **V5 scope**, not active V4. They remain genuine post-V3 work. IDs, names, rationale, and priorities are unchanged.
+Product Owner decisions: **2026-08-26** (original 14 IDs), **2026-08-28** (**V4-FEAT-008**), and **2026-09-02** (**V4-FEAT-012, V4-FEAT-013, V4-FEAT-015**). These **18** items are **V5 scope**, not active V4. They remain genuine post-V3 work. IDs, names, rationale, and priorities are unchanged.
 
 This is a **roadmap / prioritization** decision, **not** a claim that the underlying capability is implemented. Status remains `OPEN`. **Do not mark these COMPLETE** because they moved. **Do not treat shipped TAF registries/import-export as unimplemented** because FEAT-008 moved — only the *remainder* is V5.
 
@@ -116,6 +113,9 @@ This is a **roadmap / prioritization** decision, **not** a claim that the underl
 | V4-FEAT-004 | Notification channel abstraction + email/webhook | V3 §30 requires Telegram/in-app capability (shipped); multi-channel is new | P2 | OPEN |
 | V4-FEAT-007 | Indicator Registry deeper versioning / remaining cutover | SD-033 residual beyond V3 registries already shipped | P2 | OPEN |
 | V4-FEAT-008 | Trading Artifact Framework remaining phases | SD-034 residual **beyond shipped** envelope, package I/O, Indicator/Screener/Strategy registries, Create/Enable/Archive, AI authoring/runtime docs, and V3 multi-strategy surfaces. **PO 2026-08-28:** remainder is V5, not active V4. Do **not** invent a new V4 TAF slice. Shipped infrastructure stays shipped. | P2 | OPEN |
+| V4-FEAT-012 | Admin force-logout of other users (PD-007) | Auth product expansion; not V3. **PO 2026-09-02:** deferred to V5; no V4 implementation required. | P3 | OPEN |
+| V4-FEAT-013 | Cash-as-of / export / compare polish | F014 residual polish; not V3. **PO 2026-09-02:** deferred to V5; no V4 implementation required. | P3 | OPEN |
+| V4-FEAT-015 | Tax reporting / attribution / benchmarks | New product surface. **PO 2026-09-02:** deferred to V5; no V4 implementation required. | P3 | OPEN |
 | V4-FEAT-016 | Mobile application | New client | TBD | OPEN |
 | V4-FEAT-017 | AI assistant (non-decision) | New assistive surface | TBD | OPEN |
 | V4-FEAT-018 | ML scoring models | Optional non-deterministic path; V3 is deterministic | TBD | OPEN |
@@ -228,7 +228,7 @@ This is identity/attribution, not an OHLCV snapshot copy or a generic versioning
 
 ## 4. Genuine V4 specification decisions (frozen PO rules — implementation on each SPEC row)
 
-These **7** IDs are the V4 specification register (separate from the **21** active V4 features and from V5). SPEC-001–006 were resolved **2026-08-26**. **V4-SPEC-007** (broker execution modes) was recovered and frozen **2026-08-27**.
+These **7** IDs are the V4 specification register (separate from the **18** active V4 features and from V5). SPEC-001–006 were resolved **2026-08-26**. **V4-SPEC-007** (broker execution modes) was recovered and frozen **2026-08-27**.
 
 **Status:** `DECIDED` — the rule is frozen. **Not** `COMPLETE`. Implementation is recorded on the SPEC row: **SPEC-001, SPEC-002, SPEC-003, SPEC-004, and SPEC-005 are implemented**; SPEC-006 is not. **SPEC-007** is implemented by FEAT-001. Do not treat V3’s current safe behaviour (below) as the V4 target.
 
@@ -478,6 +478,7 @@ Moving a FEAT from V4 to V5 does **not** satisfy acceptance. Freezing V4-SPEC-00
 | 2026-08-28 | **V4-FEAT-009 COMPLETE:** Review reports list `/review/reports` and detail `/review/reports/:id`. Live `/review` kept. Single sidebar Review item. Stored ReviewEngine metrics only; Generate on the list with query-param dates. Tests: `tests/js/tos/tos-review-reports.test.jsx`, `tests/js/tos/review-reports.test.js`. Active V4 is **21** (**16** COMPLETE, **5** OPEN: 011–015). |
 | 2026-08-28 | **V4-FEAT-014 COMPLETE:** Backtest history Duplicate starts a new simulation from stored period/capital/notes/tags against the current Strategy via existing `POST /api/v1/backtests`. No result-state copy; no new endpoint; no Strategy Duplicate. Tests: `tests/Feature/Backtest/BacktestDuplicateTest.php`, `tests/js/tos/backtest-duplicate.test.jsx`, `tests/js/backtestDuplicate.test.mjs`. Active V4 is **21** (**17** COMPLETE, **4** OPEN: 011–013, 015). |
 | 2026-09-02 | **V4-FEAT-011 VERIFIED COMPLETE:** Stocks admin SPA frozen behavior passed `StockAdminTest`, `StockSearchTest`, `EquityUniverseServiceTest`, and `stocksAdmin.test.jsx` in manual GitHub Actions run `33544994802` (PHP 8.4, Node 22, isolated in-memory SQLite). Active V4 is **21** (**18** COMPLETE, **3** OPEN: 012, 013, 015). Focused verification workflow does not close V5-deferred FEAT-030. |
+| 2026-09-02 | **Product Owner deferred V4-FEAT-012, V4-FEAT-013, and V4-FEAT-015 to V5:** IDs and `OPEN` status are unchanged; this is roadmap reprioritization, not implementation. Active V4 is now **18** (**18 COMPLETE, 0 OPEN**) and is formally closed. V5-deferred is **18**. |
 
 ## Appendix — Former ID map
 
