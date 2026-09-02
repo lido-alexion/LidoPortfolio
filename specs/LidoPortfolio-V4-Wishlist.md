@@ -5,7 +5,7 @@
 | **V3 Status** | **V3 STRICTLY COMPLETE** (strict register-to-implementation pass 2026-08-26) |
 | **Document type** | Forward-looking V4 register + V5 deferred features (same genuine-new-work pool) |
 | **Created** | 2026-08-25 |
-| **Last reconciled** | 2026-09-02 (V4 closed; FEAT-012, 013, 015 deferred to V5) |
+| **Last reconciled** | 2026-09-02 (V4 closed and FEAT-011 production-verified) |
 | **Canonical path** | [`specs/LidoPortfolio-V4-Wishlist.md`](LidoPortfolio-V4-Wishlist.md) |
 | **Related** | [`LidoPortfolio-V3-Specification.md`](LidoPortfolio-V3-Specification.md) · [`../implementation.md`](../implementation.md) |
 
@@ -72,6 +72,7 @@ Active V4 feature count: **18** (**0** `OPEN`, **18** `COMPLETE`). **V4 is close
 - Public stock index/search return effectively active rows only. Transaction resolution and BSE/NSE ISIN deduplication retain the frozen raw-state behavior.
 - No manual stock-add or delete control was introduced.
 - Verification: manual GitHub Actions run [`33544994802`](https://github.com/lido-alexion/LidoPortfolio/actions/runs/33544994802) passed `StockAdminTest`, `StockSearchTest`, `EquityUniverseServiceTest`, and `stocksAdmin.test.jsx` on PHP 8.4 / Node 22 with an isolated in-memory SQLite database.
+- Production verification: deployed 2026-09-02; PHP 8.4.23 `migrate --force` applied `2026_09_01_000001_add_admin_deactivated_to_portfolio_stocks` successfully, all cPanel migration checks passed, the updated `assets/app-DKEolVAa.js` bundle loaded, and the Product Owner confirmed the deployed pages were working.
 - The focused FEAT-011 workflow does **not** complete V5-deferred `V4-FEAT-030`, whose broader PHPUnit + frontend-build CI scope remains `OPEN`.
 
 ---
@@ -479,6 +480,7 @@ Moving a FEAT from V4 to V5 does **not** satisfy acceptance. Freezing V4-SPEC-00
 | 2026-08-28 | **V4-FEAT-014 COMPLETE:** Backtest history Duplicate starts a new simulation from stored period/capital/notes/tags against the current Strategy via existing `POST /api/v1/backtests`. No result-state copy; no new endpoint; no Strategy Duplicate. Tests: `tests/Feature/Backtest/BacktestDuplicateTest.php`, `tests/js/tos/backtest-duplicate.test.jsx`, `tests/js/backtestDuplicate.test.mjs`. Active V4 is **21** (**17** COMPLETE, **4** OPEN: 011–013, 015). |
 | 2026-09-02 | **V4-FEAT-011 VERIFIED COMPLETE:** Stocks admin SPA frozen behavior passed `StockAdminTest`, `StockSearchTest`, `EquityUniverseServiceTest`, and `stocksAdmin.test.jsx` in manual GitHub Actions run `33544994802` (PHP 8.4, Node 22, isolated in-memory SQLite). Active V4 is **21** (**18** COMPLETE, **3** OPEN: 012, 013, 015). Focused verification workflow does not close V5-deferred FEAT-030. |
 | 2026-09-02 | **Product Owner deferred V4-FEAT-012, V4-FEAT-013, and V4-FEAT-015 to V5:** IDs and `OPEN` status are unchanged; this is roadmap reprioritization, not implementation. Active V4 is now **18** (**18 COMPLETE, 0 OPEN**) and is formally closed. V5-deferred is **18**. |
+| 2026-09-02 | **V4-FEAT-011 PRODUCTION VERIFIED:** cPanel migration checks passed on PHP 8.4.23; the `admin_deactivated` migration completed; the updated `assets/app-DKEolVAa.js` bundle loaded; Product Owner confirmed the deployed pages were working. V4 remains closed. |
 
 ## Appendix — Former ID map
 
