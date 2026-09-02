@@ -1,0 +1,71 @@
+# LidoPortfolio V5 Wishlist
+
+| Field | Value |
+|-------|-------|
+| **V4 Status** | **V4 COMPLETE AND CLOSED** (18/18 active features complete) |
+| **Document type** | Canonical V5 product wishlist and planning register |
+| **Created** | 2026-09-02 |
+| **Last reconciled** | 2026-09-02 |
+| **Canonical path** | [`specs/LidoPortfolio-V5-Wishlist.md`](LidoPortfolio-V5-Wishlist.md) |
+| **Related** | [`LidoPortfolio-V4-Wishlist.md`](LidoPortfolio-V4-Wishlist.md) · [`LidoPortfolio-V3-Specification.md`](LidoPortfolio-V3-Specification.md) · [`../implementation.md`](../implementation.md) |
+
+## 1. Purpose and authority
+
+This is the single active source of truth for V5 wishlist discovery, prioritization, specification, and implementation status. It contains genuine post-V4 product work. The completed V4 register remains a historical record and must not be used as an active V5 backlog.
+
+Feature IDs retained from the earlier combined roadmap remain `V4-FEAT-*` to preserve traceability. An ID prefix records origin; it does not assign the feature back to V4. New entries continue the existing sequence until a deliberate ID migration is approved.
+
+Moving an item here does not satisfy it. Every item remains `OPEN` until its product rules are sufficiently specified, implemented, tested, documented, deployed, and production-verified as appropriate.
+
+### Status values
+
+`OPEN` · `BLOCKED` · `DECIDED` · `IN PROGRESS` · `COMPLETE`
+
+## 2. V5 wishlist
+
+Current count: **24 OPEN**.
+
+| ID | Item | V5 scope and rationale | Priority | Status |
+|----|------|------------------------|----------|--------|
+| V4-FEAT-003 | B4 persistent app-wide critical banner | V3 §29: **B4 is explicit wishlist**; B3 Dashboard reserve warning is current V3. | P2 | OPEN |
+| V4-FEAT-004 | Notification channel abstraction + email/webhook | V3 §30 requires Telegram/in-app capability (shipped); multi-channel is new. | P2 | OPEN |
+| V4-FEAT-007 | Indicator Registry deeper versioning / remaining cutover | SD-033 residual beyond V3 registries already shipped. | P2 | OPEN |
+| V4-FEAT-008 | Trading Artifact Framework remaining phases | SD-034 residual beyond the shipped envelope, package I/O, Indicator/Screener/Strategy registries, Create/Enable/Archive, AI authoring/runtime docs, and V3 multi-strategy surfaces. Remaining scope: immutable published versions, first-class library/binding model, expanded AI catalogue UX, sharing/distribution, dependency dashboards, rollback, bundle UI, and fork workflows. Shipped infrastructure stays shipped. | P2 | OPEN |
+| V4-FEAT-012 | Admin force-logout of other users (PD-007) | Authentication product expansion deferred from V4. | P3 | OPEN |
+| V4-FEAT-013 | Cash-as-of / export / compare polish | F014 residual cash-history polish deferred from V4. | P3 | OPEN |
+| V4-FEAT-015 | Tax reporting / attribution / benchmarks | New reporting and analysis surface. | P3 | OPEN |
+| V4-FEAT-016 | Mobile application | New client. | TBD | OPEN |
+| V4-FEAT-017 | AI assistant (non-decision) | New assistive surface. | TBD | OPEN |
+| V4-FEAT-018 | ML scoring models | Optional non-deterministic path; V3/V4 decision logic is deterministic. | TBD | OPEN |
+| V4-FEAT-019 | Options / crypto / ETF products | Markets and instrument expansion. | TBD | OPEN |
+| V4-FEAT-020 | Live paper / portfolio replay modes | New live simulation and replay modes. | TBD | OPEN |
+| V4-FEAT-030 | CI workflow for PHPUnit + frontend build | Broader automated verification beyond the focused V4 workflow. | P2 | OPEN |
+| V4-FEAT-031 | Production secrets / single-folder deploy hardening | Production deployment and operations hardening. | P3 | OPEN |
+| V4-FEAT-033 | Discovery inline default screener | Discovery UX enhancement. | P3 | OPEN |
+| V4-FEAT-034 | Richer Evaluation history UX | Evaluation UX enhancement. | P3 | OPEN |
+| V4-FEAT-035 | TypeScript / TanStack Query / AG Grid migration | Frontend stack migration. | TBD | OPEN |
+| V4-FEAT-036 | Optional JWT/token API for non-SPA clients | Authentication expansion; the current SPA continues to use Sanctum session cookies. | TBD | OPEN |
+| V4-FEAT-037 | Dashboard-first daily Kite readiness and reconnect | When an Automatic portfolio cannot submit because its daily Kite session is missing or expired, show a prominent Dashboard readiness state and minimum-friction **Connect Kite** action. Return to Dashboard and refresh readiness after Zerodha authentication. Add a configurable, at-most-once-daily Telegram reminder while Automatic execution is enabled and Kite remains unusable; suppress it when connected. Interactive Zerodha authentication remains mandatory. | P2 | OPEN |
+| V4-FEAT-038 | Exchange holidays in Calendar with automatic holiday-list sync | Add a visibly distinct exchange-holiday Calendar event type with admin correction/override. Automatically refresh the official NSE holiday list when a reliable source is available, retaining manual entry as fallback. This becomes the canonical trading-calendar input for scheduling. | P2 | OPEN |
+| V4-FEAT-039 | Holiday-aware scheduled order execution | After FEAT-038, make scheduled execution skip NSE holidays as well as weekends. Pending Semi-Automatic and Automatic orders roll forward to the next eligible trading day and remain subject to existing execution gates. | P2 | OPEN |
+| V4-FEAT-040 | Kite portfolio reconciliation (holdings and funds) | Available only for **Semi-Automatic and Automatic** portfolios; Manual mode must not expose or run it. Manually and on a configurable schedule, fetch Kite holdings/positions and funds/margins through read-only APIs while the session is usable, including outside market hours. Preview differences against StoX before applying anything. Kite data is evidence and must never silently overwrite the StoX transaction ledger, Strategy ownership, costs, fees, or history. Applying a difference requires an explicit audited reconciliation action. Persist runs, discrepancies, decisions, and failures. | P2 | OPEN |
+| V4-FEAT-041 | Linked Markdown wiki rooted in Knowledge Board | Add wiki-style Knowledge pages with canonical `.md` Markdown sources rendered safely as HTML in-app. **Knowledge Board remains the root** of the nested page and navigation hierarchy. Every rendered page has a hierarchy-derived breadcrumb tree at the top beginning at Knowledge Board. Stable internal page links make cross-page linking easy without manually constructing deployment URLs and remain valid under the configured app base path. Handle missing/broken links clearly and provide navigation back to the Knowledge Board tree. | P2 | OPEN |
+| V4-FEAT-042 | Separate role-based Admin Portal and investor application | Retain one login endpoint, then route each authenticated account to a role-specific application shell. Administrators see only administrative data and controls; normal users see the portfolio and investment application. Enforce separation server-side and in navigation/UI, including direct URLs and APIs. Administrators cannot own portfolios, stocks/holdings, strategies, recommendations, broker connections, or trading activity. Define migration and validation for existing administrator-owned investment data before enforcing this invariant. | P1 | OPEN |
+
+## 3. Planning rules
+
+Before implementation, each selected feature should have:
+
+1. A frozen Product Owner outcome and explicit non-goals.
+2. Dependencies and sequencing identified.
+3. Data ownership, authorization, migration, and audit implications resolved.
+4. Acceptance criteria covering UI, APIs, scheduled behavior, and failure states as applicable.
+5. A deployment and production-verification plan.
+
+Priority is a planning signal, not execution order. Dependencies, risk, and prerequisite product decisions may change the delivery sequence.
+
+## 4. Change log
+
+| Date | Change |
+|------|--------|
+| 2026-09-02 | Created the dedicated canonical V5 wishlist by extracting all 24 open V5 items from the completed V4 register. V4 remains closed. |
