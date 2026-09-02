@@ -42,6 +42,7 @@ Copy-Tree (Join-Path $app 'database/migrations') (Join-Path $staging 'lidoportfo
 Copy-SafeConfigFiles (Join-Path $app 'config') (Join-Path $staging 'lidoportfolio/config')
 New-Item -ItemType Directory -Path (Join-Path $staging 'lidoportfolio/bootstrap') -Force | Out-Null
 Copy-Item (Join-Path $app 'bootstrap/app.php') (Join-Path $staging 'lidoportfolio/bootstrap/app.php') -Force
+Copy-Item (Join-Path $app 'bootstrap/providers.php') (Join-Path $staging 'lidoportfolio/bootstrap/providers.php') -Force
 Copy-Item (Join-Path $app 'composer.json') (Join-Path $staging 'lidoportfolio/composer.json') -Force
 Copy-Tree (Join-Path $app 'public/build') (Join-Path $staging 'lidoportfolio/public/build')
 Copy-Tree (Join-Path $app 'public/build') (Join-Path $staging 'portfolio/build')
@@ -51,6 +52,8 @@ Copy-Tree (Join-Path $app 'public/docs') (Join-Path $staging 'portfolio/docs')
 Copy-Tree (Join-Path $app 'public/docs') (Join-Path $staging 'lidoportfolio/public/docs')
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-migrate.php') (Join-Path $staging 'portfolio/cpanel-migrate.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-config-cache.php') (Join-Path $staging 'portfolio/cpanel-config-cache.php') -Force
+Copy-Item (Join-Path $PSScriptRoot 'cpanel-composer-install.php') (Join-Path $staging 'portfolio/cpanel-composer-install.php') -Force
+Copy-Item (Join-Path $PSScriptRoot 'cpanel-broker-bootstrap-repair.php') (Join-Path $staging 'portfolio/cpanel-broker-bootstrap-repair.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-repair-tos-schema.php') (Join-Path $staging 'portfolio/cpanel-repair-tos-schema.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-backfill-sell-realizations.php') (Join-Path $staging 'portfolio/cpanel-backfill-sell-realizations.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-repair-corporate-action-prices.php') (Join-Path $staging 'portfolio/cpanel-repair-corporate-action-prices.php') -Force

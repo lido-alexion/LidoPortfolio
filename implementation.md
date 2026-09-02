@@ -853,7 +853,7 @@ Split/bonus (SPEC-003), cash LOAN/RECALL/BRIDGE (SPEC-004), SELL attribution (SP
 - Semi-Automatic: `POST /api/v1/execution/submit-selected` with TOTP. Selection is not execution.
 - Automatic: no per-order UI; pipeline + `tos:submit-automatic-orders`. Enabling Automatic requires TOTP + `confirm_automatic`. Unattended jobs check enrolled TOTP, not a fresh code.
 - Domain: recommendation → execution decision → broker order → fill → ledger. `executed` still means ledger fill (`RecommendationEngine::markExecuted`).
-- Zerodha/Kite only. **Per-user** Kite Connect (encrypted access token). Central shared account was not used because it would mix whose money is traded.
+- Zerodha/Kite only. **Per-user** Kite Connect (encrypted access token). Central shared account was not used because it would mix whose money is traded. The cross-site Kite callback is guest-accessible and bound to the initiating Lido user by a short-lived encrypted `state`; it does not rely on the SPA session cookie surviving the broker round trip.
 
 ### Engineering
 
@@ -2151,6 +2151,8 @@ Sanctum auth. Machine-readable contract: [`app/openapi/v1.json`](app/openapi/v1.
 **Dashboard cash deposit fix (2026-07-25):** SD-026 deposit UI briefly declared `submitCashDeposit` before `fetchDashboard` (TDZ → production “Cannot access … before initialization”) and dropped `cachedAt` / `handleTopMoverPeriodChange`. Deposit callback now sits after `fetchDashboard`; cache timestamp and top-mover period handler restored. Deposit UI later moved off Dashboard to `/cash`.
 
 **Recommendations review dialog:** Bootstrap modals were staying light in dark mode because only `data-theme` was set (not `data-bs-theme`). `applyResolvedTheme` now sets both. Dialog also uses `.lido-tos-review-modal` Lido tokens. Qty → Quantity. Defer/Reject close the dialog; Approve on BUY/SELL moves to pending execution (trade later); Approve on WATCH/HOLD N/A (insights view-only).
+
+**Recommendations clarity cleanup (2026-09-02):** Recommendation rows now identify their strategy; `published` insights are labelled informational; WATCH/HOLD allocation text describes intent instead of showing a zero-to-zero allocation; current scope is explicitly status-based with result count and visible generated range; closed history is independently selectable. HOLD insights remain persisted for audit but are hidden by default behind **Show HOLD insights**. Migration `2026_09_02_190000_retire_legacy_hold_pending_execution.php` expires invalid legacy HOLD records left in executable lifecycle states.
 
 **Shared ledger write (Option A):** `TransactionWriteService::create` is the single create path for `POST /api/transactions` and TOS completions (`ExecutionEngine` after shared insert). Holdings, realizations, buy OHLCV backfill, and snapshot rebuild stay aligned.
 

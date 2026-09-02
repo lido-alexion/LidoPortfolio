@@ -1,0 +1,14 @@
+---
+description: Require every production upload artifact to be prepared in the deployment staging tree
+alwaysApply: true
+---
+
+# Production Upload Staging
+
+- Never ask the user to upload a file directly from its source location.
+- Put every artifact intended for production under exactly one of:
+  - `deploy/staging/portfolio/` for files destined for `public_html/portfolio/`.
+  - `deploy/staging/lidoportfolio/` for files destined for `public_html/lidoportfolio/`.
+- Preserve the destination-relative directory structure inside the relevant staging root.
+- Give upload instructions using the staged path because the user syncs only these two directories.
+- If an upload set is replaced or narrowed, ensure the staging contents and upload table clearly reflect the intended production files.

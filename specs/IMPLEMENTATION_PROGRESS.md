@@ -62,6 +62,15 @@ Independent freeze audit (2026-07-25): [`architecture/audit/`](./architecture/au
 - [x] **M8** Notification history page (`/notification-history`)
 - [x] **M9** Tests updated; `MVP_DEMO_CHECKLIST.md`; progress + `implementation.md`
 
+### PO-approved follow-up TODOs (2026-09-02; not started)
+
+- [x] **REC-UX-001** Replace the misleading “No trade recommendations / market data” empty state with a successful informational-only outcome message when the pipeline produced insights but no actionable trades.
+- [x] **REC-UX-002** Show Strategy identity on Recommendation and Market Insight rows so per-strategy results for the same stock do not look like duplicates.
+- [x] **REC-DATA-001** Safely retire the two legacy `HOLD_POSITION + pending_execution` rows; informational HOLD records must never be executable.
+- [x] **REC-UX-003** Present informational allocation meaningfully (for example, “No position → Watch”) instead of an unexplained `0.00% → 0.00%`.
+- [x] **REC-UX-004** Clarify the default open/current scope versus “Show all history,” including the visible time range and pagination behavior.
+- [x] **REC-UX-005** Hide `HOLD_POSITION` insights from the Recommendations table by default; add an independent **Show HOLD insights** toggle for review/audit. Preserve HOLD rows and their Evaluation/Recommendation evidence. The toggle applies consistently whether current/open or all-history scope is selected. It does not legitimize legacy `HOLD_POSITION + pending_execution` rows; REC-DATA-001 must still retire those invalid lifecycle records.
+
 ---
 
 ## Completion log

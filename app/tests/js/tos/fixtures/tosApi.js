@@ -117,12 +117,30 @@ export const HOLD_INSIGHT = {
     market_opinion: { direction: 'neutral', strength: 'moderate', confidence: 0.55 },
     confidence: 0.55,
     score: 51,
+    strategy_name: 'Core Holdings Strategy',
+    current_allocation_pct: 12.5,
+    target_allocation_pct: 12.5,
+    suggested_allocation_pct: 12.5,
     status: 'published',
     category: 'insight',
     can_review: false,
     generated_at: '2026-08-27T10:00:00+05:30',
     evidence: { passed_rules: [], indicators: {} },
     failed_checks: [],
+};
+
+export const WATCH_INSIGHT = {
+    ...HOLD_INSIGHT,
+    id: 43,
+    symbol: 'RADICO',
+    name: 'Radico Khaitan Limited',
+    recommendation_type: 'WATCH',
+    portfolio_action: 'WATCH',
+    ui_label: 'Watch',
+    strategy_name: 'Swing Strategy',
+    current_allocation_pct: 0,
+    target_allocation_pct: 0,
+    suggested_allocation_pct: 0,
 };
 
 export const DISCOVERY_CANDIDATE = {

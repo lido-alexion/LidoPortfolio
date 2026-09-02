@@ -89,6 +89,10 @@ Route::post('/reset-password/accept', [PasswordResetAcceptController::class, 'ac
 Route::get('/auth/me', [AuthController::class, 'me']);
 Route::get('/auth/csrf-token', [AuthController::class, 'csrfToken']);
 
+// Kite returns from another domain, so the callback cannot depend on the SPA
+// session cookie. A short-lived encrypted state binds it to the initiating user.
+Route::get('/v1/broker/kite/callback', [TradingOsBrokerController::class, 'kiteCallback']);
+
 Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::post('/logs/frontend', [FrontendLogController::class, 'store']);
 
@@ -354,7 +358,6 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
 
     Route::get('/broker/status', [TradingOsBrokerController::class, 'status']);
     Route::get('/broker/kite/login-url', [TradingOsBrokerController::class, 'kiteLoginUrl']);
-    Route::get('/broker/kite/callback', [TradingOsBrokerController::class, 'kiteCallback']);
     Route::post('/broker/kite/session', [TradingOsBrokerController::class, 'kiteSession']);
     Route::post('/broker/kite/disconnect', [TradingOsBrokerController::class, 'disconnect']);
 

@@ -3,12 +3,12 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { axiosError, installDefaultTosHandlers } from './helpers/mockApi.js';
 import { renderTosApp } from './helpers/renderTosApp.jsx';
-import { HOLD_INSIGHT, OPEN_BUY_RECOMMENDATION } from './fixtures/tosApi.js';
+import { HOLD_INSIGHT, OPEN_BUY_RECOMMENDATION, WATCH_INSIGHT } from './fixtures/tosApi.js';
 
 describe('Recommendations TOS smoke', () => {
     it('shows loading then representative API data', async () => {
         installDefaultTosHandlers({
-            recommendations: [OPEN_BUY_RECOMMENDATION, HOLD_INSIGHT],
+            recommendations: [OPEN_BUY_RECOMMENDATION, HOLD_INSIGHT, WATCH_INSIGHT],
             delayRecommendationsMs: 40,
         });
 
@@ -18,8 +18,17 @@ describe('Recommendations TOS smoke', () => {
         expect(await screen.findByText('INFY')).toBeInTheDocument();
         expect(screen.getByText('Infosys Limited')).toBeInTheDocument();
         expect(screen.getByRole('heading', { name: 'Trade recommendations' })).toBeInTheDocument();
-        expect(screen.getByText('TCS')).toBeInTheDocument();
+        expect(screen.queryByText('TCS')).not.toBeInTheDocument();
+        expect(screen.getByText('RADICO')).toBeInTheDocument();
+        expect(screen.getByText('No position → Watch')).toBeInTheDocument();
+        expect(screen.getByText('Minervini Strategy')).toBeInTheDocument();
         expect(screen.getByRole('heading', { name: 'Market insights' })).toBeInTheDocument();
+        expect(screen.getByText(/1 HOLD record is hidden/)).toBeInTheDocument();
+        await userEvent.click(screen.getByRole('checkbox', { name: 'Show HOLD insights' }));
+        expect(screen.getByText('TCS')).toBeInTheDocument();
+        expect(screen.getByText('12.50% · Hold')).toBeInTheDocument();
+        expect(screen.getAllByText('informational')).toHaveLength(2);
+        expect(screen.queryByText('published')).not.toBeInTheDocument();
         expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
     });
 

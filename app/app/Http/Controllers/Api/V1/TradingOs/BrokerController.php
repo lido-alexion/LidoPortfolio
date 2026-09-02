@@ -42,13 +42,14 @@ class BrokerController extends Controller
     {
         $token = $request->query('request_token');
         $status = $request->query('status');
+        $user = $this->connections->userFromLoginState($request->query('state'));
         $frontend = rtrim((string) config('app.url'), '/').'/settings/account';
 
-        if ($status === 'error' || ! is_string($token) || $token === '') {
+        if ($status === 'error' || ! is_string($token) || $token === '' || $user === null) {
             return redirect($frontend.'?kite=failed');
         }
 
-        $this->connections->completeLogin($request->user(), $token);
+        $this->connections->completeLogin($user, $token);
 
         return redirect($frontend.'?kite=connected');
     }

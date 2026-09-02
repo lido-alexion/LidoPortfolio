@@ -49,7 +49,6 @@ function statusBadge(status) {
             return 'text-bg-secondary';
         case 'rejected': return 'text-bg-danger';
         case 'deferred': return 'text-bg-warning';
-        case 'executed': return 'text-bg-primary';
         case 'pending_review': return 'text-bg-info';
         case 'published': return 'text-bg-secondary';
         default: return 'text-bg-secondary';
@@ -66,9 +65,37 @@ function formatAlloc(v) {
     return `${Number(v).toFixed(2)}%`;
 }
 
+function recommendationAction(r) {
+    return String(r.portfolio_action || r.recommendation_type || '').toUpperCase();
+}
+
+function isHoldRec(r) {
+    return ['HOLD', 'HOLD_POSITION'].includes(recommendationAction(r));
+}
+
+function allocationLabel(r) {
+    const action = recommendationAction(r);
+    const current = Number(r.current_allocation_pct);
+    const suggested = r.suggested_allocation_pct ?? r.target_allocation_pct;
+    if (action === 'WATCH' && (!Number.isFinite(current) || current === 0)
+        && (suggested == null || Number(suggested) === 0)) {
+        return 'No position → Watch';
+    }
+    if (isHoldRec(r)) {
+        return Number.isFinite(current) && current > 0
+            ? `${formatAlloc(current)} · Hold`
+            : 'Hold existing position';
+    }
+    return `${formatAlloc(r.current_allocation_pct)} → ${formatAlloc(suggested)}`;
+}
+
 function isActionableRec(r) {
     const action = String(r.portfolio_action || r.recommendation_type || '').toUpperCase();
     return r.category === 'actionable' || ACTIONABLE.has(action);
+}
+
+function displayStatus(r) {
+    return !isActionableRec(r) && r.status === 'published' ? 'informational' : r.status;
 }
 
 function displayLabel(r) {
@@ -127,6 +154,7 @@ function RecTable({ rows, actionLabel, onOpen, expandedLenderId, onToggleLender,
                     <tr>
                         <th>Action</th>
                         <th>Symbol</th>
+                        <th>Strategy</th>
                         <th>Opinion</th>
                         <th>Status</th>
                         <th>Capital</th>
@@ -148,13 +176,14 @@ function RecTable({ rows, actionLabel, onOpen, expandedLenderId, onToggleLender,
                                 <strong>{r.symbol}</strong>
                                 {r.name ? <div className="small text-muted">{r.name}</div> : null}
                             </td>
+                            <td className="small">{r.strategy_name || 'Legacy / unassigned'}</td>
                             <td className="small">
                                 {r.market_opinion?.direction || '—'}
                                 {r.market_opinion?.strength ? (
                                     <div className="text-muted">{r.market_opinion.strength}</div>
                                 ) : null}
                             </td>
-                            <td><span className={`badge ${statusBadge(r.status)}`}>{r.status}</span></td>
+                            <td><span className={`badge ${statusBadge(r.status)}`}>{displayStatus(r)}</span></td>
                             <td className="small">
                                 <CapitalStatusCell
                                     r={r}
@@ -163,11 +192,7 @@ function RecTable({ rows, actionLabel, onOpen, expandedLenderId, onToggleLender,
                                     onLenderChanged={onLenderChanged}
                                 />
                             </td>
-                            <td className="small">
-                                {formatAlloc(r.current_allocation_pct)}
-                                {' → '}
-                                {formatAlloc(r.suggested_allocation_pct ?? r.target_allocation_pct)}
-                            </td>
+                            <td className="small">{allocationLabel(r)}</td>
                             <td>{formatPct(r.confidence)}</td>
                             <td className="small">{r.generated_at ? new Date(r.generated_at).toLocaleString() : '—'}</td>
                             <td>
@@ -191,6 +216,8 @@ export default function RecommendationsPage() {
     const [notes, setNotes] = useState('');
     const [busyId, setBusyId] = useState(null);
     const [showAll, setShowAll] = useState(false);
+    const [showHold, setShowHold] = useState(false);
+    const [resultMeta, setResultMeta] = useState(null);
     const [expandedLenderId, setExpandedLenderId] = useState(null);
 
     const { loading, reload: load } = useApiGet({
@@ -203,12 +230,21 @@ export default function RecommendationsPage() {
             });
             const list = Array.isArray(data?.data) ? data.data : [];
             setRecs(list);
+            setResultMeta(data?.meta || null);
             return list;
         },
     });
 
     const tradeRecs = useMemo(() => recs.filter(isActionableRec), [recs]);
-    const insights = useMemo(() => recs.filter((r) => !isActionableRec(r)), [recs]);
+    const allInsights = useMemo(() => recs.filter((r) => !isActionableRec(r)), [recs]);
+    const hiddenHoldCount = useMemo(() => allInsights.filter(isHoldRec).length, [allInsights]);
+    const insights = useMemo(
+        () => allInsights.filter((r) => showHold || !isHoldRec(r)),
+        [allInsights, showHold],
+    );
+    const generatedDates = useMemo(() => recs
+        .map((r) => r.generated_at && new Date(r.generated_at))
+        .filter((date) => date && !Number.isNaN(date.getTime())), [recs]);
 
     const openDetail = async (id) => {
         const { ok, data: detail } = await runApiMutation(async () => {
@@ -305,7 +341,7 @@ export default function RecommendationsPage() {
                 <div className="d-flex flex-wrap gap-2 align-items-center">
                     <div className="form-check form-switch mb-0">
                         <input className="form-check-input" type="checkbox" id="showAllRecs" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
-                        <label className="form-check-label small" htmlFor="showAllRecs">Show all history</label>
+                        <label className="form-check-label small" htmlFor="showAllRecs">Include closed history</label>
                     </div>
                     <Link className="btn btn-outline-secondary btn-sm" to="/strategy">Strategy</Link>
                     <button type="button" className="btn btn-outline-secondary btn-sm" onClick={load} disabled={loading || running}>Refresh</button>
@@ -317,12 +353,26 @@ export default function RecommendationsPage() {
 
             {pipelineMeta && (
                 <div className="alert alert-info small py-2">
-                    Pipeline: candidates {pipelineMeta.discovery?.candidates ?? '—'}
+                    Pipeline: discovery candidates {pipelineMeta.discovery?.candidates ?? '—'}
                     {' · '}
-                    evaluations {pipelineMeta.evaluation?.results ?? '—'}
+                    candidate evaluations {pipelineMeta.evaluation?.results ?? '—'}
                     {' · '}
-                    recommendations {pipelineMeta.recommendation?.count ?? '—'}
+                    strategy-specific recommendations {pipelineMeta.recommendation?.count ?? '—'}
                 </div>
+            )}
+
+            {!loading && (
+                <p className="small text-muted mb-3">
+                    {showAll
+                        ? 'All recommendation statuses, newest first.'
+                        : 'Current/open statuses only; this view is status-based, not date-based.'}
+                    {' Showing '}
+                    {recs.length}
+                    {resultMeta?.total != null ? ` of ${resultMeta.total}` : ''}
+                    {generatedDates.length > 0 ? (
+                        ` · Generated ${new Date(Math.min(...generatedDates)).toLocaleString()} to ${new Date(Math.max(...generatedDates)).toLocaleString()}`
+                    ) : ''}
+                </p>
             )}
 
             {loading ? (
@@ -334,7 +384,9 @@ export default function RecommendationsPage() {
                         <p className="small text-muted mb-2">Open / Buy More / Sell Partial / Sell All — review before recording a trade.</p>
                         {tradeRecs.length === 0 ? (
                             <div className="border rounded p-3 text-muted small">
-                                No trade recommendations. Run the decision pipeline when market data is ready.
+                                {pipelineMeta
+                                    ? `No actionable trades. This pipeline produced ${pipelineMeta.recommendation?.count ?? 0} informational recommendations.`
+                                    : 'No trade recommendations are actionable in the current view. Informational insights may appear below.'}
                             </div>
                         ) : (
                             <RecTable
@@ -352,8 +404,23 @@ export default function RecommendationsPage() {
                     </section>
 
                     <section className="mb-2">
-                        <h2 className="h5 mb-1">Market insights</h2>
-                        <p className="small text-muted mb-2">Hold and Watch — informational only; no approval or orders.</p>
+                        <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-1">
+                            <h2 className="h5 mb-0">Market insights</h2>
+                            <div className="form-check form-switch mb-0">
+                                <input
+                                    className="form-check-input"
+                                    type="checkbox"
+                                    id="showHoldInsights"
+                                    checked={showHold}
+                                    onChange={(e) => setShowHold(e.target.checked)}
+                                />
+                                <label className="form-check-label small" htmlFor="showHoldInsights">Show HOLD insights</label>
+                            </div>
+                        </div>
+                        <p className="small text-muted mb-2">
+                            Watch and optional HOLD records — informational only; no approval or orders.
+                            {!showHold && hiddenHoldCount > 0 ? ` ${hiddenHoldCount} HOLD ${hiddenHoldCount === 1 ? 'record is' : 'records are'} hidden.` : ''}
+                        </p>
                         {insights.length === 0 ? (
                             <div className="border rounded p-3 text-muted small">No insights right now.</div>
                         ) : (
@@ -388,7 +455,7 @@ export default function RecommendationsPage() {
                                 <p className="small text-muted mb-2">
                                     Status
                                     {' '}
-                                    <span className={`badge ${statusBadge(selected.status)}`}>{selected.status}</span>
+                                    <span className={`badge ${statusBadge(selected.status)}`}>{displayStatus(selected)}</span>
                                     {selected.review_status ? (
                                         <span className="badge text-bg-light border ms-1">Review: {selected.review_status}</span>
                                     ) : null}

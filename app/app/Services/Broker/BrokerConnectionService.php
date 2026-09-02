@@ -6,11 +6,15 @@ use App\Exceptions\DomainException;
 use App\Models\BrokerConnection;
 use App\Models\User;
 use App\Services\PortfolioLoggerService;
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 
 class BrokerConnectionService
 {
+    private const LOGIN_STATE_TTL_SECONDS = 600;
+
     public function __construct(
         protected PortfolioLoggerService $logger,
     ) {}
@@ -50,7 +54,36 @@ class BrokerConnectionService
             'user_id' => $user->id,
         ]);
 
-        return rtrim((string) config('broker.kite.login_url'), '/').'?v=3&api_key='.urlencode($key);
+        $state = Crypt::encryptString(json_encode([
+            'user_id' => $user->id,
+            'expires_at' => now()->addSeconds(self::LOGIN_STATE_TTL_SECONDS)->getTimestamp(),
+        ], JSON_THROW_ON_ERROR));
+        $redirectParams = http_build_query(['state' => $state], '', '&', PHP_QUERY_RFC3986);
+
+        return rtrim((string) config('broker.kite.login_url'), '/')
+            .'?v=3&api_key='.urlencode($key)
+            .'&redirect_params='.urlencode($redirectParams);
+    }
+
+    public function userFromLoginState(?string $state): ?User
+    {
+        if (! is_string($state) || $state === '') {
+            return null;
+        }
+
+        try {
+            $payload = json_decode(Crypt::decryptString($state), true, flags: JSON_THROW_ON_ERROR);
+        } catch (DecryptException|\JsonException) {
+            return null;
+        }
+
+        $userId = filter_var($payload['user_id'] ?? null, FILTER_VALIDATE_INT);
+        $expiresAt = filter_var($payload['expires_at'] ?? null, FILTER_VALIDATE_INT);
+        if ($userId === false || $expiresAt === false || $expiresAt < now()->getTimestamp()) {
+            return null;
+        }
+
+        return User::query()->find($userId);
     }
 
     public function completeLogin(User $user, #[\SensitiveParameter] string $requestToken): BrokerConnection

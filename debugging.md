@@ -35,6 +35,8 @@ Optional hardening after the above: remove `DebugAgentToken` middleware from `bo
 
 **Cron:** cPanel must run `php artisan schedule:run` **every minute** against `lidoportfolio/`. One-off maintenance uses token-guarded `deploy/cpanel-*.php` in `public_html/portfolio/`.
 
+**Upload handoff rule:** Every file given to the user for production upload must first be placed under `deploy/staging/portfolio/` or `deploy/staging/lidoportfolio/`, preserving its production-relative path. The user syncs only these staging directories; never hand off a source-tree file for direct upload.
+
 ---
 
 ## Three layers to debug
@@ -176,6 +178,7 @@ Returns JSON: `status`, `body` (parsed), `request_id`.
 | `cpanel-run-universe-maintenance.php` | Force one maintenance batch (`&apply=1`) |
 | `cpanel-config-cache.php` | After `.env` / config upload |
 | `cpanel-migrate.php` | Migrations |
+| `cpanel-composer-install.php` | Install locked dependencies while preserving existing `vendor/` packages |
 | `cpanel-sync-logs-probe.php` | API routing / route cache for sync logs |
 
 Full list: `deploy/README.md`.

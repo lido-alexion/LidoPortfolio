@@ -94,8 +94,13 @@ class TradingOsControllerSplitTest extends TestCase
             $route = Route::getRoutes()->match(Request::create($uri, $method));
             $this->assertSame($controller, $route->getControllerClass(), $method.' '.$uri);
             $this->assertSame($action, $route->getActionMethod(), $method.' '.$uri);
-            $this->assertContains('auth:sanctum', $route->gatherMiddleware(), $method.' '.$uri);
-            $this->assertContains('active.portfolio', $route->gatherMiddleware(), $method.' '.$uri);
+            if ($uri === '/api/v1/broker/kite/callback') {
+                $this->assertNotContains('auth:sanctum', $route->gatherMiddleware(), $method.' '.$uri);
+                $this->assertNotContains('active.portfolio', $route->gatherMiddleware(), $method.' '.$uri);
+            } else {
+                $this->assertContains('auth:sanctum', $route->gatherMiddleware(), $method.' '.$uri);
+                $this->assertContains('active.portfolio', $route->gatherMiddleware(), $method.' '.$uri);
+            }
         }
     }
 
