@@ -1,5 +1,7 @@
 # Documentation Map
 
+**Active V5 planning:** [`specs/LidoPortfolio-V5-Wishlist.md`](specs/LidoPortfolio-V5-Wishlist.md) · **Frozen FEAT-039:** [`specs/V5-FEAT-039-Holiday-Aware-Scheduled-Execution.md`](specs/V5-FEAT-039-Holiday-Aware-Scheduled-Execution.md)
+
 **Purpose:** Single root index for every major Markdown document in this repository.  
 **Audience:** Humans and AI agents ingesting or re-understanding the project from scratch.  
 **Rule:** Prefer reading **top → bottom** within each path below. Do not jump to implementation before intent unless you only need a runbook.

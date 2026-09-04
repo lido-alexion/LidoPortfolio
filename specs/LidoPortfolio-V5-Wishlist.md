@@ -5,7 +5,7 @@
 | **V4 Status** | **V4 COMPLETE AND CLOSED** (18/18 active features complete) |
 | **Document type** | Canonical V5 product wishlist and planning register |
 | **Created** | 2026-09-02 |
-| **Last reconciled** | 2026-09-02 |
+| **Last reconciled** | 2026-09-04 |
 | **Canonical path** | [`specs/LidoPortfolio-V5-Wishlist.md`](LidoPortfolio-V5-Wishlist.md) |
 | **Related** | [`LidoPortfolio-V4-Wishlist.md`](LidoPortfolio-V4-Wishlist.md) · [`LidoPortfolio-V3-Specification.md`](LidoPortfolio-V3-Specification.md) · [`../implementation.md`](../implementation.md) |
 
@@ -23,7 +23,7 @@ Moving an item here does not satisfy it. Every item remains `OPEN` until its pro
 
 ## 2. V5 wishlist
 
-Current count: **24 OPEN**.
+Current count: **23 OPEN / 1 DECIDED**.
 
 | ID | Item | V5 scope and rationale | Priority | Status |
 |----|------|------------------------|----------|--------|
@@ -47,12 +47,18 @@ Current count: **24 OPEN**.
 | V4-FEAT-036 | Optional JWT/token API for non-SPA clients | Authentication expansion; the current SPA continues to use Sanctum session cookies. | TBD | OPEN |
 | V4-FEAT-037 | Dashboard-first daily Kite readiness and reconnect | When an Automatic portfolio cannot submit because its daily Kite session is missing or expired, show a prominent Dashboard readiness state and minimum-friction **Connect Kite** action. Return to Dashboard and refresh readiness after Zerodha authentication. Add a configurable, at-most-once-daily Telegram reminder while Automatic execution is enabled and Kite remains unusable; suppress it when connected. Interactive Zerodha authentication remains mandatory. | P2 | OPEN |
 | V4-FEAT-038 | Exchange holidays in Calendar with automatic holiday-list sync | Add a visibly distinct exchange-holiday Calendar event type with admin correction/override. Automatically refresh the official NSE holiday list when a reliable source is available, retaining manual entry as fallback. This becomes the canonical trading-calendar input for scheduling. | P2 | OPEN |
-| V4-FEAT-039 | Holiday-aware scheduled order execution | After FEAT-038, make scheduled execution skip NSE holidays as well as weekends. Pending Semi-Automatic and Automatic orders roll forward to the next eligible trading day and remain subject to existing execution gates. | P2 | OPEN |
+| V4-FEAT-039 | Holiday-aware scheduled order execution | **Frozen:** [`V5-FEAT-039-Holiday-Aware-Scheduled-Execution.md`](V5-FEAT-039-Holiday-Aware-Scheduled-Execution.md). Two-session target-seeking execution, holiday-aware opportunities, same-symbol internal netting, shared Kite funds, resizing, internal-transfer valuation, partial progress and bounded insufficient-funds retry. Implementation pending. | P2 | DECIDED |
 | V4-FEAT-040 | Kite portfolio reconciliation (holdings and funds) | Available only for **Semi-Automatic and Automatic** portfolios; Manual mode must not expose or run it. Manually and on a configurable schedule, fetch Kite holdings/positions and funds/margins through read-only APIs while the session is usable, including outside market hours. Preview differences against StoX before applying anything. Kite data is evidence and must never silently overwrite the StoX transaction ledger, Strategy ownership, costs, fees, or history. Applying a difference requires an explicit audited reconciliation action. Persist runs, discrepancies, decisions, and failures. | P2 | OPEN |
 | V4-FEAT-041 | Linked Markdown wiki rooted in Knowledge Board | Add wiki-style Knowledge pages with canonical `.md` Markdown sources rendered safely as HTML in-app. **Knowledge Board remains the root** of the nested page and navigation hierarchy. Every rendered page has a hierarchy-derived breadcrumb tree at the top beginning at Knowledge Board. Stable internal page links make cross-page linking easy without manually constructing deployment URLs and remain valid under the configured app base path. Handle missing/broken links clearly and provide navigation back to the Knowledge Board tree. | P2 | OPEN |
 | V4-FEAT-042 | Separate role-based Admin Portal and investor application | Retain one login endpoint, then route each authenticated account to a role-specific application shell. Administrators see only administrative data and controls; normal users see the portfolio and investment application. Enforce separation server-side and in navigation/UI, including direct URLs and APIs. Administrators cannot own portfolios, stocks/holdings, strategies, recommendations, broker connections, or trading activity. Define migration and validation for existing administrator-owned investment data before enforcing this invariant. | P1 | OPEN |
 
-## 3. Planning rules
+## 3. Preserved V6 wishlist additions
+
+1. **Dashboard Kite disconnect kill switch.** Immediately disconnect/revoke StoX's usable Kite session and block new submissions until reconnect. It does not cancel already-submitted orders.
+2. **Emergency cancel-open-orders then disconnect kill switch.** After deliberate confirmation, attempt to cancel every StoX-managed Kite order not fully executed, including only the cancellable remainder of partial fills. Persist and report every failure; then disconnect. Disconnection is not proof of cancellation.
+3. **Live Kite quote-based execution sizing.** Immediately before an automated/semi-automated order, fetch the latest applicable Kite price and derive whole shares through `target amount -> actual Strategy ownership -> remaining gap -> live price -> V3 capital/lending -> internal netting -> verified shared broker funds -> residual order`. This replaces V5's previous-session-close sizing, keeps the cushion as safety margin and reduces dependence on V5's 5%-retry fallback.
+
+## 4. Planning rules
 
 Before implementation, each selected feature should have:
 
@@ -64,8 +70,9 @@ Before implementation, each selected feature should have:
 
 Priority is a planning signal, not execution order. Dependencies, risk, and prerequisite product decisions may change the delivery sequence.
 
-## 4. Change log
+## 5. Change log
 
 | Date | Change |
 |------|--------|
+| 2026-09-04 | Reconciled and froze FEAT-039 against current master and V3/V4. Preserved three agreed V6 Kite safety/live-sizing additions. FEAT-040 was not started. |
 | 2026-09-02 | Created the dedicated canonical V5 wishlist by extracting all 24 open V5 items from the completed V4 register. V4 remains closed. |
