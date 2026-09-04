@@ -47,6 +47,9 @@ class V4Feat010UnattendedOpsTest extends TestCase
     /** @var array{pipeline:int,reconcile:int,submit:int,all:int} */
     protected array $telegramCounts = ['pipeline' => 0, 'reconcile' => 0, 'submit' => 0, 'all' => 0];
 
+    /** @var array<int, list<string>> */
+    protected array $recoveryCodes = [];
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -325,6 +328,49 @@ class V4Feat010UnattendedOpsTest extends TestCase
         $this->assertSame(110.0, (float) $transfer->final_unit_price);
         $this->assertSame(110.0, (float) Transaction::query()->findOrFail($transfer->sell_transaction_id)->price);
         $this->assertSame(110.0, (float) Transaction::query()->findOrFail($transfer->buy_transaction_id)->price);
+    }
+
+    public function test_authorized_semi_selection_nets_with_ready_automatic_intent(): void
+    {
+        [$user, $sellerProfile] = $this->actingReadyUser();
+        $this->setMode($user, $sellerProfile, PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC);
+        $stock = $this->stock();
+        app(TransactionWriteService::class)->create($sellerProfile, $stock, [
+            'type' => 'buy', 'quantity' => 5, 'price' => 80, 'fees' => 0,
+            'transaction_date' => now()->toDateString(), 'source' => 'manual',
+        ], applyCash: false);
+        $sell = $this->pendingBuy($sellerProfile, $stock, 500);
+        $sell->forceFill([
+            'recommendation_type' => TradingRecommendation::ACTION_EXIT_POSITION,
+            'execution_plan' => ['suggested_quantity' => 5, 'suggested_investment_amount' => 500, 'side' => 'sell'],
+            'target_amount' => 0, 'capital_resolved_amount' => 500,
+            'remaining_target_amount' => 500, 'original_display_quantity' => 5,
+        ])->save();
+
+        $buyerProfile = $this->createPortfolioProfile($user, 'Automatic buyer', false);
+        app(CashManagementService::class)->deposit($buyerProfile, 50_000, 'seed', $user);
+        $this->withProfileHeader($user, $buyerProfile);
+        $this->setMode($user, $buyerProfile, PortfolioProfile::EXECUTION_MODE_AUTOMATIC, confirm: true);
+        $buy = $this->pendingBuy($buyerProfile, $stock, 500);
+        $buy->forceFill([
+            'target_amount' => 500, 'capital_resolved_amount' => 500,
+            'remaining_target_amount' => 500, 'original_display_quantity' => 5,
+        ])->save();
+
+        $this->withProfileHeader($user, $sellerProfile)
+            ->postJson('/api/v1/execution/submit-selected', [
+                'recommendation_ids' => [$sell->id],
+                'recovery_code' => $this->totpCode($user),
+            ])->assertOk();
+
+        $this->assertSame(0, app(FakeBrokerGateway::class)->placeCalls);
+        $this->assertDatabaseHas('portfolio_internal_execution_transfers', [
+            'sell_recommendation_id' => $sell->id,
+            'buy_recommendation_id' => $buy->id,
+            'quantity' => 5,
+        ]);
+        $this->assertSame(TradingRecommendation::STATUS_EXECUTED, $sell->fresh()->status);
+        $this->assertSame(TradingRecommendation::STATUS_EXECUTED, $buy->fresh()->status);
     }
 
     public function test_reconcile_failure_alerts_telegram_once_then_recovers(): void

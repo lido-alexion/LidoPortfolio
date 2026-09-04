@@ -57,12 +57,16 @@ class LiveBrokerExecutionService
             throw new DomainException('Select at least one recommendation.', 'VALIDATION_ERROR', 422);
         }
 
-        $results = [];
-        foreach ($ids as $id) {
-            $results[] = $this->submitOne($user, $profile, $id, ExecutionGate::TRIGGER_SEMI);
-        }
+        $profiles = PortfolioProfile::query()
+            ->where('user_id', $user->id)
+            ->whereIn('execution_mode', [
+                PortfolioProfile::EXECUTION_MODE_AUTOMATIC,
+                PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC,
+            ])
+            ->get();
+        $summary = $this->submitInvestorCycle($user, $profiles, $profile, $ids);
 
-        return $results;
+        return $summary['results'];
     }
 
     /**
@@ -130,13 +134,34 @@ class LiveBrokerExecutionService
      */
     public function submitAutomaticForUser(User $user, iterable $profiles): array
     {
+        return $this->submitInvestorCycle($user, $profiles);
+    }
+
+    /**
+     * One Investor-scoped cycle. Scheduled runs admit Automatic intent only;
+     * an authenticated Semi-Automatic run also admits its explicitly selected
+     * approved intent so both modes can net and sequence against each other.
+     *
+     * @param  iterable<PortfolioProfile>  $profiles
+     * @param  list<int>  $selectedSemiIds
+     * @return array{submitted:int,skipped:int,blocked:int,results:list<array<string,mixed>>}
+     */
+    protected function submitInvestorCycle(
+        User $user,
+        iterable $profiles,
+        ?PortfolioProfile $authorizedSemiProfile = null,
+        array $selectedSemiIds = [],
+    ): array
+    {
         $profileCollection = collect($profiles);
         $profileScope = $profileCollection->pluck('id')->map(fn ($id) => (int) $id)->sort()->implode(',');
+        $semiScope = collect($selectedSemiIds)->map(fn ($id) => (int) $id)->sort()->implode(',');
         $cycleKey = implode('|', [
             $this->broker->provider(),
             $user->id,
             now()->timezone('Asia/Kolkata')->format('Y-m-d-H-i'),
             $profileScope,
+            $authorizedSemiProfile ? 'semi:'.$authorizedSemiProfile->id.':'.$semiScope : 'automatic',
         ]);
         $batch = ExecutionBatch::query()->firstOrCreate(
             ['cycle_key' => $cycleKey],
@@ -172,10 +197,22 @@ class LiveBrokerExecutionService
             }
         }
 
+        if ($authorizedSemiProfile
+            && (int) $authorizedSemiProfile->user_id === (int) $user->id
+            && $authorizedSemiProfile->executionMode() === PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC) {
+            $readyProfiles->put($authorizedSemiProfile->id, $authorizedSemiProfile);
+        }
+
         $recommendations = TradingRecommendation::query()
             ->whereIn('profile_id', $readyProfiles->keys())
             ->get()
-            ->filter(fn (TradingRecommendation $row) => $this->isAutomaticCandidate($row))
+            ->filter(function (TradingRecommendation $row) use ($authorizedSemiProfile, $selectedSemiIds): bool {
+                if ($authorizedSemiProfile && (int) $row->profile_id === (int) $authorizedSemiProfile->id) {
+                    return in_array((int) $row->id, $selectedSemiIds, true) && $row->canExecuteManually();
+                }
+
+                return $this->isAutomaticCandidate($row);
+            })
             ->sort(function (TradingRecommendation $left, TradingRecommendation $right): int {
                 $leftSide = $left->orderSide() === 'sell' ? 0 : 1;
                 $rightSide = $right->orderSide() === 'sell' ? 0 : 1;
@@ -188,7 +225,13 @@ class LiveBrokerExecutionService
         $recommendations = TradingRecommendation::query()
             ->whereIn('id', $recommendations->pluck('id'))
             ->get()
-            ->filter(fn (TradingRecommendation $row) => $this->isAutomaticCandidate($row))
+            ->filter(function (TradingRecommendation $row) use ($authorizedSemiProfile, $selectedSemiIds): bool {
+                if ($authorizedSemiProfile && (int) $row->profile_id === (int) $authorizedSemiProfile->id) {
+                    return in_array((int) $row->id, $selectedSemiIds, true) && $row->canExecuteManually();
+                }
+
+                return $this->isAutomaticCandidate($row);
+            })
             ->sort(function (TradingRecommendation $left, TradingRecommendation $right): int {
                 return [$left->orderSide() === 'sell' ? 0 : 1, $left->generated_at?->getTimestamp() ?? 0, $left->id]
                     <=> [$right->orderSide() === 'sell' ? 0 : 1, $right->generated_at?->getTimestamp() ?? 0, $right->id];
@@ -202,7 +245,10 @@ class LiveBrokerExecutionService
             if (! $profile) {
                 continue;
             }
-            $row = $this->submitOne($user, $profile, (int) $recommendation->id, ExecutionGate::TRIGGER_AUTOMATIC);
+            $trigger = $authorizedSemiProfile && (int) $profile->id === (int) $authorizedSemiProfile->id
+                ? ExecutionGate::TRIGGER_SEMI
+                : ExecutionGate::TRIGGER_AUTOMATIC;
+            $row = $this->submitOne($user, $profile, (int) $recommendation->id, $trigger);
             $results[] = $row;
             if (($row['outcome'] ?? '') === ExecutionDecision::OUTCOME_SUBMITTED) {
                 $submitted++;
