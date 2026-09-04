@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\CalendarEvent;
 use App\Services\CalendarRecurrenceService;
+use App\Services\SettingsService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Schema;
 
@@ -40,7 +41,7 @@ class TradingCalendar
         $tz = $timezone;
         if ($tz === null || trim($tz) === '') {
             try {
-                $tz = app(\App\Services\SettingsService::class)->get('cron_timezone', 'Asia/Kolkata') ?? 'Asia/Kolkata';
+                $tz = app(SettingsService::class)->get('cron_timezone', 'Asia/Kolkata') ?? 'Asia/Kolkata';
             } catch (\Throwable) {
                 $tz = 'Asia/Kolkata';
             }
@@ -110,6 +111,34 @@ class TradingCalendar
         }
 
         return $session;
+    }
+
+    /** Walk forward to the first equity session on or after the supplied date. */
+    public static function nextSessionOnOrAfter(Carbon $date): Carbon
+    {
+        $session = $date->copy()->startOfDay();
+
+        while (! self::isEquitySessionDate($session)) {
+            $session->addDay();
+        }
+
+        return $session;
+    }
+
+    /** Walk forward by an exact number of equity sessions. */
+    public static function addSessions(Carbon $date, int $sessions): Carbon
+    {
+        $result = $date->copy()->startOfDay();
+        $remaining = max(0, $sessions);
+
+        while ($remaining > 0) {
+            $result->addDay();
+            if (self::isEquitySessionDate($result)) {
+                $remaining--;
+            }
+        }
+
+        return $result;
     }
 
     /**

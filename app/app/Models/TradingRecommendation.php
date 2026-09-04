@@ -213,6 +213,19 @@ class TradingRecommendation extends Model
         'cancellation_reason',
         'executed_at',
         'executed_transaction_id',
+        'target_amount',
+        'capital_resolved_amount',
+        'internal_executed_amount',
+        'external_executed_amount',
+        'remaining_target_amount',
+        'original_display_quantity',
+        'execution_anchor_date',
+        'execution_anchor_class',
+        'first_eligible_execution_date',
+        'second_eligible_execution_date',
+        'execution_expires_at',
+        'superseded_at',
+        'superseded_by_id',
     ];
 
     protected function casts(): array
@@ -244,6 +257,18 @@ class TradingRecommendation extends Model
             'executed_at' => 'datetime',
             'reserved_at' => 'datetime',
             'executed_transaction_id' => 'integer',
+            'target_amount' => 'decimal:4',
+            'capital_resolved_amount' => 'decimal:4',
+            'internal_executed_amount' => 'decimal:4',
+            'external_executed_amount' => 'decimal:4',
+            'remaining_target_amount' => 'decimal:4',
+            'original_display_quantity' => 'decimal:4',
+            'execution_anchor_date' => 'date',
+            'first_eligible_execution_date' => 'date',
+            'second_eligible_execution_date' => 'date',
+            'execution_expires_at' => 'datetime',
+            'superseded_at' => 'datetime',
+            'superseded_by_id' => 'integer',
         ];
     }
 
