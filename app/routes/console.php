@@ -1,14 +1,23 @@
 <?php
 
 use App\Jobs\DailyMarketDataJob;
+use App\Services\AlertExpirationService;
+use App\Services\AlertNotificationService;
 use App\Services\BenchmarkPriceSyncService;
+use App\Services\Broker\KiteReadinessReminderService;
+use App\Services\HistoryDepthBackfillService;
 use App\Services\NotificationScheduleService;
+use App\Services\NseHolidaySyncService;
+use App\Services\PortfolioLoggerService;
 use App\Services\SettingsService;
+use App\Services\SyncLogService;
+use App\Services\UniversePriceSyncService;
 use App\Support\TradingCalendar;
 use App\Support\TradingOsConfig;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
+use Illuminate\Support\Facades\Schema;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -22,11 +31,13 @@ Artisan::command('portfolio:daily-sync', function () {
 
 Artisan::command('portfolio:sync-nse-holidays', function () {
     try {
-        $result = app(\App\Services\NseHolidaySyncService::class)->sync();
+        $result = app(NseHolidaySyncService::class)->sync();
         $this->info("NSE holidays: {$result['created']} created, {$result['updated']} refreshed, {$result['overridden']} admin overrides preserved.");
+
         return 0;
-    } catch (\Throwable $error) {
+    } catch (Throwable $error) {
         $this->error($error->getMessage());
+
         return 1;
     }
 })->purpose('Refresh official NSE capital-market trading holidays');
@@ -61,7 +72,7 @@ Artisan::command('portfolio:send-notifications {--at= : HH:mm schedule slot in c
             ->format('H:i');
     }
 
-    $result = app(\App\Services\AlertNotificationService::class)->sendScheduledNotificationsAt($at);
+    $result = app(AlertNotificationService::class)->sendScheduledNotificationsAt($at);
 
     if (($result['skipped'] ?? false) && ($result['alert_count'] ?? 0) === 0) {
         $this->info('No alerts to send.');
@@ -82,15 +93,16 @@ Artisan::command('portfolio:send-notifications {--at= : HH:mm schedule slot in c
 })->purpose('Send portfolio alerts to Telegram (silent when none)');
 
 Artisan::command('portfolio:expire-alerts', function () {
-    $count = app(\App\Services\AlertExpirationService::class)->expireOlderThanHours(100);
+    $count = app(AlertExpirationService::class)->expireOlderThanHours(100);
     $this->info("Expired {$count} alert(s) older than 100 hours.");
 
     return 0;
 })->purpose('Expire portfolio alerts older than 100 hours');
 
 Artisan::command('portfolio:send-kite-readiness-reminders', function () {
-    $result = app(\App\Services\Broker\KiteReadinessReminderService::class)->sendDue();
+    $result = app(KiteReadinessReminderService::class)->sendDue();
     $this->info("Kite readiness reminders: {$result['sent']} sent; {$result['checked']} due profiles checked.");
+
     return 0;
 })->purpose('Remind Automatic portfolios to reconnect an unusable Kite session');
 
@@ -98,12 +110,12 @@ $cronTime = env('PORTFOLIO_CRON_TIME', '18:30');
 $timezone = env('PORTFOLIO_CRON_TIMEZONE', 'Asia/Kolkata');
 
 try {
-    if (\Illuminate\Support\Facades\Schema::hasTable('portfolio_settings')) {
+    if (Schema::hasTable('portfolio_settings')) {
         $settings = app(SettingsService::class);
         $cronTime = $settings->get('cron_time', $cronTime) ?? $cronTime;
         $timezone = $settings->get('cron_timezone', $timezone) ?? $timezone;
     }
-} catch (\Throwable) {
+} catch (Throwable) {
     // Fall back to env defaults if DB is unavailable during bootstrap.
 }
 
@@ -114,7 +126,7 @@ if (! is_string($timezone) || trim($timezone) === '') {
 $marketDataSyncDue = function () use ($timezone): bool {
     try {
         return TradingCalendar::isScheduledMarketDataDay(timezone: $timezone);
-    } catch (\Throwable) {
+    } catch (Throwable) {
         return false;
     }
 };
@@ -141,10 +153,10 @@ if (config('portfolio.indexes.enabled', true)) {
 
 $notificationSchedules = [];
 try {
-    if (\Illuminate\Support\Facades\Schema::hasTable('portfolio_profile_settings')) {
+    if (Schema::hasTable('portfolio_profile_settings')) {
         $notificationSchedules = app(NotificationScheduleService::class)->distinctSchedulesAcrossProfiles();
     }
-} catch (\Throwable) {
+} catch (Throwable) {
     // Fall back to no notification schedules if DB is unavailable during bootstrap.
 }
 
@@ -179,15 +191,15 @@ Schedule::command('portfolio:universe-maintenance-probe --write-heartbeat')
 
 $universeMaintenanceDue = function (): bool {
     try {
-        return app(\App\Services\UniversePriceSyncService::class)->isMaintenanceWindowDue();
-    } catch (\Throwable $e) {
+        return app(UniversePriceSyncService::class)->isMaintenanceWindowDue();
+    } catch (Throwable $e) {
         try {
-            app(\App\Services\PortfolioLoggerService::class)->scheduler(
+            app(PortfolioLoggerService::class)->scheduler(
                 'error',
                 'isMaintenanceWindowDue failed',
                 ['error' => $e->getMessage()],
             );
-        } catch (\Throwable) {
+        } catch (Throwable) {
             // ignore nested logger failures
         }
 
@@ -216,8 +228,8 @@ if (config('portfolio.universe_price_sync.enabled')) {
 // isDue() gate keeps it idle. Re-arms automatically if the target is raised.
 $historyDepthDue = function (): bool {
     try {
-        return app(\App\Services\HistoryDepthBackfillService::class)->isDue();
-    } catch (\Throwable) {
+        return app(HistoryDepthBackfillService::class)->isDue();
+    } catch (Throwable) {
         return false;
     }
 };
@@ -287,8 +299,8 @@ Schedule::command('portfolio:process-recall-settlements')
     ->name('recall-settlements');
 
 Schedule::call(function () {
-    if (\Illuminate\Support\Facades\Schema::hasTable('portfolio_sync_runs')) {
-        app(\App\Services\SyncLogService::class)->prune();
+    if (Schema::hasTable('portfolio_sync_runs')) {
+        app(SyncLogService::class)->prune();
     }
 })->hourly()->timezone($timezone)->name('sync-log-prune');
 
@@ -303,3 +315,9 @@ Schedule::command('tos:submit-automatic-orders')
     ->timezone($timezone)
     ->withoutOverlapping(5)
     ->name('tos-broker-automatic');
+
+Schedule::command('tos:expire-execution-windows')
+    ->everyMinute()
+    ->timezone($timezone)
+    ->withoutOverlapping(5)
+    ->name('tos-recommendation-execution-expiry');

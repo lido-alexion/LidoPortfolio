@@ -10,6 +10,7 @@ use App\Models\EvaluationResult;
 use App\Models\EvaluationRun;
 use App\Models\Holding;
 use App\Models\PortfolioProfile;
+use App\Models\Stock;
 use App\Models\StockPrice;
 use App\Models\TradingRecommendation;
 use App\Models\TradingStrategy;
@@ -17,17 +18,18 @@ use App\Models\TradingStrategyVersion;
 use App\Services\Analytics\MarketAnalyticsService;
 use App\Services\CashManagementService;
 use App\Services\DataQualityGuardService;
-use App\Services\PortfolioCalculationService;
-use App\Services\PortfolioLoggerService;
-use App\Services\ProfileSettingsService;
-use App\Services\Ranking\CapitalFillOrderService;
-use App\Services\Ranking\ReturnQualityRankingService;
-use App\Services\Lending\RecommendationLendingCoordinator;
 use App\Services\Entry\BuyCooldownEvaluator;
 use App\Services\Entry\MinimumActionableAmountResolver;
 use App\Services\Entry\StaggeredEntryCalculator;
 use App\Services\Entry\StrategyPositionTargetService;
 use App\Services\Entry\WholeShareQuantityCalculator;
+use App\Services\Execution\RecommendationExecutionLifetime;
+use App\Services\Lending\RecommendationLendingCoordinator;
+use App\Services\PortfolioCalculationService;
+use App\Services\PortfolioLoggerService;
+use App\Services\ProfileSettingsService;
+use App\Services\Ranking\CapitalFillOrderService;
+use App\Services\Ranking\ReturnQualityRankingService;
 use App\Services\Risk\ExitAttribution;
 use App\Services\Risk\ExitPrecedenceEvaluator;
 use App\Services\Strategy\PortfolioCapitalAccountingService;
@@ -648,7 +650,7 @@ class RecommendationGenerationPipeline
             if ($isHeld) {
                 $holding = $ctx['holdings_by_stock'][$securityId] ?? null;
                 if ($holding instanceof Holding) {
-                    $stock = $holding->stock ?? \App\Models\Stock::query()->find($securityId);
+                    $stock = $holding->stock ?? Stock::query()->find($securityId);
                     if ($stock !== null) {
                         $precedence = $this->exitPrecedence->evaluate(
                             $ctx['profile'] ?? $holding->profile,
@@ -952,7 +954,7 @@ class RecommendationGenerationPipeline
                 ],
             ];
             if ($holding instanceof Holding && $profile instanceof PortfolioProfile) {
-                $stock = $holding->stock ?? \App\Models\Stock::query()->find($securityId);
+                $stock = $holding->stock ?? Stock::query()->find($securityId);
                 if ($stock !== null) {
                     $precedence = $this->exitPrecedence->evaluate(
                         $profile,
@@ -1057,7 +1059,7 @@ class RecommendationGenerationPipeline
             if (! $holding instanceof Holding) {
                 continue;
             }
-            $stock = $holding->stock ?? \App\Models\Stock::query()->find($securityId);
+            $stock = $holding->stock ?? Stock::query()->find($securityId);
             if ($stock === null) {
                 continue;
             }
@@ -1604,6 +1606,10 @@ class RecommendationGenerationPipeline
                 'generated_at' => now(),
             ]);
 
+            if ($rec->isActionable()) {
+                $rec = app(RecommendationExecutionLifetime::class)->initialize($rec);
+            }
+
             // OD-12: persist position target on strategy-owned holding (survives perishable rec rows).
             if (
                 $strategy instanceof TradingStrategy
@@ -1616,7 +1622,7 @@ class RecommendationGenerationPipeline
                     ?? $capitalAllocationMeta['position_target_amount']
                     ?? 0);
                 if ($positionTarget > 0) {
-                    $stock = \App\Models\Stock::query()->find((int) $draft['security_id']);
+                    $stock = Stock::query()->find((int) $draft['security_id']);
                     if ($stock !== null) {
                         $this->positionTargets->upsertTargetAmount(
                             $profile,

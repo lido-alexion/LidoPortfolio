@@ -32,6 +32,8 @@ class TradingRecommendation extends Model
 
     public const STATUS_EXPIRED = 'expired';
 
+    public const STATUS_SUPERSEDED = 'superseded';
+
     /** Approved but will not be executed (operator cancelled the execution). */
     public const STATUS_CANCELLED = 'cancelled';
 
@@ -516,6 +518,7 @@ class TradingRecommendation extends Model
             self::STATUS_CANCELLED,
             self::STATUS_EXPIRED,
             self::STATUS_ARCHIVED,
+            self::STATUS_SUPERSEDED,
         ], true);
     }
 
@@ -573,6 +576,7 @@ class TradingRecommendation extends Model
             self::STATUS_PENDING_REVIEW => 'pending_review',
             self::STATUS_PENDING_EXECUTION, self::STATUS_ACCEPTED, self::STATUS_EXECUTED,
             self::STATUS_CANCELLED, self::STATUS_EXPIRED => 'approved',
+            self::STATUS_SUPERSEDED => 'superseded',
             self::STATUS_REJECTED => 'rejected',
             self::STATUS_DEFERRED => 'deferred',
             self::STATUS_PUBLISHED => 'published',
@@ -587,6 +591,7 @@ class TradingRecommendation extends Model
             self::STATUS_EXECUTED => 'executed',
             self::STATUS_CANCELLED => 'cancelled',
             self::STATUS_EXPIRED => 'expired',
+            self::STATUS_SUPERSEDED => 'superseded',
             self::STATUS_PENDING_REVIEW, self::STATUS_DEFERRED, self::STATUS_REJECTED => 'awaiting_approval',
             self::STATUS_PUBLISHED => 'not_applicable',
             default => 'not_applicable',

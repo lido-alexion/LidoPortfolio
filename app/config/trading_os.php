@@ -66,6 +66,11 @@ return [
         'schedule_time' => env('TRADING_OS_PIPELINE_TIME', '19:00'),
     ],
 
+    'execution' => [
+        // FEAT-039: current primary-order cutoff; Day #2 expires at this instant.
+        'cutoff_time' => env('TRADING_OS_EXECUTION_CUTOFF', '15:30'),
+    ],
+
     /*
     | Market Analysis Engine (SD-032) — sentiment weights sum to 100.
     */
