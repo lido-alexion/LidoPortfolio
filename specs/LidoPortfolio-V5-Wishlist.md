@@ -5,7 +5,7 @@
 | **V4 Status** | **V4 COMPLETE AND CLOSED** (18/18 active features complete) |
 | **Document type** | Canonical V5 product wishlist and planning register |
 | **Created** | 2026-09-02 |
-| **Last reconciled** | 2026-09-04 |
+| **Last reconciled** | 2026-09-05 |
 | **Canonical path** | [`specs/LidoPortfolio-V5-Wishlist.md`](LidoPortfolio-V5-Wishlist.md) |
 | **Related** | [`LidoPortfolio-V4-Wishlist.md`](LidoPortfolio-V4-Wishlist.md) · [`LidoPortfolio-V3-Specification.md`](LidoPortfolio-V3-Specification.md) · [`../implementation.md`](../implementation.md) |
 
@@ -19,16 +19,16 @@ Moving an item here does not satisfy it. Every item remains `OPEN` until its pro
 
 ### Status values
 
-`OPEN` · `BLOCKED` · `DECIDED` · `IN PROGRESS` · `COMPLETE`
+`OPEN` · `BLOCKED` · `DECIDED` · `IN PROGRESS` · `COMPLETE` · `SUPERSEDED`
 
 ## 2. V5 wishlist
 
-Current count: **15 OPEN / 3 IN PROGRESS / 1 DECIDED / 5 COMPLETE**.
+Current count: **14 OPEN / 3 IN PROGRESS / 1 DECIDED / 5 COMPLETE / 1 SUPERSEDED**.
 
 | ID | Item | V5 scope and rationale | Priority | Status |
 |----|------|------------------------|----------|--------|
-| V4-FEAT-003 | B4 persistent app-wide critical banner | V3 §29: **B4 is explicit wishlist**; B3 Dashboard reserve warning is current V3. | P2 | OPEN |
-| V4-FEAT-004 | Notification channel abstraction + email/webhook | V3 §30 requires Telegram/in-app capability (shipped); multi-channel is new. | P2 | OPEN |
+| V4-FEAT-003 | B4 persistent app-wide critical banner | **Superseded by FEAT-004.** The original B4 banner was the simpler mechanism for surfacing important notifications. V5 will implement the complete notification feature instead; any persistent/prominent in-app treatment required by notification severity belongs to FEAT-004 rather than a separate banner subsystem. | P2 | SUPERSEDED |
+| V4-FEAT-004 | Notification channel abstraction + email/webhook | V3 §30 requires Telegram/in-app capability (shipped); multi-channel is new. FEAT-004 also absorbs any persistent/prominent in-app notification treatment formerly represented by FEAT-003. | P2 | OPEN |
 | V4-FEAT-007 | Indicator Registry deeper versioning / remaining cutover | SD-033 residual beyond V3 registries already shipped. | P2 | OPEN |
 | V4-FEAT-008 | Trading Artifact Framework remaining phases | SD-034 residual beyond the shipped envelope, package I/O, Indicator/Screener/Strategy registries, Create/Enable/Archive, AI authoring/runtime docs, and V3 multi-strategy surfaces. Remaining scope: immutable published versions, first-class library/binding model, expanded AI catalogue UX, sharing/distribution, dependency dashboards, rollback, bundle UI, and fork workflows. Shipped infrastructure stays shipped. | P2 | OPEN |
 | V4-FEAT-012 | Admin force-logout of other users (PD-007) | Authentication product expansion deferred from V4. | P3 | OPEN |
@@ -75,6 +75,7 @@ Priority is a planning signal, not execution order. Dependencies, risk, and prer
 
 | Date | Change |
 |------|--------|
+| 2026-09-05 | **FEAT-003 SUPERSEDED:** no separate persistent critical-banner subsystem will be built; FEAT-004 absorbs the required persistent/prominent in-app notification UX. |
 | 2026-09-04 | **FEAT-040 DECIDED:** froze portfolio-level Kite holdings/cash reconciliation, holdings-mismatch execution blocking, one-live-portfolio invariant, mode-change blackout, immutable reconciliation evidence, and V6 account-level Emergency Halt/Get-a-life controls. |
 | 2026-09-04 | **FEAT-039 implementation started:** added holiday-aware immutable two-session lifetime derivation and persistence foundations for target progress, Investor execution batches, and idempotent internal transfers with provisional/final valuation. |
 | 2026-09-04 | **FEAT-033 COMPLETE:** Discovery now shows default factory-screener readiness/latest totals and runs it inline with a missing-screener recovery path; no engine or API behavior changed. |
