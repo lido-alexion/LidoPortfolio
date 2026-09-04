@@ -4,6 +4,7 @@ namespace App\Engines\Execution;
 
 use App\Engines\Recommendation\RecommendationEngine;
 use App\Exceptions\DomainException;
+use App\Models\ExecutionBatch;
 use App\Models\ExecutionDecision;
 use App\Models\Holding;
 use App\Models\PortfolioProfile;
@@ -114,6 +115,92 @@ class LiveBrokerExecutionService
             'blocked' => 0,
             'results' => $results,
         ];
+    }
+
+    /**
+     * FEAT-039 account coordinator: one deterministic cycle across all of an
+     * Investor's Automatic portfolios, with residual sells submitted before buys.
+     *
+     * @param  iterable<PortfolioProfile>  $profiles
+     * @return array{submitted:int,skipped:int,blocked:int,results:list<array<string,mixed>>}
+     */
+    public function submitAutomaticForUser(User $user, iterable $profiles): array
+    {
+        $profileCollection = collect($profiles);
+        $profileScope = $profileCollection->pluck('id')->map(fn ($id) => (int) $id)->sort()->implode(',');
+        $cycleKey = implode('|', [
+            $this->broker->provider(),
+            $user->id,
+            now()->timezone('Asia/Kolkata')->format('Y-m-d-H-i'),
+            $profileScope,
+        ]);
+        $batch = ExecutionBatch::query()->firstOrCreate(
+            ['cycle_key' => $cycleKey],
+            [
+                'user_id' => $user->id,
+                'provider' => $this->broker->provider(),
+                'status' => 'running',
+                'started_at' => now(),
+            ],
+        );
+        if (! $batch->wasRecentlyCreated) {
+            return is_array($batch->summary)
+                ? $batch->summary
+                : ['submitted' => 0, 'skipped' => 1, 'blocked' => 0, 'results' => [['reason' => 'cycle_in_progress']]];
+        }
+
+        $readyProfiles = $profileCollection
+            ->filter(fn (PortfolioProfile $profile) => (int) $profile->user_id === (int) $user->id)
+            ->filter(fn (PortfolioProfile $profile) => $profile->executionMode() === PortfolioProfile::EXECUTION_MODE_AUTOMATIC)
+            ->keyBy('id');
+        $blocked = 0;
+        foreach ($readyProfiles as $id => $profile) {
+            try {
+                $this->gate->assertCanSubmitBroker($user, $profile, ExecutionGate::TRIGGER_AUTOMATIC);
+            } catch (DomainException $e) {
+                $readyProfiles->forget($id);
+                $blocked++;
+                $this->logger->event('LiveBrokerExecutionService', 'execution.automatic_blocked', 'warning', 'Automatic submit blocked', [
+                    'profile_id' => $profile->id,
+                    'user_id' => $user->id,
+                    'reason' => $e->errorCode(),
+                ]);
+            }
+        }
+
+        $recommendations = TradingRecommendation::query()
+            ->whereIn('profile_id', $readyProfiles->keys())
+            ->get()
+            ->filter(fn (TradingRecommendation $row) => $this->isAutomaticCandidate($row))
+            ->sort(function (TradingRecommendation $left, TradingRecommendation $right): int {
+                $leftSide = $left->orderSide() === 'sell' ? 0 : 1;
+                $rightSide = $right->orderSide() === 'sell' ? 0 : 1;
+
+                return [$leftSide, $left->generated_at?->getTimestamp() ?? 0, $left->id]
+                    <=> [$rightSide, $right->generated_at?->getTimestamp() ?? 0, $right->id];
+            });
+
+        $results = [];
+        $submitted = 0;
+        $skipped = 0;
+        foreach ($recommendations as $recommendation) {
+            $profile = $readyProfiles->get($recommendation->profile_id);
+            if (! $profile) {
+                continue;
+            }
+            $row = $this->submitOne($user, $profile, (int) $recommendation->id, ExecutionGate::TRIGGER_AUTOMATIC);
+            $results[] = $row;
+            if (($row['outcome'] ?? '') === ExecutionDecision::OUTCOME_SUBMITTED) {
+                $submitted++;
+            } else {
+                $skipped++;
+            }
+        }
+
+        $summary = compact('submitted', 'skipped', 'blocked', 'results');
+        $batch->forceFill(['status' => 'completed', 'completed_at' => now(), 'summary' => $summary])->save();
+
+        return $summary;
     }
 
     /**

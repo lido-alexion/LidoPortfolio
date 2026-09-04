@@ -24,6 +24,7 @@ use App\Services\TelegramNotificationService;
 use App\Support\TradingOsConfig;
 use Carbon\Carbon;
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -45,7 +46,7 @@ class V4Feat010UnattendedOpsTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class);
+        $this->withoutMiddleware(ValidateCsrfToken::class);
         Http::preventStrayRequests();
         app(FakeBrokerGateway::class)->reset();
         Carbon::setTestNow(Carbon::parse('2026-08-07 19:05:00', 'Asia/Kolkata'));
@@ -224,6 +225,36 @@ class V4Feat010UnattendedOpsTest extends TestCase
         $this->assertSame(1, app(FakeBrokerGateway::class)->placeCalls);
         $this->assertSame(0, TradingOrder::query()->where('profile_id', $semi->id)->count());
         $this->assertSame(0, TradingOrder::query()->where('profile_id', $manual->id)->count());
+    }
+
+    public function test_account_cycle_submits_sells_before_buys_across_automatic_portfolios(): void
+    {
+        [$user, $buyProfile] = $this->actingReadyUser();
+        $this->setMode($user, $buyProfile, PortfolioProfile::EXECUTION_MODE_AUTOMATIC, confirm: true);
+        $buy = $this->pendingBuy($buyProfile);
+
+        $sellProfile = $this->createPortfolioProfile($user, 'Sell book', false);
+        app(CashManagementService::class)->deposit($sellProfile, 50_000, 'seed', $user);
+        $this->withProfileHeader($user, $sellProfile);
+        $this->setMode($user, $sellProfile, PortfolioProfile::EXECUTION_MODE_AUTOMATIC, confirm: true);
+        $sell = $this->pendingBuy($sellProfile);
+        $sell->forceFill([
+            'recommendation_type' => TradingRecommendation::ACTION_EXIT_POSITION,
+            'execution_plan' => ['suggested_quantity' => 2, 'suggested_investment_amount' => 200, 'side' => 'sell'],
+        ])->save();
+
+        $this->artisan('tos:submit-automatic-orders')->assertSuccessful();
+
+        $placed = app(FakeBrokerGateway::class)->placed;
+        $this->assertCount(2, $placed);
+        $this->assertSame($sell->id, $placed[0]->recommendationId);
+        $this->assertSame('sell', $placed[0]->side);
+        $this->assertSame($buy->id, $placed[1]->recommendationId);
+        $this->assertSame('buy', $placed[1]->side);
+        $this->assertDatabaseHas('portfolio_execution_batches', [
+            'user_id' => $user->id,
+            'status' => 'completed',
+        ]);
     }
 
     public function test_reconcile_failure_alerts_telegram_once_then_recovers(): void

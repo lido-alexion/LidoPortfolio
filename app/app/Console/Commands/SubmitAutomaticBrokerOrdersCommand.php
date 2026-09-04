@@ -24,13 +24,18 @@ class SubmitAutomaticBrokerOrdersCommand extends Command
 
         $submitted = 0;
         $errors = [];
-        foreach ($query->with('user')->get() as $profile) {
+        $profiles = $query->with('user')->get();
+        foreach ($profiles->groupBy('user_id') as $userProfiles) {
+            $user = $userProfiles->first()?->user;
+            if (! $user) {
+                continue;
+            }
             try {
-                $result = $live->submitAutomaticForProfile($profile);
+                $result = $live->submitAutomaticForUser($user, $userProfiles);
                 $submitted += (int) ($result['submitted'] ?? 0);
             } catch (Throwable $e) {
-                $errors[] = sprintf('profile #%d: %s', $profile->id, $e->getMessage());
-                $this->error(sprintf('Automatic submit failed for profile #%d: %s', $profile->id, $e->getMessage()));
+                $errors[] = sprintf('user #%d: %s', $user->id, $e->getMessage());
+                $this->error(sprintf('Automatic submit failed for user #%d: %s', $user->id, $e->getMessage()));
             }
         }
 
