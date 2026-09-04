@@ -44,6 +44,7 @@ class SettingsController extends Controller
             'indiavix_alert_threshold' => ['nullable', 'numeric', 'min:1', 'max:100'],
             'notification_schedules' => ['nullable', 'array', 'max:24'],
             'notification_schedules.*' => ['date_format:H:i'],
+            'kite_readiness_reminder_time' => ['nullable', 'date_format:H:i'],
             'backend_log_level' => ['nullable', 'in:debug,info,warning,error'],
             'sync_log_retention_days' => ['nullable', 'integer', 'min:0', 'max:90'],
             'admin_ops_telegram_ping_when_clear' => ['nullable', 'in:true,false'],

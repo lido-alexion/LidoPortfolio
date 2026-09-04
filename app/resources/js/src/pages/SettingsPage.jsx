@@ -285,6 +285,7 @@ export default function SettingsPage() {
                 : settings.max_lending_absolute,
             telegram_bot_token: settings.telegram_bot_token,
             telegram_chat_id: settings.telegram_chat_id,
+            kite_readiness_reminder_time: settings.kite_readiness_reminder_time || '',
             notification_schedules: notificationPayload,
         });
         await loadSettings();
@@ -1021,6 +1022,17 @@ export default function SettingsPage() {
                                     />
                                     <p className="text-muted small mb-0 mt-1">
                                         Telegram bot and chat ID are saved for the active portfolio.
+                                    </p>
+                                </div>
+                                <div className="col-md-6">
+                                    <label className="form-label" htmlFor="kite-readiness-reminder-time">Daily Kite readiness reminder</label>
+                                    <TimeInput
+                                        id="kite-readiness-reminder-time"
+                                        value={settings.kite_readiness_reminder_time || ''}
+                                        onChange={(e) => setSettings({ ...settings, kite_readiness_reminder_time: e.target.value })}
+                                    />
+                                    <p className="text-muted small mb-0 mt-1">
+                                        Automatic mode only, in the application timezone. Clear to disable. Sent at most once per day while Kite is unusable.
                                     </p>
                                 </div>
                                 {telegramConfigured && (

@@ -77,6 +77,12 @@ Artisan::command('portfolio:expire-alerts', function () {
     return 0;
 })->purpose('Expire portfolio alerts older than 100 hours');
 
+Artisan::command('portfolio:send-kite-readiness-reminders', function () {
+    $result = app(\App\Services\Broker\KiteReadinessReminderService::class)->sendDue();
+    $this->info("Kite readiness reminders: {$result['sent']} sent; {$result['checked']} due profiles checked.");
+    return 0;
+})->purpose('Remind Automatic portfolios to reconnect an unusable Kite session');
+
 $cronTime = env('PORTFOLIO_CRON_TIME', '18:30');
 $timezone = env('PORTFOLIO_CRON_TIMEZONE', 'Asia/Kolkata');
 
@@ -217,6 +223,11 @@ Schedule::command('portfolio:expire-alerts')
     ->timezone($timezone)
     ->name('alert-max-age-cleanup');
 
+Schedule::command('portfolio:send-kite-readiness-reminders')
+    ->everyMinute()
+    ->timezone($timezone)
+    ->name('kite-readiness-reminders');
+
 Schedule::command('portfolio:send-calendar-reminders')
     ->dailyAt('07:00')
     ->timezone($timezone)
@@ -276,4 +287,3 @@ Schedule::command('tos:submit-automatic-orders')
     ->timezone($timezone)
     ->withoutOverlapping(5)
     ->name('tos-broker-automatic');
-

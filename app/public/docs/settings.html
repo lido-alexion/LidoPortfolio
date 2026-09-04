@@ -106,7 +106,7 @@
         <a href="settings.html">This topic</a>
       </div>
     </header>
-    
+
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Settings</h1>
       <p class="muted"><code>settings</code> · screen: <code>/settings</code></p>
@@ -125,70 +125,70 @@
         <dl class="doc-list">
         <dt>Settings tabs</dt>
         <dd>Navigate Global / Portfolio / Account sections.</dd>
-    
+
         <dt>Execution mode</dt>
         <dd>Per active portfolio. New portfolios default to Manual. Semi-Automatic and Automatic require admin entitlement plus a valid authenticator code. Manual → Automatic needs an explicit confirmation checkbox. Automatic → Manual stops future automatic submits and does not cancel broker orders already sent. Automatic mode is unattended in production: after the scheduled daily pipeline, eligible orders submit without a per-order click (Laravel schedule:run; existing TOTP enrollment and Kite session are still required).</dd>
-    
+
         <dt>Authenticator (TOTP)</dt>
         <dd>Account tab. Enroll a compatible authenticator (for example Google Authenticator), confirm with a code, and store recovery codes shown once. Required before broker submission in Semi-Automatic or Automatic; not required for Manual fills. Disable requires a current code.</dd>
-    
+
         <dt>Zerodha / Kite</dt>
-        <dd>Account tab. Connect your own Kite account. Not required for Manual mode. Sessions typically expire around 6:00 AM IST; reconnect if broker submit is blocked.</dd>
-    
+        <dd>Account tab. Connect your own Kite account. Not required for Manual mode. Sessions typically expire around 6:00 AM IST; reconnect if broker submit is blocked. Portfolio settings can schedule one daily Telegram readiness reminder for Automatic mode; clear its time to disable.</dd>
+
         <dt>Fee components</dt>
         <dd>Drive auto fees on buy/sell ledger rows.</dd>
-    
+
         <dt>Telegram</dt>
         <dd>Bot token and chat id for portfolio notifications.</dd>
-    
+
         <dt>Portfolio cash reserve %</dt>
         <dd>Portfolio-level OD-19 percentage. Required reserve rupees = this % × max(currently held invested amount, current holdings market value). Leave blank for 0 (no configured reserve). Not a % of cash. Withdrawals are not blocked if cash falls below the resulting rupee floor; Dashboard warns instead.</dd>
-    
+
         <dt>Minimum actionable BUY / INCREASE (₹)</dt>
         <dd>OD-12 this-cycle opportunity floor. Blank uses the platform default ₹5,000. Not the OD-06 atomic reservation block.</dd>
-    
+
         <dt>Opportunity-cost rate %</dt>
         <dd>Annualized rate for §19 success (positive return + NIFTY beat + opportunity-cost hurdle). UI shows percent; stored as decimal fraction (12% → 0.12). Default 12%. Closed backtest trades persist NIFTY-comparable <code>benchmark_return_pct</code> and <code>is_success</code> via SuccessCriteriaEvaluator during simulation.</dd>
-    
+
         <dt>Portfolio max position size %</dt>
         <dd>Optional ceiling on single-name size. Generation uses effective max_pct = min(strategy max_position_size_pct, portfolio_max_position_pct if set, 100/max_holdings if set), then market-gate multiplier. Blank = no portfolio ceiling beyond strategy limits (§3.5).</dd>
-    
+
         <dt>Max lending % of unused allocation</dt>
         <dd>§5.7 / §8.2 optional portfolio cap on available_for_lending. After lendable surplus (unused − OD-24 retained − already committed), raw is min’d with unused_allocation × this % / 100, then floored to ₹5,000 blocks. Blank = no % cap (backward compatible).</dd>
-    
+
         <dt>Max lending absolute (₹)</dt>
         <dd>§5.7 / §8.2 optional absolute ₹ ceiling on available_for_lending. Applied with the % cap when both are set (whichever is tighter), before the ₹5,000 floor. Blank = no absolute cap.</dd>
-    
+
         <dt>Reservation policy (display only)</dt>
         <dd>Atomic block ₹5,000 · Execution margin 1% (OD-06) — reservation policy, not a mandate to invest the margin. Not editable here.</dd>
-    
+
         <dt>Portfolio Stop-Loss %</dt>
         <dd>Independent portfolio-level stop-loss. Uses weighted-average actual fill cost of the current ownership episode; evaluated on raw daily close. Not derived from trailing % or strategy exit JSON.</dd>
-    
+
         <dt>Portfolio Trailing Stop %</dt>
         <dd>Independent portfolio-level trailing stop (default/seed 15%). Peak is maximum raw daily close since the ownership episode began. Not based on unrealized %, not stop-loss %, and not strategy trailing_stop JSON. Strategy-specific exit rules remain separate under Strategy → Exit Strategy.</dd>
-    
+
         <dt>Recall period (calendar days)</dt>
         <dd>Days after a loan is committed before the lender may recall. Blank uses the platform default (14). Changing the period does not reset existing commitment dates — eligibility uses commitment date + the current effective period. Follow-up cooldown is floor(period/2). Saved separately via Save recall period.</dd>
-    
+
         <dt>Notification history</dt>
         <dd>Open /notification-history from Portfolio → Alerts &amp; notifications to audit Telegram deliveries.</dd>
-    
+
         <dt>Active sessions</dt>
         <dd>Account tab: list devices (IP, browser summary, last activity). Log out other devices keeps this browser signed in. Revoke removes one non-current session; revoking the current session signs you out.</dd>
-    
+
         <dt>Admin shortcuts</dt>
         <dd>From Global settings: Admin alerts, Sync logs, Universe price sync, Data Quality, Indicator/Screener/Strategy registries.</dd>
-    
+
         <dt>Screener Registry (admin)</dt>
         <dd>Admin shortcut to Screener artifact import/export and catalogue.</dd>
-    
+
         <dt>Strategy Registry (admin)</dt>
         <dd>Admin shortcut to Strategy artifact import/export, selection, and catalogue.</dd>
-    
+
         <dt>Typical flow</dt>
         <dd>Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.</dd>
-    
+
         <dt>Validation and errors</dt>
         <dd>Form and API validations are shown as inline errors or toast messages. Fix the first reported issue, retry, and re-check dependent sections that consume the same data.</dd>
     </dl>
@@ -199,34 +199,34 @@
         <dl class="doc-list">
         <dt>Manual vs automatic session revoke</dt>
         <dd>Active sessions controls are manual. Changing your password (or accepting an admin password-reset link) also signs out other devices automatically while keeping the active/new session.</dd>
-    
+
         <dt>Admin vs portfolio scope</dt>
         <dd>Some tools (users, sync logs, universe sync) are admin-only.</dd>
-    
+
         <dt>Portfolio cash reserve</dt>
         <dd>A non-investable, non-lendable rupee floor. It is not a separate bank account and not strategy cash.</dd>
-    
+
         <dt>Configurable lending limits (§5.7)</dt>
         <dd>Optional portfolio settings max_lending_pct_of_unused and/or max_lending_absolute cap available_for_lending after OD-24 surplus and before the ₹5,000 floor. Defaults empty = full surplus (current behaviour). Does not change OD-19/20/21/24 formulas or lender ranking.</dd>
-    
+
         <dt>Portfolio risk exits vs strategy exits</dt>
         <dd>Portfolio Stop-Loss and Portfolio Trailing Stop are common/settings controls. Strategy Exit Strategy keeps strategy-specific rules (MA, RS, trend, score, ATR, Screener Exit). Legacy strategy JSON max_loss / trailing_stop are ignored. Exit precedence when both fire: Strategy exit → Portfolio Stop-Loss → Portfolio Trailing Stop → Strategy Horizon.</dd>
-    
+
         <dt>Recall period</dt>
         <dd>Rule-driven eligibility for automated recalls. There is no auto-return toggle that controls repayment or recall.</dd>
-    
+
         <dt>Not in sidebar</dt>
         <dd>Settings sub-pages and registries stay off the primary sidebar; reach them from Settings or parent product pages.</dd>
-    
+
         <dt>Active portfolio context</dt>
         <dd>Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.</dd>
-    
+
         <dt>Data freshness</dt>
         <dd>Many analytics depend on cached daily OHLCV and scheduled sync jobs. If numbers look stale, refresh this page and verify sync status in admin tools.</dd>
     </dl>
       </section>
 
-      
+
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
@@ -234,7 +234,7 @@
         </div>
       </section>
     </article>
-    
+
     <footer class="muted">
       Generated from the StoX in-app documentation source. Product screens still require sign-in.
     </footer>

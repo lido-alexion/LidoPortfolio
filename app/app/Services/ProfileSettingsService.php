@@ -15,6 +15,7 @@ class ProfileSettingsService
         'telegram_chat_id' => '',
         'notifications_enabled' => 'true',
         'notification_schedules' => '[]',
+        'kite_readiness_reminder_time' => '08:30',
         'indiavix_alert_enabled' => 'true',
         'indiavix_alert_threshold' => '20',
         'portfolio_cash_reserve_pct' => '',
@@ -32,6 +33,7 @@ class ProfileSettingsService
 
     /** Internal arming flag — not exposed via settings API defaults list. */
     public const INDIAVIX_ALERT_ARMED_KEY = 'indiavix_alert_armed';
+    public const KITE_READINESS_LAST_REMINDER_KEY = 'kite_readiness_last_reminded_on';
 
     public function get(PortfolioProfile $profile, string $key, ?string $default = null): ?string
     {
