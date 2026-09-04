@@ -76,4 +76,16 @@ describe('Discovery TOS smoke', () => {
         await user.click(screen.getByRole('button', { name: 'Evidence' }));
         expect(await screen.findByText(/discovery evidence/i)).toBeInTheDocument();
     });
+
+    it('inspects the ranked results of a historical evaluation run', async () => {
+        const user = userEvent.setup();
+        installDefaultTosHandlers({ candidates: [DISCOVERY_CANDIDATE] });
+        renderTosApp({ route: '/candidates' });
+
+        const selector = await screen.findByRole('combobox', { name: 'Evaluation run' });
+        await user.selectOptions(selector, '5');
+
+        expect(await screen.findByRole('region', { name: 'Evaluation history' })).toHaveTextContent('INFY');
+        expect(screen.getByRole('region', { name: 'Evaluation history' })).toHaveTextContent('78.0');
+    });
 });

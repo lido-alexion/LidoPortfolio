@@ -439,6 +439,14 @@ class EvaluationEngine
     }
 
     /**
+     * @return list<EvaluationRun>
+     */
+    public function listRuns(PortfolioProfile $profile, int $limit = 20): array
+    {
+        return $this->evaluationResults->listRuns($profile, $limit);
+    }
+
+    /**
      * @param  array<string, mixed>  $config
      * @return array<string, mixed>
      */

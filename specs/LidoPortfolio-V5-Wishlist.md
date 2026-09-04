@@ -23,7 +23,7 @@ Moving an item here does not satisfy it. Every item remains `OPEN` until its pro
 
 ## 2. V5 wishlist
 
-Current count: **20 OPEN / 1 IN PROGRESS / 1 DECIDED / 2 COMPLETE**.
+Current count: **19 OPEN / 1 IN PROGRESS / 1 DECIDED / 3 COMPLETE**.
 
 | ID | Item | V5 scope and rationale | Priority | Status |
 |----|------|------------------------|----------|--------|
@@ -42,7 +42,7 @@ Current count: **20 OPEN / 1 IN PROGRESS / 1 DECIDED / 2 COMPLETE**.
 | V4-FEAT-030 | CI workflow for PHPUnit + frontend build | **Implemented and verified 2026-09-04:** CI runs the full Laravel/PHPUnit suite on PHP 8.4 plus JavaScript tests and a production Vite build on Node 22 for pushes to `master`, pull requests, and manual dispatch. Initial full coverage exposed and repaired stale market-gate fixtures and the intentionally public, encrypted-state Kite callback contract. GitHub Actions run `33865499081` passed both jobs on `e09a9ff`. | P2 | COMPLETE |
 | V4-FEAT-031 | Production secrets / single-folder deploy hardening | **Implemented; production cutover verification pending:** [`V5-FEAT-031-Production-Secrets-Single-Folder-Deploy.md`](V5-FEAT-031-Production-Secrets-Single-Folder-Deploy.md). External environment secrets, one-build packaging, nested Laravel denial, compatible cPanel helpers, migration verification, and rollback are implemented. | P3 | IN PROGRESS |
 | V4-FEAT-033 | Discovery inline default screener | **Implemented 2026-09-04:** [`V5-FEAT-033-Discovery-Inline-Default-Screener.md`](V5-FEAT-033-Discovery-Inline-Default-Screener.md). Discovery shows and runs the factory screener inline using existing APIs, while keeping candidate regeneration explicit. | P3 | COMPLETE |
-| V4-FEAT-034 | Richer Evaluation history UX | Evaluation UX enhancement. | P3 | OPEN |
+| V4-FEAT-034 | Richer Evaluation history UX | **Implemented 2026-09-04:** [`V5-FEAT-034-Richer-Evaluation-History-UX.md`](V5-FEAT-034-Richer-Evaluation-History-UX.md). Discovery includes a bounded, portfolio-scoped Evaluation run selector and ranked historical results without restoring a separate Evaluation page. | P3 | COMPLETE |
 | V4-FEAT-035 | TypeScript / TanStack Query / AG Grid migration | Frontend stack migration. | TBD | OPEN |
 | V4-FEAT-036 | Optional JWT/token API for non-SPA clients | Authentication expansion; the current SPA continues to use Sanctum session cookies. | TBD | OPEN |
 | V4-FEAT-037 | Dashboard-first daily Kite readiness and reconnect | When an Automatic portfolio cannot submit because its daily Kite session is missing or expired, show a prominent Dashboard readiness state and minimum-friction **Connect Kite** action. Return to Dashboard and refresh readiness after Zerodha authentication. Add a configurable, at-most-once-daily Telegram reminder while Automatic execution is enabled and Kite remains unusable; suppress it when connected. Interactive Zerodha authentication remains mandatory. | P2 | OPEN |

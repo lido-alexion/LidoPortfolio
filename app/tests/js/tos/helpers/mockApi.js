@@ -52,6 +52,15 @@ export function resetApiMock() {
 export function installDefaultTosHandlers({
     recommendations = [OPEN_BUY_RECOMMENDATION],
     candidates = [DISCOVERY_CANDIDATE],
+    evaluationRuns = [{
+        id: 5,
+        discovery_run_id: 3,
+        status: 'completed',
+        result_count: 1,
+        stats: { evaluated: 1 },
+        completed_at: '2026-09-04T09:30:00.000Z',
+    }],
+    evaluations = [DISCOVERY_CANDIDATE],
     screeners = [DEFAULT_SCREENER],
     failRecommendations = false,
     failCandidates = false,
@@ -130,6 +139,12 @@ export function installDefaultTosHandlers({
                 });
             }
             return axiosOk(apiEnvelope(candidates));
+        }
+        if (path === '/v1/evaluation/runs') {
+            return axiosOk(apiEnvelope(evaluationRuns));
+        }
+        if (path === '/v1/evaluations') {
+            return axiosOk(apiEnvelope(evaluations));
         }
         if (path === '/screeners') {
             return axiosOk({ data: screeners });

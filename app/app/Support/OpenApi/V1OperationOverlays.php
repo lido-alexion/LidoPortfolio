@@ -104,6 +104,13 @@ final class V1OperationOverlays
                     '422' => $envError('EVALUATION_PRECONDITION', 'No completed evaluation run or other EvaluationEngine RuntimeException mapped locally.'),
                 ],
             ],
+            'GET /api/v1/evaluation/runs' => [
+                'summary' => 'List recent Evaluation runs',
+                'description' => 'Returns newest-first portfolio-scoped run history for the merged Discovery/Evaluation UX (V4-FEAT-034). Bounded to 50 runs.',
+                'parameters' => [
+                    $q('limit', 'integer', 'Maximum runs to return (default 20, maximum 50).'),
+                ],
+            ],
             'POST /api/v1/discovery/runs' => [
                 'summary' => 'Run Discovery',
                 'description' => 'Not freshness-gated. DiscoveryRun.dataset_version is stamped with DataEngine::currentDatasetVersion() (immutable key when a version exists).',

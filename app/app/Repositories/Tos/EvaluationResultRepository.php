@@ -12,6 +12,20 @@ use App\Models\PortfolioProfile;
  */
 class EvaluationResultRepository
 {
+    /**
+     * @return list<EvaluationRun>
+     */
+    public function listRuns(PortfolioProfile $profile, int $limit = 20): array
+    {
+        return EvaluationRun::query()
+            ->where('profile_id', $profile->id)
+            ->withCount('results')
+            ->orderByDesc('id')
+            ->limit(max(1, min($limit, 50)))
+            ->get()
+            ->all();
+    }
+
     public function latestCompletedId(PortfolioProfile $profile): ?int
     {
         $id = EvaluationRun::query()
@@ -32,6 +46,9 @@ class EvaluationResultRepository
 
         if ($evaluationRunId) {
             $query->where('evaluation_run_id', $evaluationRunId);
+            if ($profile) {
+                $query->whereHas('evaluationRun', fn ($run) => $run->where('profile_id', $profile->id));
+            }
         } elseif ($profile) {
             $latest = $this->latestCompletedId($profile);
             if (! $latest) {

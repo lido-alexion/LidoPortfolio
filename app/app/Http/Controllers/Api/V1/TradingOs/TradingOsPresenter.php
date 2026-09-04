@@ -107,6 +107,8 @@ final class TradingOsPresenter
             'discovery_run_id' => $run->discovery_run_id,
             'status' => $run->status,
             'stats' => $run->stats_json,
+            'result_count' => isset($run->results_count) ? (int) $run->results_count : null,
+            'error_message' => $run->error_message,
             'started_at' => optional($run->started_at)?->toIso8601String(),
             'completed_at' => optional($run->completed_at)?->toIso8601String(),
         ];

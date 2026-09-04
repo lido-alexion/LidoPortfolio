@@ -317,6 +317,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
     Route::get('/candidates', [TradingOsDiscoveryController::class, 'candidates']);
 
     Route::post('/evaluation/runs', [TradingOsEvaluationController::class, 'evaluationRunsStore']);
+    Route::get('/evaluation/runs', [TradingOsEvaluationController::class, 'evaluationRunsIndex']);
     Route::get('/evaluations', [TradingOsEvaluationController::class, 'evaluations']);
 
     Route::post('/recommendations/generate', [TradingOsRecommendationController::class, 'recommendationsGenerate']);

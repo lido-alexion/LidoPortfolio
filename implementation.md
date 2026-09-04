@@ -2090,6 +2090,8 @@ Sanctum auth. Machine-readable contract: [`app/openapi/v1.json`](app/openapi/v1.
 
 **Discovery merges Evaluations UI (2026-07-30):** Removed the separate Evaluations nav page. Discovery (`/candidates`) shows evaluation rank/score/confidence/explanation (from latest `EvaluationResult` per candidate); **Run discovery** auto-runs evaluation afterward; **Run evaluation** re-scores the latest discovery run. `/evaluations` redirects to `/candidates`. Docs clarify long-focused evaluation scoring and Discovery↔Evaluation linkage (no Recommendations references in that Discovery topic). APIs `GET /v1/evaluations` and `POST /v1/evaluation/runs` remain.
 
+**V5 FEAT-034 Evaluation history (2026-09-04):** Discovery now includes a read-only selector for the 20 newest portfolio-scoped Evaluation runs and loads each run's immutable ranked results through `GET /api/v1/evaluation/runs` plus the existing run-filtered `GET /api/v1/evaluations`. Run history is bounded to 50 server-side, reports status/result count/error metadata, and explicit result lookup now enforces active-portfolio ownership. The frozen merged-page rule remains: `/evaluations` still redirects to `/candidates`.
+
 **Brand rename (2026-07-30):** Product display name is **StoX by Lido Alexion**. Header shows **StoX** in Nulshock at the former title size; **by Lido Alexion** is a much smaller cursive byline. Browser title (`app.blade.php`) updated accordingly.
 
 **Discovery reason icons (2026-07-30):** Discovery reason column renders matched patterns as `PatternSketch` icons (same as Watchlist / Patterns guide) with name + category on hover; links to `/patterns#id`. Non-pattern signals (screener hit, holding/watchlist membership) stay text badges.

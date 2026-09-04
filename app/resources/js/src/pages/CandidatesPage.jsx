@@ -83,6 +83,56 @@ function DefaultScreenerCard({ screener, loading, running, onRun }) {
     );
 }
 
+function EvaluationHistory({ runs, loading, selectedRunId, onSelect, results, resultsLoading }) {
+    return (
+        <section className="card mb-3" aria-label="Evaluation history">
+            <div className="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <div>
+                    <span className="fw-semibold">Evaluation history</span>
+                    <span className="small text-muted ms-2">Most recent 20 runs</span>
+                </div>
+                <select
+                    className="form-select form-select-sm"
+                    style={{ maxWidth: 360 }}
+                    aria-label="Evaluation run"
+                    value={selectedRunId || ''}
+                    onChange={(event) => onSelect(event.target.value ? Number(event.target.value) : null)}
+                    disabled={loading || runs.length === 0}
+                >
+                    <option value="">{loading ? 'Loading runs…' : 'Choose a run'}</option>
+                    {runs.map((run, index) => (
+                        <option key={run.id} value={run.id}>
+                            {index === 0 ? 'Latest · ' : ''}Run #{run.id} · {run.status} · {run.result_count ?? run.stats?.evaluated ?? 0} results
+                        </option>
+                    ))}
+                </select>
+            </div>
+            {runs.length === 0 && !loading ? (
+                <div className="card-body small text-muted">No evaluation runs have been recorded yet.</div>
+            ) : selectedRunId ? (
+                <div className="table-responsive">
+                    <table className="table table-sm align-middle mb-0">
+                        <thead><tr><th>Rank</th><th>Symbol</th><th>Score</th><th>Confidence</th><th>Explanation</th></tr></thead>
+                        <tbody>
+                            {resultsLoading ? <tr><td colSpan="5" className="text-muted">Loading run…</td></tr> : results.length === 0 ? (
+                                <tr><td colSpan="5" className="text-muted">This run has no results.</td></tr>
+                            ) : results.map((row) => (
+                                <tr key={row.id}>
+                                    <td>{row.rank ?? '—'}</td>
+                                    <td><strong>{row.symbol || '—'}</strong></td>
+                                    <td>{formatScore(row.score)}</td>
+                                    <td>{formatPct(row.confidence)}</td>
+                                    <td className="small text-muted">{row.explanation || '—'}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            ) : <div className="card-body small text-muted">Choose a run to inspect its ranked results.</div>}
+        </section>
+    );
+}
+
 /**
  * Pattern matches as sketches (name on hover); other signals as compact text badges.
  */
@@ -154,6 +204,7 @@ export default function CandidatesPage() {
     const [runningDiscovery, setRunningDiscovery] = useState(false);
     const [runningEval, setRunningEval] = useState(false);
     const [runningScreener, setRunningScreener] = useState(false);
+    const [selectedRunId, setSelectedRunId] = useState(null);
 
     const { data, loading, reload: load } = useApiGet({
         deps: [source, search],
@@ -183,6 +234,28 @@ export default function CandidatesPage() {
     const defaultScreener = screeners.find((row) => row.factory_key === 'minervini_trend_template')
         || screeners.find((row) => row.is_factory)
         || null;
+
+    const { data: runData, loading: runLoading, reload: loadRuns } = useApiGet({
+        errorFallback: 'Failed to load evaluation history',
+        request: async () => {
+            const response = await api.get('/v1/evaluation/runs', { params: { limit: 20 }, skipErrorToast: true });
+            return tosList(response);
+        },
+    });
+    const evaluationRuns = Array.isArray(runData) ? runData : [];
+    const { data: historyData, loading: historyLoading } = useApiGet({
+        deps: [selectedRunId],
+        enabled: Boolean(selectedRunId),
+        errorFallback: 'Failed to load evaluation run',
+        request: async () => {
+            const response = await api.get('/v1/evaluations', {
+                params: { evaluation_run_id: selectedRunId },
+                skipErrorToast: true,
+            });
+            return tosList(response);
+        },
+    });
+    const historyResults = Array.isArray(historyData) ? historyData : [];
 
     const sources = useMemo(() => {
         const set = new Set(items.map((i) => i.source).filter(Boolean));
@@ -231,7 +304,7 @@ export default function CandidatesPage() {
                     'warning',
                 );
             }
-            await load();
+            await Promise.all([load(), loadRuns()]);
         } catch (e) {
             showToast(e?.response?.data?.error?.message || e.message || 'Discovery failed', 'danger');
         } finally {
@@ -246,7 +319,7 @@ export default function CandidatesPage() {
                 await api.post('/v1/evaluation/runs', null, { skipErrorToast: true });
             }, { successMessage: 'Evaluation completed', errorFallback: 'Evaluation failed' });
             if (ok) {
-                await load();
+                await Promise.all([load(), loadRuns()]);
             }
         } finally {
             setRunningEval(false);
@@ -323,6 +396,15 @@ export default function CandidatesPage() {
                     </div>
                 </div>
             </div>
+
+            <EvaluationHistory
+                runs={evaluationRuns}
+                loading={runLoading}
+                selectedRunId={selectedRunId}
+                onSelect={setSelectedRunId}
+                results={historyResults}
+                resultsLoading={historyLoading}
+            />
 
             <div className="row g-2 mb-3">
                 <div className="col-md-4">

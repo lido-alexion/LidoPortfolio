@@ -145,6 +145,7 @@ flowchart TD
 </tbody></table>
 <p>The system does not infer sell purpose from screener condition text. You assign purpose by wiring the screener to eligibility (buy gate) or Screener Exit (sell trigger). Discovery/Evaluation only inventory and measure; they do not invent that wiring.</p>
 <p>The portfolio factory/default screener is shown inline with its enabled state, scope, and latest matched/scanned totals. <strong>Run default screener</strong> refreshes its hit set; it deliberately does not silently create a Discovery run. Use <strong>Run discovery</strong> afterward to rebuild candidates from recent hits (evaluation follows automatically). Use <strong>Run evaluation</strong> to re-measure the latest discovery run without rebuilding candidates.</p>
+<p><strong>Evaluation history</strong> lists the 20 newest portfolio-scoped runs. Choose one to inspect its stored ranked results. History is read-only: viewing an earlier run never re-scores it or replaces the current Discovery table.</p>
 <p>Discovery is the candidate funnel plus long-focused evaluation facts on one page. Think of it as &quot;who deserves deeper attention now&quot; with measured score/confidence — not a sell-flipped score for bearish screeners. Candidates still need Strategy scoring later in the pipeline for action labels.</p>
 <p>Bearish screeners can contribute hits to Discovery, but Evaluation does not know which screener was “for selling.” Wire sell intent via Strategy Screener Exit on holdings; keep Eligibility Sources for entry-oriented screeners.</p>
 <p>Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).</p>
@@ -162,6 +163,9 @@ flowchart TD
 
         <dt>Run evaluation</dt>
         <dd>Re-scores the latest completed discovery run’s candidates with long-focused factor facts (score, confidence, rank, explanation). Requires a prior discovery run.</dd>
+
+        <dt>Evaluation history</dt>
+        <dd>Choose one of the 20 newest Evaluation runs and inspect its stored symbol, rank, score, confidence, and explanation. Failed or empty runs remain visible for auditability.</dd>
 
         <dt>Candidate table</dt>
         <dd>Symbol, source, discovery reason (matched patterns as sketch icons with name on hover — same sketches as the Patterns guide; screener/membership signals stay as text badges), plus evaluation rank / score / confidence / explanation when evaluated. Evidence opens discovery signals; Factors opens indicators and passed/failed rules. Click a pattern icon to open that entry in the Patterns guide.</dd>

@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\V1\TradingOs\PipelineController;
 use App\Http\Controllers\Api\V1\TradingOs\RecommendationController;
 use App\Http\Controllers\Api\V1\TradingOs\ReviewController;
 use App\Models\User;
+use App\Models\EvaluationRun;
 use App\Support\TradingOsConfig;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
@@ -43,6 +44,7 @@ class TradingOsControllerSplitTest extends TestCase
             ['POST', '/api/v1/discovery/runs', DiscoveryController::class, 'discoveryRunsStore'],
             ['GET', '/api/v1/candidates', DiscoveryController::class, 'candidates'],
             ['POST', '/api/v1/evaluation/runs', EvaluationController::class, 'evaluationRunsStore'],
+            ['GET', '/api/v1/evaluation/runs', EvaluationController::class, 'evaluationRunsIndex'],
             ['GET', '/api/v1/evaluations', EvaluationController::class, 'evaluations'],
             ['POST', '/api/v1/recommendations/generate', RecommendationController::class, 'recommendationsGenerate'],
             ['GET', '/api/v1/recommendations', RecommendationController::class, 'recommendationsIndex'],
@@ -224,6 +226,35 @@ class TradingOsControllerSplitTest extends TestCase
             ->assertJsonPath('success', false)
             ->assertJsonPath('error.code', 'EVALUATION_PRECONDITION')
             ->assertJsonPath('error.message', 'No completed discovery run available for evaluation.');
+    }
+
+    public function test_evaluation_run_history_is_bounded_and_portfolio_scoped(): void
+    {
+        [$user, $profile] = $this->actingPortfolioUser();
+
+        EvaluationRun::query()->create([
+            'profile_id' => $profile->id,
+            'status' => 'failed',
+            'started_at' => now()->subMinutes(2),
+            'error_message' => 'Example failure',
+        ]);
+        $newer = EvaluationRun::query()->create([
+            'profile_id' => $profile->id,
+            'status' => 'completed',
+            'started_at' => now()->subMinute(),
+            'completed_at' => now(),
+            'stats_json' => ['evaluated' => 4],
+        ]);
+
+        $this->actingAs($user)
+            ->withProfileHeader($user, $profile)
+            ->getJson('/api/v1/evaluation/runs?limit=1')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $newer->id)
+            ->assertJsonPath('data.0.status', 'completed')
+            ->assertJsonPath('data.0.stats.evaluated', 4)
+            ->assertJsonPath('data.0.result_count', 0);
     }
 
     public function test_pipeline_run_without_fresh_dataset_returns_dataset_not_fresh(): void

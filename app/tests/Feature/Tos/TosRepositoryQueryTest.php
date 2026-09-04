@@ -162,6 +162,11 @@ class TosRepositoryQueryTest extends TestCase
         $listed = $repo->listResults(null, $profile);
         $this->assertSame([$r1->id, $r2->id], array_map(fn ($row) => $row->id, $listed));
         $this->assertTrue($listed[0]->relationLoaded('candidate'));
+        $this->assertSame([], $repo->listResults($otherRun->id, $profile));
+        $this->assertSame(
+            [$latest->id, $older->id],
+            array_map(fn ($row) => $row->id, $repo->listRuns($profile)),
+        );
         $this->assertSame([], $repo->listResults(null, $this->defaultPortfolioFor(User::factory()->create())));
     }
 

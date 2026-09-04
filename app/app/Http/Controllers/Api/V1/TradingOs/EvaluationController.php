@@ -47,4 +47,13 @@ class EvaluationController extends Controller
 
         return ApiEnvelope::success(array_map(fn ($r) => TradingOsPresenter::evaluation($r), $items));
     }
+
+    public function evaluationRunsIndex(Request $request): JsonResponse
+    {
+        $profile = \activePortfolio();
+        $limit = max(1, min((int) $request->query('limit', 20), 50));
+        $items = $this->evaluation->listRuns($profile, $limit);
+
+        return ApiEnvelope::success(array_map(fn ($run) => TradingOsPresenter::evaluationRun($run), $items));
+    }
 }

@@ -803,7 +803,8 @@ const APP_DOCUMENTATION_BASE = [
             + '| Strategy → Exit Strategy → Screener Exit | If you **already hold** the stock and it appears in that screener’s latest run → exit signal |\n'
             + '\n'
             + 'The system does not infer sell purpose from screener condition text. You assign purpose by wiring the screener to eligibility (buy gate) or Screener Exit (sell trigger). Discovery/Evaluation only inventory and measure; they do not invent that wiring.\n\n'
-            + 'The portfolio factory/default screener is shown inline with its enabled state, scope, and latest matched/scanned totals. **Run default screener** refreshes its hit set; it deliberately does not silently create a Discovery run. Use **Run discovery** afterward to rebuild candidates from recent hits (evaluation follows automatically). Use **Run evaluation** to re-measure the latest discovery run without rebuilding candidates.',
+            + 'The portfolio factory/default screener is shown inline with its enabled state, scope, and latest matched/scanned totals. **Run default screener** refreshes its hit set; it deliberately does not silently create a Discovery run. Use **Run discovery** afterward to rebuild candidates from recent hits (evaluation follows automatically). Use **Run evaluation** to re-measure the latest discovery run without rebuilding candidates.\n\n'
+            + '**Evaluation history** lists the 20 newest portfolio-scoped runs. Choose one to inspect its stored ranked results. History is read-only: viewing an earlier run never re-scores it or replaces the current Discovery table.',
         controls: [
             {
                 name: 'Default screener card',
@@ -819,6 +820,11 @@ const APP_DOCUMENTATION_BASE = [
                 name: 'Run evaluation',
                 description:
                     'Re-scores the latest completed discovery run’s candidates with long-focused factor facts (score, confidence, rank, explanation). Requires a prior discovery run.',
+            },
+            {
+                name: 'Evaluation history',
+                description:
+                    'Choose one of the 20 newest Evaluation runs and inspect its stored symbol, rank, score, confidence, and explanation. Failed or empty runs remain visible for auditability.',
             },
             {
                 name: 'Candidate table',
