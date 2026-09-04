@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import api from '../api';
 import PatternSketch from '../components/PatternSketch';
 import useApiGet from '../hooks/useApiGet';
@@ -8,6 +9,9 @@ import { showToast } from '../toast';
 import { categoryLabel, PATTERN_BY_ID } from '../utils/patternDetection';
 import { patternGuideLink } from '../utils/patternGuideLinks';
 import { tosList } from '../utils/tosEnvelope';
+import { usePortfolio } from '../context/PortfolioContext';
+
+const EvaluationHistoryGrid = lazy(() => import('../components/EvaluationHistoryGrid'));
 
 function formatPct(v) {
     if (v == null || Number.isNaN(Number(v))) return '—';
@@ -110,24 +114,13 @@ function EvaluationHistory({ runs, loading, selectedRunId, onSelect, results, re
             {runs.length === 0 && !loading ? (
                 <div className="card-body small text-muted">No evaluation runs have been recorded yet.</div>
             ) : selectedRunId ? (
-                <div className="table-responsive">
-                    <table className="table table-sm align-middle mb-0">
-                        <thead><tr><th>Rank</th><th>Symbol</th><th>Score</th><th>Confidence</th><th>Explanation</th></tr></thead>
-                        <tbody>
-                            {resultsLoading ? <tr><td colSpan="5" className="text-muted">Loading run…</td></tr> : results.length === 0 ? (
-                                <tr><td colSpan="5" className="text-muted">This run has no results.</td></tr>
-                            ) : results.map((row) => (
-                                <tr key={row.id}>
-                                    <td>{row.rank ?? '—'}</td>
-                                    <td><strong>{row.symbol || '—'}</strong></td>
-                                    <td>{formatScore(row.score)}</td>
-                                    <td>{formatPct(row.confidence)}</td>
-                                    <td className="small text-muted">{row.explanation || '—'}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                <div>{resultsLoading ? <div className="p-3 text-muted">Loading run…</div> : results.length === 0 ? (
+                    <div className="p-3 text-muted">This run has no results.</div>
+                ) : (
+                    <Suspense fallback={<div className="p-3 text-muted">Loading grid…</div>}>
+                        <EvaluationHistoryGrid rows={results} />
+                    </Suspense>
+                )}</div>
             ) : <div className="card-body small text-muted">Choose a run to inspect its ranked results.</div>}
         </section>
     );
@@ -197,6 +190,7 @@ function DiscoveryReasonCell({ candidate }) {
 }
 
 export default function CandidatesPage() {
+    const { activePortfolio } = usePortfolio();
     const [source, setSource] = useState('');
     const [search, setSearch] = useState('');
     const [selected, setSelected] = useState(null);
@@ -235,19 +229,19 @@ export default function CandidatesPage() {
         || screeners.find((row) => row.is_factory)
         || null;
 
-    const { data: runData, loading: runLoading, reload: loadRuns } = useApiGet({
-        errorFallback: 'Failed to load evaluation history',
-        request: async () => {
+    const runQuery = useQuery({
+        queryKey: ['evaluation-runs', activePortfolio?.id],
+        enabled: Boolean(activePortfolio?.id),
+        queryFn: async () => {
             const response = await api.get('/v1/evaluation/runs', { params: { limit: 20 }, skipErrorToast: true });
             return tosList(response);
         },
     });
-    const evaluationRuns = Array.isArray(runData) ? runData : [];
-    const { data: historyData, loading: historyLoading } = useApiGet({
-        deps: [selectedRunId],
+    const evaluationRuns = Array.isArray(runQuery.data) ? runQuery.data : [];
+    const historyQuery = useQuery({
+        queryKey: ['evaluations', activePortfolio?.id, selectedRunId],
         enabled: Boolean(selectedRunId),
-        errorFallback: 'Failed to load evaluation run',
-        request: async () => {
+        queryFn: async () => {
             const response = await api.get('/v1/evaluations', {
                 params: { evaluation_run_id: selectedRunId },
                 skipErrorToast: true,
@@ -255,7 +249,13 @@ export default function CandidatesPage() {
             return tosList(response);
         },
     });
-    const historyResults = Array.isArray(historyData) ? historyData : [];
+    const historyResults = Array.isArray(historyQuery.data) ? historyQuery.data : [];
+    useEffect(() => {
+        if (runQuery.error) showToast('Failed to load evaluation history', 'danger');
+    }, [runQuery.error]);
+    useEffect(() => {
+        if (historyQuery.error) showToast('Failed to load evaluation run', 'danger');
+    }, [historyQuery.error]);
 
     const sources = useMemo(() => {
         const set = new Set(items.map((i) => i.source).filter(Boolean));
@@ -304,7 +304,7 @@ export default function CandidatesPage() {
                     'warning',
                 );
             }
-            await Promise.all([load(), loadRuns()]);
+            await Promise.all([load(), runQuery.refetch()]);
         } catch (e) {
             showToast(e?.response?.data?.error?.message || e.message || 'Discovery failed', 'danger');
         } finally {
@@ -319,7 +319,7 @@ export default function CandidatesPage() {
                 await api.post('/v1/evaluation/runs', null, { skipErrorToast: true });
             }, { successMessage: 'Evaluation completed', errorFallback: 'Evaluation failed' });
             if (ok) {
-                await Promise.all([load(), loadRuns()]);
+                await Promise.all([load(), runQuery.refetch()]);
             }
         } finally {
             setRunningEval(false);
@@ -399,11 +399,11 @@ export default function CandidatesPage() {
 
             <EvaluationHistory
                 runs={evaluationRuns}
-                loading={runLoading}
+                loading={runQuery.isLoading}
                 selectedRunId={selectedRunId}
                 onSelect={setSelectedRunId}
                 results={historyResults}
-                resultsLoading={historyLoading}
+                resultsLoading={historyQuery.isLoading}
             />
 
             <div className="row g-2 mb-3">

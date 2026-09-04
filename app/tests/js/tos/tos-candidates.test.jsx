@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { installDefaultTosHandlers } from './helpers/mockApi.js';
 import { renderTosApp } from './helpers/renderTosApp.jsx';
@@ -83,9 +83,11 @@ describe('Discovery TOS smoke', () => {
         renderTosApp({ route: '/candidates' });
 
         const selector = await screen.findByRole('combobox', { name: 'Evaluation run' });
+        await screen.findByRole('option', { name: /Latest · Run #5/ });
         await user.selectOptions(selector, '5');
 
-        expect(await screen.findByRole('region', { name: 'Evaluation history' })).toHaveTextContent('INFY');
-        expect(screen.getByRole('region', { name: 'Evaluation history' })).toHaveTextContent('78.0');
+        const history = await screen.findByRole('region', { name: 'Evaluation history' });
+        await waitFor(() => expect(history).toHaveTextContent('INFY'));
+        expect(history).toHaveTextContent('78.0');
     });
 });

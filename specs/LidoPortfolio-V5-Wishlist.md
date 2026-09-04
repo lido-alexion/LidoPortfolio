@@ -23,7 +23,7 @@ Moving an item here does not satisfy it. Every item remains `OPEN` until its pro
 
 ## 2. V5 wishlist
 
-Current count: **19 OPEN / 1 IN PROGRESS / 1 DECIDED / 3 COMPLETE**.
+Current count: **18 OPEN / 2 IN PROGRESS / 1 DECIDED / 3 COMPLETE**.
 
 | ID | Item | V5 scope and rationale | Priority | Status |
 |----|------|------------------------|----------|--------|
@@ -43,7 +43,7 @@ Current count: **19 OPEN / 1 IN PROGRESS / 1 DECIDED / 3 COMPLETE**.
 | V4-FEAT-031 | Production secrets / single-folder deploy hardening | **Implemented; production cutover verification pending:** [`V5-FEAT-031-Production-Secrets-Single-Folder-Deploy.md`](V5-FEAT-031-Production-Secrets-Single-Folder-Deploy.md). External environment secrets, one-build packaging, nested Laravel denial, compatible cPanel helpers, migration verification, and rollback are implemented. | P3 | IN PROGRESS |
 | V4-FEAT-033 | Discovery inline default screener | **Implemented 2026-09-04:** [`V5-FEAT-033-Discovery-Inline-Default-Screener.md`](V5-FEAT-033-Discovery-Inline-Default-Screener.md). Discovery shows and runs the factory screener inline using existing APIs, while keeping candidate regeneration explicit. | P3 | COMPLETE |
 | V4-FEAT-034 | Richer Evaluation history UX | **Implemented 2026-09-04:** [`V5-FEAT-034-Richer-Evaluation-History-UX.md`](V5-FEAT-034-Richer-Evaluation-History-UX.md). Discovery includes a bounded, portfolio-scoped Evaluation run selector and ranked historical results without restoring a separate Evaluation page. | P3 | COMPLETE |
-| V4-FEAT-035 | TypeScript / TanStack Query / AG Grid migration | Frontend stack migration. | TBD | OPEN |
+| V4-FEAT-035 | TypeScript / TanStack Query / AG Grid migration | **Incremental migration in progress (2026-09-04):** TypeScript strict/no-emit checking and CI gate, application-level TanStack Query provider with portfolio-scoped Evaluation queries, and a typed/lazy-loaded AG Grid Evaluation-history table are implemented. Remaining legacy screens migrate opportunistically; no big-bang rewrite. See [`V5-FEAT-035-Frontend-Stack-Migration.md`](V5-FEAT-035-Frontend-Stack-Migration.md). | TBD | IN PROGRESS |
 | V4-FEAT-036 | Optional JWT/token API for non-SPA clients | Authentication expansion; the current SPA continues to use Sanctum session cookies. | TBD | OPEN |
 | V4-FEAT-037 | Dashboard-first daily Kite readiness and reconnect | When an Automatic portfolio cannot submit because its daily Kite session is missing or expired, show a prominent Dashboard readiness state and minimum-friction **Connect Kite** action. Return to Dashboard and refresh readiness after Zerodha authentication. Add a configurable, at-most-once-daily Telegram reminder while Automatic execution is enabled and Kite remains unusable; suppress it when connected. Interactive Zerodha authentication remains mandatory. | P2 | OPEN |
 | V4-FEAT-038 | Exchange holidays in Calendar with automatic holiday-list sync | Add a visibly distinct exchange-holiday Calendar event type with admin correction/override. Automatically refresh the official NSE holiday list when a reliable source is available, retaining manual entry as fallback. This becomes the canonical trading-calendar input for scheduling. | P2 | OPEN |

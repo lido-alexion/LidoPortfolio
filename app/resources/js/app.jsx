@@ -6,11 +6,13 @@ import './src/styles/lido-app.css';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
 import App from './src/App';
 import { AuthProvider } from './src/context/AuthContext';
 import { PortfolioProvider } from './src/context/PortfolioContext';
 import { ThemeProvider } from './src/context/ThemeContext';
 import { getAppBase } from './src/appBase';
+import { appQueryClient } from './src/queryClient';
 
 const routerBasename = getAppBase() || undefined;
 
@@ -41,7 +43,8 @@ try {
     const rootEl = document.getElementById('app');
     createRoot(rootEl).render(
         <React.StrictMode>
-            <BrowserRouter basename={routerBasename}>
+            <QueryClientProvider client={appQueryClient}>
+              <BrowserRouter basename={routerBasename}>
                 <ThemeProvider>
                     <AuthProvider>
                         <PortfolioProvider>
@@ -49,7 +52,8 @@ try {
                         </PortfolioProvider>
                     </AuthProvider>
                 </ThemeProvider>
-            </BrowserRouter>
+              </BrowserRouter>
+            </QueryClientProvider>
         </React.StrictMode>,
     );
 } catch (error) {

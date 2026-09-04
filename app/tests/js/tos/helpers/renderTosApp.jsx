@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { render } from '@testing-library/react';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { getToastAutoDismissMs } from '../../../../resources/js/src/toast.js';
 import AppHeader from '../../../../resources/js/src/components/AppHeader.jsx';
 import PageChrome from '../../../../resources/js/src/components/navigation/PageChrome.jsx';
@@ -15,6 +16,7 @@ import ReviewDashboardPage from '../../../../resources/js/src/pages/ReviewDashbo
 import ReviewReportDetailPage from '../../../../resources/js/src/pages/ReviewReportDetailPage.jsx';
 import ReviewReportsListPage from '../../../../resources/js/src/pages/ReviewReportsListPage.jsx';
 import { TEST_USER } from '../fixtures/tosApi.js';
+import { createAppQueryClient } from '../../../../resources/js/src/queryClient.ts';
 
 function TosRoutes() {
     return (
@@ -96,8 +98,10 @@ function TosAuthStub({ children }) {
 }
 
 export function renderTosApp({ route = '/recommendations' } = {}) {
+    const queryClient = createAppQueryClient();
     return render(
-        <MemoryRouter initialEntries={[route]}>
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={[route]}>
             <ThemeProvider>
                 <TosAuthStub>
                     <PortfolioProvider>
@@ -105,7 +109,8 @@ export function renderTosApp({ route = '/recommendations' } = {}) {
                     </PortfolioProvider>
                 </TosAuthStub>
             </ThemeProvider>
-        </MemoryRouter>,
+          </MemoryRouter>
+        </QueryClientProvider>,
     );
 }
 

@@ -71,6 +71,8 @@ jobs:
         run: npm ci --registry=https://registry.npmjs.org
       - name: Run frontend test suite
         run: npm run test:js
+      - name: Type-check migrated frontend modules
+        run: npm run typecheck
       - name: Build production assets
         env:
           VITE_APP_BASE: /portfolio/build/
