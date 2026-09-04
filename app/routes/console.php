@@ -20,6 +20,17 @@ Artisan::command('portfolio:daily-sync', function () {
     $this->info('Daily portfolio sync completed.');
 })->purpose('Run daily market data sync manually');
 
+Artisan::command('portfolio:sync-nse-holidays', function () {
+    try {
+        $result = app(\App\Services\NseHolidaySyncService::class)->sync();
+        $this->info("NSE holidays: {$result['created']} created, {$result['updated']} refreshed, {$result['overridden']} admin overrides preserved.");
+        return 0;
+    } catch (\Throwable $error) {
+        $this->error($error->getMessage());
+        return 1;
+    }
+})->purpose('Refresh official NSE capital-market trading holidays');
+
 Artisan::command('portfolio:sync-benchmark-prices', function () {
     @set_time_limit(0);
     $result = app(BenchmarkPriceSyncService::class)->syncIfNeeded(force: true);
@@ -148,6 +159,11 @@ Schedule::command('stocks:sync')
     ->weeklyOn(0, '02:00')
     ->timezone($timezone)
     ->name('stock-master-sync');
+
+Schedule::command('portfolio:sync-nse-holidays')
+    ->weeklyOn(0, '01:30')
+    ->timezone($timezone)
+    ->name('nse-trading-holiday-sync');
 
 // Backup weekly pass if stock-master sync is skipped/fails before constituent refresh.
 Schedule::command('portfolio:refresh-index-constituents')

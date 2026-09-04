@@ -122,6 +122,9 @@ class CalendarEventService
         }
 
         $event->fill($payload);
+        if ($event->source === 'nse' && $event->isDirty()) {
+            $event->sync_override = true;
+        }
         $event->save();
         TradingCalendar::clearHolidayCache();
 
@@ -135,6 +138,11 @@ class CalendarEventService
                 throw ValidationException::withMessages([
                     'event' => ['Only admins can delete global trade holidays.'],
                 ]);
+            }
+            if ($event->source === 'nse') {
+                $event->forceFill(['is_active' => false, 'sync_override' => true])->save();
+                TradingCalendar::clearHolidayCache();
+                return;
             }
         } else {
             $this->assertBelongsToProfile($event, $profile);
@@ -162,6 +170,9 @@ class CalendarEventService
             'id' => $event->id,
             'profile_id' => $event->profile_id,
             'category' => $event->category,
+            'source' => $event->source,
+            'sync_override' => (bool) $event->sync_override,
+            'last_synced_at' => $event->last_synced_at?->toIso8601String(),
             'is_global' => $event->isGlobal(),
             'is_trade_holiday' => $event->isTradeHoliday(),
             'title' => $event->title,

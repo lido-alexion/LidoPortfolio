@@ -106,7 +106,7 @@
         <a href="calendar.html">This topic</a>
       </div>
     </header>
-    
+
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Calendar</h1>
       <p class="muted"><code>calendar</code> · screen: <code>/calendar</code></p>
@@ -114,7 +114,7 @@
 
       <section class="panel">
         <h2>Overview</h2>
-        <p>Track F&amp;O / options expiry templates, custom recurring events, and admin-defined trade holidays on a year grid. Trade holidays appear on every portfolio calendar. Scheduled trade-alert Telegram digests are skipped on weekends and trade holidays (markets closed). Optional event reminders still use Telegram when configured.</p>
+        <p>Track F&amp;O / options expiry templates, custom recurring events, and global exchange holidays on a year grid. Trade holidays appear on every portfolio calendar. StoX refreshes the official NSE Capital Market holiday feed weekly; admin edits become durable overrides, and manual entry remains the fallback. Scheduled trade-alert Telegram digests are skipped on weekends and trade holidays (markets closed). Optional event reminders still use Telegram when configured.</p>
 <p>Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).</p>
 
       </section>
@@ -124,19 +124,19 @@
         <dl class="doc-list">
         <dt>Year grid</dt>
         <dd>Color markers for event days; open a day for details.</dd>
-    
+
         <dt>Templates / custom events</dt>
         <dd>Add expiry-style or custom recurrence rules for the active portfolio.</dd>
-    
+
         <dt>Trade holiday (admin)</dt>
         <dd>Mark an event as a global trade holiday so everyone sees it and trade-alert Telegram is suppressed that day.</dd>
-    
+
         <dt>Reminders</dt>
         <dd>Configure advance notice for portfolio events when Telegram is set up (not used for trade holidays).</dd>
-    
+
         <dt>Typical flow</dt>
         <dd>Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.</dd>
-    
+
         <dt>Validation and errors</dt>
         <dd>Form and API validations are shown as inline errors or toast messages. Fix the first reported issue, retry, and re-check dependent sections that consume the same data.</dd>
     </dl>
@@ -147,22 +147,22 @@
         <dl class="doc-list">
         <dt>Portfolio-scoped events</dt>
         <dd>Ordinary events belong to the active portfolio only.</dd>
-    
+
         <dt>Global trade holidays</dt>
-        <dd>Admin-created holidays (profile_id null, category trade_holiday) visible to all portfolios.</dd>
-    
+        <dd>Official NSE CM holidays and admin-created fallback rows (profile_id null, category trade_holiday), visible to all portfolios. Synced future dates refresh weekly; an admin edit/deactivation is preserved as an override.</dd>
+
         <dt>Notification quiet days</dt>
         <dd>Weekends and trade holidays skip scheduled trade-alert Telegram; Settings → Test telegram still works any day.</dd>
-    
+
         <dt>Active portfolio context</dt>
         <dd>Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.</dd>
-    
+
         <dt>Data freshness</dt>
         <dd>Many analytics depend on cached daily OHLCV and scheduled sync jobs. If numbers look stale, refresh this page and verify sync status in admin tools.</dd>
     </dl>
       </section>
 
-      
+
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
@@ -170,7 +170,7 @@
         </div>
       </section>
     </article>
-    
+
     <footer class="muted">
       Generated from the StoX in-app documentation source. Product screens still require sign-in.
     </footer>

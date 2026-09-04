@@ -1627,7 +1627,7 @@ const APP_DOCUMENTATION_BASE = [
         match: (p) => pathStarts(p, '/calendar'),
         summary: 'Per-portfolio market events plus global trade holidays, with optional Telegram reminders.',
         overview:
-            'Track F&O / options expiry templates, custom recurring events, and admin-defined trade holidays on a year grid. Trade holidays appear on every portfolio calendar. Scheduled trade-alert Telegram digests are skipped on weekends and trade holidays (markets closed). Optional event reminders still use Telegram when configured.',
+            'Track F&O / options expiry templates, custom recurring events, and global exchange holidays on a year grid. Trade holidays appear on every portfolio calendar. StoX refreshes the official NSE Capital Market holiday feed weekly; admin edits become durable overrides, and manual entry remains the fallback. Scheduled trade-alert Telegram digests are skipped on weekends and trade holidays (markets closed). Optional event reminders still use Telegram when configured.',
         controls: [
             { name: 'Year grid', description: 'Color markers for event days; open a day for details.' },
             { name: 'Templates / custom events', description: 'Add expiry-style or custom recurrence rules for the active portfolio.' },
@@ -1636,7 +1636,7 @@ const APP_DOCUMENTATION_BASE = [
         ],
         concepts: [
             { name: 'Portfolio-scoped events', description: 'Ordinary events belong to the active portfolio only.' },
-            { name: 'Global trade holidays', description: 'Admin-created holidays (profile_id null, category trade_holiday) visible to all portfolios.' },
+            { name: 'Global trade holidays', description: 'Official NSE CM holidays and admin-created fallback rows (profile_id null, category trade_holiday), visible to all portfolios. Synced future dates refresh weekly; an admin edit/deactivation is preserved as an override.' },
             { name: 'Notification quiet days', description: 'Weekends and trade holidays skip scheduled trade-alert Telegram; Settings → Test telegram still works any day.' },
         ],
         related: ['dashboard', 'notifications', 'alert-policies'],

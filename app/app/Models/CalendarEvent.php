@@ -33,6 +33,10 @@ class CalendarEvent extends Model
     protected $fillable = [
         'profile_id',
         'category',
+        'source',
+        'external_key',
+        'sync_override',
+        'last_synced_at',
         'title',
         'description',
         'color',
@@ -55,6 +59,8 @@ class CalendarEvent extends Model
             'reminder_enabled' => 'boolean',
             'reminder_days_before' => 'array',
             'is_active' => 'boolean',
+            'sync_override' => 'boolean',
+            'last_synced_at' => 'datetime',
         ];
     }
 
