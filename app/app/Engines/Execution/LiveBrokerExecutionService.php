@@ -218,8 +218,14 @@ class LiveBrokerExecutionService
     /**
      * @return array<string, mixed>
      */
-    public function submitOne(User $user, PortfolioProfile $profile, int $recommendationId, string $trigger): array
-    {
+    public function submitOne(
+        User $user,
+        PortfolioProfile $profile,
+        int $recommendationId,
+        string $trigger,
+        ?float $quantityOverride = null,
+        int $insufficientFundsRetry = 0,
+    ): array {
         $recommendation = TradingRecommendation::query()
             ->forProfile($profile)
             ->where('id', $recommendationId)
@@ -256,7 +262,7 @@ class LiveBrokerExecutionService
             ];
         }
 
-        $qty = $this->quantityFor($recommendation);
+        $qty = $quantityOverride ?? $this->quantityFor($recommendation);
         $side = $recommendation->orderSide();
         if ($qty === null || $side === null) {
             $this->recordDecision($profile, $user, $recommendation, $trigger, ExecutionDecision::OUTCOME_SKIPPED, 'not_actionable');
@@ -363,6 +369,28 @@ class LiveBrokerExecutionService
                 'reason' => $e->errorCode(),
                 'order_id' => $order->id,
             ])->save();
+
+            if ($e->errorCode() === 'BROKER_INSUFFICIENT_FUNDS'
+                && $side === 'buy'
+                && $insufficientFundsRetry < 2) {
+                $reduced = (float) floor($qty * 0.95);
+                if ($reduced >= 1 && $reduced < $qty) {
+                    $retryResult = $this->submitOne(
+                        $user,
+                        $profile,
+                        $recommendationId,
+                        $trigger,
+                        $reduced,
+                        $insufficientFundsRetry + 1,
+                    );
+                    $retryResult['insufficient_funds_retries'] = max(
+                        (int) ($retryResult['insufficient_funds_retries'] ?? 0),
+                        $insufficientFundsRetry + 1,
+                    );
+
+                    return $retryResult;
+                }
+            }
 
             return [
                 'recommendation_id' => $recommendation->id,

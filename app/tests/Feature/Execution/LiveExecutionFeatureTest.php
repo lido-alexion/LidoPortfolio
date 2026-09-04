@@ -276,6 +276,40 @@ class LiveExecutionFeatureTest extends TestCase
         $this->assertSame(6.0, (float) TradingOrder::query()->findOrFail($second['order_id'])->quantity);
     }
 
+    public function test_buy_retries_twice_with_successive_five_percent_quantity_reductions_only_for_margin_error(): void
+    {
+        [$user, $profile] = $this->actingReadyUser();
+        $this->setMode($user, $profile, PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC);
+        $rec = $this->pendingBuy($profile, amount: 10_000);
+        $fake = app(FakeBrokerGateway::class);
+        $fake->insufficientFundsFailuresRemaining = 2;
+
+        $result = app(LiveBrokerExecutionService::class)->submitOne(
+            $user,
+            $profile,
+            $rec->id,
+            ExecutionGate::TRIGGER_SEMI,
+        );
+
+        $this->assertSame(3, $fake->placeCalls);
+        $this->assertSame([100.0, 95.0, 90.0], array_map(fn ($request) => $request->quantity, $fake->placed));
+        $this->assertSame(2, $result['insufficient_funds_retries']);
+        $this->assertSame('submitted', $result['outcome']);
+    }
+
+    public function test_non_margin_rejection_is_never_quantity_retried(): void
+    {
+        [$user, $profile] = $this->actingReadyUser();
+        $this->setMode($user, $profile, PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC);
+        $rec = $this->pendingBuy($profile, amount: 1_000);
+        $fake = app(FakeBrokerGateway::class);
+        $fake->nextPlaceRejected = true;
+
+        app(LiveBrokerExecutionService::class)->submitOne($user, $profile, $rec->id, ExecutionGate::TRIGGER_SEMI);
+
+        $this->assertSame(1, $fake->placeCalls);
+    }
+
     public function test_execution_mode_is_portfolio_scoped(): void
     {
         [$user, $profile] = $this->actingReadyUser();

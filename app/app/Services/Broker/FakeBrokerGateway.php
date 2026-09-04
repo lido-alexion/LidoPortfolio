@@ -2,6 +2,8 @@
 
 namespace App\Services\Broker;
 
+use App\Exceptions\DomainException;
+
 /**
  * In-memory broker used in automated tests. Never contacts Zerodha.
  */
@@ -15,6 +17,8 @@ class FakeBrokerGateway implements BrokerGateway
     public bool $nextPlaceAmbiguous = false;
 
     public bool $nextPlaceRejected = false;
+
+    public int $insufficientFundsFailuresRemaining = 0;
 
     public bool $nextPlaceThrows = false;
 
@@ -60,6 +64,7 @@ class FakeBrokerGateway implements BrokerGateway
         $this->placed = [];
         $this->nextPlaceAmbiguous = false;
         $this->nextPlaceRejected = false;
+        $this->insufficientFundsFailuresRemaining = 0;
         $this->nextPlaceThrows = false;
         $this->nextFetchThrows = false;
         $this->orders = [];
@@ -117,6 +122,15 @@ class FakeBrokerGateway implements BrokerGateway
             throw new BrokerAmbiguousException('Simulated broker timeout after place.');
         }
 
+        if ($this->insufficientFundsFailuresRemaining > 0) {
+            $this->insufficientFundsFailuresRemaining--;
+            throw new DomainException(
+                'Insufficient funds.',
+                'BROKER_INSUFFICIENT_FUNDS',
+                422,
+            );
+        }
+
         $id = 'fake-'.$this->seq++;
         if ($this->nextPlaceRejected) {
             $this->nextPlaceRejected = false;
@@ -168,7 +182,7 @@ class FakeBrokerGateway implements BrokerGateway
 
         if ($this->gttFailRemaining > 0) {
             $this->gttFailRemaining--;
-            throw new \App\Exceptions\DomainException('Simulated GTT place failure.', 'BROKER_REJECTED', 422);
+            throw new DomainException('Simulated GTT place failure.', 'BROKER_REJECTED', 422);
         }
 
         $id = 'gtt-'.$this->seq++;
@@ -206,7 +220,7 @@ class FakeBrokerGateway implements BrokerGateway
 
         if ($this->nextGttModifyUnsupported || ! $this->supportsModify) {
             $this->nextGttModifyUnsupported = false;
-            throw new \App\Exceptions\DomainException(
+            throw new DomainException(
                 'Broker does not support modifying this GTT.',
                 'MODIFY_UNSUPPORTED',
                 422,
@@ -215,12 +229,12 @@ class FakeBrokerGateway implements BrokerGateway
 
         if ($this->gttFailRemaining > 0) {
             $this->gttFailRemaining--;
-            throw new \App\Exceptions\DomainException('Simulated GTT modify failure.', 'BROKER_REJECTED', 422);
+            throw new DomainException('Simulated GTT modify failure.', 'BROKER_REJECTED', 422);
         }
 
         $existing = $this->gtts[$brokerGttId] ?? null;
         if ($existing === null) {
-            throw new \App\Exceptions\DomainException('GTT not found.', 'BROKER_REJECTED', 422);
+            throw new DomainException('GTT not found.', 'BROKER_REJECTED', 422);
         }
 
         $prev = $existing['snapshot'];

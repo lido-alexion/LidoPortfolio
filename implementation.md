@@ -24,6 +24,15 @@ Specs under `specs/` define a seven-engine decision platform. Implementation evo
 
 **MVP status:** Complete for clarified workflow (data → discovery → evaluation → recommendation → user **approval** → **pending execution** → manual/broker trade → review). Sanctum, `portfolio_*` tables, Screener/Pattern services, Telegram-only notifications accepted.
 
+### V5 FEAT-039 execution coordinator (in progress, 2026-09-05)
+
+- Actionable Recommendations persist an immutable IST generation anchor, first/second eligible NSE sessions, Day #2 cutoff, target amount, capital-resolved capacity, remaining gap, and internal/external progress.
+- Automatic submission is Investor/Kite-account scoped and idempotent, coordinates all Automatic portfolios, internally matches opposing same-symbol intent first, then submits residual SELLs before BUYs in oldest-first order.
+- Internal matches write paired, zero-fee, no-cash ledger transactions plus a durable provisional transfer record. The final-valuation restatement step remains pending.
+- External fills reduce the monetary gap; completing one incremental broker order does not close a partially fulfilled Recommendation. New order quantity is floored from the remaining gap at the stored reference close and bounded by remaining capital.
+- Kite's documented structured `MarginException` maps to `BROKER_INSUFFICIENT_FUNDS`. BUY placement retries at most twice at successive whole-share floors of 95%; there is no message parsing and no retry for other or ambiguous failures.
+- `tos:expire-execution-windows` atomically expires unresolved gaps after Day #2 cutoff while preserving in-flight Order Lifecycle.
+
 **Independent audit (2026-07-25):** Full freeze audit vs `/specs` lives in [`specs/architecture/audit/`](specs/architecture/audit/). Verdict: clarified MVP **YES** (~90%); release posture **Ready for Internal Testing Only** — see `specs/architecture/audit/MVP_VERDICT.md`.
 
 **Governance (2026-07-25):** Bridge between architectural intent and V1.0 code — [`specs/architecture/governance/`](specs/architecture/governance/). Precedence: [`DOCUMENT_PRECEDENCE.md`](specs/architecture/governance/DOCUMENT_PRECEDENCE.md). Baseline: [`VERSION_1_BASELINE.md`](specs/architecture/governance/VERSION_1_BASELINE.md). Do not rewrite original `/specs` architecture or engine docs to match implementation; record decisions as SD-xxx instead.

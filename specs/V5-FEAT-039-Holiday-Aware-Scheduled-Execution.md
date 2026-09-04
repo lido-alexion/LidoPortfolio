@@ -97,7 +97,7 @@ V5 uses the latest stored raw close (normally previous-session close intraday) a
 
 - Apply broker funds only to the residual net external BUY, never gross pre-net intents. Internal progress proceeds even if the residual is unfunded.
 - Size from remaining monetary target using stored close, V3 capital result, existing cushion and currently verified shared Kite funds. Submit maximum valid whole shares and recompute remaining target after every fill/transfer.
-- Only an unambiguously classifiable Kite insufficient-funds/margin rejection receives retries: reduce the just-attempted quantity by approximately 5% (whole-share floor) and retry; after the same second rejection reduce by another approximately 5% from the preceding attempt and retry once. Never retry zero or the same rounded quantity. After two reduced retries, or any unrelated/ambiguous error, stop this attempt and leave the gap pending. Technical design must verify Kite's real error contract before defining the classifier.
+- Only an unambiguously classifiable Kite insufficient-funds/margin rejection receives retries: reduce the just-attempted quantity by approximately 5% (whole-share floor) and retry; after the same second rejection reduce by another approximately 5% from the preceding attempt and retry once. Never retry zero or the same rounded quantity. After two reduced retries, or any unrelated/ambiguous error, stop this attempt and leave the gap pending. Verified against Kite Connect 3's documented structured `error_type`: only `MarginException` maps to StoX `BROKER_INSUFFICIENT_FUNDS`; message-text matching is forbidden.
 
 ## UX
 

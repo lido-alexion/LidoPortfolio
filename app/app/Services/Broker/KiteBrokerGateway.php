@@ -52,13 +52,18 @@ class KiteBrokerGateway implements BrokerGateway
         $json = $response->json();
         if (! is_array($json) || ($json['status'] ?? '') !== 'success') {
             $message = is_array($json) ? (string) ($json['message'] ?? 'Kite rejected the order.') : 'Kite rejected the order.';
+            $errorType = is_array($json) ? (string) ($json['error_type'] ?? '') : '';
             $this->logger->event('KiteBrokerGateway', 'broker.place_rejected', 'warning', 'Kite place rejected', [
                 'user_id' => $request->userId,
                 'recommendation_id' => $request->recommendationId,
                 'http_status' => $response->status(),
             ]);
 
-            throw new DomainException($message, 'BROKER_REJECTED', 422);
+            throw new DomainException(
+                $message,
+                $errorType === 'MarginException' ? 'BROKER_INSUFFICIENT_FUNDS' : 'BROKER_REJECTED',
+                422,
+            );
         }
 
         $orderId = (string) data_get($json, 'data.order_id', '');
