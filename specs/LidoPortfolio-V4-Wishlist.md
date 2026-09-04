@@ -73,7 +73,7 @@ Active V4 feature count: **18** (**0** `OPEN`, **18** `COMPLETE`). **V4 is close
 - No manual stock-add or delete control was introduced.
 - Verification: manual GitHub Actions run [`33544994802`](https://github.com/lido-alexion/LidoPortfolio/actions/runs/33544994802) passed `StockAdminTest`, `StockSearchTest`, `EquityUniverseServiceTest`, and `stocksAdmin.test.jsx` on PHP 8.4 / Node 22 with an isolated in-memory SQLite database.
 - Production verification: deployed 2026-09-02; PHP 8.4.23 `migrate --force` applied `2026_09_01_000001_add_admin_deactivated_to_portfolio_stocks` successfully, all cPanel migration checks passed, the updated `assets/app-DKEolVAa.js` bundle loaded, and the Product Owner confirmed the deployed pages were working.
-- The focused FEAT-011 workflow does **not** complete V5-deferred `V4-FEAT-030`, whose broader PHPUnit + frontend-build CI scope remains `OPEN`.
+- The focused FEAT-011 workflow did **not** complete V5-deferred `V4-FEAT-030`; the broader PHPUnit + frontend-build CI scope was subsequently completed in V5 on 2026-09-04.
 
 ---
 
@@ -122,7 +122,7 @@ This is a **roadmap / prioritization** decision, **not** a claim that the underl
 | V4-FEAT-018 | ML scoring models | Optional non-deterministic path; V3 is deterministic | TBD | OPEN |
 | V4-FEAT-019 | Options / crypto / ETF products | Markets expansion | TBD | OPEN |
 | V4-FEAT-020 | Live paper / portfolio replay modes | New simulation modes | TBD | OPEN |
-| V4-FEAT-030 | CI workflow for PHPUnit + frontend build | Ops (was V4-TD-013) | P2 | OPEN |
+| V4-FEAT-030 | CI workflow for PHPUnit + frontend build | V5-deferred item, subsequently **completed 2026-09-04**; see the canonical V5 register. | P2 | COMPLETE |
 | V4-FEAT-031 | Production secrets / single-folder deploy hardening | Ops (was V4-TD-014) | P3 | OPEN |
 | V4-FEAT-033 | Discovery inline default screener | Discovery UX enhancement (was V4-UX-004) | P3 | OPEN |
 | V4-FEAT-034 | Richer Evaluation history UX | Evaluation UX (was V4-UX-005) | P3 | OPEN |
