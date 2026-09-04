@@ -8,6 +8,7 @@ import { DataTableCard } from '../components/DataTable';
 import AnalyseStockButton from '../components/AnalyseStockButton';
 import DashboardTopMoverCard from '../components/DashboardTopMoverCard';
 import DashboardAllocationCard from '../components/DashboardAllocationCard';
+import KiteReadinessCard from '../components/KiteReadinessCard';
 import PercentGradientBar from '../components/PercentGradientBar';
 import SentimentGauge from '../components/SentimentGauge';
 import MarketPhaseGauge from '../components/MarketPhaseGauge';
@@ -770,6 +771,9 @@ export default function DashboardPage() {
 
     return (
         <div className="row g-3">
+            <div className="col-12">
+                <KiteReadinessCard executionMode={activePortfolio?.execution_mode} />
+            </div>
             {loadError ? (
                 <div className="col-12">
                     <div className="alert alert-warning mb-0">{loadError}</div>

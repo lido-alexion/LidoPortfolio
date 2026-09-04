@@ -23,7 +23,7 @@ class BrokerController extends Controller
     public function kiteLoginUrl(Request $request): JsonResponse
     {
         return ApiEnvelope::success([
-            'url' => $this->connections->loginUrl($request->user()),
+            'url' => $this->connections->loginUrl($request->user(), (string) $request->query('return_to', 'account')),
         ]);
     }
 
@@ -43,7 +43,8 @@ class BrokerController extends Controller
         $token = $request->query('request_token');
         $status = $request->query('status');
         $user = $this->connections->userFromLoginState($request->query('state'));
-        $frontend = rtrim((string) config('app.url'), '/').'/settings/account';
+        $destination = $this->connections->returnToFromLoginState($request->query('state'));
+        $frontend = rtrim((string) config('app.url'), '/').($destination === 'dashboard' ? '/' : '/settings/account');
 
         if ($status === 'error' || ! is_string($token) || $token === '' || $user === null) {
             return redirect($frontend.'?kite=failed');

@@ -199,7 +199,7 @@ const APP_DOCUMENTATION_BASE = [
         match: (p) => pathIs(p, '/'),
         summary: 'Portfolio snapshot: value, allocation, market analytics, alerts, calendar, pattern signals, and a cash-reserve shortfall warning when physical cash is below the required reserve.',
         overview:
-            'The Dashboard is the home screen for the active portfolio. It summarises performance, allocation, market context, alerts, upcoming calendar events, and pattern signals on holdings. A client-side cache can show the last load instantly until you refresh. If physical cash is below the portfolio required cash reserve, a warning appears on this page only — it does not block withdrawals or cancel recommendations by itself.',
+            'The Dashboard is the home screen for the active portfolio. It summarises performance, allocation, market context, alerts, upcoming calendar events, and pattern signals on holdings. A client-side cache can show the last load instantly until you refresh. If physical cash is below the portfolio required cash reserve, a warning appears on this page only — it does not block withdrawals or cancel recommendations by itself. Automatic portfolios also show a prominent Connect Kite warning whenever the daily broker session is missing or expired; a successful Dashboard-initiated connection returns here.',
         controls: [
             { name: 'Refresh dashboard', description: 'Clears the local cache and reloads dashboard + pattern scan data.' },
             { name: 'Sync prices for today', description: 'Admin: pulls latest holdings prices for the current session day.' },
@@ -215,6 +215,7 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Portfolio XIRR', description: 'Money-weighted return for the active portfolio based on cash flows and current value.' },
             { name: 'Market phase / sentiment', description: 'Deterministic market regime from the primary benchmark (e.g. Nifty 50); used later by Strategy market gates.' },
             { name: 'Dashboard cache', description: 'Responses are cached per user + portfolio (~24h) for snappy revisits; mutations invalidate it.' },
+            { name: 'Kite readiness', description: 'Automatic mode only. Checked independently of the Dashboard cache. If the session is missing or expired, Connect Kite starts Zerodha authentication and returns to Dashboard afterward.' },
             { name: 'Required cash reserve', description: 'Portfolio-level floor from Settings (portfolio cash reserve %). Rupee amount = that % of the larger of currently held invested amount and current holdings market value. Non-investable and non-lendable. Physical cash may fall below it after a broker withdrawal; Dashboard then warns.' },
         ],
         related: ['trading-os-flow', 'holdings', 'market-depth', 'patterns', 'calendar', 'review', 'portfolio-snapshots', 'historical-holdings', 'cash', 'settings'],

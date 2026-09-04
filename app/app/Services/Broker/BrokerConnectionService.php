@@ -38,7 +38,7 @@ class BrokerConnectionService
         ];
     }
 
-    public function loginUrl(User $user): string
+    public function loginUrl(User $user, string $returnTo = 'account'): string
     {
         if (! $this->kiteConfigured()) {
             throw new DomainException(
@@ -57,6 +57,7 @@ class BrokerConnectionService
         $state = Crypt::encryptString(json_encode([
             'user_id' => $user->id,
             'expires_at' => now()->addSeconds(self::LOGIN_STATE_TTL_SECONDS)->getTimestamp(),
+            'return_to' => in_array($returnTo, ['dashboard', 'account'], true) ? $returnTo : 'account',
         ], JSON_THROW_ON_ERROR));
         $redirectParams = http_build_query(['state' => $state], '', '&', PHP_QUERY_RFC3986);
 
@@ -84,6 +85,17 @@ class BrokerConnectionService
         }
 
         return User::query()->find($userId);
+    }
+
+    public function returnToFromLoginState(?string $state): string
+    {
+        if (! is_string($state) || $state === '') return 'account';
+        try {
+            $payload = json_decode(Crypt::decryptString($state), true, flags: JSON_THROW_ON_ERROR);
+        } catch (DecryptException|\JsonException) {
+            return 'account';
+        }
+        return ($payload['return_to'] ?? null) === 'dashboard' ? 'dashboard' : 'account';
     }
 
     public function completeLogin(User $user, #[\SensitiveParameter] string $requestToken): BrokerConnection
