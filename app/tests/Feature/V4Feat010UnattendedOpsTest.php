@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Engines\Execution\LiveBrokerExecutionService;
 use App\Engines\Pipeline\DailyDecisionPipeline;
 use App\Models\BrokerConnection;
+use App\Models\InternalExecutionTransfer;
 use App\Models\OperationalAlert;
 use App\Models\PortfolioProfile;
 use App\Models\Setting;
@@ -12,8 +13,10 @@ use App\Models\Stock;
 use App\Models\SyncRun;
 use App\Models\TradingOrder;
 use App\Models\TradingRecommendation;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Services\AdminOperationalAlertService;
+use App\Services\Broker\BrokerOrderSnapshot;
 use App\Services\Broker\FakeBrokerGateway;
 use App\Services\CashManagementService;
 use App\Services\DecisionPipelineScheduleService;
@@ -299,6 +302,29 @@ class V4Feat010UnattendedOpsTest extends TestCase
         $this->assertCount(1, $placed);
         $this->assertSame($buy->id, $placed[0]->recommendationId);
         $this->assertSame(5.0, $placed[0]->quantity);
+
+        $transfer = InternalExecutionTransfer::query()->firstOrFail();
+        $this->artisan('tos:finalize-internal-transfer-valuations')->assertSuccessful();
+        $this->assertSame('provisional', $transfer->fresh()->valuation_status);
+
+        $order = TradingOrder::query()->where('recommendation_id', $buy->id)->firstOrFail();
+        app(FakeBrokerGateway::class)->seedSnapshot(new BrokerOrderSnapshot(
+            $order->broker_order_id,
+            'filled',
+            5,
+            0,
+            110,
+            'COMPLETE',
+        ));
+        app(LiveBrokerExecutionService::class)->reconcileOrder($buyerProfile, $order);
+        $this->artisan('tos:finalize-internal-transfer-valuations')->assertSuccessful();
+
+        $transfer->refresh();
+        $this->assertSame('final', $transfer->valuation_status);
+        $this->assertSame('residual_wavg_fill', $transfer->valuation_source);
+        $this->assertSame(110.0, (float) $transfer->final_unit_price);
+        $this->assertSame(110.0, (float) Transaction::query()->findOrFail($transfer->sell_transaction_id)->price);
+        $this->assertSame(110.0, (float) Transaction::query()->findOrFail($transfer->buy_transaction_id)->price);
     }
 
     public function test_reconcile_failure_alerts_telegram_once_then_recovers(): void

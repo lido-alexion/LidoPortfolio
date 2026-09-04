@@ -321,3 +321,9 @@ Schedule::command('tos:expire-execution-windows')
     ->timezone($timezone)
     ->withoutOverlapping(5)
     ->name('tos-recommendation-execution-expiry');
+
+Schedule::command('tos:finalize-internal-transfer-valuations')
+    ->everyFiveMinutes()
+    ->timezone($timezone)
+    ->withoutOverlapping(5)
+    ->name('tos-internal-transfer-valuations');

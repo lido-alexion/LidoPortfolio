@@ -28,7 +28,7 @@ Specs under `specs/` define a seven-engine decision platform. Implementation evo
 
 - Actionable Recommendations persist an immutable IST generation anchor, first/second eligible NSE sessions, Day #2 cutoff, target amount, capital-resolved capacity, remaining gap, and internal/external progress.
 - Automatic submission is Investor/Kite-account scoped and idempotent, coordinates all Automatic portfolios, internally matches opposing same-symbol intent first, then submits residual SELLs before BUYs in oldest-first order.
-- Internal matches write paired, zero-fee, no-cash ledger transactions plus a durable provisional transfer record. The final-valuation restatement step remains pending.
+- Internal matches write paired, zero-fee, no-cash ledger transactions plus a durable provisional transfer record. A guarded finalizer waits for residual orders to become terminal, then restates both ledger sides and Recommendation progress to residual WAVG fill price; when there is no fill it waits for the official session close.
 - External fills reduce the monetary gap; completing one incremental broker order does not close a partially fulfilled Recommendation. New order quantity is floored from the remaining gap at the stored reference close and bounded by remaining capital.
 - Kite's documented structured `MarginException` maps to `BROKER_INSUFFICIENT_FUNDS`. BUY placement retries at most twice at successive whole-share floors of 95%; there is no message parsing and no retry for other or ambiguous failures.
 - `tos:expire-execution-windows` atomically expires unresolved gaps after Day #2 cutoff while preserving in-flight Order Lifecycle.
