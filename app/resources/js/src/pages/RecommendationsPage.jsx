@@ -65,6 +65,11 @@ function formatAlloc(v) {
     return `${Number(v).toFixed(2)}%`;
 }
 
+function formatExecutionDate(value) {
+    if (!value) return '—';
+    return String(value).slice(0, 10);
+}
+
 function recommendationAction(r) {
     return String(r.portfolio_action || r.recommendation_type || '').toUpperCase();
 }
@@ -541,6 +546,28 @@ export default function RecommendationsPage() {
                                     {formatAlloc(selected.suggested_allocation_pct)}
                                 </p>
                                 {selected.reasoning ? <p className="small">{selected.reasoning}</p> : null}
+
+                                {selected.execution_anchor_date ? (
+                                    <div className="mb-3">
+                                        <h6>Execution progress</h6>
+                                        <p className="small mb-1">
+                                            Recommendation date {formatExecutionDate(selected.execution_anchor_date)}
+                                            {' · First eligible '}
+                                            {formatExecutionDate(selected.first_eligible_execution_date)}
+                                            {' · Expires '}
+                                            {selected.execution_expires_at
+                                                ? new Date(selected.execution_expires_at).toLocaleString()
+                                                : '—'}
+                                        </p>
+                                        <p className="small mb-0">
+                                            Target ₹{selected.target_amount ?? '—'}
+                                            {' · Capital-ready ₹'}{selected.capital_resolved_amount ?? '—'}
+                                            {' · Internal ₹'}{selected.internal_executed_amount ?? 0}
+                                            {' · External ₹'}{selected.external_executed_amount ?? 0}
+                                            {' · Remaining ₹'}{selected.remaining_target_amount ?? '—'}
+                                        </p>
+                                    </div>
+                                ) : null}
 
                                 {(selected.position_target_amount != null
                                     || plan?.position_target_amount != null

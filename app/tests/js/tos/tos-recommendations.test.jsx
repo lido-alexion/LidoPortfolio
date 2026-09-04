@@ -70,6 +70,32 @@ describe('Recommendations TOS smoke', () => {
         expect(screen.getByRole('alert')).toHaveTextContent(/Pending Execution/i);
     });
 
+    it('shows FEAT-039 dates and target-seeking progress in recommendation detail', async () => {
+        const user = userEvent.setup();
+        const recommendation = {
+            ...OPEN_BUY_RECOMMENDATION,
+            execution_anchor_date: '2026-09-04',
+            first_eligible_execution_date: '2026-09-07',
+            execution_expires_at: '2026-09-08T15:30:00+05:30',
+            target_amount: 1000,
+            capital_resolved_amount: 900,
+            internal_executed_amount: 200,
+            external_executed_amount: 300,
+            remaining_target_amount: 500,
+        };
+        installDefaultTosHandlers({ recommendations: [recommendation] });
+        renderTosApp({ route: '/recommendations' });
+
+        await screen.findByText('INFY');
+        await user.click(screen.getByRole('button', { name: 'Review', exact: true }));
+
+        const dialog = await screen.findByRole('dialog');
+        const progress = within(dialog).getByRole('heading', { name: 'Execution progress' }).closest('div');
+        expect(within(progress).getByText(/Recommendation date 2026-09-04/)).toBeInTheDocument();
+        expect(within(progress).getByText(/Internal ₹200/)).toBeInTheDocument();
+        expect(within(progress).getByText(/Remaining ₹500/)).toBeInTheDocument();
+    });
+
     it('shows a pipeline freshness error from POST /api/v1/pipeline/run', async () => {
         const user = userEvent.setup();
         installDefaultTosHandlers({

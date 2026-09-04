@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\TradingOs;
 
 use App\Models\StockPrice;
 use App\Models\TradingRecommendation;
+use App\Services\Lending\CapitalResolutionStatusService;
 
 /**
  * HTTP wire mapping for Trading OS list/detail JSON.
@@ -151,6 +152,18 @@ final class TradingOsPresenter
             'reserved_cash_at_generation' => $r->reserved_cash_at_generation !== null ? (float) $r->reserved_cash_at_generation : null,
             'available_cash_at_generation' => $r->available_cash_at_generation !== null ? (float) $r->available_cash_at_generation : null,
             'executed_amount' => $r->executed_amount !== null ? (float) $r->executed_amount : null,
+            'target_amount' => $r->target_amount !== null ? (float) $r->target_amount : null,
+            'capital_resolved_amount' => $r->capital_resolved_amount !== null ? (float) $r->capital_resolved_amount : null,
+            'internal_executed_amount' => $r->internal_executed_amount !== null ? (float) $r->internal_executed_amount : null,
+            'external_executed_amount' => $r->external_executed_amount !== null ? (float) $r->external_executed_amount : null,
+            'original_display_quantity' => $r->original_display_quantity !== null ? (float) $r->original_display_quantity : null,
+            'execution_anchor_date' => optional($r->execution_anchor_date)?->toDateString(),
+            'execution_anchor_class' => $r->execution_anchor_class,
+            'first_eligible_execution_date' => optional($r->first_eligible_execution_date)?->toDateString(),
+            'second_eligible_execution_date' => optional($r->second_eligible_execution_date)?->toDateString(),
+            'execution_expires_at' => optional($r->execution_expires_at)?->toIso8601String(),
+            'superseded_at' => optional($r->superseded_at)?->toIso8601String(),
+            'superseded_by_id' => $r->superseded_by_id,
             'reference_price' => $r->reference_price !== null ? (float) $r->reference_price : null,
             'current_market_price' => self::latestCloseForSecurity($r->security_id),
             'status' => $r->status,
@@ -203,9 +216,11 @@ final class TradingOsPresenter
             'position_filled_amount' => is_numeric($r->execution_plan['filled_amount'] ?? null)
                 ? (float) $r->execution_plan['filled_amount']
                 : null,
-            'remaining_target_amount' => is_numeric($r->execution_plan['remaining_amount'] ?? null)
-                ? (float) $r->execution_plan['remaining_amount']
-                : null,
+            'remaining_target_amount' => $r->remaining_target_amount !== null
+                ? (float) $r->remaining_target_amount
+                : (is_numeric($r->execution_plan['remaining_amount'] ?? null)
+                    ? (float) $r->execution_plan['remaining_amount']
+                    : null),
             'is_first_entry' => array_key_exists('is_first_entry', is_array($r->execution_plan) ? $r->execution_plan : [])
                 ? (bool) $r->execution_plan['is_first_entry']
                 : null,
@@ -252,7 +267,7 @@ final class TradingOsPresenter
             try {
                 $profile = \activePortfolio();
                 if ($profile) {
-                    $payload['capital_resolution'] = app(\App\Services\Lending\CapitalResolutionStatusService::class)
+                    $payload['capital_resolution'] = app(CapitalResolutionStatusService::class)
                         ->forRecommendation($profile, $r);
                 }
             } catch (\Throwable) {
