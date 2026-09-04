@@ -803,8 +803,13 @@ const APP_DOCUMENTATION_BASE = [
             + '| Strategy → Exit Strategy → Screener Exit | If you **already hold** the stock and it appears in that screener’s latest run → exit signal |\n'
             + '\n'
             + 'The system does not infer sell purpose from screener condition text. You assign purpose by wiring the screener to eligibility (buy gate) or Screener Exit (sell trigger). Discovery/Evaluation only inventory and measure; they do not invent that wiring.\n\n'
-            + 'Use **Run discovery** to rebuild candidates (evaluation follows automatically). Use **Run evaluation** to re-measure the latest discovery run without rebuilding candidates.',
+            + 'The portfolio factory/default screener is shown inline with its enabled state, scope, and latest matched/scanned totals. **Run default screener** refreshes its hit set; it deliberately does not silently create a Discovery run. Use **Run discovery** afterward to rebuild candidates from recent hits (evaluation follows automatically). Use **Run evaluation** to re-measure the latest discovery run without rebuilding candidates.',
         controls: [
+            {
+                name: 'Default screener card',
+                description:
+                    'Shows the factory Minervini Trend Template inline on Discovery, including readiness and latest run totals. Run it without leaving the page, or open its full editor. If the factory screener is missing, Open Screeners provides the recovery path.',
+            },
             {
                 name: 'Run discovery',
                 description:

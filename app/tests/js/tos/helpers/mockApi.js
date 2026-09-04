@@ -1,6 +1,7 @@
 import { vi } from 'vitest';
 import {
     CAPITAL_RESOLUTION,
+    DEFAULT_SCREENER,
     DISCOVERY_CANDIDATE,
     EMPTY_REVIEW_DASHBOARD,
     OPEN_BUY_RECOMMENDATION,
@@ -51,6 +52,7 @@ export function resetApiMock() {
 export function installDefaultTosHandlers({
     recommendations = [OPEN_BUY_RECOMMENDATION],
     candidates = [DISCOVERY_CANDIDATE],
+    screeners = [DEFAULT_SCREENER],
     failRecommendations = false,
     failCandidates = false,
     delayRecommendationsMs = 0,
@@ -128,6 +130,9 @@ export function installDefaultTosHandlers({
                 });
             }
             return axiosOk(apiEnvelope(candidates));
+        }
+        if (path === '/screeners') {
+            return axiosOk({ data: screeners });
         }
         if (path === '/v1/recommendations/pending-execution') {
             return axiosOk(apiEnvelope(recs.filter((r) => r.status === 'pending_execution' || r.can_execute_manually), {
@@ -226,6 +231,17 @@ export function installDefaultTosHandlers({
         }
         if (path === '/v1/discovery/runs') {
             return axiosOk(apiEnvelope({ id: 3 }), { status: 201 });
+        }
+        const screenerRunMatch = path.match(/^\/screeners\/(\d+)\/run$/);
+        if (screenerRunMatch) {
+            return axiosOk({
+                data: {
+                    id: 19,
+                    status: 'completed',
+                    stats: { matched: 14, scanned: 500 },
+                },
+                completed: true,
+            });
         }
         if (path === '/v1/evaluation/runs') {
             return axiosOk(apiEnvelope({ id: 5 }), { status: 201 });

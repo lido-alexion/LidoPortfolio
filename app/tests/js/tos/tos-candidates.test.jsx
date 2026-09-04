@@ -16,6 +16,27 @@ describe('Discovery TOS smoke', () => {
         expect(screen.getByText('Infosys Limited')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Run discovery' })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Evidence' })).toBeInTheDocument();
+        expect(screen.getByRole('region', { name: 'Default screener' })).toHaveTextContent('Minervini Trend Template');
+        expect(screen.getByText('12 matched / 500 scanned')).toBeInTheDocument();
+    });
+
+    it('runs the default screener inline and keeps Discovery available', async () => {
+        const user = userEvent.setup();
+        installDefaultTosHandlers({ candidates: [DISCOVERY_CANDIDATE] });
+        renderTosApp({ route: '/candidates' });
+
+        await user.click(await screen.findByRole('button', { name: 'Run default screener' }));
+
+        expect(await screen.findByRole('alert')).toHaveTextContent(/14 match\(es\) \/ 500 scanned/i);
+        expect(screen.getByRole('button', { name: 'Run discovery' })).toBeInTheDocument();
+    });
+
+    it('shows a recovery action when no default screener exists', async () => {
+        installDefaultTosHandlers({ candidates: [], screeners: [] });
+        renderTosApp({ route: '/candidates' });
+
+        expect(await screen.findByText('Default screener unavailable')).toBeInTheDocument();
+        expect(screen.getAllByRole('link', { name: 'Open Screeners' }).length).toBeGreaterThan(0);
     });
 
     it('shows the empty candidate state', async () => {

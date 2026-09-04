@@ -164,6 +164,23 @@ export const DISCOVERY_CANDIDATE = {
     created_at: '2026-08-27T09:00:00+05:30',
 };
 
+export const DEFAULT_SCREENER = {
+    id: 6,
+    name: 'Minervini Trend Template',
+    description: 'Factory eligibility screener for the Momentum Strategy.',
+    scope: 'all_equities',
+    is_enabled: true,
+    is_factory: true,
+    factory_key: 'minervini_trend_template',
+    watchlist_issue: null,
+    index_issue: null,
+    last_run: {
+        id: 18,
+        status: 'completed',
+        stats: { matched: 12, scanned: 500, skipped_insufficient_data: 0, errors: 0, warnings: [] },
+    },
+};
+
 export const CAPITAL_RESOLUTION = {
     capital_resolution_state: 'resolved_at_actual',
     requested_investment_amount: 50000,

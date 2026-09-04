@@ -1,5 +1,5 @@
 StoX static documentation
-Generated: 2026-09-02T13:58:43.173Z
+Generated: 2026-09-04T12:17:54.568Z
 Topics: 46
 Open index.html or any {keyword}.html — no JavaScript required.
 AI download pack: stox-trading-artifacts-ai-guide.md

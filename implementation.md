@@ -3036,6 +3036,10 @@ The first broad run correctly exposed two previously hidden test-contract defect
 
 `App\Support\ProductionEnvironment` resolves `LIDO_ENV_PATH` or the outermost readable ancestor `config/LidoPortfolio.env`; `bootstrap/app.php` directs Laravel to that file while retaining normal `.env` fallback. The FEAT-031 front controller boots `portfolio/laravel` and binds `public_path()` to the containing `portfolio/`, eliminating the second Vite build. Parent rewrite rules deny `laravel/` and dot paths before real-directory pass-through, while the nested deny-all file remains defense in depth. `prepare-single-folder-upload.ps1` builds and assembles an upload while refusing secret files, the Vite hot marker, a local DB template, or a duplicate nested build. All cPanel helpers resolve the new root first and retain the legacy root fallback.
 
+## V4-FEAT-033 — Discovery inline default screener (2026-09-04)
+
+**Status:** **COMPLETE.** Frozen behavior: [`specs/V5-FEAT-033-Discovery-Inline-Default-Screener.md`](specs/V5-FEAT-033-Discovery-Inline-Default-Screener.md). `CandidatesPage` loads the existing portfolio Screener list, selects the stable Minervini factory key, and presents enabled state, scope, description, latest status, and matched/scanned totals above the Discovery metrics. The existing chunk-aware Screener run API can be invoked inline; completing it refreshes the summary and explicitly leaves candidate regeneration to **Run discovery**. Missing, disabled, or misconfigured factory screeners have non-destructive recovery/status states. No backend, schema, engine, scheduling, or Strategy behavior changed.
+
 ### Autocomplete UX
 
 - `StockAutocomplete.jsx` — debounced search; omit `exchange` param to search NSE+BSE; shows `exchange_label` (`NSE+` for dual-listed); optional `clearOnBlur` clears typed text when the field loses focus without a selection (used by Watchlist quick-add)

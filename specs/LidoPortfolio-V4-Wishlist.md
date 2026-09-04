@@ -124,7 +124,7 @@ This is a **roadmap / prioritization** decision, **not** a claim that the underl
 | V4-FEAT-020 | Live paper / portfolio replay modes | New simulation modes | TBD | OPEN |
 | V4-FEAT-030 | CI workflow for PHPUnit + frontend build | V5-deferred item, subsequently **completed 2026-09-04**; see the canonical V5 register. | P2 | COMPLETE |
 | V4-FEAT-031 | Production secrets / single-folder deploy hardening | Ops (was V4-TD-014) | P3 | OPEN |
-| V4-FEAT-033 | Discovery inline default screener | Discovery UX enhancement (was V4-UX-004) | P3 | OPEN |
+| V4-FEAT-033 | Discovery inline default screener | V5-deferred item, subsequently **completed 2026-09-04**; see the canonical V5 register. | P3 | COMPLETE |
 | V4-FEAT-034 | Richer Evaluation history UX | Evaluation UX (was V4-UX-005) | P3 | OPEN |
 | V4-FEAT-035 | TypeScript / TanStack Query / AG Grid migration | Stack migration (was V4-UX-006) | TBD | OPEN |
 | V4-FEAT-036 | Optional JWT/token API for non-SPA clients | Auth expansion; Sanctum SPA is V3 (was V4-UX-007 / TD-016 drift → docs reconciled) | TBD | OPEN |

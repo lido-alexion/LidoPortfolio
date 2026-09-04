@@ -19,6 +19,70 @@ function formatScore(v) {
     return Number(v).toFixed(1);
 }
 
+function DefaultScreenerCard({ screener, loading, running, onRun }) {
+    if (loading) {
+        return <div className="card mb-3"><div className="card-body text-muted small">Loading default screener…</div></div>;
+    }
+
+    if (!screener) {
+        return (
+            <div className="card mb-3 border-warning-subtle">
+                <div className="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div>
+                        <div className="fw-semibold">Default screener unavailable</div>
+                        <div className="small text-muted">Open Screeners to create or restore the portfolio&apos;s factory screener.</div>
+                    </div>
+                    <Link className="btn btn-sm btn-outline-secondary" to="/screeners">Open Screeners</Link>
+                </div>
+            </div>
+        );
+    }
+
+    const stats = screener.last_run?.stats;
+    const issue = screener.watchlist_issue || screener.index_issue;
+    const scope = screener.scope === 'all_equities' ? 'All equities' : (screener.scope || '—');
+
+    return (
+        <section className="card mb-3" aria-label="Default screener">
+            <div className="card-body py-3">
+                <div className="d-flex flex-wrap justify-content-between align-items-start gap-3">
+                    <div>
+                        <div className="d-flex flex-wrap align-items-center gap-2 mb-1">
+                            <span className="text-muted small text-uppercase">Default screener</span>
+                            <span className={`badge ${screener.is_enabled ? 'text-bg-success' : 'text-bg-secondary'}`}>
+                                {screener.is_enabled ? 'Enabled' : 'Off'}
+                            </span>
+                        </div>
+                        <h2 className="h5 mb-1">{screener.name}</h2>
+                        <p className="small text-muted mb-2">{screener.description || screener.summary || 'Factory eligibility screen for Discovery.'}</p>
+                        <div className="d-flex flex-wrap gap-3 small">
+                            <span><span className="text-muted">Scope:</span> {scope}</span>
+                            <span>
+                                <span className="text-muted">Latest run:</span>
+                                {' '}
+                                {stats ? `${stats.matched ?? 0} matched / ${stats.scanned ?? 0} scanned` : 'Not run yet'}
+                            </span>
+                            {screener.last_run?.status && <span><span className="text-muted">Status:</span> {screener.last_run.status}</span>}
+                        </div>
+                        {issue && <div className="text-danger small mt-2">{issue}</div>}
+                    </div>
+                    <div className="d-flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            className="btn btn-sm btn-outline-primary"
+                            disabled={running || !screener.is_enabled || Boolean(issue)}
+                            onClick={onRun}
+                        >
+                            {running ? 'Running screener…' : 'Run default screener'}
+                        </button>
+                        <Link className="btn btn-sm btn-outline-secondary" to={`/screeners/${screener.id}`}>View or edit</Link>
+                    </div>
+                </div>
+            </div>
+        </section>
+    );
+}
+
 /**
  * Pattern matches as sketches (name on hover); other signals as compact text badges.
  */
@@ -89,6 +153,7 @@ export default function CandidatesPage() {
     const [detailMode, setDetailMode] = useState('evidence'); // evidence | evaluation
     const [runningDiscovery, setRunningDiscovery] = useState(false);
     const [runningEval, setRunningEval] = useState(false);
+    const [runningScreener, setRunningScreener] = useState(false);
 
     const { data, loading, reload: load } = useApiGet({
         deps: [source, search],
@@ -103,12 +168,51 @@ export default function CandidatesPage() {
     });
     const items = Array.isArray(data) ? data : [];
 
+    const {
+        data: screenerData,
+        loading: screenerLoading,
+        reload: loadScreeners,
+    } = useApiGet({
+        errorFallback: 'Failed to load the default screener',
+        request: async () => {
+            const response = await api.get('/screeners', { skipErrorToast: true });
+            return response.data?.data ?? [];
+        },
+    });
+    const screeners = Array.isArray(screenerData) ? screenerData : [];
+    const defaultScreener = screeners.find((row) => row.factory_key === 'minervini_trend_template')
+        || screeners.find((row) => row.is_factory)
+        || null;
+
     const sources = useMemo(() => {
         const set = new Set(items.map((i) => i.source).filter(Boolean));
         return Array.from(set).sort();
     }, [items]);
 
-    const busy = runningDiscovery || runningEval;
+    const busy = runningDiscovery || runningEval || runningScreener;
+
+    const runDefaultScreener = async () => {
+        if (!defaultScreener) return;
+        setRunningScreener(true);
+        try {
+            let response = await api.post(`/screeners/${defaultScreener.id}/run`);
+            let run = response.data?.data;
+            let guard = 0;
+            while (response.data?.continued && run?.id && guard < 500) {
+                guard += 1;
+                response = await api.post(`/screener-runs/${run.id}/continue`);
+                run = response.data?.data;
+            }
+            const matched = run?.stats?.matched ?? 0;
+            const scanned = run?.stats?.scanned ?? 0;
+            showToast(`Default screener finished: ${matched} match(es) / ${scanned} scanned. Run discovery to refresh candidates.`, 'success');
+            await loadScreeners();
+        } catch (error) {
+            showToast(error?.response?.data?.message || error.message || 'Default screener failed', 'danger');
+        } finally {
+            setRunningScreener(false);
+        }
+    };
 
     const runDiscovery = async () => {
         setRunningDiscovery(true);
@@ -185,6 +289,13 @@ export default function CandidatesPage() {
                     </button>
                 </div>
             </div>
+
+            <DefaultScreenerCard
+                screener={defaultScreener}
+                loading={screenerLoading}
+                running={runningScreener}
+                onRun={runDefaultScreener}
+            />
 
             <div className="row g-2 mb-3">
                 <div className="col-md-4 col-lg-3">

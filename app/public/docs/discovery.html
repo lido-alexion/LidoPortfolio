@@ -106,7 +106,7 @@
         <a href="discovery.html">This topic</a>
       </div>
     </header>
-    
+
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Discovery</h1>
       <p class="muted"><code>discovery</code> · screen: <code>/candidates</code></p>
@@ -144,7 +144,7 @@ flowchart TD
 </tr>
 </tbody></table>
 <p>The system does not infer sell purpose from screener condition text. You assign purpose by wiring the screener to eligibility (buy gate) or Screener Exit (sell trigger). Discovery/Evaluation only inventory and measure; they do not invent that wiring.</p>
-<p>Use <strong>Run discovery</strong> to rebuild candidates (evaluation follows automatically). Use <strong>Run evaluation</strong> to re-measure the latest discovery run without rebuilding candidates.</p>
+<p>The portfolio factory/default screener is shown inline with its enabled state, scope, and latest matched/scanned totals. <strong>Run default screener</strong> refreshes its hit set; it deliberately does not silently create a Discovery run. Use <strong>Run discovery</strong> afterward to rebuild candidates from recent hits (evaluation follows automatically). Use <strong>Run evaluation</strong> to re-measure the latest discovery run without rebuilding candidates.</p>
 <p>Discovery is the candidate funnel plus long-focused evaluation facts on one page. Think of it as &quot;who deserves deeper attention now&quot; with measured score/confidence — not a sell-flipped score for bearish screeners. Candidates still need Strategy scoring later in the pipeline for action labels.</p>
 <p>Bearish screeners can contribute hits to Discovery, but Evaluation does not know which screener was “for selling.” Wire sell intent via Strategy Screener Exit on holdings; keep Eligibility Sources for entry-oriented screeners.</p>
 <p>Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).</p>
@@ -154,27 +154,30 @@ flowchart TD
       <section class="panel">
         <h2>Controls</h2>
         <dl class="doc-list">
+        <dt>Default screener card</dt>
+        <dd>Shows the factory Minervini Trend Template inline on Discovery, including readiness and latest run totals. Run it without leaving the page, or open its full editor. If the factory screener is missing, Open Screeners provides the recovery path.</dd>
+
         <dt>Run discovery</dt>
         <dd>Creates a new discovery run (pattern scans + recent screener hits, with holdings/watchlist fallback), then runs evaluation on those candidates and refreshes the table.</dd>
-    
+
         <dt>Run evaluation</dt>
         <dd>Re-scores the latest completed discovery run’s candidates with long-focused factor facts (score, confidence, rank, explanation). Requires a prior discovery run.</dd>
-    
+
         <dt>Candidate table</dt>
         <dd>Symbol, source, discovery reason (matched patterns as sketch icons with name on hover — same sketches as the Patterns guide; screener/membership signals stay as text badges), plus evaluation rank / score / confidence / explanation when evaluated. Evidence opens discovery signals; Factors opens indicators and passed/failed rules. Click a pattern icon to open that entry in the Patterns guide.</dd>
-    
+
         <dt>Filters</dt>
         <dd>Search by symbol/name and filter by source (screener, pattern, holding, watchlist, mixed).</dd>
-    
+
         <dt>Run provenance</dt>
         <dd>Check which screener/pipeline run produced candidates before comparing two lists from different run contexts.</dd>
-    
+
         <dt>Score / confidence / explanation</dt>
         <dd>Come from the latest evaluation result for each candidate (long-focused factor facts). Empty until you run evaluation (or Run discovery, which evaluates afterward).</dd>
-    
+
         <dt>Typical flow</dt>
         <dd>Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.</dd>
-    
+
         <dt>Validation and errors</dt>
         <dd>Form and API validations are shown as inline errors or toast messages. Fix the first reported issue, retry, and re-check dependent sections that consume the same data.</dd>
     </dl>
@@ -185,28 +188,28 @@ flowchart TD
         <dl class="doc-list">
         <dt>Candidate</dt>
         <dd>A stock admitted into the latest discovery inventory (screener hit, pattern, or membership fallback).</dd>
-    
+
         <dt>Factor facts vs Strategy weights</dt>
         <dd>Evaluation stores measurable facts and an informational equal-weight rank. Strategy weights and buy/sell action labels are applied later in the decision pipeline — not rewritten on this page.</dd>
-    
+
         <dt>Long-focused evaluation</dt>
         <dd>Scores favour long setups. Bearish screener hits are listed and measured the same way; they are not auto-flipped into a sell score. Sell-oriented screeners belong on Strategy Screener Exit when you want exits from holdings.</dd>
-    
+
         <dt>Discovery → Evaluation link</dt>
         <dd>Evaluation requires a completed discovery run. Results attach to candidates via candidate_id; the evaluation run records discovery_run_id.</dd>
-    
+
         <dt>No separate Evaluations page</dt>
         <dd>Former /evaluations redirects to Discovery. Factor details open from the Factors link on each row.</dd>
-    
+
         <dt>Active portfolio context</dt>
         <dd>Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.</dd>
-    
+
         <dt>Data freshness</dt>
         <dd>Many analytics depend on cached daily OHLCV and scheduled sync jobs. If numbers look stale, refresh this page and verify sync status in admin tools.</dd>
     </dl>
       </section>
 
-      
+
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
@@ -214,7 +217,7 @@ flowchart TD
         </div>
       </section>
     </article>
-    
+
     <footer class="muted">
       Generated from the StoX in-app documentation source. Product screens still require sign-in.
     </footer>
