@@ -100,6 +100,47 @@ class RecommendationExecutionLifetime
         return $now->gte($start) && $now->lt($cutoff);
     }
 
+    /** Recalculate only future session dates after permitted Calendar corrections. */
+    public function refreshFutureWindows(?Carbon $at = null): int
+    {
+        $today = ($at ?? now())->copy()->timezone(self::TIMEZONE)->startOfDay();
+        $rows = TradingRecommendation::query()
+            ->whereNotNull('execution_anchor_date')
+            ->whereIn('status', [
+                TradingRecommendation::STATUS_PENDING_REVIEW,
+                TradingRecommendation::STATUS_DEFERRED,
+                TradingRecommendation::STATUS_PENDING_EXECUTION,
+                TradingRecommendation::STATUS_ACCEPTED,
+            ])
+            ->get();
+        $changed = 0;
+        foreach ($rows as $row) {
+            $anchor = $row->execution_anchor_date->copy()->startOfDay();
+            $first = $row->execution_anchor_class === 'day_0'
+                ? $anchor
+                : TradingCalendar::nextSessionOnOrAfter($anchor->copy()->addDay());
+            $second = TradingCalendar::addSessions($first, 1);
+            $values = [];
+            if ($row->first_eligible_execution_date?->gt($today)
+                && ! $row->first_eligible_execution_date->equalTo($first)) {
+                $values['first_eligible_execution_date'] = $first->toDateString();
+            }
+            if ($row->second_eligible_execution_date?->gt($today)
+                && ! $row->second_eligible_execution_date->equalTo($second)) {
+                $values['second_eligible_execution_date'] = $second->toDateString();
+                $values['execution_expires_at'] = $second->copy()->setTimeFromTimeString(
+                    (string) config('trading_os.execution.cutoff_time', '15:30'),
+                );
+            }
+            if ($values !== []) {
+                $row->forceFill($values)->save();
+                $changed++;
+            }
+        }
+
+        return $changed;
+    }
+
     /** Expire only unresolved intent without an in-flight broker order. */
     public function expireDue(?Carbon $at = null): int
     {

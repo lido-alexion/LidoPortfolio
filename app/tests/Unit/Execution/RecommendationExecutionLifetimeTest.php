@@ -140,4 +140,34 @@ class RecommendationExecutionLifetimeTest extends TestCase
         $this->assertFalse($lifetime->isExecutionOpportunity($recommendation, Carbon::parse('2026-09-05 10:00', 'Asia/Kolkata')));
         $this->assertTrue($lifetime->isExecutionOpportunity($recommendation, Carbon::parse('2026-09-07 10:00', 'Asia/Kolkata')));
     }
+
+    public function test_future_calendar_correction_rolls_dates_without_rewriting_anchor(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->createPortfolioProfile($user, 'Calendar correction');
+        $stock = Stock::query()->create(['symbol' => 'ROLL', 'name' => 'Roll', 'exchange' => 'NSE', 'is_active' => true]);
+        $row = TradingRecommendation::query()->create([
+            'profile_id' => $profile->id, 'security_id' => $stock->id,
+            'recommendation_type' => TradingRecommendation::ACTION_OPEN_POSITION,
+            'status' => TradingRecommendation::STATUS_PENDING_EXECUTION,
+            'execution_anchor_date' => '2026-09-04', 'execution_anchor_class' => 'day_1',
+            'first_eligible_execution_date' => '2026-09-07',
+            'second_eligible_execution_date' => '2026-09-08',
+            'execution_expires_at' => Carbon::parse('2026-09-08 15:30', 'Asia/Kolkata'),
+        ]);
+        CalendarEvent::query()->create([
+            'title' => 'New holiday', 'anchor_date' => '2026-09-07',
+            'category' => CalendarEvent::CATEGORY_TRADE_HOLIDAY,
+            'recurrence_type' => CalendarEvent::RECURRENCE_NONE, 'is_active' => true,
+        ]);
+        TradingCalendar::clearHolidayCache();
+
+        $this->assertSame(1, app(RecommendationExecutionLifetime::class)->refreshFutureWindows(
+            Carbon::parse('2026-09-06 10:00', 'Asia/Kolkata'),
+        ));
+        $row->refresh();
+        $this->assertSame('2026-09-04', $row->execution_anchor_date->toDateString());
+        $this->assertSame('2026-09-08', $row->first_eligible_execution_date->toDateString());
+        $this->assertSame('2026-09-09', $row->second_eligible_execution_date->toDateString());
+    }
 }

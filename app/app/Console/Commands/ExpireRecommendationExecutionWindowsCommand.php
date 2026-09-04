@@ -16,9 +16,10 @@ class ExpireRecommendationExecutionWindowsCommand extends Command
         RecommendationExecutionLifetime $lifetime,
         RecommendationExecutionNotificationService $notifications,
     ): int {
+        $refreshed = $lifetime->refreshFutureWindows();
         $warnings = $notifications->sendApproachingExpiry();
         $count = $lifetime->expireDue();
-        $this->info("Recommendation execution warnings: {$warnings}; windows expired: {$count}.");
+        $this->info("Execution windows refreshed: {$refreshed}; warnings: {$warnings}; expired: {$count}.");
 
         return self::SUCCESS;
     }
