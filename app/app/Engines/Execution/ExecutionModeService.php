@@ -2,11 +2,15 @@
 
 namespace App\Engines\Execution;
 
+use App\Engines\Recommendation\RecommendationLifecycleService;
 use App\Exceptions\DomainException;
 use App\Models\PortfolioProfile;
+use App\Models\TradingOrder;
+use App\Models\TradingRecommendation;
 use App\Models\User;
 use App\Services\PortfolioLoggerService;
 use App\Services\Security\TotpService;
+use Illuminate\Support\Facades\DB;
 
 class ExecutionModeService
 {
@@ -14,6 +18,7 @@ class ExecutionModeService
         protected ExecutionGate $gate,
         protected TotpService $totp,
         protected PortfolioLoggerService $logger,
+        protected RecommendationLifecycleService $recommendations,
     ) {}
 
     /**
@@ -56,7 +61,10 @@ class ExecutionModeService
         }
 
         if ($mode === PortfolioProfile::EXECUTION_MODE_MANUAL) {
-            $profile->forceFill(['execution_mode' => $mode])->save();
+            DB::transaction(function () use ($profile, $mode): void {
+                $profile->forceFill(['execution_mode' => $mode])->save();
+                $this->cancelUnsubmittedIntents($profile);
+            });
             $this->logger->event('ExecutionModeService', 'execution.mode_changed', 'info', 'Execution mode set to manual', [
                 'user_id' => $user->id,
                 'profile_id' => $profile->id,
@@ -81,7 +89,13 @@ class ExecutionModeService
 
         $this->totp->assertRecentVerification($user, $totpCode, $recoveryCode);
 
-        $profile->forceFill(['execution_mode' => $mode])->save();
+        DB::transaction(function () use ($profile, $mode, $current): void {
+            $profile->forceFill(['execution_mode' => $mode])->save();
+            if ($current === PortfolioProfile::EXECUTION_MODE_AUTOMATIC
+                && $mode === PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC) {
+                $this->invalidateAutomaticApprovals($profile);
+            }
+        });
         $this->logger->event('ExecutionModeService', 'execution.mode_changed', 'info', 'Execution mode changed', [
             'user_id' => $user->id,
             'profile_id' => $profile->id,
@@ -90,5 +104,47 @@ class ExecutionModeService
         ]);
 
         return $profile->fresh();
+    }
+
+    protected function cancelUnsubmittedIntents(PortfolioProfile $profile): void
+    {
+        $rows = $this->mutableFeat039Intents($profile)->lockForUpdate()->get();
+        foreach ($rows as $row) {
+            $row->forceFill([
+                'status' => TradingRecommendation::STATUS_CANCELLED,
+                'cancelled_at' => now(),
+                'cancellation_reason' => 'mode_changed_to_manual',
+            ])->save();
+            $this->recommendations->releaseReservation($row);
+        }
+    }
+
+    protected function invalidateAutomaticApprovals(PortfolioProfile $profile): void
+    {
+        $this->mutableFeat039Intents($profile)
+            ->whereIn('status', [TradingRecommendation::STATUS_PENDING_EXECUTION, TradingRecommendation::STATUS_ACCEPTED])
+            ->lockForUpdate()
+            ->get()
+            ->each(function (TradingRecommendation $row): void {
+                $row->forceFill([
+                    'status' => TradingRecommendation::STATUS_PENDING_REVIEW,
+                    'approved_at' => null,
+                ])->save();
+                $this->recommendations->releaseReservation($row);
+            });
+    }
+
+    protected function mutableFeat039Intents(PortfolioProfile $profile)
+    {
+        return TradingRecommendation::query()
+            ->forProfile($profile)
+            ->whereNotNull('execution_anchor_date')
+            ->whereIn('status', [
+                TradingRecommendation::STATUS_PENDING_REVIEW,
+                TradingRecommendation::STATUS_DEFERRED,
+                TradingRecommendation::STATUS_PENDING_EXECUTION,
+                TradingRecommendation::STATUS_ACCEPTED,
+            ])
+            ->whereDoesntHave('orders', fn ($query) => $query->whereIn('broker_status', TradingOrder::IN_FLIGHT_BROKER_STATUSES));
     }
 }

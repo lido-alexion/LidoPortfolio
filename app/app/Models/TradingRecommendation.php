@@ -117,6 +117,7 @@ class TradingRecommendation extends Model
         'executed_outside_system',
         'no_longer_valid',
         'other',
+        'mode_changed_to_manual',
     ];
 
     public const CANCELLATION_REASON_LABELS = [
@@ -127,6 +128,7 @@ class TradingRecommendation extends Model
         'executed_outside_system' => 'Executed outside system',
         'no_longer_valid' => 'Recommendation no longer valid',
         'other' => 'Other',
+        'mode_changed_to_manual' => 'Execution mode changed to Manual',
     ];
 
     /** Portfolio actions that require review then pending execution. */

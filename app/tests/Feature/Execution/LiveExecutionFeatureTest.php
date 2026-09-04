@@ -310,6 +310,24 @@ class LiveExecutionFeatureTest extends TestCase
         $this->assertSame(1, $fake->placeCalls);
     }
 
+    public function test_mode_changes_cancel_or_reapprove_only_unsubmitted_feat_039_intent(): void
+    {
+        [$user, $profile] = $this->actingReadyUser();
+        $this->setMode($user, $profile, PortfolioProfile::EXECUTION_MODE_AUTOMATIC, confirm: true);
+        $needsApproval = $this->pendingBuy($profile);
+        $needsApproval->forceFill(['execution_anchor_date' => now()->toDateString()])->save();
+
+        $this->setMode($user, $profile, PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC);
+        $this->assertSame(TradingRecommendation::STATUS_PENDING_REVIEW, $needsApproval->fresh()->status);
+        $this->assertNull($needsApproval->fresh()->approved_at);
+
+        $cancelled = $this->pendingBuy($profile);
+        $cancelled->forceFill(['execution_anchor_date' => now()->toDateString()])->save();
+        $this->setMode($user, $profile, PortfolioProfile::EXECUTION_MODE_MANUAL);
+        $this->assertSame(TradingRecommendation::STATUS_CANCELLED, $cancelled->fresh()->status);
+        $this->assertSame('mode_changed_to_manual', $cancelled->fresh()->cancellation_reason);
+    }
+
     public function test_execution_mode_is_portfolio_scoped(): void
     {
         [$user, $profile] = $this->actingReadyUser();

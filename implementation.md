@@ -33,6 +33,7 @@ Specs under `specs/` define a seven-engine decision platform. Implementation evo
 - Kite's documented structured `MarginException` maps to `BROKER_INSUFFICIENT_FUNDS`. BUY placement retries at most twice at successive whole-share floors of 95%; there is no message parsing and no retry for other or ambiguous failures.
 - `tos:expire-execution-windows` atomically expires unresolved gaps after Day #2 cutoff while preserving in-flight Order Lifecycle.
 - New FEAT-039 rows submit only on their frozen first or second eligible NSE session and only inside the configured 09:15–15:30 IST primary-order window; weekends and active Trade Holidays are rejected by the same calendar gate. Legacy rows remain compatible during migration.
+- Execution-mode changes now reconcile unsubmitted FEAT-039 intent: switching to Manual cancels it with an audited reason, while Automatic→Semi-Automatic invalidates the automatic approval and returns it to review. Recommendations with an in-flight broker order stay under Order Lifecycle.
 
 **Independent audit (2026-07-25):** Full freeze audit vs `/specs` lives in [`specs/architecture/audit/`](specs/architecture/audit/). Verdict: clarified MVP **YES** (~90%); release posture **Ready for Internal Testing Only** — see `specs/architecture/audit/MVP_VERDICT.md`.
 
