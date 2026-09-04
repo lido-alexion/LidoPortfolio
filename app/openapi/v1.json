@@ -1556,11 +1556,26 @@
                     "broker"
                 ],
                 "summary": "Kite Connect OAuth callback",
-                "description": "Exchanges request_token for an access token and redirects to Settings → Account. Query request_token is not logged.",
+                "description": "Public broker redirect authenticated by a short-lived encrypted state token, not by the SPA Sanctum cookie. Exchanges request_token for an access token and redirects to Settings → Account. Query request_token is not logged.",
                 "operationId": "get_broker_kite_callback",
                 "parameters": [
                     {
-                        "$ref": "#/components/parameters/XProfileId"
+                        "name": "request_token",
+                        "in": "query",
+                        "required": false,
+                        "description": "Short-lived request token returned by Kite.",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "state",
+                        "in": "query",
+                        "required": false,
+                        "description": "Encrypted state created when the user initiated the connection.",
+                        "schema": {
+                            "type": "string"
+                        }
                     }
                 ],
                 "responses": {
@@ -1574,9 +1589,6 @@
                             }
                         }
                     },
-                    "401": {
-                        "description": "Unauthenticated (Sanctum session missing or expired)."
-                    },
                     "422": {
                         "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
                         "content": {
@@ -1587,7 +1599,8 @@
                             }
                         }
                     }
-                }
+                },
+                "security": []
             }
         },
         "/api/v1/broker/kite/disconnect": {

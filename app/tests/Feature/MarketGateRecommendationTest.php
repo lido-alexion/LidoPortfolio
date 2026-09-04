@@ -316,6 +316,9 @@ class MarketGateRecommendationTest extends TestCase
             'max_new_positions_per_cycle' => 5,
             'min_cash_reserve_pct' => 0,
             'max_cash_deployment_pct' => 100,
+            // Keep the gate tests above OD-12's ₹5,000 minimum actionable
+            // amount so WATCH means a gate decision, not tranche suppression.
+            'first_entry_pct' => 100.0,
         ]);
         $config['exit_strategy'] = ['enabled' => false, 'mode' => 'any', 'rules' => []];
         $config[TradingOsConfig::STRATEGY_MARKET_GATES] = $options['market_gates'] ?? ['enabled' => false];

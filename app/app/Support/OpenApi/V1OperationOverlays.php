@@ -669,7 +669,11 @@ final class V1OperationOverlays
             ],
             'GET /api/v1/broker/kite/callback' => [
                 'summary' => 'Kite Connect OAuth callback',
-                'description' => 'Exchanges request_token for an access token and redirects to Settings → Account. Query request_token is not logged.',
+                'description' => 'Public broker redirect authenticated by a short-lived encrypted state token, not by the SPA Sanctum cookie. Exchanges request_token for an access token and redirects to Settings → Account. Query request_token is not logged.',
+                'parameters' => [
+                    $q('request_token', 'string', 'Short-lived request token returned by Kite.'),
+                    $q('state', 'string', 'Encrypted state created when the user initiated the connection.'),
+                ],
                 'successStatus' => '200',
                 'noBody' => true,
             ],

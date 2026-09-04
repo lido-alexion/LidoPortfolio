@@ -65,7 +65,7 @@ class OpenApiV1ContractTest extends TestCase
         }
     }
 
-    public function test_all_v1_operations_require_sanctum_and_document_admin_flag(): void
+    public function test_v1_operations_document_authentication_and_admin_flags(): void
     {
         $builder = app(V1DocumentBuilder::class);
         $spec = json_decode(file_get_contents($builder->canonicalPath()), true, 512, JSON_THROW_ON_ERROR);
@@ -77,8 +77,15 @@ class OpenApiV1ContractTest extends TestCase
             if ($route['admin']) {
                 $adminKeys[] = $route['key'];
             }
-            $this->assertContains('auth:sanctum', $route['middleware']);
-            $this->assertContains('active.portfolio', $route['middleware']);
+            if ($route['authenticated']) {
+                $this->assertContains('auth:sanctum', $route['middleware']);
+                $this->assertContains('active.portfolio', $route['middleware']);
+            } else {
+                $this->assertSame('GET /api/v1/broker/kite/callback', $route['key']);
+                $operation = $spec['paths'][$route['path']][strtolower($route['method'])];
+                $this->assertSame([], $operation['security'] ?? null);
+                $this->assertNotContains(['$ref' => '#/components/parameters/XProfileId'], $operation['parameters'] ?? []);
+            }
         }
 
         foreach ($adminKeys as $key) {

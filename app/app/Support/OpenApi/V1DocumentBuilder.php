@@ -149,7 +149,7 @@ class V1DocumentBuilder
     }
 
     /**
-     * @return list<array{method:string,path:string,key:string,middleware:list<string>,action:string,admin:bool}>
+     * @return list<array{method:string,path:string,key:string,middleware:list<string>,action:string,admin:bool,authenticated:bool}>
      */
     public function v1Routes(): array
     {
@@ -176,6 +176,7 @@ class V1DocumentBuilder
                     'middleware' => $middleware,
                     'action' => $route->getActionName(),
                     'admin' => in_array('admin', $middleware, true),
+                    'authenticated' => in_array('auth:sanctum', $middleware, true),
                 ];
             }
         }
@@ -186,7 +187,7 @@ class V1DocumentBuilder
     }
 
     /**
-     * @param  array{method:string,path:string,key:string,middleware:list<string>,action:string,admin:bool}  $entry
+     * @param  array{method:string,path:string,key:string,middleware:list<string>,action:string,admin:bool,authenticated:bool}  $entry
      * @param  array<string, mixed>  $overlay
      * @return array<string, mixed>
      */
@@ -198,7 +199,7 @@ class V1DocumentBuilder
         $operationId = $overlay['operationId'] ?? $this->operationId($entry);
 
         $parameters = array_merge(
-            [['$ref' => '#/components/parameters/XProfileId']],
+            $entry['authenticated'] ? [['$ref' => '#/components/parameters/XProfileId']] : [],
             $this->pathParameters($entry['path']),
             $overlay['parameters'] ?? [],
         );
@@ -215,9 +216,6 @@ class V1DocumentBuilder
                     ],
                 ],
             ],
-            '401' => [
-                'description' => 'Unauthenticated (Sanctum session missing or expired).',
-            ],
             '422' => [
                 'description' => 'Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.',
                 'content' => [
@@ -227,6 +225,12 @@ class V1DocumentBuilder
                 ],
             ],
         ];
+
+        if ($entry['authenticated']) {
+            $responses['401'] = [
+                'description' => 'Unauthenticated (Sanctum session missing or expired).',
+            ];
+        }
 
         if ($entry['admin']) {
             $responses['403'] = [
@@ -267,6 +271,12 @@ class V1DocumentBuilder
 
         if ($entry['admin']) {
             $operation['x-stox-admin'] = true;
+        }
+
+        if (! $entry['authenticated']) {
+            // Override the document-level Sanctum requirement for intentionally
+            // public broker redirects that authenticate through signed state.
+            $operation['security'] = [];
         }
 
         return $operation;
