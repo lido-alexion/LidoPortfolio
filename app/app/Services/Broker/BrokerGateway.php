@@ -8,6 +8,9 @@ interface BrokerGateway
 
     public function placeOrder(BrokerOrderRequest $request): BrokerSubmission;
 
+    /** Current account-wide equity balance usable for order sizing. */
+    public function availableEquityFunds(int $userId): ?float;
+
     public function fetchOrder(int $userId, string $brokerOrderId): ?BrokerOrderSnapshot;
 
     public function cancelOrder(int $userId, string $brokerOrderId): BrokerOrderSnapshot;

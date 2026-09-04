@@ -277,7 +277,23 @@ class LiveBrokerExecutionService
 
         $qty = $quantityOverride ?? $this->quantityFor($recommendation);
         $side = $recommendation->orderSide();
-        if ($qty === null || $side === null) {
+        if ($qty !== null && $side === 'buy') {
+            $funds = $this->broker->availableEquityFunds((int) $user->id);
+            $price = (float) $recommendation->reference_price;
+            if ($funds === null) {
+                $this->recordDecision($profile, $user, $recommendation, $trigger, ExecutionDecision::OUTCOME_BLOCKED, 'broker_funds_unavailable');
+
+                return [
+                    'recommendation_id' => $recommendation->id,
+                    'outcome' => ExecutionDecision::OUTCOME_BLOCKED,
+                    'reason' => 'broker_funds_unavailable',
+                ];
+            }
+            if ($price > 0) {
+                $qty = min($qty, (float) floor($funds / $price));
+            }
+        }
+        if ($qty === null || $qty < 1 || $side === null) {
             $this->recordDecision($profile, $user, $recommendation, $trigger, ExecutionDecision::OUTCOME_SKIPPED, 'not_actionable');
 
             return [

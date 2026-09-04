@@ -310,6 +310,19 @@ class LiveExecutionFeatureTest extends TestCase
         $this->assertSame(1, $fake->placeCalls);
     }
 
+    public function test_buy_quantity_is_bounded_by_current_shared_kite_funds(): void
+    {
+        [$user, $profile] = $this->actingReadyUser();
+        $this->setMode($user, $profile, PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC);
+        $rec = $this->pendingBuy($profile, amount: 1_000);
+        $fake = app(FakeBrokerGateway::class);
+        $fake->availableFunds = 450;
+
+        app(LiveBrokerExecutionService::class)->submitOne($user, $profile, $rec->id, ExecutionGate::TRIGGER_SEMI);
+
+        $this->assertSame(4.0, $fake->placed[0]->quantity);
+    }
+
     public function test_mode_changes_cancel_or_reapprove_only_unsubmitted_feat_039_intent(): void
     {
         [$user, $profile] = $this->actingReadyUser();

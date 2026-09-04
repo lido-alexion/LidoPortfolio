@@ -9,6 +9,8 @@ use App\Exceptions\DomainException;
  */
 class FakeBrokerGateway implements BrokerGateway
 {
+    public float $availableFunds = 1_000_000_000;
+
     public int $placeCalls = 0;
 
     /** @var list<BrokerOrderRequest> */
@@ -60,6 +62,7 @@ class FakeBrokerGateway implements BrokerGateway
 
     public function reset(): void
     {
+        $this->availableFunds = 1_000_000_000;
         $this->placeCalls = 0;
         $this->placed = [];
         $this->nextPlaceAmbiguous = false;
@@ -80,6 +83,11 @@ class FakeBrokerGateway implements BrokerGateway
         $this->gttFailRemaining = 0;
         $this->gtts = [];
         $this->seq = 1;
+    }
+
+    public function availableEquityFunds(int $userId): ?float
+    {
+        return $this->availableFunds;
     }
 
     public function seedSnapshot(BrokerOrderSnapshot $snapshot): void

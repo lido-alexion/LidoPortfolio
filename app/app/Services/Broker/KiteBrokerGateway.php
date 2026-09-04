@@ -80,6 +80,28 @@ class KiteBrokerGateway implements BrokerGateway
         return new BrokerSubmission($orderId, 'submitted');
     }
 
+    public function availableEquityFunds(int $userId): ?float
+    {
+        $token = $this->accessToken($userId);
+        try {
+            $response = Http::timeout(20)
+                ->withHeaders($this->headers($token))
+                ->get(rtrim((string) config('broker.kite.api_base'), '/').'/user/margins/equity');
+        } catch (ConnectionException) {
+            return null;
+        }
+        if (! $response->successful()) {
+            return null;
+        }
+        $data = data_get($response->json(), 'data');
+        if (! is_array($data)) {
+            return null;
+        }
+        $value = data_get($data, 'available.live_balance', $data['net'] ?? null);
+
+        return is_numeric($value) ? max(0.0, (float) $value) : null;
+    }
+
     public function fetchOrder(int $userId, string $brokerOrderId): ?BrokerOrderSnapshot
     {
         $token = $this->accessToken($userId);
