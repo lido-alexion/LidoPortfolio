@@ -21,6 +21,7 @@ use App\Services\ProfileSettingsService;
 use App\Services\Security\TotpService;
 use App\Services\SyncLogService;
 use App\Services\TelegramNotificationService;
+use App\Services\TransactionWriteService;
 use App\Support\TradingOsConfig;
 use Carbon\Carbon;
 use Illuminate\Console\Scheduling\Schedule;
@@ -255,6 +256,49 @@ class V4Feat010UnattendedOpsTest extends TestCase
             'user_id' => $user->id,
             'status' => 'completed',
         ]);
+    }
+
+    public function test_account_cycle_internally_matches_same_symbol_before_residual_broker_buy(): void
+    {
+        [$user, $sellerProfile] = $this->actingReadyUser();
+        $this->setMode($user, $sellerProfile, PortfolioProfile::EXECUTION_MODE_AUTOMATIC, confirm: true);
+        $stock = $this->stock();
+        app(TransactionWriteService::class)->create($sellerProfile, $stock, [
+            'type' => 'buy', 'quantity' => 5, 'price' => 80, 'fees' => 0,
+            'transaction_date' => now()->toDateString(), 'source' => 'manual',
+        ], applyCash: false);
+        $sell = $this->pendingBuy($sellerProfile, $stock, 500);
+        $sell->forceFill([
+            'recommendation_type' => TradingRecommendation::ACTION_EXIT_POSITION,
+            'execution_plan' => ['suggested_quantity' => 5, 'suggested_investment_amount' => 500, 'side' => 'sell'],
+            'target_amount' => 0, 'capital_resolved_amount' => 500,
+            'remaining_target_amount' => 500, 'original_display_quantity' => 5,
+        ])->save();
+
+        $buyerProfile = $this->createPortfolioProfile($user, 'Buyer book', false);
+        app(CashManagementService::class)->deposit($buyerProfile, 50_000, 'seed', $user);
+        $this->withProfileHeader($user, $buyerProfile);
+        $this->setMode($user, $buyerProfile, PortfolioProfile::EXECUTION_MODE_AUTOMATIC, confirm: true);
+        $buy = $this->pendingBuy($buyerProfile, $stock, 1_000);
+        $buy->forceFill([
+            'target_amount' => 1_000, 'capital_resolved_amount' => 1_000,
+            'remaining_target_amount' => 1_000, 'original_display_quantity' => 10,
+        ])->save();
+
+        $this->artisan('tos:submit-automatic-orders')->assertSuccessful();
+
+        $this->assertDatabaseHas('portfolio_internal_execution_transfers', [
+            'sell_recommendation_id' => $sell->id,
+            'buy_recommendation_id' => $buy->id,
+            'quantity' => 5,
+            'valuation_status' => 'provisional',
+        ]);
+        $this->assertSame(TradingRecommendation::STATUS_EXECUTED, $sell->fresh()->status);
+        $this->assertSame(500.0, (float) $buy->fresh()->remaining_target_amount);
+        $placed = app(FakeBrokerGateway::class)->placed;
+        $this->assertCount(1, $placed);
+        $this->assertSame($buy->id, $placed[0]->recommendationId);
+        $this->assertSame(5.0, $placed[0]->quantity);
     }
 
     public function test_reconcile_failure_alerts_telegram_once_then_recovers(): void

@@ -16,6 +16,7 @@ use App\Services\Broker\BrokerAmbiguousException;
 use App\Services\Broker\BrokerGateway;
 use App\Services\Broker\BrokerOrderRequest;
 use App\Services\Broker\BrokerOrderSnapshot;
+use App\Services\Execution\InternalRecommendationMatcher;
 use App\Services\Lending\RecommendationLendingCoordinator;
 use App\Services\PortfolioLoggerService;
 use App\Services\Protection\PositionProtectionService;
@@ -34,6 +35,7 @@ class LiveBrokerExecutionService
         protected BrokerGateway $broker,
         protected RecommendationLendingCoordinator $lending,
         protected PortfolioLoggerService $logger,
+        protected InternalRecommendationMatcher $internalMatcher,
     ) {}
 
     /**
@@ -178,6 +180,16 @@ class LiveBrokerExecutionService
 
                 return [$leftSide, $left->generated_at?->getTimestamp() ?? 0, $left->id]
                     <=> [$rightSide, $right->generated_at?->getTimestamp() ?? 0, $right->id];
+            });
+
+        $this->internalMatcher->match($batch, $recommendations);
+        $recommendations = TradingRecommendation::query()
+            ->whereIn('id', $recommendations->pluck('id'))
+            ->get()
+            ->filter(fn (TradingRecommendation $row) => $this->isAutomaticCandidate($row))
+            ->sort(function (TradingRecommendation $left, TradingRecommendation $right): int {
+                return [$left->orderSide() === 'sell' ? 0 : 1, $left->generated_at?->getTimestamp() ?? 0, $left->id]
+                    <=> [$right->orderSide() === 'sell' ? 0 : 1, $right->generated_at?->getTimestamp() ?? 0, $right->id];
             });
 
         $results = [];
