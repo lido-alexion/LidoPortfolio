@@ -41,6 +41,7 @@ if (($_GET['token'] ?? '') !== SETUP_TOKEN) {
 header('Content-Type: text/plain; charset=utf-8');
 
 $laravelRootCandidates = [
+    __DIR__.'/laravel',
     dirname(__DIR__).'/lidoportfolio',
     dirname(__DIR__, 2).'/public_html/lidoportfolio',
 ];
@@ -194,10 +195,12 @@ foreach ($requiredExtensions as $ext) {
     }
 }
 
-$envOk = is_file(LARAVEL_ROOT.'/.env');
-check_line('   .env', $envOk, 'create from .env.production.example');
+require_once __DIR__.'/cpanel-environment.php';
+$environmentFile = lido_production_environment_file(LARAVEL_ROOT);
+$envOk = $environmentFile !== null;
+check_line('   environment', $envOk, 'create /home/USER/config/LidoPortfolio.env from .env.production.example');
 if (! $envOk) {
-    record_failure($failures, 'Missing .env');
+    record_failure($failures, 'Missing production environment file');
 }
 
 $storageOk = is_writable(LARAVEL_ROOT.'/storage');
@@ -220,8 +223,9 @@ if (is_file($viteHot)) {
     echo "   public/hot: OK (absent)\n";
 }
 
-$manifestLaravel = LARAVEL_ROOT.'/public/build/manifest.json';
-$manifestWeb = dirname(__DIR__).'/portfolio/build/manifest.json';
+$singleFolder = realpath(LARAVEL_ROOT) === realpath(__DIR__.'/laravel');
+$manifestLaravel = $singleFolder ? __DIR__.'/build/manifest.json' : LARAVEL_ROOT.'/public/build/manifest.json';
+$manifestWeb = __DIR__.'/build/manifest.json';
 check_line('   public/build/manifest.json', is_file($manifestLaravel), 'npm run build + upload');
 check_line('   portfolio/build/manifest.json', is_file($manifestWeb), 'copy public/build to portfolio/build');
 

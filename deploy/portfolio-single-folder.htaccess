@@ -1,0 +1,42 @@
+<IfModule mod_rewrite.c>
+    <IfModule mod_negotiation.c>
+        Options -MultiViews -Indexes
+    </IfModule>
+
+    RewriteEngine On
+    RewriteBase /portfolio/
+
+    # Laravel and its secrets are never web-addressable. This rule must stay
+    # before the generic existing-directory pass-through below.
+    RewriteRule ^laravel(?:/|$) - [F,L,NC]
+    RewriteRule (^|/)\. - [F,L]
+
+    RewriteCond %{HTTP_HOST} ^lidoalexion\.com$ [NC]
+    RewriteRule ^ https://www.lidoalexion.com%{REQUEST_URI} [R=301,L]
+
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    RewriteCond %{HTTP:x-xsrf-token} .
+    RewriteRule .* - [E=HTTP_X_XSRF_TOKEN:%{HTTP:X-XSRF-Token}]
+
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_URI} (.+)/$
+    RewriteRule ^ %1 [L,R=301]
+
+    RewriteRule ^cpanel-.*\.php$ - [L]
+    RewriteRule ^mobile-debug\.html$ - [L]
+    RewriteRule ^docs(/.*)?$ - [L]
+
+    RewriteCond %{REQUEST_FILENAME} -f
+    RewriteRule ^ - [L]
+
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    RewriteRule ^ index.php [L]
+</IfModule>
+
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>

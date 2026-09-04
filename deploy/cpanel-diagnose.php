@@ -19,11 +19,13 @@ foreach ($requiredExtensions as $ext) {
 }
 echo "\n";
 
-$root = dirname(__DIR__).'/lidoportfolio';
+$root = is_file(__DIR__.'/laravel/vendor/autoload.php') ? __DIR__.'/laravel' : dirname(__DIR__).'/lidoportfolio';
+require_once __DIR__.'/cpanel-environment.php';
+$environmentFile = lido_production_environment_file($root);
 echo "2) Laravel root: {$root}\n";
 echo "   exists: ".(is_dir($root) ? 'yes' : 'NO')."\n";
 echo "   vendor/autoload.php: ".(is_file($root.'/vendor/autoload.php') ? 'yes' : 'NO')."\n";
-echo "   .env: ".(is_file($root.'/.env') ? 'yes' : 'NO')."\n";
+echo "   environment: ".($environmentFile ?? 'MISSING')."\n";
 echo "   storage writable: ".(is_writable($root.'/storage') ? 'yes' : 'NO')."\n";
 echo "   bootstrap/cache writable: ".(is_writable($root.'/bootstrap/cache') ? 'yes' : 'NO')."\n";
 
@@ -31,11 +33,12 @@ $configCache = $root.'/bootstrap/cache/config.php';
 echo "   bootstrap/cache/config.php: ".(is_file($configCache) ? 'YES — delete this if DB user is wrong' : 'no')."\n";
 
 $viteHot = $root.'/public/hot';
-$viteManifest = $root.'/public/build/manifest.json';
-$webBuild = dirname(__DIR__).'/portfolio/build/manifest.json';
+$singleFolder = realpath($root) === realpath(__DIR__.'/laravel');
+$viteManifest = $singleFolder ? __DIR__.'/build/manifest.json' : $root.'/public/build/manifest.json';
+$webBuild = __DIR__.'/build/manifest.json';
 echo "   public/hot (dev): ".(is_file($viteHot) ? 'YES — DELETE (causes blank page)' : 'no')."\n";
-echo "   public/build/manifest.json: ".(is_file($viteManifest) ? 'yes' : 'MISSING — run npm run build and upload')."\n";
-echo "   portfolio/build/manifest.json: ".(is_file($webBuild) ? 'yes' : 'MISSING — copy public/build to portfolio/build')."\n\n";
+echo "   Laravel manifest: ".(is_file($viteManifest) ? 'yes' : 'MISSING — run npm run build and upload')."\n";
+echo "   browser manifest: ".(is_file($webBuild) ? 'yes' : 'MISSING — upload portfolio/build')."\n\n";
 
 $sharedDbConfig = dirname(__DIR__, 2).'/config/DBConfig.php';
 if (! is_file($sharedDbConfig)) {

@@ -18,7 +18,7 @@ header('Content-Type: text/plain; charset=utf-8');
 ini_set('display_errors', '1');
 error_reporting(E_ALL);
 
-$root = dirname(__DIR__).'/lidoportfolio';
+$root = is_file(__DIR__.'/laravel/vendor/autoload.php') ? __DIR__.'/laravel' : dirname(__DIR__).'/lidoportfolio';
 echo "=== API probe ===\n\n";
 
 if (! is_file($root.'/vendor/autoload.php')) {

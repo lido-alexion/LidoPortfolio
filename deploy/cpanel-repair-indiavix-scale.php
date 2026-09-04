@@ -22,6 +22,7 @@ ini_set('display_errors', '1');
 error_reporting(E_ALL);
 
 $laravelRootCandidates = [
+    __DIR__.'/laravel',
     dirname(__DIR__).'/lidoportfolio',
     dirname(__DIR__, 2).'/public_html/lidoportfolio',
 ];

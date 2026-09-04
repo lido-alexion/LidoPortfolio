@@ -25,7 +25,7 @@ if (($_GET['token'] ?? '') !== SETUP_TOKEN) {
 
 header('Content-Type: text/plain; charset=utf-8');
 
-$root = dirname(__DIR__).'/lidoportfolio';
+$root = is_file(__DIR__.'/laravel/vendor/autoload.php') ? __DIR__.'/laravel' : dirname(__DIR__).'/lidoportfolio';
 if (! is_file($root.'/vendor/autoload.php')) {
     http_response_code(500);
     exit("Laravel not found.\n");

@@ -23,7 +23,7 @@ ini_set('display_errors', '1');
 error_reporting(E_ALL);
 @set_time_limit(120);
 
-$root = dirname(__DIR__).'/lidoportfolio';
+$root = is_file(__DIR__.'/laravel/vendor/autoload.php') ? __DIR__.'/laravel' : dirname(__DIR__).'/lidoportfolio';
 if (! is_file($root.'/vendor/autoload.php')) {
     http_response_code(500);
     exit("Laravel not found at {$root}\n");

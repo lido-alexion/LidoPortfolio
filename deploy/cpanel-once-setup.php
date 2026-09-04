@@ -42,6 +42,7 @@ echo "Setup script started (PHP ".PHP_VERSION.")\n";
 flush();
 
 $laravelRootCandidates = [
+    __DIR__.'/laravel',
     dirname(__DIR__).'/lidoportfolio',
     dirname(__DIR__, 2).'/public_html/lidoportfolio',
 ];
@@ -87,8 +88,9 @@ function setup_step(string $label, callable $run): void
 }
 
 try {
-    if (! is_file(LARAVEL_ROOT.'/.env')) {
-        throw new RuntimeException('Missing .env in '.LARAVEL_ROOT);
+    require_once __DIR__.'/cpanel-environment.php';
+    if (lido_production_environment_file(LARAVEL_ROOT) === null) {
+        throw new RuntimeException('Missing /home/USER/config/LidoPortfolio.env (or legacy Laravel .env).');
     }
 
     if (! is_writable(LARAVEL_ROOT.'/storage')) {

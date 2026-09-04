@@ -5,6 +5,11 @@
 
 This is the **canonical** deploy guide (verified May 2026). Use it for first deploy and for code updates.
 
+> **FEAT-031 (2026-09-04):** the hardened single-folder release tooling is
+> implemented. Use [SINGLE-FOLDER-DEPLOY.md](SINGLE-FOLDER-DEPLOY.md) for the
+> controlled migration and all new single-folder packages. This document keeps
+> the currently deployed two-folder procedure as the rollback/legacy guide.
+
 | Also see | Purpose |
 |----------|---------|
 | [DEPLOYMENT_VALIDATION_PLAN.md](../DEPLOYMENT_VALIDATION_PLAN.md) | Pre/post checklists, test commands |
@@ -121,9 +126,13 @@ Always upload **the entire** `public/build/` folder to **both** locations in the
 
 `cpanel-diagnose.php` checks that both manifests exist; it does not compare file hashes — keeping them in sync is a deploy discipline.
 
-### 2.2 Alternative: one `portfolio/` folder only (wishlist — deferred)
+### 2.2 Hardened one-folder replacement (implemented; controlled cutover)
 
-**Status (Jun 2026):** Not planned for near-term deploy. Owner decision: keep the two-folder layout until production **secrets handling** is improved (`.env` under a consolidated web tree is a higher exposure risk). Tracked in `implementation.md` → **Wishlist**.
+**Status (Sep 2026):** FEAT-031 implementation is complete. Secrets are loaded
+from `/home/USER/config/LidoPortfolio.env`, the parent and nested web rules deny
+the Laravel tree, and release packaging contains one build copy. Follow
+[SINGLE-FOLDER-DEPLOY.md](SINGLE-FOLDER-DEPLOY.md); do not improvise the
+production cutover from this historical design sketch.
 
 **Question:** Can Laravel live inside `public_html/portfolio/` and drop the sibling `lidoportfolio/` folder?
 
@@ -170,7 +179,9 @@ public_html/portfolio/
 
 **Effort:** Medium one-time migration — `deploy/index.php`, all `cpanel-*.php` root detection, `prepare-upload.ps1`, cron in cPanel, production file move, docs. No change to `APP_URL` or user-facing URLs.
 
-Until that migration is done, keep using the two-folder layout in §2.1. Prerequisites before attempting: secrets handling (see `implementation.md` Wishlist) and hardened rules blocking `laravel/.env` from HTTP.
+Until the controlled migration and verification are performed, production may
+continue using the two-folder layout in §2.1. The prerequisites described above
+are now implemented by the FEAT-031 package.
 
 ### Obsolete approaches (do not use)
 

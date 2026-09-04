@@ -5,16 +5,24 @@ require_once dirname(__DIR__).'/app/Support/helpers.php';
 use App\Engines\Support\ApiEnvelope;
 use App\Exceptions\DomainException;
 use App\Http\Middleware\AssignRequestId;
+use App\Http\Middleware\DebugAgentToken;
+use App\Http\Middleware\EnsureUserIsAdmin;
+use App\Http\Middleware\ResolveActivePortfolio;
 use App\Services\PortfolioLoggerService;
 use App\Support\ApiErrorMessage;
+use App\Support\ProductionEnvironment;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
-return Application::configure(basePath: dirname(__DIR__))
+$application = Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
         api: __DIR__.'/../routes/api.php',
@@ -23,17 +31,17 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->statefulApi();
-        $middleware->prependToGroup('api', \App\Http\Middleware\DebugAgentToken::class);
+        $middleware->prependToGroup('api', DebugAgentToken::class);
         $middleware->appendToGroup('api', AssignRequestId::class);
         $middleware->appendToGroup('web', AssignRequestId::class);
         $middleware->alias([
-            'admin' => \App\Http\Middleware\EnsureUserIsAdmin::class,
-            'active.portfolio' => \App\Http\Middleware\ResolveActivePortfolio::class,
+            'admin' => EnsureUserIsAdmin::class,
+            'active.portfolio' => ResolveActivePortfolio::class,
         ]);
-        $middleware->appendToGroup('api', \App\Http\Middleware\ResolveActivePortfolio::class);
+        $middleware->appendToGroup('api', ResolveActivePortfolio::class);
         $middleware->priority([
-            \App\Http\Middleware\ResolveActivePortfolio::class,
-            \Illuminate\Routing\Middleware\SubstituteBindings::class,
+            ResolveActivePortfolio::class,
+            SubstituteBindings::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
@@ -41,7 +49,7 @@ return Application::configure(basePath: dirname(__DIR__))
             fn (Request $request) => $request->is('api/*'),
         );
 
-        $exceptions->report(function (\Throwable $e): void {
+        $exceptions->report(function (Throwable $e): void {
             if (app()->bound(PortfolioLoggerService::class)) {
                 app(PortfolioLoggerService::class)->api('error', $e->getMessage(), [
                     'exception' => $e::class,
@@ -51,7 +59,7 @@ return Application::configure(basePath: dirname(__DIR__))
             }
         });
 
-        $exceptions->render(function (\Throwable $e, Request $request) {
+        $exceptions->render(function (Throwable $e, Request $request) {
             if (! $request->is('api/*')) {
                 return null;
             }
@@ -68,12 +76,12 @@ return Application::configure(basePath: dirname(__DIR__))
             // Let the framework render 401/403 (AuthenticationException and
             // AuthorizationException are not HttpExceptionInterface, so the
             // generic branch below would wrongly report them as 500).
-            if ($e instanceof \Illuminate\Auth\AuthenticationException
-                || $e instanceof \Illuminate\Auth\Access\AuthorizationException) {
+            if ($e instanceof AuthenticationException
+                || $e instanceof AuthorizationException) {
                 return null;
             }
 
-            if ($e instanceof \Illuminate\Http\Exceptions\HttpResponseException) {
+            if ($e instanceof HttpResponseException) {
                 return $e->getResponse();
             }
 
@@ -87,3 +95,18 @@ return Application::configure(basePath: dirname(__DIR__))
             ], $status)->header('X-Request-ID', (string) $requestId);
         });
     })->create();
+
+// FEAT-031: production secrets may live outside public_html in
+// /home/USER/config/LidoPortfolio.env. An explicit process-level path wins;
+// otherwise walk ancestors so both legacy and single-folder cPanel layouts work.
+$explicitEnvironmentPath = getenv('LIDO_ENV_PATH');
+$environmentFile = ProductionEnvironment::resolve(
+    dirname(__DIR__),
+    is_string($explicitEnvironmentPath) ? $explicitEnvironmentPath : null,
+);
+if ($environmentFile !== null) {
+    $application->useEnvironmentPath(dirname($environmentFile));
+    $application->loadEnvironmentFrom(basename($environmentFile));
+}
+
+return $application;

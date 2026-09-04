@@ -9,7 +9,7 @@ Read **top → bottom**. Requirements/architecture come **before** implementatio
 
 **V3:** [LidoPortfolio-V3-Specification.md](LidoPortfolio-V3-Specification.md) is the source of truth for V3 product behavior (**v0.28**; **V3 STRICTLY COMPLETE** as of 2026-08-26). Recall / capital-resolution build plan (historical + shipped): [architecture/V3-WS4-Recall-Bridge-Implementation-Delta.md](architecture/V3-WS4-Recall-Bridge-Implementation-Delta.md).
 
-**V4:** [LidoPortfolio-V4-Wishlist.md](LidoPortfolio-V4-Wishlist.md) is closed history. **V5:** [LidoPortfolio-V5-Wishlist.md](LidoPortfolio-V5-Wishlist.md) is active; [V5-FEAT-039-Holiday-Aware-Scheduled-Execution.md](V5-FEAT-039-Holiday-Aware-Scheduled-Execution.md) is the frozen FEAT-039 specification.
+**V4:** [LidoPortfolio-V4-Wishlist.md](LidoPortfolio-V4-Wishlist.md) is closed history. **V5:** [LidoPortfolio-V5-Wishlist.md](LidoPortfolio-V5-Wishlist.md) is active; [V5-FEAT-031-Production-Secrets-Single-Folder-Deploy.md](V5-FEAT-031-Production-Secrets-Single-Folder-Deploy.md) records implemented deploy hardening pending production cutover, and [V5-FEAT-039-Holiday-Aware-Scheduled-Execution.md](V5-FEAT-039-Holiday-Aware-Scheduled-Execution.md) is the frozen FEAT-039 specification.
 
 ---
 
@@ -41,6 +41,7 @@ specs/
 ├── LidoPortfolio-V3-Specification.md  【 V3 SoT — V3 STRICTLY COMPLETE 】
 ├── LidoPortfolio-V4-Wishlist.md       【 V4 features + frozen SPEC-001–007 + V5 deferred FEAT 】
 ├── LidoPortfolio-V5-Wishlist.md       【 active V5 planning register 】
+├── V5-FEAT-031-Production-Secrets-Single-Folder-Deploy.md 【 deploy hardening + cutover gate 】
 ├── V5-FEAT-039-Holiday-Aware-Scheduled-Execution.md 【 frozen FEAT-039 behavior 】
 ├── IMPLEMENTATION_PROGRESS.md         【 STATUS 】
 ├── MVP_DEMO_CHECKLIST.md              【 ACCEPTANCE DEMO 】

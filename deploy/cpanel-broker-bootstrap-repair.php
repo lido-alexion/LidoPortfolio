@@ -24,6 +24,7 @@ header('Content-Type: text/plain; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 
 $rootCandidates = [
+    __DIR__.'/laravel',
     dirname(__DIR__).'/lidoportfolio',
     dirname(__DIR__, 2).'/public_html/lidoportfolio',
 ];

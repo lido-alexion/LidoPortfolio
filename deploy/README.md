@@ -7,7 +7,11 @@
 | **`prepare-upload.ps1`** | Builds frontend + stages `deploy/staging/` (gitignored) for cPanel upload |
 | **`index.php`** | Copy → `public_html/portfolio/index.php` (Laravel front controller) |
 | **`public_html-portfolio-.htaccess`** | Copy → `public_html/portfolio/.htaccess` |
-| **`public_html-lidoportfolio-.htaccess`** | Copy → `public_html/lidoportfolio/.htaccess` (Deny web access) |
+| **`SINGLE-FOLDER-DEPLOY.md`** | FEAT-031 target layout, migration, verification, and rollback |
+| **`prepare-single-folder-upload.ps1`** | Build the hardened one-folder release package |
+| **`portfolio-single-folder-index.php`** | One-folder front controller (`portfolio/laravel`) |
+| **`portfolio-single-folder.htaccess`** | Parent protection and routing for the one-folder layout |
+| **`public_html-lidoportfolio-.htaccess`** | Nested deny-all protection (also legacy root protection) |
 | **`public_html-root-portfolio-snippet.htaccess`** | Paste into root `public_html/.htaccess` (before other rewrite rules) |
 
 ### One-time / maintenance (upload → run → **delete from server**)

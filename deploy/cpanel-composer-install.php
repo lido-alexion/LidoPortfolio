@@ -32,6 +32,7 @@ while (ob_get_level() > 0) {
 ob_implicit_flush(true);
 
 $laravelRootCandidates = [
+    __DIR__.'/laravel',
     dirname(__DIR__).'/lidoportfolio',
     dirname(__DIR__, 2).'/public_html/lidoportfolio',
 ];

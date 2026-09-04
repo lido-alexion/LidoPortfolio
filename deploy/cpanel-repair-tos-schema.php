@@ -70,6 +70,7 @@ $apply = isset($_GET['apply']) && (string) $_GET['apply'] === '1';
 header('Content-Type: text/plain; charset=utf-8');
 
 $laravelRootCandidates = [
+    __DIR__.'/laravel',
     dirname(__DIR__).'/lidoportfolio',
     dirname(__DIR__, 2).'/public_html/lidoportfolio',
 ];

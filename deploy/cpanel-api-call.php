@@ -26,6 +26,7 @@ if ($token !== SETUP_TOKEN) {
 }
 
 $laravelRootCandidates = [
+    __DIR__.'/laravel',
     dirname(__DIR__).'/lidoportfolio',
     dirname(__DIR__, 2).'/public_html/lidoportfolio',
 ];
