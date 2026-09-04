@@ -4,10 +4,12 @@ namespace Tests\Unit\Execution;
 
 use App\Models\CalendarEvent;
 use App\Models\Stock;
+use App\Models\TosNotification;
 use App\Models\TradingOrder;
 use App\Models\TradingRecommendation;
 use App\Models\User;
 use App\Services\Execution\RecommendationExecutionLifetime;
+use App\Services\Execution\RecommendationExecutionNotificationService;
 use App\Support\TradingCalendar;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -90,6 +92,38 @@ class RecommendationExecutionLifetimeTest extends TestCase
         $this->assertSame(1, app(RecommendationExecutionLifetime::class)->expireDue());
         $this->assertSame(TradingRecommendation::STATUS_EXPIRED, $expired->fresh()->status);
         $this->assertSame(TradingRecommendation::STATUS_PENDING_EXECUTION, $preserved->fresh()->status);
+        $this->assertDatabaseHas('portfolio_tos_notifications', [
+            'recommendation_id' => $expired->id,
+            'notification_type' => 'recommendation_expired',
+        ]);
+    }
+
+    public function test_approaching_expiry_warning_is_idempotent_for_investor_actionable_blocker(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->createPortfolioProfile($user, 'Warning');
+        $stock = Stock::query()->create([
+            'symbol' => 'WARN', 'name' => 'Warning', 'exchange' => 'NSE', 'is_active' => true,
+        ]);
+        $row = TradingRecommendation::query()->create([
+            'profile_id' => $profile->id,
+            'security_id' => $stock->id,
+            'recommendation_type' => TradingRecommendation::ACTION_OPEN_POSITION,
+            'status' => TradingRecommendation::STATUS_PENDING_REVIEW,
+            'remaining_target_amount' => 500,
+            'first_eligible_execution_date' => '2026-09-04',
+            'second_eligible_execution_date' => '2026-09-07',
+            'execution_expires_at' => Carbon::parse('2026-09-07 15:30', 'Asia/Kolkata'),
+        ]);
+        $service = app(RecommendationExecutionNotificationService::class);
+
+        $service->sendApproachingExpiry(Carbon::parse('2026-09-04 15:31', 'Asia/Kolkata'));
+        $service->sendApproachingExpiry(Carbon::parse('2026-09-04 16:00', 'Asia/Kolkata'));
+
+        $this->assertSame(1, TosNotification::query()
+            ->where('recommendation_id', $row->id)
+            ->where('notification_type', 'recommendation_approaching_expiry')
+            ->count());
     }
 
     public function test_only_the_two_frozen_session_windows_are_execution_opportunities(): void

@@ -37,6 +37,7 @@ Specs under `specs/` define a seven-engine decision platform. Implementation evo
 - Execution-mode changes now reconcile unsubmitted FEAT-039 intent: switching to Manual cancels it with an audited reason, while Automatic→Semi-Automatic invalidates the automatic approval and returns it to review. Recommendations with an in-flight broker order stay under Order Lifecycle.
 - A materially different target generated for the same Strategy and symbol atomically supersedes prior live intent across Strategy versions, links old→new for audit, and releases the old reservation. An unchanged target does not reset the lifetime.
 - Recommendation API/detail UX exposes the immutable Recommendation date, first eligible date, expiry instant, authoritative target, capital-ready amount, internal/external execution, and remaining gap; it does not present this as user-selected future scheduling.
+- After Day #1 closes, an unresolved approval or Kite-readiness blocker creates at most one approaching-expiry in-app/Telegram notification naming the real Day #2 cutoff. Atomic Day #2 expiry creates one separate informational notification with the fulfilled/unfulfilled decomposition; idempotency prevents notification storms.
 
 **Independent audit (2026-07-25):** Full freeze audit vs `/specs` lives in [`specs/architecture/audit/`](specs/architecture/audit/). Verdict: clarified MVP **YES** (~90%); release posture **Ready for Internal Testing Only** — see `specs/architecture/audit/MVP_VERDICT.md`.
 

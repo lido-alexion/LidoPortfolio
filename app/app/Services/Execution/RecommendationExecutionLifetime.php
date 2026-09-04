@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\DB;
 /** Frozen FEAT-039 two-session lifetime derivation. */
 class RecommendationExecutionLifetime
 {
+    public function __construct(protected RecommendationExecutionNotificationService $notifications) {}
+
     public const TIMEZONE = 'Asia/Kolkata';
 
     /**
@@ -116,7 +118,7 @@ class RecommendationExecutionLifetime
 
         $expired = 0;
         foreach ($ids as $id) {
-            $expired += DB::transaction(function () use ($id, $at): int {
+            $didExpire = DB::transaction(function () use ($id, $at): int {
                 $row = TradingRecommendation::query()->lockForUpdate()->find($id);
                 if (! $row || ! in_array($row->status, [
                     TradingRecommendation::STATUS_PENDING_REVIEW,
@@ -133,6 +135,13 @@ class RecommendationExecutionLifetime
 
                 return 1;
             });
+            $expired += $didExpire;
+            if ($didExpire > 0) {
+                $row = TradingRecommendation::query()->find($id);
+                if ($row?->status === TradingRecommendation::STATUS_EXPIRED) {
+                    $this->notifications->notifyExpired($row);
+                }
+            }
         }
 
         return $expired;
