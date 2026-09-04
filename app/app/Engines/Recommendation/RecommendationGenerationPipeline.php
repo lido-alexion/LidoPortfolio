@@ -24,6 +24,7 @@ use App\Services\Entry\StaggeredEntryCalculator;
 use App\Services\Entry\StrategyPositionTargetService;
 use App\Services\Entry\WholeShareQuantityCalculator;
 use App\Services\Execution\RecommendationExecutionLifetime;
+use App\Services\Execution\RecommendationSupersessionService;
 use App\Services\Lending\RecommendationLendingCoordinator;
 use App\Services\PortfolioCalculationService;
 use App\Services\PortfolioLoggerService;
@@ -1608,6 +1609,8 @@ class RecommendationGenerationPipeline
 
             if ($rec->isActionable()) {
                 $rec = app(RecommendationExecutionLifetime::class)->initialize($rec);
+                app(RecommendationSupersessionService::class)
+                    ->supersedeMateriallyDifferentPriorIntent($rec);
             }
 
             // OD-12: persist position target on strategy-owned holding (survives perishable rec rows).
