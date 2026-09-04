@@ -17,6 +17,7 @@ use App\Services\Broker\BrokerGateway;
 use App\Services\Broker\BrokerOrderRequest;
 use App\Services\Broker\BrokerOrderSnapshot;
 use App\Services\Execution\InternalRecommendationMatcher;
+use App\Services\Execution\RecommendationExecutionLifetime;
 use App\Services\Lending\RecommendationLendingCoordinator;
 use App\Services\PortfolioLoggerService;
 use App\Services\Protection\PositionProtectionService;
@@ -36,6 +37,7 @@ class LiveBrokerExecutionService
         protected RecommendationLendingCoordinator $lending,
         protected PortfolioLoggerService $logger,
         protected InternalRecommendationMatcher $internalMatcher,
+        protected RecommendationExecutionLifetime $executionLifetime,
     ) {}
 
     /**
@@ -233,6 +235,17 @@ class LiveBrokerExecutionService
 
         if (! $recommendation) {
             return $this->decisionRow($profile, $user, $recommendationId, $trigger, ExecutionDecision::OUTCOME_BLOCKED, 'not_found');
+        }
+
+        if (! $this->executionLifetime->isExecutionOpportunity($recommendation)) {
+            return $this->decisionRow(
+                $profile,
+                $user,
+                $recommendationId,
+                $trigger,
+                ExecutionDecision::OUTCOME_SKIPPED,
+                'outside_execution_opportunity',
+            );
         }
 
         try {

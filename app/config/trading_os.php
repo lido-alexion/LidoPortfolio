@@ -68,6 +68,7 @@ return [
 
     'execution' => [
         // FEAT-039: current primary-order cutoff; Day #2 expires at this instant.
+        'window_start' => env('TRADING_OS_EXECUTION_START', '09:15'),
         'cutoff_time' => env('TRADING_OS_EXECUTION_CUTOFF', '15:30'),
     ],
 

@@ -91,4 +91,19 @@ class RecommendationExecutionLifetimeTest extends TestCase
         $this->assertSame(TradingRecommendation::STATUS_EXPIRED, $expired->fresh()->status);
         $this->assertSame(TradingRecommendation::STATUS_PENDING_EXECUTION, $preserved->fresh()->status);
     }
+
+    public function test_only_the_two_frozen_session_windows_are_execution_opportunities(): void
+    {
+        $recommendation = new TradingRecommendation([
+            'first_eligible_execution_date' => '2026-09-04',
+            'second_eligible_execution_date' => '2026-09-07',
+        ]);
+        $lifetime = app(RecommendationExecutionLifetime::class);
+
+        $this->assertFalse($lifetime->isExecutionOpportunity($recommendation, Carbon::parse('2026-09-04 09:14', 'Asia/Kolkata')));
+        $this->assertTrue($lifetime->isExecutionOpportunity($recommendation, Carbon::parse('2026-09-04 09:15', 'Asia/Kolkata')));
+        $this->assertFalse($lifetime->isExecutionOpportunity($recommendation, Carbon::parse('2026-09-04 15:30', 'Asia/Kolkata')));
+        $this->assertFalse($lifetime->isExecutionOpportunity($recommendation, Carbon::parse('2026-09-05 10:00', 'Asia/Kolkata')));
+        $this->assertTrue($lifetime->isExecutionOpportunity($recommendation, Carbon::parse('2026-09-07 10:00', 'Asia/Kolkata')));
+    }
 }

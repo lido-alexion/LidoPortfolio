@@ -75,6 +75,29 @@ class RecommendationExecutionLifetime
         return $recommendation->fresh();
     }
 
+    public function isExecutionOpportunity(TradingRecommendation $recommendation, ?Carbon $at = null): bool
+    {
+        // Pre-FEAT-039 rows retain their prior behavior during migration.
+        if ($recommendation->first_eligible_execution_date === null
+            || $recommendation->second_eligible_execution_date === null) {
+            return true;
+        }
+
+        $now = ($at ?? now())->copy()->timezone(self::TIMEZONE);
+        $date = $now->toDateString();
+        if (! in_array($date, [
+            $recommendation->first_eligible_execution_date->toDateString(),
+            $recommendation->second_eligible_execution_date->toDateString(),
+        ], true) || ! TradingCalendar::isEquitySessionDate($now)) {
+            return false;
+        }
+
+        $start = $now->copy()->startOfDay()->setTimeFromTimeString((string) config('trading_os.execution.window_start', '09:15'));
+        $cutoff = $now->copy()->startOfDay()->setTimeFromTimeString((string) config('trading_os.execution.cutoff_time', '15:30'));
+
+        return $now->gte($start) && $now->lt($cutoff);
+    }
+
     /** Expire only unresolved intent without an in-flight broker order. */
     public function expireDue(?Carbon $at = null): int
     {
