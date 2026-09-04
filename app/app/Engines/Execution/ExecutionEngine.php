@@ -17,6 +17,7 @@ use App\Services\CashManagementService;
 use App\Services\HoldingsCalculationService;
 use App\Services\Lending\RecommendationLendingCoordinator;
 use App\Services\PortfolioLoggerService;
+use App\Services\Protection\PositionProtectionService;
 use App\Services\TransactionWriteService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -213,6 +214,23 @@ class ExecutionEngine
                 'average_fill_price' => $price,
             ])->save();
 
+            $intentComplete = true;
+            if ($recommendation && $recommendation->remaining_target_amount !== null) {
+                $executedNotional = round($delta * $price, 4);
+                $remaining = max(0.0, round((float) $recommendation->remaining_target_amount - $executedNotional, 4));
+                $recommendation->forceFill([
+                    'external_executed_amount' => round((float) $recommendation->external_executed_amount + $executedNotional, 4),
+                    'remaining_target_amount' => $remaining,
+                    'executed_amount' => round(
+                        (float) $recommendation->internal_executed_amount
+                            + (float) $recommendation->external_executed_amount
+                            + $executedNotional,
+                        4,
+                    ),
+                ])->save();
+                $intentComplete = $remaining <= 0.0001;
+            }
+
             if ($shouldComplete && $newFilled + 0.0001 >= $target) {
                 $order->forceFill([
                     'status' => TradingOrder::STATUS_EXECUTED,
@@ -220,11 +238,13 @@ class ExecutionEngine
                     'broker_status' => TradingOrder::BROKER_FILLED,
                 ])->save();
 
-                if ($recommendation && $recommendation->isActionable() && $recommendation->canExecuteManually()) {
+                if ($recommendation && $intentComplete && $recommendation->isActionable() && $recommendation->canExecuteManually()) {
                     $this->recommendation->markExecuted($recommendation, $transaction);
                     $this->lending->recordExecution($recommendation->fresh(), $transaction);
                 }
-            } elseif ($recommendation && $recommendation->requiresCashReservation()) {
+            }
+
+            if ($recommendation && $recommendation->requiresCashReservation() && (! $shouldComplete || ! $intentComplete)) {
                 $consumed = round($delta * $price, 4);
                 $reserved = max(0, round((float) $recommendation->reserved_amount - $consumed, 4));
                 $recommendation->forceFill(['reserved_amount' => $reserved])->save();
@@ -237,7 +257,7 @@ class ExecutionEngine
 
         try {
             if ($order->order_type !== 'gtt_protection') {
-                app(\App\Services\Protection\PositionProtectionService::class)
+                app(PositionProtectionService::class)
                     ->afterCommittedFill($profile, $stock, (string) $order->side, $transaction->source);
             }
         } catch (\Throwable) {

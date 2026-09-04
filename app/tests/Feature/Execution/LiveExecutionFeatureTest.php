@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Execution;
 
+use App\Engines\Execution\ExecutionGate;
 use App\Engines\Execution\LiveBrokerExecutionService;
 use App\Models\BrokerConnection;
 use App\Models\PortfolioProfile;
@@ -14,6 +15,7 @@ use App\Services\Broker\BrokerOrderSnapshot;
 use App\Services\Broker\FakeBrokerGateway;
 use App\Services\CashManagementService;
 use App\Services\Security\TotpService;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -29,7 +31,7 @@ class LiveExecutionFeatureTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class);
+        $this->withoutMiddleware(ValidateCsrfToken::class);
         Http::preventStrayRequests();
         app(FakeBrokerGateway::class)->reset();
     }
@@ -242,6 +244,36 @@ class LiveExecutionFeatureTest extends TestCase
             'recovery_code' => $this->totpCode($user),
         ])->assertOk();
         $this->assertSame($before + 1, $fake->placeCalls);
+    }
+
+    public function test_target_seeking_fill_keeps_remaining_gap_open_and_resizes_next_order(): void
+    {
+        [$user, $profile] = $this->actingReadyUser();
+        $this->setMode($user, $profile, PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC);
+        $live = app(LiveBrokerExecutionService::class);
+        $fake = app(FakeBrokerGateway::class);
+        $rec = $this->pendingBuy($profile, amount: 500);
+        $rec->forceFill([
+            'target_amount' => 1_000,
+            'capital_resolved_amount' => 1_000,
+            'remaining_target_amount' => 1_000,
+            'original_display_quantity' => 10,
+            'external_executed_amount' => 0,
+            'internal_executed_amount' => 0,
+        ])->save();
+
+        $first = $live->submitOne($user, $profile, $rec->id, ExecutionGate::TRIGGER_SEMI);
+        $firstOrder = TradingOrder::query()->findOrFail($first['order_id']);
+        $this->assertSame(10.0, (float) $firstOrder->quantity);
+        $fake->seedSnapshot(new BrokerOrderSnapshot($firstOrder->broker_order_id, 'filled', 4, 0, 100, 'COMPLETE'));
+        $live->reconcileOrder($profile, $firstOrder);
+
+        $this->assertSame(TradingRecommendation::STATUS_PENDING_EXECUTION, $rec->fresh()->status);
+        $this->assertSame(600.0, (float) $rec->fresh()->remaining_target_amount);
+        $this->assertSame(400.0, (float) $rec->fresh()->external_executed_amount);
+
+        $second = $live->submitOne($user, $profile, $rec->id, ExecutionGate::TRIGGER_SEMI);
+        $this->assertSame(6.0, (float) TradingOrder::query()->findOrFail($second['order_id'])->quantity);
     }
 
     public function test_execution_mode_is_portfolio_scoped(): void

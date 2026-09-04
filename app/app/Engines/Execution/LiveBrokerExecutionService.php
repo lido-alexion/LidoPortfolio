@@ -17,6 +17,7 @@ use App\Services\Broker\BrokerOrderRequest;
 use App\Services\Broker\BrokerOrderSnapshot;
 use App\Services\Lending\RecommendationLendingCoordinator;
 use App\Services\PortfolioLoggerService;
+use App\Services\Protection\PositionProtectionService;
 use Throwable;
 
 /**
@@ -412,13 +413,13 @@ class LiveBrokerExecutionService
             return;
         }
         try {
-            app(\App\Services\Protection\PositionProtectionService::class)
+            app(PositionProtectionService::class)
                 ->afterAutomaticBuyFill($profile, $holding);
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             $this->logger->event('LiveBrokerExecutionService', 'protection.automatic_failed', 'warning', 'Automatic GTT protection failed after buy fill', [
                 'profile_id' => $profile->id,
                 'holding_id' => $holding->id,
-                'reason' => $e instanceof \App\Exceptions\DomainException ? $e->errorCode() : 'protection_failed',
+                'reason' => $e instanceof DomainException ? $e->errorCode() : 'protection_failed',
             ]);
         }
     }
@@ -483,6 +484,24 @@ class LiveBrokerExecutionService
 
     protected function quantityFor(TradingRecommendation $recommendation): ?float
     {
+        if ($recommendation->remaining_target_amount !== null && $recommendation->reference_price !== null) {
+            $price = (float) $recommendation->reference_price;
+            $remaining = max(0.0, (float) $recommendation->remaining_target_amount);
+            if ($recommendation->requiresCashReservation() && $recommendation->capital_resolved_amount !== null) {
+                $remainingCapital = max(
+                    0.0,
+                    (float) $recommendation->capital_resolved_amount
+                        - (float) $recommendation->external_executed_amount,
+                );
+                $remaining = min($remaining, $remainingCapital);
+            }
+            if ($price <= 0 || $remaining < $price) {
+                return null;
+            }
+
+            return (float) floor($remaining / $price);
+        }
+
         $qty = $recommendation->suggestedQuantity();
         if ($qty === null || $qty <= 0) {
             return null;
