@@ -3055,6 +3055,8 @@ Bulk OHLCV for the **equity universe** (NSE + BSE-only; ISIN deduped). Reuses `p
 
 The first broad run correctly exposed two previously hidden test-contract defects: market-gate fixtures produced a ₹3,000 first tranche below OD-12's ₹5,000 minimum actionable amount, and the OpenAPI test incorrectly required a Sanctum cookie on Kite's external redirect callback. Production rules were preserved: the fixture now creates an actionable tranche, while the callback is explicitly documented as the sole public `/api/v1` operation authenticated through short-lived encrypted state. Local verification passed **1,322 tests / 8,048 assertions**; GitHub Actions run [`33865499081`](https://github.com/lido-alexion/LidoPortfolio/actions/runs/33865499081) passed PHP 8.4 and Node 22 on commit `e09a9ff`.
 
+Follow-up full-suite hardening normalizes every provider OHLCV session key before `updateOrCreate`. Equivalent `Y-m-d`, ISO-8601, and timestamp inputs now resolve to the same stored trading date instead of racing into the unique `(stock_id, price_date)` constraint. This closes the live-provider corporate-action test failure without changing provider precedence or price values.
+
 ## V4-FEAT-031 — external secrets and single-folder deploy (2026-09-04)
 
 **Status:** **IMPLEMENTED; PRODUCTION CUTOVER PENDING.** Frozen behavior and acceptance criteria: [`specs/V5-FEAT-031-Production-Secrets-Single-Folder-Deploy.md`](specs/V5-FEAT-031-Production-Secrets-Single-Folder-Deploy.md). Operator runbook: [`deploy/SINGLE-FOLDER-DEPLOY.md`](deploy/SINGLE-FOLDER-DEPLOY.md).

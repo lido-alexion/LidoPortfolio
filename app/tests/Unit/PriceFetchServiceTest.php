@@ -227,4 +227,32 @@ class PriceFetchServiceTest extends TestCase
         $this->assertNotNull($row);
         $this->assertNull($row->volume);
     }
+
+    public function test_store_historical_rows_updates_same_session_across_provider_date_formats(): void
+    {
+        $stock = \App\Models\Stock::query()->create([
+            'symbol' => 'DATEKEY',
+            'exchange' => 'NSE',
+            'name' => 'Date Key Equity',
+            'is_active' => true,
+            'is_benchmark' => false,
+        ]);
+        $service = app(PriceFetchService::class);
+        $base = [
+            'open_price' => 100,
+            'high_price' => 105,
+            'low_price' => 99,
+            'close_price' => 101,
+            'volume' => 1000,
+        ];
+
+        $service->storeHistoricalRows($stock, [$base + ['price_date' => '2025-07-15']], 'nse');
+        $service->storeHistoricalRows($stock, [array_merge($base, [
+            'price_date' => '2025-07-15T00:00:00+05:30',
+            'close_price' => 102,
+        ])], 'yahoo');
+
+        $this->assertSame(1, \App\Models\StockPrice::query()->where('stock_id', $stock->id)->count());
+        $this->assertSame(102.0, (float) \App\Models\StockPrice::query()->where('stock_id', $stock->id)->value('close_price'));
+    }
 }

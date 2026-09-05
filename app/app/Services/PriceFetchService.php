@@ -270,7 +270,11 @@ class PriceFetchService
             StockPrice::query()->updateOrCreate(
                 [
                     'stock_id' => $stock->id,
-                    'price_date' => $row['price_date'],
+                    // Match the model's date serialization exactly. Providers may
+                    // return the same session as Y-m-d, ISO-8601, or a timestamp;
+                    // mixing the raw value with Eloquent's stored midnight value
+                    // can miss the row and violate the unique session key.
+                    'price_date' => $priceDate,
                 ],
                 [
                     'open_price' => $row['open_price'],
