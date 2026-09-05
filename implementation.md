@@ -24,7 +24,7 @@ Specs under `specs/` define a seven-engine decision platform. Implementation evo
 
 **MVP status:** Complete for clarified workflow (data → discovery → evaluation → recommendation → user **approval** → **pending execution** → manual/broker trade → review). Sanctum, `portfolio_*` tables, Screener/Pattern services, Telegram-only notifications accepted.
 
-### V5 FEAT-039 execution coordinator (in progress, 2026-09-05)
+### V5 FEAT-039 execution coordinator (complete, 2026-09-05)
 
 - Actionable Recommendations persist an immutable IST generation anchor, first/second eligible NSE sessions, Day #2 cutoff, target amount, capital-resolved capacity, remaining gap, and internal/external progress.
 - Submission is Investor/Kite-account scoped and idempotent. Scheduled cycles coordinate all Automatic portfolios; an authenticated Semi-Automatic action adds its explicitly selected approved intent to the same account cycle. Opposing same-symbol intent is internally matched first, then residual SELLs are submitted before BUYs in oldest-first order. Manual, unapproved, foreign-user, and unselected Semi-Automatic intent never enters the cycle.
@@ -40,6 +40,7 @@ Specs under `specs/` define a seven-engine decision platform. Implementation evo
 - Recommendation API/detail UX exposes the immutable Recommendation date, first eligible date, expiry instant, authoritative target, capital-ready amount, internal/external execution, and remaining gap; it does not present this as user-selected future scheduling.
 - After Day #1 closes, an unresolved approval or Kite-readiness blocker creates at most one approaching-expiry in-app/Telegram notification naming the real Day #2 cutoff. Atomic Day #2 expiry creates one separate informational notification with the fulfilled/unfulfilled decomposition; idempotency prevents notification storms.
 - The minute lifecycle job re-derives still-future Day #1/Day #2 dates from the canonical Calendar, so newly corrected future Trade Holidays roll execution and expiry. The generation anchor and any eligible date whose IST day has begun are immutable.
+- Final verification passed the complete PHP suite (**1,352 tests / 8,239 assertions**), all frontend tests (**59/59**), and the production Vite build. FEAT-039 is frozen and complete; FEAT-040 implementation has not begun.
 
 **Independent audit (2026-07-25):** Full freeze audit vs `/specs` lives in [`specs/architecture/audit/`](specs/architecture/audit/). Verdict: clarified MVP **YES** (~90%); release posture **Ready for Internal Testing Only** — see `specs/architecture/audit/MVP_VERDICT.md`.
 

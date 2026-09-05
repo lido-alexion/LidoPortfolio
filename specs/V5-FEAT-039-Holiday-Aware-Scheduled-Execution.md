@@ -2,8 +2,9 @@
 
 | Field | Value |
 |---|---|
-| **Status** | **FROZEN / DECIDED** |
+| **Status** | **FROZEN / IMPLEMENTED** |
 | **Frozen** | 2026-09-04 |
+| **Implemented** | 2026-09-05 |
 | **Scope** | Primary Recommendation execution for Semi-Automatic and Automatic portfolios |
 | **Depends on** | V4-FEAT-037, V4-FEAT-038; V3 capital/lending and ownership; V4 live execution |
 | **Related** | [`LidoPortfolio-V5-Wishlist.md`](LidoPortfolio-V5-Wishlist.md) · [`LidoPortfolio-V3-Specification.md`](LidoPortfolio-V3-Specification.md) |
