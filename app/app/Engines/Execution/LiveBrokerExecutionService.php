@@ -11,6 +11,7 @@ use App\Models\PortfolioProfile;
 use App\Models\Stock;
 use App\Models\TradingOrder;
 use App\Models\TradingRecommendation;
+use App\Models\TradingStrategy;
 use App\Models\User;
 use App\Services\Broker\BrokerAmbiguousException;
 use App\Services\Broker\BrokerGateway;
@@ -206,7 +207,11 @@ class LiveBrokerExecutionService
         $recommendations = TradingRecommendation::query()
             ->whereIn('profile_id', $readyProfiles->keys())
             ->get()
-            ->filter(function (TradingRecommendation $row) use ($authorizedSemiProfile, $selectedSemiIds): bool {
+            ->filter(function (TradingRecommendation $row) use ($user, $readyProfiles, $authorizedSemiProfile, $selectedSemiIds): bool {
+                $profile = $readyProfiles->get($row->profile_id);
+                if (! $profile || ! $this->passesCurrentStateRevalidation($user, $profile, $row)) {
+                    return false;
+                }
                 if ($authorizedSemiProfile && (int) $row->profile_id === (int) $authorizedSemiProfile->id) {
                     return in_array((int) $row->id, $selectedSemiIds, true) && $row->canExecuteManually();
                 }
@@ -281,6 +286,17 @@ class LiveBrokerExecutionService
 
         if (! $recommendation) {
             return $this->decisionRow($profile, $user, $recommendationId, $trigger, ExecutionDecision::OUTCOME_BLOCKED, 'not_found');
+        }
+
+        if (! $this->passesCurrentStateRevalidation($user, $profile, $recommendation)) {
+            return $this->decisionRow(
+                $profile,
+                $user,
+                $recommendationId,
+                $trigger,
+                ExecutionDecision::OUTCOME_SKIPPED,
+                (string) $recommendation->fresh()->cancellation_reason,
+            );
         }
 
         if (! $this->executionLifetime->isExecutionOpportunity($recommendation)) {
@@ -667,6 +683,55 @@ class LiveBrokerExecutionService
         }
 
         return $r->canBeReviewed();
+    }
+
+    /**
+     * FEAT-039 current-state gate. Once a broker order exists, Order Lifecycle
+     * remains authoritative and this method deliberately leaves the intent alone.
+     */
+    protected function passesCurrentStateRevalidation(
+        User $user,
+        PortfolioProfile $profile,
+        TradingRecommendation $recommendation,
+    ): bool {
+        if ($recommendation->execution_anchor_date === null
+            || $recommendation->isImmutable()
+            || $this->hasInFlightBrokerOrder($profile, $recommendation)) {
+            return true;
+        }
+
+        $reason = null;
+        $stock = Stock::query()->find($recommendation->security_id);
+        if (! $stock || ! $stock->isEffectivelyActive()) {
+            $reason = 'stock_inactive';
+        } elseif ($recommendation->strategy_version_id !== null) {
+            $strategyId = $recommendation->owningStrategyId();
+            $strategy = $strategyId === null ? null : TradingStrategy::query()->find($strategyId);
+            if (! $strategy || (int) $strategy->profile_id !== (int) $profile->id) {
+                $reason = 'strategy_ownership_changed';
+            } elseif (! $strategy->isEnabled()) {
+                $reason = 'strategy_inactive';
+            }
+        }
+
+        if ($reason === null) {
+            return true;
+        }
+
+        $recommendation->forceFill([
+            'status' => TradingRecommendation::STATUS_CANCELLED,
+            'cancelled_at' => now(),
+            'cancellation_reason' => $reason,
+        ])->save();
+        $this->recommendation->releaseReservation($recommendation);
+        $this->logger->event('LiveBrokerExecutionService', 'execution.intent_cancelled', 'info', 'Execution intent cancelled during current-state revalidation', [
+            'profile_id' => $profile->id,
+            'recommendation_id' => $recommendation->id,
+            'user_id' => $user->id,
+            'reason' => $reason,
+        ]);
+
+        return false;
     }
 
     protected function hasInFlightBrokerOrder(PortfolioProfile $profile, TradingRecommendation $recommendation): bool

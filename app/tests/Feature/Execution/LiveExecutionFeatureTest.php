@@ -341,6 +341,24 @@ class LiveExecutionFeatureTest extends TestCase
         $this->assertSame('mode_changed_to_manual', $cancelled->fresh()->cancellation_reason);
     }
 
+    public function test_current_state_revalidation_cancels_unsubmitted_feat_039_intent_for_inactive_stock(): void
+    {
+        [$user, $profile] = $this->actingReadyUser();
+        $this->setMode($user, $profile, PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC);
+        $rec = $this->pendingBuy($profile);
+        $rec->forceFill(['execution_anchor_date' => now()->toDateString()])->save();
+        $rec->security()->update(['is_active' => false]);
+
+        $this->postJson('/api/v1/execution/submit-selected', [
+            'recommendation_ids' => [$rec->id],
+            'recovery_code' => $this->totpCode($user),
+        ])->assertOk();
+
+        $this->assertSame(TradingRecommendation::STATUS_CANCELLED, $rec->fresh()->status);
+        $this->assertSame('stock_inactive', $rec->fresh()->cancellation_reason);
+        $this->assertSame(0, app(FakeBrokerGateway::class)->placeCalls);
+    }
+
     public function test_execution_mode_is_portfolio_scoped(): void
     {
         [$user, $profile] = $this->actingReadyUser();

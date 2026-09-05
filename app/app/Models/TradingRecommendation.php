@@ -118,6 +118,9 @@ class TradingRecommendation extends Model
         'no_longer_valid',
         'other',
         'mode_changed_to_manual',
+        'stock_inactive',
+        'strategy_inactive',
+        'strategy_ownership_changed',
     ];
 
     public const CANCELLATION_REASON_LABELS = [
@@ -129,6 +132,9 @@ class TradingRecommendation extends Model
         'no_longer_valid' => 'Recommendation no longer valid',
         'other' => 'Other',
         'mode_changed_to_manual' => 'Execution mode changed to Manual',
+        'stock_inactive' => 'Stock is no longer active',
+        'strategy_inactive' => 'Strategy is no longer enabled',
+        'strategy_ownership_changed' => 'Strategy ownership changed',
     ];
 
     /** Portfolio actions that require review then pending execution. */
