@@ -23,7 +23,7 @@ Moving an item here does not satisfy it. Every item remains `OPEN` until its pro
 
 ## 2. V5 wishlist
 
-Current count: **14 OPEN / 2 IN PROGRESS / 2 DECIDED / 6 COMPLETE / 1 SUPERSEDED**.
+Current count: **13 OPEN / 2 IN PROGRESS / 3 DECIDED / 6 COMPLETE / 1 SUPERSEDED**.
 
 | ID | Item | V5 scope and rationale | Priority | Status |
 |----|------|------------------------|----------|--------|
@@ -49,7 +49,7 @@ Current count: **14 OPEN / 2 IN PROGRESS / 2 DECIDED / 6 COMPLETE / 1 SUPERSEDED
 | V4-FEAT-038 | Exchange holidays in Calendar with automatic holiday-list sync | **Implemented 2026-09-04:** existing global amber Trade Holidays/TradingCalendar completed with weekly official NSE CM sync, provenance, future-date refresh, post-session immutability, and durable admin overrides. See [`V5-FEAT-038-Exchange-Holiday-Calendar.md`](V5-FEAT-038-Exchange-Holiday-Calendar.md). | P2 | COMPLETE |
 | V4-FEAT-039 | Holiday-aware scheduled order execution | **Implemented and verified 2026-09-05:** [`V5-FEAT-039-Holiday-Aware-Scheduled-Execution.md`](V5-FEAT-039-Holiday-Aware-Scheduled-Execution.md). Two-session holiday-aware target seeking, Investor-level Automatic/authorized-Semi coordination, same-symbol internal transfers and final valuation, shared-funds resizing, bounded margin retries, revalidation, progress UX, and lifecycle notifications are complete. | P2 | COMPLETE |
 | V4-FEAT-040 | Kite portfolio reconciliation (holdings and funds) | **Frozen:** [`V5-FEAT-040-Kite-Portfolio-Reconciliation.md`](V5-FEAT-040-Kite-Portfolio-Reconciliation.md). Portfolio-level read-only Kite reconciliation with independent holdings/funds status, immutable runs, transaction-ledger correction by the Investor, holdings-mismatch execution blocking, activation/scheduled/post-trade/manual triggers, one-live-portfolio invariant and trading-day mode-change blackout. | P2 | DECIDED |
-| V4-FEAT-041 | Linked Markdown wiki rooted in Knowledge Board | Add wiki-style Knowledge pages with canonical `.md` Markdown sources rendered safely as HTML in-app. **Knowledge Board remains the root** of the nested page and navigation hierarchy. Every rendered page has a hierarchy-derived breadcrumb tree at the top beginning at Knowledge Board. Stable internal page links make cross-page linking easy without manually constructing deployment URLs and remain valid under the configured app base path. Handle missing/broken links clearly and provide navigation back to the Knowledge Board tree. | P2 | OPEN |
+| V4-FEAT-041 | Linked Markdown wiki rooted in Knowledge Board | **Frozen:** [`V5-FEAT-041-Linked-Markdown-Wiki.md`](V5-FEAT-041-Linked-Markdown-Wiki.md). Portfolio-scoped Markdown-native Wiki Pages alongside existing Notes, stable identity-based links and hierarchy, revision history, integrated Knowledge search, portable Markdown export, managed images, and explicit revocable anonymous page sharing that never exposes private portfolio hierarchy or implicitly shares linked pages. | P2 | DECIDED |
 | V4-FEAT-042 | Separate role-based Admin Portal and investor application | Retain one login endpoint, then route each authenticated account to a role-specific application shell. Administrators see only administrative data and controls; normal users see the portfolio and investment application. Enforce separation server-side and in navigation/UI, including direct URLs and APIs. Administrators cannot own portfolios, stocks/holdings, strategies, recommendations, broker connections, or trading activity. Define migration and validation for existing administrator-owned investment data before enforcing this invariant. | P1 | OPEN |
 
 ## 3. Preserved V6 wishlist additions
@@ -75,6 +75,7 @@ Priority is a planning signal, not execution order. Dependencies, risk, and prer
 
 | Date | Change |
 |------|--------|
+| 2026-09-06 | **FEAT-041 DECIDED:** froze the portfolio-scoped Markdown-native Wiki under Knowledge Board, including separate Notes/Wiki content models, stable hierarchical page identity and links, revision history, integrated search, portable Markdown export, managed images, and explicit revocable anonymous per-page sharing with strict private-hierarchy isolation. |
 | 2026-09-06 | **FEAT-004 DECIDED:** froze the account-level Notification Service and Center, independent attention/condition lifecycle, severity and Critical presentation rules, deduplicated active conditions, durable In-app/Telegram/Email/Webhook delivery, channel preferences/verification/health, 48-hour reminders, immutable history, and Admin/Investor audience separation. FEAT-003 remains superseded by FEAT-004. |
 | 2026-09-05 | **FEAT-039 COMPLETE:** implemented and verified the frozen holiday-aware target-seeking lifecycle and Investor/Kite-account execution coordinator. Full PHP suite passed 1,352 tests / 8,239 assertions; all 59 JavaScript tests and the production Vite build passed. |
 | 2026-09-05 | **FEAT-003 SUPERSEDED:** no separate persistent critical-banner subsystem will be built; FEAT-004 absorbs the required persistent/prominent in-app notification UX. |
