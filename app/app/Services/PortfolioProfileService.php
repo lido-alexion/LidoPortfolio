@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\PortfolioProfile;
 use App\Models\ProfileSetting;
 use App\Models\User;
-use App\Services\WatchlistService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -17,6 +16,12 @@ class PortfolioProfileService
 
     public function createDefaultForUser(User $user, string $name = 'Default'): PortfolioProfile
     {
+        if ($user->is_admin) {
+            throw ValidationException::withMessages([
+                'portfolio' => ['Admin accounts cannot own portfolios.'],
+            ]);
+        }
+
         $hasDefault = PortfolioProfile::query()
             ->where('user_id', $user->id)
             ->where('is_default', true)

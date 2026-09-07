@@ -22,6 +22,16 @@ class ResolveActivePortfolio
             return $next($request);
         }
 
+        if ($user->is_admin) {
+            if ($this->isAdminOrSharedRoute($request)) {
+                $request->attributes->set('active_portfolio', null);
+
+                return $next($request);
+            }
+
+            abort(403, 'Investor application access is not available to Admin accounts.');
+        }
+
         $portfolioId = $request->header('X-Profile-Id')
             ?? $request->header('X-Portfolio-Id')
             ?? $request->query('portfolio_id');
@@ -46,5 +56,24 @@ class ResolveActivePortfolio
         $request->attributes->set('active_portfolio', $profile);
 
         return $next($request);
+    }
+
+    protected function isAdminOrSharedRoute(Request $request): bool
+    {
+        $middleware = $request->route()?->gatherMiddleware() ?? [];
+        if (in_array('admin', $middleware, true)) {
+            return true;
+        }
+
+        return $request->is(
+            'api/auth/me',
+            'api/auth/csrf-token',
+            'api/auth/logout',
+            'api/auth/sessions',
+            'api/auth/sessions/*',
+            'api/profile',
+            'api/profile/*',
+            'api/logs/frontend',
+        );
     }
 }
