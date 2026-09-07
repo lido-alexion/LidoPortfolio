@@ -4,13 +4,14 @@ namespace App\Services;
 
 use App\Models\CalendarEvent;
 use App\Models\CalendarReminderSend;
+use App\Services\Notification\NotificationPublisher;
 use Carbon\Carbon;
 
 class CalendarReminderService
 {
     public function __construct(
         protected CalendarRecurrenceService $recurrence,
-        protected TelegramNotificationService $telegram,
+        protected NotificationPublisher $publisher,
     ) {}
 
     /**
@@ -63,18 +64,27 @@ class CalendarReminderService
                 }
 
                 $message = $this->buildMessage($event, $occurrence['date'], $daysBefore);
-                if ($this->telegram->sendMessageForProfile($profile, $message)) {
-                    CalendarReminderSend::query()->create([
-                        'event_id' => $event->id,
-                        'occurrence_date' => $occurrence['date'],
-                        'days_before' => $daysBefore,
-                        'sent_at' => now(),
-                    ]);
-                    $sent++;
-                    $profilesNotified[$profile->id] = true;
-                } else {
+                if (! $profile->user) {
                     $skipped++;
+                    continue;
                 }
+                $this->publisher->publishEvent([$profile->user], [
+                    'notification_type' => 'calendar.reminder',
+                    'audience' => 'investor',
+                    'severity' => 'action_required',
+                    'title' => 'Calendar reminder',
+                    'message' => $message,
+                    'context' => ['portfolio_id' => $profile->id, 'calendar_event_id' => $event->id, 'occurrence_date' => $occurrence['date'], 'days_before' => $daysBefore],
+                    'primary_action' => ['label' => 'Open Calendar', 'route' => '/calendar'],
+                ]);
+                CalendarReminderSend::query()->create([
+                    'event_id' => $event->id,
+                    'occurrence_date' => $occurrence['date'],
+                    'days_before' => $daysBefore,
+                    'sent_at' => now(),
+                ]);
+                $sent++;
+                $profilesNotified[$profile->id] = true;
             }
         }
 
