@@ -16,6 +16,7 @@ class NotificationEmailDestination extends Model
         return [
             'is_account_email' => 'boolean',
             'verified_at' => 'datetime',
+            'verification_expires_at' => 'datetime',
         ];
     }
 

@@ -41,4 +41,6 @@ test('notification settings exposes encrypted-channel lifecycle controls', () =>
     assert.match(settings, /signing_secret_once/);
     assert.match(settings, /canTest/);
     assert.match(settings, /bot_token_configured/);
+    assert.match(settings, /email-destinations/);
+    assert.match(settings, /Verification email sent/);
 });

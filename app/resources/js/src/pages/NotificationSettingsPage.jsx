@@ -13,6 +13,8 @@ export default function NotificationSettingsPage() {
     const [forms, setForms] = useState(defaults);
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(null);
+    const [emailDestinations, setEmailDestinations] = useState([]);
+    const [additionalEmail, setAdditionalEmail] = useState('');
 
     const load = async () => {
         setLoading(true);
@@ -20,6 +22,8 @@ export default function NotificationSettingsPage() {
             const response = await api.get('/notification-settings', { skipErrorToast: true });
             const next = response.data?.data || [];
             setChannels(next);
+            const destinations = await api.get('/notification-settings/email-destinations', { skipErrorToast: true });
+            setEmailDestinations(destinations.data?.data || []);
             setForms((current) => Object.fromEntries(next.filter((item) => item.channel !== 'in_app').map((item) => [
                 item.channel,
                 { ...current[item.channel], enabled: !!item.enabled, chat_id: item.chat_id || '', url: item.url || '' },
@@ -28,6 +32,34 @@ export default function NotificationSettingsPage() {
             showToast('Could not load notification settings.', 'danger');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const addEmailDestination = async (event) => {
+        event.preventDefault();
+        setBusy('email-destination');
+        try {
+            await api.post('/notification-settings/email-destinations', { email: additionalEmail }, { skipErrorToast: true });
+            setAdditionalEmail('');
+            showToast('Verification email sent.', 'success');
+            await load();
+        } catch (error) {
+            showToast(error.response?.data?.message || 'Could not add email recipient.', 'danger');
+        } finally {
+            setBusy(null);
+        }
+    };
+
+    const removeEmailDestination = async (id) => {
+        setBusy(`email-destination-${id}`);
+        try {
+            await api.delete(`/notification-settings/email-destinations/${id}`, { skipErrorToast: true });
+            showToast('Email recipient removed.', 'success');
+            await load();
+        } catch (error) {
+            showToast(error.response?.data?.message || 'Could not remove email recipient.', 'danger');
+        } finally {
+            setBusy(null);
         }
     };
 
@@ -73,6 +105,22 @@ export default function NotificationSettingsPage() {
         <div className="container-fluid py-3">
             <h1 className="h3 mb-1">Notification Settings</h1>
             <p className="text-muted small mb-4">Configure account-level delivery channels. In-app notifications are always enabled.</p>
+            <section className="card mb-3">
+                <div className="card-body">
+                    <h2 className="h5">Email recipients</h2>
+                    <p className="small text-muted">Your account email is always retained. Additional addresses must be verified before delivery.</p>
+                    <div className="d-flex flex-wrap gap-2 mb-3">
+                        {emailDestinations.map((destination) => <span className="badge text-bg-light border" key={destination.id}>
+                            {destination.email} · {destination.verified_at ? 'verified' : 'verification pending'}
+                            {!destination.is_account_email && <button type="button" className="btn btn-link btn-sm p-0 ms-2" disabled={busy === `email-destination-${destination.id}`} onClick={() => removeEmailDestination(destination.id)}>Remove</button>}
+                        </span>)}
+                    </div>
+                    <form className="d-flex gap-2" onSubmit={addEmailDestination}>
+                        <input type="email" className="form-control" value={additionalEmail} onChange={(event) => setAdditionalEmail(event.target.value)} placeholder="alerts@example.com" required />
+                        <button type="submit" className="btn btn-outline-primary" disabled={busy === 'email-destination'}>Add</button>
+                    </form>
+                </div>
+            </section>
             <div className="row g-3">
                 {channels.filter((item) => item.channel !== 'in_app').map((channel) => {
                     const form = forms[channel.channel] || {};

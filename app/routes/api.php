@@ -104,11 +104,18 @@ Route::middleware('auth:sanctum')->prefix('notification-center')->group(function
 
 Route::middleware('auth:sanctum')->prefix('notification-settings')->group(function () {
     Route::get('/', [NotificationSettingsController::class, 'index']);
+    Route::get('/email-destinations', [NotificationSettingsController::class, 'emailDestinations']);
+    Route::post('/email-destinations', [NotificationSettingsController::class, 'addEmailDestination']);
+    Route::delete('/email-destinations/{destination}', [NotificationSettingsController::class, 'removeEmailDestination'])->whereNumber('destination');
     Route::put('/{channel}', [NotificationSettingsController::class, 'update'])
         ->where('channel', 'telegram|email|webhook');
     Route::post('/{channel}/test', [NotificationSettingsController::class, 'test'])
         ->where('channel', 'telegram|email|webhook');
 });
+
+Route::get('/notification-settings/email-destinations/{destination}/verify', [NotificationSettingsController::class, 'verifyEmailDestination'])
+    ->middleware('signed')
+    ->name('notification.email.verify');
 
 Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::post('/logs/frontend', [FrontendLogController::class, 'store']);

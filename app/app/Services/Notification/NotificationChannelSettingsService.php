@@ -5,7 +5,10 @@ namespace App\Services\Notification;
 use App\Models\NotificationChannelSetting;
 use App\Models\NotificationEmailDestination;
 use App\Models\User;
+use App\Mail\NotificationEmailVerificationMail;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\ValidationException;
 
 class NotificationChannelSettingsService
@@ -25,6 +28,73 @@ class NotificationChannelSettingsService
             ['channel' => 'in_app', 'enabled' => true, 'health_status' => 'healthy', 'can_disable' => false],
             ...array_map(fn (string $channel) => $this->present($settings->get($channel), $channel, $accountEmail), self::EXTERNAL_CHANNELS),
         ];
+    }
+
+    public function emailDestinations(User $user): array
+    {
+        $this->ensureAccountEmail($user);
+
+        return NotificationEmailDestination::query()
+            ->where('user_id', $user->id)
+            ->orderByDesc('is_account_email')
+            ->orderBy('email')
+            ->get()
+            ->map(fn (NotificationEmailDestination $destination) => $this->presentDestination($destination))
+            ->all();
+    }
+
+    public function addEmailDestination(User $user, string $email): array
+    {
+        $this->ensureAccountEmail($user);
+        $email = strtolower(trim($email));
+        $existing = NotificationEmailDestination::query()->where('user_id', $user->id)->where('email', $email)->first();
+        if ($existing?->is_account_email) {
+            return $this->presentDestination($existing);
+        }
+
+        $token = bin2hex(random_bytes(32));
+        $destination = NotificationEmailDestination::query()->updateOrCreate(
+            ['user_id' => $user->id, 'email' => $email],
+            [
+                'is_account_email' => false,
+                'verified_at' => null,
+                'verification_token_hash' => hash('sha256', $token),
+                'verification_expires_at' => now()->addDay(),
+            ],
+        );
+        $url = URL::temporarySignedRoute('notification.email.verify', now()->addDay(), [
+            'destination' => $destination->id,
+            'token' => $token,
+        ]);
+        Mail::to($email)->send(new NotificationEmailVerificationMail($url));
+
+        return $this->presentDestination($destination);
+    }
+
+    public function verifyEmailDestination(NotificationEmailDestination $destination, string $token): bool
+    {
+        if ($destination->is_account_email || ! $destination->verification_expires_at?->isFuture()) {
+            return false;
+        }
+        if (! hash_equals((string) $destination->verification_token_hash, hash('sha256', $token))) {
+            return false;
+        }
+
+        $destination->update([
+            'verified_at' => now(),
+            'verification_token_hash' => null,
+            'verification_expires_at' => null,
+        ]);
+        return true;
+    }
+
+    public function removeEmailDestination(User $user, NotificationEmailDestination $destination): void
+    {
+        abort_unless($destination->user_id === $user->id, 404);
+        if ($destination->is_account_email) {
+            throw ValidationException::withMessages(['email' => ['The account email is always retained while Email is enabled.']]);
+        }
+        $destination->delete();
     }
 
     public function update(User $user, string $channel, array $configuration, ?bool $enabled): array
@@ -134,6 +204,25 @@ class NotificationChannelSettingsService
         }
 
         return $data;
+    }
+
+    private function presentDestination(NotificationEmailDestination $destination): array
+    {
+        return [
+            'id' => $destination->id,
+            'email' => $destination->email,
+            'is_account_email' => (bool) $destination->is_account_email,
+            'verified_at' => $destination->verified_at?->toIso8601String(),
+            'verification_pending' => ! $destination->is_account_email && ! $destination->verified_at,
+        ];
+    }
+
+    private function ensureAccountEmail(User $user): NotificationEmailDestination
+    {
+        return NotificationEmailDestination::query()->firstOrCreate(
+            ['user_id' => $user->id, 'email' => $user->email],
+            ['is_account_email' => true, 'verified_at' => $user->email_verified_at],
+        );
     }
 
     private function materialConfiguration(array $configuration): array

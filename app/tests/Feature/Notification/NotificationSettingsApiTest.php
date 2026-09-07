@@ -3,6 +3,7 @@
 namespace Tests\Feature\Notification;
 
 use App\Mail\NotificationChannelTestMail;
+use App\Mail\NotificationEmailVerificationMail;
 use App\Models\NotificationChannelSetting;
 use App\Models\User;
 use App\Services\Notification\NotificationChannelSettingsService;
@@ -191,5 +192,43 @@ class NotificationSettingsApiTest extends TestCase
         $this->actingAs($user)->postJson('/api/notification-settings/email/test')->assertOk();
 
         Mail::assertSent(NotificationChannelTestMail::class, fn ($mail) => $mail->hasTo('investor@example.test'));
+    }
+
+    public function test_optional_email_destination_requires_signed_verification_and_can_be_removed(): void
+    {
+        Mail::fake();
+        $user = User::factory()->create();
+        $created = $this->actingAs($user)->postJson('/api/notification-settings/email-destinations', [
+            'email' => 'alerts@example.test',
+        ])->assertCreated()->assertJsonPath('data.email', 'alerts@example.test');
+
+        $destinationId = $created->json('data.id');
+        $this->assertDatabaseHas('portfolio_notification_email_destinations', [
+            'id' => $destinationId,
+            'email' => 'alerts@example.test',
+            'verified_at' => null,
+        ]);
+        Mail::assertSent(NotificationEmailVerificationMail::class, fn ($mail) => $mail->hasTo('alerts@example.test'));
+
+        $mail = null;
+        Mail::assertSent(NotificationEmailVerificationMail::class, function ($sent) use (&$mail) {
+            $mail = $sent;
+            return true;
+        });
+        parse_str((string) parse_url($mail->verificationUrl, PHP_URL_QUERY), $query);
+        $this->getJson('/api/notification-settings/email-destinations/'.$destinationId.'/verify?'.http_build_query($query))
+            ->assertOk()->assertJsonPath('data.verified', true);
+
+        $this->actingAs($user)->deleteJson('/api/notification-settings/email-destinations/'.$destinationId)
+            ->assertOk()->assertJsonPath('data.deleted', true);
+    }
+
+    public function test_account_email_cannot_be_removed(): void
+    {
+        $user = User::factory()->create(['email' => 'account@example.test']);
+        $destination = app(NotificationChannelSettingsService::class)->emailDestinations($user)[0];
+
+        $this->actingAs($user)->deleteJson('/api/notification-settings/email-destinations/'.$destination['id'])
+            ->assertUnprocessable()->assertJsonValidationErrors('email');
     }
 }
