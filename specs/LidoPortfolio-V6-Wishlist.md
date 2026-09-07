@@ -24,121 +24,123 @@ Existing roadmap IDs are retained for traceability. The historical `V4-FEAT-*` p
 
 ## 2. Canonical V6 backlog
 
-Current count: **14 items — 14 OPEN**.
+Current count: **13 items — 9 DECIDED, 4 OPEN**.
 
 | ID | Feature | Scope / inherited boundary | Planning group | Status |
 |---|---|---|---|---|
-| V4-FEAT-016 | Mobile application | Client expansion. Native vs PWA vs responsive SPA is not yet decided. Must preserve role/security boundaries. | UX / Platform | OPEN |
-| V4-FEAT-017 | AI Assistant | Assistive/non-authoritative AI. FEAT-008 permits AI-assisted Draft authoring, but normal validation/publication/versioning remains authoritative. | Intelligence | OPEN |
-| V4-FEAT-018 | ML scoring models | Optional non-deterministic scoring path. Must not silently replace deterministic Strategy/Recommendation semantics. Requires model/version evidence, leakage controls, reproducibility and fallback design. | Intelligence | OPEN |
-| V4-FEAT-019 | ETF / Options / Crypto expansion | Instrument/market expansion. Accounting, execution, calendars, pricing, risk, tax, reconciliation and simulation implications must be designed; likely split by instrument family during planning. | Market expansion | OPEN |
+| V4-FEAT-016 | Mobile / responsive client support | Responsive SPA across mobile, desktop, ultrawide and 4K. Mobile may use different interaction components rather than shrinking desktop UI. Native/PWA remains out of scope unless later needed. | UX / Platform | OPEN |
 | V4-FEAT-035 | Remaining frontend stack migration | Continue the already-shipped TypeScript/TanStack Query/AG Grid foundation incrementally. No big-bang rewrite and no rework of already migrated V5 surfaces merely for uniformity. | UX / Platform | OPEN |
-| V4-FEAT-036 | Optional JWT/token API for non-SPA clients | Add legitimate non-SPA authentication without replacing Sanctum stateful-session browser authentication. Client/use-case/security model requires planning. | Platform / API | OPEN |
-| V4-FEAT-043 | Dashboard reorganization / widget management | Define fixed vs customizable widgets, show/hide, ordering, defaults, persistence scope, reset behaviour and mobile implications. Emergency controls are not ordinary hideable widgets. | UX / Platform | OPEN |
-| V4-FEAT-044 | Kite Disconnect Kill Switch | Account-level emergency action: enter Emergency Halt, revoke/disconnect StoX's usable Kite session and prevent new live broker submissions. Does not cancel already-submitted orders and must not imply cancellation. | Live Execution Safety | OPEN |
-| V4-FEAT-045 | Emergency Cancel Open Orders + Disconnect | High-risk action: enter Emergency Halt, attempt cancellation of StoX-managed submitted-but-not-fully-executed Kite orders (remaining cancellable quantity only for partial fills), persist/report failures, then disconnect. Partial fills remain real Trades. | Live Execution Safety | OPEN |
-| V4-FEAT-046 | Live Kite Quote-Based Execution Sizing | Before Semi/Automatic external submission, recompute remaining target using actual Strategy ownership, current broker quote, V3 capital/lending rules, internal netting and verified shared broker funds. Stored Recommendation quantity remains non-authoritative. | Live Execution Safety | OPEN |
-| V4-FEAT-047 | Account-Level Execution State | Introduce operational `Normal` / `Emergency Halt` state separate from Portfolio `Manual/Semi-Automatic/Automatic` mode. Halt blocks new live execution immediately; recovery is explicit and never automatic. | Live Execution Safety | OPEN |
-| V4-FEAT-048 | Persistent Emergency Controls | If any LIVE Portfolio is Semi-Automatic/Automatic, emergency control remains quickly accessible throughout Investor application; while halted, recovery remains accessible. Applies across portfolio/page context. | Live Execution Safety / UX | OPEN |
-| V4-FEAT-049 | Clone Portfolio as Paper | Create a new independent PAPER Portfolio from an existing Portfolio. Source financial identity is neither altered nor linked. Exact state/configuration copied is a V6 product decision. | Portfolio experimentation | OPEN |
-| V4-FEAT-050 | Admin Audit Explorer | Admin-only read-only explorer over persisted StoX audit traces with filters, pagination/detail and filter-respecting CSV export. No audit mutation and no weakening of FEAT-042 ownership separation. | Administration | OPEN |
+| V4-FEAT-036 | Trusted non-SPA API tokens | Personal/scoped API tokens for first-party or trusted personal integrations. Browser SPA remains Sanctum stateful-cookie auth. No public OAuth/developer-platform commitment in V6. | Platform / API | DECIDED |
+| V4-FEAT-043 | Dashboard / UX reorganization and widget management | V6 UX fit-and-finish baseline: spacious, hierarchical, visual-first, icon-rich, responsive, progressively disclosed UI; dashboard/widget management and reusable component standardization. Emergency controls are never hideable widgets. | UX / Platform | OPEN |
+| V4-FEAT-044 | Kite Disconnect Kill Switch | Account-level emergency action: enter Emergency Halt, hard-close StoX outbound order creation/submission, attempt Kite disconnect/revocation, destroy local usable credential. Existing submitted orders remain Order Lifecycle responsibility. | Live Execution Safety | DECIDED |
+| V4-FEAT-045 | Emergency Cancel Open Orders + Disconnect | High-risk action: halt first; cancel all eligible StoX-managed primary open orders for the targeted broker/account; bounded verification; disconnect/revoke; destroy local credential. Existing protective/GTT orders are not cancelled. | Live Execution Safety | DECIDED |
+| V4-FEAT-046 | Live Kite Quote-Based Execution Sizing | Recompute residual external order from target/current ownership using live quote. Investor-level quote policy: Strict or Allow closing-price fallback. V5 internal-netting valuation remains unchanged. | Live Execution Safety | DECIDED |
+| V4-FEAT-047 | Account-Level Execution State | Broker-independent Investor execution state `Normal` / `Emergency Halt`, separate from Portfolio mode. Halt is Investor-triggered only and hard-blocks all new StoX broker-order creation/submission. | Live Execution Safety | DECIDED |
+| V4-FEAT-048 | Persistent Emergency Controls | Global Investor-app execution-state indicator and emergency controls; responsive/mobile equivalents required. Recovery remains explicit and strongly validated. | Live Execution Safety / UX | DECIDED |
+| V4-FEAT-049 | Clone Portfolio as Paper | Create an independent PAPER Portfolio from an existing Portfolio. User chooses whether current holdings are copied. Strategy/artifact versions are pinned; no historical trades/performance or ongoing synchronization. | Portfolio experimentation | DECIDED |
+| V4-FEAT-050 | Admin Audit Explorer | Admin-only read-only explorer over authoritative persisted audit traces. Admin may inspect Investors/Portfolios. UI is curated; CSV may expose a broader/rawer authorized audit dataset. | Administration | DECIDED |
+| V4-FEAT-051 | Contextual Notes | Personal plain-text notes available contextually across pages via stable logical page context + account/portfolio scope. Lightweight right overlay pane, inline add/edit/delete, timestamps and responsive mobile alternative. | UX / Productivity | DECIDED |
+| V4-FEAT-052 | Telemetry | V6 telemetry/observability epic. Product scope, event model, privacy boundary, retention, operational/product analytics use cases and UI/administrative implications are intentionally not yet frozen. | Platform / Observability | OPEN |
 
-## 3. Reconciliation against V5 deferred work
+## 3. Explicitly moved to V7
 
-The V5 canonical register preserved six deferred IDs: `V4-FEAT-016`, `017`, `018`, `019`, `035`, and `036`. It additionally preserved seven V6 product-work bullets: Dashboard widget management; Kite disconnect; emergency cancel+disconnect; live quote sizing; combined Execution State/persistent controls; Clone Portfolio as Paper; and Admin Audit Explorer.
+The following previously deferred roadmap items are **not V6 scope** and are moved to V7 planning:
 
-V6 separates the combined Execution State/persistent-control bullet into two independently traceable features (`V4-FEAT-047` and `V4-FEAT-048`) because one is a domain safety state and the other is an application-wide UX/accessibility requirement. This yields the canonical **14-item** V6 backlog. No other explicit V6-deferred item was found in the reconciled V5 register or the reviewed relevant V5 specifications as of 2026-09-07.
+| ID | Feature | V7 rationale |
+|---|---|---|
+| V4-FEAT-017 | AI Assistant | Deferred until after V6 safety/UX/platform consolidation. |
+| V4-FEAT-018 | ML scoring models | Deferred with AI/decision-authority work; deterministic Strategy semantics remain authoritative. |
+| V4-FEAT-019 | ETF / Options / Crypto expansion | Deferred market/instrument expansion; likely to be decomposed by instrument family in V7. |
 
-## 4. Dependency groups
+Their historical IDs are retained for traceability and must not be treated as unfinished V6 work.
 
-### A. Live Execution Safety — plan first
+## 4. Reconciliation against V5 deferred work
 
-- `V4-FEAT-047` Account-Level Execution State is the foundational domain concept.
-- `V4-FEAT-044` Disconnect Kill Switch and `V4-FEAT-045` Cancel+Disconnect transition the account into Emergency Halt.
-- `V4-FEAT-048` Persistent Emergency Controls exposes those account-level safety actions independently of current page/portfolio.
-- `V4-FEAT-046` Live Quote Sizing changes the final live-submission sizing stage but preserves FEAT-039 target-seeking, V3 capital/lending and FEAT-040 reconciliation gates.
-- Inherits FEAT-037 Kite readiness, FEAT-039 execution/order lifecycle, FEAT-040 reconciliation and FEAT-004 notification/audit principles.
+The V5 canonical register preserved six deferred IDs: `V4-FEAT-016`, `017`, `018`, `019`, `035`, and `036`. It additionally preserved V6 product work around Dashboard UX, emergency execution controls, live quote sizing, account Execution State, Clone Portfolio as Paper, and Admin Audit Explorer.
 
-### B. Portfolio experimentation
+During V6 planning:
 
-- `V4-FEAT-049` depends on FEAT-020 Paper Portfolio semantics, FEAT-008 immutable artifact/binding versions and canonical Portfolio accounting/capital state.
+- `V4-FEAT-017`, `018`, and `019` were explicitly moved to V7.
+- The combined Execution State/persistent-control concept remains split into `V4-FEAT-047` and `V4-FEAT-048` for domain/UX traceability.
+- `V4-FEAT-051` Contextual Notes was added as a new V6 productivity/UX epic.
+- `V4-FEAT-052` Telemetry was added as a new V6 observability epic and remains to be deliberated.
 
-### C. Administration
+## 5. V6 epic grouping and planning state
 
-- `V4-FEAT-050` depends on FEAT-042 role separation and existing persisted audit evidence. It is observational only and does not introduce Admin impersonation or Investor-domain ownership.
+### E1 — Live Execution Safety & Emergency Controls — DECIDED
 
-### D. UX / Platform
+Features: `V4-FEAT-044` through `V4-FEAT-048`.
 
-- `V4-FEAT-043` Dashboard customization must never allow safety-critical emergency controls to be hidden.
-- `V4-FEAT-035` proceeds incrementally alongside feature work rather than as a release-blocking rewrite.
-- `V4-FEAT-016` Mobile architecture should be decided before finalizing any mobile-driven authentication requirement.
+Frozen architecture includes broker-independent `Normal/Emergency Halt`, hard outbound gate close, Kite-specific cleanup below the global halt, strict explicit Recovery, crash-safe bounded emergency cleanup, Investor-level live-quote policy, and persistent safety controls across clients.
 
-### E. Intelligence
+### E2 — Paper Experimentation — DECIDED
 
-- `V4-FEAT-017` AI Assistant inherits FEAT-008 Draft/publication/versioning boundaries and deterministic investment-decision authority.
-- `V4-FEAT-018` ML scoring additionally depends on Indicator/artifact version provenance, historical anti-leakage and simulation/reproducibility evidence.
+Feature: `V4-FEAT-049`.
 
-### F. Platform / API
+Clone-as-Paper creates a new independent Paper Portfolio. User chooses whether to copy current holdings. Historical Trades/performance are not copied; exact published Strategy/artifact versions are pinned; provenance is retained; no ongoing synchronization exists.
 
-- `V4-FEAT-036` JWT/token API should follow concrete non-SPA client/use-case definition. It may be influenced by the Mobile decision but must coexist with Sanctum browser sessions.
+### E3 — Administrative Auditability — DECIDED
 
-### G. Market expansion
+Feature: `V4-FEAT-050`.
 
-- `V4-FEAT-019` should first be decomposed by instrument family. ETFs are closest to present equity semantics; Options and Crypto have materially larger accounting/execution/calendar/risk/tax consequences and should not be treated as one dropdown extension.
+Authoritative persisted audit records remain source of truth. Admin can inspect any Investor and that Investor's Portfolios in read-only mode. CSV may expose broader/rawer authorized audit fields than the curated explorer UI.
 
-## 5. Recommended V6 planning sequence
+### E4 — Investor UX & Client Evolution — ACTIVE REVIEW
 
-1. **Live Execution Safety cluster:** FEAT-047 → FEAT-044/045/048 → FEAT-046, frozen as one coherent safety architecture while retaining independently traceable feature IDs.
-2. **Clone Portfolio as Paper** — FEAT-049.
-3. **Admin Audit Explorer** — FEAT-050.
-4. **Dashboard reorganization/widget management** — FEAT-043.
-5. **Mobile architecture** — FEAT-016, before locking mobile-driven API/auth needs.
-6. **JWT/non-SPA API** — FEAT-036 once legitimate clients and scopes are known.
-7. **AI Assistant** — FEAT-017.
-8. **ML scoring** — FEAT-018, after AI/decision-authority boundaries and evidence requirements are explicit.
-9. **Market expansion** — FEAT-019, decomposed ETF first vs Options/Crypto as separate planning tracks if confirmed.
-10. **Frontend migration** — FEAT-035 continues incrementally in parallel wherever touched surfaces justify migration.
+Features: `V4-FEAT-043`, `V4-FEAT-016`, `V4-FEAT-035`.
 
-## 6. Planning rules
+V6 UX is a fit-and-finish/consolidation effort rather than a frontend rewrite: responsive across viewport classes, hierarchical information architecture, standardized tabs/components, progressive disclosure, visual-first presentation, icon-rich controls, themes, adaptive chrome, local preference persistence and incremental reuse/migration of proven StoX components.
+
+### E5 — External/API Access — DECIDED
+
+Feature: `V4-FEAT-036`.
+
+Trusted first-party/personal integrations use named, revocable, scoped personal API tokens. SPA remains Sanctum cookie auth. Tokens never bypass normal StoX role, Emergency Halt, reconciliation or execution-readiness gates. No public OAuth/developer ecosystem in V6.
+
+### E6 — Contextual Notes — DECIDED
+
+Feature: `V4-FEAT-051`.
+
+Personal plain-text notes are available contextually throughout Investor pages via a lightweight right-side utility pane, with responsive mobile replacement where appropriate.
+
+### E7 — Telemetry — OPEN
+
+Feature: `V4-FEAT-052`.
+
+Record now so it is not lost; deliberate and freeze only after E4 review is complete.
+
+## 6. Recommended V6 planning sequence
+
+1. **E1 Live Execution Safety** — product architecture frozen; persist dedicated specs before implementation.
+2. **E2 Paper Experimentation** — frozen.
+3. **E3 Administrative Auditability** — frozen.
+4. **E5 External/API Access** — frozen.
+5. **E4 Investor UX & Client Evolution** — current active review/freeze work.
+6. **E6 Contextual Notes** — frozen; may be implemented with E4 because it uses the same right-side utility/chrome language.
+7. **E7 Telemetry** — deliberate after E4 is frozen.
+8. **FEAT-035 frontend migration** — continues incrementally in parallel wherever touched surfaces justify migration.
+
+## 7. Planning rules
 
 For each feature/cluster:
 
 1. Inspect current implementation and authoritative V1–V5 specifications.
 2. State inherited rules and whether V6 preserves or explicitly supersedes them.
-3. Ask the PO only for materially different product semantics/UX/policy/security decisions.
+3. Ask the PO only for materially different product semantics/policy/security/architecture decisions; routine UI and edge-case choices may follow the frozen design principles.
 4. Freeze outcomes, non-goals, dependencies, authorization/audit/migration implications and acceptance criteria.
 5. Persist a dedicated V6 specification and mark the register `DECIDED` only when product behaviour is implementable without unresolved material PO choices.
 6. Implementation begins only after the relevant feature is `DECIDED`.
 
 V6 planning may run concurrently with the separate V5 closure mission, but V6 implementation must not contaminate V5 closure work.
 
-## 7. First active planning cluster — Live Execution Safety
-
-Relevant inherited rules:
+## 8. Inherited V6-wide principles
 
 - Recommendation target amount remains authoritative; stored/displayed quantity is derived.
 - Execution remains target-seeking and revalidates before each incremental attempt.
 - Submitted broker orders remain Order Lifecycle responsibility.
 - Internal transfers/fills already completed remain economically real and are never rolled back because later residual broker work fails.
 - Reconciliation remains diagnostic; a confirmed holdings mismatch blocks new Semi/Automatic execution, while cash mismatch alone does not.
-- Portfolio execution mode remains configuration. Emergency Halt is a separate account operational override.
-- Paper Portfolios are structurally outside Kite, reconciliation, kill switches and Emergency Halt.
-
-Initial V6 safety architecture baseline (subject only to genuine PO decisions):
-
-1. Emergency action first establishes `Emergency Halt` atomically before attempting broker-side disconnect/cancellation, preventing concurrent new live execution from escaping while the emergency operation runs.
-2. Emergency Halt applies across the Investor account's LIVE execution domain; it does not rewrite Portfolio modes and does not affect PAPER simulation.
-3. Existing submitted orders continue under Order Lifecycle. Later fills remain real Trades/accounting evidence.
-4. Disconnect failure or cancellation failure does not automatically clear Emergency Halt.
-5. Kill-switch/cancellation/disconnect/recovery attempts and outcomes are auditable independently; `disconnect != cancellation succeeded` remains explicit.
-6. Recovery is deliberate and never automatic; it must revalidate current execution readiness before returning to Normal.
-7. Safety controls are platform chrome/application-level controls when applicable, not ordinary Dashboard widgets and therefore are not hideable by FEAT-043.
-
-### Genuine PO decisions still to freeze for this cluster
-
-- Live-quote failure/fallback behaviour immediately before Semi/Automatic submission.
-- Exact recovery eligibility/UX semantics after Emergency Halt.
-- Emergency cancel+disconnect confirmation and partial-failure recovery UX.
-- Final user-facing terminology for `Emergency Halt` and recovery (working name: `Get-a-life`).
-
-These decisions should be taken one at a time; ordinary schema/service/API/component details remain engineering decisions.
+- Portfolio execution mode remains configuration. Emergency Halt is a separate account operational state.
+- Paper Portfolios are structurally outside Kite/reconciliation/live Emergency Halt execution authority.
+- Admin observation does not imply Investor trading authority.
+- Reuse existing StoX domain/component foundations rather than redesigning frozen V3–V5 behavior without necessity.
