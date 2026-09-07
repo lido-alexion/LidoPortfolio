@@ -100,7 +100,6 @@ class ArtifactRegistryApiTest extends TestCase
     public function test_admin_can_create_indicator_draft(): void
     {
         $admin = User::factory()->create(['is_admin' => true]);
-        $this->defaultPortfolioFor($admin);
 
         $this->actingAs($admin)
             ->postJson('/api/v1/artifacts/indicator', [

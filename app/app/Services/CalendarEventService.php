@@ -16,10 +16,14 @@ class CalendarEventService
     /**
      * @return Collection<int, array<string, mixed>>
      */
-    public function listForProfile(PortfolioProfile $profile): Collection
+    public function listForProfile(?PortfolioProfile $profile): Collection
     {
-        return CalendarEvent::query()
-            ->visibleToProfile($profile->id)
+        $query = CalendarEvent::query();
+        $profile
+            ? $query->visibleToProfile($profile->id)
+            : $query->whereNull('profile_id');
+
+        return $query
             ->orderByRaw('CASE WHEN category = ? THEN 0 ELSE 1 END', [CalendarEvent::CATEGORY_TRADE_HOLIDAY])
             ->orderBy('title')
             ->get()
@@ -29,10 +33,14 @@ class CalendarEventService
     /**
      * @return array<int, array<string, mixed>>
      */
-    public function occurrencesForProfile(PortfolioProfile $profile, Carbon $from, Carbon $to): array
+    public function occurrencesForProfile(?PortfolioProfile $profile, Carbon $from, Carbon $to): array
     {
-        $events = CalendarEvent::query()
-            ->visibleToProfile($profile->id)
+        $query = CalendarEvent::query();
+        $profile
+            ? $query->visibleToProfile($profile->id)
+            : $query->whereNull('profile_id');
+
+        $events = $query
             ->where('is_active', true)
             ->get();
 
@@ -42,7 +50,7 @@ class CalendarEventService
     /**
      * @return array<int, array<string, mixed>>
      */
-    public function upcomingForProfile(PortfolioProfile $profile, int $days = 31): array
+    public function upcomingForProfile(?PortfolioProfile $profile, int $days = 31): array
     {
         $today = Carbon::today();
         $to = $today->copy()->addDays($days);
@@ -62,7 +70,7 @@ class CalendarEventService
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
-    public function create(PortfolioProfile $profile, array $data, bool $asAdmin = false): array
+    public function create(?PortfolioProfile $profile, array $data, bool $asAdmin = false): array
     {
         $isTradeHoliday = ($data['category'] ?? null) === CalendarEvent::CATEGORY_TRADE_HOLIDAY;
         if ($isTradeHoliday && ! $asAdmin) {
@@ -70,10 +78,15 @@ class CalendarEventService
                 'category' => ['Only admins can create global trade holidays.'],
             ]);
         }
+        if (! $isTradeHoliday && ! $profile) {
+            throw ValidationException::withMessages([
+                'category' => ['Admin accounts may create only global trade holidays.'],
+            ]);
+        }
 
         $payload = $this->normalizePayload($data, null, $isTradeHoliday);
         $event = CalendarEvent::query()->create(array_merge($payload, [
-            'profile_id' => $isTradeHoliday ? null : $profile->id,
+            'profile_id' => $isTradeHoliday ? null : $profile?->id,
             'category' => $isTradeHoliday ? CalendarEvent::CATEGORY_TRADE_HOLIDAY : null,
         ]));
 
@@ -86,7 +99,7 @@ class CalendarEventService
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
-    public function update(CalendarEvent $event, PortfolioProfile $profile, array $data, bool $asAdmin = false): array
+    public function update(CalendarEvent $event, ?PortfolioProfile $profile, array $data, bool $asAdmin = false): array
     {
         if ($event->isTradeHoliday()) {
             if (! $asAdmin) {
@@ -117,6 +130,11 @@ class CalendarEventService
             } elseif ($event->isTradeHoliday() && $data['category'] === null) {
                 // Demote to portfolio event for the active profile.
                 $payload['category'] = null;
+                if (! $profile) {
+                    throw ValidationException::withMessages([
+                        'category' => ['Admin accounts cannot demote a global holiday into a Portfolio event.'],
+                    ]);
+                }
                 $payload['profile_id'] = $profile->id;
             }
         }
@@ -131,7 +149,7 @@ class CalendarEventService
         return $this->formatEvent($event->fresh());
     }
 
-    public function delete(CalendarEvent $event, PortfolioProfile $profile, bool $asAdmin = false): void
+    public function delete(CalendarEvent $event, ?PortfolioProfile $profile, bool $asAdmin = false): void
     {
         if ($event->isTradeHoliday()) {
             if (! $asAdmin) {
@@ -142,6 +160,7 @@ class CalendarEventService
             if ($event->source === 'nse') {
                 $event->forceFill(['is_active' => false, 'sync_override' => true])->save();
                 TradingCalendar::clearHolidayCache();
+
                 return;
             }
         } else {
@@ -152,9 +171,9 @@ class CalendarEventService
         TradingCalendar::clearHolidayCache();
     }
 
-    public function assertBelongsToProfile(CalendarEvent $event, PortfolioProfile $profile): void
+    public function assertBelongsToProfile(CalendarEvent $event, ?PortfolioProfile $profile): void
     {
-        if ((int) $event->profile_id !== (int) $profile->id) {
+        if (! $profile || (int) $event->profile_id !== (int) $profile->id) {
             throw ValidationException::withMessages([
                 'event' => ['Calendar event not found for this portfolio.'],
             ]);

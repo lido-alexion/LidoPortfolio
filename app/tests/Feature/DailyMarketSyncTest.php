@@ -63,7 +63,7 @@ class DailyMarketSyncTest extends TestCase
             ->assertJsonPath('skipped', false);
     }
 
-    public function test_dashboard_includes_daily_market_sync_status_for_admin(): void
+    public function test_admin_cannot_use_investor_dashboard_for_sync_status(): void
     {
         $user = User::query()->create([
             'name' => 'Dash Sync',
@@ -75,17 +75,8 @@ class DailyMarketSyncTest extends TestCase
 
         $response = $this->actingAs($user)->getJson('/api/dashboard');
 
-        $response->assertOk()
-            ->assertJsonStructure([
-                'daily_market_sync' => [
-                    'synced_today',
-                    'sync_date',
-                    'synced_at',
-                    'today',
-                    'timezone',
-                    'in_progress',
-                ],
-            ]);
+        $response->assertForbidden()
+            ->assertJsonPath('message', 'Investor application access is not available to Admin accounts.');
     }
 
     public function test_dashboard_omits_daily_market_sync_for_non_admin(): void

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Engines\Discovery\DiscoveryEngine;
+use App\Models\PortfolioProfile;
 use App\Models\Screener;
 use App\Models\User;
 use App\Services\StrategyEligibilityService;
@@ -40,7 +41,7 @@ class F060SharedScreenerAuthzTest extends TestCase
     }
 
     /**
-     * @return array{owner: User, ownerProfile: \App\Models\PortfolioProfile, otherProfile: \App\Models\PortfolioProfile, sharedId: int}
+     * @return array{owner: User, ownerProfile: PortfolioProfile, otherProfile: PortfolioProfile, sharedId: int}
      */
     private function seedSameUserShared(string $name = 'Momentum Screener'): array
     {
@@ -215,24 +216,19 @@ class F060SharedScreenerAuthzTest extends TestCase
     {
         $ctx = $this->seedSameUserShared();
         $admin = User::factory()->create(['is_admin' => true]);
-        $adminProfile = $this->defaultPortfolioFor($admin);
         $sharedId = $ctx['sharedId'];
 
         $this->actingAs($admin)
-            ->withHeader('X-Profile-Id', (string) $adminProfile->id)
             ->getJson('/api/screeners/shared')
-            ->assertOk()
-            ->assertJsonPath('count', 0);
+            ->assertForbidden();
 
         $this->actingAs($admin)
-            ->withHeader('X-Profile-Id', (string) $adminProfile->id)
             ->postJson("/api/screeners/shared/{$sharedId}/import")
-            ->assertNotFound();
+            ->assertForbidden();
 
         $this->actingAs($admin)
-            ->withHeader('X-Profile-Id', (string) $adminProfile->id)
             ->getJson('/api/v1/screener-registry/'.$sharedId)
-            ->assertNotFound();
+            ->assertForbidden();
     }
 
     public function test_registry_classic_parity_same_user(): void

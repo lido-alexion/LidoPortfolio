@@ -3,8 +3,8 @@
 namespace App\Services;
 
 use App\Models\PortfolioProfile;
+use App\Models\Setting;
 use App\Models\User;
-use App\Services\SyncLogService;
 
 class SettingsService
 {
@@ -30,9 +30,9 @@ class SettingsService
      *
      * @return array<string, mixed>
      */
-    public function allForProfile(PortfolioProfile $profile, User $user): array
+    public function allForProfile(?PortfolioProfile $profile, User $user): array
     {
-        $settings = $this->profileSettings->all($profile);
+        $settings = $profile ? $this->profileSettings->all($profile) : [];
 
         if (! $user->is_admin) {
             $settings['cron_timezone'] = $this->get(
@@ -66,7 +66,7 @@ class SettingsService
     /**
      * @return array<string, mixed>
      */
-    public function updateForProfile(PortfolioProfile $profile, User $user, array $data): array
+    public function updateForProfile(?PortfolioProfile $profile, User $user, array $data): array
     {
         $profileData = [];
         $globalData = [];
@@ -90,6 +90,9 @@ class SettingsService
         }
 
         if ($profileData !== []) {
+            if (! $profile) {
+                abort(403, 'Investor portfolio settings are not available to Admin accounts.');
+            }
             $this->profileSettings->update($profile, $profileData);
         }
 
@@ -104,7 +107,7 @@ class SettingsService
         if (array_key_exists('fee_components', $data)) {
             $components = is_array($data['fee_components']) ? $data['fee_components'] : [];
             $normalized = app(FeeCalculatorService::class)->normalizeComponents($components);
-            \App\Models\Setting::setValue('fee_components', json_encode($normalized));
+            Setting::setValue('fee_components', json_encode($normalized));
             unset($data['fee_components']);
         }
 
@@ -120,7 +123,7 @@ class SettingsService
                 || $key === 'external_stock_links') {
                 continue;
             }
-            \App\Models\Setting::setValue($key, $value === null ? null : (string) $value);
+            Setting::setValue($key, $value === null ? null : (string) $value);
         }
 
         return $this->globalOnly();
@@ -144,7 +147,7 @@ class SettingsService
 
     public function get(string $key, ?string $default = null): ?string
     {
-        return \App\Models\Setting::getValue($key, $default ?? (self::DEFAULTS[$key] ?? null));
+        return Setting::getValue($key, $default ?? (self::DEFAULTS[$key] ?? null));
     }
 
     public function isTelegramPingWhenClearEnabled(): bool

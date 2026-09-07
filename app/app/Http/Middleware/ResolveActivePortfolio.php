@@ -74,6 +74,10 @@ class ResolveActivePortfolio
             'api/profile',
             'api/profile/*',
             'api/logs/frontend',
+            'api/settings',
+            'api/calendar/*',
+            'api/v1/artifacts/indicator',
+            'api/v1/artifacts/indicator/*',
         );
     }
 }

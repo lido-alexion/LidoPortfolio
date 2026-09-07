@@ -96,7 +96,6 @@ class CalendarEventTest extends TestCase
         ]);
         $admin->is_admin = true;
         $admin->save();
-        $this->defaultPortfolioFor($admin);
         $this->actingAs($admin);
 
         $create = $this->postJson('/api/calendar/events', [
