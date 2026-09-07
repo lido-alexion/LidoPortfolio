@@ -78,6 +78,8 @@ class ResolveActivePortfolio
             'api/calendar/*',
             'api/v1/artifacts/indicator',
             'api/v1/artifacts/indicator/*',
+            'api/notification-center',
+            'api/notification-center/*',
         );
     }
 }

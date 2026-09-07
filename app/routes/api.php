@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AdminStockController;
 use App\Http\Controllers\Api\AlertController;
 use App\Http\Controllers\Api\AlertPolicyController;
 use App\Http\Controllers\Api\AnalyticsController;
@@ -20,6 +21,7 @@ use App\Http\Controllers\Api\KnowledgeBoardImageController;
 use App\Http\Controllers\Api\KnowledgeBoardNoteController;
 use App\Http\Controllers\Api\KnowledgeBoardTagController;
 use App\Http\Controllers\Api\MarketDepthController;
+use App\Http\Controllers\Api\NotificationCenterController;
 use App\Http\Controllers\Api\OperationalAlertController;
 use App\Http\Controllers\Api\PasswordResetAcceptController;
 use App\Http\Controllers\Api\PasswordResetLinkController;
@@ -31,7 +33,6 @@ use App\Http\Controllers\Api\ScreenerBacktestController;
 use App\Http\Controllers\Api\ScreenerController;
 use App\Http\Controllers\Api\ScreenerRunController;
 use App\Http\Controllers\Api\SettingsController;
-use App\Http\Controllers\Api\AdminStockController;
 use App\Http\Controllers\Api\StockController;
 use App\Http\Controllers\Api\StockPriceController;
 use App\Http\Controllers\Api\SyncController;
@@ -47,11 +48,11 @@ use App\Http\Controllers\Api\V1\CapitalAccountingController;
 use App\Http\Controllers\Api\V1\CapitalLendingController;
 use App\Http\Controllers\Api\V1\CapitalRecallController;
 use App\Http\Controllers\Api\V1\CapitalResolutionController;
+use App\Http\Controllers\Api\V1\IndicatorRegistryController;
+use App\Http\Controllers\Api\V1\MarketAnalysisController;
 use App\Http\Controllers\Api\V1\PendingSaleProceedsController;
 use App\Http\Controllers\Api\V1\RecallBridgeLoanController;
 use App\Http\Controllers\Api\V1\RecallPeriodController;
-use App\Http\Controllers\Api\V1\IndicatorRegistryController;
-use App\Http\Controllers\Api\V1\MarketAnalysisController;
 use App\Http\Controllers\Api\V1\ScreenerRegistryController;
 use App\Http\Controllers\Api\V1\StrategyController;
 use App\Http\Controllers\Api\V1\StrategyRegistryController;
@@ -92,6 +93,13 @@ Route::get('/auth/csrf-token', [AuthController::class, 'csrfToken']);
 // Kite returns from another domain, so the callback cannot depend on the SPA
 // session cookie. A short-lived encrypted state binds it to the initiating user.
 Route::get('/v1/broker/kite/callback', [TradingOsBrokerController::class, 'kiteCallback']);
+
+Route::middleware('auth:sanctum')->prefix('notification-center')->group(function () {
+    Route::get('/', [NotificationCenterController::class, 'index']);
+    Route::post('/mark-all-read', [NotificationCenterController::class, 'markAllRead']);
+    Route::get('/{notification}', [NotificationCenterController::class, 'show'])->whereNumber('notification');
+    Route::post('/{notification}/read', [NotificationCenterController::class, 'markRead'])->whereNumber('notification');
+});
 
 Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::post('/logs/frontend', [FrontendLogController::class, 'store']);

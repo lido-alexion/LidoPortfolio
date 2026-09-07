@@ -480,3 +480,7 @@ This freeze resolves the earlier apparent tension between the notification archi
 - Therefore persistence of condition state does not imply every Action-required notification consumes permanent app-wide banner space.
 
 Previously frozen FEAT-038/039/040 rules remain intact, except that references to direct Telegram delivery are interpreted through FEAT-004's channel abstraction where the business meaning is external delivery. The explicit FEAT-039 Info-expiry exception remains externally deliverable through FEAT-004 rather than being a bespoke Telegram call.
+
+## 10. Implementation progress
+
+The account-level persistence and lifecycle foundation is implemented in the canonical source, recipient projection and immutable occurrence tables. The shared authenticated `/api/notification-center` API provides bounded account-isolated list views, secondary filters, unread and active-Critical counts, detail timelines, and individual/all mark-read actions. Opening a list or detail does not mutate attention state, read actions do not resolve conditions, and Admin access does not require or create an Investor Portfolio.
