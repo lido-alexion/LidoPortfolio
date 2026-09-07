@@ -64,6 +64,9 @@ class NotificationChannelSettingsService
                 $setting->enabled = $enabled;
             }
             $setting->save();
+            if ($enabled === false) {
+                app(NotificationChannelHealthService::class)->recovered($user, $channel);
+            }
 
             $presented = $this->present($setting->fresh(), $channel);
             if ($generatedSecret !== null) {

@@ -7,6 +7,7 @@ use App\Models\NotificationDelivery;
 use App\Models\User;
 use App\Services\Notification\NotificationChannelSettingsService;
 use App\Services\Notification\NotificationPublisher;
+use App\Services\Notification\NotificationReminderService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
@@ -76,6 +77,23 @@ class NotificationDeliveryPlannerTest extends TestCase
         $publisher->publishCondition('escalation:test', [$user], $this->content('critical'));
         $this->assertDatabaseCount('portfolio_notification_deliveries', 2);
         $this->assertSame(['initial', 'escalation'], NotificationDelivery::query()->orderBy('id')->pluck('delivery_kind')->all());
+    }
+
+    public function test_reminder_is_queued_after_48_hours_from_last_success_and_is_idempotent(): void
+    {
+        $user = User::factory()->create();
+        $settings = app(NotificationChannelSettingsService::class);
+        $settings->update($user, 'telegram', ['bot_token' => 'token', 'chat_id' => 'chat'], false);
+        $settings->markVerified($user, 'telegram');
+        $settings->update($user, 'telegram', ['bot_token' => 'token', 'chat_id' => 'chat'], true);
+        $source = app(NotificationPublisher::class)->publishCondition('reminder:test', [$user], $this->content('critical'));
+        $recipient = $source->recipients->sole();
+        $recipient->update(['last_successful_external_delivery_at' => now()->subHours(49)]);
+
+        $service = app(NotificationReminderService::class);
+        $this->assertSame(1, $service->queueDue()['queued']);
+        $this->assertSame(0, $service->queueDue()['queued']);
+        $this->assertSame(['initial', 'reminder'], NotificationDelivery::query()->orderBy('id')->pluck('delivery_kind')->all());
     }
 
     private function enableChannels(User $user): void

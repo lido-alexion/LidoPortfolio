@@ -4,7 +4,9 @@ namespace Tests\Feature\Notification;
 
 use App\Mail\NotificationDeliveryMail;
 use App\Models\NotificationDelivery;
+use App\Models\NotificationSource;
 use App\Models\User;
+use App\Services\Notification\NotificationChannelHealthService;
 use App\Services\Notification\NotificationChannelSettingsService;
 use App\Services\Notification\NotificationDeliveryProcessor;
 use App\Services\Notification\NotificationPublisher;
@@ -64,6 +66,35 @@ class NotificationDeliveryProcessorTest extends TestCase
 
         $this->assertSame(['retry' => false, 'status' => 'failed'], $result);
         $this->assertSame(1, $delivery->attempts()->count());
+    }
+
+    public function test_persistent_failure_creates_one_deduplicated_channel_health_condition_without_recursion(): void
+    {
+        Http::fake(['api.telegram.org/*' => Http::response([], 400)]);
+        $delivery = $this->delivery('telegram', 'health:test');
+
+        app(NotificationDeliveryProcessor::class)->process($delivery->id);
+        app(NotificationDeliveryProcessor::class)->process($delivery->id);
+
+        $this->assertDatabaseHas('portfolio_notification_sources', [
+            'notification_type' => 'notification.channel_health',
+            'condition_state' => 'active',
+        ]);
+        $this->assertSame(1, NotificationSource::query()->where('notification_type', 'notification.channel_health')->count());
+        $this->assertSame(1, NotificationSource::query()->where('notification_type', 'notification.channel_health')->first()->occurrence_count);
+    }
+
+    public function test_channel_recovery_resolves_existing_health_condition(): void
+    {
+        $user = User::factory()->create();
+        $health = app(NotificationChannelHealthService::class);
+        $health->failure($user, 'telegram');
+        $health->recovered($user, 'telegram');
+
+        $this->assertDatabaseHas('portfolio_notification_sources', [
+            'notification_type' => 'notification.channel_health',
+            'condition_state' => 'resolved',
+        ]);
     }
 
     public function test_resolved_condition_is_suppressed_before_network_send(): void

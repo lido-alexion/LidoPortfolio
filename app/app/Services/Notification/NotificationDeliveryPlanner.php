@@ -21,32 +21,59 @@ class NotificationDeliveryPlanner
         $created = 0;
         $source->loadMissing('recipients.user');
         foreach ($source->recipients as $recipient) {
-            $settings = NotificationChannelSetting::query()
-                ->where('user_id', $recipient->user_id)
-                ->where('enabled', true)
-                ->whereNotNull('verified_at')
-                ->get();
+            $created += $this->planForRecipient($recipient, $source, $kind, $kind);
+        }
 
-            foreach ($settings as $setting) {
-                foreach ($this->destinations($recipient, $setting) as $destination) {
-                    $hash = hash('sha256', $destination);
-                    $delivery = NotificationDelivery::query()->firstOrCreate(
-                        ['idempotency_key' => "{$recipient->id}:{$kind}:{$setting->channel}:{$hash}"],
-                        [
-                            'recipient_notification_id' => $recipient->id,
-                            'channel_setting_id' => $setting->id,
-                            'channel' => $setting->channel,
-                            'delivery_kind' => $kind,
-                            'destination' => $destination,
-                            'destination_hash' => $hash,
-                            'status' => 'queued',
-                            'available_at' => now(),
-                        ],
-                    );
-                    if ($delivery->wasRecentlyCreated) {
-                        $created++;
-                        DB::afterCommit(fn () => ProcessNotificationDelivery::dispatch($delivery->id)->onQueue('notifications'));
-                    }
+        return $created;
+    }
+
+    public function planReminder(RecipientNotification $recipient): int
+    {
+        $recipient->loadMissing('source', 'user');
+        if ($recipient->condition_state !== 'active'
+            || ! in_array($recipient->source->severity, ['action_required', 'critical'], true)
+            || ! $recipient->last_successful_external_delivery_at) {
+            return 0;
+        }
+
+        return $this->planForRecipient(
+            $recipient,
+            $recipient->source,
+            'reminder',
+            'reminder:'.$recipient->last_successful_external_delivery_at->timestamp,
+        );
+    }
+
+    private function planForRecipient(RecipientNotification $recipient, NotificationSource $source, string $kind, string $generation): int
+    {
+        $created = 0;
+        $excluded = (array) ($source->context['excluded_channels'] ?? []);
+        $settings = NotificationChannelSetting::query()
+            ->where('user_id', $recipient->user_id)
+            ->where('enabled', true)
+            ->whereNotNull('verified_at')
+            ->whereNotIn('channel', $excluded)
+            ->get();
+
+        foreach ($settings as $setting) {
+            foreach ($this->destinations($recipient, $setting) as $destination) {
+                $hash = hash('sha256', $destination);
+                $delivery = NotificationDelivery::query()->firstOrCreate(
+                    ['idempotency_key' => "{$recipient->id}:{$generation}:{$setting->channel}:{$hash}"],
+                    [
+                        'recipient_notification_id' => $recipient->id,
+                        'channel_setting_id' => $setting->id,
+                        'channel' => $setting->channel,
+                        'delivery_kind' => $kind,
+                        'destination' => $destination,
+                        'destination_hash' => $hash,
+                        'status' => 'queued',
+                        'available_at' => now(),
+                    ],
+                );
+                if ($delivery->wasRecentlyCreated) {
+                    $created++;
+                    DB::afterCommit(fn () => ProcessNotificationDelivery::dispatch($delivery->id)->onQueue('notifications'));
                 }
             }
         }

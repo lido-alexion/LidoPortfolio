@@ -6,6 +6,7 @@ use App\Services\AlertNotificationService;
 use App\Services\BenchmarkPriceSyncService;
 use App\Services\Broker\KiteReadinessReminderService;
 use App\Services\HistoryDepthBackfillService;
+use App\Services\Notification\NotificationReminderService;
 use App\Services\NotificationScheduleService;
 use App\Services\NseHolidaySyncService;
 use App\Services\PortfolioLoggerService;
@@ -105,6 +106,13 @@ Artisan::command('portfolio:send-kite-readiness-reminders', function () {
 
     return 0;
 })->purpose('Remind Automatic portfolios to reconnect an unusable Kite session');
+
+Artisan::command('portfolio:queue-notification-reminders', function () {
+    $result = app(NotificationReminderService::class)->queueDue();
+    $this->info("Notification reminders: {$result['queued']} queued; {$result['checked']} due notifications checked.");
+
+    return 0;
+})->purpose('Queue 48-hour reminders for unresolved notification conditions');
 
 $cronTime = env('PORTFOLIO_CRON_TIME', '18:30');
 $timezone = env('PORTFOLIO_CRON_TIMEZONE', 'Asia/Kolkata');
@@ -255,6 +263,11 @@ Schedule::command('portfolio:send-kite-readiness-reminders')
     ->everyMinute()
     ->timezone($timezone)
     ->name('kite-readiness-reminders');
+
+Schedule::command('portfolio:queue-notification-reminders')
+    ->hourly()
+    ->withoutOverlapping(10)
+    ->name('notification-condition-reminders');
 
 Schedule::command('portfolio:send-calendar-reminders')
     ->dailyAt('07:00')

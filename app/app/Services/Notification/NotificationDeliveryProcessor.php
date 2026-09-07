@@ -7,7 +7,10 @@ use Illuminate\Support\Facades\DB;
 
 class NotificationDeliveryProcessor
 {
-    public function __construct(private NotificationDeliveryAdapter $adapter) {}
+    public function __construct(
+        private NotificationDeliveryAdapter $adapter,
+        private NotificationChannelHealthService $health,
+    ) {}
 
     /** @return array{retry: bool, status: string} */
     public function process(int $deliveryId): array
@@ -18,7 +21,7 @@ class NotificationDeliveryProcessor
                 return null;
             }
 
-            $delivery->load('recipientNotification.source');
+            $delivery->load('recipientNotification.source', 'recipientNotification.user');
             if ($delivery->recipientNotification->condition_state === 'resolved'
                 && $delivery->recipientNotification->source->condition_key !== null) {
                 $delivery->update(['status' => 'suppressed', 'suppressed_at' => now()]);
@@ -35,7 +38,7 @@ class NotificationDeliveryProcessor
             return ['retry' => false, 'status' => 'terminal'];
         }
 
-        $delivery->load(['channelSetting', 'recipientNotification.source']);
+        $delivery->load(['channelSetting', 'recipientNotification.source', 'recipientNotification.user']);
         $result = $this->adapter->send($delivery);
 
         return DB::transaction(function () use ($deliveryId, $result) {
@@ -52,6 +55,9 @@ class NotificationDeliveryProcessor
             if ($result['successful']) {
                 $delivery->update(['status' => 'delivered', 'delivered_at' => now(), 'last_error_code' => null]);
                 $delivery->recipientNotification()->update(['last_successful_external_delivery_at' => now()]);
+                if (! str_starts_with($delivery->recipientNotification->source->notification_type, 'notification.channel_health')) {
+                    $this->health->recovered($delivery->recipientNotification->user, $delivery->channel);
+                }
 
                 return ['retry' => false, 'status' => 'delivered'];
             }
@@ -61,6 +67,11 @@ class NotificationDeliveryProcessor
                 'status' => $retry ? 'queued' : 'failed',
                 'last_error_code' => $result['error_code'],
             ]);
+
+            if (! $retry
+                && ! str_starts_with($delivery->recipientNotification->source->notification_type, 'notification.channel_health')) {
+                $this->health->failure($delivery->recipientNotification->user, $delivery->channel);
+            }
 
             return ['retry' => $retry, 'status' => $retry ? 'queued' : 'failed'];
         });
