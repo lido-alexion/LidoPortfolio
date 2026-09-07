@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import HeaderHelpButton from './HeaderHelpButton';
 import ProfileMenu from './ProfileMenu';
 import PortfolioSwitcher from './PortfolioSwitcher';
+import NotificationBell from './NotificationBell';
 import { useSidebar } from '../context/SidebarContext';
 
 function SidebarToggle() {
@@ -67,6 +68,7 @@ export default function AppHeader({ user, showSidebarToggle = false }) {
                 </div>
                 <div className="lido-header-actions">
                     {user && !user.is_admin && <PortfolioSwitcher />}
+                    {user && <NotificationBell />}
                     <HeaderHelpButton />
                     {user && <ProfileMenu user={user} />}
                 </div>

@@ -9,6 +9,8 @@ import BootErrorBanner, { clearBootError } from './components/BootErrorBanner';
 import { hideBootPanel } from './utils/bootPanel';
 import { useAuth } from './context/AuthContext';
 import { SidebarProvider } from './context/SidebarContext';
+import { NotificationProvider } from './context/NotificationContext';
+import CriticalNotificationBanner from './components/CriticalNotificationBanner';
 import DashboardPage from './pages/DashboardPage';
 import HoldingsPage from './pages/HoldingsPage';
 import StockPricesPage from './pages/StockPricesPage';
@@ -214,18 +216,21 @@ function AdminAppRoutes() {
 
 function AuthenticatedShell({ user, isDocumentationRoute }) {
     return (
-        <SidebarProvider>
-            <div className={`lido-app-frame${isDocumentationRoute ? ' lido-app-frame--docs' : ''}`}>
-                <AppHeader user={user} showSidebarToggle={!isDocumentationRoute} />
-                <div className={`lido-shell${isDocumentationRoute ? ' lido-shell--docs' : ''}`}>
-                    {!isDocumentationRoute && <Sidebar />}
-                    <div className="lido-main">
-                        {!isDocumentationRoute && <PageChrome />}
-                        {user.is_admin ? <AdminAppRoutes /> : <AppRoutes />}
+        <NotificationProvider>
+            <SidebarProvider>
+                <div className={`lido-app-frame${isDocumentationRoute ? ' lido-app-frame--docs' : ''}`}>
+                    <AppHeader user={user} showSidebarToggle={!isDocumentationRoute} />
+                    <CriticalNotificationBanner />
+                    <div className={`lido-shell${isDocumentationRoute ? ' lido-shell--docs' : ''}`}>
+                        {!isDocumentationRoute && <Sidebar />}
+                        <div className="lido-main">
+                            {!isDocumentationRoute && <PageChrome />}
+                            {user.is_admin ? <AdminAppRoutes /> : <AppRoutes />}
+                        </div>
                     </div>
                 </div>
-            </div>
-        </SidebarProvider>
+            </SidebarProvider>
+        </NotificationProvider>
     );
 }
 
