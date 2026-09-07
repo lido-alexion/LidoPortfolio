@@ -2,17 +2,25 @@
 
 namespace Tests\Feature\Notification;
 
+use App\Jobs\ProcessNotificationDelivery;
 use App\Models\NotificationDelivery;
 use App\Models\User;
 use App\Services\Notification\NotificationChannelSettingsService;
 use App\Services\Notification\NotificationPublisher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class NotificationDeliveryPlannerTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Queue::fake();
+    }
 
     public function test_action_required_fans_out_durable_work_to_each_enabled_verified_channel(): void
     {
@@ -30,6 +38,7 @@ class NotificationDeliveryPlannerTest extends TestCase
         $rawDestinations = DB::table('portfolio_notification_deliveries')->pluck('destination')->implode('|');
         $this->assertStringNotContainsString('delivery@example.test', $rawDestinations);
         $this->assertStringNotContainsString('https://hooks.example.test/stox', $rawDestinations);
+        Queue::assertPushed(ProcessNotificationDelivery::class, 3);
     }
 
     public function test_info_is_in_app_only_unless_explicit_external_exception_is_frozen(): void

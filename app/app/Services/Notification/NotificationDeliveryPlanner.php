@@ -2,11 +2,13 @@
 
 namespace App\Services\Notification;
 
+use App\Jobs\ProcessNotificationDelivery;
 use App\Models\NotificationChannelSetting;
 use App\Models\NotificationDelivery;
 use App\Models\NotificationEmailDestination;
 use App\Models\NotificationSource;
 use App\Models\RecipientNotification;
+use Illuminate\Support\Facades\DB;
 
 class NotificationDeliveryPlanner
 {
@@ -43,6 +45,7 @@ class NotificationDeliveryPlanner
                     );
                     if ($delivery->wasRecentlyCreated) {
                         $created++;
+                        DB::afterCommit(fn () => ProcessNotificationDelivery::dispatch($delivery->id)->onQueue('notifications'));
                     }
                 }
             }
