@@ -5,7 +5,7 @@ namespace App\Services\Broker;
 use App\Models\PortfolioProfile;
 use App\Services\ProfileSettingsService;
 use App\Services\SettingsService;
-use App\Services\TelegramNotificationService;
+use App\Services\Notification\NotificationPublisher;
 use Illuminate\Support\Carbon;
 
 class KiteReadinessReminderService
@@ -14,7 +14,7 @@ class KiteReadinessReminderService
         protected BrokerConnectionService $connections,
         protected ProfileSettingsService $settings,
         protected SettingsService $globalSettings,
-        protected TelegramNotificationService $telegram,
+        protected NotificationPublisher $publisher,
     ) {}
 
     /** @return array{checked:int,sent:int,skipped:int} */
@@ -37,17 +37,26 @@ class KiteReadinessReminderService
                     return;
                 }
                 $stats['checked']++;
-                if ($this->connections->status($profile->user)['usable']
-                    || $this->settings->get($profile, ProfileSettingsService::KITE_READINESS_LAST_REMINDER_KEY) === $date) {
+                $conditionKey = 'kite-readiness:'.$profile->id;
+                if ($this->connections->status($profile->user)['usable']) {
+                    $this->publisher->resolveCondition($conditionKey);
                     $stats['skipped']++;
                     return;
                 }
-                if ($this->telegram->sendMessageForProfile(
-                    $profile,
-                    'StoX: Automatic execution is not ready because your daily Kite session is missing or expired. Open Dashboard and select Connect Kite.',
-                )) {
+                if ($this->settings->get($profile, ProfileSettingsService::KITE_READINESS_LAST_REMINDER_KEY) !== $date) {
+                    $this->publisher->publishCondition($conditionKey, [$profile->user], [
+                        'notification_type' => 'broker.kite_readiness',
+                        'audience' => 'investor',
+                        'severity' => 'action_required',
+                        'title' => 'Kite connection required',
+                        'message' => 'Automatic execution is not ready because your daily Kite session is missing or expired. Open Dashboard and select Connect Kite.',
+                        'context' => ['portfolio_id' => $profile->id],
+                        'primary_action' => ['label' => 'Connect Kite', 'route' => '/dashboard'],
+                    ]);
                     $this->settings->set($profile, ProfileSettingsService::KITE_READINESS_LAST_REMINDER_KEY, $date);
                     $stats['sent']++;
+                } else {
+                    $stats['skipped']++;
                 }
             });
 
