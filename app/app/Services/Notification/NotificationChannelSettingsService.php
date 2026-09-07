@@ -1,0 +1,126 @@
+<?php
+
+namespace App\Services\Notification;
+
+use App\Models\NotificationChannelSetting;
+use App\Models\NotificationEmailDestination;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+
+class NotificationChannelSettingsService
+{
+    public const EXTERNAL_CHANNELS = ['telegram', 'email', 'webhook'];
+
+    public function all(User $user): array
+    {
+        $accountEmail = NotificationEmailDestination::query()->firstOrCreate(
+            ['user_id' => $user->id, 'email' => $user->email],
+            ['is_account_email' => true, 'verified_at' => $user->email_verified_at],
+        );
+
+        $settings = NotificationChannelSetting::query()->where('user_id', $user->id)->get()->keyBy('channel');
+
+        return [
+            ['channel' => 'in_app', 'enabled' => true, 'health_status' => 'healthy', 'can_disable' => false],
+            ...array_map(fn (string $channel) => $this->present($settings->get($channel), $channel, $accountEmail), self::EXTERNAL_CHANNELS),
+        ];
+    }
+
+    public function update(User $user, string $channel, array $configuration, ?bool $enabled): array
+    {
+        $this->assertExternalChannel($channel);
+
+        return DB::transaction(function () use ($user, $channel, $configuration, $enabled) {
+            $setting = NotificationChannelSetting::query()->firstOrNew([
+                'user_id' => $user->id,
+                'channel' => $channel,
+            ]);
+            $current = $setting->configuration ?? [];
+            $next = array_merge($current, array_filter($configuration, fn ($value) => $value !== null));
+            if ($channel === 'webhook' && empty($next['signing_secret'])) {
+                $next['signing_secret'] = bin2hex(random_bytes(32));
+            }
+
+            $materialChange = $setting->exists && $this->materialConfiguration($current) !== $this->materialConfiguration($next);
+            if (! $setting->exists || $materialChange) {
+                $setting->verified_at = null;
+                $setting->health_status = 'unverified';
+                $setting->enabled = false;
+            }
+            $setting->configuration = $next;
+
+            if ($enabled === true && ! $setting->verified_at) {
+                throw ValidationException::withMessages([
+                    'enabled' => ['Test and verify this channel before enabling it.'],
+                ]);
+            }
+            if ($enabled !== null) {
+                $setting->enabled = $enabled;
+            }
+            $setting->save();
+
+            return $this->present($setting->fresh(), $channel);
+        });
+    }
+
+    public function markVerified(User $user, string $channel): NotificationChannelSetting
+    {
+        $this->assertExternalChannel($channel);
+        $setting = NotificationChannelSetting::query()
+            ->where('user_id', $user->id)
+            ->where('channel', $channel)
+            ->firstOrFail();
+        $setting->update([
+            'verified_at' => now(),
+            'last_tested_at' => now(),
+            'last_test_status' => 'succeeded',
+            'last_error_code' => null,
+            'health_status' => 'healthy',
+        ]);
+
+        return $setting->fresh();
+    }
+
+    private function present(?NotificationChannelSetting $setting, string $channel, ?NotificationEmailDestination $accountEmail = null): array
+    {
+        $config = $setting?->configuration ?? [];
+        $data = [
+            'channel' => $channel,
+            'enabled' => (bool) $setting?->enabled,
+            'health_status' => $setting?->health_status ?? 'unverified',
+            'verified_at' => $setting?->verified_at?->toIso8601String(),
+            'last_tested_at' => $setting?->last_tested_at?->toIso8601String(),
+            'last_test_status' => $setting?->last_test_status,
+            'can_disable' => true,
+        ];
+
+        if ($channel === 'telegram') {
+            $data['bot_token_configured'] = ! empty($config['bot_token']);
+            $data['chat_id'] = $config['chat_id'] ?? null;
+        } elseif ($channel === 'webhook') {
+            $data['url'] = $config['url'] ?? null;
+            $data['signing_secret_configured'] = ! empty($config['signing_secret']);
+        } elseif ($channel === 'email') {
+            $data['account_email'] = $accountEmail?->email;
+            $data['account_email_verified'] = (bool) $accountEmail?->verified_at;
+        }
+
+        return $data;
+    }
+
+    private function materialConfiguration(array $configuration): array
+    {
+        unset($configuration['signing_secret']);
+        ksort($configuration);
+
+        return $configuration;
+    }
+
+    private function assertExternalChannel(string $channel): void
+    {
+        if (! in_array($channel, self::EXTERNAL_CHANNELS, true)) {
+            throw ValidationException::withMessages(['channel' => ['Unsupported or mandatory notification channel.']]);
+        }
+    }
+}

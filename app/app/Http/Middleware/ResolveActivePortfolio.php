@@ -80,6 +80,8 @@ class ResolveActivePortfolio
             'api/v1/artifacts/indicator/*',
             'api/notification-center',
             'api/notification-center/*',
+            'api/notification-settings',
+            'api/notification-settings/*',
         );
     }
 }

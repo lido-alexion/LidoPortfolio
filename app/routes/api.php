@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\KnowledgeBoardNoteController;
 use App\Http\Controllers\Api\KnowledgeBoardTagController;
 use App\Http\Controllers\Api\MarketDepthController;
 use App\Http\Controllers\Api\NotificationCenterController;
+use App\Http\Controllers\Api\NotificationSettingsController;
 use App\Http\Controllers\Api\OperationalAlertController;
 use App\Http\Controllers\Api\PasswordResetAcceptController;
 use App\Http\Controllers\Api\PasswordResetLinkController;
@@ -99,6 +100,12 @@ Route::middleware('auth:sanctum')->prefix('notification-center')->group(function
     Route::post('/mark-all-read', [NotificationCenterController::class, 'markAllRead']);
     Route::get('/{notification}', [NotificationCenterController::class, 'show'])->whereNumber('notification');
     Route::post('/{notification}/read', [NotificationCenterController::class, 'markRead'])->whereNumber('notification');
+});
+
+Route::middleware('auth:sanctum')->prefix('notification-settings')->group(function () {
+    Route::get('/', [NotificationSettingsController::class, 'index']);
+    Route::put('/{channel}', [NotificationSettingsController::class, 'update'])
+        ->where('channel', 'telegram|email|webhook');
 });
 
 Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
