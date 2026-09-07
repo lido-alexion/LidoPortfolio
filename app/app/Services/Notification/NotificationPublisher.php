@@ -15,6 +15,8 @@ class NotificationPublisher
 
     private const AUDIENCES = ['investor', 'admin', 'both'];
 
+    public function __construct(private NotificationDeliveryPlanner $deliveries) {}
+
     /** @param iterable<User> $recipients */
     public function publishEvent(iterable $recipients, array $content): NotificationSource
     {
@@ -29,6 +31,7 @@ class NotificationPublisher
             ]);
             $this->recordOccurrence($source, 'detected', $now);
             $this->fanOut($source, $recipients, $now);
+            $this->deliveries->planInitial($source);
 
             return $source->fresh(['recipients', 'occurrences']);
         });
@@ -68,6 +71,11 @@ class NotificationPublisher
             $this->fanOut($source, $recipients, $now);
             if ($makeUnread) {
                 $source->recipients()->update(['attention_state' => 'unread', 'read_at' => null, 'latest_activity_at' => $now]);
+            }
+            if ($activity === 'detected') {
+                $this->deliveries->planInitial($source);
+            } elseif ($makeUnread) {
+                $this->deliveries->planInitial($source, 'escalation');
             }
 
             return $source->fresh(['recipients', 'occurrences']);

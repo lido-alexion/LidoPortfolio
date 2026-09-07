@@ -88,6 +88,12 @@ class NotificationChannelSettingsService
             'last_error_code' => null,
             'health_status' => 'healthy',
         ]);
+        if ($channel === 'email') {
+            NotificationEmailDestination::query()->updateOrCreate(
+                ['user_id' => $user->id, 'email' => $user->email],
+                ['is_account_email' => true, 'verified_at' => now()],
+            );
+        }
 
         return $setting->fresh();
     }
