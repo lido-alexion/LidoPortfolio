@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\Notification\NotificationChannelSettingsService;
+use App\Services\Notification\NotificationChannelTester;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -38,5 +39,12 @@ class NotificationSettingsController extends Controller
             $configuration,
             array_key_exists('enabled', $validated) ? (bool) $validated['enabled'] : null,
         )]);
+    }
+
+    public function test(Request $request, string $channel, NotificationChannelTester $tester): JsonResponse
+    {
+        $result = $tester->test($request->user(), $channel);
+
+        return response()->json(['data' => $result], $result['successful'] ? 200 : 422);
     }
 }

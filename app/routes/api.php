@@ -106,6 +106,8 @@ Route::middleware('auth:sanctum')->prefix('notification-settings')->group(functi
     Route::get('/', [NotificationSettingsController::class, 'index']);
     Route::put('/{channel}', [NotificationSettingsController::class, 'update'])
         ->where('channel', 'telegram|email|webhook');
+    Route::post('/{channel}/test', [NotificationSettingsController::class, 'test'])
+        ->where('channel', 'telegram|email|webhook');
 });
 
 Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {

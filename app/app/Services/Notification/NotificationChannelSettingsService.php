@@ -38,8 +38,13 @@ class NotificationChannelSettingsService
             ]);
             $current = $setting->configuration ?? [];
             $next = array_merge($current, array_filter($configuration, fn ($value) => $value !== null));
+            $generatedSecret = null;
+            if ($channel === 'webhook') {
+                $this->assertSafeWebhookUrl((string) ($next['url'] ?? ''));
+            }
             if ($channel === 'webhook' && empty($next['signing_secret'])) {
-                $next['signing_secret'] = bin2hex(random_bytes(32));
+                $generatedSecret = bin2hex(random_bytes(32));
+                $next['signing_secret'] = $generatedSecret;
             }
 
             $materialChange = $setting->exists && $this->materialConfiguration($current) !== $this->materialConfiguration($next);
@@ -60,7 +65,12 @@ class NotificationChannelSettingsService
             }
             $setting->save();
 
-            return $this->present($setting->fresh(), $channel);
+            $presented = $this->present($setting->fresh(), $channel);
+            if ($generatedSecret !== null) {
+                $presented['signing_secret_once'] = $generatedSecret;
+            }
+
+            return $presented;
         });
     }
 
@@ -121,6 +131,20 @@ class NotificationChannelSettingsService
     {
         if (! in_array($channel, self::EXTERNAL_CHANNELS, true)) {
             throw ValidationException::withMessages(['channel' => ['Unsupported or mandatory notification channel.']]);
+        }
+    }
+
+    private function assertSafeWebhookUrl(string $url): void
+    {
+        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+        $isLocalName = $host === 'localhost' || str_ends_with($host, '.localhost');
+        $isUnsafeIp = filter_var($host, FILTER_VALIDATE_IP)
+            && ! filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE);
+
+        if ($host === '' || $isLocalName || $isUnsafeIp) {
+            throw ValidationException::withMessages([
+                'url' => ['Webhook destination must be a public HTTPS endpoint.'],
+            ]);
         }
     }
 }
