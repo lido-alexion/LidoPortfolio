@@ -46,6 +46,7 @@ export const ROUTES = Object.freeze({
     SETTINGS_SCREENER_REGISTRY: '/settings/screener-registry',
     SETTINGS_STRATEGY_REGISTRY: '/settings/strategy-registry',
     NOTIFICATION_HISTORY: '/notification-history',
+    NOTIFICATION_SETTINGS: '/settings/notifications',
     PORTFOLIOS: '/portfolios',
     PROFILE: '/profile',
     DOCUMENTATION: '/documentation',

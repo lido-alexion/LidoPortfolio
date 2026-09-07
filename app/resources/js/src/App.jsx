@@ -58,6 +58,7 @@ import ReviewDashboardPage from './pages/ReviewDashboardPage';
 import ReviewReportsListPage from './pages/ReviewReportsListPage';
 import ReviewReportDetailPage from './pages/ReviewReportDetailPage';
 import NotificationHistoryPage from './pages/NotificationHistoryPage';
+import NotificationSettingsPage from './pages/NotificationSettingsPage';
 import CashManagementPage from './pages/CashManagementPage';
 import StrategyPage from './pages/StrategyPage';
 import BacktestHistoryPage from './pages/BacktestHistoryPage';
@@ -97,6 +98,7 @@ function AppRoutes() {
             <Route path="/review/reports" element={<ReviewReportsListPage />} />
             <Route path="/review" element={<ReviewDashboardPage />} />
             <Route path="/notification-history" element={<NotificationHistoryPage />} />
+            <Route path="/settings/notifications" element={<NotificationSettingsPage />} />
             <Route path="/patterns" element={<PatternGuidePage />} />
             <Route path="/knowledge-board" element={<KnowledgeBoardPage />} />
             <Route path="/knowledge-board/tags" element={<KnowledgeBoardTagsPage />} />
@@ -198,6 +200,7 @@ function AdminAppRoutes() {
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/documentation" element={<DocumentationPage />} />
             <Route path="/notification-history" element={<NotificationHistoryPage />} />
+            <Route path="/settings/notifications" element={<NotificationSettingsPage />} />
             <Route path="/settings/users" element={<UserManagementPage />} />
             <Route path="/settings/stocks" element={<StocksAdminPage />} />
             <Route path="/settings/sync-logs" element={<SyncLogsPage />} />

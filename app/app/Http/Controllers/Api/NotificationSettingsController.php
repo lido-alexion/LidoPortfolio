@@ -7,7 +7,6 @@ use App\Services\Notification\NotificationChannelSettingsService;
 use App\Services\Notification\NotificationChannelTester;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 class NotificationSettingsController extends Controller
 {
@@ -22,9 +21,9 @@ class NotificationSettingsController extends Controller
     {
         $validated = $request->validate([
             'enabled' => ['nullable', 'boolean'],
-            'bot_token' => [Rule::requiredIf($channel === 'telegram'), 'nullable', 'string', 'max:255'],
-            'chat_id' => [Rule::requiredIf($channel === 'telegram'), 'nullable', 'string', 'max:255'],
-            'url' => [Rule::requiredIf($channel === 'webhook'), 'nullable', 'url:https', 'max:1000'],
+            'bot_token' => ['nullable', 'string', 'max:255'],
+            'chat_id' => ['nullable', 'string', 'max:255'],
+            'url' => ['nullable', 'url:https', 'max:1000'],
         ]);
 
         $configuration = match ($channel) {

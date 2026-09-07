@@ -117,6 +117,7 @@ export default function Sidebar() {
             'admin-alerts',
             'universe-price-sync',
             'notification-history',
+            'notification-settings',
             'profile',
         ]);
         const catalog = navigationRegistry.getCatalog()

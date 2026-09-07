@@ -39,7 +39,15 @@ class NotificationChannelSettingsService
             $current = $setting->configuration ?? [];
             $next = array_merge($current, array_filter($configuration, fn ($value) => $value !== null));
             $generatedSecret = null;
+            if ($channel === 'telegram' && (empty($next['bot_token']) || empty($next['chat_id']))) {
+                throw ValidationException::withMessages([
+                    'bot_token' => ['Telegram bot token and chat ID are required.'],
+                ]);
+            }
             if ($channel === 'webhook') {
+                if (empty($next['url'])) {
+                    throw ValidationException::withMessages(['url' => ['Webhook URL is required.']]);
+                }
                 $this->assertSafeWebhookUrl((string) ($next['url'] ?? ''));
             }
             if ($channel === 'webhook' && empty($next['signing_secret'])) {

@@ -66,6 +66,19 @@ class NotificationSettingsApiTest extends TestCase
         $this->assertStringNotContainsString('secret-bot-token', $raw);
     }
 
+    public function test_verified_telegram_can_be_enabled_without_resending_its_token(): void
+    {
+        $user = User::factory()->create();
+        $service = app(NotificationChannelSettingsService::class);
+        $service->update($user, 'telegram', ['bot_token' => 'secret-bot-token', 'chat_id' => 'chat-42'], false);
+        $service->markVerified($user, 'telegram');
+
+        $this->actingAs($user)->putJson('/api/notification-settings/telegram', [
+            'enabled' => true,
+            'chat_id' => 'chat-42',
+        ])->assertOk()->assertJsonPath('data.enabled', true);
+    }
+
     public function test_material_destination_change_returns_channel_to_unverified_and_disabled(): void
     {
         $user = User::factory()->create();

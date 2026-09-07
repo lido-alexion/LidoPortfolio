@@ -7,6 +7,7 @@ const header = readFileSync(new URL('../../resources/js/src/components/AppHeader
 const bell = readFileSync(new URL('../../resources/js/src/components/NotificationBell.jsx', import.meta.url), 'utf8');
 const banner = readFileSync(new URL('../../resources/js/src/components/CriticalNotificationBanner.jsx', import.meta.url), 'utf8');
 const center = readFileSync(new URL('../../resources/js/src/pages/NotificationHistoryPage.jsx', import.meta.url), 'utf8');
+const settings = readFileSync(new URL('../../resources/js/src/pages/NotificationSettingsPage.jsx', import.meta.url), 'utf8');
 
 test('both authenticated role shells share global notification chrome', () => {
     assert.match(app, /<NotificationProvider>/);
@@ -32,4 +33,12 @@ test('Notification Center provides frozen quick views and attention-only actions
     }
     assert.match(center, /mark-all-read/);
     assert.doesNotMatch(center, /Retry attempted|Trading OS Telegram deliveries/);
+});
+
+test('notification settings exposes encrypted-channel lifecycle controls', () => {
+    assert.match(settings, /notification-settings\/\$\{channel\}/);
+    assert.match(settings, /notification-settings\/\$\{channel\}\/test/);
+    assert.match(settings, /signing_secret_once/);
+    assert.match(settings, /canTest/);
+    assert.match(settings, /bot_token_configured/);
 });
