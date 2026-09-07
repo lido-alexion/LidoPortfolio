@@ -15,7 +15,7 @@ This is the single active source of truth for V5 wishlist discovery, prioritizat
 
 Feature IDs retained from the earlier combined roadmap remain `V4-FEAT-*` to preserve traceability. An ID prefix records origin; it does not assign the feature back to V4. New entries continue the existing sequence until a deliberate ID migration is approved.
 
-Moving an item here does not satisfy it. Every item remains `OPEN` until its product rules are sufficiently specified, implemented, tested, documented, deployed, and production-verified as appropriate.
+Moving an item here does not satisfy it. A feature reaches `COMPLETE` only after its product rules are sufficiently specified, implemented, tested, documented, deployed, and production-verified as appropriate.
 
 ### Status values
 
@@ -23,7 +23,9 @@ Moving an item here does not satisfy it. Every item remains `OPEN` until its pro
 
 ## 2. V5 wishlist
 
-Current count: **5 OPEN / 2 IN PROGRESS / 10 DECIDED / 6 COMPLETE / 1 SUPERSEDED**.
+**V5 scope is now reconciled and frozen at 18 items.** Items explicitly deferred to V6 are not part of the V5 closure gate and appear only in section 3.
+
+Current count: **0 OPEN / 1 IN PROGRESS / 10 DECIDED / 6 COMPLETE / 1 SUPERSEDED**.
 
 | ID | Item | V5 scope and rationale | Priority | Status |
 |----|------|------------------------|----------|--------|
@@ -34,17 +36,11 @@ Current count: **5 OPEN / 2 IN PROGRESS / 10 DECIDED / 6 COMPLETE / 1 SUPERSEDED
 | V4-FEAT-012 | Admin force-logout of other users (PD-007) | **Frozen:** [`V5-FEAT-012-Admin-Force-Logout.md`](V5-FEAT-012-Admin-Force-Logout.md). Elevates deferred V2 PD-007 into an Admin-only FEAT-042 capability to view a target user's app sessions and revoke one/all sessions using existing database-session infrastructure, with strict authorization and audit evidence. | P3 | DECIDED |
 | V4-FEAT-013 | Cash-as-of / export / compare polish | **Frozen:** [`V5-FEAT-013-Cash-Export-Compare.md`](V5-FEAT-013-Cash-Export-Compare.md). Append-only Portfolio cash ledger authority, arbitrary-date historical cash/value with explicit completeness, complete Cash Statement, secure schema-versioned CSV exports and same-Portfolio Date-A-vs-Date-B comparison without mislabelling wealth changes as returns or inventing causal attribution. | P3 | DECIDED |
 | V4-FEAT-015 | Tax reporting / attribution / benchmarks | **Frozen:** [`V5-FEAT-015-Tax-Attribution-Benchmarks.md`](V5-FEAT-015-Tax-Attribution-Benchmarks.md). XIRR/TWR performance, NIFTY 50 TRI/default benchmark catalogue, risk and reconciliation-based attribution, separate FIFO tax-lot derivation over WAVG accounting, India-focused capital-gains/loss/dividend reporting, What-if/configured inclusion, evidence/completeness and tax exports. | P3 | DECIDED |
-| V4-FEAT-016 | Mobile application | New client. | TBD | OPEN |
-| V4-FEAT-017 | AI assistant (non-decision) | New assistive surface. | TBD | OPEN |
-| V4-FEAT-018 | ML scoring models | Optional non-deterministic path; V3/V4 decision logic is deterministic. | TBD | OPEN |
-| V4-FEAT-019 | Options / crypto / ETF products | Markets and instrument expansion. | TBD | OPEN |
 | V4-FEAT-020 | Paper Portfolio / Portfolio Replay / Strategy Backtest | **Frozen:** [`V5-FEAT-020-Paper-Replay-Backtest.md`](V5-FEAT-020-Paper-Replay-Backtest.md). Three distinct simulation surfaces: simplified per-Strategy historical Backtest, high-fidelity historical Portfolio Replay, and forward/current-market Paper Portfolio using normal StoX accounting/capital mechanics with simulated execution. Includes immutable artifact pinning, point-in-time data integrity, configurable historical fill methodology, deterministic Replay, Paper catch-up/pause semantics, bounded resumable processing, run evidence/comparison and Backtest-to-Strategy-Draft workflow. | TBD | DECIDED |
 | V4-FEAT-030 | CI workflow for PHPUnit + frontend build | **Implemented and verified 2026-09-04:** CI runs the full Laravel/PHPUnit suite on PHP 8.4 plus JavaScript tests and a production Vite build on Node 22 for pushes to `master`, pull requests, and manual dispatch. Initial full coverage exposed and repaired stale market-gate fixtures and the intentionally public, encrypted-state Kite callback contract. GitHub Actions run `33865499081` passed both jobs on `e09a9ff`. | P2 | COMPLETE |
 | V4-FEAT-031 | Production secrets / single-folder deploy hardening | **Implemented; production cutover verification pending:** [`V5-FEAT-031-Production-Secrets-Single-Folder-Deploy.md`](V5-FEAT-031-Production-Secrets-Single-Folder-Deploy.md). External environment secrets, one-build packaging, nested Laravel denial, compatible cPanel helpers, migration verification, and rollback are implemented. | P3 | IN PROGRESS |
 | V4-FEAT-033 | Discovery inline default screener | **Implemented 2026-09-04:** [`V5-FEAT-033-Discovery-Inline-Default-Screener.md`](V5-FEAT-033-Discovery-Inline-Default-Screener.md). Discovery shows and runs the factory screener inline using existing APIs, while keeping candidate regeneration explicit. | P3 | COMPLETE |
 | V4-FEAT-034 | Richer Evaluation history UX | **Implemented 2026-09-04:** [`V5-FEAT-034-Richer-Evaluation-History-UX.md`](V5-FEAT-034-Richer-Evaluation-History-UX.md). Discovery includes a bounded, portfolio-scoped Evaluation run selector and ranked historical results without restoring a separate Evaluation page. | P3 | COMPLETE |
-| V4-FEAT-035 | TypeScript / TanStack Query / AG Grid migration | **Incremental migration in progress (2026-09-04):** TypeScript strict/no-emit checking and CI gate, application-level TanStack Query provider with portfolio-scoped Evaluation queries, and a typed/lazy-loaded AG Grid Evaluation-history table are implemented. Remaining legacy screens migrate opportunistically; no big-bang rewrite. See [`V5-FEAT-035-Frontend-Stack-Migration.md`](V5-FEAT-035-Frontend-Stack-Migration.md). | TBD | IN PROGRESS |
-| V4-FEAT-036 | Optional JWT/token API for non-SPA clients | Authentication expansion; the current SPA continues to use Sanctum session cookies. | TBD | OPEN |
 | V4-FEAT-037 | Dashboard-first daily Kite readiness and reconnect | **Implemented 2026-09-04:** Dashboard readiness/reconnect plus configurable, portfolio-local at-most-once-daily Telegram reminder. See [`V5-FEAT-037-Dashboard-Kite-Readiness.md`](V5-FEAT-037-Dashboard-Kite-Readiness.md). | P2 | COMPLETE |
 | V4-FEAT-038 | Exchange holidays in Calendar with automatic holiday-list sync | **Implemented 2026-09-04:** existing global amber Trade Holidays/TradingCalendar completed with weekly official NSE CM sync, provenance, future-date refresh, post-session immutability, and durable admin overrides. See [`V5-FEAT-038-Exchange-Holiday-Calendar.md`](V5-FEAT-038-Exchange-Holiday-Calendar.md). | P2 | COMPLETE |
 | V4-FEAT-039 | Holiday-aware scheduled order execution | **Implemented and verified 2026-09-05:** [`V5-FEAT-039-Holiday-Aware-Scheduled-Execution.md`](V5-FEAT-039-Holiday-Aware-Scheduled-Execution.md). Two-session holiday-aware target seeking, Investor-level Automatic/authorized-Semi coordination, same-symbol internal transfers and final valuation, shared-funds resizing, bounded margin retries, revalidation, progress UX, and lifecycle notifications are complete. | P2 | COMPLETE |
@@ -52,14 +48,30 @@ Current count: **5 OPEN / 2 IN PROGRESS / 10 DECIDED / 6 COMPLETE / 1 SUPERSEDED
 | V4-FEAT-041 | Linked Markdown wiki rooted in Knowledge Board | **Frozen:** [`V5-FEAT-041-Linked-Markdown-Wiki.md`](V5-FEAT-041-Linked-Markdown-Wiki.md). Portfolio-scoped Markdown-native Wiki Pages alongside existing Notes, stable identity-based links and hierarchy, revision history, integrated Knowledge search, portable Markdown export, managed images, and explicit revocable anonymous page sharing that never exposes private portfolio hierarchy or implicitly shares linked pages. | P2 | DECIDED |
 | V4-FEAT-042 | Separate role-based Admin Portal and investor application | **Frozen:** [`V5-FEAT-042-Role-Separated-Admin-Investor-Applications.md`](V5-FEAT-042-Role-Separated-Admin-Investor-Applications.md). Keep one login, then enforce distinct role-specific application shells and backend authorization. Admin accounts cannot own or operate Investor-domain portfolios/trading resources; Investors cannot access Admin surfaces. Existing Admin-owned investment data must be detected and handled through explicit non-destructive migration/validation before enforcing the invariant. | P1 | DECIDED |
 
-## 3. Preserved V6 wishlist additions
+## 3. V6 deferred / preserved wishlist
 
-1. **Dashboard Kite disconnect kill switch.** Immediately disconnect/revoke StoX's usable Kite session and block new submissions until reconnect. It does not cancel already-submitted orders.
-2. **Emergency cancel-open-orders then disconnect kill switch.** After deliberate confirmation, attempt to cancel every StoX-managed Kite order not fully executed, including only the cancellable remainder of partial fills. Persist and report every failure; then disconnect. Disconnection is not proof of cancellation.
-3. **Live Kite quote-based execution sizing.** Immediately before an automated/semi-automated order, fetch the latest applicable Kite price and derive whole shares through `target amount -> actual Strategy ownership -> remaining gap -> live price -> V3 capital/lending -> internal netting -> verified shared broker funds -> residual order`. This replaces V5's previous-session-close sizing, keeps the cushion as safety margin and reduces dependence on V5's 5%-retry fallback.
-4. **First-class account Execution State and persistent emergency controls.** Separate operational execution state from portfolio mode. Support `Normal` and `Emergency Halt`; kill-switch actions enter Emergency Halt and immediately block new execution while leaving the configured Semi/Automatic portfolio mode intact. Recovery is an explicit "Get-a-life" action after required readiness/reconciliation checks and never occurs automatically. If any portfolio in the Investor account has Semi-Automatic or Automatic mode enabled, the kill switch must remain visible and quickly accessible on every Investor-app page and while viewing every portfolio, including Manual portfolios; when halted, the recovery control must likewise remain accessible.
-5. **Clone Portfolio as Paper.** Create a new Paper Portfolio from an existing Portfolio's state/configuration without changing or linking the source Portfolio's financial identity. Exact state/configuration cloning semantics are intentionally deferred to V6 design.
-6. **Admin Audit Explorer.** Add an Admin-only, read-only interface over StoX's persisted audit traces so operational/product auditing does not require direct database queries. Present all useful recorded audit fields with pagination/detail views as needed, and support filtering including Investor, that Investor's Portfolio, date/time range and other trace fields exposed by the underlying audit data. CSV export must export the currently filtered audit result set—the same logical data represented by the UI filters—not an unfiltered audit dump. This surface is observational only: it cannot edit, delete or otherwise mutate audited records.
+The following items are explicitly **not part of the V5 implementation or closure gate**. Existing partial implementation, where noted, is preserved; V5 work must not expand these items merely to make them appear complete.
+
+### Deferred feature IDs
+
+| ID | Item | V6 disposition |
+|----|------|----------------|
+| V4-FEAT-016 | Mobile application | V6 client expansion. |
+| V4-FEAT-017 | AI assistant (non-decision) | V6 assistive surface; must remain non-authoritative for investment decisions unless separately designed. |
+| V4-FEAT-018 | ML scoring models | V6 optional non-deterministic path; deterministic V3/V4/V5 decision logic remains authoritative until explicitly changed. |
+| V4-FEAT-019 | Options / crypto / ETF products | V6 market/instrument expansion. |
+| V4-FEAT-035 | TypeScript / TanStack Query / AG Grid migration | **Deferred remaining migration to V6.** The V5 work already shipped—TypeScript strict/no-emit checking and CI gate, application-level TanStack Query provider with portfolio-scoped Evaluation queries, and typed/lazy-loaded AG Grid Evaluation-history table—remains valid. Do not perform a big-bang V5 rewrite of remaining legacy screens. See [`V5-FEAT-035-Frontend-Stack-Migration.md`](V5-FEAT-035-Frontend-Stack-Migration.md). |
+| V4-FEAT-036 | Optional JWT/token API for non-SPA clients | V6 authentication expansion. V5 SPA continues to use Sanctum session cookies. |
+
+### Additional V6 product work
+
+1. **Dashboard reorganization / widget management.** Reorganize Dashboard surfaces and allow widgets to be hidden/deprioritized, including Upcoming Calendar Events.
+2. **Dashboard Kite disconnect kill switch.** Immediately disconnect/revoke StoX's usable Kite session and block new submissions until reconnect. It does not cancel already-submitted orders.
+3. **Emergency cancel-open-orders then disconnect kill switch.** After deliberate confirmation, attempt to cancel every StoX-managed Kite order not fully executed, including only the cancellable remainder of partial fills. Persist and report every failure; then disconnect. Disconnection is not proof of cancellation.
+4. **Live Kite quote-based execution sizing.** Immediately before an automated/semi-automated order, fetch the latest applicable Kite price and derive whole shares through `target amount -> actual Strategy ownership -> remaining gap -> live price -> V3 capital/lending -> internal netting -> verified shared broker funds -> residual order`. This replaces V5's previous-session-close sizing, keeps the cushion as safety margin and reduces dependence on V5's 5%-retry fallback.
+5. **First-class account Execution State and persistent emergency controls.** Separate operational execution state from portfolio mode. Support `Normal` and `Emergency Halt`; kill-switch actions enter Emergency Halt and immediately block new execution while leaving the configured Semi/Automatic portfolio mode intact. Recovery is an explicit "Get-a-life" action after required readiness/reconciliation checks and never occurs automatically. If any portfolio in the Investor account has Semi-Automatic or Automatic mode enabled, the kill switch must remain visible and quickly accessible on every Investor-app page and while viewing every portfolio, including Manual portfolios; when halted, the recovery control must likewise remain accessible.
+6. **Clone Portfolio as Paper.** Create a new Paper Portfolio from an existing Portfolio's state/configuration without changing or linking the source Portfolio's financial identity. Exact state/configuration cloning semantics are intentionally deferred to V6 design.
+7. **Admin Audit Explorer.** Add an Admin-only, read-only interface over StoX's persisted audit traces so operational/product auditing does not require direct database queries. Present all useful recorded audit fields with pagination/detail views as needed, and support filtering including Investor, that Investor's Portfolio, date/time range and other trace fields exposed by the underlying audit data. CSV export must export the currently filtered audit result set—the same logical data represented by the UI filters—not an unfiltered audit dump. This surface is observational only: it cannot edit, delete or otherwise mutate audited records.
 
 ## 4. Planning rules
 
@@ -73,10 +85,15 @@ Before implementation, each selected feature should have:
 
 Priority is a planning signal, not execution order. Dependencies, risk, and prerequisite product decisions may change the delivery sequence.
 
-## 5. Change log
+## 5. V5 closure rule
+
+V5 is not closed merely when the 18 rows above have implementation statuses resolved. The V5 closure gate also requires a repository-wide conformance audit against authoritative V1–V5 documentation, remediation of actionable inherited implementation gaps/regressions, relevant automated tests and validation, documentation reconciliation, and a final closure report. V6 work must not be started merely to satisfy the V5 gate.
+
+## 6. Change log
 
 | Date | Change |
 |------|--------|
+| 2026-09-07 | **V5/V6 ROADMAP RECONCILED:** froze the active V5 scope at 18 items and removed FEAT-016/017/018/019/035/036 from the V5 implementation/closure table. Preserved them explicitly as V6 work; FEAT-035's already-shipped incremental V5 foundation remains valid while the remaining migration is deferred. Added the previously agreed V6 Dashboard reorganization/widget-management item. V5 now has no product-planning `OPEN` rows. |
 | 2026-09-07 | **FEAT-007/008/012/013/015 DECIDED:** persisted the previously completed PO planning as dedicated frozen specifications for Indicator version/evidence semantics, Trading Artifact lifecycle/bindings/distribution, Admin force-logout, historical cash/export/compare, and performance/tax/attribution/benchmarks. These five features are unblocked for implementation and must not be reopened as greenfield product design. |
 | 2026-09-07 | **FEAT-042 DECIDED:** froze one-login role-separated Admin and Investor applications, server-side/direct-API authorization boundaries, prohibition on Admin ownership of Investor-domain resources, and explicit non-destructive validation/migration for any existing Admin-owned investment data. Implementation is unblocked. |
 | 2026-09-06 | **FEAT-020 DECIDED:** froze distinct Strategy Backtest, Portfolio Replay and Paper Portfolio semantics, including high-fidelity Portfolio simulation, point-in-time integrity, simulated execution/accounting, Paper lifecycle/catch-up/pause, deterministic Replay, bounded resumable processing, evidence/comparison and Backtest parameter experimentation. Added V6 Clone Portfolio as Paper and Admin Audit Explorer wishlist items. |
