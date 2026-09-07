@@ -6,6 +6,7 @@ use App\Models\PortfolioProfile;
 use App\Models\Stock;
 use App\Models\StockPrice;
 use App\Support\IndiaVixScale;
+use App\Services\Notification\NotificationPublisher;
 
 class IndiaVixAlertService
 {
@@ -13,13 +14,13 @@ class IndiaVixAlertService
 
     public function __construct(
         protected ProfileSettingsService $profileSettings,
-        protected TelegramNotificationService $telegram,
+        protected NotificationPublisher $publisher,
         protected PortfolioLoggerService $logger,
     ) {}
 
     /**
      * Evaluate latest India VIX close against each portfolio's threshold.
-     * Notifies via Telegram on cross above (armed while at/below, fires once while above).
+     * Publishes an Action-required condition on cross above (armed while at/below, fires once while above).
      *
      * @return array{evaluated: bool, vix: float|null, price_date: string|null, notified: int, rearmed: int, skipped: int}
      */
@@ -94,10 +95,14 @@ class IndiaVixAlertService
                 return 'skipped';
             }
 
-            $message = $this->formatMessage($profile, $vix, $priceDate, $threshold);
-            if (! $this->telegram->sendMessageForProfile($profile, $message)) {
-                return 'skipped';
-            }
+            $this->publisher->publishCondition('india-vix:'.$profile->id, [$profile->user], [
+                'notification_type' => 'market.india_vix',
+                'audience' => 'investor',
+                'severity' => 'action_required',
+                'title' => 'India VIX threshold exceeded',
+                'message' => $this->formatMessage($profile, $vix, $priceDate, $threshold),
+                'context' => ['portfolio_id' => $profile->id, 'vix' => $vix, 'threshold' => $threshold, 'price_date' => $priceDate],
+            ]);
 
             $this->profileSettings->setIndiaVixAlertArmed($profile, false);
 
@@ -105,6 +110,7 @@ class IndiaVixAlertService
         }
 
         if (! $armed) {
+            $this->publisher->resolveCondition('india-vix:'.$profile->id);
             $this->profileSettings->setIndiaVixAlertArmed($profile, true);
 
             return 'rearmed';

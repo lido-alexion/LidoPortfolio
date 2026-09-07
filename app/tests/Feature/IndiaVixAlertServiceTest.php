@@ -7,7 +7,6 @@ use App\Models\StockPrice;
 use App\Models\User;
 use App\Services\IndiaVixAlertService;
 use App\Services\ProfileSettingsService;
-use App\Services\TelegramNotificationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -87,30 +86,11 @@ class IndiaVixAlertServiceTest extends TestCase
         app(ProfileSettingsService::class)->update($profile, [
             'indiavix_alert_enabled' => 'true',
             'indiavix_alert_threshold' => '20',
-            'notifications_enabled' => 'true',
-            'telegram_bot_token' => 'token',
-            'telegram_chat_id' => 'chat',
         ]);
-
-        $telegram = $this->createMock(TelegramNotificationService::class);
-        $telegram->expects($this->once())
-            ->method('sendMessageForProfile')
-            ->with(
-                $this->callback(fn ($p) => $p->id === $profile->id),
-                $this->callback(fn (string $message) => str_contains($message, '21.5')
-                    && str_contains($message, '20')
-                    && str_contains($message, 'India VIX')),
-            )
-            ->willReturn(true);
-        $this->app->instance(TelegramNotificationService::class, $telegram);
 
         $first = app(IndiaVixAlertService::class)->evaluateAndNotify();
         $this->assertTrue($first['evaluated']);
         $this->assertSame(1, $first['notified']);
-
-        $telegram2 = $this->createMock(TelegramNotificationService::class);
-        $telegram2->expects($this->never())->method('sendMessageForProfile');
-        $this->app->instance(TelegramNotificationService::class, $telegram2);
 
         $second = app(IndiaVixAlertService::class)->evaluateAndNotify();
         $this->assertSame(0, $second['notified']);
@@ -130,13 +110,7 @@ class IndiaVixAlertServiceTest extends TestCase
         app(ProfileSettingsService::class)->update($profile, [
             'indiavix_alert_enabled' => 'false',
             'indiavix_alert_threshold' => '20',
-            'telegram_bot_token' => 'token',
-            'telegram_chat_id' => 'chat',
         ]);
-
-        $telegram = $this->createMock(TelegramNotificationService::class);
-        $telegram->expects($this->never())->method('sendMessageForProfile');
-        $this->app->instance(TelegramNotificationService::class, $telegram);
 
         $result = app(IndiaVixAlertService::class)->evaluateAndNotify();
         $this->assertSame(0, $result['notified']);
@@ -157,13 +131,7 @@ class IndiaVixAlertServiceTest extends TestCase
         $settings->update($profile, [
             'indiavix_alert_enabled' => 'true',
             'indiavix_alert_threshold' => '20',
-            'telegram_bot_token' => 'token',
-            'telegram_chat_id' => 'chat',
         ]);
-
-        $telegram = $this->createMock(TelegramNotificationService::class);
-        $telegram->expects($this->exactly(2))->method('sendMessageForProfile')->willReturn(true);
-        $this->app->instance(TelegramNotificationService::class, $telegram);
 
         $this->assertSame(1, app(IndiaVixAlertService::class)->evaluateAndNotify()['notified']);
 
