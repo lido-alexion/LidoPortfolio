@@ -5,7 +5,7 @@
 | **V4 Status** | **V4 COMPLETE AND CLOSED** (18/18 active features complete) |
 | **Document type** | Canonical V5 product wishlist and planning register |
 | **Created** | 2026-09-02 |
-| **Last reconciled** | 2026-09-06 |
+| **Last reconciled** | 2026-09-07 |
 | **Canonical path** | [`specs/LidoPortfolio-V5-Wishlist.md`](LidoPortfolio-V5-Wishlist.md) |
 | **Related** | [`LidoPortfolio-V4-Wishlist.md`](LidoPortfolio-V4-Wishlist.md) · [`LidoPortfolio-V3-Specification.md`](LidoPortfolio-V3-Specification.md) · [`../implementation.md`](../implementation.md) |
 
@@ -23,7 +23,7 @@ Moving an item here does not satisfy it. Every item remains `OPEN` until its pro
 
 ## 2. V5 wishlist
 
-Current count: **12 OPEN / 2 IN PROGRESS / 4 DECIDED / 6 COMPLETE / 1 SUPERSEDED**.
+Current count: **11 OPEN / 2 IN PROGRESS / 5 DECIDED / 6 COMPLETE / 1 SUPERSEDED**.
 
 | ID | Item | V5 scope and rationale | Priority | Status |
 |----|------|------------------------|----------|--------|
@@ -50,7 +50,7 @@ Current count: **12 OPEN / 2 IN PROGRESS / 4 DECIDED / 6 COMPLETE / 1 SUPERSEDED
 | V4-FEAT-039 | Holiday-aware scheduled order execution | **Implemented and verified 2026-09-05:** [`V5-FEAT-039-Holiday-Aware-Scheduled-Execution.md`](V5-FEAT-039-Holiday-Aware-Scheduled-Execution.md). Two-session holiday-aware target seeking, Investor-level Automatic/authorized-Semi coordination, same-symbol internal transfers and final valuation, shared-funds resizing, bounded margin retries, revalidation, progress UX, and lifecycle notifications are complete. | P2 | COMPLETE |
 | V4-FEAT-040 | Kite portfolio reconciliation (holdings and funds) | **Frozen:** [`V5-FEAT-040-Kite-Portfolio-Reconciliation.md`](V5-FEAT-040-Kite-Portfolio-Reconciliation.md). Portfolio-level read-only Kite reconciliation with independent holdings/funds status, immutable runs, transaction-ledger correction by the Investor, holdings-mismatch execution blocking, activation/scheduled/post-trade/manual triggers, one-live-portfolio invariant and trading-day mode-change blackout. | P2 | DECIDED |
 | V4-FEAT-041 | Linked Markdown wiki rooted in Knowledge Board | **Frozen:** [`V5-FEAT-041-Linked-Markdown-Wiki.md`](V5-FEAT-041-Linked-Markdown-Wiki.md). Portfolio-scoped Markdown-native Wiki Pages alongside existing Notes, stable identity-based links and hierarchy, revision history, integrated Knowledge search, portable Markdown export, managed images, and explicit revocable anonymous page sharing that never exposes private portfolio hierarchy or implicitly shares linked pages. | P2 | DECIDED |
-| V4-FEAT-042 | Separate role-based Admin Portal and investor application | Retain one login endpoint, then route each authenticated account to a role-specific application shell. Administrators see only administrative data and controls; normal users see the portfolio and investment application. Enforce separation server-side and in navigation/UI, including direct URLs and APIs. Administrators cannot own portfolios, stocks/holdings, strategies, recommendations, broker connections, or trading activity. Define migration and validation for existing administrator-owned investment data before enforcing this invariant. | P1 | OPEN |
+| V4-FEAT-042 | Separate role-based Admin Portal and investor application | **Frozen:** [`V5-FEAT-042-Role-Separated-Admin-Investor-Applications.md`](V5-FEAT-042-Role-Separated-Admin-Investor-Applications.md). Keep one login, then enforce distinct role-specific application shells and backend authorization. Admin accounts cannot own or operate Investor-domain portfolios/trading resources; Investors cannot access Admin surfaces. Existing Admin-owned investment data must be detected and handled through explicit non-destructive migration/validation before enforcing the invariant. | P1 | DECIDED |
 
 ## 3. Preserved V6 wishlist additions
 
@@ -77,6 +77,7 @@ Priority is a planning signal, not execution order. Dependencies, risk, and prer
 
 | Date | Change |
 |------|--------|
+| 2026-09-07 | **FEAT-042 DECIDED:** froze one-login role-separated Admin and Investor applications, server-side/direct-API authorization boundaries, prohibition on Admin ownership of Investor-domain resources, and explicit non-destructive validation/migration for any existing Admin-owned investment data. Implementation is unblocked. |
 | 2026-09-06 | **FEAT-020 DECIDED:** froze distinct Strategy Backtest, Portfolio Replay and Paper Portfolio semantics, including high-fidelity Portfolio simulation, point-in-time integrity, simulated execution/accounting, Paper lifecycle/catch-up/pause, deterministic Replay, bounded resumable processing, evidence/comparison and Backtest parameter experimentation. Added V6 Clone Portfolio as Paper and Admin Audit Explorer wishlist items. |
 | 2026-09-06 | **FEAT-041 DECIDED:** froze the portfolio-scoped Markdown-native Wiki under Knowledge Board, including separate Notes/Wiki content models, stable hierarchical page identity and links, revision history, integrated search, portable Markdown export, managed images, and explicit revocable anonymous per-page sharing with strict private-hierarchy isolation. |
 | 2026-09-06 | **FEAT-004 DECIDED:** froze the account-level Notification Service and Center, independent attention/condition lifecycle, severity and Critical presentation rules, deduplicated active conditions, durable In-app/Telegram/Email/Webhook delivery, channel preferences/verification/health, 48-hour reminders, immutable history, and Admin/Investor audience separation. FEAT-003 remains superseded by FEAT-004. |
