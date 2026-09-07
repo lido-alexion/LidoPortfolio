@@ -16,7 +16,7 @@ use App\Models\WatchlistItem;
 use App\Services\EquityUniverseService;
 use App\Services\IndexCatalogService;
 use App\Services\IndexConstituentService;
-use App\Services\TelegramNotificationService;
+use App\Services\Notification\NotificationPublisher;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -25,7 +25,7 @@ class ScreenerRunService
     public function __construct(
         protected ScreenerEvaluationService $evaluation,
         protected EquityUniverseService $universe,
-        protected TelegramNotificationService $telegram,
+        protected NotificationPublisher $publisher,
         protected IndexConstituentService $indexConstituents,
         protected IndexCatalogService $indexCatalog,
         protected \App\Services\DataQualityGuardService $dataQualityGuard,
@@ -242,7 +242,7 @@ class ScreenerRunService
 
         if ($screener->telegram_enabled && $run->triggered_by === 'schedule') {
             try {
-                $sent = $this->sendTelegram($screener, $run);
+                $sent = $this->publishNotification($screener, $run);
                 $stats['telegram_sent'] = $sent;
                 $stats['telegram_failed'] = ! $sent;
             } catch (Throwable $e) {
@@ -329,10 +329,10 @@ class ScreenerRunService
         $run->save();
     }
 
-    private function sendTelegram(Screener $screener, ScreenerRun $run): bool
+    private function publishNotification(Screener $screener, ScreenerRun $run): bool
     {
         $profile = PortfolioProfile::query()->find($screener->profile_id);
-        if ($profile === null) {
+        if ($profile === null || ! $profile->user) {
             return false;
         }
 
@@ -386,7 +386,17 @@ class ScreenerRunService
             $lines[] = "… and {$more} more";
         }
 
-        return $this->telegram->sendMessageForProfile($profile, implode("\n", $lines));
+        $this->publisher->publishEvent([$profile->user], [
+            'notification_type' => 'screener.scheduled_run',
+            'audience' => 'investor',
+            'severity' => 'action_required',
+            'title' => 'Scheduled screener completed',
+            'message' => implode("\n", $lines),
+            'context' => ['portfolio_id' => $profile->id, 'screener_id' => $screener->id, 'run_id' => $run->id],
+            'primary_action' => ['label' => 'Open Screener', 'route' => '/screeners'],
+        ]);
+
+        return true;
     }
 
     /**
