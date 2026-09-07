@@ -116,8 +116,6 @@ export default function Sidebar() {
             'indicator-registry',
             'admin-alerts',
             'universe-price-sync',
-            'screener-registry-admin',
-            'strategy-registry-admin',
             'notification-history',
             'profile',
         ]);

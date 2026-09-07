@@ -1,6 +1,6 @@
 # V5 FEAT-042 — Separate Role-Based Admin Portal and Investor Application
 
-**Status:** IN PROGRESS — role shells, portfolio boundary and ownership-conflict audit implemented
+**Status:** IMPLEMENTED — production ownership verification pending
 **Date:** 2026-09-07
 
 ## 1. Problem
@@ -90,3 +90,5 @@ php artisan portfolio:audit-admin-investment-ownership --json
 ```
 
 The command is read-only. It exits successfully only when no Admin account owns a Portfolio or direct Investor broker/execution state. When conflicts exist it reports each Admin account, every active or soft-deleted Portfolio, counts for every current table carrying those Portfolio IDs, and direct broker/execution counts. It never transfers, deletes or guesses ownership; deployment must remain blocked until each reported conflict has an explicit audited disposition.
+
+Administrative catalogue routes defined by FEAT-007/008 are intentionally not exposed in the Admin shell until their separately authorized Admin APIs are implemented. Their legacy Investor-shell route declarations remain guarded and cannot weaken the server-side role boundary.

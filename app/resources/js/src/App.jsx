@@ -207,10 +207,6 @@ function AdminAppRoutes() {
             <Route path="/settings/data-quality/history" element={<CorporateActionHistoryPage />} />
             <Route path="/settings/indicators" element={<IndicatorRegistryPage />} />
             <Route path="/settings/indicators/:id" element={<IndicatorRegistryDetailPage />} />
-            <Route path="/settings/screener-registry" element={<ScreenerRegistryPage adminMode />} />
-            <Route path="/settings/screener-registry/:id" element={<ScreenerRegistryDetailPage adminMode />} />
-            <Route path="/settings/strategy-registry" element={<StrategyRegistryPage adminMode />} />
-            <Route path="/settings/strategy-registry/:id" element={<StrategyRegistryDetailPage adminMode />} />
             <Route path="*" element={<Navigate to="/settings/users" replace />} />
         </Routes>
     );

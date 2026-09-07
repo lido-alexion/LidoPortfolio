@@ -23,6 +23,10 @@ test('Admin shell exposes only administrative and shared account navigation', ()
     assert.match(sidebar, /'profile'/);
     assert.match(sidebar, /!user\?\.is_admin && <SidebarFavourites/);
     assert.match(sidebar, /!user\?\.is_admin && <SidebarQuickActions/);
+    assert.doesNotMatch(
+        app.match(/function AdminAppRoutes\(\)[\s\S]*?\n}\n\nfunction AuthenticatedShell/)?.[0] || '',
+        /adminMode/,
+    );
 });
 
 test('Admin header never renders the Investor portfolio switcher', () => {

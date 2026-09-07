@@ -73,6 +73,24 @@ class RoleSeparatedApplicationTest extends TestCase
         $this->assertSame(0, PortfolioProfile::query()->where('user_id', $admin->id)->count());
     }
 
+    public function test_admin_is_rejected_across_investor_domain_apis(): void
+    {
+        $admin = $this->makeUser(true);
+        $this->login($admin);
+
+        foreach ([
+            '/api/transactions',
+            '/api/holdings',
+            '/api/knowledge-board/notes',
+            '/api/v1/recommendations',
+            '/api/v1/broker/status',
+        ] as $uri) {
+            $this->getJson($uri)
+                ->assertForbidden()
+                ->assertJsonPath('message', 'Investor application access is not available to Admin accounts.');
+        }
+    }
+
     public function test_admin_can_still_use_admin_and_shared_session_apis(): void
     {
         $admin = $this->makeUser(true);
