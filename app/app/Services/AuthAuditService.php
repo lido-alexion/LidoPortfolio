@@ -41,6 +41,34 @@ class AuthAuditService
     }
 
     /**
+     * Record FEAT-012 administrative session revocation without persisting a
+     * reusable session identifier or any authentication secret.
+     *
+     * @param  array<int, string>  $sessionIds
+     */
+    public function logAdminForceLogout(
+        User $actor,
+        User $target,
+        Request $request,
+        string $scope,
+        array $sessionIds,
+        int $affectedCount,
+    ): void {
+        $this->logger->security('warning', 'Administrator forced user logout', [
+            ...$this->context($actor, $request),
+            'actor_user_id' => $actor->id,
+            'target_user_id' => $target->id,
+            'scope' => $scope,
+            'affected_count' => $affectedCount,
+            'session_references' => array_map(
+                static fn (string $id): string => substr(hash('sha256', $id), 0, 12),
+                $sessionIds,
+            ),
+            'occurred_at' => now()->toIso8601String(),
+        ]);
+    }
+
+    /**
      * @return array<string, mixed>
      */
     protected function context(User $user, Request $request): array

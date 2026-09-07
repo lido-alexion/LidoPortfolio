@@ -156,6 +156,10 @@ export default function UserManagementPage() {
     const [resetBusyId, setResetBusyId] = useState(null);
     const [creatingInvite, setCreatingInvite] = useState(false);
     const [creatingResetLink, setCreatingResetLink] = useState(false);
+    const [sessionUser, setSessionUser] = useState(null);
+    const [sessions, setSessions] = useState([]);
+    const [sessionsLoading, setSessionsLoading] = useState(false);
+    const [sessionBusyId, setSessionBusyId] = useState(null);
 
     const loadAll = useCallback(async () => {
         setLoading(true);
@@ -183,6 +187,56 @@ export default function UserManagementPage() {
     useEffect(() => {
         loadAll();
     }, [loadAll]);
+
+    const openSessions = async (targetUser) => {
+        setSessionUser(targetUser);
+        setSessions([]);
+        setSessionsLoading(true);
+        try {
+            const res = await api.get(`/users/${targetUser.id}/sessions`);
+            setSessions(res.data.data || []);
+        } catch (error) {
+            showToast(error?.response?.data?.message || 'Failed to load active sessions', 'danger');
+            setSessionUser(null);
+        } finally {
+            setSessionsLoading(false);
+        }
+    };
+
+    const revokeSession = async (session) => {
+        if (!sessionUser || !window.confirm(`Force logout ${sessionUser.email} from ${session.device}?`)) {
+            return;
+        }
+        setSessionBusyId(session.id);
+        try {
+            await api.delete(`/users/${sessionUser.id}/sessions/${encodeURIComponent(session.id)}`);
+            setSessions((rows) => rows.filter((row) => row.id !== session.id));
+            showToast('Session revoked');
+        } catch (error) {
+            if (error?.response?.status === 404) {
+                setSessions((rows) => rows.filter((row) => row.id !== session.id));
+            }
+            showToast(error?.response?.data?.message || 'Failed to revoke session', 'danger');
+        } finally {
+            setSessionBusyId(null);
+        }
+    };
+
+    const revokeAllSessions = async () => {
+        if (!sessionUser || !window.confirm(`Force logout ${sessionUser.email} from all active application sessions?`)) {
+            return;
+        }
+        setSessionBusyId('all');
+        try {
+            const res = await api.delete(`/users/${sessionUser.id}/sessions`);
+            setSessions([]);
+            showToast(`${res.data.sessions_removed || 0} session(s) revoked`);
+        } catch (error) {
+            showToast(error?.response?.data?.message || 'Failed to revoke sessions', 'danger');
+        } finally {
+            setSessionBusyId(null);
+        }
+    };
 
     const createInvite = async (e) => {
         e.preventDefault();
@@ -627,18 +681,27 @@ export default function UserManagementPage() {
                                                                 Reset password
                                                             </button>
                                                             {!isSelf ? (
-                                                                <button
-                                                                    type="button"
-                                                                    className={`btn btn-sm ${row.is_admin ? 'btn-outline-secondary' : 'btn-outline-primary'}`}
-                                                                    onClick={() => toggleRole(row)}
-                                                                    disabled={busy}
-                                                                >
-                                                                    {busy
-                                                                        ? 'Saving…'
-                                                                        : row.is_admin
-                                                                            ? 'Revoke admin access'
-                                                                            : 'Make admin'}
-                                                                </button>
+                                                                <>
+                                                                    <button
+                                                                        type="button"
+                                                                        className="btn btn-sm btn-outline-danger"
+                                                                        onClick={() => openSessions(row)}
+                                                                    >
+                                                                        Manage sessions
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        className={`btn btn-sm ${row.is_admin ? 'btn-outline-secondary' : 'btn-outline-primary'}`}
+                                                                        onClick={() => toggleRole(row)}
+                                                                        disabled={busy}
+                                                                    >
+                                                                        {busy
+                                                                            ? 'Saving…'
+                                                                            : row.is_admin
+                                                                                ? 'Revoke admin access'
+                                                                                : 'Make admin'}
+                                                                    </button>
+                                                                </>
                                                             ) : null}
                                                             <button
                                                                 type="button"
@@ -664,6 +727,66 @@ export default function UserManagementPage() {
                     </div>
                 </div>
             </div>
+
+            {sessionUser ? (
+                <div className="col-12">
+                    <div className="card border-danger-subtle" id="admin-user-sessions">
+                        <div className="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                            <div>
+                                <strong>Active application sessions</strong>
+                                <span className="text-muted ms-2">{sessionUser.name || sessionUser.email}</span>
+                            </div>
+                            <button type="button" className="btn-close" aria-label="Close sessions" onClick={() => setSessionUser(null)} />
+                        </div>
+                        <div className="card-body">
+                            <p className="text-muted small">
+                                Revoking these sessions requires the user to sign in again. Passwords, account status, and Kite connections are unchanged.
+                            </p>
+                            {sessionsLoading ? (
+                                <div className="text-muted">Loading sessions…</div>
+                            ) : sessions.length === 0 ? (
+                                <div className="text-muted">No active application sessions.</div>
+                            ) : (
+                                <div className="table-responsive">
+                                    <table className="table table-sm align-middle">
+                                        <thead><tr><th>Device</th><th>IP address</th><th>Login time</th><th>Last active</th><th /></tr></thead>
+                                        <tbody>
+                                            {sessions.map((session) => (
+                                                <tr key={session.id}>
+                                                    <td>{session.device}</td>
+                                                    <td>{session.ip_address || '—'}</td>
+                                                    <td>{formatDate(session.login_time)}</td>
+                                                    <td>{formatDate(session.last_activity)}</td>
+                                                    <td className="text-end">
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-sm btn-outline-danger"
+                                                            disabled={sessionBusyId !== null}
+                                                            onClick={() => revokeSession(session)}
+                                                        >
+                                                            {sessionBusyId === session.id ? 'Revoking…' : 'Force logout'}
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                            <div className="d-flex justify-content-end mt-3">
+                                <button
+                                    type="button"
+                                    className="btn btn-danger"
+                                    disabled={sessionsLoading || sessionBusyId !== null}
+                                    onClick={revokeAllSessions}
+                                >
+                                    {sessionBusyId === 'all' ? 'Revoking…' : 'Force logout all sessions'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
         </div>
     );
 }

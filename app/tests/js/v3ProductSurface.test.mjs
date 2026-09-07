@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path';
 
 const src = join(dirname(fileURLToPath(import.meta.url)), '../../resources/js/src');
 const nav = readFileSync(join(src, 'config/navigation.js'), 'utf8');
+const icons = readFileSync(join(src, 'navigation/icons.js'), 'utf8');
 const page = readFileSync(join(src, 'pages/StrategyPage.jsx'), 'utf8');
 const registry = readFileSync(join(src, 'pages/StrategyRegistryPage.jsx'), 'utf8');
 const createPanel = readFileSync(join(src, 'components/strategy/CreateStrategyPanel.jsx'), 'utf8');
@@ -32,6 +33,11 @@ test('Strategy Registry remains a Trading sidebar item', () => {
     assert.match(entry, /title: 'Strategy Registry'/);
     assert.match(entry, /showInSidebar: true/);
     assert.match(entry, /ROUTES\.STRATEGY_REGISTRY/);
+});
+
+test('every configured History navigation icon is registered', () => {
+    assert.match(nav, /icon: 'History'/);
+    assert.match(icons, /\bHistory,/);
 });
 
 test('Create Strategy action exists on Registry, editor, and create panel', () => {

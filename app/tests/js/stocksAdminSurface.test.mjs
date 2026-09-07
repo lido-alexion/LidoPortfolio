@@ -8,6 +8,7 @@ const src = join(dirname(fileURLToPath(import.meta.url)), '../../resources/js/sr
 const app = readFileSync(join(src, 'App.jsx'), 'utf8');
 const nav = readFileSync(join(src, 'config/navigation.js'), 'utf8');
 const page = readFileSync(join(src, 'pages/StocksAdminPage.jsx'), 'utf8');
+const usersPage = readFileSync(join(src, 'pages/UserManagementPage.jsx'), 'utf8');
 
 test('Stocks admin route is wrapped in AdminRoute', () => {
     assert.match(app, /path="\/settings\/stocks"/);
@@ -32,4 +33,12 @@ test('Stocks admin page has no manual add or delete controls', () => {
     assert.match(page, /admin\/stocks/);
     assert.match(page, /\/stocks\/\$\{stock\.id\}\/deactivate/);
     assert.match(page, /\/stocks\/\$\{stock\.id\}\/activate/);
+});
+
+test('User management exposes FEAT-012 session inspection and confirmed revocation', () => {
+    assert.match(usersPage, /Manage sessions/);
+    assert.match(usersPage, /users\/\$\{targetUser\.id\}\/sessions/);
+    assert.match(usersPage, /Force logout all sessions/);
+    assert.match(usersPage, /window\.confirm/);
+    assert.match(usersPage, /Kite connections are unchanged/);
 });

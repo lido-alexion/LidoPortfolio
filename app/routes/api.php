@@ -280,6 +280,9 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
 
         Route::get('/users', [UserManagementController::class, 'index']);
         Route::put('/users/{user}/admin', [UserManagementController::class, 'updateAdmin']);
+        Route::get('/users/{user}/sessions', [UserManagementController::class, 'sessions']);
+        Route::delete('/users/{user}/sessions', [UserManagementController::class, 'revokeAllSessions']);
+        Route::delete('/users/{user}/sessions/{sessionId}', [UserManagementController::class, 'revokeSession']);
 
         Route::get('/invites', [UserInviteController::class, 'index']);
         Route::post('/invites', [UserInviteController::class, 'store']);

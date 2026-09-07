@@ -43,6 +43,21 @@ class SessionManagementService
             ->delete();
     }
 
+    public function destroyAllSessions(int $userId): int
+    {
+        return DB::table(config('session.table', 'sessions'))
+            ->where('user_id', $userId)
+            ->delete();
+    }
+
+    public function destroyTargetSession(int $userId, string $sessionId): bool
+    {
+        return DB::table(config('session.table', 'sessions'))
+            ->where('user_id', $userId)
+            ->where('id', $sessionId)
+            ->delete() > 0;
+    }
+
     public function destroySession(int $userId, string $sessionId, string $currentSessionId): bool
     {
         if ($sessionId === $currentSessionId) {
