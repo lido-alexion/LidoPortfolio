@@ -6,6 +6,7 @@ import useNavFavourites from '../../hooks/useNavFavourites';
 import {
     createNavAccessContext,
     ensureNavigationBootstrapped,
+    navigationRegistry,
     STORAGE_KEYS,
 } from '../../navigation';
 import {
@@ -102,10 +103,36 @@ export default function Sidebar() {
     const accessCtx = useMemo(() => createNavAccessContext(user), [user]);
     const fav = useNavFavourites(user?.id, accessCtx);
 
-    const tree = useMemo(
-        () => buildSidebarNavigation(undefined, accessCtx),
-        [accessCtx],
-    );
+    const tree = useMemo(() => {
+        if (!user?.is_admin) {
+            return buildSidebarNavigation(undefined, accessCtx);
+        }
+
+        const adminIds = new Set([
+            'stocks-admin',
+            'users',
+            'sync-logs',
+            'data-quality',
+            'indicator-registry',
+            'admin-alerts',
+            'universe-price-sync',
+            'screener-registry-admin',
+            'strategy-registry-admin',
+            'notification-history',
+            'profile',
+        ]);
+        const catalog = navigationRegistry.getCatalog()
+            .filter((item) => item.id === 'group-administration' || adminIds.has(item.id))
+            .map((item) => item.kind === 'page' ? {
+                ...item,
+                group: 'group-administration',
+                parent: 'group-administration',
+                showInSidebar: true,
+                favouriteEligible: false,
+            } : item);
+
+        return buildSidebarNavigation(catalog, accessCtx);
+    }, [accessCtx, user?.is_admin]);
 
     const activePageId = useMemo(
         () => findActiveSidebarPageId(pathname, accessCtx),
@@ -197,7 +224,7 @@ export default function Sidebar() {
                 {...(isOverlayOpen ? { role: 'dialog', 'aria-modal': true } : {})}
             >
                 <div className="lido-sidebar-scroll" ref={scrollRef}>
-                    <SidebarFavourites
+                    {!user?.is_admin && <SidebarFavourites
                         favourites={fav.favourites}
                         collapsed={isCollapsed}
                         onNavigate={onNavigate}
@@ -205,13 +232,13 @@ export default function Sidebar() {
                         onReorder={fav.reorder}
                         max={fav.max}
                         activePageId={activePageId}
-                    />
+                    />}
 
-                    <SidebarQuickActions
+                    {!user?.is_admin && <SidebarQuickActions
                         collapsed={isCollapsed}
                         accessCtx={accessCtx}
                         onDone={onNavigate}
-                    />
+                    />}
 
                     <div className="lido-sidebar-nav-region" aria-label="Navigation">
                         {!isCollapsed && (

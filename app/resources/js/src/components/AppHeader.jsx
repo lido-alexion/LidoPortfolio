@@ -66,7 +66,7 @@ export default function AppHeader({ user, showSidebarToggle = false }) {
                     </Link>
                 </div>
                 <div className="lido-header-actions">
-                    {user && <PortfolioSwitcher />}
+                    {user && !user.is_admin && <PortfolioSwitcher />}
                     <HeaderHelpButton />
                     {user && <ProfileMenu user={user} />}
                 </div>

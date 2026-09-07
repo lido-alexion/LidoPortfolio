@@ -189,6 +189,33 @@ function AppRoutes() {
     );
 }
 
+function AdminAppRoutes() {
+    return (
+        <Routes>
+            <Route path="/" element={<Navigate to="/settings/users" replace />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/documentation" element={<DocumentationPage />} />
+            <Route path="/notification-history" element={<NotificationHistoryPage />} />
+            <Route path="/settings/users" element={<UserManagementPage />} />
+            <Route path="/settings/stocks" element={<StocksAdminPage />} />
+            <Route path="/settings/sync-logs" element={<SyncLogsPage />} />
+            <Route path="/settings/admin-alerts" element={<AdminAlertsPage />} />
+            <Route path="/settings/universe-price-sync" element={<UniversePriceSyncPage />} />
+            <Route path="/settings/universe-price-sync/gap-failures" element={<GapFillFailuresPage />} />
+            <Route path="/settings/universe-price-sync/ignored-gaps" element={<IgnoredPriceGapsPage />} />
+            <Route path="/settings/data-quality" element={<DataQualityCenterPage />} />
+            <Route path="/settings/data-quality/history" element={<CorporateActionHistoryPage />} />
+            <Route path="/settings/indicators" element={<IndicatorRegistryPage />} />
+            <Route path="/settings/indicators/:id" element={<IndicatorRegistryDetailPage />} />
+            <Route path="/settings/screener-registry" element={<ScreenerRegistryPage adminMode />} />
+            <Route path="/settings/screener-registry/:id" element={<ScreenerRegistryDetailPage adminMode />} />
+            <Route path="/settings/strategy-registry" element={<StrategyRegistryPage adminMode />} />
+            <Route path="/settings/strategy-registry/:id" element={<StrategyRegistryDetailPage adminMode />} />
+            <Route path="*" element={<Navigate to="/settings/users" replace />} />
+        </Routes>
+    );
+}
+
 function AuthenticatedShell({ user, isDocumentationRoute }) {
     return (
         <SidebarProvider>
@@ -198,7 +225,7 @@ function AuthenticatedShell({ user, isDocumentationRoute }) {
                     {!isDocumentationRoute && <Sidebar />}
                     <div className="lido-main">
                         {!isDocumentationRoute && <PageChrome />}
-                        <AppRoutes />
+                        {user.is_admin ? <AdminAppRoutes /> : <AppRoutes />}
                     </div>
                 </div>
             </div>
