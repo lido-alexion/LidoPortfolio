@@ -1,6 +1,6 @@
 # V5 FEAT-042 — Separate Role-Based Admin Portal and Investor Application
 
-**Status:** DECIDED / FROZEN  
+**Status:** IN PROGRESS — role shells, portfolio boundary and ownership-conflict audit implemented
 **Date:** 2026-09-07
 
 ## 1. Problem
@@ -80,3 +80,13 @@ Before enforcing the invariant, implementation must inspect existing data for Ad
 
 ## 10. Implementation instruction
 This feature is **not blocked on further Product Owner design**. Engineering should inspect the current role/auth/navigation/data model, implement the separation above non-destructively, add migration/invariant checks and tests, and escalate only if existing production data presents an ownership ambiguity that cannot be resolved safely from repository/domain evidence.
+
+## 11. Deployment ownership check
+
+Before deploying the completed role invariant, run:
+
+```bash
+php artisan portfolio:audit-admin-investment-ownership --json
+```
+
+The command is read-only. It exits successfully only when no Admin account owns a Portfolio or direct Investor broker/execution state. When conflicts exist it reports each Admin account, every active or soft-deleted Portfolio, counts for every current table carrying those Portfolio IDs, and direct broker/execution counts. It never transfers, deletes or guesses ownership; deployment must remain blocked until each reported conflict has an explicit audited disposition.
