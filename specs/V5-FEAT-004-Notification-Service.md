@@ -1,6 +1,6 @@
 # V5-FEAT-004 — Notification Service and Multi-Channel Delivery
 
-**Status:** DECIDED / FROZEN  
+**Status:** FROZEN / IMPLEMENTATION IN PROGRESS
 **Product Owner freeze:** 2026-09-06  
 **Supersedes:** V4-FEAT-003 as a separate feature
 
