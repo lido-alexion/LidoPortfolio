@@ -71,6 +71,32 @@ class ArtifactSharingServiceTest extends TestCase
         $lifecycle->fork($version, $recipient, 'denied', 'Denied');
     }
 
+    public function test_shared_exact_dependency_can_be_pinned_by_recipient_artifact(): void
+    {
+        $owner = User::factory()->create();
+        $recipient = User::factory()->create();
+        $lifecycle = app(ReusableArtifactLifecycleService::class);
+        $dependency = $lifecycle->publish(
+            $lifecycle->createDraft($owner, ArtifactType::SCREENER, 'shared_dep', 'Shared Dep', $this->screenerEnvelope('shared_dep')),
+            $owner,
+        );
+        app(ArtifactSharingService::class)->share($dependency, $owner, $recipient);
+        $draft = $lifecycle->createDraft(
+            $recipient,
+            ArtifactType::STRATEGY,
+            'recipient_strategy',
+            'Recipient Strategy',
+            $this->strategyEnvelope('recipient_strategy'),
+        );
+
+        $published = $lifecycle->publish($draft, $recipient, [[
+            'kind' => 'uses_screener',
+            'artifact_version_id' => $dependency->id,
+        ]]);
+
+        $this->assertSame($dependency->id, $published->dependencies->sole()->target_artifact_version_id);
+    }
+
     /** @return array<string, mixed> */
     private function screenerEnvelope(string $slug): array
     {

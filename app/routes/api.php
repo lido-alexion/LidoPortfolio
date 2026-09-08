@@ -466,6 +466,12 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
 
     // Trading Artifact Registry (SD-034) — additive infrastructure; does not replace screeners/strategy APIs.
     Route::get('/artifact-library', [ArtifactLibraryController::class, 'index']);
+    Route::post('/artifact-library/drafts', [ArtifactLibraryController::class, 'createDraft']);
+    Route::put('/artifact-library/versions/{version}', [ArtifactLibraryController::class, 'updateDraft'])->whereNumber('version');
+    Route::post('/artifact-library/versions/{version}/publish', [ArtifactLibraryController::class, 'publish'])->whereNumber('version');
+    Route::post('/artifact-library/versions/{version}/next-draft', [ArtifactLibraryController::class, 'nextDraft'])->whereNumber('version');
+    Route::post('/artifact-library/versions/{version}/fork', [ArtifactLibraryController::class, 'fork'])->whereNumber('version');
+    Route::post('/artifact-library/{uuid}/archive', [ArtifactLibraryController::class, 'archive'])->whereUuid('uuid');
     Route::get('/artifact-library/{uuid}', [ArtifactLibraryController::class, 'show'])->whereUuid('uuid');
     Route::get('/artifact-library/{uuid}/diff', [ArtifactLibraryController::class, 'diff'])->whereUuid('uuid');
 

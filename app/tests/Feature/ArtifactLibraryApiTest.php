@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\ReusableArtifact;
+use App\Models\ReusableArtifactVersion;
 use App\Models\User;
 use App\Services\Artifacts\ArtifactBindingService;
 use App\Services\Artifacts\ArtifactOrigin;
@@ -96,6 +98,82 @@ class ArtifactLibraryApiTest extends TestCase
             ->assertJsonPath('meta.count', 1)
             ->assertJsonPath('data.0.artifact_uuid', $factory->artifact->artifact_uuid)
             ->assertJsonPath('data.0.permission', 'system');
+    }
+
+    public function test_owner_can_drive_draft_publish_forward_version_and_archive_lifecycle_through_api(): void
+    {
+        $owner = User::factory()->create();
+        $this->defaultPortfolioFor($owner);
+
+        $created = $this->actingAs($owner)->postJson('/api/v1/artifact-library/drafts', [
+            'type' => ArtifactType::SCREENER,
+            'slug' => 'api_quality',
+            'name' => 'API Quality',
+            'content' => $this->envelope('api_quality', 50),
+            'ai_assisted' => true,
+        ])->assertCreated()
+            ->assertJsonPath('data.origin', ArtifactOrigin::AI_ASSISTED);
+        $draftId = $created->json('data.versions.0.id');
+
+        $this->actingAs($owner)->putJson('/api/v1/artifact-library/versions/'.$draftId, [
+            'expected_lock_version' => 0,
+            'content' => $this->envelope('api_quality', 55),
+            'documentation' => ['usage' => 'Daily'],
+            'change_summary' => 'Tune threshold',
+        ])->assertOk()
+            ->assertJsonPath('data.versions.0.lock_version', 1)
+            ->assertJsonPath('data.versions.0.documentation.usage', 'Daily');
+
+        $this->actingAs($owner)->putJson('/api/v1/artifact-library/versions/'.$draftId, [
+            'expected_lock_version' => 0,
+            'content' => $this->envelope('api_quality', 60),
+        ])->assertStatus(409)
+            ->assertJsonPath('error.code', 'ARTIFACT_DRAFT_CONFLICT');
+
+        $published = $this->actingAs($owner)->postJson('/api/v1/artifact-library/versions/'.$draftId.'/publish', [
+            'dependencies' => [[
+                'kind' => 'uses_indicator',
+                'indicator_id' => 'rsi',
+                'indicator_version' => '1.0.0',
+            ]],
+            'change_summary' => 'First release',
+        ])->assertOk();
+        $published->assertJsonPath('data.versions.0.status', ReusableArtifactVersion::STATUS_PUBLISHED);
+
+        $this->actingAs($owner)->postJson('/api/v1/artifact-library/versions/'.$draftId.'/next-draft', [
+            'semver' => '1.1.0',
+        ])->assertCreated()
+            ->assertJsonPath('data.draft_version', '1.1.0');
+
+        $artifact = ReusableArtifact::query()->where('slug', 'api_quality')->sole();
+        $this->actingAs($owner)->postJson('/api/v1/artifact-library/'.$artifact->artifact_uuid.'/archive')
+            ->assertOk();
+        $this->assertNotNull($artifact->fresh()->archived_at);
+        $this->assertSame(2, $artifact->versions()->count());
+    }
+
+    public function test_non_owner_cannot_edit_another_accounts_draft_and_shared_version_can_be_forked(): void
+    {
+        $owner = User::factory()->create();
+        $recipient = User::factory()->create();
+        $this->defaultPortfolioFor($owner);
+        $this->defaultPortfolioFor($recipient);
+        $shared = $this->published($owner, 'fork_source');
+        app(ArtifactSharingService::class)->share($shared, $owner, $recipient);
+
+        $this->actingAs($recipient)->putJson('/api/v1/artifact-library/versions/'.$shared->id, [
+            'expected_lock_version' => 0,
+            'content' => $this->envelope('fork_source', 75),
+        ])->assertNotFound();
+
+        $this->actingAs($recipient)->postJson('/api/v1/artifact-library/versions/'.$shared->id.'/fork', [
+            'slug' => 'my_fork',
+            'name' => 'My Fork',
+        ])->assertCreated()
+            ->assertJsonPath('data.slug', 'my_fork')
+            ->assertJsonPath('data.origin', ArtifactOrigin::FORK)
+            ->assertJsonPath('data.provenance.source_artifact_uuid', $shared->artifact->artifact_uuid)
+            ->assertJsonPath('data.versions.0.status', ReusableArtifactVersion::STATUS_DRAFT);
     }
 
     private function published(User $owner, string $slug)

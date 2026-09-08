@@ -167,6 +167,16 @@ final class ReusableArtifactLifecycleService
         );
     }
 
+    public function archive(ReusableArtifact $artifact, User $actor): ReusableArtifact
+    {
+        $this->assertOwner($artifact, $actor);
+        if ($artifact->archived_at === null) {
+            $artifact->forceFill(['archived_at' => now()])->save();
+        }
+
+        return $artifact->fresh();
+    }
+
     /** @param array<string, mixed> $content @param array<string, mixed> $documentation */
     private function storeDraft(
         ReusableArtifact $artifact,
@@ -238,7 +248,7 @@ final class ReusableArtifactLifecycleService
                 if (! $target || $target->status !== ReusableArtifactVersion::STATUS_PUBLISHED) {
                     throw new InvalidArgumentException('Artifact dependencies must target an exact published version.');
                 }
-                if ((int) $target->artifact->owner_user_id !== (int) $source->artifact->owner_user_id) {
+                if (! $this->libraryAccess->canAccess($source->artifact->owner, $target)) {
                     throw new InvalidArgumentException('Dependency version is not available in the owner Library.');
                 }
                 if ($source->artifact->artifact_type === ArtifactType::BUNDLE
