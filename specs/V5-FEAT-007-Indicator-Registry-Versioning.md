@@ -1,7 +1,8 @@
 # V5 FEAT-007 — Indicator Registry Deeper Versioning / Remaining Cutover
 
-**Status:** DECIDED / FROZEN  
+**Status:** COMPLETE / VERIFIED
 **Date:** 2026-09-07
+**Completed:** 2026-09-08
 
 ## Problem
 V3 shipped Indicator registry foundations, but V5 needs the registry to become the authoritative, version-aware catalogue and evidence source used by Strategies, Screeners and later artifact tooling without silently changing existing deployed behaviour.
@@ -65,3 +66,12 @@ Each Indicator evaluation must be able to expose, as applicable:
 - Automatic migration of existing published artifacts to newer Indicator versions.
 - Fabricated historical Indicator versions.
 - Standalone Investor Registry product surface.
+
+## Completion evidence
+
+- The in-memory authoritative registry retains multiple exact SemVer definitions per stable ID, selects the highest Active version for new authoring, supports the full Planned/Stub/Active/Deprecated/Retired lifecycle, and preserves exact deprecated/retired lookup without inventing legacy history.
+- Strategy and Screener authoring persist exact Indicator versions. Existing unpinned legacy artifacts project against their established baseline, explicit pins remain unchanged, and invalid requested versions are rejected.
+- Indicator, Strategy and Screener artifact dependencies expose exact `ref_version` values. Admin detail APIs and UI expose available versions, version-specific dependency trees, and direct dependent impact.
+- Evaluation keeps backward-compatible numeric fields and adds structured evidence for registry identity/version, effective parameters, explicit available/unavailable/error state, value, source components, reason/error and market-session as-of date. Neutral legacy stubs are identified as unavailable instead of represented as fabricated valid evidence.
+- Strategy parameters override global defaults, and evaluation grouping fingerprints include the pinned Indicator-version world.
+- Verification on 2026-09-08: full backend suite passed 1,408 tests / 8,516 assertions; all 198 JavaScript tests passed; strict TypeScript checking and the production Vite build passed under Node 22.

@@ -216,6 +216,25 @@ class IndicatorRegistryTest extends TestCase
         $this->assertContains('momentum_score', array_map(fn (IndicatorDefinition $definition) => $definition->id, $dependents));
     }
 
+    public function test_historical_dependency_tree_uses_requested_definition(): void
+    {
+        $dependency = IndicatorDefinition::make('close', IndicatorType::PRIMARY, IndicatorCategory::PRICE);
+        $old = IndicatorDefinition::make('derived', IndicatorType::COMPOSITE, IndicatorCategory::PRICE, [
+            'version' => '1.0.0',
+            'status' => IndicatorStatus::DEPRECATED,
+            'depends_on' => ['close'],
+        ]);
+        $current = IndicatorDefinition::make('derived', IndicatorType::COMPOSITE, IndicatorCategory::PRICE, [
+            'version' => '2.0.0',
+            'depends_on' => [],
+        ]);
+        $registry = new IndicatorRegistry([$dependency, $old, $current]);
+
+        $tree = $registry->dependencyTreeFor($registry->getVersion('derived', '1.0.0'));
+        $this->assertSame('1.0.0', $tree['version']);
+        $this->assertSame('close', $tree['depends_on'][0]['id']);
+    }
+
     public function test_filter_by_consumer(): void
     {
         $registry = $this->registry();

@@ -100,7 +100,7 @@ class IndicatorRegistryController extends Controller
                 fn ($item) => ['id' => $item->id, 'version' => $item->version, 'status' => $item->status],
                 $this->registry->dependents($resolved),
             ),
-            'dependency_tree' => $this->registry->dependencyTreeDetailed($resolved),
+            'dependency_tree' => $this->registry->dependencyTreeFor($definition),
             'dependencies' => array_map(
                 function (string $depId) {
                     $dep = $this->registry->find($depId);
@@ -108,6 +108,7 @@ class IndicatorRegistryController extends Controller
                     return $dep ? [
                         'id' => $dep->id,
                         'display_name' => $dep->displayName,
+                        'version' => $dep->version,
                         'type' => $dep->type,
                         'status' => $dep->status,
                     ] : ['id' => $depId, 'missing' => true];

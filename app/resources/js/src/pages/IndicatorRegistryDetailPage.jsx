@@ -12,6 +12,8 @@ function statusBadgeClass(status) {
             return 'text-bg-secondary';
         case 'deprecated':
             return 'text-bg-dark';
+        case 'retired':
+            return 'text-bg-danger';
         default:
             return 'text-bg-light';
     }
@@ -52,6 +54,7 @@ export default function IndicatorRegistryDetailPage() {
     const [payload, setPayload] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [selectedVersion, setSelectedVersion] = useState('');
 
     useEffect(() => {
         let cancelled = false;
@@ -59,7 +62,9 @@ export default function IndicatorRegistryDetailPage() {
             setLoading(true);
             setError('');
             try {
-                const res = await api.get(`/v1/indicators/${encodeURIComponent(id)}`);
+                const res = await api.get(`/v1/indicators/${encodeURIComponent(id)}`, {
+                    params: selectedVersion ? { version: selectedVersion } : {},
+                });
                 if (!cancelled) setPayload(res.data?.data || null);
             } catch (err) {
                 if (!cancelled) {
@@ -71,6 +76,10 @@ export default function IndicatorRegistryDetailPage() {
             }
         })();
         return () => { cancelled = true; };
+    }, [id, selectedVersion]);
+
+    useEffect(() => {
+        setSelectedVersion('');
     }, [id]);
 
     const indicator = payload?.indicator;
@@ -96,6 +105,27 @@ export default function IndicatorRegistryDetailPage() {
                     <div className="card">
                         <div className="card-header">Overview</div>
                         <div className="card-body d-grid gap-2">
+                            <div className="row align-items-end g-2">
+                                <div className="col-sm-5 col-lg-3">
+                                    <label className="form-label small mb-1" htmlFor="indicator-version">Registry version</label>
+                                    <select
+                                        id="indicator-version"
+                                        className="form-select form-select-sm"
+                                        value={selectedVersion}
+                                        onChange={(event) => setSelectedVersion(event.target.value)}
+                                    >
+                                        <option value="">Current ({payload.available_versions?.find((item) => item.version === indicator.version)?.version || indicator.version})</option>
+                                        {(payload.available_versions || []).map((item) => (
+                                            <option key={item.version} value={item.version}>
+                                                v{item.version} · {item.status}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="col-sm-7 small text-muted">
+                                    Historical versions are read-only. Existing pinned artifacts are never migrated by this selector.
+                                </div>
+                            </div>
                             <div className="d-flex flex-wrap gap-2">
                                 <span className={`badge ${statusBadgeClass(indicator.status)}`}>{indicator.status}</span>
                                 <span className="badge text-bg-light text-dark border">{indicator.type}</span>
@@ -202,6 +232,7 @@ export default function IndicatorRegistryDetailPage() {
                                                     {' '}
                                                     (
                                                     {d.id}
+                                                    {d.version ? `@${d.version}` : ''}
                                                     )
                                                 </Link>
                                             )}
@@ -213,6 +244,27 @@ export default function IndicatorRegistryDetailPage() {
                             <div className="border rounded p-2 bg-body-tertiary">
                                 <DependencyTree node={payload.dependency_tree} />
                             </div>
+                        </div>
+                    </div>
+
+                    <div className="card">
+                        <div className="card-header">Dependency impact</div>
+                        <div className="card-body">
+                            {(payload.dependents || []).length === 0 ? (
+                                <p className="text-muted small mb-0">No current Registry definitions directly depend on this indicator.</p>
+                            ) : (
+                                <ul className="small mb-0">
+                                    {payload.dependents.map((dependent) => (
+                                        <li key={`${dependent.id}@${dependent.version}`}>
+                                            <Link to={`/settings/indicators/${encodeURIComponent(dependent.id)}`}>
+                                                {dependent.id}@{dependent.version}
+                                            </Link>
+                                            {' '}
+                                            <span className={`badge ${statusBadgeClass(dependent.status)}`}>{dependent.status}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
                         </div>
                     </div>
 

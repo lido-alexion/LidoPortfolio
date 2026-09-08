@@ -13,6 +13,8 @@ function statusBadgeClass(status) {
             return 'text-bg-secondary';
         case 'deprecated':
             return 'text-bg-dark';
+        case 'retired':
+            return 'text-bg-danger';
         default:
             return 'text-bg-light';
     }

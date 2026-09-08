@@ -5,7 +5,7 @@
 | **V4 Status** | **V4 COMPLETE AND CLOSED** (18/18 active features complete) |
 | **Document type** | Canonical V5 product wishlist and planning register |
 | **Created** | 2026-09-02 |
-| **Last reconciled** | 2026-09-07 |
+| **Last reconciled** | 2026-09-08 |
 | **Canonical path** | [`specs/LidoPortfolio-V5-Wishlist.md`](LidoPortfolio-V5-Wishlist.md) |
 | **Related** | [`LidoPortfolio-V4-Wishlist.md`](LidoPortfolio-V4-Wishlist.md) · [`LidoPortfolio-V3-Specification.md`](LidoPortfolio-V3-Specification.md) · [`../implementation.md`](../implementation.md) |
 
@@ -25,13 +25,13 @@ Moving an item here does not satisfy it. A feature reaches `COMPLETE` only after
 
 **V5 scope is now reconciled and frozen at 18 items.** Items explicitly deferred to V6 are not part of the V5 closure gate and appear only in section 3.
 
-Current count: **0 OPEN / 2 IN PROGRESS / 7 DECIDED / 8 COMPLETE / 1 SUPERSEDED**.
+Current count: **0 OPEN / 2 IN PROGRESS / 6 DECIDED / 9 COMPLETE / 1 SUPERSEDED**.
 
 | ID | Item | V5 scope and rationale | Priority | Status |
 |----|------|------------------------|----------|--------|
 | V4-FEAT-003 | B4 persistent app-wide critical banner | **Superseded by FEAT-004.** The original B4 banner was the simpler mechanism for surfacing important notifications. V5 will implement the complete notification feature instead; any persistent/prominent in-app treatment required by notification severity belongs to FEAT-004 rather than a separate banner subsystem. | P2 | SUPERSEDED |
 | V4-FEAT-004 | Notification channel abstraction + email/webhook | **Implemented and verified 2026-09-08:** [`V5-FEAT-004-Notification-Service.md`](V5-FEAT-004-Notification-Service.md). Canonical lifecycle, account APIs/UX, shared Notification Settings UI, signed verification for optional email recipients, encrypted settings and durable asynchronous Telegram/Email/signed-Webhook delivery include idempotent planning, stale suppression, bounded retry/backoff, sanitized attempts, 48-hour reminders and deduplicated channel-health conditions. Consistent legacy credentials migrate safely; conflicting credentials are not guessed. All application producers use channel-neutral delivery, including Trading OS flows with legacy history/status compatibility. FEAT-004 absorbs FEAT-003. | P2 | COMPLETE |
-| V4-FEAT-007 | Indicator Registry deeper versioning / remaining cutover | **Frozen:** [`V5-FEAT-007-Indicator-Registry-Versioning.md`](V5-FEAT-007-Indicator-Registry-Versioning.md). System-owned stable Indicator identities with explicit SemVer/lifecycle, exact dependency/evidence versioning, Strategy parameter precedence, dependency impact visibility, non-fabricated result states and no silent migration of existing published artifacts. | P2 | DECIDED |
+| V4-FEAT-007 | Indicator Registry deeper versioning / remaining cutover | **Implemented and verified 2026-09-08:** [`V5-FEAT-007-Indicator-Registry-Versioning.md`](V5-FEAT-007-Indicator-Registry-Versioning.md). The evolved system registry retains exact SemVer definitions and full lifecycle history without fabricated lineage; new authoring pins current versions while legacy and explicitly pinned artifacts remain stable. Strategy/Screener/Indicator dependencies, evaluation provenance, result states, as-of evidence, parameter precedence, Admin version inspection and dependency impact are implemented and tested. | P2 | COMPLETE |
 | V4-FEAT-008 | Trading Artifact Framework remaining phases | **Frozen:** [`V5-FEAT-008-Trading-Artifact-Framework.md`](V5-FEAT-008-Trading-Artifact-Framework.md). Immutable Draft→Published lifecycle, exact dependency pinning, account Library and Portfolio bindings, explicit upgrades, Fork/share/import/export, provenance, transactional Bundles, DAG enforcement, usability state and immutable structural/version history. | P2 | DECIDED |
 | V4-FEAT-012 | Admin force-logout of other users (PD-007) | **Implemented and verified 2026-09-07:** [`V5-FEAT-012-Admin-Force-Logout.md`](V5-FEAT-012-Admin-Force-Logout.md). Admin User Management lists a target account's database-backed application sessions and can revoke one or all with explicit confirmation. Server-side Admin authorization, self-target protection, idempotent all-session revocation, race-safe missing-session handling, sanitized security audit evidence and unchanged Investor self-service session controls are covered by tests. | P3 | COMPLETE |
 | V4-FEAT-013 | Cash-as-of / export / compare polish | **Frozen:** [`V5-FEAT-013-Cash-Export-Compare.md`](V5-FEAT-013-Cash-Export-Compare.md). Append-only Portfolio cash ledger authority, arbitrary-date historical cash/value with explicit completeness, complete Cash Statement, secure schema-versioned CSV exports and same-Portfolio Date-A-vs-Date-B comparison without mislabelling wealth changes as returns or inventing causal attribution. | P3 | DECIDED |
@@ -93,6 +93,7 @@ V5 is not closed merely when the 18 rows above have implementation statuses reso
 
 | Date | Change |
 |------|--------|
+| 2026-09-08 | **FEAT-007 marked COMPLETE after clean audit:** Indicator identity/SemVer/lifecycle, exact historical lookup and artifact pinning, no-silent-migration behavior, Strategy parameter precedence, structured evaluation provenance/result states/session dates, dependency impact APIs and Admin inspection UX satisfy all eight frozen acceptance criteria. The full backend suite passed 1,408 tests / 8,516 assertions; the combined frontend suite passed 198 tests; TypeScript and production build gates are green. This does not close V5. |
 | 2026-09-08 | **FEAT-004 marked COMPLETE after clean audit:** all 27 frozen acceptance criteria are implemented; the full backend suite passed 1,402 tests / 8,466 assertions, the combined frontend suite passed 198 tests, and PHP lint, TypeScript and production build gates are green. This does not close V5. |
 | 2026-09-08 | **Frontend regression gate repaired:** authenticated TOS test shells now include the same Notification Provider as production, clearing 24 test-harness failures introduced by the global notification chrome; the combined JavaScript suite is green. |
 | 2026-09-08 | **FEAT-004 direct-producer cutover completed:** scheduled clear pings now use externally delivered Info events; duplicate Portfolio Telegram controls were removed, and the legacy test endpoint is a non-delivering `410 Gone` pointer to account Notification Settings. |

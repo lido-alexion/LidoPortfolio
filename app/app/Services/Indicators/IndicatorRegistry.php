@@ -258,16 +258,28 @@ final class IndicatorRegistry
         return $this->buildTree($id, [], $maxDepth, true);
     }
 
+    /** @return array<string, mixed> */
+    public function dependencyTreeFor(IndicatorDefinition $definition, int $maxDepth = 8): array
+    {
+        return $this->buildTree($definition->id, [], $maxDepth, true, $definition);
+    }
+
     /**
      * @param  list<string>  $stack
      * @return array<string, mixed>
      */
-    private function buildTree(string $id, array $stack, int $depthLeft, bool $detailed): array
-    {
+    private function buildTree(
+        string $id,
+        array $stack,
+        int $depthLeft,
+        bool $detailed,
+        ?IndicatorDefinition $definitionOverride = null,
+    ): array {
         $node = ['id' => $id, 'depends_on' => []];
+        $definition = $definitionOverride ?? $this->find($id);
         if ($detailed) {
-            $definition = $this->find($id);
             $node['display_name'] = $definition?->displayName ?? $id;
+            $node['version'] = $definition?->version;
             $node['type'] = $definition?->type;
             $node['status'] = $definition?->status;
             $node['category'] = $definition?->category;
@@ -283,7 +295,7 @@ final class IndicatorRegistry
             return $node;
         }
         $children = [];
-        foreach ($this->dependencies($id) as $dep) {
+        foreach ($definition?->dependsOn ?? [] as $dep) {
             $children[] = $this->buildTree($dep, [...$stack, $id], $depthLeft - 1, $detailed);
         }
         $node['depends_on'] = $children;
