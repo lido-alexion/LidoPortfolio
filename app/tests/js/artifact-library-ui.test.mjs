@@ -27,3 +27,16 @@ test('Artifact detail exposes immutable package export, exact dependencies, and 
     assert.match(detail, /Published package downloaded/);
     assert.match(detail, /\/diff/);
 });
+
+test('Draft, share, Fork, archive, and enablement controls retain explicit lifecycle gates', () => {
+    const library = readFileSync(new URL('../../resources/js/src/pages/ArtifactLibraryPage.jsx', import.meta.url), 'utf8');
+    assert.match(library, /AI cannot publish or deploy it/);
+    assert.match(library, /Imported .* validated Drafts\. Nothing was published or deployed/);
+    assert.match(detail, /Saving never publishes or deploys this artifact/);
+    assert.match(detail, /Exact dependencies JSON array/);
+    assert.match(detail, /New version Draft/);
+    assert.match(detail, />Share</);
+    assert.match(detail, />Fork</);
+    assert.match(detail, /Archive artifact/);
+    assert.match(detail, /artifact-bindings\/\$\{binding\.binding_uuid\}\/enabled/);
+});
