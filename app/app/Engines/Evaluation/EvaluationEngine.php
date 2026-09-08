@@ -12,6 +12,8 @@ use App\Models\Stock;
 use App\Repositories\Tos\DiscoveryCandidateRepository;
 use App\Repositories\Tos\EvaluationResultRepository;
 use App\Repositories\Tos\MarketDataRepository;
+use App\Services\DataQualityGuardService;
+use App\Services\Indicators\IndicatorRegistry;
 use App\Services\PortfolioLoggerService;
 use App\Services\RelativeStrengthService;
 use App\Services\Screener\TechnicalIndicatorService;
@@ -29,7 +31,7 @@ class EvaluationEngine
         protected TechnicalIndicatorService $indicators,
         protected RelativeStrengthService $relativeStrength,
         protected PortfolioLoggerService $logger,
-        protected \App\Services\DataQualityGuardService $dataQualityGuard,
+        protected DataQualityGuardService $dataQualityGuard,
         protected EvaluationParameterResolver $parameterResolver,
         protected MarketAnalysisEngine $marketAnalysis,
         protected MarketRegimeScoreMapper $regimeScores,
@@ -37,6 +39,7 @@ class EvaluationEngine
         protected DiscoveryCandidateRepository $discoveryCandidates,
         protected EvaluationResultRepository $evaluationResults,
         protected MarketDataRepository $marketData,
+        protected IndicatorRegistry $indicatorRegistry,
     ) {}
 
     /**
@@ -86,6 +89,7 @@ class EvaluationEngine
                         'passed_rules' => [],
                         'failed_rules' => ['data_quality_pending_review'],
                     ];
+
                     continue;
                 }
                 try {
@@ -235,14 +239,16 @@ class EvaluationEngine
         $priceVsSma = $ti->evaluate(['indicator' => 'price_vs_sma_pct', 'params' => ['period' => $smaFastPeriod]]);
 
         $rs = null;
+        $rsError = null;
         try {
             $lookback = ! empty($config['use_lookback_days']) ? (int) $config['lookback_days'] : null;
             $benchmarkSymbol = isset($config['benchmark']) && is_string($config['benchmark'])
                 ? $config['benchmark']
                 : null;
             $rs = $this->relativeStrength->evaluationRelativeStrength($stock, $benchmarkSymbol, $lookback);
-        } catch (Throwable) {
+        } catch (Throwable $error) {
             $rs = null;
+            $rsError = $error->getMessage();
         }
 
         $closeF = $this->safeFloat($close);
@@ -284,6 +290,43 @@ class EvaluationEngine
             ? round(array_sum($present) / count($present), 4)
             : 0.0;
         $confidence = round(min(1.0, (count($passed) / max(1, count($passed) + count($failed)))), 4);
+        $asOf = $bars[array_key_last($bars)]['as_of'] ?? null;
+        $indicatorEvidence = $this->indicatorEvidence(
+            $config,
+            $asOf,
+            [
+                'close' => ['id' => 'close', 'parameters' => [], 'value' => $closeF],
+                'sma_fast' => ['id' => 'sma', 'parameters' => ['period' => $smaFastPeriod], 'value' => $this->safeFloat($smaFast)],
+                'sma_slow' => ['id' => 'sma', 'parameters' => ['period' => $smaSlowPeriod], 'value' => $this->safeFloat($smaSlow)],
+                'rsi' => ['id' => 'rsi', 'parameters' => ['period' => $rsiPeriod], 'value' => $this->safeFloat($rsi)],
+                'atr' => ['id' => 'atr', 'parameters' => ['period' => $atrPeriod], 'value' => $atrF],
+                'volume_ratio' => ['id' => 'volume_ratio', 'parameters' => ['period' => $volPeriod], 'value' => $this->safeFloat($volumeRatio)],
+                'price_vs_sma_pct' => ['id' => 'price_vs_sma_pct', 'parameters' => ['period' => $smaFastPeriod], 'value' => $this->safeFloat($priceVsSma)],
+                'relative_strength_3m' => [
+                    'id' => 'relative_strength_3m',
+                    'parameters' => [
+                        'lookback_days' => ! empty($config['use_lookback_days']) ? (int) $config['lookback_days'] : null,
+                        'benchmark' => $config['benchmark'] ?? null,
+                    ],
+                    'value' => $this->safeFloat($rs),
+                    'error' => $rsError,
+                ],
+            ],
+            count($bars),
+        );
+        foreach (array_intersect_key($factorScores, array_flip($catalogueKeys)) as $id => $value) {
+            $components = $this->factorComponents($id, $context);
+            $indicatorEvidence[$id] = $this->indicatorEvidenceRow(
+                $id,
+                $id,
+                $config['indicator_versions'][$id] ?? null,
+                $this->factorParameters($id, $config),
+                $this->safeFloat($value),
+                $asOf,
+                ['source' => 'evaluation_factor_rules', 'inputs' => $components],
+                unavailableReason: $this->factorUnavailableReason($id, $components),
+            );
+        }
 
         return [
             'candidate' => $candidate,
@@ -306,6 +349,7 @@ class EvaluationEngine
                     'price_vs_sma_pct' => $this->safeFloat($priceVsSma),
                     'relative_strength_3m' => $this->safeFloat($rs),
                 ],
+                'indicator_evidence' => $indicatorEvidence,
                 'discovery' => is_array($candidate->evidence) ? $candidate->evidence : [],
                 'indicator_scores' => array_intersect_key($factorScores, array_flip($catalogueKeys)),
                 'factor_scores' => $factorScores,
@@ -317,7 +361,7 @@ class EvaluationEngine
     }
 
     /**
-     * @return list<array{open:?float,high:?float,low:?float,close:float,volume:?float}>
+     * @return list<array{as_of:?string,open:?float,high:?float,low:?float,close:float,volume:?float}>
      */
     protected function loadBars(?Stock $stock): array
     {
@@ -335,6 +379,9 @@ class EvaluationEngine
                 continue;
             }
             $bars[] = [
+                'as_of' => $row->price_date instanceof \DateTimeInterface
+                    ? $row->price_date->format('Y-m-d')
+                    : (isset($row->price_date) ? (string) $row->price_date : null),
                 'open' => $this->safeFloat($row->open_price),
                 'high' => $this->safeFloat($row->high_price),
                 'low' => $this->safeFloat($row->low_price),
@@ -461,5 +508,115 @@ class EvaluationEngine
             'lookback_days' => ! empty($config['use_lookback_days']) ? (int) $config['lookback_days'] : null,
             'benchmark' => $config['benchmark'] ?? null,
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @param  array<string, array<string, mixed>>  $evaluations
+     * @return array<string, array<string, mixed>>
+     */
+    protected function indicatorEvidence(array $config, mixed $asOf, array $evaluations, int $barCount): array
+    {
+        $out = [];
+        foreach ($evaluations as $key => $evaluation) {
+            $out[$key] = $this->indicatorEvidenceRow(
+                (string) $key,
+                (string) $evaluation['id'],
+                $config['indicator_versions'][$evaluation['id']] ?? null,
+                is_array($evaluation['parameters'] ?? null) ? $evaluation['parameters'] : [],
+                $this->safeFloat($evaluation['value'] ?? null),
+                $asOf,
+                ['source' => 'stock_prices', 'bar_count' => $barCount],
+                isset($evaluation['error']) ? (string) $evaluation['error'] : null,
+            );
+        }
+
+        return $out;
+    }
+
+    /** @return array<string, mixed> */
+    protected function indicatorEvidenceRow(
+        string $evidenceKey,
+        string $id,
+        ?string $pinnedVersion,
+        array $parameters,
+        ?float $value,
+        mixed $asOf,
+        array $components,
+        ?string $error = null,
+        ?string $unavailableReason = null,
+    ): array {
+        $definition = $pinnedVersion !== null
+            ? $this->indicatorRegistry->findVersion($id, $pinnedVersion)
+            : $this->indicatorRegistry->find($id);
+        $state = $error !== null ? 'error' : ($value === null || $unavailableReason !== null ? 'unavailable' : 'available');
+        if ($state !== 'available') {
+            $value = null;
+        }
+
+        return [
+            'evidence_key' => $evidenceKey,
+            'indicator_id' => $id,
+            'indicator_version' => $definition?->version,
+            'effective_parameters' => $parameters,
+            'state' => $state,
+            'value' => $value,
+            'as_of' => is_string($asOf) && $asOf !== '' ? $asOf : null,
+            'components' => $components,
+            'reason' => $state === 'unavailable'
+                ? ($unavailableReason ?? 'not_computable')
+                : ($state === 'error' ? 'calculation_error' : null),
+            'error' => $error,
+        ];
+    }
+
+    /** @param array<string, mixed> $config @return array<string, mixed> */
+    protected function factorParameters(string $id, array $config): array
+    {
+        return match ($id) {
+            'momentum_score' => ['rsi_period' => (int) ($config['rsi_period'] ?? 14)],
+            'trend_score' => ['sma_fast' => (int) ($config['sma_fast'] ?? 20), 'sma_slow' => (int) ($config['sma_slow'] ?? 50)],
+            'volume_score' => ['volume_sma_period' => (int) ($config['volume_sma_period'] ?? 20)],
+            'relative_strength' => [
+                'lookback_days' => ! empty($config['use_lookback_days']) ? (int) $config['lookback_days'] : null,
+                'benchmark' => $config['benchmark'] ?? null,
+            ],
+            'risk_score' => ['atr_period' => (int) ($config['atr_period'] ?? 14)],
+            default => [],
+        };
+    }
+
+    /** @return array<string, mixed> */
+    protected function factorComponents(string $id, EvaluationFactorContext $context): array
+    {
+        return match ($id) {
+            'momentum_score' => ['rsi' => $context->rsi],
+            'trend_score' => ['close' => $context->close, 'sma_fast' => $context->smaFast, 'sma_slow' => $context->smaSlow],
+            'breakout_score' => ['price_vs_sma_pct' => $context->priceVsSma, 'pattern_count' => $context->patternCount],
+            'volume_score' => ['volume_ratio' => $context->volumeRatio],
+            'relative_strength' => ['relative_strength_3m' => $context->relativeStrength],
+            'market_regime' => ['market_regime' => $context->marketRegime],
+            'sector_strength' => ['state' => 'neutral_stub'],
+            'risk_score' => ['atr_pct' => $context->atrPct],
+            default => [],
+        };
+    }
+
+    /** @param array<string, mixed> $components */
+    protected function factorUnavailableReason(string $id, array $components): ?string
+    {
+        if ($id === 'sector_strength') {
+            return 'registered_stub';
+        }
+        if ($components === []) {
+            return null;
+        }
+        foreach ($components as $key => $value) {
+            if ($key !== 'pattern_count' && $value === null) {
+                return 'component_unavailable';
+            }
+        }
+
+        return null;
     }
 }

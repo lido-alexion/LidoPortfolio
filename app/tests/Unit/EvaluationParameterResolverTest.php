@@ -9,6 +9,15 @@ use Tests\TestCase;
 
 class EvaluationParameterResolverTest extends TestCase
 {
+    public function test_fingerprint_changes_for_a_different_pinned_indicator_world(): void
+    {
+        $resolver = app(EvaluationParameterResolver::class);
+        $base = $resolver->globals();
+        $pinned = array_merge($base, ['indicator_versions' => ['momentum_score' => '1.0.0']]);
+
+        $this->assertNotSame($resolver->fingerprint($base), $resolver->fingerprint($pinned));
+    }
+
     public function test_missing_strategy_parameters_fall_back_to_evaluation_globals(): void
     {
         $resolver = app(EvaluationParameterResolver::class);

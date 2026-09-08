@@ -58,6 +58,7 @@ class EvaluationParameterResolver
     {
         $resolved = $this->globals();
         $extracted = $this->extractParameters($strategyConfig ?? []);
+        $resolved['indicator_versions'] = $this->extractVersions($strategyConfig ?? []);
 
         foreach (self::PERIOD_KEYS as $key) {
             $valid = $this->validPositiveInt($extracted[$key] ?? null);
@@ -87,6 +88,11 @@ class EvaluationParameterResolver
      */
     public function fingerprint(array $resolved): string
     {
+        $indicatorVersions = is_array($resolved['indicator_versions'] ?? null)
+            ? $resolved['indicator_versions']
+            : [];
+        ksort($indicatorVersions);
+
         return json_encode([
             'rsi_period' => (int) ($resolved['rsi_period'] ?? 14),
             'sma_fast' => (int) ($resolved['sma_fast'] ?? 20),
@@ -98,6 +104,7 @@ class EvaluationParameterResolver
                 : null,
             'benchmark' => $resolved['benchmark'] ?? null,
             'min_bars' => (int) ($resolved['min_bars'] ?? 60),
+            'indicator_versions' => $indicatorVersions,
         ], JSON_THROW_ON_ERROR);
     }
 
@@ -130,6 +137,31 @@ class EvaluationParameterResolver
         }
 
         return $out;
+    }
+
+    /**
+     * @param  array<string, mixed>  $strategyConfig
+     * @return array<string, string>
+     */
+    protected function extractVersions(array $strategyConfig): array
+    {
+        $rows = $strategyConfig['indicators']
+            ?? $strategyConfig['scoring_model']
+            ?? $strategyConfig['factors']
+            ?? [];
+        if (! is_array($rows)) {
+            return [];
+        }
+
+        $versions = [];
+        foreach ($rows as $row) {
+            if (! is_array($row) || empty($row['key']) || empty($row['indicator_version'])) {
+                continue;
+            }
+            $versions[(string) $row['key']] = (string) $row['indicator_version'];
+        }
+
+        return $versions;
     }
 
     protected function validPositiveInt(mixed $value): ?int

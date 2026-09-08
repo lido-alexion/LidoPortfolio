@@ -94,6 +94,6 @@ class MarketDataRepository
             ->whereNotNull('close_price')
             ->orderByDesc('price_date')
             ->limit($limit)
-            ->get(['open_price', 'high_price', 'low_price', 'close_price', 'volume']);
+            ->get(['price_date', 'open_price', 'high_price', 'low_price', 'close_price', 'volume']);
     }
 }

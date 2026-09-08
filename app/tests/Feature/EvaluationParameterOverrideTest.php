@@ -9,6 +9,7 @@ use App\Engines\Strategy\SupportedIndicators;
 use App\Models\Candidate;
 use App\Models\DiscoveryRun;
 use App\Models\EvaluationRun;
+use App\Models\PortfolioProfile;
 use App\Models\Stock;
 use App\Models\StockPrice;
 use App\Models\User;
@@ -79,6 +80,32 @@ class EvaluationParameterOverrideTest extends TestCase
         $this->assertSame(21, $overrideEvidence['evaluation_parameters']['sma_slow']);
         $this->assertSame(7, $overrideEvidence['evaluation_parameters']['atr_period']);
         $this->assertSame(6, $overrideEvidence['evaluation_parameters']['volume_sma_period']);
+
+        $rsiEvidence = $overrideEvidence['indicator_evidence']['rsi'];
+        $this->assertSame('rsi', $rsiEvidence['indicator_id']);
+        $this->assertSame('1.0.0', $rsiEvidence['indicator_version']);
+        $this->assertSame(['period' => 5], $rsiEvidence['effective_parameters']);
+        $this->assertSame('available', $rsiEvidence['state']);
+        $this->assertIsFloat($rsiEvidence['value']);
+        $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}$/', $rsiEvidence['as_of']);
+        $this->assertSame(80, $rsiEvidence['components']['bar_count']);
+
+        $momentumEvidence = $overrideEvidence['indicator_evidence']['momentum_score'];
+        $this->assertSame('momentum_score', $momentumEvidence['indicator_id']);
+        $this->assertSame('1.0.0', $momentumEvidence['indicator_version']);
+        $this->assertSame(['rsi_period' => 5], $momentumEvidence['effective_parameters']);
+        $this->assertArrayHasKey('rsi', $momentumEvidence['components']['inputs']);
+
+        $sectorEvidence = $overrideEvidence['indicator_evidence']['sector_strength'];
+        $this->assertSame('unavailable', $sectorEvidence['state']);
+        $this->assertSame('registered_stub', $sectorEvidence['reason']);
+        $this->assertNull($sectorEvidence['value']);
+
+        $relativeStrengthEvidence = $overrideEvidence['indicator_evidence']['relative_strength_3m'];
+        $this->assertContains($relativeStrengthEvidence['state'], ['available', 'unavailable', 'error']);
+        if ($relativeStrengthEvidence['value'] === null) {
+            $this->assertNotNull($relativeStrengthEvidence['reason']);
+        }
 
         $this->assertNotEquals(
             $defaultEvidence['indicators']['rsi'],
@@ -208,10 +235,15 @@ class EvaluationParameterOverrideTest extends TestCase
         $this->assertSame('completed', $result['pipeline_run']->status);
         $run = EvaluationRun::query()->findOrFail($result['stages']['evaluation']['run_id']);
         $this->assertSame(6, (int) ($run->stats_json['evaluation_parameters']['rsi_period'] ?? 0));
+        $resultRow = $run->results()->firstOrFail();
+        $this->assertSame(
+            '1.0.0',
+            $resultRow->evidence['indicator_evidence']['momentum_score']['indicator_version'] ?? null,
+        );
     }
 
     /**
-     * @return array{0: \App\Models\PortfolioProfile, 1: Stock}
+     * @return array{0: PortfolioProfile, 1: Stock}
      */
     protected function seedEvaluableStock(bool $withWatchlist = false): array
     {
