@@ -5,6 +5,7 @@ namespace App\Services\Artifacts;
 use App\Models\PortfolioProfile;
 use App\Models\Screener;
 use App\Services\Artifacts\Contracts\ArtifactRegistryInterface;
+use App\Services\Indicators\IndicatorRegistry;
 use App\Services\Screener\ScreenerService;
 use App\Services\Screener\ScreenerVersioningService;
 use InvalidArgumentException;
@@ -19,6 +20,7 @@ final class ScreenerArtifactRegistry implements ArtifactRegistryInterface
         private ScreenerService $screeners,
         private ArtifactValidationService $validator,
         private ScreenerVersioningService $versioning,
+        private IndicatorRegistry $indicatorRegistry,
     ) {}
 
     public function type(): string
@@ -428,20 +430,27 @@ final class ScreenerArtifactRegistry implements ArtifactRegistryInterface
                 foreach (['left', 'right'] as $side) {
                     $op = $n[$side] ?? null;
                     if (is_array($op) && isset($op['indicator'])) {
-                        $ids[(string) $op['indicator']] = true;
+                        $id = (string) $op['indicator'];
+                        $ids[$id] = isset($op['indicator_version']) ? (string) $op['indicator_version'] : null;
                     }
                 }
             }
         };
         $walk($node);
         $deps = [];
-        foreach (array_keys($ids) as $id) {
+        foreach ($ids as $id => $pinnedVersion) {
+            $versions = $this->indicatorRegistry->versions($id);
+            $version = $pinnedVersion;
+            if ($version === null || $this->indicatorRegistry->findVersion($id, $version) === null) {
+                $version = $versions === [] ? '' : $versions[array_key_last($versions)]->version;
+            }
             $deps[] = [
                 'kind' => 'uses_indicator',
                 'artifact_type' => ArtifactType::INDICATOR,
                 'ref' => $id,
+                'ref_version' => $version,
                 'ref_scheme' => 'registry_id',
-                'resolution' => 'runtime_registry',
+                'resolution' => 'exact_registry_version',
                 'required' => true,
             ];
         }

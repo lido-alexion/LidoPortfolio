@@ -216,12 +216,14 @@ final class IndicatorArtifactRegistry implements ArtifactRegistryInterface
 
         $deps = [];
         foreach ($def->dependsOn as $dep) {
+            $dependency = $this->registry->get($dep);
             $deps[] = [
                 'kind' => 'uses_indicator',
                 'artifact_type' => ArtifactType::INDICATOR,
                 'ref' => $dep,
+                'ref_version' => $dependency->version,
                 'ref_scheme' => 'registry_id',
-                'resolution' => 'runtime_registry',
+                'resolution' => 'exact_registry_version',
                 'required' => true,
             ];
         }

@@ -8,6 +8,7 @@ use App\Models\ScreenerRun;
 use App\Models\Watchlist;
 use App\Services\ExternalStockLinkService;
 use App\Services\IndexCatalogService;
+use App\Services\Indicators\IndicatorRegistry;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
@@ -23,6 +24,7 @@ class ScreenerService
         protected ExternalStockLinkService $externalStockLinks,
         protected IndexCatalogService $indexCatalog,
         protected ScreenerVersioningService $versioning,
+        protected IndicatorRegistry $indicatorRegistry,
     ) {}
 
     /**
@@ -412,7 +414,7 @@ class ScreenerService
             throw ValidationException::withMessages(['definition_json' => 'definition_json is required.']);
         }
         try {
-            $definition = $this->validator->validate($definitionInput);
+            $definition = $this->validator->validate($this->pinIndicatorVersions($definitionInput));
         } catch (InvalidArgumentException $e) {
             throw ValidationException::withMessages(['definition_json' => $e->getMessage()]);
         }
@@ -540,6 +542,53 @@ class ScreenerService
         }
 
         return $out;
+    }
+
+    /**
+     * Pin each authored operand to an exact Registry version. Existing persisted
+     * definitions are not rewritten; they receive their legacy baseline only when saved.
+     *
+     * @param  array<string, mixed>  $definition
+     * @return array<string, mixed>
+     */
+    private function pinIndicatorVersions(array $definition): array
+    {
+        $walk = function (array $node) use (&$walk): array {
+            if (($node['type'] ?? '') === 'group') {
+                $node['children'] = array_map(
+                    static fn ($child) => is_array($child) ? $walk($child) : $child,
+                    is_array($node['children'] ?? null) ? $node['children'] : [],
+                );
+
+                return $node;
+            }
+            if (($node['type'] ?? '') !== 'condition') {
+                return $node;
+            }
+            foreach (['left', 'right'] as $side) {
+                $operand = $node[$side] ?? null;
+                if (! is_array($operand) || ! isset($operand['indicator'])) {
+                    continue;
+                }
+                $id = (string) $operand['indicator'];
+                if (! $this->indicatorRegistry->has($id)) {
+                    continue;
+                }
+                $requested = isset($operand['indicator_version']) ? (string) $operand['indicator_version'] : null;
+                if ($requested !== null && $this->indicatorRegistry->findVersion($id, $requested) === null) {
+                    throw new InvalidArgumentException("Unknown indicator version: {$id}@{$requested}");
+                }
+                $node[$side]['indicator_version'] = $requested ?? $this->indicatorRegistry->get($id)->version;
+            }
+
+            return $node;
+        };
+
+        if (isset($definition['root']) && is_array($definition['root'])) {
+            $definition['root'] = $walk($definition['root']);
+        }
+
+        return $definition;
     }
 
     /**

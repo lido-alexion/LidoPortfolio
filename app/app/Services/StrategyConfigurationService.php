@@ -10,8 +10,10 @@ use App\Models\PortfolioProfile;
 use App\Models\Screener;
 use App\Models\TradingStrategy;
 use App\Models\TradingStrategyVersion;
+use App\Services\Indicators\IndicatorRegistry;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use InvalidArgumentException;
 
 /**
  * Strategy Configuration (SD-027 / SD-028 / SD-030).
@@ -23,7 +25,9 @@ class StrategyConfigurationService
 {
     public function __construct(
         protected StrategyEligibilityService $eligibility,
+        protected IndicatorRegistry $indicatorRegistry,
     ) {}
+
     /**
      * @return array<string, mixed>
      */
@@ -389,8 +393,15 @@ class StrategyConfigurationService
                     ?? ($factoryRow['parameters'][$paramKey] ?? $meta['default']);
             }
 
+            $requestedVersion = isset($row['indicator_version']) ? (string) $row['indicator_version'] : null;
+            if ($requestedVersion !== null && $this->indicatorRegistry->findVersion($key, $requestedVersion) === null) {
+                throw new InvalidArgumentException("Unknown indicator version: {$key}@{$requestedVersion}");
+            }
+            $indicatorVersion = $requestedVersion ?? $this->indicatorRegistry->get($key)->version;
+
             $indicators[] = [
                 'key' => $key,
+                'indicator_version' => $indicatorVersion,
                 'category' => $def['category'],
                 'display_name' => $def['display_name'],
                 'description' => $def['description'],

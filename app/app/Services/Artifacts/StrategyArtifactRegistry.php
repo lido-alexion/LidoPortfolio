@@ -7,6 +7,7 @@ use App\Models\PortfolioProfile;
 use App\Models\TradingStrategy;
 use App\Models\TradingStrategyVersion;
 use App\Services\Artifacts\Contracts\ArtifactRegistryInterface;
+use App\Services\Indicators\IndicatorRegistry;
 use App\Services\Strategy\StrategyRegistrySupport;
 use App\Services\StrategyConfigurationService;
 use Illuminate\Support\Facades\DB;
@@ -20,10 +21,12 @@ use InvalidArgumentException;
 final class StrategyArtifactRegistry implements ArtifactRegistryInterface
 {
     public const ENABLEMENT_RULE = 'multiple_enabled_per_portfolio';
+
     public function __construct(
         private StrategyConfigurationService $strategies,
         private ArtifactValidationService $validator,
         private StrategyRegistrySupport $support,
+        private IndicatorRegistry $indicatorRegistry,
     ) {}
 
     public function type(): string
@@ -469,8 +472,12 @@ final class StrategyArtifactRegistry implements ArtifactRegistryInterface
                 'kind' => 'uses_indicator',
                 'artifact_type' => ArtifactType::INDICATOR,
                 'ref' => (string) $row['key'],
+                'ref_version' => $this->indicatorVersion(
+                    (string) $row['key'],
+                    isset($row['indicator_version']) ? (string) $row['indicator_version'] : null,
+                ),
                 'ref_scheme' => 'registry_id',
-                'resolution' => 'runtime_registry',
+                'resolution' => 'exact_registry_version',
                 'required' => (bool) ($row['enabled'] ?? false),
             ];
         }
@@ -511,6 +518,16 @@ final class StrategyArtifactRegistry implements ArtifactRegistryInterface
             max(1, (int) $version->version),
             (string) $strategy->id,
         );
+    }
+
+    private function indicatorVersion(string $id, ?string $pinned): string
+    {
+        if ($pinned !== null && $this->indicatorRegistry->findVersion($id, $pinned) !== null) {
+            return $pinned;
+        }
+        $versions = $this->indicatorRegistry->versions($id);
+
+        return $versions === [] ? '' : $versions[array_key_last($versions)]->version;
     }
 
     /**

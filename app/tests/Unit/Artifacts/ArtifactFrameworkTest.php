@@ -35,6 +35,10 @@ class ArtifactFrameworkTest extends TestCase
         $this->assertSame('rsi', $rsi['slug']);
         $this->assertSame('rsi', $rsi['definition']['registry_id']);
         $this->assertArrayHasKey('definition_hash', $rsi);
+
+        $momentum = $registry->get('momentum_score');
+        $this->assertSame('1.0.0', $momentum['dependencies'][0]['ref_version']);
+        $this->assertSame('exact_registry_version', $momentum['dependencies'][0]['resolution']);
     }
 
     public function test_screener_envelope_validation(): void

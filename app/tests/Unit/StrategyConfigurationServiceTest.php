@@ -2,6 +2,7 @@
 
 namespace Tests\Unit;
 
+use App\Engines\Strategy\FactoryMomentumStrategy;
 use App\Engines\Strategy\SupportedIndicators;
 use App\Services\StrategyConfigurationService;
 use Tests\TestCase;
@@ -75,6 +76,20 @@ class StrategyConfigurationServiceTest extends TestCase
         $this->assertNotContains('custom_magic', $keys);
         $this->assertContains(SupportedIndicators::VOLUME_SCORE, $keys);
         $this->assertCount(count(SupportedIndicators::keys()), $keys);
+        foreach ($config['indicators'] as $indicator) {
+            $this->assertSame('1.0.0', $indicator['indicator_version']);
+        }
+    }
+
+    public function test_normalize_rejects_unknown_indicator_version(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        app(StrategyConfigurationService::class)->normalizeConfig([
+            'indicators' => [[
+                'key' => SupportedIndicators::VOLUME_SCORE,
+                'indicator_version' => '9.9.9',
+            ]],
+        ]);
     }
 
     public function test_legacy_aliases_score(): void
@@ -101,7 +116,7 @@ class StrategyConfigurationServiceTest extends TestCase
         $config = $svc->defaultConfig();
         $this->assertEqualsWithDelta(100.0, $svc->enabledWeightTotal($config), 0.01);
         $svc->validateConfig($svc->normalizeConfig($config));
-        $this->assertSame('Minervini Strategy', \App\Engines\Strategy\FactoryMomentumStrategy::NAME);
+        $this->assertSame('Minervini Strategy', FactoryMomentumStrategy::NAME);
     }
 
     public function test_normalize_config_auto_normalizes_enabled_weights_to_100(): void

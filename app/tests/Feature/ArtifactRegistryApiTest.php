@@ -31,6 +31,13 @@ class ArtifactRegistryApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.slug', 'rsi')
             ->assertJsonPath('data.artifact_type', ArtifactType::INDICATOR);
+
+        $this->actingAs($user)
+            ->getJson('/api/v1/artifacts/indicator/momentum_score')
+            ->assertOk()
+            ->assertJsonPath('data.dependencies.0.ref', 'rsi')
+            ->assertJsonPath('data.dependencies.0.ref_version', '1.0.0')
+            ->assertJsonPath('data.dependencies.0.resolution', 'exact_registry_version');
     }
 
     public function test_validate_screener_envelope(): void

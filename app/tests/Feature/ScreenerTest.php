@@ -3,9 +3,16 @@
 namespace Tests\Feature;
 
 use App\Models\Holding;
+use App\Models\Screener;
+use App\Models\ScreenerBacktestDay;
+use App\Models\ScreenerBacktestHit;
+use App\Models\ScreenerRun;
+use App\Models\ScreenerRunHit;
+use App\Models\Setting;
 use App\Models\Stock;
 use App\Models\StockPrice;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -91,6 +98,8 @@ class ScreenerTest extends TestCase
         $create->assertCreated();
         $create->assertJsonPath('data.scope', 'holdings');
         $create->assertJsonPath('data.max_lookback', 10);
+        $create->assertJsonPath('data.definition_json.root.children.0.left.indicator_version', '1.0.0');
+        $create->assertJsonPath('data.definition_json.root.children.0.right.indicator_version', '1.0.0');
         $id = $create->json('data.id');
 
         $this->getJson('/api/screeners')
@@ -350,7 +359,7 @@ class ScreenerTest extends TestCase
         ]);
         $create->assertStatus(422);
 
-        $screener = \App\Models\Screener::query()->create([
+        $screener = Screener::query()->create([
             'profile_id' => $profile->id,
             'name' => 'Orphan watchlist screen',
             'scope' => 'watchlist',
@@ -445,8 +454,8 @@ class ScreenerTest extends TestCase
             'is_benchmark' => false,
         ]);
 
-        \App\Models\Setting::setValue('index_constituents_nifty50_json', json_encode([$inIndex->symbol]));
-        \App\Models\Setting::setValue('index_constituents_nifty50_cached_at', now()->toIso8601String());
+        Setting::setValue('index_constituents_nifty50_json', json_encode([$inIndex->symbol]));
+        Setting::setValue('index_constituents_nifty50_cached_at', now()->toIso8601String());
 
         $base = now()->subDays(30)->startOfDay();
         foreach ([$inIndex, $outIndex] as $stock) {
@@ -620,7 +629,7 @@ class ScreenerTest extends TestCase
         $this->assertSame([], $empty['columns']);
         $this->assertSame([], $empty['rows']);
 
-        $runA = \App\Models\ScreenerRun::query()->create([
+        $runA = ScreenerRun::query()->create([
             'screener_id' => $screenerId,
             'triggered_by' => 'manual',
             'status' => 'completed',
@@ -628,7 +637,7 @@ class ScreenerTest extends TestCase
             'finished_at' => now()->subHours(3)->addMinutes(1),
             'stats_json' => ['matched' => 2],
         ]);
-        $runB = \App\Models\ScreenerRun::query()->create([
+        $runB = ScreenerRun::query()->create([
             'screener_id' => $screenerId,
             'triggered_by' => 'schedule',
             'status' => 'completed',
@@ -636,7 +645,7 @@ class ScreenerTest extends TestCase
             'finished_at' => now()->subHours(2)->addMinutes(1),
             'stats_json' => ['matched' => 1],
         ]);
-        $runC = \App\Models\ScreenerRun::query()->create([
+        $runC = ScreenerRun::query()->create([
             'screener_id' => $screenerId,
             'triggered_by' => 'manual',
             'status' => 'completed',
@@ -644,7 +653,7 @@ class ScreenerTest extends TestCase
             'finished_at' => now()->subHour()->addMinutes(1),
             'stats_json' => ['matched' => 2],
         ]);
-        \App\Models\ScreenerRun::query()->create([
+        ScreenerRun::query()->create([
             'screener_id' => $screenerId,
             'triggered_by' => 'manual',
             'status' => 'running',
@@ -653,7 +662,7 @@ class ScreenerTest extends TestCase
             'stats_json' => ['matched' => 0],
         ]);
 
-        \App\Models\ScreenerRunHit::query()->create([
+        ScreenerRunHit::query()->create([
             'run_id' => $runA->id,
             'stock_id' => $stockA->id,
             'symbol' => 'AAA',
@@ -661,7 +670,7 @@ class ScreenerTest extends TestCase
             'name' => 'Alpha',
             'metrics_json' => [],
         ]);
-        \App\Models\ScreenerRunHit::query()->create([
+        ScreenerRunHit::query()->create([
             'run_id' => $runA->id,
             'stock_id' => $stockB->id,
             'symbol' => 'BBB',
@@ -669,7 +678,7 @@ class ScreenerTest extends TestCase
             'name' => 'Beta',
             'metrics_json' => [],
         ]);
-        \App\Models\ScreenerRunHit::query()->create([
+        ScreenerRunHit::query()->create([
             'run_id' => $runB->id,
             'stock_id' => $stockA->id,
             'symbol' => 'AAA',
@@ -677,7 +686,7 @@ class ScreenerTest extends TestCase
             'name' => 'Alpha',
             'metrics_json' => [],
         ]);
-        \App\Models\ScreenerRunHit::query()->create([
+        ScreenerRunHit::query()->create([
             'run_id' => $runC->id,
             'stock_id' => $stockA->id,
             'symbol' => 'AAA',
@@ -685,7 +694,7 @@ class ScreenerTest extends TestCase
             'name' => 'Alpha',
             'metrics_json' => [],
         ]);
-        \App\Models\ScreenerRunHit::query()->create([
+        ScreenerRunHit::query()->create([
             'run_id' => $runC->id,
             'stock_id' => $stockC->id,
             'symbol' => 'CCC',
@@ -882,7 +891,7 @@ class ScreenerTest extends TestCase
 
     public function test_backtest_weekdays_matrix_and_session_discard(): void
     {
-        \Carbon\Carbon::setTestNow(\Carbon\Carbon::parse('2026-07-21 12:00:00', config('app.timezone')));
+        Carbon::setTestNow(Carbon::parse('2026-07-21 12:00:00', config('app.timezone')));
 
         $user = User::query()->create([
             'name' => 'Backtest User',
@@ -977,8 +986,8 @@ class ScreenerTest extends TestCase
 
         $this->assertNotEmpty($matrix['columns']);
         foreach ($matrix['columns'] as $col) {
-            $dow = \Carbon\Carbon::parse($col['id'])->dayOfWeek;
-            $this->assertNotContains($dow, [\Carbon\Carbon::SATURDAY, \Carbon\Carbon::SUNDAY]);
+            $dow = Carbon::parse($col['id'])->dayOfWeek;
+            $this->assertNotContains($dow, [Carbon::SATURDAY, Carbon::SUNDAY]);
         }
         $this->assertSame($stock->symbol, $matrix['rows'][0]['symbol']);
         $this->assertTrue(in_array(true, $matrix['rows'][0]['presence'], true));
@@ -1035,12 +1044,12 @@ class ScreenerTest extends TestCase
         $this->assertSame(count($matrix['columns']), count($persisted['columns']));
         $this->assertSame($stock->symbol, $persisted['rows'][0]['symbol']);
 
-        \Carbon\Carbon::setTestNow();
+        Carbon::setTestNow();
     }
 
     public function test_completed_run_fills_backtest_day_cache_and_backtest_reuses_it(): void
     {
-        \Carbon\Carbon::setTestNow(\Carbon\Carbon::parse('2026-07-21 18:30:00', config('app.timezone')));
+        Carbon::setTestNow(Carbon::parse('2026-07-21 18:30:00', config('app.timezone')));
 
         $user = User::query()->create([
             'name' => 'Run Cache User',
@@ -1104,20 +1113,20 @@ class ScreenerTest extends TestCase
         // writes today's result into the per-date backtest cache.
         $this->postJson("/api/screeners/{$id}/run")->assertOk();
         $today = now()->toDateString();
-        $day = \App\Models\ScreenerBacktestDay::query()
+        $day = ScreenerBacktestDay::query()
             ->where('screener_id', $id)
             ->where('as_of_date', $today)
             ->first();
         $this->assertNotNull($day);
         $this->assertSame(1, (int) $day->matched);
-        $this->assertSame($stock->symbol, \App\Models\ScreenerBacktestHit::query()
+        $this->assertSame($stock->symbol, ScreenerBacktestHit::query()
             ->where('screener_id', $id)
             ->where('as_of_date', $today)
             ->value('symbol'));
 
         // Running again the same day overwrites (still one row per date).
         $this->postJson("/api/screeners/{$id}/run")->assertOk();
-        $this->assertSame(1, \App\Models\ScreenerBacktestDay::query()->where('screener_id', $id)->count());
+        $this->assertSame(1, ScreenerBacktestDay::query()->where('screener_id', $id)->count());
 
         // A 15-day backtest reuses the run-filled date and computes only the rest.
         $start = $this->postJson("/api/screeners/{$id}/backtest", [
@@ -1136,14 +1145,14 @@ class ScreenerTest extends TestCase
         }
         $this->assertTrue($completed);
         $this->assertSame(1, (int) $data['stats']['days_reused']);
-        $this->assertSame((int) $data['stats']['day_total'], \App\Models\ScreenerBacktestDay::query()->where('screener_id', $id)->count());
+        $this->assertSame((int) $data['stats']['day_total'], ScreenerBacktestDay::query()->where('screener_id', $id)->count());
 
-        \Carbon\Carbon::setTestNow();
+        Carbon::setTestNow();
     }
 
     public function test_backtest_reuses_saved_dates_and_clears_on_edit_or_clear_history(): void
     {
-        \Carbon\Carbon::setTestNow(\Carbon\Carbon::parse('2026-07-21 12:00:00', config('app.timezone')));
+        Carbon::setTestNow(Carbon::parse('2026-07-21 12:00:00', config('app.timezone')));
 
         $user = User::query()->create([
             'name' => 'Backtest Cache User',
@@ -1230,7 +1239,7 @@ class ScreenerTest extends TestCase
         $dayTotal = (int) $first['stats']['day_total'];
         $this->assertGreaterThan(0, $dayTotal);
         $this->assertSame(0, (int) $first['stats']['days_reused']);
-        $this->assertSame($dayTotal, \App\Models\ScreenerBacktestDay::query()->where('screener_id', $id)->count());
+        $this->assertSame($dayTotal, ScreenerBacktestDay::query()->where('screener_id', $id)->count());
 
         // Second run: every date already saved → fully reused, zero scanning.
         // Deleting the price history proves results come from the DB, not recomputation.
@@ -1247,7 +1256,7 @@ class ScreenerTest extends TestCase
             'scope' => 'holdings',
             'definition_json' => $definition,
         ])->assertOk();
-        $this->assertSame($dayTotal, \App\Models\ScreenerBacktestDay::query()->where('screener_id', $id)->count());
+        $this->assertSame($dayTotal, ScreenerBacktestDay::query()->where('screener_id', $id)->count());
 
         // Changing conditions invalidates saved backtest results.
         $this->putJson("/api/screeners/{$id}", [
@@ -1262,20 +1271,20 @@ class ScreenerTest extends TestCase
                 ],
             ],
         ])->assertOk();
-        $this->assertSame(0, \App\Models\ScreenerBacktestDay::query()->where('screener_id', $id)->count());
-        $this->assertSame(0, \App\Models\ScreenerBacktestHit::query()->where('screener_id', $id)->count());
+        $this->assertSame(0, ScreenerBacktestDay::query()->where('screener_id', $id)->count());
+        $this->assertSame(0, ScreenerBacktestHit::query()->where('screener_id', $id)->count());
 
         // Rebuild results, then Clear history wipes them too.
         $third = $runBacktest($token.'-3');
         $this->assertSame(0, (int) $third['stats']['days_reused']);
-        $this->assertSame($dayTotal, \App\Models\ScreenerBacktestDay::query()->where('screener_id', $id)->count());
+        $this->assertSame($dayTotal, ScreenerBacktestDay::query()->where('screener_id', $id)->count());
         $this->deleteJson("/api/screeners/{$id}/runs")
             ->assertOk()
             ->assertJsonPath('backtest_days_cleared', $dayTotal);
-        $this->assertSame(0, \App\Models\ScreenerBacktestDay::query()->where('screener_id', $id)->count());
+        $this->assertSame(0, ScreenerBacktestDay::query()->where('screener_id', $id)->count());
         $empty = $this->getJson("/api/screeners/{$id}/backtest/matrix")->assertOk()->json('data');
         $this->assertSame(0, $empty['run_count']);
 
-        \Carbon\Carbon::setTestNow();
+        Carbon::setTestNow();
     }
 }
