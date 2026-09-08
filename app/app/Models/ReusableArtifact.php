@@ -30,4 +30,9 @@ class ReusableArtifact extends Model
     {
         return $this->hasMany(ReusableArtifactVersion::class, 'artifact_id');
     }
+
+    public function bindings(): HasMany
+    {
+        return $this->hasMany(ArtifactBinding::class, 'artifact_id');
+    }
 }

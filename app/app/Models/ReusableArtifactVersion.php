@@ -53,4 +53,9 @@ class ReusableArtifactVersion extends Model
     {
         return $this->hasMany(ReusableArtifactDependency::class, 'source_version_id');
     }
+
+    public function bindingRevisions(): HasMany
+    {
+        return $this->hasMany(ArtifactBindingRevision::class, 'artifact_version_id');
+    }
 }
