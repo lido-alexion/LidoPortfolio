@@ -26,6 +26,7 @@ export const ROUTES = Object.freeze({
     REVIEW_REPORTS: '/review/reports',
     STRATEGY: '/strategy',
     STRATEGY_REGISTRY: '/strategy/registry',
+    ARTIFACT_LIBRARY: '/artifact-library',
     BACKTESTS: '/backtests',
     SCREENERS: '/screeners',
     SCREENER_REGISTRY: '/screeners/registry',
