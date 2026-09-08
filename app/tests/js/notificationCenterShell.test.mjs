@@ -8,6 +8,7 @@ const bell = readFileSync(new URL('../../resources/js/src/components/Notificatio
 const banner = readFileSync(new URL('../../resources/js/src/components/CriticalNotificationBanner.jsx', import.meta.url), 'utf8');
 const center = readFileSync(new URL('../../resources/js/src/pages/NotificationHistoryPage.jsx', import.meta.url), 'utf8');
 const settings = readFileSync(new URL('../../resources/js/src/pages/NotificationSettingsPage.jsx', import.meta.url), 'utf8');
+const portfolioSettings = readFileSync(new URL('../../resources/js/src/pages/SettingsPage.jsx', import.meta.url), 'utf8');
 
 test('both authenticated role shells share global notification chrome', () => {
     assert.match(app, /<NotificationProvider>/);
@@ -43,4 +44,9 @@ test('notification settings exposes encrypted-channel lifecycle controls', () =>
     assert.match(settings, /bot_token_configured/);
     assert.match(settings, /email-destinations/);
     assert.match(settings, /Verification email sent/);
+});
+
+test('Portfolio Settings delegates channel configuration to account Notification Settings', () => {
+    assert.match(portfolioSettings, /to="\/settings\/notifications"/);
+    assert.doesNotMatch(portfolioSettings, /telegram_bot_token|telegram_chat_id|test-telegram/);
 });

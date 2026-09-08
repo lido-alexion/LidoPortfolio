@@ -3,17 +3,13 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Services\AlertNotificationService;
 use App\Services\SettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class SettingsController extends Controller
 {
-    public function __construct(
-        protected SettingsService $settings,
-        protected AlertNotificationService $alertNotifications,
-    ) {}
+    public function __construct(protected SettingsService $settings) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -71,32 +67,11 @@ class SettingsController extends Controller
         ]);
     }
 
-    public function testTelegram(Request $request): JsonResponse
+    public function testTelegram(): JsonResponse
     {
-        $validated = $request->validate([
-            'telegram_bot_token' => ['required', 'string', 'max:255'],
-            'telegram_chat_id' => ['required', 'string', 'max:255'],
-        ]);
-
-        $result = $this->alertNotifications->sendTestNotification(
-            \activePortfolio(),
-            $validated['telegram_bot_token'],
-            $validated['telegram_chat_id'],
-        );
-
-        if (! $result['sent']) {
-            return response()->json([
-                'message' => 'Telegram delivery failed. Check bot token, chat ID, and server logs.',
-            ], 422);
-        }
-
-        $alertCount = $result['alert_count'];
-
         return response()->json([
-            'message' => $alertCount > 0
-                ? "Sent {$alertCount} active alert(s) to Telegram."
-                : 'Sent test message to Telegram.',
-            'alert_count' => $alertCount,
-        ]);
+            'message' => 'Portfolio-level Telegram testing has moved to account-level Notification Settings.',
+            'notification_settings_url' => '/settings/notifications',
+        ], 410);
     }
 }

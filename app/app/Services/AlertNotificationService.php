@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\NotificationDelivery;
 use App\Models\PortfolioProfile;
 use App\Services\Notification\NotificationMessageComposer;
 use App\Services\Notification\NotificationPublisher;
@@ -12,7 +13,6 @@ class AlertNotificationService
     public function __construct(
         protected ProfileSettingsService $profileSettings,
         protected AlertService $alerts,
-        protected TelegramNotificationService $telegram,
         protected PortfolioLoggerService $logger,
         protected SettingsService $settings,
         protected NotificationMessageComposer $composer,
@@ -120,36 +120,6 @@ class AlertNotificationService
     }
 
     /**
-     * Manual test from Settings — sends only the active profile's alerts.
-     * Not gated by weekends/holidays so integration can be verified any day.
-     *
-     * @return array{sent: bool, alert_count: int, message: string}
-     */
-    public function sendTestNotification(PortfolioProfile $profile, string $token, string $chatId): array
-    {
-        $alerts = $this->alerts->getActiveForProfile($profile);
-        $text = $alerts === []
-            ? 'No active alerts at this time'
-            : $this->composer->alertsMessage($alerts);
-
-        $sent = $this->telegram->sendMessageWithCredentials($text, $token, $chatId);
-
-        $this->logger->scheduler($sent ? 'info' : 'warning', 'Telegram test notification processed', [
-            'category' => 'AlertNotification',
-            'profile_id' => $profile->id,
-            'alert_count' => count($alerts),
-            'sent' => $sent,
-            'test' => true,
-        ]);
-
-        return [
-            'sent' => $sent,
-            'alert_count' => count($alerts),
-            'message' => $text,
-        ];
-    }
-
-    /**
      * @return array{sent: bool, skipped: bool, alert_count: int}
      */
     protected function sendNotificationsForProfile(PortfolioProfile $profile, ?string $atTime = null): array
@@ -167,7 +137,19 @@ class AlertNotificationService
         if ($alerts === []) {
             if ($this->settings->isTelegramPingWhenClearEnabled()) {
                 $text = $this->composer->clearPingMessage($profile, $atTime);
-                $sent = $this->telegram->sendMessageForProfile($profile, $text);
+                $source = $this->publisher->publishEvent([$profile->user], [
+                    'notification_type' => 'portfolio.alert_digest_clear',
+                    'audience' => 'both',
+                    'severity' => 'info',
+                    'title' => 'No active portfolio alerts',
+                    'message' => $text,
+                    'external_info_delivery' => true,
+                    'context' => ['portfolio_id' => $profile->id, 'scheduled_at' => $atTime],
+                    'primary_action' => ['label' => 'Open Alerts', 'route' => '/dashboard'],
+                ]);
+                $sent = NotificationDelivery::query()
+                    ->whereHas('recipientNotification', fn ($query) => $query->where('source_id', $source->id))
+                    ->exists();
 
                 return [
                     'sent' => $sent,

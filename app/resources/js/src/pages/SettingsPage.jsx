@@ -80,7 +80,6 @@ export default function SettingsPage() {
     const [scheduleTouched, setScheduleTouched] = useState({});
     const [feeSectionOpen, setFeeSectionOpen] = useState(false);
     const [externalLinksSectionOpen, setExternalLinksSectionOpen] = useState(false);
-    const [telegramTesting, setTelegramTesting] = useState(false);
     const [opsCheckRunning, setOpsCheckRunning] = useState(false);
     const [activeScope, setActiveScope] = useState(() => scopeFromPath(location.pathname, isAdmin));
     const [recallPeriod, setRecallPeriod] = useState(null);
@@ -115,14 +114,6 @@ export default function SettingsPage() {
 
     const canSaveGlobal = !cronTimeInvalid;
     const canSavePortfolio = !notificationSchedulesInvalid;
-
-    const telegramConfigured = useMemo(
-        () => Boolean(
-            settings.telegram_bot_token?.trim()
-            && settings.telegram_chat_id?.trim(),
-        ),
-        [settings.telegram_bot_token, settings.telegram_chat_id],
-    );
 
     const loadSettings = async () => {
         const res = await api.get('/settings');
@@ -283,8 +274,6 @@ export default function SettingsPage() {
                 || settings.max_lending_absolute == null
                 ? null
                 : settings.max_lending_absolute,
-            telegram_bot_token: settings.telegram_bot_token,
-            telegram_chat_id: settings.telegram_chat_id,
             kite_readiness_reminder_time: settings.kite_readiness_reminder_time || '',
             notification_schedules: notificationPayload,
         });
@@ -297,22 +286,6 @@ export default function SettingsPage() {
         await api.post('/auth/sessions/logout-others');
         showToast('Other devices logged out');
         await loadSessions();
-    };
-
-    const testTelegram = async () => {
-        setTelegramTesting(true);
-        try {
-            const res = await api.post('/settings/test-telegram', {
-                telegram_bot_token: settings.telegram_bot_token.trim(),
-                telegram_chat_id: settings.telegram_chat_id.trim(),
-            });
-            showToast(res.data.message || 'Test message sent to Telegram');
-        } catch (error) {
-            const msg = error?.response?.data?.message || 'Telegram test failed';
-            showToast(msg, 'danger');
-        } finally {
-            setTelegramTesting(false);
-        }
     };
 
     const runOpsAlertCheck = async () => {
@@ -1006,22 +979,9 @@ export default function SettingsPage() {
                                     </button>
                                 </div>
                                 <div className="col-12">
-                                    <label className="form-label">Telegram Bot Token</label>
-                                    <input
-                                        className="form-control"
-                                        value={settings.telegram_bot_token || ''}
-                                        onChange={(e) => setSettings({ ...settings, telegram_bot_token: e.target.value })}
-                                    />
-                                </div>
-                                <div className="col-12">
-                                    <label className="form-label">Telegram Chat ID</label>
-                                    <input
-                                        className="form-control"
-                                        value={settings.telegram_chat_id || ''}
-                                        onChange={(e) => setSettings({ ...settings, telegram_chat_id: e.target.value })}
-                                    />
-                                    <p className="text-muted small mb-0 mt-1">
-                                        Telegram bot and chat ID are saved for the active portfolio.
+                                    <p className="text-muted small mb-0">
+                                        Telegram, email, and webhook destinations are account-level. Configure and test them in
+                                        {' '}<Link to="/settings/notifications">Notification Settings</Link>.
                                     </p>
                                 </div>
                                 <div className="col-md-6">
@@ -1035,21 +995,6 @@ export default function SettingsPage() {
                                         Automatic mode only, in the application timezone. Clear to disable. Sent at most once per day while Kite is unusable.
                                     </p>
                                 </div>
-                                {telegramConfigured && (
-                                    <div className="col-12">
-                                        <button
-                                            type="button"
-                                            className="btn btn-outline-secondary btn-sm"
-                                            onClick={testTelegram}
-                                            disabled={telegramTesting}
-                                        >
-                                            {telegramTesting ? 'Sending…' : 'Test telegram integration'}
-                                        </button>
-                                        <p className="text-muted small mb-0 mt-1">
-                                            Sends active alerts now, or &quot;No active alerts at this time&quot; if none.
-                                        </p>
-                                    </div>
-                                )}
                                 <div className="col-12">
                                     <button className="btn btn-primary" type="submit" disabled={!canSavePortfolio}>
                                         Save portfolio settings
