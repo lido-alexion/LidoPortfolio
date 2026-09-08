@@ -544,9 +544,16 @@ class PositionProtectionService
             }
         }
 
+        $recommendationId = $this->attributionRecommendationId($protection);
+        $recommendation = $recommendationId === null
+            ? null
+            : TradingRecommendation::query()->find($recommendationId);
+
         return TradingOrder::query()->create([
             'profile_id' => $profile->id,
-            'recommendation_id' => $this->attributionRecommendationId($protection),
+            'recommendation_id' => $recommendationId,
+            'reusable_artifact_version_id' => $recommendation?->reusable_artifact_version_id,
+            'artifact_binding_revision_id' => $recommendation?->artifact_binding_revision_id,
             'security_id' => $protection->stock_id,
             'side' => 'sell',
             'quantity' => $protection->quantity > 0 ? $protection->quantity : $filled,

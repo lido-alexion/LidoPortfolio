@@ -202,6 +202,10 @@ class ExecutionEngine
             OrderTransaction::query()->create([
                 'order_id' => $order->id,
                 'transaction_id' => $transaction->id,
+                'reusable_artifact_version_id' => $order->reusable_artifact_version_id
+                    ?? $recommendation?->reusable_artifact_version_id,
+                'artifact_binding_revision_id' => $order->artifact_binding_revision_id
+                    ?? $recommendation?->artifact_binding_revision_id,
                 'execution_price' => $price,
                 'quantity' => $delta,
                 'charges' => 0,
@@ -312,6 +316,8 @@ class ExecutionEngine
             return TradingOrder::query()->create([
                 'profile_id' => $profile->id,
                 'recommendation_id' => $recommendation?->id,
+                'reusable_artifact_version_id' => $recommendation?->reusable_artifact_version_id,
+                'artifact_binding_revision_id' => $recommendation?->artifact_binding_revision_id,
                 'security_id' => $stock->id,
                 'side' => $side,
                 'quantity' => $quantity,
@@ -414,6 +420,10 @@ class ExecutionEngine
             OrderTransaction::query()->create([
                 'order_id' => $order->id,
                 'transaction_id' => $transaction->id,
+                'reusable_artifact_version_id' => $order->reusable_artifact_version_id
+                    ?? $recommendation?->reusable_artifact_version_id,
+                'artifact_binding_revision_id' => $order->artifact_binding_revision_id
+                    ?? $recommendation?->artifact_binding_revision_id,
                 'execution_price' => $price,
                 'quantity' => $quantity,
                 'charges' => $fees,

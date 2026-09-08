@@ -400,6 +400,8 @@ class LiveBrokerExecutionService
             : TradingOrder::query()->create([
                 'profile_id' => $profile->id,
                 'recommendation_id' => $recommendation->id,
+                'reusable_artifact_version_id' => $recommendation->reusable_artifact_version_id,
+                'artifact_binding_revision_id' => $recommendation->artifact_binding_revision_id,
                 'security_id' => $stock->id,
                 'side' => $side,
                 'quantity' => $qty,

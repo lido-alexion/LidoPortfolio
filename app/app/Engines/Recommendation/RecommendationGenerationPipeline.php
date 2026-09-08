@@ -16,6 +16,8 @@ use App\Models\TradingRecommendation;
 use App\Models\TradingStrategy;
 use App\Models\TradingStrategyVersion;
 use App\Services\Analytics\MarketAnalyticsService;
+use App\Services\Artifacts\ArtifactRuntimeBindingResolver;
+use App\Services\Artifacts\ArtifactRuntimeSelection;
 use App\Services\CashManagementService;
 use App\Services\DataQualityGuardService;
 use App\Services\Entry\BuyCooldownEvaluator;
@@ -34,6 +36,7 @@ use App\Services\Ranking\ReturnQualityRankingService;
 use App\Services\Risk\ExitAttribution;
 use App\Services\Risk\ExitPrecedenceEvaluator;
 use App\Services\Strategy\PortfolioCapitalAccountingService;
+use App\Services\Strategy\StrategyRegistrySupport;
 use App\Services\StrategyConfigurationService;
 use App\Services\StrategyEligibilityService;
 use App\Support\TradingOsConfig;
@@ -67,6 +70,10 @@ class RecommendationGenerationPipeline
 
     protected MinimumActionableAmountResolver $minActionable;
 
+    protected ArtifactRuntimeBindingResolver $artifactRuntime;
+
+    protected StrategyRegistrySupport $strategyRegistrySupport;
+
     public function __construct(
         protected PortfolioCalculationService $portfolio,
         protected PortfolioLoggerService $logger,
@@ -86,6 +93,8 @@ class RecommendationGenerationPipeline
         ?StrategyPositionTargetService $positionTargets = null,
         ?WholeShareQuantityCalculator $wholeShares = null,
         ?MinimumActionableAmountResolver $minActionable = null,
+        ?ArtifactRuntimeBindingResolver $artifactRuntime = null,
+        ?StrategyRegistrySupport $strategyRegistrySupport = null,
     ) {
         $this->allocator = $allocator ?? new ReturnQualityCapitalAllocator;
         $this->lending = $lending ?? app(RecommendationLendingCoordinator::class);
@@ -95,6 +104,8 @@ class RecommendationGenerationPipeline
         $this->positionTargets = $positionTargets ?? app(StrategyPositionTargetService::class);
         $this->wholeShares = $wholeShares ?? app(WholeShareQuantityCalculator::class);
         $this->minActionable = $minActionable ?? app(MinimumActionableAmountResolver::class);
+        $this->artifactRuntime = $artifactRuntime ?? app(ArtifactRuntimeBindingResolver::class);
+        $this->strategyRegistrySupport = $strategyRegistrySupport ?? app(StrategyRegistrySupport::class);
     }
 
     /**
@@ -347,7 +358,24 @@ class RecommendationGenerationPipeline
             $strategyVersion->loadMissing('strategy');
         }
         $strategy = $strategyVersion->strategy;
-        $config = $strategyVersion->config_json ?? $this->strategies->defaultConfig();
+        $runtimeSelection = $this->artifactRuntime->forStrategyVersion($profile, $strategyVersion);
+        if ($strategy?->reusable_artifact_id !== null && $runtimeSelection === null) {
+            throw new DomainException(
+                'The Strategy immutable artifact binding is unavailable or blocked.',
+                'ARTIFACT_BINDING_UNAVAILABLE',
+            );
+        }
+        $config = $runtimeSelection?->definition
+            ?? $strategyVersion->config_json
+            ?? $this->strategies->defaultConfig();
+        if ($runtimeSelection !== null) {
+            $sources = is_array($config['eligibility_sources'] ?? null) ? $config['eligibility_sources'] : [];
+            if ($sources !== []) {
+                $config['eligibility_sources'] = $this->strategyRegistrySupport
+                    ->resolveEligibilitySources($profile, $sources);
+            }
+            $config = $this->strategies->normalizeConfig($config);
+        }
 
         $thresholds = $config[TradingOsConfig::STRATEGY_THRESHOLDS] ?? [];
         $buyMin = (float) ($thresholds[TradingOsConfig::THRESHOLD_OPEN_POSITION] ?? TradingOsConfig::recommendationBuyScoreMin());
@@ -505,6 +533,7 @@ class RecommendationGenerationPipeline
             'evaluation_run' => $evaluationRun,
             'strategy_version' => $strategyVersion,
             'strategy' => $strategy,
+            'artifact_runtime_selection' => $runtimeSelection,
             'config' => $config,
             'buy_min' => $buyMin,
             'increase_min' => $increaseMin,
@@ -1479,6 +1508,8 @@ class RecommendationGenerationPipeline
         $maxConcurrent = $ctx['max_concurrent'];
         $strategyVersion = $ctx['strategy_version'];
         $strategy = $ctx['strategy'] ?? null;
+        /** @var ArtifactRuntimeSelection|null $runtimeSelection */
+        $runtimeSelection = $ctx['artifact_runtime_selection'] ?? null;
         $eligibility = $ctx['eligibility'];
         $market = $ctx['market'];
         $gateDecision = $ctx['market_gate_decision'] ?? MarketGateEvaluator::evaluate($market, []);
@@ -1524,6 +1555,8 @@ class RecommendationGenerationPipeline
                 'score' => $draft['score'],
                 'strategy_score' => $draft['score'],
                 'strategy_version_id' => $strategyVersion->id,
+                'reusable_artifact_version_id' => $runtimeSelection?->artifactVersion->id,
+                'artifact_binding_revision_id' => $runtimeSelection?->bindingRevision->id,
                 'strategy_version' => $strategyVersion->version,
                 'strategy_name' => $strategy->name ?? 'Strategy',
                 'eligibility' => [
@@ -1579,6 +1612,8 @@ class RecommendationGenerationPipeline
                 'profile_id' => $profile->id,
                 'evaluation_result_id' => $draft['result']?->id,
                 'strategy_version_id' => $strategyVersion->id,
+                'reusable_artifact_version_id' => $runtimeSelection?->artifactVersion->id,
+                'artifact_binding_revision_id' => $runtimeSelection?->bindingRevision->id,
                 'security_id' => $draft['security_id'],
                 'recommendation_type' => $action,
                 'market_opinion' => $draft['opinion'],

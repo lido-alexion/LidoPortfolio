@@ -2,9 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Engines\Execution\ExecutionEngine;
 use App\Engines\Recommendation\RecommendationEngine;
 use App\Engines\Recommendation\RecommendationGenerationPipeline;
 use App\Engines\Strategy\FactoryMomentumStrategy;
+use App\Exceptions\DomainException;
 use App\Models\BacktestRun;
 use App\Models\BacktestTrade;
 use App\Models\Candidate;
@@ -12,6 +14,7 @@ use App\Models\DiscoveryRun;
 use App\Models\EvaluationResult;
 use App\Models\EvaluationRun;
 use App\Models\Holding;
+use App\Models\OrderTransaction;
 use App\Models\PortfolioProfile;
 use App\Models\Stock;
 use App\Models\StockPrice;
@@ -20,7 +23,9 @@ use App\Models\TradingStrategy;
 use App\Models\TradingStrategyVersion;
 use App\Models\User;
 use App\Services\Analytics\MarketAnalyticsService;
+use App\Services\Artifacts\LegacyArtifactBackfillService;
 use App\Services\CashManagementService;
+use App\Services\Entry\MinimumActionableAmountResolver;
 use App\Services\ProfileSettingsService;
 use App\Services\Strategy\PortfolioCapitalAccountingService;
 use App\Services\Strategy\StrategyRegistrySupport;
@@ -123,6 +128,68 @@ class V3RecommendationGenerationTest extends TestCase
         $this->assertSame(TradingRecommendation::ACTION_OPEN_POSITION, $rec->recommendation_type);
         $this->assertSame(TradingRecommendation::ALLOCATION_FUNDED, $rec->evidence['capital_allocation']['status'] ?? null);
         $this->assertCount(1, $result['strategies']);
+    }
+
+    public function test_mapped_strategy_uses_pinned_artifact_and_propagates_runtime_evidence_to_fill(): void
+    {
+        [$profile, $stock, $run, $strategy] = $this->seedSingleStrategy();
+        $this->mockMarket();
+        app(CashManagementService::class)->deposit($profile, 100000, 'seed');
+
+        $backfill = app(LegacyArtifactBackfillService::class)->backfill($profile);
+        $this->assertSame(0, $backfill['failed']);
+        $strategy = $strategy->fresh(['activeVersion', 'reusableArtifact.versions']);
+        $artifactVersion = $strategy->reusableArtifact->versions->firstWhere('status', 'published');
+        $binding = $strategy->reusableArtifact->bindings()->where('profile_id', $profile->id)->firstOrFail();
+
+        $legacyConfig = $strategy->activeVersion->config_json;
+        $legacyConfig['thresholds']['open_position'] = 99;
+        $strategy->activeVersion->forceFill(['config_json' => $legacyConfig])->save();
+
+        $result = app(RecommendationEngine::class)->generate($profile, $run);
+        $recommendation = collect($result['recommendations'])->firstWhere('security_id', $stock->id);
+
+        $this->assertNotNull($recommendation);
+        $this->assertSame(TradingRecommendation::ACTION_OPEN_POSITION, $recommendation->recommendation_type);
+        $this->assertSame($artifactVersion->id, $recommendation->reusable_artifact_version_id);
+        $this->assertSame($binding->active_revision_id, $recommendation->artifact_binding_revision_id);
+        $this->assertSame($artifactVersion->id, $recommendation->evidence['reusable_artifact_version_id']);
+        $this->assertSame($binding->active_revision_id, $recommendation->evidence['artifact_binding_revision_id']);
+
+        $recommendation->forceFill([
+            'status' => TradingRecommendation::STATUS_PENDING_EXECUTION,
+            'approved_at' => now(),
+        ])->save();
+        $execution = app(ExecutionEngine::class)->recordOrder($profile, $stock, [
+            'side' => 'buy',
+            'quantity' => 1,
+            'price' => 100,
+            'recommendation_id' => $recommendation->id,
+            'execute_now' => true,
+        ]);
+        $fill = OrderTransaction::query()->where('order_id', $execution['order']->id)->sole();
+
+        $this->assertSame($artifactVersion->id, $execution['order']->reusable_artifact_version_id);
+        $this->assertSame($binding->active_revision_id, $execution['order']->artifact_binding_revision_id);
+        $this->assertSame($artifactVersion->id, $fill->reusable_artifact_version_id);
+        $this->assertSame($binding->active_revision_id, $fill->artifact_binding_revision_id);
+    }
+
+    public function test_mapped_strategy_fails_closed_when_immutable_binding_is_disabled(): void
+    {
+        [$profile, $stock, $run, $strategy] = $this->seedSingleStrategy();
+        $this->mockMarket();
+        app(CashManagementService::class)->deposit($profile, 100000, 'seed');
+        app(LegacyArtifactBackfillService::class)->backfill($profile);
+        $strategy = $strategy->fresh('reusableArtifact');
+        $strategy->reusableArtifact->bindings()
+            ->where('profile_id', $profile->id)
+            ->update(['status' => 'disabled']);
+
+        $this->expectException(DomainException::class);
+        $this->expectExceptionMessage('immutable artifact binding is unavailable or blocked');
+
+        app(RecommendationEngine::class)->generate($profile, $run);
     }
 
     public function test_od23_order_is_recorded_when_ranking_unavailable(): void
@@ -323,7 +390,7 @@ class V3RecommendationGenerationTest extends TestCase
         $strategyVersion = app(StrategyConfigurationService::class)->ensureActive($profile);
         app(ProfileSettingsService::class)->set(
             $profile,
-            \App\Services\Entry\MinimumActionableAmountResolver::SETTING_KEY,
+            MinimumActionableAmountResolver::SETTING_KEY,
             '1',
         );
         $config = $strategyVersion->config_json ?? FactoryMomentumStrategy::config();
