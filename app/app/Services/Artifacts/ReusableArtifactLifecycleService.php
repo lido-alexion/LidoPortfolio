@@ -241,6 +241,10 @@ final class ReusableArtifactLifecycleService
                 if ((int) $target->artifact->owner_user_id !== (int) $source->artifact->owner_user_id) {
                     throw new InvalidArgumentException('Dependency version is not available in the owner Library.');
                 }
+                if ($source->artifact->artifact_type === ArtifactType::BUNDLE
+                    && $target->artifact->artifact_type === ArtifactType::BUNDLE) {
+                    throw new InvalidArgumentException('Nested Bundles are not supported in V5.');
+                }
             } elseif ($indicatorId !== null && $indicatorVersion !== null) {
                 if ($this->indicators->findVersion($indicatorId, $indicatorVersion) === null) {
                     throw new InvalidArgumentException("Unknown Indicator dependency: {$indicatorId}@{$indicatorVersion}");

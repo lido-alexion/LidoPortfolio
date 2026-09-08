@@ -3,6 +3,7 @@
 namespace App\Services\Artifacts;
 
 use App\Models\PortfolioProfile;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 /**
@@ -35,7 +36,7 @@ final class ArtifactRegistry
     {
         $type = $filters['type'] ?? null;
         unset($filters['type']);
-        if (is_string($type) && ArtifactType::isValid($type)) {
+        if (is_string($type) && in_array($type, [ArtifactType::INDICATOR, ArtifactType::SCREENER, ArtifactType::STRATEGY], true)) {
             return $this->forType($type)->list($profile, $filters);
         }
 
@@ -108,7 +109,7 @@ final class ArtifactRegistry
 
         return [
             'schema_version' => ArtifactType::SCHEMA_VERSION,
-            'package_id' => (string) \Illuminate\Support\Str::uuid(),
+            'package_id' => (string) Str::uuid(),
             'package_format' => ArtifactType::PACKAGE_FORMAT,
             'exported_at' => now()->toIso8601String(),
             'minimum_engine_version' => ArtifactType::MINIMUM_ENGINE_VERSION,

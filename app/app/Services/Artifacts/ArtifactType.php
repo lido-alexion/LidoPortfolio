@@ -10,6 +10,8 @@ final class ArtifactType
 
     public const STRATEGY = 'strategy';
 
+    public const BUNDLE = 'bundle';
+
     public const SCHEMA_VERSION = '1.0';
 
     public const PACKAGE_FORMAT = 'stox.trading_artifacts';
@@ -21,7 +23,7 @@ final class ArtifactType
      */
     public static function all(): array
     {
-        return [self::INDICATOR, self::SCREENER, self::STRATEGY];
+        return [self::INDICATOR, self::SCREENER, self::STRATEGY, self::BUNDLE];
     }
 
     public static function isValid(string $type): bool
