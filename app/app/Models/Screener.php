@@ -35,6 +35,7 @@ class Screener extends Model
         'is_factory',
         'factory_key',
         'last_run_at',
+        'reusable_artifact_id',
     ];
 
     protected function casts(): array
@@ -52,6 +53,7 @@ class Screener extends Model
             'is_shared' => 'boolean',
             'is_factory' => 'boolean',
             'last_run_at' => 'datetime',
+            'reusable_artifact_id' => 'integer',
         ];
     }
 
@@ -122,5 +124,10 @@ class Screener extends Model
     public function versions(): HasMany
     {
         return $this->hasMany(ScreenerVersion::class, 'screener_id');
+    }
+
+    public function reusableArtifact(): BelongsTo
+    {
+        return $this->belongsTo(ReusableArtifact::class, 'reusable_artifact_id');
     }
 }

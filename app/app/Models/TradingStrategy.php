@@ -31,6 +31,7 @@ class TradingStrategy extends Model
         'factory_key',
         'duplicated_from_id',
         'active_version_id',
+        'reusable_artifact_id',
     ];
 
     protected function casts(): array
@@ -38,6 +39,7 @@ class TradingStrategy extends Model
         return [
             'profile_id' => 'integer',
             'active_version_id' => 'integer',
+            'reusable_artifact_id' => 'integer',
             'duplicated_from_id' => 'integer',
             'allocation_pct' => 'decimal:4',
             'is_factory' => 'boolean',
@@ -63,6 +65,11 @@ class TradingStrategy extends Model
     public function duplicatedFrom(): BelongsTo
     {
         return $this->belongsTo(self::class, 'duplicated_from_id');
+    }
+
+    public function reusableArtifact(): BelongsTo
+    {
+        return $this->belongsTo(ReusableArtifact::class, 'reusable_artifact_id');
     }
 
     public function holdings(): HasMany

@@ -57,6 +57,8 @@ class TradingOrder extends Model
         'submission_key',
         'execution_decision_id',
         'last_broker_sync_at',
+        'reusable_artifact_version_id',
+        'artifact_binding_revision_id',
     ];
 
     protected function casts(): array
@@ -69,6 +71,8 @@ class TradingOrder extends Model
             'executed_at' => 'datetime',
             'cancelled_at' => 'datetime',
             'last_broker_sync_at' => 'datetime',
+            'reusable_artifact_version_id' => 'integer',
+            'artifact_binding_revision_id' => 'integer',
         ];
     }
 
@@ -96,5 +100,15 @@ class TradingOrder extends Model
     public function orderTransactions(): HasMany
     {
         return $this->hasMany(OrderTransaction::class, 'order_id');
+    }
+
+    public function reusableArtifactVersion(): BelongsTo
+    {
+        return $this->belongsTo(ReusableArtifactVersion::class, 'reusable_artifact_version_id');
+    }
+
+    public function artifactBindingRevision(): BelongsTo
+    {
+        return $this->belongsTo(ArtifactBindingRevision::class, 'artifact_binding_revision_id');
     }
 }

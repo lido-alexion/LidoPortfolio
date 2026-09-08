@@ -16,6 +16,8 @@ class OrderTransaction extends Model
         'quantity',
         'charges',
         'executed_at',
+        'reusable_artifact_version_id',
+        'artifact_binding_revision_id',
     ];
 
     protected function casts(): array
@@ -25,6 +27,8 @@ class OrderTransaction extends Model
             'quantity' => 'decimal:4',
             'charges' => 'decimal:4',
             'executed_at' => 'datetime',
+            'reusable_artifact_version_id' => 'integer',
+            'artifact_binding_revision_id' => 'integer',
         ];
     }
 
@@ -36,5 +40,15 @@ class OrderTransaction extends Model
     public function transaction(): BelongsTo
     {
         return $this->belongsTo(Transaction::class, 'transaction_id');
+    }
+
+    public function reusableArtifactVersion(): BelongsTo
+    {
+        return $this->belongsTo(ReusableArtifactVersion::class, 'reusable_artifact_version_id');
+    }
+
+    public function artifactBindingRevision(): BelongsTo
+    {
+        return $this->belongsTo(ArtifactBindingRevision::class, 'artifact_binding_revision_id');
     }
 }

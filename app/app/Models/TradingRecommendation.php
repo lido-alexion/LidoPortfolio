@@ -236,6 +236,8 @@ class TradingRecommendation extends Model
         'execution_expires_at',
         'superseded_at',
         'superseded_by_id',
+        'reusable_artifact_version_id',
+        'artifact_binding_revision_id',
     ];
 
     protected function casts(): array
@@ -279,6 +281,8 @@ class TradingRecommendation extends Model
             'execution_expires_at' => 'datetime',
             'superseded_at' => 'datetime',
             'superseded_by_id' => 'integer',
+            'reusable_artifact_version_id' => 'integer',
+            'artifact_binding_revision_id' => 'integer',
         ];
     }
 
@@ -290,6 +294,16 @@ class TradingRecommendation extends Model
     public function strategyVersion(): BelongsTo
     {
         return $this->belongsTo(TradingStrategyVersion::class, 'strategy_version_id');
+    }
+
+    public function reusableArtifactVersion(): BelongsTo
+    {
+        return $this->belongsTo(ReusableArtifactVersion::class, 'reusable_artifact_version_id');
+    }
+
+    public function artifactBindingRevision(): BelongsTo
+    {
+        return $this->belongsTo(ArtifactBindingRevision::class, 'artifact_binding_revision_id');
     }
 
     public function owningStrategyId(): ?int
