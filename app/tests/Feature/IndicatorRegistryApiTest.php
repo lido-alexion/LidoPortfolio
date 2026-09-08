@@ -58,6 +58,7 @@ class IndicatorRegistryApiTest extends TestCase
             ->getJson('/api/v1/indicators/momentum_score')
             ->assertOk()
             ->assertJsonPath('data.indicator.id', 'momentum_score')
+            ->assertJsonPath('data.available_versions.0.version', '1.0.0')
             ->assertJsonPath('data.dependency_tree.id', 'momentum_score')
             ->assertJsonPath('data.dependency_tree.depends_on.0.id', 'rsi');
 
@@ -70,5 +71,15 @@ class IndicatorRegistryApiTest extends TestCase
         $this->actingAs($admin)
             ->getJson('/api/v1/indicators/does_not_exist')
             ->assertNotFound();
+
+        $this->actingAs($admin)
+            ->getJson('/api/v1/indicators/rsi?version=9.9.9')
+            ->assertNotFound()
+            ->assertJsonPath('error.code', 'INDICATOR_VERSION_NOT_FOUND');
+
+        $this->actingAs($admin)
+            ->getJson('/api/v1/indicators/rsi')
+            ->assertOk()
+            ->assertJsonFragment(['id' => 'momentum_score', 'version' => '1.0.0']);
     }
 }

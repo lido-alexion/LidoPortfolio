@@ -39,6 +39,12 @@ class IndicatorRegistryTest extends TestCase
         IndicatorDefinition::make('x', 'not_a_type', IndicatorCategory::PRICE);
     }
 
+    public function test_definition_rejects_non_semver_version(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        IndicatorDefinition::make('x', IndicatorType::PRIMARY, IndicatorCategory::PRICE, ['version' => '1.0']);
+    }
+
     public function test_types_categories_consumers_are_documented(): void
     {
         $this->assertContains(IndicatorType::PRIMARY, IndicatorType::all());
@@ -177,6 +183,37 @@ class IndicatorRegistryTest extends TestCase
         ]);
         $this->expectException(InvalidArgumentException::class);
         new IndicatorRegistry([$def, $def]);
+    }
+
+    public function test_versions_are_retained_and_active_version_is_current(): void
+    {
+        $make = fn (string $version, string $status) => IndicatorDefinition::make(
+            'rsi',
+            IndicatorType::PRIMARY,
+            IndicatorCategory::MOMENTUM,
+            ['version' => $version, 'status' => $status],
+        );
+        $registry = new IndicatorRegistry([
+            $make('1.0.0', IndicatorStatus::DEPRECATED),
+            $make('2.0.0', IndicatorStatus::ACTIVE),
+            $make('3.0.0', IndicatorStatus::RETIRED),
+            $make('2.1.0', IndicatorStatus::ACTIVE),
+        ]);
+
+        $this->assertSame('2.1.0', $registry->get('rsi')->version);
+        $this->assertSame('1.0.0', $registry->getVersion('rsi', '1.0.0')->version);
+        $this->assertSame(['3.0.0', '2.1.0', '2.0.0', '1.0.0'], array_column(
+            array_map(fn (IndicatorDefinition $definition) => $definition->toArray(), $registry->versions('rsi')),
+            'version',
+        ));
+        $this->assertSame(1, $registry->count());
+        $this->assertCount(4, $registry->allVersions());
+    }
+
+    public function test_dependents_report_direct_impact(): void
+    {
+        $dependents = $this->registry()->dependents('rsi');
+        $this->assertContains('momentum_score', array_map(fn (IndicatorDefinition $definition) => $definition->id, $dependents));
     }
 
     public function test_filter_by_consumer(): void

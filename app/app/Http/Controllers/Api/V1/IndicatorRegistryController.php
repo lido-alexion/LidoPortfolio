@@ -75,17 +75,31 @@ class IndicatorRegistryController extends Controller
         ]);
     }
 
-    public function show(string $id)
+    public function show(Request $request, string $id)
     {
         $resolved = $this->registry->resolveId($id);
         if ($resolved === null) {
             return ApiEnvelope::error('INDICATOR_NOT_FOUND', "Unknown indicator: {$id}", 404);
         }
 
-        $definition = $this->registry->get($resolved);
+        $version = $request->filled('version') ? (string) $request->input('version') : null;
+        $definition = $version === null
+            ? $this->registry->get($resolved)
+            : $this->registry->findVersion($resolved, $version);
+        if ($definition === null) {
+            return ApiEnvelope::error('INDICATOR_VERSION_NOT_FOUND', "Unknown indicator version: {$resolved}@{$version}", 404);
+        }
 
         return ApiEnvelope::success([
             'indicator' => $definition->toArray(),
+            'available_versions' => array_map(
+                fn ($item) => ['version' => $item->version, 'status' => $item->status],
+                $this->registry->versions($resolved),
+            ),
+            'dependents' => array_map(
+                fn ($item) => ['id' => $item->id, 'version' => $item->version, 'status' => $item->status],
+                $this->registry->dependents($resolved),
+            ),
             'dependency_tree' => $this->registry->dependencyTreeDetailed($resolved),
             'dependencies' => array_map(
                 function (string $depId) {

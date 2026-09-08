@@ -49,6 +49,9 @@ final readonly class IndicatorDefinition
         if ($id === '') {
             throw new InvalidArgumentException('Indicator id must be non-empty.');
         }
+        if (preg_match('/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/', $version) !== 1) {
+            throw new InvalidArgumentException("Indicator version must be valid SemVer: {$version}");
+        }
         if (! IndicatorType::isValid($type)) {
             throw new InvalidArgumentException("Invalid indicator type: {$type}");
         }

@@ -19,6 +19,9 @@ final class IndicatorStatus
     /** Kept for aliases / history; not offered to new consumers. */
     public const DEPRECATED = 'deprecated';
 
+    /** Preserved for exact historical resolution; never offered to new consumers. */
+    public const RETIRED = 'retired';
+
     /**
      * @return array<string, string>
      */
@@ -29,6 +32,7 @@ final class IndicatorStatus
             self::STUB => 'Stub',
             self::PLANNED => 'Planned',
             self::DEPRECATED => 'Deprecated',
+            self::RETIRED => 'Retired',
         ];
     }
 

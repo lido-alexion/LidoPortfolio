@@ -15,6 +15,9 @@ final class IndicatorRegistry
     /** @var array<string, IndicatorDefinition> */
     private array $byId = [];
 
+    /** @var array<string, array<string, IndicatorDefinition>> */
+    private array $versionsById = [];
+
     /**
      * @param  list<IndicatorDefinition>  $definitions
      */
@@ -27,10 +30,15 @@ final class IndicatorRegistry
 
     public function register(IndicatorDefinition $definition): void
     {
-        if (isset($this->byId[$definition->id])) {
-            throw new InvalidArgumentException("Duplicate indicator id: {$definition->id}");
+        if (isset($this->versionsById[$definition->id][$definition->version])) {
+            throw new InvalidArgumentException("Duplicate indicator id/version: {$definition->id}@{$definition->version}");
         }
-        $this->byId[$definition->id] = $definition;
+        $this->versionsById[$definition->id][$definition->version] = $definition;
+        uksort(
+            $this->versionsById[$definition->id],
+            static fn (string $left, string $right): int => version_compare($right, $left),
+        );
+        $this->byId[$definition->id] = $this->selectCurrent($this->versionsById[$definition->id]);
     }
 
     public function has(string $id): bool
@@ -50,6 +58,33 @@ final class IndicatorRegistry
     public function find(string $id): ?IndicatorDefinition
     {
         return $this->byId[$id] ?? null;
+    }
+
+    public function getVersion(string $id, string $version): IndicatorDefinition
+    {
+        $definition = $this->findVersion($id, $version);
+        if ($definition === null) {
+            throw new InvalidArgumentException("Unknown indicator id/version: {$id}@{$version}");
+        }
+
+        return $definition;
+    }
+
+    public function findVersion(string $id, string $version): ?IndicatorDefinition
+    {
+        return $this->versionsById[$id][$version] ?? null;
+    }
+
+    /** @return list<IndicatorDefinition> Newest first. */
+    public function versions(string $id): array
+    {
+        return array_values($this->versionsById[$id] ?? []);
+    }
+
+    /** @return list<IndicatorDefinition> */
+    public function allVersions(): array
+    {
+        return array_merge(...array_map('array_values', array_values($this->versionsById)));
     }
 
     /**
@@ -191,6 +226,19 @@ final class IndicatorRegistry
     }
 
     /**
+     * Current registry entries that directly reference this stable indicator id.
+     *
+     * @return list<IndicatorDefinition>
+     */
+    public function dependents(string $id): array
+    {
+        return array_values(array_filter(
+            $this->byId,
+            static fn (IndicatorDefinition $definition): bool => in_array($id, $definition->dependsOn, true),
+        ));
+    }
+
+    /**
      * Nested dependency tree (ids only). Detects cycles.
      *
      * @return array<string, mixed>
@@ -291,5 +339,30 @@ final class IndicatorRegistry
         unset($stack[$id]);
 
         return false;
+    }
+
+    /**
+     * Prefer the highest Active version for new authoring. If none exists, expose
+     * the highest non-retired lifecycle entry, while exact historical lookup stays available.
+     *
+     * @param  array<string, IndicatorDefinition>  $versions
+     */
+    private function selectCurrent(array $versions): IndicatorDefinition
+    {
+        $priority = [
+            IndicatorStatus::ACTIVE => 0,
+            IndicatorStatus::STUB => 1,
+            IndicatorStatus::PLANNED => 2,
+            IndicatorStatus::DEPRECATED => 3,
+            IndicatorStatus::RETIRED => 4,
+        ];
+        $definitions = array_values($versions);
+        usort($definitions, static function (IndicatorDefinition $left, IndicatorDefinition $right) use ($priority): int {
+            $status = ($priority[$left->status] ?? PHP_INT_MAX) <=> ($priority[$right->status] ?? PHP_INT_MAX);
+
+            return $status !== 0 ? $status : version_compare($right->version, $left->version);
+        });
+
+        return $definitions[0];
     }
 }
