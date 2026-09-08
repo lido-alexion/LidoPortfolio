@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\PortfolioProfile;
 use App\Services\Notification\NotificationMessageComposer;
+use App\Services\Notification\NotificationPublisher;
 use App\Support\TradingCalendar;
 
 class AlertNotificationService
@@ -15,6 +16,7 @@ class AlertNotificationService
         protected PortfolioLoggerService $logger,
         protected SettingsService $settings,
         protected NotificationMessageComposer $composer,
+        protected NotificationPublisher $publisher,
     ) {}
 
     /**
@@ -182,10 +184,23 @@ class AlertNotificationService
         }
 
         $text = $this->composer->alertsMessage($alerts);
-        $sent = $this->telegram->sendMessageForProfile($profile, $text);
+        $this->publisher->publishEvent([$profile->user], [
+            'notification_type' => 'portfolio.alert_digest',
+            'audience' => 'investor',
+            'severity' => 'action_required',
+            'title' => 'Portfolio alerts',
+            'message' => $text,
+            'context' => [
+                'portfolio_id' => $profile->id,
+                'scheduled_at' => $atTime,
+                'alert_count' => count($alerts),
+                'alert_ids' => array_values(array_map(fn (array $alert) => (int) $alert['id'], $alerts)),
+            ],
+            'primary_action' => ['label' => 'Open Alerts', 'route' => '/dashboard'],
+        ]);
 
         return [
-            'sent' => $sent,
+            'sent' => true,
             'skipped' => false,
             'alert_count' => count($alerts),
         ];

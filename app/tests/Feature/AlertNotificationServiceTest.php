@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Alert;
 use App\Models\CalendarEvent;
 use App\Models\Holding;
+use App\Models\NotificationSource;
 use App\Models\Stock;
 use App\Models\User;
 use App\Services\AlertNotificationService;
@@ -12,6 +13,7 @@ use App\Services\TelegramNotificationService;
 use App\Support\TradingCalendar;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -99,6 +101,7 @@ class AlertNotificationServiceTest extends TestCase
 
     public function test_scheduled_notifications_send_active_alerts(): void
     {
+        Queue::fake();
         $user = User::query()->create([
             'name' => 'Alert Notify',
             'email' => 'alert-notify-'.Str::random(8).'@example.com',
@@ -134,13 +137,7 @@ class AlertNotificationServiceTest extends TestCase
         ]);
 
         $telegram = $this->createMock(TelegramNotificationService::class);
-        $telegram->expects($this->once())
-            ->method('sendMessageForProfile')
-            ->with(
-                $this->callback(fn ($p) => $p->id === $profile->id),
-                $this->stringContains('ALERT'),
-            )
-            ->willReturn(true);
+        $telegram->expects($this->never())->method('sendMessageForProfile');
         $this->app->instance(TelegramNotificationService::class, $telegram);
 
         app(\App\Services\NotificationScheduleService::class)->persistForProfile($profile, ['10:00']);
@@ -155,6 +152,13 @@ class AlertNotificationServiceTest extends TestCase
         $this->assertFalse($result['skipped']);
         $this->assertSame(1, $result['alert_count']);
         $this->assertTrue($result['sent']);
+        $source = NotificationSource::query()->sole();
+        $this->assertSame('portfolio.alert_digest', $source->notification_type);
+        $this->assertSame('action_required', $source->severity);
+        $this->assertSame($profile->id, $source->context['portfolio_id']);
+        $this->assertSame('10:00', $source->context['scheduled_at']);
+        $this->assertSame(1, $source->recipients()->where('user_id', $user->id)->count());
+        $this->assertDatabaseCount('portfolio_notification_deliveries', 1);
     }
 
     public function test_scheduled_notifications_skip_on_weekend(): void
@@ -225,6 +229,7 @@ class AlertNotificationServiceTest extends TestCase
 
     public function test_scheduled_notifications_repeat_digest_for_same_active_alert(): void
     {
+        Queue::fake();
         $user = User::query()->create([
             'name' => 'Repeat Digest',
             'email' => 'alert-repeat-'.Str::random(8).'@example.com',
@@ -260,13 +265,7 @@ class AlertNotificationServiceTest extends TestCase
         ]);
 
         $telegram = $this->createMock(TelegramNotificationService::class);
-        $telegram->expects($this->exactly(2))
-            ->method('sendMessageForProfile')
-            ->with(
-                $this->callback(fn ($p) => $p->id === $profile->id),
-                $this->stringContains('RPTA'),
-            )
-            ->willReturn(true);
+        $telegram->expects($this->never())->method('sendMessageForProfile');
         $this->app->instance(TelegramNotificationService::class, $telegram);
 
         app(\App\Services\NotificationScheduleService::class)->persistForProfile($profile, ['10:00', '15:00']);
@@ -285,6 +284,12 @@ class AlertNotificationServiceTest extends TestCase
         $this->assertSame(1, $second['alert_count']);
         $this->assertNull(Alert::query()->first()->expired_at);
         $this->assertFalse(Alert::query()->first()->is_sent);
+        $this->assertDatabaseCount('portfolio_notification_sources', 2);
+        $this->assertDatabaseCount('portfolio_notification_deliveries', 2);
+        $this->assertSame(
+            ['10:00', '15:00'],
+            NotificationSource::query()->orderBy('id')->get()->pluck('context')->map(fn (array $context) => $context['scheduled_at'])->all(),
+        );
     }
 
     public function test_empty_notification_schedule_does_not_send_digest(): void
