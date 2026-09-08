@@ -43,6 +43,7 @@ use App\Http\Controllers\Api\UniversePriceSyncController;
 use App\Http\Controllers\Api\UserInviteController;
 use App\Http\Controllers\Api\UserManagementController;
 use App\Http\Controllers\Api\V1\AnalyticsArchitectureController;
+use App\Http\Controllers\Api\V1\ArtifactLibraryController;
 use App\Http\Controllers\Api\V1\ArtifactRegistryController;
 use App\Http\Controllers\Api\V1\BacktestController;
 use App\Http\Controllers\Api\V1\CapitalAccountingController;
@@ -464,6 +465,10 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
     Route::get('/backtests/{id}/timeline', [BacktestController::class, 'timeline'])->whereNumber('id');
 
     // Trading Artifact Registry (SD-034) — additive infrastructure; does not replace screeners/strategy APIs.
+    Route::get('/artifact-library', [ArtifactLibraryController::class, 'index']);
+    Route::get('/artifact-library/{uuid}', [ArtifactLibraryController::class, 'show'])->whereUuid('uuid');
+    Route::get('/artifact-library/{uuid}/diff', [ArtifactLibraryController::class, 'diff'])->whereUuid('uuid');
+
     Route::get('/artifacts', [ArtifactRegistryController::class, 'index']);
     Route::post('/artifacts/export', [ArtifactRegistryController::class, 'exportPackage']);
     Route::post('/artifacts/import', [ArtifactRegistryController::class, 'importPackage']);

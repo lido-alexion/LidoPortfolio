@@ -15,6 +15,10 @@ final class ArtifactLibraryAccessService
         if ((int) $version->artifact->owner_user_id === (int) $user->id) {
             return true;
         }
+        if ($version->status === ReusableArtifactVersion::STATUS_PUBLISHED
+            && $version->artifact->origin === ArtifactOrigin::FACTORY) {
+            return true;
+        }
         if (ArtifactLibraryAdoption::query()
             ->where('user_id', $user->id)
             ->where('artifact_version_id', $version->id)
