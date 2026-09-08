@@ -269,6 +269,11 @@ Schedule::command('portfolio:queue-notification-reminders')
     ->withoutOverlapping(10)
     ->name('notification-condition-reminders');
 
+Schedule::command('portfolio:refresh-artifact-binding-usability')
+    ->hourly()
+    ->withoutOverlapping(10)
+    ->name('artifact-binding-usability');
+
 Schedule::command('portfolio:send-calendar-reminders')
     ->dailyAt('07:00')
     ->timezone($timezone)

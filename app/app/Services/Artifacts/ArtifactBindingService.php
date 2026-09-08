@@ -7,7 +7,6 @@ use App\Models\ArtifactBindingRevision;
 use App\Models\PortfolioProfile;
 use App\Models\ReusableArtifactVersion;
 use App\Models\User;
-use App\Services\Indicators\IndicatorRegistry;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
@@ -16,7 +15,7 @@ use RuntimeException;
 final class ArtifactBindingService
 {
     public function __construct(
-        private IndicatorRegistry $indicators,
+        private ArtifactUsabilityEvaluator $usabilityEvaluator,
         private ArtifactLibraryAccessService $libraryAccess,
     ) {}
 
@@ -187,25 +186,7 @@ final class ArtifactBindingService
     /** @return array{0:string,1:list<string>} */
     private function usability(ReusableArtifactVersion $version): array
     {
-        $reasons = [];
-        if ($version->status !== ReusableArtifactVersion::STATUS_PUBLISHED) {
-            $reasons[] = 'artifact_version_not_published';
-        }
-        foreach ($version->dependencies as $dependency) {
-            if ($dependency->target_artifact_version_id !== null
-                && ! ReusableArtifactVersion::query()
-                    ->whereKey($dependency->target_artifact_version_id)
-                    ->where('status', ReusableArtifactVersion::STATUS_PUBLISHED)
-                    ->exists()) {
-                $reasons[] = 'artifact_dependency_unavailable:'.$dependency->target_artifact_version_id;
-            }
-            if ($dependency->indicator_id !== null
-                && $this->indicators->findVersion($dependency->indicator_id, (string) $dependency->indicator_version) === null) {
-                $reasons[] = 'indicator_dependency_unavailable:'.$dependency->indicator_id.'@'.$dependency->indicator_version;
-            }
-        }
-
-        return [$reasons === [] ? ArtifactBinding::USABLE : ArtifactBinding::BLOCKED, $reasons];
+        return $this->usabilityEvaluator->evaluate($version);
     }
 
     private function assertAvailablePublishedVersion(ReusableArtifactVersion $version, User $actor): void
