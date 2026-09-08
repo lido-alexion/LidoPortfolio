@@ -90,6 +90,7 @@ class ArtifactLibraryApiTest extends TestCase
             'Factory Quality',
             $this->envelope('factory_quality', 50),
             origin: ArtifactOrigin::FACTORY,
+            provenance: ['permission' => 'system'],
         );
         $factory = $lifecycle->publish($draft, $factoryOwner);
 
@@ -98,6 +99,27 @@ class ArtifactLibraryApiTest extends TestCase
             ->assertJsonPath('meta.count', 1)
             ->assertJsonPath('data.0.artifact_uuid', $factory->artifact->artifact_uuid)
             ->assertJsonPath('data.0.permission', 'system');
+    }
+
+    public function test_account_local_factory_origin_is_not_mistaken_for_global_system_permission(): void
+    {
+        $owner = User::factory()->create();
+        $other = User::factory()->create();
+        $this->defaultPortfolioFor($owner);
+        $this->defaultPortfolioFor($other);
+        $lifecycle = app(ReusableArtifactLifecycleService::class);
+        $localFactory = $lifecycle->publish($lifecycle->createDraft(
+            $owner,
+            ArtifactType::SCREENER,
+            'local_factory',
+            'Local Factory',
+            $this->envelope('local_factory', 50),
+            origin: ArtifactOrigin::FACTORY,
+            provenance: ['kind' => 'legacy_portfolio_factory'],
+        ), $owner);
+
+        $this->actingAs($other)->getJson('/api/v1/artifact-library/'.$localFactory->artifact->artifact_uuid)
+            ->assertNotFound();
     }
 
     public function test_owner_can_drive_draft_publish_forward_version_and_archive_lifecycle_through_api(): void

@@ -16,7 +16,8 @@ final class ArtifactLibraryAccessService
             return true;
         }
         if ($version->status === ReusableArtifactVersion::STATUS_PUBLISHED
-            && $version->artifact->origin === ArtifactOrigin::FACTORY) {
+            && $version->artifact->origin === ArtifactOrigin::FACTORY
+            && ($version->artifact->provenance_json['permission'] ?? null) === 'system') {
             return true;
         }
         if (ArtifactLibraryAdoption::query()

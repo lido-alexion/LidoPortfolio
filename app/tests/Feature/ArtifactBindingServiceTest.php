@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\Artifacts\ArtifactBindingService;
 use App\Services\Artifacts\ArtifactType;
 use App\Services\Artifacts\ReusableArtifactLifecycleService;
+use App\Services\Indicators\IndicatorRegistry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use InvalidArgumentException;
 use LogicException;
@@ -79,6 +80,28 @@ class ArtifactBindingServiceTest extends TestCase
 
         $this->expectException(InvalidArgumentException::class);
         app(ArtifactBindingService::class)->bind($otherProfile, $version, $other);
+    }
+
+    public function test_initial_binding_cannot_enable_blocked_version_and_persists_derived_state_when_disabled(): void
+    {
+        $owner = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($owner);
+        $lifecycle = app(ReusableArtifactLifecycleService::class);
+        $version = $lifecycle->publish(
+            $lifecycle->createDraft($owner, ArtifactType::SCREENER, 'dependency', 'Dependency', $this->envelope('dependency')),
+            $owner,
+            [['kind' => 'uses_indicator', 'indicator_id' => 'rsi', 'indicator_version' => '1.0.0']],
+        );
+        $this->app->instance(IndicatorRegistry::class, new IndicatorRegistry);
+
+        try {
+            app(ArtifactBindingService::class)->bind($profile, $version, $owner, [], true);
+            $this->fail('Blocked version should not be enabled.');
+        } catch (InvalidArgumentException) {
+            $binding = app(ArtifactBindingService::class)->bind($profile, $version, $owner, [], false);
+            $this->assertSame(ArtifactBinding::BLOCKED, $binding->usability_state);
+            $this->assertSame(ArtifactBinding::BLOCKED, $binding->activeRevision->usability_state);
+        }
     }
 
     /** @return array{0:User,1:ArtifactBinding} */

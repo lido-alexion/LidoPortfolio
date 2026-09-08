@@ -29,6 +29,10 @@ final class ArtifactBindingService
     ): ArtifactBinding {
         $this->assertPortfolioOwner($profile, $actor);
         $this->assertAvailablePublishedVersion($version, $actor);
+        [$usability, $reasons] = $this->usability($version);
+        if ($enable && $usability === ArtifactBinding::BLOCKED) {
+            throw new InvalidArgumentException('A blocked artifact version cannot be enabled for this Portfolio.');
+        }
         if (ArtifactBinding::query()
             ->where('profile_id', $profile->id)
             ->where('artifact_id', $version->artifact_id)
@@ -36,14 +40,14 @@ final class ArtifactBindingService
             throw new InvalidArgumentException('This artifact already has a binding in the Portfolio.');
         }
 
-        return DB::transaction(function () use ($profile, $version, $actor, $settings, $enable) {
+        return DB::transaction(function () use ($profile, $version, $actor, $settings, $enable, $usability, $reasons) {
             $binding = ArtifactBinding::query()->create([
                 'binding_uuid' => (string) Str::uuid(),
                 'profile_id' => $profile->id,
                 'artifact_id' => $version->artifact_id,
                 'status' => $enable ? ArtifactBinding::STATUS_ENABLED : ArtifactBinding::STATUS_DISABLED,
-                'usability_state' => ArtifactBinding::USABLE,
-                'usability_reasons_json' => [],
+                'usability_state' => $usability,
+                'usability_reasons_json' => $reasons,
                 'lock_version' => 0,
             ]);
             $revision = $this->createRevision($binding, $version, $actor, $settings, 'bind', 'Initial Portfolio binding');
