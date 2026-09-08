@@ -62,7 +62,7 @@ Independent freeze audit (2026-07-25): [`architecture/audit/`](./architecture/au
 - [x] **M8** Notification history page (`/notification-history`)
 - [x] **M9** Tests updated; `MVP_DEMO_CHECKLIST.md`; progress + `implementation.md`
 
-### PO-approved follow-up TODOs (2026-09-02; not started)
+### PO-approved follow-up TODOs (2026-09-02)
 
 - [x] **REC-UX-001** Replace the misleading “No trade recommendations / market data” empty state with a successful informational-only outcome message when the pipeline produced insights but no actionable trades.
 - [x] **REC-UX-002** Show Strategy identity on Recommendation and Market Insight rows so per-strategy results for the same stock do not look like duplicates.
@@ -104,7 +104,7 @@ Independent freeze audit (2026-07-25): [`architecture/audit/`](./architecture/au
 ## Remaining gaps (post-MVP / future — not blocking)
 
 - Indicator Registry Admin UI + later phases (PB-055+; Epics 1–2 metadata/façades landed)
-- Trading Artifact Framework **remainder** (V5 **V4-FEAT-008**): immutable published versions, sharing/distribution, extra AI draft UX, dependency dashboards, rollback, bundle UI, fork workflows. Envelope/registries/package I/O already shipped.
+- Trading Artifact Framework **runtime cutover remainder** (V5 **V4-FEAT-008**): the immutable lifecycle, account Library, versioned Portfolio bindings, sharing/Fork/package distribution, transactional Bundles, dependency/usability inspection, APIs and UI are implemented. Remaining before FEAT-008 completion: evolve/map the legacy Strategy/Screener runtime records into the immutable identities, resolve live runs from exact active binding revisions, and carry originating immutable version/binding evidence through Recommendation/order/execution. See [`V5-FEAT-008-IMPLEMENTATION-STATUS.md`](V5-FEAT-008-IMPLEMENTATION-STATUS.md).
 - Wire Strategy indicator parameters into Evaluation (PB-054 / TD-19)
 - Liquidity / Tradability indicator calculators (PB-057)
 - Dedicated Discovery Engine Specification document
