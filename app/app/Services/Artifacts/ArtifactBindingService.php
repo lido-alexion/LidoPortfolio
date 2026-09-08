@@ -15,7 +15,10 @@ use RuntimeException;
 
 final class ArtifactBindingService
 {
-    public function __construct(private IndicatorRegistry $indicators) {}
+    public function __construct(
+        private IndicatorRegistry $indicators,
+        private ArtifactLibraryAccessService $libraryAccess,
+    ) {}
 
     /** @param array<string, mixed> $settings */
     public function bind(
@@ -211,7 +214,7 @@ final class ArtifactBindingService
         if ($version->status !== ReusableArtifactVersion::STATUS_PUBLISHED) {
             throw new InvalidArgumentException('Portfolio bindings require an immutable published artifact version.');
         }
-        if ((int) $version->artifact->owner_user_id !== (int) $actor->id) {
+        if (! $this->libraryAccess->canAccess($actor, $version)) {
             throw new InvalidArgumentException('Artifact version is not available in this account Library.');
         }
     }
@@ -227,8 +230,9 @@ final class ArtifactBindingService
     {
         $binding->loadMissing('profile', 'artifact', 'activeRevision.artifactVersion');
         $this->assertPortfolioOwner($binding->profile, $actor);
-        if ((int) $binding->artifact->owner_user_id !== (int) $actor->id) {
-            throw new InvalidArgumentException('Artifact binding is not owned by this account.');
+        $version = $binding->activeRevision?->artifactVersion;
+        if (! $version || ! $this->libraryAccess->canAccess($actor, $version)) {
+            throw new InvalidArgumentException('Artifact binding is not available in this account Library.');
         }
     }
 }

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\ReusableArtifactVersion;
 use App\Models\User;
 use App\Services\Artifacts\ArtifactOrigin;
+use App\Services\Artifacts\ArtifactSharingService;
 use App\Services\Artifacts\ArtifactType;
 use App\Services\Artifacts\ReusableArtifactLifecycleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -68,6 +69,8 @@ class ReusableArtifactLifecycleTest extends TestCase
         $this->assertSame($published->artifact_id, $next->artifact_id);
         $service->publish($next, $owner);
 
+        $grant = app(ArtifactSharingService::class)->share($published, $owner, $recipient);
+        app(ArtifactSharingService::class)->adopt($grant, $recipient);
         $fork = $service->fork($published, $recipient, 'adopted', 'Adopted');
         $this->assertSame('1.0.0', $fork->semver);
         $this->assertNotSame($published->artifact_id, $fork->artifact_id);

@@ -17,6 +17,7 @@ final class ReusableArtifactLifecycleService
     public function __construct(
         private ArtifactValidationService $validator,
         private IndicatorRegistry $indicators,
+        private ArtifactLibraryAccessService $libraryAccess,
     ) {}
 
     /** @param array<string, mixed> $content @param array<string, mixed> $provenance */
@@ -145,6 +146,9 @@ final class ReusableArtifactLifecycleService
     {
         if ($source->status !== ReusableArtifactVersion::STATUS_PUBLISHED) {
             throw new InvalidArgumentException('Only an immutable published version can be forked.');
+        }
+        if (! $this->libraryAccess->canAccess($recipient, $source)) {
+            throw new InvalidArgumentException('Artifact version is not available in the recipient Library.');
         }
 
         return $this->createDraft(
