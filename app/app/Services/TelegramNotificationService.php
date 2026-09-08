@@ -3,7 +3,11 @@
 namespace App\Services;
 
 use App\Models\PortfolioProfile;
+use App\Models\NotificationChannelSetting;
+use App\Models\NotificationDelivery;
+use App\Models\NotificationSource;
 use App\Models\User;
+use App\Services\Notification\LegacyTelegramChannelMigrator;
 use App\Services\Notification\NotificationPublisher;
 
 class TelegramNotificationService
@@ -12,6 +16,7 @@ class TelegramNotificationService
         protected ProfileSettingsService $profileSettings,
         protected SystemLogService $logger,
         protected NotificationPublisher $publisher,
+        protected LegacyTelegramChannelMigrator $legacyTelegram,
     ) {}
 
     public function sendMessageForProfile(PortfolioProfile $profile, string $message): bool
@@ -75,7 +80,7 @@ class TelegramNotificationService
             return false;
         }
 
-        $this->publisher->publishEvent($admins, [
+        $source = $this->publisher->publishEvent($admins, [
             'notification_type' => 'operations.price_sync_failure',
             'audience' => 'admin',
             'severity' => 'critical',
@@ -84,7 +89,7 @@ class TelegramNotificationService
             'primary_action' => ['label' => 'Review Price Sync', 'route' => '/settings/universe-price-sync'],
         ]);
 
-        return true;
+        return $this->deliveryStats($source)['sent'];
     }
 
     /**
@@ -92,51 +97,65 @@ class TelegramNotificationService
      */
     public function sendAdminOperationalAlert(string $message): array
     {
-        $sentKeys = [];
-
-        foreach (User::query()->where('is_admin', true)->orderBy('id')->get() as $admin) {
-            foreach ($admin->portfolios()->orderByDesc('is_default')->orderBy('id')->get() as $profile) {
-                if ($this->profileSettings->get($profile, 'notifications_enabled', 'true') !== 'true') {
-                    continue;
-                }
-
-                $token = trim((string) $this->profileSettings->get($profile, 'telegram_bot_token'));
-                $chatId = trim((string) $this->profileSettings->get($profile, 'telegram_chat_id'));
-                if ($token === '' || $chatId === '') {
-                    continue;
-                }
-
-                $dedupeKey = $token.'|'.$chatId;
-                if (isset($sentKeys[$dedupeKey])) {
-                    continue;
-                }
-
-                if ($this->sendMessageWithCredentials($message, $token, $chatId)) {
-                    $sentKeys[$dedupeKey] = true;
-                }
-            }
+        $admins = User::query()->where('is_admin', true)->orderBy('id')->get();
+        if ($admins->isEmpty()) {
+            return ['sent' => false, 'recipients' => 0];
         }
 
-        return [
-            'sent' => $sentKeys !== [],
-            'recipients' => count($sentKeys),
-        ];
+        $severity = str_contains($message, '[CRITICAL]') ? 'critical'
+            : (str_contains($message, '[WARNING]') ? 'action_required' : 'info');
+        $title = collect(preg_split('/\R/', $message) ?: [])
+            ->first(fn (string $line) => preg_match('/^\[(CRITICAL|WARNING)\]\s+/', $line) === 1);
+        $title = $title
+            ? (preg_replace('/^\[(CRITICAL|WARNING)\]\s+/', '', $title) ?? 'Operational status')
+            : 'Operational status';
+
+        $source = $this->publisher->publishEvent($admins, [
+            'notification_type' => $severity === 'info' ? 'operations.all_clear' : 'operations.alert',
+            'audience' => 'admin',
+            'severity' => $severity,
+            'title' => $title,
+            'message' => $message,
+            'external_info_delivery' => $severity === 'info',
+            'primary_action' => ['label' => 'Review Operational Alerts', 'route' => '/settings/admin-alerts'],
+        ]);
+
+        return $this->deliveryStats($source);
     }
 
     public function countAdminTelegramRecipients(): int
     {
-        $keys = [];
-
-        foreach (User::query()->where('is_admin', true)->get() as $admin) {
-            foreach ($admin->portfolios as $profile) {
-                $token = trim((string) $this->profileSettings->get($profile, 'telegram_bot_token'));
-                $chatId = trim((string) $this->profileSettings->get($profile, 'telegram_chat_id'));
-                if ($token !== '' && $chatId !== '') {
-                    $keys[$token.'|'.$chatId] = true;
-                }
-            }
+        $admins = User::query()->where('is_admin', true)->get();
+        foreach ($admins as $admin) {
+            $this->legacyTelegram->migrateIfUnambiguous($admin);
         }
 
-        return count($keys);
+        return NotificationChannelSetting::query()
+            ->whereIn('user_id', $admins->pluck('id'))
+            ->where('channel', 'telegram')
+            ->where('enabled', true)
+            ->whereNotNull('verified_at')
+            ->get()
+            ->map(fn (NotificationChannelSetting $setting) => hash('sha256',
+                (string) ($setting->configuration['bot_token'] ?? '')."\0".(string) ($setting->configuration['chat_id'] ?? ''),
+            ))
+            ->unique()
+            ->count();
+    }
+
+    /** @return array{sent: bool, recipients: int} */
+    private function deliveryStats(NotificationSource $source): array
+    {
+        $recipientIds = $source->recipients->pluck('id');
+        $deliveredRecipientCount = NotificationDelivery::query()
+            ->whereIn('recipient_notification_id', $recipientIds)
+            ->pluck('recipient_notification_id')
+            ->unique()
+            ->count();
+
+        return [
+            'sent' => $deliveredRecipientCount > 0,
+            'recipients' => $deliveredRecipientCount,
+        ];
     }
 }
