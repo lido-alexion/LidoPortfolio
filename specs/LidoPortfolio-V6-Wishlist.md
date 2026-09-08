@@ -24,14 +24,14 @@ Existing roadmap IDs are retained for traceability. The historical `V4-FEAT-*` p
 
 ## 2. Canonical V6 backlog
 
-Current count: **13 items — 9 DECIDED, 4 OPEN**.
+Current count: **13 items — 12 DECIDED, 1 OPEN**.
 
 | ID | Feature | Scope / inherited boundary | Planning group | Status |
 |---|---|---|---|---|
-| V4-FEAT-016 | Mobile / responsive client support | Responsive SPA across mobile, desktop, ultrawide and 4K. Mobile may use different interaction components rather than shrinking desktop UI. Native/PWA remains out of scope unless later needed. | UX / Platform | OPEN |
-| V4-FEAT-035 | Remaining frontend stack migration | Continue the already-shipped TypeScript/TanStack Query/AG Grid foundation incrementally. No big-bang rewrite and no rework of already migrated V5 surfaces merely for uniformity. Existing useful controls/components must be reused where practical and current functionality must not silently regress. | UX / Platform | OPEN |
+| V4-FEAT-016 | Mobile / responsive client support | Responsive SPA across mobile, desktop, ultrawide and 4K. Mobile may use different interaction components rather than shrinking desktop UI. Native/PWA remains out of scope unless later needed. | UX / Platform | DECIDED |
+| V4-FEAT-035 | Remaining frontend stack migration | Continue the already-shipped TypeScript/TanStack Query/AG Grid foundation incrementally. No big-bang rewrite and no rework of already migrated V5 surfaces merely for uniformity. Existing useful controls/components must be reused where practical and current functionality must not silently regress. | UX / Platform | DECIDED |
 | V4-FEAT-036 | Trusted non-SPA API tokens | Personal/scoped API tokens for first-party or trusted personal integrations. Browser SPA remains Sanctum stateful-cookie auth. No public OAuth/developer-platform commitment in V6. | Platform / API | DECIDED |
-| V4-FEAT-043 | Dashboard / UX reorganization and widget management | V6 UX fit-and-finish baseline: spacious, hierarchical, visual-first, icon-rich, responsive, progressively disclosed UI; dashboard/widget management and reusable component standardization. Existing Dashboard data and small convenience features are preservation baseline; removal requires PO review. Emergency controls are never hideable widgets. | UX / Platform | OPEN |
+| V4-FEAT-043 | Dashboard / UX reorganization and widget management | V6 UX fit-and-finish baseline: spacious, hierarchical, visual-first, icon-rich, responsive, progressively disclosed UI; dashboard/widget management and reusable component standardization. Existing Dashboard data and small convenience features are preservation baseline; removal requires PO review. Emergency controls are never hideable widgets. | UX / Platform | DECIDED |
 | V4-FEAT-044 | Kite Disconnect Kill Switch | Account-level emergency action: enter Emergency Halt, hard-close StoX outbound order creation/submission, attempt Kite disconnect/revocation, destroy local usable credential. Existing submitted orders remain Order Lifecycle responsibility. | Live Execution Safety | DECIDED |
 | V4-FEAT-045 | Emergency Cancel Open Orders + Disconnect | High-risk action: halt first; cancel all eligible StoX-managed primary open orders for the targeted broker/account; bounded verification; disconnect/revoke; destroy local credential. Existing protective/GTT orders are not cancelled. | Live Execution Safety | DECIDED |
 | V4-FEAT-046 | Live Kite Quote-Based Execution Sizing | Recompute residual external order from target/current ownership using live quote. Investor-level quote policy: Strict or Allow closing-price fallback. V5 internal-netting valuation remains unchanged. | Live Execution Safety | DECIDED |
@@ -85,13 +85,15 @@ Feature: `V4-FEAT-050`.
 
 Authoritative persisted audit records remain source of truth. Admin can inspect any Investor and that Investor's Portfolios in read-only mode. CSV may expose broader/rawer authorized audit fields than the curated explorer UI.
 
-### E4 — Investor UX & Client Evolution — ACTIVE REVIEW
+### E4 — Investor UX & Client Evolution — DECIDED
 
 Features: `V4-FEAT-043`, `V4-FEAT-016`, `V4-FEAT-035`.
 
+Frozen on 2026-09-08 in `V6-E4-Investor-UX-Client-Evolution.md`.
+
 V6 UX is a fit-and-finish/consolidation effort rather than a frontend rewrite: responsive across viewport classes, hierarchical information architecture, standardized tabs/components, progressive disclosure, visual-first presentation, icon-rich controls, themes, adaptive chrome, local preference persistence and incremental reuse/migration of proven StoX components.
 
-Additional frozen review constraints:
+Frozen constraints include:
 
 - reuse the existing `ThemeToggle`/theme mechanism rather than introducing a new theme selector;
 - current Dashboard information is a preservation baseline: presentation may change without repeated PO review, but removing an existing data item requires PO review;
@@ -114,18 +116,18 @@ Personal plain-text notes are available contextually throughout Investor pages v
 
 Feature: `V4-FEAT-052`.
 
-Record now so it is not lost; deliberate and freeze only after E4 review is complete.
+Record now so it is not lost; deliberate and freeze after the other V6 architecture epics.
 
 ## 6. Recommended V6 planning sequence
 
-1. **E1 Live Execution Safety** — product architecture frozen; persist dedicated specs before implementation.
+1. **E1 Live Execution Safety** — frozen.
 2. **E2 Paper Experimentation** — frozen.
 3. **E3 Administrative Auditability** — frozen.
 4. **E5 External/API Access** — frozen.
-5. **E4 Investor UX & Client Evolution** — current active review/freeze work.
+5. **E4 Investor UX & Client Evolution** — frozen.
 6. **E6 Contextual Notes** — frozen; may be implemented with E4 because it uses the same right-side utility/chrome language.
-7. **E7 Telemetry** — deliberate after E4 is frozen.
-8. **FEAT-035 frontend migration** — continues incrementally in parallel wherever touched surfaces justify migration.
+7. **E7 Telemetry** — next architecture epic to deliberate and freeze.
+8. **FEAT-035 frontend migration** — continues incrementally wherever touched surfaces justify migration, within the frozen E4 rules.
 
 ## 7. Planning rules
 
