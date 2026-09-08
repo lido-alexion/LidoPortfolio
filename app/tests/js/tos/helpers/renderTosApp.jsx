@@ -7,6 +7,7 @@ import AppHeader from '../../../../resources/js/src/components/AppHeader.jsx';
 import PageChrome from '../../../../resources/js/src/components/navigation/PageChrome.jsx';
 import Sidebar from '../../../../resources/js/src/components/sidebar/Sidebar.jsx';
 import AuthContext from '../../../../resources/js/src/context/AuthContext.jsx';
+import { NotificationProvider } from '../../../../resources/js/src/context/NotificationContext.jsx';
 import { PortfolioProvider } from '../../../../resources/js/src/context/PortfolioContext.jsx';
 import { SidebarProvider } from '../../../../resources/js/src/context/SidebarContext.jsx';
 import { ThemeProvider } from '../../../../resources/js/src/context/ThemeContext.jsx';
@@ -105,7 +106,9 @@ export function renderTosApp({ route = '/recommendations' } = {}) {
             <ThemeProvider>
                 <TosAuthStub>
                     <PortfolioProvider>
-                        <TosAuthenticatedShell user={TEST_USER} />
+                        <NotificationProvider>
+                            <TosAuthenticatedShell user={TEST_USER} />
+                        </NotificationProvider>
                     </PortfolioProvider>
                 </TosAuthStub>
             </ThemeProvider>

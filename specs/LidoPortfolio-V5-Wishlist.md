@@ -93,6 +93,7 @@ V5 is not closed merely when the 18 rows above have implementation statuses reso
 
 | Date | Change |
 |------|--------|
+| 2026-09-08 | **Frontend regression gate repaired:** authenticated TOS test shells now include the same Notification Provider as production, clearing 24 test-harness failures introduced by the global notification chrome; the combined JavaScript suite is green. |
 | 2026-09-08 | **FEAT-004 direct-producer cutover completed:** scheduled clear pings now use externally delivered Info events; duplicate Portfolio Telegram controls were removed, and the legacy test endpoint is a non-delivering `410 Gone` pointer to account Notification Settings. |
 | 2026-09-08 | **FEAT-004 Trading OS delivery migrated:** legacy `TosNotification` history/idempotency rows now link one-to-one with durable channel-neutral sources; Telegram outcomes mirror back to legacy status and explicit retries requeue the same outbox row. |
 | 2026-09-08 | **FEAT-004 admin operational fan-out migrated:** warning, critical and explicit all-clear notifications now use durable Admin account channels while preserving the six-hour scheduling cooldown; no-channel attempts do not incorrectly advance that cooldown. |
