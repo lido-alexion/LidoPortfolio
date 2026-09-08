@@ -15,8 +15,11 @@ class NotificationChannelSettingsService
 {
     public const EXTERNAL_CHANNELS = ['telegram', 'email', 'webhook'];
 
+    public function __construct(private LegacyTelegramChannelMigrator $legacyTelegram) {}
+
     public function all(User $user): array
     {
+        $this->legacyTelegram->migrateIfUnambiguous($user);
         $accountEmail = NotificationEmailDestination::query()->firstOrCreate(
             ['user_id' => $user->id, 'email' => $user->email],
             ['is_account_email' => true, 'verified_at' => $user->email_verified_at],

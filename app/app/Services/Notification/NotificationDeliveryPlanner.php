@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\DB;
 
 class NotificationDeliveryPlanner
 {
+    public function __construct(private LegacyTelegramChannelMigrator $legacyTelegram) {}
+
     public function planInitial(NotificationSource $source, string $kind = 'initial'): int
     {
         if (! $this->requiresExternalDelivery($source)) {
@@ -48,6 +50,7 @@ class NotificationDeliveryPlanner
     {
         $created = 0;
         $excluded = (array) ($source->context['excluded_channels'] ?? []);
+        $this->legacyTelegram->migrateIfUnambiguous($recipient->user);
         $settings = NotificationChannelSetting::query()
             ->where('user_id', $recipient->user_id)
             ->where('enabled', true)
