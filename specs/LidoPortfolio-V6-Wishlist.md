@@ -29,9 +29,9 @@ Current count: **13 items — 9 DECIDED, 4 OPEN**.
 | ID | Feature | Scope / inherited boundary | Planning group | Status |
 |---|---|---|---|---|
 | V4-FEAT-016 | Mobile / responsive client support | Responsive SPA across mobile, desktop, ultrawide and 4K. Mobile may use different interaction components rather than shrinking desktop UI. Native/PWA remains out of scope unless later needed. | UX / Platform | OPEN |
-| V4-FEAT-035 | Remaining frontend stack migration | Continue the already-shipped TypeScript/TanStack Query/AG Grid foundation incrementally. No big-bang rewrite and no rework of already migrated V5 surfaces merely for uniformity. | UX / Platform | OPEN |
+| V4-FEAT-035 | Remaining frontend stack migration | Continue the already-shipped TypeScript/TanStack Query/AG Grid foundation incrementally. No big-bang rewrite and no rework of already migrated V5 surfaces merely for uniformity. Existing useful controls/components must be reused where practical and current functionality must not silently regress. | UX / Platform | OPEN |
 | V4-FEAT-036 | Trusted non-SPA API tokens | Personal/scoped API tokens for first-party or trusted personal integrations. Browser SPA remains Sanctum stateful-cookie auth. No public OAuth/developer-platform commitment in V6. | Platform / API | DECIDED |
-| V4-FEAT-043 | Dashboard / UX reorganization and widget management | V6 UX fit-and-finish baseline: spacious, hierarchical, visual-first, icon-rich, responsive, progressively disclosed UI; dashboard/widget management and reusable component standardization. Emergency controls are never hideable widgets. | UX / Platform | OPEN |
+| V4-FEAT-043 | Dashboard / UX reorganization and widget management | V6 UX fit-and-finish baseline: spacious, hierarchical, visual-first, icon-rich, responsive, progressively disclosed UI; dashboard/widget management and reusable component standardization. Existing Dashboard data and small convenience features are preservation baseline; removal requires PO review. Emergency controls are never hideable widgets. | UX / Platform | OPEN |
 | V4-FEAT-044 | Kite Disconnect Kill Switch | Account-level emergency action: enter Emergency Halt, hard-close StoX outbound order creation/submission, attempt Kite disconnect/revocation, destroy local usable credential. Existing submitted orders remain Order Lifecycle responsibility. | Live Execution Safety | DECIDED |
 | V4-FEAT-045 | Emergency Cancel Open Orders + Disconnect | High-risk action: halt first; cancel all eligible StoX-managed primary open orders for the targeted broker/account; bounded verification; disconnect/revoke; destroy local credential. Existing protective/GTT orders are not cancelled. | Live Execution Safety | DECIDED |
 | V4-FEAT-046 | Live Kite Quote-Based Execution Sizing | Recompute residual external order from target/current ownership using live quote. Investor-level quote policy: Strict or Allow closing-price fallback. V5 internal-netting valuation remains unchanged. | Live Execution Safety | DECIDED |
@@ -90,6 +90,13 @@ Authoritative persisted audit records remain source of truth. Admin can inspect 
 Features: `V4-FEAT-043`, `V4-FEAT-016`, `V4-FEAT-035`.
 
 V6 UX is a fit-and-finish/consolidation effort rather than a frontend rewrite: responsive across viewport classes, hierarchical information architecture, standardized tabs/components, progressive disclosure, visual-first presentation, icon-rich controls, themes, adaptive chrome, local preference persistence and incremental reuse/migration of proven StoX components.
+
+Additional frozen review constraints:
+
+- reuse the existing `ThemeToggle`/theme mechanism rather than introducing a new theme selector;
+- current Dashboard information is a preservation baseline: presentation may change without repeated PO review, but removing an existing data item requires PO review;
+- existing small convenience features such as handy links, contextual shortcuts, copy helpers and readymade prompts for external LLM review should be retained as much as reasonably possible;
+- E4 must not silently functionally regress an existing page; materially redesigned pages require a before/after capability inventory, with any intentional removal explicitly reviewed by the PO.
 
 ### E5 — External/API Access — DECIDED
 
