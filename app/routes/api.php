@@ -43,6 +43,7 @@ use App\Http\Controllers\Api\UniversePriceSyncController;
 use App\Http\Controllers\Api\UserInviteController;
 use App\Http\Controllers\Api\UserManagementController;
 use App\Http\Controllers\Api\V1\AnalyticsArchitectureController;
+use App\Http\Controllers\Api\V1\ArtifactActionController;
 use App\Http\Controllers\Api\V1\ArtifactLibraryController;
 use App\Http\Controllers\Api\V1\ArtifactRegistryController;
 use App\Http\Controllers\Api\V1\BacktestController;
@@ -472,6 +473,17 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
     Route::post('/artifact-library/versions/{version}/next-draft', [ArtifactLibraryController::class, 'nextDraft'])->whereNumber('version');
     Route::post('/artifact-library/versions/{version}/fork', [ArtifactLibraryController::class, 'fork'])->whereNumber('version');
     Route::post('/artifact-library/{uuid}/archive', [ArtifactLibraryController::class, 'archive'])->whereUuid('uuid');
+    Route::post('/artifact-library/versions/{version}/bind', [ArtifactActionController::class, 'bind'])->whereNumber('version');
+    Route::post('/artifact-library/versions/{version}/share', [ArtifactActionController::class, 'share'])->whereNumber('version');
+    Route::post('/artifact-library/versions/{version}/export', [ArtifactActionController::class, 'export'])->whereNumber('version');
+    Route::post('/artifact-library/import', [ArtifactActionController::class, 'import']);
+    Route::post('/artifact-library/versions/{version}/bundle-plan', [ArtifactActionController::class, 'planBundle'])->whereNumber('version');
+    Route::post('/artifact-library/bundle-deployments/{uuid}/deploy', [ArtifactActionController::class, 'deployBundle'])->whereUuid('uuid');
+    Route::put('/artifact-bindings/{uuid}/upgrade', [ArtifactActionController::class, 'upgrade'])->whereUuid('uuid');
+    Route::put('/artifact-bindings/{uuid}/settings', [ArtifactActionController::class, 'settings'])->whereUuid('uuid');
+    Route::put('/artifact-bindings/{uuid}/enabled', [ArtifactActionController::class, 'enable'])->whereUuid('uuid');
+    Route::post('/artifact-share-grants/{uuid}/adopt', [ArtifactActionController::class, 'adopt'])->whereUuid('uuid');
+    Route::post('/artifact-share-grants/{uuid}/revoke', [ArtifactActionController::class, 'revoke'])->whereUuid('uuid');
     Route::get('/artifact-library/{uuid}', [ArtifactLibraryController::class, 'show'])->whereUuid('uuid');
     Route::get('/artifact-library/{uuid}/diff', [ArtifactLibraryController::class, 'diff'])->whereUuid('uuid');
 

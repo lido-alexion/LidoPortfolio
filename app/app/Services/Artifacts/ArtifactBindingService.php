@@ -29,6 +29,12 @@ final class ArtifactBindingService
     ): ArtifactBinding {
         $this->assertPortfolioOwner($profile, $actor);
         $this->assertAvailablePublishedVersion($version, $actor);
+        if (ArtifactBinding::query()
+            ->where('profile_id', $profile->id)
+            ->where('artifact_id', $version->artifact_id)
+            ->exists()) {
+            throw new InvalidArgumentException('This artifact already has a binding in the Portfolio.');
+        }
 
         return DB::transaction(function () use ($profile, $version, $actor, $settings, $enable) {
             $binding = ArtifactBinding::query()->create([
