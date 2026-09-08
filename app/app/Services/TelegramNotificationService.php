@@ -4,12 +4,14 @@ namespace App\Services;
 
 use App\Models\PortfolioProfile;
 use App\Models\User;
+use App\Services\Notification\NotificationPublisher;
 
 class TelegramNotificationService
 {
     public function __construct(
         protected ProfileSettingsService $profileSettings,
         protected SystemLogService $logger,
+        protected NotificationPublisher $publisher,
     ) {}
 
     public function sendMessageForProfile(PortfolioProfile $profile, string $message): bool
@@ -68,16 +70,21 @@ class TelegramNotificationService
 
     public function sendSyncFailureAlert(string $details): bool
     {
-        $message = 'Portfolio sync failure: '.$details;
-        $sent = false;
-
-        foreach (PortfolioProfile::query()->orderBy('id')->get() as $profile) {
-            if ($this->sendMessageForProfile($profile, $message)) {
-                $sent = true;
-            }
+        $admins = User::query()->where('is_admin', true)->orderBy('id')->get();
+        if ($admins->isEmpty()) {
+            return false;
         }
 
-        return $sent;
+        $this->publisher->publishEvent($admins, [
+            'notification_type' => 'operations.price_sync_failure',
+            'audience' => 'admin',
+            'severity' => 'critical',
+            'title' => 'Portfolio price sync failed',
+            'message' => 'Portfolio sync failure: '.$details,
+            'primary_action' => ['label' => 'Review Price Sync', 'route' => '/settings/universe-price-sync'],
+        ]);
+
+        return true;
     }
 
     /**
