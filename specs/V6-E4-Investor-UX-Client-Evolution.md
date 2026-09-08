@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| **Status** | **DRAFT FOR PO REVIEW** |
+| **Status** | **FROZEN / DECIDED** |
 | **Scope** | V4-FEAT-043, V4-FEAT-016, V4-FEAT-035 |
 | **Purpose** | Canonical StoX V6 UI architecture, responsive behavior, component placement, frontend standardization and non-regression rules |
 | **Brand accent** | `#1e90ff` |
@@ -840,8 +840,8 @@ E4 does **not** introduce:
 
 ---
 
-## 27. PO review status
+## 27. Freeze status
 
-This document consolidates the discussed E4 UX direction plus the explicit late-entry preservation requirements.
+**FROZEN / DECIDED — PO approved on 2026-09-08.**
 
-It remains **DRAFT FOR PO REVIEW** until the PO accepts the architecture as a whole. Once accepted, E4 may be marked `DECIDED`; ordinary spacing/component implementation details can then proceed as engineering decisions unless they materially change the product behavior described here.
+This specification is the canonical V6 E4 UX architecture. Ordinary spacing, styling, component-internal and implementation details may proceed as engineering decisions provided they remain within this specification. Any change that materially alters the frozen product behavior, removes preserved functionality, or changes the stated UX architecture requires explicit PO review before implementation.
