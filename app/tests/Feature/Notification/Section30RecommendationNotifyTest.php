@@ -13,6 +13,7 @@ use App\Services\ProfileSettingsService;
 use App\Services\TelegramNotificationService;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Mockery;
 use Tests\TestCase;
@@ -28,6 +29,7 @@ class Section30RecommendationNotifyTest extends TestCase
     {
         parent::setUp();
         $this->withoutMiddleware(ValidateCsrfToken::class);
+        Queue::fake();
 
         $telegram = Mockery::mock(TelegramNotificationService::class);
         $telegram->shouldReceive('sendMessageForProfile')->andReturn(true)->byDefault();

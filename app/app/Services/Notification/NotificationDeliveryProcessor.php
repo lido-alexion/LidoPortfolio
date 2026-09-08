@@ -3,6 +3,7 @@
 namespace App\Services\Notification;
 
 use App\Models\NotificationDelivery;
+use App\Models\TosNotification;
 use Illuminate\Support\Facades\DB;
 
 class NotificationDeliveryProcessor
@@ -58,6 +59,7 @@ class NotificationDeliveryProcessor
                 if (! str_starts_with($delivery->recipientNotification->source->notification_type, 'notification.channel_health')) {
                     $this->health->recovered($delivery->recipientNotification->user, $delivery->channel);
                 }
+                $this->syncLegacyTosStatus($delivery, 'delivered');
 
                 return ['retry' => false, 'status' => 'delivered'];
             }
@@ -72,8 +74,27 @@ class NotificationDeliveryProcessor
                 && ! str_starts_with($delivery->recipientNotification->source->notification_type, 'notification.channel_health')) {
                 $this->health->failure($delivery->recipientNotification->user, $delivery->channel);
             }
+            $this->syncLegacyTosStatus($delivery, $retry ? 'queued' : 'failed', $result['error_code']);
 
             return ['retry' => $retry, 'status' => $retry ? 'queued' : 'failed'];
         });
+    }
+
+    private function syncLegacyTosStatus(NotificationDelivery $delivery, string $status, ?string $error = null): void
+    {
+        if ($delivery->channel !== 'telegram') {
+            return;
+        }
+
+        $legacyId = (int) ($delivery->recipientNotification->source->context['legacy_tos_notification_id'] ?? 0);
+        if ($legacyId <= 0) {
+            return;
+        }
+
+        TosNotification::query()->whereKey($legacyId)->update([
+            'status' => $status,
+            'delivered_at' => $status === 'delivered' ? now() : null,
+            'last_error' => $error,
+        ]);
     }
 }

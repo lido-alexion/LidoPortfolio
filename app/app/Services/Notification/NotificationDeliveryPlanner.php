@@ -46,6 +46,22 @@ class NotificationDeliveryPlanner
         );
     }
 
+    public function requeueFailedForSourceChannel(NotificationSource $source, string $channel): int
+    {
+        $deliveries = NotificationDelivery::query()
+            ->whereHas('recipientNotification', fn ($query) => $query->where('source_id', $source->id))
+            ->where('channel', $channel)
+            ->where('status', 'failed')
+            ->get();
+
+        foreach ($deliveries as $delivery) {
+            $delivery->update(['status' => 'queued', 'available_at' => now(), 'last_error_code' => null]);
+            DB::afterCommit(fn () => ProcessNotificationDelivery::dispatch($delivery->id)->onQueue('notifications'));
+        }
+
+        return $deliveries->count();
+    }
+
     private function planForRecipient(RecipientNotification $recipient, NotificationSource $source, string $kind, string $generation): int
     {
         $created = 0;

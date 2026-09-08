@@ -3,15 +3,19 @@
 namespace App\Engines\Notification;
 
 use App\Models\PortfolioProfile;
+use App\Models\NotificationDelivery;
+use App\Models\NotificationSource;
 use App\Models\TosNotification;
 use App\Models\TradingRecommendation;
 use App\Repositories\Tos\NotificationQueryRepository;
 use App\Services\Notification\NotificationMessageComposer;
+use App\Services\Notification\NotificationPublisher;
+use App\Services\Notification\NotificationDeliveryPlanner;
 use App\Services\PortfolioLoggerService;
 use App\Services\ProfileSettingsService;
-use App\Services\TelegramNotificationService;
 use App\Support\TradingOsConfig;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Str;
 
 /**
  * Notification Engine — delivery only; never mutates recommendation content.
@@ -20,11 +24,12 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 class NotificationEngine
 {
     public function __construct(
-        protected TelegramNotificationService $telegram,
         protected ProfileSettingsService $profileSettings,
         protected PortfolioLoggerService $logger,
         protected NotificationMessageComposer $composer,
         protected NotificationQueryRepository $notifications,
+        protected NotificationPublisher $publisher,
+        protected NotificationDeliveryPlanner $deliveries,
     ) {}
 
     /**
@@ -153,7 +158,7 @@ class NotificationEngine
         return $this->send($notification);
     }
 
-    public function send(TosNotification $notification): TosNotification
+    public function send(TosNotification $notification, bool $retryFailed = false): TosNotification
     {
         $maxRetries = TradingOsConfig::notificationMaxRetries();
         $notification->forceFill([
@@ -164,9 +169,12 @@ class NotificationEngine
         $message = (string) ($notification->payload['message'] ?? 'Trading recommendation update');
         $profile = $notification->profile;
 
-        $ok = false;
         try {
-            $ok = $this->telegram->sendMessageForProfile($profile, $message);
+            $source = $this->sourceFor($notification, $profile, $message);
+            if ($retryFailed) {
+                $this->deliveries->requeueFailedForSourceChannel($source, 'telegram');
+            }
+            $this->deliveries->planInitial($source);
         } catch (\Throwable $e) {
             $notification->forceFill([
                 'status' => 'failed',
@@ -182,19 +190,16 @@ class NotificationEngine
             return $notification->fresh();
         }
 
-        if ($ok) {
-            $notification->forceFill([
-                'status' => 'delivered',
-                'delivered_at' => now(),
-                'last_error' => null,
-            ])->save();
-        } else {
-            $status = $notification->attempt_count >= $maxRetries ? 'failed' : 'queued';
-            $notification->forceFill([
-                'status' => $status,
-                'last_error' => 'Telegram delivery failed or disabled',
-            ])->save();
-        }
+        $hasTelegramDelivery = NotificationDelivery::query()
+            ->whereHas('recipientNotification', fn ($query) => $query->where('source_id', $source->id))
+            ->where('channel', 'telegram')
+            ->exists();
+        $notification->forceFill([
+            'status' => $hasTelegramDelivery
+                ? 'queued'
+                : ($notification->attempt_count >= $maxRetries ? 'failed' : 'queued'),
+            'last_error' => $hasTelegramDelivery ? null : 'Telegram delivery unavailable or disabled',
+        ])->save();
 
         return $notification->fresh();
     }
@@ -214,7 +219,7 @@ class NotificationEngine
         // Allow a fresh attempt by clearing terminal failure.
         $notification->forceFill(['status' => 'queued'])->save();
 
-        return $this->send($notification);
+        return $this->send($notification, true);
     }
 
     /**
@@ -228,5 +233,34 @@ class NotificationEngine
     public function history(PortfolioProfile $profile, int $limit = 50): array
     {
         return $this->paginateHistory($profile, 1, $limit)->items();
+    }
+
+    private function sourceFor(TosNotification $notification, PortfolioProfile $profile, string $message): NotificationSource
+    {
+        $payload = $notification->payload ?? [];
+        $sourceId = (int) ($payload['notification_source_id'] ?? 0);
+        if ($sourceId > 0 && ($source = NotificationSource::query()->find($sourceId))) {
+            return $source;
+        }
+
+        $source = $this->publisher->publishEvent([$profile->user], [
+            'notification_type' => 'trading.'.Str::snake($notification->notification_type),
+            'audience' => 'both',
+            'severity' => 'action_required',
+            'title' => Str::headline($notification->notification_type),
+            'message' => $message,
+            'context' => [
+                'portfolio_id' => $profile->id,
+                'recommendation_id' => $notification->recommendation_id,
+                'legacy_tos_notification_id' => $notification->id,
+                'legacy_idempotency_key' => $notification->idempotency_key,
+            ],
+            'primary_action' => ['label' => 'Open Recommendations', 'route' => '/recommendations'],
+        ]);
+
+        $payload['notification_source_id'] = $source->id;
+        $notification->forceFill(['payload' => $payload])->save();
+
+        return $source;
     }
 }
