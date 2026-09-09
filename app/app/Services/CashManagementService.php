@@ -401,12 +401,46 @@ class CashManagementService
 
     public function balanceAsOf(PortfolioProfile $profile, string $date): float
     {
-        $asOf = CarbonImmutable::parse($date)->toDateString();
+        return (float) ($this->cashAsOf($profile, $date)['balance'] ?? 0.0);
+    }
 
-        return round((float) CashLedgerEntry::query()
+    /** @return array{balance: ?float, complete: bool, complete_from: ?string, reason: ?string} */
+    public function cashAsOf(PortfolioProfile $profile, string $date): array
+    {
+        $asOf = CarbonImmutable::parse($date)->toDateString();
+        $firstRecorded = CashLedgerEntry::query()
             ->where('profile_id', $profile->id)
-            ->whereDate('entry_date', '<=', $asOf)
-            ->sum('amount'), 4);
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->first();
+
+        if ($firstRecorded === null) {
+            $cached = $this->balance($profile);
+
+            return $cached == 0.0
+                ? ['balance' => 0.0, 'complete' => true, 'complete_from' => null, 'reason' => null]
+                : ['balance' => null, 'complete' => false, 'complete_from' => null, 'reason' => 'opening_balance_unknown'];
+        }
+
+        $openingBeforeLedger = round((float) $firstRecorded->balance_after - (float) $firstRecorded->amount, 4);
+        if (abs($openingBeforeLedger) > 0.0001) {
+            return [
+                'balance' => null,
+                'complete' => false,
+                'complete_from' => optional($firstRecorded->entry_date)?->toDateString(),
+                'reason' => 'opening_balance_unknown',
+            ];
+        }
+
+        return [
+            'balance' => round((float) CashLedgerEntry::query()
+                ->where('profile_id', $profile->id)
+                ->whereDate('entry_date', '<=', $asOf)
+                ->sum('amount'), 4),
+            'complete' => true,
+            'complete_from' => optional($firstRecorded->entry_date)?->toDateString(),
+            'reason' => null,
+        ];
     }
 
     /**
@@ -427,13 +461,14 @@ class CashManagementService
         $toDate = $to ? CarbonImmutable::parse($to)->toDateString() : now()->toDateString();
         $page = max(1, $page);
         $perPage = min(100, max(1, $perPage));
+        $cashState = $this->cashAsOf($profile, $toDate);
 
-        $opening = $fromDate
+        $opening = $cashState['complete'] && $fromDate
             ? round((float) CashLedgerEntry::query()
                 ->where('profile_id', $profile->id)
                 ->whereDate('entry_date', '<', $fromDate)
                 ->sum('amount'), 4)
-            : 0.0;
+            : ($cashState['complete'] ? 0.0 : null);
 
         $query = CashLedgerEntry::query()
             ->where('profile_id', $profile->id)
@@ -445,8 +480,8 @@ class CashManagementService
             ->orderBy('id');
 
         $total = (clone $query)->count();
-        $entries = $query->forPage($page, $perPage)->get()->map(function (CashLedgerEntry $entry) use ($profile) {
-            $running = round((float) CashLedgerEntry::query()
+        $entries = $query->forPage($page, $perPage)->get()->map(function (CashLedgerEntry $entry) use ($profile, $cashState) {
+            $running = $cashState['complete'] ? round((float) CashLedgerEntry::query()
                 ->where('profile_id', $profile->id)
                 ->where(function ($query) use ($entry) {
                     $query->whereDate('entry_date', '<', $entry->entry_date)
@@ -461,7 +496,7 @@ class CashManagementService
                                 });
                         });
                 })
-                ->sum('amount'), 4);
+                ->sum('amount'), 4) : null;
 
             return [
                 'id' => $entry->id,
@@ -485,7 +520,9 @@ class CashManagementService
 
         return [
             'opening_balance' => $opening,
-            'closing_balance' => $this->balanceAsOf($profile, $toDate),
+            'closing_balance' => $cashState['balance'],
+            'complete' => $cashState['complete'],
+            'incomplete_reason' => $cashState['reason'],
             'from' => $fromDate,
             'to' => $toDate,
             'entries' => $entries,

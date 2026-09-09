@@ -116,11 +116,15 @@ class CashController extends Controller
             'date' => 'required|date|before_or_equal:today',
         ]);
 
+        $cash = $this->cash->cashAsOf(\activePortfolio(), $validated['date']);
+
         return response()->json(['data' => [
             'requested_date' => $validated['date'],
-            'cash_balance' => $this->cash->balanceAsOf(\activePortfolio(), $validated['date']),
+            'cash_balance' => $cash['balance'],
             'reservations_included' => false,
-            'complete' => true,
+            'complete' => $cash['complete'],
+            'complete_from' => $cash['complete_from'],
+            'incomplete_reason' => $cash['reason'],
         ]]);
     }
 

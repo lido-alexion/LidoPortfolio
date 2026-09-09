@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\CashAccount;
+use App\Models\CashLedgerEntry;
 use App\Models\User;
 use App\Services\CashManagementService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -67,5 +68,35 @@ class V5CashStatementTest extends TestCase
 
         $this->assertSame(500.0, $cash->rebuildBalance($profile));
         $this->assertSame(500.0, $cash->balance($profile));
+    }
+
+    public function test_unknown_legacy_opening_balance_is_never_reported_as_zero_or_complete(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        CashAccount::query()->updateOrCreate(['profile_id' => $profile->id], ['balance' => 150]);
+        CashLedgerEntry::query()->create([
+            'profile_id' => $profile->id,
+            'entry_type' => CashLedgerEntry::TYPE_ADJUSTMENT,
+            'amount' => 50,
+            'balance_after' => 150,
+            'reason' => 'Legacy imported correction',
+            'entry_date' => '2026-08-01',
+            'user_id' => $user->id,
+            'created_at' => now(),
+        ]);
+
+        $response = $this->actingAs($user)->withProfileHeader($user, $profile)
+            ->getJson('/api/cash/as-of?date=2026-08-02');
+
+        $response->assertOk()
+            ->assertJsonPath('data.cash_balance', null)
+            ->assertJsonPath('data.complete', false)
+            ->assertJsonPath('data.incomplete_reason', 'opening_balance_unknown');
+
+        $statement = app(CashManagementService::class)->statement($profile, null, '2026-08-02');
+        $this->assertNull($statement['opening_balance']);
+        $this->assertNull($statement['closing_balance']);
+        $this->assertNull($statement['entries'][0]['running_balance']);
     }
 }

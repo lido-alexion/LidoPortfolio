@@ -50,7 +50,8 @@ class HistoricalHoldingsService
         $detailed = $this->reconstruction->holdingsAsOfDetailed($transactions, $asOf);
         $holdingsMap = $detailed['holdings'];
         $warnings = $detailed['warnings'];
-        $cashBalance = $this->cash->balanceAsOf($profile, $asOfDate);
+        $cashState = $this->cash->cashAsOf($profile, $asOfDate);
+        $cashBalance = $cashState['balance'];
 
         if ($holdingsMap === []) {
             return [
@@ -61,7 +62,7 @@ class HistoricalHoldingsService
                     'invested_value' => 0.0,
                     'market_value' => null,
                     'cash_balance' => $cashBalance,
-                    'total_value' => $cashBalance,
+                    'total_value' => $cashState['complete'] ? $cashBalance : null,
                     'unrealized_profit' => null,
                     'unrealized_gain_percent' => null,
                     'valuation_complete' => true,
@@ -73,8 +74,9 @@ class HistoricalHoldingsService
                     'holding_count' => 0,
                     'holdings_state_complete' => true,
                     'holdings_valuation_complete' => true,
-                    'cash_complete' => true,
-                    'total_value_complete' => true,
+                    'cash_complete' => $cashState['complete'],
+                    'cash_incomplete_reason' => $cashState['reason'],
+                    'total_value_complete' => $cashState['complete'],
                 ],
             ];
         }
@@ -166,7 +168,7 @@ class HistoricalHoldingsService
                 'invested_value' => round($investedTotal, 4),
                 'market_value' => $totalsMarket,
                 'cash_balance' => $cashBalance,
-                'total_value' => $totalsMarket !== null ? round($totalsMarket + $cashBalance, 4) : null,
+                'total_value' => $totalsMarket !== null && $cashBalance !== null ? round($totalsMarket + $cashBalance, 4) : null,
                 'unrealized_profit' => $totalsUnrealized,
                 'unrealized_gain_percent' => $totalsUnrealizedPct,
                 'valuation_complete' => $marketComplete,
@@ -178,8 +180,9 @@ class HistoricalHoldingsService
                 'holding_count' => count($rows),
                 'holdings_state_complete' => $warnings === [],
                 'holdings_valuation_complete' => $marketComplete,
-                'cash_complete' => true,
-                'total_value_complete' => $warnings === [] && $marketComplete,
+                'cash_complete' => $cashState['complete'],
+                'cash_incomplete_reason' => $cashState['reason'],
+                'total_value_complete' => $warnings === [] && $marketComplete && $cashState['complete'],
             ],
         ];
     }
