@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class TaxRuleVersion extends Model
 {
@@ -17,5 +18,10 @@ class TaxRuleVersion extends Model
             'effective_to' => 'date',
             'rules' => 'array',
         ];
+    }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
     }
 }

@@ -45,6 +45,7 @@ use App\Http\Controllers\Api\SyncController;
 use App\Http\Controllers\Api\SyncLogController;
 use App\Http\Controllers\Api\TaxEvidenceController;
 use App\Http\Controllers\Api\TaxExportController;
+use App\Http\Controllers\Api\TaxRuleVersionController;
 use App\Http\Controllers\Api\TransactionController;
 use App\Http\Controllers\Api\UniversePriceSyncController;
 use App\Http\Controllers\Api\UserInviteController;
@@ -283,6 +284,8 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::post('/settings/test-telegram', [SettingsController::class, 'testTelegram']);
 
     Route::middleware('admin')->group(function () {
+        Route::get('/admin/tax-rule-versions', [TaxRuleVersionController::class, 'index']);
+        Route::post('/admin/tax-rule-versions', [TaxRuleVersionController::class, 'store']);
         Route::get('/admin/stocks', [AdminStockController::class, 'index']);
         Route::post('/stocks/{stock}/activate', [AdminStockController::class, 'activate']);
         Route::post('/stocks/{stock}/deactivate', [AdminStockController::class, 'deactivate']);
