@@ -24,7 +24,7 @@ Existing roadmap IDs are retained for traceability. The historical `V4-FEAT-*` p
 
 ## 2. Canonical V6 backlog
 
-Current count: **13 items — 12 DECIDED, 1 OPEN**.
+Current count: **12 items — 12 DECIDED, 0 OPEN**.
 
 | ID | Feature | Scope / inherited boundary | Planning group | Status |
 |---|---|---|---|---|
@@ -40,17 +40,17 @@ Current count: **13 items — 12 DECIDED, 1 OPEN**.
 | V4-FEAT-049 | Clone Portfolio as Paper | Create an independent PAPER Portfolio from an existing Portfolio. User chooses whether current holdings are copied. Strategy/artifact versions are pinned; no historical trades/performance or ongoing synchronization. | Portfolio experimentation | DECIDED |
 | V4-FEAT-050 | Admin Audit Explorer | Admin-only read-only explorer over authoritative persisted audit traces. Admin may inspect Investors/Portfolios. UI is curated; CSV may expose a broader/rawer authorized audit dataset. | Administration | DECIDED |
 | V4-FEAT-051 | Contextual Notes | Personal plain-text notes available contextually across pages via stable logical page context + account/portfolio scope. Lightweight right overlay pane, inline add/edit/delete, timestamps and responsive mobile alternative. | UX / Productivity | DECIDED |
-| V4-FEAT-052 | Telemetry | V6 telemetry/observability epic. Product scope, event model, privacy boundary, retention, operational/product analytics use cases and UI/administrative implications are intentionally not yet frozen. | Platform / Observability | OPEN |
 
 ## 3. Explicitly moved to V7
 
-The following previously deferred roadmap items are **not V6 scope** and are moved to V7 planning:
+The following roadmap items are **not V6 scope** and are moved to V7 planning:
 
 | ID | Feature | V7 rationale |
 |---|---|---|
 | V4-FEAT-017 | AI Assistant | Deferred until after V6 safety/UX/platform consolidation. |
 | V4-FEAT-018 | ML scoring models | Deferred with AI/decision-authority work; deterministic Strategy semantics remain authoritative. |
 | V4-FEAT-019 | ETF / Options / Crypto expansion | Deferred market/instrument expansion; likely to be decomposed by instrument family in V7. |
+| V4-FEAT-052 | Standalone Telemetry Platform | Deliberation showed this should not be a StoX-internal feature. It is a separate, product-independent application/product with StoX as its first client. Canonical architecture is in `V7-Telemetry-Platform.md`. |
 
 Their historical IDs are retained for traceability and must not be treated as unfinished V6 work.
 
@@ -63,7 +63,7 @@ During V6 planning:
 - `V4-FEAT-017`, `018`, and `019` were explicitly moved to V7.
 - The combined Execution State/persistent-control concept remains split into `V4-FEAT-047` and `V4-FEAT-048` for domain/UX traceability.
 - `V4-FEAT-051` Contextual Notes was added as a new V6 productivity/UX epic.
-- `V4-FEAT-052` Telemetry was added as a new V6 observability epic and remains to be deliberated.
+- `V4-FEAT-052` Telemetry was initially added to V6, then moved to V7 after product deliberation established it as a standalone, reusable Telemetry application rather than a StoX feature. Its canonical architecture is `V7-Telemetry-Platform.md`.
 
 ## 5. V6 epic grouping and planning state
 
@@ -112,13 +112,9 @@ Feature: `V4-FEAT-051`.
 
 Personal plain-text notes are available contextually throughout Investor pages via a lightweight right-side utility pane, with responsive mobile replacement where appropriate.
 
-### E7 — Telemetry — OPEN
-
-Feature: `V4-FEAT-052`.
-
-Record now so it is not lost; deliberate and freeze after the other V6 architecture epics.
-
 ## 6. Recommended V6 planning sequence
+
+All V6 architecture epics are now decided. Implementation can proceed by dependency/priority rather than further V6 product-architecture deliberation.
 
 1. **E1 Live Execution Safety** — frozen.
 2. **E2 Paper Experimentation** — frozen.
@@ -126,8 +122,9 @@ Record now so it is not lost; deliberate and freeze after the other V6 architect
 4. **E5 External/API Access** — frozen.
 5. **E4 Investor UX & Client Evolution** — frozen.
 6. **E6 Contextual Notes** — frozen; may be implemented with E4 because it uses the same right-side utility/chrome language.
-7. **E7 Telemetry** — next architecture epic to deliberate and freeze.
-8. **FEAT-035 frontend migration** — continues incrementally wherever touched surfaces justify migration, within the frozen E4 rules.
+7. **FEAT-035 frontend migration** — continues incrementally wherever touched surfaces justify migration, within the frozen E4 rules.
+
+`V4-FEAT-052` Telemetry is no longer part of this V6 sequence; it is V7 standalone-product work.
 
 ## 7. Planning rules
 
