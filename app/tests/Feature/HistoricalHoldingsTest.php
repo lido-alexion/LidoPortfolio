@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Holding;
 use App\Models\Stock;
 use App\Models\StockPrice;
 use App\Models\Transaction;
@@ -197,6 +198,8 @@ class HistoricalHoldingsTest extends TestCase
 
         $response->assertOk()
             ->assertJsonPath('holdings.0.as_of_price', 200)
+            ->assertJsonPath('holdings.0.price_as_of', '2026-02-06')
+            ->assertJsonPath('holdings.0.price_source', 'adjusted_close')
             ->assertJsonPath('holdings.0.market_value', 400)
             ->assertJsonPath('holdings.0.unrealized_profit', 200)
             ->assertJsonPath('holdings.0.unrealized_gain_percent', 100)
@@ -304,7 +307,7 @@ class HistoricalHoldingsTest extends TestCase
         $this->addPrice($stock, '2026-02-01', 30);
 
         // Poison live holdings with a different quantity — F014 must ignore it.
-        \App\Models\Holding::query()->create([
+        Holding::query()->create([
             'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'quantity' => 999,

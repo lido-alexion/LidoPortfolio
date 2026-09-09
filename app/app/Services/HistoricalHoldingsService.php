@@ -17,6 +17,7 @@ class HistoricalHoldingsService
 {
     public function __construct(
         protected PortfolioHistoricalHoldingsService $reconstruction,
+        protected CashManagementService $cash,
     ) {}
 
     /**
@@ -49,6 +50,7 @@ class HistoricalHoldingsService
         $detailed = $this->reconstruction->holdingsAsOfDetailed($transactions, $asOf);
         $holdingsMap = $detailed['holdings'];
         $warnings = $detailed['warnings'];
+        $cashBalance = $this->cash->balanceAsOf($profile, $asOfDate);
 
         if ($holdingsMap === []) {
             return [
@@ -58,6 +60,8 @@ class HistoricalHoldingsService
                 'totals' => [
                     'invested_value' => 0.0,
                     'market_value' => null,
+                    'cash_balance' => $cashBalance,
+                    'total_value' => $cashBalance,
                     'unrealized_profit' => null,
                     'unrealized_gain_percent' => null,
                     'valuation_complete' => true,
@@ -67,6 +71,10 @@ class HistoricalHoldingsService
                     'missing_price_count' => 0,
                     'priced_holding_count' => 0,
                     'holding_count' => 0,
+                    'holdings_state_complete' => true,
+                    'holdings_valuation_complete' => true,
+                    'cash_complete' => true,
+                    'total_value_complete' => true,
                 ],
             ];
         }
@@ -98,7 +106,8 @@ class HistoricalHoldingsService
             $avgBuy = round((float) $holding['avg_buy_price'], 4);
             $investedTotal += $invested;
 
-            $close = $priceByStock[$stockId] ?? null;
+            $priceEvidence = $priceByStock[$stockId] ?? null;
+            $close = $priceEvidence['price'] ?? null;
             $priceAvailable = $close !== null && $close > 0;
             $asOfPrice = $priceAvailable ? round($close, 4) : null;
             $marketValue = $priceAvailable ? round($qty * $close, 4) : null;
@@ -128,6 +137,8 @@ class HistoricalHoldingsService
                 'avg_buy_price' => $avgBuy,
                 'invested_amount' => $invested,
                 'as_of_price' => $asOfPrice,
+                'price_as_of' => $priceEvidence['date'] ?? null,
+                'price_source' => $priceEvidence['source'] ?? null,
                 'price_available' => $priceAvailable,
                 'market_value' => $marketValue,
                 'unrealized_profit' => $unrealized,
@@ -154,6 +165,8 @@ class HistoricalHoldingsService
             'totals' => [
                 'invested_value' => round($investedTotal, 4),
                 'market_value' => $totalsMarket,
+                'cash_balance' => $cashBalance,
+                'total_value' => $totalsMarket !== null ? round($totalsMarket + $cashBalance, 4) : null,
                 'unrealized_profit' => $totalsUnrealized,
                 'unrealized_gain_percent' => $totalsUnrealizedPct,
                 'valuation_complete' => $marketComplete,
@@ -163,6 +176,10 @@ class HistoricalHoldingsService
                 'missing_price_count' => $missingPriceCount,
                 'priced_holding_count' => $pricedCount,
                 'holding_count' => count($rows),
+                'holdings_state_complete' => $warnings === [],
+                'holdings_valuation_complete' => $marketComplete,
+                'cash_complete' => true,
+                'total_value_complete' => $warnings === [] && $marketComplete,
             ],
         ];
     }
@@ -180,7 +197,7 @@ class HistoricalHoldingsService
      * Single F014 price path (PD-06): latest price_date <= asOf; adjusted_close ?? close.
      *
      * @param  list<int>  $stockIds
-     * @return array<int, float>
+     * @return array<int, array{price: float, date: string, source: string}>
      */
     protected function latestClosesOnOrBefore(array $stockIds, Carbon $asOf): array
     {
@@ -201,11 +218,16 @@ class HistoricalHoldingsService
             if (isset($result[$stockId])) {
                 continue;
             }
-            $close = $row->adjusted_close_price ?? $row->close_price;
+            $usesAdjusted = $row->adjusted_close_price !== null;
+            $close = $usesAdjusted ? $row->adjusted_close_price : $row->close_price;
             if ($close === null || (float) $close <= 0) {
                 continue;
             }
-            $result[$stockId] = (float) $close;
+            $result[$stockId] = [
+                'price' => (float) $close,
+                'date' => $row->price_date->toDateString(),
+                'source' => $usesAdjusted ? 'adjusted_close' : 'close',
+            ];
         }
 
         return $result;
@@ -213,7 +235,7 @@ class HistoricalHoldingsService
 
     /**
      * @param  list<array<string, mixed>>  $warnings
-     * @param  \Illuminate\Support\Collection<int, Stock>|array  $stocks
+     * @param  Collection<int, Stock>|array  $stocks
      * @return list<array<string, mixed>>
      */
     protected function enrichWarnings(array $warnings, $stocks): array

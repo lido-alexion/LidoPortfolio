@@ -220,6 +220,16 @@ export default function HistoricalHoldingsPage() {
                             ? formatTableMoney2(totals.market_value)
                             : 'Incomplete'}
                         {' · '}
+                        Cash:
+                        {' '}
+                        {formatTableMoney2(totals.cash_balance ?? 0)}
+                        {' · '}
+                        Total value:
+                        {' '}
+                        {completeness.total_value_complete !== false
+                            ? formatTableMoney2(totals.total_value)
+                            : 'Incomplete'}
+                        {' · '}
                         Unrealized:
                         {' '}
                         {valuationComplete
@@ -273,7 +283,15 @@ export default function HistoricalHoldingsPage() {
                                     <td className="text-end">{formatTableMoney2(row.invested_amount)}</td>
                                     <td className="text-end">
                                         {row.price_available
-                                            ? formatTableMoney2(row.as_of_price)
+                                            ? (
+                                                <>
+                                                    {formatTableMoney2(row.as_of_price)}
+                                                    <div className="small text-muted">
+                                                        {row.price_as_of ? `Price as of ${formatTransactionDateDisplay(row.price_as_of)}` : 'Price date unavailable'}
+                                                        {row.price_source ? ` · ${String(row.price_source).replace('_', ' ')}` : ''}
+                                                    </div>
+                                                </>
+                                            )
                                             : <span className="text-muted">Unavailable</span>}
                                     </td>
                                     <td className="text-end">{moneyOrUnavailable(row.market_value)}</td>
