@@ -4,10 +4,13 @@ namespace App\Services\Artifacts;
 
 use App\Models\PortfolioProfile;
 use App\Models\Screener;
+use App\Models\Watchlist;
 use App\Services\Artifacts\Contracts\ArtifactRegistryInterface;
 use App\Services\Indicators\IndicatorRegistry;
+use App\Services\Screener\ScreenerDefinitionValidator;
 use App\Services\Screener\ScreenerService;
 use App\Services\Screener\ScreenerVersioningService;
+use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 
 /**
@@ -16,11 +19,17 @@ use InvalidArgumentException;
  */
 final class ScreenerArtifactRegistry implements ArtifactRegistryInterface
 {
+    private const NAME_ALLOWED_PATTERN = '/^[\pL\pN\s\-\._,\&\(\)\/:\+\#%\'\"]+$/u';
+
+    private const DESCRIPTION_ALLOWED_PATTERN = '/^[\pL\pN\s\-\._,\&\(\)\/:\+\#%\'\"\?\!]*$/u';
+
     public function __construct(
         private ScreenerService $screeners,
         private ArtifactValidationService $validator,
         private ScreenerVersioningService $versioning,
         private IndicatorRegistry $indicatorRegistry,
+        private ScreenerDefinitionValidator $definitionValidator,
+        private LegacyArtifactAuthoringService $legacyAuthoring,
     ) {}
 
     public function type(): string
@@ -99,11 +108,81 @@ final class ScreenerArtifactRegistry implements ArtifactRegistryInterface
             throw new InvalidArgumentException('Validation failed: '.json_encode($result->toArray()));
         }
 
-        $input = $this->envelopeToScreenerInput($envelope, $profile);
-        $created = $this->screeners->create($profile, $input);
-        $model = Screener::query()->where('profile_id', $profile->id)->where('id', $created['id'])->firstOrFail();
+        $metadata = is_array($envelope['metadata'] ?? null) ? $envelope['metadata'] : [];
+        $origin = ($metadata['origin'] ?? null) === ArtifactOrigin::IMPORTED
+            ? ArtifactOrigin::IMPORTED
+            : ArtifactOrigin::USER;
 
-        return $this->project($model);
+        return $this->legacyAuthoring->createDraft($profile, $envelope, $origin);
+    }
+
+    /** @param array<string, mixed> $input @return array<string, mixed> */
+    public function createFromEditorInput(PortfolioProfile $profile, array $input): array
+    {
+        $scope = (string) ($input['scope'] ?? 'all_equities');
+        $name = trim((string) ($input['name'] ?? ''));
+        $description = (string) ($input['description'] ?? '');
+        $errors = [];
+        if ($name === '' || mb_strlen($name) > 120 || preg_match(self::NAME_ALLOWED_PATTERN, $name) !== 1) {
+            $errors['name'] = ['Name is required, must not exceed 120 characters, and contains unsupported characters.'];
+        }
+        if (mb_strlen($description) > 500 || preg_match(self::DESCRIPTION_ALLOWED_PATTERN, $description) !== 1) {
+            $errors['description'] = ['Description must not exceed 500 characters and contains unsupported characters.'];
+        }
+        if (! in_array($scope, ['holdings', 'watchlist', 'all_equities', 'index'], true)) {
+            $errors['scope'] = ['Invalid Screener scope.'];
+        } elseif ($scope === 'watchlist') {
+            $watchlistId = (int) ($input['watchlist_id'] ?? 0);
+            if ($watchlistId < 1 || ! Watchlist::query()->whereKey($watchlistId)->where('profile_id', $profile->id)->exists()) {
+                $errors['watchlist_id'] = ['Select a watchlist owned by this Portfolio.'];
+            }
+        } elseif ($scope === 'index') {
+            $indexSymbol = strtoupper(trim((string) ($input['index_symbol'] ?? '')));
+            $allowed = array_column($this->screeners->constituentCapableIndexes(), 'symbol');
+            if ($indexSymbol === '' || ! in_array($indexSymbol, $allowed, true)) {
+                $errors['index_symbol'] = ['Select an enabled index with constituent support.'];
+            }
+        }
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
+        $definition = is_array($input['definition_json'] ?? null)
+            ? $input['definition_json']
+            : ['root' => ['type' => 'group', 'op' => 'AND', 'children' => []]];
+        try {
+            $definition = $this->definitionValidator->validate($definition);
+        } catch (InvalidArgumentException $exception) {
+            throw ValidationException::withMessages([
+                'definition_json' => [$exception->getMessage()],
+            ]);
+        }
+
+        return $this->create([
+            'schema_version' => ArtifactType::SCHEMA_VERSION,
+            'artifact_type' => ArtifactType::SCREENER,
+            'slug' => $this->versioning->slugify($name, null),
+            'name' => $name,
+            'metadata' => [
+                'scope' => ArtifactScope::PORTFOLIO,
+                'status' => ArtifactStatus::DRAFT,
+                'origin' => ArtifactOrigin::USER,
+                'description' => $description,
+                'summary' => (string) ($input['summary'] ?? $input['description'] ?? ''),
+                'intent' => (string) ($input['intent'] ?? ''),
+                'tags' => is_array($input['tags'] ?? null) ? $input['tags'] : [],
+                'universe' => $scope,
+                'suggested_binding_settings' => [
+                    'scope' => $scope,
+                    'watchlist_id' => $scope === 'watchlist' ? ($input['watchlist_id'] ?? null) : null,
+                    'index_symbol' => $scope === 'index' ? ($input['index_symbol'] ?? null) : null,
+                    'schedule_enabled' => (bool) ($input['schedule_enabled'] ?? false),
+                    'schedule_time' => $input['schedule_time'] ?? null,
+                    'schedule_days' => is_array($input['schedule_days'] ?? null) ? $input['schedule_days'] : [],
+                    'telegram_enabled' => (bool) ($input['telegram_enabled'] ?? false),
+                ],
+            ],
+            'definition' => $definition,
+        ], $profile);
     }
 
     public function update(string $idOrSlug, array $envelope, ?PortfolioProfile $profile = null): array
@@ -153,6 +232,10 @@ final class ScreenerArtifactRegistry implements ArtifactRegistryInterface
     public function importEnvelope(array $envelope, PortfolioProfile $profile): array
     {
         $envelope['artifact_type'] = ArtifactType::SCREENER;
+        $envelope['metadata'] = array_merge(
+            is_array($envelope['metadata'] ?? null) ? $envelope['metadata'] : [],
+            ['origin' => ArtifactOrigin::IMPORTED, 'status' => ArtifactStatus::DRAFT],
+        );
         $envelope = ArtifactEnvelope::withFreshHash($envelope);
         $result = $this->validate($envelope, $profile);
         if (! $result->ok) {
@@ -180,10 +263,19 @@ final class ScreenerArtifactRegistry implements ArtifactRegistryInterface
      */
     public function importShared(PortfolioProfile $profile, int $sourceId): array
     {
-        $formatted = $this->screeners->importShared($profile, $sourceId);
-        $model = Screener::query()->where('profile_id', $profile->id)->where('id', $formatted['id'])->firstOrFail();
+        $source = Screener::query()
+            ->sharedVisibleTo($profile)
+            ->where('id', $sourceId)
+            ->firstOrFail();
+        $envelope = $this->projectShared($source);
+        $envelope['name'] = $source->name.' (copy)';
 
-        return $this->project($model);
+        return $this->legacyAuthoring->createDraft(
+            $profile,
+            $envelope,
+            ArtifactOrigin::FORK,
+            ['source_legacy_screener_id' => $source->id],
+        );
     }
 
     /**

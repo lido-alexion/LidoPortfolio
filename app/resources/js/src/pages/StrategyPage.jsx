@@ -4,7 +4,7 @@ import api from '../api';
 import { DataTableCard } from '../components/DataTable';
 import NumberInput from '../components/NumberInput';
 import AIStrategyPromptBuilder from '../components/strategy/AIStrategyPromptBuilder';
-import CreateStrategyPanel, { createdStrategyId } from '../components/strategy/CreateStrategyPanel';
+import CreateStrategyPanel, { createdArtifactPath, createdStrategyId } from '../components/strategy/CreateStrategyPanel';
 import useApiGet from '../hooks/useApiGet';
 import { runApiMutation } from '../hooks/useApiMutation';
 import { showToast } from '../toast';
@@ -942,6 +942,11 @@ export default function StrategyPage() {
                 onClose={() => setShowCreate(false)}
                 onCreated={(created) => {
                     setShowCreate(false);
+                    const path = createdArtifactPath(created);
+                    if (path) {
+                        navigate(path);
+                        return;
+                    }
                     const id = createdStrategyId(created);
                     if (id) {
                         navigate(`/strategy?strategy_id=${encodeURIComponent(id)}`);

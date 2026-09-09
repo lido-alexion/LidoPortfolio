@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import api from '../api';
 import { appUrl } from '../appBase';
 import ValidationSuccessBanner from '../components/artifacts/ValidationSuccessBanner';
@@ -33,6 +33,7 @@ function downloadJson(filename, data) {
  * @param {{ adminMode?: boolean }} props
  */
 export default function ScreenerRegistryPage({ adminMode = false }) {
+    const navigate = useNavigate();
     const basePath = adminMode ? '/settings/screener-registry' : '/screeners/registry';
     const [rows, setRows] = useState([]);
     const [meta, setMeta] = useState(null);
@@ -119,10 +120,10 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
             const envelope = parseImportPayload();
             const res = await api.post('/v1/screener-registry/import', envelope);
             const created = res.data?.data;
-            showToast(`Imported “${created?.name || 'screener'}” (slug ${created?.slug || '—'}).`);
+            showToast(`Imported “${created?.name || 'screener'}” as an Artifact Library Draft (slug ${created?.slug || '—'}).`);
             setImportText('');
             setValidateResult(null);
-            await load();
+            if (created?.library_path) navigate(created.library_path);
         } catch (err) {
             setError(err?.response?.data?.error?.message || err.message || 'Import failed');
         } finally {
@@ -153,8 +154,9 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
         setError('');
         try {
             const res = await api.post(`/v1/screener-registry/shared/${encodeURIComponent(sourceId)}/import`);
-            showToast(`Copied shared screener into this portfolio as “${res.data?.data?.name || 'screener'}”.`);
-            await load();
+            const created = res.data?.data;
+            showToast(`Copied shared Screener as Artifact Library Draft “${created?.name || 'screener'}”.`);
+            if (created?.library_path) navigate(created.library_path);
         } catch (err) {
             setError(err?.response?.data?.error?.message || err.message || 'Shared import failed');
         } finally {
@@ -168,8 +170,8 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
                 <div>
                     <h2 className="h4 mb-1">{adminMode ? 'Screener Registry (Admin)' : 'Screener Registry'}</h2>
                     <p className="text-muted small mb-0">
-                        Reusable Screener artifacts with metadata, versioning, and JSON import/export.
-                        Execution still uses the existing Screener run engine — this registry does not redesign conditions.
+                        Compatibility view for Portfolio runtime Screeners. New imports become Artifact Library Drafts;
+                        publish and bind them explicitly before execution.
                     </p>
                     {countsLabel && <p className="text-muted small mb-0 mt-1">{countsLabel}</p>}
                 </div>
@@ -323,10 +325,12 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
                                                 )}
                                                 {!isShared && (
                                                     <Link
-                                                        to={`/screeners/${encodeURIComponent(id)}`}
+                                                        to={m.compatibility_read_only && m.reusable_artifact_uuid
+                                                            ? `/artifact-library/${encodeURIComponent(m.reusable_artifact_uuid)}`
+                                                            : `/screeners/${encodeURIComponent(id)}`}
                                                         className="btn btn-outline-primary btn-sm"
                                                     >
-                                                        Edit
+                                                        {m.compatibility_read_only ? 'Open artifact' : 'Edit'}
                                                     </Link>
                                                 )}
                                             </div>
@@ -363,7 +367,7 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
                         {' '}
                         — full Indicator + Screener + Strategy + Cookbook pack for AI/offline use.
                         Run <strong>Validate</strong> first — <strong>Import</strong> stays disabled until validation succeeds.
-                        Import always creates a new screener in this portfolio.
+                        Import creates an Artifact Library Draft; it becomes runnable only after explicit publish and binding.
                     </p>
                     <textarea
                         className="form-control font-monospace small"

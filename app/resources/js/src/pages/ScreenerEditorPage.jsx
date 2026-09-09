@@ -695,8 +695,9 @@ export default function ScreenerEditorPage() {
             const payload = buildPayload();
             if (isNew) {
                 const res = await api.post('/screeners', payload);
-                showToast(`Screener "${payload.name.trim()}" created successfully.`);
-                navigate(`/screeners/${res.data?.data?.id}`, { replace: true });
+                const created = res.data?.data;
+                showToast(`Screener "${payload.name.trim()}" created as an Artifact Library Draft.`);
+                navigate(created?.library_path || `/artifact-library/${encodeURIComponent(created?.reusable_artifact_uuid || '')}`, { replace: true });
                 return true;
             }
             const res = await api.put(`/screeners/${id}`, payload);

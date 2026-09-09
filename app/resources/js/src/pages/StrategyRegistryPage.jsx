@@ -4,7 +4,7 @@ import api from '../api';
 import { appUrl } from '../appBase';
 import ValidationSuccessBanner from '../components/artifacts/ValidationSuccessBanner';
 import NumberInput from '../components/NumberInput';
-import CreateStrategyPanel, { createdStrategyId } from '../components/strategy/CreateStrategyPanel';
+import CreateStrategyPanel, { createdArtifactPath, createdStrategyId } from '../components/strategy/CreateStrategyPanel';
 import { showToast } from '../toast';
 import { notifyPortfolioDashboardRefresh } from '../utils/portfolioEvents';
 
@@ -198,11 +198,12 @@ export default function StrategyRegistryPage({ adminMode = false }) {
             const res = await api.post('/v1/strategy-registry/import', envelope);
             const created = res.data?.data;
             showToast(
-                `Imported “${created?.name || 'strategy'}” as draft (slug ${created?.slug || '—'}). Use Enable to turn it on — other enabled strategies stay enabled.`,
+                `Imported “${created?.name || 'strategy'}” as an Artifact Library Draft (slug ${created?.slug || '—'}).`,
             );
             setImportText('');
             setValidateResult(null);
-            await load();
+            const path = createdArtifactPath(created);
+            if (path) navigate(path);
         } catch (err) {
             setError(err?.response?.data?.error?.message || err.message || 'Import failed');
         } finally {
@@ -266,8 +267,8 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                 <div>
                     <h2 className="h4 mb-1">{adminMode ? 'Strategy Registry (Admin)' : 'Strategy Registry'}</h2>
                     <p className="text-muted small mb-0">
-                        Manage every strategy for this portfolio: create, enable, edit, and archive.
-                        Multiple strategies may be enabled at the same time. Strategies reference Screeners by registry slug / factory key — they never embed Screener trees.
+                        Compatibility view for Portfolio runtime Strategies. New definitions and imports become Artifact Library Drafts.
+                        Published bindings control enablement; Strategies reference Screeners by slug / factory key.
                     </p>
                     {countsLabel && <p className="text-muted small mb-0 mt-1">{countsLabel}</p>}
                 </div>
@@ -297,6 +298,11 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                 onClose={() => setShowCreate(false)}
                 onCreated={async (created) => {
                     setShowCreate(false);
+                    const path = createdArtifactPath(created);
+                    if (path) {
+                        navigate(path);
+                        return;
+                    }
                     const id = createdStrategyId(created);
                     await load();
                     if (id) {
@@ -551,8 +557,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                         {' '}
                         — full Indicator + Screener + Strategy + Cookbook pack for AI/offline use.
                         Run <strong>Validate</strong> first — <strong>Import</strong> stays disabled until validation succeeds.
-                        Import creates a <strong>draft</strong> — use <strong>Enable</strong> to turn it on for this portfolio.
-                        Multiple strategies may be enabled at the same time; Enable does not disable others.
+                        Import creates an <strong>Artifact Library Draft</strong>. Review it there, publish an immutable version, then bind it to this Portfolio.
                     </p>
                     <textarea
                         className="form-control font-monospace small"

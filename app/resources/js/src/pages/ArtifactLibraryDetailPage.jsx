@@ -100,7 +100,8 @@ export default function ArtifactLibraryDetailPage() {
 
     const bindOrUpgrade = (version) => {
         const binding = artifact.portfolio_binding;
-        if (!binding) return act(() => api.post(`/v1/artifact-library/versions/${version.id}/bind`, { enabled: false }), 'Artifact bound to this Portfolio.');
+        const suggestedSettings = version.content?.metadata?.suggested_binding_settings || {};
+        if (!binding) return act(() => api.post(`/v1/artifact-library/versions/${version.id}/bind`, { enabled: false, settings: suggestedSettings }), 'Artifact bound to this Portfolio.');
         if (binding.active_version === version.semver) return;
         return act(() => api.put(`/v1/artifact-bindings/${binding.binding_uuid}/upgrade`, {
             artifact_version_id: version.id,

@@ -3,7 +3,7 @@ import api from '../../api';
 import { showToast } from '../../toast';
 
 /**
- * Name + optional description → POST /v1/strategy-registry (factory/default config, stored as draft).
+ * Name + optional description → V5 Artifact Library Draft from factory/default config.
  */
 export default function CreateStrategyPanel({ open, onClose, onCreated, disabled = false }) {
     const [name, setName] = useState('');
@@ -37,7 +37,7 @@ export default function CreateStrategyPanel({ open, onClose, onCreated, disabled
             });
             const created = res.data?.data;
             showToast(
-                `Created “${created?.name || trimmed}” as a draft. Enable it when you want it to generate recommendations.`,
+                `Created “${created?.name || trimmed}” as an Artifact Library Draft. Publish and bind it when ready.`,
             );
             reset();
             onCreated?.(created);
@@ -57,8 +57,8 @@ export default function CreateStrategyPanel({ open, onClose, onCreated, disabled
             <div className="card-body d-grid gap-2">
                 <h3 className="h6 mb-0">New Strategy</h3>
                 <p className="text-muted small mb-0">
-                    Creates a new strategy from the default factory configuration. You can edit it next,
-                    then Enable it — other enabled strategies stay enabled.
+                    Creates an Artifact Library Draft from the default factory configuration.
+                    Review it, publish an immutable version, then bind it to the Portfolio.
                 </p>
                 {error ? <div className="alert alert-danger py-2 mb-0">{error}</div> : null}
                 <div>
@@ -121,4 +121,10 @@ export function createdStrategyId(created) {
     const raw = created?.artifact_id ?? created?.metadata?.legacy_id ?? created?.id;
     const n = Number(raw);
     return Number.isFinite(n) && n > 0 ? String(n) : '';
+}
+
+export function createdArtifactPath(created) {
+    if (created?.library_path) return created.library_path;
+    const uuid = created?.reusable_artifact_uuid ?? created?.artifact_uuid;
+    return uuid ? `/artifact-library/${encodeURIComponent(uuid)}` : '';
 }

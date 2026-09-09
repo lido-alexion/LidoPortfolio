@@ -8,6 +8,7 @@ use App\Models\ReusableArtifactVersion;
 use App\Models\Screener;
 use App\Models\TradingStrategy;
 use App\Models\TradingStrategyVersion;
+use App\Models\Watchlist;
 use App\Services\Screener\ScreenerDefinitionValidator;
 use App\Services\Strategy\StrategyRegistrySupport;
 use App\Services\StrategyConfigurationService;
@@ -131,15 +132,13 @@ final class ArtifactLegacyProjectionService
             ->first();
         $metadata = is_array($content['metadata'] ?? null) ? $content['metadata'] : [];
         if (! $screener) {
-            $universe = (string) ($metadata['universe'] ?? 'all_equities');
+            $universe = (string) ($settings['scope'] ?? $metadata['universe'] ?? 'all_equities');
             $scope = match ($universe) {
                 'all', 'all_active_equities' => 'all_equities',
                 'portfolio', 'holding' => 'holdings',
                 default => in_array($universe, ['holdings', 'watchlist', 'all_equities', 'index'], true) ? $universe : 'all_equities',
             };
-            if (in_array($scope, ['watchlist', 'index'], true)) {
-                throw new InvalidArgumentException('A new bound Screener projection cannot use watchlist/index scope without Portfolio-specific scope settings.');
-            }
+            [$watchlistId, $indexSymbol] = $this->screenerScopeSettings($profile, $scope, $settings);
             $screener = Screener::query()->create([
                 'profile_id' => $profile->id,
                 'name' => $this->uniqueName(Screener::query()->where('profile_id', $profile->id), (string) ($content['name'] ?? $binding->artifact->name)),
@@ -152,6 +151,8 @@ final class ArtifactLegacyProjectionService
                 'tags_json' => is_array($metadata['tags'] ?? null) ? $metadata['tags'] : [],
                 'artifact_status' => ArtifactStatus::ACTIVE,
                 'scope' => $scope,
+                'watchlist_id' => $watchlistId,
+                'index_symbol' => $indexSymbol,
                 'definition_json' => $definition,
                 'telegram_enabled' => false,
                 'is_enabled' => false,
@@ -160,6 +161,13 @@ final class ArtifactLegacyProjectionService
                 'reusable_artifact_id' => $binding->artifact_id,
             ]);
         }
+        $universe = (string) ($settings['scope'] ?? $metadata['universe'] ?? $screener->scope);
+        $scope = match ($universe) {
+            'all', 'all_active_equities' => 'all_equities',
+            'portfolio', 'holding' => 'holdings',
+            default => in_array($universe, ['holdings', 'watchlist', 'all_equities', 'index'], true) ? $universe : 'all_equities',
+        };
+        [$watchlistId, $indexSymbol] = $this->screenerScopeSettings($profile, $scope, $settings, $screener);
         if ($screener->definition_hash !== $version->definition_hash) {
             $screener->artifact_version = max(1, (int) $screener->artifact_version + 1);
         }
@@ -167,11 +175,41 @@ final class ArtifactLegacyProjectionService
             'definition_json' => $definition,
             'definition_hash' => $version->definition_hash,
             'is_enabled' => $binding->status === ArtifactBinding::STATUS_ENABLED,
+            'scope' => $scope,
+            'watchlist_id' => $watchlistId,
+            'index_symbol' => $indexSymbol,
             'schedule_enabled' => (bool) ($settings['schedule_enabled'] ?? $screener->schedule_enabled ?? false),
             'schedule_time' => $settings['schedule_time'] ?? $screener->schedule_time,
             'schedule_days' => is_array($settings['schedule_days'] ?? null) ? $settings['schedule_days'] : ($screener->schedule_days ?? []),
             'telegram_enabled' => (bool) ($settings['telegram_enabled'] ?? $screener->telegram_enabled ?? false),
         ])->save();
+    }
+
+    /** @param array<string,mixed> $settings @return array{0:?int,1:?string} */
+    private function screenerScopeSettings(
+        PortfolioProfile $profile,
+        string $scope,
+        array $settings,
+        ?Screener $existing = null,
+    ): array {
+        if ($scope === 'watchlist') {
+            $watchlistId = (int) ($settings['watchlist_id'] ?? $existing?->watchlist_id ?? 0);
+            if ($watchlistId < 1 || ! Watchlist::query()->whereKey($watchlistId)->where('profile_id', $profile->id)->exists()) {
+                throw new InvalidArgumentException('Watchlist Screener bindings require a watchlist_id owned by this Portfolio.');
+            }
+
+            return [$watchlistId, null];
+        }
+        if ($scope === 'index') {
+            $indexSymbol = strtoupper(trim((string) ($settings['index_symbol'] ?? $existing?->index_symbol ?? '')));
+            if ($indexSymbol === '') {
+                throw new InvalidArgumentException('Index Screener bindings require an index_symbol.');
+            }
+
+            return [null, $indexSymbol];
+        }
+
+        return [null, null];
     }
 
     private function uniqueName($query, string $desired): string

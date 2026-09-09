@@ -27,6 +27,7 @@ final class StrategyArtifactRegistry implements ArtifactRegistryInterface
         private ArtifactValidationService $validator,
         private StrategyRegistrySupport $support,
         private IndicatorRegistry $indicatorRegistry,
+        private LegacyArtifactAuthoringService $legacyAuthoring,
     ) {}
 
     public function type(): string
@@ -95,48 +96,12 @@ final class StrategyArtifactRegistry implements ArtifactRegistryInterface
             throw new InvalidArgumentException('Validation failed: '.json_encode($result->toArray()));
         }
 
-        $config = $this->envelopeToConfig($envelope, $profile);
-        $meta = is_array($envelope['metadata'] ?? null) ? $envelope['metadata'] : [];
-        $desiredSlug = (string) ($envelope['slug'] ?? '');
-        if ($desiredSlug === '') {
-            $desiredSlug = $this->support->slugify(
-                (string) ($envelope['name'] ?? 'Imported Strategy'),
-                isset($meta['factory_key']) ? (string) $meta['factory_key'] : null
-            );
-        }
-        $slug = $this->support->uniqueSlug($profile, $desiredSlug);
+        $metadata = is_array($envelope['metadata'] ?? null) ? $envelope['metadata'] : [];
+        $origin = ($metadata['origin'] ?? null) === ArtifactOrigin::IMPORTED
+            ? ArtifactOrigin::IMPORTED
+            : ArtifactOrigin::USER;
 
-        return DB::transaction(function () use ($profile, $envelope, $config, $meta, $slug) {
-            $hash = $this->support->hashDefinition($config);
-            $strategy = TradingStrategy::query()->create([
-                'profile_id' => $profile->id,
-                'name' => (string) ($envelope['name'] ?? 'Imported Strategy'),
-                'slug' => $slug,
-                'definition_hash' => $hash,
-                'description' => (string) ($meta['description'] ?? $meta['summary'] ?? ''),
-                'intent' => (string) ($meta['intent'] ?? ''),
-                'summary' => (string) ($meta['summary'] ?? ''),
-                'tags_json' => is_array($meta['tags'] ?? null) ? $meta['tags'] : [],
-                'status' => TradingStrategy::STATUS_DRAFT,
-                'is_factory' => ($meta['origin'] ?? '') === ArtifactOrigin::FACTORY,
-                'factory_key' => $meta['factory_key'] ?? null,
-            ]);
-
-            $version = TradingStrategyVersion::query()->create([
-                'strategy_id' => $strategy->id,
-                'version' => 1,
-                'version_label' => '1.0',
-                'config_json' => $config,
-                'definition_hash' => $hash,
-                'status' => TradingStrategyVersion::STATUS_DRAFT,
-                'change_notes' => 'Created via Strategy Registry (draft — not active)',
-                'activated_at' => null,
-            ]);
-
-            $strategy->forceFill(['active_version_id' => $version->id])->save();
-
-            return $this->project($strategy->fresh(), $version->fresh());
-        });
+        return $this->legacyAuthoring->createDraft($profile, $envelope, $origin);
     }
 
     /**
@@ -298,6 +263,10 @@ final class StrategyArtifactRegistry implements ArtifactRegistryInterface
     public function importEnvelope(array $envelope, PortfolioProfile $profile): array
     {
         $envelope['artifact_type'] = ArtifactType::STRATEGY;
+        $envelope['metadata'] = array_merge(
+            is_array($envelope['metadata'] ?? null) ? $envelope['metadata'] : [],
+            ['origin' => ArtifactOrigin::IMPORTED, 'status' => ArtifactStatus::DRAFT],
+        );
         $envelope = $this->normalizeScoringAlias($envelope);
         $envelope = ArtifactEnvelope::withFreshHash($envelope);
         $result = $this->validate($envelope, $profile);

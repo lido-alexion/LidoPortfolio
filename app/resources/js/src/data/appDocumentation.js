@@ -561,10 +561,10 @@ const APP_DOCUMENTATION_BASE = [
         overview:
             'Screeners are the sole eligibility engine. Build nested AND/OR conditions on technical indicators, run manually or on a schedule, review history, and optionally Telegram results. Strategy only references Screeners — it does not rewrite their rules.',
         controls: [
-            { name: 'Create / open screener', description: 'Opens the editor for a new or existing definition.' },
+            { name: 'Create / open screener', description: 'Opens the condition editor. Saving a new definition creates an Artifact Library Draft; it is not runnable until published and bound.' },
             { name: 'Run / schedule', description: 'Execute now or attach a cron schedule + optional Telegram delivery.' },
             { name: 'Share across your portfolios', description: 'Mark a screener shared so your other portfolios (same account only) can list and import a private copy. Other users cannot see it.' },
-            { name: 'Screener Registry', description: 'Open the registry to export/import Screener JSON. The import schema guide lists mandatory fields (slug, name, definition.root, …) and a minimal working example.' },
+            { name: 'Screener Registry', description: 'Open the compatibility registry to inspect/export runtime Screeners or validate/import Screener JSON as an Artifact Library Draft.' },
             { name: 'Guide tab (editor)', description: 'Plain-language indicator definitions and Investopedia links.' },
         ],
         concepts: [
@@ -587,7 +587,7 @@ const APP_DOCUMENTATION_BASE = [
             if (pathStarts(path, '/screeners/registry')) return false;
             return /^\/screeners\/[^/]+/.test(path);
         },
-        summary: 'Inspect/run mapped Screeners; unmapped legacy rows may still be edited until V5 backfill.',
+        summary: 'Build new Library Drafts and inspect/run legacy or mapped Portfolio Screeners.',
         overview:
             'Review condition trees, run history, stacked compare matrices, and backtests. A mapped Screener is a read-only runtime projection: author its Draft and publish/upgrade it in the Artifact Library; Run consumes its exact pinned binding version.',
         controls: [
@@ -595,7 +595,7 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Run history', description: 'Past runs with hit lists for comparison.' },
             { name: 'Stacked results', description: 'Compare multiple runs side by side.' },
             { name: 'Backtest', description: 'Evaluate the rule set across dates with per-date persistence.' },
-            { name: 'Save', description: 'Available only for an unmapped legacy Screener. Mapped Screeners are changed through Artifact Library Draft → publish → explicit binding upgrade.' },
+            { name: 'Save', description: 'For a new Screener, creates an Artifact Library Draft and opens it there. Existing unmapped legacy Screeners remain editable for migration compatibility; mapped Screeners require Library Draft → publish → explicit binding upgrade.' },
         ],
         concepts: [
             { name: 'LHS entity', description: 'Compute the left side on the stock or an index (e.g. stock range % vs Nifty 50).' },
@@ -613,8 +613,8 @@ const APP_DOCUMENTATION_BASE = [
         match: (p) => pathStarts(p, '/screeners/registry') || pathStarts(p, '/settings/screener-registry'),
         summary: 'Import/export Screener JSON artifacts — mandatory fields, slug rules, condition tree shape, and version history.',
         overview:
-            'The Screener Registry turns portfolio screeners into reusable Trading Artifacts. Each screener still uses the same condition tree the run engine executes. The registry adds slug, metadata, artifact_version, definition_hash, and version history.\n\n'
-            + 'Export downloads the Trading Artifact JSON envelope. **Validate** checks the envelope. **Import** stays disabled until validation succeeds, then creates a new screener in the active portfolio. Shared screeners from **your other portfolios** (same account) appear read-only and can be copied with Import copy — not visible to other users.\n\n'
+            'The Screener Registry is a compatibility view of Portfolio runtime Screeners. Existing rows still use the same condition tree the run engine executes; mapped rows link to the authoritative Artifact Library.\n\n'
+            + 'Export downloads a Trading Artifact JSON envelope. **Validate** checks the envelope. **Import** stays disabled until validation succeeds, then creates an account-owned Artifact Library Draft without creating a runnable Portfolio row. Publish and bind the Draft explicitly. Copying a shared legacy Screener from another Portfolio also creates a Library Fork Draft.\n\n'
             + '## Importing JSON — start here\n\n'
             + 'If Validate or Import reports many field errors, you almost always missed a **mandatory** envelope field or built an empty/invalid `definition.root` tree. Use the minimum schema below, then expand.\n\n'
             + '### Minimum valid envelope (copy/paste starting point)\n\n'
@@ -970,7 +970,7 @@ const APP_DOCUMENTATION_BASE = [
             {
                 name: 'Create Strategy',
                 description:
-                    'On Strategy and Strategy Registry. Enter a name and optional description; the app creates a draft from the default factory configuration (POST `/v1/strategy-registry`) and opens it in the editor. You do not paste JSON to create a normal strategy. Enable it when you want it to generate recommendations — other enabled strategies stay enabled.',
+                    'On Strategy and Strategy Registry. Enter a name and optional description; the app creates an account-owned Artifact Library Draft from the default factory configuration (POST `/v1/strategy-registry`) and opens it in the Library. Publish and bind it explicitly before it can generate recommendations.',
             },
             {
                 name: 'Enable / Archive (editor)',
@@ -980,7 +980,7 @@ const APP_DOCUMENTATION_BASE = [
             {
                 name: 'Strategy Registry',
                 description:
-                    'Open /strategy/registry (also listed under Trading in the sidebar) to create, Enable, Archive, export/import Strategy JSON, and validate packs. Multiple strategies may be enabled.',
+                    'Open /strategy/registry (also listed under Trading in the sidebar) to inspect/export runtime Strategies and validate/import new definitions as Artifact Library Drafts. Existing compatibility rows retain Enable/Archive controls until mapped.',
             },
             {
                 name: 'General tab',
@@ -1104,7 +1104,7 @@ const APP_DOCUMENTATION_BASE = [
             {
                 name: 'Registry vs editor',
                 description:
-                    'The Artifact Library is the authoritative lifecycle/deployment surface. The legacy Registry remains a compatibility and portable-JSON surface for unmapped rows; mapped rows are read-only. Export never includes portfolio-local Screener ids — only slug / factory_key refs.',
+                    'The Artifact Library is the authoritative lifecycle/deployment surface. New Registry/editor authoring creates Library Drafts and no runnable legacy row. The legacy Registry remains a compatibility and portable-JSON inspection surface; mapped rows are read-only. Export never includes portfolio-local Screener ids — only slug / factory_key refs.',
             },
             {
                 name: 'AI Strategy Designer',
@@ -1280,8 +1280,8 @@ const APP_DOCUMENTATION_BASE = [
         summary: 'Legacy Strategy compatibility registry; mapped lifecycle and deployment actions live in the Artifact Library.',
         overview:
             'The Strategy Registry is the V3 compatibility surface for strategy rows in the current portfolio. A portfolio may have **multiple enabled Strategies** at once. After V5 mapping, rows are read-only here and link to the authoritative Artifact Library lifecycle. '
-            + 'Draft authoring, immutable publication, binding enablement, explicit upgrades and archive belong to the Artifact Library; the legacy registry remains available for unmapped migration-era rows and portable inspection.\n\n'
-            + 'Export downloads the portable Trading Artifact JSON envelope. **Validate** checks the envelope. **Import** stays disabled until validation succeeds, then creates a **draft** — use **Enable** to turn it on without disabling other enabled strategies. '
+            + 'New definitions and imports create account-owned Library Drafts without a runnable Portfolio row. Immutable publication, binding enablement, explicit upgrades and archive belong to the Artifact Library; the legacy registry remains available for migration-era runtime rows and portable inspection.\n\n'
+            + 'Export downloads the portable Trading Artifact JSON envelope. **Validate** checks the envelope. **Import** stays disabled until validation succeeds, then creates and opens an **Artifact Library Draft**. Publish and bind it explicitly. '
             + 'Enabled rows show **Allocation %**. An **Allocation** editor (same PUT `/v1/capital/allocations` as Cash) lets you set percentages that must sum to 100.\n\n'
             + 'Existing Minervini (`momentum_factory`) migrates automatically to slug `momentum_strategy` with eligibility linked to `minervini_trend_template`.\n\n'
             + '## Importing JSON — start here\n\n'
@@ -1358,7 +1358,7 @@ const APP_DOCUMENTATION_BASE = [
             + '| `slug` | One portfolio | Must be unique among that portfolio’s strategies. On Import collision the system may suffix `_import_<hex>` (or create-path may use `_2`, `_3`, …). |\n'
             + '| `name` | One portfolio | Soft unique — Import may rename to `"… (import)"` if the display name already exists. |\n'
             + '| `metadata.factory_key` | Built-ins | Stable factory identity (e.g. `momentum_factory`). Not required for user imports. |\n'
-            + '| Enablement | One portfolio | Multiple strategies may be `active` (enabled) at once. Import always creates **draft**; **Enable** turns that strategy on without disabling others. |\n'
+            + '| Enablement | One portfolio | Multiple bound strategies may be `active` (enabled) at once. Import creates a Library Draft; publish and bind it before enablement. |\n'
             + '| `scoring_model[].key` | One envelope | Each catalogue key should appear once; duplicates are collapsed when normalised. |\n'
             + '| `screener_slug` / `screener_factory_key` | Eligibility row | Identify a Screener in this portfolio (or a factory Screener the system can ensure). Not unique across strategies — many strategies may share the same Screener. |\n'
             + '\n'
@@ -1381,7 +1381,7 @@ const APP_DOCUMENTATION_BASE = [
             + '| `status` | Optional | Hint: `draft` / `active` / `archived` — Import **always** stores draft regardless |\n'
             + '| `origin` | Optional | `factory` / `user` / `imported` / … |\n'
             + '| `factory_key` | Optional | Built-in id, e.g. `momentum_factory` |\n'
-            + '| `is_selected` / `is_enabled` | Export-only | Whether this row is currently enabled (`STATUS_ACTIVE`); Import ignores it — use **Enable**. Multiple strategies may be enabled. |\n'
+            + '| `is_selected` / `is_enabled` | Export-only | Whether a compatibility row is currently enabled (`STATUS_ACTIVE`). Import ignores it and creates an unbound Library Draft. |\n'
             + '| `storage` / `legacy_id` | Export-only | Internal pointers; leave out on hand-written JSON |\n'
             + '\n'
             + '**`definition`** — Strategy runtime config. Validate requires scoring; eligibility is strongly recommended for a working Recommendations feed.\n\n'
@@ -1442,9 +1442,9 @@ const APP_DOCUMENTATION_BASE = [
             + '1. Ensure referenced Screeners exist in this portfolio (Screener Registry → import Screener JSON, or use a factory screener like `minervini_trend_template`).\n'
             + '2. Start from the minimum example above (or Export an existing working strategy and edit a copy — best for thresholds / exits / gates).\n'
             + '3. Paste into Strategy Registry → **Validate** and fix every listed path (`$.slug`, `$.definition.scoring_model`, …).\n'
-            + '4. Use **Import** (enabled only after Validate succeeds) — creates a **draft** (does not change Recommendations yet).\n'
-            + '5. Click **Enable** on the new row when you want it enabled (other enabled strategies stay enabled).\n'
-            + '6. Optionally open **Edit** (`/strategy?strategy_id=…`) to refine tabs visually and Save.\n\n'
+            + '4. Use **Import** (enabled only after Validate succeeds) — creates and opens an **Artifact Library Draft** (does not change Recommendations yet).\n'
+            + '5. Review the Draft, publish an immutable version, and bind it to the Portfolio. Enable the binding when it should generate recommendations.\n'
+            + '6. Create a new Library Draft/version for later definition changes; explicitly upgrade the binding after publication.\n\n'
             + '### Common validation / import errors\n\n'
             + '| Message / code | Likely cause |\n'
             + '|----------------|--------------|\n'
@@ -1494,7 +1494,7 @@ const APP_DOCUMENTATION_BASE = [
             {
                 name: 'Multiple enabled strategies',
                 description:
-                    'Enablement rule: more than one STATUS_ACTIVE strategy may exist per portfolio. Import always creates draft; Enable turns a strategy on without archiving others. Archive sets STATUS_ARCHIVED without changing siblings. The editor strategy_id query is UI selection, not exclusive-active.',
+                    'Enablement rule: more than one STATUS_ACTIVE strategy may exist per portfolio. Import creates an Artifact Library Draft; publication and binding are explicit. Enabling a binding does not archive siblings. The editor strategy_id query is UI selection, not exclusive-active.',
             },
             {
                 name: 'No Screener duplication',

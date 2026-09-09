@@ -5,6 +5,10 @@ import test from 'node:test';
 const app = readFileSync(new URL('../../resources/js/src/App.jsx', import.meta.url), 'utf8');
 const navigation = readFileSync(new URL('../../resources/js/src/config/navigation.js', import.meta.url), 'utf8');
 const detail = readFileSync(new URL('../../resources/js/src/pages/ArtifactLibraryDetailPage.jsx', import.meta.url), 'utf8');
+const screenerEditor = readFileSync(new URL('../../resources/js/src/pages/ScreenerEditorPage.jsx', import.meta.url), 'utf8');
+const screenerRegistry = readFileSync(new URL('../../resources/js/src/pages/ScreenerRegistryPage.jsx', import.meta.url), 'utf8');
+const strategyCreate = readFileSync(new URL('../../resources/js/src/components/strategy/CreateStrategyPanel.jsx', import.meta.url), 'utf8');
+const strategyRegistry = readFileSync(new URL('../../resources/js/src/pages/StrategyRegistryPage.jsx', import.meta.url), 'utf8');
 
 test('immutable Artifact Library is routable and discoverable in Trading navigation', () => {
     assert.match(app, /path="\/artifact-library"/);
@@ -39,4 +43,13 @@ test('Draft, share, Fork, archive, and enablement controls retain explicit lifec
     assert.match(detail, />Fork</);
     assert.match(detail, /Archive artifact/);
     assert.match(detail, /artifact-bindings\/\$\{binding\.binding_uuid\}\/enabled/);
+});
+
+test('legacy authoring surfaces redirect new definitions to Library Drafts', () => {
+    assert.match(strategyCreate, /createdArtifactPath/);
+    assert.match(strategyRegistry, /navigate\(path\)/);
+    assert.match(screenerEditor, /created\?\.library_path/);
+    assert.match(screenerRegistry, /Copied shared Screener as Artifact Library Draft/);
+    assert.match(detail, /suggested_binding_settings/);
+    assert.match(detail, /settings: suggestedSettings/);
 });

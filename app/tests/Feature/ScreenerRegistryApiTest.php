@@ -6,6 +6,7 @@ use App\Models\Screener;
 use App\Models\ScreenerVersion;
 use App\Models\User;
 use App\Services\Artifacts\ArtifactType;
+use App\Services\Screener\ScreenerService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -39,14 +40,12 @@ class ScreenerRegistryApiTest extends TestCase
             ],
         ];
 
-        $create = $this->actingAs($user)->postJson('/api/screeners', [
+        $created = app(ScreenerService::class)->create($profile, [
             'name' => 'Registry Test Screen',
             'scope' => 'all_equities',
             'definition_json' => $definition,
         ]);
-        $create->assertCreated();
-        $id = $create->json('data.id') ?? $create->json('id');
-        $this->assertNotNull($id);
+        $id = $created['id'];
 
         $screener = Screener::query()->findOrFail($id);
         $this->assertNotEmpty($screener->slug);
@@ -86,7 +85,12 @@ class ScreenerRegistryApiTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('data.slug', 'imported_copy');
 
-        $this->assertSame(2, Screener::query()->where('profile_id', $profile->id)->count());
+        $this->assertSame(1, Screener::query()->where('profile_id', $profile->id)->count());
+        $this->assertDatabaseHas('portfolio_reusable_artifacts', [
+            'owner_user_id' => $user->id,
+            'artifact_type' => ArtifactType::SCREENER,
+            'slug' => 'imported_copy',
+        ]);
 
         $definition['root']['children'][0]['right']['value'] = 20;
         $this->actingAs($user)
@@ -131,14 +135,13 @@ class ScreenerRegistryApiTest extends TestCase
             ],
         ];
 
-        $create = $this->actingAs($owner)->withHeader('X-Profile-Id', (string) $ownerProfile->id)->postJson('/api/screeners', [
+        $created = app(ScreenerService::class)->create($ownerProfile, [
             'name' => 'Shared Screen',
             'scope' => 'all_equities',
             'definition_json' => $definition,
             'is_shared' => true,
         ]);
-        $create->assertCreated();
-        $sourceId = (int) $create->json('data.id');
+        $sourceId = (int) $created['id'];
 
         $list = $this->actingAs($owner)
             ->withHeader('X-Profile-Id', (string) $otherProfile->id)
@@ -163,9 +166,12 @@ class ScreenerRegistryApiTest extends TestCase
             ->postJson('/api/v1/screener-registry/shared/'.$sourceId.'/import')
             ->assertCreated();
 
-        $this->assertTrue(
-            Screener::query()->where('profile_id', $otherProfile->id)->where('name', 'like', 'Shared Screen%')->exists()
-        );
+        $this->assertFalse(Screener::query()->where('profile_id', $otherProfile->id)->exists());
+        $this->assertDatabaseHas('portfolio_reusable_artifacts', [
+            'owner_user_id' => $owner->id,
+            'artifact_type' => ArtifactType::SCREENER,
+            'origin' => 'fork',
+        ]);
         $this->assertTrue(
             Screener::query()->where('profile_id', $ownerProfile->id)->where('is_shared', true)->exists()
         );

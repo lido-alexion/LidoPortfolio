@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Screener;
 use App\Models\ScreenerRun;
+use App\Services\Artifacts\ScreenerArtifactRegistry;
 use App\Services\Screener\ScreenerBacktestService;
 use App\Services\Screener\ScreenerCatalog;
 use App\Services\Screener\ScreenerRunService;
@@ -18,6 +19,7 @@ class ScreenerController extends Controller
         protected ScreenerService $screeners,
         protected ScreenerRunService $runs,
         protected ScreenerBacktestService $backtests,
+        protected ScreenerArtifactRegistry $artifactRegistry,
     ) {}
 
     public function meta(): JsonResponse
@@ -47,14 +49,14 @@ class ScreenerController extends Controller
 
     public function importShared(int $sourceId): JsonResponse
     {
-        $data = $this->screeners->importShared(\activePortfolio(), $sourceId);
+        $data = $this->artifactRegistry->importShared(\activePortfolio(), $sourceId);
 
         return response()->json(['data' => $data], 201);
     }
 
     public function store(Request $request): JsonResponse
     {
-        $data = $this->screeners->create(\activePortfolio(), $request->all());
+        $data = $this->artifactRegistry->createFromEditorInput(\activePortfolio(), $request->all());
 
         return response()->json(['data' => $data], 201);
     }

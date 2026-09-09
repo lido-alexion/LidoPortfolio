@@ -12,6 +12,7 @@ use App\Models\Setting;
 use App\Models\Stock;
 use App\Models\StockPrice;
 use App\Models\User;
+use App\Services\Screener\ScreenerService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -89,18 +90,17 @@ class ScreenerTest extends TestCase
             ],
         ];
 
-        $create = $this->postJson('/api/screeners', [
+        $created = app(ScreenerService::class)->create($profile, [
             'name' => 'Uptrend SMA',
             'scope' => 'holdings',
             'telegram_enabled' => false,
             'definition_json' => $definition,
         ]);
-        $create->assertCreated();
-        $create->assertJsonPath('data.scope', 'holdings');
-        $create->assertJsonPath('data.max_lookback', 10);
-        $create->assertJsonPath('data.definition_json.root.children.0.left.indicator_version', '1.0.0');
-        $create->assertJsonPath('data.definition_json.root.children.0.right.indicator_version', '1.0.0');
-        $id = $create->json('data.id');
+        $this->assertSame('holdings', $created['scope']);
+        $this->assertSame(10, $created['max_lookback']);
+        $this->assertSame('1.0.0', $created['definition_json']['root']['children'][0]['left']['indicator_version']);
+        $this->assertSame('1.0.0', $created['definition_json']['root']['children'][0]['right']['indicator_version']);
+        $id = $created['id'];
 
         $this->getJson('/api/screeners')
             ->assertOk()
@@ -186,7 +186,7 @@ class ScreenerTest extends TestCase
 
         $this->actingAs($user);
 
-        $create = $this->postJson('/api/screeners', [
+        $created = app(ScreenerService::class)->create($profile, [
             'name' => 'Needs history',
             'scope' => 'holdings',
             'telegram_enabled' => false,
@@ -205,8 +205,7 @@ class ScreenerTest extends TestCase
                 ],
             ],
         ]);
-        $create->assertCreated();
-        $id = $create->json('data.id');
+        $id = $created['id'];
 
         $run = $this->postJson("/api/screeners/{$id}/run");
         $run->assertOk();
@@ -242,15 +241,14 @@ class ScreenerTest extends TestCase
 
         $this->actingAs($user)->withHeader('X-Profile-Id', (string) $ownerProfile->id);
 
-        $create = $this->postJson('/api/screeners', [
+        $created = app(ScreenerService::class)->create($ownerProfile, [
             'name' => 'Shared RSI',
             'scope' => 'holdings',
             'is_shared' => true,
             'definition_json' => $definition,
         ]);
-        $create->assertCreated();
-        $create->assertJsonPath('data.is_shared', true);
-        $sharedId = $create->json('data.id');
+        $this->assertTrue($created['is_shared']);
+        $sharedId = $created['id'];
 
         $this->withHeader('X-Profile-Id', (string) $otherProfile->id)
             ->getJson('/api/screeners/shared')
@@ -267,14 +265,14 @@ class ScreenerTest extends TestCase
         $import = $this->withHeader('X-Profile-Id', (string) $otherProfile->id)
             ->postJson("/api/screeners/shared/{$sharedId}/import");
         $import->assertCreated();
-        $import->assertJsonPath('data.is_shared', false);
-        $import->assertJsonPath('data.profile_id', $otherProfile->id);
-        $import->assertJsonPath('data.name', 'Shared RSI');
+        $import->assertJsonPath('data.status', 'draft');
+        $import->assertJsonPath('data.metadata.origin', 'fork');
+        $import->assertJsonPath('data.name', 'Shared RSI (copy)');
 
         $this->withHeader('X-Profile-Id', (string) $otherProfile->id)
             ->getJson('/api/screeners')
             ->assertOk()
-            ->assertJsonPath('count', 1);
+            ->assertJsonPath('count', 0);
 
         $this->withHeader('X-Profile-Id', (string) $ownerProfile->id)
             ->getJson('/api/screeners/shared')
@@ -406,13 +404,12 @@ class ScreenerTest extends TestCase
             ],
         ];
 
-        $create = $this->postJson('/api/screeners', [
+        $created = app(ScreenerService::class)->create($profile, [
             'name' => 'Clearable screen',
             'scope' => 'holdings',
             'definition_json' => $definition,
         ]);
-        $create->assertCreated();
-        $id = $create->json('data.id');
+        $id = $created['id'];
 
         $this->postJson("/api/screeners/{$id}/run")->assertOk();
         $this->getJson("/api/screeners/{$id}/runs")
@@ -437,7 +434,7 @@ class ScreenerTest extends TestCase
             'email' => 'scr-idx-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
-        $this->defaultPortfolioFor($user);
+        $profile = $this->defaultPortfolioFor($user);
 
         $inIndex = Stock::query()->create([
             'symbol' => 'IDXIN'.strtoupper(Str::random(2)),
@@ -512,18 +509,17 @@ class ScreenerTest extends TestCase
             'definition_json' => $definition,
         ])->assertStatus(422);
 
-        $create = $this->postJson('/api/screeners', [
+        $created = app(ScreenerService::class)->create($profile, [
             'name' => 'Nifty50 screen',
             'scope' => 'index',
             'index_symbol' => 'nifty50',
             'definition_json' => $definition,
             'telegram_enabled' => false,
         ]);
-        $create->assertCreated();
-        $create->assertJsonPath('data.scope', 'index');
-        $create->assertJsonPath('data.index_symbol', 'NIFTY50');
-        $create->assertJsonPath('data.index.symbol', 'NIFTY50');
-        $id = $create->json('data.id');
+        $this->assertSame('index', $created['scope']);
+        $this->assertSame('NIFTY50', $created['index_symbol']);
+        $this->assertSame('NIFTY50', $created['index']['symbol']);
+        $id = $created['id'];
 
         $run = $this->postJson("/api/screeners/{$id}/run")->assertOk();
         $run->assertJsonPath('data.stats.scanned', 1);
@@ -542,7 +538,7 @@ class ScreenerTest extends TestCase
             'email' => 'scr-empty-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
-        $this->defaultPortfolioFor($user);
+        $profile = $this->defaultPortfolioFor($user);
         $this->actingAs($user);
 
         $definition = [
@@ -554,14 +550,14 @@ class ScreenerTest extends TestCase
             ],
         ];
 
-        $create = $this->postJson('/api/screeners', [
+        $created = app(ScreenerService::class)->create($profile, [
             'name' => 'Empty Nifty Bank',
             'scope' => 'index',
             'index_symbol' => 'NIFTYBANK',
             'definition_json' => $definition,
             'telegram_enabled' => false,
-        ])->assertCreated();
-        $id = $create->json('data.id');
+        ]);
+        $id = $created['id'];
 
         $run = $this->postJson("/api/screeners/{$id}/run")->assertOk();
         $run->assertJsonPath('data.stats.scanned', 0);
@@ -580,7 +576,7 @@ class ScreenerTest extends TestCase
         $profile = $this->defaultPortfolioFor($user);
         $this->actingAs($user);
 
-        $create = $this->postJson('/api/screeners', [
+        $created = app(ScreenerService::class)->create($profile, [
             'name' => 'Compare screen',
             'scope' => 'holdings',
             'definition_json' => [
@@ -597,8 +593,8 @@ class ScreenerTest extends TestCase
                     ],
                 ],
             ],
-        ])->assertCreated();
-        $screenerId = (int) $create->json('data.id');
+        ]);
+        $screenerId = (int) $created['id'];
 
         $stockA = Stock::query()->create([
             'symbol' => 'AAA',
@@ -726,7 +722,7 @@ class ScreenerTest extends TestCase
             'email' => 'scr-wf-'.Str::random(8).'@example.com',
             'password' => 'password123',
         ]);
-        $this->defaultPortfolioFor($user);
+        $profile = $this->defaultPortfolioFor($user);
         $this->actingAs($user);
 
         $definition = [
@@ -745,13 +741,13 @@ class ScreenerTest extends TestCase
             ],
         ];
 
-        $create = $this->postJson('/api/screeners', [
+        $created = app(ScreenerService::class)->create($profile, [
             'name' => 'Weighted screen',
             'scope' => 'holdings',
             'definition_json' => $definition,
-        ])->assertCreated();
+        ]);
 
-        $this->assertSame(0.5, $create->json('data.definition_json.root.children.0.weight_factor'));
+        $this->assertSame(0.5, $created['definition_json']['root']['children'][0]['weight_factor']);
 
         $this->postJson('/api/screeners', [
             'name' => 'Bad weight',
@@ -842,13 +838,13 @@ class ScreenerTest extends TestCase
             ],
         ];
 
-        $create = $this->postJson('/api/screeners', [
+        $created = app(ScreenerService::class)->create($profile, [
             'name' => 'Beats index range',
             'scope' => 'holdings',
             'definition_json' => $definition,
-        ])->assertCreated();
-        $this->assertSame('NIFTY50', $create->json('data.definition_json.root.left.entity'));
-        $id = $create->json('data.id');
+        ]);
+        $this->assertSame('NIFTY50', $created['definition_json']['root']['left']['entity']);
+        $id = $created['id'];
 
         $run = $this->postJson("/api/screeners/{$id}/run");
         $run->assertOk();
@@ -943,7 +939,7 @@ class ScreenerTest extends TestCase
             ->assertJsonPath('data.backtest_scopes.0', 'holdings')
             ->assertJsonFragment(['id' => '15d', 'label' => '15 days']);
 
-        $create = $this->postJson('/api/screeners', [
+        $created = app(ScreenerService::class)->create($profile, [
             'name' => 'Backtest screen',
             'scope' => 'holdings',
             'definition_json' => [
@@ -961,8 +957,8 @@ class ScreenerTest extends TestCase
                     ],
                 ],
             ],
-        ])->assertCreated();
-        $id = (int) $create->json('data.id');
+        ]);
+        $id = (int) $created['id'];
         $token = 'test-backtest-session-'.Str::random(8);
 
         $start = $this->postJson("/api/screeners/{$id}/backtest", [
@@ -998,7 +994,7 @@ class ScreenerTest extends TestCase
             ->assertOk()
             ->assertJsonFragment(['backtest_scopes' => ['holdings', 'watchlist', 'all_equities', 'index']]);
 
-        $universeCreate = $this->postJson('/api/screeners', [
+        $universeCreated = app(ScreenerService::class)->create($profile, [
             'name' => 'Universe backtest',
             'scope' => 'all_equities',
             'definition_json' => [
@@ -1009,8 +1005,8 @@ class ScreenerTest extends TestCase
                     'right' => ['type' => 'constant', 'value' => 0],
                 ],
             ],
-        ])->assertCreated();
-        $universeId = (int) $universeCreate->json('data.id');
+        ]);
+        $universeId = (int) $universeCreated['id'];
 
         $uniStart = $this->postJson("/api/screeners/{$universeId}/backtest", [
             'range' => '15d',
@@ -1095,7 +1091,7 @@ class ScreenerTest extends TestCase
 
         $this->actingAs($user);
 
-        $create = $this->postJson('/api/screeners', [
+        $created = app(ScreenerService::class)->create($profile, [
             'name' => 'Run cache screen',
             'scope' => 'holdings',
             'definition_json' => [
@@ -1106,8 +1102,8 @@ class ScreenerTest extends TestCase
                     'right' => ['type' => 'constant', 'value' => 0],
                 ],
             ],
-        ])->assertCreated();
-        $id = (int) $create->json('data.id');
+        ]);
+        $id = (int) $created['id'];
 
         // A completed run (manual here; scheduled cron runs use the same path)
         // writes today's result into the per-date backtest cache.
@@ -1206,12 +1202,12 @@ class ScreenerTest extends TestCase
                 'right' => ['type' => 'constant', 'value' => 0],
             ],
         ];
-        $create = $this->postJson('/api/screeners', [
+        $created = app(ScreenerService::class)->create($profile, [
             'name' => 'Backtest cache screen',
             'scope' => 'holdings',
             'definition_json' => $definition,
-        ])->assertCreated();
-        $id = (int) $create->json('data.id');
+        ]);
+        $id = (int) $created['id'];
         $token = 'bt-cache-'.Str::random(8);
 
         $runBacktest = function (string $sessionToken) use ($id) {
