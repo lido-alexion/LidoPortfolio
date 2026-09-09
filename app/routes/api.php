@@ -214,6 +214,7 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::post('/portfolio/rebuild-history', [PortfolioHistoryController::class, 'rebuild']);
     Route::get('/portfolio/snapshots', [PortfolioHistoryController::class, 'snapshots']);
     Route::get('/portfolio/historical-holdings', [HistoricalHoldingsController::class, 'show']);
+    Route::get('/portfolio/compare', [HistoricalHoldingsController::class, 'compare']);
     Route::get('/analytics/portfolio', [AnalyticsController::class, 'portfolio']);
     Route::get('/analytics/stocks/{stock}', [AnalyticsController::class, 'stock']);
     Route::post('/analytics/explore', [ExplorerAnalyticsController::class, 'analyze'])
