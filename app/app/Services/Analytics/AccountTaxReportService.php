@@ -99,10 +99,15 @@ final class AccountTaxReportService
             ->whereBetween('received_on', [$from, $to])->where('created_at', '<=', $cutoff)->orderBy('received_on')->get();
         $losses = TaxLoss::query()->where('user_id', $user->id)
             ->where('financial_year', $financialYear)->where('created_at', '<=', $cutoff)->orderBy('loss_type')->get();
+        $confirmedCarryForwardLosses = TaxLoss::query()->where('user_id', $user->id)
+            ->where('financial_year', '<', $financialYear)->where('status', 'confirmed')
+            ->where('created_at', '<=', $cutoff)->orderBy('financial_year')->orderBy('loss_type')->get();
         $shortTerm = collect($realized)->where('term', 'short_term')->sum('gain');
         $longTerm = collect($realized)->where('term', 'long_term')->sum('gain');
         $limitations = array_values(array_unique($limitations));
-        [$estimatedTax, $appliedRules, $taxLimitations] = $this->estimateTax($realized, $losses);
+        [$estimatedTax, $appliedRules, $taxLimitations] = $this->estimateTax(
+            $realized, $confirmedCarryForwardLosses, $to,
+        );
         $limitations = array_values(array_unique([...$limitations, ...$taxLimitations]));
 
         return [
@@ -121,6 +126,7 @@ final class AccountTaxReportService
             'open_lots_informational' => $openLots,
             'dividends' => $dividends,
             'losses' => $losses,
+            'confirmed_carryforward_losses' => $confirmedCarryForwardLosses,
             'tax_rule_versions' => $appliedRules,
             'completeness' => $limitations === [] ? 'complete' : 'incomplete',
             'limitations' => $limitations,
@@ -138,17 +144,15 @@ final class AccountTaxReportService
      * @param array<int, array<string, mixed>> $realized
      * @return array{float|null, array<int, string>, array<int, string>}
      */
-    private function estimateTax(array $realized, $losses): array
+    private function estimateTax(array $realized, $confirmedCarryForwardLosses, string $periodEnd): array
     {
         if ($realized === []) {
             return [0.0, [], []];
         }
-        if ($losses->isNotEmpty() || collect($realized)->contains(fn (array $row) => $row['gain'] < 0)) {
-            return [null, [], ['loss_setoff_requires_versioned_rule_engine']];
-        }
 
         $buckets = [];
         $applied = [];
+        $currentLosses = ['short_term' => 0.0, 'long_term' => 0.0];
         foreach ($realized as $row) {
             $rule = TaxRuleVersion::query()
                 ->whereDate('effective_from', '<=', $row['disposed_on'])
@@ -164,7 +168,37 @@ final class AccountTaxReportService
             $applied[] = $rule->version;
             $key = $rule->id.':'.$term;
             $buckets[$key] ??= ['term' => $term, 'gain' => 0.0, 'rules' => $rule->rules];
-            $buckets[$key]['gain'] += max(0.0, (float) $row['gain']);
+            $gain = (float) $row['gain'];
+            if ($gain < 0.0) {
+                $currentLosses[$term] += abs($gain);
+            } else {
+                $buckets[$key]['gain'] += $gain;
+            }
+        }
+
+        $hasLosses = array_sum($currentLosses) > 0.0 || $confirmedCarryForwardLosses->isNotEmpty();
+        if ($hasLosses) {
+            if (count(array_unique($applied)) !== 1) {
+                return [null, array_values(array_unique($applied)), ['loss_setoff_across_multiple_rule_versions_not_supported']];
+            }
+            $setoffRule = TaxRuleVersion::query()
+                ->whereDate('effective_from', '<=', $periodEnd)
+                ->where(fn ($query) => $query->whereNull('effective_to')->orWhereDate('effective_to', '>=', $periodEnd))
+                ->first();
+            $setoff = $setoffRule?->rules['loss_setoff'] ?? null;
+            if (! is_array($setoff)) {
+                return [null, array_values(array_unique($applied)), ['loss_setoff_rule_not_configured']];
+            }
+            $targetFinancialYearStart = (int) substr($periodEnd, 0, 4) - 1;
+            $carryForwardYears = (int) ($setoff['carry_forward_years'] ?? 0);
+            foreach ($confirmedCarryForwardLosses as $loss) {
+                $lossFinancialYearStart = (int) substr($loss->financial_year, 0, 4);
+                if (($targetFinancialYearStart - $lossFinancialYearStart) > $carryForwardYears) {
+                    continue;
+                }
+                $currentLosses[$loss->loss_type] = ($currentLosses[$loss->loss_type] ?? 0.0) + (float) $loss->amount;
+            }
+            $buckets = $this->applyLossSetoff($buckets, $currentLosses, $setoff);
         }
 
         $tax = 0.0;
@@ -176,6 +210,33 @@ final class AccountTaxReportService
         }
 
         return [round($tax, 4), array_values(array_unique($applied)), []];
+    }
+
+    /**
+     * @param array<string, array<string, mixed>> $buckets
+     * @param array<string, float> $losses
+     * @param array<string, mixed> $rules
+     * @return array<string, array<string, mixed>>
+     */
+    private function applyLossSetoff(array $buckets, array $losses, array $rules): array
+    {
+        foreach (['short_term', 'long_term'] as $lossType) {
+            $remaining = $losses[$lossType] ?? 0.0;
+            $allowed = $rules[$lossType.'_against'] ?? [];
+            foreach ($allowed as $gainType) {
+                foreach ($buckets as &$bucket) {
+                    if ($remaining <= 0.0 || $bucket['term'] !== $gainType) {
+                        continue;
+                    }
+                    $used = min($remaining, $bucket['gain']);
+                    $bucket['gain'] -= $used;
+                    $remaining -= $used;
+                }
+                unset($bucket);
+            }
+        }
+
+        return $buckets;
     }
 
     /** @return array{string, string} */

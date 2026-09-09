@@ -7,6 +7,7 @@ use App\Models\Dividend;
 use App\Models\Stock;
 use App\Models\Transaction;
 use App\Models\TaxRuleVersion;
+use App\Models\TaxLoss;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -108,5 +109,42 @@ class V5AccountTaxReportApiTest extends TestCase
             ->assertJsonPath('data.summary.estimated_tax', 10)
             ->assertJsonPath('data.tax_rule_versions.0', 'test-rule-1')
             ->assertJsonPath('data.completeness', 'complete');
+    }
+
+    public function test_confirmed_carryforward_loss_is_applied_only_by_versioned_setoff_rule(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        $stock = Stock::query()->create(['symbol' => 'LOSS', 'exchange' => 'NSE', 'name' => 'Loss Setoff']);
+        Transaction::query()->create([
+            'profile_id' => $profile->id, 'stock_id' => $stock->id, 'type' => 'buy',
+            'quantity' => 1, 'price' => 100, 'fees' => 0, 'transaction_date' => '2025-04-02',
+        ]);
+        Transaction::query()->create([
+            'profile_id' => $profile->id, 'stock_id' => $stock->id, 'type' => 'sell',
+            'quantity' => 1, 'price' => 200, 'fees' => 0, 'transaction_date' => '2025-05-01',
+        ]);
+        TaxLoss::query()->create([
+            'user_id' => $user->id, 'financial_year' => '2024-25', 'loss_type' => 'short_term',
+            'amount' => 40, 'status' => 'confirmed', 'created_by' => $user->id,
+        ]);
+        TaxRuleVersion::query()->create([
+            'version' => 'setoff-test', 'effective_from' => '2025-04-01',
+            'rules' => [
+                'long_term_holding_days' => 365, 'short_term_rate' => 0.2, 'long_term_rate' => 0.1,
+                'long_term_exemption' => 0, 'fee_classifications' => [],
+                'loss_setoff' => [
+                    'short_term_against' => ['short_term', 'long_term'],
+                    'long_term_against' => ['long_term'],
+                    'carry_forward_years' => 8,
+                ],
+            ],
+        ]);
+
+        $this->actingAs($user)->withProfileHeader($user, $profile)
+            ->getJson('/api/tax/report?financial_year=2025-26')
+            ->assertOk()
+            ->assertJsonPath('data.summary.estimated_tax', 12)
+            ->assertJsonCount(1, 'data.confirmed_carryforward_losses');
     }
 }

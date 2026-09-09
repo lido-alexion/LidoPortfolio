@@ -31,6 +31,11 @@ class TaxRuleVersionController extends Controller
             'rules.long_term_exemption' => ['nullable', 'numeric', 'min:0'],
             'rules.fee_classifications' => ['required', 'array'],
             'rules.loss_setoff' => ['nullable', 'array'],
+            'rules.loss_setoff.short_term_against' => ['required_with:rules.loss_setoff', 'array'],
+            'rules.loss_setoff.short_term_against.*' => ['string', 'in:short_term,long_term'],
+            'rules.loss_setoff.long_term_against' => ['required_with:rules.loss_setoff', 'array'],
+            'rules.loss_setoff.long_term_against.*' => ['string', 'in:long_term'],
+            'rules.loss_setoff.carry_forward_years' => ['required_with:rules.loss_setoff', 'integer', 'min:0', 'max:20'],
         ]);
 
         $overlap = TaxRuleVersion::query()
