@@ -7,6 +7,7 @@ use App\Models\Dividend;
 use App\Models\OpeningTaxLot;
 use App\Models\Stock;
 use App\Models\TaxLoss;
+use App\Services\Analytics\AccountTaxReportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -15,6 +16,23 @@ use Illuminate\Validation\ValidationException;
 
 class TaxEvidenceController extends Controller
 {
+    public function __construct(private AccountTaxReportService $reports) {}
+
+    public function report(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'financial_year' => ['required', 'regex:/^\\d{4}-\\d{2}$/'],
+            'portfolio_ids' => ['sometimes', 'array'],
+            'portfolio_ids.*' => ['integer', 'distinct'],
+        ]);
+
+        return response()->json(['data' => $this->reports->calculate(
+            $request->user(),
+            $validated['financial_year'],
+            array_key_exists('portfolio_ids', $validated) ? $validated['portfolio_ids'] : null,
+        )]);
+    }
+
     public function dividends(Request $request): JsonResponse
     {
         $rows = Dividend::query()

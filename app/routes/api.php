@@ -233,6 +233,7 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::post('/tax/losses', [TaxEvidenceController::class, 'storeTaxLoss']);
     Route::get('/tax/opening-lots', [TaxEvidenceController::class, 'openingLots']);
     Route::post('/tax/opening-lots', [TaxEvidenceController::class, 'storeOpeningLot']);
+    Route::get('/tax/report', [TaxEvidenceController::class, 'report']);
     Route::post('/analytics/explore', [ExplorerAnalyticsController::class, 'analyze'])
         ->middleware('throttle:analytics-explore');
 
