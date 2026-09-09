@@ -14,3 +14,11 @@ test('cash statement labels SPEC-004 loan recall bridge types', () => {
     assert.doesNotMatch(source, /LOAN_IN/);
     assert.doesNotMatch(source, /RECALL_OUT/);
 });
+
+test('V5 cash statement uses effective-date balances and requires adjustment reasons', () => {
+    assert.match(source, /api\.get\('\/cash\/statement'/);
+    assert.match(source, /entry\.running_balance/);
+    assert.match(source, /fmtWhen\(entry\.created_at\)/);
+    assert.match(source, /Adjustment reason is required/);
+    assert.match(source, /required=\{op === 'adjust'\}/);
+});

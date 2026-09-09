@@ -68,6 +68,7 @@ export default function CashManagementPage() {
 
     const [summary, setSummary] = useState(null);
     const [ledger, setLedger] = useState([]);
+    const [statement, setStatement] = useState(null);
     const [showReservations, setShowReservations] = useState(false);
     const [op, setOp] = useState('deposit');
     const [amount, setAmount] = useState('');
@@ -84,6 +85,7 @@ export default function CashManagementPage() {
         if (!profileId) {
             setSummary(null);
             setLedger([]);
+            setStatement(null);
         }
     }, [profileId]);
 
@@ -98,11 +100,13 @@ export default function CashManagementPage() {
         request: async () => {
             const [summaryRes, ledgerRes] = await Promise.all([
                 api.get('/cash', { params: { include_reservations: true }, skipErrorToast: true }),
-                api.get('/cash/ledger', { params: { limit: 100 }, skipErrorToast: true }),
+                api.get('/cash/statement', { params: { per_page: 100 }, skipErrorToast: true }),
             ]);
             const nextSummary = summaryRes.data?.data || null;
-            const nextLedger = Array.isArray(ledgerRes.data?.data) ? ledgerRes.data.data : [];
+            const nextStatement = ledgerRes.data?.data || null;
+            const nextLedger = Array.isArray(nextStatement?.entries) ? nextStatement.entries : [];
             setSummary(nextSummary);
+            setStatement(nextStatement);
             setLedger(nextLedger);
             const strategies = Array.isArray(nextSummary?.strategies) ? nextSummary.strategies : [];
             setAllocDraft(strategies.map((row) => ({
@@ -143,6 +147,10 @@ export default function CashManagementPage() {
         }
         if (!transactionDate) {
             showToast('Select a transaction date', 'danger');
+            return;
+        }
+        if (op === 'adjust' && !remarks.trim()) {
+            showToast('Adjustment reason is required', 'danger');
             return;
         }
         setBusy(true);
@@ -489,15 +497,18 @@ export default function CashManagementPage() {
                                     />
                                 </div>
                                 <div className="col-12 col-md-4">
-                                    <label className="form-label small mb-0" htmlFor="cash-remarks">Remarks</label>
+                                    <label className="form-label small mb-0" htmlFor="cash-remarks">
+                                        Remarks{op === 'adjust' ? ' (required)' : ''}
+                                    </label>
                                     <input
                                         id="cash-remarks"
                                         type="text"
                                         className="form-control form-control-sm"
                                         value={remarks}
                                         onChange={(e) => setRemarks(e.target.value)}
-                                        placeholder="Optional remarks"
+                                        placeholder={op === 'adjust' ? 'Reason for this immutable correction' : 'Optional remarks'}
                                         maxLength={500}
+                                        required={op === 'adjust'}
                                     />
                                 </div>
                                 <div className="col-auto">
@@ -510,7 +521,14 @@ export default function CashManagementPage() {
                     </div>
 
                     <div className="card">
-                        <div className="card-header">Cash account statement</div>
+                        <div className="card-header d-flex flex-wrap justify-content-between gap-2">
+                            <span>Cash account statement</span>
+                            {statement ? (
+                                <span className="small text-muted">
+                                    Opening {money(statement.opening_balance)} · Closing {money(statement.closing_balance)}
+                                </span>
+                            ) : null}
+                        </div>
                         <div className="card-body p-0">
                             {ledger.length === 0 ? (
                                 <p className="text-muted mb-0 p-3">No cash ledger entries yet. Deposit cash to start.</p>
@@ -520,10 +538,11 @@ export default function CashManagementPage() {
                                         <thead>
                                             <tr>
                                                 <th>Date</th>
+                                                <th>Recorded</th>
                                                 <th>Type</th>
-                                                <th>Kind</th>
+                                                <th>Category</th>
                                                 <th className="text-end">Amount</th>
-                                                <th className="text-end">Balance after</th>
+                                                <th className="text-end">Running balance</th>
                                                 <th>Remarks</th>
                                                 <th>Links</th>
                                             </tr>
@@ -532,14 +551,13 @@ export default function CashManagementPage() {
                                             {ledger.map((entry) => (
                                                 <tr key={entry.id}>
                                                     <td className="small">{fmtEntryDate(entry)}</td>
+                                                    <td className="small text-muted">{fmtWhen(entry.created_at)}</td>
                                                     <td>{entryTypeLabel(entry.entry_type)}</td>
-                                                    <td className="small">
-                                                        {entry.movement_label || entry.movement_kind || '—'}
-                                                    </td>
+                                                    <td className="small text-capitalize">{String(entry.category || 'internal').replace('_', ' ')}</td>
                                                     <td className={`text-end ${Number(entry.amount) < 0 ? 'text-danger' : Number(entry.amount) > 0 ? 'text-success' : ''}`}>
                                                         {money(entry.amount)}
                                                     </td>
-                                                    <td className="text-end">{money(entry.balance_after)}</td>
+                                                    <td className="text-end">{money(entry.running_balance)}</td>
                                                     <td className="small">{entry.reason || '—'}</td>
                                                     <td className="small text-muted">
                                                         {entry.transaction_id ? `Tx #${entry.transaction_id}` : ''}
