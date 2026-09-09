@@ -10,6 +10,8 @@
 
 ---
 
+> **V5 supersession (2026-09-09):** This document records the original V3 migration. Under the frozen V5 Trading Artifact Framework, new classic-editor creates, Registry imports, and shared copies create account-owned Artifact Library Drafts and no runnable Portfolio Screener row. Existing unmapped rows remain migration-compatible; mapped rows are read-only projections. Publish and bind explicitly. See [`../../V5-FEAT-008-IMPLEMENTATION-STATUS.md`](../../V5-FEAT-008-IMPLEMENTATION-STATUS.md).
+
 # 1. Goal
 
 Evolve existing Screeners into **first-class reusable artifacts** without redesigning Screener execution.

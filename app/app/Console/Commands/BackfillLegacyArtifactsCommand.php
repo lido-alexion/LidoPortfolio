@@ -8,7 +8,9 @@ use Illuminate\Console\Command;
 
 class BackfillLegacyArtifactsCommand extends Command
 {
-    protected $signature = 'portfolio:backfill-reusable-artifacts {--profile= : Limit to one Portfolio profile id}';
+    protected $signature = 'portfolio:backfill-reusable-artifacts
+        {--profile= : Limit to one Portfolio profile id}
+        {--dry-run : Validate and inventory the exact backfill, then roll back every write}';
 
     protected $description = 'Idempotently map legacy Screeners and Strategies into immutable reusable artifacts and bindings';
 
@@ -22,8 +24,13 @@ class BackfillLegacyArtifactsCommand extends Command
 
             return self::FAILURE;
         }
-        $result = $service->backfill($profile);
-        $this->info("Artifact backfill: {$result['created']} created; {$result['skipped']} skipped; {$result['failed']} failed.");
+        $dryRun = (bool) $this->option('dry-run');
+        $result = $dryRun ? $service->preview($profile) : $service->backfill($profile);
+        if ($dryRun) {
+            $this->info("Artifact backfill dry run: {$result['created']} would be created; {$result['skipped']} already mapped; {$result['failed']} failed. No changes were committed.");
+        } else {
+            $this->info("Artifact backfill: {$result['created']} created; {$result['skipped']} skipped; {$result['failed']} failed.");
+        }
         foreach ($result['failures'] as $failure) {
             $this->warn("{$failure['type']} #{$failure['legacy_id']}: {$failure['error']}");
         }

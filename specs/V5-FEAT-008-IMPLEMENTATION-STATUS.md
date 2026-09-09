@@ -25,10 +25,11 @@
 - Screener and Strategy backtests retain exact artifact-version/binding-revision evidence and immutable definition/config snapshots across resumable chunks, so a later binding upgrade cannot reinterpret an in-flight simulation.
 - Mapped legacy editors/registries are explicitly read-only compatibility projections and link to the authoritative Artifact Library; legacy mutation/enable/archive/delete endpoints reject lifecycle bypasses.
 - All remaining legacy Strategy/Screener creation, validated JSON import and shared-copy authoring paths now create account-owned Artifact Library Drafts without creating runnable unmapped rows. New Screener Drafts retain suggested Portfolio scope, watchlist/index, schedule and notification settings for the later explicit bind transaction.
+- The rollout command supports an exact transactional `--dry-run` inventory, including per-row failures and a failing exit code, before any committing run. The tested operational and restore procedure is documented in [`V5-FEAT-008-ROLLOUT-RUNBOOK.md`](V5-FEAT-008-ROLLOUT-RUNBOOK.md).
 
 Focused evidence at this checkpoint:
 
-- Dedicated Artifact lifecycle/runtime/API suite: **71 tests / 421 assertions passed** after the authoring cutover.
+- Dedicated Artifact lifecycle/runtime/API/rollout suite: **73 tests / 434 assertions passed** after the authoring cutover and dry-run addition.
 - Combined Screener behavior, authoring, registry and sharing suite: **38 tests / 359 assertions passed**.
 - Frontend JavaScript groups: **144 contract/unit tests + 59 component tests passed**; TypeScript no-emit passed.
 - Earlier checkpoint production Vite build passed; the final build remains part of the closure gate below.
@@ -36,7 +37,7 @@ Focused evidence at this checkpoint:
 
 ## Material work still required
 
-1. **Operational rollout evidence.** Execute the explicit backfill against representative/restored application data, inventory any invalid rows, and document remediation/rollback procedure before production rollout.
+1. **Operational rollout evidence.** Execute the documented dry-run and explicit backfill against representative/restored application data, inventory and disposition any invalid rows, and retain the runbook evidence. The current local application database was unreachable at the 2026-09-09 checkpoint, so this data-backed gate has not yet passed.
 2. **Final verification.** Run the full backend/frontend/typecheck/build/migration/security/trading suites and re-audit every frozen acceptance criterion before changing FEAT-008 to COMPLETE.
 
 ## Closure decision

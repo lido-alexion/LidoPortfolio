@@ -10,6 +10,8 @@
 
 ---
 
+> **V5 supersession (2026-09-09):** This document describes the initial Registry infrastructure phase. The current authoritative lifecycle is the immutable V5 Artifact Library: new legacy Registry/editor authoring creates Library Drafts, publication and Portfolio binding are explicit, mapped legacy rows are read-only runtime projections, and execution pins exact artifact/binding evidence. See [`../../V5-FEAT-008-Trading-Artifact-Framework.md`](../../V5-FEAT-008-Trading-Artifact-Framework.md).
+
 # 1. What shipped in this phase
 
 Additive **Trading Artifact Registry** infrastructure:

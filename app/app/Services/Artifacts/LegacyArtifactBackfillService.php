@@ -38,6 +38,20 @@ final class LegacyArtifactBackfillService
         return $result;
     }
 
+    /** @return array{created:int,skipped:int,failed:int,failures:list<array<string,mixed>>} */
+    public function preview(?PortfolioProfile $onlyProfile = null): array
+    {
+        $initialTransactionLevel = DB::transactionLevel();
+        DB::beginTransaction();
+        try {
+            return $this->backfill($onlyProfile);
+        } finally {
+            while (DB::transactionLevel() > $initialTransactionLevel) {
+                DB::rollBack();
+            }
+        }
+    }
+
     private function backfillScreener(PortfolioProfile $profile, Screener $screener): bool
     {
         if ($screener->reusable_artifact_id !== null) {

@@ -10,6 +10,8 @@
 
 ---
 
+> **V5 supersession (2026-09-09):** This document records the original V3 migration. Under the frozen V5 Trading Artifact Framework, new Strategy creates and Registry imports create account-owned Artifact Library Drafts and no runnable Portfolio Strategy row. Existing unmapped rows remain migration-compatible; mapped rows are read-only projections. A Portfolio may enable multiple explicitly bound Strategies. See [`../../V5-FEAT-008-IMPLEMENTATION-STATUS.md`](../../V5-FEAT-008-IMPLEMENTATION-STATUS.md).
+
 # 1. Migration summary
 
 ## What changed

@@ -100,6 +100,55 @@ class LegacyArtifactBackfillServiceTest extends TestCase
         $this->assertNull($two->fresh()->reusable_artifact_id);
     }
 
+    public function test_dry_run_inventories_exact_changes_and_rolls_back_every_write(): void
+    {
+        $owner = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($owner);
+        $screener = $this->legacyScreener($profile->id);
+        $strategy = $this->legacyStrategy($profile->id, $screener);
+
+        $this->artisan('portfolio:backfill-reusable-artifacts', [
+            '--profile' => $profile->id,
+            '--dry-run' => true,
+        ])->expectsOutput('Artifact backfill dry run: 2 would be created; 0 already mapped; 0 failed. No changes were committed.')
+            ->assertSuccessful();
+
+        $this->assertNull($screener->fresh()->reusable_artifact_id);
+        $this->assertNull($strategy->fresh()->reusable_artifact_id);
+        $this->assertSame(0, ReusableArtifact::query()->where('owner_user_id', $owner->id)->count());
+        $this->assertSame(0, ArtifactBinding::query()->where('profile_id', $profile->id)->count());
+
+        $result = app(LegacyArtifactBackfillService::class)->backfill($profile);
+        $this->assertSame(2, $result['created']);
+        $this->assertSame(0, $result['failed']);
+    }
+
+    public function test_dry_run_returns_failure_for_invalid_rows_without_retaining_partial_data(): void
+    {
+        $owner = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($owner);
+        $invalid = Screener::query()->create([
+            'profile_id' => $profile->id,
+            'name' => 'Invalid preview row',
+            'slug' => 'invalid_preview_row',
+            'artifact_version' => 1,
+            'artifact_status' => 'active',
+            'scope' => 'all_equities',
+            'definition_json' => ['root' => []],
+            'is_enabled' => true,
+        ]);
+
+        $this->artisan('portfolio:backfill-reusable-artifacts', [
+            '--profile' => $profile->id,
+            '--dry-run' => true,
+        ])->expectsOutput('Artifact backfill dry run: 0 would be created; 0 already mapped; 1 failed. No changes were committed.')
+            ->assertFailed();
+
+        $this->assertNull($invalid->fresh()->reusable_artifact_id);
+        $this->assertSame(0, ReusableArtifact::query()->where('owner_user_id', $owner->id)->count());
+        $this->assertSame(0, ArtifactBinding::query()->where('profile_id', $profile->id)->count());
+    }
+
     public function test_mapped_legacy_rows_are_read_only_compatibility_projections(): void
     {
         $profile = $this->defaultPortfolioFor(User::factory()->create());
