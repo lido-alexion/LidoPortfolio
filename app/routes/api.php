@@ -32,6 +32,7 @@ use App\Http\Controllers\Api\PatternScanController;
 use App\Http\Controllers\Api\PortfolioController;
 use App\Http\Controllers\Api\PortfolioHistoryController;
 use App\Http\Controllers\Api\PortfolioPerformanceController;
+use App\Http\Controllers\Api\PortfolioAttributionController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\ScreenerBacktestController;
 use App\Http\Controllers\Api\ScreenerController;
@@ -228,6 +229,7 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::get('/analysis/preferences', [AnalysisPreferenceController::class, 'show']);
     Route::put('/analysis/preferences', [AnalysisPreferenceController::class, 'update']);
     Route::get('/analysis/performance', [PortfolioPerformanceController::class, 'show']);
+    Route::get('/analysis/attribution', [PortfolioAttributionController::class, 'show']);
     Route::get('/tax/dividends', [TaxEvidenceController::class, 'dividends']);
     Route::post('/tax/dividends', [TaxEvidenceController::class, 'storeDividend']);
     Route::get('/tax/losses', [TaxEvidenceController::class, 'taxLosses']);
