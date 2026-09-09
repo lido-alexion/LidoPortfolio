@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AdminStockController;
 use App\Http\Controllers\Api\AlertController;
 use App\Http\Controllers\Api\AlertPolicyController;
+use App\Http\Controllers\Api\AnalysisPreferenceController;
 use App\Http\Controllers\Api\AnalyticsController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BulkTransactionImportController;
@@ -220,6 +221,9 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::get('/portfolio/exports/{dataset}', [PortfolioExportController::class, 'show']);
     Route::get('/analytics/portfolio', [AnalyticsController::class, 'portfolio']);
     Route::get('/analytics/stocks/{stock}', [AnalyticsController::class, 'stock']);
+    Route::get('/analysis/benchmarks', [AnalysisPreferenceController::class, 'benchmarks']);
+    Route::get('/analysis/preferences', [AnalysisPreferenceController::class, 'show']);
+    Route::put('/analysis/preferences', [AnalysisPreferenceController::class, 'update']);
     Route::post('/analytics/explore', [ExplorerAnalyticsController::class, 'analyze'])
         ->middleware('throttle:analytics-explore');
 
