@@ -16,18 +16,21 @@ Items may be refined, decomposed, or reprioritized during V7 planning. `DECIDED`
 
 The standalone Telemetry Platform previously listed here has been moved to V8 because it is a separate application/product rather than a StoX-internal feature. StoX integration with that platform is planned separately for V9.
 
+AI Assistant and Instrument Expansion have also been moved to V9 so V7 can focus on foundational analytical capabilities before those broader product expansions.
+
 ## 2. Current V7 backlog
 
 | ID | Feature | Scope / rationale | Status |
 |---|---|---|---|
-| V4-FEAT-017 | AI Assistant | Deferred until after V6 safety/UX/platform consolidation. Architecture and decision-authority boundaries require dedicated V7 deliberation. | OPEN |
-| V4-FEAT-018 | ML scoring models | Deferred with AI/decision-authority work. Deterministic Strategy semantics remain authoritative until explicitly superseded. | OPEN |
-| V4-FEAT-019 | ETF / Options / Crypto expansion | Deferred instrument expansion; likely to be decomposed by instrument family during V7 planning. | OPEN |
+| V4-FEAT-018 | ML Scoring Models | Introduce ML-based scoring capability without silently superseding deterministic Strategy semantics. Exact scoring role, training/evaluation methodology, reproducibility, leakage controls, explainability, and decision-authority boundaries require V7 deliberation. | OPEN |
+| V4-FEAT-053 | Fundamental Data Integration & Support | Add first-class ingestion, storage, normalization, historical handling, APIs and product support for company fundamental data so StoX can use fundamental information alongside existing market/technical data. Provider choice, canonical data model, history/restatement semantics, derived ratios/metrics, UI exposure, and Strategy/Evaluation/Discovery integration require V7 deliberation. | OPEN |
 
 ## 3. Moved beyond V7
 
 | ID | Feature | Disposition |
 |---|---|---|
+| V4-FEAT-017 | AI Assistant | **Moved to V9.** AI assistance and authority boundaries will be planned after the V7 analytical-data foundations and V8 standalone Telemetry product. |
+| V4-FEAT-019 | ETF / Options / Crypto expansion | **Moved to V9.** Instrument-family expansion remains separate from V7 analytical-data work and may be decomposed by instrument family during V9 planning. |
 | V4-FEAT-052 | Standalone Telemetry Platform | **Moved to V8.** It is a separate, independently deployable, product-independent application/product. Canonical architecture remains in `V7-Telemetry-Platform.md` until/if the file is renamed; its version target is V8. |
 | TBD | StoX integration with Telemetry Platform | **Planned for V9.** StoX-side instrumentation, identity/context mapping, SDK/API integration, operational telemetry and product-usage telemetry integration are intentionally separate from building the standalone Telemetry product itself. |
 
@@ -35,4 +38,4 @@ The standalone Telemetry Platform previously listed here has been moved to V8 be
 
 V7 work must not be treated as unfinished V6 scope. V6 implementation/closure can proceed independently while V7 items remain in planning or are implemented later.
 
-The V8 Telemetry Platform and V9 StoX-Telemetry integration are likewise outside the V7 closure gate.
+The V8 Telemetry Platform and V9 AI, instrument-expansion and StoX-Telemetry integration work are outside the V7 closure gate.
