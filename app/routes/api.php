@@ -235,6 +235,7 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::get('/analysis/evidence/{evidence}', [AnalysisEvidenceController::class, 'show']);
     Route::get('/tax/dividends', [TaxEvidenceController::class, 'dividends']);
     Route::post('/tax/dividends', [TaxEvidenceController::class, 'storeDividend']);
+    Route::post('/tax/dividends/import', [TaxEvidenceController::class, 'importDividends']);
     Route::get('/tax/losses', [TaxEvidenceController::class, 'taxLosses']);
     Route::post('/tax/losses', [TaxEvidenceController::class, 'storeTaxLoss']);
     Route::get('/tax/opening-lots', [TaxEvidenceController::class, 'openingLots']);

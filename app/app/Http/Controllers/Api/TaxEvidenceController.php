@@ -8,6 +8,8 @@ use App\Models\OpeningTaxLot;
 use App\Models\Stock;
 use App\Models\TaxLoss;
 use App\Services\Analytics\AccountTaxReportService;
+use App\Services\Analytics\DividendStatementImportService;
+use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,7 +18,24 @@ use Illuminate\Validation\ValidationException;
 
 class TaxEvidenceController extends Controller
 {
-    public function __construct(private AccountTaxReportService $reports) {}
+    public function __construct(
+        private AccountTaxReportService $reports,
+        private DividendStatementImportService $dividendImports,
+    ) {}
+
+    public function importDividends(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'file' => ['required', 'file', 'max:2048', 'mimes:csv,txt'],
+            'definition_version' => ['required', Rule::in([DividendStatementImportService::DEFINITION_VERSION])],
+            'dry_run' => ['sometimes', 'boolean'],
+        ]);
+        $result = $this->dividendImports->import(
+            $request->user(), $validated['file'], (bool) ($validated['dry_run'] ?? true),
+        );
+
+        return response()->json(['data' => $result], $result['valid'] ? 200 : Response::HTTP_UNPROCESSABLE_ENTITY);
+    }
 
     public function report(Request $request): JsonResponse
     {
