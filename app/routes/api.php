@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\DataQualityController;
 use App\Http\Controllers\Api\ExplorerAnalyticsController;
 use App\Http\Controllers\Api\FrontendLogController;
 use App\Http\Controllers\Api\HistoricalHoldingsController;
+use App\Http\Controllers\Api\PortfolioExportController;
 use App\Http\Controllers\Api\HoldingController;
 use App\Http\Controllers\Api\IndexController;
 use App\Http\Controllers\Api\InviteAcceptController;
@@ -215,6 +216,7 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::get('/portfolio/snapshots', [PortfolioHistoryController::class, 'snapshots']);
     Route::get('/portfolio/historical-holdings', [HistoricalHoldingsController::class, 'show']);
     Route::get('/portfolio/compare', [HistoricalHoldingsController::class, 'compare']);
+    Route::get('/portfolio/exports/{dataset}', [PortfolioExportController::class, 'show']);
     Route::get('/analytics/portfolio', [AnalyticsController::class, 'portfolio']);
     Route::get('/analytics/stocks/{stock}', [AnalyticsController::class, 'stock']);
     Route::post('/analytics/explore', [ExplorerAnalyticsController::class, 'analyze'])
