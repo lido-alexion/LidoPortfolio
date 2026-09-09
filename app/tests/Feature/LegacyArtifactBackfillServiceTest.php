@@ -3,14 +3,18 @@
 namespace Tests\Feature;
 
 use App\Models\ArtifactBinding;
+use App\Models\BacktestRun;
 use App\Models\ReusableArtifact;
 use App\Models\ReusableArtifactVersion;
 use App\Models\Screener;
+use App\Models\ScreenerBacktest;
 use App\Models\TradingStrategy;
 use App\Models\TradingStrategyVersion;
 use App\Models\User;
 use App\Services\Artifacts\LegacyArtifactBackfillService;
 use App\Services\Artifacts\StrategyArtifactRegistry;
+use App\Services\Backtest\BacktestSimulationEngine;
+use App\Services\Screener\ScreenerBacktestService;
 use App\Services\Screener\ScreenerService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
@@ -123,6 +127,43 @@ class LegacyArtifactBackfillServiceTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('managed by the Artifact Library');
         app(StrategyArtifactRegistry::class)->activate((string) $strategy->id, $profile);
+    }
+
+    public function test_mapped_backtests_pin_exact_artifact_and_binding_evidence(): void
+    {
+        $owner = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($owner);
+        $screener = $this->legacyScreener($profile->id);
+        $strategy = $this->legacyStrategy($profile->id, $screener);
+        $this->assertSame(0, app(LegacyArtifactBackfillService::class)->backfill($profile)['failed']);
+        $screener->refresh();
+        $strategy->refresh();
+        $this->actingAs($owner);
+
+        app(ScreenerBacktestService::class)->start($screener, '15d', 'artifact-pin-screener');
+        $screenerBacktest = ScreenerBacktest::query()->latest('id')->firstOrFail();
+        $this->assertNotNull($screenerBacktest->reusable_artifact_version_id);
+        $this->assertNotNull($screenerBacktest->artifact_binding_revision_id);
+        $this->assertSame(
+            $screener->definition_json,
+            $screenerBacktest->stats_json['definition_snapshot'],
+        );
+
+        app(BacktestSimulationEngine::class)->start($profile, [
+            'range_key' => 'custom',
+            'from_date' => '2026-09-07',
+            'to_date' => '2026-09-07',
+            'initial_capital' => 100000,
+            'session_token' => 'artifact-pin-strategy',
+            'strategy_version_id' => $strategy->active_version_id,
+        ]);
+        $strategyBacktest = BacktestRun::query()->latest('id')->firstOrFail();
+        $this->assertNotNull($strategyBacktest->reusable_artifact_version_id);
+        $this->assertNotNull($strategyBacktest->artifact_binding_revision_id);
+        $entry = $strategyBacktest->entry_screener_versions_json[0];
+        $this->assertNotNull($entry['reusable_artifact_version_id']);
+        $this->assertNotNull($entry['artifact_binding_revision_id']);
+        $this->assertSame($screener->definition_json, $entry['definition_snapshot']);
     }
 
     private function legacyScreener(int $profileId): Screener

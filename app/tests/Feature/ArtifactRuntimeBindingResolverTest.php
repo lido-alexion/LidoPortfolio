@@ -20,14 +20,18 @@ class ArtifactRuntimeBindingResolverTest extends TestCase
     {
         $owner = User::factory()->create();
         $profile = $this->defaultPortfolioFor($owner);
-        [$strategy, $legacyVersion] = $this->legacyStrategy($profile->id);
+        $this->legacyStrategy($profile->id);
         $lifecycle = app(ReusableArtifactLifecycleService::class);
         $v1 = $lifecycle->publish(
             $lifecycle->createDraft($owner, ArtifactType::STRATEGY, 'runtime', 'Runtime', $this->envelope(60)),
             $owner,
         );
         $binding = app(ArtifactBindingService::class)->bind($profile, $v1, $owner, [], true);
-        $strategy->forceFill(['reusable_artifact_id' => $v1->artifact_id])->save();
+        $strategy = TradingStrategy::query()
+            ->where('profile_id', $profile->id)
+            ->where('reusable_artifact_id', $v1->artifact_id)
+            ->firstOrFail();
+        $legacyVersion = $strategy->activeVersion()->firstOrFail();
         $resolver = app(ArtifactRuntimeBindingResolver::class);
 
         $selected = $resolver->forStrategyVersion($profile, $legacyVersion);
@@ -42,15 +46,17 @@ class ArtifactRuntimeBindingResolverTest extends TestCase
         $this->assertSame($v1->id, $resolver->forStrategyVersion($profile, $legacyVersion)->artifactVersion->id);
 
         $binding = app(ArtifactBindingService::class)->upgrade($binding, $v11, $owner, 0);
-        $this->assertSame($v11->id, $resolver->forStrategyVersion($profile, $legacyVersion)->artifactVersion->id);
-        $this->assertSame($binding->active_revision_id, $resolver->forStrategyVersion($profile, $legacyVersion)->bindingRevision->id);
+        $this->assertNull($resolver->forStrategyVersion($profile, $legacyVersion));
+        $upgradedLegacyVersion = $strategy->fresh()->activeVersion()->firstOrFail();
+        $this->assertSame($v11->id, $resolver->forStrategyVersion($profile, $upgradedLegacyVersion)->artifactVersion->id);
+        $this->assertSame($binding->active_revision_id, $resolver->forStrategyVersion($profile, $upgradedLegacyVersion)->bindingRevision->id);
     }
 
     public function test_runtime_selection_fails_closed_for_disabled_blocked_unmapped_or_cross_portfolio_bindings(): void
     {
         $owner = User::factory()->create();
         $profile = $this->defaultPortfolioFor($owner);
-        [$strategy, $legacyVersion] = $this->legacyStrategy($profile->id);
+        [, $legacyVersion] = $this->legacyStrategy($profile->id);
         $resolver = app(ArtifactRuntimeBindingResolver::class);
         $this->assertNull($resolver->forStrategyVersion($profile, $legacyVersion));
 
@@ -60,7 +66,11 @@ class ArtifactRuntimeBindingResolverTest extends TestCase
             $owner,
         );
         $binding = app(ArtifactBindingService::class)->bind($profile, $published, $owner, [], false);
-        $strategy->forceFill(['reusable_artifact_id' => $published->artifact_id])->save();
+        $strategy = TradingStrategy::query()
+            ->where('profile_id', $profile->id)
+            ->where('reusable_artifact_id', $published->artifact_id)
+            ->firstOrFail();
+        $legacyVersion = $strategy->activeVersion()->firstOrFail();
         $this->assertNull($resolver->forStrategyVersion($profile, $legacyVersion));
 
         $binding->forceFill(['status' => 'enabled', 'usability_state' => 'blocked'])->save();

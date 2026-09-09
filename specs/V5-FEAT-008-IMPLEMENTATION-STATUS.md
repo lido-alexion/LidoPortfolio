@@ -22,6 +22,7 @@
 - Library binding and explicit-upgrade transactions create/update the existing Strategy/Screener runtime identities rather than a parallel execution model; projection failure rolls back the binding transaction.
 - Live Recommendation generation consumes the exact enabled usable Strategy binding definition and fails closed for mapped-but-unavailable bindings. Recommendation, manual/live/GTT order, and fill evidence retain the originating artifact version and binding revision.
 - Manual/scheduled Screener runs pin the exact immutable definition and binding revision at start and retain it across chunk continuation; inconsistent or unavailable mapped bindings fail closed.
+- Screener and Strategy backtests retain exact artifact-version/binding-revision evidence and immutable definition/config snapshots across resumable chunks, so a later binding upgrade cannot reinterpret an in-flight simulation.
 - Mapped legacy editors/registries are explicitly read-only compatibility projections and link to the authoritative Artifact Library; legacy mutation/enable/archive/delete endpoints reject lifecycle bypasses.
 
 Focused evidence at this checkpoint:
@@ -34,10 +35,9 @@ Focused evidence at this checkpoint:
 ## Material work still required
 
 1. **Authoring cutover completion.** New legacy Registry/editor creation/import paths can still create unmapped compatibility rows. Route those paths into V5 Draft creation (or retire them after equivalent Library UX) so no new runnable definition can bypass publication and binding.
-2. **Remaining simulation consumers.** Audit Screener/Strategy backtest and preview paths for immutable-world pinning; FEAT-020 owns the full simulation model, but V5 must not leave a mutable-definition contradiction.
-3. **Operational rollout evidence.** Execute the explicit backfill against representative/restored application data, inventory any invalid rows, and document remediation/rollback procedure before production rollout.
-4. **Final verification.** Run the full backend/frontend/typecheck/build/migration/security/trading suites and re-audit every frozen acceptance criterion before changing FEAT-008 to COMPLETE.
+2. **Operational rollout evidence.** Execute the explicit backfill against representative/restored application data, inventory any invalid rows, and document remediation/rollback procedure before production rollout.
+3. **Final verification.** Run the full backend/frontend/typecheck/build/migration/security/trading suites and re-audit every frozen acceptance criterion before changing FEAT-008 to COMPLETE.
 
 ## Closure decision
 
-FEAT-008 remains deliberately **IN PROGRESS**. The live Strategy/Screener runtime and trading evidence cutover are implemented, but new legacy authoring paths and simulation consumers still require reconciliation plus final rollout/full-suite evidence before closure.
+FEAT-008 remains deliberately **IN PROGRESS**. The live Strategy/Screener runtime, trading evidence, and resumable simulation pinning are implemented, but new legacy authoring paths still require reconciliation plus final rollout/full-suite evidence before closure.

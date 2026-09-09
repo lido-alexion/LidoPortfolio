@@ -120,7 +120,13 @@ class EligibilityPrecomputeService
             return ['job' => $job];
         }
 
-        $definition = is_array($screener->definition_json)
+        $definition = is_array($job['definition_snapshot'] ?? null)
+            ? $job['definition_snapshot']
+            : null;
+        if ($definition === null && $screener->reusable_artifact_id !== null) {
+            throw new \RuntimeException("Mapped Screener #{$screenerId} has no immutable backtest definition snapshot.");
+        }
+        $definition ??= is_array($screener->definition_json)
             ? $screener->definition_json
             : ['root' => $screener->definition_json];
         $stockLookback = $this->evaluation->stockLookback($definition);

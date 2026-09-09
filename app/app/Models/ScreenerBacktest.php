@@ -21,6 +21,8 @@ class ScreenerBacktest extends Model
         'status',
         'from_date',
         'to_date',
+        'reusable_artifact_version_id',
+        'artifact_binding_revision_id',
         'stats_json',
         'error_message',
     ];
@@ -30,6 +32,8 @@ class ScreenerBacktest extends Model
         return [
             'screener_id' => 'integer',
             'profile_id' => 'integer',
+            'reusable_artifact_version_id' => 'integer',
+            'artifact_binding_revision_id' => 'integer',
             'from_date' => 'date',
             'to_date' => 'date',
             'stats_json' => 'array',

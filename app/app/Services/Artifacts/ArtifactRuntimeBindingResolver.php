@@ -64,6 +64,7 @@ final class ArtifactRuntimeBindingResolver
             || ! $version
             || $version->status !== ReusableArtifactVersion::STATUS_PUBLISHED
             || $version->artifact->artifact_type !== ArtifactType::STRATEGY
+            || $legacyVersion->definition_hash !== $version->definition_hash
             || ! is_array($definition)) {
             return null;
         }

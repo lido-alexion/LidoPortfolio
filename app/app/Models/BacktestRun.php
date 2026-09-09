@@ -37,6 +37,8 @@ class BacktestRun extends Model
         'strategy_version_id',
         'strategy_name',
         'strategy_version_number',
+        'reusable_artifact_version_id',
+        'artifact_binding_revision_id',
         'entry_screener_versions_json',
         'exit_screener_versions_json',
         'name',
@@ -63,6 +65,8 @@ class BacktestRun extends Model
 
     protected $casts = [
         'entry_screener_versions_json' => 'array',
+        'reusable_artifact_version_id' => 'integer',
+        'artifact_binding_revision_id' => 'integer',
         'exit_screener_versions_json' => 'array',
         'tags_json' => 'array',
         'context_json' => 'array',

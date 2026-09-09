@@ -2,12 +2,14 @@
 
 namespace App\Services\Screener;
 
+use App\Exceptions\DomainException;
 use App\Models\Screener;
 use App\Models\ScreenerBacktest;
 use App\Models\ScreenerBacktestDay;
 use App\Models\ScreenerBacktestHit;
 use App\Models\Stock;
 use App\Models\StockPrice;
+use App\Services\Artifacts\ArtifactRuntimeBindingResolver;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -19,6 +21,7 @@ class ScreenerBacktestService
     public function __construct(
         protected ScreenerEvaluationService $evaluation,
         protected ScreenerRunService $runs,
+        protected ArtifactRuntimeBindingResolver $artifactRuntime,
     ) {}
 
     /**
@@ -34,6 +37,16 @@ class ScreenerBacktestService
         $to = Carbon::now(config('app.timezone'))->startOfDay();
         $from = $this->fromDateForRange($rangeKey, $to->copy());
         $days = $this->weekdayDates($from, $to);
+        $runtimeSelection = $this->artifactRuntime->forScreener($screener);
+        if ($screener->reusable_artifact_id !== null && $runtimeSelection === null) {
+            throw new DomainException(
+                'The Screener immutable artifact binding is unavailable or blocked.',
+                'ARTIFACT_BINDING_UNAVAILABLE',
+            );
+        }
+        $definition = $runtimeSelection?->definition ?? (is_array($screener->definition_json)
+            ? $screener->definition_json
+            : ['root' => $screener->definition_json]);
 
         $backtest = ScreenerBacktest::query()->create([
             'screener_id' => $screener->id,
@@ -43,6 +56,8 @@ class ScreenerBacktestService
             'status' => 'running',
             'from_date' => $from->toDateString(),
             'to_date' => $to->toDateString(),
+            'reusable_artifact_version_id' => $runtimeSelection?->artifactVersion->id,
+            'artifact_binding_revision_id' => $runtimeSelection?->bindingRevision->id,
             'stats_json' => [
                 'day_total' => count($days),
                 'days_done' => 0,
@@ -55,6 +70,7 @@ class ScreenerBacktestService
                 'days' => [],
                 'warnings' => [],
                 'as_of_dates' => array_map(static fn (Carbon $d) => $d->toDateString(), $days),
+                'definition_snapshot' => $definition,
             ],
         ]);
 
@@ -292,7 +308,16 @@ class ScreenerBacktestService
                 return $this->finalize($backtest, $screener->id, $stats, $dates, $missing);
             }
 
-            $definition = is_array($screener->definition_json)
+            $definition = is_array($stats['definition_snapshot'] ?? null)
+                ? $stats['definition_snapshot']
+                : null;
+            if ($definition === null && $screener->reusable_artifact_id !== null) {
+                throw new DomainException(
+                    'The mapped Screener backtest has no immutable definition snapshot.',
+                    'ARTIFACT_BACKTEST_EVIDENCE_MISSING',
+                );
+            }
+            $definition ??= is_array($screener->definition_json)
                 ? $screener->definition_json
                 : ['root' => $screener->definition_json];
             $stockLookback = $this->evaluation->stockLookback($definition);
@@ -548,6 +573,8 @@ class ScreenerBacktestService
             'from_date' => optional($backtest->from_date)?->toDateString(),
             'to_date' => optional($backtest->to_date)?->toDateString(),
             'error_message' => $backtest->error_message,
+            'reusable_artifact_version_id' => $backtest->reusable_artifact_version_id,
+            'artifact_binding_revision_id' => $backtest->artifact_binding_revision_id,
             'stats' => [
                 'day_total' => (int) ($stats['day_total'] ?? 0),
                 'stock_cursor' => (int) ($stats['stock_cursor'] ?? 0),

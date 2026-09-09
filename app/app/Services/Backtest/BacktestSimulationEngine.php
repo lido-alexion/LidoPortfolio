@@ -9,6 +9,7 @@ use App\Models\BacktestTransaction;
 use App\Models\PortfolioProfile;
 use App\Models\Screener;
 use App\Models\TradingStrategyVersion;
+use App\Services\Artifacts\ArtifactRuntimeBindingResolver;
 use App\Services\Screener\ScreenerBacktestService;
 use App\Services\Screener\ScreenerCatalog;
 use App\Services\StrategyConfigurationService;
@@ -31,6 +32,7 @@ class BacktestSimulationEngine
         protected StatisticsGenerator $statistics,
         protected BacktestPersistenceService $persistence,
         protected TimelineBuilder $timeline,
+        protected ArtifactRuntimeBindingResolver $artifactRuntime,
     ) {}
 
     /**
@@ -74,6 +76,15 @@ class BacktestSimulationEngine
 
         $version = $this->resolveStrategyVersion($profile, isset($input['strategy_version_id']) ? (int) $input['strategy_version_id'] : null);
         $strategy = $version->strategy;
+        $runtimeSelection = $this->artifactRuntime->forStrategyVersion($profile, $version);
+        if ($strategy?->reusable_artifact_id !== null && $runtimeSelection === null) {
+            throw ValidationException::withMessages([
+                'strategy' => 'The Strategy immutable artifact binding is unavailable or blocked.',
+            ]);
+        }
+        // The immutable Strategy envelope uses portable Screener slugs. Its exact
+        // projected legacy version supplies the Portfolio-local Screener ids and
+        // is hash-verified by ArtifactRuntimeBindingResolver above.
         $config = $version->config_json ?? $this->strategies->defaultConfig();
         $config = $this->strategies->normalizeConfig(is_array($config) ? $config : []);
 
@@ -107,6 +118,8 @@ class BacktestSimulationEngine
 
         $ctx = SimulationContext::blank($initialCapital, $dayStrings);
         $ctx->set('config_snapshot', $config);
+        $ctx->set('reusable_artifact_version_id', $runtimeSelection?->artifactVersion->id);
+        $ctx->set('artifact_binding_revision_id', $runtimeSelection?->bindingRevision->id);
         $ctx->set('eligibility_restricted', ($entryMeta['mode'] ?? 'unrestricted') === 'screener_union');
         $ctx->set('eligibility', [
             'phase' => 'pending',
@@ -114,11 +127,17 @@ class BacktestSimulationEngine
                 array_map(static fn ($s) => [
                     'screener_id' => $s['screener_id'],
                     'role' => 'entry',
+                    'definition_snapshot' => $s['definition_snapshot'],
+                    'reusable_artifact_version_id' => $s['reusable_artifact_version_id'],
+                    'artifact_binding_revision_id' => $s['artifact_binding_revision_id'],
                     'done' => false,
                 ], $entryMeta['screeners']),
                 array_map(static fn ($s) => [
                     'screener_id' => $s['screener_id'],
                     'role' => 'exit',
+                    'definition_snapshot' => $s['definition_snapshot'],
+                    'reusable_artifact_version_id' => $s['reusable_artifact_version_id'],
+                    'artifact_binding_revision_id' => $s['artifact_binding_revision_id'],
                     'done' => false,
                 ], $exitMeta['screeners']),
             ),
@@ -131,6 +150,8 @@ class BacktestSimulationEngine
             'strategy_version_id' => $version->id,
             'strategy_name' => $strategy?->name,
             'strategy_version_number' => $version->version,
+            'reusable_artifact_version_id' => $runtimeSelection?->artifactVersion->id,
+            'artifact_binding_revision_id' => $runtimeSelection?->bindingRevision->id,
             'entry_screener_versions_json' => $entryMeta['screeners'],
             'exit_screener_versions_json' => $exitMeta['screeners'],
             'name' => $name,
@@ -301,6 +322,8 @@ class BacktestSimulationEngine
             'strategy_name' => $run->strategy_name,
             'strategy_version_id' => $run->strategy_version_id,
             'strategy_version' => $run->strategy_version_number,
+            'reusable_artifact_version_id' => $run->reusable_artifact_version_id,
+            'artifact_binding_revision_id' => $run->artifact_binding_revision_id,
             'entry_screener_versions' => $run->entry_screener_versions_json,
             'exit_screener_versions' => $run->exit_screener_versions_json,
             'range_key' => $run->range_key,
@@ -481,12 +504,24 @@ class BacktestSimulationEngine
             if (! $screener) {
                 continue;
             }
+            $runtimeSelection = $this->artifactRuntime->forScreener($screener);
+            if ($screener->reusable_artifact_id !== null && $runtimeSelection === null) {
+                throw ValidationException::withMessages([
+                    'strategy' => "Eligibility Screener {$screener->name} has no usable immutable binding.",
+                ]);
+            }
+            $definition = $runtimeSelection?->definition ?? (is_array($screener->definition_json)
+                ? $screener->definition_json
+                : ['root' => $screener->definition_json]);
             $screeners[] = [
                 'screener_id' => $screener->id,
                 'name' => $screener->name,
                 'slug' => $screener->slug,
                 'artifact_version' => $screener->artifact_version ?? null,
                 'definition_hash' => $screener->definition_hash ?? null,
+                'definition_snapshot' => $definition,
+                'reusable_artifact_version_id' => $runtimeSelection?->artifactVersion->id,
+                'artifact_binding_revision_id' => $runtimeSelection?->bindingRevision->id,
             ];
         }
 
@@ -522,12 +557,24 @@ class BacktestSimulationEngine
             if (! $screener) {
                 continue;
             }
+            $runtimeSelection = $this->artifactRuntime->forScreener($screener);
+            if ($screener->reusable_artifact_id !== null && $runtimeSelection === null) {
+                throw ValidationException::withMessages([
+                    'strategy' => "Exit Screener {$screener->name} has no usable immutable binding.",
+                ]);
+            }
+            $definition = $runtimeSelection?->definition ?? (is_array($screener->definition_json)
+                ? $screener->definition_json
+                : ['root' => $screener->definition_json]);
             $screeners[] = [
                 'screener_id' => $screener->id,
                 'name' => $screener->name,
                 'slug' => $screener->slug,
                 'artifact_version' => $screener->artifact_version ?? null,
                 'definition_hash' => $screener->definition_hash ?? null,
+                'definition_snapshot' => $definition,
+                'reusable_artifact_version_id' => $runtimeSelection?->artifactVersion->id,
+                'artifact_binding_revision_id' => $runtimeSelection?->bindingRevision->id,
             ];
         }
 
