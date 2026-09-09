@@ -11,7 +11,9 @@ return new class extends Migration
         Schema::create('portfolio_reusable_artifacts', function (Blueprint $table) {
             $table->id();
             $table->uuid('artifact_uuid')->unique();
-            $table->foreignId('owner_user_id')->constrained('portfolio_users')->restrictOnDelete();
+            $table->foreignId('owner_user_id')
+                ->constrained('portfolio_users', indexName: 'reusable_artifact_owner_fk')
+                ->restrictOnDelete();
             $table->string('artifact_type', 32);
             $table->string('slug', 120);
             $table->string('name', 200);
@@ -26,7 +28,9 @@ return new class extends Migration
 
         Schema::create('portfolio_reusable_artifact_versions', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('artifact_id')->constrained('portfolio_reusable_artifacts')->restrictOnDelete();
+            $table->foreignId('artifact_id')
+                ->constrained('portfolio_reusable_artifacts', indexName: 'reusable_artifact_version_artifact_fk')
+                ->restrictOnDelete();
             $table->string('semver', 64);
             $table->string('status', 24);
             $table->unsignedTinyInteger('draft_slot')->nullable();
@@ -35,7 +39,9 @@ return new class extends Migration
             $table->string('definition_hash', 80);
             $table->string('change_summary', 1000)->nullable();
             $table->unsignedInteger('lock_version')->default(0);
-            $table->foreignId('created_by_user_id')->constrained('portfolio_users')->restrictOnDelete();
+            $table->foreignId('created_by_user_id')
+                ->constrained('portfolio_users', indexName: 'reusable_artifact_version_creator_fk')
+                ->restrictOnDelete();
             $table->timestamp('published_at')->nullable();
             $table->timestamps();
 
@@ -46,9 +52,13 @@ return new class extends Migration
 
         Schema::create('portfolio_reusable_artifact_dependencies', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('source_version_id')->constrained('portfolio_reusable_artifact_versions')->restrictOnDelete();
+            $table->foreignId('source_version_id')
+                ->constrained('portfolio_reusable_artifact_versions', indexName: 'artifact_dependency_source_fk')
+                ->restrictOnDelete();
             $table->string('kind', 48);
-            $table->foreignId('target_artifact_version_id')->nullable()->constrained('portfolio_reusable_artifact_versions')->restrictOnDelete();
+            $table->foreignId('target_artifact_version_id')->nullable()
+                ->constrained('portfolio_reusable_artifact_versions', indexName: 'artifact_dependency_target_fk')
+                ->restrictOnDelete();
             $table->string('indicator_id', 120)->nullable();
             $table->string('indicator_version', 64)->nullable();
             $table->boolean('required')->default(true);

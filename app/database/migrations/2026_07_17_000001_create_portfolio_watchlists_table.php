@@ -64,13 +64,14 @@ return new class extends Migration
     {
         if (Schema::hasColumn('portfolio_watchlist_items', 'watchlist_id')) {
             Schema::table('portfolio_watchlist_items', function (Blueprint $table) {
+                $table->dropForeign(['watchlist_id']);
                 if ($this->indexExists('portfolio_watchlist_items', 'pwi_watchlist_stock_unique')) {
                     $table->dropUnique('pwi_watchlist_stock_unique');
                 }
                 if ($this->indexExists('portfolio_watchlist_items', 'pwi_watchlist_updated_idx')) {
                     $table->dropIndex('pwi_watchlist_updated_idx');
                 }
-                $table->dropConstrainedForeignId('watchlist_id');
+                $table->dropColumn('watchlist_id');
             });
 
             Schema::table('portfolio_watchlist_items', function (Blueprint $table) {

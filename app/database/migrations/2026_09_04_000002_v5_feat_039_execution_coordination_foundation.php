@@ -39,10 +39,18 @@ return new class extends Migration
 
         Schema::create('portfolio_internal_execution_transfers', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('execution_batch_id')->constrained('portfolio_execution_batches')->cascadeOnDelete();
-            $table->foreignId('security_id')->constrained('portfolio_stocks')->restrictOnDelete();
-            $table->foreignId('sell_recommendation_id')->constrained('portfolio_tos_recommendations')->restrictOnDelete();
-            $table->foreignId('buy_recommendation_id')->constrained('portfolio_tos_recommendations')->restrictOnDelete();
+            $table->foreignId('execution_batch_id')
+                ->constrained('portfolio_execution_batches', indexName: 'internal_exec_transfer_batch_fk')
+                ->cascadeOnDelete();
+            $table->foreignId('security_id')
+                ->constrained('portfolio_stocks', indexName: 'internal_exec_transfer_security_fk')
+                ->restrictOnDelete();
+            $table->foreignId('sell_recommendation_id')
+                ->constrained('portfolio_tos_recommendations', indexName: 'internal_exec_transfer_sell_rec_fk')
+                ->restrictOnDelete();
+            $table->foreignId('buy_recommendation_id')
+                ->constrained('portfolio_tos_recommendations', indexName: 'internal_exec_transfer_buy_rec_fk')
+                ->restrictOnDelete();
             $table->decimal('quantity', 18, 4);
             $table->decimal('provisional_unit_price', 18, 4);
             $table->decimal('final_unit_price', 18, 4)->nullable();

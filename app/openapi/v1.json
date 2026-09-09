@@ -21,6 +21,18 @@
             "description": "Routes under `/api/v1/analytics`."
         },
         {
+            "name": "artifact-bindings",
+            "description": "Routes under `/api/v1/artifact-bindings`."
+        },
+        {
+            "name": "artifact-library",
+            "description": "Routes under `/api/v1/artifact-library`."
+        },
+        {
+            "name": "artifact-share-grants",
+            "description": "Routes under `/api/v1/artifact-share-grants`."
+        },
+        {
             "name": "artifacts",
             "description": "Routes under `/api/v1/artifacts`."
         },
@@ -519,6 +531,1146 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ErrorOrValidation"
                                 }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/artifact-bindings/{uuid}/enabled": {
+            "put": {
+                "tags": [
+                    "artifact-bindings"
+                ],
+                "summary": "PUT enable",
+                "description": "Live route: `PUT /api/v1/artifact-bindings/{uuid}/enabled`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactActionController@enable`.",
+                "operationId": "put_artifact-bindings_uuid_enabled",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/artifact-bindings/{uuid}/settings": {
+            "put": {
+                "tags": [
+                    "artifact-bindings"
+                ],
+                "summary": "PUT settings",
+                "description": "Live route: `PUT /api/v1/artifact-bindings/{uuid}/settings`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactActionController@settings`.",
+                "operationId": "put_artifact-bindings_uuid_settings",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/artifact-bindings/{uuid}/upgrade": {
+            "put": {
+                "tags": [
+                    "artifact-bindings"
+                ],
+                "summary": "PUT upgrade",
+                "description": "Live route: `PUT /api/v1/artifact-bindings/{uuid}/upgrade`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactActionController@upgrade`.",
+                "operationId": "put_artifact-bindings_uuid_upgrade",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/artifact-library": {
+            "get": {
+                "tags": [
+                    "artifact-library"
+                ],
+                "summary": "GET index",
+                "description": "Live route: `GET /api/v1/artifact-library`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactLibraryController@index`.",
+                "operationId": "get_artifact-library",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/artifact-library/bundle-deployments/{uuid}/deploy": {
+            "post": {
+                "tags": [
+                    "artifact-library"
+                ],
+                "summary": "POST deployBundle",
+                "description": "Live route: `POST /api/v1/artifact-library/bundle-deployments/{uuid}/deploy`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactActionController@deployBundle`.",
+                "operationId": "post_artifact-library_bundle-deployments_uuid_deploy",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/artifact-library/drafts": {
+            "post": {
+                "tags": [
+                    "artifact-library"
+                ],
+                "summary": "POST createDraft",
+                "description": "Live route: `POST /api/v1/artifact-library/drafts`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactLibraryController@createDraft`.",
+                "operationId": "post_artifact-library_drafts",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/artifact-library/import": {
+            "post": {
+                "tags": [
+                    "artifact-library"
+                ],
+                "summary": "POST import",
+                "description": "Live route: `POST /api/v1/artifact-library/import`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactActionController@import`.",
+                "operationId": "post_artifact-library_import",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/artifact-library/versions/{version}": {
+            "put": {
+                "tags": [
+                    "artifact-library"
+                ],
+                "summary": "PUT updateDraft",
+                "description": "Live route: `PUT /api/v1/artifact-library/versions/{version}`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactLibraryController@updateDraft`.",
+                "operationId": "put_artifact-library_versions_version",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "version",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/artifact-library/versions/{version}/bind": {
+            "post": {
+                "tags": [
+                    "artifact-library"
+                ],
+                "summary": "POST bind",
+                "description": "Live route: `POST /api/v1/artifact-library/versions/{version}/bind`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactActionController@bind`.",
+                "operationId": "post_artifact-library_versions_version_bind",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "version",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/artifact-library/versions/{version}/bundle-plan": {
+            "post": {
+                "tags": [
+                    "artifact-library"
+                ],
+                "summary": "POST planBundle",
+                "description": "Live route: `POST /api/v1/artifact-library/versions/{version}/bundle-plan`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactActionController@planBundle`.",
+                "operationId": "post_artifact-library_versions_version_bundle-plan",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "version",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/artifact-library/versions/{version}/export": {
+            "post": {
+                "tags": [
+                    "artifact-library"
+                ],
+                "summary": "POST export",
+                "description": "Live route: `POST /api/v1/artifact-library/versions/{version}/export`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactActionController@export`.",
+                "operationId": "post_artifact-library_versions_version_export",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "version",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/artifact-library/versions/{version}/fork": {
+            "post": {
+                "tags": [
+                    "artifact-library"
+                ],
+                "summary": "POST fork",
+                "description": "Live route: `POST /api/v1/artifact-library/versions/{version}/fork`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactLibraryController@fork`.",
+                "operationId": "post_artifact-library_versions_version_fork",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "version",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/artifact-library/versions/{version}/next-draft": {
+            "post": {
+                "tags": [
+                    "artifact-library"
+                ],
+                "summary": "POST nextDraft",
+                "description": "Live route: `POST /api/v1/artifact-library/versions/{version}/next-draft`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactLibraryController@nextDraft`.",
+                "operationId": "post_artifact-library_versions_version_next-draft",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "version",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/artifact-library/versions/{version}/publish": {
+            "post": {
+                "tags": [
+                    "artifact-library"
+                ],
+                "summary": "POST publish",
+                "description": "Live route: `POST /api/v1/artifact-library/versions/{version}/publish`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactLibraryController@publish`.",
+                "operationId": "post_artifact-library_versions_version_publish",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "version",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/artifact-library/versions/{version}/share": {
+            "post": {
+                "tags": [
+                    "artifact-library"
+                ],
+                "summary": "POST share",
+                "description": "Live route: `POST /api/v1/artifact-library/versions/{version}/share`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactActionController@share`.",
+                "operationId": "post_artifact-library_versions_version_share",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "version",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/artifact-library/{uuid}": {
+            "get": {
+                "tags": [
+                    "artifact-library"
+                ],
+                "summary": "GET show",
+                "description": "Live route: `GET /api/v1/artifact-library/{uuid}`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactLibraryController@show`.",
+                "operationId": "get_artifact-library_uuid",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/artifact-library/{uuid}/archive": {
+            "post": {
+                "tags": [
+                    "artifact-library"
+                ],
+                "summary": "POST archive",
+                "description": "Live route: `POST /api/v1/artifact-library/{uuid}/archive`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactLibraryController@archive`.",
+                "operationId": "post_artifact-library_uuid_archive",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/artifact-library/{uuid}/diff": {
+            "get": {
+                "tags": [
+                    "artifact-library"
+                ],
+                "summary": "GET diff",
+                "description": "Live route: `GET /api/v1/artifact-library/{uuid}/diff`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactLibraryController@diff`.",
+                "operationId": "get_artifact-library_uuid_diff",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/artifact-share-grants/{uuid}/adopt": {
+            "post": {
+                "tags": [
+                    "artifact-share-grants"
+                ],
+                "summary": "POST adopt",
+                "description": "Live route: `POST /api/v1/artifact-share-grants/{uuid}/adopt`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactActionController@adopt`.",
+                "operationId": "post_artifact-share-grants_uuid_adopt",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/artifact-share-grants/{uuid}/revoke": {
+            "post": {
+                "tags": [
+                    "artifact-share-grants"
+                ],
+                "summary": "POST revoke",
+                "description": "Live route: `POST /api/v1/artifact-share-grants/{uuid}/revoke`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactActionController@revoke`.",
+                "operationId": "post_artifact-share-grants_uuid_revoke",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
                             }
                         }
                     }

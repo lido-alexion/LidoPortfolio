@@ -11,8 +11,12 @@ return new class extends Migration
         Schema::create('portfolio_artifact_bindings', function (Blueprint $table) {
             $table->id();
             $table->uuid('binding_uuid')->unique();
-            $table->foreignId('profile_id')->constrained('portfolio_profiles')->restrictOnDelete();
-            $table->foreignId('artifact_id')->constrained('portfolio_reusable_artifacts')->restrictOnDelete();
+            $table->foreignId('profile_id')
+                ->constrained('portfolio_profiles', indexName: 'artifact_binding_profile_fk')
+                ->restrictOnDelete();
+            $table->foreignId('artifact_id')
+                ->constrained('portfolio_reusable_artifacts', indexName: 'artifact_binding_artifact_fk')
+                ->restrictOnDelete();
             $table->unsignedBigInteger('active_revision_id')->nullable();
             $table->string('status', 24)->default('disabled');
             $table->string('usability_state', 24)->default('usable');
@@ -26,16 +30,22 @@ return new class extends Migration
 
         Schema::create('portfolio_artifact_binding_revisions', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('binding_id')->constrained('portfolio_artifact_bindings')->restrictOnDelete();
+            $table->foreignId('binding_id')
+                ->constrained('portfolio_artifact_bindings', indexName: 'artifact_binding_revision_binding_fk')
+                ->restrictOnDelete();
             $table->unsignedInteger('revision_number');
-            $table->foreignId('artifact_version_id')->constrained('portfolio_reusable_artifact_versions')->restrictOnDelete();
+            $table->foreignId('artifact_version_id')
+                ->constrained('portfolio_reusable_artifact_versions', indexName: 'artifact_binding_revision_version_fk')
+                ->restrictOnDelete();
             $table->json('settings_json')->nullable();
             $table->string('binding_status', 24);
             $table->string('usability_state', 24);
             $table->json('usability_reasons_json')->nullable();
             $table->string('action', 32);
             $table->string('change_summary', 1000)->nullable();
-            $table->foreignId('activated_by_user_id')->constrained('portfolio_users')->restrictOnDelete();
+            $table->foreignId('activated_by_user_id')
+                ->constrained('portfolio_users', indexName: 'artifact_binding_revision_actor_fk')
+                ->restrictOnDelete();
             $table->timestamp('activated_at');
             $table->timestamps();
 

@@ -11,9 +11,15 @@ return new class extends Migration
         Schema::create('portfolio_artifact_share_grants', function (Blueprint $table) {
             $table->id();
             $table->uuid('grant_uuid')->unique();
-            $table->foreignId('artifact_version_id')->constrained('portfolio_reusable_artifact_versions')->restrictOnDelete();
-            $table->foreignId('owner_user_id')->constrained('portfolio_users')->restrictOnDelete();
-            $table->foreignId('recipient_user_id')->constrained('portfolio_users')->restrictOnDelete();
+            $table->foreignId('artifact_version_id')
+                ->constrained('portfolio_reusable_artifact_versions', indexName: 'artifact_share_version_fk')
+                ->restrictOnDelete();
+            $table->foreignId('owner_user_id')
+                ->constrained('portfolio_users', indexName: 'artifact_share_owner_fk')
+                ->restrictOnDelete();
+            $table->foreignId('recipient_user_id')
+                ->constrained('portfolio_users', indexName: 'artifact_share_recipient_fk')
+                ->restrictOnDelete();
             $table->json('dependency_version_ids_json')->nullable();
             $table->string('status', 24);
             $table->timestamp('granted_at');
@@ -26,9 +32,15 @@ return new class extends Migration
 
         Schema::create('portfolio_artifact_library_adoptions', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained('portfolio_users')->restrictOnDelete();
-            $table->foreignId('artifact_version_id')->constrained('portfolio_reusable_artifact_versions')->restrictOnDelete();
-            $table->foreignId('share_grant_id')->nullable()->constrained('portfolio_artifact_share_grants')->nullOnDelete();
+            $table->foreignId('user_id')
+                ->constrained('portfolio_users', indexName: 'artifact_adoption_user_fk')
+                ->restrictOnDelete();
+            $table->foreignId('artifact_version_id')
+                ->constrained('portfolio_reusable_artifact_versions', indexName: 'artifact_adoption_version_fk')
+                ->restrictOnDelete();
+            $table->foreignId('share_grant_id')->nullable()
+                ->constrained('portfolio_artifact_share_grants', indexName: 'artifact_adoption_share_fk')
+                ->nullOnDelete();
             $table->json('provenance_json');
             $table->timestamp('adopted_at');
             $table->timestamps();

@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Setting;
 use App\Models\User;
 use App\Services\PortfolioProfileService;
 use App\Services\RelativeStrengthService;
@@ -15,25 +16,31 @@ class DatabaseSeeder extends Seeder
     {
         $settings = app(SettingsService::class);
         foreach (SettingsService::DEFAULTS as $key => $value) {
-            \App\Models\Setting::setValue($key, $value);
+            Setting::setValue($key, $value);
         }
 
         app(RelativeStrengthService::class)->benchmarkStock();
 
-        $admin = User::query()->updateOrCreate(
+        User::query()->updateOrCreate(
             ['email' => 'admin@lidoportfolio.local'],
             [
                 'name' => 'Portfolio Admin',
                 'password' => Hash::make('password123'),
+                'is_admin' => true,
             ],
         );
 
-        User::query()
-            ->where('email', 'admin@lidoportfolio.local')
-            ->update(['is_admin' => true]);
+        $investor = User::query()->updateOrCreate(
+            ['email' => 'investor@lidoportfolio.local'],
+            [
+                'name' => 'Portfolio Investor',
+                'password' => Hash::make('password123'),
+                'is_admin' => false,
+            ],
+        );
 
-        if ($admin->portfolios()->doesntExist()) {
-            app(PortfolioProfileService::class)->createDefaultForUser($admin);
+        if ($investor->portfolios()->doesntExist()) {
+            app(PortfolioProfileService::class)->createDefaultForUser($investor);
         }
 
         $this->call(FactoryMomentumStrategySeeder::class);

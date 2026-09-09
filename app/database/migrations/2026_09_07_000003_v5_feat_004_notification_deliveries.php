@@ -10,8 +10,12 @@ return new class extends Migration
     {
         Schema::create('portfolio_notification_deliveries', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('recipient_notification_id')->constrained('portfolio_recipient_notifications')->cascadeOnDelete();
-            $table->foreignId('channel_setting_id')->nullable()->constrained('portfolio_notification_channel_settings')->nullOnDelete();
+            $table->foreignId('recipient_notification_id')
+                ->constrained('portfolio_recipient_notifications', indexName: 'notification_delivery_recipient_fk')
+                ->cascadeOnDelete();
+            $table->foreignId('channel_setting_id')->nullable()
+                ->constrained('portfolio_notification_channel_settings', indexName: 'notification_delivery_channel_setting_fk')
+                ->nullOnDelete();
             $table->string('channel', 24);
             $table->string('delivery_kind', 24);
             $table->text('destination');
@@ -30,7 +34,9 @@ return new class extends Migration
 
         Schema::create('portfolio_notification_delivery_attempts', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('delivery_id')->constrained('portfolio_notification_deliveries')->cascadeOnDelete();
+            $table->foreignId('delivery_id')
+                ->constrained('portfolio_notification_deliveries', indexName: 'notification_attempt_delivery_fk')
+                ->cascadeOnDelete();
             $table->unsignedTinyInteger('attempt_number');
             $table->string('status', 24);
             $table->string('error_code', 64)->nullable();

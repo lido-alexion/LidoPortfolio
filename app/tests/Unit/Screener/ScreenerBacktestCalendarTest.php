@@ -2,6 +2,7 @@
 
 namespace Tests\Unit\Screener;
 
+use App\Services\Artifacts\ArtifactRuntimeBindingResolver;
 use App\Services\Screener\ScreenerBacktestService;
 use App\Services\Screener\ScreenerEvaluationService;
 use App\Services\Screener\ScreenerRunService;
@@ -22,6 +23,7 @@ class ScreenerBacktestCalendarTest extends TestCase
         $service = new ScreenerBacktestService(
             Mockery::mock(ScreenerEvaluationService::class),
             Mockery::mock(ScreenerRunService::class),
+            app(ArtifactRuntimeBindingResolver::class),
         );
 
         $from = Carbon::parse('2026-07-10', 'UTC'); // Friday
@@ -39,6 +41,7 @@ class ScreenerBacktestCalendarTest extends TestCase
         $service = new ScreenerBacktestService(
             Mockery::mock(ScreenerEvaluationService::class),
             Mockery::mock(ScreenerRunService::class),
+            app(ArtifactRuntimeBindingResolver::class),
         );
         $to = Carbon::parse('2026-07-21', 'UTC');
 

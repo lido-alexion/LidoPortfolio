@@ -33,11 +33,13 @@ Focused evidence at this checkpoint:
 - Combined Screener behavior, authoring, registry and sharing suite: **38 tests / 359 assertions passed**.
 - Frontend JavaScript groups: **144 contract/unit tests + 59 component tests passed**; TypeScript no-emit passed.
 - Earlier checkpoint production Vite build passed; the final build remains part of the closure gate below.
+- A clean MariaDB 11.4 database completed the entire forward migration/seed chain. The backfill dry run predicted two factory runtime mappings with zero retained writes; the committing run created both with zero failures; the immediate second run skipped both, proving idempotence. A separate MySQL-backed focused suite passed **21 tests / 119 assertions**.
+- After repairing the migration, seed, generated OpenAPI and stale unit-fixture gaps exposed by that exercise, the complete backend suite passed **1,457 tests / 8,849 assertions**.
 - Implementation commits: `843c34e`, `80577a4`, `278a528`, `7f5248d`, `dcf85d6`, `47738b2`, `70f686c`, `11761a9`, `8b6a7b4`, `26d8ed2`, `78fdaf7`, `8214c0d`, `40e0db`, `46485a2`, `a68e473`, `f8e45c8`, `4a83f78`, `0ceac28`.
 
 ## Material work still required
 
-1. **Operational rollout evidence.** Execute the documented dry-run and explicit backfill against representative/restored application data, inventory and disposition any invalid rows, and retain the runbook evidence. The current local application database was unreachable at the 2026-09-09 checkpoint, so this data-backed gate has not yet passed.
+1. **Operational rollout evidence.** The isolated seeded MariaDB rollout is clean. The documented dry-run and explicit backfill must still be executed against restored staging/production-shaped data, with any invalid rows inventoried and dispositioned before production rollout.
 2. **Final verification.** Run the full backend/frontend/typecheck/build/migration/security/trading suites and re-audit every frozen acceptance criterion before changing FEAT-008 to COMPLETE.
 
 ## Closure decision
