@@ -1,7 +1,15 @@
 # V5 FEAT-013 — Cash-as-of, Export, and Compare Polish
 
-**Status:** DECIDED / FROZEN  
+**Status:** IMPLEMENTED / VERIFIED
 **Date:** 2026-09-07
+
+**Closure evidence (2026-09-10):** Effective-dated append-only cash history,
+explicit unknown-opening completeness, Cash Statement and traceable reversal
+workflows, historical holdings-plus-cash valuation with price evidence,
+same-Portfolio Date-A/Date-B comparison and shortcuts, and the complete
+schema-versioned CSV dataset set with one logical request cutoff are implemented.
+The dedicated backend acceptance suites pass (10 tests, 79 assertions), as does
+the frontend comparison contract test.
 
 ## Problem
 StoX needs trustworthy historical cash state, historical total Portfolio value, robust exports and a simple Date-A-vs-Date-B comparison without inventing performance attribution or weakening ledger truth.
