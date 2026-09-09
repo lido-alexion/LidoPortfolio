@@ -40,6 +40,7 @@ use App\Http\Controllers\Api\StockController;
 use App\Http\Controllers\Api\StockPriceController;
 use App\Http\Controllers\Api\SyncController;
 use App\Http\Controllers\Api\SyncLogController;
+use App\Http\Controllers\Api\TaxEvidenceController;
 use App\Http\Controllers\Api\TransactionController;
 use App\Http\Controllers\Api\UniversePriceSyncController;
 use App\Http\Controllers\Api\UserInviteController;
@@ -224,6 +225,12 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::get('/analysis/benchmarks', [AnalysisPreferenceController::class, 'benchmarks']);
     Route::get('/analysis/preferences', [AnalysisPreferenceController::class, 'show']);
     Route::put('/analysis/preferences', [AnalysisPreferenceController::class, 'update']);
+    Route::get('/tax/dividends', [TaxEvidenceController::class, 'dividends']);
+    Route::post('/tax/dividends', [TaxEvidenceController::class, 'storeDividend']);
+    Route::get('/tax/losses', [TaxEvidenceController::class, 'taxLosses']);
+    Route::post('/tax/losses', [TaxEvidenceController::class, 'storeTaxLoss']);
+    Route::get('/tax/opening-lots', [TaxEvidenceController::class, 'openingLots']);
+    Route::post('/tax/opening-lots', [TaxEvidenceController::class, 'storeOpeningLot']);
     Route::post('/analytics/explore', [ExplorerAnalyticsController::class, 'analyze'])
         ->middleware('throttle:analytics-explore');
 

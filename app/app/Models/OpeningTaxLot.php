@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class OpeningTaxLot extends Model
 {
@@ -17,5 +18,10 @@ class OpeningTaxLot extends Model
             'quantity' => 'decimal:4',
             'cost_basis' => 'decimal:4',
         ];
+    }
+
+    public function stock(): BelongsTo
+    {
+        return $this->belongsTo(Stock::class);
     }
 }
