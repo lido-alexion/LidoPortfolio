@@ -13,7 +13,10 @@ class PortfolioExportController extends Controller
 
     public function show(Request $request, string $dataset): StreamedResponse
     {
-        abort_unless(in_array($dataset, ['cash_statement', 'historical_holdings', 'portfolio_compare'], true), 404);
+        abort_unless(in_array($dataset, [
+            'cash_statement', 'historical_holdings', 'portfolio_compare', 'current_holdings',
+            'transactions', 'portfolio_value_history', 'recommendations', 'orders_trades',
+        ], true), 404);
         $rules = match ($dataset) {
             'cash_statement' => [
                 'from' => ['nullable', 'date_format:Y-m-d', 'before_or_equal:today'],
@@ -24,6 +27,7 @@ class PortfolioExportController extends Controller
                 'date_a' => ['required', 'date_format:Y-m-d', 'before:date_b', 'before_or_equal:today'],
                 'date_b' => ['required', 'date_format:Y-m-d', 'after:date_a', 'before_or_equal:today'],
             ],
+            default => [],
         };
 
         return $this->exports->response(\activePortfolio(), $dataset, $request->validate($rules));

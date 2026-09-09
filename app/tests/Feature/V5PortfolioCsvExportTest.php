@@ -42,4 +42,20 @@ class V5PortfolioCsvExportTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonValidationErrors('as_of');
     }
+
+    public function test_all_frozen_logical_export_datasets_are_available_and_portfolio_scoped(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+
+        foreach (['current_holdings', 'transactions', 'portfolio_value_history', 'recommendations', 'orders_trades'] as $dataset) {
+            $response = $this->actingAs($user)->withProfileHeader($user, $profile)
+                ->get('/api/portfolio/exports/'.$dataset);
+            $response->assertOk();
+            $csv = $response->streamedContent();
+            $this->assertStringContainsString('dataset,'.$dataset, $csv);
+            $this->assertStringContainsString('portfolio_id,'.$profile->id, $csv);
+            $this->assertStringContainsString('request_cutoff,', $csv);
+        }
+    }
 }
