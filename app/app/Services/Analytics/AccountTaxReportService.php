@@ -20,8 +20,9 @@ final class AccountTaxReportService
      * @param array<int, int>|null $whatIfProfileIds
      * @return array<string, mixed>
      */
-    public function calculate(User $user, string $financialYear, ?array $whatIfProfileIds = null): array
+    public function calculate(User $user, string $financialYear, ?array $whatIfProfileIds = null, ?string $cutoff = null): array
     {
+        $cutoff ??= now()->toDateTimeString();
         [$from, $to] = $this->financialYearBounds($financialYear);
         $profiles = PortfolioProfile::query()->where('user_id', $user->id)->get();
         $ownedIds = $profiles->pluck('id')->map(fn ($id) => (int) $id)->all();
@@ -52,10 +53,12 @@ final class AccountTaxReportService
         $transactions = Transaction::query()
             ->whereIn('profile_id', $selectedIds ?: [-1])
             ->where('transaction_date', '<=', $to)
+            ->where('created_at', '<=', $cutoff)
             ->whereNotIn('id', $transferTransactionIds ?: [-1])
             ->orderBy('transaction_date')->orderBy('id')->get();
         $openingLots = OpeningTaxLot::query()
             ->whereIn('profile_id', $selectedIds ?: [-1])
+            ->where('created_at', '<=', $cutoff)
             ->orderBy('acquired_on')->orderBy('id')->get();
 
         $realized = [];
@@ -92,9 +95,9 @@ final class AccountTaxReportService
         }
 
         $dividends = Dividend::query()->where('user_id', $user->id)
-            ->whereBetween('received_on', [$from, $to])->orderBy('received_on')->get();
+            ->whereBetween('received_on', [$from, $to])->where('created_at', '<=', $cutoff)->orderBy('received_on')->get();
         $losses = TaxLoss::query()->where('user_id', $user->id)
-            ->where('financial_year', $financialYear)->orderBy('loss_type')->get();
+            ->where('financial_year', $financialYear)->where('created_at', '<=', $cutoff)->orderBy('loss_type')->get();
         $shortTerm = collect($realized)->where('term', 'short_term')->sum('gain');
         $longTerm = collect($realized)->where('term', 'long_term')->sum('gain');
         $limitations = array_values(array_unique($limitations));
@@ -103,6 +106,7 @@ final class AccountTaxReportService
             'financial_year' => $financialYear,
             'period' => ['from' => $from, 'to' => $to],
             'calculation_mode' => $mode,
+            'request_cutoff_at' => $cutoff,
             'portfolio_ids' => $selectedIds,
             'summary' => [
                 'short_term_realized_gain' => round($shortTerm, 4),

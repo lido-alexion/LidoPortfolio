@@ -42,6 +42,7 @@ use App\Http\Controllers\Api\StockPriceController;
 use App\Http\Controllers\Api\SyncController;
 use App\Http\Controllers\Api\SyncLogController;
 use App\Http\Controllers\Api\TaxEvidenceController;
+use App\Http\Controllers\Api\TaxExportController;
 use App\Http\Controllers\Api\TransactionController;
 use App\Http\Controllers\Api\UniversePriceSyncController;
 use App\Http\Controllers\Api\UserInviteController;
@@ -234,6 +235,7 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::get('/tax/opening-lots', [TaxEvidenceController::class, 'openingLots']);
     Route::post('/tax/opening-lots', [TaxEvidenceController::class, 'storeOpeningLot']);
     Route::get('/tax/report', [TaxEvidenceController::class, 'report']);
+    Route::get('/tax/exports/{dataset}', [TaxExportController::class, 'show']);
     Route::post('/analytics/explore', [ExplorerAnalyticsController::class, 'analyze'])
         ->middleware('throttle:analytics-explore');
 
