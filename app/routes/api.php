@@ -153,6 +153,8 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::get('/cash', [CashController::class, 'summary']);
     Route::get('/cash/reservations', [CashController::class, 'reservations']);
     Route::get('/cash/ledger', [CashController::class, 'ledger']);
+    Route::get('/cash/statement', [CashController::class, 'statement']);
+    Route::get('/cash/as-of', [CashController::class, 'asOf']);
     Route::post('/cash/deposit', [CashController::class, 'deposit']);
     Route::post('/cash/withdraw', [CashController::class, 'withdraw']);
     Route::post('/cash/adjust', [CashController::class, 'adjust']);

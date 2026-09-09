@@ -3,7 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\CashLedgerEntry;
 use App\Services\CashManagementService;
+use App\Services\Lending\CapitalRecallPresenter;
+use App\Services\Strategy\PortfolioCapitalAccountingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -23,7 +26,7 @@ class CashController extends Controller
         );
 
         $summary = $this->cash->summary($profile, $includeReservations);
-        $capital = app(\App\Services\Strategy\PortfolioCapitalAccountingService::class)->snapshot($profile);
+        $capital = app(PortfolioCapitalAccountingService::class)->snapshot($profile);
         $summary['available_physical_cash'] = $capital['physical_cash']['available_physical_cash'];
         $summary['required_cash_reserve'] = $capital['od19']['required_cash_reserve'];
         $summary['portfolio_cash_reserve_pct'] = $capital['od19']['portfolio_cash_reserve_pct'];
@@ -58,7 +61,7 @@ class CashController extends Controller
 
         $entries = array_map(function ($e) {
             $reason = $e->reason;
-            $kind = app(\App\Services\Lending\CapitalRecallPresenter::class)->cashMovementKind($reason, $e->entry_type);
+            $kind = app(CapitalRecallPresenter::class)->cashMovementKind($reason, $e->entry_type);
 
             return [
                 'id' => $e->id,
@@ -85,6 +88,42 @@ class CashController extends Controller
         return response()->json(['data' => $entries]);
     }
 
+    public function statement(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'from' => 'nullable|date|before_or_equal:today',
+            'to' => 'nullable|date|before_or_equal:today|after_or_equal:from',
+            'page' => 'nullable|integer|min:1',
+            'per_page' => 'nullable|integer|min:1|max:100',
+            'entry_type' => 'nullable|string|in:'.implode(',', CashLedgerEntry::TYPES),
+        ]);
+
+        return response()->json([
+            'data' => $this->cash->statement(
+                \activePortfolio(),
+                $validated['from'] ?? null,
+                $validated['to'] ?? null,
+                (int) ($validated['page'] ?? 1),
+                (int) ($validated['per_page'] ?? 50),
+                $validated['entry_type'] ?? null,
+            ),
+        ]);
+    }
+
+    public function asOf(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'date' => 'required|date|before_or_equal:today',
+        ]);
+
+        return response()->json(['data' => [
+            'requested_date' => $validated['date'],
+            'cash_balance' => $this->cash->balanceAsOf(\activePortfolio(), $validated['date']),
+            'reservations_included' => false,
+            'complete' => true,
+        ]]);
+    }
+
     public function deposit(Request $request): JsonResponse
     {
         return $this->mutate($request, 'deposit');
@@ -105,7 +144,7 @@ class CashController extends Controller
         $profile = \activePortfolio();
         $validated = $request->validate([
             'amount' => 'required|numeric',
-            'reason' => 'nullable|string|max:500',
+            'reason' => $op === 'adjust' ? 'required_without:remarks|string|max:500' : 'nullable|string|max:500',
             'remarks' => 'nullable|string|max:500',
             'transaction_date' => 'nullable|date|before_or_equal:today',
             'entry_date' => 'nullable|date|before_or_equal:today',

@@ -8,6 +8,8 @@ use App\Models\PortfolioProfile;
 use App\Models\TradingRecommendation;
 use App\Models\Transaction;
 use App\Models\User;
+use Carbon\Carbon;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -187,6 +189,10 @@ class CashManagementService
             throw ValidationException::withMessages(['amount' => ['Adjustment amount cannot be zero.']]);
         }
 
+        if (trim((string) $reason) === '') {
+            throw ValidationException::withMessages(['reason' => ['Adjustment reason is required.']]);
+        }
+
         return $this->post(
             $profile,
             CashLedgerEntry::TYPE_ADJUSTMENT,
@@ -312,7 +318,7 @@ class CashManagementService
         $fees = (float) ($transaction->fees ?? 0);
         $notional = round($qty * $price, 4);
         $entryDate = $transaction->transaction_date
-            ? \Carbon\Carbon::parse($transaction->transaction_date)->toDateString()
+            ? Carbon::parse($transaction->transaction_date)->toDateString()
             : null;
 
         if (strtolower((string) $transaction->type) === 'buy') {
@@ -393,6 +399,119 @@ class CashManagementService
             ->all();
     }
 
+    public function balanceAsOf(PortfolioProfile $profile, string $date): float
+    {
+        $asOf = CarbonImmutable::parse($date)->toDateString();
+
+        return round((float) CashLedgerEntry::query()
+            ->where('profile_id', $profile->id)
+            ->whereDate('entry_date', '<=', $asOf)
+            ->sum('amount'), 4);
+    }
+
+    /**
+     * Effective-date cash statement. Created timestamps remain visible audit evidence,
+     * while the running balance follows financial effective-date order.
+     *
+     * @return array<string, mixed>
+     */
+    public function statement(
+        PortfolioProfile $profile,
+        ?string $from = null,
+        ?string $to = null,
+        int $page = 1,
+        int $perPage = 50,
+        ?string $type = null,
+    ): array {
+        $fromDate = $from ? CarbonImmutable::parse($from)->toDateString() : null;
+        $toDate = $to ? CarbonImmutable::parse($to)->toDateString() : now()->toDateString();
+        $page = max(1, $page);
+        $perPage = min(100, max(1, $perPage));
+
+        $opening = $fromDate
+            ? round((float) CashLedgerEntry::query()
+                ->where('profile_id', $profile->id)
+                ->whereDate('entry_date', '<', $fromDate)
+                ->sum('amount'), 4)
+            : 0.0;
+
+        $query = CashLedgerEntry::query()
+            ->where('profile_id', $profile->id)
+            ->when($fromDate, fn ($q) => $q->whereDate('entry_date', '>=', $fromDate))
+            ->whereDate('entry_date', '<=', $toDate)
+            ->when($type, fn ($q) => $q->where('entry_type', $type))
+            ->orderBy('entry_date')
+            ->orderBy('created_at')
+            ->orderBy('id');
+
+        $total = (clone $query)->count();
+        $entries = $query->forPage($page, $perPage)->get()->map(function (CashLedgerEntry $entry) use ($profile) {
+            $running = round((float) CashLedgerEntry::query()
+                ->where('profile_id', $profile->id)
+                ->where(function ($query) use ($entry) {
+                    $query->whereDate('entry_date', '<', $entry->entry_date)
+                        ->orWhere(function ($sameDate) use ($entry) {
+                            $sameDate->whereDate('entry_date', $entry->entry_date)
+                                ->where(function ($ordered) use ($entry) {
+                                    $ordered->where('created_at', '<', $entry->created_at)
+                                        ->orWhere(function ($sameTimestamp) use ($entry) {
+                                            $sameTimestamp->where('created_at', $entry->created_at)
+                                                ->where('id', '<=', $entry->id);
+                                        });
+                                });
+                        });
+                })
+                ->sum('amount'), 4);
+
+            return [
+                'id' => $entry->id,
+                'entry_type' => $entry->entry_type,
+                'category' => match ($entry->entry_type) {
+                    CashLedgerEntry::TYPE_DEPOSIT, CashLedgerEntry::TYPE_WITHDRAWAL => 'external_flow',
+                    CashLedgerEntry::TYPE_ADJUSTMENT => 'adjustment',
+                    CashLedgerEntry::TYPE_BUY, CashLedgerEntry::TYPE_SELL => 'trade',
+                    default => 'internal',
+                },
+                'amount' => (float) $entry->amount,
+                'running_balance' => $running,
+                'reason' => $entry->reason,
+                'entry_date' => optional($entry->entry_date)?->toDateString(),
+                'transaction_id' => $entry->transaction_id,
+                'recommendation_id' => $entry->recommendation_id,
+                'user_id' => $entry->user_id,
+                'created_at' => optional($entry->created_at)?->toIso8601String(),
+            ];
+        })->values()->all();
+
+        return [
+            'opening_balance' => $opening,
+            'closing_balance' => $this->balanceAsOf($profile, $toDate),
+            'from' => $fromDate,
+            'to' => $toDate,
+            'entries' => $entries,
+            'pagination' => [
+                'page' => $page,
+                'per_page' => $perPage,
+                'total' => $total,
+                'last_page' => max(1, (int) ceil($total / $perPage)),
+            ],
+        ];
+    }
+
+    public function rebuildBalance(PortfolioProfile $profile): float
+    {
+        return DB::transaction(function () use ($profile) {
+            $account = $this->ensureAccount($profile);
+            $account = CashAccount::query()->whereKey($account->id)->lockForUpdate()->firstOrFail();
+            $balance = round((float) CashLedgerEntry::query()
+                ->where('profile_id', $profile->id)
+                ->sum('amount'), 4);
+            $account->forceFill(['balance' => $balance])->save();
+
+            return $balance;
+        });
+    }
+
     protected function post(
         PortfolioProfile $profile,
         string $type,
@@ -439,7 +558,7 @@ class CashManagementService
             $account->forceFill(['balance' => max(0, $newBalance)])->save();
 
             $resolvedDate = $entryDate
-                ? \Carbon\Carbon::parse($entryDate)->toDateString()
+                ? Carbon::parse($entryDate)->toDateString()
                 : now()->toDateString();
 
             $trimmedReason = $reason !== null ? trim($reason) : '';
