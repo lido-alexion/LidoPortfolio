@@ -143,6 +143,28 @@ class CashController extends Controller
         return $this->mutate($request, 'adjust');
     }
 
+    public function reverse(Request $request, int $entry): JsonResponse
+    {
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'max:500'],
+            'entry_date' => ['nullable', 'date', 'before_or_equal:today'],
+        ]);
+        $reversal = $this->cash->reverseCashMovement(
+            \activePortfolio(),
+            $entry,
+            $validated['reason'],
+            $request->user(),
+            $validated['entry_date'] ?? null,
+        );
+
+        return response()->json(['data' => [
+            'id' => $reversal->id,
+            'reversal_of_entry_id' => $reversal->reversal_of_entry_id,
+            'amount' => (float) $reversal->amount,
+            'reason' => $reversal->reason,
+        ]], 201);
+    }
+
     protected function mutate(Request $request, string $op): JsonResponse
     {
         $profile = \activePortfolio();

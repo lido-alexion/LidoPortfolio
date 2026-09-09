@@ -549,6 +549,46 @@ class CashManagementService
         });
     }
 
+    public function reverseCashMovement(
+        PortfolioProfile $profile,
+        int $entryId,
+        string $reason,
+        ?User $user = null,
+        ?string $entryDate = null,
+    ): CashLedgerEntry {
+        $reason = trim($reason);
+        if ($reason === '') {
+            throw ValidationException::withMessages(['reason' => ['Reversal reason is required.']]);
+        }
+
+        $entry = CashLedgerEntry::query()->where('profile_id', $profile->id)->find($entryId);
+        if ($entry === null) {
+            throw ValidationException::withMessages(['entry' => ['Cash ledger entry was not found for this Portfolio.']]);
+        }
+        if (! in_array($entry->entry_type, [
+            CashLedgerEntry::TYPE_DEPOSIT,
+            CashLedgerEntry::TYPE_WITHDRAWAL,
+            CashLedgerEntry::TYPE_ADJUSTMENT,
+        ], true)) {
+            throw ValidationException::withMessages(['entry' => ['Trade and internal cash effects must be corrected through their source workflow.']]);
+        }
+        if (CashLedgerEntry::query()->where('reversal_of_entry_id', $entry->id)->exists()) {
+            throw ValidationException::withMessages(['entry' => ['This cash ledger entry has already been reversed.']]);
+        }
+
+        return $this->post(
+            $profile,
+            CashLedgerEntry::TYPE_ADJUSTMENT,
+            -1 * (float) $entry->amount,
+            'Reversal of cash entry #'.$entry->id.': '.$reason,
+            $user,
+            null,
+            null,
+            $entryDate,
+            $entry->id,
+        );
+    }
+
     protected function post(
         PortfolioProfile $profile,
         string $type,
@@ -558,6 +598,7 @@ class CashManagementService
         ?int $transactionId = null,
         ?int $recommendationId = null,
         ?string $entryDate = null,
+        ?int $reversalOfEntryId = null,
     ): CashLedgerEntry {
         return DB::transaction(function () use (
             $profile,
@@ -568,6 +609,7 @@ class CashManagementService
             $transactionId,
             $recommendationId,
             $entryDate,
+            $reversalOfEntryId,
         ) {
             $account = CashAccount::query()
                 ->where('profile_id', $profile->id)
@@ -606,6 +648,7 @@ class CashManagementService
                 'amount' => $signedAmount,
                 'balance_after' => (float) $account->balance,
                 'reason' => $trimmedReason !== '' ? $trimmedReason : null,
+                'reversal_of_entry_id' => $reversalOfEntryId,
                 'entry_date' => $resolvedDate,
                 'transaction_id' => $transactionId,
                 'recommendation_id' => $recommendationId,

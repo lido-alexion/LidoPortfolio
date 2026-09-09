@@ -159,6 +159,7 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::post('/cash/deposit', [CashController::class, 'deposit']);
     Route::post('/cash/withdraw', [CashController::class, 'withdraw']);
     Route::post('/cash/adjust', [CashController::class, 'adjust']);
+    Route::post('/cash/ledger/{entry}/reverse', [CashController::class, 'reverse'])->whereNumber('entry');
 
     Route::get('/corporate-actions', [CorporateActionController::class, 'index']);
     Route::post('/corporate-actions/preview', [CorporateActionController::class, 'preview']);

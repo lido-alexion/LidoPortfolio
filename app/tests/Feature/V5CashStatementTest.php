@@ -99,4 +99,27 @@ class V5CashStatementTest extends TestCase
         $this->assertNull($statement['closing_balance']);
         $this->assertNull($statement['entries'][0]['running_balance']);
     }
+
+    public function test_cash_corrections_are_append_only_traceable_and_cannot_be_reversed_twice(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        $entry = app(CashManagementService::class)->deposit($profile, 500, 'Incorrect deposit', $user, '2026-08-01');
+
+        $response = $this->actingAs($user)->withProfileHeader($user, $profile)
+            ->postJson('/api/cash/ledger/'.$entry->id.'/reverse', [
+                'reason' => 'Duplicate broker entry',
+                'entry_date' => '2026-08-02',
+            ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.reversal_of_entry_id', $entry->id)
+            ->assertJsonPath('data.amount', -500);
+        $this->assertDatabaseHas('portfolio_cash_ledger_entries', ['id' => $entry->id, 'amount' => 500]);
+        $this->assertSame(0.0, app(CashManagementService::class)->balance($profile));
+
+        $this->postJson('/api/cash/ledger/'.$entry->id.'/reverse', ['reason' => 'Again'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('entry');
+    }
 }

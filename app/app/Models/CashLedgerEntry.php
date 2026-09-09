@@ -51,6 +51,7 @@ class CashLedgerEntry extends Model
         'amount',
         'balance_after',
         'reason',
+        'reversal_of_entry_id',
         'entry_date',
         'transaction_id',
         'recommendation_id',
@@ -65,6 +66,7 @@ class CashLedgerEntry extends Model
             'amount' => 'decimal:4',
             'balance_after' => 'decimal:4',
             'entry_date' => 'date',
+            'reversal_of_entry_id' => 'integer',
             'transaction_id' => 'integer',
             'recommendation_id' => 'integer',
             'user_id' => 'integer',
@@ -90,5 +92,10 @@ class CashLedgerEntry extends Model
     public function recommendation(): BelongsTo
     {
         return $this->belongsTo(TradingRecommendation::class, 'recommendation_id');
+    }
+
+    public function reversedEntry(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'reversal_of_entry_id');
     }
 }
