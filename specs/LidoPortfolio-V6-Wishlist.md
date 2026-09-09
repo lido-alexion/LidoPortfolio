@@ -4,15 +4,22 @@
 |---|---|
 | **Document type** | Canonical V6 product wishlist and planning register |
 | **Created** | 2026-09-07 |
-| **Status** | ACTIVE PLANNING |
+| **Frozen** | 2026-09-09 |
+| **Status** | **FROZEN / IMPLEMENTATION READY** |
 | **Canonical path** | `specs/LidoPortfolio-V6-Wishlist.md` |
 | **Predecessor** | `specs/LidoPortfolio-V5-Wishlist.md` |
 
 ## 1. Purpose and authority
 
-This is the canonical register for V6 product planning. V1–V5 frozen specifications remain authoritative for inherited behaviour. A V6 feature may supersede an older rule only when the V6 specification says so explicitly and records compatibility/migration consequences.
+This is the canonical register for V6 product scope and planning. **V6 product architecture is frozen as of 2026-09-09 and implementation may proceed.** V1–V5 frozen specifications remain authoritative for inherited behaviour. A V6 feature may supersede an older rule only when the V6 specification says so explicitly and records compatibility/migration consequences.
 
 `DECIDED` means product behaviour is sufficiently frozen for implementation. It does not mean implementation exists. `COMPLETE` requires implementation, tests, documentation, migrations/build/deployment verification as applicable.
+
+### V6 freeze rule
+
+The six V6 epics and twelve V6 backlog items are frozen for implementation. Routine engineering choices, implementation details, refactoring and architecture-consistent edge-case handling do not require PO review. A change that materially alters frozen product semantics, security boundaries, accounting/execution behaviour, user-visible capability, or intentionally removes an existing preserved capability requires explicit PO review and a recorded V6 amendment before implementation.
+
+Work explicitly moved to V7 is not unfinished V6 scope and must not be pulled into V6 implementation implicitly.
 
 ### Status values
 
@@ -112,32 +119,34 @@ Feature: `V4-FEAT-051`.
 
 Personal plain-text notes are available contextually throughout Investor pages via a lightweight right-side utility pane, with responsive mobile replacement where appropriate.
 
-## 6. Recommended V6 planning sequence
+## 6. V6 freeze declaration and implementation handoff
 
-All V6 architecture epics are now decided. Implementation can proceed by dependency/priority rather than further V6 product-architecture deliberation.
+**V6 is frozen for implementation as of 2026-09-09.** There are no unresolved V6 product-architecture epics. Implementation may proceed by dependency and priority.
 
 1. **E1 Live Execution Safety** — frozen.
 2. **E2 Paper Experimentation** — frozen.
 3. **E3 Administrative Auditability** — frozen.
-4. **E5 External/API Access** — frozen.
-5. **E4 Investor UX & Client Evolution** — frozen.
-6. **E6 Contextual Notes** — frozen; may be implemented with E4 because it uses the same right-side utility/chrome language.
+4. **E4 Investor UX & Client Evolution** — frozen.
+5. **E5 External/API Access** — frozen.
+6. **E6 Contextual Notes** — frozen.
 7. **FEAT-035 frontend migration** — continues incrementally wherever touched surfaces justify migration, within the frozen E4 rules.
 
-`V4-FEAT-052` Telemetry is no longer part of this V6 sequence; it is V7 standalone-product work.
+`V4-FEAT-052` Telemetry is no longer part of V6; it is V7 standalone-product work.
 
-## 7. Planning rules
+Implementation agents should treat the frozen specifications and inherited V1–V5 rules as the product contract. They should inspect existing code before changing a surface, preserve established behavior unless superseded, and prefer architecture-consistent implementation choices over reopening settled product questions. Any genuine contradiction or material product-semantic gap should be escalated rather than guessed.
 
-For each feature/cluster:
+## 7. Implementation governance
 
-1. Inspect current implementation and authoritative V1–V5 specifications.
-2. State inherited rules and whether V6 preserves or explicitly supersedes them.
-3. Ask the PO only for materially different product semantics/policy/security/architecture decisions; routine UI and edge-case choices may follow the frozen design principles.
-4. Freeze outcomes, non-goals, dependencies, authorization/audit/migration implications and acceptance criteria.
-5. Persist a dedicated V6 specification and mark the register `DECIDED` only when product behaviour is implementable without unresolved material PO choices.
-6. Implementation begins only after the relevant feature is `DECIDED`.
+For implementation of each feature/cluster:
 
-V6 planning may run concurrently with the separate V5 closure mission, but V6 implementation must not contaminate V5 closure work.
+1. Inspect current implementation and authoritative V1–V6 specifications.
+2. Preserve inherited rules unless the frozen V6 specification explicitly supersedes them.
+3. Resolve routine engineering choices and edge cases using existing architecture and project conventions without reopening product planning.
+4. Escalate only material contradictions or missing product/security/accounting/execution semantics.
+5. Keep implementation, tests, migrations, documentation and acceptance evidence aligned.
+6. Mark a feature `COMPLETE` only after implementation, tests, documentation, migrations/build/deployment verification as applicable.
+
+V6 implementation may run concurrently with the separate V5 closure mission, but V6 work must not contaminate or rewrite V5 closure evidence.
 
 ## 8. Inherited V6-wide principles
 
