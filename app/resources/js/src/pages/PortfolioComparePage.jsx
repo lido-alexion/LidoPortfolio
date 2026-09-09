@@ -6,6 +6,7 @@ import { usePortfolio } from '../context/PortfolioContext';
 import { ROUTES } from '../navigation/routes';
 import { formatTableMoney2 } from '../utils/tableFormat';
 import { getLocalTodayDateString } from '../utils/transactionDate';
+import { downloadPortfolioCsv } from '../utils/portfolioCsvExport';
 
 function monthAgo(dateString) {
     const date = new Date(`${dateString}T12:00:00`);
@@ -23,6 +24,7 @@ export default function PortfolioComparePage() {
     const today = getLocalTodayDateString();
     const [dateA, setDateA] = useState(params.get('date_a') || monthAgo(today));
     const [dateB, setDateB] = useState(params.get('date_b') || today);
+    const [exporting, setExporting] = useState(false);
     const valid = Boolean(dateA && dateB && dateA < dateB && dateB <= today);
 
     const request = useCallback(async () => {
@@ -58,6 +60,10 @@ export default function PortfolioComparePage() {
                     </p>
                 </div>
                 <Link className="btn btn-sm btn-outline-secondary" to={ROUTES.PORTFOLIO_HISTORICAL_HOLDINGS}>Historical holdings</Link>
+                <button type="button" className="btn btn-sm btn-outline-primary" disabled={!valid || exporting} onClick={async () => {
+                    setExporting(true);
+                    try { await downloadPortfolioCsv('portfolio_compare', { date_a: dateA, date_b: dateB }); } finally { setExporting(false); }
+                }}>{exporting ? 'Exporting…' : 'Export comparison'}</button>
             </div>
 
             <div className="card mb-3"><div className="card-body row g-2 align-items-end">

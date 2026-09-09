@@ -15,4 +15,5 @@ test('V5 portfolio compare is deep-linkable and does not mislabel wealth change 
     assert.match(page, /Value change is not investment return or causal attribution/);
     assert.match(page, /External flows/);
     assert.match(page, /Transaction evidence in \(A, B\]/);
+    assert.match(page, /downloadPortfolioCsv\('portfolio_compare'/);
 });

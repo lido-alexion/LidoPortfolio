@@ -19,6 +19,7 @@ import {
     isValidTransactionDate,
     parseTransactionDateDisplay,
 } from '../utils/transactionDate';
+import { downloadPortfolioCsv } from '../utils/portfolioCsvExport';
 
 function moneyOrUnavailable(value) {
     if (value == null || Number.isNaN(Number(value))) {
@@ -48,6 +49,7 @@ export default function HistoricalHoldingsPage() {
     const today = getLocalTodayDateString();
     const [asOf, setAsOf] = useState(today);
     const [asOfDisplay, setAsOfDisplay] = useState(formatTransactionDateDisplay(today));
+    const [exporting, setExporting] = useState(false);
 
     const asOfValid = isValidTransactionDate(asOf) && !isTransactionDateInFuture(asOf);
 
@@ -131,6 +133,10 @@ export default function HistoricalHoldingsPage() {
                 <Link className="btn btn-sm btn-outline-primary" to={ROUTES.PORTFOLIO_COMPARE}>
                     Compare dates
                 </Link>
+                <button type="button" className="btn btn-sm btn-outline-primary" disabled={!asOfValid || exporting} onClick={async () => {
+                    setExporting(true);
+                    try { await downloadPortfolioCsv('historical_holdings', { as_of: asOf }); } finally { setExporting(false); }
+                }}>{exporting ? 'Exporting…' : 'Export holdings'}</button>
             </div>
 
             <div className="card mb-3">

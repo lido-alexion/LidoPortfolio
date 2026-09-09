@@ -14,6 +14,7 @@ import {
     getLocalTodayDateString,
 } from '../utils/transactionDate';
 import CapitalRecallPanel from '../components/CapitalRecallPanel';
+import { downloadPortfolioCsv } from '../utils/portfolioCsvExport';
 
 const OPS = [
     { id: 'deposit', label: 'Deposit', endpoint: '/cash/deposit', amountPlaceholder: 'Amount deposited' },
@@ -80,6 +81,7 @@ export default function CashManagementPage() {
     const [busy, setBusy] = useState(false);
     const [allocDraft, setAllocDraft] = useState([]);
     const [allocBusy, setAllocBusy] = useState(false);
+    const [exporting, setExporting] = useState(false);
 
     useEffect(() => {
         if (!profileId) {
@@ -219,6 +221,10 @@ export default function CashManagementPage() {
                 </div>
                 <div className="d-flex gap-2">
                     <Link className="btn btn-outline-secondary btn-sm" to="/transactions/pending">Pending execution</Link>
+                    <button type="button" className="btn btn-outline-primary btn-sm" disabled={exporting || !profileId} onClick={async () => {
+                        setExporting(true);
+                        try { await downloadPortfolioCsv('cash_statement'); } finally { setExporting(false); }
+                    }}>{exporting ? 'Exporting…' : 'Export statement'}</button>
                     <button type="button" className="btn btn-outline-secondary btn-sm" onClick={load} disabled={loading}>
                         Refresh
                     </button>

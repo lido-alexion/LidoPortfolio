@@ -21,4 +21,5 @@ test('V5 cash statement uses effective-date balances and requires adjustment rea
     assert.match(source, /fmtWhen\(entry\.created_at\)/);
     assert.match(source, /Adjustment reason is required/);
     assert.match(source, /required=\{op === 'adjust'\}/);
+    assert.match(source, /downloadPortfolioCsv\('cash_statement'/);
 });

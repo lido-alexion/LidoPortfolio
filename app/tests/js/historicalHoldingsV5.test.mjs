@@ -13,4 +13,5 @@ test('V5 historical holdings exposes cash, total value, and price evidence', () 
     assert.match(source, /completeness\.total_value_complete/);
     assert.match(source, /row\.price_as_of/);
     assert.match(source, /row\.price_source/);
+    assert.match(source, /downloadPortfolioCsv\('historical_holdings'/);
 });
