@@ -6,6 +6,7 @@ use App\Models\AnalysisPreference;
 use App\Models\Dividend;
 use App\Models\Stock;
 use App\Models\Transaction;
+use App\Models\TaxRuleVersion;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -78,5 +79,34 @@ class V5AccountTaxReportApiTest extends TestCase
         $this->actingAs($user)->withProfileHeader($user, $profile)
             ->getJson('/api/tax/report?financial_year=2025-26&portfolio_ids[]='.$otherProfile->id)
             ->assertUnprocessable();
+    }
+
+    public function test_estimated_tax_requires_and_records_effective_rule_version(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        $stock = Stock::query()->create(['symbol' => 'RULE', 'exchange' => 'NSE', 'name' => 'Rule Test']);
+        Transaction::query()->create([
+            'profile_id' => $profile->id, 'stock_id' => $stock->id, 'type' => 'buy',
+            'quantity' => 1, 'price' => 100, 'fees' => 0, 'transaction_date' => '2024-01-01',
+        ]);
+        Transaction::query()->create([
+            'profile_id' => $profile->id, 'stock_id' => $stock->id, 'type' => 'sell',
+            'quantity' => 1, 'price' => 200, 'fees' => 0, 'transaction_date' => '2025-05-01',
+        ]);
+        TaxRuleVersion::query()->create([
+            'version' => 'test-rule-1', 'effective_from' => '2025-04-01',
+            'rules' => [
+                'long_term_holding_days' => 365, 'short_term_rate' => 0.2,
+                'long_term_rate' => 0.1, 'long_term_exemption' => 0, 'fee_classifications' => [],
+            ],
+        ]);
+
+        $this->actingAs($user)->withProfileHeader($user, $profile)
+            ->getJson('/api/tax/report?financial_year=2025-26')
+            ->assertOk()
+            ->assertJsonPath('data.summary.estimated_tax', 10)
+            ->assertJsonPath('data.tax_rule_versions.0', 'test-rule-1')
+            ->assertJsonPath('data.completeness', 'complete');
     }
 }

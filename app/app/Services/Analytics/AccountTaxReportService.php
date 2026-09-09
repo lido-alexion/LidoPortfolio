@@ -7,6 +7,7 @@ use App\Models\Dividend;
 use App\Models\OpeningTaxLot;
 use App\Models\PortfolioProfile;
 use App\Models\TaxLoss;
+use App\Models\TaxRuleVersion;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -101,6 +102,8 @@ final class AccountTaxReportService
         $shortTerm = collect($realized)->where('term', 'short_term')->sum('gain');
         $longTerm = collect($realized)->where('term', 'long_term')->sum('gain');
         $limitations = array_values(array_unique($limitations));
+        [$estimatedTax, $appliedRules, $taxLimitations] = $this->estimateTax($realized, $losses);
+        $limitations = array_values(array_unique([...$limitations, ...$taxLimitations]));
 
         return [
             'financial_year' => $financialYear,
@@ -112,14 +115,15 @@ final class AccountTaxReportService
                 'short_term_realized_gain' => round($shortTerm, 4),
                 'long_term_realized_gain' => round($longTerm, 4),
                 'dividend_income' => round((float) $dividends->sum('amount'), 4),
-                'estimated_tax' => null,
+                'estimated_tax' => $estimatedTax,
             ],
             'realized_disposals' => $realized,
             'open_lots_informational' => $openLots,
             'dividends' => $dividends,
             'losses' => $losses,
-            'completeness' => $limitations === [] ? 'estimate_with_limitations' : 'incomplete',
-            'limitations' => [...$limitations, 'tax_rate_rule_not_configured'],
+            'tax_rule_versions' => $appliedRules,
+            'completeness' => $limitations === [] ? 'complete' : 'incomplete',
+            'limitations' => $limitations,
             'assumptions' => [
                 'jurisdiction' => 'India',
                 'lot_method' => 'fifo',
@@ -128,6 +132,50 @@ final class AccountTaxReportService
                 'tax_advice' => false,
             ],
         ];
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $realized
+     * @return array{float|null, array<int, string>, array<int, string>}
+     */
+    private function estimateTax(array $realized, $losses): array
+    {
+        if ($realized === []) {
+            return [0.0, [], []];
+        }
+        if ($losses->isNotEmpty() || collect($realized)->contains(fn (array $row) => $row['gain'] < 0)) {
+            return [null, [], ['loss_setoff_requires_versioned_rule_engine']];
+        }
+
+        $buckets = [];
+        $applied = [];
+        foreach ($realized as $row) {
+            $rule = TaxRuleVersion::query()
+                ->whereDate('effective_from', '<=', $row['disposed_on'])
+                ->where(fn ($query) => $query->whereNull('effective_to')->orWhereDate('effective_to', '>=', $row['disposed_on']))
+                ->orderByDesc('effective_from')->first();
+            $longTerm = $rule !== null
+                && $row['holding_days'] > (int) ($rule->rules['long_term_holding_days'] ?? 365);
+            $term = $longTerm ? 'long_term' : 'short_term';
+            $rateKey = $longTerm ? 'long_term_rate' : 'short_term_rate';
+            if ($rule === null || ! is_numeric($rule->rules[$rateKey] ?? null)) {
+                return [null, array_values(array_unique($applied)), ['tax_rate_rule_not_configured']];
+            }
+            $applied[] = $rule->version;
+            $key = $rule->id.':'.$term;
+            $buckets[$key] ??= ['term' => $term, 'gain' => 0.0, 'rules' => $rule->rules];
+            $buckets[$key]['gain'] += max(0.0, (float) $row['gain']);
+        }
+
+        $tax = 0.0;
+        foreach ($buckets as $bucket) {
+            $longTerm = $bucket['term'] === 'long_term';
+            $exemption = $longTerm ? (float) ($bucket['rules']['long_term_exemption'] ?? 0.0) : 0.0;
+            $rate = (float) $bucket['rules'][$longTerm ? 'long_term_rate' : 'short_term_rate'];
+            $tax += max(0.0, $bucket['gain'] - $exemption) * $rate;
+        }
+
+        return [round($tax, 4), array_values(array_unique($applied)), []];
     }
 
     /** @return array{string, string} */

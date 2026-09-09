@@ -30,6 +30,7 @@ class TaxRuleVersionController extends Controller
             'rules.long_term_rate' => ['nullable', 'numeric', 'between:0,1'],
             'rules.long_term_exemption' => ['nullable', 'numeric', 'min:0'],
             'rules.fee_classifications' => ['required', 'array'],
+            'rules.loss_setoff' => ['nullable', 'array'],
         ]);
 
         $overlap = TaxRuleVersion::query()
