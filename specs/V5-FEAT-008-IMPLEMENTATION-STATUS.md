@@ -24,20 +24,21 @@
 - Manual/scheduled Screener runs pin the exact immutable definition and binding revision at start and retain it across chunk continuation; inconsistent or unavailable mapped bindings fail closed.
 - Screener and Strategy backtests retain exact artifact-version/binding-revision evidence and immutable definition/config snapshots across resumable chunks, so a later binding upgrade cannot reinterpret an in-flight simulation.
 - Mapped legacy editors/registries are explicitly read-only compatibility projections and link to the authoritative Artifact Library; legacy mutation/enable/archive/delete endpoints reject lifecycle bypasses.
+- All remaining legacy Strategy/Screener creation, validated JSON import and shared-copy authoring paths now create account-owned Artifact Library Drafts without creating runnable unmapped rows. New Screener Drafts retain suggested Portfolio scope, watchlist/index, schedule and notification settings for the later explicit bind transaction.
 
 Focused evidence at this checkpoint:
 
-- Combined backend compatibility/runtime/projection suite: **143 tests / 1,219 assertions passed**.
-- Frontend JavaScript groups: **143 contract/unit tests + 59 component tests passed**.
-- Dedicated Library UI contracts, TypeScript no-emit and production Vite build passed.
-- Implementation commits: `843c34e`, `80577a4`, `278a528`, `7f5248d`, `dcf85d6`, `47738b2`, `70f686c`, `11761a9`, `8b6a7b4`, `26d8ed2`, `78fdaf7`, `8214c0d`, `40e0db`, `46485a2`, `a68e473`.
+- Dedicated Artifact lifecycle/runtime/API suite: **71 tests / 421 assertions passed** after the authoring cutover.
+- Combined Screener behavior, authoring, registry and sharing suite: **38 tests / 359 assertions passed**.
+- Frontend JavaScript groups: **144 contract/unit tests + 59 component tests passed**; TypeScript no-emit passed.
+- Earlier checkpoint production Vite build passed; the final build remains part of the closure gate below.
+- Implementation commits: `843c34e`, `80577a4`, `278a528`, `7f5248d`, `dcf85d6`, `47738b2`, `70f686c`, `11761a9`, `8b6a7b4`, `26d8ed2`, `78fdaf7`, `8214c0d`, `40e0db`, `46485a2`, `a68e473`, `f8e45c8`, `4a83f78`, `0ceac28`.
 
 ## Material work still required
 
-1. **Authoring cutover completion.** New legacy Registry/editor creation/import paths can still create unmapped compatibility rows. Route those paths into V5 Draft creation (or retire them after equivalent Library UX) so no new runnable definition can bypass publication and binding.
-2. **Operational rollout evidence.** Execute the explicit backfill against representative/restored application data, inventory any invalid rows, and document remediation/rollback procedure before production rollout.
-3. **Final verification.** Run the full backend/frontend/typecheck/build/migration/security/trading suites and re-audit every frozen acceptance criterion before changing FEAT-008 to COMPLETE.
+1. **Operational rollout evidence.** Execute the explicit backfill against representative/restored application data, inventory any invalid rows, and document remediation/rollback procedure before production rollout.
+2. **Final verification.** Run the full backend/frontend/typecheck/build/migration/security/trading suites and re-audit every frozen acceptance criterion before changing FEAT-008 to COMPLETE.
 
 ## Closure decision
 
-FEAT-008 remains deliberately **IN PROGRESS**. The live Strategy/Screener runtime, trading evidence, and resumable simulation pinning are implemented, but new legacy authoring paths still require reconciliation plus final rollout/full-suite evidence before closure.
+FEAT-008 remains deliberately **IN PROGRESS**. Runtime cutover, immutable trading/simulation evidence and the authoring cutover are implemented. Representative-data rollout evidence and the final full-suite/frozen-criteria audit are still required before closure.
