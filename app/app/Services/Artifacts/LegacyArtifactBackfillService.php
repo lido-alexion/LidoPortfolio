@@ -54,13 +54,13 @@ final class LegacyArtifactBackfillService
                 $screener->id,
                 ['legacy_artifact_version' => (int) ($screener->artifact_version ?? 1)],
             );
+            $screener->forceFill(['reusable_artifact_id' => $artifactVersion->artifact_id])->save();
             $binding = $this->bindings->bind($profile, $artifactVersion, $profile->user, [
                 'schedule_enabled' => (bool) $screener->schedule_enabled,
                 'schedule_time' => $screener->schedule_time,
                 'schedule_days' => $screener->schedule_days ?? [],
                 'telegram_enabled' => (bool) $screener->telegram_enabled,
             ], (bool) $screener->is_enabled);
-            $screener->forceFill(['reusable_artifact_id' => $artifactVersion->artifact_id])->save();
             if ($screener->artifact_status === ArtifactStatus::ARCHIVED) {
                 $this->lifecycle->archive($artifactVersion->artifact, $profile->user);
                 if ($binding->status === ArtifactBinding::STATUS_ENABLED) {
@@ -89,10 +89,10 @@ final class LegacyArtifactBackfillService
                 $strategy->id,
                 ['legacy_strategy_version_id' => $legacyVersionId],
             );
+            $strategy->forceFill(['reusable_artifact_id' => $artifactVersion->artifact_id])->save();
             $binding = $this->bindings->bind($profile, $artifactVersion, $profile->user, [
                 'allocation_pct' => $strategy->allocation_pct !== null ? (float) $strategy->allocation_pct : 100.0,
             ], $strategy->status === TradingStrategy::STATUS_ACTIVE);
-            $strategy->forceFill(['reusable_artifact_id' => $artifactVersion->artifact_id])->save();
             if ($strategy->status === TradingStrategy::STATUS_ARCHIVED) {
                 $this->lifecycle->archive($artifactVersion->artifact, $profile->user);
                 if ($binding->status === ArtifactBinding::STATUS_ENABLED) {

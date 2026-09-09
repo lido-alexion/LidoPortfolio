@@ -17,6 +17,7 @@ final class ArtifactBindingService
     public function __construct(
         private ArtifactUsabilityEvaluator $usabilityEvaluator,
         private ArtifactLibraryAccessService $libraryAccess,
+        private ArtifactLegacyProjectionService $legacyProjection,
     ) {}
 
     /** @param array<string, mixed> $settings */
@@ -52,6 +53,7 @@ final class ArtifactBindingService
             ]);
             $revision = $this->createRevision($binding, $version, $actor, $settings, 'bind', 'Initial Portfolio binding');
             $binding->forceFill(['active_revision_id' => $revision->id])->save();
+            $this->legacyProjection->sync($binding, $version);
 
             return $binding->fresh(['activeRevision.artifactVersion', 'revisions']);
         });
@@ -163,6 +165,8 @@ final class ArtifactBindingService
             ])->save();
             $revision = $this->createRevision($locked, $version, $actor, $settings, $action, $changeSummary);
             $locked->forceFill(['active_revision_id' => $revision->id])->save();
+            $locked->unsetRelation('activeRevision');
+            $this->legacyProjection->sync($locked, $version);
 
             return $locked->fresh(['activeRevision.artifactVersion', 'revisions']);
         });
