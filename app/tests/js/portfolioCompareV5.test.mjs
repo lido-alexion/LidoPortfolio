@@ -16,4 +16,7 @@ test('V5 portfolio compare is deep-linkable and does not mislabel wealth change 
     assert.match(page, /External flows/);
     assert.match(page, /Transaction evidence in \(A, B\]/);
     assert.match(page, /downloadPortfolioCsv\('portfolio_compare'/);
+    for (const shortcut of ['1M', '3M', '6M', 'YTD', '1Y', 'Since inception']) {
+        assert.match(page, new RegExp(`'${shortcut}'`));
+    }
 });

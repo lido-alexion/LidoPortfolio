@@ -8,9 +8,9 @@ import { formatTableMoney2 } from '../utils/tableFormat';
 import { getLocalTodayDateString } from '../utils/transactionDate';
 import { downloadPortfolioCsv } from '../utils/portfolioCsvExport';
 
-function monthAgo(dateString) {
+function monthsAgo(dateString, months = 1) {
     const date = new Date(`${dateString}T12:00:00`);
-    date.setMonth(date.getMonth() - 1);
+    date.setMonth(date.getMonth() - months);
     return date.toISOString().slice(0, 10);
 }
 
@@ -22,7 +22,7 @@ export default function PortfolioComparePage() {
     const { activePortfolio } = usePortfolio();
     const [params, setParams] = useSearchParams();
     const today = getLocalTodayDateString();
-    const [dateA, setDateA] = useState(params.get('date_a') || monthAgo(today));
+    const [dateA, setDateA] = useState(params.get('date_a') || monthsAgo(today));
     const [dateB, setDateB] = useState(params.get('date_b') || today);
     const [exporting, setExporting] = useState(false);
     const valid = Boolean(dateA && dateB && dateA < dateB && dateB <= today);
@@ -71,6 +71,16 @@ export default function PortfolioComparePage() {
                 <div className="col-sm-4 col-lg-3"><label className="form-label small" htmlFor="compare-b">Date B</label><input id="compare-b" className="form-control form-control-sm" type="date" min={dateA} max={today} value={dateB} onChange={(event) => setDateB(event.target.value)} /></div>
                 <div className="col-auto"><button type="button" className="btn btn-sm btn-primary" disabled={!valid || loading} onClick={apply}>{loading ? 'Comparing…' : 'Compare'}</button></div>
                 {!valid ? <div className="col-12 small text-danger">Date A must be before Date B, and neither date may be in the future.</div> : null}
+                <div className="col-12 d-flex flex-wrap gap-1" aria-label="Comparison date shortcuts">
+                    {[
+                        ['1M', monthsAgo(today, 1)],
+                        ['3M', monthsAgo(today, 3)],
+                        ['6M', monthsAgo(today, 6)],
+                        ['YTD', `${today.slice(0, 4)}-01-01`],
+                        ['1Y', monthsAgo(today, 12)],
+                        ['Since inception', activePortfolio?.created_at?.slice(0, 10)],
+                    ].map(([label, start]) => <button key={label} type="button" className="btn btn-sm btn-outline-secondary" disabled={!start || start >= today} onClick={() => { setDateA(start); setDateB(today); }}>{label}</button>)}
+                </div>
             </div></div>
 
             {error ? <div className="alert alert-danger py-2 small">{String(error)}</div> : null}
