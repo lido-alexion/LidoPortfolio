@@ -18,6 +18,8 @@ class ScreenerRun extends Model
         'finished_at',
         'stats_json',
         'error_message',
+        'reusable_artifact_version_id',
+        'artifact_binding_revision_id',
     ];
 
     protected function casts(): array
@@ -27,6 +29,8 @@ class ScreenerRun extends Model
             'started_at' => 'datetime',
             'finished_at' => 'datetime',
             'stats_json' => 'array',
+            'reusable_artifact_version_id' => 'integer',
+            'artifact_binding_revision_id' => 'integer',
         ];
     }
 
@@ -52,5 +56,15 @@ class ScreenerRun extends Model
     public function hits(): HasMany
     {
         return $this->hasMany(ScreenerRunHit::class, 'run_id');
+    }
+
+    public function reusableArtifactVersion(): BelongsTo
+    {
+        return $this->belongsTo(ReusableArtifactVersion::class, 'reusable_artifact_version_id');
+    }
+
+    public function artifactBindingRevision(): BelongsTo
+    {
+        return $this->belongsTo(ArtifactBindingRevision::class, 'artifact_binding_revision_id');
     }
 }

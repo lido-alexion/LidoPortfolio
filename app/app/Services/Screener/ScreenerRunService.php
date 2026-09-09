@@ -2,8 +2,10 @@
 
 namespace App\Services\Screener;
 
+use App\Exceptions\DomainException;
 use App\Models\Holding;
 use App\Models\PortfolioProfile;
+use App\Models\ReusableArtifactVersion;
 use App\Models\Screener;
 use App\Models\ScreenerBacktestDay;
 use App\Models\ScreenerBacktestHit;
@@ -13,6 +15,9 @@ use App\Models\Stock;
 use App\Models\StockPrice;
 use App\Models\Watchlist;
 use App\Models\WatchlistItem;
+use App\Services\Artifacts\ArtifactRuntimeBindingResolver;
+use App\Services\Artifacts\ArtifactType;
+use App\Services\DataQualityGuardService;
 use App\Services\EquityUniverseService;
 use App\Services\IndexCatalogService;
 use App\Services\IndexConstituentService;
@@ -28,7 +33,8 @@ class ScreenerRunService
         protected NotificationPublisher $publisher,
         protected IndexConstituentService $indexConstituents,
         protected IndexCatalogService $indexCatalog,
-        protected \App\Services\DataQualityGuardService $dataQualityGuard,
+        protected DataQualityGuardService $dataQualityGuard,
+        protected ArtifactRuntimeBindingResolver $artifactRuntime,
     ) {}
 
     /**
@@ -38,8 +44,17 @@ class ScreenerRunService
      */
     public function start(Screener $screener, string $triggeredBy = 'manual'): array
     {
+        $runtimeSelection = $this->artifactRuntime->forScreener($screener);
+        if ($screener->reusable_artifact_id !== null && $runtimeSelection === null) {
+            throw new DomainException(
+                'The Screener immutable artifact binding is unavailable or blocked.',
+                'ARTIFACT_BINDING_UNAVAILABLE',
+            );
+        }
         $run = ScreenerRun::query()->create([
             'screener_id' => $screener->id,
+            'reusable_artifact_version_id' => $runtimeSelection?->artifactVersion->id,
+            'artifact_binding_revision_id' => $runtimeSelection?->bindingRevision->id,
             'triggered_by' => in_array($triggeredBy, ['manual', 'schedule'], true) ? $triggeredBy : 'manual',
             'status' => 'running',
             'started_at' => now(),
@@ -106,9 +121,7 @@ class ScreenerRunService
             $chunkSize = ScreenerCatalog::CHUNK_SIZE;
             $chunkIds = array_slice($stockIds, $cursor, $chunkSize);
 
-            $definition = is_array($screener->definition_json)
-                ? $screener->definition_json
-                : ['root' => $screener->definition_json];
+            $definition = $this->definitionForRun($run, $screener);
             $lookback = $this->evaluation->maxLookback($definition);
             $fetchLimit = $lookback + 5;
 
@@ -215,6 +228,44 @@ class ScreenerRunService
         return ScreenerRun::query()
             ->where('screener_id', $screener->id)
             ->delete();
+    }
+
+    /** @return array<string, mixed> */
+    private function definitionForRun(ScreenerRun $run, Screener $screener): array
+    {
+        if ($run->reusable_artifact_version_id !== null) {
+            $version = $run->reusableArtifactVersion()->with('artifact')->first();
+            $revision = $run->artifactBindingRevision()->with('binding')->first();
+            $definition = $version?->content_json['definition'] ?? null;
+            if (! $version
+                || ! $revision
+                || ! $revision->binding
+                || $version->status !== ReusableArtifactVersion::STATUS_PUBLISHED
+                || $version->artifact->artifact_type !== ArtifactType::SCREENER
+                || (int) $version->artifact_id !== (int) $screener->reusable_artifact_id
+                || (int) $revision->artifact_version_id !== (int) $version->id
+                || (int) $revision->binding->profile_id !== (int) $screener->profile_id
+                || (int) $revision->binding->artifact_id !== (int) $version->artifact_id
+                || ! is_array($definition)
+                || ! is_array($definition['root'] ?? null)) {
+                throw new DomainException(
+                    'The Screener run immutable artifact evidence is invalid.',
+                    'ARTIFACT_RUN_EVIDENCE_INVALID',
+                );
+            }
+
+            return $definition;
+        }
+        if ($screener->reusable_artifact_id !== null) {
+            throw new DomainException(
+                'The mapped Screener run has no immutable artifact evidence.',
+                'ARTIFACT_RUN_EVIDENCE_MISSING',
+            );
+        }
+
+        return is_array($screener->definition_json)
+            ? $screener->definition_json
+            : ['root' => $screener->definition_json];
     }
 
     /**
@@ -554,6 +605,8 @@ class ScreenerRunService
         $data = [
             'id' => $run->id,
             'screener_id' => $run->screener_id,
+            'reusable_artifact_version_id' => $run->reusable_artifact_version_id,
+            'artifact_binding_revision_id' => $run->artifact_binding_revision_id,
             'triggered_by' => $run->triggered_by,
             'status' => $run->status,
             'started_at' => optional($run->started_at)?->toIso8601String(),
@@ -633,6 +686,8 @@ class ScreenerRunService
 
             return [
                 'id' => $run->id,
+                'reusable_artifact_version_id' => $run->reusable_artifact_version_id,
+                'artifact_binding_revision_id' => $run->artifact_binding_revision_id,
                 'triggered_by' => $run->triggered_by,
                 'trigger_label' => $run->triggered_by === 'schedule' ? 'Scheduled' : 'Manual',
                 'status' => $run->status,
