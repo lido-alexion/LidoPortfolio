@@ -587,15 +587,15 @@ const APP_DOCUMENTATION_BASE = [
             if (pathStarts(path, '/screeners/registry')) return false;
             return /^\/screeners\/[^/]+/.test(path);
         },
-        summary: 'Edit conditions, run history, stacked results, and backtests.',
+        summary: 'Inspect/run mapped Screeners; unmapped legacy rows may still be edited until V5 backfill.',
         overview:
-            'Define LHS/RHS comparisons (stock or index entity), weight factors, and nested groups. Review run history, stacked compare matrices, and backtests over 1y / 6m / 3m / 1m / 15d windows.',
+            'Review condition trees, run history, stacked compare matrices, and backtests. A mapped Screener is a read-only runtime projection: author its Draft and publish/upgrade it in the Artifact Library; Run consumes its exact pinned binding version.',
         controls: [
             { name: 'Condition builder', description: 'Add indicators, operators, weights, and AND/OR groups.' },
             { name: 'Run history', description: 'Past runs with hit lists for comparison.' },
             { name: 'Stacked results', description: 'Compare multiple runs side by side.' },
             { name: 'Backtest', description: 'Evaluate the rule set across dates with per-date persistence.' },
-            { name: 'Save', description: 'Persist definition changes for future Discovery / Strategy use. Definition changes bump Screener Registry artifact versions.' },
+            { name: 'Save', description: 'Available only for an unmapped legacy Screener. Mapped Screeners are changed through Artifact Library Draft → publish → explicit binding upgrade.' },
         ],
         concepts: [
             { name: 'LHS entity', description: 'Compute the left side on the stock or an index (e.g. stock range % vs Nifty 50).' },
@@ -928,10 +928,10 @@ const APP_DOCUMENTATION_BASE = [
         title: 'Strategy',
         routeLabel: '/strategy',
         match: (p) => pathStarts(p, '/strategy') && !pathStarts(p, '/strategy/registry'),
-        summary: 'A portfolio may enable multiple strategies — create, enable, edit, and archive them from Registry or the editor.',
+        summary: 'A portfolio may enable multiple strategies; mapped runtime rows are inspected here and versioned in the Artifact Library.',
         overview:
-            'Strategy is your decision policy. A portfolio may have **multiple enabled strategies** at the same time. It starts with Minervini Strategy (Minervini Trend Template eligibility + momentum scoring). Use **Create Strategy** (name + optional description) to add another from the default factory configuration as a draft, then **Enable** it without disabling others. Edit any tab and Save — the editor still saves that strategy in place.\n\n'
-            + 'Use Strategy Registry (Trading sidebar or the editor link) to create strategies, Enable/Archive them, import/export JSON, validate packs, and browse drafts. The Strategy editor selector / `?strategy_id=` chooses which strategy to edit — not a database rule that only one strategy can be enabled. Strategies reference Screeners by slug / factory key — they never duplicate Screener condition trees.\n\n'
+            'Strategy is your decision policy. A portfolio may have **multiple enabled strategies** at the same time. After V5 migration, this page displays a read-only runtime projection of the exact immutable artifact bound to the Portfolio. Use the **Artifact Library** to create/edit a Draft, publish it, bind it, and explicitly upgrade an existing binding.\n\n'
+            + 'The Strategy selector / `?strategy_id=` chooses which compatibility projection to inspect — not a database rule that only one strategy can be enabled. Unmapped legacy rows remain editable only until the V5 backfill maps them. Strategies reference Screeners by slug / factory key — they never duplicate Screener condition trees.\n\n'
             + '**AI Strategy Designer** (collapsible panel on this page) does **not** call an LLM. It builds a paste-ready prompt from your style/risk/complexity choices, copies it to the clipboard, and expects you to attach the StoX Trading Artifacts AI Authoring Guide in ChatGPT/Gemini/Claude/etc. Import the resulting Screener/Strategy JSON via the registries after Validate.\n\n'
             + 'Strategy does not invent stocks and does not rewrite Screener conditions. Screeners admit candidates; Strategy scores them, labels an action, applies portfolio/cash/market limits, and watches holdings for exits.\n\n'
             + 'Where do finished ideas appear?\n\n'
@@ -1099,12 +1099,12 @@ const APP_DOCUMENTATION_BASE = [
             {
                 name: 'Multiple enabled strategies',
                 description:
-                    'A portfolio may enable more than one strategy. Physical cash stays one pool; each enabled strategy has an allocation % of investable capital (Cash page; must sum to 100 to save). Defaults include Minervini Strategy. Create Strategy adds another from the factory defaults. The editor `?strategy_id=` chooses which definition to edit. Save still updates that strategy in place.',
+                    'A portfolio may enable more than one strategy. Physical cash stays one pool; each enabled strategy has an allocation % of investable capital. The editor `?strategy_id=` chooses a compatibility projection. Once mapped, its definition and enablement are changed only through Artifact Library Draft/publish/binding actions.',
             },
             {
                 name: 'Registry vs editor',
                 description:
-                    'Registry is the management surface: create from factory defaults, Enable, Archive, allocation %, and JSON import/export. The Strategy page edits one selected strategy. Export never includes portfolio-local Screener ids — only slug / factory_key refs.',
+                    'The Artifact Library is the authoritative lifecycle/deployment surface. The legacy Registry remains a compatibility and portable-JSON surface for unmapped rows; mapped rows are read-only. Export never includes portfolio-local Screener ids — only slug / factory_key refs.',
             },
             {
                 name: 'AI Strategy Designer',
@@ -1277,11 +1277,10 @@ const APP_DOCUMENTATION_BASE = [
         title: 'Strategy Registry',
         routeLabel: '/strategy/registry',
         match: (p) => pathStarts(p, '/strategy/registry') || pathStarts(p, '/settings/strategy-registry'),
-        summary: 'Create, enable, archive, and import/export Strategy artifacts — multiple strategies may be enabled per portfolio.',
+        summary: 'Legacy Strategy compatibility registry; mapped lifecycle and deployment actions live in the Artifact Library.',
         overview:
-            'The Strategy Registry is the V3 management surface for every strategy in the current portfolio. A portfolio may have **multiple enabled Strategies** at once. '
-            + 'Use **Create Strategy** (name + optional description) to add a draft from the default factory configuration, then **Enable** it without disabling other enabled strategies. **Archive** disables generation for that strategy only. '
-            + 'The registry also adds slug, metadata, artifact_version, definition_hash, and version history on top of the same config the Recommendation engine already uses.\n\n'
+            'The Strategy Registry is the V3 compatibility surface for strategy rows in the current portfolio. A portfolio may have **multiple enabled Strategies** at once. After V5 mapping, rows are read-only here and link to the authoritative Artifact Library lifecycle. '
+            + 'Draft authoring, immutable publication, binding enablement, explicit upgrades and archive belong to the Artifact Library; the legacy registry remains available for unmapped migration-era rows and portable inspection.\n\n'
             + 'Export downloads the portable Trading Artifact JSON envelope. **Validate** checks the envelope. **Import** stays disabled until validation succeeds, then creates a **draft** — use **Enable** to turn it on without disabling other enabled strategies. '
             + 'Enabled rows show **Allocation %**. An **Allocation** editor (same PUT `/v1/capital/allocations` as Cash) lets you set percentages that must sum to 100.\n\n'
             + 'Existing Minervini (`momentum_factory`) migrates automatically to slug `momentum_strategy` with eligibility linked to `minervini_trend_template`.\n\n'

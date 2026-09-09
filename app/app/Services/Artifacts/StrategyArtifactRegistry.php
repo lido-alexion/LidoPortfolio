@@ -197,6 +197,7 @@ final class StrategyArtifactRegistry implements ArtifactRegistryInterface
         if (! $strategy) {
             throw new InvalidArgumentException("Strategy not found: {$idOrSlug}");
         }
+        $this->assertLegacyMutable($strategy);
 
         $envelope['artifact_type'] = ArtifactType::STRATEGY;
         $envelope = $this->normalizeScoringAlias($envelope);
@@ -327,6 +328,7 @@ final class StrategyArtifactRegistry implements ArtifactRegistryInterface
         if (! $strategy) {
             throw new InvalidArgumentException("Strategy not found: {$idOrSlug}");
         }
+        $this->assertLegacyMutable($strategy);
         $activated = $this->support->activate($profile, $strategy);
         $version = $activated->activeVersion
             ?? TradingStrategyVersion::query()->where('strategy_id', $activated->id)->orderByDesc('id')->firstOrFail();
@@ -345,6 +347,7 @@ final class StrategyArtifactRegistry implements ArtifactRegistryInterface
         if (! $strategy) {
             throw new InvalidArgumentException("Strategy not found: {$idOrSlug}");
         }
+        $this->assertLegacyMutable($strategy);
         $archived = $this->support->archive($profile, $strategy);
         $version = $archived->activeVersion
             ?? TradingStrategyVersion::query()->where('strategy_id', $archived->id)->orderByDesc('id')->firstOrFail();
@@ -513,6 +516,9 @@ final class StrategyArtifactRegistry implements ArtifactRegistryInterface
                 'is_enabled' => $strategy->status === TradingStrategy::STATUS_ACTIVE,
                 'is_selected' => $strategy->status === TradingStrategy::STATUS_ACTIVE,
                 'allocation_pct' => $strategy->allocation_pct !== null ? (float) $strategy->allocation_pct : 100.0,
+                'reusable_artifact_id' => $strategy->reusable_artifact_id,
+                'reusable_artifact_uuid' => $strategy->reusableArtifact?->artifact_uuid,
+                'compatibility_read_only' => $strategy->reusable_artifact_id !== null,
             ],
             $deps,
             max(1, (int) $version->version),
@@ -528,6 +534,15 @@ final class StrategyArtifactRegistry implements ArtifactRegistryInterface
         $versions = $this->indicatorRegistry->versions($id);
 
         return $versions === [] ? '' : $versions[array_key_last($versions)]->version;
+    }
+
+    private function assertLegacyMutable(TradingStrategy $strategy): void
+    {
+        if ($strategy->reusable_artifact_id !== null) {
+            throw new InvalidArgumentException(
+                'This Strategy is managed by the Artifact Library. Create or edit a Draft there, then publish and explicitly upgrade its Portfolio binding.'
+            );
+        }
     }
 
     /**

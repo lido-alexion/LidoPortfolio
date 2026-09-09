@@ -191,12 +191,13 @@ export default function ScreenerMyScreensTab() {
                             to={`/screeners/${screenerId}`}
                             className="btn btn-sm btn-outline-secondary me-1"
                         >
-                            Edit
+                            {row.original.compatibility_read_only ? 'Inspect' : 'Edit'}
                         </Link>
                         <button
                             type="button"
                             className="btn btn-sm btn-outline-danger"
-                            disabled={deletingId === screenerId}
+                            disabled={deletingId === screenerId || row.original.compatibility_read_only}
+                            title={row.original.compatibility_read_only ? 'Managed by the Artifact Library' : 'Delete screener'}
                             onClick={() => deleteScreener(screenerId)}
                         >
                             Delete

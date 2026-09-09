@@ -155,6 +155,8 @@ function applyPayload(payload, setMeta, setConfig) {
         enabled_indicator_count: payload.enabled_indicator_count ?? payload.enabled_factor_count,
         weight_total: payload.weight_total,
         weights_valid: payload.weights_valid,
+        reusable_artifact_uuid: payload.reusable_artifact_uuid,
+        compatibility_read_only: Boolean(payload.compatibility_read_only),
     });
     const rawIndicators = payload.scoring_model || payload.indicators || payload.config?.indicators || payload.factors || [];
     setConfig({
@@ -258,6 +260,10 @@ export default function StrategyPage() {
     );
 
     const save = async () => {
+        if (meta.compatibility_read_only) {
+            showToast('This Strategy is managed in the Artifact Library. Create a Draft there to make changes.', 'warning');
+            return;
+        }
         const enabledPositive = (config.indicators || []).some(
             (ind) => ind.enabled && Number(ind.weight || 0) > 0,
         );
@@ -835,6 +841,7 @@ export default function StrategyPage() {
     }).length;
     const currentStatus = meta.status || '';
     const currentEnabled = currentStatus === 'active';
+    const compatibilityReadOnly = Boolean(meta.compatibility_read_only);
     const canArchive = currentEnabled && enabledCount > 1;
     const onSelectStrategy = (nextId) => {
         if (!nextId || nextId === selectedStrategyId) return;
@@ -915,11 +922,18 @@ export default function StrategyPage() {
                     <Link className="btn btn-outline-secondary btn-sm" to="/screeners">Screeners</Link>
                     <Link className="btn btn-outline-secondary btn-sm" to="/recommendations">Recommendations</Link>
                     <button type="button" className="btn btn-outline-secondary btn-sm" onClick={load}>Refresh</button>
-                    <button type="button" className="btn btn-primary btn-sm" onClick={save} disabled={saving}>
+                    <button type="button" className="btn btn-primary btn-sm" onClick={save} disabled={saving || compatibilityReadOnly}>
                         {saving ? 'Saving…' : 'Save'}
                     </button>
                 </div>
             </div>
+
+            {compatibilityReadOnly ? (
+                <div className="alert alert-info d-flex flex-wrap justify-content-between align-items-center gap-2" role="status">
+                    <span>This is a read-only runtime projection. Draft, publish, and explicitly upgrade it in the Artifact Library.</span>
+                    {meta.reusable_artifact_uuid ? <Link className="btn btn-sm btn-primary" to={`/artifact-library/${meta.reusable_artifact_uuid}`}>Open artifact</Link> : null}
+                </div>
+            ) : null}
 
             <div className={showCreate ? 'mb-3' : ''}>
             <CreateStrategyPanel
@@ -973,7 +987,7 @@ export default function StrategyPage() {
                                     type="button"
                                     id="strategy-editor-enable"
                                     className="btn btn-primary btn-sm"
-                                    disabled={lifecycleBusy}
+                                    disabled={lifecycleBusy || compatibilityReadOnly}
                                     onClick={onEnableCurrent}
                                 >
                                     Enable
@@ -984,7 +998,7 @@ export default function StrategyPage() {
                                     type="button"
                                     id="strategy-editor-archive"
                                     className="btn btn-outline-secondary btn-sm"
-                                    disabled={lifecycleBusy || !canArchive}
+                                    disabled={lifecycleBusy || compatibilityReadOnly || !canArchive}
                                     title={!canArchive
                                         ? 'Enable another strategy before archiving the last enabled one'
                                         : 'Archive this strategy'}

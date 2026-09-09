@@ -10,7 +10,11 @@ use App\Models\TradingStrategy;
 use App\Models\TradingStrategyVersion;
 use App\Models\User;
 use App\Services\Artifacts\LegacyArtifactBackfillService;
+use App\Services\Artifacts\StrategyArtifactRegistry;
+use App\Services\Screener\ScreenerService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Validation\ValidationException;
+use InvalidArgumentException;
 use Tests\TestCase;
 
 class LegacyArtifactBackfillServiceTest extends TestCase
@@ -90,6 +94,35 @@ class LegacyArtifactBackfillServiceTest extends TestCase
 
         $this->assertNotNull($one->fresh()->reusable_artifact_id);
         $this->assertNull($two->fresh()->reusable_artifact_id);
+    }
+
+    public function test_mapped_legacy_rows_are_read_only_compatibility_projections(): void
+    {
+        $profile = $this->defaultPortfolioFor(User::factory()->create());
+        $screener = $this->legacyScreener($profile->id);
+        $strategy = $this->legacyStrategy($profile->id, $screener);
+        $this->assertSame(0, app(LegacyArtifactBackfillService::class)->backfill($profile)['failed']);
+        $screener = $screener->fresh();
+        $strategy = $strategy->fresh();
+
+        $formatted = app(ScreenerService::class)->format($screener);
+        $this->assertTrue($formatted['compatibility_read_only']);
+        $this->assertSame($screener->reusable_artifact_id, $formatted['reusable_artifact_id']);
+
+        try {
+            app(ScreenerService::class)->update($screener, ['name' => 'Bypass']);
+            $this->fail('Mapped Screener updates must use the Artifact Library lifecycle.');
+        } catch (ValidationException $error) {
+            $this->assertArrayHasKey('artifact', $error->errors());
+        }
+
+        $envelope = app(StrategyArtifactRegistry::class)->get((string) $strategy->id, $profile);
+        $this->assertTrue($envelope['metadata']['compatibility_read_only']);
+        $this->assertSame($strategy->reusable_artifact_id, $envelope['metadata']['reusable_artifact_id']);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('managed by the Artifact Library');
+        app(StrategyArtifactRegistry::class)->activate((string) $strategy->id, $profile);
     }
 
     private function legacyScreener(int $profileId): Screener

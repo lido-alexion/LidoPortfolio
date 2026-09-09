@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Strategy Registry — StoX docs</title>
-  <meta name="description" content="Create, enable, archive, and import/export Strategy artifacts — multiple strategies may be enabled per portfolio.">
+  <meta name="description" content="Legacy Strategy compatibility registry; mapped lifecycle and deployment actions live in the Artifact Library.">
   <link rel="canonical" href="strategy-registry.html">
   <style>
     :root {
@@ -110,11 +110,11 @@
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Strategy Registry</h1>
       <p class="muted"><code>strategy-registry</code> · screen: <code>/strategy/registry</code></p>
-      <p>Create, enable, archive, and import/export Strategy artifacts — multiple strategies may be enabled per portfolio.</p>
+      <p>Legacy Strategy compatibility registry; mapped lifecycle and deployment actions live in the Artifact Library.</p>
 
       <section class="panel">
         <h2>Overview</h2>
-        <p>The Strategy Registry is the V3 management surface for every strategy in the current portfolio. A portfolio may have <strong>multiple enabled Strategies</strong> at once. Use <strong>Create Strategy</strong> (name + optional description) to add a draft from the default factory configuration, then <strong>Enable</strong> it without disabling other enabled strategies. <strong>Archive</strong> disables generation for that strategy only. The registry also adds slug, metadata, artifact_version, definition_hash, and version history on top of the same config the Recommendation engine already uses.</p>
+        <p>The Strategy Registry is the V3 compatibility surface for strategy rows in the current portfolio. A portfolio may have <strong>multiple enabled Strategies</strong> at once. After V5 mapping, rows are read-only here and link to the authoritative Artifact Library lifecycle. Draft authoring, immutable publication, binding enablement, explicit upgrades and archive belong to the Artifact Library; the legacy registry remains available for unmapped migration-era rows and portable inspection.</p>
 <p>Export downloads the portable Trading Artifact JSON envelope. <strong>Validate</strong> checks the envelope. <strong>Import</strong> stays disabled until validation succeeds, then creates a <strong>draft</strong> — use <strong>Enable</strong> to turn it on without disabling other enabled strategies. Enabled rows show <strong>Allocation %</strong>. An <strong>Allocation</strong> editor (same PUT <code>/v1/capital/allocations</code> as Cash) lets you set percentages that must sum to 100.</p>
 <p>Existing Minervini (<code>momentum_factory</code>) migrates automatically to slug <code>momentum_strategy</code> with eligibility linked to <code>minervini_trend_template</code>.</p>
 <h2>Importing JSON — start here</h2>

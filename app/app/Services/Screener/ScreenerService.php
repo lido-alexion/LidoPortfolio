@@ -157,6 +157,7 @@ class ScreenerService
      */
     public function update(Screener $screener, array $input): array
     {
+        $this->assertLegacyMutable($screener);
         $profile = PortfolioProfile::query()->findOrFail($screener->profile_id);
         $previousHash = $screener->definition_hash;
         $data = $this->normalizeInput($profile, $input, $screener);
@@ -180,6 +181,7 @@ class ScreenerService
 
     public function delete(Screener $screener): void
     {
+        $this->assertLegacyMutable($screener);
         $screener->delete();
     }
 
@@ -220,6 +222,9 @@ class ScreenerService
             'is_shared' => (bool) $screener->is_shared,
             'is_factory' => (bool) $screener->is_factory,
             'factory_key' => $screener->factory_key,
+            'reusable_artifact_id' => $screener->reusable_artifact_id,
+            'reusable_artifact_uuid' => $screener->reusableArtifact?->artifact_uuid,
+            'compatibility_read_only' => $screener->reusable_artifact_id !== null,
             'watchlist_issue' => $this->watchlistIssue($screener),
             'index_issue' => $this->indexIssue($screener),
             'last_run_at' => optional($screener->last_run_at)?->toIso8601String(),
@@ -345,6 +350,15 @@ class ScreenerService
         }
 
         return $name;
+    }
+
+    private function assertLegacyMutable(Screener $screener): void
+    {
+        if ($screener->reusable_artifact_id !== null) {
+            throw ValidationException::withMessages([
+                'artifact' => 'This Screener is managed by the Artifact Library. Create or edit a Draft there, then publish and explicitly upgrade its Portfolio binding.',
+            ]);
+        }
     }
 
     /**

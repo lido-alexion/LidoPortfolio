@@ -602,6 +602,8 @@ export default function ScreenerEditorPage() {
                 is_enabled: !!data.is_enabled,
                 is_shared: !!data.is_shared,
                 max_lookback: data.max_lookback,
+                reusable_artifact_uuid: data.reusable_artifact_uuid,
+                compatibility_read_only: Boolean(data.compatibility_read_only),
             });
             setHistory(runsRes.data?.data ?? []);
             setHistoryTotal(runsRes.data?.total ?? runsRes.data?.data?.length ?? 0);
@@ -678,6 +680,10 @@ export default function ScreenerEditorPage() {
     });
 
     const save = async () => {
+        if (form.compatibility_read_only) {
+            showToast('This Screener is managed in the Artifact Library. Create a Draft there to make changes.', 'warning');
+            return false;
+        }
         setSubmitted(true);
         if (hasValidationErrors) {
             const firstError = Object.values(validationErrors)[0];
@@ -733,8 +739,10 @@ export default function ScreenerEditorPage() {
         }
         setRunning(true);
         try {
-            const ok = await save();
-            if (!ok) return;
+            if (!form.compatibility_read_only) {
+                const ok = await save();
+                if (!ok) return;
+            }
             const res = await api.post(`/screeners/${id}/run`);
             let run = res.data?.data;
             setRunResult(run);
@@ -820,8 +828,10 @@ export default function ScreenerEditorPage() {
         setBacktestMatrix(null);
         setBacktestProgress(null);
         try {
-            const ok = await save();
-            if (!ok) return;
+            if (!form.compatibility_read_only) {
+                const ok = await save();
+                if (!ok) return;
+            }
             const token = getOrCreateBacktestSessionToken();
             const res = await api.post(`/screeners/${id}/backtest`, {
                 range: nextRange,
@@ -1121,6 +1131,13 @@ export default function ScreenerEditorPage() {
                 <Link to="/screeners" className="btn btn-sm btn-outline-secondary">← Screeners</Link>
                 <h1 className="h3 mb-0">{isNew ? 'New screener' : 'Edit screener'}</h1>
             </div>
+
+            {form.compatibility_read_only ? (
+                <div className="alert alert-info d-flex flex-wrap justify-content-between align-items-center gap-2" role="status">
+                    <span>This is a read-only runtime projection. Draft, publish, and explicitly upgrade it in the Artifact Library.</span>
+                    {form.reusable_artifact_uuid ? <Link className="btn btn-sm btn-primary" to={`/artifact-library/${form.reusable_artifact_uuid}`}>Open artifact</Link> : null}
+                </div>
+            ) : null}
 
             <div className="row g-3">
                 <div className="col-12 col-xxl-4">
@@ -1451,7 +1468,7 @@ export default function ScreenerEditorPage() {
                 <button
                     type="button"
                     className="btn btn-primary"
-                    disabled={saving || running || backtesting || hasValidationErrors}
+                    disabled={saving || running || backtesting || hasValidationErrors || form.compatibility_read_only}
                     onClick={save}
                 >
                     {saving ? 'Saving…' : (isNew ? 'Save' : 'Save')}

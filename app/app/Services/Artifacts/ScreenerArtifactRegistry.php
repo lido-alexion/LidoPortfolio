@@ -343,6 +343,9 @@ final class ScreenerArtifactRegistry implements ArtifactRegistryInterface
             'legacy_id' => $screener->id,
             'is_shared' => (bool) $screener->is_shared,
             'is_enabled' => (bool) $screener->is_enabled,
+            'reusable_artifact_id' => $screener->reusable_artifact_id,
+            'reusable_artifact_uuid' => $screener->reusableArtifact?->artifact_uuid,
+            'compatibility_read_only' => $screener->reusable_artifact_id !== null,
         ], $extraMeta);
 
         return ArtifactEnvelope::make(

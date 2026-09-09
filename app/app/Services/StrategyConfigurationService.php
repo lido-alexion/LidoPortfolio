@@ -208,6 +208,11 @@ class StrategyConfigurationService
         $this->validateConfig($normalized);
         $version = $this->resolveEditorVersion($profile, $strategyId);
         $strategy = TradingStrategy::query()->findOrFail($version->strategy_id);
+        if ($strategy->reusable_artifact_id !== null) {
+            throw ValidationException::withMessages([
+                'artifact' => ['This Strategy is managed by the Artifact Library. Create or edit a Draft there, then publish and explicitly upgrade its Portfolio binding.'],
+            ]);
+        }
 
         return DB::transaction(function () use ($strategy, $version, $normalized, $name, $description, $changeNotes) {
             $version->forceFill([
@@ -713,6 +718,9 @@ class StrategyConfigurationService
             'is_protected' => false,
             'factory_key' => $strategy->factory_key,
             'duplicated_from_id' => $strategy->duplicated_from_id,
+            'reusable_artifact_id' => $strategy->reusable_artifact_id,
+            'reusable_artifact_uuid' => $strategy->reusableArtifact?->artifact_uuid,
+            'compatibility_read_only' => $strategy->reusable_artifact_id !== null,
             'version' => $version->version,
             'version_label' => $versionLabel,
             'version_id' => $version->id,

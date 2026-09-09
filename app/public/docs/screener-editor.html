@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Screener editor — StoX docs</title>
-  <meta name="description" content="Edit conditions, run history, stacked results, and backtests.">
+  <meta name="description" content="Inspect/run mapped Screeners; unmapped legacy rows may still be edited until V5 backfill.">
   <link rel="canonical" href="screener-editor.html">
   <style>
     :root {
@@ -110,11 +110,11 @@
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Screener editor</h1>
       <p class="muted"><code>screener-editor</code> · screen: <code>/screeners/:id</code></p>
-      <p>Edit conditions, run history, stacked results, and backtests.</p>
+      <p>Inspect/run mapped Screeners; unmapped legacy rows may still be edited until V5 backfill.</p>
 
       <section class="panel">
         <h2>Overview</h2>
-        <p>Define LHS/RHS comparisons (stock or index entity), weight factors, and nested groups. Review run history, stacked compare matrices, and backtests over 1y / 6m / 3m / 1m / 15d windows.</p>
+        <p>Review condition trees, run history, stacked compare matrices, and backtests. A mapped Screener is a read-only runtime projection: author its Draft and publish/upgrade it in the Artifact Library; Run consumes its exact pinned binding version.</p>
 <p>Editor is where signal quality is won or lost. Build conditions incrementally, test each change with runs/backtests, and document the intended market behavior the rule is trying to capture.</p>
 <p>Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).</p>
 
@@ -136,7 +136,7 @@
         <dd>Evaluate the rule set across dates with per-date persistence.</dd>
     
         <dt>Save</dt>
-        <dd>Persist definition changes for future Discovery / Strategy use. Definition changes bump Screener Registry artifact versions.</dd>
+        <dd>Available only for an unmapped legacy Screener. Mapped Screeners are changed through Artifact Library Draft → publish → explicit binding upgrade.</dd>
     
         <dt>Incremental tuning</dt>
         <dd>Change one condition at a time, run again, and compare hit drift in run history instead of editing many conditions at once.</dd>
