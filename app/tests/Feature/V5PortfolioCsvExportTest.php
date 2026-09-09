@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\CashLedgerEntry;
 use App\Models\User;
 use App\Services\CashManagementService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -16,6 +17,16 @@ class V5PortfolioCsvExportTest extends TestCase
         $user = User::factory()->create();
         $profile = $this->defaultPortfolioFor($user);
         app(CashManagementService::class)->deposit($profile, 1000, 'Seed, with comma', $user, '2026-08-01');
+        CashLedgerEntry::query()->create([
+            'profile_id' => $profile->id,
+            'entry_type' => CashLedgerEntry::TYPE_ADJUSTMENT,
+            'amount' => 50,
+            'balance_after' => 1050,
+            'reason' => 'Created after request cutoff',
+            'entry_date' => '2026-08-02',
+            'user_id' => $user->id,
+            'created_at' => now()->addMinute(),
+        ]);
 
         $response = $this->actingAs($user)->withProfileHeader($user, $profile)
             ->get('/api/portfolio/exports/cash_statement?from=2026-08-01&to=2026-08-02');
@@ -29,6 +40,7 @@ class V5PortfolioCsvExportTest extends TestCase
         $this->assertStringContainsString('request_cutoff,', $csv);
         $this->assertStringContainsString('entry_date,created_at', $csv);
         $this->assertStringContainsString('"Seed, with comma"', $csv);
+        $this->assertStringNotContainsString('Created after request cutoff', $csv);
     }
 
     public function test_export_requires_authentication_and_dataset_specific_dates(): void

@@ -405,11 +405,12 @@ class CashManagementService
     }
 
     /** @return array{balance: ?float, complete: bool, complete_from: ?string, reason: ?string} */
-    public function cashAsOf(PortfolioProfile $profile, string $date): array
+    public function cashAsOf(PortfolioProfile $profile, string $date, ?string $cutoff = null): array
     {
         $asOf = CarbonImmutable::parse($date)->toDateString();
         $firstRecorded = CashLedgerEntry::query()
             ->where('profile_id', $profile->id)
+            ->when($cutoff, fn ($query) => $query->where('created_at', '<=', $cutoff))
             ->orderBy('created_at')
             ->orderBy('id')
             ->first();
@@ -435,6 +436,7 @@ class CashManagementService
         return [
             'balance' => round((float) CashLedgerEntry::query()
                 ->where('profile_id', $profile->id)
+                ->when($cutoff, fn ($query) => $query->where('created_at', '<=', $cutoff))
                 ->whereDate('entry_date', '<=', $asOf)
                 ->sum('amount'), 4),
             'complete' => true,
@@ -456,22 +458,25 @@ class CashManagementService
         int $page = 1,
         int $perPage = 50,
         ?string $type = null,
+        ?string $cutoff = null,
     ): array {
         $fromDate = $from ? CarbonImmutable::parse($from)->toDateString() : null;
         $toDate = $to ? CarbonImmutable::parse($to)->toDateString() : now()->toDateString();
         $page = max(1, $page);
         $perPage = min(100, max(1, $perPage));
-        $cashState = $this->cashAsOf($profile, $toDate);
+        $cashState = $this->cashAsOf($profile, $toDate, $cutoff);
 
         $opening = $cashState['complete'] && $fromDate
             ? round((float) CashLedgerEntry::query()
                 ->where('profile_id', $profile->id)
+                ->when($cutoff, fn ($query) => $query->where('created_at', '<=', $cutoff))
                 ->whereDate('entry_date', '<', $fromDate)
                 ->sum('amount'), 4)
             : ($cashState['complete'] ? 0.0 : null);
 
         $query = CashLedgerEntry::query()
             ->where('profile_id', $profile->id)
+            ->when($cutoff, fn ($query) => $query->where('created_at', '<=', $cutoff))
             ->when($fromDate, fn ($q) => $q->whereDate('entry_date', '>=', $fromDate))
             ->whereDate('entry_date', '<=', $toDate)
             ->when($type, fn ($q) => $q->where('entry_type', $type))
@@ -480,9 +485,10 @@ class CashManagementService
             ->orderBy('id');
 
         $total = (clone $query)->count();
-        $entries = $query->forPage($page, $perPage)->get()->map(function (CashLedgerEntry $entry) use ($profile, $cashState) {
+        $entries = $query->forPage($page, $perPage)->get()->map(function (CashLedgerEntry $entry) use ($profile, $cashState, $cutoff) {
             $running = $cashState['complete'] ? round((float) CashLedgerEntry::query()
                 ->where('profile_id', $profile->id)
+                ->when($cutoff, fn ($query) => $query->where('created_at', '<=', $cutoff))
                 ->where(function ($query) use ($entry) {
                     $query->whereDate('entry_date', '<', $entry->entry_date)
                         ->orWhere(function ($sameDate) use ($entry) {

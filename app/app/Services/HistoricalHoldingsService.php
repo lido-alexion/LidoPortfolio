@@ -29,7 +29,7 @@ class HistoricalHoldingsService
      *   completeness: array<string, mixed>
      * }
      */
-    public function asOf(PortfolioProfile $profile, string $asOfDate): array
+    public function asOf(PortfolioProfile $profile, string $asOfDate, ?string $cutoff = null): array
     {
         $asOfDate = substr(trim($asOfDate), 0, 10);
         if ($asOfDate === '' || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $asOfDate)) {
@@ -46,11 +46,11 @@ class HistoricalHoldingsService
         }
 
         $asOf = Carbon::parse($asOfDate)->startOfDay();
-        $transactions = $this->loadTransactions($profile);
+        $transactions = $this->loadTransactions($profile, $cutoff);
         $detailed = $this->reconstruction->holdingsAsOfDetailed($transactions, $asOf);
         $holdingsMap = $detailed['holdings'];
         $warnings = $detailed['warnings'];
-        $cashState = $this->cash->cashAsOf($profile, $asOfDate);
+        $cashState = $this->cash->cashAsOf($profile, $asOfDate, $cutoff);
         $cashBalance = $cashState['balance'];
 
         if ($holdingsMap === []) {
@@ -92,6 +92,7 @@ class HistoricalHoldingsService
         $priceByStock = $this->latestClosesOnOrBefore(
             array_map('intval', array_keys($holdingsMap)),
             $asOf,
+            $cutoff,
         );
 
         $rows = [];
@@ -187,10 +188,11 @@ class HistoricalHoldingsService
         ];
     }
 
-    protected function loadTransactions(PortfolioProfile $profile): Collection
+    protected function loadTransactions(PortfolioProfile $profile, ?string $cutoff = null): Collection
     {
         return Transaction::query()
             ->where('profile_id', $profile->id)
+            ->when($cutoff, fn ($query) => $query->where('created_at', '<=', $cutoff))
             ->orderBy('transaction_date')
             ->orderBy('id')
             ->get();
@@ -202,7 +204,7 @@ class HistoricalHoldingsService
      * @param  list<int>  $stockIds
      * @return array<int, array{price: float, date: string, source: string}>
      */
-    protected function latestClosesOnOrBefore(array $stockIds, Carbon $asOf): array
+    protected function latestClosesOnOrBefore(array $stockIds, Carbon $asOf, ?string $cutoff = null): array
     {
         if ($stockIds === []) {
             return [];
@@ -212,6 +214,7 @@ class HistoricalHoldingsService
         $rows = StockPrice::query()
             ->whereIn('stock_id', $stockIds)
             ->where('price_date', '<=', $asOfEnd)
+            ->when($cutoff, fn ($query) => $query->where('created_at', '<=', $cutoff))
             ->orderByDesc('price_date')
             ->get(['stock_id', 'price_date', 'close_price', 'adjusted_close_price']);
 

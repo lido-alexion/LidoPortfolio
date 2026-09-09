@@ -13,10 +13,10 @@ class PortfolioDateComparisonService
     ) {}
 
     /** @return array<string, mixed> */
-    public function compare(PortfolioProfile $profile, string $dateA, string $dateB): array
+    public function compare(PortfolioProfile $profile, string $dateA, string $dateB, ?string $cutoff = null): array
     {
-        $a = $this->historical->asOf($profile, $dateA);
-        $b = $this->historical->asOf($profile, $dateB);
+        $a = $this->historical->asOf($profile, $dateA, $cutoff);
+        $b = $this->historical->asOf($profile, $dateB, $cutoff);
         $aByStock = collect($a['holdings'])->keyBy('stock_id');
         $bByStock = collect($b['holdings'])->keyBy('stock_id');
 
@@ -50,6 +50,7 @@ class PortfolioDateComparisonService
 
         $intervalCash = CashLedgerEntry::query()
             ->where('profile_id', $profile->id)
+            ->when($cutoff, fn ($query) => $query->where('created_at', '<=', $cutoff))
             ->whereDate('entry_date', '>', $dateA)
             ->whereDate('entry_date', '<=', $dateB);
         $deposits = (float) (clone $intervalCash)->where('entry_type', CashLedgerEntry::TYPE_DEPOSIT)->sum('amount');
@@ -59,6 +60,7 @@ class PortfolioDateComparisonService
         $transactions = Transaction::query()
             ->with('stock:id,symbol,name')
             ->where('profile_id', $profile->id)
+            ->when($cutoff, fn ($query) => $query->where('created_at', '<=', $cutoff))
             ->whereDate('transaction_date', '>', $dateA)
             ->whereDate('transaction_date', '<=', $dateB)
             ->orderBy('transaction_date')

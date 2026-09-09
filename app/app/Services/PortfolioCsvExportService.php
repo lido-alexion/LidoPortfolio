@@ -23,8 +23,9 @@ class PortfolioCsvExportService
     /** @param array<string, mixed> $options */
     public function response(PortfolioProfile $profile, string $dataset, array $options): StreamedResponse
     {
-        $cutoff = now()->toIso8601String();
-        $options['_cutoff'] = $cutoff;
+        $cutoffAt = now();
+        $cutoff = $cutoffAt->toIso8601String();
+        $options['_cutoff'] = $cutoffAt->toDateTimeString();
         [$context, $headers, $rows] = match ($dataset) {
             'cash_statement' => $this->cashStatement($profile, $options),
             'historical_holdings' => $this->historicalHoldings($profile, $options),
@@ -67,7 +68,7 @@ class PortfolioCsvExportService
         $page = 1;
         $rows = [];
         do {
-            $statement = $this->cash->statement($profile, $options['from'] ?? null, $options['to'] ?? null, $page, 100);
+            $statement = $this->cash->statement($profile, $options['from'] ?? null, $options['to'] ?? null, $page, 100, null, $options['_cutoff']);
             $rows = array_merge($rows, $statement['entries']);
             $page++;
         } while ($page <= $statement['pagination']['last_page']);
@@ -87,7 +88,7 @@ class PortfolioCsvExportService
     /** @return array{array<string, mixed>, list<string>, list<array<string, mixed>>} */
     protected function historicalHoldings(PortfolioProfile $profile, array $options): array
     {
-        $result = $this->historical->asOf($profile, $options['as_of']);
+        $result = $this->historical->asOf($profile, $options['as_of'], $options['_cutoff']);
 
         return [[
             'as_of' => $result['as_of'],
@@ -103,7 +104,7 @@ class PortfolioCsvExportService
     /** @return array{array<string, mixed>, list<string>, list<array<string, mixed>>} */
     protected function portfolioCompare(PortfolioProfile $profile, array $options): array
     {
-        $result = $this->comparison->compare($profile, $options['date_a'], $options['date_b']);
+        $result = $this->comparison->compare($profile, $options['date_a'], $options['date_b'], $options['_cutoff']);
 
         return [[
             'date_a' => $result['date_a'],
