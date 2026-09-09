@@ -54,6 +54,7 @@ import RecommendationsPage from './pages/RecommendationsPage';
 import CandidatesPage from './pages/CandidatesPage';
 import PortfolioSnapshotsPage from './pages/PortfolioSnapshotsPage';
 import HistoricalHoldingsPage from './pages/HistoricalHoldingsPage';
+import PortfolioComparePage from './pages/PortfolioComparePage';
 import ReviewDashboardPage from './pages/ReviewDashboardPage';
 import ReviewReportsListPage from './pages/ReviewReportsListPage';
 import ReviewReportDetailPage from './pages/ReviewReportDetailPage';
@@ -97,6 +98,7 @@ function AppRoutes() {
             <Route path="/backtests" element={<BacktestHistoryPage />} />
             <Route path="/backtests/:id" element={<BacktestDetailPage />} />
             <Route path="/portfolio/historical-holdings" element={<HistoricalHoldingsPage />} />
+            <Route path="/portfolio/compare" element={<PortfolioComparePage />} />
             <Route path="/portfolio/snapshots" element={<PortfolioSnapshotsPage />} />
             <Route path="/review/reports/:id" element={<ReviewReportDetailPage />} />
             <Route path="/review/reports" element={<ReviewReportsListPage />} />

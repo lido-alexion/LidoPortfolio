@@ -128,6 +128,9 @@ export default function HistoricalHoldingsPage() {
                 >
                     Refresh
                 </button>
+                <Link className="btn btn-sm btn-outline-primary" to={ROUTES.PORTFOLIO_COMPARE}>
+                    Compare dates
+                </Link>
             </div>
 
             <div className="card mb-3">
