@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AdminStockController;
 use App\Http\Controllers\Api\AlertController;
 use App\Http\Controllers\Api\AlertPolicyController;
 use App\Http\Controllers\Api\AnalysisPreferenceController;
+use App\Http\Controllers\Api\AnalysisEvidenceController;
 use App\Http\Controllers\Api\AnalyticsController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BulkTransactionImportController;
@@ -230,6 +231,8 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::put('/analysis/preferences', [AnalysisPreferenceController::class, 'update']);
     Route::get('/analysis/performance', [PortfolioPerformanceController::class, 'show']);
     Route::get('/analysis/attribution', [PortfolioAttributionController::class, 'show']);
+    Route::post('/analysis/evidence', [AnalysisEvidenceController::class, 'store']);
+    Route::get('/analysis/evidence/{evidence}', [AnalysisEvidenceController::class, 'show']);
     Route::get('/tax/dividends', [TaxEvidenceController::class, 'dividends']);
     Route::post('/tax/dividends', [TaxEvidenceController::class, 'storeDividend']);
     Route::get('/tax/losses', [TaxEvidenceController::class, 'taxLosses']);
