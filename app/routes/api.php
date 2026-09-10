@@ -36,6 +36,7 @@ use App\Http\Controllers\Api\PortfolioController;
 use App\Http\Controllers\Api\PortfolioExportController;
 use App\Http\Controllers\Api\PortfolioHistoryController;
 use App\Http\Controllers\Api\PortfolioPerformanceController;
+use App\Http\Controllers\Api\PortfolioReconciliationController;
 use App\Http\Controllers\Api\PortfolioReplayController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\ScreenerBacktestController;
@@ -143,6 +144,9 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::get('/portfolios/{portfolio}/simulation', [PaperSimulationController::class, 'show']);
     Route::post('/portfolios/{portfolio}/simulation/pause', [PaperSimulationController::class, 'pause']);
     Route::post('/portfolios/{portfolio}/simulation/resume', [PaperSimulationController::class, 'resume']);
+    Route::get('/reconciliation', [PortfolioReconciliationController::class, 'index']);
+    Route::post('/reconciliation', [PortfolioReconciliationController::class, 'store']);
+    Route::get('/reconciliation/{run}', [PortfolioReconciliationController::class, 'show'])->whereNumber('run');
     Route::get('/replays', [PortfolioReplayController::class, 'index']);
     Route::post('/replays/readiness', [PortfolioReplayController::class, 'readiness']);
     Route::post('/replays', [PortfolioReplayController::class, 'store']);

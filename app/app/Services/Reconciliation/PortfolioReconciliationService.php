@@ -8,6 +8,7 @@ use App\Models\Stock;
 use App\Services\Broker\BrokerGateway;
 use App\Services\CashManagementService;
 use App\Services\SettingsService;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -20,6 +21,18 @@ final class PortfolioReconciliationService
     ) {}
 
     public function run(PortfolioProfile $profile, string $trigger): PortfolioReconciliationRun
+    {
+        $result = Cache::lock('portfolio-reconciliation:'.$profile->id, 60)->get(
+            fn () => $this->runLocked($profile, $trigger)
+        );
+        if (! $result instanceof PortfolioReconciliationRun) {
+            throw new \RuntimeException('Reconciliation is already in progress for this portfolio.');
+        }
+
+        return $result;
+    }
+
+    private function runLocked(PortfolioProfile $profile, string $trigger): PortfolioReconciliationRun
     {
         if ($profile->isPaper() || $profile->isManualExecution()) {
             throw new \InvalidArgumentException('Portfolio reconciliation is available only for live Semi-Automatic or Automatic portfolios.');

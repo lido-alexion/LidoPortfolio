@@ -47,6 +47,17 @@ class V5PortfolioReconciliationFoundationTest extends TestCase
         $this->assertSame(1, count($success->broker_snapshot['positions']));
         $successfulAt = $profile->fresh()->last_successful_reconciliation_at;
 
+        $this->actingAs($user)->withProfileHeader($user, $profile)
+            ->getJson('/api/reconciliation')->assertOk()
+            ->assertJsonPath('data.status.overall', 'reconciled')
+            ->assertJsonPath('data.runs.0.id', $success->id);
+        $this->getJson('/api/reconciliation/'.$success->id)->assertOk()
+            ->assertJsonPath('data.broker_snapshot.provider', 'kite');
+        $this->postJson('/api/reconciliation')->assertCreated()
+            ->assertJsonPath('data.status.overall', 'reconciled')
+            ->assertJsonPath('data.run.trigger', 'manual');
+        $successfulAt = $profile->fresh()->last_successful_reconciliation_at;
+
         $broker->reconciliationSnapshotUnavailable = true;
         $failed = app(PortfolioReconciliationService::class)->run($profile->fresh(), 'post_trade');
         $this->assertSame('sync_failed', $failed->status);
