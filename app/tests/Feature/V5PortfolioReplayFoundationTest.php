@@ -37,7 +37,8 @@ class V5PortfolioReplayFoundationTest extends TestCase
         ]);
         $version = ReusableArtifactVersion::query()->create([
             'artifact_id' => $artifact->id, 'semver' => '1.0.0', 'status' => 'published',
-            'content_json' => ['rules' => []], 'definition_hash' => hash('sha256', 'replay'),
+            'content_json' => ['definition' => ['scoring_model' => [['key' => 'trend_score', 'weight' => 100, 'enabled' => true]]]],
+            'definition_hash' => hash('sha256', 'replay'),
             'created_by_user_id' => $user->id, 'published_at' => now(),
         ]);
         $strategy = TradingStrategy::query()->create([
@@ -68,6 +69,8 @@ class V5PortfolioReplayFoundationTest extends TestCase
         $created = $this->postJson('/api/replays', $payload)->assertCreated()
             ->assertJsonPath('data.status', 'queued')
             ->assertJsonPath('data.pinned_world.binding_revisions.0.artifact_version_id', $version->id)
+            ->assertJsonPath('data.pinned_world.binding_revisions.0.definition_hash', $version->definition_hash)
+            ->assertJsonPath('data.pinned_world.binding_revisions.0.strategy_definition.scoring_model.0.key', 'trend_score')
             ->assertJsonPath('data.pinned_world.binding_revisions.0.strategy_id', $strategy->id)
             ->assertJsonPath('data.starting_state.schema_version', 1)
             ->assertJsonPath('data.starting_state.strategies.0.allocation_pct', 100);

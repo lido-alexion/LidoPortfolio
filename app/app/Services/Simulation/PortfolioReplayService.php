@@ -55,7 +55,9 @@ final class PortfolioReplayService
                 'source' => 'new_simulated_portfolio',
             ];
         }
-        $bindings = ArtifactBinding::query()->with('activeRevision')
+        $bindings = ArtifactBinding::query()->with([
+            'activeRevision.artifactVersion.dependencies.targetVersion.artifact',
+        ])
             ->where('profile_id', $profile->id)->where('status', ArtifactBinding::STATUS_ENABLED)->get();
         if ($bindings->isEmpty()) {
             $limitations[] = 'no_enabled_strategy_artifact_bindings';
@@ -64,10 +66,31 @@ final class PortfolioReplayService
             ->whereIn('reusable_artifact_id', $bindings->pluck('artifact_id'))->get()->keyBy('reusable_artifact_id');
         $pinned = $bindings->map(function (ArtifactBinding $binding) use ($strategies): array {
             $strategy = $strategies->get($binding->artifact_id);
+            $revision = $binding->activeRevision;
+            $version = $revision?->artifactVersion;
+            $content = is_array($version?->content_json) ? $version->content_json : [];
 
             return [
                 'binding_id' => $binding->id, 'binding_revision_id' => $binding->active_revision_id,
-                'artifact_id' => $binding->artifact_id, 'artifact_version_id' => $binding->activeRevision?->artifact_version_id,
+                'binding_settings' => is_array($revision?->settings_json) ? $revision->settings_json : [],
+                'artifact_id' => $binding->artifact_id, 'artifact_version_id' => $revision?->artifact_version_id,
+                'definition_hash' => $version?->definition_hash,
+                'strategy_definition' => is_array($content['definition'] ?? null) ? $content['definition'] : [],
+                'dependencies' => $version?->dependencies->map(function ($dependency): array {
+                    $target = $dependency->targetVersion;
+                    $targetContent = is_array($target?->content_json) ? $target->content_json : [];
+
+                    return [
+                        'kind' => $dependency->kind,
+                        'required' => (bool) $dependency->required,
+                        'artifact_type' => $target?->artifact?->artifact_type,
+                        'artifact_version_id' => $target?->id,
+                        'definition_hash' => $target?->definition_hash,
+                        'definition' => is_array($targetContent['definition'] ?? null) ? $targetContent['definition'] : null,
+                        'indicator_id' => $dependency->indicator_id,
+                        'indicator_version' => $dependency->indicator_version,
+                    ];
+                })->values()->all() ?? [],
                 'usability_state' => $binding->usability_state,
                 'strategy_id' => $strategy?->id,
                 'strategy_name' => $strategy?->name,
@@ -167,6 +190,7 @@ final class PortfolioReplayService
             throw ValidationException::withMessages(['run' => 'Only queued or running Replay can be cancelled.']);
         }
         $run->forceFill(['status' => 'cancelled', 'cancelled_at' => now()])->save();
+
         return $run->fresh();
     }
 
