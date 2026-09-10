@@ -8,11 +8,14 @@ use App\Models\BacktestTrade;
 use App\Models\BacktestTransaction;
 use App\Models\PortfolioProfile;
 use App\Models\Stock;
+use App\Models\StockPrice;
 use App\Models\TradingStrategy;
 use App\Models\TradingStrategyVersion;
 use App\Models\User;
 use App\Services\Backtest\EligibilityPrecomputeService;
+use App\Services\Backtest\PaperTradeExecutor;
 use App\Services\Backtest\SimulationContext;
+use App\Services\Backtest\SimulationDayProcessor;
 use App\Services\Backtest\StatisticsGenerator;
 use App\Services\StrategyConfigurationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -24,6 +27,61 @@ use Tests\TestCase;
 class BacktestDuplicateTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_pending_recommendation_executes_on_next_session_with_pinned_price_evidence(): void
+    {
+        [, , , , $run, $stock] = $this->seedOriginalRun();
+        $run->forceFill(['execution_assumptions_json' => [
+            'price_method' => 'next_open',
+            'adverse_slippage_percent' => 1,
+            'charge_model' => ['version' => 'test-v1', 'components' => []],
+        ]])->save();
+        StockPrice::query()->create([
+            'stock_id' => $stock->id, 'price_date' => '2024-01-03',
+            'open_price' => 100, 'high_price' => 110, 'low_price' => 90, 'close_price' => 105,
+            'provider_source' => 'test', 'data_source' => 'test', 'created_at' => now(),
+        ]);
+        $ctx = SimulationContext::blank(2000, ['2024-01-02', '2024-01-03']);
+        $ctx->set('pending_execution_drafts', [[
+            'security_id' => $stock->id, 'symbol' => $stock->symbol,
+            'action' => 'OPEN_POSITION', 'decision_date' => '2024-01-02',
+            'target_amount' => 1010, 'entry_score' => 90, 'reason' => 'recommendation', 'exchange' => 'NSE',
+        ]]);
+
+        $result = app(SimulationDayProcessor::class)->executePendingDrafts($run, $ctx, new PaperTradeExecutor($ctx), '2024-01-03');
+
+        $this->assertFalse($result['waiting']);
+        $this->assertCount(1, $result['transactions']);
+        $this->assertSame('2024-01-03', $result['transactions'][0]['trade_date']);
+        $this->assertSame(101.0, $result['transactions'][0]['price']);
+        $this->assertSame('2024-01-02', $result['transactions'][0]['meta_json']['execution_evidence']['decision_date']);
+        $this->assertSame('test-v1', $result['transactions'][0]['meta_json']['execution_evidence']['charge_model_version']);
+        $this->assertSame([], $ctx->get('pending_execution_drafts'));
+    }
+
+    public function test_pending_recommendation_waits_atomically_when_next_session_ohlc_is_missing(): void
+    {
+        [, , , , $run, $stock] = $this->seedOriginalRun();
+        $run->forceFill(['execution_assumptions_json' => [
+            'price_method' => 'next_open', 'adverse_slippage_percent' => 0,
+            'charge_model' => ['version' => 'test-v1', 'components' => []],
+        ]])->save();
+        $ctx = SimulationContext::blank(2000, ['2024-01-02', '2024-01-03']);
+        $pending = [[
+            'security_id' => $stock->id, 'symbol' => $stock->symbol,
+            'action' => 'OPEN_POSITION', 'decision_date' => '2024-01-02',
+            'target_amount' => 1000, 'reason' => 'recommendation', 'exchange' => 'NSE',
+        ]];
+        $ctx->set('pending_execution_drafts', $pending);
+
+        $result = app(SimulationDayProcessor::class)->executePendingDrafts($run, $ctx, new PaperTradeExecutor($ctx), '2024-01-03');
+
+        $this->assertTrue($result['waiting']);
+        $this->assertSame(['missing_session_ohlc'], $result['limitations']);
+        $this->assertSame(2000.0, $ctx->cash());
+        $this->assertSame([], $ctx->holdings());
+        $this->assertSame($pending, $ctx->get('pending_execution_drafts'));
+    }
 
     public function test_statistics_expose_pinned_execution_assumptions_charges_and_end_of_period_limitations(): void
     {

@@ -8,6 +8,8 @@ use App\Engines\Strategy\ExitStrategyEvaluator;
 use App\Models\BacktestRun;
 use App\Models\Stock;
 use App\Models\TradingRecommendation;
+use App\Services\FeeCalculatorService;
+use App\Services\Simulation\SimulationPriceService;
 use App\Services\StrategyConfigurationService;
 use App\Support\TradingOsConfig;
 
@@ -24,9 +26,11 @@ class SimulationDayProcessor
         protected EligibilityPrecomputeService $eligibility,
         protected StrategyConfigurationService $strategies,
         protected EvaluationParameterResolver $parameterResolver,
+        protected SimulationPriceService $prices,
+        protected FeeCalculatorService $fees,
         ?ScorePriorityCapitalAllocator $allocator = null,
     ) {
-        $this->allocator = $allocator ?? new ScorePriorityCapitalAllocator();
+        $this->allocator = $allocator ?? new ScorePriorityCapitalAllocator;
     }
 
     /**
@@ -41,6 +45,13 @@ class SimulationDayProcessor
         $config = is_array($ctx->get('config_snapshot')) ? $ctx->get('config_snapshot') : [];
         $portfolio = new PaperPortfolioManager($ctx);
         $executor = new PaperTradeExecutor($ctx);
+
+        $pendingResult = $this->executePendingDrafts($run, $ctx, $executor, $asOfDate);
+        if ($pendingResult['waiting']) {
+            return $pendingResult;
+        }
+        $transactions = $pendingResult['transactions'];
+        $closedTrades = $pendingResult['closed_trades'];
 
         $valuation = $portfolio->valueAsOf($asOfDate, false);
         $heldQty = $portfolio->heldQuantities();
@@ -216,81 +227,114 @@ class SimulationDayProcessor
         }
         $allocations = $this->allocator->allocate($availableCash, $buyDrafts);
 
-        $transactions = [];
-        $closedTrades = [];
-        $executed = 0;
-
-        // Exits / reduces first (free cash), then buys.
+        usort($drafts, static fn (array $a, array $b): int => (self::executionOrder($a) <=> self::executionOrder($b))
+            ?: (($b['score'] ?? 0) <=> ($a['score'] ?? 0)));
+        $queued = [];
         foreach ($drafts as $draft) {
-            if ($executed >= $maxConcurrent) {
-                break;
-            }
-            $action = $draft['action'];
-            if (! in_array($action, [TradingRecommendation::ACTION_EXIT_POSITION, TradingRecommendation::ACTION_REDUCE_POSITION], true)) {
+            if (count($queued) >= $maxConcurrent || ! in_array($draft['action'], TradingRecommendation::ACTIONABLE_ACTIONS, true)) {
                 continue;
             }
-            $qty = (int) ($draft['plan']['suggested_quantity'] ?? 0);
-            if ($qty < 1) {
-                continue;
-            }
-            $reason = ($draft['exit_eval']['triggered'] ?? false) ? 'exit_strategy' : 'recommendation';
-            $result = $executor->sell(
-                $asOfDate,
-                (int) $draft['security_id'],
-                (string) $draft['symbol'],
-                (float) $qty,
-                (float) $draft['reference_price'],
-                $reason,
-                $action,
-            );
-            if ($result['ok'] ?? false) {
-                $transactions[] = $result['transaction'];
-                foreach ($result['closed_trades'] ?? [] as $t) {
-                    $closedTrades[] = $t;
-                }
-                $executed++;
-            }
+            $alloc = $allocations[$draft['key']] ?? ['allocated_amount' => 0.0];
+            $queued[] = [
+                'security_id' => (int) $draft['security_id'],
+                'symbol' => (string) $draft['symbol'],
+                'action' => (string) $draft['action'],
+                'decision_date' => $asOfDate,
+                'quantity' => in_array($draft['action'], [TradingRecommendation::ACTION_EXIT_POSITION, TradingRecommendation::ACTION_REDUCE_POSITION], true)
+                    ? (int) ($draft['plan']['suggested_quantity'] ?? 0)
+                    : null,
+                'target_amount' => in_array($draft['action'], [TradingRecommendation::ACTION_OPEN_POSITION, TradingRecommendation::ACTION_INCREASE_POSITION], true)
+                    ? (float) ($alloc['allocated_amount'] ?? $draft['plan']['suggested_investment_amount'] ?? 0)
+                    : null,
+                'entry_score' => isset($draft['score']) ? (float) $draft['score'] : null,
+                'reason' => ($draft['exit_eval']['triggered'] ?? false) ? 'exit_strategy' : 'recommendation',
+                'exchange' => 'NSE',
+            ];
         }
-
-        // Refresh available cash after sells (no V1 strategy cash-% re-reserve).
-        $availableCash = $ctx->cash();
-
-        foreach ($drafts as $draft) {
-            if ($executed >= $maxConcurrent) {
-                break;
-            }
-            $action = $draft['action'];
-            if (! in_array($action, [TradingRecommendation::ACTION_OPEN_POSITION, TradingRecommendation::ACTION_INCREASE_POSITION], true)) {
-                continue;
-            }
-            $alloc = $allocations[$draft['key']] ?? ['allocated_amount' => 0.0, 'quantity' => 0];
-            $qty = (int) ($alloc['quantity'] ?? 0);
-            if ($qty < 1) {
-                continue;
-            }
-            $result = $executor->buy(
-                $asOfDate,
-                (int) $draft['security_id'],
-                (string) $draft['symbol'],
-                (float) $qty,
-                (float) $draft['reference_price'],
-                'recommendation',
-                $action,
-                isset($draft['score']) ? (float) $draft['score'] : null,
-            );
-            if ($result['ok'] ?? false) {
-                $transactions[] = $result['transaction'];
-                $executed++;
-            }
-        }
+        $ctx->set('pending_execution_drafts', array_values(array_filter(
+            $queued,
+            static fn (array $draft): bool => (int) ($draft['quantity'] ?? 0) > 0 || (float) ($draft['target_amount'] ?? 0) > 0
+        )));
 
         $valuation = $portfolio->valueAsOf($asOfDate, true);
 
         return [
+            'waiting' => false,
             'transactions' => $transactions,
             'closed_trades' => $closedTrades,
             'snapshot' => $this->buildSnapshot($ctx, $asOfDate, $valuation),
         ];
+    }
+
+    /** @return array{waiting:bool, transactions:list<array<string,mixed>>, closed_trades:list<array<string,mixed>>, snapshot?:array<string,mixed>, limitations?:list<string>} */
+    public function executePendingDrafts(BacktestRun $run, SimulationContext $ctx, PaperTradeExecutor $executor, string $session): array
+    {
+        $pending = is_array($ctx->get('pending_execution_drafts')) ? $ctx->get('pending_execution_drafts') : [];
+        if ($pending === []) {
+            return ['waiting' => false, 'transactions' => [], 'closed_trades' => []];
+        }
+
+        $assumptions = is_array($run->execution_assumptions_json) ? $run->execution_assumptions_json : [];
+        $resolved = [];
+        $limitations = [];
+        foreach ($pending as $draft) {
+            $side = in_array($draft['action'] ?? null, [TradingRecommendation::ACTION_EXIT_POSITION, TradingRecommendation::ACTION_REDUCE_POSITION], true) ? 'sell' : 'buy';
+            $evidence = $this->prices->resolve(
+                (int) $draft['security_id'],
+                $session,
+                (string) ($assumptions['price_method'] ?? 'next_open'),
+                $side,
+                (float) ($assumptions['adverse_slippage_percent'] ?? 0),
+            );
+            if (($evidence['status'] ?? null) !== 'ready') {
+                $limitations = array_values(array_unique([...$limitations, ...($evidence['limitations'] ?? [])]));
+            }
+            $resolved[(int) $draft['security_id'].'|'.$side] = $evidence;
+        }
+        if ($limitations !== []) {
+            $ctx->set('waiting_detail', ['session' => $session, 'limitations' => $limitations]);
+
+            return ['waiting' => true, 'transactions' => [], 'closed_trades' => [], 'limitations' => $limitations];
+        }
+
+        $transactions = [];
+        $closedTrades = [];
+        usort($pending, static fn (array $a, array $b): int => self::executionOrder($a) <=> self::executionOrder($b));
+        foreach ($pending as $draft) {
+            $side = in_array($draft['action'] ?? null, [TradingRecommendation::ACTION_EXIT_POSITION, TradingRecommendation::ACTION_REDUCE_POSITION], true) ? 'sell' : 'buy';
+            $priceEvidence = $resolved[(int) $draft['security_id'].'|'.$side];
+            $price = (float) $priceEvidence['execution_price'];
+            $quantity = $side === 'sell'
+                ? (int) ($draft['quantity'] ?? 0)
+                : (int) floor((float) ($draft['target_amount'] ?? 0) / $price);
+            $charge = $this->fees->calculate($quantity, $price, $side, (string) ($draft['exchange'] ?? 'NSE'), $assumptions['charge_model']['components'] ?? null);
+            while ($side === 'buy' && $quantity > 0 && ($quantity * $price) + $charge['total'] > $ctx->cash() + 0.0001) {
+                $quantity--;
+                $charge = $this->fees->calculate($quantity, $price, $side, (string) ($draft['exchange'] ?? 'NSE'), $assumptions['charge_model']['components'] ?? null);
+            }
+            $executionEvidence = [
+                'decision_date' => $draft['decision_date'] ?? null,
+                'price' => $priceEvidence,
+                'charge_model_version' => $assumptions['charge_model']['version'] ?? null,
+                'charge_breakdown' => $charge['breakdown'],
+            ];
+            $result = $side === 'sell'
+                ? $executor->sell($session, (int) $draft['security_id'], (string) $draft['symbol'], $quantity, $price, (string) $draft['reason'], (string) $draft['action'], (float) $charge['total'], $executionEvidence)
+                : $executor->buy($session, (int) $draft['security_id'], (string) $draft['symbol'], $quantity, $price, (string) $draft['reason'], (string) $draft['action'], $draft['entry_score'] ?? null, (float) $charge['total'], $executionEvidence);
+            if ($result['ok'] ?? false) {
+                $transactions[] = $result['transaction'];
+                array_push($closedTrades, ...($result['closed_trades'] ?? []));
+            }
+        }
+        $ctx->set('pending_execution_drafts', []);
+        $ctx->set('waiting_detail', null);
+
+        return ['waiting' => false, 'transactions' => $transactions, 'closed_trades' => $closedTrades];
+    }
+
+    private static function executionOrder(array $draft): int
+    {
+        return in_array($draft['action'] ?? null, [TradingRecommendation::ACTION_EXIT_POSITION, TradingRecommendation::ACTION_REDUCE_POSITION], true) ? 0 : 1;
     }
 
     /**

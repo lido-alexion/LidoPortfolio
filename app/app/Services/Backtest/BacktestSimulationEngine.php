@@ -229,6 +229,10 @@ class BacktestSimulationEngine
                 while ($cursor < count($days) && microtime(true) < $deadline) {
                     $asOf = $days[$cursor];
                     $dayResult = $this->dayProcessor->processDay($run, $ctx, $asOf);
+                    if ($dayResult['waiting'] ?? false) {
+                        $run->error_message = 'Waiting for complete execution-price data for '.$asOf.': '.implode(', ', $dayResult['limitations'] ?? []);
+                        break;
+                    }
                     $this->persistence->persistDayResults(
                         $run,
                         $dayResult['transactions'],
@@ -239,6 +243,7 @@ class BacktestSimulationEngine
                     $ctx->setDayCursor($cursor);
                     $run->processed_days = $cursor;
                     $run->current_date = $asOf;
+                    $run->error_message = null;
                     $run->progress_pct = count($days) > 0
                         ? round(($cursor / count($days)) * 90.0, 4) // leave headroom for stats/report
                         : 90.0;
