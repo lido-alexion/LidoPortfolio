@@ -506,6 +506,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
     Route::get('/backtests/meta', [BacktestController::class, 'meta']);
     Route::get('/backtests', [BacktestController::class, 'index']);
     Route::post('/backtests', [BacktestController::class, 'store']);
+    Route::post('/backtests/compare', [BacktestController::class, 'compare']);
     Route::get('/backtests/{id}', [BacktestController::class, 'show'])->whereNumber('id');
     Route::post('/backtests/{id}/continue', [BacktestController::class, 'continue'])->whereNumber('id');
     Route::post('/backtests/{id}/cancel', [BacktestController::class, 'cancel'])->whereNumber('id');

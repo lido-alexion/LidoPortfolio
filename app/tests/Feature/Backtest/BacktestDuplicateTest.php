@@ -28,6 +28,30 @@ class BacktestDuplicateTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_completed_backtests_can_be_compared_without_ranking_and_with_assumption_disclosure(): void
+    {
+        [$user, $profile, , , $first] = $this->seedOriginalRun();
+        $first->forceFill(['execution_assumptions_json' => [
+            'price_method' => 'next_open', 'adverse_slippage_percent' => 0,
+        ]])->save();
+        $second = $first->replicate();
+        $second->name = 'Comparison Run';
+        $second->initial_capital = 3000000;
+        $second->execution_assumptions_json = [
+            'price_method' => 'next_close', 'adverse_slippage_percent' => 1,
+        ];
+        $second->save();
+
+        $this->actingAs($user)->withProfileHeader($user, $profile)
+            ->postJson('/api/v1/backtests/compare', ['run_ids' => [$first->id, $second->id]])
+            ->assertOk()
+            ->assertJsonPath('data.compatible', true)
+            ->assertJsonPath('data.compatibility.strategy_version', true)
+            ->assertJsonPath('data.ranking', null)
+            ->assertJsonCount(2, 'data.assumption_differences')
+            ->assertJsonCount(2, 'data.runs');
+    }
+
     public function test_pending_recommendation_executes_on_next_session_with_pinned_price_evidence(): void
     {
         [, , , , $run, $stock] = $this->seedOriginalRun();

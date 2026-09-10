@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Engines\Support\ApiEnvelope;
 use App\Http\Controllers\Controller;
 use App\Models\BacktestRun;
+use App\Models\PortfolioProfile;
 use App\Services\Backtest\BacktestSimulationEngine;
 use App\Services\Screener\ScreenerCatalog;
 use Illuminate\Http\JsonResponse;
@@ -61,7 +62,7 @@ class BacktestController extends Controller
             'tags.*' => 'string|max:64',
             'session_token' => 'required|string|max:64',
             'strategy_version_id' => 'nullable|integer',
-            'price_method' => ['nullable', Rule::in(\App\Models\PortfolioProfile::SIMULATION_PRICE_METHODS)],
+            'price_method' => ['nullable', Rule::in(PortfolioProfile::SIMULATION_PRICE_METHODS)],
             'adverse_slippage_percent' => 'nullable|numeric|between:0,100',
         ]);
 
@@ -75,6 +76,21 @@ class BacktestController extends Controller
         $run = $this->findOwned($id);
 
         return ApiEnvelope::success($this->engine->detail($run));
+    }
+
+    public function compare(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'run_ids' => ['required', 'array', 'min:2', 'max:5'],
+            'run_ids.*' => ['required', 'integer', 'distinct'],
+        ]);
+        $runs = BacktestRun::query()->where('profile_id', \activePortfolio()->id)
+            ->whereIn('id', $validated['run_ids'])->get()->keyBy('id');
+        abort_if($runs->count() !== count($validated['run_ids']), 404);
+
+        return ApiEnvelope::success($this->engine->compare(
+            collect($validated['run_ids'])->map(fn (int $id) => $runs->get($id))
+        ));
     }
 
     public function continue(int $id): JsonResponse

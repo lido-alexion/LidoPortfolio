@@ -87,6 +87,8 @@ export default function BacktestHistoryPage() {
     const [showModal, setShowModal] = useState(false);
     const [starting, setStarting] = useState(false);
     const [activeRun, setActiveRun] = useState(null);
+    const [selectedIds, setSelectedIds] = useState([]);
+    const [comparison, setComparison] = useState(null);
 
     const [form, setForm] = useState({
         name: '',
@@ -150,6 +152,19 @@ export default function BacktestHistoryPage() {
             showToast(e?.response?.data?.error?.message || e.message || 'Cancellation failed', 'danger');
         }
     };
+
+    const compareSelected = async () => {
+        try {
+            const response = await api.post('/v1/backtests/compare', { run_ids: selectedIds });
+            setComparison(response.data?.data || null);
+        } catch (e) {
+            showToast(e?.response?.data?.error?.message || e.message || 'Comparison failed', 'danger');
+        }
+    };
+
+    const toggleComparison = (id) => setSelectedIds((current) => current.includes(id)
+        ? current.filter((value) => value !== id)
+        : current.length < 5 ? [...current, id] : current);
 
     const finishStartedRun = async (result, { closeModal = false } = {}) => {
         const run = result.run;
@@ -247,9 +262,11 @@ export default function BacktestHistoryPage() {
                 </div>
             ) : (
                 <div className="table-responsive">
+                    <div className="d-flex justify-content-end mb-2"><button type="button" className="btn btn-outline-primary btn-sm" disabled={selectedIds.length < 2} onClick={compareSelected}>Compare selected ({selectedIds.length})</button></div>
                     <table className="table table-sm align-middle">
                         <thead>
                             <tr>
+                                <th aria-label="Select for comparison" />
                                 <th>Run Name</th>
                                 <th>Strategy</th>
                                 <th>Period</th>
@@ -262,6 +279,7 @@ export default function BacktestHistoryPage() {
                         <tbody>
                             {runs.map((run) => (
                                 <tr key={run.id}>
+                                    <td><input type="checkbox" aria-label={`Compare Backtest ${run.id}`} checked={selectedIds.includes(run.id)} disabled={!selectedIds.includes(run.id) && selectedIds.length >= 5} onChange={() => toggleComparison(run.id)} /></td>
                                     <td>
                                         <Link to={backtestDetailPath(run.id)} className="text-decoration-none fw-semibold">
                                             {run.name || `Backtest #${run.id}`}
@@ -317,6 +335,12 @@ export default function BacktestHistoryPage() {
                             ))}
                         </tbody>
                     </table>
+                    {comparison && <div className={`alert ${comparison.compatible ? 'alert-info' : 'alert-warning'}`} data-testid="backtest-comparison">
+                        <div className="d-flex justify-content-between"><strong>{comparison.compatible ? 'Compatible Backtest comparison' : 'Backtest compatibility differs'}</strong><button type="button" className="btn-close" aria-label="Close comparison" onClick={() => setComparison(null)} /></div>
+                        {comparison.assumption_differences?.length ? <div className="small">Different assumptions: {comparison.assumption_differences.map((item) => item.replaceAll('_', ' ')).join(', ')}</div> : null}
+                        <div className="row g-2 mt-1">{comparison.runs?.map((run) => <div className="col-md" key={run.id}><div className="border rounded bg-white p-2 small"><strong>{run.name || `Backtest #${run.id}`}</strong><br />Return: {run.statistics?.return_pct ?? 'Unavailable'}%<br />Drawdown: {run.statistics?.maximum_drawdown ?? 'Unavailable'}%<br />Charges: {run.statistics?.simulated_charges ?? 'Unavailable'}<br />Trades: {run.statistics?.total_trades ?? 'Unavailable'}</div></div>)}</div>
+                        <div className="small mt-2">{comparison.disclosure}</div>
+                    </div>}
                 </div>
             )}
 

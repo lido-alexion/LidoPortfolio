@@ -15,6 +15,7 @@ use App\Services\Screener\ScreenerBacktestService;
 use App\Services\Screener\ScreenerCatalog;
 use App\Services\StrategyConfigurationService;
 use Carbon\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -442,6 +443,39 @@ class BacktestSimulationEngine
                 'points' => $snapshots,
             ],
         ]);
+    }
+
+    /** @param Collection<int,BacktestRun> $runs @return array<string,mixed> */
+    public function compare(Collection $runs): array
+    {
+        $rows = $runs->map(fn (BacktestRun $run): array => [
+            'id' => $run->id,
+            'name' => $run->name,
+            'status' => $run->status,
+            'strategy_id' => $run->strategy_id,
+            'strategy_version_id' => $run->strategy_version_id,
+            'strategy_name' => $run->strategy_name,
+            'artifact_version_id' => $run->reusable_artifact_version_id,
+            'binding_revision_id' => $run->artifact_binding_revision_id,
+            'period' => ['from' => $run->from_date?->toDateString(), 'to' => $run->to_date?->toDateString()],
+            'initial_capital' => (float) $run->initial_capital,
+            'execution_assumptions' => $run->execution_assumptions_json,
+            'statistics' => $run->statistics_json,
+        ])->values();
+        $compatibility = [
+            'strategy_version' => $rows->pluck('strategy_version_id')->uniqueStrict()->count() === 1,
+            'period' => $rows->pluck('period')->uniqueStrict()->count() === 1,
+        ];
+
+        return [
+            'compatible' => ! in_array(false, $compatibility, true),
+            'compatibility' => $compatibility,
+            'assumption_differences' => collect(['initial_capital', 'execution_assumptions'])
+                ->filter(fn (string $key): bool => $rows->pluck($key)->uniqueStrict()->count() > 1)->values()->all(),
+            'runs' => $rows->all(),
+            'ranking' => null,
+            'disclosure' => 'Comparison is descriptive only; StoX does not rank or promote a winning Backtest.',
+        ];
     }
 
     /**
