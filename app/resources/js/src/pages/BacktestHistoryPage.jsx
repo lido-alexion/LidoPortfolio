@@ -136,6 +136,19 @@ export default function BacktestHistoryPage() {
         }
     };
 
+    const onCancel = async (run) => {
+        if (!window.confirm(`Cancel backtest “${run.name || `#${run.id}`}” at its latest durable checkpoint?`)) {
+            return;
+        }
+        try {
+            await api.post(`/v1/backtests/${run.id}/cancel`);
+            showToast('Backtest cancelled', 'success');
+            await load();
+        } catch (e) {
+            showToast(e?.response?.data?.error?.message || e.message || 'Cancellation failed', 'danger');
+        }
+    };
+
     const finishStartedRun = async (result, { closeModal = false } = {}) => {
         const run = result.run;
         if (!run?.id) {
@@ -146,7 +159,7 @@ export default function BacktestHistoryPage() {
         } else if (result.completed || run.status === 'completed') {
             showToast('Backtest completed', 'success');
         } else {
-            showToast('Backtest is still running — open the run to resume.', 'warning');
+            showToast('Backtest is still running in the background.', 'warning');
         }
         if (closeModal) {
             setShowModal(false);
@@ -278,6 +291,15 @@ export default function BacktestHistoryPage() {
                                             >
                                                 Duplicate
                                             </button>
+                                            {isBacktestInProgress(run) && (
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-outline-warning btn-sm"
+                                                    onClick={() => onCancel(run)}
+                                                >
+                                                    Cancel
+                                                </button>
+                                            )}
                                             <button
                                                 type="button"
                                                 className="btn btn-outline-danger btn-sm"

@@ -34,3 +34,11 @@ test('help documents Duplicate as a new simulation against the current Strategy'
     assert.match(topic, /current Strategy/);
     assert.doesNotMatch(topic, /Duplicate is reserved for a future release/);
 });
+
+test('V5 Backtests expose background execution and safe cancellation', () => {
+    assert.match(helpers, /continues in bounded background slices/);
+    assert.match(helpers, /case 'cancelled'/);
+    assert.match(page, /\/v1\/backtests\/\$\{run\.id\}\/cancel/);
+    assert.match(page, />\s*Cancel\s*</);
+    assert.doesNotMatch(page, /open the run to resume/);
+});

@@ -4,7 +4,7 @@ export const BACKTEST_SESSION_KEY = 'lido_strategy_backtest_session';
 
 /** Shown in New Backtest modal and while a run is in progress. */
 export const BACKTEST_DURATION_NOTICE =
-    'This operation can take several minutes depending on the backtest period. Please keep this page open until it finishes — leaving or closing the tab may interrupt progress.';
+    'This operation can take several minutes. It continues in bounded background slices, so you may close this page and return later.';
 
 const MAX_CONTINUE_ITERATIONS = 2000;
 
@@ -114,6 +114,7 @@ export function formatBacktestStage(stage) {
         GENERATING_REPORT: 'Generating report',
         COMPLETED: 'Completed',
         FAILED: 'Failed',
+        CANCELLED: 'Cancelled',
     };
     return labels[stage] || stage || '—';
 }
@@ -128,6 +129,8 @@ export function backtestStatusBadgeClass(status) {
             return 'text-bg-info';
         case 'failed':
             return 'text-bg-danger';
+        case 'cancelled':
+            return 'text-bg-warning';
         default:
             return 'text-bg-secondary';
     }
@@ -157,7 +160,7 @@ export async function continueBacktestUntilDone(runId, onProgress) {
         if (result.completed || result.run?.status === 'completed') {
             return { ...result, completed: true, continued: false };
         }
-        if (result.run?.status === 'failed') {
+        if (result.run?.status === 'failed' || result.run?.status === 'cancelled') {
             return { ...result, continued: false, completed: false };
         }
         iterations += 1;
