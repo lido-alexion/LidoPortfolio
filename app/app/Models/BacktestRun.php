@@ -20,6 +20,8 @@ class BacktestRun extends Model
 
     public const STAGE_FAILED = 'FAILED';
 
+    public const STAGE_CANCELLED = 'CANCELLED';
+
     public const STATUS_PREPARING = 'preparing';
 
     public const STATUS_RUNNING = 'running';
@@ -27,6 +29,8 @@ class BacktestRun extends Model
     public const STATUS_COMPLETED = 'completed';
 
     public const STATUS_FAILED = 'failed';
+
+    public const STATUS_CANCELLED = 'cancelled';
 
     protected $table = 'portfolio_backtest_runs';
 
@@ -60,6 +64,7 @@ class BacktestRun extends Model
         'error_message',
         'started_at',
         'completed_at',
+        'cancelled_at',
         'execution_seconds',
     ];
 
@@ -78,6 +83,7 @@ class BacktestRun extends Model
         'progress_pct' => 'float',
         'started_at' => 'datetime',
         'completed_at' => 'datetime',
+        'cancelled_at' => 'datetime',
     ];
 
     public function profile(): BelongsTo
@@ -102,6 +108,6 @@ class BacktestRun extends Model
 
     public function isTerminal(): bool
     {
-        return in_array($this->status, [self::STATUS_COMPLETED, self::STATUS_FAILED], true);
+        return in_array($this->status, [self::STATUS_COMPLETED, self::STATUS_FAILED, self::STATUS_CANCELLED], true);
     }
 }

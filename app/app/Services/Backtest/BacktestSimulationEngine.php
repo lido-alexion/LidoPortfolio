@@ -15,6 +15,7 @@ use App\Services\Screener\ScreenerCatalog;
 use App\Services\StrategyConfigurationService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
@@ -340,6 +341,7 @@ class BacktestSimulationEngine
             'error_message' => $run->error_message,
             'started_at' => $run->started_at?->toIso8601String(),
             'completed_at' => $run->completed_at?->toIso8601String(),
+            'cancelled_at' => $run->cancelled_at?->toIso8601String(),
             'execution_seconds' => $run->execution_seconds,
             'created_at' => $run->created_at?->toIso8601String(),
         ];
@@ -449,9 +451,36 @@ class BacktestSimulationEngine
         return $run->fresh();
     }
 
-    public function delete(BacktestRun $run): void
+    public function cancel(BacktestRun $run): BacktestRun
     {
-        $this->persistence->deleteRun($run);
+        if ($run->isTerminal()) {
+            throw ValidationException::withMessages(['run' => 'Only an in-progress Backtest can be cancelled.']);
+        }
+
+        $run->forceFill([
+            'status' => BacktestRun::STATUS_CANCELLED,
+            'stage' => BacktestRun::STAGE_CANCELLED,
+            'cancelled_at' => now(),
+        ])->save();
+        $this->persistence->clearTransientState($run);
+
+        return $run->fresh();
+    }
+
+    public function delete(BacktestRun $run, ?int $actorId = null): void
+    {
+        DB::transaction(function () use ($run, $actorId): void {
+            DB::table('portfolio_backtest_run_tombstones')->insert([
+                'backtest_run_id' => $run->id,
+                'profile_id' => $run->profile_id,
+                'strategy_id' => $run->strategy_id,
+                'final_status' => $run->status,
+                'run_created_at' => $run->created_at,
+                'deleted_by_user_id' => $actorId,
+                'deleted_at' => now(),
+            ]);
+            $this->persistence->deleteRun($run);
+        });
     }
 
     private function saveProgress(BacktestRun $run, SimulationContext $ctx, string $stage, string $status): void

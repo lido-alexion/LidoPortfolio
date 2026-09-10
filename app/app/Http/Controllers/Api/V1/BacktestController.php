@@ -82,6 +82,13 @@ class BacktestController extends Controller
         return ApiEnvelope::success($result);
     }
 
+    public function cancel(int $id): JsonResponse
+    {
+        $run = $this->engine->cancel($this->findOwned($id));
+
+        return ApiEnvelope::success($this->engine->format($run));
+    }
+
     public function update(Request $request, int $id): JsonResponse
     {
         $run = $this->findOwned($id);
@@ -99,7 +106,7 @@ class BacktestController extends Controller
     public function destroy(int $id): JsonResponse
     {
         $run = $this->findOwned($id);
-        $this->engine->delete($run);
+        $this->engine->delete($run, request()->user()?->id);
 
         return ApiEnvelope::success(['deleted' => true, 'id' => $id]);
     }
