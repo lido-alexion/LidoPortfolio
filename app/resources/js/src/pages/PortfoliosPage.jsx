@@ -4,6 +4,7 @@ import { usePortfolio } from '../context/PortfolioContext';
 import { showToast } from '../toast';
 import { validatePortfolioName } from '../utils/portfolioName';
 import { notifyPortfolioDeleted } from '../utils/portfolioEvents';
+import PortfolioReplayPanel from '../components/portfolio/PortfolioReplayPanel';
 
 function validationMessage(error) {
     const errors = error?.response?.data?.errors;
@@ -207,6 +208,8 @@ export default function PortfoliosPage() {
                     </form>
                 </div>
             </div>
+
+            {activePortfolio && <PortfolioReplayPanel portfolio={activePortfolio} />}
 
             <div className="card">
                 <div className="card-body p-0">
