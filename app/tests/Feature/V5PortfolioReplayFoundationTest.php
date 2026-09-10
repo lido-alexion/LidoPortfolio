@@ -104,6 +104,12 @@ class V5PortfolioReplayFoundationTest extends TestCase
             'run_uuid' => $created->json('data.run_uuid'), 'final_status' => 'cancelled',
             'deleted_by_user_id' => $user->id,
         ]);
+
+        $strategy->delete();
+        $unprojectable = app(PortfolioReplayService::class)->readiness($profile, $payload);
+        $this->assertSame('blocked', $unprojectable['status']);
+        $this->assertContains('strategy_projection_missing', $unprojectable['limitations']);
+        $this->assertContains('strategy_allocations_not_complete', $unprojectable['limitations']);
     }
 
     public function test_missing_strategy_world_blocks_instead_of_silently_shortening(): void

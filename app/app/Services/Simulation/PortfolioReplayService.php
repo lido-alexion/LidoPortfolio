@@ -85,6 +85,13 @@ final class PortfolioReplayService
                 'borrowed' => 0.0,
             ])->values()->all();
         }
+        if (collect($pinned)->contains(fn (array $row): bool => $row['strategy_id'] === null)) {
+            $limitations[] = 'strategy_projection_missing';
+        }
+        $allocationSum = collect($pinned)->sum(fn (array $row): float => (float) ($row['allocation_pct'] ?? 0));
+        if ($pinned !== [] && abs($allocationSum - 100.0) > 0.01) {
+            $limitations[] = 'strategy_allocations_not_complete';
+        }
         if ($bindings->contains(fn (ArtifactBinding $binding) => $binding->usability_state === ArtifactBinding::BLOCKED)) {
             $limitations[] = 'blocked_artifact_binding';
         }
@@ -97,6 +104,8 @@ final class PortfolioReplayService
                 'historical_strategy_capital_state_not_reconstructable',
                 'no_enabled_strategy_artifact_bindings',
                 'blocked_artifact_binding',
+                'strategy_projection_missing',
+                'strategy_allocations_not_complete',
             ]) ? 'blocked' : 'ready_with_limitations'),
             'requested_period' => ['from' => $start, 'to' => $input['period_end']],
             'starting_state' => $state,
