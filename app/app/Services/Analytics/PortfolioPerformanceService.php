@@ -7,8 +7,11 @@ use App\Models\Benchmark;
 use App\Models\CashLedgerEntry;
 use App\Models\PortfolioProfile;
 use App\Models\PortfolioSnapshot;
+use App\Models\PaperExecutionEvent;
+use App\Models\PaperSimulationEvent;
 use App\Models\Stock;
 use App\Models\StockPrice;
+use App\Models\Transaction;
 use App\Services\HistoricalHoldingsService;
 use Carbon\CarbonImmutable;
 
@@ -87,8 +90,26 @@ final class PortfolioPerformanceService
             ->map(fn (Benchmark $comparison) => $this->benchmarkReturn($comparison, $from, $to, $cutoff))
             ->values()->all();
 
+        $paperDisclosure = $profile->isPaper() ? [
+            'label' => 'PAPER',
+            'simulation_state' => $profile->simulation_state,
+            'checkpoint_date' => $profile->simulation_checkpoint_date?->toDateString(),
+            'strategy_simulated_fill_count' => PaperExecutionEvent::query()->where('profile_id', $profile->id)
+                ->whereDate('effective_session_date', '>=', $from)->whereDate('effective_session_date', '<=', $to)
+                ->whereNotNull('transaction_id')->count(),
+            'investor_intervention_count' => Transaction::query()->where('profile_id', $profile->id)
+                ->where('simulation_origin', 'investor_intervention')
+                ->whereDate('transaction_date', '>=', $from)->whereDate('transaction_date', '<=', $to)->count(),
+            'pause_discontinuity_count' => PaperSimulationEvent::query()->where('profile_id', $profile->id)
+                ->where('event_type', 'investor_paused')
+                ->whereDate('effective_session_date', '>=', $from)->whereDate('effective_session_date', '<=', $to)->count(),
+            'real_account_aggregation_excluded' => true,
+        ] : null;
+
         return [
             'scope' => 'portfolio',
+            'portfolio_type' => $profile->portfolio_type,
+            'paper_disclosure' => $paperDisclosure,
             'profile_id' => $profile->id,
             'period' => ['from' => $from, 'to' => $to],
             'request_cutoff_at' => $cutoff,

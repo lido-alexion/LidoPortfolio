@@ -126,6 +126,18 @@ class TransactionController extends Controller
             'owner_key' => $validated['owner_key'] ?? null,
             'strategy_id' => $validated['strategy_id'] ?? null,
         ];
+        if ($profile->isPaper()) {
+            $input += [
+                'simulation_origin' => 'investor_intervention',
+                'simulation_effective_session_date' => $validated['transaction_date'],
+                'simulation_processed_at' => now(),
+                'simulation_evidence' => [
+                    'provenance' => 'paper_simulation',
+                    'intervention' => true,
+                    'actor_user_id' => $request->user()->id,
+                ],
+            ];
+        }
 
         $tos = null;
         // WSB-D3 (low-risk): when linking a recommendation, keep create + completion
@@ -184,6 +196,11 @@ class TransactionController extends Controller
     public function update(Request $request, Transaction $transaction): JsonResponse
     {
         $profile = \activePortfolio();
+        if ($profile->isPaper() && $transaction->simulation_origin === 'strategy_simulation') {
+            throw ValidationException::withMessages([
+                'transaction' => ['Strategy-simulated Paper transactions are immutable economic evidence.'],
+            ]);
+        }
 
         if (! $request->filled('stock_id') && ! $request->filled('symbol')) {
             $request->merge(['stock_id' => $transaction->stock_id]);
@@ -212,6 +229,19 @@ class TransactionController extends Controller
         if (array_key_exists('strategy_id', $validated)) {
             $input['strategy_id'] = $validated['strategy_id'];
         }
+        if ($profile->isPaper()) {
+            $input += [
+                'simulation_origin' => 'investor_intervention',
+                'simulation_effective_session_date' => $validated['transaction_date'],
+                'simulation_processed_at' => now(),
+                'simulation_evidence' => [
+                    ...(is_array($transaction->simulation_evidence) ? $transaction->simulation_evidence : []),
+                    'intervention' => true,
+                    'last_corrected_by_user_id' => $request->user()->id,
+                    'last_corrected_at' => now()->toISOString(),
+                ],
+            ];
+        }
 
         $updated = $this->writes->update(
             $profile,
@@ -232,6 +262,11 @@ class TransactionController extends Controller
     public function destroy(Request $request, Transaction $transaction): JsonResponse
     {
         $profile = \activePortfolio();
+        if ($profile->isPaper() && $transaction->simulation_origin === 'strategy_simulation') {
+            throw ValidationException::withMessages([
+                'transaction' => ['Strategy-simulated Paper transactions are immutable economic evidence.'],
+            ]);
+        }
 
         $tosRevert = null;
         $this->writes->delete(

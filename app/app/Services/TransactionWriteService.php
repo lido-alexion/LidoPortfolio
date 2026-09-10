@@ -227,6 +227,12 @@ class TransactionWriteService
         if (array_key_exists('recommendation_id', $input)) {
             $fill['recommendation_id'] = $normalized['recommendation_id'];
         }
+        if (array_key_exists('simulation_origin', $input)) {
+            $fill['simulation_origin'] = $normalized['simulation_origin'];
+            $fill['simulation_effective_session_date'] = $normalized['simulation_effective_session_date'];
+            $fill['simulation_processed_at'] = $normalized['simulation_processed_at'];
+            $fill['simulation_evidence'] = $normalized['simulation_evidence'];
+        }
 
         $transaction->forceFill($fill)->save();
 
@@ -327,6 +333,10 @@ class TransactionWriteService
             'transaction_date' => $normalized['transaction_date'],
             'notes' => $normalized['notes'],
             'source' => $normalized['source'],
+            'simulation_origin' => $normalized['simulation_origin'],
+            'simulation_effective_session_date' => $normalized['simulation_effective_session_date'],
+            'simulation_processed_at' => $normalized['simulation_processed_at'],
+            'simulation_evidence' => $normalized['simulation_evidence'],
             'recommendation_id' => $normalized['recommendation_id'],
             'corporate_action_id' => $normalized['corporate_action_id'],
             'exit_reason' => $exitReason,
@@ -509,6 +519,11 @@ class TransactionWriteService
             ]);
         }
 
+        $simulationOrigin = $input['simulation_origin'] ?? null;
+        if ($simulationOrigin !== null && ! in_array($simulationOrigin, ['strategy_simulation', 'investor_intervention'], true)) {
+            throw ValidationException::withMessages(['simulation_origin' => ['Invalid simulation origin.']]);
+        }
+
         return [
             'type' => $type,
             'quantity' => $quantity,
@@ -519,6 +534,13 @@ class TransactionWriteService
             'source' => $source,
             'recommendation_id' => $recommendationId,
             'corporate_action_id' => $corporateActionId,
+            'simulation_origin' => $simulationOrigin,
+            'simulation_effective_session_date' => $simulationOrigin === null
+                ? null : substr((string) ($input['simulation_effective_session_date'] ?? $dateOnly), 0, 10),
+            'simulation_processed_at' => $simulationOrigin === null
+                ? null : ($input['simulation_processed_at'] ?? now()),
+            'simulation_evidence' => $simulationOrigin === null
+                ? null : (is_array($input['simulation_evidence'] ?? null) ? $input['simulation_evidence'] : []),
             'exit_reason' => isset($input['exit_reason']) && is_string($input['exit_reason'])
                 ? $input['exit_reason']
                 : null,

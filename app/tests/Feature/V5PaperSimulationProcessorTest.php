@@ -49,6 +49,9 @@ class V5PaperSimulationProcessorTest extends TestCase
         $this->assertSame('paper_simulation', $event->evidence['provenance']);
         $this->assertSame('executed', $recommendation->fresh()->status);
         $this->assertSame('2026-01-02', $recommendation->fresh()->executedTransaction->transaction_date->toDateString());
+        $this->assertSame('strategy_simulation', $recommendation->fresh()->executedTransaction->simulation_origin);
+        $this->assertSame('2026-01-02', $recommendation->fresh()->executedTransaction->simulation_effective_session_date->toDateString());
+        $this->assertNotEmpty($recommendation->fresh()->executedTransaction->simulation_evidence['price_fingerprint']);
         $this->assertLessThan(600.0, app(CashManagementService::class)->balance($paper));
         $this->assertStringStartsWith('settings-sha256:', $event->evidence['charge_model']['version']);
         $this->assertGreaterThan(0, $event->evidence['charge_model']['total']);
@@ -56,6 +59,17 @@ class V5PaperSimulationProcessorTest extends TestCase
         $second = app(PaperSimulationProcessor::class)->process($paper->fresh(), '2026-01-02');
         $this->assertSame(0, $second['fills']);
         $this->assertSame(1, PaperExecutionEvent::query()->count());
+
+        $this->actingAs($user)->withProfileHeader($user, $paper)
+            ->getJson('/api/analysis/performance?from=2026-01-01&to=2026-01-02')
+            ->assertOk()
+            ->assertJsonPath('data.portfolio_type', 'paper')
+            ->assertJsonPath('data.paper_disclosure.label', 'PAPER')
+            ->assertJsonPath('data.paper_disclosure.strategy_simulated_fill_count', 1)
+            ->assertJsonPath('data.paper_disclosure.real_account_aggregation_excluded', true);
+        $transactionId = $recommendation->fresh()->executed_transaction_id;
+        $this->putJson('/api/transactions/'.$transactionId, [])->assertUnprocessable();
+        $this->deleteJson('/api/transactions/'.$transactionId)->assertUnprocessable();
     }
 
     public function test_missing_session_price_waits_without_advancing_checkpoint(): void

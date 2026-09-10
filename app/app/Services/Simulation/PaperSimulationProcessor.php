@@ -100,6 +100,15 @@ final class PaperSimulationProcessor
                         'transaction_date' => $session, 'notes' => 'Paper simulated execution for recommendation #'.$recommendation->id,
                         'source' => Transaction::SOURCE_RECOMMENDATION, 'recommendation_id' => $recommendation->id,
                         'owner_key' => Holding::ownerKeyFor($recommendation->owningStrategyId()),
+                        'simulation_origin' => 'strategy_simulation',
+                        'simulation_effective_session_date' => $session,
+                        'simulation_processed_at' => now(),
+                        'simulation_evidence' => [
+                            'price_fingerprint' => $price['source']['fingerprint'],
+                            'price_method' => $price['method'],
+                            'artifact_version_id' => $recommendation->reusable_artifact_version_id,
+                            'binding_revision_id' => $recommendation->artifact_binding_revision_id,
+                        ],
                     ], user: null, applyCash: true);
                     $notional = round($executable * (float) $price['execution_price'], 4);
                     $priorExecuted = (float) $recommendation->external_executed_amount;

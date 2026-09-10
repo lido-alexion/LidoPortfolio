@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\PortfolioProfile;
 use App\Models\PaperSimulationEvent;
 use App\Models\User;
+use App\Models\Stock;
 use App\Services\CashManagementService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -117,5 +118,27 @@ class V5PaperPortfolioFoundationTest extends TestCase
         $this->actingAs($user)->withProfileHeader($user, $live)
             ->postJson('/api/portfolios/'.$live->id.'/simulation/pause')
             ->assertUnprocessable();
+    }
+
+    public function test_manual_paper_trade_carries_intervention_evidence(): void
+    {
+        $user = User::factory()->create();
+        $paper = $this->defaultPortfolioFor($user);
+        $paper->forceFill([
+            'portfolio_type' => 'paper', 'simulation_state' => 'active',
+            'simulation_price_method' => 'next_open',
+        ])->save();
+        app(CashManagementService::class)->deposit($paper, 1000, 'Paper starting cash', $user, '2026-01-01');
+        $stock = Stock::query()->create(['symbol' => 'MANUALP', 'exchange' => 'NSE', 'name' => 'Manual Paper']);
+
+        $this->actingAs($user)->withProfileHeader($user, $paper)
+            ->postJson('/api/transactions', [
+                'stock_id' => $stock->id, 'type' => 'buy', 'quantity' => 1,
+                'price' => 100, 'fees' => 1, 'transaction_date' => '2026-01-02',
+            ])->assertCreated()
+            ->assertJsonPath('data.simulation_origin', 'investor_intervention')
+            ->assertJsonPath('data.simulation_effective_session_date', '2026-01-02T00:00:00.000000Z')
+            ->assertJsonPath('data.simulation_evidence.intervention', true)
+            ->assertJsonPath('data.simulation_evidence.actor_user_id', $user->id);
     }
 }
