@@ -42,4 +42,22 @@ class PaperPortfolioSimulationTest extends TestCase
     {
         $this->assertSame(20.0, SimulationContext::TIME_BUDGET_SECONDS);
     }
+
+    public function test_pinned_simulated_fees_affect_cash_realized_profit_and_evidence(): void
+    {
+        $ctx = SimulationContext::blank(2000, ['2026-01-02', '2026-01-03']);
+        $exec = new PaperTradeExecutor($ctx);
+        $buy = $exec->buy('2026-01-02', 3, 'FEE', 10, 100, 'recommendation', 'OPEN_POSITION', null, 5, ['charge_model_version' => 'v1']);
+        $this->assertTrue($buy['ok']);
+        $this->assertSame(995.0, $ctx->cash());
+        $this->assertSame(5.0, $buy['transaction']['meta_json']['fees']);
+
+        $sell = $exec->sell('2026-01-03', 3, 'FEE', 10, 110, 'recommendation', 'EXIT_POSITION', 6, ['charge_model_version' => 'v1']);
+        $this->assertTrue($sell['ok']);
+        $this->assertSame(2089.0, $ctx->cash());
+        $this->assertSame(94.0, $ctx->get('realized_profit'));
+        $this->assertSame(11.0, $ctx->get('total_fees'));
+        $this->assertSame(94.0, $sell['closed_trades'][0]['profit_loss']);
+        $this->assertSame('v1', $sell['transaction']['meta_json']['execution_evidence']['charge_model_version']);
+    }
 }

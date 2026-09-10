@@ -20,6 +20,7 @@ final class SimulationContext
         return new self([
             'cash' => $initialCapital,
             'realized_profit' => 0.0,
+            'total_fees' => 0.0,
             'peak_portfolio_value' => $initialCapital,
             'max_concurrent_positions' => 0,
             'utilization_sum' => 0.0,

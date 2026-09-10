@@ -21,15 +21,18 @@ class PaperTradeExecutor
         string $reason,
         string $recommendation,
         ?float $entryScore = null,
+        float $fees = 0.0,
+        array $executionEvidence = [],
     ): array {
         $qty = (float) floor($qty);
         if ($qty < 1 || $price <= 0) {
             return ['ok' => false, 'error' => 'invalid_buy'];
         }
         $value = round($qty * $price, 4);
-        if ($value > $this->ctx->cash() + 0.0001) {
+        $fees = round(max(0.0, $fees), 4);
+        if ($value + $fees > $this->ctx->cash() + 0.0001) {
             // Clamp to affordable whole shares.
-            $affordable = (int) floor($this->ctx->cash() / $price);
+            $affordable = (int) floor(max(0.0, $this->ctx->cash() - $fees) / $price);
             if ($affordable < 1) {
                 return ['ok' => false, 'error' => 'insufficient_cash'];
             }
@@ -37,7 +40,8 @@ class PaperTradeExecutor
             $value = round($qty * $price, 4);
         }
 
-        $this->ctx->setCash($this->ctx->cash() - $value);
+        $this->ctx->setCash($this->ctx->cash() - $value - $fees);
+        $this->ctx->set('total_fees', round((float) $this->ctx->get('total_fees', 0) + $fees, 4));
         $holdings = $this->ctx->holdings();
         $key = (string) $stockId;
         $existing = $holdings[$key] ?? $holdings[$stockId] ?? null;
@@ -82,6 +86,7 @@ class PaperTradeExecutor
                 'value' => $value,
                 'reason' => $reason,
                 'recommendation' => $recommendation,
+                'meta_json' => ['fees' => $fees, 'execution_evidence' => $executionEvidence],
             ],
         ];
     }
@@ -97,6 +102,8 @@ class PaperTradeExecutor
         float $price,
         string $reason,
         string $recommendation,
+        float $fees = 0.0,
+        array $executionEvidence = [],
     ): array {
         $qty = (float) floor($qty);
         if ($qty < 1 || $price <= 0) {
@@ -117,9 +124,11 @@ class PaperTradeExecutor
         $value = round($qty * $price, 4);
         $avgCost = (float) ($existing['avg_cost'] ?? 0);
         $costSold = round($qty * $avgCost, 4);
-        $realized = round($value - $costSold, 4);
+        $fees = round(max(0.0, $fees), 4);
+        $realized = round($value - $costSold - $fees, 4);
 
-        $this->ctx->setCash($this->ctx->cash() + $value);
+        $this->ctx->setCash($this->ctx->cash() + $value - $fees);
+        $this->ctx->set('total_fees', round((float) $this->ctx->get('total_fees', 0) + $fees, 4));
         $this->ctx->set('realized_profit', round((float) $this->ctx->get('realized_profit', 0) + $realized, 4));
 
         $remaining = $held - $qty;
@@ -131,7 +140,7 @@ class PaperTradeExecutor
         }
         $this->ctx->setHoldings($holdings);
 
-        $closedTrades = $this->closeLots($key, $stockId, $symbol, $qty, $price, $date, $reason);
+        $closedTrades = $this->closeLots($key, $stockId, $symbol, $qty, $price, $date, $reason, $fees);
 
         return [
             'ok' => true,
@@ -145,7 +154,7 @@ class PaperTradeExecutor
                 'value' => $value,
                 'reason' => $reason,
                 'recommendation' => $recommendation,
-                'meta_json' => ['realized_pl' => $realized],
+                'meta_json' => ['realized_pl' => $realized, 'fees' => $fees, 'execution_evidence' => $executionEvidence],
             ],
             'closed_trades' => $closedTrades,
         ];
@@ -164,6 +173,7 @@ class PaperTradeExecutor
         float $sellPrice,
         string $sellDate,
         string $exitReason,
+        float $totalFees,
     ): array {
         $lots = is_array($this->ctx->get('open_lots', [])) ? $this->ctx->get('open_lots', []) : [];
         $stockLots = is_array($lots[$key] ?? null) ? $lots[$key] : [];
@@ -183,8 +193,9 @@ class PaperTradeExecutor
                 $buyDate = (string) ($lot['buy_date'] ?? $sellDate);
                 $buyPrice = (float) ($lot['price'] ?? 0);
                 $holdingDays = max(0, (int) ((strtotime($sellDate) - strtotime($buyDate)) / 86400));
-                $pl = round(($sellPrice - $buyPrice) * $take, 4);
-                $ret = $buyPrice > 0 ? round((($sellPrice - $buyPrice) / $buyPrice) * 100.0, 6) : 0.0;
+                $allocatedFees = $qty > 0 ? $totalFees * ($take / $qty) : 0.0;
+                $pl = round((($sellPrice - $buyPrice) * $take) - $allocatedFees, 4);
+                $ret = $buyPrice > 0 ? round(($pl / ($buyPrice * $take)) * 100.0, 6) : 0.0;
                 $cagr = BacktestMath::cagrPercent($buyPrice, $sellPrice, $holdingDays);
                 $closed[] = [
                     'stock_id' => $stockId,
