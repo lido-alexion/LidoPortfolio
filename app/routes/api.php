@@ -41,6 +41,7 @@ use App\Http\Controllers\Api\ScreenerController;
 use App\Http\Controllers\Api\ScreenerRunController;
 use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\StockController;
+use App\Http\Controllers\Api\StrategyPerformanceController;
 use App\Http\Controllers\Api\StockPriceController;
 use App\Http\Controllers\Api\SyncController;
 use App\Http\Controllers\Api\SyncLogController;
@@ -234,6 +235,7 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::get('/analysis/performance', [PortfolioPerformanceController::class, 'show']);
     Route::get('/analysis/account-performance', [AccountPerformanceController::class, 'show']);
     Route::get('/analysis/attribution', [PortfolioAttributionController::class, 'show']);
+    Route::get('/analysis/strategies/{strategy}/performance', [StrategyPerformanceController::class, 'show'])->whereNumber('strategy');
     Route::post('/analysis/evidence', [AnalysisEvidenceController::class, 'store']);
     Route::get('/analysis/evidence/{evidence}', [AnalysisEvidenceController::class, 'show']);
     Route::get('/tax/dividends', [TaxEvidenceController::class, 'dividends']);
