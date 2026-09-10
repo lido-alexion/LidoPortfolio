@@ -90,7 +90,11 @@ class V5PortfolioReplayFoundationTest extends TestCase
         $this->assertSame(3, PortfolioReplayCheckpoint::query()->where('replay_run_id', $id)->count());
         $checkpoint = PortfolioReplayCheckpoint::query()->where('replay_run_id', $id)->latest('id')->firstOrFail();
         $this->assertNotEmpty($checkpoint->market_evidence['sha256']);
-        $this->assertContains('portfolio_economic_engine_pending_integration', $checkpoint->limitations);
+        $this->assertSame('economic_checkpoint', $checkpoint->stage);
+        $this->assertEquals(100000.0, $checkpoint->state_after['valuation']['total_value']);
+        $this->assertEquals(100000.0, $checkpoint->state_after['capital']['investable_capital']);
+        $this->assertEquals(100000.0, $checkpoint->state_after['strategies'][0]['available_capital']);
+        $this->assertContains('strategy_evaluation_and_trade_transition_pending_integration', $checkpoint->limitations);
         $this->assertSame($sourceEconomicState, [
             'holdings' => Holding::query()->where('profile_id', $profile->id)->count(),
             'transactions' => Transaction::query()->where('profile_id', $profile->id)->count(),
