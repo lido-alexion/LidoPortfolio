@@ -5,15 +5,19 @@ namespace Tests\Feature;
 use App\Models\ArtifactBinding;
 use App\Models\ArtifactBindingRevision;
 use App\Models\Holding;
+use App\Models\PortfolioReplayCheckpoint;
+use App\Models\PortfolioReplayRun;
 use App\Models\ReusableArtifact;
 use App\Models\ReusableArtifactVersion;
-use App\Models\PortfolioReplayRun;
-use App\Models\PortfolioReplayCheckpoint;
-use App\Models\Transaction;
+use App\Models\Stock;
+use App\Models\StockPrice;
 use App\Models\TradingStrategy;
+use App\Models\Transaction;
 use App\Models\User;
+use App\Services\FeeCalculatorService;
 use App\Services\Simulation\PortfolioReplayProcessor;
 use App\Services\Simulation\PortfolioReplayService;
+use App\Services\Simulation\ReplayTradeTransition;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -94,7 +98,7 @@ class V5PortfolioReplayFoundationTest extends TestCase
         $this->assertEquals(100000.0, $checkpoint->state_after['valuation']['total_value']);
         $this->assertEquals(100000.0, $checkpoint->state_after['capital']['investable_capital']);
         $this->assertEquals(100000.0, $checkpoint->state_after['strategies'][0]['available_capital']);
-        $this->assertContains('strategy_evaluation_and_trade_transition_pending_integration', $checkpoint->limitations);
+        $this->assertContains('strategy_evaluation_pending_integration', $checkpoint->limitations);
         $this->assertSame($sourceEconomicState, [
             'holdings' => Holding::query()->where('profile_id', $profile->id)->count(),
             'transactions' => Transaction::query()->where('profile_id', $profile->id)->count(),
@@ -145,5 +149,46 @@ class V5PortfolioReplayFoundationTest extends TestCase
             'historical_strategy_capital_state_not_reconstructable',
             $readiness['limitations'],
         );
+    }
+
+    public function test_replay_trade_transition_uses_pinned_price_charges_and_is_idempotent(): void
+    {
+        $stock = Stock::query()->create(['symbol' => 'REPLAY', 'exchange' => 'NSE', 'name' => 'Replay Fill']);
+        StockPrice::query()->create([
+            'stock_id' => $stock->id, 'price_date' => '2026-01-02',
+            'open_price' => 100, 'high_price' => 110, 'low_price' => 95, 'close_price' => 105,
+            'data_source' => 'test', 'created_at' => '2026-01-02 18:00:00',
+        ]);
+        $components = app(FeeCalculatorService::class)->componentsFromSettings();
+        $state = [
+            'cash_balance' => 1000, 'holdings' => [], 'transactions' => [],
+            'pending_recommendations' => [[
+                'key' => 'rec-1', 'stock_id' => $stock->id, 'strategy_id' => 7,
+                'side' => 'buy', 'quantity' => 4, 'exchange' => 'NSE',
+                'first_eligible_session' => '2026-01-02', 'status' => 'pending',
+            ]],
+        ];
+        $assumptions = [
+            'price_method' => 'next_open', 'adverse_slippage_percent' => 1,
+            'charge_model' => ['version' => 'test-v1', 'components' => $components],
+        ];
+
+        $first = app(ReplayTradeTransition::class)->apply($state, '2026-01-02', $assumptions);
+        $this->assertFalse($first['waiting']);
+        $this->assertSame(1, $first['fills']);
+        $this->assertSame(101.0, $first['state']['transactions'][0]['price']);
+        $this->assertSame('test-v1', $first['state']['transactions'][0]['evidence']['charge_model_version']);
+        $this->assertSame(4.0, $first['state']['holdings'][0]['quantity']);
+        $this->assertLessThan(596.0, $first['state']['cash_balance']);
+        $second = app(ReplayTradeTransition::class)->apply($first['state'], '2026-01-02', $assumptions);
+        $this->assertSame(0, $second['fills']);
+        $this->assertCount(1, $second['state']['transactions']);
+
+        $missing = $state;
+        $missing['pending_recommendations'][0]['stock_id'] = $stock->id + 999;
+        $waiting = app(ReplayTradeTransition::class)->apply($missing, '2026-01-02', $assumptions);
+        $this->assertTrue($waiting['waiting']);
+        $this->assertContains('missing_session_ohlc', $waiting['limitations']);
+        $this->assertSame($missing, $waiting['state']);
     }
 }

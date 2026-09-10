@@ -10,7 +10,10 @@ use Illuminate\Support\Facades\DB;
 
 final class PortfolioReplayProcessor
 {
-    public function __construct(private ReplayEconomicStateCalculator $economics) {}
+    public function __construct(
+        private ReplayTradeTransition $trades,
+        private ReplayEconomicStateCalculator $economics,
+    ) {}
 
     /** @return array<string, mixed> */
     public function process(PortfolioReplayRun $run, int $maxSessions = 5): array
@@ -35,6 +38,7 @@ final class PortfolioReplayProcessor
             while ($cursor->lte($run->period_end) && $processed < max(1, min($maxSessions, 31))) {
                 if (! TradingCalendar::isEquitySessionDate($cursor)) {
                     $cursor->addDay();
+
                     continue;
                 }
                 $session = $cursor->toDateString();
@@ -43,6 +47,25 @@ final class PortfolioReplayProcessor
                     $prior = PortfolioReplayCheckpoint::query()->where('replay_run_id', $run->id)
                         ->orderByDesc('effective_session_date')->first();
                     $state = $prior?->state_after ?? $run->starting_state;
+                    $transition = $this->trades->apply($state, $session, [
+                        'price_method' => $run->price_method,
+                        'adverse_slippage_percent' => (float) $run->adverse_slippage_percent,
+                        'charge_model' => $run->pinned_world['charge_model'] ?? [],
+                    ]);
+                    if ($transition['waiting']) {
+                        $run->forceFill(['results' => [
+                            'processing_state' => 'waiting_for_data',
+                            'effective_session_date' => $session,
+                            'limitations' => $transition['limitations'],
+                        ]])->save();
+
+                        return [
+                            'status' => 'running', 'processing_state' => 'waiting_for_data',
+                            'processed_sessions' => $processed, 'checkpoint_date' => $run->checkpoint_date?->toDateString(),
+                            'limitations' => $transition['limitations'],
+                        ];
+                    }
+                    $state = $transition['state'];
                     $prices = StockPrice::query()->whereDate('price_date', $session)->whereNotNull('close_price')
                         ->pluck('close_price', 'stock_id')->map(fn ($price) => (float) $price)->all();
                     $stateAfter = $this->economics->advance(
@@ -55,7 +78,7 @@ final class PortfolioReplayProcessor
                         'processed_at' => now(), 'stage' => 'economic_checkpoint',
                         'state_before' => $state, 'state_after' => $stateAfter,
                         'market_evidence' => $this->marketFingerprint($session),
-                        'limitations' => ['strategy_evaluation_and_trade_transition_pending_integration'],
+                        'limitations' => ['strategy_evaluation_pending_integration'],
                     ]);
                 }
                 $run->forceFill(['checkpoint_date' => $session])->save();
