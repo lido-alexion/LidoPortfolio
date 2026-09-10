@@ -19,6 +19,9 @@ test('workspace distinguishes what-if, evidence, completeness, and tax advice', 
     assert.match(page, /What-if portfolio selection/);
     assert.match(page, /does not change configured inclusion/);
     assert.match(page, /Preserve evidence/);
+    assert.match(page, /Include in Account performance/);
+    assert.match(page, /Include in Account Tax/);
+    assert.match(page, /\/analysis\/preferences/);
     assert.match(page, /Completeness:/);
     assert.match(page, /not certified tax advice/);
 });

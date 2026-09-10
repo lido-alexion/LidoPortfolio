@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../api';
 import useApiGet from '../hooks/useApiGet';
 import { usePortfolio } from '../context/PortfolioContext';
@@ -28,19 +28,27 @@ export default function PerformanceTaxPage() {
     const [whatIf, setWhatIf] = useState(false);
     const [selectedIds, setSelectedIds] = useState([]);
     const [savingEvidence, setSavingEvidence] = useState(false);
+    const [savingPreferences, setSavingPreferences] = useState(false);
+    const [preferenceForm, setPreferenceForm] = useState(null);
 
     const taxParams = useMemo(() => ({
         financial_year: financialYear,
         ...(whatIf ? { portfolio_ids: selectedIds } : {}),
     }), [financialYear, whatIf, selectedIds]);
     const request = useCallback(async () => {
-        const [performance, accountPerformance, attribution, tax] = await Promise.all([
+        const [performance, accountPerformance, attribution, tax, preferences, benchmarks] = await Promise.all([
             api.get('/analysis/performance', { params: { from, to }, skipErrorToast: true }),
             api.get('/analysis/account-performance', { params: { from, to, ...(whatIf ? { portfolio_ids: selectedIds } : {}) }, skipErrorToast: true }),
             api.get('/analysis/attribution', { params: { from, to }, skipErrorToast: true }),
             api.get('/tax/report', { params: taxParams, skipErrorToast: true }),
+            api.get('/analysis/preferences', { skipErrorToast: true }),
+            api.get('/analysis/benchmarks', { skipErrorToast: true }),
         ]);
-        return { performance: performance.data.data, accountPerformance: accountPerformance.data.data, attribution: attribution.data.data, tax: tax.data.data };
+        return {
+            performance: performance.data.data, accountPerformance: accountPerformance.data.data,
+            attribution: attribution.data.data, tax: tax.data.data,
+            preferences: preferences.data.data, benchmarks: benchmarks.data.data,
+        };
     }, [from, to, taxParams, whatIf, selectedIds]);
     const valid = from < to && to <= today && /^\d{4}-\d{2}$/.test(financialYear);
     const { data, loading, error, reload } = useApiGet({
@@ -48,6 +56,9 @@ export default function PerformanceTaxPage() {
         enabled: Boolean(activePortfolio?.id) && valid,
         errorFallback: 'Could not load performance and tax analysis', initialData: null,
     });
+    useEffect(() => {
+        if (data?.preferences) setPreferenceForm(data.preferences);
+    }, [data?.preferences]);
 
     const preserve = async (calculationType) => {
         setSavingEvidence(true);
@@ -58,6 +69,21 @@ export default function PerformanceTaxPage() {
             await api.post('/analysis/evidence', payload);
             showToast('Immutable calculation evidence preserved', 'success');
         } finally { setSavingEvidence(false); }
+    };
+
+    const savePreferences = async () => {
+        setSavingPreferences(true);
+        try {
+            await api.put('/analysis/preferences', {
+                primary_benchmark_id: Number(preferenceForm.primary_benchmark_id),
+                include_in_account_performance: Boolean(preferenceForm.include_in_account_performance),
+                include_in_account_tax: Boolean(preferenceForm.include_in_account_tax),
+                risk_free_rate: preferenceForm.risk_free_rate === '' ? null : Number(preferenceForm.risk_free_rate),
+                annualization_days: preferenceForm.annualization_days === '' ? null : Number(preferenceForm.annualization_days),
+            });
+            showToast('Analysis preferences saved', 'success');
+            reload();
+        } finally { setSavingPreferences(false); }
     };
 
     return <div className="container-fluid py-3">
@@ -72,6 +98,14 @@ export default function PerformanceTaxPage() {
         </div></div>
         {error ? <div className="alert alert-danger py-2 small">{String(error)}</div> : null}
         {data ? <>
+            {preferenceForm ? <div className="card mb-3"><div className="card-header">Analysis settings · {activePortfolio.name}</div><div className="card-body row g-2 align-items-end">
+                <div className="col-md-4"><label className="form-label small" htmlFor="primary-benchmark">Primary benchmark</label><select id="primary-benchmark" className="form-select form-select-sm" value={preferenceForm.primary_benchmark_id ?? ''} onChange={(e) => setPreferenceForm((value) => ({ ...value, primary_benchmark_id: e.target.value }))}>{data.benchmarks.map((benchmark) => <option key={benchmark.id} value={benchmark.id}>{benchmark.name} · {benchmark.return_type}</option>)}</select></div>
+                <div className="col-md-2"><label className="form-label small" htmlFor="risk-free">Annual risk-free rate</label><input id="risk-free" className="form-control form-control-sm" type="number" step="0.0001" min="-0.25" max="1" value={preferenceForm.risk_free_rate ?? ''} onChange={(e) => setPreferenceForm((value) => ({ ...value, risk_free_rate: e.target.value }))} /></div>
+                <div className="col-md-2"><label className="form-label small" htmlFor="annualization-days">Annualization days</label><input id="annualization-days" className="form-control form-control-sm" type="number" min="1" max="366" value={preferenceForm.annualization_days ?? 252} onChange={(e) => setPreferenceForm((value) => ({ ...value, annualization_days: e.target.value }))} /></div>
+                <div className="col-md-3"><label className="d-block small"><input className="form-check-input me-1" type="checkbox" checked={preferenceForm.include_in_account_performance} onChange={(e) => setPreferenceForm((value) => ({ ...value, include_in_account_performance: e.target.checked }))} />Include in Account performance</label><label className="d-block small mt-2"><input className="form-check-input me-1" type="checkbox" checked={preferenceForm.include_in_account_tax} onChange={(e) => setPreferenceForm((value) => ({ ...value, include_in_account_tax: e.target.checked }))} />Include in Account Tax</label></div>
+                <div className="col-auto"><button type="button" className="btn btn-sm btn-outline-primary" disabled={savingPreferences} onClick={savePreferences}>{savingPreferences ? 'Saving…' : 'Save settings'}</button></div>
+                <div className="col-12 small text-muted">Tax and performance inclusion are independent. Benchmark levels use the latest authoritative value on or before each endpoint without interpolation.</div>
+            </div></div> : null}
             <div className="d-flex justify-content-between align-items-center mb-2"><h2 className="h5 mb-0">Portfolio performance</h2><button type="button" className="btn btn-sm btn-outline-secondary" disabled={savingEvidence} onClick={() => preserve('portfolio_performance')}>Preserve evidence</button></div>
             <div className="row g-3 mb-3"><Metric label="XIRR" value={data.performance.xirr_percent} /><Metric label="TWR" value={data.performance.twr_percent} /><Metric label="Excess return" value={data.performance.excess_return_percent} /><Metric label="Maximum drawdown" value={data.performance.maximum_drawdown_percent} /></div>
             <div className="alert alert-secondary py-2 small">Benchmark: {data.performance.benchmark?.name || 'Unavailable'} · Volatility {data.performance.volatility_percent == null ? 'requires 30 observations' : formatTablePercent2(data.performance.volatility_percent)} · Sharpe {data.performance.sharpe_ratio ?? 'Incomplete'} · Completeness: {data.performance.completeness}</div>
