@@ -4,10 +4,12 @@ namespace Tests\Feature;
 
 use App\Models\ArtifactBinding;
 use App\Models\ArtifactBindingRevision;
+use App\Models\Holding;
 use App\Models\ReusableArtifact;
 use App\Models\ReusableArtifactVersion;
 use App\Models\PortfolioReplayRun;
 use App\Models\PortfolioReplayCheckpoint;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Services\Simulation\PortfolioReplayProcessor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -59,6 +61,11 @@ class V5PortfolioReplayFoundationTest extends TestCase
         $this->assertNotEmpty($run->pinned_world['charge_model']['components']);
         $this->assertSame('india_equity', $run->pinned_world['calendar']['market']);
         $this->assertSame('daily_eod', $run->pinned_world['calendar']['resolution']);
+        $sourceEconomicState = [
+            'holdings' => Holding::query()->where('profile_id', $profile->id)->count(),
+            'transactions' => Transaction::query()->where('profile_id', $profile->id)->count(),
+            'cash_ledger' => DB::table('portfolio_cash_ledger_entries')->where('profile_id', $profile->id)->count(),
+        ];
         $slice = app(PortfolioReplayProcessor::class)->process($run, 2);
         $this->assertSame('running', $slice['status']);
         $this->assertSame(2, $slice['processed_sessions']);
@@ -68,6 +75,11 @@ class V5PortfolioReplayFoundationTest extends TestCase
         $checkpoint = PortfolioReplayCheckpoint::query()->where('replay_run_id', $id)->latest('id')->firstOrFail();
         $this->assertNotEmpty($checkpoint->market_evidence['sha256']);
         $this->assertContains('portfolio_economic_engine_pending_integration', $checkpoint->limitations);
+        $this->assertSame($sourceEconomicState, [
+            'holdings' => Holding::query()->where('profile_id', $profile->id)->count(),
+            'transactions' => Transaction::query()->where('profile_id', $profile->id)->count(),
+            'cash_ledger' => DB::table('portfolio_cash_ledger_entries')->where('profile_id', $profile->id)->count(),
+        ], 'Replay processing must never mutate the source Portfolio economic state.');
         $this->postJson('/api/replays/'.$id.'/cancel')->assertOk()->assertJsonPath('data.status', 'cancelled');
         $this->assertSame(0, app(PortfolioReplayProcessor::class)->process($run->fresh(), 5)['processed_sessions']);
         $this->deleteJson('/api/replays/'.$id)->assertOk();
