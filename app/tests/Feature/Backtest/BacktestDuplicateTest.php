@@ -122,6 +122,9 @@ class BacktestDuplicateTest extends TestCase
         $ctx = SimulationContext::blank(1000000, []);
         $ctx->set('total_fees', 12.34567);
         $ctx->set('pending_execution_drafts', [['action' => 'buy', 'symbol' => 'TEST']]);
+        $ctx->set('benchmark_evidence', [
+            'stable_key' => 'nifty_50', 'return_percent' => 5.0, 'complete' => true, 'limitations' => [],
+        ]);
 
         $statistics = app(StatisticsGenerator::class)->generate($run->fresh(), $ctx);
 
@@ -129,7 +132,8 @@ class BacktestDuplicateTest extends TestCase
         $this->assertSame('ohlc_average', $statistics['execution_assumptions']['price_method']);
         $this->assertSame(1, $statistics['unresolved_end_recommendations']);
         $this->assertContains('recommendations_at_period_end_have_no_next_eligible_session_within_requested_period', $statistics['limitations']);
-        $this->assertContains('benchmark_and_excess_return_not_available', $statistics['limitations']);
+        $this->assertSame('nifty_50', $statistics['benchmark']['stable_key']);
+        $this->assertSame(-5.0, $statistics['excess_return_percent']);
         $this->assertArrayHasKey('twr_percent', $statistics);
         $this->assertArrayHasKey('volatility_percent', $statistics);
         $this->assertArrayHasKey('sharpe_ratio', $statistics);

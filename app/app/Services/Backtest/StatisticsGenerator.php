@@ -74,9 +74,12 @@ class StatisticsGenerator
                 'complete' => true,
             ])->all()];
         $performance = $this->risk->calculate($curve);
+        $benchmark = is_array($ctx->get('benchmark_evidence')) ? $ctx->get('benchmark_evidence') : [
+            'complete' => false, 'return_percent' => null, 'limitations' => ['benchmark_evidence_not_pinned'],
+        ];
         $recommendationOutcomes = is_array($ctx->get('recommendation_outcomes')) ? $ctx->get('recommendation_outcomes') : [];
         $pendingCount = count(is_array($ctx->get('pending_execution_drafts')) ? $ctx->get('pending_execution_drafts') : []);
-        $limitations = [...$performance['limitations'], 'benchmark_and_excess_return_not_available'];
+        $limitations = [...$performance['limitations'], ...($benchmark['limitations'] ?? [])];
         if ($pendingCount > 0) {
             $limitations[] = 'recommendations_at_period_end_have_no_next_eligible_session_within_requested_period';
         }
@@ -91,6 +94,9 @@ class StatisticsGenerator
             'twr_percent' => $performance['twr_percent'],
             'volatility_percent' => $performance['volatility_percent'],
             'sharpe_ratio' => $performance['sharpe_ratio'],
+            'benchmark' => $benchmark,
+            'excess_return_percent' => $performance['twr_percent'] !== null && ($benchmark['return_percent'] ?? null) !== null
+                ? round($performance['twr_percent'] - (float) $benchmark['return_percent'], 6) : null,
             'maximum_drawdown' => BacktestMath::clampDecimal12_6(round($maxDd, 6)),
             'total_trades' => $totalTrades,
             'total_transactions' => $txCount,

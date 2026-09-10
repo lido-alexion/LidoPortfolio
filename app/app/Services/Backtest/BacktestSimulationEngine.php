@@ -2,12 +2,16 @@
 
 namespace App\Services\Backtest;
 
+use App\Models\AnalysisPreference;
 use App\Models\BacktestRun;
 use App\Models\BacktestSnapshot;
 use App\Models\BacktestTrade;
 use App\Models\BacktestTransaction;
+use App\Models\Benchmark;
 use App\Models\PortfolioProfile;
 use App\Models\Screener;
+use App\Models\Stock;
+use App\Models\StockPrice;
 use App\Models\TradingStrategyVersion;
 use App\Services\Artifacts\ArtifactRuntimeBindingResolver;
 use App\Services\FeeCalculatorService;
@@ -132,6 +136,7 @@ class BacktestSimulationEngine
         ];
         $ctx->set('config_snapshot', $config);
         $ctx->set('execution_assumptions', $executionAssumptions);
+        $ctx->set('benchmark_evidence', $this->pinBenchmarkEvidence($profile, $from->toDateString(), $to->toDateString()));
         $ctx->set('reusable_artifact_version_id', $runtimeSelection?->artifactVersion->id);
         $ctx->set('artifact_binding_revision_id', $runtimeSelection?->bindingRevision->id);
         $ctx->set('eligibility_restricted', ($entryMeta['mode'] ?? 'unrestricted') === 'screener_union');
@@ -675,5 +680,52 @@ class BacktestSimulationEngine
         }
 
         return $rangeKey;
+    }
+
+    /** @return array<string,mixed> */
+    private function pinBenchmarkEvidence(PortfolioProfile $profile, string $from, string $to): array
+    {
+        $preference = AnalysisPreference::query()->where('user_id', $profile->user_id)
+            ->where('scope_key', 'portfolio:'.$profile->id)->first();
+        $benchmark = $preference?->primaryBenchmark
+            ?? Benchmark::query()->where('is_active', true)->orderByDesc('is_default')->orderBy('id')->first();
+        if ($benchmark === null) {
+            return ['complete' => false, 'limitations' => ['benchmark_not_configured']];
+        }
+        $stock = Stock::query()->where('symbol', $benchmark->symbol)->first();
+        if ($stock === null) {
+            return [
+                'benchmark_id' => $benchmark->id, 'stable_key' => $benchmark->stable_key,
+                'symbol' => $benchmark->symbol, 'complete' => false,
+                'limitations' => ['benchmark_security_not_available'],
+            ];
+        }
+        $observations = [];
+        foreach (['from' => $from, 'to' => $to] as $key => $date) {
+            $row = StockPrice::query()->where('stock_id', $stock->id)->whereDate('price_date', '<=', $date)
+                ->orderByDesc('price_date')->orderByDesc('id')->first();
+            $value = $row?->adjusted_close_price ?? $row?->close_price;
+            $observations[$key] = $row === null || $value === null ? null : [
+                'stock_price_id' => $row->id,
+                'price_date' => $row->price_date->toDateString(),
+                'value' => (float) $value,
+                'provider' => $row->provider_source,
+                'fingerprint' => hash('sha256', json_encode([
+                    $row->id, $row->price_date->toDateString(), (float) $value, $row->provider_source,
+                ], JSON_THROW_ON_ERROR)),
+            ];
+        }
+        $complete = $observations['from'] !== null && $observations['to'] !== null
+            && $observations['from']['value'] > 0;
+
+        return [
+            'benchmark_id' => $benchmark->id, 'stable_key' => $benchmark->stable_key,
+            'symbol' => $benchmark->symbol, 'return_type' => $benchmark->return_type,
+            'observations' => $observations,
+            'return_percent' => $complete
+                ? round((($observations['to']['value'] / $observations['from']['value']) - 1) * 100, 6) : null,
+            'complete' => $complete,
+            'limitations' => $complete ? [] : ['benchmark_period_observations_incomplete'],
+        ];
     }
 }
