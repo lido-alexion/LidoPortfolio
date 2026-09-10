@@ -59,6 +59,8 @@ class PortfolioProfile extends Model
             'is_default' => 'boolean',
             'simulation_checkpoint_date' => 'date',
             'simulation_evidence' => 'array',
+            'execution_blocked_by_reconciliation' => 'boolean',
+            'last_successful_reconciliation_at' => 'datetime',
             'deleted_at' => 'datetime',
         ];
     }
