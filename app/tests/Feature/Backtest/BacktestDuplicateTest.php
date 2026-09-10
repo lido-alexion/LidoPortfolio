@@ -43,6 +43,8 @@ class BacktestDuplicateTest extends TestCase
             'notes' => 'keep these notes',
             'tags' => ['swing', 'v4'],
             'session_token' => 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+            'price_method' => 'ohlc_average',
+            'adverse_slippage_percent' => 1.25,
         ];
 
         $created = $this->actingAs($user)
@@ -63,6 +65,10 @@ class BacktestDuplicateTest extends TestCase
         $this->assertNotSame($stale->id, $created['strategy_version_id']);
         $this->assertSame('Current Live Strategy', $created['strategy_name']);
         $this->assertSame($current->strategy_id, $created['strategy_id']);
+        $this->assertSame('ohlc_average', $created['execution_assumptions']['price_method']);
+        $this->assertSame(1.25, $created['execution_assumptions']['adverse_slippage_percent']);
+        $this->assertStringStartsWith('settings-sha256:', $created['execution_assumptions']['charge_model']['version']);
+        $this->assertNotEmpty($created['execution_assumptions']['charge_model']['components']);
         $this->assertStringContainsString('Current Live Strategy', (string) $created['name']);
         $this->assertStringNotContainsString('Original Frozen Run', (string) $created['name']);
 

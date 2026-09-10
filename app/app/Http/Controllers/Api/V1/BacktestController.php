@@ -9,6 +9,7 @@ use App\Services\Backtest\BacktestSimulationEngine;
 use App\Services\Screener\ScreenerCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class BacktestController extends Controller
 {
@@ -60,6 +61,8 @@ class BacktestController extends Controller
             'tags.*' => 'string|max:64',
             'session_token' => 'required|string|max:64',
             'strategy_version_id' => 'nullable|integer',
+            'price_method' => ['nullable', Rule::in(\App\Models\PortfolioProfile::SIMULATION_PRICE_METHODS)],
+            'adverse_slippage_percent' => 'nullable|numeric|between:0,100',
         ]);
 
         $result = $this->engine->start($profile, $validated);

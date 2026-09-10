@@ -10,6 +10,7 @@ use App\Models\PortfolioProfile;
 use App\Models\Screener;
 use App\Models\TradingStrategyVersion;
 use App\Services\Artifacts\ArtifactRuntimeBindingResolver;
+use App\Services\FeeCalculatorService;
 use App\Services\Screener\ScreenerBacktestService;
 use App\Services\Screener\ScreenerCatalog;
 use App\Services\StrategyConfigurationService;
@@ -34,6 +35,7 @@ class BacktestSimulationEngine
         protected BacktestPersistenceService $persistence,
         protected TimelineBuilder $timeline,
         protected ArtifactRuntimeBindingResolver $artifactRuntime,
+        protected FeeCalculatorService $fees,
     ) {}
 
     /**
@@ -118,7 +120,17 @@ class BacktestSimulationEngine
         ), static fn ($t) => $t !== '')));
 
         $ctx = SimulationContext::blank($initialCapital, $dayStrings);
+        $chargeComponents = $this->fees->componentsFromSettings();
+        $executionAssumptions = [
+            'price_method' => $input['price_method'] ?? 'next_open',
+            'adverse_slippage_percent' => (float) ($input['adverse_slippage_percent'] ?? 0),
+            'charge_model' => [
+                'version' => 'settings-sha256:'.hash('sha256', json_encode($chargeComponents, JSON_THROW_ON_ERROR)),
+                'components' => $chargeComponents,
+            ],
+        ];
         $ctx->set('config_snapshot', $config);
+        $ctx->set('execution_assumptions', $executionAssumptions);
         $ctx->set('reusable_artifact_version_id', $runtimeSelection?->artifactVersion->id);
         $ctx->set('artifact_binding_revision_id', $runtimeSelection?->bindingRevision->id);
         $ctx->set('eligibility_restricted', ($entryMeta['mode'] ?? 'unrestricted') === 'screener_union');
@@ -162,6 +174,7 @@ class BacktestSimulationEngine
             'from_date' => $from->toDateString(),
             'to_date' => $to->toDateString(),
             'initial_capital' => $initialCapital,
+            'execution_assumptions_json' => $executionAssumptions,
             'status' => BacktestRun::STATUS_PREPARING,
             'stage' => BacktestRun::STAGE_PREPARING,
             'processed_days' => 0,
@@ -331,6 +344,7 @@ class BacktestSimulationEngine
             'from_date' => $run->from_date?->toDateString(),
             'to_date' => $run->to_date?->toDateString(),
             'initial_capital' => (float) $run->initial_capital,
+            'execution_assumptions' => $run->execution_assumptions_json,
             'processed_days' => (int) $run->processed_days,
             'total_days' => (int) $run->total_days,
             'progress_pct' => (float) $run->progress_pct,
