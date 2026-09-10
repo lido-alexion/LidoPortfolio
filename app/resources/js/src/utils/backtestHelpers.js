@@ -164,7 +164,7 @@ export async function continueBacktestUntilDone(runId, onProgress) {
     }
 
     if (iterations >= MAX_CONTINUE_ITERATIONS) {
-        throw new Error('Backtest resume timed out — open the run to continue polling.');
+        throw new Error('Backtest is still running in the background. You may close this page and return later.');
     }
 
     return result;

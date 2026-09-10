@@ -342,6 +342,12 @@ Schedule::command('portfolio:process-replays')
     ->withoutOverlapping(5)
     ->name('portfolio-replay-slices');
 
+Schedule::command('portfolio:process-backtests --max-runs=1')
+    ->everyFiveMinutes()
+    ->timezone($timezone)
+    ->withoutOverlapping(5)
+    ->name('strategy-backtest-slices');
+
 Schedule::command('tos:submit-automatic-orders')
     ->everyFiveMinutes()
     ->timezone($timezone)

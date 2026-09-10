@@ -41,6 +41,9 @@ class V5BacktestLifecycleTest extends TestCase
         $run->refresh();
         $this->assertNotNull($run->cancelled_at);
         $this->assertNull($run->context_json);
+        $this->artisan('portfolio:process-backtests')
+            ->expectsOutput('Backtest slices: 0 runs; 0 completed.')
+            ->assertSuccessful();
         $this->postJson('/api/v1/backtests/'.$run->id.'/continue')
             ->assertOk()->assertJsonPath('data.run.status', BacktestRun::STATUS_CANCELLED);
         $this->postJson('/api/v1/backtests/'.$run->id.'/cancel')->assertUnprocessable();
