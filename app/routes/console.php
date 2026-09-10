@@ -328,6 +328,14 @@ Schedule::command('tos:reconcile-broker-orders')
     ->withoutOverlapping(5)
     ->name('tos-broker-reconcile');
 
+// FEAT-020 Paper work is scheduled before analytical simulation capacity and
+// processes bounded durable checkpoints without requiring a resident worker.
+Schedule::command('portfolio:process-paper-simulations')
+    ->everyFiveMinutes()
+    ->timezone($timezone)
+    ->withoutOverlapping(5)
+    ->name('paper-simulation-priority');
+
 Schedule::command('tos:submit-automatic-orders')
     ->everyFiveMinutes()
     ->timezone($timezone)
