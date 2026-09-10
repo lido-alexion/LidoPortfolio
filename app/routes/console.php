@@ -336,6 +336,12 @@ Schedule::command('portfolio:process-paper-simulations')
     ->withoutOverlapping(5)
     ->name('paper-simulation-priority');
 
+Schedule::command('portfolio:process-replays')
+    ->everyFiveMinutes()
+    ->timezone($timezone)
+    ->withoutOverlapping(5)
+    ->name('portfolio-replay-slices');
+
 Schedule::command('tos:submit-automatic-orders')
     ->everyFiveMinutes()
     ->timezone($timezone)
