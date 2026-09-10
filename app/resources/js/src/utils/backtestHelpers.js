@@ -93,6 +93,8 @@ export function duplicateBacktestPayload(run, sessionToken) {
         initial_capital: capital,
         tags,
         session_token: token,
+        price_method: run?.execution_assumptions?.price_method || 'next_open',
+        adverse_slippage_percent: Number(run?.execution_assumptions?.adverse_slippage_percent || 0),
     };
 
     if (run?.range_key) {

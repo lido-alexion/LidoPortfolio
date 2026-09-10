@@ -23,6 +23,8 @@ test('duplicate helper omits strategy_version_id and result state', () => {
     assert.match(helpers, /from_date/);
     assert.match(helpers, /to_date/);
     assert.match(helpers, /initial_capital/);
+    assert.match(helpers, /execution_assumptions\?\.price_method/);
+    assert.match(helpers, /adverse_slippage_percent/);
     assert.doesNotMatch(helpers, /payload\.strategy_version_id/);
 });
 
@@ -41,4 +43,12 @@ test('V5 Backtests expose background execution and safe cancellation', () => {
     assert.match(page, /\/v1\/backtests\/\$\{run\.id\}\/cancel/);
     assert.match(page, />\s*Cancel\s*</);
     assert.doesNotMatch(page, /open the run to resume/);
+});
+
+test('V5 Backtest form exposes pinned next-session execution assumptions', () => {
+    assert.match(page, /id="bt-price-method"/);
+    assert.match(page, /Next eligible session open/);
+    assert.match(page, /Next eligible session OHLC average/);
+    assert.match(page, /id="bt-slippage"/);
+    assert.match(page, /adverse_slippage_percent/);
 });

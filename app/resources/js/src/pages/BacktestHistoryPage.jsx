@@ -94,6 +94,8 @@ export default function BacktestHistoryPage() {
         initial_capital: '1000000',
         notes: '',
         tags: '',
+        price_method: 'next_open',
+        adverse_slippage_percent: '0',
     });
 
     const load = useCallback(async () => {
@@ -179,6 +181,8 @@ export default function BacktestHistoryPage() {
                 initial_capital: Number(form.initial_capital),
                 notes: form.notes.trim() || undefined,
                 tags: parseTagsInput(form.tags),
+                price_method: form.price_method,
+                adverse_slippage_percent: Number(form.adverse_slippage_percent || 0),
                 session_token: getOrCreateBacktestSessionToken(),
             };
             const result = await startBacktest(payload, setActiveRun);
@@ -371,6 +375,21 @@ export default function BacktestHistoryPage() {
                                             compact
                                             disabled={starting}
                                         />
+                                    </div>
+                                    <div className="row g-2">
+                                        <div className="col-sm-8">
+                                            <label className="form-label small mb-1" htmlFor="bt-price-method">Execution price</label>
+                                            <select id="bt-price-method" className="form-select form-select-sm" value={form.price_method} onChange={(e) => setForm({ ...form, price_method: e.target.value })} disabled={starting}>
+                                                <option value="next_open">Next eligible session open</option>
+                                                <option value="next_close">Next eligible session close</option>
+                                                <option value="ohlc_average">Next eligible session OHLC average</option>
+                                                <option value="high_low_midpoint">Next eligible session high/low midpoint</option>
+                                            </select>
+                                        </div>
+                                        <div className="col-sm-4">
+                                            <label className="form-label small mb-1" htmlFor="bt-slippage">Adverse slippage %</label>
+                                            <NumberInput id="bt-slippage" value={form.adverse_slippage_percent} onChange={(e) => setForm({ ...form, adverse_slippage_percent: e.target.value })} min={0} max={100} step={0.01} compact disabled={starting} />
+                                        </div>
                                     </div>
                                     <div>
                                         <label className="form-label small mb-1" htmlFor="bt-notes">Notes</label>
