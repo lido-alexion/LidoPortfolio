@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Engines\Execution\ExecutionGate;
 use App\Models\PortfolioReconciliationRun;
 use App\Models\Stock;
 use App\Models\User;
@@ -40,6 +41,10 @@ class V5PortfolioReconciliationFoundationTest extends TestCase
         $this->assertCount(2, $run->discrepancies['holdings']);
         $this->assertCount(1, $run->unsupported_instruments);
         $this->assertTrue($profile->fresh()->execution_blocked_by_reconciliation);
+        $this->assertContains(
+            'reconciliation_holdings_mismatch',
+            app(ExecutionGate::class)->blockers($user, $profile->fresh())
+        );
     }
 
     public function test_cash_only_mismatch_requires_attention_without_execution_block_and_runs_are_immutable(): void

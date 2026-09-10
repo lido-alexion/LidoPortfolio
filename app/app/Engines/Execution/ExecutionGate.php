@@ -58,6 +58,13 @@ class ExecutionGate
                 403,
             );
         }
+        if ($profile->execution_blocked_by_reconciliation) {
+            throw new DomainException(
+                'Broker submission is blocked because the latest successful holdings reconciliation found a mismatch. Correct StoX transactions and run reconciliation again.',
+                'RECONCILIATION_HOLDINGS_MISMATCH',
+                403,
+            );
+        }
         $this->assertEntitled($user);
 
         $mode = $profile->executionMode();
@@ -120,6 +127,9 @@ class ExecutionGate
         }
         if ((int) $profile->user_id !== (int) $user->id) {
             $blockers[] = 'portfolio_access';
+        }
+        if ($profile->execution_blocked_by_reconciliation) {
+            $blockers[] = 'reconciliation_holdings_mismatch';
         }
         if (! $user->automatedExecutionEntitled()) {
             $blockers[] = 'entitlement';
