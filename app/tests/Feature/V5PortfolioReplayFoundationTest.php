@@ -17,7 +17,9 @@ use App\Models\User;
 use App\Services\FeeCalculatorService;
 use App\Services\Simulation\PortfolioReplayProcessor;
 use App\Services\Simulation\PortfolioReplayService;
+use App\Services\Simulation\ReplayStrategyEvaluator;
 use App\Services\Simulation\ReplayTradeTransition;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -26,6 +28,77 @@ use Tests\TestCase;
 class V5PortfolioReplayFoundationTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_replay_evaluates_pinned_strategy_and_screener_definitions_into_next_session_recommendation(): void
+    {
+        $stock = Stock::query()->create(['symbol' => 'PINNED', 'exchange' => 'NSE', 'name' => 'Pinned Candidate']);
+        $date = Carbon::parse('2026-01-01');
+        for ($day = 0; $day < 91; $day++) {
+            $price = 100 + $day;
+            StockPrice::query()->create([
+                'stock_id' => $stock->id, 'price_date' => $date->copy()->addDays($day)->toDateString(),
+                'open_price' => $price - 1, 'high_price' => $price + 1, 'low_price' => $price - 2,
+                'close_price' => $price, 'volume' => 100000 + $day,
+                'data_source' => 'test', 'created_at' => $date->copy()->addDays($day)->endOfDay(),
+            ]);
+        }
+        $session = '2026-04-01';
+        $state = [
+            'holdings' => [], 'pending_recommendations' => [],
+            'strategies' => [['strategy_id' => 7, 'available_capital' => 100000]],
+        ];
+        $world = ['binding_revisions' => [[
+            'strategy_id' => 7, 'artifact_version_id' => 70, 'definition_hash' => 'pinned-hash',
+            'strategy_definition' => [
+                'scoring_model' => [['key' => 'trend_score', 'weight' => 100, 'enabled' => true]],
+                'thresholds' => ['open_position' => 1],
+                'portfolio_rules' => ['default_position_size_pct' => 10],
+            ],
+            'dependencies' => [[
+                'artifact_type' => 'screener',
+                'definition' => ['root' => [
+                    'type' => 'condition', 'left' => ['indicator' => 'close'],
+                    'operator' => 'gt', 'right' => ['type' => 'constant', 'value' => 0],
+                ]],
+            ]],
+        ]]];
+
+        $result = app(ReplayStrategyEvaluator::class)->evaluate($state, $world, $session);
+
+        $this->assertSame(1, $result['generated']);
+        $this->assertSame([], $result['limitations']);
+        $recommendation = $result['state']['pending_recommendations'][0];
+        $this->assertSame('buy', $recommendation['side']);
+        $this->assertSame('2026-04-02', $recommendation['first_eligible_session']);
+        $this->assertSame(70, $recommendation['evidence']['artifact_version_id']);
+        $this->assertSame('pinned-hash', $recommendation['evidence']['definition_hash']);
+        $this->assertGreaterThan(0, $recommendation['target_amount']);
+    }
+
+    public function test_replay_marks_completed_after_final_in_range_session(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        $state = [
+            'schema_version' => 1, 'cash_balance' => 1000, 'holdings' => [],
+            'strategies' => [], 'pending_recommendations' => [], 'transactions' => [],
+        ];
+        $run = PortfolioReplayRun::query()->create([
+            'run_uuid' => (string) Str::uuid(), 'user_id' => $user->id, 'profile_id' => $profile->id,
+            'starting_mode' => 'new_simulated', 'period_start' => '2026-01-02', 'period_end' => '2026-01-02',
+            'starting_cash' => 1000, 'price_method' => 'next_open', 'adverse_slippage_percent' => 0,
+            'status' => 'queued', 'pinned_world' => ['binding_revisions' => [], 'portfolio_economic_settings' => []],
+            'starting_state' => $state, 'readiness' => ['status' => 'ready'],
+        ]);
+
+        $result = app(PortfolioReplayProcessor::class)->process($run, 5);
+
+        $this->assertSame('completed', $result['status']);
+        $this->assertFalse($result['remaining']);
+        $this->assertSame('completed', $run->fresh()->status);
+        $this->assertSame('completed', $run->fresh()->results['processing_state']);
+        $this->assertNotNull($run->fresh()->completed_at);
+    }
 
     public function test_ready_scenario_pins_world_and_cannot_be_modified_after_queueing(): void
     {
@@ -101,7 +174,7 @@ class V5PortfolioReplayFoundationTest extends TestCase
         $this->assertEquals(100000.0, $checkpoint->state_after['valuation']['total_value']);
         $this->assertEquals(100000.0, $checkpoint->state_after['capital']['investable_capital']);
         $this->assertEquals(100000.0, $checkpoint->state_after['strategies'][0]['available_capital']);
-        $this->assertContains('strategy_evaluation_pending_integration', $checkpoint->limitations);
+        $this->assertContains('pinned_strategy_eligibility_missing', $checkpoint->limitations);
         $this->assertSame($sourceEconomicState, [
             'holdings' => Holding::query()->where('profile_id', $profile->id)->count(),
             'transactions' => Transaction::query()->where('profile_id', $profile->id)->count(),

@@ -13,6 +13,7 @@ final class PortfolioReplayProcessor
     public function __construct(
         private ReplayTradeTransition $trades,
         private ReplayEconomicStateCalculator $economics,
+        private ReplayStrategyEvaluator $strategies,
     ) {}
 
     /** @return array<string, mixed> */
@@ -73,12 +74,14 @@ final class PortfolioReplayProcessor
                         $run->pinned_world['portfolio_economic_settings'] ?? [],
                         $prices,
                     );
+                    $evaluation = $this->strategies->evaluate($stateAfter, $run->pinned_world, $session);
+                    $stateAfter = $evaluation['state'];
                     PortfolioReplayCheckpoint::query()->create([
                         'replay_run_id' => $run->id, 'effective_session_date' => $session,
                         'processed_at' => now(), 'stage' => 'economic_checkpoint',
                         'state_before' => $state, 'state_after' => $stateAfter,
                         'market_evidence' => $this->marketFingerprint($session),
-                        'limitations' => ['strategy_evaluation_pending_integration'],
+                        'limitations' => $evaluation['limitations'],
                     ]);
                 }
                 $run->forceFill(['checkpoint_date' => $session])->save();
@@ -86,8 +89,33 @@ final class PortfolioReplayProcessor
                 $cursor->addDay();
             }
 
-            // Do not claim completion until deterministic Strategy evaluation and
-            // trade transitions build on the isolated economic state checkpoints.
+            if ($cursor->gt($run->period_end)) {
+                $final = PortfolioReplayCheckpoint::query()->where('replay_run_id', $run->id)
+                    ->orderByDesc('effective_session_date')->first();
+                $finalState = is_array($final?->state_after) ? $final->state_after : $run->starting_state;
+                $unresolved = collect($finalState['pending_recommendations'] ?? [])->where('status', 'pending')->count();
+                $limitations = $unresolved > 0
+                    ? ['recommendations_at_period_end_have_no_next_eligible_session_within_requested_period']
+                    : [];
+                $run->forceFill([
+                    'status' => 'completed', 'completed_at' => now(),
+                    'results' => [
+                        'processing_state' => 'completed',
+                        'checkpoint_date' => $run->checkpoint_date?->toDateString(),
+                        'transaction_count' => count($finalState['transactions'] ?? []),
+                        'unresolved_end_recommendations' => $unresolved,
+                        'valuation' => $finalState['valuation'] ?? null,
+                        'limitations' => $limitations,
+                    ],
+                ])->save();
+
+                return [
+                    'status' => 'completed', 'processing_state' => 'completed',
+                    'processed_sessions' => $processed, 'checkpoint_date' => $run->checkpoint_date?->toDateString(),
+                    'remaining' => false, 'limitations' => $limitations,
+                ];
+            }
+
             return [
                 'status' => 'running', 'processed_sessions' => $processed,
                 'checkpoint_date' => $run->checkpoint_date?->toDateString(),
