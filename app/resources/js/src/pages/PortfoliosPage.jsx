@@ -26,6 +26,9 @@ export default function PortfoliosPage() {
     } = usePortfolio();
     const [newName, setNewName] = useState('');
     const [newNameTouched, setNewNameTouched] = useState(false);
+    const [newType, setNewType] = useState('live');
+    const [startingCash, setStartingCash] = useState('100000');
+    const [priceMethod, setPriceMethod] = useState('next_open');
     const [creating, setCreating] = useState(false);
     const [renameId, setRenameId] = useState(null);
     const [renameName, setRenameName] = useState('');
@@ -33,6 +36,7 @@ export default function PortfoliosPage() {
     const [savingRename, setSavingRename] = useState(false);
     const [defaultingId, setDefaultingId] = useState(null);
     const [deletingId, setDeletingId] = useState(null);
+    const [simulationBusyId, setSimulationBusyId] = useState(null);
 
     const newNameError = newNameTouched ? validatePortfolioName(newName) : null;
     const renameNameError = renameTouched ? validatePortfolioName(renameName) : null;
@@ -59,7 +63,14 @@ export default function PortfoliosPage() {
         }
         setCreating(true);
         try {
-            await api.post('/portfolios', { name });
+            await api.post('/portfolios', {
+                name,
+                portfolio_type: newType,
+                ...(newType === 'paper' ? {
+                    starting_cash: Number(startingCash),
+                    simulation_price_method: priceMethod,
+                } : {}),
+            });
             setNewName('');
             setNewNameTouched(false);
             await bootstrap();
@@ -68,6 +79,20 @@ export default function PortfoliosPage() {
             showToast(validationMessage(error), 'danger');
         } finally {
             setCreating(false);
+        }
+    };
+
+    const changeSimulationState = async (portfolio) => {
+        setSimulationBusyId(portfolio.id);
+        try {
+            const action = portfolio.simulation_state === 'paused' ? 'resume' : 'pause';
+            await api.post(`/portfolios/${portfolio.id}/simulation/${action}`);
+            await bootstrap();
+            showToast(`Paper simulation ${action === 'pause' ? 'paused' : 'resumed'}`);
+        } catch (error) {
+            showToast(validationMessage(error), 'danger');
+        } finally {
+            setSimulationBusyId(null);
         }
     };
 
@@ -152,7 +177,7 @@ export default function PortfoliosPage() {
                 <div className="card-body">
                     <h3 className="h6 mb-3">Create portfolio</h3>
                     <form className="row g-2 align-items-end" onSubmit={createPortfolio}>
-                        <div className="col-sm-8">
+                        <div className="col-sm-4">
                             <label htmlFor="new-portfolio-name" className="form-label small mb-1">Name</label>
                             <input
                                 id="new-portfolio-name"
@@ -168,11 +193,13 @@ export default function PortfoliosPage() {
                                 <div className="invalid-feedback d-block">{newNameError}</div>
                             )}
                         </div>
-                        <div className="col-sm-4">
+                        <div className="col-sm-2"><label htmlFor="new-portfolio-type" className="form-label small mb-1">Type</label><select id="new-portfolio-type" className="form-select form-select-sm" value={newType} onChange={(event) => setNewType(event.target.value)}><option value="live">Live</option><option value="paper">Paper</option></select></div>
+                        {newType === 'paper' ? <><div className="col-sm-2"><label htmlFor="paper-starting-cash" className="form-label small mb-1">Simulated cash</label><input id="paper-starting-cash" type="number" min="0.01" step="0.01" className="form-control form-control-sm" value={startingCash} onChange={(event) => setStartingCash(event.target.value)} /></div><div className="col-sm-2"><label htmlFor="paper-price-method" className="form-label small mb-1">Fill price</label><select id="paper-price-method" className="form-select form-select-sm" value={priceMethod} onChange={(event) => setPriceMethod(event.target.value)}><option value="next_open">Next open</option><option value="next_close">Next close</option><option value="ohlc_average">OHLC average</option><option value="high_low_midpoint">High/low midpoint</option></select></div></> : null}
+                        <div className="col-sm-2">
                             <button
                                 type="submit"
                                 className="btn btn-primary btn-sm w-100"
-                                disabled={creating || Boolean(validatePortfolioName(newName))}
+                                disabled={creating || Boolean(validatePortfolioName(newName)) || (newType === 'paper' && Number(startingCash) <= 0)}
                             >
                                 {creating ? 'Creating…' : 'Create'}
                             </button>
@@ -230,6 +257,7 @@ export default function PortfoliosPage() {
                                             ) : (
                                                 <>
                                                     <span className="fw-semibold">{portfolio.name}</span>
+                                                    <span className={`badge ms-2 ${portfolio.portfolio_type === 'paper' ? 'text-bg-warning' : 'text-bg-success'}`}>{portfolio.portfolio_type === 'paper' ? 'PAPER' : 'LIVE'}</span>
                                                     {portfolio.is_default && (
                                                         <span className="badge text-bg-secondary ms-2">Default</span>
                                                     )}
@@ -241,6 +269,7 @@ export default function PortfoliosPage() {
                                         </div>
                                         {!isRenaming && (
                                             <div className="d-flex flex-wrap gap-2">
+                                                {portfolio.portfolio_type === 'paper' && <button type="button" className="btn btn-outline-warning btn-sm" disabled={simulationBusyId === portfolio.id} onClick={() => changeSimulationState(portfolio)}>{portfolio.simulation_state === 'paused' ? 'Resume simulation' : 'Pause simulation'}</button>}
                                                 {!isActive && (
                                                     <button
                                                         type="button"

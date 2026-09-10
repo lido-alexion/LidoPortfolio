@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import api from '../api';
 import { runApiMutation } from '../hooks/useApiMutation';
 import { tosData } from '../utils/tosEnvelope';
+import { usePortfolio } from '../context/PortfolioContext';
 
 const MODE_LABELS = {
     manual: 'Manual',
@@ -10,6 +11,7 @@ const MODE_LABELS = {
 };
 
 export default function ExecutionModePanel() {
+    const { activePortfolio } = usePortfolio();
     const [snap, setSnap] = useState(null);
     const [mode, setMode] = useState('manual');
     const [totp, setTotp] = useState('');
@@ -50,6 +52,10 @@ export default function ExecutionModePanel() {
     };
 
     const blockers = snap?.blockers || [];
+
+    if (activePortfolio?.portfolio_type === 'paper') {
+        return <div className="card"><div className="card-header">Execution mode · PAPER</div><div className="card-body"><p className="mb-0 small text-muted">Paper portfolios never connect or submit to Kite. Broker mode remains Manual while eligible recommendations are executed by the separate Paper simulator using simulated cash and pinned market evidence.</p></div></div>;
+    }
 
     return (
         <div className="card">

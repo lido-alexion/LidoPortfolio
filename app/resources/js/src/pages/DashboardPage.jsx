@@ -771,9 +771,9 @@ export default function DashboardPage() {
 
     return (
         <div className="row g-3">
-            <div className="col-12">
+            {activePortfolio?.portfolio_type !== 'paper' ? <div className="col-12">
                 <KiteReadinessCard executionMode={activePortfolio?.execution_mode} />
-            </div>
+            </div> : <div className="col-12"><div className="alert alert-warning mb-0"><strong>PAPER portfolio</strong> · Uses simulated cash and execution. Kite submission and reconciliation are unavailable.</div></div>}
             {loadError ? (
                 <div className="col-12">
                     <div className="alert alert-warning mb-0">{loadError}</div>

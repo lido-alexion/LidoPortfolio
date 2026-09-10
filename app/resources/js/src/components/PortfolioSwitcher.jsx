@@ -15,7 +15,7 @@ export default function PortfolioSwitcher() {
         return null;
     }
 
-    const activeName = activePortfolio?.name ?? 'Portfolio';
+    const activeName = `${activePortfolio?.name ?? 'Portfolio'}${activePortfolio?.portfolio_type === 'paper' ? ' · PAPER' : ''}`;
 
     return (
         <div className="dropdown lido-portfolio-switcher-wrap" style={{ position: 'relative', zIndex: 2001 }}>
@@ -69,7 +69,7 @@ export default function PortfolioSwitcher() {
                                         setIsOpen(false);
                                     }}
                                 >
-                                    <span>{portfolio.name}</span>
+                                    <span>{portfolio.name}{portfolio.portfolio_type === 'paper' ? ' · PAPER' : ''}</span>
                                     {isActive && <span aria-hidden="true">✓</span>}
                                 </button>
                             );
