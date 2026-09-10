@@ -103,6 +103,18 @@ class V5PortfolioReplayFoundationTest extends TestCase
         $this->assertCount(2, $run->fresh()->results['statistics']['equity_curve']);
         $this->assertContains('risk_metrics_require_30_daily_returns', $run->fresh()->results['limitations']);
         $this->assertNotNull($run->fresh()->completed_at);
+
+        $comparisonRun = $run->fresh()->replicate();
+        $comparisonRun->run_uuid = (string) Str::uuid();
+        $comparisonRun->price_method = 'next_close';
+        $comparisonRun->save();
+        $this->actingAs($user)->withProfileHeader($user, $profile)
+            ->postJson('/api/replays/compare', ['run_ids' => [$run->id, $comparisonRun->id]])
+            ->assertOk()
+            ->assertJsonPath('data.compatible', true)
+            ->assertJsonPath('data.assumption_differences.0', 'price_method')
+            ->assertJsonPath('data.ranking', null)
+            ->assertJsonCount(2, 'data.runs');
     }
 
     public function test_ready_scenario_pins_world_and_cannot_be_modified_after_queueing(): void

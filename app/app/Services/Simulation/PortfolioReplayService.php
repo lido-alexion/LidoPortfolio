@@ -12,6 +12,7 @@ use App\Services\HistoricalHoldingsService;
 use App\Services\ProfileSettingsService;
 use App\Support\TradingCalendar;
 use Carbon\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -222,6 +223,46 @@ final class PortfolioReplayService
                 'recommendation_count' => count($checkpoints !== [] ? $checkpoints[array_key_last($checkpoints)]['recommendations'] : []),
             ],
         ]);
+    }
+
+    /** @param Collection<int,PortfolioReplayRun> $runs @return array<string,mixed> */
+    public function compare(Collection $runs): array
+    {
+        $rows = $runs->map(fn (PortfolioReplayRun $run): array => [
+            'id' => $run->id,
+            'run_uuid' => $run->run_uuid,
+            'status' => $run->status,
+            'period' => ['from' => $run->period_start->toDateString(), 'to' => $run->period_end->toDateString()],
+            'starting_mode' => $run->starting_mode,
+            'starting_cash' => $run->starting_cash !== null ? (float) $run->starting_cash : null,
+            'price_method' => $run->price_method,
+            'adverse_slippage_percent' => (float) $run->adverse_slippage_percent,
+            'strategy_world' => collect($run->pinned_world['binding_revisions'] ?? [])->map(fn (array $binding): array => [
+                'strategy_id' => $binding['strategy_id'] ?? null,
+                'artifact_version_id' => $binding['artifact_version_id'] ?? null,
+                'definition_hash' => $binding['definition_hash'] ?? null,
+            ])->values()->all(),
+            'economic_settings' => $run->pinned_world['portfolio_economic_settings'] ?? [],
+            'statistics' => $run->results['statistics'] ?? null,
+            'limitations' => $run->results['limitations'] ?? $run->readiness['limitations'] ?? [],
+        ])->values();
+        $dimensions = [
+            'period' => $rows->pluck('period')->uniqueStrict()->count() === 1,
+            'starting_mode' => $rows->pluck('starting_mode')->uniqueStrict()->count() === 1,
+            'strategy_world' => $rows->pluck('strategy_world')->uniqueStrict()->count() === 1,
+            'economic_settings' => $rows->pluck('economic_settings')->uniqueStrict()->count() === 1,
+        ];
+
+        return [
+            'compatible' => ! in_array(false, $dimensions, true),
+            'compatibility' => $dimensions,
+            'assumption_differences' => collect([
+                'starting_cash', 'price_method', 'adverse_slippage_percent', 'strategy_world', 'economic_settings',
+            ])->filter(fn (string $key): bool => $rows->pluck($key)->uniqueStrict()->count() > 1)->values()->all(),
+            'runs' => $rows->all(),
+            'ranking' => null,
+            'disclosure' => 'Comparison is descriptive only; StoX does not rank or promote a winning Replay.',
+        ];
     }
 
     public function delete(PortfolioReplayRun $run, int $actorId): void

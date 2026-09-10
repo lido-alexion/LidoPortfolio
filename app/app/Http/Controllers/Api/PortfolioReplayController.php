@@ -38,6 +38,21 @@ class PortfolioReplayController extends Controller
         return response()->json(['data' => $this->replays->detail($this->owned($replay))]);
     }
 
+    public function compare(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'run_ids' => ['required', 'array', 'min:2', 'max:5'],
+            'run_ids.*' => ['required', 'integer', 'distinct'],
+        ]);
+        $runs = PortfolioReplayRun::query()->where('profile_id', \activePortfolio()->id)
+            ->whereIn('id', $validated['run_ids'])->get()->keyBy('id');
+        abort_if($runs->count() !== count($validated['run_ids']), 404);
+
+        return response()->json(['data' => $this->replays->compare(
+            collect($validated['run_ids'])->map(fn (int $id) => $runs->get($id))
+        )]);
+    }
+
     public function cancel(int $replay): JsonResponse
     {
         return response()->json(['data' => $this->replays->cancel($this->owned($replay))]);
