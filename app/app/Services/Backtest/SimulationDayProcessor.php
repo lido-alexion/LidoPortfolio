@@ -251,10 +251,12 @@ class SimulationDayProcessor
                 'exchange' => 'NSE',
             ];
         }
-        $ctx->set('pending_execution_drafts', array_values(array_filter(
+        $pendingDrafts = array_values(array_filter(
             $queued,
             static fn (array $draft): bool => (int) ($draft['quantity'] ?? 0) > 0 || (float) ($draft['target_amount'] ?? 0) > 0
-        )));
+        ));
+        $ctx->set('pending_execution_drafts', $pendingDrafts);
+        $ctx->set('recommendations_generated', (int) $ctx->get('recommendations_generated', 0) + count($pendingDrafts));
 
         $valuation = $portfolio->valueAsOf($asOfDate, true);
 
@@ -307,6 +309,7 @@ class SimulationDayProcessor
             $quantity = $side === 'sell'
                 ? (int) ($draft['quantity'] ?? 0)
                 : (int) floor((float) ($draft['target_amount'] ?? 0) / $price);
+            $requestedQuantity = $quantity;
             $charge = $this->fees->calculate($quantity, $price, $side, (string) ($draft['exchange'] ?? 'NSE'), $assumptions['charge_model']['components'] ?? null);
             while ($side === 'buy' && $quantity > 0 && ($quantity * $price) + $charge['total'] > $ctx->cash() + 0.0001) {
                 $quantity--;
@@ -325,6 +328,12 @@ class SimulationDayProcessor
                 $transactions[] = $result['transaction'];
                 array_push($closedTrades, ...($result['closed_trades'] ?? []));
             }
+            $executedQuantity = (int) ($result['transaction']['quantity'] ?? 0);
+            $outcome = $executedQuantity < 1 ? 'unexecuted_capital_constraint'
+                : ($executedQuantity < $requestedQuantity ? 'partial' : 'full');
+            $outcomes = is_array($ctx->get('recommendation_outcomes')) ? $ctx->get('recommendation_outcomes') : [];
+            $outcomes[$outcome] = (int) ($outcomes[$outcome] ?? 0) + 1;
+            $ctx->set('recommendation_outcomes', $outcomes);
         }
         $ctx->set('pending_execution_drafts', []);
         $ctx->set('waiting_detail', null);

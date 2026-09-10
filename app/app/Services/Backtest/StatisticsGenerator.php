@@ -6,10 +6,13 @@ use App\Models\BacktestRun;
 use App\Models\BacktestSnapshot;
 use App\Models\BacktestTrade;
 use App\Models\BacktestTransaction;
+use App\Services\Analytics\PerformanceRiskCalculator;
 use Carbon\Carbon;
 
 class StatisticsGenerator
 {
+    public function __construct(private PerformanceRiskCalculator $risk) {}
+
     /**
      * @return array<string, mixed>
      */
@@ -60,6 +63,23 @@ class StatisticsGenerator
 
         $utilDays = max(1, (int) $ctx->get('utilization_days', 1));
         $avgUtil = round(((float) $ctx->get('utilization_sum', 0)) / $utilDays, 4);
+        $curve = [[
+            'date' => $run->from_date->copy()->subDay()->toDateString(),
+            'value' => $initial,
+            'complete' => true,
+        ], ...BacktestSnapshot::query()->where('backtest_run_id', $run->id)->orderBy('snapshot_date')->get()
+            ->map(fn (BacktestSnapshot $snapshot): array => [
+                'date' => $snapshot->snapshot_date->toDateString(),
+                'value' => (float) $snapshot->portfolio_value,
+                'complete' => true,
+            ])->all()];
+        $performance = $this->risk->calculate($curve);
+        $recommendationOutcomes = is_array($ctx->get('recommendation_outcomes')) ? $ctx->get('recommendation_outcomes') : [];
+        $pendingCount = count(is_array($ctx->get('pending_execution_drafts')) ? $ctx->get('pending_execution_drafts') : []);
+        $limitations = [...$performance['limitations'], 'benchmark_and_excess_return_not_available'];
+        if ($pendingCount > 0) {
+            $limitations[] = 'recommendations_at_period_end_have_no_next_eligible_session_within_requested_period';
+        }
 
         return [
             'initial_capital' => $initial,
@@ -67,6 +87,10 @@ class StatisticsGenerator
             'absolute_return' => $absoluteReturn,
             'return_pct' => BacktestMath::clampDecimal12_6($returnPct),
             'cagr' => $cagr,
+            'xirr_percent' => $cagr,
+            'twr_percent' => $performance['twr_percent'],
+            'volatility_percent' => $performance['volatility_percent'],
+            'sharpe_ratio' => $performance['sharpe_ratio'],
             'maximum_drawdown' => BacktestMath::clampDecimal12_6(round($maxDd, 6)),
             'total_trades' => $totalTrades,
             'total_transactions' => $txCount,
@@ -84,11 +108,15 @@ class StatisticsGenerator
             'cash_remaining' => $lastSnap ? (float) $lastSnap->cash : (float) $ctx->cash(),
             'maximum_concurrent_positions' => (int) $ctx->get('max_concurrent_positions', 0),
             'simulated_charges' => round((float) $ctx->get('total_fees', 0), 4),
+            'charge_impact_percent' => $initial > 0
+                ? round(((float) $ctx->get('total_fees', 0) / $initial) * 100, 6) : null,
+            'equity_curve' => $curve,
+            'recommendations_generated' => (int) $ctx->get('recommendations_generated', 0),
+            'recommendation_outcomes' => $recommendationOutcomes,
             'execution_assumptions' => $run->execution_assumptions_json,
-            'unresolved_end_recommendations' => count(is_array($ctx->get('pending_execution_drafts')) ? $ctx->get('pending_execution_drafts') : []),
-            'limitations' => count(is_array($ctx->get('pending_execution_drafts')) ? $ctx->get('pending_execution_drafts') : []) > 0
-                ? ['recommendations_at_period_end_have_no_next_eligible_session_within_requested_period']
-                : [],
+            'unresolved_end_recommendations' => $pendingCount,
+            'completeness' => 'complete_with_limitations',
+            'limitations' => array_values(array_unique($limitations)),
         ];
     }
 }
