@@ -10,6 +10,7 @@ test('V5 performance and tax workspace is routed and discoverable', () => {
     assert.match(app, /path="\/portfolio\/performance-tax"/);
     assert.match(nav, /title: 'Performance & Tax'/);
     assert.match(page, /\/analysis\/performance/);
+    assert.match(page, /\/analysis\/account-performance/);
     assert.match(page, /\/analysis\/attribution/);
     assert.match(page, /\/tax\/report/);
 });

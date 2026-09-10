@@ -34,13 +34,14 @@ export default function PerformanceTaxPage() {
         ...(whatIf ? { portfolio_ids: selectedIds } : {}),
     }), [financialYear, whatIf, selectedIds]);
     const request = useCallback(async () => {
-        const [performance, attribution, tax] = await Promise.all([
+        const [performance, accountPerformance, attribution, tax] = await Promise.all([
             api.get('/analysis/performance', { params: { from, to }, skipErrorToast: true }),
+            api.get('/analysis/account-performance', { params: { from, to, ...(whatIf ? { portfolio_ids: selectedIds } : {}) }, skipErrorToast: true }),
             api.get('/analysis/attribution', { params: { from, to }, skipErrorToast: true }),
             api.get('/tax/report', { params: taxParams, skipErrorToast: true }),
         ]);
-        return { performance: performance.data.data, attribution: attribution.data.data, tax: tax.data.data };
-    }, [from, to, taxParams]);
+        return { performance: performance.data.data, accountPerformance: accountPerformance.data.data, attribution: attribution.data.data, tax: tax.data.data };
+    }, [from, to, taxParams, whatIf, selectedIds]);
     const valid = from < to && to <= today && /^\d{4}-\d{2}$/.test(financialYear);
     const { data, loading, error, reload } = useApiGet({
         request, deps: [activePortfolio?.id, from, to, financialYear, whatIf, selectedIds.join('|')],
@@ -74,6 +75,7 @@ export default function PerformanceTaxPage() {
             <div className="d-flex justify-content-between align-items-center mb-2"><h2 className="h5 mb-0">Portfolio performance</h2><button type="button" className="btn btn-sm btn-outline-secondary" disabled={savingEvidence} onClick={() => preserve('portfolio_performance')}>Preserve evidence</button></div>
             <div className="row g-3 mb-3"><Metric label="XIRR" value={data.performance.xirr_percent} /><Metric label="TWR" value={data.performance.twr_percent} /><Metric label="Excess return" value={data.performance.excess_return_percent} /><Metric label="Maximum drawdown" value={data.performance.maximum_drawdown_percent} /></div>
             <div className="alert alert-secondary py-2 small">Benchmark: {data.performance.benchmark?.name || 'Unavailable'} · Volatility {data.performance.volatility_percent == null ? 'requires 30 observations' : formatTablePercent2(data.performance.volatility_percent)} · Sharpe {data.performance.sharpe_ratio ?? 'Incomplete'} · Completeness: {data.performance.completeness}</div>
+            <div className="card mb-3"><div className="card-header">Account performance · {data.accountPerformance.calculation_mode}</div><div className="card-body small">Independently aggregated across {data.accountPerformance.portfolio_ids.length} included portfolio(s), never averaged: XIRR {data.accountPerformance.xirr_percent == null ? 'Incomplete' : formatTablePercent2(data.accountPerformance.xirr_percent)} · TWR {data.accountPerformance.twr_percent == null ? 'Incomplete' : formatTablePercent2(data.accountPerformance.twr_percent)}.</div></div>
             <div className="card mb-4"><div className="card-header">Reconciliation attribution</div><div className="card-body small">Method: {data.attribution.method}. Explained realized: {formatTableMoney2(data.attribution.explained_net_realized)}; residual: {data.attribution.reconciliation_residual == null ? 'Incomplete' : formatTableMoney2(data.attribution.reconciliation_residual)}. {data.attribution.limitations.join(' ')}</div></div>
             <div className="d-flex flex-wrap justify-content-between gap-2 align-items-center mb-2"><h2 className="h5 mb-0">Account Tax · FY {financialYear}</h2><div className="d-flex flex-wrap gap-1"><button type="button" className="btn btn-sm btn-outline-secondary" disabled={savingEvidence} onClick={() => preserve('account_tax')}>Preserve evidence</button>{['summary', 'realized_gains', 'open_lots', 'dividends', 'losses', 'assumptions'].map((dataset) => <button key={dataset} type="button" className="btn btn-sm btn-outline-primary" onClick={() => downloadTaxCsv(dataset, taxParams)}>Export {dataset.replaceAll('_', ' ')}</button>)}</div></div>
             <div className="row g-3 mb-3"><Metric label="STCG" value={data.tax.summary.short_term_realized_gain} kind="money" /><Metric label="LTCG" value={data.tax.summary.long_term_realized_gain} kind="money" /><Metric label="Dividends" value={data.tax.summary.dividend_income} kind="money" /><Metric label="Estimated tax" value={data.tax.summary.estimated_tax} kind="money" /></div>
