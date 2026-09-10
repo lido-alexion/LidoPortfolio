@@ -13,6 +13,7 @@ export const ROUTES = Object.freeze({
     CASH: '/cash',
     PORTFOLIO_HISTORICAL_HOLDINGS: '/portfolio/historical-holdings',
     PORTFOLIO_COMPARE: '/portfolio/compare',
+    PERFORMANCE_TAX: '/portfolio/performance-tax',
     PORTFOLIO_SNAPSHOTS: '/portfolio/snapshots',
     CORPORATE_ACTION: '/corporate-action',
     CANDIDATES: '/candidates',
