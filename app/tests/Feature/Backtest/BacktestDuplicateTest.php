@@ -6,12 +6,14 @@ use App\Models\BacktestRun;
 use App\Models\BacktestSnapshot;
 use App\Models\BacktestTrade;
 use App\Models\BacktestTransaction;
+use App\Models\PortfolioProfile;
 use App\Models\Stock;
 use App\Models\TradingStrategy;
 use App\Models\TradingStrategyVersion;
 use App\Models\User;
 use App\Services\Backtest\EligibilityPrecomputeService;
 use App\Services\Backtest\SimulationContext;
+use App\Services\Backtest\StatisticsGenerator;
 use App\Services\StrategyConfigurationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -22,6 +24,32 @@ use Tests\TestCase;
 class BacktestDuplicateTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_statistics_expose_pinned_execution_assumptions_charges_and_end_of_period_limitations(): void
+    {
+        [, , , , $run] = $this->seedOriginalRun();
+        $run->forceFill([
+            'execution_assumptions_json' => [
+                'price_method' => 'ohlc_average',
+                'adverse_slippage_percent' => 1.25,
+                'charge_model' => ['version' => 'settings-sha256:test'],
+            ],
+        ])->save();
+
+        $ctx = SimulationContext::blank(1000000, []);
+        $ctx->set('total_fees', 12.34567);
+        $ctx->set('pending_execution_drafts', [['action' => 'buy', 'symbol' => 'TEST']]);
+
+        $statistics = app(StatisticsGenerator::class)->generate($run->fresh(), $ctx);
+
+        $this->assertSame(12.3457, $statistics['simulated_charges']);
+        $this->assertSame('ohlc_average', $statistics['execution_assumptions']['price_method']);
+        $this->assertSame(1, $statistics['unresolved_end_recommendations']);
+        $this->assertSame(
+            ['recommendations_at_period_end_have_no_next_eligible_session_within_requested_period'],
+            $statistics['limitations']
+        );
+    }
 
     public function test_duplicate_payload_creates_new_run_with_original_inputs_and_current_strategy(): void
     {
@@ -197,7 +225,7 @@ class BacktestDuplicateTest extends TestCase
     }
 
     /**
-     * @return array{0: User, 1: \App\Models\PortfolioProfile, 2: TradingStrategyVersion, 3: TradingStrategyVersion, 4: BacktestRun, 5: Stock}
+     * @return array{0: User, 1: PortfolioProfile, 2: TradingStrategyVersion, 3: TradingStrategyVersion, 4: BacktestRun, 5: Stock}
      */
     private function seedOriginalRun(): array
     {

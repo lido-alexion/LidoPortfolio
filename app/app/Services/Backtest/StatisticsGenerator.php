@@ -83,6 +83,12 @@ class StatisticsGenerator
             'average_portfolio_utilization' => $avgUtil,
             'cash_remaining' => $lastSnap ? (float) $lastSnap->cash : (float) $ctx->cash(),
             'maximum_concurrent_positions' => (int) $ctx->get('max_concurrent_positions', 0),
+            'simulated_charges' => round((float) $ctx->get('total_fees', 0), 4),
+            'execution_assumptions' => $run->execution_assumptions_json,
+            'unresolved_end_recommendations' => count(is_array($ctx->get('pending_execution_drafts')) ? $ctx->get('pending_execution_drafts') : []),
+            'limitations' => count(is_array($ctx->get('pending_execution_drafts')) ? $ctx->get('pending_execution_drafts') : []) > 0
+                ? ['recommendations_at_period_end_have_no_next_eligible_session_within_requested_period']
+                : [],
         ];
     }
 }
