@@ -6,6 +6,7 @@ import { formatTableMoney2, formatTablePercent2 } from '../utils/tableFormat';
 import { getLocalTodayDateString } from '../utils/transactionDate';
 import { downloadTaxCsv } from '../utils/taxCsvExport';
 import { showToast } from '../toast';
+import TaxEvidenceEntryPanel from '../components/TaxEvidenceEntryPanel';
 
 function currentFinancialYear(today) {
     const year = Number(today.slice(0, 4));
@@ -114,6 +115,7 @@ export default function PerformanceTaxPage() {
             <div className="d-flex flex-wrap justify-content-between gap-2 align-items-center mb-2"><h2 className="h5 mb-0">Account Tax · FY {financialYear}</h2><div className="d-flex flex-wrap gap-1"><button type="button" className="btn btn-sm btn-outline-secondary" disabled={savingEvidence} onClick={() => preserve('account_tax')}>Preserve evidence</button>{['summary', 'realized_gains', 'open_lots', 'dividends', 'losses', 'assumptions'].map((dataset) => <button key={dataset} type="button" className="btn btn-sm btn-outline-primary" onClick={() => downloadTaxCsv(dataset, taxParams)}>Export {dataset.replaceAll('_', ' ')}</button>)}</div></div>
             <div className="row g-3 mb-3"><Metric label="STCG" value={data.tax.summary.short_term_realized_gain} kind="money" /><Metric label="LTCG" value={data.tax.summary.long_term_realized_gain} kind="money" /><Metric label="Dividends" value={data.tax.summary.dividend_income} kind="money" /><Metric label="Estimated tax" value={data.tax.summary.estimated_tax} kind="money" /></div>
             <div className={`alert py-2 small ${data.tax.completeness === 'complete' ? 'alert-success' : 'alert-warning'}`}>Mode: {data.tax.calculation_mode}. Completeness: {data.tax.completeness}. {data.tax.limitations.join(' ') || 'All required evidence is available.'}</div>
+            <TaxEvidenceEntryPanel financialYear={financialYear} onChanged={reload} />
         </> : null}
     </div>;
 }
