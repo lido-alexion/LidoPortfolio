@@ -11,6 +11,11 @@ class FakeBrokerGateway implements BrokerGateway
 {
     public float $availableFunds = 1_000_000_000;
 
+    /** @var array<string,mixed>|null */
+    public ?array $reconciliationSnapshot = null;
+
+    public bool $reconciliationSnapshotUnavailable = false;
+
     public int $placeCalls = 0;
 
     /** @var list<BrokerOrderRequest> */
@@ -63,6 +68,8 @@ class FakeBrokerGateway implements BrokerGateway
     public function reset(): void
     {
         $this->availableFunds = 1_000_000_000;
+        $this->reconciliationSnapshot = null;
+        $this->reconciliationSnapshotUnavailable = false;
         $this->placeCalls = 0;
         $this->placed = [];
         $this->nextPlaceAmbiguous = false;
@@ -88,6 +95,18 @@ class FakeBrokerGateway implements BrokerGateway
     public function availableEquityFunds(int $userId): ?float
     {
         return $this->availableFunds;
+    }
+
+    public function portfolioSnapshot(int $userId): ?array
+    {
+        if ($this->reconciliationSnapshotUnavailable) {
+            return null;
+        }
+
+        return $this->reconciliationSnapshot ?? [
+            'provider' => 'kite', 'captured_at' => now()->toISOString(),
+            'holdings' => [], 'positions' => [], 'current_cash' => $this->availableFunds,
+        ];
     }
 
     public function seedSnapshot(BrokerOrderSnapshot $snapshot): void

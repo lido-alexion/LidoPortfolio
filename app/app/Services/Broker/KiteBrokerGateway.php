@@ -102,6 +102,41 @@ class KiteBrokerGateway implements BrokerGateway
         return is_numeric($value) ? max(0.0, (float) $value) : null;
     }
 
+    public function portfolioSnapshot(int $userId): ?array
+    {
+        $token = $this->accessToken($userId);
+        try {
+            $holdingsResponse = Http::timeout(20)->withHeaders($this->headers($token))
+                ->get(rtrim((string) config('broker.kite.api_base'), '/').'/portfolio/holdings');
+            $positionsResponse = Http::timeout(20)->withHeaders($this->headers($token))
+                ->get(rtrim((string) config('broker.kite.api_base'), '/').'/portfolio/positions');
+        } catch (ConnectionException) {
+            return null;
+        }
+        $cash = $this->availableEquityFunds($userId);
+        $holdings = data_get($holdingsResponse->json(), 'data');
+        if (! $holdingsResponse->successful() || ! is_array($holdings) || $cash === null) {
+            return null;
+        }
+        $positions = $positionsResponse->successful() && is_array(data_get($positionsResponse->json(), 'data.net'))
+            ? data_get($positionsResponse->json(), 'data.net') : [];
+
+        return [
+            'provider' => 'kite', 'captured_at' => now()->toISOString(),
+            'holdings' => collect($holdings)->map(fn (array $row): array => [
+                'symbol' => (string) ($row['tradingsymbol'] ?? ''),
+                'exchange' => (string) ($row['exchange'] ?? ''),
+                'quantity' => (float) ($row['quantity'] ?? 0),
+                'average_price' => isset($row['average_price']) ? (float) $row['average_price'] : null,
+                'cost' => isset($row['average_price']) ? round((float) ($row['quantity'] ?? 0) * (float) $row['average_price'], 4) : null,
+                'instrument_token' => $row['instrument_token'] ?? null,
+                'product' => $row['product'] ?? 'CNC',
+            ])->values()->all(),
+            'positions' => $positions,
+            'current_cash' => $cash,
+        ];
+    }
+
     public function fetchOrder(int $userId, string $brokerOrderId): ?BrokerOrderSnapshot
     {
         $token = $this->accessToken($userId);

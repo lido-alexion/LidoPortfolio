@@ -11,6 +11,9 @@ interface BrokerGateway
     /** Current account-wide equity balance usable for order sizing. */
     public function availableEquityFunds(int $userId): ?float;
 
+    /** @return array<string,mixed>|null Durable holdings, informational positions, and current cash. */
+    public function portfolioSnapshot(int $userId): ?array;
+
     public function fetchOrder(int $userId, string $brokerOrderId): ?BrokerOrderSnapshot;
 
     public function cancelOrder(int $userId, string $brokerOrderId): BrokerOrderSnapshot;

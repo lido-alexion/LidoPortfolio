@@ -5,10 +5,52 @@ namespace App\Services\Reconciliation;
 use App\Models\PortfolioProfile;
 use App\Models\PortfolioReconciliationRun;
 use App\Models\Stock;
+use App\Services\Broker\BrokerGateway;
+use App\Services\CashManagementService;
+use App\Services\SettingsService;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 final class PortfolioReconciliationService
 {
+    public function __construct(
+        private BrokerGateway $broker,
+        private CashManagementService $cash,
+        private SettingsService $settings,
+    ) {}
+
+    public function run(PortfolioProfile $profile, string $trigger): PortfolioReconciliationRun
+    {
+        if ($profile->isPaper() || $profile->isManualExecution()) {
+            throw new \InvalidArgumentException('Portfolio reconciliation is available only for live Semi-Automatic or Automatic portfolios.');
+        }
+        try {
+            $broker = $this->broker->portfolioSnapshot((int) $profile->user_id);
+            if ($broker === null) {
+                throw new \RuntimeException('Kite holdings or current cash could not be retrieved.');
+            }
+            $holdings = $profile->holdings()->with('stock')->get()->groupBy('stock_id')->map(function ($rows): array {
+                $first = $rows->first();
+
+                return [
+                    'symbol' => (string) $first->stock->symbol,
+                    'quantity' => round((float) $rows->sum('quantity'), 4),
+                    'cost' => round((float) $rows->sum('invested_amount'), 4),
+                ];
+            })->values()->all();
+
+            return $this->recordSuccessful($profile, $trigger, $broker, [
+                'captured_at' => now()->toISOString(), 'holdings' => $holdings,
+                'cash_balance' => $this->cash->balance($profile),
+            ], [
+                'holding_cost' => max(0.0, (float) $this->settings->get('reconciliation_holding_cost_tolerance', '1')),
+                'funds' => max(0.0, (float) $this->settings->get('reconciliation_funds_tolerance', '1')),
+            ]);
+        } catch (Throwable $error) {
+            return $this->recordFailure($profile, $trigger, $error->getMessage());
+        }
+    }
+
     /** @param array<string,mixed> $broker @param array<string,mixed> $stox @param array<string,float> $tolerances */
     public function recordSuccessful(PortfolioProfile $profile, string $trigger, array $broker, array $stox, array $tolerances): PortfolioReconciliationRun
     {
@@ -63,6 +105,21 @@ final class PortfolioReconciliationService
                 'last_successful_reconciliation_at' => $run->completed_at,
                 'last_reconciliation_failure' => null,
             ])->save();
+
+            return $run;
+        });
+    }
+
+    private function recordFailure(PortfolioProfile $profile, string $trigger, string $failure): PortfolioReconciliationRun
+    {
+        return DB::transaction(function () use ($profile, $trigger, $failure): PortfolioReconciliationRun {
+            $profile = PortfolioProfile::query()->lockForUpdate()->findOrFail($profile->id);
+            $run = PortfolioReconciliationRun::query()->create([
+                'profile_id' => $profile->id, 'user_id' => $profile->user_id, 'trigger' => $trigger,
+                'status' => 'sync_failed', 'holdings_status' => 'unknown', 'funds_status' => 'unknown',
+                'overall_status' => 'unknown', 'failure' => $failure, 'started_at' => now(), 'completed_at' => now(),
+            ]);
+            $profile->forceFill(['last_reconciliation_failure' => $failure])->save();
 
             return $run;
         });
