@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\PortfolioProfile;
 use App\Models\PortfolioReplayRun;
 use App\Services\Simulation\PortfolioReplayService;
 use Illuminate\Http\JsonResponse;
@@ -21,18 +22,20 @@ class PortfolioReplayController extends Controller
     public function readiness(Request $request): JsonResponse
     {
         $input = $this->validated($request);
+
         return response()->json(['data' => $this->replays->readiness(\activePortfolio(), $input)]);
     }
 
     public function store(Request $request): JsonResponse
     {
         $input = $this->validated($request);
+
         return response()->json(['data' => $this->replays->create(\activePortfolio(), $request->user()->id, $input)], 201);
     }
 
     public function show(int $replay): JsonResponse
     {
-        return response()->json(['data' => $this->owned($replay)]);
+        return response()->json(['data' => $this->replays->detail($this->owned($replay))]);
     }
 
     public function cancel(int $replay): JsonResponse
@@ -43,6 +46,7 @@ class PortfolioReplayController extends Controller
     public function destroy(Request $request, int $replay): JsonResponse
     {
         $this->replays->delete($this->owned($replay), $request->user()->id);
+
         return response()->json(['message' => 'Replay deleted; audit tombstone retained.']);
     }
 
@@ -58,7 +62,7 @@ class PortfolioReplayController extends Controller
             'period_start' => ['required', 'date', 'before:period_end'],
             'period_end' => ['required', 'date', 'after:period_start', 'before_or_equal:today'],
             'starting_cash' => ['required_if:starting_mode,new_simulated', 'nullable', 'numeric', 'gt:0'],
-            'price_method' => ['required', Rule::in(\App\Models\PortfolioProfile::SIMULATION_PRICE_METHODS)],
+            'price_method' => ['required', Rule::in(PortfolioProfile::SIMULATION_PRICE_METHODS)],
             'adverse_slippage_percent' => ['sometimes', 'numeric', 'between:0,100'],
         ]);
     }

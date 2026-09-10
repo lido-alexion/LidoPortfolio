@@ -4,6 +4,7 @@ namespace App\Services\Simulation;
 
 use App\Models\ArtifactBinding;
 use App\Models\PortfolioProfile;
+use App\Models\PortfolioReplayCheckpoint;
 use App\Models\PortfolioReplayRun;
 use App\Models\TradingStrategy;
 use App\Services\FeeCalculatorService;
@@ -192,6 +193,35 @@ final class PortfolioReplayService
         $run->forceFill(['status' => 'cancelled', 'cancelled_at' => now()])->save();
 
         return $run->fresh();
+    }
+
+    /** @return array<string, mixed> */
+    public function detail(PortfolioReplayRun $run): array
+    {
+        $checkpoints = PortfolioReplayCheckpoint::query()->where('replay_run_id', $run->id)
+            ->orderBy('effective_session_date')->get()->map(fn (PortfolioReplayCheckpoint $checkpoint): array => [
+                'effective_session_date' => $checkpoint->effective_session_date->toDateString(),
+                'processed_at' => $checkpoint->processed_at?->toISOString(),
+                'stage' => $checkpoint->stage,
+                'market_evidence' => $checkpoint->market_evidence,
+                'limitations' => $checkpoint->limitations ?? [],
+                'valuation' => $checkpoint->state_after['valuation'] ?? null,
+                'capital' => $checkpoint->state_after['capital'] ?? null,
+                'strategies' => $checkpoint->state_after['strategies'] ?? [],
+                'holdings' => $checkpoint->state_after['holdings'] ?? [],
+                'transactions' => $checkpoint->state_after['transactions'] ?? [],
+                'recommendations' => $checkpoint->state_after['pending_recommendations'] ?? [],
+            ])->all();
+
+        return array_merge($run->toArray(), [
+            'checkpoints' => $checkpoints,
+            'evidence_summary' => [
+                'checkpoint_count' => count($checkpoints),
+                'latest_market_fingerprint' => $checkpoints !== [] ? $checkpoints[array_key_last($checkpoints)]['market_evidence']['sha256'] ?? null : null,
+                'transaction_count' => count($checkpoints !== [] ? $checkpoints[array_key_last($checkpoints)]['transactions'] : []),
+                'recommendation_count' => count($checkpoints !== [] ? $checkpoints[array_key_last($checkpoints)]['recommendations'] : []),
+            ],
+        ]);
     }
 
     public function delete(PortfolioReplayRun $run, int $actorId): void

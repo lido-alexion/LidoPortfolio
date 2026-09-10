@@ -175,6 +175,11 @@ class V5PortfolioReplayFoundationTest extends TestCase
         $this->assertEquals(100000.0, $checkpoint->state_after['capital']['investable_capital']);
         $this->assertEquals(100000.0, $checkpoint->state_after['strategies'][0]['available_capital']);
         $this->assertContains('pinned_strategy_eligibility_missing', $checkpoint->limitations);
+        $this->getJson('/api/replays/'.$id)->assertOk()
+            ->assertJsonPath('data.evidence_summary.checkpoint_count', 3)
+            ->assertJsonPath('data.checkpoints.2.stage', 'economic_checkpoint')
+            ->assertJsonPath('data.checkpoints.2.market_evidence.sha256', $checkpoint->market_evidence['sha256'])
+            ->assertJsonStructure(['data' => ['pinned_world', 'starting_state', 'checkpoints', 'evidence_summary']]);
         $this->assertSame($sourceEconomicState, [
             'holdings' => Holding::query()->where('profile_id', $profile->id)->count(),
             'transactions' => Transaction::query()->where('profile_id', $profile->id)->count(),
