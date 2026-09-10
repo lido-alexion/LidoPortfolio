@@ -53,4 +53,23 @@ class V5AnalysisPreferenceApiTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonValidationErrors('primary_benchmark_id');
     }
+
+    public function test_account_risk_override_is_independent_from_portfolio_inclusion(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+
+        $this->actingAs($user)->withProfileHeader($user, $profile)
+            ->putJson('/api/analysis/preferences', [
+                'scope' => 'account', 'risk_free_rate' => 0.05, 'annualization_days' => 250,
+                'include_in_account_performance' => false,
+            ])->assertOk()
+            ->assertJsonPath('data.scope', 'account')
+            ->assertJsonPath('data.risk_free_rate', 0.05)
+            ->assertJsonPath('data.annualization_days', 250)
+            ->assertJsonPath('data.include_in_account_performance', null);
+
+        $this->getJson('/api/analysis/preferences')
+            ->assertOk()->assertJsonPath('data.include_in_account_performance', true);
+    }
 }

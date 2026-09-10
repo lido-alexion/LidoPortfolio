@@ -31,24 +31,27 @@ export default function PerformanceTaxPage() {
     const [savingEvidence, setSavingEvidence] = useState(false);
     const [savingPreferences, setSavingPreferences] = useState(false);
     const [preferenceForm, setPreferenceForm] = useState(null);
+    const [accountPreferenceForm, setAccountPreferenceForm] = useState(null);
 
     const taxParams = useMemo(() => ({
         financial_year: financialYear,
         ...(whatIf ? { portfolio_ids: selectedIds } : {}),
     }), [financialYear, whatIf, selectedIds]);
     const request = useCallback(async () => {
-        const [performance, accountPerformance, attribution, tax, preferences, benchmarks] = await Promise.all([
+        const [performance, accountPerformance, attribution, tax, preferences, accountPreferences, benchmarks] = await Promise.all([
             api.get('/analysis/performance', { params: { from, to }, skipErrorToast: true }),
             api.get('/analysis/account-performance', { params: { from, to, ...(whatIf ? { portfolio_ids: selectedIds } : {}) }, skipErrorToast: true }),
             api.get('/analysis/attribution', { params: { from, to }, skipErrorToast: true }),
             api.get('/tax/report', { params: taxParams, skipErrorToast: true }),
             api.get('/analysis/preferences', { skipErrorToast: true }),
+            api.get('/analysis/preferences', { params: { scope: 'account' }, skipErrorToast: true }),
             api.get('/analysis/benchmarks', { skipErrorToast: true }),
         ]);
         return {
             performance: performance.data.data, accountPerformance: accountPerformance.data.data,
             attribution: attribution.data.data, tax: tax.data.data,
             preferences: preferences.data.data, benchmarks: benchmarks.data.data,
+            accountPreferences: accountPreferences.data.data,
         };
     }, [from, to, taxParams, whatIf, selectedIds]);
     const valid = from < to && to <= today && /^\d{4}-\d{2}$/.test(financialYear);
@@ -59,7 +62,8 @@ export default function PerformanceTaxPage() {
     });
     useEffect(() => {
         if (data?.preferences) setPreferenceForm(data.preferences);
-    }, [data?.preferences]);
+        if (data?.accountPreferences) setAccountPreferenceForm(data.accountPreferences);
+    }, [data?.preferences, data?.accountPreferences]);
 
     const preserve = async (calculationType) => {
         setSavingEvidence(true);
@@ -86,6 +90,19 @@ export default function PerformanceTaxPage() {
             reload();
         } finally { setSavingPreferences(false); }
     };
+    const saveAccountPreferences = async () => {
+        setSavingPreferences(true);
+        try {
+            await api.put('/analysis/preferences', {
+                scope: 'account',
+                primary_benchmark_id: Number(accountPreferenceForm.primary_benchmark_id),
+                risk_free_rate: accountPreferenceForm.risk_free_rate === '' ? null : Number(accountPreferenceForm.risk_free_rate),
+                annualization_days: accountPreferenceForm.annualization_days === '' ? null : Number(accountPreferenceForm.annualization_days),
+            });
+            showToast('Account analysis overrides saved', 'success');
+            reload();
+        } finally { setSavingPreferences(false); }
+    };
 
     return <div className="container-fluid py-3">
         <div className="mb-3"><h1 className="h4 mb-1">Performance & Tax</h1><p className="small text-muted mb-0">Cash-flow-adjusted investment analytics and India-focused estimates—not certified tax advice.</p></div>
@@ -107,6 +124,7 @@ export default function PerformanceTaxPage() {
                 <div className="col-auto"><button type="button" className="btn btn-sm btn-outline-primary" disabled={savingPreferences} onClick={savePreferences}>{savingPreferences ? 'Saving…' : 'Save settings'}</button></div>
                 <div className="col-12 small text-muted">Tax and performance inclusion are independent. Benchmark levels use the latest authoritative value on or before each endpoint without interpolation.</div>
             </div></div> : null}
+            {accountPreferenceForm ? <div className="card mb-3"><div className="card-header">Optional Account analytics overrides</div><div className="card-body row g-2 align-items-end"><div className="col-md-4"><label className="form-label small" htmlFor="account-benchmark">Account benchmark</label><select id="account-benchmark" className="form-select form-select-sm" value={accountPreferenceForm.primary_benchmark_id ?? ''} onChange={(e) => setAccountPreferenceForm((value) => ({ ...value, primary_benchmark_id: e.target.value }))}>{data.benchmarks.map((benchmark) => <option key={benchmark.id} value={benchmark.id}>{benchmark.name}</option>)}</select></div><div className="col-md-3"><label className="form-label small" htmlFor="account-risk-free">Account risk-free rate</label><input id="account-risk-free" className="form-control form-control-sm" type="number" min="-0.25" max="1" step="0.0001" value={accountPreferenceForm.risk_free_rate ?? ''} onChange={(e) => setAccountPreferenceForm((value) => ({ ...value, risk_free_rate: e.target.value }))} /></div><div className="col-md-2"><label className="form-label small" htmlFor="account-days">Annualization days</label><input id="account-days" className="form-control form-control-sm" type="number" min="1" max="366" value={accountPreferenceForm.annualization_days ?? 252} onChange={(e) => setAccountPreferenceForm((value) => ({ ...value, annualization_days: e.target.value }))} /></div><div className="col-auto"><button type="button" className="btn btn-sm btn-outline-primary" disabled={savingPreferences} onClick={saveAccountPreferences}>Save Account overrides</button></div></div></div> : null}
             <div className="d-flex justify-content-between align-items-center mb-2"><h2 className="h5 mb-0">Portfolio performance</h2><button type="button" className="btn btn-sm btn-outline-secondary" disabled={savingEvidence} onClick={() => preserve('portfolio_performance')}>Preserve evidence</button></div>
             <div className="row g-3 mb-3"><Metric label="XIRR" value={data.performance.xirr_percent} /><Metric label="TWR" value={data.performance.twr_percent} /><Metric label="Excess return" value={data.performance.excess_return_percent} /><Metric label="Maximum drawdown" value={data.performance.maximum_drawdown_percent} /></div>
             <div className="alert alert-secondary py-2 small">Benchmark: {data.performance.benchmark?.name || 'Unavailable'} · Volatility {data.performance.volatility_percent == null ? 'requires 30 observations' : formatTablePercent2(data.performance.volatility_percent)} · Sharpe {data.performance.sharpe_ratio ?? 'Incomplete'} · Completeness: {data.performance.completeness}</div>

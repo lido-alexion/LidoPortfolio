@@ -24,13 +24,16 @@ class AnalysisPreferenceController extends Controller
 
     public function show(Request $request): JsonResponse
     {
-        return response()->json(['data' => $this->present($request)]);
+        $validated = $request->validate(['scope' => ['sometimes', Rule::in(['portfolio', 'account'])]]);
+
+        return response()->json(['data' => $this->present($request, $validated['scope'] ?? 'portfolio')]);
     }
 
     public function update(Request $request): JsonResponse
     {
         $activeBenchmarkIds = Benchmark::query()->where('is_active', true)->pluck('id')->all();
         $validated = $request->validate([
+            'scope' => ['sometimes', Rule::in(['portfolio', 'account'])],
             'primary_benchmark_id' => ['nullable', 'integer', Rule::in($activeBenchmarkIds)],
             'comparison_benchmark_ids' => ['sometimes', 'array', 'max:5'],
             'comparison_benchmark_ids.*' => ['integer', 'distinct', Rule::in($activeBenchmarkIds)],
@@ -39,6 +42,8 @@ class AnalysisPreferenceController extends Controller
             'risk_free_rate' => ['nullable', 'numeric', 'between:-0.25,1'],
             'annualization_days' => ['nullable', 'integer', 'between:1,366'],
         ]);
+        $scope = $validated['scope'] ?? 'portfolio';
+        unset($validated['scope']);
 
         if (isset($validated['comparison_benchmark_ids'])) {
             $validated['comparison_benchmark_ids'] = array_values(array_filter(
@@ -47,28 +52,32 @@ class AnalysisPreferenceController extends Controller
             ));
         }
 
-        $profile = \activePortfolio();
+        $profile = $scope === 'portfolio' ? \activePortfolio() : null;
+        if ($scope === 'account') {
+            unset($validated['include_in_account_performance'], $validated['include_in_account_tax']);
+        }
         AnalysisPreference::query()->updateOrCreate(
             [
                 'user_id' => $request->user()->id,
-                'scope_key' => 'portfolio:'.$profile->id,
+                'scope_key' => $scope === 'account' ? 'account' : 'portfolio:'.$profile->id,
             ],
             [
-                'profile_id' => $profile->id,
+                'profile_id' => $profile?->id,
                 ...$validated,
             ],
         );
 
-        return response()->json(['data' => $this->present($request)]);
+        return response()->json(['data' => $this->present($request, $scope)]);
     }
 
     /** @return array<string, mixed> */
-    private function present(Request $request): array
+    private function present(Request $request, string $scope): array
     {
-        $profile = \activePortfolio();
+        $profile = $scope === 'portfolio' ? \activePortfolio() : null;
+        $scopeKey = $scope === 'account' ? 'account' : 'portfolio:'.$profile->id;
         $preference = AnalysisPreference::query()
             ->where('user_id', $request->user()->id)
-            ->where('scope_key', 'portfolio:'.$profile->id)
+            ->where('scope_key', $scopeKey)
             ->first();
         $defaultBenchmark = Benchmark::query()
             ->where('is_active', true)
@@ -77,12 +86,12 @@ class AnalysisPreferenceController extends Controller
             ->first();
 
         return [
-            'scope' => 'portfolio',
-            'profile_id' => $profile->id,
+            'scope' => $scope,
+            'profile_id' => $profile?->id,
             'primary_benchmark_id' => $preference?->primary_benchmark_id ?? $defaultBenchmark?->id,
             'comparison_benchmark_ids' => $preference?->comparison_benchmark_ids ?? [],
-            'include_in_account_performance' => $preference?->include_in_account_performance ?? true,
-            'include_in_account_tax' => $preference?->include_in_account_tax ?? true,
+            'include_in_account_performance' => $scope === 'portfolio' ? ($preference?->include_in_account_performance ?? true) : null,
+            'include_in_account_tax' => $scope === 'portfolio' ? ($preference?->include_in_account_tax ?? true) : null,
             'risk_free_rate' => $preference?->risk_free_rate === null ? null : (float) $preference->risk_free_rate,
             'annualization_days' => $preference?->annualization_days,
             'defaults' => [
