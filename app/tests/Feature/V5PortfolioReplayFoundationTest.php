@@ -10,6 +10,7 @@ use App\Models\ReusableArtifactVersion;
 use App\Models\PortfolioReplayRun;
 use App\Models\PortfolioReplayCheckpoint;
 use App\Models\Transaction;
+use App\Models\TradingStrategy;
 use App\Models\User;
 use App\Services\Simulation\PortfolioReplayProcessor;
 use App\Services\Simulation\PortfolioReplayService;
@@ -35,6 +36,14 @@ class V5PortfolioReplayFoundationTest extends TestCase
             'content_json' => ['rules' => []], 'definition_hash' => hash('sha256', 'replay'),
             'created_by_user_id' => $user->id, 'published_at' => now(),
         ]);
+        $strategy = TradingStrategy::query()->create([
+            'profile_id' => $profile->id,
+            'name' => 'Replay Strategy',
+            'slug' => 'replay-strategy',
+            'status' => TradingStrategy::STATUS_ACTIVE,
+            'allocation_pct' => 100,
+            'reusable_artifact_id' => $artifact->id,
+        ]);
         $binding = ArtifactBinding::query()->create([
             'binding_uuid' => (string) Str::uuid(), 'profile_id' => $profile->id,
             'artifact_id' => $artifact->id, 'status' => 'enabled', 'usability_state' => 'usable',
@@ -54,7 +63,10 @@ class V5PortfolioReplayFoundationTest extends TestCase
             ->postJson('/api/replays/readiness', $payload)->assertOk()->assertJsonPath('data.status', 'ready');
         $created = $this->postJson('/api/replays', $payload)->assertCreated()
             ->assertJsonPath('data.status', 'queued')
-            ->assertJsonPath('data.pinned_world.binding_revisions.0.artifact_version_id', $version->id);
+            ->assertJsonPath('data.pinned_world.binding_revisions.0.artifact_version_id', $version->id)
+            ->assertJsonPath('data.pinned_world.binding_revisions.0.strategy_id', $strategy->id)
+            ->assertJsonPath('data.starting_state.schema_version', 1)
+            ->assertJsonPath('data.starting_state.strategies.0.allocation_pct', 100);
         $id = $created->json('data.id');
         $this->putJson('/api/replays/'.$id, ['starting_cash' => 1])->assertMethodNotAllowed();
         $run = PortfolioReplayRun::query()->findOrFail($id);
@@ -62,6 +74,9 @@ class V5PortfolioReplayFoundationTest extends TestCase
         $this->assertNotEmpty($run->pinned_world['charge_model']['components']);
         $this->assertSame('india_equity', $run->pinned_world['calendar']['market']);
         $this->assertSame('daily_eod', $run->pinned_world['calendar']['resolution']);
+        $this->assertArrayHasKey('portfolio_cash_reserve_pct', $run->pinned_world['portfolio_economic_settings']);
+        $this->assertSame([], $run->starting_state['loans']);
+        $this->assertSame([], $run->starting_state['recall_bridge_loans']);
         $sourceEconomicState = [
             'holdings' => Holding::query()->where('profile_id', $profile->id)->count(),
             'transactions' => Transaction::query()->where('profile_id', $profile->id)->count(),

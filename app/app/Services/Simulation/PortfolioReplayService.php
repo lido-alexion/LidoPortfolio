@@ -5,8 +5,10 @@ namespace App\Services\Simulation;
 use App\Models\ArtifactBinding;
 use App\Models\PortfolioProfile;
 use App\Models\PortfolioReplayRun;
+use App\Models\TradingStrategy;
 use App\Services\FeeCalculatorService;
 use App\Services\HistoricalHoldingsService;
+use App\Services\ProfileSettingsService;
 use App\Support\TradingCalendar;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -18,6 +20,7 @@ final class PortfolioReplayService
     public function __construct(
         private HistoricalHoldingsService $history,
         private FeeCalculatorService $fees,
+        private ProfileSettingsService $profileSettings,
     ) {}
 
     /** @param array<string, mixed> $input */
@@ -40,18 +43,48 @@ final class PortfolioReplayService
             // would fabricate a materially different Portfolio world.
             $limitations[] = 'historical_strategy_capital_state_not_reconstructable';
         } else {
-            $state = ['cash_balance' => (float) $input['starting_cash'], 'holdings' => [], 'source' => 'new_simulated_portfolio'];
+            $state = [
+                'schema_version' => 1,
+                'cash_balance' => (float) $input['starting_cash'],
+                'holdings' => [],
+                'reservations' => [],
+                'loans' => [],
+                'recalls' => [],
+                'recall_bridge_loans' => [],
+                'transactions' => [],
+                'source' => 'new_simulated_portfolio',
+            ];
         }
         $bindings = ArtifactBinding::query()->with('activeRevision')
             ->where('profile_id', $profile->id)->where('status', ArtifactBinding::STATUS_ENABLED)->get();
         if ($bindings->isEmpty()) {
             $limitations[] = 'no_enabled_strategy_artifact_bindings';
         }
-        $pinned = $bindings->map(fn (ArtifactBinding $binding) => [
-            'binding_id' => $binding->id, 'binding_revision_id' => $binding->active_revision_id,
-            'artifact_id' => $binding->artifact_id, 'artifact_version_id' => $binding->activeRevision?->artifact_version_id,
-            'usability_state' => $binding->usability_state,
-        ])->values()->all();
+        $strategies = TradingStrategy::query()->where('profile_id', $profile->id)
+            ->whereIn('reusable_artifact_id', $bindings->pluck('artifact_id'))->get()->keyBy('reusable_artifact_id');
+        $pinned = $bindings->map(function (ArtifactBinding $binding) use ($strategies): array {
+            $strategy = $strategies->get($binding->artifact_id);
+
+            return [
+                'binding_id' => $binding->id, 'binding_revision_id' => $binding->active_revision_id,
+                'artifact_id' => $binding->artifact_id, 'artifact_version_id' => $binding->activeRevision?->artifact_version_id,
+                'usability_state' => $binding->usability_state,
+                'strategy_id' => $strategy?->id,
+                'strategy_name' => $strategy?->name,
+                'allocation_pct' => $strategy?->allocation_pct !== null ? (float) $strategy->allocation_pct : null,
+            ];
+        })->values()->all();
+        if ($mode === 'new_simulated') {
+            $state['strategies'] = collect($pinned)->map(fn (array $row): array => [
+                'strategy_id' => $row['strategy_id'],
+                'artifact_version_id' => $row['artifact_version_id'],
+                'allocation_pct' => $row['allocation_pct'],
+                'owned_market_value' => 0.0,
+                'reserved' => 0.0,
+                'lent' => 0.0,
+                'borrowed' => 0.0,
+            ])->values()->all();
+        }
         if ($bindings->contains(fn (ArtifactBinding $binding) => $binding->usability_state === ArtifactBinding::BLOCKED)) {
             $limitations[] = 'blocked_artifact_binding';
         }
@@ -78,10 +111,27 @@ final class PortfolioReplayService
                     'session_rule' => 'TradingCalendar::isEquitySessionDate',
                     'resolution' => 'daily_eod',
                 ],
+                'portfolio_economic_settings' => $this->economicSettings($profile),
                 'captured_at' => now()->toISOString(),
             ],
             'limitations' => $limitations,
         ];
+    }
+
+    /** @return array<string, string|null> */
+    private function economicSettings(PortfolioProfile $profile): array
+    {
+        $keys = [
+            'portfolio_cash_reserve_pct',
+            'max_lending_pct_of_unused',
+            'max_lending_absolute',
+        ];
+
+        return collect($keys)->mapWithKeys(function (string $key) use ($profile): array {
+            $value = $this->profileSettings->get($profile, $key, '');
+
+            return [$key => $value === null || trim((string) $value) === '' ? null : (string) $value];
+        })->all();
     }
 
     /** @param array<string, mixed> $input */
