@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\PortfolioProfile;
+use App\Models\PaperSimulationEvent;
 use App\Models\User;
 use App\Services\CashManagementService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -75,5 +76,46 @@ class V5PaperPortfolioFoundationTest extends TestCase
         $this->getJson('/api/v1/execution/mode')->assertOk()
             ->assertJsonPath('data.execution_mode', 'manual')
             ->assertJsonPath('data.blockers.0', 'paper_portfolio');
+    }
+
+    public function test_investor_pause_is_audited_and_resume_skips_the_deliberately_paused_period(): void
+    {
+        $user = User::factory()->create();
+        $paper = $this->defaultPortfolioFor($user);
+        $paper->forceFill([
+            'portfolio_type' => 'paper', 'simulation_state' => 'active',
+            'simulation_price_method' => 'next_open',
+        ])->save();
+
+        $this->actingAs($user)->withProfileHeader($user, $paper)
+            ->postJson('/api/portfolios/'.$paper->id.'/simulation/pause')
+            ->assertOk()
+            ->assertJsonPath('data.state', 'paused')
+            ->assertJsonPath('data.manual_interventions_allowed', false)
+            ->assertJsonPath('data.events.0.event_type', 'investor_paused');
+        $this->postJson('/api/transactions', [])->assertUnprocessable()
+            ->assertJsonPath('errors.portfolio.0', 'Paper interventions are blocked while simulation is paused or catching up.');
+
+        $this->postJson('/api/portfolios/'.$paper->id.'/simulation/resume')
+            ->assertOk()
+            ->assertJsonPath('data.state', 'active')
+            ->assertJsonPath('data.manual_interventions_allowed', true)
+            ->assertJsonPath('data.checkpoint_date', now()->toDateString())
+            ->assertJsonPath('data.events.0.event_type', 'investor_resumed')
+            ->assertJsonPath('data.events.0.evidence.paused_sessions_skipped', true);
+
+        $this->assertSame(2, PaperSimulationEvent::query()->where('profile_id', $paper->id)->count());
+        $this->postJson('/api/portfolios/'.$paper->id.'/simulation/resume')->assertOk();
+        $this->assertSame(2, PaperSimulationEvent::query()->where('profile_id', $paper->id)->count());
+    }
+
+    public function test_live_portfolio_cannot_use_paper_simulation_controls(): void
+    {
+        $user = User::factory()->create();
+        $live = $this->defaultPortfolioFor($user);
+
+        $this->actingAs($user)->withProfileHeader($user, $live)
+            ->postJson('/api/portfolios/'.$live->id.'/simulation/pause')
+            ->assertUnprocessable();
     }
 }

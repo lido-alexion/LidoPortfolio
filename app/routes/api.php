@@ -32,6 +32,7 @@ use App\Http\Controllers\Api\PasswordResetAcceptController;
 use App\Http\Controllers\Api\PasswordResetLinkController;
 use App\Http\Controllers\Api\PatternScanController;
 use App\Http\Controllers\Api\PortfolioController;
+use App\Http\Controllers\Api\PaperSimulationController;
 use App\Http\Controllers\Api\PortfolioHistoryController;
 use App\Http\Controllers\Api\PortfolioPerformanceController;
 use App\Http\Controllers\Api\PortfolioAttributionController;
@@ -138,6 +139,9 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::put('/portfolios/{portfolio}', [PortfolioController::class, 'update']);
     Route::delete('/portfolios/{portfolio}', [PortfolioController::class, 'destroy']);
     Route::post('/portfolios/{portfolio}/set-default', [PortfolioController::class, 'setDefault']);
+    Route::get('/portfolios/{portfolio}/simulation', [PaperSimulationController::class, 'show']);
+    Route::post('/portfolios/{portfolio}/simulation/pause', [PaperSimulationController::class, 'pause']);
+    Route::post('/portfolios/{portfolio}/simulation/resume', [PaperSimulationController::class, 'resume']);
 
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/sessions', [AuthController::class, 'sessions']);

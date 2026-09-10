@@ -84,6 +84,11 @@ class TransactionController extends Controller
     public function store(Request $request): JsonResponse
     {
         $profile = \activePortfolio();
+        if ($profile->isPaper() && $profile->simulation_state !== \App\Models\PortfolioProfile::SIMULATION_ACTIVE) {
+            throw ValidationException::withMessages([
+                'portfolio' => ['Paper interventions are blocked while simulation is paused or catching up.'],
+            ]);
+        }
         $stock = $this->stocks->resolve($request);
         $validated = $this->validateTransaction($request);
 
