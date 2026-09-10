@@ -80,6 +80,12 @@ final class PortfolioPerformanceService
             ? null
             : $this->moneyWeighted->calculate($from, $to, (float) $openingValue, (float) $closingValue, $externalFlows);
         $benchmarkResult = $this->benchmarkReturn($benchmark, $from, $to, $cutoff);
+        $comparisonBenchmarks = Benchmark::query()
+            ->where('is_active', true)
+            ->whereIn('id', $preference?->comparison_benchmark_ids ?? [])
+            ->get()
+            ->map(fn (Benchmark $comparison) => $this->benchmarkReturn($comparison, $from, $to, $cutoff))
+            ->values()->all();
 
         return [
             'scope' => 'portfolio',
@@ -89,6 +95,7 @@ final class PortfolioPerformanceService
             'xirr_percent' => $xirr,
             ...$metrics,
             'benchmark' => $benchmarkResult,
+            'comparison_benchmarks' => $comparisonBenchmarks,
             'excess_return_percent' => $metrics['twr_percent'] === null || $benchmarkResult['return_percent'] === null
                 ? null
                 : round($metrics['twr_percent'] - $benchmarkResult['return_percent'], 6),

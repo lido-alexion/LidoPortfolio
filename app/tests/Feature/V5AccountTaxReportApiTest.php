@@ -111,6 +111,38 @@ class V5AccountTaxReportApiTest extends TestCase
             ->assertJsonPath('data.completeness', 'complete');
     }
 
+    public function test_effective_rule_term_classification_is_consistent_in_detail_summary_and_tax(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        $stock = Stock::query()->create(['symbol' => 'TERM', 'exchange' => 'NSE', 'name' => 'Term Rule Test']);
+        Transaction::query()->create([
+            'profile_id' => $profile->id, 'stock_id' => $stock->id, 'type' => 'buy',
+            'quantity' => 1, 'price' => 100, 'fees' => 0, 'transaction_date' => '2024-01-01',
+        ]);
+        Transaction::query()->create([
+            'profile_id' => $profile->id, 'stock_id' => $stock->id, 'type' => 'sell',
+            'quantity' => 1, 'price' => 200, 'fees' => 0, 'transaction_date' => '2025-05-01',
+        ]);
+        TaxRuleVersion::query()->create([
+            'version' => 'term-threshold-500', 'effective_from' => '2025-04-01',
+            'rules' => [
+                'long_term_holding_days' => 500, 'short_term_rate' => 0.2,
+                'long_term_rate' => 0.1, 'long_term_exemption' => 0, 'fee_classifications' => [],
+            ],
+        ]);
+
+        $this->actingAs($user)->withProfileHeader($user, $profile)
+            ->getJson('/api/tax/report?financial_year=2025-26')
+            ->assertOk()
+            ->assertJsonPath('data.realized_disposals.0.term', 'short_term')
+            ->assertJsonPath('data.realized_disposals.0.term_rule_version', 'term-threshold-500')
+            ->assertJsonPath('data.realized_disposals.0.long_term_holding_days', 500)
+            ->assertJsonPath('data.summary.short_term_realized_gain', 100)
+            ->assertJsonPath('data.summary.long_term_realized_gain', 0)
+            ->assertJsonPath('data.summary.estimated_tax', 20);
+    }
+
     public function test_confirmed_carryforward_loss_is_applied_only_by_versioned_setoff_rule(): void
     {
         $user = User::factory()->create();

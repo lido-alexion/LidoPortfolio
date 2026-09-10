@@ -93,11 +93,18 @@ final class AccountPerformanceService
         $benchmark = $accountPreference?->primaryBenchmark
             ?? Benchmark::query()->where('is_active', true)->orderByDesc('is_default')->first();
         $benchmarkResult = $this->benchmarkReturn($benchmark, $from, $to, $cutoff);
+        $comparisonBenchmarks = Benchmark::query()
+            ->where('is_active', true)
+            ->whereIn('id', $accountPreference?->comparison_benchmark_ids ?? [])
+            ->get()
+            ->map(fn (Benchmark $comparison) => $this->benchmarkReturn($comparison, $from, $to, $cutoff))
+            ->values()->all();
 
         return [
             'scope' => 'account', 'calculation_mode' => $mode, 'portfolio_ids' => $selectedIds,
             'period' => ['from' => $from, 'to' => $to], 'request_cutoff_at' => $cutoff,
             'xirr_percent' => $xirr, ...$metrics, 'benchmark' => $benchmarkResult,
+            'comparison_benchmarks' => $comparisonBenchmarks,
             'excess_return_percent' => $metrics['twr_percent'] === null || $benchmarkResult['return_percent'] === null
                 ? null : round($metrics['twr_percent'] - $benchmarkResult['return_percent'], 6),
             'evidence' => ['aggregation' => 'daily_account_wealth_and_flows_not_average_of_portfolio_returns'],

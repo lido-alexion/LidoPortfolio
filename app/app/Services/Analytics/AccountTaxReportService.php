@@ -102,6 +102,10 @@ final class AccountTaxReportService
         $confirmedCarryForwardLosses = TaxLoss::query()->where('user_id', $user->id)
             ->where('financial_year', '<', $financialYear)->where('status', 'confirmed')
             ->where('created_at', '<=', $cutoff)->orderBy('financial_year')->orderBy('loss_type')->get();
+        // The FIFO calculator owns lot matching, but statutory term classification is
+        // effective-dated platform policy. Reclassify each disposal before exposing
+        // summaries/exports so the report cannot disagree with its own tax estimate.
+        $realized = $this->classifyRealizedTerms($realized);
         $shortTerm = collect($realized)->where('term', 'short_term')->sum('gain');
         $longTerm = collect($realized)->where('term', 'long_term')->sum('gain');
         $limitations = array_values(array_unique($limitations));
@@ -134,10 +138,38 @@ final class AccountTaxReportService
                 'jurisdiction' => 'India',
                 'lot_method' => 'fifo',
                 'canonical_accounting_method' => 'wavg',
-                'long_term_holding_days' => 365,
+                'long_term_holding_days' => 'effective_dated_platform_rule',
                 'tax_advice' => false,
             ],
         ];
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $realized
+     * @return array<int, array<string, mixed>>
+     */
+    private function classifyRealizedTerms(array $realized): array
+    {
+        return array_map(function (array $row): array {
+            $rule = $this->effectiveRule((string) $row['disposed_on']);
+            $threshold = (int) ($rule?->rules['long_term_holding_days'] ?? 365);
+
+            return [
+                ...$row,
+                'term' => (int) $row['holding_days'] > $threshold ? 'long_term' : 'short_term',
+                'term_rule_version' => $rule?->version,
+                'long_term_holding_days' => $threshold,
+            ];
+        }, $realized);
+    }
+
+    private function effectiveRule(string $date): ?TaxRuleVersion
+    {
+        return TaxRuleVersion::query()
+            ->whereDate('effective_from', '<=', $date)
+            ->where(fn ($query) => $query->whereNull('effective_to')->orWhereDate('effective_to', '>=', $date))
+            ->orderByDesc('effective_from')
+            ->first();
     }
 
     /**
@@ -154,13 +186,9 @@ final class AccountTaxReportService
         $applied = [];
         $currentLosses = ['short_term' => 0.0, 'long_term' => 0.0];
         foreach ($realized as $row) {
-            $rule = TaxRuleVersion::query()
-                ->whereDate('effective_from', '<=', $row['disposed_on'])
-                ->where(fn ($query) => $query->whereNull('effective_to')->orWhereDate('effective_to', '>=', $row['disposed_on']))
-                ->orderByDesc('effective_from')->first();
-            $longTerm = $rule !== null
-                && $row['holding_days'] > (int) ($rule->rules['long_term_holding_days'] ?? 365);
-            $term = $longTerm ? 'long_term' : 'short_term';
+            $rule = $this->effectiveRule((string) $row['disposed_on']);
+            $term = (string) $row['term'];
+            $longTerm = $term === 'long_term';
             $rateKey = $longTerm ? 'long_term_rate' : 'short_term_rate';
             if ($rule === null || ! is_numeric($rule->rules[$rateKey] ?? null)) {
                 return [null, array_values(array_unique($applied)), ['tax_rate_rule_not_configured']];
