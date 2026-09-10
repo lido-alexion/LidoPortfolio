@@ -12,6 +12,7 @@ use App\Models\PortfolioReplayCheckpoint;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\Simulation\PortfolioReplayProcessor;
+use App\Services\Simulation\PortfolioReplayService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -100,5 +101,24 @@ class V5PortfolioReplayFoundationTest extends TestCase
                 'starting_cash' => 100000, 'price_method' => 'next_open',
             ])->assertUnprocessable()
             ->assertJsonPath('errors.readiness.0', 'no_enabled_strategy_artifact_bindings');
+    }
+
+    public function test_historical_branch_blocks_when_strategy_capital_state_is_not_reconstructable(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+
+        $readiness = app(PortfolioReplayService::class)->readiness($profile, [
+            'starting_mode' => 'historical_branch',
+            'period_start' => '2026-01-02',
+            'period_end' => '2026-01-30',
+            'price_method' => 'next_open',
+        ]);
+
+        $this->assertSame('blocked', $readiness['status']);
+        $this->assertContains(
+            'historical_strategy_capital_state_not_reconstructable',
+            $readiness['limitations'],
+        );
     }
 }

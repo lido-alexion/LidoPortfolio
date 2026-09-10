@@ -34,6 +34,11 @@ final class PortfolioReplayService
             if (! $state['completeness']['total_value_complete']) {
                 $limitations[] = 'historical_starting_state_not_reconstructable';
             }
+            // Holdings and cash alone are not a complete Replay branch. Until the
+            // point-in-time reconstruction also covers Strategy ownership,
+            // capital allocations, loans/recalls and bridge funding, proceeding
+            // would fabricate a materially different Portfolio world.
+            $limitations[] = 'historical_strategy_capital_state_not_reconstructable';
         } else {
             $state = ['cash_balance' => (float) $input['starting_cash'], 'holdings' => [], 'source' => 'new_simulated_portfolio'];
         }
@@ -54,7 +59,12 @@ final class PortfolioReplayService
         $chargeComponents = $this->fees->componentsFromSettings();
 
         return [
-            'status' => $limitations === [] ? 'ready' : (array_intersect($limitations, ['historical_starting_state_not_reconstructable', 'no_enabled_strategy_artifact_bindings', 'blocked_artifact_binding']) ? 'blocked' : 'ready_with_limitations'),
+            'status' => $limitations === [] ? 'ready' : (array_intersect($limitations, [
+                'historical_starting_state_not_reconstructable',
+                'historical_strategy_capital_state_not_reconstructable',
+                'no_enabled_strategy_artifact_bindings',
+                'blocked_artifact_binding',
+            ]) ? 'blocked' : 'ready_with_limitations'),
             'requested_period' => ['from' => $start, 'to' => $input['period_end']],
             'starting_state' => $state,
             'pinned_world' => [
