@@ -14,6 +14,7 @@ final class PortfolioReplayProcessor
         private ReplayTradeTransition $trades,
         private ReplayEconomicStateCalculator $economics,
         private ReplayStrategyEvaluator $strategies,
+        private ReplayStatisticsService $statistics,
     ) {}
 
     /** @return array<string, mixed> */
@@ -97,6 +98,8 @@ final class PortfolioReplayProcessor
                 $limitations = $unresolved > 0
                     ? ['recommendations_at_period_end_have_no_next_eligible_session_within_requested_period']
                     : [];
+                $statistics = $this->statistics->generate($run);
+                $limitations = array_values(array_unique([...$limitations, ...$statistics['limitations']]));
                 $run->forceFill([
                     'status' => 'completed', 'completed_at' => now(),
                     'results' => [
@@ -105,6 +108,7 @@ final class PortfolioReplayProcessor
                         'transaction_count' => count($finalState['transactions'] ?? []),
                         'unresolved_end_recommendations' => $unresolved,
                         'valuation' => $finalState['valuation'] ?? null,
+                        'statistics' => $statistics,
                         'limitations' => $limitations,
                     ],
                 ])->save();

@@ -97,6 +97,11 @@ class V5PortfolioReplayFoundationTest extends TestCase
         $this->assertFalse($result['remaining']);
         $this->assertSame('completed', $run->fresh()->status);
         $this->assertSame('completed', $run->fresh()->results['processing_state']);
+        $this->assertEquals(1000.0, $run->fresh()->results['statistics']['initial_value']);
+        $this->assertEquals(1000.0, $run->fresh()->results['statistics']['final_value']);
+        $this->assertEquals(0.0, $run->fresh()->results['statistics']['return_percent']);
+        $this->assertCount(2, $run->fresh()->results['statistics']['equity_curve']);
+        $this->assertContains('risk_metrics_require_30_daily_returns', $run->fresh()->results['limitations']);
         $this->assertNotNull($run->fresh()->completed_at);
     }
 
