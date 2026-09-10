@@ -51,4 +51,23 @@ class V5AnalysisEvidenceApiTest extends TestCase
             ->getJson('/api/analysis/evidence/'.$created->json('data.id'))
             ->assertNotFound();
     }
+
+    public function test_server_preserves_account_performance_what_if_evidence_without_mutating_preferences(): void
+    {
+        $user = User::factory()->create();
+        $included = $this->defaultPortfolioFor($user);
+        $whatIf = $user->portfolios()->create(['name' => 'What-if']);
+        app(CashManagementService::class)->deposit($whatIf, 1000, 'Opening', $user, '2025-12-31');
+
+        $this->actingAs($user)->withProfileHeader($user, $included)
+            ->postJson('/api/analysis/evidence', [
+                'calculation_type' => 'account_performance',
+                'from' => '2026-01-01',
+                'to' => '2026-01-03',
+                'portfolio_ids' => [$whatIf->id],
+            ])->assertCreated()
+            ->assertJsonPath('data.calculation_mode', 'what_if')
+            ->assertJsonPath('data.result.portfolio_ids', [$whatIf->id])
+            ->assertJsonPath('data.result.xirr_percent', 0);
+    }
 }

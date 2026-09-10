@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\AnalysisEvidence;
 use App\Services\Analytics\AccountTaxReportService;
+use App\Services\Analytics\AccountPerformanceService;
 use App\Services\Analytics\PortfolioPerformanceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,15 +15,16 @@ class AnalysisEvidenceController extends Controller
 {
     public function __construct(
         private PortfolioPerformanceService $performance,
+        private AccountPerformanceService $accountPerformance,
         private AccountTaxReportService $tax,
     ) {}
 
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'calculation_type' => ['required', Rule::in(['portfolio_performance', 'account_tax'])],
-            'from' => ['required_if:calculation_type,portfolio_performance', 'nullable', 'date', 'before:to'],
-            'to' => ['required_if:calculation_type,portfolio_performance', 'nullable', 'date', 'after:from', 'before_or_equal:today'],
+            'calculation_type' => ['required', Rule::in(['portfolio_performance', 'account_performance', 'account_tax'])],
+            'from' => ['required_if:calculation_type,portfolio_performance,account_performance', 'nullable', 'date', 'before:to'],
+            'to' => ['required_if:calculation_type,portfolio_performance,account_performance', 'nullable', 'date', 'after:from', 'before_or_equal:today'],
             'financial_year' => ['required_if:calculation_type,account_tax', 'nullable', 'regex:/^\\d{4}-\\d{2}$/'],
             'portfolio_ids' => ['sometimes', 'array'],
             'portfolio_ids.*' => ['integer', 'distinct'],
@@ -35,6 +37,21 @@ class AnalysisEvidenceController extends Controller
             $periodEnd = $validated['to'];
             $mode = 'configured';
             $profileId = $profile->id;
+            $assumptions = [
+                'annualization_days' => $result['annualization_days'],
+                'annual_risk_free_rate' => $result['annual_risk_free_rate'],
+                'benchmark' => $result['benchmark']['stable_key'],
+                ...$result['evidence'],
+            ];
+        } elseif ($validated['calculation_type'] === 'account_performance') {
+            $portfolioIds = array_key_exists('portfolio_ids', $validated) ? $validated['portfolio_ids'] : null;
+            $result = $this->accountPerformance->calculate(
+                $request->user(), $validated['from'], $validated['to'], $portfolioIds,
+            );
+            $periodStart = $validated['from'];
+            $periodEnd = $validated['to'];
+            $mode = $result['calculation_mode'];
+            $profileId = null;
             $assumptions = [
                 'annualization_days' => $result['annualization_days'],
                 'annual_risk_free_rate' => $result['annual_risk_free_rate'],
