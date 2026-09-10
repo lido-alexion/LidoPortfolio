@@ -33,6 +33,7 @@ use App\Http\Controllers\Api\PasswordResetLinkController;
 use App\Http\Controllers\Api\PatternScanController;
 use App\Http\Controllers\Api\PortfolioController;
 use App\Http\Controllers\Api\PaperSimulationController;
+use App\Http\Controllers\Api\PortfolioReplayController;
 use App\Http\Controllers\Api\PortfolioHistoryController;
 use App\Http\Controllers\Api\PortfolioPerformanceController;
 use App\Http\Controllers\Api\PortfolioAttributionController;
@@ -142,6 +143,12 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::get('/portfolios/{portfolio}/simulation', [PaperSimulationController::class, 'show']);
     Route::post('/portfolios/{portfolio}/simulation/pause', [PaperSimulationController::class, 'pause']);
     Route::post('/portfolios/{portfolio}/simulation/resume', [PaperSimulationController::class, 'resume']);
+    Route::get('/replays', [PortfolioReplayController::class, 'index']);
+    Route::post('/replays/readiness', [PortfolioReplayController::class, 'readiness']);
+    Route::post('/replays', [PortfolioReplayController::class, 'store']);
+    Route::get('/replays/{replay}', [PortfolioReplayController::class, 'show'])->whereNumber('replay');
+    Route::post('/replays/{replay}/cancel', [PortfolioReplayController::class, 'cancel'])->whereNumber('replay');
+    Route::delete('/replays/{replay}', [PortfolioReplayController::class, 'destroy'])->whereNumber('replay');
 
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/sessions', [AuthController::class, 'sessions']);
