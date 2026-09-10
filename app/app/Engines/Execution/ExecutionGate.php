@@ -51,6 +51,13 @@ class ExecutionGate
         #[\SensitiveParameter] ?string $recoveryCode = null,
     ): void {
         $this->assertPortfolioOwner($user, $profile);
+        if ($profile->isPaper()) {
+            throw new DomainException(
+                'Paper portfolios never submit orders to a broker.',
+                'PAPER_BROKER_UNAVAILABLE',
+                403,
+            );
+        }
         $this->assertEntitled($user);
 
         $mode = $profile->executionMode();
@@ -108,6 +115,9 @@ class ExecutionGate
     public function blockers(User $user, PortfolioProfile $profile): array
     {
         $blockers = [];
+        if ($profile->isPaper()) {
+            return ['paper_portfolio'];
+        }
         if ((int) $profile->user_id !== (int) $user->id) {
             $blockers[] = 'portfolio_access';
         }

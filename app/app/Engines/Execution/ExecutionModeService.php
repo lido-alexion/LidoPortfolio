@@ -54,6 +54,13 @@ class ExecutionModeService
         if (! in_array($mode, PortfolioProfile::EXECUTION_MODES, true)) {
             throw new DomainException('Invalid execution mode.', 'EXECUTION_MODE_INVALID', 422);
         }
+        if ($profile->isPaper() && $mode !== PortfolioProfile::EXECUTION_MODE_MANUAL) {
+            throw new DomainException(
+                'Paper portfolios support Manual broker mode only; eligible recommendations are simulated separately.',
+                'PAPER_EXECUTION_MODE_IMMUTABLE',
+                422,
+            );
+        }
 
         $current = $profile->executionMode();
         if ($current === $mode) {

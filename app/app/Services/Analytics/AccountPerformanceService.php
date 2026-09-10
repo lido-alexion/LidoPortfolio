@@ -28,17 +28,21 @@ final class AccountPerformanceService
         $cutoff = now()->toDateTimeString();
         $profiles = PortfolioProfile::query()->where('user_id', $user->id)->get();
         $ownedIds = $profiles->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $realPortfolioIds = $profiles->reject->isPaper()->pluck('id')->map(fn ($id) => (int) $id)->all();
         if ($whatIfProfileIds !== null) {
             $selectedIds = array_values(array_unique(array_map('intval', $whatIfProfileIds)));
             if (array_diff($selectedIds, $ownedIds) !== []) {
                 throw ValidationException::withMessages(['portfolio_ids' => 'What-if portfolios must belong to the signed-in account.']);
+            }
+            if (array_diff($selectedIds, $realPortfolioIds) !== []) {
+                throw ValidationException::withMessages(['portfolio_ids' => 'Paper portfolios cannot enter real Account performance.']);
             }
             $mode = 'what_if';
         } else {
             $excluded = AnalysisPreference::query()->where('user_id', $user->id)
                 ->whereNotNull('profile_id')->where('include_in_account_performance', false)
                 ->pluck('profile_id')->map(fn ($id) => (int) $id)->all();
-            $selectedIds = array_values(array_diff($ownedIds, $excluded));
+            $selectedIds = array_values(array_diff($realPortfolioIds, $excluded));
             $mode = 'configured';
         }
         $selectedProfiles = $profiles->whereIn('id', $selectedIds);

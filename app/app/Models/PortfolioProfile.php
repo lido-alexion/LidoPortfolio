@@ -11,6 +11,18 @@ class PortfolioProfile extends Model
 {
     use SoftDeletes;
 
+    public const TYPE_LIVE = 'live';
+
+    public const TYPE_PAPER = 'paper';
+
+    public const TYPES = [self::TYPE_LIVE, self::TYPE_PAPER];
+
+    public const SIMULATION_ACTIVE = 'active';
+
+    public const SIMULATION_PAUSED = 'paused';
+
+    public const SIMULATION_PRICE_METHODS = ['next_open', 'next_close', 'ohlc_average', 'high_low_midpoint'];
+
     public const EXECUTION_MODE_MANUAL = 'manual';
 
     public const EXECUTION_MODE_SEMI_AUTOMATIC = 'semi_automatic';
@@ -29,6 +41,11 @@ class PortfolioProfile extends Model
         'user_id',
         'name',
         'is_default',
+        'portfolio_type',
+        'simulation_state',
+        'simulation_price_method',
+        'simulation_checkpoint_date',
+        'simulation_evidence',
     ];
 
     protected $attributes = [
@@ -40,8 +57,15 @@ class PortfolioProfile extends Model
         return [
             'user_id' => 'integer',
             'is_default' => 'boolean',
+            'simulation_checkpoint_date' => 'date',
+            'simulation_evidence' => 'array',
             'deleted_at' => 'datetime',
         ];
+    }
+
+    public function isPaper(): bool
+    {
+        return $this->portfolio_type === self::TYPE_PAPER;
     }
 
     public function executionMode(): string
