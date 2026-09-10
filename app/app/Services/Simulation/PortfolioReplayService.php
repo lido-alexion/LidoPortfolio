@@ -5,6 +5,7 @@ namespace App\Services\Simulation;
 use App\Models\ArtifactBinding;
 use App\Models\PortfolioProfile;
 use App\Models\PortfolioReplayRun;
+use App\Services\FeeCalculatorService;
 use App\Services\HistoricalHoldingsService;
 use App\Support\TradingCalendar;
 use Carbon\Carbon;
@@ -14,7 +15,10 @@ use Illuminate\Validation\ValidationException;
 
 final class PortfolioReplayService
 {
-    public function __construct(private HistoricalHoldingsService $history) {}
+    public function __construct(
+        private HistoricalHoldingsService $history,
+        private FeeCalculatorService $fees,
+    ) {}
 
     /** @param array<string, mixed> $input */
     public function readiness(PortfolioProfile $profile, array $input): array
@@ -47,11 +51,25 @@ final class PortfolioReplayService
             $limitations[] = 'blocked_artifact_binding';
         }
 
+        $chargeComponents = $this->fees->componentsFromSettings();
+
         return [
             'status' => $limitations === [] ? 'ready' : (array_intersect($limitations, ['historical_starting_state_not_reconstructable', 'no_enabled_strategy_artifact_bindings', 'blocked_artifact_binding']) ? 'blocked' : 'ready_with_limitations'),
             'requested_period' => ['from' => $start, 'to' => $input['period_end']],
             'starting_state' => $state,
-            'pinned_world' => ['binding_revisions' => $pinned, 'captured_at' => now()->toISOString()],
+            'pinned_world' => [
+                'binding_revisions' => $pinned,
+                'charge_model' => [
+                    'version' => 'settings-sha256:'.hash('sha256', json_encode($chargeComponents, JSON_THROW_ON_ERROR)),
+                    'components' => $chargeComponents,
+                ],
+                'calendar' => [
+                    'market' => 'india_equity',
+                    'session_rule' => 'TradingCalendar::isEquitySessionDate',
+                    'resolution' => 'daily_eod',
+                ],
+                'captured_at' => now()->toISOString(),
+            ],
             'limitations' => $limitations,
         ];
     }

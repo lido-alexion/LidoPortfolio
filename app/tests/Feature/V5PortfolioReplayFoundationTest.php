@@ -55,6 +55,10 @@ class V5PortfolioReplayFoundationTest extends TestCase
         $id = $created->json('data.id');
         $this->putJson('/api/replays/'.$id, ['starting_cash' => 1])->assertMethodNotAllowed();
         $run = PortfolioReplayRun::query()->findOrFail($id);
+        $this->assertStringStartsWith('settings-sha256:', $run->pinned_world['charge_model']['version']);
+        $this->assertNotEmpty($run->pinned_world['charge_model']['components']);
+        $this->assertSame('india_equity', $run->pinned_world['calendar']['market']);
+        $this->assertSame('daily_eod', $run->pinned_world['calendar']['resolution']);
         $slice = app(PortfolioReplayProcessor::class)->process($run, 2);
         $this->assertSame('running', $slice['status']);
         $this->assertSame(2, $slice['processed_sessions']);
