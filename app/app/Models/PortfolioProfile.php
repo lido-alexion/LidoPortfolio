@@ -108,6 +108,11 @@ class PortfolioProfile extends Model
         return $this->hasMany(Transaction::class, 'profile_id');
     }
 
+    public function wikiPages(): HasMany
+    {
+        return $this->hasMany(WikiPage::class, 'profile_id');
+    }
+
     public function holdings(): HasMany
     {
         return $this->hasMany(Holding::class, 'profile_id');
