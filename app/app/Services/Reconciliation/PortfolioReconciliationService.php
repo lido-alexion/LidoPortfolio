@@ -7,6 +7,7 @@ use App\Models\PortfolioReconciliationRun;
 use App\Models\Stock;
 use App\Services\Broker\BrokerGateway;
 use App\Services\CashManagementService;
+use App\Services\Notification\NotificationPublisher;
 use App\Services\SettingsService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -18,6 +19,7 @@ final class PortfolioReconciliationService
         private BrokerGateway $broker,
         private CashManagementService $cash,
         private SettingsService $settings,
+        private NotificationPublisher $notifications,
     ) {}
 
     public function run(PortfolioProfile $profile, string $trigger): PortfolioReconciliationRun
@@ -118,6 +120,32 @@ final class PortfolioReconciliationService
                 'last_successful_reconciliation_at' => $run->completed_at,
                 'last_reconciliation_failure' => null,
             ])->save();
+            $conditionKey = 'portfolio:reconciliation:'.$profile->id;
+            if ($overallStatus === 'reconciled') {
+                $this->notifications->resolveCondition($conditionKey);
+            } else {
+                $parts = [];
+                if ($holdingsStatus === 'mismatch') {
+                    $parts[] = count($holdingDiscrepancies).' holding '.(count($holdingDiscrepancies) === 1 ? 'discrepancy' : 'discrepancies').' found; new live execution is blocked';
+                }
+                if ($fundsStatus === 'mismatch') {
+                    $parts[] = 'cash differs by ₹'.number_format(abs($cashDifference), 2);
+                }
+                $this->notifications->publishCondition($conditionKey, [$profile->user], [
+                    'notification_type' => 'portfolio.reconciliation_discrepancy',
+                    'audience' => 'investor',
+                    'severity' => 'action_required',
+                    'title' => 'Portfolio reconciliation needs attention',
+                    'message' => implode('. ', $parts).'. Correct the relevant StoX transactions, then run reconciliation again.',
+                    'context' => [
+                        'profile_id' => $profile->id,
+                        'reconciliation_run_id' => $run->id,
+                        'holdings_status' => $holdingsStatus,
+                        'funds_status' => $fundsStatus,
+                    ],
+                    'primary_action' => ['label' => 'Review reconciliation', 'route' => '/dashboard'],
+                ]);
+            }
 
             return $run;
         });

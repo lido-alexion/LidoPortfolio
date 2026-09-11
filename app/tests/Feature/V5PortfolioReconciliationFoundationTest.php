@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Engines\Execution\ExecutionGate;
 use App\Models\Holding;
+use App\Models\NotificationSource;
 use App\Models\PortfolioProfile;
 use App\Models\PortfolioReconciliationRun;
 use App\Models\Setting;
@@ -142,5 +143,33 @@ class V5PortfolioReconciliationFoundationTest extends TestCase
         $this->assertFalse($profile->fresh()->execution_blocked_by_reconciliation);
         $this->expectException(LogicException::class);
         PortfolioReconciliationRun::query()->findOrFail($run->id)->update(['trigger' => 'manual']);
+    }
+
+    public function test_discrepancy_notification_deduplicates_and_resolves_after_verified_recovery(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        Stock::query()->create(['symbol' => 'AAA', 'exchange' => 'NSE', 'name' => 'AAA', 'is_active' => true]);
+        $service = app(PortfolioReconciliationService::class);
+        $broker = ['holdings' => [['symbol' => 'AAA', 'quantity' => 2]], 'current_cash' => 100];
+        $mismatched = ['holdings' => [['symbol' => 'AAA', 'quantity' => 1]], 'cash_balance' => 90];
+        $tolerances = ['holding_cost' => 1, 'funds' => 1];
+
+        $service->recordSuccessful($profile, 'manual', $broker, $mismatched, $tolerances);
+        $second = $service->recordSuccessful($profile->fresh(), 'scheduled', $broker, $mismatched, $tolerances);
+
+        $source = NotificationSource::query()->where('condition_key', 'portfolio:reconciliation:'.$profile->id)->sole();
+        $this->assertSame('active', $source->condition_state);
+        $this->assertSame(2, $source->occurrence_count);
+        $this->assertSame($second->id, $source->context['reconciliation_run_id']);
+        $this->assertDatabaseCount('portfolio_recipient_notifications', 1);
+
+        $service->recordSuccessful($profile->fresh(), 'manual', $broker, [
+            'holdings' => [['symbol' => 'AAA', 'quantity' => 2]],
+            'cash_balance' => 100,
+        ], $tolerances);
+
+        $this->assertSame('resolved', $source->fresh()->condition_state);
+        $this->assertNull($source->fresh()->active_condition_key);
     }
 }
