@@ -109,6 +109,8 @@ Route::post('/reset-password/accept', [PasswordResetAcceptController::class, 'ac
 Route::get('/auth/me', [AuthController::class, 'me']);
 Route::get('/auth/csrf-token', [AuthController::class, 'csrfToken']);
 Route::get('/wiki/shared/{token}', [WikiShareController::class, 'show'])->where('token', '[A-Za-z0-9]{64}');
+Route::get('/wiki/shared/{token}/images/{image}', [WikiShareController::class, 'image'])
+    ->where('token', '[A-Za-z0-9]{64}')->whereUuid('image');
 
 // Kite returns from another domain, so the callback cannot depend on the SPA
 // session cookie. A short-lived encrypted state binds it to the initiating user.
@@ -231,6 +233,7 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
         Route::get('/wiki/pages/{page}/revisions/{revision}', [WikiPageController::class, 'revision'])->whereUuid('page')->whereNumber('revision');
         Route::post('/wiki/pages/{page}/revisions/{revision}/restore', [WikiPageController::class, 'restore'])->whereUuid('page')->whereNumber('revision');
         Route::post('/wiki/pages/{page}/share', [WikiShareController::class, 'store'])->whereUuid('page');
+        Route::post('/wiki/pages/{page}/images/{image}', [WikiPageController::class, 'attachImage'])->whereUuid('page')->whereUuid('image');
         Route::post('/wiki/pages/{page}/share/regenerate', [WikiShareController::class, 'regenerate'])->whereUuid('page');
         Route::delete('/wiki/pages/{page}/share', [WikiShareController::class, 'destroy'])->whereUuid('page');
         Route::delete('/wiki/pages/{page}', [WikiPageController::class, 'destroy'])->whereUuid('page');

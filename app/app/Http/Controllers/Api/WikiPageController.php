@@ -58,6 +58,11 @@ class WikiPageController extends Controller
         return response()->json(['data' => $this->pages->restore($this->pages->find(\activePortfolio(), $page), \activePortfolio(), $request->user(), $revision)]);
     }
 
+    public function attachImage(string $page, string $image): JsonResponse
+    {
+        return response()->json(['data' => $this->pages->attachImage($this->pages->find(\activePortfolio(), $page), \activePortfolio(), $image)]);
+    }
+
     public function destroy(Request $request, string $page): JsonResponse
     {
         $data = $request->validate(['recursive' => ['sometimes', 'boolean'], 'confirm_count' => ['nullable', 'integer', 'min:1']]);

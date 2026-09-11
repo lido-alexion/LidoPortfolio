@@ -10,8 +10,23 @@ use League\CommonMark\GithubFlavoredMarkdownConverter;
 
 final class WikiMarkdownRenderer
 {
-    public function render(PortfolioProfile $profile, string $markdown, bool $public = false): string
+    public function render(PortfolioProfile $profile, string $markdown, bool $public = false, ?WikiPage $source = null, ?string $publicToken = null): string
     {
+        $markdown = preg_replace_callback(
+            '/!\[([^\]]*)\]\(wiki-image:([0-9a-f-]{36})\)/i',
+            function (array $match) use ($profile, $public, $source, $publicToken): string {
+                $image = $source?->images()->where('profile_id', $profile->id)->where('uuid', $match[2])->first();
+                if (! $image) {
+                    return '**⚠ Missing Wiki Image**';
+                }
+                $url = $public
+                    ? url('/api/wiki/shared/'.$publicToken.'/images/'.$image->uuid)
+                    : url('/api/knowledge-board/images/'.$image->uuid);
+
+                return '!['.$this->escapeMarkdown($match[1]).']('.$url.')';
+            },
+            $markdown,
+        ) ?? '';
         $markdown = preg_replace_callback(
             '/\[\[wiki:([0-9a-f-]{36})(?:\|([^\]]+))?\]\]/i',
             function (array $match) use ($profile, $public): string {

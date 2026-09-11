@@ -2,6 +2,7 @@
 
 namespace App\Services\Wiki;
 
+use App\Models\KnowledgeImage;
 use App\Models\PortfolioProfile;
 use App\Models\WikiPage;
 use App\Models\WikiPageShare;
@@ -54,7 +55,14 @@ final class WikiShareService
         $share = WikiPageShare::query()->where('token_hash', hash('sha256', $token))->whereNull('revoked_at')->firstOrFail();
         $page = $share->page()->with('profile')->firstOrFail();
 
-        return ['title' => $page->title, 'rendered_html' => $this->renderer->render($page->profile, $page->markdown, true)];
+        return ['title' => $page->title, 'rendered_html' => $this->renderer->render($page->profile, $page->markdown, true, $page, $token)];
+    }
+
+    public function sharedImage(string $token, string $imageUuid): KnowledgeImage
+    {
+        $share = WikiPageShare::query()->where('token_hash', hash('sha256', $token))->whereNull('revoked_at')->firstOrFail();
+
+        return $share->page->images()->where('uuid', $imageUuid)->firstOrFail();
     }
 
     private function format(WikiPageShare $share, ?string $token = null): array

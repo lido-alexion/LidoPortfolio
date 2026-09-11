@@ -2,11 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Models\KnowledgeImage;
 use App\Models\PortfolioProfile;
 use App\Models\User;
 use App\Models\WikiPage;
 use App\Models\WikiPageRevision;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use LogicException;
 use Tests\TestCase;
@@ -240,5 +242,40 @@ class V5WikiFoundationTest extends TestCase
         $this->assertSame(['note', 'wiki_page'], $response->json('data.*.type'));
         $this->assertSame('Knowledge Board / Notes', $response->json('data.0.context'));
         $this->assertSame('Knowledge Board / Companies / Valuation note', $response->json('data.1.context'));
+    }
+
+    public function test_public_managed_images_are_limited_to_images_attached_to_that_shared_page(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        $this->actingAs($user)->withProfileHeader($user, $profile);
+        $attached = $this->wikiImage($profile, 'attached.jpg');
+        $unrelated = $this->wikiImage($profile, 'unrelated.jpg');
+        $page = $this->postJson('/api/knowledge-board/wiki/pages', [
+            'title' => 'Illustrated', 'markdown' => '![Chart](wiki-image:'.$attached->uuid.')',
+        ])->json('data.uuid');
+        $this->postJson('/api/knowledge-board/wiki/pages/'.$page.'/images/'.$attached->uuid)->assertOk();
+        $shareUrl = $this->postJson('/api/knowledge-board/wiki/pages/'.$page.'/share')->json('data.url');
+        $token = basename(parse_url($shareUrl, PHP_URL_PATH));
+
+        $html = $this->getJson('/api/wiki/shared/'.$token)->assertOk()->json('data.rendered_html');
+        $this->assertStringContainsString('/api/wiki/shared/'.$token.'/images/'.$attached->uuid, $html);
+        $this->get('/api/wiki/shared/'.$token.'/images/'.$attached->uuid)->assertOk()->assertHeader('Content-Type', 'image/jpeg');
+        $this->getJson('/api/wiki/shared/'.$token.'/images/'.$unrelated->uuid)->assertNotFound();
+
+        File::deleteDirectory(storage_path('app/knowledge-images/'.$profile->id));
+    }
+
+    private function wikiImage(PortfolioProfile $profile, string $filename): KnowledgeImage
+    {
+        $uuid = (string) Str::uuid();
+        $directory = storage_path('app/knowledge-images/'.$profile->id);
+        File::ensureDirectoryExists($directory);
+        file_put_contents($directory.'/'.$filename, 'test-image');
+
+        return KnowledgeImage::query()->create([
+            'profile_id' => $profile->id, 'uuid' => $uuid, 'mime_type' => 'image/jpeg',
+            'display_filename' => $filename, 'full_filename' => $filename,
+        ]);
     }
 }

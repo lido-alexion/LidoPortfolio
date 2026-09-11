@@ -34,10 +34,19 @@ final class WikiPageService
 
         return [
             ...$page->toArray(),
-            'rendered_html' => $this->renderer->render($profile, $page->markdown),
+            'rendered_html' => $this->renderer->render($profile, $page->markdown, false, $page),
             'breadcrumbs' => $this->breadcrumbs($page),
             'revisions' => $page->revisions()->get(),
         ];
+    }
+
+    public function attachImage(WikiPage $page, PortfolioProfile $profile, string $imageUuid): WikiPage
+    {
+        $this->assertOwned($page, $profile);
+        $image = $profile->knowledgeImages()->where('uuid', $imageUuid)->firstOrFail();
+        $page->images()->syncWithoutDetaching([$image->id]);
+
+        return $page->fresh('images');
     }
 
     public function hierarchyPath(WikiPage $page, PortfolioProfile $profile): string

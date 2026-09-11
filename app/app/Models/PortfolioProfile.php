@@ -113,6 +113,11 @@ class PortfolioProfile extends Model
         return $this->hasMany(WikiPage::class, 'profile_id');
     }
 
+    public function knowledgeImages(): HasMany
+    {
+        return $this->hasMany(KnowledgeImage::class, 'profile_id');
+    }
+
     public function holdings(): HasMany
     {
         return $this->hasMany(Holding::class, 'profile_id');
