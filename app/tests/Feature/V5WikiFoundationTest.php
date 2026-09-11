@@ -94,7 +94,7 @@ class V5WikiFoundationTest extends TestCase
         $this->putJson('/api/knowledge-board/wiki/pages/'.$childUuid, ['title' => 'Renamed child'])
             ->assertOk()->assertJsonPath('data.slug', 'renamed-child');
         $this->putJson('/api/knowledge-board/wiki/pages/'.$childUuid.'/move', ['parent_uuid' => null, 'display_order' => 3])
-            ->assertOk()->assertJsonPath('data.display_order', 3);
+            ->assertOk()->assertJsonPath('data.display_order', 1);
         $this->getJson('/api/knowledge-board/wiki/pages/'.$childUuid)->assertOk()
             ->assertJsonCount(3, 'data.revisions');
 

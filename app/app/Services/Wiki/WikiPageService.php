@@ -115,7 +115,14 @@ final class WikiPageService
             if ($parent && ($parent->is($page) || $this->ancestorIds($parent)->contains($page->id))) {
                 throw ValidationException::withMessages(['parent_uuid' => ['A Wiki Page cannot become its own ancestor.']]);
             }
-            $page->forceFill(['parent_id' => $parent?->id, 'display_order' => max(0, $displayOrder)])->save();
+            $siblings = WikiPage::query()->where('profile_id', $profile->id)->where('parent_id', $parent?->id)
+                ->whereKeyNot($page->id)->orderBy('display_order')->orderBy('id')->get()->values();
+            $position = min(max(0, $displayOrder), $siblings->count());
+            $siblings->splice($position, 0, [$page]);
+            foreach ($siblings as $order => $sibling) {
+                $sibling->forceFill(['parent_id' => $parent?->id, 'display_order' => $order])->saveQuietly();
+            }
+            $page->refresh();
             $this->revise($page, $user, 'moved');
 
             return $page->fresh();
@@ -240,6 +247,7 @@ final class WikiPageService
     {
         return $pages->where('parent_id', $parentId)->values()->map(fn (WikiPage $page): array => [
             'uuid' => $page->uuid, 'title' => $page->title, 'slug' => $page->slug,
+            'parent_uuid' => $page->parent_id ? $pages->firstWhere('id', $page->parent_id)?->uuid : null,
             'display_order' => $page->display_order, 'children' => $this->treeLevel($pages, $page->id),
         ]);
     }

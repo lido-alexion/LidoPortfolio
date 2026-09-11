@@ -52,6 +52,7 @@ export default function KnowledgeBoardPage() {
     const [tags, setTags] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
+    const [wikiSearchResults, setWikiSearchResults] = useState([]);
     const [sort, setSort] = useState(() => loadSortPreference());
     const [tagMatch, setTagMatch] = useState('any');
     const [filterTagIds, setFilterTagIds] = useState([]);
@@ -102,6 +103,13 @@ export default function KnowledgeBoardPage() {
     useEffect(() => {
         loadNotes();
     }, [loadNotes]);
+
+    useEffect(() => {
+        if (!debouncedSearch.trim()) { setWikiSearchResults([]); return; }
+        api.get('/knowledge-board/search', { params: { q: debouncedSearch } })
+            .then((response) => setWikiSearchResults((response.data?.data || []).filter((item) => item.type === 'wiki_page')))
+            .catch(() => setWikiSearchResults([]));
+    }, [debouncedSearch]);
 
     useEffect(() => {
         if (profileId) {
@@ -475,6 +483,8 @@ export default function KnowledgeBoardPage() {
                     </>
             </div>
             )}
+
+            {wikiSearchResults.length ? <div className="card"><div className="card-header">Wiki Page results</div><div className="list-group list-group-flush">{wikiSearchResults.map((result) => <Link key={result.id} to={`/knowledge-board/wiki/${result.id}`} className="list-group-item list-group-item-action"><strong>{result.title}</strong><div className="small text-muted">Wiki Page · {result.context}</div><div className="small">{result.excerpt}</div></Link>)}</div></div> : null}
 
             {loading ? (
                 <div className="text-muted small px-1">Loading notes…</div>

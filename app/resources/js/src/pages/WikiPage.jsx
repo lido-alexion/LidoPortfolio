@@ -26,6 +26,8 @@ export default function WikiPage() {
     const [markdown, setMarkdown] = useState('');
     const [previewHtml, setPreviewHtml] = useState('');
     const [busy, setBusy] = useState(false);
+    const [comparison, setComparison] = useState(null);
+    const [dragged, setDragged] = useState(null);
     const pages = useMemo(() => flatten(tree), [tree]);
 
     const loadTree = useCallback(async () => {
@@ -54,10 +56,11 @@ export default function WikiPage() {
         catch (error) { showToast(getApiErrorMessage(error, 'Could not save Wiki Page'), 'danger'); }
         finally { setBusy(false); }
     };
-    const move = async (parentUuid) => {
-        await api.put(`/knowledge-board/wiki/pages/${pageId}/move`, { parent_uuid: parentUuid || null, display_order: 0 });
+    const movePage = async (uuid, parentUuid, displayOrder = 0) => {
+        await api.put(`/knowledge-board/wiki/pages/${uuid}/move`, { parent_uuid: parentUuid || null, display_order: displayOrder });
         await Promise.all([loadTree(), loadPage()]);
     };
+    const move = (parentUuid) => movePage(pageId, parentUuid);
     const remove = async () => {
         const current = pages.find((item) => item.uuid === pageId);
         const descendants = current ? flatten(current.children).length : 0;
@@ -69,6 +72,20 @@ export default function WikiPage() {
     const restore = async (revisionId) => {
         if (!window.confirm('Restore this revision as a new current revision?')) return;
         await api.post(`/knowledge-board/wiki/pages/${pageId}/revisions/${revisionId}/restore`); await Promise.all([loadTree(), loadPage()]);
+    };
+    const compare = async (revisionId) => {
+        const response = await api.get(`/knowledge-board/wiki/pages/${pageId}/revisions/${revisionId}`);
+        setComparison(response.data?.data || null);
+    };
+    const uploadImage = async (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        const form = new FormData(); form.append('display', file); form.append('full', file); form.append('original_name', file.name);
+        const upload = await api.post('/knowledge-board/images', form);
+        const image = upload.data.data;
+        await api.post(`/knowledge-board/wiki/pages/${pageId}/images/${image.uuid}`);
+        setMarkdown((value) => `${value}${value ? '\n' : ''}![${file.name}](wiki-image:${image.uuid})`);
+        showToast('Image attached and inserted; save the page to keep the Markdown change', 'success');
     };
     const exportFile = async (scope) => {
         const endpoint = scope === 'wiki' ? '/knowledge-board/wiki/export' : `/knowledge-board/wiki/pages/${pageId}/${scope === 'branch' ? 'export-branch' : 'export'}`;
@@ -93,7 +110,7 @@ export default function WikiPage() {
     return <div className="container-fluid py-3">
         <div className="d-flex justify-content-between align-items-center mb-3"><div><Link to="/knowledge-board">Knowledge Board</Link> / Wiki</div><button className="btn btn-primary btn-sm" onClick={() => createPage()}>New root page</button></div>
         <div className="row g-3">
-            <aside className="col-lg-3"><div className="card"><div className="card-header">Wiki hierarchy</div><div className="list-group list-group-flush">{pages.map((item) => <Link key={item.uuid} className={`list-group-item list-group-item-action ${item.uuid === pageId ? 'active' : ''}`} style={{ paddingLeft: `${1 + item.depth * 1.1}rem` }} to={`/knowledge-board/wiki/${item.uuid}`}>{item.title}</Link>)}</div></div></aside>
+            <aside className="col-lg-3"><div className="card"><div className="card-header">Wiki hierarchy</div><div className="list-group list-group-flush"><div className="small text-muted p-2 border-bottom" onDragOver={(event) => event.preventDefault()} onDrop={() => dragged && movePage(dragged, null, 0)}>Drop here to move to root</div>{pages.map((item) => <React.Fragment key={item.uuid}><div style={{ height: 6 }} onDragOver={(event) => event.preventDefault()} onDrop={() => dragged && movePage(dragged, item.parent_uuid, item.display_order)} /><Link draggable onDragStart={() => setDragged(item.uuid)} onDragEnd={() => setDragged(null)} onDragOver={(event) => event.preventDefault()} onDrop={() => dragged && dragged !== item.uuid && movePage(dragged, item.uuid, 0)} className={`list-group-item list-group-item-action ${item.uuid === pageId ? 'active' : ''}`} style={{ paddingLeft: `${1 + item.depth * 1.1}rem` }} to={`/knowledge-board/wiki/${item.uuid}`}>{item.title}</Link></React.Fragment>)}</div></div></aside>
             <main className="col-lg-9">{!page ? <div className="card"><div className="card-body text-muted">Select a Wiki Page or create a root page.</div></div> : <div className="d-grid gap-3">
                 <div className="small">{(page.breadcrumbs || []).map((crumb, index) => <React.Fragment key={`${crumb.uuid}-${index}`}>{index ? ' / ' : ''}{crumb.uuid ? <Link to={`/knowledge-board/wiki/${crumb.uuid}`}>{crumb.title}</Link> : <Link to="/knowledge-board">{crumb.title}</Link>}</React.Fragment>)}</div>
                 <div className="card"><div className="card-body d-grid gap-3">
@@ -103,10 +120,10 @@ export default function WikiPage() {
                         <select className="form-select w-auto" defaultValue="__choose" onChange={(event) => event.target.value !== '__choose' && move(event.target.value)} aria-label="Move Wiki Page"><option value="__choose" disabled>Move…</option><option value="">Move to root</option>{pages.filter((item) => item.uuid !== pageId).map((item) => <option key={item.uuid} value={item.uuid}>{'—'.repeat(item.depth)} {item.title}</option>)}</select>
                         <select className="form-select w-auto" defaultValue="" onChange={(event) => insertLink(event.target.value)} aria-label="Insert Wiki Link"><option value="">Insert Wiki Link…</option>{pages.filter((item) => item.uuid !== pageId).map((item) => <option key={item.uuid} value={item.uuid}>{item.title}</option>)}</select>
                         <button className="btn btn-outline-secondary" onClick={() => exportFile('page')}>Export page</button><button className="btn btn-outline-secondary" onClick={() => exportFile('branch')}>Export branch</button><button className="btn btn-outline-secondary" onClick={() => exportFile('wiki')}>Export Wiki</button>
-                        <button className="btn btn-outline-secondary" onClick={() => share()}>Share publicly</button><button className="btn btn-outline-secondary" onClick={() => share('regenerate')}>Regenerate link</button><button className="btn btn-outline-secondary" onClick={() => share('stop')}>Stop sharing</button><button className="btn btn-outline-danger" onClick={remove}>Delete</button>
+                        <label className="btn btn-outline-secondary mb-0">Insert image<input className="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={uploadImage} /></label><button className="btn btn-outline-secondary" onClick={() => share()}>Share publicly</button><button className="btn btn-outline-secondary" onClick={() => share('regenerate')}>Regenerate link</button><button className="btn btn-outline-secondary" onClick={() => share('stop')}>Stop sharing</button><button className="btn btn-outline-danger" onClick={remove}>Delete</button>
                     </div>
                 </div></div>
-                <div className="card"><div className="card-header">Revision history</div><div className="list-group list-group-flush">{(page.revisions || []).map((revision) => <div key={revision.id} className="list-group-item d-flex justify-content-between align-items-center"><span>#{revision.revision_number} · {revision.change_type} · {new Date(revision.created_at).toLocaleString()}</span><button className="btn btn-link btn-sm" onClick={() => restore(revision.id)}>Restore</button></div>)}</div></div>
+                <div className="card"><div className="card-header">Revision history</div><div className="list-group list-group-flush">{(page.revisions || []).map((revision) => <div key={revision.id} className="list-group-item d-flex justify-content-between align-items-center"><span>#{revision.revision_number} · {revision.change_type} · {new Date(revision.created_at).toLocaleString()}</span><span><button className="btn btn-link btn-sm" onClick={() => compare(revision.id)}>Compare</button><button className="btn btn-link btn-sm" onClick={() => restore(revision.id)}>Restore</button></span></div>)}</div>{comparison ? <div className="card-body border-top"><div className="d-flex justify-content-between"><strong>Revision #{comparison.revision.revision_number} vs current</strong><button className="btn-close" aria-label="Close comparison" onClick={() => setComparison(null)} /></div><div className="row g-2 mt-1"><div className="col-md-6"><div className="small text-muted">Historical Markdown</div><pre className="border rounded p-2 text-wrap">{comparison.revision.markdown}</pre></div><div className="col-md-6"><div className="small text-muted">Current Markdown</div><pre className="border rounded p-2 text-wrap">{comparison.current.markdown}</pre></div></div></div> : null}</div>
             </div>}</main>
         </div>
     </div>;

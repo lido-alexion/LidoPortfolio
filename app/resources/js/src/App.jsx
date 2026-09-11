@@ -43,6 +43,7 @@ import PatternGuidePage from './pages/PatternGuidePage';
 import KnowledgeBoardPage from './pages/KnowledgeBoardPage';
 import KnowledgeBoardTagsPage from './pages/KnowledgeBoardTagsPage';
 import WikiPage from './pages/WikiPage';
+import PublicWikiPage from './pages/PublicWikiPage';
 import CalendarPage from './pages/CalendarPage';
 import LoginPage from './pages/LoginPage';
 import AcceptInvitePage from './pages/AcceptInvitePage';
@@ -253,6 +254,7 @@ function App() {
     const [toast, setToast] = useState(null);
     const dismissTimerRef = useRef(null);
     const isDocumentationRoute = pathname === '/documentation' || pathname.startsWith('/documentation/');
+    const isPublicWikiRoute = pathname.startsWith('/wiki/shared/');
 
     const dismissToast = useCallback(() => {
         if (dismissTimerRef.current) {
@@ -307,6 +309,10 @@ function App() {
                 </div>
             </div>
         );
+    }
+
+    if (isPublicWikiRoute) {
+        return <ErrorBoundary><Routes><Route path="/wiki/shared/:token" element={<PublicWikiPage />} /></Routes></ErrorBoundary>;
     }
 
     return (
