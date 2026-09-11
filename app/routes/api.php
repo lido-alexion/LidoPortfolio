@@ -224,6 +224,8 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
         Route::get('/wiki/pages/{page}', [WikiPageController::class, 'show'])->whereUuid('page');
         Route::put('/wiki/pages/{page}', [WikiPageController::class, 'update'])->whereUuid('page');
         Route::put('/wiki/pages/{page}/move', [WikiPageController::class, 'move'])->whereUuid('page');
+        Route::get('/wiki/pages/{page}/revisions/{revision}', [WikiPageController::class, 'revision'])->whereUuid('page')->whereNumber('revision');
+        Route::post('/wiki/pages/{page}/revisions/{revision}/restore', [WikiPageController::class, 'restore'])->whereUuid('page')->whereNumber('revision');
         Route::delete('/wiki/pages/{page}', [WikiPageController::class, 'destroy'])->whereUuid('page');
 
         Route::post('/images', [KnowledgeBoardImageController::class, 'store']);

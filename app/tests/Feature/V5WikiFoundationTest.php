@@ -155,4 +155,27 @@ class V5WikiFoundationTest extends TestCase
         $this->assertStringContainsString('Missing Wiki Page', $html);
         $this->assertStringNotContainsString('Secret title', $html);
     }
+
+    public function test_revision_can_be_compared_and_restored_without_erasing_later_history(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        $this->actingAs($user)->withProfileHeader($user, $profile);
+        $uuid = $this->postJson('/api/knowledge-board/wiki/pages', ['title' => 'First', 'markdown' => 'Version one'])
+            ->assertCreated()->json('data.uuid');
+        $revisionId = WikiPage::query()->where('uuid', $uuid)->firstOrFail()->revisions()->sole()->id;
+        $this->putJson('/api/knowledge-board/wiki/pages/'.$uuid, ['title' => 'Second', 'markdown' => 'Version two'])->assertOk();
+
+        $this->getJson('/api/knowledge-board/wiki/pages/'.$uuid.'/revisions/'.$revisionId)->assertOk()
+            ->assertJsonPath('data.revision.markdown', 'Version one')
+            ->assertJsonPath('data.current.markdown', 'Version two')
+            ->assertJsonPath('data.changed.markdown', true);
+        $this->postJson('/api/knowledge-board/wiki/pages/'.$uuid.'/revisions/'.$revisionId.'/restore')->assertOk()
+            ->assertJsonPath('data.title', 'First')
+            ->assertJsonPath('data.markdown', 'Version one');
+
+        $page = WikiPage::query()->where('uuid', $uuid)->firstOrFail();
+        $this->assertSame(3, $page->revisions()->count());
+        $this->assertSame('restored', $page->revisions()->first()->change_type);
+    }
 }

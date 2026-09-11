@@ -48,6 +48,16 @@ class WikiPageController extends Controller
         return response()->json(['data' => $this->pages->move($this->pages->find(\activePortfolio(), $page), \activePortfolio(), $request->user(), $data['parent_uuid'] ?? null, $data['display_order'])]);
     }
 
+    public function revision(string $page, int $revision): JsonResponse
+    {
+        return response()->json(['data' => $this->pages->revision($this->pages->find(\activePortfolio(), $page), \activePortfolio(), $revision)]);
+    }
+
+    public function restore(Request $request, string $page, int $revision): JsonResponse
+    {
+        return response()->json(['data' => $this->pages->restore($this->pages->find(\activePortfolio(), $page), \activePortfolio(), $request->user(), $revision)]);
+    }
+
     public function destroy(Request $request, string $page): JsonResponse
     {
         $data = $request->validate(['recursive' => ['sometimes', 'boolean'], 'confirm_count' => ['nullable', 'integer', 'min:1']]);

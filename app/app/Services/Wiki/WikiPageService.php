@@ -99,6 +99,43 @@ final class WikiPageService
         });
     }
 
+    public function revision(WikiPage $page, PortfolioProfile $profile, int $revisionId): array
+    {
+        $this->assertOwned($page, $profile);
+        $revision = $page->revisions()->whereKey($revisionId)->firstOrFail();
+
+        return [
+            'revision' => $revision,
+            'current' => ['title' => $page->title, 'slug' => $page->slug, 'markdown' => $page->markdown, 'parent_id' => $page->parent_id, 'display_order' => $page->display_order],
+            'changed' => [
+                'title' => $revision->title !== $page->title,
+                'markdown' => $revision->markdown !== $page->markdown,
+                'hierarchy' => (int) $revision->parent_id !== (int) $page->parent_id || (int) $revision->display_order !== (int) $page->display_order,
+            ],
+        ];
+    }
+
+    public function restore(WikiPage $page, PortfolioProfile $profile, User $user, int $revisionId): WikiPage
+    {
+        $this->assertOwned($page, $profile);
+
+        return DB::transaction(function () use ($page, $profile, $user, $revisionId): WikiPage {
+            $page = WikiPage::query()->lockForUpdate()->findOrFail($page->id);
+            $revision = WikiPageRevision::query()->where('page_id', $page->id)->whereKey($revisionId)->firstOrFail();
+            $parent = $revision->parent_id ? WikiPage::query()->where('profile_id', $profile->id)->find($revision->parent_id) : null;
+            if ($parent && ($parent->is($page) || $this->ancestorIds($parent)->contains($page->id))) {
+                throw ValidationException::withMessages(['revision' => ['This revision cannot be restored because its historical parent would create a cycle.']]);
+            }
+            $page->forceFill([
+                'title' => $revision->title, 'slug' => $revision->slug, 'markdown' => $revision->markdown,
+                'parent_id' => $parent?->id, 'display_order' => $revision->display_order,
+            ])->save();
+            $this->revise($page, $user, 'restored');
+
+            return $page->fresh();
+        });
+    }
+
     public function delete(WikiPage $page, PortfolioProfile $profile, bool $recursive, ?int $confirmedCount): int
     {
         $this->assertOwned($page, $profile);
