@@ -15,10 +15,14 @@ use App\Services\Screener\ScreenerCatalog;
  */
 final class ArtifactValidationService
 {
+    private StrategyParameterSchema $strategyParameters;
+
     public function __construct(
         private IndicatorRegistry $indicators,
-        private StrategyParameterSchema $strategyParameters,
-    ) {}
+        ?StrategyParameterSchema $strategyParameters = null,
+    ) {
+        $this->strategyParameters = $strategyParameters ?? new StrategyParameterSchema;
+    }
 
     public function validateEnvelope(array $envelope, ?PortfolioProfile $profile = null): ValidationResult
     {
