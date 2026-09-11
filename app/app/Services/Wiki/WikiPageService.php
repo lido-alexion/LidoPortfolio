@@ -1,0 +1,169 @@
+<?php
+
+namespace App\Services\Wiki;
+
+use App\Models\PortfolioProfile;
+use App\Models\User;
+use App\Models\WikiPage;
+use App\Models\WikiPageRevision;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+
+final class WikiPageService
+{
+    public function find(PortfolioProfile $profile, string $uuid): WikiPage
+    {
+        return WikiPage::query()->where('profile_id', $profile->id)->where('uuid', $uuid)->firstOrFail();
+    }
+
+    public function tree(PortfolioProfile $profile): Collection
+    {
+        $pages = WikiPage::query()->where('profile_id', $profile->id)
+            ->orderBy('display_order')->orderBy('id')->get();
+
+        return $this->treeLevel($pages, null);
+    }
+
+    public function create(PortfolioProfile $profile, User $user, array $data): WikiPage
+    {
+        return DB::transaction(function () use ($profile, $user, $data): WikiPage {
+            $parent = $this->validatedParent($profile, $data['parent_uuid'] ?? null);
+            $page = WikiPage::query()->create([
+                'profile_id' => $profile->id,
+                'parent_id' => $parent?->id,
+                'uuid' => (string) Str::uuid(),
+                'title' => trim($data['title']),
+                'slug' => $this->slug($data['title']),
+                'markdown' => (string) ($data['markdown'] ?? ''),
+                'display_order' => $this->nextOrder($profile, $parent?->id),
+            ]);
+            $this->revise($page, $user, 'created');
+
+            return $page->fresh();
+        });
+    }
+
+    public function update(WikiPage $page, PortfolioProfile $profile, User $user, array $data): WikiPage
+    {
+        $this->assertOwned($page, $profile);
+
+        return DB::transaction(function () use ($page, $user, $data): WikiPage {
+            $page = WikiPage::query()->lockForUpdate()->findOrFail($page->id);
+            if (array_key_exists('title', $data)) {
+                $page->title = trim($data['title']);
+                $page->slug = $this->slug($data['title']);
+            }
+            if (array_key_exists('markdown', $data)) {
+                $page->markdown = (string) $data['markdown'];
+            }
+            if (! $page->isDirty()) {
+                return $page;
+            }
+            $page->save();
+            $this->revise($page, $user, 'updated');
+
+            return $page->fresh();
+        });
+    }
+
+    public function move(WikiPage $page, PortfolioProfile $profile, User $user, ?string $parentUuid, int $displayOrder): WikiPage
+    {
+        $this->assertOwned($page, $profile);
+
+        return DB::transaction(function () use ($page, $profile, $user, $parentUuid, $displayOrder): WikiPage {
+            $page = WikiPage::query()->lockForUpdate()->findOrFail($page->id);
+            $parent = $this->validatedParent($profile, $parentUuid);
+            if ($parent && ($parent->is($page) || $this->ancestorIds($parent)->contains($page->id))) {
+                throw ValidationException::withMessages(['parent_uuid' => ['A Wiki Page cannot become its own ancestor.']]);
+            }
+            $page->forceFill(['parent_id' => $parent?->id, 'display_order' => max(0, $displayOrder)])->save();
+            $this->revise($page, $user, 'moved');
+
+            return $page->fresh();
+        });
+    }
+
+    public function delete(WikiPage $page, PortfolioProfile $profile, bool $recursive, ?int $confirmedCount): int
+    {
+        $this->assertOwned($page, $profile);
+        $ids = $this->descendantIds($page);
+        $count = $ids->count() + 1;
+        if ($count > 1 && (! $recursive || $confirmedCount !== $count)) {
+            throw ValidationException::withMessages([
+                'confirm_count' => ["This branch contains {$count} pages. Confirm that exact count to delete it recursively."],
+            ]);
+        }
+
+        DB::transaction(function () use ($page, $ids): void {
+            $ids->reverse()->each(fn (int $id) => WikiPage::query()->findOrFail($id)->delete());
+            $page->delete();
+        });
+
+        return $count;
+    }
+
+    private function revise(WikiPage $page, User $user, string $changeType): void
+    {
+        $number = (int) WikiPageRevision::query()->where('page_id', $page->id)->max('revision_number') + 1;
+        WikiPageRevision::query()->create([
+            'page_id' => $page->id, 'user_id' => $user->id, 'revision_number' => $number,
+            'change_type' => $changeType, 'title' => $page->title, 'slug' => $page->slug,
+            'parent_id' => $page->parent_id, 'display_order' => $page->display_order,
+            'markdown' => $page->markdown, 'created_at' => now(),
+        ]);
+    }
+
+    private function validatedParent(PortfolioProfile $profile, ?string $uuid): ?WikiPage
+    {
+        return $uuid ? $this->find($profile, $uuid) : null;
+    }
+
+    private function nextOrder(PortfolioProfile $profile, ?int $parentId): int
+    {
+        return (int) WikiPage::query()->where('profile_id', $profile->id)->where('parent_id', $parentId)->max('display_order') + 1;
+    }
+
+    private function ancestorIds(WikiPage $page): Collection
+    {
+        $ids = collect();
+        while ($page->parent_id !== null && $ids->count() < 100) {
+            $page = WikiPage::query()->findOrFail($page->parent_id);
+            $ids->push($page->id);
+        }
+
+        return $ids;
+    }
+
+    private function descendantIds(WikiPage $page): Collection
+    {
+        $ids = collect();
+        $frontier = collect([$page->id]);
+        while ($frontier->isNotEmpty() && $ids->count() < 10000) {
+            $children = WikiPage::query()->whereIn('parent_id', $frontier)->pluck('id');
+            $ids = $ids->merge($children);
+            $frontier = $children;
+        }
+
+        return $ids;
+    }
+
+    private function treeLevel(Collection $pages, ?int $parentId): Collection
+    {
+        return $pages->where('parent_id', $parentId)->values()->map(fn (WikiPage $page): array => [
+            'uuid' => $page->uuid, 'title' => $page->title, 'slug' => $page->slug,
+            'display_order' => $page->display_order, 'children' => $this->treeLevel($pages, $page->id),
+        ]);
+    }
+
+    private function slug(string $title): string
+    {
+        return Str::slug($title) ?: 'page';
+    }
+
+    private function assertOwned(WikiPage $page, PortfolioProfile $profile): void
+    {
+        abort_unless((int) $page->profile_id === (int) $profile->id, 404);
+    }
+}

@@ -86,6 +86,7 @@ use App\Http\Controllers\Api\V1\TradingOs\ReviewController as TradingOsReviewCon
 use App\Http\Controllers\Api\V1\TradingOs\TotpController as TradingOsTotpController;
 use App\Http\Controllers\Api\WatchlistController;
 use App\Http\Controllers\Api\WatchlistsController;
+use App\Http\Controllers\Api\WikiPageController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
@@ -218,6 +219,13 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     });
 
     Route::prefix('knowledge-board')->group(function () {
+        Route::get('/wiki/pages', [WikiPageController::class, 'index']);
+        Route::post('/wiki/pages', [WikiPageController::class, 'store']);
+        Route::get('/wiki/pages/{page}', [WikiPageController::class, 'show'])->whereUuid('page');
+        Route::put('/wiki/pages/{page}', [WikiPageController::class, 'update'])->whereUuid('page');
+        Route::put('/wiki/pages/{page}/move', [WikiPageController::class, 'move'])->whereUuid('page');
+        Route::delete('/wiki/pages/{page}', [WikiPageController::class, 'destroy'])->whereUuid('page');
+
         Route::post('/images', [KnowledgeBoardImageController::class, 'store']);
         Route::get('/images/{knowledgeImage}', [KnowledgeBoardImageController::class, 'show']);
         Route::get('/images/{knowledgeImage}/full', [KnowledgeBoardImageController::class, 'full']);
