@@ -102,6 +102,30 @@ class KiteBrokerGateway implements BrokerGateway
         return is_numeric($value) ? max(0.0, (float) $value) : null;
     }
 
+    public function liveQuote(int $userId, string $symbol, string $exchange = 'NSE'): ?float
+    {
+        $token = $this->accessToken($userId);
+        $instrument = strtoupper($exchange ?: 'NSE').':'.strtoupper($symbol);
+
+        try {
+            $response = Http::timeout(10)
+                ->withHeaders($this->headers($token))
+                ->get(rtrim((string) config('broker.kite.api_base'), '/').'/quote/ltp', [
+                    'i' => $instrument,
+                ]);
+        } catch (ConnectionException) {
+            return null;
+        }
+
+        if (! $response->successful()) {
+            return null;
+        }
+
+        $value = data_get($response->json(), 'data.'.$instrument.'.last_price');
+
+        return is_numeric($value) && (float) $value > 0 ? (float) $value : null;
+    }
+
     public function portfolioSnapshot(int $userId): ?array
     {
         $token = $this->accessToken($userId);

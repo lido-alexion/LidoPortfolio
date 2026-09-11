@@ -106,7 +106,7 @@
         <a href="pending-execution.html">This topic</a>
       </div>
     </header>
-    
+
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Pending Execution</h1>
       <p class="muted"><code>pending-execution</code> · screen: <code>/transactions/pending</code></p>
@@ -114,7 +114,7 @@
 
       <section class="panel">
         <h2>Overview</h2>
-        <p>After you Approve a BUY or SELL recommendation, it moves here as pending execution. In Manual mode, you trade at your broker then record the fill in the app (ledger transaction). In Semi-Automatic mode, selecting rows is not execution — use Accept / Execute Selected with an authenticator code to submit to Zerodha. Automatic mode submits eligible orders without a per-order click. Broker acceptance is not a fill; the recommendation becomes executed only after an actual ledger fill.</p>
+        <p>After you Approve a BUY or SELL recommendation, it moves here as pending execution. In Manual mode, you trade at your broker then record the fill in the app (ledger transaction). In Semi-Automatic mode, selecting rows is not execution — use Accept / Execute Selected with an authenticator code to submit to Zerodha. Automatic mode submits eligible orders without a per-order click. Broker acceptance is not a fill. An actionable broker Recommendation seeks its monetary target over its next two eligible NSE sessions, can make partial progress, and completes only when fills or internal transfers reach that target.</p>
 <p>Use this page as an execution queue, not an analysis board. Only approved actionable recommendations appear here. Complete each row after broker fill so your ledger and performance timeline stay aligned with real-world trades.</p>
 <p>Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).</p>
 
@@ -125,25 +125,25 @@
         <dl class="doc-list">
         <dt>Execute manually</dt>
         <dd>Opens the transaction form prefilled from the recommendation. Always available in Manual mode; still works when no Kite account is connected.</dd>
-    
+
         <dt>Accept / Execute Selected</dt>
         <dd>Semi-Automatic only. Submits selected eligible recommendations to Zerodha after server checks (entitlement, TOTP, capital, broker session). Not shown as a substitute for Automatic mode.</dd>
-    
+
         <dt>Authenticator code</dt>
         <dd>Required on Semi-Automatic submit. Not required for Manual ledger fills.</dd>
-    
+
         <dt>Cancel execution</dt>
         <dd>Drops pending status and releases any reserved cash for buys. Does not cancel an in-flight Zerodha order by itself.</dd>
-    
+
         <dt>History toggle</dt>
         <dd>Navigate back to full Transaction History.</dd>
-    
+
         <dt>Execute after actual fill</dt>
         <dd>Record the real fill price/quantity from your broker confirmation; avoid placeholder values to keep holdings and P/L accurate.</dd>
-    
+
         <dt>Typical flow</dt>
         <dd>Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.</dd>
-    
+
         <dt>Validation and errors</dt>
         <dd>Form and API validations are shown as inline errors or toast messages. Fix the first reported issue, retry, and re-check dependent sections that consume the same data.</dd>
     </dl>
@@ -154,25 +154,31 @@
         <dl class="doc-list">
         <dt>Approval vs execution</dt>
         <dd>Approve means you accept the idea; execution is the separate ledger write after a real fill. A capital_committed buy can be approved and then filled the same way as a fully funded buy. Unfunded or awaiting-lender buys never reach this page.</dd>
-    
+
         <dt>Execution modes</dt>
         <dd>Per portfolio: Manual (default, no broker submit and no automatic GTT protection), Semi-Automatic (explicit Accept / Execute Selected; GTT Target or Stop-Loss is also an explicit Holdings action), Automatic (unattended submit; Stop-Loss GTT is placed after an automated BUY fill without a per-order click). Entitlement is per user and admin-controlled. There is no separate Advanced Orders entitlement.</dd>
-    
+
         <dt>Cash reservation</dt>
         <dd>Approving a funded buy reserves the own-funded amount until execute, cancel, expire, or reopen. A committed loan is not a second cash reservation and does not deposit extra cash. Signed Loan ledger rows for the commitment net to zero on the one physical pool. The borrower strategy owns the resulting holding; the lender does not receive stock.</dd>
-    
+
+        <dt>Two-session target seeking</dt>
+        <dd>The target amount is authoritative; displayed quantity is only a stored-close estimate. StoX recalculates the remaining whole-share quantity before each attempt, can progress by one share, and expires only the unresolved portion at the second eligible session cutoff. Weekends and exchange Trade Holidays do not count as opportunities.</dd>
+
+        <dt>Investor-level coordination</dt>
+        <dd>Automatic intents across your portfolios share one Kite-account cycle. An authenticated Semi-Automatic action adds only its selected approved intents. Opposing same-symbol Strategy intents transfer ownership internally first; only the residual reaches Kite, with residual sells processed before buys and buys bounded by currently reported shared Kite funds.</dd>
+
         <dt>Queue hygiene</dt>
         <dd>If a recommendation is no longer valid, cancel execution promptly so reserved cash is released and stale intent does not pollute future decisions.</dd>
-    
+
         <dt>Active portfolio context</dt>
         <dd>Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.</dd>
-    
+
         <dt>Data freshness</dt>
         <dd>Many analytics depend on cached daily OHLCV and scheduled sync jobs. If numbers look stale, refresh this page and verify sync status in admin tools.</dd>
     </dl>
       </section>
 
-      
+
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
@@ -180,7 +186,7 @@
         </div>
       </section>
     </article>
-    
+
     <footer class="muted">
       Generated from the StoX in-app documentation source. Product screens still require sign-in.
     </footer>

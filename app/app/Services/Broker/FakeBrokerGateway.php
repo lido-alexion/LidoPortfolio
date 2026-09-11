@@ -11,6 +11,8 @@ class FakeBrokerGateway implements BrokerGateway
 {
     public float $availableFunds = 1_000_000_000;
 
+    public ?float $liveQuote = 100.0;
+
     /** @var array<string,mixed>|null */
     public ?array $reconciliationSnapshot = null;
 
@@ -68,6 +70,7 @@ class FakeBrokerGateway implements BrokerGateway
     public function reset(): void
     {
         $this->availableFunds = 1_000_000_000;
+        $this->liveQuote = 100.0;
         $this->reconciliationSnapshot = null;
         $this->reconciliationSnapshotUnavailable = false;
         $this->placeCalls = 0;
@@ -95,6 +98,11 @@ class FakeBrokerGateway implements BrokerGateway
     public function availableEquityFunds(int $userId): ?float
     {
         return $this->availableFunds;
+    }
+
+    public function liveQuote(int $userId, string $symbol, string $exchange = 'NSE'): ?float
+    {
+        return $this->liveQuote;
     }
 
     public function portfolioSnapshot(int $userId): ?array

@@ -9,6 +9,7 @@ use App\Models\PortfolioProfile;
 use App\Models\PortfolioReconciliationRun;
 use App\Models\Setting;
 use App\Models\Stock;
+use App\Models\StockPrice;
 use App\Models\TradingOrder;
 use App\Models\TradingRecommendation;
 use App\Models\Transaction;
@@ -539,6 +540,124 @@ class LiveExecutionFeatureTest extends TestCase
             'recommendation_ids' => [$rec->id],
             'totp' => '123456',
         ])->assertStatus(403)->assertJsonPath('error.code', 'TOTP_REQUIRED');
+    }
+
+    public function test_emergency_halt_blocks_all_new_broker_submissions_until_recovered(): void
+    {
+        [$user, $profile] = $this->actingReadyUser();
+        $this->setMode($user, $profile, PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC);
+        $rec = $this->pendingBuy($profile);
+
+        $this->postJson('/api/v1/execution/halt', ['reason' => 'phone lost'])
+            ->assertOk()
+            ->assertJsonPath('data.execution_state', User::EXECUTION_STATE_EMERGENCY_HALT);
+
+        $this->postJson('/api/v1/execution/submit-selected', [
+            'recommendation_ids' => [$rec->id],
+            'recovery_code' => $this->totpCode($user),
+        ])->assertStatus(423)->assertJsonPath('error.code', 'EXECUTION_EMERGENCY_HALT');
+        $this->assertSame(0, app(FakeBrokerGateway::class)->placeCalls);
+
+        $this->postJson('/api/v1/execution/recover', [
+            'confirm' => true,
+            'recovery_code' => $this->totpCode($user),
+        ])->assertOk()->assertJsonPath('data.execution_state', User::EXECUTION_STATE_NORMAL);
+
+        $this->postJson('/api/v1/execution/submit-selected', [
+            'recommendation_ids' => [$rec->id],
+            'recovery_code' => $this->totpCode($user),
+        ])->assertOk()->assertJsonPath('data.0.outcome', 'submitted');
+        $this->assertSame(1, app(FakeBrokerGateway::class)->placeCalls);
+    }
+
+    public function test_kite_emergency_disconnect_halts_and_destroys_local_credential(): void
+    {
+        [$user] = $this->actingReadyUser();
+
+        $this->postJson('/api/v1/broker/kite/emergency-disconnect', ['reason' => 'suspected compromise'])
+            ->assertOk()
+            ->assertJsonPath('data.execution_state', User::EXECUTION_STATE_EMERGENCY_HALT)
+            ->assertJsonPath('data.broker.connected', false);
+
+        $this->assertDatabaseMissing('portfolio_broker_connections', ['user_id' => $user->id]);
+        $this->assertDatabaseHas('portfolio_execution_safety_events', [
+            'user_id' => $user->id,
+            'event' => 'execution.kite_disconnected',
+            'status' => 'completed',
+        ]);
+    }
+
+    public function test_emergency_cancel_open_orders_disconnect_cancels_only_primary_orders(): void
+    {
+        [$user, $profile] = $this->actingReadyUser();
+        $this->setMode($user, $profile, PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC);
+        $rec = $this->pendingBuy($profile);
+        $this->postJson('/api/v1/execution/submit-selected', [
+            'recommendation_ids' => [$rec->id],
+            'recovery_code' => $this->totpCode($user),
+        ])->assertOk();
+        $primary = TradingOrder::query()->where('recommendation_id', $rec->id)->firstOrFail();
+        $protective = TradingOrder::query()->create([
+            'profile_id' => $profile->id,
+            'security_id' => $primary->security_id,
+            'side' => 'sell',
+            'quantity' => 1,
+            'order_type' => 'gtt_protection',
+            'status' => TradingOrder::STATUS_PENDING,
+            'broker_provider' => 'kite',
+            'broker_order_id' => 'protective-1',
+            'broker_status' => TradingOrder::BROKER_OPEN,
+            'filled_quantity' => 0,
+        ]);
+
+        $this->postJson('/api/v1/broker/kite/emergency-cancel-open-orders-disconnect', [
+            'confirm' => true,
+            'reason' => 'panic button',
+        ])->assertOk()
+            ->assertJsonPath('data.cancelled_orders', 1)
+            ->assertJsonPath('data.broker.connected', false);
+
+        $this->assertSame(TradingOrder::BROKER_CANCELLED, $primary->fresh()->broker_status);
+        $this->assertSame(TradingOrder::BROKER_OPEN, $protective->fresh()->broker_status);
+        $this->assertSame(User::EXECUTION_STATE_EMERGENCY_HALT, $user->fresh()->executionState());
+    }
+
+    public function test_live_quote_strict_policy_blocks_and_fallback_policy_uses_latest_close(): void
+    {
+        [$user, $profile] = $this->actingReadyUser();
+        $this->setMode($user, $profile, PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC);
+        $stock = $this->stock();
+        $rec = $this->pendingBuy($profile, $stock, 1_000);
+        $rec->forceFill([
+            'target_amount' => 1_000,
+            'capital_resolved_amount' => 1_000,
+            'remaining_target_amount' => 1_000,
+            'external_executed_amount' => 0,
+        ])->save();
+        app(FakeBrokerGateway::class)->liveQuote = null;
+
+        $result = app(LiveBrokerExecutionService::class)->submitOne($user, $profile, $rec->id, ExecutionGate::TRIGGER_SEMI);
+        $this->assertSame('live_quote_unavailable', $result['reason']);
+        $this->assertSame(0, app(FakeBrokerGateway::class)->placeCalls);
+
+        StockPrice::query()->create([
+            'stock_id' => $stock->id,
+            'price_date' => now()->toDateString(),
+            'close_price' => 125,
+            'open_price' => 125,
+            'high_price' => 125,
+            'low_price' => 125,
+            'volume' => 1000,
+            'data_source' => 'test',
+        ]);
+        $this->putJson('/api/v1/execution/quote-policy', [
+            'live_quote_policy' => User::LIVE_QUOTE_POLICY_ALLOW_CLOSE_FALLBACK,
+        ])->assertOk();
+
+        $result = app(LiveBrokerExecutionService::class)->submitOne($user->fresh(), $profile, $rec->id, ExecutionGate::TRIGGER_SEMI);
+        $order = TradingOrder::query()->findOrFail($result['order_id']);
+        $this->assertSame(8.0, (float) $order->quantity);
+        $this->assertSame(125.0, (float) $order->limit_price);
     }
 
     /**

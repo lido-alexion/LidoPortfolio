@@ -4,6 +4,7 @@ import HeaderHelpButton from './HeaderHelpButton';
 import ProfileMenu from './ProfileMenu';
 import PortfolioSwitcher from './PortfolioSwitcher';
 import NotificationBell from './NotificationBell';
+import ExecutionSafetyControls from './ExecutionSafetyControls';
 import { useSidebar } from '../context/SidebarContext';
 
 function SidebarToggle() {
@@ -68,6 +69,7 @@ export default function AppHeader({ user, showSidebarToggle = false }) {
                 </div>
                 <div className="lido-header-actions">
                     {user && !user.is_admin && <PortfolioSwitcher />}
+                    <ExecutionSafetyControls user={user} />
                     {user && <NotificationBell />}
                     <HeaderHelpButton />
                     {user && <ProfileMenu user={user} />}

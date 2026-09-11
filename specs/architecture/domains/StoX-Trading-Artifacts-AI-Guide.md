@@ -4,7 +4,7 @@
 
 > **Audience:** AI agents and developers authoring portable Indicator / Screener / Strategy JSON **without** reading application source code.
 >
-> **Generated:** 2026-09-04T17:14:06.059Z
+> **Generated:** 2026-09-11T20:20:25.468Z
 > **Deploy download:** `/docs/stox-trading-artifacts-ai-guide.md` (also linked from Screener Registry and Strategy Registry).
 > **Repo copy:** `specs/architecture/domains/StoX-Trading-Artifacts-AI-Guide.md`
 
@@ -659,9 +659,9 @@ Practical tip: treat this page as one step in a larger workflow, not an isolated
 
 **UI / docs route label:** `/screeners/registry`
 
-The Screener Registry turns portfolio screeners into reusable Trading Artifacts. Each screener still uses the same condition tree the run engine executes. The registry adds slug, metadata, artifact_version, definition_hash, and version history.
+The Screener Registry is a compatibility view of Portfolio runtime Screeners. Existing rows still use the same condition tree the run engine executes; mapped rows link to the authoritative Artifact Library.
 
-Export downloads the Trading Artifact JSON envelope. **Validate** checks the envelope. **Import** stays disabled until validation succeeds, then creates a new screener in the active portfolio. Shared screeners from **your other portfolios** (same account) appear read-only and can be copied with Import copy — not visible to other users.
+Export downloads a Trading Artifact JSON envelope. **Validate** checks the envelope. **Import** stays disabled until validation succeeds, then creates an account-owned Artifact Library Draft without creating a runnable Portfolio row. Publish and bind the Draft explicitly. Copying a shared legacy Screener from another Portfolio also creates a Library Fork Draft.
 
 ## Importing JSON — start here
 
@@ -1210,13 +1210,13 @@ Practical tip: treat this page as one step in a larger workflow, not an isolated
 **Keyword:** `strategy-registry`
 **Aliases:** `strategy-artifacts`, `strategy-json`, `import-strategy`, `select-strategy`
 
-**Summary:** Create, enable, archive, and import/export Strategy artifacts — multiple strategies may be enabled per portfolio.
+**Summary:** Legacy Strategy compatibility registry; mapped lifecycle and deployment actions live in the Artifact Library.
 
 **UI / docs route label:** `/strategy/registry`
 
-The Strategy Registry is the V3 management surface for every strategy in the current portfolio. A portfolio may have **multiple enabled Strategies** at once. Use **Create Strategy** (name + optional description) to add a draft from the default factory configuration, then **Enable** it without disabling other enabled strategies. **Archive** disables generation for that strategy only. The registry also adds slug, metadata, artifact_version, definition_hash, and version history on top of the same config the Recommendation engine already uses.
+The Strategy Registry is the V3 compatibility surface for strategy rows in the current portfolio. A portfolio may have **multiple enabled Strategies** at once. After V5 mapping, rows are read-only here and link to the authoritative Artifact Library lifecycle. New definitions and imports create account-owned Library Drafts without a runnable Portfolio row. Immutable publication, binding enablement, explicit upgrades and archive belong to the Artifact Library; the legacy registry remains available for migration-era runtime rows and portable inspection.
 
-Export downloads the portable Trading Artifact JSON envelope. **Validate** checks the envelope. **Import** stays disabled until validation succeeds, then creates a **draft** — use **Enable** to turn it on without disabling other enabled strategies. Enabled rows show **Allocation %**. An **Allocation** editor (same PUT `/v1/capital/allocations` as Cash) lets you set percentages that must sum to 100.
+Export downloads the portable Trading Artifact JSON envelope. **Validate** checks the envelope. **Import** stays disabled until validation succeeds, then creates and opens an **Artifact Library Draft**. Publish and bind it explicitly. Enabled rows show **Allocation %**. An **Allocation** editor (same PUT `/v1/capital/allocations` as Cash) lets you set percentages that must sum to 100.
 
 Existing Minervini (`momentum_factory`) migrates automatically to slug `momentum_strategy` with eligibility linked to `minervini_trend_template`.
 
@@ -1304,7 +1304,7 @@ Note: the database stores strategy config in `config_json` on version rows, but 
 | `slug` | One portfolio | Must be unique among that portfolio’s strategies. On Import collision the system may suffix `_import_<hex>` (or create-path may use `_2`, `_3`, …). |
 | `name` | One portfolio | Soft unique — Import may rename to `"… (import)"` if the display name already exists. |
 | `metadata.factory_key` | Built-ins | Stable factory identity (e.g. `momentum_factory`). Not required for user imports. |
-| Enablement | One portfolio | Multiple strategies may be `active` (enabled) at once. Import always creates **draft**; **Enable** turns that strategy on without disabling others. |
+| Enablement | One portfolio | Multiple bound strategies may be `active` (enabled) at once. Import creates a Library Draft; publish and bind it before enablement. |
 | `scoring_model[].key` | One envelope | Each catalogue key should appear once; duplicates are collapsed when normalised. |
 | `screener_slug` / `screener_factory_key` | Eligibility row | Identify a Screener in this portfolio (or a factory Screener the system can ensure). Not unique across strategies — many strategies may share the same Screener. |
 
@@ -1330,7 +1330,7 @@ Note: the database stores strategy config in `config_json` on version rows, but 
 | `status` | Optional | Hint: `draft` / `active` / `archived` — Import **always** stores draft regardless |
 | `origin` | Optional | `factory` / `user` / `imported` / … |
 | `factory_key` | Optional | Built-in id, e.g. `momentum_factory` |
-| `is_selected` / `is_enabled` | Export-only | Whether this row is currently enabled (`STATUS_ACTIVE`); Import ignores it — use **Enable**. Multiple strategies may be enabled. |
+| `is_selected` / `is_enabled` | Export-only | Whether a compatibility row is currently enabled (`STATUS_ACTIVE`). Import ignores it and creates an unbound Library Draft. |
 | `storage` / `legacy_id` | Export-only | Internal pointers; leave out on hand-written JSON |
 
 **`definition`** — Strategy runtime config. Validate requires scoring; eligibility is strongly recommended for a working Recommendations feed.
@@ -1403,9 +1403,9 @@ Rules:
 1. Ensure referenced Screeners exist in this portfolio (Screener Registry → import Screener JSON, or use a factory screener like `minervini_trend_template`).
 2. Start from the minimum example above (or Export an existing working strategy and edit a copy — best for thresholds / exits / gates).
 3. Paste into Strategy Registry → **Validate** and fix every listed path (`$.slug`, `$.definition.scoring_model`, …).
-4. Use **Import** (enabled only after Validate succeeds) — creates a **draft** (does not change Recommendations yet).
-5. Click **Enable** on the new row when you want it enabled (other enabled strategies stay enabled).
-6. Optionally open **Edit** (`/strategy?strategy_id=…`) to refine tabs visually and Save.
+4. Use **Import** (enabled only after Validate succeeds) — creates and opens an **Artifact Library Draft** (does not change Recommendations yet).
+5. Review the Draft, publish an immutable version, and bind it to the Portfolio. Enable the binding when it should generate recommendations.
+6. Create a new Library Draft/version for later definition changes; explicitly upgrade the binding after publication.
 
 ### Common validation / import errors
 
@@ -1745,7 +1745,7 @@ Practical tip: treat this page as one step in a larger workflow, not an isolated
 - **Slug** — Stable machine id (snake_case: `swing_rs`). Unique per portfolio. Used for uniqueness and selection. Not the display title — that is `name`. Only a–z, 0–9, and underscore after normalisation.
 - **Strategy allocation %** — Policy share of investable capital (TradingStrategy.allocation_pct). Editable on Strategy Registry and Cash; must sum to 100 across enabled strategies. Distinct from score-band allocation_pct on the Strategy Capital Allocation tab.
 - **Uniqueness** — slug is unique per portfolio (Import may suffix on collision). name is soft-unique (may get " (import)"). Multiple strategies may be enabled per portfolio. scoring keys should appear once in scoring_model. Screener refs may be shared across strategies.
-- **Multiple enabled strategies** — Enablement rule: more than one STATUS_ACTIVE strategy may exist per portfolio. Import always creates draft; Enable turns a strategy on without archiving others. Archive sets STATUS_ARCHIVED without changing siblings. The editor strategy_id query is UI selection, not exclusive-active.
+- **Multiple enabled strategies** — Enablement rule: more than one STATUS_ACTIVE strategy may exist per portfolio. Import creates an Artifact Library Draft; publication and binding are explicit. Enabling a binding does not archive siblings. The editor strategy_id query is UI selection, not exclusive-active.
 - **No Screener duplication** — eligibility_sources reference Screeners by screener_slug / screener_factory_key. Condition trees stay on Screener Registry — never embed root/children on a Strategy.
 - **definition vs config_json** — Import/export JSON uses the field `definition`. Version rows store the same config in `config_json`. Do not invent a `config_json` field on the envelope.
 - **scoring_model vs indicators** — Portable JSON prefers scoring_model. The engine also accepts indicators as an alias; Import normalises both. Enabled weights must sum to 100.

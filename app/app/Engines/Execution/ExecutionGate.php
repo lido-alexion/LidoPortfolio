@@ -65,6 +65,13 @@ class ExecutionGate
                 403,
             );
         }
+        if (($user->fresh() ?? $user)->executionIsHalted()) {
+            throw new DomainException(
+                'Emergency Halt is active for this account. Recover execution state before submitting broker orders.',
+                'EXECUTION_EMERGENCY_HALT',
+                423,
+            );
+        }
         $this->assertEntitled($user);
 
         $mode = $profile->executionMode();
@@ -130,6 +137,9 @@ class ExecutionGate
         }
         if ($profile->execution_blocked_by_reconciliation) {
             $blockers[] = 'reconciliation_holdings_mismatch';
+        }
+        if (($user->fresh() ?? $user)->executionIsHalted()) {
+            $blockers[] = 'execution_emergency_halt';
         }
         if (! $user->automatedExecutionEntitled()) {
             $blockers[] = 'entitlement';

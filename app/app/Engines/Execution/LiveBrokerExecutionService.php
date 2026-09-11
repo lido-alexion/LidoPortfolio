@@ -23,6 +23,7 @@ use App\Services\Lending\RecommendationLendingCoordinator;
 use App\Services\PortfolioLoggerService;
 use App\Services\Protection\PositionProtectionService;
 use App\Services\Reconciliation\PortfolioReconciliationService;
+use App\Services\StockQuoteService;
 use Throwable;
 
 /**
@@ -41,6 +42,7 @@ class LiveBrokerExecutionService
         protected InternalRecommendationMatcher $internalMatcher,
         protected RecommendationExecutionLifetime $executionLifetime,
         protected PortfolioReconciliationService $portfolioReconciliation,
+        protected StockQuoteService $quotes,
     ) {}
 
     /**
@@ -338,11 +340,19 @@ class LiveBrokerExecutionService
             ];
         }
 
-        $qty = $quantityOverride ?? $this->quantityFor($recommendation);
         $side = $recommendation->orderSide();
+        $stock = $recommendation->security ?? Stock::query()->find($recommendation->security_id);
+        if (! $stock) {
+            return $this->decisionRow($profile, $user, $recommendation->id, $trigger, ExecutionDecision::OUTCOME_BLOCKED, 'security_missing');
+        }
+
+        $sizing = $quantityOverride !== null
+            ? ['quantity' => $quantityOverride, 'price' => (float) $recommendation->reference_price, 'source' => 'override']
+            : $this->quantityFor($user, $recommendation, $stock);
+        $qty = $sizing['quantity'];
         if ($qty !== null && $side === 'buy') {
             $funds = $this->broker->availableEquityFunds((int) $user->id);
-            $price = (float) $recommendation->reference_price;
+            $price = (float) ($sizing['price'] ?? $recommendation->reference_price);
             if ($funds === null) {
                 $this->recordDecision($profile, $user, $recommendation, $trigger, ExecutionDecision::OUTCOME_BLOCKED, 'broker_funds_unavailable');
 
@@ -357,12 +367,15 @@ class LiveBrokerExecutionService
             }
         }
         if ($qty === null || $qty < 1 || $side === null) {
-            $this->recordDecision($profile, $user, $recommendation, $trigger, ExecutionDecision::OUTCOME_SKIPPED, 'not_actionable');
+            $reason = ($sizing['blocked_reason'] ?? null) === 'live_quote_unavailable'
+                ? 'live_quote_unavailable'
+                : 'not_actionable';
+            $this->recordDecision($profile, $user, $recommendation, $trigger, ExecutionDecision::OUTCOME_SKIPPED, $reason);
 
             return [
                 'recommendation_id' => $recommendation->id,
                 'outcome' => ExecutionDecision::OUTCOME_SKIPPED,
-                'reason' => 'not_actionable',
+                'reason' => $reason,
             ];
         }
 
@@ -389,11 +402,6 @@ class LiveBrokerExecutionService
             }
         }
 
-        $stock = $recommendation->security ?? Stock::query()->find($recommendation->security_id);
-        if (! $stock) {
-            return $this->decisionRow($profile, $user, $recommendation->id, $trigger, ExecutionDecision::OUTCOME_BLOCKED, 'security_missing');
-        }
-
         $decision = $this->recordDecision($profile, $user, $recommendation, $trigger, ExecutionDecision::OUTCOME_SUBMITTED, null);
 
         $order = $existingByKey && $existingByKey->broker_order_id === null && $existingByKey->status === TradingOrder::STATUS_PENDING
@@ -407,6 +415,7 @@ class LiveBrokerExecutionService
                 'side' => $side,
                 'quantity' => $qty,
                 'order_type' => 'market',
+                'limit_price' => $sizing['price'] ?? null,
                 'status' => TradingOrder::STATUS_PENDING,
                 'broker_provider' => $this->broker->provider(),
                 'broker_status' => TradingOrder::BROKER_UNKNOWN,
@@ -515,6 +524,8 @@ class LiveBrokerExecutionService
             'broker_order_id' => $placed->brokerOrderId,
             'user_id' => $user->id,
             'trigger' => $trigger,
+            'quote_source' => $sizing['source'] ?? null,
+            'sizing_price' => $sizing['price'] ?? null,
         ]);
 
         if ($brokerStatus === TradingOrder::BROKER_SUBMITTED) {
@@ -763,10 +774,27 @@ class LiveBrokerExecutionService
             ->first();
     }
 
-    protected function quantityFor(TradingRecommendation $recommendation): ?float
+    /**
+     * @return array{quantity:?float,price:?float,source:string,blocked_reason?:string}
+     */
+    protected function quantityFor(User $user, TradingRecommendation $recommendation, Stock $stock): array
     {
         if ($recommendation->remaining_target_amount !== null && $recommendation->reference_price !== null) {
-            $price = (float) $recommendation->reference_price;
+            $live = $this->broker->liveQuote((int) $user->id, (string) $stock->symbol, $stock->exchange ?: 'NSE');
+            $source = 'live_quote';
+            if ($live === null || $live <= 0) {
+                if ($user->liveQuotePolicy() === User::LIVE_QUOTE_POLICY_STRICT) {
+                    return [
+                        'quantity' => null,
+                        'price' => null,
+                        'source' => 'live_quote',
+                        'blocked_reason' => 'live_quote_unavailable',
+                    ];
+                }
+                $live = $this->quotes->latestClose((int) $stock->id);
+                $source = 'closing_price_fallback';
+            }
+            $price = (float) $live;
             $remaining = max(0.0, (float) $recommendation->remaining_target_amount);
             if ($recommendation->requiresCashReservation() && $recommendation->capital_resolved_amount !== null) {
                 $remainingCapital = max(
@@ -777,18 +805,22 @@ class LiveBrokerExecutionService
                 $remaining = min($remaining, $remainingCapital);
             }
             if ($price <= 0 || $remaining < $price) {
-                return null;
+                return ['quantity' => null, 'price' => $price, 'source' => $source];
             }
 
-            return (float) floor($remaining / $price);
+            return ['quantity' => (float) floor($remaining / $price), 'price' => $price, 'source' => $source];
         }
 
         $qty = $recommendation->suggestedQuantity();
         if ($qty === null || $qty <= 0) {
-            return null;
+            return ['quantity' => null, 'price' => null, 'source' => 'suggested_quantity'];
         }
 
-        return (float) max(1, (int) round($qty));
+        return [
+            'quantity' => (float) max(1, (int) round($qty)),
+            'price' => $recommendation->reference_price !== null ? (float) $recommendation->reference_price : null,
+            'source' => 'suggested_quantity',
+        ];
     }
 
     protected function submissionKey(PortfolioProfile $profile, TradingRecommendation $recommendation, string $side, float $qty): string

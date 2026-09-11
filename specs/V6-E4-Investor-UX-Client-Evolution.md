@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| **Status** | **FROZEN / DECIDED** |
+| **Status** | **FROZEN / COMPLETE** |
 | **Scope** | V4-FEAT-043, V4-FEAT-016, V4-FEAT-035 |
 | **Purpose** | Canonical StoX V6 UI architecture, responsive behavior, component placement, frontend standardization and non-regression rules |
 | **Brand accent** | `#1e90ff` |

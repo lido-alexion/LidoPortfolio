@@ -38,6 +38,12 @@ export default function PortfoliosPage() {
     const [defaultingId, setDefaultingId] = useState(null);
     const [deletingId, setDeletingId] = useState(null);
     const [simulationBusyId, setSimulationBusyId] = useState(null);
+    const [cloneId, setCloneId] = useState(null);
+    const [cloneName, setCloneName] = useState('');
+    const [cloneCopyHoldings, setCloneCopyHoldings] = useState(true);
+    const [cloneCash, setCloneCash] = useState('100000');
+    const [clonePriceMethod, setClonePriceMethod] = useState('next_open');
+    const [cloning, setCloning] = useState(false);
 
     const newNameError = newNameTouched ? validatePortfolioName(newName) : null;
     const renameNameError = renameTouched ? validatePortfolioName(renameName) : null;
@@ -164,6 +170,39 @@ export default function PortfoliosPage() {
         }
     };
 
+    const startClone = (portfolio) => {
+        setCloneId(portfolio.id);
+        setCloneName(`${portfolio.name} Paper`);
+        setCloneCopyHoldings(true);
+        setCloneCash('100000');
+        setClonePriceMethod('next_open');
+    };
+
+    const cloneAsPaper = async (portfolio) => {
+        const name = cloneName.trim();
+        const error = validatePortfolioName(name);
+        if (error || Number(cloneCash) <= 0) {
+            showToast(error || 'Enter simulated cash greater than zero.', 'danger');
+            return;
+        }
+        setCloning(true);
+        try {
+            await api.post(`/portfolios/${portfolio.id}/clone-as-paper`, {
+                name,
+                copy_holdings: cloneCopyHoldings,
+                starting_cash: Number(cloneCash),
+                simulation_price_method: clonePriceMethod,
+            });
+            setCloneId(null);
+            await bootstrap();
+            showToast('Paper portfolio cloned');
+        } catch (error) {
+            showToast(validationMessage(error), 'danger');
+        } finally {
+            setCloning(false);
+        }
+    };
+
     return (
         <div className="container py-4">
             <div className="mb-4">
@@ -217,6 +256,7 @@ export default function PortfoliosPage() {
                         {portfolios.map((portfolio) => {
                             const isActive = String(portfolio.id) === String(activePortfolio?.id);
                             const isRenaming = renameId === portfolio.id;
+                            const isCloning = cloneId === portfolio.id;
                             return (
                                 <li
                                     key={portfolio.id}
@@ -289,6 +329,13 @@ export default function PortfoliosPage() {
                                                 >
                                                     Rename
                                                 </button>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-outline-secondary btn-sm"
+                                                    onClick={() => startClone(portfolio)}
+                                                >
+                                                    Clone as Paper
+                                                </button>
                                                 {!portfolio.is_default && (
                                                     <button
                                                         type="button"
@@ -312,6 +359,35 @@ export default function PortfoliosPage() {
                                             </div>
                                         )}
                                     </div>
+                                    {isCloning && (
+                                        <div className="row g-2 align-items-end mt-3">
+                                            <div className="col-md-3">
+                                                <label className="form-label small mb-1" htmlFor={`clone-name-${portfolio.id}`}>Paper name</label>
+                                                <input id={`clone-name-${portfolio.id}`} className="form-control form-control-sm" value={cloneName} maxLength={120} onChange={(event) => setCloneName(event.target.value)} />
+                                            </div>
+                                            <div className="col-md-2">
+                                                <label className="form-label small mb-1" htmlFor={`clone-cash-${portfolio.id}`}>Simulated cash</label>
+                                                <input id={`clone-cash-${portfolio.id}`} type="number" min="0.01" step="0.01" className="form-control form-control-sm" value={cloneCash} onChange={(event) => setCloneCash(event.target.value)} />
+                                            </div>
+                                            <div className="col-md-3">
+                                                <label className="form-label small mb-1" htmlFor={`clone-price-${portfolio.id}`}>Fill price</label>
+                                                <select id={`clone-price-${portfolio.id}`} className="form-select form-select-sm" value={clonePriceMethod} onChange={(event) => setClonePriceMethod(event.target.value)}>
+                                                    <option value="next_open">Next open</option>
+                                                    <option value="next_close">Next close</option>
+                                                    <option value="ohlc_average">OHLC average</option>
+                                                    <option value="high_low_midpoint">High/low midpoint</option>
+                                                </select>
+                                            </div>
+                                            <div className="col-md-2 form-check mb-1">
+                                                <input id={`clone-holdings-${portfolio.id}`} type="checkbox" className="form-check-input" checked={cloneCopyHoldings} onChange={(event) => setCloneCopyHoldings(event.target.checked)} />
+                                                <label className="form-check-label small" htmlFor={`clone-holdings-${portfolio.id}`}>Copy holdings</label>
+                                            </div>
+                                            <div className="col-md-2 d-flex gap-2">
+                                                <button type="button" className="btn btn-primary btn-sm" disabled={cloning} onClick={() => cloneAsPaper(portfolio)}>{cloning ? 'Cloning…' : 'Clone'}</button>
+                                                <button type="button" className="btn btn-outline-secondary btn-sm" disabled={cloning} onClick={() => setCloneId(null)}>Cancel</button>
+                                            </div>
+                                        </div>
+                                    )}
                                 </li>
                             );
                         })}

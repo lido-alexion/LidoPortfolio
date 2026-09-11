@@ -31,22 +31,22 @@ Existing roadmap IDs are retained for traceability. The historical `V4-FEAT-*` p
 
 ## 2. Canonical V6 backlog
 
-Current count: **12 items — 12 DECIDED, 0 OPEN**.
+Current count: **12 items — 12 COMPLETE, 0 OPEN**.
 
 | ID | Feature | Scope / inherited boundary | Planning group | Status |
 |---|---|---|---|---|
-| V4-FEAT-016 | Mobile / responsive client support | Responsive SPA across mobile, desktop, ultrawide and 4K. Mobile may use different interaction components rather than shrinking desktop UI. Native/PWA remains out of scope unless later needed. | UX / Platform | DECIDED |
-| V4-FEAT-035 | Remaining frontend stack migration | Continue the already-shipped TypeScript/TanStack Query/AG Grid foundation incrementally. No big-bang rewrite and no rework of already migrated V5 surfaces merely for uniformity. Existing useful controls/components must be reused where practical and current functionality must not silently regress. | UX / Platform | DECIDED |
-| V4-FEAT-036 | Trusted non-SPA API tokens | Personal/scoped API tokens for first-party or trusted personal integrations. Browser SPA remains Sanctum stateful-cookie auth. No public OAuth/developer-platform commitment in V6. | Platform / API | DECIDED |
-| V4-FEAT-043 | Dashboard / UX reorganization and widget management | V6 UX fit-and-finish baseline: spacious, hierarchical, visual-first, icon-rich, responsive, progressively disclosed UI; dashboard/widget management and reusable component standardization. Existing Dashboard data and small convenience features are preservation baseline; removal requires PO review. Emergency controls are never hideable widgets. | UX / Platform | DECIDED |
-| V4-FEAT-044 | Kite Disconnect Kill Switch | Account-level emergency action: enter Emergency Halt, hard-close StoX outbound order creation/submission, attempt Kite disconnect/revocation, destroy local usable credential. Existing submitted orders remain Order Lifecycle responsibility. | Live Execution Safety | DECIDED |
-| V4-FEAT-045 | Emergency Cancel Open Orders + Disconnect | High-risk action: halt first; cancel all eligible StoX-managed primary open orders for the targeted broker/account; bounded verification; disconnect/revoke; destroy local credential. Existing protective/GTT orders are not cancelled. | Live Execution Safety | DECIDED |
-| V4-FEAT-046 | Live Kite Quote-Based Execution Sizing | Recompute residual external order from target/current ownership using live quote. Investor-level quote policy: Strict or Allow closing-price fallback. V5 internal-netting valuation remains unchanged. | Live Execution Safety | DECIDED |
-| V4-FEAT-047 | Account-Level Execution State | Broker-independent Investor execution state `Normal` / `Emergency Halt`, separate from Portfolio mode. Halt is Investor-triggered only and hard-blocks all new StoX broker-order creation/submission. | Live Execution Safety | DECIDED |
-| V4-FEAT-048 | Persistent Emergency Controls | Global Investor-app execution-state indicator and emergency controls; responsive/mobile equivalents required. Recovery remains explicit and strongly validated. | Live Execution Safety / UX | DECIDED |
-| V4-FEAT-049 | Clone Portfolio as Paper | Create an independent PAPER Portfolio from an existing Portfolio. User chooses whether current holdings are copied. Strategy/artifact versions are pinned; no historical trades/performance or ongoing synchronization. | Portfolio experimentation | DECIDED |
-| V4-FEAT-050 | Admin Audit Explorer | Admin-only read-only explorer over authoritative persisted audit traces. Admin may inspect Investors/Portfolios. UI is curated; CSV may expose a broader/rawer authorized audit dataset. | Administration | DECIDED |
-| V4-FEAT-051 | Contextual Notes | Personal plain-text notes available contextually across pages via stable logical page context + account/portfolio scope. Lightweight right overlay pane, inline add/edit/delete, timestamps and responsive mobile alternative. | UX / Productivity | DECIDED |
+| V4-FEAT-016 | Mobile / responsive client support | Responsive SPA across mobile, desktop, ultrawide and 4K. Mobile may use different interaction components rather than shrinking desktop UI. Native/PWA remains out of scope unless later needed. | UX / Platform | COMPLETE |
+| V4-FEAT-035 | Remaining frontend stack migration | Continue the already-shipped TypeScript/TanStack Query/AG Grid foundation incrementally. No big-bang rewrite and no rework of already migrated V5 surfaces merely for uniformity. Existing useful controls/components must be reused where practical and current functionality must not silently regress. | UX / Platform | COMPLETE |
+| V4-FEAT-036 | Trusted non-SPA API tokens | Personal/scoped API tokens for first-party or trusted personal integrations. Browser SPA remains Sanctum stateful-cookie auth. No public OAuth/developer-platform commitment in V6. | Platform / API | COMPLETE |
+| V4-FEAT-043 | Dashboard / UX reorganization and widget management | V6 UX fit-and-finish baseline: spacious, hierarchical, visual-first, icon-rich, responsive, progressively disclosed UI; dashboard/widget management and reusable component standardization. Existing Dashboard data and small convenience features are preservation baseline; removal requires PO review. Emergency controls are never hideable widgets. | UX / Platform | COMPLETE |
+| V4-FEAT-044 | Kite Disconnect Kill Switch | Account-level emergency action: enter Emergency Halt, hard-close StoX outbound order creation/submission, attempt Kite disconnect/revocation, destroy local usable credential. Existing submitted orders remain Order Lifecycle responsibility. | Live Execution Safety | COMPLETE |
+| V4-FEAT-045 | Emergency Cancel Open Orders + Disconnect | High-risk action: halt first; cancel all eligible StoX-managed primary open orders for the targeted broker/account; bounded verification; disconnect/revoke; destroy local credential. Existing protective/GTT orders are not cancelled. | Live Execution Safety | COMPLETE |
+| V4-FEAT-046 | Live Kite Quote-Based Execution Sizing | Recompute residual external order from target/current ownership using live quote. Investor-level quote policy: Strict or Allow closing-price fallback. V5 internal-netting valuation remains unchanged. | Live Execution Safety | COMPLETE |
+| V4-FEAT-047 | Account-Level Execution State | Broker-independent Investor execution state `Normal` / `Emergency Halt`, separate from Portfolio mode. Halt is Investor-triggered only and hard-blocks all new StoX broker-order creation/submission. | Live Execution Safety | COMPLETE |
+| V4-FEAT-048 | Persistent Emergency Controls | Global Investor-app execution-state indicator and emergency controls; responsive/mobile equivalents required. Recovery remains explicit and strongly validated. | Live Execution Safety / UX | COMPLETE |
+| V4-FEAT-049 | Clone Portfolio as Paper | Create an independent PAPER Portfolio from an existing Portfolio. User chooses whether current holdings are copied. Strategy/artifact versions are pinned; no historical trades/performance or ongoing synchronization. | Portfolio experimentation | COMPLETE |
+| V4-FEAT-050 | Admin Audit Explorer | Admin-only read-only explorer over authoritative persisted audit traces. Admin may inspect Investors/Portfolios. UI is curated; CSV may expose a broader/rawer authorized audit dataset. | Administration | COMPLETE |
+| V4-FEAT-051 | Contextual Notes | Personal plain-text notes available contextually across pages via stable logical page context + account/portfolio scope. Lightweight right overlay pane, inline add/edit/delete, timestamps and responsive mobile alternative. | UX / Productivity | COMPLETE |
 
 ## 3. Explicitly moved to V7
 
@@ -74,25 +74,25 @@ During V6 planning:
 
 ## 5. V6 epic grouping and planning state
 
-### E1 — Live Execution Safety & Emergency Controls — DECIDED
+### E1 — Live Execution Safety & Emergency Controls — COMPLETE
 
 Features: `V4-FEAT-044` through `V4-FEAT-048`.
 
 Frozen architecture includes broker-independent `Normal/Emergency Halt`, hard outbound gate close, Kite-specific cleanup below the global halt, strict explicit Recovery, crash-safe bounded emergency cleanup, Investor-level live-quote policy, and persistent safety controls across clients.
 
-### E2 — Paper Experimentation — DECIDED
+### E2 — Paper Experimentation — COMPLETE
 
 Feature: `V4-FEAT-049`.
 
 Clone-as-Paper creates a new independent Paper Portfolio. User chooses whether to copy current holdings. Historical Trades/performance are not copied; exact published Strategy/artifact versions are pinned; provenance is retained; no ongoing synchronization exists.
 
-### E3 — Administrative Auditability — DECIDED
+### E3 — Administrative Auditability — COMPLETE
 
 Feature: `V4-FEAT-050`.
 
 Authoritative persisted audit records remain source of truth. Admin can inspect any Investor and that Investor's Portfolios in read-only mode. CSV may expose broader/rawer authorized audit fields than the curated explorer UI.
 
-### E4 — Investor UX & Client Evolution — DECIDED
+### E4 — Investor UX & Client Evolution — COMPLETE
 
 Features: `V4-FEAT-043`, `V4-FEAT-016`, `V4-FEAT-035`.
 
@@ -107,13 +107,13 @@ Frozen constraints include:
 - existing small convenience features such as handy links, contextual shortcuts, copy helpers and readymade prompts for external LLM review should be retained as much as reasonably possible;
 - E4 must not silently functionally regress an existing page; materially redesigned pages require a before/after capability inventory, with any intentional removal explicitly reviewed by the PO.
 
-### E5 — External/API Access — DECIDED
+### E5 — External/API Access — COMPLETE
 
 Feature: `V4-FEAT-036`.
 
 Trusted first-party/personal integrations use named, revocable, scoped personal API tokens. SPA remains Sanctum cookie auth. Tokens never bypass normal StoX role, Emergency Halt, reconciliation or execution-readiness gates. No public OAuth/developer ecosystem in V6.
 
-### E6 — Contextual Notes — DECIDED
+### E6 — Contextual Notes — COMPLETE
 
 Feature: `V4-FEAT-051`.
 
@@ -123,12 +123,12 @@ Personal plain-text notes are available contextually throughout Investor pages v
 
 **V6 is frozen for implementation as of 2026-09-09.** There are no unresolved V6 product-architecture epics. Implementation may proceed by dependency and priority.
 
-1. **E1 Live Execution Safety** — frozen.
-2. **E2 Paper Experimentation** — frozen.
-3. **E3 Administrative Auditability** — frozen.
-4. **E4 Investor UX & Client Evolution** — frozen.
-5. **E5 External/API Access** — frozen.
-6. **E6 Contextual Notes** — frozen.
+1. **E1 Live Execution Safety** — complete.
+2. **E2 Paper Experimentation** — complete.
+3. **E3 Administrative Auditability** — complete.
+4. **E4 Investor UX & Client Evolution** — complete.
+5. **E5 External/API Access** — complete.
+6. **E6 Contextual Notes** — complete.
 7. **FEAT-035 frontend migration** — continues incrementally wherever touched surfaces justify migration, within the frozen E4 rules.
 
 `V4-FEAT-052` Telemetry is no longer part of V6; it is V7 standalone-product work.

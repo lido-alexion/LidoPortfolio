@@ -25,13 +25,21 @@ use Laravel\Sanctum\HasApiTokens;
 ])]
 class User extends Authenticatable
 {
+    public const EXECUTION_STATE_NORMAL = 'normal';
+
+    public const EXECUTION_STATE_EMERGENCY_HALT = 'emergency_halt';
+
+    public const LIVE_QUOTE_POLICY_STRICT = 'strict';
+
+    public const LIVE_QUOTE_POLICY_ALLOW_CLOSE_FALLBACK = 'allow_close_fallback';
+
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
 
     protected $appends = [
         'profile_photo_url',
     ];
-    
+
     protected $table = 'portfolio_users';
 
     public function portfolios(): HasMany
@@ -88,6 +96,8 @@ class User extends Authenticatable
             'totp_confirmed_at' => 'datetime',
             'totp_last_counter' => 'integer',
             'automated_execution_entitled_at' => 'datetime',
+            'execution_halted_at' => 'datetime',
+            'execution_recovered_at' => 'datetime',
         ];
     }
 
@@ -101,5 +111,24 @@ class User extends Authenticatable
     public function automatedExecutionEntitled(): bool
     {
         return $this->automated_execution_entitled_at !== null;
+    }
+
+    public function executionState(): string
+    {
+        return $this->execution_state === self::EXECUTION_STATE_EMERGENCY_HALT
+            ? self::EXECUTION_STATE_EMERGENCY_HALT
+            : self::EXECUTION_STATE_NORMAL;
+    }
+
+    public function executionIsHalted(): bool
+    {
+        return $this->executionState() === self::EXECUTION_STATE_EMERGENCY_HALT;
+    }
+
+    public function liveQuotePolicy(): string
+    {
+        return $this->live_quote_policy === self::LIVE_QUOTE_POLICY_ALLOW_CLOSE_FALLBACK
+            ? self::LIVE_QUOTE_POLICY_ALLOW_CLOSE_FALLBACK
+            : self::LIVE_QUOTE_POLICY_STRICT;
     }
 }

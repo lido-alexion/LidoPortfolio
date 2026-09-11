@@ -4,8 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\PortfolioProfile;
-use App\Services\PortfolioProfileService;
 use App\Services\CashManagementService;
+use App\Services\PortfolioCloneService;
+use App\Services\PortfolioProfileService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,6 +17,7 @@ class PortfolioController extends Controller
     public function __construct(
         protected PortfolioProfileService $portfolios,
         protected CashManagementService $cash,
+        protected PortfolioCloneService $clones,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -99,5 +101,28 @@ class PortfolioController extends Controller
         $profile = $this->portfolios->setDefault($request->user(), $portfolio);
 
         return response()->json(['data' => $profile]);
+    }
+
+    public function cloneAsPaper(Request $request, PortfolioProfile $portfolio): JsonResponse
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:120', 'regex:/^[A-Za-z0-9 _-]+$/'],
+            'copy_holdings' => ['required', 'boolean'],
+            'starting_cash' => ['required', 'numeric', 'gt:0'],
+            'simulation_price_method' => ['required', Rule::in(PortfolioProfile::SIMULATION_PRICE_METHODS)],
+        ], [
+            'name.regex' => 'Use only letters, numbers, spaces, hyphens, and underscores.',
+        ]);
+
+        $paper = $this->clones->cloneAsPaper(
+            $request->user(),
+            $portfolio,
+            $validated['name'],
+            (bool) $validated['copy_holdings'],
+            (float) $validated['starting_cash'],
+            $validated['simulation_price_method'],
+        );
+
+        return response()->json(['data' => $paper], 201);
     }
 }

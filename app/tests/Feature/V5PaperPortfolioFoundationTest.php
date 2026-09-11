@@ -2,10 +2,15 @@
 
 namespace Tests\Feature;
 
-use App\Models\PortfolioProfile;
+use App\Models\ArtifactBinding;
+use App\Models\Holding;
 use App\Models\PaperSimulationEvent;
-use App\Models\User;
+use App\Models\PortfolioProfile;
 use App\Models\Stock;
+use App\Models\User;
+use App\Services\Artifacts\ArtifactBindingService;
+use App\Services\Artifacts\ArtifactType;
+use App\Services\Artifacts\ReusableArtifactLifecycleService;
 use App\Services\CashManagementService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -40,6 +45,60 @@ class V5PaperPortfolioFoundationTest extends TestCase
         $this->assertTrue($paper->fresh()->isPaper());
     }
 
+    public function test_v6_clone_as_paper_is_independent_and_optionally_copies_holdings_and_pinned_bindings(): void
+    {
+        $user = User::factory()->create();
+        $live = $this->defaultPortfolioFor($user);
+        $stock = Stock::query()->create([
+            'symbol' => 'CLONE',
+            'exchange' => 'NSE',
+            'name' => 'Clone Stock',
+            'is_active' => true,
+            'is_benchmark' => false,
+        ]);
+        Holding::query()->create([
+            'profile_id' => $live->id,
+            'stock_id' => $stock->id,
+            'quantity' => 7,
+            'avg_buy_price' => 100,
+            'invested_amount' => 700,
+            'realized_profit' => 50,
+            'updated_at' => now(),
+        ]);
+
+        $lifecycle = app(ReusableArtifactLifecycleService::class);
+        $v1 = $lifecycle->publish(
+            $lifecycle->createDraft($user, ArtifactType::SCREENER, 'clone-quality', 'Clone Quality', $this->cloneEnvelope()),
+            $user,
+        );
+        $binding = app(ArtifactBindingService::class)->bind($live, $v1, $user, ['schedule' => 'daily'], true);
+        $v2 = $lifecycle->publish($lifecycle->createNextDraft($v1, $user, '1.1.0'), $user);
+        $this->assertNotSame($v2->id, $binding->fresh('activeRevision')->activeRevision->artifact_version_id);
+
+        $response = $this->actingAs($user)->withProfileHeader($user, $live)
+            ->postJson('/api/portfolios/'.$live->id.'/clone-as-paper', [
+                'name' => 'Paper Clone',
+                'copy_holdings' => true,
+                'starting_cash' => 50000,
+                'simulation_price_method' => 'next_open',
+            ])->assertCreated()
+            ->assertJsonPath('data.portfolio_type', 'paper')
+            ->assertJsonPath('data.simulation_evidence.provenance', 'clone_as_paper')
+            ->assertJsonPath('data.simulation_evidence.source_profile_id', $live->id);
+
+        $paper = PortfolioProfile::query()->findOrFail($response->json('data.id'));
+        $this->assertSame(50000.0, app(CashManagementService::class)->balance($paper));
+        $this->assertSame(1, Holding::query()->where('profile_id', $paper->id)->count());
+        $this->assertSame(0, $paper->transactions()->count());
+
+        $cloneBinding = ArtifactBinding::query()->where('profile_id', $paper->id)->sole();
+        $this->assertSame($v1->id, $cloneBinding->activeRevision->artifact_version_id);
+        $this->assertSame('clone_as_paper', $cloneBinding->activeRevision->action);
+
+        $live->holdings()->firstOrFail()->forceFill(['quantity' => 2])->save();
+        $this->assertSame(7.0, (float) Holding::query()->where('profile_id', $paper->id)->value('quantity'));
+    }
+
     public function test_paper_is_structurally_excluded_from_real_account_performance_and_tax(): void
     {
         $user = User::factory()->create();
@@ -59,6 +118,26 @@ class V5PaperPortfolioFoundationTest extends TestCase
             ->assertUnprocessable();
         $this->getJson('/api/tax/report?financial_year=2025-26&portfolio_ids[]='.$paper->id)
             ->assertUnprocessable();
+    }
+
+    /** @return array<string, mixed> */
+    private function cloneEnvelope(): array
+    {
+        return [
+            'schema_version' => '1.0',
+            'artifact_type' => 'screener',
+            'slug' => 'clone-quality',
+            'name' => 'Clone Quality',
+            'metadata' => ['scope' => 'account', 'status' => 'draft', 'origin' => 'user'],
+            'definition' => [
+                'root' => [
+                    'type' => 'condition',
+                    'left' => ['indicator' => 'rsi', 'params' => ['period' => 14]],
+                    'operator' => 'gte',
+                    'right' => ['type' => 'constant', 'value' => 50],
+                ],
+            ],
+        ];
     }
 
     public function test_paper_cannot_enable_real_broker_authority(): void

@@ -11,6 +11,7 @@ import { useAuth } from './context/AuthContext';
 import { SidebarProvider } from './context/SidebarContext';
 import { NotificationProvider } from './context/NotificationContext';
 import CriticalNotificationBanner from './components/CriticalNotificationBanner';
+import ContextualNotesPane from './components/ContextualNotesPane';
 import DashboardPage from './pages/DashboardPage';
 import HoldingsPage from './pages/HoldingsPage';
 import StockPricesPage from './pages/StockPricesPage';
@@ -34,6 +35,7 @@ import CorporateActionHistoryPage from './pages/CorporateActionHistoryPage';
 import UserManagementPage from './pages/UserManagementPage';
 import StocksAdminPage from './pages/StocksAdminPage';
 import AdminAlertsPage from './pages/AdminAlertsPage';
+import AdminAuditExplorerPage from './pages/AdminAuditExplorerPage';
 import AdminRoute from './components/AdminRoute';
 import StockExplorerPage from './pages/StockExplorerPage';
 import IndicesPage from './pages/IndicesPage';
@@ -132,6 +134,11 @@ function AppRoutes() {
                     <AdminAlertsPage />
                 </AdminRoute>
             )} />
+            <Route path="/settings/audit" element={(
+                <AdminRoute>
+                    <AdminAuditExplorerPage />
+                </AdminRoute>
+            )} />
             <Route path="/settings/universe-price-sync" element={(
                 <AdminRoute>
                     <UniversePriceSyncPage />
@@ -216,6 +223,7 @@ function AdminAppRoutes() {
             <Route path="/settings/stocks" element={<StocksAdminPage />} />
             <Route path="/settings/sync-logs" element={<SyncLogsPage />} />
             <Route path="/settings/admin-alerts" element={<AdminAlertsPage />} />
+            <Route path="/settings/audit" element={<AdminAuditExplorerPage />} />
             <Route path="/settings/universe-price-sync" element={<UniversePriceSyncPage />} />
             <Route path="/settings/universe-price-sync/gap-failures" element={<GapFillFailuresPage />} />
             <Route path="/settings/universe-price-sync/ignored-gaps" element={<IgnoredPriceGapsPage />} />
@@ -241,6 +249,7 @@ function AuthenticatedShell({ user, isDocumentationRoute }) {
                             {!isDocumentationRoute && <PageChrome />}
                             {user.is_admin ? <AdminAppRoutes /> : <AppRoutes />}
                         </div>
+                        {!isDocumentationRoute && <ContextualNotesPane user={user} />}
                     </div>
                 </div>
             </SidebarProvider>

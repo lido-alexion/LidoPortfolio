@@ -114,8 +114,8 @@
 
       <section class="panel">
         <h2>Overview</h2>
-        <p>The Screener Registry turns portfolio screeners into reusable Trading Artifacts. Each screener still uses the same condition tree the run engine executes. The registry adds slug, metadata, artifact_version, definition_hash, and version history.</p>
-<p>Export downloads the Trading Artifact JSON envelope. <strong>Validate</strong> checks the envelope. <strong>Import</strong> stays disabled until validation succeeds, then creates a new screener in the active portfolio. Shared screeners from <strong>your other portfolios</strong> (same account) appear read-only and can be copied with Import copy — not visible to other users.</p>
+        <p>The Screener Registry is a compatibility view of Portfolio runtime Screeners. Existing rows still use the same condition tree the run engine executes; mapped rows link to the authoritative Artifact Library.</p>
+<p>Export downloads a Trading Artifact JSON envelope. <strong>Validate</strong> checks the envelope. <strong>Import</strong> stays disabled until validation succeeds, then creates an account-owned Artifact Library Draft without creating a runnable Portfolio row. Publish and bind the Draft explicitly. Copying a shared legacy Screener from another Portfolio also creates a Library Fork Draft.</p>
 <h2>Importing JSON — start here</h2>
 <p>If Validate or Import reports many field errors, you almost always missed a <strong>mandatory</strong> envelope field or built an empty/invalid <code>definition.root</code> tree. Use the minimum schema below, then expand.</p>
 <h3>Minimum valid envelope (copy/paste starting point)</h3>

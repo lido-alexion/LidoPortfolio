@@ -221,6 +221,112 @@ body {
     flex-shrink: 0;
 }
 
+.lido-execution-safety {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.2rem;
+    border: 1px solid var(--lido-border);
+    border-radius: 6px;
+    background: var(--lido-bg-surface);
+}
+
+.lido-execution-safety-state {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-height: 1.8rem;
+    padding: 0 0.5rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.lido-execution-safety.is-normal .lido-execution-safety-state {
+    color: #198754;
+}
+
+.lido-execution-safety.is-halted .lido-execution-safety-state {
+    color: #dc3545;
+}
+
+.lido-icon-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.8rem;
+    height: 1.8rem;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: var(--lido-text);
+    background: transparent;
+}
+
+.lido-icon-action:hover,
+.lido-icon-action:focus-visible {
+    border-color: var(--lido-border);
+    background: var(--lido-bg-elevated);
+}
+
+.lido-icon-action--danger {
+    color: #dc3545;
+}
+
+.lido-notes-rail-button {
+    position: fixed;
+    right: 0.75rem;
+    bottom: 1rem;
+    z-index: 1040;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.35rem;
+    height: 2.35rem;
+    border: 1px solid var(--lido-border);
+    border-radius: 6px;
+    color: var(--lido-text);
+    background: var(--lido-bg-surface);
+    box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.18);
+}
+
+.lido-context-notes-pane {
+    position: fixed;
+    top: 4.75rem;
+    right: 0.75rem;
+    bottom: 1rem;
+    z-index: 1045;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    width: min(360px, calc(100vw - 1.5rem));
+    border: 1px solid var(--lido-border);
+    border-radius: 8px;
+    background: var(--lido-bg-surface);
+    box-shadow: 0 1rem 2.5rem rgba(0, 0, 0, 0.24);
+}
+
+.lido-context-notes-header,
+.lido-context-notes-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--lido-border);
+}
+
+.lido-context-notes-actions {
+    justify-content: flex-start;
+    border-top: 1px solid var(--lido-border);
+    border-bottom: 0;
+}
+
+.lido-context-notes-textarea {
+    min-height: 16rem;
+    border: 0;
+    border-radius: 0;
+    resize: none;
+}
+
 .lido-sidebar-toggle {
     display: inline-flex;
     align-items: center;
@@ -5524,4 +5630,3 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
         scroll-behavior: auto;
     }
 }
-

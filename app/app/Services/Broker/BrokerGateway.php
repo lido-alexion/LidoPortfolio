@@ -11,6 +11,9 @@ interface BrokerGateway
     /** Current account-wide equity balance usable for order sizing. */
     public function availableEquityFunds(int $userId): ?float;
 
+    /** Current live quote usable for final broker-order sizing. */
+    public function liveQuote(int $userId, string $symbol, string $exchange = 'NSE'): ?float;
+
     /** @return array<string,mixed>|null Durable holdings, informational positions, and current cash. */
     public function portfolioSnapshot(int $userId): ?array;
 

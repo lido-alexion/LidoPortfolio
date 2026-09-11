@@ -115,6 +115,7 @@ export default function Sidebar() {
             'data-quality',
             'indicator-registry',
             'admin-alerts',
+            'audit-explorer',
             'universe-price-sync',
             'notification-history',
             'notification-settings',

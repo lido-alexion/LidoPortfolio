@@ -15,6 +15,7 @@ import { runApiMutation } from '../hooks/useApiMutation';
 import TotpSettingsPanel from '../components/TotpSettingsPanel';
 import BrokerConnectionPanel from '../components/BrokerConnectionPanel';
 import ExecutionModePanel from '../components/ExecutionModePanel';
+import PersonalApiTokensPanel from '../components/PersonalApiTokensPanel';
 
 function roundToTwoDecimals(value) {
     const num = Number(value);
@@ -591,6 +592,9 @@ export default function SettingsPage() {
                                     <Link to="/settings/sync-logs" className="btn btn-outline-secondary btn-sm">
                                         View sync logs
                                     </Link>
+                                    <Link to="/settings/audit" className="btn btn-outline-secondary btn-sm">
+                                        Audit Explorer
+                                    </Link>
                                     <Link to="/settings/universe-price-sync" className="btn btn-outline-secondary btn-sm">
                                         Universe price sync
                                     </Link>
@@ -1014,6 +1018,7 @@ export default function SettingsPage() {
                 <div className="d-grid gap-3">
                     <TotpSettingsPanel />
                     <BrokerConnectionPanel />
+                    <PersonalApiTokensPanel />
                     <div className="card lido-settings-admin-card">
                         <div className="card-header">Management</div>
                         <div className="card-body d-flex flex-wrap gap-2">

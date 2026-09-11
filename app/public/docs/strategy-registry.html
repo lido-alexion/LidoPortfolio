@@ -114,8 +114,8 @@
 
       <section class="panel">
         <h2>Overview</h2>
-        <p>The Strategy Registry is the V3 compatibility surface for strategy rows in the current portfolio. A portfolio may have <strong>multiple enabled Strategies</strong> at once. After V5 mapping, rows are read-only here and link to the authoritative Artifact Library lifecycle. Draft authoring, immutable publication, binding enablement, explicit upgrades and archive belong to the Artifact Library; the legacy registry remains available for unmapped migration-era rows and portable inspection.</p>
-<p>Export downloads the portable Trading Artifact JSON envelope. <strong>Validate</strong> checks the envelope. <strong>Import</strong> stays disabled until validation succeeds, then creates a <strong>draft</strong> — use <strong>Enable</strong> to turn it on without disabling other enabled strategies. Enabled rows show <strong>Allocation %</strong>. An <strong>Allocation</strong> editor (same PUT <code>/v1/capital/allocations</code> as Cash) lets you set percentages that must sum to 100.</p>
+        <p>The Strategy Registry is the V3 compatibility surface for strategy rows in the current portfolio. A portfolio may have <strong>multiple enabled Strategies</strong> at once. After V5 mapping, rows are read-only here and link to the authoritative Artifact Library lifecycle. New definitions and imports create account-owned Library Drafts without a runnable Portfolio row. Immutable publication, binding enablement, explicit upgrades and archive belong to the Artifact Library; the legacy registry remains available for migration-era runtime rows and portable inspection.</p>
+<p>Export downloads the portable Trading Artifact JSON envelope. <strong>Validate</strong> checks the envelope. <strong>Import</strong> stays disabled until validation succeeds, then creates and opens an <strong>Artifact Library Draft</strong>. Publish and bind it explicitly. Enabled rows show <strong>Allocation %</strong>. An <strong>Allocation</strong> editor (same PUT <code>/v1/capital/allocations</code> as Cash) lets you set percentages that must sum to 100.</p>
 <p>Existing Minervini (<code>momentum_factory</code>) migrates automatically to slug <code>momentum_strategy</code> with eligibility linked to <code>minervini_trend_template</code>.</p>
 <h2>Importing JSON — start here</h2>
 <p>If Validate or Import reports many field errors, you almost always missed a <strong>mandatory</strong> envelope field, forgot <code>scoring_model</code>, enabled weights that do not sum to 100, or embedded a Screener condition tree. Strategies reference Screeners by <strong>slug / factory_key only</strong> — never paste <code>definition.root</code> into a Strategy. Use the minimum schema below, then expand.</p>
@@ -285,7 +285,7 @@
 <tr>
 <td>Enablement</td>
 <td>One portfolio</td>
-<td>Multiple strategies may be <code>active</code> (enabled) at once. Import always creates <strong>draft</strong>; <strong>Enable</strong> turns that strategy on without disabling others.</td>
+<td>Multiple bound strategies may be <code>active</code> (enabled) at once. Import creates a Library Draft; publish and bind it before enablement.</td>
 </tr>
 <tr>
 <td><code>scoring_model[].key</code></td>
@@ -355,7 +355,7 @@
 <tr>
 <td><code>is_selected</code> / <code>is_enabled</code></td>
 <td>Export-only</td>
-<td>Whether this row is currently enabled (<code>STATUS_ACTIVE</code>); Import ignores it — use <strong>Enable</strong>. Multiple strategies may be enabled.</td>
+<td>Whether a compatibility row is currently enabled (<code>STATUS_ACTIVE</code>). Import ignores it and creates an unbound Library Draft.</td>
 </tr>
 <tr>
 <td><code>storage</code> / <code>legacy_id</code></td>
@@ -488,9 +488,9 @@
 <li>Ensure referenced Screeners exist in this portfolio (Screener Registry → import Screener JSON, or use a factory screener like <code>minervini_trend_template</code>).</li>
 <li>Start from the minimum example above (or Export an existing working strategy and edit a copy — best for thresholds / exits / gates).</li>
 <li>Paste into Strategy Registry → <strong>Validate</strong> and fix every listed path (<code>$.slug</code>, <code>$.definition.scoring_model</code>, …).</li>
-<li>Use <strong>Import</strong> (enabled only after Validate succeeds) — creates a <strong>draft</strong> (does not change Recommendations yet).</li>
-<li>Click <strong>Enable</strong> on the new row when you want it enabled (other enabled strategies stay enabled).</li>
-<li>Optionally open <strong>Edit</strong> (<code>/strategy?strategy_id=…</code>) to refine tabs visually and Save.</li>
+<li>Use <strong>Import</strong> (enabled only after Validate succeeds) — creates and opens an <strong>Artifact Library Draft</strong> (does not change Recommendations yet).</li>
+<li>Review the Draft, publish an immutable version, and bind it to the Portfolio. Enable the binding when it should generate recommendations.</li>
+<li>Create a new Library Draft/version for later definition changes; explicitly upgrade the binding after publication.</li>
 </ol>
 <h3>Common validation / import errors</h3>
 <table>
@@ -947,7 +947,7 @@
         <dd>slug is unique per portfolio (Import may suffix on collision). name is soft-unique (may get &quot; (import)&quot;). Multiple strategies may be enabled per portfolio. scoring keys should appear once in scoring_model. Screener refs may be shared across strategies.</dd>
     
         <dt>Multiple enabled strategies</dt>
-        <dd>Enablement rule: more than one STATUS_ACTIVE strategy may exist per portfolio. Import always creates draft; Enable turns a strategy on without archiving others. Archive sets STATUS_ARCHIVED without changing siblings. The editor strategy_id query is UI selection, not exclusive-active.</dd>
+        <dd>Enablement rule: more than one STATUS_ACTIVE strategy may exist per portfolio. Import creates an Artifact Library Draft; publication and binding are explicit. Enabling a binding does not archive siblings. The editor strategy_id query is UI selection, not exclusive-active.</dd>
     
         <dt>No Screener duplication</dt>
         <dd>eligibility_sources reference Screeners by screener_slug / screener_factory_key. Condition trees stay on Screener Registry — never embed root/children on a Strategy.</dd>

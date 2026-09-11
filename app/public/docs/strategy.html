@@ -153,13 +153,13 @@ flowchart TD
         <dd>Editing strategy dropdown lists strategies for this portfolio (enabled, draft, archived). Choosing one loads it via <code>?strategy_id=</code> — UI selection only; enabling a strategy does not disable others.</dd>
     
         <dt>Create Strategy</dt>
-        <dd>On Strategy and Strategy Registry. Enter a name and optional description; the app creates a draft from the default factory configuration (POST <code>/v1/strategy-registry</code>) and opens it in the editor. You do not paste JSON to create a normal strategy. Enable it when you want it to generate recommendations — other enabled strategies stay enabled.</dd>
+        <dd>On Strategy and Strategy Registry. Enter a name and optional description; the app creates an account-owned Artifact Library Draft from the default factory configuration (POST <code>/v1/strategy-registry</code>) and opens it in the Library. Publish and bind it explicitly before it can generate recommendations.</dd>
     
         <dt>Enable / Archive (editor)</dt>
         <dd>Enable turns the selected draft/archived strategy on without disabling others. Archive sets STATUS_ARCHIVED for the selected enabled strategy; siblings stay enabled. The last remaining enabled strategy cannot be archived until another is enabled. Past holdings/recommendations keep attribution.</dd>
     
         <dt>Strategy Registry</dt>
-        <dd>Open /strategy/registry (also listed under Trading in the sidebar) to create, Enable, Archive, export/import Strategy JSON, and validate packs. Multiple strategies may be enabled.</dd>
+        <dd>Open /strategy/registry (also listed under Trading in the sidebar) to inspect/export runtime Strategies and validate/import new definitions as Artifact Library Drafts. Existing compatibility rows retain Enable/Archive controls until mapped.</dd>
     
         <dt>General tab</dt>
         <dd>Name — label for your strategy (default: Minervini Strategy).
@@ -268,7 +268,7 @@ Save — writes the current config in place. After Save, run the pipeline from R
         <dd>A portfolio may enable more than one strategy. Physical cash stays one pool; each enabled strategy has an allocation % of investable capital. The editor <code>?strategy_id=</code> chooses a compatibility projection. Once mapped, its definition and enablement are changed only through Artifact Library Draft/publish/binding actions.</dd>
     
         <dt>Registry vs editor</dt>
-        <dd>The Artifact Library is the authoritative lifecycle/deployment surface. The legacy Registry remains a compatibility and portable-JSON surface for unmapped rows; mapped rows are read-only. Export never includes portfolio-local Screener ids — only slug / factory_key refs.</dd>
+        <dd>The Artifact Library is the authoritative lifecycle/deployment surface. New Registry/editor authoring creates Library Drafts and no runnable legacy row. The legacy Registry remains a compatibility and portable-JSON inspection surface; mapped rows are read-only. Export never includes portfolio-local Screener ids — only slug / factory_key refs.</dd>
     
         <dt>AI Strategy Designer</dt>
         <dd>Prompt builder only — no in-app LLM. Generated text instructs an external assistant to obey the StoX AI Authoring Guide / Contract. You still Validate and Import JSON via Screener Registry and Strategy Registry.</dd>

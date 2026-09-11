@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AccountPerformanceController;
+use App\Http\Controllers\Api\AdminAuditExplorerController;
 use App\Http\Controllers\Api\AdminStockController;
 use App\Http\Controllers\Api\AlertController;
 use App\Http\Controllers\Api\AlertPolicyController;
@@ -11,6 +12,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BulkTransactionImportController;
 use App\Http\Controllers\Api\CalendarEventController;
 use App\Http\Controllers\Api\CashController;
+use App\Http\Controllers\Api\ContextualNoteController;
 use App\Http\Controllers\Api\CorporateActionController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DataQualityController;
@@ -32,6 +34,7 @@ use App\Http\Controllers\Api\PaperSimulationController;
 use App\Http\Controllers\Api\PasswordResetAcceptController;
 use App\Http\Controllers\Api\PasswordResetLinkController;
 use App\Http\Controllers\Api\PatternScanController;
+use App\Http\Controllers\Api\PersonalApiTokenController;
 use App\Http\Controllers\Api\PortfolioAttributionController;
 use App\Http\Controllers\Api\PortfolioController;
 use App\Http\Controllers\Api\PortfolioExportController;
@@ -79,6 +82,7 @@ use App\Http\Controllers\Api\V1\TradingOs\DataController as TradingOsDataControl
 use App\Http\Controllers\Api\V1\TradingOs\DiscoveryController as TradingOsDiscoveryController;
 use App\Http\Controllers\Api\V1\TradingOs\EvaluationController as TradingOsEvaluationController;
 use App\Http\Controllers\Api\V1\TradingOs\ExecutionController as TradingOsExecutionController;
+use App\Http\Controllers\Api\V1\TradingOs\ExecutionSafetyController as TradingOsExecutionSafetyController;
 use App\Http\Controllers\Api\V1\TradingOs\NotificationController as TradingOsNotificationController;
 use App\Http\Controllers\Api\V1\TradingOs\PipelineController as TradingOsPipelineController;
 use App\Http\Controllers\Api\V1\TradingOs\ProtectionController as TradingOsProtectionController;
@@ -142,12 +146,20 @@ Route::get('/notification-settings/email-destinations/{destination}/verify', [No
 Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::post('/logs/frontend', [FrontendLogController::class, 'store']);
 
-    Route::get('/portfolios', [PortfolioController::class, 'index']);
-    Route::post('/portfolios', [PortfolioController::class, 'store']);
-    Route::get('/portfolios/{portfolio}', [PortfolioController::class, 'show']);
-    Route::put('/portfolios/{portfolio}', [PortfolioController::class, 'update']);
-    Route::delete('/portfolios/{portfolio}', [PortfolioController::class, 'destroy']);
-    Route::post('/portfolios/{portfolio}/set-default', [PortfolioController::class, 'setDefault']);
+    Route::get('/portfolios', [PortfolioController::class, 'index'])->middleware('token.scope:portfolio:read');
+    Route::get('/personal-api-tokens', [PersonalApiTokenController::class, 'index']);
+    Route::post('/personal-api-tokens', [PersonalApiTokenController::class, 'store']);
+    Route::delete('/personal-api-tokens/{token}', [PersonalApiTokenController::class, 'destroy'])->whereNumber('token');
+    Route::get('/contextual-notes', [ContextualNoteController::class, 'index'])->middleware('token.scope:notes:read');
+    Route::post('/contextual-notes', [ContextualNoteController::class, 'store'])->middleware('token.scope:notes:write');
+    Route::put('/contextual-notes/{contextualNote}', [ContextualNoteController::class, 'update'])->middleware('token.scope:notes:write');
+    Route::delete('/contextual-notes/{contextualNote}', [ContextualNoteController::class, 'destroy'])->middleware('token.scope:notes:write');
+    Route::post('/portfolios', [PortfolioController::class, 'store'])->middleware('token.scope:portfolio:write');
+    Route::get('/portfolios/{portfolio}', [PortfolioController::class, 'show'])->middleware('token.scope:portfolio:read');
+    Route::put('/portfolios/{portfolio}', [PortfolioController::class, 'update'])->middleware('token.scope:portfolio:write');
+    Route::delete('/portfolios/{portfolio}', [PortfolioController::class, 'destroy'])->middleware('token.scope:portfolio:write');
+    Route::post('/portfolios/{portfolio}/set-default', [PortfolioController::class, 'setDefault'])->middleware('token.scope:portfolio:write');
+    Route::post('/portfolios/{portfolio}/clone-as-paper', [PortfolioController::class, 'cloneAsPaper'])->middleware('token.scope:portfolio:write');
     Route::get('/portfolios/{portfolio}/simulation', [PaperSimulationController::class, 'show']);
     Route::post('/portfolios/{portfolio}/simulation/pause', [PaperSimulationController::class, 'pause']);
     Route::post('/portfolios/{portfolio}/simulation/resume', [PaperSimulationController::class, 'resume']);
@@ -332,6 +344,8 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
         Route::get('/admin/tax-rule-versions', [TaxRuleVersionController::class, 'index']);
         Route::post('/admin/tax-rule-versions', [TaxRuleVersionController::class, 'store']);
         Route::get('/admin/stocks', [AdminStockController::class, 'index']);
+        Route::get('/admin/audit', [AdminAuditExplorerController::class, 'index']);
+        Route::get('/admin/audit/export', [AdminAuditExplorerController::class, 'export']);
         Route::post('/stocks/{stock}/activate', [AdminStockController::class, 'activate']);
         Route::post('/stocks/{stock}/deactivate', [AdminStockController::class, 'deactivate']);
 
@@ -444,9 +458,13 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
     Route::post('/orders/{id}/cancel', [TradingOsExecutionController::class, 'ordersCancel'])->whereNumber('id');
     Route::get('/transactions', [TradingOsExecutionController::class, 'transactionsIndex']);
     Route::get('/positions', [TradingOsExecutionController::class, 'positionsIndex']);
-    Route::get('/execution/mode', [TradingOsExecutionController::class, 'executionModeShow']);
-    Route::put('/execution/mode', [TradingOsExecutionController::class, 'executionModeUpdate']);
-    Route::post('/execution/submit-selected', [TradingOsExecutionController::class, 'submitSelected']);
+    Route::get('/execution/mode', [TradingOsExecutionController::class, 'executionModeShow'])->middleware('token.scope:execution:read');
+    Route::put('/execution/mode', [TradingOsExecutionController::class, 'executionModeUpdate'])->middleware('token.scope:execution:submit');
+    Route::get('/execution/state', [TradingOsExecutionSafetyController::class, 'show'])->middleware('token.scope:execution:read');
+    Route::post('/execution/halt', [TradingOsExecutionSafetyController::class, 'halt'])->middleware('token.scope:execution:submit');
+    Route::post('/execution/recover', [TradingOsExecutionSafetyController::class, 'recover'])->middleware('token.scope:execution:submit');
+    Route::put('/execution/quote-policy', [TradingOsExecutionSafetyController::class, 'quotePolicy'])->middleware('token.scope:execution:submit');
+    Route::post('/execution/submit-selected', [TradingOsExecutionController::class, 'submitSelected'])->middleware('token.scope:execution:submit');
     Route::post('/orders/{id}/reconcile', [TradingOsExecutionController::class, 'ordersReconcile'])->whereNumber('id');
 
     Route::get('/protections', [TradingOsProtectionController::class, 'index']);
@@ -462,10 +480,12 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
     Route::post('/totp/recover', [TradingOsTotpController::class, 'recover']);
     Route::post('/totp/disable', [TradingOsTotpController::class, 'disable']);
 
-    Route::get('/broker/status', [TradingOsBrokerController::class, 'status']);
+    Route::get('/broker/status', [TradingOsBrokerController::class, 'status'])->middleware('token.scope:execution:read');
     Route::get('/broker/kite/login-url', [TradingOsBrokerController::class, 'kiteLoginUrl']);
     Route::post('/broker/kite/session', [TradingOsBrokerController::class, 'kiteSession']);
     Route::post('/broker/kite/disconnect', [TradingOsBrokerController::class, 'disconnect']);
+    Route::post('/broker/kite/emergency-disconnect', [TradingOsExecutionSafetyController::class, 'kiteDisconnect'])->middleware('token.scope:execution:submit');
+    Route::post('/broker/kite/emergency-cancel-open-orders-disconnect', [TradingOsExecutionSafetyController::class, 'cancelOpenOrdersAndDisconnect'])->middleware('token.scope:execution:submit');
 
     Route::middleware('admin')->group(function () {
         Route::put('/admin/users/{user}/automated-execution-entitlement', [TradingOsAdminEntitlementController::class, 'update']);

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Screener editor — StoX docs</title>
-  <meta name="description" content="Inspect/run mapped Screeners; unmapped legacy rows may still be edited until V5 backfill.">
+  <meta name="description" content="Build new Library Drafts and inspect/run legacy or mapped Portfolio Screeners.">
   <link rel="canonical" href="screener-editor.html">
   <style>
     :root {
@@ -110,7 +110,7 @@
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Screener editor</h1>
       <p class="muted"><code>screener-editor</code> · screen: <code>/screeners/:id</code></p>
-      <p>Inspect/run mapped Screeners; unmapped legacy rows may still be edited until V5 backfill.</p>
+      <p>Build new Library Drafts and inspect/run legacy or mapped Portfolio Screeners.</p>
 
       <section class="panel">
         <h2>Overview</h2>
@@ -136,7 +136,7 @@
         <dd>Evaluate the rule set across dates with per-date persistence.</dd>
     
         <dt>Save</dt>
-        <dd>Available only for an unmapped legacy Screener. Mapped Screeners are changed through Artifact Library Draft → publish → explicit binding upgrade.</dd>
+        <dd>For a new Screener, creates an Artifact Library Draft and opens it there. Existing unmapped legacy Screeners remain editable for migration compatibility; mapped Screeners require Library Draft → publish → explicit binding upgrade.</dd>
     
         <dt>Incremental tuning</dt>
         <dd>Change one condition at a time, run again, and compare hit drift in run history instead of editing many conditions at once.</dd>

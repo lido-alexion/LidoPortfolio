@@ -6,6 +6,7 @@ use App\Engines\Support\ApiEnvelope;
 use App\Exceptions\DomainException;
 use App\Http\Middleware\AssignRequestId;
 use App\Http\Middleware\DebugAgentToken;
+use App\Http\Middleware\EnsurePersonalApiTokenScope;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\ResolveActivePortfolio;
 use App\Services\PortfolioLoggerService;
@@ -37,6 +38,7 @@ $application = Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'admin' => EnsureUserIsAdmin::class,
             'active.portfolio' => ResolveActivePortfolio::class,
+            'token.scope' => EnsurePersonalApiTokenScope::class,
         ]);
         $middleware->appendToGroup('api', ResolveActivePortfolio::class);
         $middleware->priority([

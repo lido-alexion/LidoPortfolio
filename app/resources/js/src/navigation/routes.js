@@ -46,6 +46,7 @@ export const ROUTES = Object.freeze({
     SETTINGS_DATA_QUALITY: '/settings/data-quality',
     SETTINGS_INDICATORS: '/settings/indicators',
     SETTINGS_ADMIN_ALERTS: '/settings/admin-alerts',
+    SETTINGS_AUDIT: '/settings/audit',
     SETTINGS_UNIVERSE_PRICE_SYNC: '/settings/universe-price-sync',
     SETTINGS_SCREENER_REGISTRY: '/settings/screener-registry',
     SETTINGS_STRATEGY_REGISTRY: '/settings/strategy-registry',
