@@ -14,7 +14,7 @@
 This register holds **only**:
 
 1. **Genuine new post-V3 functionality** that was not part of V3 normative scope (active V4 FEAT IDs and V5-deferred FEAT IDs), **or**
-2. **Genuine V4 product/spec decisions** for rules V3 never froze. **V4-SPEC-001 through V4-SPEC-007 are now FROZEN Product Owner decisions**. Frozen means the rule is specified. Implementation is separate: **SPEC-007** is implemented by FEAT-001; **SPEC-001** same-stock adoption merge, **SPEC-003** split/bonus restatement, **SPEC-004** cash-ledger LOAN/RECALL/BRIDGE, **SPEC-005** explicit cross-owner SELL attribution, and **SPEC-002** rights-are-not-a-CA (exercise = normal purchase) are implemented 2026-08-28; **SPEC-006** remains unimplemented.
+2. **Genuine V4 product/spec decisions** for rules V3 never froze. **V4-SPEC-001 through V4-SPEC-007 are now FROZEN Product Owner decisions**. Frozen means the rule is specified. Implementation is separate: **SPEC-007** is implemented by FEAT-001; **SPEC-001** same-stock adoption merge, **SPEC-003** split/bonus restatement, **SPEC-004** cash-ledger LOAN/RECALL/BRIDGE, **SPEC-005** explicit cross-owner SELL attribution, and **SPEC-002** rights-are-not-a-CA (exercise = normal purchase) are implemented 2026-08-28; **SPEC-006** is implemented by the live execution ownership model and V5-FEAT-040 aggregate broker reconciliation.
 
 It is **not** a deferral bin for V3 bugs, V3 technical debt, V3 UX polish, or historical notes.
 
@@ -334,12 +334,12 @@ The application is primarily for **personal use** and a small number of trusted 
 
 | Field | Content |
 |-------|---------|
-| **Status** | **DECIDED** (2026-08-26). Not implemented (live broker attribution). |
+| **Status** | **DECIDED** (2026-08-26). Implemented (live execution ownership attribution and aggregate broker reconciliation; verified 2026-09-11). |
 | **Why V3 left it** | V3 §32 Decision 11 deferred exclusivity/binding to the broker era. |
 | **Current V3 behaviour** | Multi-portfolio paper/manual continues. No live broker automation (SD-010). |
 | **PO decision** | A **single live broker account may contain multiple Lido Strategies**. Do **not** impose one-broker-account / one-Strategy. |
 | **Frozen rule** | Example: Broker Account → Momentum owns Reliance 100; Value owns Reliance 50. **Broker** = actual aggregate holdings and executions. **Lido** = logical Strategy ownership and attribution. The broker does not need to understand Lido Strategy ownership. Live orders/executions therefore need sufficient **Lido-side** Strategy attribution. |
-| **Implementation implications** | Unblocks V4-FEAT-001 / FEAT-002 design. Do not require broker-side strategy tags. Live-mode semantics are **V4-SPEC-007**. FEAT-001 and FEAT-002 are implemented. |
+| **Implementation implications** | Implemented by recommendation-linked live orders/fills and persisted Lido-side `strategy_id` / `owner_key` attribution. V5-FEAT-040 compares the broker's aggregate holdings/funds with StoX without requiring broker-side Strategy tags or silently rewriting Strategy ownership. Live-mode semantics are **V4-SPEC-007**. |
 
 ---
 
