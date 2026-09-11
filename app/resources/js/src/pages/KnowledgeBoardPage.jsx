@@ -396,6 +396,7 @@ export default function KnowledgeBoardPage() {
                                 </>
                             ) : null}
                             <Link to="/knowledge-board/tags" className="btn btn-sm btn-outline-secondary">Manage tags</Link>
+                            <Link to="/knowledge-board/wiki" className="btn btn-sm btn-outline-primary">Open Wiki</Link>
                             {manageMode && selectedIds.size ? (
                                 <span className="small text-muted align-self-center ms-1">{selectedIds.size} selected</span>
                             ) : null}

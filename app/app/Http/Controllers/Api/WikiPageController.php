@@ -41,6 +41,13 @@ class WikiPageController extends Controller
         return response()->json(['data' => $this->pages->update($this->pages->find(\activePortfolio(), $page), \activePortfolio(), $request->user(), $data)]);
     }
 
+    public function preview(Request $request, string $page): JsonResponse
+    {
+        $data = $request->validate(['markdown' => ['required', 'string']]);
+
+        return response()->json(['data' => ['rendered_html' => $this->pages->preview($this->pages->find(\activePortfolio(), $page), \activePortfolio(), $data['markdown'])]]);
+    }
+
     public function move(Request $request, string $page): JsonResponse
     {
         $data = $request->validate(['parent_uuid' => ['nullable', 'uuid'], 'display_order' => ['required', 'integer', 'min:0']]);

@@ -233,6 +233,7 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
         Route::get('/wiki/pages/{page}/export', [WikiExportController::class, 'page'])->whereUuid('page');
         Route::get('/wiki/pages/{page}/export-branch', [WikiExportController::class, 'branch'])->whereUuid('page');
         Route::put('/wiki/pages/{page}', [WikiPageController::class, 'update'])->whereUuid('page');
+        Route::post('/wiki/pages/{page}/preview', [WikiPageController::class, 'preview'])->whereUuid('page');
         Route::put('/wiki/pages/{page}/move', [WikiPageController::class, 'move'])->whereUuid('page');
         Route::get('/wiki/pages/{page}/revisions/{revision}', [WikiPageController::class, 'revision'])->whereUuid('page')->whereNumber('revision');
         Route::post('/wiki/pages/{page}/revisions/{revision}/restore', [WikiPageController::class, 'restore'])->whereUuid('page')->whereNumber('revision');

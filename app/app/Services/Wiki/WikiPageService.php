@@ -56,6 +56,13 @@ final class WikiPageService
         return collect($this->breadcrumbs($page))->pluck('title')->implode(' / ');
     }
 
+    public function preview(WikiPage $page, PortfolioProfile $profile, string $markdown): string
+    {
+        $this->assertOwned($page, $profile);
+
+        return $this->renderer->render($profile, $markdown, false, $page);
+    }
+
     public function create(PortfolioProfile $profile, User $user, array $data): WikiPage
     {
         return DB::transaction(function () use ($profile, $user, $data): WikiPage {

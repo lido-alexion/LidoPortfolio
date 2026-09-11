@@ -42,6 +42,7 @@ import WatchlistPage from './pages/WatchlistPage';
 import PatternGuidePage from './pages/PatternGuidePage';
 import KnowledgeBoardPage from './pages/KnowledgeBoardPage';
 import KnowledgeBoardTagsPage from './pages/KnowledgeBoardTagsPage';
+import WikiPage from './pages/WikiPage';
 import CalendarPage from './pages/CalendarPage';
 import LoginPage from './pages/LoginPage';
 import AcceptInvitePage from './pages/AcceptInvitePage';
@@ -110,6 +111,7 @@ function AppRoutes() {
             <Route path="/patterns" element={<PatternGuidePage />} />
             <Route path="/knowledge-board" element={<KnowledgeBoardPage />} />
             <Route path="/knowledge-board/tags" element={<KnowledgeBoardTagsPage />} />
+            <Route path="/knowledge-board/wiki/:pageId?" element={<WikiPage />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/documentation" element={<DocumentationPage />} />

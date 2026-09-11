@@ -34,6 +34,7 @@ export const ROUTES = Object.freeze({
     SCREENER_REGISTRY: '/screeners/registry',
     KNOWLEDGE_BOARD: '/knowledge-board',
     KNOWLEDGE_TAGS: '/knowledge-board/tags',
+    KNOWLEDGE_WIKI: '/knowledge-board/wiki',
     SETTINGS: '/settings',
     SETTINGS_GLOBAL: '/settings/global',
     SETTINGS_PORTFOLIO: '/settings/portfolio',
