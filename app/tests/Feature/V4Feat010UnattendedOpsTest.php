@@ -218,14 +218,12 @@ class V4Feat010UnattendedOpsTest extends TestCase
         $this->setMode($user, $automatic, PortfolioProfile::EXECUTION_MODE_AUTOMATIC, confirm: true);
         $this->pendingReviewBuy($automatic);
 
-        $semi = $this->createPortfolioProfile($user, 'Semi book', false);
-        app(CashManagementService::class)->deposit($semi, 50_000, 'seed', $user);
-        $this->actingAs($user)->withProfileHeader($user, $semi);
-        $this->setMode($user, $semi, PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC);
+        [$semiUser, $semi] = $this->actingReadyUser();
+        $this->setMode($semiUser, $semi, PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC);
         $this->pendingBuy($semi);
 
-        $manual = $this->createPortfolioProfile($user, 'Manual book', false);
-        app(CashManagementService::class)->deposit($manual, 50_000, 'seed', $user);
+        $manual = $this->createPortfolioProfile($semiUser, 'Manual book', false);
+        app(CashManagementService::class)->deposit($manual, 50_000, 'seed', $semiUser);
         $this->pendingBuy($manual);
 
         $this->artisan('tos:submit-automatic-orders')->assertSuccessful();
@@ -234,16 +232,14 @@ class V4Feat010UnattendedOpsTest extends TestCase
         $this->assertSame(0, TradingOrder::query()->where('profile_id', $manual->id)->count());
     }
 
-    public function test_account_cycle_submits_sells_before_buys_across_automatic_portfolios(): void
+    public function test_account_cycles_are_isolated_across_investors(): void
     {
         [$user, $buyProfile] = $this->actingReadyUser();
         $this->setMode($user, $buyProfile, PortfolioProfile::EXECUTION_MODE_AUTOMATIC, confirm: true);
         $buy = $this->pendingBuy($buyProfile);
 
-        $sellProfile = $this->createPortfolioProfile($user, 'Sell book', false);
-        app(CashManagementService::class)->deposit($sellProfile, 50_000, 'seed', $user);
-        $this->withProfileHeader($user, $sellProfile);
-        $this->setMode($user, $sellProfile, PortfolioProfile::EXECUTION_MODE_AUTOMATIC, confirm: true);
+        [$sellUser, $sellProfile] = $this->actingReadyUser();
+        $this->setMode($sellUser, $sellProfile, PortfolioProfile::EXECUTION_MODE_AUTOMATIC, confirm: true);
         $sell = $this->pendingBuy($sellProfile);
         $sell->forceFill([
             'recommendation_type' => TradingRecommendation::ACTION_EXIT_POSITION,
@@ -254,10 +250,10 @@ class V4Feat010UnattendedOpsTest extends TestCase
 
         $placed = app(FakeBrokerGateway::class)->placed;
         $this->assertCount(2, $placed);
-        $this->assertSame($sell->id, $placed[0]->recommendationId);
-        $this->assertSame('sell', $placed[0]->side);
-        $this->assertSame($buy->id, $placed[1]->recommendationId);
-        $this->assertSame('buy', $placed[1]->side);
+        $this->assertEqualsCanonicalizing([$buy->id, $sell->id], array_map(
+            static fn ($order): int => $order->recommendationId,
+            $placed,
+        ));
         $this->assertDatabaseHas('portfolio_execution_batches', [
             'user_id' => $user->id,
             'status' => 'completed',
@@ -284,7 +280,7 @@ class V4Feat010UnattendedOpsTest extends TestCase
         $buyerProfile = $this->createPortfolioProfile($user, 'Buyer book', false);
         app(CashManagementService::class)->deposit($buyerProfile, 50_000, 'seed', $user);
         $this->withProfileHeader($user, $buyerProfile);
-        $this->setMode($user, $buyerProfile, PortfolioProfile::EXECUTION_MODE_AUTOMATIC, confirm: true);
+        $this->setMode($user, $buyerProfile, PortfolioProfile::EXECUTION_MODE_AUTOMATIC, confirm: true, fixtureBypassAccountInvariant: true);
         $buy = $this->pendingBuy($buyerProfile, $stock, 1_000);
         $buy->forceFill([
             'target_amount' => 1_000, 'capital_resolved_amount' => 1_000,
@@ -350,7 +346,7 @@ class V4Feat010UnattendedOpsTest extends TestCase
         $buyerProfile = $this->createPortfolioProfile($user, 'Automatic buyer', false);
         app(CashManagementService::class)->deposit($buyerProfile, 50_000, 'seed', $user);
         $this->withProfileHeader($user, $buyerProfile);
-        $this->setMode($user, $buyerProfile, PortfolioProfile::EXECUTION_MODE_AUTOMATIC, confirm: true);
+        $this->setMode($user, $buyerProfile, PortfolioProfile::EXECUTION_MODE_AUTOMATIC, confirm: true, fixtureBypassAccountInvariant: true);
         $buy = $this->pendingBuy($buyerProfile, $stock, 500);
         $buy->forceFill([
             'target_amount' => 500, 'capital_resolved_amount' => 500,
@@ -543,8 +539,21 @@ class V4Feat010UnattendedOpsTest extends TestCase
         return $code;
     }
 
-    protected function setMode(User $user, PortfolioProfile $profile, string $mode, bool $confirm = false): void
-    {
+    protected function setMode(
+        User $user,
+        PortfolioProfile $profile,
+        string $mode,
+        bool $confirm = false,
+        bool $fixtureBypassAccountInvariant = false,
+    ): void {
+        if ($fixtureBypassAccountInvariant) {
+            // FEAT-040 prevents this state through every production route. These
+            // two legacy tests retain defensive coverage of the lower-level
+            // cross-Portfolio netting algorithm for pre-invariant data only.
+            $profile->forceFill(['execution_mode' => $mode])->save();
+
+            return;
+        }
         $this->putJson('/api/v1/execution/mode', [
             'execution_mode' => $mode,
             'confirm_automatic' => $confirm,
