@@ -115,4 +115,44 @@ class V5WikiFoundationTest extends TestCase
             ->assertOk()->assertJsonPath('data.deleted', 2);
         $this->assertDatabaseCount('portfolio_wiki_pages', 0);
     }
+
+    public function test_markdown_is_sanitized_and_stable_links_follow_target_rename(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        $this->actingAs($user)->withProfileHeader($user, $profile);
+        $target = $this->postJson('/api/knowledge-board/wiki/pages', ['title' => 'Original'])->json('data.uuid');
+        $source = $this->postJson('/api/knowledge-board/wiki/pages', [
+            'title' => 'Source',
+            'markdown' => "[[wiki:{$target}]]\n\n<script>alert(1)</script>\n\n[unsafe](javascript:alert(1))",
+        ])->json('data.uuid');
+
+        $this->putJson('/api/knowledge-board/wiki/pages/'.$target, ['title' => 'Renamed'])->assertOk();
+        $response = $this->getJson('/api/knowledge-board/wiki/pages/'.$source)->assertOk()
+            ->assertJsonPath('data.breadcrumbs.0.title', 'Knowledge Board');
+        $html = $response->json('data.rendered_html');
+
+        $this->assertStringContainsString('Renamed', $html);
+        $this->assertStringContainsString('/knowledge-board/wiki/'.$target, $html);
+        $this->assertStringNotContainsString('<script', $html);
+        $this->assertStringNotContainsString('href="javascript:', $html);
+    }
+
+    public function test_missing_and_cross_portfolio_wiki_links_do_not_leak_titles(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        $other = PortfolioProfile::query()->create(['user_id' => $user->id, 'name' => 'Other', 'portfolio_type' => 'live']);
+        $private = WikiPage::query()->create([
+            'profile_id' => $other->id, 'uuid' => (string) Str::uuid(), 'title' => 'Secret title', 'slug' => 'secret-title', 'markdown' => 'Secret',
+        ]);
+        $this->actingAs($user)->withProfileHeader($user, $profile);
+        $source = $this->postJson('/api/knowledge-board/wiki/pages', [
+            'title' => 'Source', 'markdown' => '[[wiki:'.$private->uuid.']]',
+        ])->json('data.uuid');
+
+        $html = $this->getJson('/api/knowledge-board/wiki/pages/'.$source)->assertOk()->json('data.rendered_html');
+        $this->assertStringContainsString('Missing Wiki Page', $html);
+        $this->assertStringNotContainsString('Secret title', $html);
+    }
 }

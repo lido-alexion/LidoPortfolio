@@ -13,6 +13,8 @@ use Illuminate\Validation\ValidationException;
 
 final class WikiPageService
 {
+    public function __construct(private WikiMarkdownRenderer $renderer) {}
+
     public function find(PortfolioProfile $profile, string $uuid): WikiPage
     {
         return WikiPage::query()->where('profile_id', $profile->id)->where('uuid', $uuid)->firstOrFail();
@@ -24,6 +26,18 @@ final class WikiPageService
             ->orderBy('display_order')->orderBy('id')->get();
 
         return $this->treeLevel($pages, null);
+    }
+
+    public function detail(WikiPage $page, PortfolioProfile $profile): array
+    {
+        $this->assertOwned($page, $profile);
+
+        return [
+            ...$page->toArray(),
+            'rendered_html' => $this->renderer->render($profile, $page->markdown),
+            'breadcrumbs' => $this->breadcrumbs($page),
+            'revisions' => $page->revisions()->get(),
+        ];
     }
 
     public function create(PortfolioProfile $profile, User $user, array $data): WikiPage
@@ -134,6 +148,19 @@ final class WikiPageService
         }
 
         return $ids;
+    }
+
+    private function breadcrumbs(WikiPage $page): array
+    {
+        $crumbs = [['title' => 'Knowledge Board', 'uuid' => null]];
+        $ancestors = collect();
+        $cursor = $page;
+        while ($cursor->parent_id !== null && $ancestors->count() < 100) {
+            $cursor = WikiPage::query()->findOrFail($cursor->parent_id);
+            $ancestors->prepend(['title' => $cursor->title, 'uuid' => $cursor->uuid]);
+        }
+
+        return collect($crumbs)->merge($ancestors)->push(['title' => $page->title, 'uuid' => $page->uuid])->all();
     }
 
     private function descendantIds(WikiPage $page): Collection

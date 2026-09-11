@@ -31,7 +31,7 @@ class WikiPageController extends Controller
     {
         $page = $this->pages->find(\activePortfolio(), $page);
 
-        return response()->json(['data' => $page->load('revisions')]);
+        return response()->json(['data' => $this->pages->detail($page, \activePortfolio())]);
     }
 
     public function update(Request $request, string $page): JsonResponse
