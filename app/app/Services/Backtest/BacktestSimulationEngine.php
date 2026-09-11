@@ -9,11 +9,16 @@ use App\Models\BacktestTrade;
 use App\Models\BacktestTransaction;
 use App\Models\Benchmark;
 use App\Models\PortfolioProfile;
+use App\Models\ReusableArtifactVersion;
 use App\Models\Screener;
 use App\Models\Stock;
 use App\Models\StockPrice;
 use App\Models\TradingStrategyVersion;
+use App\Models\User;
+use App\Services\Artifacts\ArtifactEnvelope;
 use App\Services\Artifacts\ArtifactRuntimeBindingResolver;
+use App\Services\Artifacts\ReusableArtifactLifecycleService;
+use App\Services\Artifacts\StrategyParameterSchema;
 use App\Services\FeeCalculatorService;
 use App\Services\Screener\ScreenerBacktestService;
 use App\Services\Screener\ScreenerCatalog;
@@ -41,6 +46,8 @@ class BacktestSimulationEngine
         protected TimelineBuilder $timeline,
         protected ArtifactRuntimeBindingResolver $artifactRuntime,
         protected FeeCalculatorService $fees,
+        protected StrategyParameterSchema $strategyParameters,
+        protected ReusableArtifactLifecycleService $artifactLifecycle,
     ) {}
 
     /**
@@ -94,6 +101,14 @@ class BacktestSimulationEngine
         // projected legacy version supplies the Portfolio-local Screener ids and
         // is hash-verified by ArtifactRuntimeBindingResolver above.
         $config = $version->config_json ?? $this->strategies->defaultConfig();
+        $parameterOverrides = is_array($input['parameter_overrides'] ?? null) ? $input['parameter_overrides'] : [];
+        $artifactEnvelope = $runtimeSelection?->artifactVersion->content_json ?? [];
+        if ($parameterOverrides !== []) {
+            if ($runtimeSelection === null) {
+                throw ValidationException::withMessages(['parameter_overrides' => 'Overrides require a pinned FEAT-008 Strategy artifact version.']);
+            }
+            $config = $this->strategyParameters->applyToDefinition($config, $artifactEnvelope, $parameterOverrides);
+        }
         $config = $this->strategies->normalizeConfig(is_array($config) ? $config : []);
 
         $initialCapital = (float) ($input['initial_capital'] ?? 100000);
@@ -133,6 +148,8 @@ class BacktestSimulationEngine
                 'version' => 'settings-sha256:'.hash('sha256', json_encode($chargeComponents, JSON_THROW_ON_ERROR)),
                 'components' => $chargeComponents,
             ],
+            'parameter_overrides' => $parameterOverrides,
+            'parameters_modified' => $parameterOverrides !== [],
         ];
         $ctx->set('config_snapshot', $config);
         $ctx->set('execution_assumptions', $executionAssumptions);
@@ -193,6 +210,15 @@ class BacktestSimulationEngine
         ]);
 
         return $this->resume($run->fresh());
+    }
+
+    /** @return list<array<string,mixed>> */
+    public function configurableParameters(PortfolioProfile $profile): array
+    {
+        $version = $this->resolveStrategyVersion($profile, null);
+        $selection = $this->artifactRuntime->forStrategyVersion($profile, $version);
+
+        return $selection ? $this->strategyParameters->declarations($selection->artifactVersion->content_json) : [];
     }
 
     /**
@@ -368,6 +394,7 @@ class BacktestSimulationEngine
             'completed_at' => $run->completed_at?->toIso8601String(),
             'cancelled_at' => $run->cancelled_at?->toIso8601String(),
             'execution_seconds' => $run->execution_seconds,
+            'configurable_parameters' => $this->configurableParametersFor($run),
             'created_at' => $run->created_at?->toIso8601String(),
         ];
     }
@@ -481,6 +508,49 @@ class BacktestSimulationEngine
             'ranking' => null,
             'disclosure' => 'Comparison is descriptive only; StoX does not rank or promote a winning Backtest.',
         ];
+    }
+
+    /** @return array<string,mixed> */
+    public function createDraftFromRun(BacktestRun $run, User $actor): array
+    {
+        if ($run->status !== BacktestRun::STATUS_COMPLETED) {
+            throw ValidationException::withMessages(['run' => 'A Strategy Draft can be created only from a completed Backtest.']);
+        }
+        $overrides = $run->execution_assumptions_json['parameter_overrides'] ?? [];
+        if (! is_array($overrides) || $overrides === []) {
+            throw ValidationException::withMessages(['parameter_overrides' => 'This Backtest did not use configurable parameter overrides.']);
+        }
+        $source = ReusableArtifactVersion::query()->with('artifact')->find($run->reusable_artifact_version_id);
+        if (! $source || $source->status !== ReusableArtifactVersion::STATUS_PUBLISHED) {
+            throw ValidationException::withMessages(['strategy' => 'The pinned published Strategy artifact is unavailable.']);
+        }
+        if ((int) $source->artifact->owner_user_id !== (int) $actor->id) {
+            throw ValidationException::withMessages(['strategy' => 'Fork the shared Strategy into your Library before creating a Draft from this Backtest.']);
+        }
+        $content = $this->strategyParameters->apply($source->content_json, $overrides);
+        $metadata = is_array($content['metadata'] ?? null) ? $content['metadata'] : [];
+        $content['metadata'] = array_merge($metadata, ['backtest_provenance' => [
+            'backtest_run_id' => $run->id,
+            'source_artifact_version_id' => $source->id,
+            'parameter_overrides' => $overrides,
+        ]]);
+        $content = ArtifactEnvelope::withFreshHash($content);
+        [$major, $minor, $patch] = array_map('intval', explode('.', preg_replace('/[-+].*$/', '', $source->semver)));
+        $draft = $this->artifactLifecycle->createNextDraft($source, $actor, $major.'.'.$minor.'.'.($patch + 1), $content);
+
+        return ['draft_version_id' => $draft->id, 'artifact_uuid' => $source->artifact->artifact_uuid,
+            'semver' => $draft->semver, 'status' => $draft->status, 'library_path' => '/artifact-library/'.$source->artifact->artifact_uuid];
+    }
+
+    /** @return list<array<string,mixed>> */
+    private function configurableParametersFor(BacktestRun $run): array
+    {
+        if (! $run->reusable_artifact_version_id) {
+            return [];
+        }
+        $version = ReusableArtifactVersion::query()->find($run->reusable_artifact_version_id);
+
+        return $version ? $this->strategyParameters->declarations($version->content_json) : [];
     }
 
     /**

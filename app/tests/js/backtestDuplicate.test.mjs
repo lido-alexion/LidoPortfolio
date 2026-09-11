@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const src = join(dirname(fileURLToPath(import.meta.url)), '../../resources/js/src');
 const page = readFileSync(join(src, 'pages/BacktestHistoryPage.jsx'), 'utf8');
+const detailPage = readFileSync(join(src, 'pages/BacktestDetailPage.jsx'), 'utf8');
 const helpers = readFileSync(join(src, 'utils/backtestHelpers.js'), 'utf8');
 const docs = readFileSync(join(src, 'data/appDocumentation.js'), 'utf8');
 
@@ -51,4 +52,13 @@ test('V5 Backtest form exposes pinned next-session execution assumptions', () =>
     assert.match(page, /Next eligible session OHLC average/);
     assert.match(page, /id="bt-slippage"/);
     assert.match(page, /adverse_slippage_percent/);
+});
+
+test('V5 Backtest exposes only declared parameter overrides and Backtest-to-Draft', () => {
+    assert.match(page, /meta\?\.configurable_parameters/);
+    assert.match(page, /parameter_overrides/);
+    assert.match(page, /Only parameters declared configurable/);
+    assert.match(detailPage, /parameters_modified/);
+    assert.match(detailPage, /strategy-draft/);
+    assert.match(detailPage, /Create Strategy Draft/);
 });

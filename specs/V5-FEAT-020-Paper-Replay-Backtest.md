@@ -1,6 +1,6 @@
 # V5 FEAT-020 — Paper Portfolio, Portfolio Replay, and Strategy Backtest
 
-**Status:** IN PROGRESS — configurable-parameter declaration decision required
+**Status:** COMPLETE — implemented and verified 2026-09-11
 **Date:** 2026-09-06
 
 ## 1. Problem
@@ -24,6 +24,7 @@ These are deliberately distinct. Backtest is simplified and Strategy-scoped; Rep
 - Overrides do not mutate the published Strategy. A result using overrides is clearly identified as modified parameters.
 - V5 does not automatically optimize/search parameter combinations, rank winners or promote parameters into production.
 - A Backtest may create a new unpublished FEAT-008 Strategy Draft carrying the tested configurable parameters and Backtest provenance. Normal validation/publication/deployment still applies.
+- FEAT-008 declares configurability through its immutable `configurable_parameters` schema. Backtest accepts overrides as a key/value map, rejects undeclared keys and values outside the declared type/bounds/choices, and records the applied map as immutable run evidence. Creating a Draft increments the source lineage's patch SemVer, changes only declared definition paths, and records the source artifact version and Backtest run as provenance. A shared artifact must first be Forked into the Investor's own Library.
 
 ### 2.2 Portfolio Replay
 - Replay is Portfolio-scoped and uses production StoX economic semantics wherever applicable: multiple Strategies, Strategy ownership, capital/funding state and limits, soft loans, inter-Strategy lending/recalls, bridge funding, competing capital, target-seeking/partial execution, internal netting/reallocation and actual simulated state-driven execution.

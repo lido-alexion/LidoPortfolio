@@ -2,8 +2,9 @@
 
 namespace App\Services\Artifacts;
 
+use App\Engines\Strategy\SupportedIndicators;
 use App\Models\PortfolioProfile;
-use App\Services\Artifacts\Contracts\ArtifactRegistryInterface;
+use App\Services\Indicators\IndicatorCapability;
 use App\Services\Indicators\IndicatorRegistry;
 use App\Services\Indicators\IndicatorStatus;
 use App\Services\Indicators\IndicatorType as IndType;
@@ -16,6 +17,7 @@ final class ArtifactValidationService
 {
     public function __construct(
         private IndicatorRegistry $indicators,
+        private StrategyParameterSchema $strategyParameters,
     ) {}
 
     public function validateEnvelope(array $envelope, ?PortfolioProfile $profile = null): ValidationResult
@@ -220,6 +222,9 @@ final class ArtifactValidationService
     private function validateStrategy(array $envelope, ?PortfolioProfile $profile, array &$errors, array &$warnings, array &$resolved): void
     {
         $def = $envelope['definition'];
+        foreach ($this->strategyParameters->declarationErrors($envelope) as $message) {
+            $errors[] = new ValidationIssue('STRATEGY_CONFIGURABLE_PARAMETER_SCHEMA', $message, 'error', '$.configurable_parameters');
+        }
         foreach (['eligibility_sources', 'root', 'children'] as $forbidden) {
             // eligibility_sources allowed; embedded trees not
         }
@@ -283,9 +288,9 @@ final class ArtifactValidationService
             }
             $resolved[] = ['artifact_type' => ArtifactType::INDICATOR, 'ref' => $key];
             $ind = $this->indicators->find($key) ?? ($this->indicators->resolveId($key) ? $this->indicators->get($this->indicators->resolveId($key)) : null);
-            if ($ind === null || ! $ind->hasCapability(\App\Services\Indicators\IndicatorCapability::STRATEGY_SCORABLE)) {
+            if ($ind === null || ! $ind->hasCapability(IndicatorCapability::STRATEGY_SCORABLE)) {
                 // Allow catalogue keys even if capability flag missing on stubs — SupportedIndicators façade is BC check
-                if (! \App\Engines\Strategy\SupportedIndicators::isSupported($key)) {
+                if (! SupportedIndicators::isSupported($key)) {
                     $errors[] = new ValidationIssue(
                         'STRATEGY_KEYS_REGISTRY',
                         "Scoring key is not strategy-scorable: {$key}",

@@ -26,6 +26,7 @@
 - Mapped legacy editors/registries are explicitly read-only compatibility projections and link to the authoritative Artifact Library; legacy mutation/enable/archive/delete endpoints reject lifecycle bypasses.
 - All remaining legacy Strategy/Screener creation, validated JSON import and shared-copy authoring paths now create account-owned Artifact Library Drafts without creating runnable unmapped rows. New Screener Drafts retain suggested Portfolio scope, watchlist/index, schedule and notification settings for the later explicit bind transaction.
 - The rollout command supports an exact transactional `--dry-run` inventory, including per-row failures and a failing exit code, before any committing run. The tested operational and restore procedure is documented in [`V5-FEAT-008-ROLLOUT-RUNBOOK.md`](V5-FEAT-008-ROLLOUT-RUNBOOK.md).
+- Strategy envelopes support an optional minimal immutable configurable-parameter declaration (stable key, definition-relative path, scalar type, and optional bounds/choices). Publication rejects malformed or nonexistent paths. FEAT-020 consumes only these declarations for validated run-local overrides and provenance-linked Backtest-to-Draft creation.
 
 Focused evidence at this checkpoint:
 

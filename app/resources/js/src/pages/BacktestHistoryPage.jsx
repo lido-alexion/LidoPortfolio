@@ -89,6 +89,7 @@ export default function BacktestHistoryPage() {
     const [activeRun, setActiveRun] = useState(null);
     const [selectedIds, setSelectedIds] = useState([]);
     const [comparison, setComparison] = useState(null);
+    const [parameterOverrides, setParameterOverrides] = useState({});
 
     const [form, setForm] = useState({
         name: '',
@@ -198,6 +199,14 @@ export default function BacktestHistoryPage() {
                 tags: parseTagsInput(form.tags),
                 price_method: form.price_method,
                 adverse_slippage_percent: Number(form.adverse_slippage_percent || 0),
+                parameter_overrides: Object.fromEntries((meta?.configurable_parameters || []).flatMap((parameter) => {
+                    const raw = parameterOverrides[parameter.key];
+                    if (raw === undefined || raw === '') return [];
+                    if (parameter.type === 'integer') return [[parameter.key, Number.parseInt(raw, 10)]];
+                    if (parameter.type === 'number') return [[parameter.key, Number(raw)]];
+                    if (parameter.type === 'boolean') return [[parameter.key, raw === true || raw === 'true']];
+                    return [[parameter.key, raw]];
+                })),
                 session_token: getOrCreateBacktestSessionToken(),
             };
             const result = await startBacktest(payload, setActiveRun);
@@ -415,6 +424,14 @@ export default function BacktestHistoryPage() {
                                             <NumberInput id="bt-slippage" value={form.adverse_slippage_percent} onChange={(e) => setForm({ ...form, adverse_slippage_percent: e.target.value })} min={0} max={100} step={0.01} compact disabled={starting} />
                                         </div>
                                     </div>
+                                    {(meta?.configurable_parameters || []).length > 0 && <div className="border rounded p-2">
+                                        <div className="fw-semibold small">Optional Strategy parameter overrides</div>
+                                        <div className="text-muted small mb-2">Only parameters declared configurable by this published Strategy are available. Blank values use the published value.</div>
+                                        <div className="row g-2">{meta.configurable_parameters.map((parameter) => <div className="col-sm-6" key={parameter.key}>
+                                            <label className="form-label small mb-1" htmlFor={`bt-param-${parameter.key}`}>{parameter.label || parameter.key}</label>
+                                            {Array.isArray(parameter.enum) ? <select id={`bt-param-${parameter.key}`} className="form-select form-select-sm" value={parameterOverrides[parameter.key] ?? ''} onChange={(event) => setParameterOverrides({ ...parameterOverrides, [parameter.key]: event.target.value })}><option value="">Published value</option>{parameter.enum.map((choice) => <option key={String(choice)} value={String(choice)}>{String(choice)}</option>)}</select> : parameter.type === 'boolean' ? <select id={`bt-param-${parameter.key}`} className="form-select form-select-sm" value={parameterOverrides[parameter.key] ?? ''} onChange={(event) => setParameterOverrides({ ...parameterOverrides, [parameter.key]: event.target.value })}><option value="">Published value</option><option value="true">True</option><option value="false">False</option></select> : <input id={`bt-param-${parameter.key}`} className="form-control form-control-sm" type={parameter.type === 'string' ? 'text' : 'number'} min={parameter.minimum} max={parameter.maximum} value={parameterOverrides[parameter.key] ?? ''} onChange={(event) => setParameterOverrides({ ...parameterOverrides, [parameter.key]: event.target.value })} />}
+                                        </div>)}</div>
+                                    </div>}
                                     <div>
                                         <label className="form-label small mb-1" htmlFor="bt-notes">Notes</label>
                                         <textarea

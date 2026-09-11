@@ -26,6 +26,7 @@ StoX needs a first-class lifecycle and distribution model for reusable trading a
 - Export/import uses a portable published package with staged validation before import. Foreign imports become a Fork/new local lineage rather than silently claiming native provenance.
 - AI may assist creation of Drafts only. AI cannot bypass publication, validation, versioning or permission rules.
 - One active Draft per artifact lineage; optimistic concurrency prevents lost updates.
+- A Strategy may declare a minimal `configurable_parameters` array outside `definition`. Each declaration has a unique stable `key`, a `path` relative to `definition`, a scalar `type` (`integer`, `number`, `boolean`, or `string`), and may include `label`, numeric `minimum`/`maximum`, or an `enum`. The path must resolve to an existing Strategy definition value when the artifact is validated/published. Absence or an empty array means no parameter is configurable. This declaration authorizes FEAT-020 run-local overrides only; it does not make arbitrary Strategy logic or Indicator formulas editable.
 - Published artifacts are not physically deleted. Archive changes discoverability/availability but preserves history and active bindings.
 - Active bindings may continue referencing archived published versions unless their usability becomes Blocked by an actual dependency/runtime condition.
 - Usability state is `Usable | Warning | Blocked`. A blocked active binding may raise FEAT-004 Action required notification.
@@ -65,6 +66,7 @@ StoX needs a first-class lifecycle and distribution model for reusable trading a
 10. Cyclic dependency publication is rejected.
 11. Blocked active bindings are visible and can integrate with FEAT-004 Action-required notifications.
 12. Automated tests cover immutability, dependency pinning, upgrade, fork/share, bundle/import and authorization semantics.
+13. Strategy configurable-parameter declarations are validated as part of the immutable envelope; undeclared paths and invalid schemas cannot be published.
 
 ## Dependencies
 - FEAT-007 Indicator Registry.

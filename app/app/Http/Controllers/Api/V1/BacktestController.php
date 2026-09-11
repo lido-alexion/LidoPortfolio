@@ -31,6 +31,7 @@ class BacktestController extends Controller
                 BacktestRun::STAGE_COMPLETED,
                 BacktestRun::STAGE_FAILED,
             ],
+            'configurable_parameters' => $this->engine->configurableParameters(\activePortfolio()),
         ]);
     }
 
@@ -64,6 +65,7 @@ class BacktestController extends Controller
             'strategy_version_id' => 'nullable|integer',
             'price_method' => ['nullable', Rule::in(PortfolioProfile::SIMULATION_PRICE_METHODS)],
             'adverse_slippage_percent' => 'nullable|numeric|between:0,100',
+            'parameter_overrides' => 'nullable|array',
         ]);
 
         $result = $this->engine->start($profile, $validated);
@@ -106,6 +108,11 @@ class BacktestController extends Controller
         $run = $this->engine->cancel($this->findOwned($id));
 
         return ApiEnvelope::success($this->engine->format($run));
+    }
+
+    public function createDraft(int $id): JsonResponse
+    {
+        return ApiEnvelope::success($this->engine->createDraftFromRun($this->findOwned($id), request()->user()));
     }
 
     public function update(Request $request, int $id): JsonResponse

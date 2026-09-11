@@ -195,6 +195,7 @@ export default function BacktestDetailPage() {
     const [loading, setLoading] = useState(true);
     const [resuming, setResuming] = useState(false);
     const [savingMeta, setSavingMeta] = useState(false);
+    const [creatingDraft, setCreatingDraft] = useState(false);
     const [editName, setEditName] = useState('');
     const [editNotes, setEditNotes] = useState('');
     const [editTags, setEditTags] = useState('');
@@ -296,6 +297,18 @@ export default function BacktestDetailPage() {
         }
     };
 
+    const onCreateDraft = async () => {
+        setCreatingDraft(true);
+        try {
+            const response = await api.post(`/v1/backtests/${id}/strategy-draft`);
+            showToast(`Strategy Draft ${response.data?.data?.semver || ''} created in Artifact Library`, 'success');
+        } catch (e) {
+            showToast(e?.response?.data?.error?.message || e.message || 'Draft creation failed', 'danger');
+        } finally {
+            setCreatingDraft(false);
+        }
+    };
+
     if (loading && !detail) {
         return <p className="text-muted">Loading backtest…</p>;
     }
@@ -337,6 +350,7 @@ export default function BacktestDetailPage() {
                     )}
                 </div>
                 <div className="d-flex flex-wrap gap-2">
+                    {detail.status === 'completed' && detail.execution_assumptions?.parameters_modified && <button type="button" className="btn btn-primary btn-sm" onClick={onCreateDraft} disabled={creatingDraft}>{creatingDraft ? 'Creating Draft…' : 'Create Strategy Draft'}</button>}
                     <Link to={ROUTES.BACKTESTS} className="btn btn-outline-secondary btn-sm">All backtests</Link>
                     <button type="button" className="btn btn-outline-secondary btn-sm" onClick={load} disabled={loading || resuming}>
                         Refresh
@@ -345,6 +359,8 @@ export default function BacktestDetailPage() {
             </div>
 
             <BacktestProgressBanner run={detail} resuming={resuming} />
+
+            {detail.execution_assumptions?.parameters_modified && <div className="alert alert-info mb-0"><strong>Modified Strategy parameters:</strong> {Object.entries(detail.execution_assumptions.parameter_overrides || {}).map(([key, value]) => `${key}=${String(value)}`).join(', ')}</div>}
 
             {detail.error_message && (
                 <div className="alert alert-danger mb-0">{detail.error_message}</div>
