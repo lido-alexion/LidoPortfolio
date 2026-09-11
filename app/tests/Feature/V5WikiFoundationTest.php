@@ -7,6 +7,7 @@ use App\Models\PortfolioProfile;
 use App\Models\User;
 use App\Models\WikiPage;
 use App\Models\WikiPageRevision;
+use App\Services\Wiki\WikiExportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
@@ -277,5 +278,33 @@ class V5WikiFoundationTest extends TestCase
             'profile_id' => $profile->id, 'uuid' => $uuid, 'mime_type' => 'image/jpeg',
             'display_filename' => $filename, 'full_filename' => $filename,
         ]);
+    }
+
+    public function test_page_and_branch_exports_rewrite_included_links_and_mark_excluded_targets(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        $this->actingAs($user)->withProfileHeader($user, $profile);
+        $root = $this->postJson('/api/knowledge-board/wiki/pages', ['title' => 'Root'])->json('data.uuid');
+        $child = $this->postJson('/api/knowledge-board/wiki/pages', ['title' => 'Child', 'parent_uuid' => $root])->json('data.uuid');
+        $outside = $this->postJson('/api/knowledge-board/wiki/pages', ['title' => 'Outside'])->json('data.uuid');
+        $this->putJson('/api/knowledge-board/wiki/pages/'.$root, [
+            'markdown' => "Included [[wiki:{$child}]]\nExcluded [[wiki:{$outside}]]",
+        ])->assertOk();
+
+        $single = $this->get('/api/knowledge-board/wiki/pages/'.$root.'/export')->assertOk();
+        $this->assertStringContainsString('Unavailable Wiki Page', $single->getContent());
+
+        $response = app(WikiExportService::class)->archive($profile, $root);
+        $path = $response->getFile()->getPathname();
+        $zip = new \ZipArchive;
+        $this->assertTrue($zip->open($path));
+        $this->assertSame(2, $zip->numFiles);
+        $rootEntry = collect(range(0, $zip->numFiles - 1))->map(fn (int $index) => $zip->getNameIndex($index))->first(fn (string $name) => ! str_contains($name, '/'));
+        $markdown = $zip->getFromName($rootEntry);
+        $this->assertStringContainsString('child-', $markdown);
+        $this->assertStringContainsString('Unavailable Wiki Page', $markdown);
+        $zip->close();
+        @unlink($path);
     }
 }

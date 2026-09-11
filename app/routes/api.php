@@ -87,6 +87,7 @@ use App\Http\Controllers\Api\V1\TradingOs\ReviewController as TradingOsReviewCon
 use App\Http\Controllers\Api\V1\TradingOs\TotpController as TradingOsTotpController;
 use App\Http\Controllers\Api\WatchlistController;
 use App\Http\Controllers\Api\WatchlistsController;
+use App\Http\Controllers\Api\WikiExportController;
 use App\Http\Controllers\Api\WikiPageController;
 use App\Http\Controllers\Api\WikiShareController;
 use Illuminate\Support\Facades\Route;
@@ -226,8 +227,11 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::prefix('knowledge-board')->group(function () {
         Route::get('/search', [KnowledgeBoardSearchController::class, 'index']);
         Route::get('/wiki/pages', [WikiPageController::class, 'index']);
+        Route::get('/wiki/export', [WikiExportController::class, 'wiki']);
         Route::post('/wiki/pages', [WikiPageController::class, 'store']);
         Route::get('/wiki/pages/{page}', [WikiPageController::class, 'show'])->whereUuid('page');
+        Route::get('/wiki/pages/{page}/export', [WikiExportController::class, 'page'])->whereUuid('page');
+        Route::get('/wiki/pages/{page}/export-branch', [WikiExportController::class, 'branch'])->whereUuid('page');
         Route::put('/wiki/pages/{page}', [WikiPageController::class, 'update'])->whereUuid('page');
         Route::put('/wiki/pages/{page}/move', [WikiPageController::class, 'move'])->whereUuid('page');
         Route::get('/wiki/pages/{page}/revisions/{revision}', [WikiPageController::class, 'revision'])->whereUuid('page')->whereNumber('revision');
