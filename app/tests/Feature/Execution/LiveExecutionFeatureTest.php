@@ -37,6 +37,13 @@ class LiveExecutionFeatureTest extends TestCase
         $this->withoutMiddleware(ValidateCsrfToken::class);
         Http::preventStrayRequests();
         app(FakeBrokerGateway::class)->reset();
+        Carbon::setTestNow(Carbon::parse('2026-09-11 08:00:00', 'Asia/Kolkata'));
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
     }
 
     public function test_new_portfolio_defaults_to_manual_and_manual_does_not_submit(): void

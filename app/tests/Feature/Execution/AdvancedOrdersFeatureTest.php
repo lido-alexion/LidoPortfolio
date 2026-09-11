@@ -19,10 +19,12 @@ use App\Services\Broker\FakeBrokerGateway;
 use App\Services\CashManagementService;
 use App\Services\CorporateActionService;
 use App\Services\Ownership\HoldingAdoptionService;
-use App\Services\Security\TotpService;
 use App\Services\Protection\PositionProtectionService;
+use App\Services\Security\TotpService;
 use App\Services\StrategyConfigurationService;
 use App\Services\TransactionWriteService;
+use Carbon\Carbon;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -41,9 +43,16 @@ class AdvancedOrdersFeatureTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class);
+        $this->withoutMiddleware(ValidateCsrfToken::class);
         Http::preventStrayRequests();
         app(FakeBrokerGateway::class)->reset();
+        Carbon::setTestNow(Carbon::parse('2026-09-11 08:00:00', 'Asia/Kolkata'));
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
     }
 
     public function test_gtt_target_placement_uses_strategy_target_price(): void
@@ -627,6 +636,21 @@ class AdvancedOrdersFeatureTest extends TestCase
 
     protected function setMode(User $user, PortfolioProfile $profile, string $mode, bool $confirm = false): void
     {
+        app(FakeBrokerGateway::class)->reconciliationSnapshot = [
+            'provider' => 'kite',
+            'captured_at' => now()->toISOString(),
+            'holdings' => $profile->holdings()->with('stock')->get()->groupBy('stock_id')->map(function ($rows): array {
+                $first = $rows->first();
+
+                return [
+                    'symbol' => $first->stock->symbol,
+                    'quantity' => (float) $rows->sum('quantity'),
+                    'cost' => (float) $rows->sum('invested_amount'),
+                ];
+            })->values()->all(),
+            'positions' => [],
+            'current_cash' => app(CashManagementService::class)->balance($profile),
+        ];
         $this->putJson('/api/v1/execution/mode', [
             'execution_mode' => $mode,
             'confirm_automatic' => $confirm,
