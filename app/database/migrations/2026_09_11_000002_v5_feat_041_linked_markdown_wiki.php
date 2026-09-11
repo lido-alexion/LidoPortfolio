@@ -30,7 +30,7 @@ return new class extends Migration
             $table->string('change_type');
             $table->string('title');
             $table->string('slug');
-            $table->foreignId('parent_id')->nullable()->constrained('portfolio_wiki_pages')->nullOnDelete();
+            $table->unsignedBigInteger('parent_id')->nullable()->index();
             $table->unsignedInteger('display_order')->default(0);
             $table->longText('markdown')->default('');
             $table->timestamp('created_at');

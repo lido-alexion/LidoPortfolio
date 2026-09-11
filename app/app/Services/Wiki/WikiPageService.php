@@ -120,7 +120,12 @@ final class WikiPageService
             $position = min(max(0, $displayOrder), $siblings->count());
             $siblings->splice($position, 0, [$page]);
             foreach ($siblings as $order => $sibling) {
-                $sibling->forceFill(['parent_id' => $parent?->id, 'display_order' => $order])->saveQuietly();
+                $sibling->forceFill(['parent_id' => $parent?->id, 'display_order' => $order]);
+                $changed = $sibling->isDirty();
+                $sibling->saveQuietly();
+                if ($changed && ! $sibling->is($page)) {
+                    $this->revise($sibling, $user, 'reordered');
+                }
             }
             $page->refresh();
             $this->revise($page, $user, 'moved');

@@ -307,4 +307,20 @@ class V5WikiFoundationTest extends TestCase
         $zip->close();
         @unlink($path);
     }
+
+    public function test_parent_deletion_does_not_rewrite_immutable_hierarchy_evidence(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        $parent = WikiPage::query()->create(['profile_id' => $profile->id, 'uuid' => (string) Str::uuid(), 'title' => 'Parent', 'slug' => 'parent', 'markdown' => '']);
+        $child = WikiPage::query()->create(['profile_id' => $profile->id, 'parent_id' => $parent->id, 'uuid' => (string) Str::uuid(), 'title' => 'Child', 'slug' => 'child', 'markdown' => '']);
+        $revision = WikiPageRevision::query()->create([
+            'page_id' => $child->id, 'user_id' => $user->id, 'revision_number' => 1, 'change_type' => 'created',
+            'title' => 'Child', 'slug' => 'child', 'parent_id' => $parent->id, 'display_order' => 0, 'markdown' => '', 'created_at' => now(),
+        ]);
+        $child->update(['parent_id' => null]);
+        $parent->delete();
+
+        $this->assertSame($parent->id, $revision->fresh()->parent_id);
+    }
 }

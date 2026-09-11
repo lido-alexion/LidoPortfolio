@@ -94,6 +94,8 @@ describe('duplicateBacktestPayload (V4-FEAT-014)', () => {
             initial_capital: 2500000,
             notes: 'keep these notes',
             tags: ['swing', 'v4'],
+            price_method: 'next_open',
+            adverse_slippage_percent: 0,
             session_token: 'session-token-1',
         });
         expect(payload).not.toHaveProperty('strategy_version_id');
