@@ -29,6 +29,8 @@
 
 Focused evidence at this checkpoint:
 
+- 2026-09-11 closure recheck: an isolated fresh migrated/seeded database completed the full migration chain and the read-only `--dry-run` predicted 2 mappings, 0 already mapped and 0 failures with no committed writes. Production-shaped restored-data evidence remains required.
+
 - Dedicated Artifact lifecycle/runtime/API/rollout suite: **73 tests / 434 assertions passed** after the authoring cutover and dry-run addition.
 - Combined Screener behavior, authoring, registry and sharing suite: **38 tests / 359 assertions passed**.
 - Frontend JavaScript groups: **144 contract/unit tests + 59 component tests passed**; TypeScript no-emit passed.

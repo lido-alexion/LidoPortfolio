@@ -3,6 +3,8 @@
 **Status:** IMPLEMENTED — production ownership verification pending
 **Date:** 2026-09-07
 
+**2026-09-11 local closure recheck:** the full migration/seed chain completed in an isolated database and the read-only ownership audit returned `safe_to_enforce: true`, one Admin account checked, and zero conflicts. This validates the command and clean-seed invariant only; the same read-only command must still run against production data before deployment.
+
 ## 1. Problem
 StoX currently needs a hard product and authorization boundary between administrative operation of the platform and an Investor's portfolio/trading application. Navigation-only hiding is insufficient: Admin accounts must not accidentally become investment-domain owners, and Investor accounts must not gain administrative capabilities through direct URLs or APIs.
 

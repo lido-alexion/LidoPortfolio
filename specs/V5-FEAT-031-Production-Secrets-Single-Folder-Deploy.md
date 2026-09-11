@@ -7,6 +7,8 @@
 | Production target | GoDaddy/cPanel, `/portfolio` subdirectory |
 | Related | [`../deploy/SINGLE-FOLDER-DEPLOY.md`](../deploy/SINGLE-FOLDER-DEPLOY.md) |
 
+**2026-09-11 local closure recheck:** the PowerShell packager completed using Node 24, produced exactly one `portfolio/build`, included both parent and nested deny rules plus the external environment example, and contained no `.env`, `DBConfig.php`, `public/hot` or nested `laravel/public/build`. The production cutover, exposure probes and cron-path confirmation remain intentionally pending authorization.
+
 ## Problem
 
 The legacy production shape uses sibling `public_html/lidoportfolio` and
