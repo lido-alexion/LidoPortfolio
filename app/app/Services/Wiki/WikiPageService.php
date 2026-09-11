@@ -40,6 +40,13 @@ final class WikiPageService
         ];
     }
 
+    public function hierarchyPath(WikiPage $page, PortfolioProfile $profile): string
+    {
+        $this->assertOwned($page, $profile);
+
+        return collect($this->breadcrumbs($page))->pluck('title')->implode(' / ');
+    }
+
     public function create(PortfolioProfile $profile, User $user, array $data): WikiPage
     {
         return DB::transaction(function () use ($profile, $user, $data): WikiPage {

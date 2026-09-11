@@ -224,4 +224,21 @@ class V5WikiFoundationTest extends TestCase
         $this->assertStringContainsString('Private target', $publicHtml);
         $this->assertStringContainsString($targetUrl, $publicHtml);
     }
+
+    public function test_knowledge_search_combines_notes_and_wiki_with_hierarchy_context(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        $this->actingAs($user)->withProfileHeader($user, $profile);
+        $this->postJson('/api/knowledge-board/notes', ['title' => 'Valuation note', 'content_html' => '<p>Quality thesis</p>'])->assertCreated();
+        $root = $this->postJson('/api/knowledge-board/wiki/pages', ['title' => 'Companies'])->json('data.uuid');
+        $this->postJson('/api/knowledge-board/wiki/pages', [
+            'title' => 'Valuation note', 'markdown' => 'Quality thesis', 'parent_uuid' => $root,
+        ])->assertCreated();
+
+        $response = $this->getJson('/api/knowledge-board/search?q=Quality')->assertOk();
+        $this->assertSame(['note', 'wiki_page'], $response->json('data.*.type'));
+        $this->assertSame('Knowledge Board / Notes', $response->json('data.0.context'));
+        $this->assertSame('Knowledge Board / Companies / Valuation note', $response->json('data.1.context'));
+    }
 }

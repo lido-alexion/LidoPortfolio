@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\IndexController;
 use App\Http\Controllers\Api\InviteAcceptController;
 use App\Http\Controllers\Api\KnowledgeBoardImageController;
 use App\Http\Controllers\Api\KnowledgeBoardNoteController;
+use App\Http\Controllers\Api\KnowledgeBoardSearchController;
 use App\Http\Controllers\Api\KnowledgeBoardTagController;
 use App\Http\Controllers\Api\MarketDepthController;
 use App\Http\Controllers\Api\NotificationCenterController;
@@ -221,6 +222,7 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     });
 
     Route::prefix('knowledge-board')->group(function () {
+        Route::get('/search', [KnowledgeBoardSearchController::class, 'index']);
         Route::get('/wiki/pages', [WikiPageController::class, 'index']);
         Route::post('/wiki/pages', [WikiPageController::class, 'store']);
         Route::get('/wiki/pages/{page}', [WikiPageController::class, 'show'])->whereUuid('page');
