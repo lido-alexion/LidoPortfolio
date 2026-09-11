@@ -6,6 +6,7 @@ use App\Engines\Execution\ExecutionGate;
 use App\Engines\Execution\LiveBrokerExecutionService;
 use App\Models\BrokerConnection;
 use App\Models\PortfolioProfile;
+use App\Models\PortfolioReconciliationRun;
 use App\Models\Setting;
 use App\Models\Stock;
 use App\Models\TradingOrder;
@@ -235,12 +236,21 @@ class LiveExecutionFeatureTest extends TestCase
         $this->assertSame(TradingRecommendation::STATUS_PENDING_EXECUTION, $buy->fresh()->status);
         $this->assertSame(0, Transaction::query()->where('recommendation_id', $buy->id)->count());
 
+        $fake->reconciliationSnapshot = [
+            'provider' => 'kite', 'captured_at' => now()->toISOString(),
+            'holdings' => [[
+                'symbol' => $buy->security->symbol, 'exchange' => 'NSE', 'quantity' => 5,
+            ]],
+            'positions' => [], 'current_cash' => 0,
+        ];
         $fake->seedSnapshot(new BrokerOrderSnapshot($buyOrder->broker_order_id, 'filled', 5, 0, 101, 'COMPLETE'));
         $live->reconcileOrder($profile, $buyOrder->fresh());
         $this->assertSame(TradingRecommendation::STATUS_EXECUTED, $buy->fresh()->status);
         $this->assertSame(1, Transaction::query()->where('recommendation_id', $buy->id)->count());
+        $this->assertSame(1, PortfolioReconciliationRun::query()->where('profile_id', $profile->id)->where('trigger', 'post_trade')->count());
         $live->reconcileOrder($profile, $buyOrder->fresh());
         $this->assertSame(1, Transaction::query()->where('recommendation_id', $buy->id)->count());
+        $this->assertSame(1, PortfolioReconciliationRun::query()->where('profile_id', $profile->id)->where('trigger', 'post_trade')->count());
 
         $sell = $this->pendingSell($profile);
         $this->postJson('/api/v1/execution/submit-selected', [

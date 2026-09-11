@@ -22,6 +22,7 @@ use App\Services\Execution\RecommendationExecutionLifetime;
 use App\Services\Lending\RecommendationLendingCoordinator;
 use App\Services\PortfolioLoggerService;
 use App\Services\Protection\PositionProtectionService;
+use App\Services\Reconciliation\PortfolioReconciliationService;
 use Throwable;
 
 /**
@@ -39,6 +40,7 @@ class LiveBrokerExecutionService
         protected PortfolioLoggerService $logger,
         protected InternalRecommendationMatcher $internalMatcher,
         protected RecommendationExecutionLifetime $executionLifetime,
+        protected PortfolioReconciliationService $portfolioReconciliation,
     ) {}
 
     /**
@@ -152,8 +154,7 @@ class LiveBrokerExecutionService
         iterable $profiles,
         ?PortfolioProfile $authorizedSemiProfile = null,
         array $selectedSemiIds = [],
-    ): array
-    {
+    ): array {
         $profileCollection = collect($profiles);
         $profileScope = $profileCollection->pluck('id')->map(fn ($id) => (int) $id)->sort()->implode(',');
         $semiScope = collect($selectedSemiIds)->map(fn ($id) => (int) $id)->sort()->implode(',');
@@ -569,6 +570,7 @@ class LiveBrokerExecutionService
 
     public function applySnapshot(PortfolioProfile $profile, TradingOrder $order, BrokerOrderSnapshot $snapshot): TradingOrder
     {
+        $previousFilled = (float) $order->filled_quantity;
         $mapped = $this->mapBrokerStatus($snapshot->status);
         $order->forceFill([
             'broker_status' => $mapped,
@@ -600,6 +602,16 @@ class LiveBrokerExecutionService
                 'status' => TradingOrder::STATUS_CANCELLED,
                 'cancelled_at' => now(),
             ])->save();
+        }
+
+        if (($terminalFilled || $terminalUnfilled) && $filled > $previousFilled + 0.0001) {
+            try {
+                $this->portfolioReconciliation->run($profile->fresh(), 'post_trade');
+            } catch (Throwable $error) {
+                $this->logger->event('LiveBrokerExecutionService', 'reconciliation.post_trade_failed', 'warning', 'Post-trade Portfolio reconciliation could not start', [
+                    'profile_id' => $profile->id, 'order_id' => $order->id, 'error' => $error->getMessage(),
+                ]);
+            }
         }
 
         $this->logger->event('LiveBrokerExecutionService', 'execution.broker_reconciled', 'info', 'Broker order reconciled', [
