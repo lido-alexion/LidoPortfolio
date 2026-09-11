@@ -9,6 +9,7 @@ import AnalyseStockButton from '../components/AnalyseStockButton';
 import DashboardTopMoverCard from '../components/DashboardTopMoverCard';
 import DashboardAllocationCard from '../components/DashboardAllocationCard';
 import KiteReadinessCard from '../components/KiteReadinessCard';
+import PortfolioReconciliationCard from '../components/PortfolioReconciliationCard';
 import PercentGradientBar from '../components/PercentGradientBar';
 import SentimentGauge from '../components/SentimentGauge';
 import MarketPhaseGauge from '../components/MarketPhaseGauge';
@@ -774,6 +775,9 @@ export default function DashboardPage() {
             {activePortfolio?.portfolio_type !== 'paper' ? <div className="col-12">
                 <KiteReadinessCard executionMode={activePortfolio?.execution_mode} />
             </div> : <div className="col-12"><div className="alert alert-warning mb-0"><strong>PAPER portfolio</strong> · Uses simulated cash and execution. Kite submission and reconciliation are unavailable.</div></div>}
+            {activePortfolio?.portfolio_type !== 'paper' ? <div className="col-12">
+                <PortfolioReconciliationCard executionMode={activePortfolio?.execution_mode} />
+            </div> : null}
             {loadError ? (
                 <div className="col-12">
                     <div className="alert alert-warning mb-0">{loadError}</div>
