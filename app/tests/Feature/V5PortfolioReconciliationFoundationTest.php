@@ -6,12 +6,14 @@ use App\Engines\Execution\ExecutionGate;
 use App\Models\Holding;
 use App\Models\PortfolioProfile;
 use App\Models\PortfolioReconciliationRun;
+use App\Models\Setting;
 use App\Models\Stock;
 use App\Models\User;
 use App\Services\Broker\BrokerGateway;
 use App\Services\Broker\FakeBrokerGateway;
 use App\Services\CashManagementService;
 use App\Services\Reconciliation\PortfolioReconciliationService;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use LogicException;
 use Tests\TestCase;
@@ -19,6 +21,29 @@ use Tests\TestCase;
 class V5PortfolioReconciliationFoundationTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_scheduled_reconciliation_runs_once_after_close_delay_and_skips_before_due_time(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        $profile->forceFill(['execution_mode' => PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC])->save();
+        Setting::setValue('cron_timezone', 'Asia/Kolkata');
+        Setting::setValue('market_close_time', '15:30');
+        Setting::setValue('reconciliation_delay_minutes', '30');
+        Carbon::setTestNow(Carbon::parse('2026-09-11 15:59:00', 'Asia/Kolkata'));
+        try {
+            $this->artisan('portfolio:reconcile')->assertSuccessful();
+            $this->assertSame(0, PortfolioReconciliationRun::query()->count());
+
+            Carbon::setTestNow(Carbon::parse('2026-09-11 16:00:00', 'Asia/Kolkata'));
+            $this->artisan('portfolio:reconcile')->assertSuccessful();
+            $this->assertSame(1, PortfolioReconciliationRun::query()->where('trigger', 'scheduled')->count());
+            $this->artisan('portfolio:reconcile')->assertSuccessful();
+            $this->assertSame(1, PortfolioReconciliationRun::query()->where('trigger', 'scheduled')->count());
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
 
     public function test_live_orchestration_snapshots_kite_and_stox_without_mutating_ledgers_and_failure_preserves_last_success(): void
     {
