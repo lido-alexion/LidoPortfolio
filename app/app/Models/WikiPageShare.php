@@ -11,9 +11,9 @@ class WikiPageShare extends Model
 
     protected $table = 'portfolio_wiki_page_shares';
 
-    protected $fillable = ['page_id', 'token_hash', 'created_at', 'revoked_at'];
+    protected $fillable = ['page_id', 'token_hash', 'token_encrypted', 'created_at', 'revoked_at'];
 
-    protected $hidden = ['token_hash'];
+    protected $hidden = ['token_hash', 'token_encrypted'];
 
     protected function casts(): array
     {

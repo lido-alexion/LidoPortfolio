@@ -178,4 +178,50 @@ class V5WikiFoundationTest extends TestCase
         $this->assertSame(3, $page->revisions()->count());
         $this->assertSame('restored', $page->revisions()->first()->change_type);
     }
+
+    public function test_public_share_is_opaque_minimal_revocable_and_regeneration_never_revives_old_url(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        $this->actingAs($user)->withProfileHeader($user, $profile);
+        $uuid = $this->postJson('/api/knowledge-board/wiki/pages', [
+            'title' => 'Shared research', 'markdown' => '# Public\n\n<script>bad()</script>',
+        ])->json('data.uuid');
+        $oldUrl = $this->postJson('/api/knowledge-board/wiki/pages/'.$uuid.'/share')->assertCreated()->json('data.url');
+        $oldToken = basename(parse_url($oldUrl, PHP_URL_PATH));
+
+        $this->assertDatabaseMissing('portfolio_wiki_page_shares', ['token_hash' => $oldToken]);
+        $this->getJson('/api/wiki/shared/'.$oldToken)->assertOk()
+            ->assertJsonPath('data.title', 'Shared research')
+            ->assertJsonMissingPath('data.uuid')
+            ->assertJsonMissingPath('data.markdown');
+        $this->assertStringNotContainsString('<script', $this->getJson('/api/wiki/shared/'.$oldToken)->json('data.rendered_html'));
+
+        $newUrl = $this->postJson('/api/knowledge-board/wiki/pages/'.$uuid.'/share/regenerate')->assertOk()->json('data.url');
+        $newToken = basename(parse_url($newUrl, PHP_URL_PATH));
+        $this->assertNotSame($oldToken, $newToken);
+        $this->getJson('/api/wiki/shared/'.$oldToken)->assertNotFound();
+        $this->getJson('/api/wiki/shared/'.$newToken)->assertOk();
+        $this->deleteJson('/api/knowledge-board/wiki/pages/'.$uuid.'/share')->assertOk();
+        $this->getJson('/api/wiki/shared/'.$newToken)->assertNotFound();
+    }
+
+    public function test_public_internal_links_only_reveal_independently_shared_targets(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        $this->actingAs($user)->withProfileHeader($user, $profile);
+        $target = $this->postJson('/api/knowledge-board/wiki/pages', ['title' => 'Private target'])->json('data.uuid');
+        $source = $this->postJson('/api/knowledge-board/wiki/pages', ['title' => 'Source', 'markdown' => '[[wiki:'.$target.']]'])->json('data.uuid');
+        $sourceToken = basename(parse_url($this->postJson('/api/knowledge-board/wiki/pages/'.$source.'/share')->json('data.url'), PHP_URL_PATH));
+
+        $privateHtml = $this->getJson('/api/wiki/shared/'.$sourceToken)->assertOk()->json('data.rendered_html');
+        $this->assertStringContainsString('Private Wiki Page', $privateHtml);
+        $this->assertStringNotContainsString('Private target', $privateHtml);
+
+        $targetUrl = $this->postJson('/api/knowledge-board/wiki/pages/'.$target.'/share')->json('data.url');
+        $publicHtml = $this->getJson('/api/wiki/shared/'.$sourceToken)->assertOk()->json('data.rendered_html');
+        $this->assertStringContainsString('Private target', $publicHtml);
+        $this->assertStringContainsString($targetUrl, $publicHtml);
+    }
 }

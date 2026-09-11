@@ -4,16 +4,17 @@ namespace App\Services\Wiki;
 
 use App\Models\PortfolioProfile;
 use App\Models\WikiPage;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Str;
 use League\CommonMark\GithubFlavoredMarkdownConverter;
 
 final class WikiMarkdownRenderer
 {
-    public function render(PortfolioProfile $profile, string $markdown): string
+    public function render(PortfolioProfile $profile, string $markdown, bool $public = false): string
     {
         $markdown = preg_replace_callback(
             '/\[\[wiki:([0-9a-f-]{36})(?:\|([^\]]+))?\]\]/i',
-            function (array $match) use ($profile): string {
+            function (array $match) use ($profile, $public): string {
                 if (! Str::isUuid($match[1])) {
                     return '**⚠ Missing Wiki Page**';
                 }
@@ -22,6 +23,14 @@ final class WikiMarkdownRenderer
                     return '**⚠ Missing Wiki Page**';
                 }
                 $text = $this->escapeMarkdown(trim($match[2] ?? '') ?: $target->title);
+                if ($public) {
+                    $share = $target->shares()->whereNull('revoked_at')->latest('id')->first();
+                    if (! $share) {
+                        return '**🔒 Private Wiki Page**';
+                    }
+
+                    return '['.$text.']('.url('/wiki/shared/'.Crypt::decryptString($share->token_encrypted)).')';
+                }
 
                 return '['.$text.']('.url('/knowledge-board/wiki/'.$target->uuid).')';
             },

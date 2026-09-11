@@ -87,6 +87,7 @@ use App\Http\Controllers\Api\V1\TradingOs\TotpController as TradingOsTotpControl
 use App\Http\Controllers\Api\WatchlistController;
 use App\Http\Controllers\Api\WatchlistsController;
 use App\Http\Controllers\Api\WikiPageController;
+use App\Http\Controllers\Api\WikiShareController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
@@ -106,6 +107,7 @@ Route::post('/reset-password/accept', [PasswordResetAcceptController::class, 'ac
 // Guest-safe session probe
 Route::get('/auth/me', [AuthController::class, 'me']);
 Route::get('/auth/csrf-token', [AuthController::class, 'csrfToken']);
+Route::get('/wiki/shared/{token}', [WikiShareController::class, 'show'])->where('token', '[A-Za-z0-9]{64}');
 
 // Kite returns from another domain, so the callback cannot depend on the SPA
 // session cookie. A short-lived encrypted state binds it to the initiating user.
@@ -226,6 +228,9 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
         Route::put('/wiki/pages/{page}/move', [WikiPageController::class, 'move'])->whereUuid('page');
         Route::get('/wiki/pages/{page}/revisions/{revision}', [WikiPageController::class, 'revision'])->whereUuid('page')->whereNumber('revision');
         Route::post('/wiki/pages/{page}/revisions/{revision}/restore', [WikiPageController::class, 'restore'])->whereUuid('page')->whereNumber('revision');
+        Route::post('/wiki/pages/{page}/share', [WikiShareController::class, 'store'])->whereUuid('page');
+        Route::post('/wiki/pages/{page}/share/regenerate', [WikiShareController::class, 'regenerate'])->whereUuid('page');
+        Route::delete('/wiki/pages/{page}/share', [WikiShareController::class, 'destroy'])->whereUuid('page');
         Route::delete('/wiki/pages/{page}', [WikiPageController::class, 'destroy'])->whereUuid('page');
 
         Route::post('/images', [KnowledgeBoardImageController::class, 'store']);

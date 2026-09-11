@@ -41,6 +41,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('page_id')->constrained('portfolio_wiki_pages')->cascadeOnDelete();
             $table->string('token_hash', 64)->unique();
+            $table->text('token_encrypted');
             $table->timestamp('created_at');
             $table->timestamp('revoked_at')->nullable();
             $table->index(['page_id', 'revoked_at']);
