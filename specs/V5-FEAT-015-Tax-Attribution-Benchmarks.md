@@ -1,6 +1,6 @@
 # V5 FEAT-015 — Tax Reporting, Attribution, Benchmarks, and Risk
 
-**Status:** DECIDED / FROZEN  
+**Status:** COMPLETE / VERIFIED 2026-09-11
 **Date:** 2026-09-07
 
 ## Problem

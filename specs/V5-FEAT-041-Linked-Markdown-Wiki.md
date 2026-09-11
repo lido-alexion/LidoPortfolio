@@ -1,6 +1,6 @@
 # V5 FEAT-041 — Linked Markdown Wiki
 
-**Status:** DECIDED / FROZEN  
+**Status:** COMPLETE / VERIFIED 2026-09-11
 **Feature:** V4-FEAT-041  
 **Priority:** P2
 

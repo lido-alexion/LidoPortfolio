@@ -1,6 +1,6 @@
 # V5 FEAT-020 — Paper Portfolio, Portfolio Replay, and Strategy Backtest
 
-**Status:** DECIDED / FROZEN  
+**Status:** IN PROGRESS — configurable-parameter declaration decision required
 **Date:** 2026-09-06
 
 ## 1. Problem

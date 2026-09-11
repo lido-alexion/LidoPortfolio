@@ -1,6 +1,6 @@
 # V5 FEAT-012 — Admin Force Logout of Other Users
 
-**Status:** DECIDED / FROZEN  
+**Status:** COMPLETE / VERIFIED 2026-09-07
 **Date:** 2026-09-07
 
 ## Problem
