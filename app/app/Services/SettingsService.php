@@ -11,6 +11,11 @@ class SettingsService
     public const DEFAULTS = [
         'cron_time' => '18:30',
         'cron_timezone' => 'Asia/Kolkata',
+        'market_open_time' => '09:15',
+        'market_close_time' => '15:30',
+        'reconciliation_delay_minutes' => '30',
+        'reconciliation_holding_cost_tolerance' => '1',
+        'reconciliation_funds_tolerance' => '1',
         'nse_retry_count' => '3',
         'alpha_vantage_api_key' => '',
         'backend_log_level' => 'info',

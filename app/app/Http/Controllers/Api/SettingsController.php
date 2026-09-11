@@ -23,6 +23,11 @@ class SettingsController extends Controller
         $validated = $request->validate([
             'cron_time' => ['nullable', 'date_format:H:i'],
             'cron_timezone' => ['nullable', 'timezone'],
+            'market_open_time' => ['nullable', 'date_format:H:i'],
+            'market_close_time' => ['nullable', 'date_format:H:i', 'after:market_open_time'],
+            'reconciliation_delay_minutes' => ['nullable', 'integer', 'min:0', 'max:240'],
+            'reconciliation_holding_cost_tolerance' => ['nullable', 'numeric', 'min:0'],
+            'reconciliation_funds_tolerance' => ['nullable', 'numeric', 'min:0'],
             'nse_retry_count' => ['nullable', 'integer', 'min:1', 'max:10'],
             'default_stoploss_percent' => ['nullable', 'numeric', 'min:1', 'max:50'],
             'portfolio_trailing_percent' => ['nullable', 'numeric', 'min:1', 'max:50'],

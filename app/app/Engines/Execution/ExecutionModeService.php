@@ -9,8 +9,13 @@ use App\Models\TradingOrder;
 use App\Models\TradingRecommendation;
 use App\Models\User;
 use App\Services\PortfolioLoggerService;
+use App\Services\Reconciliation\PortfolioReconciliationService;
 use App\Services\Security\TotpService;
+use App\Services\SettingsService;
+use App\Support\TradingCalendar;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 class ExecutionModeService
 {
@@ -19,6 +24,8 @@ class ExecutionModeService
         protected TotpService $totp,
         protected PortfolioLoggerService $logger,
         protected RecommendationLifecycleService $recommendations,
+        protected SettingsService $settings,
+        protected PortfolioReconciliationService $reconciliation,
     ) {}
 
     /**
@@ -66,6 +73,7 @@ class ExecutionModeService
         if ($current === $mode) {
             return $profile;
         }
+        $this->assertOutsideModeChangeBlackout();
 
         if ($mode === PortfolioProfile::EXECUTION_MODE_MANUAL) {
             DB::transaction(function () use ($profile, $mode): void {
@@ -97,6 +105,19 @@ class ExecutionModeService
         $this->totp->assertRecentVerification($user, $totpCode, $recoveryCode);
 
         DB::transaction(function () use ($profile, $mode, $current): void {
+            $otherLiveMode = PortfolioProfile::query()->where('user_id', $profile->user_id)
+                ->where('id', '!=', $profile->id)
+                ->whereIn('execution_mode', [
+                    PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC,
+                    PortfolioProfile::EXECUTION_MODE_AUTOMATIC,
+                ])->lockForUpdate()->exists();
+            if ($otherLiveMode) {
+                throw new DomainException(
+                    'Only one portfolio per Investor account may use Semi-Automatic or Automatic execution.',
+                    'EXECUTION_MODE_ACCOUNT_CONFLICT',
+                    422,
+                );
+            }
             $profile->forceFill(['execution_mode' => $mode])->save();
             if ($current === PortfolioProfile::EXECUTION_MODE_AUTOMATIC
                 && $mode === PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC) {
@@ -110,7 +131,33 @@ class ExecutionModeService
             'to' => $mode,
         ]);
 
+        try {
+            $this->reconciliation->run($profile->fresh(), 'activation');
+        } catch (Throwable $error) {
+            $this->logger->event('ExecutionModeService', 'reconciliation.activation_failed', 'warning', 'Activation reconciliation could not start', [
+                'user_id' => $user->id, 'profile_id' => $profile->id, 'error' => $error->getMessage(),
+            ]);
+        }
+
         return $profile->fresh();
+    }
+
+    protected function assertOutsideModeChangeBlackout(): void
+    {
+        $timezone = (string) $this->settings->get('cron_timezone', 'Asia/Kolkata');
+        $now = Carbon::now($timezone);
+        if (! TradingCalendar::isEquitySessionDate($now)) {
+            return;
+        }
+        $open = Carbon::parse($now->toDateString().' '.(string) $this->settings->get('market_open_time', '09:15'), $timezone);
+        $close = Carbon::parse($now->toDateString().' '.(string) $this->settings->get('market_close_time', '15:30'), $timezone);
+        if ($now->betweenIncluded($open->copy()->subHour(), $close->copy()->addHour())) {
+            throw new DomainException(
+                'Portfolio execution mode cannot change during the market safety window.',
+                'EXECUTION_MODE_CHANGE_BLACKOUT',
+                422,
+            );
+        }
     }
 
     protected function cancelUnsubmittedIntents(PortfolioProfile $profile): void

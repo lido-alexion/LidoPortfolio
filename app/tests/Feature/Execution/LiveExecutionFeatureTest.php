@@ -6,6 +6,7 @@ use App\Engines\Execution\ExecutionGate;
 use App\Engines\Execution\LiveBrokerExecutionService;
 use App\Models\BrokerConnection;
 use App\Models\PortfolioProfile;
+use App\Models\Setting;
 use App\Models\Stock;
 use App\Models\TradingOrder;
 use App\Models\TradingRecommendation;
@@ -15,6 +16,7 @@ use App\Services\Broker\BrokerOrderSnapshot;
 use App\Services\Broker\FakeBrokerGateway;
 use App\Services\CashManagementService;
 use App\Services\Security\TotpService;
+use Carbon\Carbon;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -48,6 +50,40 @@ class LiveExecutionFeatureTest extends TestCase
         ])->assertStatus(403)->assertJsonPath('error.code', 'EXECUTION_MODE_MANUAL');
 
         $this->assertSame(0, app(FakeBrokerGateway::class)->placeCalls);
+    }
+
+    public function test_mode_changes_are_blocked_during_market_safety_window(): void
+    {
+        [$user, $profile] = $this->actingReadyUser();
+        Setting::setValue('cron_timezone', 'Asia/Kolkata');
+        Setting::setValue('market_open_time', '09:15');
+        Setting::setValue('market_close_time', '15:30');
+        Carbon::setTestNow(Carbon::parse('2026-09-11 09:15:00', 'Asia/Kolkata'));
+        try {
+            $this->putJson('/api/v1/execution/mode', [
+                'execution_mode' => PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC,
+                'recovery_code' => $this->totpCode($user),
+            ])->assertStatus(422)->assertJsonPath('error.code', 'EXECUTION_MODE_CHANGE_BLACKOUT');
+            $this->assertSame(PortfolioProfile::EXECUTION_MODE_MANUAL, $profile->fresh()->executionMode());
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_only_one_portfolio_per_investor_can_use_live_execution_mode(): void
+    {
+        [$user, $first] = $this->actingReadyUser();
+        $this->setMode($user, $first, PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC);
+        $second = PortfolioProfile::query()->create([
+            'user_id' => $user->id, 'name' => 'Second Portfolio', 'is_default' => false,
+            'portfolio_type' => PortfolioProfile::TYPE_LIVE,
+        ]);
+        $this->withProfileHeader($user, $second)->putJson('/api/v1/execution/mode', [
+            'execution_mode' => PortfolioProfile::EXECUTION_MODE_AUTOMATIC,
+            'confirm_automatic' => true,
+            'recovery_code' => $this->totpCode($user),
+        ])->assertStatus(422)->assertJsonPath('error.code', 'EXECUTION_MODE_ACCOUNT_CONFLICT');
+        $this->assertSame(PortfolioProfile::EXECUTION_MODE_MANUAL, $second->fresh()->executionMode());
     }
 
     public function test_semi_automatic_requires_explicit_action_and_totp(): void
