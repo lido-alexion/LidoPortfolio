@@ -1,0 +1,223 @@
+name: Deploy StoXla Production
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stoxla-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  backend:
+    name: Backend verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: lidoportfolio_ci
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: bcmath, curl, dom, fileinfo, gd, intl, mbstring, pdo_mysql, pdo_sqlite, tokenizer, xml, zip
+          coverage: none
+          tools: composer
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache/files
+          key: composer-${{ runner.os }}-${{ hashFiles('app/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare Laravel test environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          php artisan config:clear
+
+      - name: Validate full MySQL migration and seed chain
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: lidoportfolio_ci
+          DB_USERNAME: root
+          DB_PASSWORD: root
+        run: php artisan migrate:fresh --seed --force
+
+      - name: Run backend test suite
+        run: php -d memory_limit=512M vendor/bin/phpunit
+
+      - name: Verify OpenAPI contract
+        run: php artisan openapi:v1 --check
+
+  frontend:
+    name: Frontend verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install npm dependencies
+        run: npm ci --registry=https://registry.npmjs.org
+
+      - name: Run frontend test suite
+        run: npm run test:js
+
+      - name: Run TypeScript check
+        run: npm run typecheck
+
+      - name: Build production assets for VPS root
+        env:
+          VITE_APP_BASE: /build/
+        run: npm run build
+
+  package:
+    name: Package release artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs:
+      - backend
+      - frontend
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: bcmath, curl, dom, fileinfo, gd, intl, mbstring, pdo_mysql, pdo_sqlite, tokenizer, xml, zip
+          coverage: none
+          tools: composer
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install production Composer dependencies
+        run: composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --no-progress
+
+      - name: Install npm dependencies
+        run: npm ci --registry=https://registry.npmjs.org
+
+      - name: Build production assets for VPS root
+        env:
+          VITE_APP_BASE: /build/
+        run: npm run build
+
+      - name: Create release archive
+        run: |
+          tar \
+            --exclude='./.env' \
+            --exclude='./node_modules' \
+            --exclude='./storage' \
+            --exclude='./public/storage' \
+            --exclude='./public/hot' \
+            -czf ../stoxla-release.tgz .
+
+      - name: Upload release archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: stoxla-release-${{ github.sha }}
+          path: stoxla-release.tgz
+          if-no-files-found: error
+          retention-days: 14
+
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs:
+      - package
+    environment: production
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Download release archive
+        uses: actions/download-artifact@v4
+        with:
+          name: stoxla-release-${{ github.sha }}
+
+      - name: Configure SSH
+        env:
+          STOXLA_HOST: ${{ secrets.STOXLA_HOST }}
+          STOXLA_SSH_PRIVATE_KEY: ${{ secrets.STOXLA_SSH_PRIVATE_KEY }}
+        run: |
+          test -n "$STOXLA_HOST"
+          test -n "$STOXLA_SSH_PRIVATE_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$STOXLA_SSH_PRIVATE_KEY" > ~/.ssh/stoxla_deploy_key
+          chmod 600 ~/.ssh/stoxla_deploy_key
+          ssh-keyscan -H "$STOXLA_HOST" >> ~/.ssh/known_hosts
+
+      - name: Upload and activate release
+        env:
+          STOXLA_HOST: ${{ secrets.STOXLA_HOST }}
+          STOXLA_SSH_USER: ${{ secrets.STOXLA_SSH_USER }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          test -n "$STOXLA_HOST"
+          test -n "$STOXLA_SSH_USER"
+          RELEASE_ID="$(date -u +%Y%m%d%H%M%S)-${RELEASE_SHA::12}"
+          REMOTE_DIR="/home/${STOXLA_SSH_USER}/.stoxla-deploy/${RELEASE_ID}"
+          SSH_OPTS="-i ~/.ssh/stoxla_deploy_key -o IdentitiesOnly=yes -o BatchMode=yes"
+
+          ssh $SSH_OPTS "${STOXLA_SSH_USER}@${STOXLA_HOST}" "mkdir -p '${REMOTE_DIR}'"
+          scp $SSH_OPTS stoxla-release.tgz deploy/scripts/stoxla-deploy-release.sh deploy/scripts/stoxla-rollback-release.sh "${STOXLA_SSH_USER}@${STOXLA_HOST}:${REMOTE_DIR}/"
+          ssh $SSH_OPTS "${STOXLA_SSH_USER}@${STOXLA_HOST}" \
+            "chmod 700 '${REMOTE_DIR}/stoxla-deploy-release.sh' '${REMOTE_DIR}/stoxla-rollback-release.sh' && cp '${REMOTE_DIR}/stoxla-rollback-release.sh' '/home/${STOXLA_SSH_USER}/.stoxla-deploy/stoxla-rollback-release.sh' && STOXLA_RELEASE_ID='${RELEASE_ID}' '${REMOTE_DIR}/stoxla-deploy-release.sh' '${REMOTE_DIR}/stoxla-release.tgz'"
+
+      - name: Post-deploy health check
+        run: |
+          curl --fail --silent --show-error --location --max-time 20 https://stoxla.in/ >/dev/null

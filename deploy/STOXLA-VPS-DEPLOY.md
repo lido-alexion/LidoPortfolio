@@ -713,8 +713,258 @@ Completed:
   tables are present after deployment migrations.
 - No temporary debug helper is web-accessible.
 
-## 12. Future CI/CD
+## 12. GitHub Actions CI/CD
 
-Automatic build/deploy on GitHub push is planned after the first VPS deployment
-is stable. It is not part of the immediate manual cutover unless a separate
-frozen deployment automation plan is created.
+Conservative CI/CD scaffolding exists, but production deployment is still
+manual-only. The workflow is intentionally triggered only by
+`workflow_dispatch`; it does not deploy on push.
+
+Implemented files:
+
+- `.github/workflows/deploy-stoxla-production.yml`
+- `deploy/scripts/stoxla-deploy-release.sh`
+- `deploy/scripts/stoxla-rollback-release.sh`
+
+### 12.1 Deployment model
+
+The GitHub Actions pipeline uses a GitHub-hosted runner to test, build, package,
+and upload a release archive over SSH. The VPS does not git pull from GitHub and
+does not need GitHub repository access.
+
+Production secrets remain only in the VPS `.env`. The workflow must not receive
+`APP_KEY`, database credentials, Kite credentials, or other Laravel runtime
+secrets.
+
+Only these GitHub Actions secrets are required for deployment access:
+
+```text
+STOXLA_HOST=82.112.230.20
+STOXLA_SSH_USER=nitty
+STOXLA_SSH_PRIVATE_KEY=<private key for an SSH public key authorized for nitty>
+```
+
+The workflow has production deployment concurrency:
+
+```text
+group: stoxla-production-deploy
+cancel-in-progress: false
+```
+
+This prevents two production deployments from overlapping.
+
+### 12.2 Workflow gates
+
+The deployment job is blocked until all verification and packaging jobs pass.
+If CI fails, production is not touched.
+
+Backend verification:
+
+- Install Composer dependencies from `app/composer.lock` on PHP 8.4.
+- Prepare a Laravel test environment from `.env.example`.
+- Validate the full MySQL migration and seed chain against a disposable MySQL
+  8.4 service.
+- Run the backend test suite with `php -d memory_limit=512M vendor/bin/phpunit`.
+- Run `php artisan openapi:v1 --check`.
+
+Frontend verification:
+
+- Install Node 22 dependencies with `npm ci`.
+- Run `npm run test:js`.
+- Run `npm run typecheck`.
+- Build root-domain production assets with `VITE_APP_BASE=/build/ npm run
+  build`.
+
+Packaging:
+
+- Rebuilds production dependencies and frontend assets.
+- Creates `stoxla-release.tgz` from `app/`.
+- Excludes `.env`, `node_modules`, `storage`, `public/storage`, and
+  `public/hot`.
+
+Deployment:
+
+- Uploads the artifact and deploy script to
+  `/home/nitty/.stoxla-deploy/<release-id>/`.
+- Runs `deploy/scripts/stoxla-deploy-release.sh` on the VPS.
+- Runs a final health check against `https://stoxla.in/`.
+
+### 12.3 VPS release layout
+
+The first CI/CD deployment converts the existing direct-root layout into a
+release layout inside the current app root, without changing Nginx, scheduler
+cron, or the queue service paths:
+
+```text
+/var/www/stoxla/
+├── current -> releases/<active-release>
+├── releases/
+├── shared/
+│   ├── .env
+│   └── storage/
+├── public -> current/public
+├── artisan -> current/artisan
+├── app -> current/app
+└── ...
+```
+
+This keeps these already-live paths valid:
+
+- Nginx document root: `/var/www/stoxla/public`
+- Scheduler working directory: `/var/www/stoxla`
+- Queue service working directory: `/var/www/stoxla`
+- Queue service artisan path: `/var/www/stoxla/artisan`
+
+On the first CI/CD deployment only, the script:
+
+- Copies the existing production `.env` into `/var/www/stoxla/shared/.env` if
+  that shared file does not already exist.
+- Copies the existing Laravel `storage` directory into
+  `/var/www/stoxla/shared/storage` if that shared directory does not already
+  exist.
+- Moves the previous direct-root application files into a timestamped
+  `/var/www/stoxla/.pre-cicd-root-<timestamp>/` backup.
+- Creates top-level symlinks back through `/var/www/stoxla/current`.
+
+The script refuses to continue if required paths are missing or if a conflicting
+non-symlink path would be overwritten.
+
+### 12.4 Release activation order
+
+For each deployment, the remote script:
+
+1. Creates a deployment lock at `/var/www/stoxla/.deploy-lock`.
+2. Extracts the archive to `/var/www/stoxla/releases/<release-id>`.
+3. Links the release `.env` to `../../shared/.env`.
+4. Links the release `storage` to `../../shared/storage`.
+5. Runs `php artisan optimize:clear`.
+6. Runs `php artisan migrate --force`.
+7. Builds Laravel caches:
+   `config:cache`, `route:cache`, `view:cache`, and `event:cache`.
+8. Atomically switches `/var/www/stoxla/current` to the new release.
+9. Refreshes top-level symlinks.
+10. Runs `php artisan queue:restart` so the systemd-managed worker reloads
+    gracefully.
+11. Checks `https://stoxla.in/`.
+12. Prunes old releases, keeping the latest five by default.
+
+The script does not modify MariaDB configuration, does not create or print
+runtime secrets, and does not change the scheduler cron.
+
+### 12.5 Required one-time GitHub setup
+
+Create an SSH key dedicated to GitHub Actions deployment from your local
+machine:
+
+```bash
+ssh-keygen -t ed25519 -C "github-actions-stoxla-deploy" -f ~/.ssh/stoxla_github_actions
+```
+
+Install the public key for `nitty` on the VPS:
+
+```bash
+ssh-copy-id -i ~/.ssh/stoxla_github_actions.pub nitty@82.112.230.20
+```
+
+Confirm that the key can connect without a password:
+
+```bash
+ssh -i ~/.ssh/stoxla_github_actions -o IdentitiesOnly=yes nitty@82.112.230.20 'hostname && test -f /var/www/stoxla/.env && test -d /var/www/stoxla/storage'
+```
+
+Then add these repository secrets in GitHub:
+
+```text
+STOXLA_HOST
+STOXLA_SSH_USER
+STOXLA_SSH_PRIVATE_KEY
+```
+
+`STOXLA_SSH_PRIVATE_KEY` should contain the full private key from
+`~/.ssh/stoxla_github_actions`. Do not add Laravel `.env` values to GitHub.
+
+### 12.6 First manual deployment
+
+Run the first deployment manually from GitHub:
+
+1. Open the repository on GitHub.
+2. Go to `Actions`.
+3. Select `Deploy StoXla Production`.
+4. Click `Run workflow`.
+5. Select `master`.
+6. Start the workflow.
+
+Watch the jobs in order:
+
+- `Backend verification`
+- `Frontend verification`
+- `Package release artifact`
+- `Deploy to VPS`
+
+After the workflow completes, verify:
+
+```bash
+curl -I https://stoxla.in/
+ssh nitty@82.112.230.20 'readlink /var/www/stoxla/current && ls -1 /var/www/stoxla/releases | tail'
+ssh nitty@82.112.230.20 'systemctl status stoxla-queue --no-pager'
+```
+
+### 12.7 Rollback
+
+Rollback switches the `current` symlink to a previous release and restarts the
+queue worker gracefully. It does not run database down migrations. If a release
+contains irreversible database changes, prefer a forward fix unless a specific
+database rollback plan has been prepared.
+
+The workflow copies the rollback helper to
+`/home/nitty/.stoxla-deploy/stoxla-rollback-release.sh`.
+
+To roll back to the previous retained release:
+
+```bash
+ssh nitty@82.112.230.20 'bash /home/nitty/.stoxla-deploy/stoxla-rollback-release.sh'
+```
+
+If that path is not available, upload or run the committed
+`deploy/scripts/stoxla-rollback-release.sh` script manually:
+
+```bash
+scp deploy/scripts/stoxla-rollback-release.sh nitty@82.112.230.20:/home/nitty/
+ssh nitty@82.112.230.20 'bash /home/nitty/stoxla-rollback-release.sh'
+```
+
+To roll back to a specific retained release:
+
+```bash
+ssh nitty@82.112.230.20 'ls -1 /var/www/stoxla/releases'
+ssh nitty@82.112.230.20 'bash /home/nitty/.stoxla-deploy/stoxla-rollback-release.sh <release-id>'
+```
+
+### 12.8 Enabling deploy-on-push later
+
+Do not enable automatic deploy-on-push until manual deployments are proven.
+
+When ready, add the production branch trigger to
+`.github/workflows/deploy-stoxla-production.yml`:
+
+```yaml
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+```
+
+Keep the deployment concurrency group unchanged.
+
+### 12.9 Public-to-private repository implications
+
+This pipeline is compatible with either a public or private GitHub repository.
+The VPS never pulls from GitHub, so converting the repository to private does
+not require adding GitHub credentials to the server.
+
+After conversion to private, verify:
+
+- GitHub Actions remains enabled for the repository.
+- The repository still has sufficient GitHub Actions minutes/storage.
+- The deployment secrets remain present.
+- Any required production environment approvals are still configured as
+  intended.
