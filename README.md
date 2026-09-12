@@ -7,7 +7,7 @@ Self-hosted **Indian stock portfolio** tracker for personal / multi-portfolio us
 - **Database:** MySQL (`portfolio_*` tables; can share an existing database)
 - **Notifications:** Telegram Bot API (optional)
 
-Production example layout: subdirectory app under cPanel (`/portfolio`) — see [deploy/DEPLOY.md](deploy/DEPLOY.md).
+Current production target: VPS at `https://stoxla.in/` — see [deploy/STOXLA-VPS-DEPLOY.md](deploy/STOXLA-VPS-DEPLOY.md). The older GoDaddy/cPanel `/portfolio` deployment docs remain legacy runbooks only.
 
 ### Project documentation ingest
 
@@ -105,7 +105,7 @@ Any **new** project Markdown doc must be linked into `DOCS.md` in the same chang
 - Holdings daily sync, **universe OHLCV** batch sync, index/benchmark sync
 - Stock master sync (`stocks:sync`), local-first symbol validation
 - **History depth backfill** — deepens OHLCV (e.g. ~18 months) all day for longer indicator/backtest windows
-- Configurable CA bundle (`CURL_CAFILE`) for outbound HTTPS on Windows / cPanel
+- Configurable CA bundle (`CURL_CAFILE`) for outbound HTTPS on Windows / legacy cPanel
 
 ### Ops & UX shell
 
@@ -114,7 +114,7 @@ Any **new** project Markdown doc must be linked into `DOCS.md` in the same chang
 - **Contextual help** — header (?) opens static `/docs/{keyword}.html` for the current screen (no login/JS required for crawlers)
 - Settings: Global (admin), Portfolio, Account — fees, cron timezone, external stock links, sync logs
 - Structured logging (backend + frontend), request IDs, optional frontend log ingest
-- Production deploy via staged upload + token-guarded `cpanel-*.php` scripts (no SSH `artisan` on cPanel)
+- Production target moved to a VPS for `stoxla.in`; legacy cPanel staged upload + token-guarded `cpanel-*.php` scripts are retained as historical tooling
 
 Deep technical detail lives in **[implementation.md](implementation.md)** (agents: treat that as the source of truth and keep it updated).
 
@@ -134,7 +134,7 @@ Browser  →  Laravel (app/)  →  app.blade.php  →  React SPA  →  /api/*  �
 | **`README.md`** | Quick start and feature overview |
 | **`implementation.md`** | Architecture, runbook, and agent reference (read for deep detail) |
 | **`app/`** | **Full application** — Laravel API, React SPA, config, tests |
-| **`deploy/`** | Production deploy scripts, `.htaccess` snippets, cPanel guides |
+| **`deploy/`** | VPS deployment runbook plus legacy cPanel scripts/guides |
 | **`.cursor/`** | Cursor IDE rules and skills for this project |
 
 There is **no separate `frontend/` folder** at the repo root.
@@ -219,7 +219,7 @@ LidoPortfolio/              ← monorepo root (docs + deploy)
     └── package.json
 ```
 
-**Where to edit:** UI → `app/resources/js/src/` · API / business logic → `app/app/` · Production server layout → [deploy/DEPLOY.md](deploy/DEPLOY.md) (server path is `public_html/lidoportfolio/`, not `app/`).
+**Where to edit:** UI → `app/resources/js/src/` · API / business logic → `app/app/` · Current production server layout → [deploy/STOXLA-VPS-DEPLOY.md](deploy/STOXLA-VPS-DEPLOY.md). Legacy GoDaddy layout is documented in [deploy/DEPLOY.md](deploy/DEPLOY.md).
 
 </details>
 
@@ -312,15 +312,17 @@ Start with this **README.md**. The **ingestion docs tree** (every major Markdown
 | [Features](#features) | Product feature overview (this README) |
 | [Project structure](#project-structure) | Folder layout and how Laravel + React fit together |
 | [implementation.md](implementation.md) | Living technical reference (agents: keep updated) |
-| [debugging.md](debugging.md) | Production debug hooks & agent runbook |
+| [debugging.md](debugging.md) | Production/VPS debug posture + legacy cPanel hooks |
 | [app/API_DOCUMENTATION.md](app/API_DOCUMENTATION.md) | REST API |
-| [deploy/DEPLOY.md](deploy/DEPLOY.md) | **Production deploy** (lidoalexion.com/portfolio, updates) |
-| [`.cursor/skills/deploy-cpanel/SKILL.md`](.cursor/skills/deploy-cpanel/SKILL.md) | Agent deploy workflow (build + upload table) |
-| [DEPLOYMENT_CPANEL.md](DEPLOYMENT_CPANEL.md) | Generic cPanel notes (other hosts) |
+| [deploy/STOXLA-VPS-DEPLOY.md](deploy/STOXLA-VPS-DEPLOY.md) | **Current production deploy planning** (`stoxla.in` VPS) |
+| [deploy/DEPLOY.md](deploy/DEPLOY.md) | Legacy GoDaddy/cPanel deploy guide (`lidoalexion.com/portfolio`) |
+| [`.cursor/skills/deploy-cpanel/SKILL.md`](.cursor/skills/deploy-cpanel/SKILL.md) | Legacy cPanel upload-table workflow |
+| [DEPLOYMENT_CPANEL.md](DEPLOYMENT_CPANEL.md) | Generic/legacy cPanel notes |
 | [DEPLOYMENT_VALIDATION_PLAN.md](DEPLOYMENT_VALIDATION_PLAN.md) | Pre/post deploy validation checklist |
 
 ## Notes
 
 - Table names are prefixed with `portfolio_` so the app can coexist with other projects in the same MySQL database.
-- Production DB: shared `/home/USER/config/DBConfig.php` (see `deploy/DEPLOY.md`). Local dev may use `app/config/DBConfig.php`.
-- **Production `/portfolio`:** build with `VITE_APP_BASE=/portfolio/build/`; use root-relative Vite URLs (see [implementation.md → Production learnings](implementation.md#deployment-validation)). Delete temporary `cpanel-*.php` and debug HTML from the server after troubleshooting (`deploy/README.md`).
+- V7-created StoX analytical tables use the `stox_` prefix. Existing legacy `portfolio_*` tables are not renamed during the VPS move without a separate cutover plan.
+- Current production target is the `stoxla.in` VPS. Old GoDaddy production DB notes using shared `/home/USER/config/DBConfig.php` remain in [deploy/DEPLOY.md](deploy/DEPLOY.md) for legacy reference.
+- Legacy GoDaddy `/portfolio` builds use `VITE_APP_BASE=/portfolio/build/`; the VPS build base depends on the final `stoxla.in` document root.

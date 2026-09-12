@@ -1,8 +1,15 @@
 # Deploy assets
 
+> **Current StoX target:** new VPS at `https://stoxla.in/`. Start with
+> [`STOXLA-VPS-DEPLOY.md`](STOXLA-VPS-DEPLOY.md). The GoDaddy/cPanel assets
+> below remain as legacy runbooks/tooling for the old `lidoalexion.com/portfolio`
+> deployment shape and should not be used for the new VPS unless explicitly
+> reselected.
+
 | File | Purpose |
 |------|---------|
-| **[DEPLOY.md](DEPLOY.md)** | **Start here** — full deploy & update guide |
+| **[STOXLA-VPS-DEPLOY.md](STOXLA-VPS-DEPLOY.md)** | **Start here for current production** — VPS/stoxla.in deployment reconciliation |
+| **[DEPLOY.md](DEPLOY.md)** | Legacy GoDaddy/cPanel deploy & update guide |
 | **[DEPLOY.md §2.1](DEPLOY.md#21-build-folders-explained-pc-vs-server)** | **Build folders** — `app/public/build/` vs `deploy/staging/`, why two server copies |
 | **`prepare-upload.ps1`** | Builds frontend + stages `deploy/staging/` (gitignored) for cPanel upload |
 | **`index.php`** | Copy → `public_html/portfolio/index.php` (Laravel front controller) |

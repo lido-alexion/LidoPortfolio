@@ -1,11 +1,12 @@
 # Deployment Validation Plan
 
-Use this checklist **before** and **after** deploying Lido Portfolio to production (cPanel / shared hosting). Each item includes exact commands, expected results, and pass/fail criteria.
+Use this checklist **before** and **after** deploying Lido Portfolio/StoX to production. The current target is the `stoxla.in` VPS; cPanel/shared-hosting entries are legacy or fallback-specific.
 
 Related docs:
 
-- **Deploy steps (lidoalexion.com/portfolio):** `deploy/DEPLOY.md`
-- Generic cPanel: `DEPLOYMENT_CPANEL.md`
+- **Current deploy planning (`stoxla.in` VPS):** `deploy/STOXLA-VPS-DEPLOY.md`
+- Legacy deploy steps (`lidoalexion.com/portfolio`): `deploy/DEPLOY.md`
+- Generic/legacy cPanel: `DEPLOYMENT_CPANEL.md`
 - API reference: `app/API_DOCUMENTATION.md`
 - Implementation notes: `implementation.md`
 
@@ -297,7 +298,11 @@ php artisan view:cache
 
 ---
 
-### 2.2 cPanel cron (required for scheduled sync)
+### 2.2 Scheduler / cron (required for scheduled sync)
+
+On the current VPS target, use the host's cron/systemd mechanism to run Laravel's scheduler every minute. The exact path is TBD until the VPS application root is finalized.
+
+Legacy cPanel command:
 
 **Add in cPanel → Cron Jobs (every minute):**
 

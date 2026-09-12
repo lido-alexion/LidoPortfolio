@@ -4,10 +4,19 @@
 |---|---|
 | Status | **IMPLEMENTED; production cutover verification pending** |
 | Implemented | 2026-09-04 |
-| Production target | GoDaddy/cPanel, `/portfolio` subdirectory |
+| Original production target | GoDaddy/cPanel, `/portfolio` subdirectory |
+| Current deployment target | VPS at `https://stoxla.in/` as of 2026-09-12 |
 | Related | [`../deploy/SINGLE-FOLDER-DEPLOY.md`](../deploy/SINGLE-FOLDER-DEPLOY.md) |
 
 **2026-09-11 local closure recheck:** the PowerShell packager completed using Node 24, produced exactly one `portfolio/build`, included both parent and nested deny rules plus the external environment example, and contained no `.env`, `DBConfig.php`, `public/hot` or nested `laravel/public/build`. The production cutover, exposure probes and cron-path confirmation remain intentionally pending authorization.
+
+**2026-09-12 hosting supersession:** the old GoDaddy/cPanel space remains outside
+the current StoX deployment target. Current production planning moved to a new
+VPS and the `stoxla.in` domain because Kite order placement requires a stable
+outbound IP for Zerodha whitelisting and the shared cPanel space hit storage
+limits. FEAT-031 remains useful as historical cPanel hardening, but it is not
+production-verified for the new VPS target and must not be used to mark
+FEAT-008, FEAT-031 or FEAT-042 production gates complete.
 
 ## Problem
 

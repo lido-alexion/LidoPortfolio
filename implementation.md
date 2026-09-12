@@ -6,7 +6,12 @@ Living reference for Lido Portfolio. **Update this file whenever code changes.**
 ## Agent / documentation policy (May 2026)
 
 - Do not use or recreate `design_doc.md` or removed phase/report/spec files.
-- **Canonical docs:** `implementation.md` (technical), **`debugging.md`** (production debug hooks & agent runbook), `README.md` (quick start + **Features** overview), **`deploy/DEPLOY.md`** (production deploy & updates), **`.cursor/skills/deploy-cpanel/SKILL.md`** (agent deploy workflow), `DEPLOYMENT_VALIDATION_PLAN.md`, `portfolio-history-rebuild-report.md`, `app/API_DOCUMENTATION.md`, **`app/openapi/v1.json`** (`/api/v1` OpenAPI 3.0.3).
+- **Canonical docs:** `implementation.md` (technical), **`debugging.md`** (production debug posture + legacy cPanel hooks), `README.md` (quick start + **Features** overview), **`deploy/STOXLA-VPS-DEPLOY.md`** (current VPS deployment planning), legacy **`deploy/DEPLOY.md`** / **`.cursor/skills/deploy-cpanel/SKILL.md`** (GoDaddy/cPanel workflow), `DEPLOYMENT_VALIDATION_PLAN.md`, `portfolio-history-rebuild-report.md`, `app/API_DOCUMENTATION.md`, **`app/openapi/v1.json`** (`/api/v1` OpenAPI 3.0.3).
+
+**Production target update (2026-09-12):** Current deployment planning moved to
+the new `stoxla.in` VPS because Kite order placement requires a stable outbound
+IP for Zerodha whitelisting and the old shared GoDaddy/cPanel space hit storage
+limits. Legacy `lidoalexion.com/portfolio` docs remain historical runbooks only.
 - Cursor rule `.cursor/rules/Always-update-implementation-details-in-implementation-md-file.mdc` enforces: read this file first; update it after code changes.
 - Cursor rule `.cursor/rules/Keep-contextual-help-docs-in-sync.mdc` enforces keeping in-app contextual help (`appDocumentation.js` + routing links) updated for every feature add/change/delete.
 - Persistent instructions across sessions: project rules in `.cursor/rules/` (`alwaysApply: true`) + optional User Rules in Cursor Settings.
@@ -2733,7 +2738,7 @@ Portfolio-scoped OHLCV technical screens (cached `portfolio_stock_prices` only �
 | Red “App load problem” on login                                | Stale `sessionStorage.lido_boot_error`                                                                                                | Tap Dismiss; deploy latest `BootErrorBanner` + `app.blade.php`                                                                                                                                             |
 | Intermittent blank page typing in forms (e.g. user mgmt email) | Mobile keyboard / `100vw` header overflow / `backdrop-filter` repaint bug — devtools resize “fixes” it                                | Deploy Jun 2026 fix: drop `100vw` header breakout, `overflow-x: hidden`, `100dvh`, `interactive-widget=resizes-content`, solid footer nav, `scroll-margin` on inputs, `autoComplete="off"` on invite email |
 
-**Server cleanup after troubleshooting:** see **`debugging.md` → [Cleanup TODO (long-term)](#cleanup-todo-long-term)** — delete `cpanel-*.php` scripts, set `LIDO_AGENT_DEBUG_ENABLED=false`, run `cpanel-config-cache.php`. Also remove `mobile-debug.html`, `portfolio-OK.txt`, `test-ok.php` from `public_html/portfolio/`. Keep `index.php`, `.htaccess`, `build/`.
+**Legacy cPanel cleanup after troubleshooting:** see **`debugging.md` → Legacy cPanel cleanup TODO (long-term)** — delete `cpanel-*.php` scripts, set `LIDO_AGENT_DEBUG_ENABLED=false`, run `cpanel-config-cache.php`. Also remove `mobile-debug.html`, `portfolio-OK.txt`, `test-ok.php` from `public_html/portfolio/`. Keep `index.php`, `.htaccess`, `build/`.
 
 **Optional deploy diagnostics (repo only, upload temporarily):** `cpanel-ping.php`, `cpanel-mobile-debug.php`, `cpanel-api-probe.php`, `cpanel-schedule-diagnostic.php`, **`cpanel-db-query.php`**, **`cpanel-read-logs.php`**, **`cpanel-api-call.php`**, `portfolio-mobile-debug.html` (upload renamed → `mobile-debug.html`). Full agent runbook: **`debugging.md`**. See `deploy/README.md`.
 

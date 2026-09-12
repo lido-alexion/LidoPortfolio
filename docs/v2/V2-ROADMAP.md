@@ -4,6 +4,12 @@
 **Program status:** **SD-035 V2 = CLOSED**  
 **Authoritative snapshot:** [V2-FINAL-RECONCILIATION.md](./V2-FINAL-RECONCILIATION.md)
 
+**2026-09-12 supersession note:** any deployment/hosting assumptions inherited
+from V1/V2 planning are historical. Current StoX production planning targets the
+`stoxla.in` VPS. Legacy `portfolio_*` database tables remain in use for V1-V6
+objects; V7 introduces additive `stox_` analytical tables and does not rename
+legacy tables without a separate cutover.
+
 All **eleven** SD-035 deferred capabilities are formally reconciled and closed. There is **no remaining Phase 1/2/3/4 implementation work under SD-035**. Deferred enhancements and non-blocking polish listed in initiative packs are **not** unfinished SD-035 initiatives.
 
 | Track | Features | Final status |

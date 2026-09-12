@@ -1,6 +1,6 @@
 # Documentation Map
 
-**Active V5 planning:** [`specs/LidoPortfolio-V5-Wishlist.md`](specs/LidoPortfolio-V5-Wishlist.md) · **FEAT-031 deploy hardening:** [`specs/V5-FEAT-031-Production-Secrets-Single-Folder-Deploy.md`](specs/V5-FEAT-031-Production-Secrets-Single-Folder-Deploy.md) · **FEAT-033 Discovery UX:** [`specs/V5-FEAT-033-Discovery-Inline-Default-Screener.md`](specs/V5-FEAT-033-Discovery-Inline-Default-Screener.md) · **Frozen FEAT-039:** [`specs/V5-FEAT-039-Holiday-Aware-Scheduled-Execution.md`](specs/V5-FEAT-039-Holiday-Aware-Scheduled-Execution.md)
+**Current deployment planning:** [`deploy/STOXLA-VPS-DEPLOY.md`](deploy/STOXLA-VPS-DEPLOY.md) · **Active V5 planning:** [`specs/LidoPortfolio-V5-Wishlist.md`](specs/LidoPortfolio-V5-Wishlist.md) · **FEAT-031 deploy hardening:** [`specs/V5-FEAT-031-Production-Secrets-Single-Folder-Deploy.md`](specs/V5-FEAT-031-Production-Secrets-Single-Folder-Deploy.md) · **FEAT-033 Discovery UX:** [`specs/V5-FEAT-033-Discovery-Inline-Default-Screener.md`](specs/V5-FEAT-033-Discovery-Inline-Default-Screener.md) · **Frozen FEAT-039:** [`specs/V5-FEAT-039-Holiday-Aware-Scheduled-Execution.md`](specs/V5-FEAT-039-Holiday-Aware-Scheduled-Execution.md)
 
 **Purpose:** Single root index for every major Markdown document in this repository.  
 **Audience:** Humans and AI agents ingesting or re-understanding the project from scratch.  
@@ -386,7 +386,7 @@ Hub: [specs/architecture/governance/README.md](specs/architecture/governance/REA
 | Order | Document | Why |
 |------:|----------|-----|
 | 5.1 | [implementation.md](implementation.md) | **Primary living technical reference** (agents: keep updated) |
-| 5.2 | [debugging.md](debugging.md) | Production debug hooks / runbook |
+| 5.2 | [debugging.md](debugging.md) | Production debug posture + legacy cPanel hooks |
 | 5.3 | [app/API_DOCUMENTATION.md](app/API_DOCUMENTATION.md) | Legacy / broader API notes |
 | 5.3a | [app/openapi/v1.json](app/openapi/v1.json) | Canonical OpenAPI 3.0.3 contract for `/api/v1` (V4-FEAT-025) |
 | 5.4 | [portfolio-history-rebuild-report.md](portfolio-history-rebuild-report.md) | Historical rebuild notes |
@@ -395,17 +395,18 @@ Hub: [specs/architecture/governance/README.md](specs/architecture/governance/REA
 
 ## 6. Deployment & operations
 
-Hub: [deploy/README.md](deploy/README.md) · Skill: [.cursor/skills/deploy-cpanel/SKILL.md](.cursor/skills/deploy-cpanel/SKILL.md)
+Hub: [deploy/README.md](deploy/README.md) · Current runbook: [deploy/STOXLA-VPS-DEPLOY.md](deploy/STOXLA-VPS-DEPLOY.md)
 
 | Order | Document | Why |
 |------:|----------|-----|
-| 6.1 | [deploy/DEPLOY.md](deploy/DEPLOY.md) | Main production deploy guide |
-| 6.2 | [DEPLOYMENT_CPANEL.md](DEPLOYMENT_CPANEL.md) | cPanel-oriented notes |
-| 6.3 | [DEPLOYMENT_VALIDATION_PLAN.md](DEPLOYMENT_VALIDATION_PLAN.md) | Validation plan |
-| 6.4 | [deploy/LIDO-SERVER.md](deploy/LIDO-SERVER.md) | Server specifics |
-| 6.5 | [deploy/GODADDY-PHP-UPGRADE.md](deploy/GODADDY-PHP-UPGRADE.md) | PHP upgrade |
-| 6.6 | [deploy/RELEASE-2026-06-21.md](deploy/RELEASE-2026-06-21.md) | Historical release note |
-| 6.7 | Fix guides | [FIX-403](deploy/FIX-403-FORBIDDEN.md) · [FIX-404](deploy/FIX-404-PORTFOLIO.md) · [FIX-MYSQL](deploy/FIX-MYSQL-INDEX-PRIVILEGES.md) · [FIX-OPEN-BASEDIR](deploy/FIX-OPEN-BASEDIR.md) · [FIX-BLANK-VITE](deploy/FIX-BLANK-VITE-PAGE.md) |
+| 6.1 | [deploy/STOXLA-VPS-DEPLOY.md](deploy/STOXLA-VPS-DEPLOY.md) | Current `stoxla.in` VPS deployment planning |
+| 6.2 | [deploy/DEPLOY.md](deploy/DEPLOY.md) | Legacy GoDaddy/cPanel deploy guide |
+| 6.3 | [DEPLOYMENT_CPANEL.md](DEPLOYMENT_CPANEL.md) | Generic/legacy cPanel-oriented notes |
+| 6.4 | [DEPLOYMENT_VALIDATION_PLAN.md](DEPLOYMENT_VALIDATION_PLAN.md) | Validation plan |
+| 6.5 | [deploy/LIDO-SERVER.md](deploy/LIDO-SERVER.md) | Legacy server specifics |
+| 6.6 | [deploy/GODADDY-PHP-UPGRADE.md](deploy/GODADDY-PHP-UPGRADE.md) | Legacy PHP upgrade |
+| 6.7 | [deploy/RELEASE-2026-06-21.md](deploy/RELEASE-2026-06-21.md) | Historical release note |
+| 6.8 | Fix guides | [FIX-403](deploy/FIX-403-FORBIDDEN.md) · [FIX-404](deploy/FIX-404-PORTFOLIO.md) · [FIX-MYSQL](deploy/FIX-MYSQL-INDEX-PRIVILEGES.md) · [FIX-OPEN-BASEDIR](deploy/FIX-OPEN-BASEDIR.md) · [FIX-BLANK-VITE](deploy/FIX-BLANK-VITE-PAGE.md) |
 
 ---
 
@@ -446,8 +447,9 @@ Hub: [deploy/README.md](deploy/README.md) · Skill: [.cursor/skills/deploy-cpane
 ### Recipe D — “Deploy production”
 
 1. implementation.md (production notes)  
-2. deploy/DEPLOY.md  
-3. deploy-cpanel skill / prepare-deploy script  
+2. deploy/STOXLA-VPS-DEPLOY.md
+3. DEPLOYMENT_VALIDATION_PLAN.md
+4. Legacy cPanel docs only if explicitly targeting the old GoDaddy deployment shape
 
 ---
 

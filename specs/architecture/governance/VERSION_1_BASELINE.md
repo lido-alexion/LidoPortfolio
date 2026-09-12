@@ -12,6 +12,13 @@ Related: [`./MVP_SCOPE.md`](./MVP_SCOPE.md) · [`./SPECIFICATION_DECISIONS.md`](
 
 This document **freezes** the Version 1.0 implementation baseline. Future 1.x work evolves **from this baseline** and updates **governance** documents. Historical architecture and engine specifications under `/specs` remain the long-term intent and are **not** rewritten to match V1.0 code. New post-baseline specifications MUST follow [ARCHITECTURE_REPOSITORY_GOVERNANCE.md](./ARCHITECTURE_REPOSITORY_GOVERNANCE.md) authoring principles (reference canonical concepts; do not duplicate them).
 
+**2026-09-12 supersession note:** hosting and URL references in this V1 frozen
+baseline are historical. Current StoX production planning targets the
+`stoxla.in` VPS, not the original GoDaddy/cPanel `/portfolio` deployment. The
+V1 database decision to keep `portfolio_*` physical tables remains valid for
+legacy V1-V6 runtime objects; V7 adds new `stox_` analytical tables without
+renaming legacy tables.
+
 ---
 
 ## Implementation Date
@@ -62,7 +69,7 @@ Original specs are **intent**, not a claim that every SHALL was implemented with
 | Engines | `App\Engines\*` + `DailyDecisionPipeline` |
 | Frontend | React (JSX), Bootstrap, Vite, React Router, Axios |
 | Notifications | Telegram |
-| Hosting target | GoDaddy / cPanel (existing deploy scripts) |
+| Hosting target | Historical: GoDaddy / cPanel (existing deploy scripts). Current target as of 2026-09-12: `stoxla.in` VPS. |
 | Tests | PHPUnit feature tests (incl. `TradingOsPipelineTest`); no Vitest suite |
 
 ---

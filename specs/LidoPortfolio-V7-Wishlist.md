@@ -34,7 +34,7 @@ Updated 2026-09-12 after local verification from current `master`.
 - V4-FEAT-018 has local implementation coverage for 1m/3m/6m model lifecycle, chronological point-in-time metadata, explicit Admin retrain/promote/rollback, promotion thresholds, persisted predictions, concise explanations and additive Evaluation/Strategy evidence that does not supersede deterministic decision semantics.
 - V4-FEAT-055 enforcement is limited to new V7 database objects and automated migration validation. The full coordinated legacy `portfolio_*` table/object cutover remains intentionally unclaimed because frozen V1-V6 behavior depends on the existing schema and the V7 cutover needs a dedicated migration plan.
 - FEAT-054 has moved to V8 and no V8 Telemetry, V9 AI Assistant or V9 instrument expansion work is included in this V7 implementation pass.
-- Production deployment and deployment-package preparation are deferred pending environment reconciliation and explicit user authorization.
+- Production deployment and deployment-package preparation are deferred pending reconciliation of the new `stoxla.in` VPS environment and explicit user authorization. The copied VPS database still uses legacy `portfolio_*` tables for V1-V6 objects; V7 `stox_` tables remain additive.
 
 ## 3. Moved beyond V7
 

@@ -192,7 +192,8 @@ specs/
 | [../README.md](../README.md) | Product / quick start |
 | [../implementation.md](../implementation.md) | Living technical reference |
 | [../debugging.md](../debugging.md) | Debug runbook |
-| [../deploy/DEPLOY.md](../deploy/DEPLOY.md) | Production deploy |
+| [../deploy/STOXLA-VPS-DEPLOY.md](../deploy/STOXLA-VPS-DEPLOY.md) | Current production deploy planning |
+| [../deploy/DEPLOY.md](../deploy/DEPLOY.md) | Legacy GoDaddy/cPanel deploy |
 
 ---
 

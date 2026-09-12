@@ -1,6 +1,10 @@
 # cPanel / shared hosting deployment
 
-> **Production (lidoalexion.com/portfolio):** use the verified guide **[deploy/DEPLOY.md](deploy/DEPLOY.md)** — GoDaddy layout, `DBConfig.php`, Vite assets, browser setup scripts, and update workflow.
+> **Current StoX production target:** VPS at `https://stoxla.in/`; see
+> **[deploy/STOXLA-VPS-DEPLOY.md](deploy/STOXLA-VPS-DEPLOY.md)**. This cPanel
+> document is now generic/legacy reference material only.
+
+> **Legacy GoDaddy (lidoalexion.com/portfolio):** use **[deploy/DEPLOY.md](deploy/DEPLOY.md)** — GoDaddy layout, `DBConfig.php`, Vite assets, browser setup scripts, and update workflow.
 
 This file keeps **generic** notes for other hosts where Laravel’s `public/` folder is the document root.
 
@@ -25,7 +29,8 @@ When **open_basedir** is not restricted and you control the document root:
 
 | Document | Use |
 |----------|-----|
-| [deploy/DEPLOY.md](deploy/DEPLOY.md) | **lidoalexion.com/portfolio** (canonical) |
+| [deploy/STOXLA-VPS-DEPLOY.md](deploy/STOXLA-VPS-DEPLOY.md) | Current `stoxla.in` VPS planning |
+| [deploy/DEPLOY.md](deploy/DEPLOY.md) | Legacy `lidoalexion.com/portfolio` guide |
 | [DEPLOYMENT_VALIDATION_PLAN.md](DEPLOYMENT_VALIDATION_PLAN.md) | Pre/post checklists |
 | [implementation.md](implementation.md) | Architecture, auth, logging |
 | [app/API_DOCUMENTATION.md](app/API_DOCUMENTATION.md) | REST API |

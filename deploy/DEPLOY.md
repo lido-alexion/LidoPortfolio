@@ -1,9 +1,14 @@
-# Lido Portfolio — production deploy (GoDaddy / cPanel)
+# Lido Portfolio — legacy production deploy (GoDaddy / cPanel)
 
-**Live URL:** `https://www.lidoalexion.com/portfolio` (apex `lidoalexion.com` redirects to www via `.htaccess`)  
+> **Superseded for current StoX production as of 2026-09-12.** The active target
+> is the new VPS at `https://stoxla.in/`; see
+> [`STOXLA-VPS-DEPLOY.md`](STOXLA-VPS-DEPLOY.md). Keep this document as the
+> legacy GoDaddy/cPanel runbook for `lidoalexion.com/portfolio` only.
+
+**Legacy live URL:** `https://www.lidoalexion.com/portfolio` (apex `lidoalexion.com` redirects to www via `.htaccess`)
 **Account example:** `/home/p7xatiz6j0mk/` (replace with your cPanel username)
 
-This is the **canonical** deploy guide (verified May 2026). Use it for first deploy and for code updates.
+This was the **canonical** GoDaddy/cPanel deploy guide (verified May 2026). Do not use it for the new VPS deployment without an explicit decision.
 
 > **FEAT-031 (2026-09-04):** the hardened single-folder release tooling is
 > implemented. Use [SINGLE-FOLDER-DEPLOY.md](SINGLE-FOLDER-DEPLOY.md) for the

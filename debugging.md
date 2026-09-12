@@ -1,14 +1,21 @@
 # Lido Portfolio — production debugging guide
 
-Living reference for **how this app runs in production** and **how to debug issues** without SSH or a local replica of live data/rate limits.
+> **Current deployment target changed on 2026-09-12.** StoX now targets a new
+> VPS at `https://stoxla.in/` because Kite order placement needs a stable
+> outbound IP for Zerodha whitelisting and the previous shared cPanel space hit
+> storage constraints. The GoDaddy/cPanel `/portfolio` material below is a
+> legacy runbook for the old `lidoalexion.com` deployment shape, not the current
+> StoX production plan. See [`deploy/STOXLA-VPS-DEPLOY.md`](deploy/STOXLA-VPS-DEPLOY.md).
 
-**Security:** These hooks are **intentionally insecure** for pre-launch development. **Remove or disable all of them before the app is public.** See [Pre-launch cleanup](#pre-launch-cleanup).
+Living reference for **how this app runs in production** and **how to debug issues** with live data/rate limits.
+
+**Security:** The legacy cPanel hooks are **intentionally insecure** for pre-launch development. **Remove or disable all of them before the app is public.** See [Pre-launch cleanup](#pre-launch-cleanup).
 
 Also update **`implementation.md`** when behavior changes; this file is the agent/human runbook for investigation.
 
 ---
 
-## Cleanup TODO (long-term)
+## Legacy cPanel cleanup TODO (long-term)
 
 **When you are done debugging** (or before any public launch), complete this checklist:
 
@@ -20,13 +27,31 @@ Optional hardening after the above: remove `DebugAgentToken` middleware from `bo
 
 ---
 
-## How production works (our setup)
+## Current production target (VPS / stoxla.in)
 
 | Aspect | Reality |
 |--------|---------|
-| **Hosting** | GoDaddy shared cPanel — **no SSH**, no `php artisan` from terminal |
-| **Deploy** | SCP upload from PC (`deploy/prepare-upload.ps1` → `deploy/staging/`) |
-| **App URL** | `https://www.lidoalexion.com/portfolio/` (SPA) |
+| **Hosting** | New VPS with SSH/remote desktop access; exact host/path TBD |
+| **Deploy** | Pending reconciliation; do not prepare or deploy without explicit authorization |
+| **App URL** | `https://stoxla.in/` |
+| **Static IP** | Required for Zerodha/Kite order-placement whitelisting |
+| **Database** | Existing `portfolio_*` tables copied as-is; prices table migration still needs special handling; V7 tables use `stox_` |
+| **Audience** | Private until explicitly launched |
+| **Primary runbook** | [`deploy/STOXLA-VPS-DEPLOY.md`](deploy/STOXLA-VPS-DEPLOY.md) |
+
+Prefer SSH and normal Laravel operations on the VPS: `php artisan migrate --force`,
+`php artisan config:cache`, `php artisan schedule:list`, log inspection under
+`storage/logs/`, and web-server/TLS checks. Do not use browser-exposed
+`cpanel-*.php` helpers on the VPS unless a later deployment plan explicitly
+chooses that fallback.
+
+## Legacy production setup (GoDaddy / cPanel)
+
+| Aspect | Reality |
+|--------|---------|
+| **Hosting** | Legacy GoDaddy shared cPanel — **no SSH**, no `php artisan` from terminal |
+| **Deploy** | Legacy SCP upload from PC (`deploy/prepare-upload.ps1` → `deploy/staging/`) |
+| **App URL** | Legacy `https://www.lidoalexion.com/portfolio/` (SPA) |
 | **Laravel root** | `/home/USER/public_html/lidoportfolio/` (not web-accessible) |
 | **Web entry** | `/home/USER/public_html/portfolio/index.php` → Laravel |
 | **API base** | `https://www.lidoalexion.com/portfolio/api/...` |
@@ -39,7 +64,7 @@ Optional hardening after the above: remove `DebugAgentToken` middleware from `bo
 
 ---
 
-## Three layers to debug
+## Legacy cPanel debugging layers
 
 | Layer | Symptoms | Tools |
 |-------|----------|--------|
@@ -170,7 +195,7 @@ Returns JSON: `status`, `body` (parsed), `request_id`.
 
 ---
 
-## Existing diagnostics (keep using)
+## Legacy cPanel diagnostics
 
 | Script | Use |
 |--------|-----|
@@ -212,7 +237,7 @@ Use this checklist (Jul 2026 incident pattern):
 
 ---
 
-## Agent workflow (recommended order)
+## Legacy cPanel agent workflow (recommended order)
 
 1. Reproduce / read user report (UI + Sync Logs screenshot).
 2. **`cpanel-api-call.php`** — GET the relevant status API.
@@ -227,7 +252,7 @@ Do **not** guess from code alone when production state is available.
 
 ## Pre-launch cleanup
 
-Same as [Cleanup TODO (long-term)](#cleanup-todo-long-term), plus before any public users:
+Same as [Legacy cPanel cleanup TODO (long-term)](#legacy-cpanel-cleanup-todo-long-term), plus before any public users:
 
 1. Delete from `public_html/portfolio/`:
    - `cpanel-db-query.php`

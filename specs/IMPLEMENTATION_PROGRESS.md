@@ -20,7 +20,7 @@ Independent freeze audit (2026-07-25): [`architecture/audit/`](./architecture/au
 | ID | Assumption |
 |----|------------|
 | A1 | Keep Sanctum session auth (not JWT). Confirmed for MVP. |
-| A2 | Keep `portfolio_*` tables; logical domain names need not match physical table names. |
+| A2 | Keep `portfolio_*` tables for legacy V1-V6 runtime objects; logical domain names need not match physical table names. V7 adds new `stox_` analytical tables but does not rename legacy tables without a separate cutover plan. |
 | A3 | New TOS entities use `portfolio_tos_*` tables. |
 | A4 | No dedicated Discovery Engine Specification file; Discovery orchestrates PatternScan + Screener services. |
 | A5 | Engines under `app/app/Engines/`; wrap existing Services. |
@@ -100,6 +100,7 @@ Independent freeze audit (2026-07-25): [`architecture/audit/`](./architecture/au
 | 2026-08-28 | V4-FEAT-008 | TAF **remainder** deferred to V5 (PO). Envelope/registries/package I/O/Create-Enable-Archive/AI docs already shipped; do not treat as unimplemented. |
 | 2026-09-12 | V7 FEAT-018 / FEAT-053 | Local implementation added for fundamentals and ML scoring foundations: `stox_` canonical tables, Yahoo provider boundary, immutable point-in-time facts, Admin APIs/UI, scheduled incremental updater, 1m/3m/6m ML lifecycle, explicit promotion/rollback, persisted predictions and additive Evaluation/Strategy evidence. Verification: focused V7, unit, feature, JS, typecheck and build pass locally. Production deployment/package preparation deferred. |
 | 2026-09-12 | V7 FEAT-055 | New V7 database objects use `stox_` and migration validation covers new V7 tables. Full legacy `portfolio_*` namespace cutover is not claimed complete; it remains a separate coordinated cutover risk because V1-V6 frozen behavior depends on existing physical table names. |
+| 2026-09-12 | Deployment target update | Current production planning moved from GoDaddy/cPanel `lidoalexion.com/portfolio` to a new VPS at `stoxla.in`. The move is driven by Zerodha/Kite static-IP whitelisting requirements and shared-hosting space limits. Deployment package preparation remains deferred pending VPS reconciliation and explicit authorization. |
 
 ---
 
