@@ -15,7 +15,7 @@ return new class extends Migration
             $table->uuid('uuid')->unique();
             $table->string('title');
             $table->string('slug');
-            $table->longText('markdown')->default('');
+            $table->longText('markdown');
             $table->unsignedInteger('display_order')->default(0);
             $table->timestamps();
             $table->index(['profile_id', 'parent_id', 'display_order'], 'wiki_page_tree');
@@ -32,7 +32,7 @@ return new class extends Migration
             $table->string('slug');
             $table->unsignedBigInteger('parent_id')->nullable()->index();
             $table->unsignedInteger('display_order')->default(0);
-            $table->longText('markdown')->default('');
+            $table->longText('markdown');
             $table->timestamp('created_at');
             $table->unique(['page_id', 'revision_number']);
         });
