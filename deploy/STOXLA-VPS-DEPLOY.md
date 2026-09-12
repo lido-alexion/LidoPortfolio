@@ -2,7 +2,7 @@
 
 | Field | Current value |
 |---|---|
-| Status | VPS server provisioning complete; app deployment not authorized |
+| Status | VPS production application deployed and responding over HTTPS |
 | Current target | Hostinger VPS `stoxla-prod` / remote connector `srv1975196` |
 | Public domain | `https://stoxla.in/` |
 | VPS IP | `82.112.230.20` |
@@ -40,11 +40,12 @@ Known:
   `npx --yes @wonderwhy-er/desktop-commander@latest remote`.
 - DNS is reported configured: `stoxla.in` and `www.stoxla.in` resolve to
   `82.112.230.20`.
-- TLS is not configured yet; configure Let's Encrypt/Certbot after Nginx is up.
+- TLS is configured with Let's Encrypt/Certbot for both production hostnames.
 - Preferred web stack: Nginx + PHP-FPM.
-- Neither Nginx nor Apache is reported installed yet.
-- PHP is not installed yet.
-- Application requires PHP `^8.3`; Ubuntu 24.04's PHP 8.3 is the target.
+- Nginx is installed and active.
+- PHP 8.4 CLI/FPM is installed and active. `composer.json` still allows
+  `^8.3`, but the committed `composer.lock` currently includes packages that
+  require PHP `>=8.4`.
 - Final application root: `/var/www/stoxla`.
 - Final web/document root: `/var/www/stoxla/public`.
 - MariaDB 10.11.14 is installed and active.
@@ -78,17 +79,18 @@ Known:
   Treat that as a cutover task, not as a blocker for VPS provisioning.
 - The copied legacy tables still use the `portfolio_` prefix.
 - V7-created tables use the canonical `stox_` prefix.
+- Kite/Zerodha static IP whitelist has been confirmed for `82.112.230.20`.
+- A secret-only production env supplement exists at
+  `/home/nitty/stoxla.env.production`, owned by `nitty:nitty` with mode `600`.
+  It contains `APP_KEY`, `DB_PASSWORD`, `KITE_API_KEY`, and `KITE_API_SECRET`.
+  Do not read or print its values in agent logs.
 
-Open before deployment packaging:
+Open after first deployment:
 
-- Production secrets: `APP_KEY`, DB password, Kite API key/secret, and any mail
-  credentials.
-- Confirm the `82.112.230.20` static IP is whitelisted in Zerodha/Kite.
 - Freeze legacy writes and run any final source-to-target delta after ID
   15,675,217 if the legacy application continues writing before cutover.
-- Create the production `.env` on the VPS.
-- Run the current-master verification/build gate before deployment.
-- Explicit operator authorization to deploy the production application.
+- Confirm login and core authenticated workflows in-browser after the first VPS
+  deployment.
 
 ## 3. Database namespace posture
 
@@ -127,7 +129,7 @@ If release symlinks are introduced later, keep shared secrets and storage
 outside release directories. The first VPS deployment assumes the direct app
 root above.
 
-Deployment should support normal SSH commands:
+Application deployment uses normal SSH commands:
 
 ```bash
 composer install --no-dev --optimize-autoloader
@@ -146,20 +148,21 @@ the new VPS panel unexpectedly requires that compatibility route.
 Recommended PHP packages:
 
 ```bash
-php8.3-cli
-php8.3-fpm
-php8.3-mysql
-php8.3-mbstring
-php8.3-xml
-php8.3-curl
-php8.3-zip
-php8.3-bcmath
-php8.3-intl
-php8.3-gd
+php8.4-cli
+php8.4-fpm
+php8.4-mysql
+php8.4-mbstring
+php8.4-xml
+php8.4-curl
+php8.4-zip
+php8.4-bcmath
+php8.4-intl
+php8.4-gd
 ```
 
-The repository currently requires PHP `^8.3`, Laravel `^13.8`, Sanctum, Google2FA,
-and QR-code support.
+The repository currently declares PHP `^8.3`, Laravel `^13.8`, Sanctum,
+Google2FA, and QR-code support. The committed lockfile currently requires PHP
+8.4-compatible infrastructure packages, so the VPS runtime is PHP 8.4.
 
 ## 5. Database bootstrap baseline
 
@@ -195,6 +198,10 @@ attempt to rerun or repair the historical starter migrations.
 
 Production `.env` belongs on the VPS only and must not be committed or packaged
 with real secrets.
+
+The prepared `/home/nitty/stoxla.env.production` file is a secret-only
+supplement, not a complete Laravel `.env`. During deployment, merge those four
+secret values into the baseline below.
 
 ```dotenv
 APP_NAME=StoX
@@ -249,12 +256,12 @@ for:
 
 ## 8. VPS provisioning runbook
 
-These steps prepare the VPS operating environment. They do not deploy the
-production application code or run application migrations.
+These steps record the VPS operating environment. The initial production app
+deployment has now been completed.
 
 ### 8.0 Execution status
 
-Current as of 2026-09-12:
+Current as of 2026-09-13:
 
 - Preflight confirmed `nitty@stoxla-prod`, Ubuntu 24.04.5, public IPv4
   `82.112.230.20`, and DNS for both `stoxla.in` and `www.stoxla.in` resolving
@@ -265,7 +272,7 @@ Current as of 2026-09-12:
 - `nvm` default alias has been reset to `system` so the project Node remains
   opt-in for StoX build shells.
 - Nginx `1.24.0` is installed, enabled, active, and serving the `stoxla` site.
-- PHP `8.3.6` CLI and PHP-FPM are installed. `php8.3-fpm` is enabled and
+- PHP `8.4.25` CLI and PHP-FPM are installed. `php8.4-fpm` is enabled and
   active.
 - Required PHP extensions verified: `bcmath`, `ctype`, `curl`, `dom`,
   `fileinfo`, `gd`, `intl`, `mbstring`, `mysqli`, `openssl`, `pdo_mysql`,
@@ -278,16 +285,19 @@ Current as of 2026-09-12:
   succeeded.
 - Certbot was registered without a notification email because none was provided
   during provisioning.
-- `/var/www/stoxla/public` exists as an empty document root. This intentionally
-  returns `403 Forbidden` until application code is deployed.
-- `/var/www/stoxla` and `/var/www/stoxla/public` are owned by `nitty:www-data`
-  with mode `2755`.
+- `/var/www/stoxla` contains the deployed Laravel application.
+- `/var/www/stoxla`, `/var/www/stoxla/public`, `/var/www/stoxla/storage`, and
+  `/var/www/stoxla/bootstrap/cache` are owned by `nitty:www-data` with mode
+  `2775`.
+- `/var/www/stoxla/.env` exists with mode `600`; do not print its values.
+- `/var/www/specs/architecture/domains` exists and is owned by
+  `nitty:www-data` so the production frontend build can mirror the generated AI
+  guide beside the deployed app root.
 - Nginx redirects HTTP `stoxla.in`, HTTP `www.stoxla.in`, and HTTPS
   `www.stoxla.in` to canonical `https://stoxla.in/`.
-- Scheduler cron was prepared only as
-  `/home/nitty/stoxla-scheduler.cron.template`; no crontab entry was installed.
-- Queue worker service was prepared as
-  `/etc/systemd/system/stoxla-queue.service`; it is disabled and inactive.
+- Scheduler cron is installed for `nitty`.
+- Queue worker service is installed as `/etc/systemd/system/stoxla-queue.service`;
+  it is enabled and active.
 - Temporary passwordless sudo used for provisioning was removed. The remote
   connector again receives `sudo: a password is required`.
 
@@ -306,16 +316,16 @@ sudo apt install -y \
   curl \
   git \
   acl \
-  php8.3-cli \
-  php8.3-fpm \
-  php8.3-mysql \
-  php8.3-mbstring \
-  php8.3-xml \
-  php8.3-curl \
-  php8.3-zip \
-  php8.3-bcmath \
-  php8.3-intl \
-  php8.3-gd
+  php8.4-cli \
+  php8.4-fpm \
+  php8.4-mysql \
+  php8.4-mbstring \
+  php8.4-xml \
+  php8.4-curl \
+  php8.4-zip \
+  php8.4-bcmath \
+  php8.4-intl \
+  php8.4-gd
 ```
 
 Verify services and versions:
@@ -323,7 +333,7 @@ Verify services and versions:
 ```bash
 php -v
 php -m | sort
-systemctl status php8.3-fpm --no-pager
+systemctl status php8.4-fpm --no-pager
 systemctl status nginx --no-pager
 ```
 
@@ -406,7 +416,7 @@ server {
 
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+        fastcgi_pass unix:/run/php/php8.4-fpm.sock;
     }
 
     location ~ /\.(?!well-known).* {
@@ -500,10 +510,10 @@ During future deployments, restart the worker after code changes:
 sudo systemctl restart stoxla-queue
 ```
 
-## 9. Application deployment plan
+## 9. Application deployment
 
-This section is a prepared deployment plan only. Do not execute it until the
-operator explicitly authorizes production application deployment.
+The first VPS production application deployment was explicitly authorized and
+completed on 2026-09-13.
 
 ### 9.1 Deployment method
 
@@ -531,9 +541,9 @@ export VITE_APP_BASE=/build/
 Do not use the legacy `/portfolio/build/` base for the VPS unless the app is
 later moved under a subdirectory.
 
-### 9.3 Preflight before code deployment
+### 9.3 Historical preflight before first code deployment
 
-Before copying or cloning app code:
+Before the first code copy, this preflight was used:
 
 ```bash
 cd /var/www/stoxla
@@ -549,12 +559,12 @@ nginx -t
 certbot certificates
 ```
 
-The directory should still be empty except for `public/` until the operator
-authorizes deployment.
+For future deployments, `/var/www/stoxla` is no longer empty; use this as a
+historical reference only.
 
 ### 9.4 Cutover deployment sequence
 
-Only after explicit production deployment authorization:
+Executed first-deployment sequence:
 
 1. Freeze legacy application writes.
 2. Run the final source-to-target database delta after ID 15,675,217 if the
@@ -604,12 +614,12 @@ Only after explicit production deployment authorization:
 10. Enable the scheduler cron and queue worker only after the app responds
     correctly over HTTPS.
 
-### 9.5 Immediate rollback sketch
+### 9.5 Rollback sketch
 
-Before the first deployment, capture the exact git revision deployed and keep
-the previous legacy app untouched. If the VPS smoke check fails before launch,
-leave DNS/TLS/VPS infrastructure in place, keep scheduler and queue disabled,
-and continue serving the legacy application until the issue is fixed.
+The exact git revision deployed is recorded below. The previous legacy app was
+left untouched. If a future VPS smoke check fails, leave DNS/TLS/VPS
+infrastructure in place, stop scheduler and queue if needed, and roll forward or
+restore the previous known-good app contents from the recorded source revision.
 
 ### 9.6 Local verification snapshot
 
@@ -635,22 +645,60 @@ and mirrors the AI guide to
 regeneration produced timestamp/whitespace-only changes; no content delta was
 identified with a whitespace-insensitive diff.
 
-## 10. Pre-deployment checklist
+### 9.7 Deployment status
 
-- Freeze legacy writes and run any final source-to-target delta after ID
-  15,675,217 if the legacy application continues writing before cutover.
-- Confirm `82.112.230.20` is whitelisted in Zerodha/Kite Developer Console.
-- Reconfirm DNS for both `stoxla.in` and `www.stoxla.in` still points to
-  `82.112.230.20` at cutover time.
-- Reconfirm TLS is valid for `stoxla.in` and `www.stoxla.in`.
-- Create production `.env` outside git and verify secrets are not copied from
-  local templates accidentally.
+Production application deployment was authorized and completed on 2026-09-13.
+
+Completed:
+
+- Exact source revision `810c53728febcc7c3c39567231ea8bbd59f350d3` was cloned
+  to `/home/nitty/LidoPortfolio-deploy-src`.
+- Laravel app contents from repository `app/` were copied into
+  `/var/www/stoxla`, excluding `.env`, `vendor/`, and `node_modules/`.
+- Complete production `.env` was created at `/var/www/stoxla/.env` by combining
+  `app/.env.example`, VPS production overrides, and the secret-only supplement
+  at `/home/nitty/stoxla.env.production`.
+- `.env` values were not printed. File permissions were verified:
+  `nitty:www-data`, mode `600`.
+- PHP 8.4 was provisioned from the Ondrej PHP PPA because the committed lockfile
+  contains packages that require PHP `>=8.4`. Production did not run
+  `composer update`.
+- Composer install completed from the committed lockfile with
+  `--no-dev --optimize-autoloader --no-interaction --prefer-dist --no-progress`.
+- Frontend dependencies were installed with `npm ci` under project-isolated Node
+  `v22.23.2`.
+- Production frontend assets were built with `VITE_APP_BASE=/build/ npm run
+  build`. Vite emitted only the existing large chunk warning.
+- The build generated static docs under `/var/www/stoxla/public/docs` and
+  mirrored the AI guide to
+  `/var/www/specs/architecture/domains/StoX-Trading-Artifacts-AI-Guide.md`.
+- `php artisan migrate --force` applied only migrations newer than the imported
+  historical baseline. Latest applied batch is `53`.
+- Read-only database shape check after migration: 121 `portfolio_*` tables, 8
+  `stox_*` tables, 114 migration rows, max migration batch `53`.
+- Laravel config, route, view, and event caches were built successfully.
+- Nginx was updated to PHP-FPM socket `/run/php/php8.4-fpm.sock`; config test
+  passed and Nginx was reloaded.
+- `https://stoxla.in/` returns `200 OK`.
+- `https://www.stoxla.in/` redirects to canonical `https://stoxla.in/`.
+- Scheduler cron is installed for `nitty`.
+- `stoxla-queue.service` is enabled and active.
+- Temporary passwordless sudo used during provisioning/deployment was removed
+  again after deployment; `sudo -n true` reports password required.
+
+## 10. Remaining operations checklist
+
+- Confirm whether any final source-to-target delta after ID 15,675,217 is still
+  needed if the legacy application continued writing before cutover.
+- Kite/Zerodha whitelist for `82.112.230.20` is confirmed.
+- DNS for both `stoxla.in` and `www.stoxla.in` resolves to `82.112.230.20`.
+- TLS is valid for `stoxla.in` and `www.stoxla.in`.
+- Production `.env` exists only on the VPS and was created from approved
+  runtime values.
 - Use `nvm use stoxla` for Node-backed StoX build commands.
-- Build frontend assets for the VPS with `VITE_APP_BASE=/build/`.
-- Run migrations against a copy or staging database before production cutover.
-- Run the V7 verification gate locally before packaging.
-- Do not prepare or upload a production package until the operator confirms the
-  remaining open gates above.
+- Build frontend assets for the VPS with `VITE_APP_BASE=/build/` during future
+  deployments.
+- Run the V7 verification gate locally before future production deployments.
 
 ## 11. Post-deployment smoke checks
 
@@ -661,8 +709,8 @@ identified with a whitespace-insensitive diff.
 - `php artisan schedule:list` shows StoX scheduled jobs.
 - Scheduler heartbeat updates after cron/systemd is enabled.
 - Kite readiness detects the whitelisted static IP path.
-- A read-only database check confirms both legacy `portfolio_*` tables and V7
-  `stox_*` tables are present as expected.
+- A read-only database check confirmed 121 `portfolio_*` tables and 8 `stox_*`
+  tables are present after deployment migrations.
 - No temporary debug helper is web-accessible.
 
 ## 12. Future CI/CD
