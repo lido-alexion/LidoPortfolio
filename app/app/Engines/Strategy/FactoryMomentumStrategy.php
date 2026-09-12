@@ -196,6 +196,16 @@ final class FactoryMomentumStrategy
                 'maximum' => 40,
                 'parameters' => [],
             ],
+            SupportedIndicators::ML_SCORE => [
+                'enabled' => false,
+                'weight' => 0,
+                'minimum' => null,
+                'maximum' => null,
+                'parameters' => [
+                    'horizon' => '3m',
+                    'min_confidence' => null,
+                ],
+            ],
         ];
     }
 }

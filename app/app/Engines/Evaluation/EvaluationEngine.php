@@ -14,6 +14,7 @@ use App\Repositories\Tos\EvaluationResultRepository;
 use App\Repositories\Tos\MarketDataRepository;
 use App\Services\DataQualityGuardService;
 use App\Services\Indicators\IndicatorRegistry;
+use App\Services\ML\MlScoringService;
 use App\Services\PortfolioLoggerService;
 use App\Services\RelativeStrengthService;
 use App\Services\Screener\TechnicalIndicatorService;
@@ -40,6 +41,7 @@ class EvaluationEngine
         protected EvaluationResultRepository $evaluationResults,
         protected MarketDataRepository $marketData,
         protected IndicatorRegistry $indicatorRegistry,
+        protected MlScoringService $mlScoring,
     ) {}
 
     /**
@@ -327,6 +329,20 @@ class EvaluationEngine
                 unavailableReason: $this->factorUnavailableReason($id, $components),
             );
         }
+        $mlPrediction = $this->mlPredictionEvidence($stock, $config, $asOf);
+        if ($mlPrediction !== null) {
+            $factorScores['ml_score'] = $mlPrediction['value'];
+            $indicatorEvidence['ml_score'] = $this->indicatorEvidenceRow(
+                'ml_score',
+                'ml_score',
+                $config['indicator_versions']['ml_score'] ?? null,
+                $mlPrediction['parameters'],
+                $mlPrediction['value'],
+                $asOf,
+                $mlPrediction['components'],
+                unavailableReason: $mlPrediction['unavailable_reason'],
+            );
+        }
 
         return [
             'candidate' => $candidate,
@@ -440,6 +456,57 @@ class EvaluationEngine
     protected function isLegacyAlias(string $key): bool
     {
         return in_array($key, ['momentum', 'trend', 'pattern_bonus', 'volume', 'risk'], true);
+    }
+
+    /**
+     * @param  array<string,mixed>  $config
+     * @return array{value:?float,parameters:array<string,mixed>,components:array<string,mixed>,unavailable_reason:?string}|null
+     */
+    protected function mlPredictionEvidence(?Stock $stock, array $config, mixed $asOf): ?array
+    {
+        if ($stock === null) {
+            return null;
+        }
+
+        $row = null;
+        foreach ($config['indicators'] ?? [] as $indicator) {
+            if (($indicator['key'] ?? null) === 'ml_score') {
+                $row = is_array($indicator) ? $indicator : null;
+                break;
+            }
+        }
+        if ($row === null) {
+            return null;
+        }
+
+        $params = is_array($row['parameters'] ?? null) ? $row['parameters'] : [];
+        $horizon = in_array(($params['horizon'] ?? null), MlScoringService::HORIZONS, true)
+            ? (string) $params['horizon']
+            : '3m';
+        $minConfidence = isset($params['min_confidence']) && is_numeric($params['min_confidence'])
+            ? (float) $params['min_confidence']
+            : null;
+        $date = $asOf ? \Carbon\Carbon::parse((string) $asOf)->endOfDay() : now();
+        $prediction = $this->mlScoring->latestPrediction($stock, $horizon, $date);
+        $value = $prediction && ($minConfidence === null || (float) $prediction->confidence >= $minConfidence)
+            ? (float) $prediction->score
+            : null;
+
+        return [
+            'value' => $value,
+            'parameters' => ['horizon' => $horizon, 'min_confidence' => $minConfidence],
+            'components' => [
+                'source' => 'stox_ml_predictions',
+                'prediction_id' => $prediction?->id,
+                'model_version_id' => $prediction?->model_version_id,
+                'confidence' => $prediction ? (float) $prediction->confidence : null,
+                'benchmark_symbol' => $prediction?->benchmark_symbol,
+                'explanations' => $prediction?->explanations,
+            ],
+            'unavailable_reason' => $prediction === null
+                ? 'missing_ml_prediction'
+                : ($value === null ? 'ml_confidence_below_threshold' : null),
+        ];
     }
 
     /**

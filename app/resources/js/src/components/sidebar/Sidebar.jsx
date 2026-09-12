@@ -114,6 +114,8 @@ export default function Sidebar() {
             'sync-logs',
             'data-quality',
             'indicator-registry',
+            'fundamental-data',
+            'ml-scoring',
             'admin-alerts',
             'audit-explorer',
             'universe-price-sync',

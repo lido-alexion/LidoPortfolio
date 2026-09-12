@@ -98,6 +98,8 @@ Independent freeze audit (2026-07-25): [`architecture/audit/`](./architecture/au
 | 2026-07-30 | Epic 2 | Indicator Registry **migration**: ScreenerCatalog + SupportedIndicators façades; seeds SoT; min-bars helper; validator; façade parity tests; no calc/UI changes |
 | 2026-07-30 | SD-034 | Trading Artifact Framework **design** accepted (docs only): shared envelope for Indicator / Screener / Strategy; absorb Strategy Templates; preserve `definition_json` / `config_json`; PB-058/059/060 |
 | 2026-08-28 | V4-FEAT-008 | TAF **remainder** deferred to V5 (PO). Envelope/registries/package I/O/Create-Enable-Archive/AI docs already shipped; do not treat as unimplemented. |
+| 2026-09-12 | V7 FEAT-018 / FEAT-053 | Local implementation added for fundamentals and ML scoring foundations: `stox_` canonical tables, Yahoo provider boundary, immutable point-in-time facts, Admin APIs/UI, scheduled incremental updater, 1m/3m/6m ML lifecycle, explicit promotion/rollback, persisted predictions and additive Evaluation/Strategy evidence. Verification: focused V7, unit, feature, JS, typecheck and build pass locally. Production deployment/package preparation deferred. |
+| 2026-09-12 | V7 FEAT-055 | New V7 database objects use `stox_` and migration validation covers new V7 tables. Full legacy `portfolio_*` namespace cutover is not claimed complete; it remains a separate coordinated cutover risk because V1-V6 frozen behavior depends on existing physical table names. |
 
 ---
 
@@ -116,5 +118,7 @@ Independent freeze audit (2026-07-25): [`architecture/audit/`](./architecture/au
 - Pluggable evaluation rules / multi-benchmark market analysis / constituent breadth V2
 - CI workflow improvements
 - Pipeline auto-run after daily sync (config exists; default off)
+- V7 FEAT-055 full legacy database namespace cutover from existing `portfolio_*` objects to `stox_*`
+- V7 deployment package / production deploy after environment reconciliation
 
 These do **not** block MVP sign-off per the completion-sprint clarifications.

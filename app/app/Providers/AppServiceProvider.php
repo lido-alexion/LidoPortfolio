@@ -7,6 +7,8 @@ use App\Services\Artifacts\ArtifactValidationService;
 use App\Services\Artifacts\IndicatorArtifactRegistry;
 use App\Services\Artifacts\ScreenerArtifactRegistry;
 use App\Services\Artifacts\StrategyArtifactRegistry;
+use App\Services\Fundamentals\FundamentalDataProvider;
+use App\Services\Fundamentals\YahooFundamentalDataProvider;
 use App\Services\Indicators\IndicatorRegistry;
 use App\Services\Indicators\IndicatorRegistryFactory;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -32,6 +34,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(ScreenerArtifactRegistry::class);
         $this->app->singleton(StrategyArtifactRegistry::class);
         $this->app->singleton(ArtifactRegistry::class);
+        $this->app->bind(FundamentalDataProvider::class, YahooFundamentalDataProvider::class);
     }
 
     /**

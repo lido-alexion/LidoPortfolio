@@ -36,6 +36,8 @@ import UserManagementPage from './pages/UserManagementPage';
 import StocksAdminPage from './pages/StocksAdminPage';
 import AdminAlertsPage from './pages/AdminAlertsPage';
 import AdminAuditExplorerPage from './pages/AdminAuditExplorerPage';
+import FundamentalDataAdminPage from './pages/FundamentalDataAdminPage';
+import MlScoringAdminPage from './pages/MlScoringAdminPage';
 import AdminRoute from './components/AdminRoute';
 import StockExplorerPage from './pages/StockExplorerPage';
 import IndicesPage from './pages/IndicesPage';
@@ -184,6 +186,16 @@ function AppRoutes() {
                     <StrategyRegistryDetailPage adminMode />
                 </AdminRoute>
             )} />
+            <Route path="/settings/fundamentals" element={(
+                <AdminRoute>
+                    <FundamentalDataAdminPage />
+                </AdminRoute>
+            )} />
+            <Route path="/settings/ml-scoring" element={(
+                <AdminRoute>
+                    <MlScoringAdminPage />
+                </AdminRoute>
+            )} />
             <Route path="/settings/universe-price-sync/gap-failures" element={(
                 <AdminRoute>
                     <GapFillFailuresPage />
@@ -231,6 +243,8 @@ function AdminAppRoutes() {
             <Route path="/settings/data-quality/history" element={<CorporateActionHistoryPage />} />
             <Route path="/settings/indicators" element={<IndicatorRegistryPage />} />
             <Route path="/settings/indicators/:id" element={<IndicatorRegistryDetailPage />} />
+            <Route path="/settings/fundamentals" element={<FundamentalDataAdminPage />} />
+            <Route path="/settings/ml-scoring" element={<MlScoringAdminPage />} />
             <Route path="*" element={<Navigate to="/settings/users" replace />} />
         </Routes>
     );

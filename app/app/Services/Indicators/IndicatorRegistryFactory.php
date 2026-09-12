@@ -171,6 +171,7 @@ final class IndicatorRegistryFactory
             'market_regime' => [],
             'sector_strength' => [],
             'risk_score' => ['risk'],
+            'ml_score' => [],
         ];
 
         $out = [];
@@ -195,6 +196,9 @@ final class IndicatorRegistryFactory
             ];
             if (! empty($def['supports_maximum'])) {
                 $capabilities[IndicatorCapability::SUPPORTS_MAXIMUM] = true;
+            }
+            if ($key === 'ml_score') {
+                $capabilities[IndicatorCapability::ML_SCORE] = true;
             }
 
             $out[] = IndicatorDefinition::make($key, IndicatorType::COMPOSITE, (string) $def['registry_category'], [

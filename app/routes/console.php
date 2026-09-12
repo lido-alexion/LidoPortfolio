@@ -5,6 +5,7 @@ use App\Services\AlertExpirationService;
 use App\Services\AlertNotificationService;
 use App\Services\BenchmarkPriceSyncService;
 use App\Services\Broker\KiteReadinessReminderService;
+use App\Services\Fundamentals\FundamentalUpdateService;
 use App\Services\HistoryDepthBackfillService;
 use App\Services\Notification\NotificationReminderService;
 use App\Services\NotificationScheduleService;
@@ -113,6 +114,38 @@ Artisan::command('portfolio:queue-notification-reminders', function () {
 
     return 0;
 })->purpose('Queue 48-hour reminders for unresolved notification conditions');
+
+Artisan::command('stox:fundamentals-update
+    {--run= : Existing V7 fundamentals run id to process}
+    {--stock= : Optional stock id for a new targeted run}
+    {--batch=25 : Jobs to process in this slice}', function () {
+    @set_time_limit(0);
+    $service = app(FundamentalUpdateService::class);
+    $runId = $this->option('run');
+    $batch = max(1, min((int) $this->option('batch'), 200));
+
+    $run = $runId
+        ? \App\Models\V7\FundamentalUpdateRun::query()->findOrFail((int) $runId)
+        : $service->createRun(
+            trigger: 'scheduled',
+            scope: $this->option('stock') ? 'stock' : 'incremental',
+            stockId: $this->option('stock') ? (int) $this->option('stock') : null,
+            limit: $batch,
+        );
+
+    $result = $service->process($run, $batch);
+    $this->info(sprintf(
+        'V7 fundamentals run #%d: %s; processed=%d succeeded=%d failed=%d skipped=%d.',
+        (int) $result['id'],
+        (string) $result['status'],
+        (int) $result['processed'],
+        (int) $result['succeeded'],
+        (int) $result['failed'],
+        (int) $result['skipped'],
+    ));
+
+    return in_array($result['status'], ['completed', 'completed_with_errors', 'running', 'queued'], true) ? 0 : 1;
+})->purpose('Process a bounded V7 StoX fundamental-data update slice');
 
 $cronTime = env('PORTFOLIO_CRON_TIME', '18:30');
 $timezone = env('PORTFOLIO_CRON_TIMEZONE', 'Asia/Kolkata');
@@ -253,6 +286,12 @@ Schedule::command('portfolio:run-due-screeners')
     ->everyMinute()
     ->timezone($timezone)
     ->name('run-due-screeners');
+
+Schedule::command('stox:fundamentals-update --batch=20')
+    ->hourly()
+    ->timezone($timezone)
+    ->withoutOverlapping(30)
+    ->name('stox-fundamentals-incremental');
 
 Schedule::command('portfolio:expire-alerts')
     ->hourly()

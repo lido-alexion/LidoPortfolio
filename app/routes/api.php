@@ -68,8 +68,10 @@ use App\Http\Controllers\Api\V1\CapitalAccountingController;
 use App\Http\Controllers\Api\V1\CapitalLendingController;
 use App\Http\Controllers\Api\V1\CapitalRecallController;
 use App\Http\Controllers\Api\V1\CapitalResolutionController;
+use App\Http\Controllers\Api\V1\FundamentalDataController;
 use App\Http\Controllers\Api\V1\IndicatorRegistryController;
 use App\Http\Controllers\Api\V1\MarketAnalysisController;
+use App\Http\Controllers\Api\V1\MlScoringController;
 use App\Http\Controllers\Api\V1\PendingSaleProceedsController;
 use App\Http\Controllers\Api\V1\RecallBridgeLoanController;
 use App\Http\Controllers\Api\V1\RecallPeriodController;
@@ -489,6 +491,14 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
 
     Route::middleware('admin')->group(function () {
         Route::put('/admin/users/{user}/automated-execution-entitlement', [TradingOsAdminEntitlementController::class, 'update']);
+        Route::get('/admin/fundamentals', [FundamentalDataController::class, 'adminStatus']);
+        Route::put('/admin/fundamentals/settings', [FundamentalDataController::class, 'updateSettings']);
+        Route::post('/admin/fundamentals/runs', [FundamentalDataController::class, 'startRun']);
+        Route::post('/admin/fundamentals/runs/{run}/process', [FundamentalDataController::class, 'processRun'])->whereNumber('run');
+        Route::get('/admin/ml', [MlScoringController::class, 'adminIndex']);
+        Route::post('/admin/ml/retrain', [MlScoringController::class, 'retrain']);
+        Route::post('/admin/ml/models/{model}/promote', [MlScoringController::class, 'promote'])->whereNumber('model');
+        Route::post('/admin/ml/rollback', [MlScoringController::class, 'rollback']);
     });
 
     Route::post('/reviews/generate', [TradingOsReviewController::class, 'reviewsGenerate']);
@@ -506,6 +516,8 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
     Route::get('/analytics/stocks/{stock}/evaluation-profile', [AnalyticsArchitectureController::class, 'evaluationProfile']);
     Route::get('/analytics/stocks/{stock}/recommendation-preview', [AnalyticsArchitectureController::class, 'recommendationPreview']);
     Route::get('/analytics/stocks/{stock}/research', [AnalyticsArchitectureController::class, 'watchlistResearch']);
+    Route::get('/stocks/{stock}/fundamentals', [FundamentalDataController::class, 'show'])->whereNumber('stock');
+    Route::post('/stocks/{stock}/ml-predictions', [MlScoringController::class, 'predict'])->whereNumber('stock');
 
     Route::get('/market-analysis', [MarketAnalysisController::class, 'latest']);
     Route::get('/market-analysis/sentiment', [MarketAnalysisController::class, 'sentiment']);

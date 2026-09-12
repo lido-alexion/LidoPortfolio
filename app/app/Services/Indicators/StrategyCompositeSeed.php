@@ -173,6 +173,25 @@ final class StrategyCompositeSeed
                 'formula_explanation' => 'atr_pct = atr/close×100; score = clamp(atr_pct×10, 0, 100). Higher is riskier; Strategy may apply maximum gate.',
                 'status' => IndicatorStatus::ACTIVE,
             ],
+            [
+                'key' => SupportedIndicators::ML_SCORE,
+                'category' => SupportedIndicators::CATEGORY_ML,
+                'registry_category' => IndicatorCategory::ML,
+                'display_name' => 'ML Score',
+                'description' => 'Versioned, benchmark-relative, risk-aware ML prediction score. Additive only; deterministic Strategy semantics remain authoritative.',
+                'supports_maximum' => false,
+                'default_enabled' => false,
+                'default_weight' => null,
+                'default_minimum' => null,
+                'default_maximum' => null,
+                'parameters' => [
+                    'horizon' => ['type' => 'string', 'label' => 'Prediction Horizon', 'default' => '3m'],
+                    'min_confidence' => ['type' => 'number', 'label' => 'Minimum Confidence', 'default' => null],
+                ],
+                'depends_on' => [],
+                'formula_explanation' => 'Reads the persisted active-model prediction for the selected 1m/3m/6m horizon as of the evaluation date. Missing or low-confidence predictions contribute 0 and may fail a configured minimum gate; no deterministic weights are re-normalised.',
+                'status' => IndicatorStatus::ACTIVE,
+            ],
         ];
     }
 }

@@ -31,6 +31,8 @@ final class SupportedIndicators
 
     public const RISK_SCORE = 'risk_score';
 
+    public const ML_SCORE = 'ml_score';
+
     public const CATEGORY_MOMENTUM = 'Momentum';
 
     public const CATEGORY_TREND = 'Trend';
@@ -40,6 +42,8 @@ final class SupportedIndicators
     public const CATEGORY_MARKET = 'Market';
 
     public const CATEGORY_RISK = 'Risk';
+
+    public const CATEGORY_ML = 'ML';
 
     /** @var list<array<string, mixed>>|null */
     private static ?array $definitionsCache = null;

@@ -30,6 +30,10 @@ final class IndicatorCategory
 
     public const DESCRIPTIVE = 'descriptive';
 
+    public const FUNDAMENTAL = 'fundamental';
+
+    public const ML = 'ml';
+
     /**
      * Human labels for Admin / docs.
      *
@@ -49,6 +53,8 @@ final class IndicatorCategory
             self::MARKET => 'Market',
             self::PRICE => 'Price',
             self::DESCRIPTIVE => 'Descriptive',
+            self::FUNDAMENTAL => 'Fundamental',
+            self::ML => 'ML',
         ];
     }
 

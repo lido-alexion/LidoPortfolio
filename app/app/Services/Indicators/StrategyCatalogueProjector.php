@@ -50,9 +50,9 @@ final class StrategyCatalogueProjector
                 'description' => $def->description,
                 'supports_maximum' => (bool) ($legacy['supports_maximum'] ?? $def->hasCapability(IndicatorCapability::SUPPORTS_MAXIMUM)),
                 'default_enabled' => (bool) ($legacy['default_enabled'] ?? true),
-                'default_weight' => $legacy['default_weight'] ?? 0,
-                'default_minimum' => $legacy['default_minimum'] ?? 0,
-                'default_maximum' => $legacy['default_maximum'] ?? null,
+                'default_weight' => array_key_exists('default_weight', $legacy) ? $legacy['default_weight'] : 0,
+                'default_minimum' => array_key_exists('default_minimum', $legacy) ? $legacy['default_minimum'] : 0,
+                'default_maximum' => array_key_exists('default_maximum', $legacy) ? $legacy['default_maximum'] : null,
                 'parameters' => $params,
             ];
         }

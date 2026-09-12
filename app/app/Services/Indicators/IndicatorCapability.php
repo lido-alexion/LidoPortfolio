@@ -15,6 +15,10 @@ final class IndicatorCapability
 
     public const EVALUATION_FACT = 'evaluation_fact';
 
+    public const FUNDAMENTAL = 'fundamental';
+
+    public const ML_SCORE = 'ml_score';
+
     /**
      * @return list<string>
      */
@@ -25,6 +29,8 @@ final class IndicatorCapability
             self::SUPPORTS_MAXIMUM,
             self::STRATEGY_SCORABLE,
             self::EVALUATION_FACT,
+            self::FUNDAMENTAL,
+            self::ML_SCORE,
         ];
     }
 }
