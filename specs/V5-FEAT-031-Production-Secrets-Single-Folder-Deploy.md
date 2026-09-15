@@ -2,109 +2,75 @@
 
 | Field | Value |
 |---|---|
-| Status | **IMPLEMENTED; production cutover verification pending** |
+| Status | **SUPERSEDED / CLOSED — legacy cPanel deployment architecture** |
 | Implemented | 2026-09-04 |
+| Superseded | 2026-09-13 production VPS deployment; reconciled 2026-09-15 |
 | Original production target | GoDaddy/cPanel, `/portfolio` subdirectory |
-| Current deployment target | VPS at `https://stoxla.in/` as of 2026-09-12 |
-| Related | [`../deploy/SINGLE-FOLDER-DEPLOY.md`](../deploy/SINGLE-FOLDER-DEPLOY.md) |
+| Current production target | VPS at `https://stoxla.in/` |
+| Current deployment runbook | [`../deploy/STOXLA-VPS-DEPLOY.md`](../deploy/STOXLA-VPS-DEPLOY.md) |
 
-**2026-09-11 local closure recheck:** the PowerShell packager completed using Node 24, produced exactly one `portfolio/build`, included both parent and nested deny rules plus the external environment example, and contained no `.env`, `DBConfig.php`, `public/hot` or nested `laravel/public/build`. The production cutover, exposure probes and cron-path confirmation remain intentionally pending authorization.
+## Closure decision
 
-**2026-09-12 hosting supersession:** the old GoDaddy/cPanel space remains outside
-the current StoX deployment target. Current production planning moved to a new
-VPS and the `stoxla.in` domain because Kite order placement requires a stable
-outbound IP for Zerodha whitelisting and the shared cPanel space hit storage
-limits. FEAT-031 remains useful as historical cPanel hardening, but it is not
-production-verified for the new VPS target and must not be used to mark
-FEAT-008, FEAT-031 or FEAT-042 production gates complete.
+FEAT-031 is closed as **superseded**, not because its original cPanel cutover checklist was executed.
 
-## Problem
+The feature successfully implemented the hardening needed for the former GoDaddy/cPanel topology: externalized secrets, single-build packaging, nested Laravel web denial, migration/setup helpers and rollback support. Before that cPanel cutover was production-verified, StoX moved to a dedicated Hostinger VPS and `stoxla.in`.
 
-The legacy production shape uses sibling `public_html/lidoportfolio` and
-`public_html/portfolio` directories and requires two copies of every Vite build.
-It also stores Laravel `.env` below `public_html`. The Laravel sibling is denied
-by Apache, but duplicated assets create atomicity risk and a future layout error
-could expose secrets.
+The old acceptance target is therefore no longer the production architecture and should not remain an open V5 closure gate.
 
-## Frozen behaviour
+The replacement VPS deployment architecture is now production-operational and provides the corresponding concerns through a different mechanism:
 
-- The target is one web directory: `public_html/portfolio`, with Laravel nested
-  at `portfolio/laravel` and exactly one public build at `portfolio/build`.
-- Application secrets live outside the web tree in
-  `/home/USER/config/LidoPortfolio.env`. Existing external `DBConfig.php`
-  remains the database credential source of truth.
-- An explicitly configured `LIDO_ENV_PATH` wins; otherwise StoX discovers the
-  external file by walking deployment ancestors. Outermost candidates win over
-  any accidental web-tree copy.
-- The parent web rule denies `laravel/` and dot paths before real-file/directory
-  pass-through. `laravel/.htaccess` independently denies all web access.
-- Laravel's public path is rebound to `portfolio/`, so framework manifest reads
-  and browser asset reads use the same `build/` release.
-- Existing two-folder production remains a supported rollback path during the
-  controlled migration. No application request automatically deletes or moves
-  production files.
+- production secrets remain outside release artifacts;
+- releases are packaged by GitHub Actions;
+- shared `.env` and Laravel storage live outside individual release directories;
+- release activation uses versioned release directories and an atomic `current` symlink;
+- migrations and Laravel caches are applied during deployment;
+- queue workers are restarted after activation;
+- rollback tooling is shipped with the deployment flow; and
+- a post-deploy HTTPS health check is mandatory.
 
-## Architecture
+The successful production workflow on 2026-09-13 passed backend verification, MySQL migration/seed validation, OpenAPI verification, frontend tests, TypeScript validation, production build, release packaging, VPS activation and HTTPS health checking.
 
-- `ProductionEnvironment` owns deterministic external environment discovery.
-- `bootstrap/app.php` selects the resolved file before Laravel environment
-  bootstrap; absent external configuration retains Laravel's normal local
-  `.env` behavior for development and legacy production.
-- The single-folder front controller boots `portfolio/laravel` and calls
-  `usePublicPath(portfolio)` before handling the request.
-- A dedicated PowerShell packager builds assets and assembles code, runtime
-  directories, web rules, temporary cPanel helpers, and an external environment
-  example into separate upload roots.
-- All cPanel helpers resolve the new nested Laravel path first and retain the
-  legacy sibling fallback.
+## Historical problem
 
-## Algorithms
+The legacy production shape used sibling `public_html/lidoportfolio` and `public_html/portfolio` directories and required two copies of every Vite build. It also stored Laravel `.env` below `public_html`. The Laravel sibling was denied by Apache, but duplicated assets created atomicity risk and a future layout error could expose secrets.
 
-1. Resolve the explicit external environment path when readable.
-2. Otherwise scan ancestor `config/LidoPortfolio.env` candidates outermost
-   first; use the first readable regular file.
-3. Otherwise allow Laravel's ordinary `.env` fallback.
-4. During packaging, build once, copy the build once, exclude secrets and local
-   DB templates, create empty writable runtime directories, and fail if a
-   forbidden artifact exists.
-5. During migration, stage beside production, install locked dependencies,
-   atomically swap the web directory, update the one scheduler path, verify, and
-   retain the old directory until the rollback window closes.
+## Historical frozen behaviour
 
-## UX
+The original feature specified:
 
-This feature has no investor-facing UI. The operator receives explicit package
-output, a migration checklist, exposure probes, and rollback instructions.
-Temporary browser-run cPanel helpers remain token-gated and must be deleted
-after use.
+- one web directory at `public_html/portfolio`, with Laravel nested at `portfolio/laravel`;
+- one public build at `portfolio/build`;
+- secrets outside the web tree;
+- deterministic external environment discovery;
+- parent and nested deny rules for Laravel/secrets;
+- cPanel-compatible setup/migration helpers; and
+- preservation of the former two-folder deployment as rollback during migration.
 
-## Acceptance criteria
+That behavior remains historical reference only. It does not describe the current VPS deployment topology.
 
-- Release package contains one `portfolio/build` and no `.env`, `DBConfig.php`,
-  `public/hot`, or `laravel/public/build`.
-- External environment selection is deterministic and tested, including
-  preference over an accidental web-tree copy.
-- Direct HTTP requests for Laravel, secrets, storage, and dot paths are denied
-  by the shipped parent rules, with nested deny-all defense in depth.
-- Front controller, diagnostics, migration, setup, Composer, and operational
-  helpers work with `portfolio/laravel`; legacy fallback remains intact.
-- Full application tests, frontend tests, and production build pass.
-- Production is not marked verified until the live cutover checklist and cron
-  path are confirmed.
+## Current authority
 
-## Dependencies
+For current production operations, deployment architecture and verification, use:
 
-- FEAT-030 supplies the full CI gate.
-- Hosting must permit `/home/USER/config` through `open_basedir`; existing
-  `DBConfig.php` proves this path is already supported on the target host.
-- Production cutover requires cPanel/file access and preservation of the
-  existing `APP_KEY`.
+- `deploy/STOXLA-VPS-DEPLOY.md`
+- `.github/workflows/deploy-stoxla-production.yml`
+- `deploy/scripts/stoxla-deploy-release.sh`
+- `deploy/scripts/stoxla-rollback-release.sh`
 
-## Non-goals
+These supersede the cPanel single-folder cutover as the active production mechanism.
 
-- No automatic production file deletion, cron mutation, credential rotation,
-  database rollback, hosting-provider API integration, containerization, or
-  deployment service.
-- No change to `/portfolio` URLs, Sanctum behavior, application features, or
-  database schema.
-- FEAT-031 does not begin FEAT-032–040 work.
+## Historical acceptance evidence
+
+Before supersession, local verification had already shown that the cPanel package:
+
+- produced exactly one public build;
+- included parent and nested deny rules;
+- excluded `.env`, `DBConfig.php`, `public/hot` and duplicate build output;
+- supported external environment selection; and
+- passed application/frontend build checks.
+
+The remaining original cPanel production-cutover checks were intentionally never completed because that hosting target was abandoned.
+
+## Final status
+
+FEAT-031 must no longer be counted as an unfinished V5 implementation or production gate. It is a **completed historical implementation whose target architecture was superseded** by the live VPS deployment.
