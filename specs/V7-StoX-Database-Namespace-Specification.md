@@ -4,71 +4,67 @@
 |---|---|
 | **Feature** | V4-FEAT-055 — StoX Database Table Namespace / Prefix |
 | **Version** | V7 |
-| **Status** | DECIDED |
+| **Status** | CLOSED / SUPERSEDED BY DEPLOYMENT ARCHITECTURE CHANGE |
 | **Owner** | Architecture |
+| **Closed** | 2026-09-15 |
 
-## 1. Purpose
+## 1. Closure decision
 
-Ensure every database object owned by StoX is immediately identifiable in a database shared with other applications by enforcing a common StoX-specific naming prefix.
+FEAT-055 is closed at its current implementation state.
 
-## 2. Canonical namespace
+The epic was created because StoX previously used a database shared with other applications, making a product-specific namespace necessary to distinguish StoX-owned database objects from unrelated application objects.
 
-The canonical prefix for StoX-owned database objects is:
+That architecture no longer applies. StoX has moved to the dedicated `stoxla.in` VPS and now uses a dedicated StoX production database. The original requirement to rename every legacy `portfolio_*` object solely to avoid collisions or ambiguity inside a shared database therefore no longer provides sufficient product or operational value to justify a large coordinated migration.
+
+The work already implemented remains valid:
+
+- new V7-owned StoX tables use the `stox_` prefix;
+- automated migration validation prevents accidental namespace drift for new V7 objects;
+- existing V1–V6 `portfolio_*` tables remain unchanged and continue to use their established application mappings.
+
+No full legacy `portfolio_*` → `stox_*` cutover is required for FEAT-055 closure.
+
+## 2. Historical purpose
+
+The original purpose was to ensure every database object owned by StoX was immediately identifiable in a database shared with other applications by enforcing a common StoX-specific naming prefix.
+
+The canonical prefix selected for new StoX-owned objects was:
 
 `stox_`
 
-This prefix is mandatory for all new StoX-owned database objects and is the target naming convention for all existing StoX-owned objects.
+## 3. Implemented state retained
 
-## 3. Scope
+The following implementation remains part of StoX:
 
-The namespace rule applies to all StoX-owned database objects where naming is under application control, including:
+1. New V7 analytical/fundamental/ML database objects use the `stox_` prefix.
+2. Automated migration/schema validation covers newly introduced V7 StoX-owned objects.
+3. Existing legacy V1–V6 objects retain their `portfolio_*` names to preserve frozen application behavior and avoid a high-risk migration with no current architectural requirement.
 
-- tables
-- views and materialized views
-- sequences
-- indexes
-- constraints
-- other explicitly named StoX-owned database objects
+## 4. Superseded original migration requirement
 
-Objects owned by other applications or shared infrastructure are outside the rename scope.
+The earlier specification required all existing StoX-owned database objects to be migrated to `stox_*` in one coordinated cutover and prohibited long-term legacy names.
 
-## 4. Existing-object migration
+That requirement is explicitly superseded by the move to a dedicated StoX database.
 
-V7 shall audit the complete StoX persistence/schema surface and identify every existing StoX-owned object that does not conform to the `stox_` prefix.
+The existing `portfolio_*` namespace is now accepted technical history rather than an open V7 product gap. Future work must not reopen a mass rename merely to satisfy this obsolete shared-database requirement.
 
-All such objects shall be migrated/renamed so the resulting schema is fully consistent. Applying the prefix only to newly created objects is not acceptable.
+A later database-name migration may still be proposed if it has an independent engineering or product justification, but it would be a new piece of work and not unfinished FEAT-055 scope.
 
-The migration must preserve existing data, relationships, keys, indexes, constraints, application behaviour and migration history semantics.
+## 5. Final acceptance state
 
-## 5. Cutover model
+FEAT-055 is considered complete/closed because:
 
-The migration uses a coordinated cutover:
+- the shared-database collision/identification problem that motivated the epic no longer exists;
+- new V7 objects already follow the selected `stox_` convention;
+- future V7 namespace drift is guarded automatically; and
+- retaining legacy `portfolio_*` tables is now an intentional architecture decision for the dedicated StoX database.
 
-- database object names and all application references move together;
-- ORM/model mappings, SQL, migrations, tests, scripts, jobs and operational tooling must be updated consistently;
-- no long-term compatibility aliases, compatibility views or duplicate old-name objects are retained.
+## 6. Non-goals after closure
 
-Temporary implementation-only mechanisms used during a single controlled migration are acceptable if removed before the epic is considered complete.
+FEAT-055 does not require:
 
-## 6. Future enforcement
-
-The naming convention must be automatically enforced so future changes cannot silently reintroduce non-conforming StoX object names.
-
-V7 shall add an automated CI/test/migration validation that fails when a newly introduced StoX-owned database object does not follow the `stox_` naming convention.
-
-Documentation alone is not sufficient enforcement.
-
-## 7. Acceptance criteria
-
-FEAT-055 is complete when:
-
-1. all StoX-owned database objects have been inventoried;
-2. every controllable StoX-owned object name conforms to the `stox_` prefix;
-3. all affected application and operational references have been migrated;
-4. existing data and application behaviour are preserved;
-5. no long-term old-name compatibility layer remains; and
-6. automated validation prevents future namespace drift.
-
-## 8. Non-goals
-
-This epic does not redesign the database schema, normalize unrelated tables, change data ownership, split StoX into a separate database, or rename objects belonging to other applications merely for stylistic consistency.
+- renaming existing V1–V6 `portfolio_*` tables;
+- rewriting historical migrations solely for naming consistency;
+- adding compatibility aliases or duplicate tables;
+- changing existing ORM/model mappings solely for prefix uniformity; or
+- performing a production schema cutover whose only benefit would be cosmetic consistency.
