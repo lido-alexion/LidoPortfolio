@@ -121,6 +121,10 @@ function resolveApiErrorMessage(error) {
         return trimmed;
     }
 
+    if (status === 405) {
+        return 'This request could not be completed. Please reload the page and try again.';
+    }
+
     if (status >= 500) {
         const requestId = error?.response?.data?.request_id
             || error?.response?.headers?.['x-request-id'];

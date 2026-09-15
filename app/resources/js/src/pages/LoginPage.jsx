@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { saveRedirectPath } from '../auth/redirect';
 import { appUrl } from '../appBase';
+import { getApiErrorMessage } from '../api';
 
 export default function LoginPage() {
     const { login, sessionExpired, consumeRedirectPath } = useAuth();
@@ -48,8 +49,7 @@ export default function LoginPage() {
             }
             setMessage(data?.message
                 || data?.errors?.email?.[0]
-                || error?.message
-                || 'Authentication failed');
+                || getApiErrorMessage(error, 'Could not sign in. Please check your email and password, then try again.'));
         } finally {
             setSubmitting(false);
         }

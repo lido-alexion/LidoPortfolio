@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { getApiErrorMessage } from '../api';
 import { showToast } from '../toast';
 
@@ -18,10 +18,21 @@ export default function useApiGet({
     const [data, setData] = useState(initialData);
     const [loading, setLoading] = useState(Boolean(enabled));
     const [error, setError] = useState(null);
+    const requestRef = useRef(request);
+    const initialDataRef = useRef(initialData);
+    const onErrorRef = useRef(onError);
+    const errorFallbackRef = useRef(errorFallback);
+
+    useEffect(() => {
+        requestRef.current = request;
+        initialDataRef.current = initialData;
+        onErrorRef.current = onError;
+        errorFallbackRef.current = errorFallback;
+    }, [request, initialData, onError, errorFallback]);
 
     const reload = useCallback(async () => {
         if (!enabled) {
-            setData(initialData);
+            setData(initialDataRef.current);
             setLoading(false);
             setError(null);
             return null;
@@ -29,22 +40,23 @@ export default function useApiGet({
         setLoading(true);
         setError(null);
         try {
-            const result = await request();
+            const result = await requestRef.current();
             setData(result);
             return result;
         } catch (e) {
             setError(e);
-            if (onError) {
-                onError(e);
+            if (onErrorRef.current) {
+                onErrorRef.current(e);
             }
-            showToast(getApiErrorMessage(e, errorFallback), 'danger');
+            showToast(getApiErrorMessage(e, errorFallbackRef.current), 'danger');
             return null;
         } finally {
             setLoading(false);
         }
-    // request is intentionally omitted; list reactive inputs in deps.
+    // request, initialData, onError, and errorFallback are kept in refs so callers
+    // can pass inline functions/objects without creating a fetch loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [enabled, errorFallback, initialData, onError, ...deps]);
+    }, [enabled, ...deps]);
 
     useEffect(() => {
         reload();
