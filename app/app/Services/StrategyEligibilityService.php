@@ -149,7 +149,7 @@ class StrategyEligibilityService
 
                 if ($run) {
                     $hitIds = ScreenerRunHit::query()
-                        ->where('screener_run_id', $run->id)
+                        ->where('run_id', $run->id)
                         ->pluck('stock_id')
                         ->map(fn ($id) => (int) $id)
                         ->unique()
@@ -269,7 +269,7 @@ class StrategyEligibilityService
 
                 if ($run) {
                     $hitIds = ScreenerRunHit::query()
-                        ->where('screener_run_id', $run->id)
+                        ->where('run_id', $run->id)
                         ->pluck('stock_id')
                         ->map(fn ($id) => (int) $id)
                         ->unique()

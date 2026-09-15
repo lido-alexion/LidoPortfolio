@@ -5,6 +5,9 @@ namespace Tests\Feature;
 use App\Engines\Discovery\DiscoveryEngine;
 use App\Models\PortfolioProfile;
 use App\Models\Screener;
+use App\Models\ScreenerRun;
+use App\Models\ScreenerRunHit;
+use App\Models\Stock;
 use App\Models\User;
 use App\Services\Screener\ScreenerService;
 use App\Services\StrategyEligibilityService;
@@ -287,6 +290,48 @@ class F060SharedScreenerAuthzTest extends TestCase
         );
 
         unset($owner);
+    }
+
+    public function test_eligibility_reads_completed_screener_hits_by_run_id(): void
+    {
+        $ctx = $this->seedSameUserShared();
+        $other = $ctx['otherProfile'];
+        $sharedId = $ctx['sharedId'];
+        $stock = Stock::query()->create([
+            'symbol' => 'RUNID',
+            'exchange' => 'NSE',
+            'name' => 'Run Id Fixture',
+            'is_active' => true,
+        ]);
+        $run = ScreenerRun::query()->create([
+            'screener_id' => $sharedId,
+            'triggered_by' => 'manual',
+            'status' => 'completed',
+            'started_at' => now()->subMinute(),
+            'finished_at' => now(),
+            'stats_json' => ['matched' => 1],
+        ]);
+        ScreenerRunHit::query()->create([
+            'run_id' => $run->id,
+            'stock_id' => $stock->id,
+            'symbol' => 'RUNID',
+            'exchange' => 'NSE',
+            'name' => 'Run Id Fixture',
+            'metrics_json' => [],
+        ]);
+
+        $resolved = app(StrategyEligibilityService::class)->resolve($other, [
+            'eligibility_sources' => [[
+                'enabled' => true,
+                'screener_id' => $sharedId,
+                'screener_name' => 'Momentum Screener',
+                'priority' => 1,
+            ]],
+        ]);
+
+        $this->assertSame('screener_union', $resolved['mode']);
+        $this->assertSame('PASS', $resolved['screeners'][0]['status'] ?? null);
+        $this->assertSame([$stock->id], $resolved['eligible_security_ids']);
     }
 
     public function test_discovery_same_user_allowed_cross_user_denied(): void
