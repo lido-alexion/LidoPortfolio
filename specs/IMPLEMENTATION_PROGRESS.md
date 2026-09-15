@@ -1,125 +1,234 @@
 # Trading Operating System — Implementation Progress
 
-Working log for evolving Lido Portfolio toward the `/specs` MVP.
-Existing stack (Laravel + React + Sanctum + `portfolio_*` tables) is preserved.
+This document is a current implementation/status summary. Detailed historical evidence lives in version registers, dedicated feature specs, Git history and deployment records.
 
-## MVP status
+**Last reconciled:** 2026-09-15
 
-**MVP is COMPLETE** for the clarified end-to-end workflow:
+## 1. Current overall state
 
-Market Data → Discovery → Evaluation → Recommendation → User Review (Approve) → Pending Execution → Manual/Broker Trade → Review
+StoX has progressed well beyond the original MVP baseline.
 
-Acceptance demo: [`./MVP_DEMO_CHECKLIST.md`](./MVP_DEMO_CHECKLIST.md).
+| Area | Current state |
+|---|---|
+| Original TOS MVP | COMPLETE |
+| V3 | STRICTLY COMPLETE |
+| V4 | COMPLETE / CLOSED — 18/18 |
+| V5 | 14 COMPLETE / 2 IN PROGRESS / 2 SUPERSEDED |
+| V6 | COMPLETE — 12/12 |
+| V7 | FEAT-018 ML + FEAT-053 Fundamentals implemented and deployed; FEAT-055 closed after dedicated-DB architecture change |
+| V8 | Future planning / not implemented |
+| V9 | Future planning / not implemented |
 
-Independent freeze audit (2026-07-25): [`architecture/audit/`](./architecture/audit/) — verdict **YES** for clarified MVP; release posture **Internal Testing Only** ([`architecture/audit/MVP_VERDICT.md`](./architecture/audit/MVP_VERDICT.md)).
+The original end-to-end MVP remains complete:
 
----
+```text
+Market Data
+  → Discovery
+  → Evaluation
+  → Recommendation
+  → User Review
+  → Pending Execution
+  → Manual/Broker Trade
+  → Review
+```
 
-## Assumptions
+Later versions added substantial Strategy, automation, execution-safety, analytics, simulation, knowledge, administration, fundamentals and ML capabilities on top of that baseline.
 
-| ID | Assumption |
-|----|------------|
-| A1 | Keep Sanctum session auth (not JWT). Confirmed for MVP. |
-| A2 | Keep `portfolio_*` tables for legacy V1-V6 runtime objects; logical domain names need not match physical table names. V7 adds new `stox_` analytical tables but does not rename legacy tables without a separate cutover plan. |
-| A3 | New TOS entities use `portfolio_tos_*` tables. |
-| A4 | No dedicated Discovery Engine Specification file; Discovery orchestrates PatternScan + Screener services. |
-| A5 | Engines under `app/app/Engines/`; wrap existing Services. |
-| A6 | REST `/api/v1/*` additive; legacy `/api/*` unchanged. |
-| A7 | Discovery sources: patterns, screener hits, holdings/watchlist fallback. |
-| A8 | Evaluation weighted scoring is acceptable for MVP (no pluggable rules engine). |
-| A9 | Telegram only for MVP notifications. |
-| A10 | Broker automation out of MVP; manual execution via Transactions + pending-execution queue. |
-| A11 | Recommendations start as `pending_review`; Approve → `pending_execution`; execute separately (SD-025). |
-| A12 | Strategy entity deferred; recommendations remain portfolio-scoped. |
-| A13 | Data Engine formal publish/validation gates deferred (existing import OK). |
+## 2. Production state
 
-## Deviations from Spec (accepted)
+Current production is the dedicated VPS deployment at **https://stoxla.in/**.
 
-| Spec | Deviation | Why |
-|------|-----------|-----|
-| JWT auth | Sanctum cookies | Confirmed clarification |
-| Separate securities/price_bars tables | Reuse `portfolio_*` | Confirmed clarification |
-| Email/webhook channels | Telegram only | Confirmed clarification |
-| Strategy entity | Not implemented | Deferred |
+The previous GoDaddy/cPanel target is historical and is no longer the StoX production architecture.
 
----
+The successful GitHub Actions production deployment on 2026-09-13 deployed commit `6307a4eccaa49682795188422498bd4a5b3bb990` and passed:
 
-## Tasks
+- full MySQL 8.4 migration/seed validation;
+- complete backend test suite;
+- OpenAPI contract verification;
+- frontend test suite;
+- TypeScript no-emit validation;
+- production Vite build;
+- release packaging;
+- VPS release activation;
+- Laravel migration/cache steps;
+- queue restart; and
+- post-deploy HTTPS health check.
 
-### Pass 1 (foundation)
+Because the V6 implementation and V7 Fundamentals/ML implementation commits predate that deployed release, those implementations are part of the current production codebase.
 
-- [x] **T0–T15** Engine layer, schema, `/api/v1`, pipeline, Recommendations page (first pass)
+Current deployment authority: `deploy/STOXLA-VPS-DEPLOY.md` and `.github/workflows/deploy-stoxla-production.yml`.
 
-### Pass 2 (MVP completion sprint)
+## 3. Implemented product capabilities
 
-- [x] **M1** User Review workflow (`pending_review` → Approve/`pending_execution` | Reject | Defer) + review history
-- [x] **M2** Candidates UI (`/candidates`) with filters + evidence
-- [x] **M3** Evaluations UI (`/evaluations`) with scores/indicators/explanation
-- [x] **M4** Recommendation detail + Approve/Reject/Defer UI
-- [x] **M5** Pending execution → manual transaction / cancel (SD-025; legacy orders BC)
-- [x] **M6** Review dashboard page (`/review`)
-- [x] **M7** Recommendation outcome tracking (ref vs current price)
-- [x] **M8** Notification history page (`/notification-history`)
-- [x] **M9** Tests updated; `MVP_DEMO_CHECKLIST.md`; progress + `implementation.md`
+The following high-level capabilities are implemented in the current codebase.
 
-### PO-approved follow-up TODOs (2026-09-02)
+### Core portfolio and decision system
 
-- [x] **REC-UX-001** Replace the misleading “No trade recommendations / market data” empty state with a successful informational-only outcome message when the pipeline produced insights but no actionable trades.
-- [x] **REC-UX-002** Show Strategy identity on Recommendation and Market Insight rows so per-strategy results for the same stock do not look like duplicates.
-- [x] **REC-DATA-001** Safely retire the two legacy `HOLD_POSITION + pending_execution` rows; informational HOLD records must never be executable.
-- [x] **REC-UX-003** Present informational allocation meaningfully (for example, “No position → Watch”) instead of an unexplained `0.00% → 0.00%`.
-- [x] **REC-UX-004** Clarify the default open/current scope versus “Show all history,” including the visible time range and pagination behavior.
-- [x] **REC-UX-005** Hide `HOLD_POSITION` insights from the Recommendations table by default; add an independent **Show HOLD insights** toggle for review/audit. Preserve HOLD rows and their Evaluation/Recommendation evidence. The toggle applies consistently whether current/open or all-history scope is selected. It does not legitimize legacy `HOLD_POSITION + pending_execution` rows; REC-DATA-001 must still retire those invalid lifecycle records.
+- market-data ingestion and historical price storage;
+- Discovery / Screener candidate generation;
+- Evaluation and explainable scoring;
+- Strategy configuration and multi-Strategy Portfolio operation;
+- Recommendations and informational Market Insights;
+- approval/reject/defer lifecycle;
+- Portfolio cash, capital allocation and lending/recall mechanics;
+- Orders, Trades and execution evidence;
+- Review/performance reporting;
+- deterministic point-in-time/historical analysis safeguards.
 
----
+### Live trading and safety
 
-## Completion log
+- Zerodha/Kite integration;
+- Manual / Semi-Automatic / Automatic execution modes;
+- broker order lifecycle;
+- GTT protective orders / partial-fill handling;
+- holiday-aware scheduled target seeking;
+- live quote-based sizing;
+- Kite holdings/funds reconciliation;
+- Investor-level `Normal` / `Emergency Halt` execution state;
+- disconnect kill switch;
+- cancel-open-orders + disconnect emergency action;
+- persistent emergency controls.
 
-| When | Task | Notes |
-|------|------|-------|
-| 2026-07-25 | T0–T15 | First pass: engines + pipeline slice |
-| 2026-07-25 | M1–M9 | MVP completion sprint: user review, UIs, order lifecycle, outcomes |
-| 2026-07-25 | SD-022 | Actionable (BUY/SELL) vs informational (HOLD/WATCH) recommendation workflows |
-| 2026-07-25 | SD-023 | Market Opinion → Portfolio Decision → Execution Plan redesign |
-| 2026-07-25 | SD-024 | Undo Accept/Reject/Defer + reopen on TOS fill delete |
-| 2026-07-25 | SD-025 | Recommendation approval separated from trade execution |
-| 2026-07-25 | SD-026 | Cash management + portfolio-wide capital allocation (reserved cash, ScorePriority allocator) |
-| 2026-07-25 | UI | Cash tab (`/cash`): deposit/withdraw/adjust/statement/reservations; Dashboard shows available cash only |
-| 2026-07-26 | SD-027 | Strategy Configuration framework: Evaluation facts → Strategy scoring → Recommendation; Strategy UI + APIs |
-| 2026-07-26 | SD-028 | Fixed supported indicator catalogue (no plugins / no Add Indicator) |
-| 2026-07-26 | SD-029 | Factory Momentum Strategy 1.0 seed + protected factory / duplicate / weight=100 validation |
-| 2026-07-29 | SD-029 amended | Single editable Minervini Strategy; Save in place; duplicate/version UX removed; weight auto-normalise |
-| 2026-07-26 | SD-030 | Strategies consume Screeners; Minervini Trend Template factory screener; exit strategy; eligibility explainability |
-| 2026-07-26 | SD-031 | Analytics Ownership Model: Stock / Evaluation / Portfolio / Market owners; Dashboard/Watchlist/Portfolio/Discovery page questions |
-| 2026-07-26 | SD-032 | Market Analysis Engine: benchmark OHLCV → sentiment/phase/analytics; Dashboard + Rec/Strategy/Portfolio consume |
-| 2026-07-30 | SD-033 | Indicator Registry **design** accepted (docs only): unified metadata/discovery; preserve TI/Evaluation/Strategy calc; types Primary/Composite/Metric; Admin UI spec; planned Liquidity/Tradability metadata; PB-054/055/056/057 + TD-19 |
-| 2026-07-30 | Plan | Indicator Registry **implementation plan** (Epics 1–7 / Stories / Tasks) — `specs/architecture/indicators/10-Indicator-Registry-Implementation-Plan.md`; still no production code |
-| 2026-07-30 | Epic 1 | Indicator Registry **foundation** coded: `App\Services\Indicators\*` + factory seed + unit tests; no consumer cutover; calculators untouched |
-| 2026-07-30 | Epic 2 | Indicator Registry **migration**: ScreenerCatalog + SupportedIndicators façades; seeds SoT; min-bars helper; validator; façade parity tests; no calc/UI changes |
-| 2026-07-30 | SD-034 | Trading Artifact Framework **design** accepted (docs only): shared envelope for Indicator / Screener / Strategy; absorb Strategy Templates; preserve `definition_json` / `config_json`; PB-058/059/060 |
-| 2026-08-28 | V4-FEAT-008 | TAF **remainder** deferred to V5 (PO). Envelope/registries/package I/O/Create-Enable-Archive/AI docs already shipped; do not treat as unimplemented. |
-| 2026-09-12 | V7 FEAT-018 / FEAT-053 | Local implementation added for fundamentals and ML scoring foundations: `stox_` canonical tables, Yahoo provider boundary, immutable point-in-time facts, Admin APIs/UI, scheduled incremental updater, 1m/3m/6m ML lifecycle, explicit promotion/rollback, persisted predictions and additive Evaluation/Strategy evidence. Verification: focused V7, unit, feature, JS, typecheck and build pass locally. Production deployment/package preparation deferred. |
-| 2026-09-12 | V7 FEAT-055 | New V7 database objects use `stox_` and migration validation covers new V7 tables. Full legacy `portfolio_*` namespace cutover is not claimed complete; it remains a separate coordinated cutover risk because V1-V6 frozen behavior depends on existing physical table names. |
-| 2026-09-12 | Deployment target update | Current production planning moved from GoDaddy/cPanel `lidoalexion.com/portfolio` to a new VPS at `stoxla.in`. The move is driven by Zerodha/Kite static-IP whitelisting requirements and shared-hosting space limits. Deployment package preparation remains deferred pending VPS reconciliation and explicit authorization. |
+### Artifact / Strategy platform
 
----
+- Indicator Registry and SemVer lifecycle;
+- Strategy/Screener/Indicator dependency evidence;
+- Trading Artifact Library;
+- immutable publications and Portfolio bindings;
+- sharing/Fork and package import/export;
+- Bundles;
+- backfill/projection into legacy runtime identities;
+- artifact evidence through Recommendation/order/fill and simulation flows;
+- Strategy Backtest, Portfolio Replay and Paper Portfolio;
+- Backtest declared-parameter overrides and Backtest-to-Draft flow.
 
-## Remaining gaps (post-MVP / future — not blocking)
+### Investor / Admin product surfaces
 
-- Indicator Registry Admin UI + later phases (PB-055+; Epics 1–2 metadata/façades landed)
-- Trading Artifact Framework **runtime cutover remainder** (V5 **V4-FEAT-008**): the immutable lifecycle, account Library, versioned Portfolio bindings, sharing/Fork/package distribution, transactional Bundles, dependency/usability inspection, APIs and UI are implemented. Remaining before FEAT-008 completion: evolve/map the legacy Strategy/Screener runtime records into the immutable identities, resolve live runs from exact active binding revisions, and carry originating immutable version/binding evidence through Recommendation/order/execution. See [`V5-FEAT-008-IMPLEMENTATION-STATUS.md`](V5-FEAT-008-IMPLEMENTATION-STATUS.md).
-- Wire Strategy indicator parameters into Evaluation (PB-054 / TD-19)
-- Liquidity / Tradability indicator calculators (PB-057)
-- Dedicated Discovery Engine Specification document
-- Email / webhook / SMS / push channels
-- Automated broker execution (Zerodha, GTT, …)
-- Multi-strategy Create/Enable/Archive shipped in V3; remaining TAF library/binding dual-UX is **V5 V4-FEAT-008**
-- OpenAPI for `/api/v1`
-- Formal Data Engine publish/validation gates & trading calendar product
-- Pluggable evaluation rules / multi-benchmark market analysis / constituent breadth V2
-- CI workflow improvements
-- Pipeline auto-run after daily sync (config exists; default off)
-- V7 FEAT-055 full legacy database namespace cutover from existing `portfolio_*` objects to `stox_*`
-- V7 deployment package / production deploy after environment reconciliation
+- responsive/mobile-capable SPA;
+- Dashboard UX/widget management;
+- separate Admin and Investor application shells;
+- Admin force logout;
+- Admin Stocks surface;
+- Admin Audit Explorer;
+- contextual Notes;
+- Linked Markdown Wiki / Knowledge Board;
+- personal/scoped API tokens;
+- richer Discovery/Evaluation/Review history surfaces.
 
-These do **not** block MVP sign-off per the completion-sprint clarifications.
+### Notifications and operations
+
+- canonical Notification Center/lifecycle;
+- In-app notifications;
+- Telegram delivery;
+- Email delivery;
+- signed Webhook delivery;
+- retries, reminders and channel-health handling;
+- unattended daily pipeline;
+- scheduler/queue operational flows;
+- GitHub Actions CI and production deployment pipeline.
+
+### Analytics / tax / data
+
+- historical cash-as-of and Cash Statement;
+- date comparison and CSV exports;
+- XIRR/TWR and benchmark/risk evidence;
+- attribution;
+- FIFO-derived tax analysis over canonical WAVG accounting;
+- India-focused gains/loss/dividend reporting;
+- exchange-holiday synchronization and calendar support;
+- immutable dataset versioning and freshness gates.
+
+### V7 analytical foundations
+
+- first-class company fundamental-data storage and ingestion;
+- provider-isolated Yahoo/yfinance initial adapter;
+- immutable fundamental revisions and point-in-time reads;
+- derived fundamental metrics and freshness handling;
+- scheduled incremental fundamental updates and Admin surfaces;
+- 1m/3m/6m ML model lifecycle;
+- chronological/point-in-time-safe ML training metadata;
+- explicit retrain/promote/rollback controls;
+- persisted ML predictions, explanations and drift evidence;
+- additive ML evidence in Evaluation/Strategy flows without replacing deterministic Strategy authority.
+
+## 4. Formal work still open
+
+Only the following current-version items remain materially open or intentionally future.
+
+### V5 formal closure gates
+
+#### V4-FEAT-008 — Trading Artifact Framework
+
+Implementation is substantially complete. Remaining formal closure work:
+
+1. execute/document the rollout validation against representative production-shaped or production data; and
+2. complete the final frozen-criteria audit.
+
+See `V5-FEAT-008-IMPLEMENTATION-STATUS.md`.
+
+#### V4-FEAT-042 — Admin / Investor separation
+
+Implementation is complete. Remaining formal gate:
+
+```bash
+php artisan portfolio:audit-admin-investment-ownership --json
+```
+
+Run the read-only ownership audit against actual production data and disposition any reported conflict.
+
+### V7
+
+There is no remaining V7 implementation epic.
+
+- FEAT-018 is implemented and deployed.
+- FEAT-053 is implemented and deployed.
+- FEAT-055 is closed at its current state because the shared-database motivation was removed by the dedicated StoX database. Existing `portfolio_*` legacy tables are intentionally retained; new V7 tables use `stox_*`.
+
+Detailed manual/functional production acceptance for FEAT-018 and FEAT-053 may still be recorded as operational evidence, but this is not unimplemented feature scope.
+
+## 5. Superseded work
+
+### V4-FEAT-003
+
+Superseded by FEAT-004 Notification Service.
+
+### V4-FEAT-031
+
+The old GoDaddy/cPanel single-folder deployment feature is closed as superseded. Its code/design was implemented, but the target topology was abandoned before cPanel production cutover.
+
+The replacement VPS architecture is live and uses GitHub Actions release packaging, shared environment/storage, versioned releases, rollback tooling and health checks.
+
+### V4-FEAT-055
+
+The full legacy database-prefix cutover is no longer required. StoX now has a dedicated database, so the original shared-database naming problem no longer exists.
+
+## 6. Future roadmap
+
+### V8
+
+- **V4-FEAT-052 — Standalone Telemetry Platform**: separate product/application; core architecture decided, not implemented.
+- **V4-FEAT-054 — Historical Fundamental Data Bootstrap**: one-time historical quarterly/annual fundamental import; source/procedure still open.
+
+### V9
+
+- **V4-FEAT-017 — AI Assistant**.
+- **V4-FEAT-019 — ETF / Options / Crypto Expansion**.
+- **StoX Telemetry Platform Integration**.
+
+See the V8 and V9 canonical registers for scope.
+
+## 7. Historical MVP assumptions
+
+The original MVP made several intentionally limited assumptions—Sanctum cookies, Telegram-only notifications, no Strategy entity, no automated broker execution, etc. Those assumptions are **historical MVP context only** and must not be read as current product limitations. Later versions superseded many of them.
+
+For current behavior, prefer the newest applicable version register and dedicated feature specification.
+
+## 8. Status authority
+
+When documents disagree about whether something is implemented or pending, use this precedence for status:
+
+1. current canonical version register;
+2. dedicated feature specification / implementation-status document;
+3. current deployment evidence;
+4. this summary;
+5. older historical implementation logs or MVP notes.
