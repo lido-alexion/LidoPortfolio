@@ -1,9 +1,11 @@
 # V5 FEAT-042 — Separate Role-Based Admin Portal and Investor Application
 
-**Status:** IMPLEMENTED — production ownership verification pending
-**Date:** 2026-09-07
+**Status:** COMPLETE
+**Date:** 2026-09-15
 
 **2026-09-11 local closure recheck:** the full migration/seed chain completed in an isolated database and the read-only ownership audit returned `safe_to_enforce: true`, one Admin account checked, and zero conflicts. This validates the command and clean-seed invariant only; the same read-only command must still run against production data before deployment.
+
+**2026-09-15 production closure:** the production ownership audit initially found Admin user `#2` owning active Portfolio `#4` (`Default`) and no direct Admin-owned broker/execution state. Read-only forensics found no transactions, holdings, cash ledger activity, recommendations, orders, broker links, reconciliation records, non-zero cash, tax lots, fills/trades or other economically meaningful Investor state. The remaining data was factory/default/generated legacy state, so Portfolio `#4` was classified `DISPOSABLE_LEGACY_DEFAULT`. Under Product Owner disposition, it was removed through the guarded maintenance command after a restorable backup: `/home/nitty/stoxla-backups/stoxla-v5-closure-pre-admin4-20260915T161142+0530.sql.gz`, SHA256 `64fb9b2cce7fab410ea0a337d971bf593eeaa0456afd865f319c3f605068f0ca`. The final production audit exited `0` with `safe_to_enforce: true`, `admin_accounts_checked: 1`, and `conflicts: []`.
 
 ## 1. Problem
 StoX currently needs a hard product and authorization boundary between administrative operation of the platform and an Investor's portfolio/trading application. Navigation-only hiding is insufficient: Admin accounts must not accidentally become investment-domain owners, and Investor accounts must not gain administrative capabilities through direct URLs or APIs.
@@ -96,3 +98,5 @@ The command is read-only. It exits successfully only when no Admin account owns 
 Administrative catalogue routes defined by FEAT-007/008 are intentionally not exposed in the Admin shell until their separately authorized Admin APIs are implemented. Their legacy Investor-shell route declarations remain guarded and cannot weaken the server-side role boundary.
 
 Existing mixed-path operator capabilities for global application settings, global Trade Holidays and system Indicator definitions remain explicitly available to Admin accounts without resolving or creating a Portfolio. Investor-owned Dashboard, Screener and other portfolio workflows remain forbidden to Admin accounts even where older tests previously constructed an Admin-owned default Portfolio.
+
+The production ownership check is complete as of 2026-09-15. No remaining Admin-owned Investor Portfolio, active or soft-deleted Portfolio conflict, or direct Admin-owned broker/execution state remains.

@@ -13,7 +13,7 @@ StoX has progressed well beyond the original MVP baseline.
 | Original TOS MVP | COMPLETE |
 | V3 | STRICTLY COMPLETE |
 | V4 | COMPLETE / CLOSED — 18/18 |
-| V5 | 14 COMPLETE / 2 IN PROGRESS / 2 SUPERSEDED |
+| V5 | COMPLETE / CLOSED — 16 complete / 2 superseded |
 | V6 | COMPLETE — 12/12 |
 | V7 | FEAT-018 ML + FEAT-053 Fundamentals implemented and deployed; FEAT-055 closed after dedicated-DB architecture change |
 | V8 | Future planning / not implemented |
@@ -153,28 +153,11 @@ The following high-level capabilities are implemented in the current codebase.
 
 ## 4. Formal work still open
 
-Only the following current-version items remain materially open or intentionally future.
+The following sections distinguish now-closed version work from intentionally future roadmap items.
 
-### V5 formal closure gates
+### V5
 
-#### V4-FEAT-008 — Trading Artifact Framework
-
-Implementation is substantially complete. Remaining formal closure work:
-
-1. execute/document the rollout validation against representative production-shaped or production data; and
-2. complete the final frozen-criteria audit.
-
-See `V5-FEAT-008-IMPLEMENTATION-STATUS.md`.
-
-#### V4-FEAT-042 — Admin / Investor separation
-
-Implementation is complete. Remaining formal gate:
-
-```bash
-php artisan portfolio:audit-admin-investment-ownership --json
-```
-
-Run the read-only ownership audit against actual production data and disposition any reported conflict.
+There is no remaining V5 implementation or closure work. FEAT-008 and FEAT-042 passed their production closure gates on 2026-09-15, and V5 is formally complete/closed.
 
 ### V7
 

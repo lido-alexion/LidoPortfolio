@@ -22,7 +22,7 @@
 |---|---|---|
 | V3 | STRICTLY COMPLETE | [V3 Specification](specs/LidoPortfolio-V3-Specification.md) |
 | V4 | COMPLETE / CLOSED | [V4 Register](specs/LidoPortfolio-V4-Wishlist.md) |
-| V5 | 14 complete, 2 formal closure gates, 2 superseded | [V5 Register](specs/LidoPortfolio-V5-Wishlist.md) |
+| V5 | COMPLETE / CLOSED — 16 complete, 2 superseded | [V5 Register](specs/LidoPortfolio-V5-Wishlist.md) |
 | V6 | COMPLETE — 12/12 | [V6 Register](specs/LidoPortfolio-V6-Wishlist.md) |
 | V7 | Fundamentals + ML implemented/deployed; DB namespace epic closed after dedicated-DB move | [V7 Register](specs/LidoPortfolio-V7-Wishlist.md) |
 | V8 | Future: standalone Telemetry + historical fundamental bootstrap | [V8 Register](specs/LidoPortfolio-V8-Wishlist.md) |
@@ -72,7 +72,7 @@ Older status prose must not override a newer canonical version register.
 - [specs/LidoPortfolio-V8-Wishlist.md](specs/LidoPortfolio-V8-Wishlist.md)
 - [specs/LidoPortfolio-V9-Wishlist.md](specs/LidoPortfolio-V9-Wishlist.md)
 
-### Current closure-sensitive specifications
+### V5 closure evidence
 
 - [specs/V5-FEAT-008-Trading-Artifact-Framework.md](specs/V5-FEAT-008-Trading-Artifact-Framework.md)
 - [specs/V5-FEAT-008-IMPLEMENTATION-STATUS.md](specs/V5-FEAT-008-IMPLEMENTATION-STATUS.md)

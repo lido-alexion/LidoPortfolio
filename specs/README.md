@@ -14,7 +14,7 @@ As reconciled on **2026-09-15**:
 |---|---|---|
 | V3 | **STRICTLY COMPLETE** | [LidoPortfolio-V3-Specification.md](LidoPortfolio-V3-Specification.md) |
 | V4 | **COMPLETE / CLOSED — 18/18 active features** | [LidoPortfolio-V4-Wishlist.md](LidoPortfolio-V4-Wishlist.md) |
-| V5 | **14 COMPLETE / 2 IN PROGRESS / 2 SUPERSEDED**. Only FEAT-008 rollout/final-audit evidence and FEAT-042 production ownership audit remain formal closure gates. | [LidoPortfolio-V5-Wishlist.md](LidoPortfolio-V5-Wishlist.md) |
+| V5 | **COMPLETE / CLOSED — 16 complete / 2 superseded**. FEAT-008 and FEAT-042 production closure gates passed on 2026-09-15. | [LidoPortfolio-V5-Wishlist.md](LidoPortfolio-V5-Wishlist.md) |
 | V6 | **COMPLETE — 12/12 features** | [LidoPortfolio-V6-Wishlist.md](LidoPortfolio-V6-Wishlist.md) |
 | V7 | **Implemented/deployed.** FEAT-018 ML and FEAT-053 Fundamentals are implemented and included in the live VPS release. FEAT-055 DB namespace is closed because the shared-database premise was superseded by the dedicated StoX database. | [LidoPortfolio-V7-Wishlist.md](LidoPortfolio-V7-Wishlist.md) |
 | V8 | **Future / early planning.** Standalone Telemetry Platform + Historical Fundamental Data Bootstrap. | [LidoPortfolio-V8-Wishlist.md](LidoPortfolio-V8-Wishlist.md) |
@@ -87,7 +87,7 @@ specs/
 
 ## Key current feature specifications
 
-### V5 closure-sensitive
+### V5 closure evidence
 
 - [V5-FEAT-008-Trading-Artifact-Framework.md](V5-FEAT-008-Trading-Artifact-Framework.md)
 - [V5-FEAT-008-IMPLEMENTATION-STATUS.md](V5-FEAT-008-IMPLEMENTATION-STATUS.md)
