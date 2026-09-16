@@ -255,6 +255,7 @@ jobs:
     name: Deploy to VPS
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    if: always() && needs.package.result == 'success'
     needs:
       - package
     environment: production
