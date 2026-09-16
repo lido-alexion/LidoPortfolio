@@ -4,6 +4,7 @@ import { showToast } from '../toast';
 
 const label = (value) => value ? value.replaceAll('_', ' ') : 'Not yet checked';
 const tone = (value) => value === 'reconciled' ? 'text-success' : value === 'mismatch' || value === 'attention_required' ? 'text-danger' : 'text-muted';
+const amount = (value) => Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 
 export default function PortfolioReconciliationCard({ executionMode }) {
     const eligible = executionMode === 'semi_automatic' || executionMode === 'automatic';
@@ -80,7 +81,10 @@ export default function PortfolioReconciliationCard({ executionMode }) {
                     {selected ? <div className="border rounded p-3 mt-3 small">
                         <div className="d-flex justify-content-between"><strong>Run #{selected.id} evidence</strong><button type="button" className="btn-close" aria-label="Close evidence" onClick={() => setSelected(null)} /></div>
                         {selected.failure ? <p className="text-warning mb-1">Sync failure: {selected.failure}</p> : null}
-                        {(discrepancies.holdings || []).map((row) => <div key={row.symbol}>{row.symbol}: StoX {row.stoxQty} shares; Kite {row.brokerQty}; difference {Number(row.brokerQty) - Number(row.stoxQty)}</div>)}
+                        {(discrepancies.holdings || []).map((row) => <div key={row.symbol} className="mb-2">
+                            <div>{row.symbol}: StoX {row.stoxQty} shares; Kite {row.brokerQty}; difference {Number(row.brokerQty) - Number(row.stoxQty)}</div>
+                            {row.costDifference !== null && row.costDifference !== undefined ? <div className="text-muted">Cost basis: StoX ₹{amount(row.stoxCost)}; Kite ₹{amount(row.brokerCost)}; difference ₹{amount(row.costDifference)}; allowed divergence ₹{amount(selected.tolerances?.holding_cost ?? 0)}</div> : null}
+                        </div>)}
                         {selected.funds_status === 'mismatch' ? <div>Cash: StoX ₹{discrepancies.funds?.stox_cash}; Kite ₹{discrepancies.funds?.broker_cash}; difference ₹{discrepancies.funds?.difference}</div> : null}
                         {(selected.unsupported_instruments || []).length ? <div className="text-muted mt-1">Informational unsupported Kite instruments: {selected.unsupported_instruments.map((row) => row.symbol).join(', ')}</div> : null}
                     </div> : null}
