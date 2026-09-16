@@ -1,0 +1,12 @@
+---
+description: Run Node, npm, npx, Vite, and JavaScript tests with the deployed-compatible local Node 22 runtime.
+alwaysApply: true
+---
+
+# Node Runtime
+
+- Use the local deployed-compatible Node 22 runtime for every Node-dependent command:
+  `export PATH="$HOME/.nvm/versions/node/v22.23.2/bin:$PATH"`
+- This applies to `node`, `npm`, `npx`, Vite builds, Vitest, Playwright, and package scripts.
+- Confirm `node --version` reports a `v22` release before running a Node-dependent command when the shell runtime is uncertain.
+- Do not use the shell-default Node 18 runtime for project tooling; it is not compatible with the installed Vite/Vitest toolchain.
