@@ -81,7 +81,10 @@ rm -rf "$RELEASE_DIR/.env" "$RELEASE_DIR/storage"
 ln -s ../../shared/.env "$RELEASE_DIR/.env"
 ln -s ../../shared/storage "$RELEASE_DIR/storage"
 mkdir -p "$RELEASE_DIR/bootstrap/cache"
-chmod -R ug+rwX "$SHARED_DIR/storage" "$RELEASE_DIR/bootstrap/cache"
+# Do not recurse into existing log files: php-fpm may own historical logs, and
+# failing to chmod those files should not block a release activation.
+find "$SHARED_DIR/storage" -path "$SHARED_DIR/storage/logs/*" -prune -o -exec chmod ug+rwX {} +
+chmod -R ug+rwX "$RELEASE_DIR/bootstrap/cache"
 
 log "running database migrations and Laravel optimization in staged release"
 (
