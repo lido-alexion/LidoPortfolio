@@ -4,7 +4,12 @@ import { showToast } from '../toast';
 
 const label = (value) => value ? value.replaceAll('_', ' ') : 'Not yet checked';
 const tone = (value) => value === 'reconciled' ? 'text-success' : value === 'mismatch' || value === 'attention_required' ? 'text-danger' : 'text-muted';
-const amount = (value) => Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+const amount = (value) => Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const quantity = (value) => Number(value).toLocaleString(undefined, { maximumFractionDigits: 4 });
+
+function ComparisonValue({ value, mismatch, money = false }) {
+    return <span className={mismatch ? 'text-danger fw-semibold' : 'text-muted'}>{money ? `₹${amount(value)}` : quantity(value)}</span>;
+}
 
 export default function PortfolioReconciliationCard({ executionMode }) {
     const eligible = executionMode === 'semi_automatic' || executionMode === 'automatic';
@@ -81,12 +86,26 @@ export default function PortfolioReconciliationCard({ executionMode }) {
                     {selected ? <div className="border rounded p-3 mt-3 small">
                         <div className="d-flex justify-content-between"><strong>Run #{selected.id} evidence</strong><button type="button" className="btn-close" aria-label="Close evidence" onClick={() => setSelected(null)} /></div>
                         {selected.failure ? <p className="text-warning mb-1">Sync failure: {selected.failure}</p> : null}
-                        {(discrepancies.holdings || []).map((row) => <div key={row.symbol} className="mb-2">
-                            <div>{row.symbol}: StoX {row.stoxQty} shares; Kite {row.brokerQty}; difference {Number(row.brokerQty) - Number(row.stoxQty)}</div>
-                            {row.isin && row.stoxSymbol && row.brokerSymbol && row.stoxSymbol !== row.brokerSymbol ? <div className="text-muted">Matched by ISIN {row.isin}; Kite symbol: {row.brokerSymbol}</div> : null}
-                            {row.costDifference !== null && row.costDifference !== undefined ? <div className="text-muted">Cost basis: StoX ₹{amount(row.stoxCost)}; Kite ₹{amount(row.brokerCost)}; difference ₹{amount(row.costDifference)}; allowed divergence ₹{amount(selected.tolerances?.holding_cost ?? 0)}</div> : null}
-                        </div>)}
-                        {selected.funds_status === 'mismatch' ? <div>Cash: StoX ₹{discrepancies.funds?.stox_cash}; Kite ₹{discrepancies.funds?.broker_cash}; difference ₹{discrepancies.funds?.difference}</div> : null}
+                        {(discrepancies.holdings || []).length ? <div className="table-responsive mt-3">
+                            <table className="table table-sm align-middle mb-0">
+                                <thead><tr><th>Stock</th><th className="text-end">StoX qty</th><th className="text-end">Kite qty</th><th className="text-end">Difference</th><th className="text-end">StoX cost</th><th className="text-end">Kite cost</th><th className="text-end">Difference</th><th className="text-end">Allowed</th></tr></thead>
+                                <tbody>{(discrepancies.holdings || []).map((row) => {
+                                    const quantityMismatch = Number(row.brokerQty) !== Number(row.stoxQty);
+                                    const costMismatch = row.costDifference !== null && row.costDifference !== undefined && Math.abs(Number(row.costDifference)) > Number(selected.tolerances?.holding_cost ?? 0);
+                                    return <tr key={row.symbol}>
+                                        <td>{row.symbol}{row.isin && row.stoxSymbol && row.brokerSymbol && row.stoxSymbol !== row.brokerSymbol ? <div className="text-muted small">ISIN {row.isin}; Kite: {row.brokerSymbol}</div> : null}</td>
+                                        <td className="text-end"><ComparisonValue value={row.stoxQty} mismatch={quantityMismatch} /></td>
+                                        <td className="text-end"><ComparisonValue value={row.brokerQty} mismatch={quantityMismatch} /></td>
+                                        <td className="text-end"><ComparisonValue value={Number(row.brokerQty) - Number(row.stoxQty)} mismatch={quantityMismatch} /></td>
+                                        <td className="text-end">{row.stoxCost == null ? <span className="text-muted">—</span> : <ComparisonValue value={row.stoxCost} mismatch={costMismatch} money />}</td>
+                                        <td className="text-end">{row.brokerCost == null ? <span className="text-muted">—</span> : <ComparisonValue value={row.brokerCost} mismatch={costMismatch} money />}</td>
+                                        <td className="text-end">{row.costDifference == null ? <span className="text-muted">—</span> : <ComparisonValue value={row.costDifference} mismatch={costMismatch} money />}</td>
+                                        <td className="text-end text-muted">₹{amount(selected.tolerances?.holding_cost ?? 0)}</td>
+                                    </tr>;
+                                })}</tbody>
+                            </table>
+                        </div> : null}
+                        {selected.funds_status === 'mismatch' ? <div className="table-responsive mt-3"><table className="table table-sm align-middle mb-0"><thead><tr><th>Cash</th><th className="text-end">StoX</th><th className="text-end">Kite</th><th className="text-end">Difference</th><th className="text-end">Allowed</th></tr></thead><tbody><tr><td>Cash balance</td><td className="text-end"><ComparisonValue value={discrepancies.funds?.stox_cash} mismatch money /></td><td className="text-end"><ComparisonValue value={discrepancies.funds?.broker_cash} mismatch money /></td><td className="text-end"><ComparisonValue value={discrepancies.funds?.difference} mismatch money /></td><td className="text-end text-muted">₹{amount(selected.tolerances?.funds ?? 0)}</td></tr></tbody></table></div> : null}
                         {(selected.unsupported_instruments || []).length ? <div className="text-muted mt-1">Informational unsupported Kite instruments: {selected.unsupported_instruments.map((row) => row.symbol).join(', ')}</div> : null}
                     </div> : null}
                 </>}

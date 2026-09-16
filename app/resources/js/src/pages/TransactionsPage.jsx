@@ -57,6 +57,7 @@ const emptyForm = () => ({
     type: 'buy',
     quantity: '',
     price: '',
+    total_invested: '',
     transaction_date: getLocalTodayDateString(),
     notes: '',
     recommendation_id: null,
@@ -107,7 +108,7 @@ function isValidMoneyField(value) {
 
     }
 
-    return Math.round(num * 100) / 100 === num;
+    return true;
 
 }
 
@@ -116,6 +117,29 @@ function isValidMoneyField(value) {
 function isValidPrice(value) {
 
     return isValidMoneyField(value) && Number(value) > 0;
+
+}
+
+function calculatedDecimal(value) {
+
+    if (!Number.isFinite(value)) {
+
+        return '';
+
+    }
+
+    return value.toFixed(8).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+
+}
+
+function calculatedTotal(quantity, price) {
+
+    const qty = Number(quantity);
+    const unitPrice = Number(price);
+
+    return Number.isFinite(qty) && qty > 0 && Number.isFinite(unitPrice) && unitPrice > 0
+        ? calculatedDecimal(qty * unitPrice)
+        : '';
 
 }
 
@@ -219,7 +243,8 @@ export default function TransactionsPage() {
             exchange,
             type: 'sell',
             quantity: prefill.quantity,
-            price: prefill.price != null && prefill.price > 0 ? roundToTwoDecimals(prefill.price) : '',
+            price: prefill.price != null && prefill.price > 0 ? String(prefill.price) : '',
+            total_invested: calculatedTotal(prefill.quantity, prefill.price),
             transaction_date: getLocalTodayDateString(),
             owner_key: prefill.owner_key || '',
         });
@@ -539,7 +564,8 @@ export default function TransactionsPage() {
 
             quantity: Number(tx.quantity),
 
-            price: roundToTwoDecimals(tx.price),
+            price: String(tx.price),
+            total_invested: calculatedTotal(tx.quantity, tx.price),
 
             transaction_date: tx.transaction_date,
 
@@ -592,7 +618,8 @@ export default function TransactionsPage() {
             exchange: prefill.exchange || 'NSE',
             type: prefill.type === 'sell' ? 'sell' : 'buy',
             quantity: prefill.quantity !== '' && prefill.quantity != null ? Number(prefill.quantity) : '',
-            price: prefill.price != null && prefill.price !== '' ? roundToTwoDecimals(prefill.price) : '',
+            price: prefill.price != null && prefill.price !== '' ? String(prefill.price) : '',
+            total_invested: calculatedTotal(prefill.quantity, prefill.price),
             notes: prefill.notes || '',
             recommendation_id: prefill.recommendation_id || null,
             owner_key: '',
@@ -1244,9 +1271,9 @@ export default function TransactionsPage() {
                                     allowDecimals={false}
                                     placeholder="e.g. 10"
                                     value={form.quantity}
-                                    onChange={(e) => setForm({
-                                        ...form,
-                                        quantity: e.target.value === '' ? '' : parseInt(e.target.value, 10),
+                                    onChange={(e) => setForm((prev) => {
+                                        const quantity = e.target.value === '' ? '' : parseInt(e.target.value, 10);
+                                        return { ...prev, quantity, total_invested: calculatedTotal(quantity, prev.price) };
                                     })}
                                     required
                                 />
@@ -1261,15 +1288,39 @@ export default function TransactionsPage() {
 
                                 <NumberInput
                                     id="tx-price"
-                                    min="0.05"
-                                    step="0.05"
-                                    fixedDecimals={2}
+                                    min="0.0001"
+                                    step="0.0001"
+                                    preserveTypedPrecision
                                     placeholder="0.00"
                                     value={form.price}
-                                    onChange={(e) => setForm({ ...form, price: e.target.value })}
-                                    onBlur={(e) => setForm({
-                                        ...form,
-                                        price: e.target.value === '' ? '' : roundToTwoDecimals(e.target.value),
+                                    onChange={(e) => setForm((prev) => ({ ...prev, price: e.target.value, total_invested: calculatedTotal(prev.quantity, e.target.value) }))}
+                                    required
+                                />
+
+                            </div>
+
+                            <div>
+
+                                <label className="form-label" htmlFor="tx-total-invested">Total invested (₹)</label>
+
+                                <NumberInput
+                                    id="tx-total-invested"
+                                    min="0.0001"
+                                    step="0.0001"
+                                    preserveTypedPrecision
+                                    placeholder="0.00"
+                                    value={form.total_invested}
+                                    onChange={(e) => setForm((prev) => {
+                                        const totalInvested = e.target.value;
+                                        const quantity = Number(prev.quantity);
+                                        const total = Number(totalInvested);
+                                        return {
+                                            ...prev,
+                                            total_invested: totalInvested,
+                                            price: Number.isFinite(quantity) && quantity > 0 && Number.isFinite(total) && total > 0
+                                                ? calculatedDecimal(total / quantity)
+                                                : prev.price,
+                                        };
                                     })}
                                     required
                                 />
@@ -1465,5 +1516,3 @@ export default function TransactionsPage() {
     );
 
 }
-
-

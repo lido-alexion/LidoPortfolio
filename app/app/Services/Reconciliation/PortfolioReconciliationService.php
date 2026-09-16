@@ -60,7 +60,7 @@ final class PortfolioReconciliationService
                 'captured_at' => now()->toISOString(), 'holdings' => $holdings,
                 'cash_balance' => $this->cash->balance($profile),
             ], [
-                'holding_cost' => max(0.0, (float) $this->settings->get('reconciliation_holding_cost_tolerance', '1')),
+                'holding_cost' => max(0.0, (float) $this->settings->get('reconciliation_holding_cost_tolerance', '5')),
                 'funds' => max(0.0, (float) $this->settings->get('reconciliation_funds_tolerance', '1')),
             ]);
         } catch (Throwable $error) {

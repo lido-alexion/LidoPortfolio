@@ -56,6 +56,7 @@ export default function NumberInput({
     height,
     compact = false,
     fixedDecimals = null,
+    preserveTypedPrecision = false,
     buttonVariant = 'primary',
     ...rest
 }) {
@@ -145,7 +146,7 @@ export default function NumberInput({
 
     const handleBlur = (event) => {
         setFocused(false);
-        if (numericValue !== null && !Number.isNaN(numericValue)) {
+        if (!preserveTypedPrecision && numericValue !== null && !Number.isNaN(numericValue)) {
             const normalized = formatValue(numericValue, stepNum, fixedDecimals);
             if (normalized !== (value ?? '')) {
                 onChange?.({ target: { value: normalized, id } });
