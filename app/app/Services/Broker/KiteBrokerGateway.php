@@ -150,6 +150,7 @@ class KiteBrokerGateway implements BrokerGateway
             'holdings' => collect($holdings)->map(fn (array $row): array => [
                 'symbol' => (string) ($row['tradingsymbol'] ?? ''),
                 'exchange' => (string) ($row['exchange'] ?? ''),
+                'isin' => ($isin = strtoupper(trim((string) ($row['isin'] ?? '')))) !== '' ? $isin : null,
                 'quantity' => (float) ($row['quantity'] ?? 0),
                 'average_price' => isset($row['average_price']) ? (float) $row['average_price'] : null,
                 'cost' => isset($row['average_price']) ? round((float) ($row['quantity'] ?? 0) * (float) $row['average_price'], 4) : null,

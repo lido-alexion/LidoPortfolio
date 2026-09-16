@@ -83,6 +83,7 @@ export default function PortfolioReconciliationCard({ executionMode }) {
                         {selected.failure ? <p className="text-warning mb-1">Sync failure: {selected.failure}</p> : null}
                         {(discrepancies.holdings || []).map((row) => <div key={row.symbol} className="mb-2">
                             <div>{row.symbol}: StoX {row.stoxQty} shares; Kite {row.brokerQty}; difference {Number(row.brokerQty) - Number(row.stoxQty)}</div>
+                            {row.isin && row.stoxSymbol && row.brokerSymbol && row.stoxSymbol !== row.brokerSymbol ? <div className="text-muted">Matched by ISIN {row.isin}; Kite symbol: {row.brokerSymbol}</div> : null}
                             {row.costDifference !== null && row.costDifference !== undefined ? <div className="text-muted">Cost basis: StoX ₹{amount(row.stoxCost)}; Kite ₹{amount(row.brokerCost)}; difference ₹{amount(row.costDifference)}; allowed divergence ₹{amount(selected.tolerances?.holding_cost ?? 0)}</div> : null}
                         </div>)}
                         {selected.funds_status === 'mismatch' ? <div>Cash: StoX ₹{discrepancies.funds?.stox_cash}; Kite ₹{discrepancies.funds?.broker_cash}; difference ₹{discrepancies.funds?.difference}</div> : null}

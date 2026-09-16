@@ -177,6 +177,34 @@ class V5PortfolioReconciliationFoundationTest extends TestCase
         );
     }
 
+    public function test_matching_by_isin_accepts_a_kite_series_suffix(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        Stock::query()->create([
+            'symbol' => 'HFCL', 'exchange' => 'NSE', 'name' => 'HFCL',
+            'isin' => 'INE548A01028', 'is_active' => true,
+        ]);
+
+        $run = app(PortfolioReconciliationService::class)->recordSuccessful($profile, 'manual', [
+            'holdings' => [[
+                'symbol' => 'HFCL-BE', 'exchange' => 'NSE', 'isin' => 'INE548A01028',
+                'quantity' => 1055, 'cost' => 1000,
+            ]],
+            'current_cash' => 1000,
+        ], [
+            'holdings' => [[
+                'symbol' => 'HFCL', 'exchange' => 'NSE', 'isin' => 'INE548A01028',
+                'quantity' => 1055, 'cost' => 1000,
+            ]],
+            'cash_balance' => 1000,
+        ], ['holding_cost' => 1, 'funds' => 1]);
+
+        $this->assertSame('reconciled', $run->holdings_status);
+        $this->assertSame([], $run->discrepancies['holdings']);
+        $this->assertSame([], $run->unsupported_instruments);
+    }
+
     public function test_cash_only_mismatch_requires_attention_without_execution_block_and_runs_are_immutable(): void
     {
         $user = User::factory()->create();

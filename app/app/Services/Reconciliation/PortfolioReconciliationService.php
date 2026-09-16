@@ -49,6 +49,8 @@ final class PortfolioReconciliationService
 
                 return [
                     'symbol' => (string) $first->stock->symbol,
+                    'exchange' => (string) $first->stock->exchange,
+                    'isin' => $this->normalisedIsin($first->stock->isin),
                     'quantity' => round((float) $rows->sum('quantity'), 4),
                     'cost' => round((float) $rows->sum('invested_amount'), 4),
                 ];
@@ -71,15 +73,22 @@ final class PortfolioReconciliationService
     {
         return DB::transaction(function () use ($profile, $trigger, $broker, $stox, $tolerances): PortfolioReconciliationRun {
             $profile = PortfolioProfile::query()->lockForUpdate()->findOrFail($profile->id);
-            $supported = Stock::query()->where('exchange', 'NSE')->where('is_active', true)->pluck('id', 'symbol');
-            $brokerHoldings = collect($broker['holdings'] ?? [])->keyBy(fn (array $row): string => (string) ($row['symbol'] ?? ''));
-            $stoxHoldings = collect($stox['holdings'] ?? [])->keyBy(fn (array $row): string => (string) ($row['symbol'] ?? ''));
-            $symbols = $brokerHoldings->keys()->merge($stoxHoldings->keys())->filter()->unique()->sort()->values();
+            $supportedStocks = Stock::query()->where('exchange', 'NSE')->where('is_active', true)->get(['symbol', 'exchange', 'isin']);
+            $supportedIsins = $supportedStocks->map(fn (Stock $stock): ?string => $this->normalisedIsin($stock->isin))->filter()->flip();
+            $supportedSymbols = $supportedStocks->mapWithKeys(fn (Stock $stock): array => [$this->symbolIdentity([
+                'symbol' => $stock->symbol,
+                'exchange' => $stock->exchange,
+            ]) => true]);
+            $brokerHoldings = $this->groupHoldings($broker['holdings'] ?? []);
+            $stoxHoldings = $this->groupHoldings($stox['holdings'] ?? []);
+            $identities = $brokerHoldings->keys()->merge($stoxHoldings->keys())->filter()->unique()->sort()->values();
             $holdingDiscrepancies = [];
             $unsupported = [];
-            foreach ($symbols as $symbol) {
-                $brokerRow = $brokerHoldings->get($symbol, []);
-                if (! $supported->has($symbol)) {
+            foreach ($identities as $identity) {
+                $brokerRow = $brokerHoldings->get($identity, []);
+                $stoxRow = $stoxHoldings->get($identity, []);
+                $reference = $brokerRow !== [] ? $brokerRow : $stoxRow;
+                if (! $this->isSupportedHolding($reference, $supportedIsins, $supportedSymbols)) {
                     if ($brokerRow !== []) {
                         $unsupported[] = $brokerRow;
                     }
@@ -87,13 +96,16 @@ final class PortfolioReconciliationService
                     continue;
                 }
                 $brokerQty = (float) ($brokerRow['quantity'] ?? 0);
-                $stoxRow = $stoxHoldings->get($symbol, []);
                 $stoxQty = (float) ($stoxRow['quantity'] ?? 0);
                 $brokerCost = isset($brokerRow['cost']) ? (float) $brokerRow['cost'] : null;
                 $stoxCost = isset($stoxRow['cost']) ? (float) $stoxRow['cost'] : null;
                 $costDifference = $brokerCost !== null && $stoxCost !== null ? round($brokerCost - $stoxCost, 4) : null;
                 if ($brokerQty !== $stoxQty || ($costDifference !== null && abs($costDifference) > (float) ($tolerances['holding_cost'] ?? 0))) {
-                    $holdingDiscrepancies[] = compact('symbol', 'brokerQty', 'stoxQty', 'brokerCost', 'stoxCost', 'costDifference');
+                    $symbol = (string) ($stoxRow['symbol'] ?? $brokerRow['symbol'] ?? '');
+                    $stoxSymbol = $stoxRow['symbol'] ?? null;
+                    $brokerSymbol = $brokerRow['symbol'] ?? null;
+                    $isin = $this->normalisedIsin($stoxRow['isin'] ?? $brokerRow['isin'] ?? null);
+                    $holdingDiscrepancies[] = compact('symbol', 'stoxSymbol', 'brokerSymbol', 'isin', 'brokerQty', 'stoxQty', 'brokerCost', 'stoxCost', 'costDifference');
                 }
             }
             $brokerCash = (float) ($broker['current_cash'] ?? 0);
@@ -149,6 +161,51 @@ final class PortfolioReconciliationService
 
             return $run;
         });
+    }
+
+    /** @param array<string,mixed> $row */
+    private function holdingIdentity(array $row): string
+    {
+        $isin = $this->normalisedIsin($row['isin'] ?? null);
+
+        return $isin !== null ? 'isin:'.$isin : $this->symbolIdentity($row);
+    }
+
+    /** @param array<string,mixed> $row */
+    private function symbolIdentity(array $row): string
+    {
+        return 'symbol:'.strtoupper(trim((string) ($row['exchange'] ?? 'NSE'))).':'.strtoupper(trim((string) ($row['symbol'] ?? '')));
+    }
+
+    private function normalisedIsin(mixed $value): ?string
+    {
+        $isin = strtoupper(trim((string) $value));
+
+        return $isin !== '' ? $isin : null;
+    }
+
+    /** @param list<array<string,mixed>> $holdings */
+    private function groupHoldings(array $holdings): \Illuminate\Support\Collection
+    {
+        return collect($holdings)->filter(fn (array $row): bool => (string) ($row['symbol'] ?? '') !== '')
+            ->groupBy(fn (array $row): string => $this->holdingIdentity($row))
+            ->map(function (\Illuminate\Support\Collection $rows): array {
+                $first = $rows->first();
+                $hasCompleteCost = $rows->every(fn (array $row): bool => isset($row['cost']));
+
+                return array_merge($first, [
+                    'quantity' => round((float) $rows->sum(fn (array $row): float => (float) ($row['quantity'] ?? 0)), 4),
+                    'cost' => $hasCompleteCost ? round((float) $rows->sum(fn (array $row): float => (float) $row['cost']), 4) : null,
+                ]);
+            });
+    }
+
+    /** @param array<string,mixed> $row */
+    private function isSupportedHolding(array $row, \Illuminate\Support\Collection $supportedIsins, \Illuminate\Support\Collection $supportedSymbols): bool
+    {
+        $isin = $this->normalisedIsin($row['isin'] ?? null);
+
+        return $isin !== null ? $supportedIsins->has($isin) : $supportedSymbols->has($this->symbolIdentity($row));
     }
 
     private function recordFailure(PortfolioProfile $profile, string $trigger, string $failure): PortfolioReconciliationRun

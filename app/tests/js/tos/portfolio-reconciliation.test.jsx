@@ -35,7 +35,7 @@ describe('Portfolio reconciliation card', () => {
                 id: 7,
                 funds_status: 'reconciled',
                 tolerances: { holding_cost: 5 },
-                discrepancies: { holdings: [{ symbol: 'AAA', stoxQty: 1, brokerQty: 2, stoxCost: 100, brokerCost: 210, costDifference: 110 }] },
+                discrepancies: { holdings: [{ symbol: 'AAA', stoxSymbol: 'AAA', brokerSymbol: 'AAA-BE', isin: 'INE000000001', stoxQty: 1, brokerQty: 2, stoxCost: 100, brokerCost: 210, costDifference: 110 }] },
                 unsupported_instruments: [{ symbol: 'GOLD' }],
             } },
         } : snapshot));
@@ -46,6 +46,7 @@ describe('Portfolio reconciliation card', () => {
         expect(screen.getByText(/New broker execution is blocked/)).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Evidence' }));
         expect(await screen.findByText(/AAA: StoX 1 shares; Kite 2/)).toBeInTheDocument();
+        expect(screen.getByText(/Matched by ISIN INE000000001; Kite symbol: AAA-BE/)).toBeInTheDocument();
         expect(screen.getByText(/Cost basis: StoX ₹100.00; Kite ₹210.00; difference ₹110.00; allowed divergence ₹5.00/)).toBeInTheDocument();
         expect(screen.getByText(/GOLD/)).toBeInTheDocument();
     });
