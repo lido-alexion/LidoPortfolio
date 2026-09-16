@@ -1,6 +1,8 @@
 name: Deploy StoXla Production
 
 on:
+  push:
+    branches: [master]
   workflow_dispatch:
 
 permissions:
