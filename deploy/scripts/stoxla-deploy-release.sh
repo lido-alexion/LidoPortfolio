@@ -187,7 +187,7 @@ header('Content-Type: text/plain');
 echo 'ok';
 PHP
 chmod 644 "$RESET_PATH"
-curl --fail --silent --show-error --location --max-time 20 \
+curl --noproxy '*' --fail --silent --show-error --location --max-time 20 \
   --resolve stoxla.in:443:127.0.0.1 \
   "$RESET_URL" >/dev/null
 cleanup_reset_script
