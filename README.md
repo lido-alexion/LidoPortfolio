@@ -1,6 +1,6 @@
-# Lido Portfolio Tracker
+# StoX
 
-Self-hosted **Indian stock portfolio** tracker for personal / multi-portfolio use: ledger-true holdings, market data, screeners, patterns, research notes, and Telegram alerts.
+Self-hosted **Indian stock portfolio and trading operating system** for personal / multi-portfolio use: ledger-true holdings, market data, screeners, strategies, recommendations, execution workflow, research notes, and notifications.
 
 - **Backend:** Laravel (PHP 8.3+)
 - **Frontend:** React + Bootstrap (Vite, served by Laravel)
@@ -11,7 +11,7 @@ Current production target: VPS at `https://stoxla.in/` — see [deploy/STOXLA-VP
 
 ### Project documentation ingest
 
-**Always start here (`README.md`).** For a full, ordered documentation tree (requirements → architecture → governance → audit → runbook → deploy), continue in **[DOCS.md](DOCS.md)**. Specs subtree: [specs/README.md](specs/README.md). Living technical reference: [implementation.md](implementation.md).
+**Always start here (`README.md`).** For current product behaviour, use **[docs/current/README.md](docs/current/README.md)**. For the repository documentation map, continue in **[DOCS.md](DOCS.md)**. Living technical reference: [implementation.md](implementation.md). Retired chronological specs live under [docs/archive/](docs/archive/).
 
 Any **new** project Markdown doc must be linked into `DOCS.md` in the same change (Cursor rule: `.cursor/rules/Keep-DOCS-md-ingestion-tree-updated.mdc`).
 
@@ -308,7 +308,8 @@ Start with this **README.md**. The **ingestion docs tree** (every major Markdown
 | File | Description |
 |------|-------------|
 | [DOCS.md](DOCS.md) | **Ingestion docs tree** — follow this after README for full project understanding |
-| [specs/README.md](specs/README.md) | Trading OS specs hub (architecture → engines → governance → audit) |
+| [docs/current/README.md](docs/current/README.md) | Current feature-oriented product source of truth |
+| [docs/archive/specs/README.md](docs/archive/specs/README.md) | Retired Trading OS specs hub (historical architecture → engines → governance → audit) |
 | [Features](#features) | Product feature overview (this README) |
 | [Project structure](#project-structure) | Folder layout and how Laravel + React fit together |
 | [implementation.md](implementation.md) | Living technical reference (agents: keep updated) |

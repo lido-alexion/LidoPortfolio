@@ -1,6 +1,8 @@
 # Sidebar navigation (code)
 
-**Canonical architecture & how-to:** [specs/architecture/ui/15-Sidebar-Navigation-Architecture.md](../../../../../specs/architecture/ui/15-Sidebar-Navigation-Architecture.md)
+**Current product docs:** [Frontend And Navigation](../../../../../docs/current/frontend-and-navigation.md)
+
+**Archived architecture & how-to:** [15-Sidebar-Navigation-Architecture.md](../../../../../docs/archive/specs/architecture/ui/15-Sidebar-Navigation-Architecture.md)
 
 ## Module map
 

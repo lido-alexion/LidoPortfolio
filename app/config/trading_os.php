@@ -2,7 +2,7 @@
 
 return [
     /*
-    | Trading Operating System (specs/) configuration.
+    | Trading Operating System configuration.
     | Engines read these values; do not hardcode thresholds in engine classes.
     */
     'enabled' => env('TRADING_OS_ENABLED', true),

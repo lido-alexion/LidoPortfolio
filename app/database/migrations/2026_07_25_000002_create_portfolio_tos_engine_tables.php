@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Trading Operating System entities (specs/engines/*).
+ * Trading Operating System entities.
  * Maps onto existing portfolio_* market/execution tables; does not duplicate securities/OHLCV.
  * Idempotent: safe to re-run if a previous attempt partially created tables.
  *

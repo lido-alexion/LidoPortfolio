@@ -422,7 +422,7 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
 });
 
 /*
-| Trading Operating System REST API (specs/engines/REST-API-Specification.md).
+| Trading Operating System REST API.
 | Additive /api/v1 surface; legacy /api/* routes above are unchanged.
 | Auth: Sanctum session (existing SPA) rather than JWT.
 */

@@ -15,7 +15,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(__dirname, '..');
 const repoRoot = path.resolve(appRoot, '..');
 const outDir = path.join(appRoot, 'public', 'docs');
-const specsAiGuidePath = path.join(repoRoot, 'specs', 'architecture', 'domains', 'StoX-Trading-Artifacts-AI-Guide.md');
+const repoAiGuidePath = path.join(repoRoot, 'docs', 'current', 'stox-trading-artifacts-ai-guide.md');
 const AI_GUIDE_BASENAME = 'stox-trading-artifacts-ai-guide.md';
 const docsModuleUrl = pathToFileURL(
     path.join(appRoot, 'resources', 'js', 'src', 'data', 'appDocumentation.js'),
@@ -322,7 +322,7 @@ function buildAiGuideMarkdown(docs, extras) {
     parts.push('>');
     parts.push(`> **Generated:** ${generatedAt}`);
     parts.push(`> **Deploy download:** \`/docs/${AI_GUIDE_BASENAME}\` (also linked from Screener Registry and Strategy Registry).`);
-    parts.push('> **Repo copy:** `specs/architecture/domains/StoX-Trading-Artifacts-AI-Guide.md`');
+    parts.push('> **Repo copy:** `docs/current/stox-trading-artifacts-ai-guide.md`');
     parts.push('');
     parts.push('This guide is the **single authoritative specification** for authoring production-ready Trading Artifacts.');
     parts.push('');
@@ -469,7 +469,10 @@ function buildAiGuideMarkdown(docs, extras) {
     parts.push('_End of StoX Trading Artifacts AI Authoring Guide._');
     parts.push('');
 
-    return parts.filter((p, i, arr) => !(p === '' && arr[i - 1] === '')).join('\n');
+    return parts
+        .filter((p, i, arr) => !(p === '' && arr[i - 1] === ''))
+        .join('\n')
+        .replace(/\]\((?!https?:\/\/|\/|#|mailto:)([^)\s]+\.html(?:#[^)]+)?)\)/g, '](/docs/$1)');
 }
 
 async function main() {
@@ -506,8 +509,8 @@ async function main() {
     });
     const aiGuidePublic = path.join(outDir, AI_GUIDE_BASENAME);
     fs.writeFileSync(aiGuidePublic, aiGuide, 'utf8');
-    fs.mkdirSync(path.dirname(specsAiGuidePath), { recursive: true });
-    fs.writeFileSync(specsAiGuidePath, aiGuide, 'utf8');
+    fs.mkdirSync(path.dirname(repoAiGuidePath), { recursive: true });
+    fs.writeFileSync(repoAiGuidePath, aiGuide, 'utf8');
 
     fs.writeFileSync(
         path.join(outDir, 'README.txt'),
@@ -532,7 +535,7 @@ async function main() {
     console.log(
         `Static docs written to ${outDir} (${APP_DOCUMENTATION.length} topics, ${written.size} html files + index + ${AI_GUIDE_BASENAME})`,
     );
-    console.log(`AI guide also written to ${specsAiGuidePath}`);
+    console.log(`AI guide also written to ${repoAiGuidePath}`);
 }
 
 main().catch((err) => {

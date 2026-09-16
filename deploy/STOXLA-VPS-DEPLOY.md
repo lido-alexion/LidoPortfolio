@@ -641,7 +641,7 @@ local `master` with no production deployment:
 
 The production build regenerates static documentation under `app/public/docs/`
 and mirrors the AI guide to
-`specs/architecture/domains/StoX-Trading-Artifacts-AI-Guide.md`. The current
+`docs/current/stox-trading-artifacts-ai-guide.md`. The current
 regeneration produced timestamp/whitespace-only changes; no content delta was
 identified with a whitespace-insensitive diff.
 
