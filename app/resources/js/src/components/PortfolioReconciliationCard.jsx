@@ -2,10 +2,18 @@ import React, { useCallback, useEffect, useState } from 'react';
 import api, { getApiErrorMessage } from '../api';
 import { showToast } from '../toast';
 
-const label = (value) => value ? value.replaceAll('_', ' ') : 'Not yet checked';
+const label = (value) => {
+    if (!value) return 'Not yet checked';
+
+    const readable = value.replaceAll('_', ' ');
+    return readable.charAt(0).toUpperCase() + readable.slice(1);
+};
 const tone = (value) => value === 'reconciled' ? 'text-success' : value === 'mismatch' || value === 'attention_required' ? 'text-danger' : 'text-muted';
 const amount = (value) => Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const quantity = (value) => Number(value).toLocaleString(undefined, { maximumFractionDigits: 4 });
+const completedAt = (value) => value ? new Date(value).toLocaleString(undefined, {
+    year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true,
+}) : '—';
 
 function ComparisonValue({ value, mismatch, money = false }) {
     return <span className={mismatch ? 'text-danger fw-semibold' : 'text-muted'}>{money ? `₹${amount(value)}` : quantity(value)}</span>;
@@ -78,8 +86,8 @@ export default function PortfolioReconciliationCard({ executionMode }) {
                             <thead><tr><th>Run</th><th>Trigger</th><th>Result</th><th>Completed</th><th /></tr></thead>
                             <tbody>{(snapshot.runs || []).slice(0, 10).map((run) => <tr key={run.id}>
                                 <td>#{run.id}</td><td>{label(run.trigger)}</td><td className={tone(run.overall_status)}>{run.status === 'sync_failed' ? 'Sync failed' : label(run.overall_status)}</td>
-                                <td>{run.completed_at ? new Date(run.completed_at).toLocaleString() : '—'}</td>
-                                <td><button type="button" className="btn btn-link btn-sm p-0" onClick={() => openRun(run.id)}>Evidence</button></td>
+                                <td>{completedAt(run.completed_at)}</td>
+                                <td>{run.overall_status !== 'reconciled' ? <button type="button" className="btn btn-link btn-sm p-0" onClick={() => openRun(run.id)}>Evidence</button> : null}</td>
                             </tr>)}</tbody>
                         </table>
                     </div>

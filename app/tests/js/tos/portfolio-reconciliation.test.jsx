@@ -15,7 +15,10 @@ const snapshot = {
                 last_successful_at: '2026-09-11T12:00:00Z',
                 last_failure: null,
             },
-            runs: [{ id: 7, trigger: 'post_trade', status: 'completed', overall_status: 'attention_required', completed_at: '2026-09-11T12:00:00Z' }],
+            runs: [
+                { id: 8, trigger: 'manual', status: 'completed', overall_status: 'reconciled', completed_at: '2026-09-11T12:00:00Z' },
+                { id: 7, trigger: 'post_trade', status: 'completed', overall_status: 'attention_required', completed_at: '2026-09-11T12:00:00Z' },
+            ],
         },
     },
 };
@@ -45,7 +48,10 @@ describe('Portfolio reconciliation card', () => {
 
         render(<PortfolioReconciliationCard executionMode="automatic" />);
 
-        expect(await screen.findAllByText('attention required')).toHaveLength(2);
+        expect(await screen.findAllByText('Attention required')).toHaveLength(2);
+        expect(screen.getAllByText('Reconciled')).toHaveLength(2);
+        expect(screen.getAllByRole('button', { name: 'Evidence', exact: true })).toHaveLength(1);
+        expect(screen.getAllByText(/\d{1,2}\/\d{1,2}\/\d{4}, \d{1,2}:\d{2} (?:AM|PM)/)).toHaveLength(2);
         expect(screen.getByText(/New broker execution is blocked/)).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Evidence' }));
         expect(await screen.findByText('AAA')).toBeInTheDocument();
@@ -62,7 +68,7 @@ describe('Portfolio reconciliation card', () => {
     it('runs a manual reconciliation and refreshes status', async () => {
         apiMock.post.mockResolvedValue({ data: { data: {} } });
         render(<PortfolioReconciliationCard executionMode="semi_automatic" />);
-        await screen.findAllByText('attention required');
+        await screen.findAllByText('Attention required');
 
         fireEvent.click(screen.getByRole('button', { name: 'Run now' }));
 
