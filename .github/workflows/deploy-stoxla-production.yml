@@ -13,9 +13,74 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  changes:
+    name: Detect changed areas
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.changed.outputs.backend }}
+      frontend: ${{ steps.changed.outputs.frontend }}
+      deployable: ${{ steps.changed.outputs.deployable }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Classify changed files
+        id: changed
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            {
+              echo "backend=true"
+              echo "frontend=true"
+              echo "deployable=true"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]]; then
+            changed_files="$(git diff --name-only "${{ github.event.before }}" HEAD)"
+          else
+            changed_files="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          fi
+
+          backend=false
+          frontend=false
+          deployable=false
+
+          while IFS= read -r file; do
+            [[ -n "$file" ]] || continue
+
+            case "$file" in
+              app/app/*|app/bootstrap/*|app/config/*|app/database/*|app/routes/*|app/tests/*.php|app/tests/**/*.php|app/composer.json|app/composer.lock|app/phpunit.xml|deploy/**|.github/workflows/*.yml|.github/workflows/*.yaml)
+                backend=true
+                deployable=true
+                ;;
+            esac
+
+            case "$file" in
+              app/resources/*|app/resources/**/*|app/tests/js/*|app/tests/js/**/*|app/package.json|app/package-lock.json|app/scripts/write-build-info.mjs|app/tsconfig.json|app/vite.config.js|app/vitest.config.js)
+                frontend=true
+                deployable=true
+                ;;
+            esac
+          done <<< "$changed_files"
+
+          {
+            echo "backend=$backend"
+            echo "frontend=$frontend"
+            echo "deployable=$deployable"
+          } >> "$GITHUB_OUTPUT"
+
   backend:
     name: Backend verification
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     timeout-minutes: 35
     services:
       mysql:
@@ -82,6 +147,8 @@ jobs:
   frontend:
     name: Frontend verification
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     timeout-minutes: 25
     defaults:
       run:
@@ -117,7 +184,13 @@ jobs:
     name: Package release artifact
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    if: |
+      always() &&
+      needs.changes.outputs.deployable == 'true' &&
+      (needs.backend.result == 'success' || needs.backend.result == 'skipped') &&
+      (needs.frontend.result == 'success' || needs.frontend.result == 'skipped')
     needs:
+      - changes
       - backend
       - frontend
     defaults:
@@ -149,6 +222,11 @@ jobs:
 
       - name: Install npm dependencies
         run: npm ci --registry=https://registry.npmjs.org
+
+      - name: Write build metadata
+        env:
+          BUILD_ID: build-${{ github.run_number }}-attempt-${{ github.run_attempt }}-${{ github.sha }}
+        run: node scripts/write-build-info.mjs
 
       - name: Build production assets for VPS root
         env:

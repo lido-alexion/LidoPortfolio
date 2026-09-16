@@ -45,6 +45,8 @@ app/playwright/.cache/
 
 # Local one-off debug / investigation artifacts (keep on disk, do not commit)
 app/scripts/
+!app/scripts/
+!app/scripts/write-build-info.mjs
 app/storage/debug-bhavcopy/
 app/tmp-*.json
 

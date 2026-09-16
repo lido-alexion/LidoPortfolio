@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\AnalysisEvidenceController;
 use App\Http\Controllers\Api\AnalysisPreferenceController;
 use App\Http\Controllers\Api\AnalyticsController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\BuildInfoController;
 use App\Http\Controllers\Api\BulkTransactionImportController;
 use App\Http\Controllers\Api\CalendarEventController;
 use App\Http\Controllers\Api\CashController;
@@ -115,6 +116,7 @@ Route::post('/reset-password/accept', [PasswordResetAcceptController::class, 'ac
 // Guest-safe session probe
 Route::get('/auth/me', [AuthController::class, 'me']);
 Route::get('/auth/csrf-token', [AuthController::class, 'csrfToken']);
+Route::get('/build-info', [BuildInfoController::class, 'show']);
 Route::get('/wiki/shared/{token}', [WikiShareController::class, 'show'])->where('token', '[A-Za-z0-9]{64}');
 Route::get('/wiki/shared/{token}/images/{image}', [WikiShareController::class, 'image'])
     ->where('token', '[A-Za-z0-9]{64}')->whereUuid('image');
