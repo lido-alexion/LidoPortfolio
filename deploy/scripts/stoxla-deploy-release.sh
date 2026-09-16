@@ -6,6 +6,7 @@ RELEASE_ID="${STOXLA_RELEASE_ID:-$(date -u +%Y%m%d%H%M%S)}"
 KEEP_RELEASES="${STOXLA_KEEP_RELEASES:-5}"
 PHP_BIN="${STOXLA_PHP_BIN:-/usr/bin/php}"
 HEALTH_URL="${STOXLA_HEALTH_URL:-https://stoxla.in/}"
+EXPECTED_COMMIT="${STOXLA_EXPECTED_COMMIT:-}"
 
 ARCHIVE="${1:-}"
 
@@ -161,8 +162,67 @@ log "warming active release and signaling queue restart"
   "$PHP_BIN" artisan queue:restart --no-interaction
 )
 
+RESET_TOKEN="$("$PHP_BIN" -r 'echo bin2hex(random_bytes(20));')"
+RESET_SCRIPT="deploy-opcache-reset-${RELEASE_ID//[^A-Za-z0-9]/}.php"
+RESET_PATH="$APP_ROOT/current/public/$RESET_SCRIPT"
+RESET_URL="https://stoxla.in/$RESET_SCRIPT?token=$RESET_TOKEN"
+cleanup_reset_script() {
+  rm -f "$RESET_PATH"
+}
+trap 'cleanup_reset_script; rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
+
+log "resetting PHP-FPM opcache through a temporary localhost-only endpoint"
+cat > "$RESET_PATH" <<PHP
+<?php
+\$expected = '$RESET_TOKEN';
+\$remote = \$_SERVER['REMOTE_ADDR'] ?? '';
+if (! hash_equals(\$expected, (string) (\$_GET['token'] ?? '')) || ! in_array(\$remote, ['127.0.0.1', '::1'], true)) {
+    http_response_code(404);
+    exit;
+}
+if (function_exists('opcache_reset')) {
+    opcache_reset();
+}
+header('Content-Type: text/plain');
+echo 'ok';
+PHP
+chmod 644 "$RESET_PATH"
+curl --fail --silent --show-error --location --max-time 20 \
+  --resolve stoxla.in:443:127.0.0.1 \
+  "$RESET_URL" >/dev/null
+cleanup_reset_script
+
 log "checking production URL"
 curl --fail --silent --show-error --location --max-time 20 "$HEALTH_URL" >/dev/null
+
+if [[ -n "$EXPECTED_COMMIT" ]]; then
+  log "checking deployed build metadata"
+  BUILD_INFO="$(mktemp)"
+  curl --fail --silent --show-error --location --max-time 20 \
+    "${HEALTH_URL%/}/api/build-info" > "$BUILD_INFO"
+  "$PHP_BIN" -r '
+    $payload = json_decode(file_get_contents($argv[1]), true);
+    $actual = $payload["data"]["commit_sha"] ?? null;
+    if ($actual !== $argv[2]) {
+        fwrite(STDERR, "Expected deployed commit {$argv[2]}, got ".($actual ?? "null").PHP_EOL);
+        exit(1);
+    }
+  ' "$BUILD_INFO" "$EXPECTED_COMMIT"
+  rm -f "$BUILD_INFO"
+fi
+
+log "checking browser module asset response"
+HTML="$(mktemp)"
+HEADERS="$(mktemp)"
+curl --fail --silent --show-error --location --max-time 20 "$HEALTH_URL" > "$HTML"
+MODULE_SRC="$(grep -oE '<script[^>]+type="module"[^>]+src="[^"]+"' "$HTML" | head -n 1 | sed -E 's/.*src="([^"]+)".*/\1/')"
+[[ -n "$MODULE_SRC" ]] || fail "could not find module script in production HTML"
+curl --fail --silent --show-error --location --max-time 20 -D "$HEADERS" -o /dev/null "${HEALTH_URL%/}$MODULE_SRC"
+if ! grep -qiE '^content-type: .*javascript' "$HEADERS"; then
+  cat "$HEADERS" >&2
+  fail "module script $MODULE_SRC did not return a JavaScript content type"
+fi
+rm -f "$HTML" "$HEADERS"
 
 log "pruning old releases; keeping $KEEP_RELEASES"
 current_target="$(readlink "$APP_ROOT/current")"

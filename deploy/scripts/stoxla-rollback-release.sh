@@ -48,5 +48,35 @@ mv -Tf "$APP_ROOT/current.new" "$APP_ROOT/current"
   "$PHP_BIN" artisan queue:restart --no-interaction
 )
 
+RESET_TOKEN="$("$PHP_BIN" -r 'echo bin2hex(random_bytes(20));')"
+RESET_SCRIPT="deploy-opcache-reset-${TARGET_RELEASE//[^A-Za-z0-9]/}.php"
+RESET_PATH="$APP_ROOT/current/public/$RESET_SCRIPT"
+RESET_URL="https://stoxla.in/$RESET_SCRIPT?token=$RESET_TOKEN"
+cleanup_reset_script() {
+  rm -f "$RESET_PATH"
+}
+trap cleanup_reset_script EXIT
+
+log "resetting PHP-FPM opcache through a temporary localhost-only endpoint"
+cat > "$RESET_PATH" <<PHP
+<?php
+\$expected = '$RESET_TOKEN';
+\$remote = \$_SERVER['REMOTE_ADDR'] ?? '';
+if (! hash_equals(\$expected, (string) (\$_GET['token'] ?? '')) || ! in_array(\$remote, ['127.0.0.1', '::1'], true)) {
+    http_response_code(404);
+    exit;
+}
+if (function_exists('opcache_reset')) {
+    opcache_reset();
+}
+header('Content-Type: text/plain');
+echo 'ok';
+PHP
+chmod 644 "$RESET_PATH"
+curl --fail --silent --show-error --location --max-time 20 \
+  --resolve stoxla.in:443:127.0.0.1 \
+  "$RESET_URL" >/dev/null
+cleanup_reset_script
+
 curl --fail --silent --show-error --location --max-time 20 "$HEALTH_URL" >/dev/null
 log "release $TARGET_RELEASE is live"

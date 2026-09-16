@@ -296,8 +296,30 @@ jobs:
           ssh $SSH_OPTS "${STOXLA_SSH_USER}@${STOXLA_HOST}" "mkdir -p '${REMOTE_DIR}'"
           scp $SSH_OPTS stoxla-release.tgz deploy/scripts/stoxla-deploy-release.sh deploy/scripts/stoxla-rollback-release.sh "${STOXLA_SSH_USER}@${STOXLA_HOST}:${REMOTE_DIR}/"
           ssh $SSH_OPTS "${STOXLA_SSH_USER}@${STOXLA_HOST}" \
-            "chmod 700 '${REMOTE_DIR}/stoxla-deploy-release.sh' '${REMOTE_DIR}/stoxla-rollback-release.sh' && cp '${REMOTE_DIR}/stoxla-rollback-release.sh' '/home/${STOXLA_SSH_USER}/.stoxla-deploy/stoxla-rollback-release.sh' && STOXLA_RELEASE_ID='${RELEASE_ID}' '${REMOTE_DIR}/stoxla-deploy-release.sh' '${REMOTE_DIR}/stoxla-release.tgz'"
+            "chmod 700 '${REMOTE_DIR}/stoxla-deploy-release.sh' '${REMOTE_DIR}/stoxla-rollback-release.sh' && cp '${REMOTE_DIR}/stoxla-rollback-release.sh' '/home/${STOXLA_SSH_USER}/.stoxla-deploy/stoxla-rollback-release.sh' && STOXLA_RELEASE_ID='${RELEASE_ID}' STOXLA_EXPECTED_COMMIT='${RELEASE_SHA}' '${REMOTE_DIR}/stoxla-deploy-release.sh' '${REMOTE_DIR}/stoxla-release.tgz'"
 
       - name: Post-deploy health check
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
         run: |
+          set -euo pipefail
           curl --fail --silent --show-error --location --max-time 20 https://stoxla.in/ >/dev/null
+          build_info="$(mktemp)"
+          curl --fail --silent --show-error --location --max-time 20 https://stoxla.in/api/build-info > "$build_info"
+          python3 - "$build_info" "$EXPECTED_SHA" <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1], "r", encoding="utf-8") as handle:
+              payload = json.load(handle)
+          actual = (payload.get("data") or {}).get("commit_sha")
+          if actual != sys.argv[2]:
+              raise SystemExit(f"Expected deployed commit {sys.argv[2]}, got {actual}")
+          PY
+          html="$(mktemp)"
+          headers="$(mktemp)"
+          curl --fail --silent --show-error --location --max-time 20 https://stoxla.in/ > "$html"
+          module_src="$(grep -oE '<script[^>]+type="module"[^>]+src="[^"]+"' "$html" | head -n 1 | sed -E 's/.*src="([^"]+)".*/\1/')"
+          test -n "$module_src"
+          curl --fail --silent --show-error --location --max-time 20 -D "$headers" -o /dev/null "https://stoxla.in${module_src}"
+          grep -qiE '^content-type: .*javascript' "$headers"
