@@ -2,17 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 function getAppBaseFrom(metaContent, windowBase, pathname) {
-    const raw = metaContent || windowBase || inferAppBaseFromLocation(pathname);
+    const raw = metaContent || windowBase || '';
     const base = String(raw).replace(/\/$/, '');
     return base === '/' ? '' : base;
-}
-
-function inferAppBaseFromLocation(pathname) {
-    const match = pathname.match(/^(\/[^/]+)(?:\/|$)/);
-    if (match?.[1] === '/portfolio') {
-        return '/portfolio';
-    }
-    return '';
 }
 
 function appUrl(path, metaContent, windowBase, pathname) {
@@ -35,10 +27,10 @@ test('appUrl falls back to window.__LIDO_APP_BASE__', () => {
     );
 });
 
-test('appUrl infers /portfolio from location when meta missing', () => {
+test('appUrl does not infer /portfolio from deep links when meta is empty', () => {
     assert.equal(
         appUrl('/api/auth/me', '', '', '/portfolio/settings'),
-        '/portfolio/api/auth/me',
+        '/api/auth/me',
     );
 });
 

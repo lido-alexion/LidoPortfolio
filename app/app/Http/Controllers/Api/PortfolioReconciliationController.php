@@ -17,11 +17,12 @@ class PortfolioReconciliationController extends Controller
     public function index(): JsonResponse
     {
         $profile = \activePortfolio();
+        $runs = PortfolioReconciliationRun::query()->where('profile_id', $profile->id)
+            ->orderByDesc('id')->limit(100)->get();
 
         return response()->json(['data' => [
             'status' => $this->status($profile),
-            'runs' => PortfolioReconciliationRun::query()->where('profile_id', $profile->id)
-                ->orderByDesc('id')->limit(100)->get(),
+            'runs' => $this->compactRuns($runs),
         ]]);
     }
 
@@ -61,5 +62,32 @@ class PortfolioReconciliationController extends Controller
             'last_successful_at' => $profile->last_successful_reconciliation_at?->toISOString(),
             'last_failure' => $profile->last_reconciliation_failure,
         ];
+    }
+
+    /**
+     * @param \Illuminate\Support\Collection<int,PortfolioReconciliationRun> $runs
+     * @return list<PortfolioReconciliationRun>
+     */
+    private function compactRuns($runs): array
+    {
+        $compacted = [];
+        $seenScheduledFailures = [];
+
+        foreach ($runs as $run) {
+            if ($run->trigger === 'scheduled' && $run->status === 'sync_failed') {
+                $key = implode('|', [
+                    $run->completed_at?->toDateString() ?? 'unknown',
+                    (string) $run->failure,
+                ]);
+                if (isset($seenScheduledFailures[$key])) {
+                    continue;
+                }
+                $seenScheduledFailures[$key] = true;
+            }
+
+            $compacted[] = $run;
+        }
+
+        return $compacted;
     }
 }

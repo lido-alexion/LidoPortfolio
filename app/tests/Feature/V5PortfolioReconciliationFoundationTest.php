@@ -46,6 +46,58 @@ class V5PortfolioReconciliationFoundationTest extends TestCase
         }
     }
 
+    public function test_scheduled_reconciliation_failure_is_not_repeated_every_scheduler_tick(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        $profile->forceFill(['execution_mode' => PortfolioProfile::EXECUTION_MODE_AUTOMATIC])->save();
+        Setting::setValue('cron_timezone', 'Asia/Kolkata');
+        Setting::setValue('market_close_time', '15:30');
+        Setting::setValue('reconciliation_delay_minutes', '30');
+        app(FakeBrokerGateway::class)->reconciliationSnapshotUnavailable = true;
+        Carbon::setTestNow(Carbon::parse('2026-09-11 16:00:00', 'Asia/Kolkata'));
+
+        try {
+            $this->artisan('portfolio:reconcile')->assertFailed();
+            $this->assertSame(1, PortfolioReconciliationRun::query()->where('trigger', 'scheduled')->count());
+
+            $this->artisan('portfolio:reconcile')->assertSuccessful();
+            $this->assertSame(1, PortfolioReconciliationRun::query()->where('trigger', 'scheduled')->count());
+            $this->assertNotNull($profile->fresh()->last_reconciliation_failure);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_reconciliation_index_compacts_duplicate_scheduled_failures(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        $profile->forceFill(['execution_mode' => PortfolioProfile::EXECUTION_MODE_AUTOMATIC])->save();
+        $failure = 'Zerodha session is missing or expired. Connect Kite again.';
+
+        foreach ([1, 2, 3] as $minute) {
+            PortfolioReconciliationRun::query()->create([
+                'profile_id' => $profile->id,
+                'user_id' => $user->id,
+                'trigger' => 'scheduled',
+                'status' => 'sync_failed',
+                'holdings_status' => 'unknown',
+                'funds_status' => 'unknown',
+                'overall_status' => 'unknown',
+                'failure' => $failure,
+                'started_at' => Carbon::parse("2026-09-11 16:0{$minute}:00", 'Asia/Kolkata'),
+                'completed_at' => Carbon::parse("2026-09-11 16:0{$minute}:00", 'Asia/Kolkata'),
+            ]);
+        }
+
+        $this->actingAs($user)->withProfileHeader($user, $profile)
+            ->getJson('/api/reconciliation')->assertOk()
+            ->assertJsonCount(1, 'data.runs')
+            ->assertJsonPath('data.runs.0.status', 'sync_failed')
+            ->assertJsonPath('data.runs.0.failure', $failure);
+    }
+
     public function test_live_orchestration_snapshots_kite_and_stox_without_mutating_ledgers_and_failure_preserves_last_success(): void
     {
         $user = User::factory()->create();

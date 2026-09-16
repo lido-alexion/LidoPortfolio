@@ -6,20 +6,9 @@ export function getAppBase() {
     const meta = document.querySelector('meta[name="app-base"]');
     const fromMeta = meta?.getAttribute('content') ?? '';
     const fromWindow = typeof window !== 'undefined' ? (window.__LIDO_APP_BASE__ ?? '') : '';
-    const raw = fromMeta || fromWindow || inferAppBaseFromLocation();
+    const raw = fromMeta || fromWindow || '';
     const base = String(raw).replace(/\/$/, '');
     return base === '/' ? '' : base;
-}
-
-function inferAppBaseFromLocation() {
-    if (typeof window === 'undefined') {
-        return '';
-    }
-    const match = window.location.pathname.match(/^(\/[^/]+)(?:\/|$)/);
-    if (match?.[1] === '/portfolio') {
-        return '/portfolio';
-    }
-    return '';
 }
 
 export function appUrl(path = '') {

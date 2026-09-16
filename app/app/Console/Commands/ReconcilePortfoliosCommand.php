@@ -43,7 +43,7 @@ class ReconcilePortfoliosCommand extends Command
         $failed = 0;
         foreach ($query->get() as $profile) {
             $alreadyDone = PortfolioReconciliationRun::query()->where('profile_id', $profile->id)
-                ->where('trigger', 'scheduled')->where('status', 'completed')
+                ->where('trigger', 'scheduled')
                 ->whereDate('completed_at', $now->toDateString())->exists();
             if ($alreadyDone) {
                 continue;
