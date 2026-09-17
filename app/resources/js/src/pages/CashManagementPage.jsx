@@ -15,6 +15,7 @@ import {
 } from '../utils/transactionDate';
 import CapitalRecallPanel from '../components/CapitalRecallPanel';
 import { downloadPortfolioCsv } from '../utils/portfolioCsvExport';
+import { strategyAllocationStatus } from '../utils/strategyAllocationStatus';
 
 const OPS = [
     { id: 'deposit', label: 'Deposit', endpoint: '/cash/deposit', amountPlaceholder: 'Amount deposited' },
@@ -369,6 +370,7 @@ export default function CashManagementPage() {
                                 <p className="text-muted small">
                                     Each enabled strategy claims a share of investable capital from the same physical cash pool.
                                     Percentages must sum to 100. They are not normalized automatically.
+                                    Changing percentages changes policy only; existing holdings are not automatically rebalanced.
                                     Retained capital is an accounting floor, not a cash ledger balance.
                                 </p>
                                 {!summary?.capital?.allocation_pct_sum_is_100 ? (
@@ -384,7 +386,8 @@ export default function CashManagementPage() {
                                                 <th>Strategy</th>
                                                 <th className="text-end" style={{ width: '8rem' }}>Allocation %</th>
                                                 <th className="text-end">Allocated capital</th>
-                                                <th className="text-end">Unused allocation</th>
+                                                <th className="text-end">Deployed</th>
+                                                <th className="text-end">Unused / status</th>
                                                 <th className="text-end">Lent</th>
                                                 <th className="text-end">Borrowed</th>
                                                 <th className="text-end">Retained capital</th>
@@ -395,6 +398,7 @@ export default function CashManagementPage() {
                                                 const live = (summary.strategies || []).find(
                                                     (s) => s.strategy_id === row.strategy_id,
                                                 );
+                                                const allocationStatus = strategyAllocationStatus(live);
                                                 return (
                                                     <tr key={row.strategy_id}>
                                                         <td>
@@ -421,7 +425,23 @@ export default function CashManagementPage() {
                                                             />
                                                         </td>
                                                         <td className="text-end">{money(live?.strategy_capital_allocation)}</td>
-                                                        <td className="text-end">{money(live?.unused_allocation)}</td>
+                                                        <td className="text-end">{money(live?.strategy_deployed_capital)}</td>
+                                                        <td className="text-end">
+                                                            {allocationStatus.status === 'above_allocation' ? (
+                                                                <>
+                                                                    <div className="text-warning-emphasis">
+                                                                        Above current allocation by {money(allocationStatus.amount)}
+                                                                    </div>
+                                                                    <div className="text-muted small">
+                                                                        Existing positions are not automatically rebalanced.
+                                                                    </div>
+                                                                </>
+                                                            ) : allocationStatus.status === 'unavailable' ? (
+                                                                <span className="text-muted">—</span>
+                                                            ) : (
+                                                                money(live?.unused_allocation)
+                                                            )}
+                                                        </td>
                                                         <td className="text-end">{money(live?.lent_capital)}</td>
                                                         <td className="text-end">{money(live?.borrowed_capital)}</td>
                                                         <td className="text-end">

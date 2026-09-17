@@ -424,3 +424,18 @@ Each episode remains an independent row. Sibling strategy ownership is derived f
 The adoption modal now distinguishes a destination strategy's existing same-stock episode from sibling strategy episodes. It explains the accepted weighted merge into the selected destination and explicitly states that other strategy ownership remains separate and unchanged. Existing adoption API/accounting semantics are untouched.
 
 Added backend coverage verifies named strategy metadata, independent same-stock rows, and archived-owner identity. Added frontend helper coverage verifies unmanaged, named, unresolved, and sibling-episode presentation semantics. MS-002 and the scoped Holdings/adoption portion of MS-003 are `IMPLEMENTED`. MS-004 allocation-change explanation and MS-005 error/recovery coverage remain open; AUD-005 remains `PARTIALLY_IMPLEMENTED`.
+
+## 28. Batch 3 Implementation Outcome — MS-004
+
+The canonical `PortfolioCapitalAccountingService` derives each strategy's logical allocation from `investable_capital` (investable cash plus strategy-owned market value), while deployed capital remains owned market value plus that strategy's pending reservation and lent capital. Allocation changes update only the enabled strategies' percentage policy. They do not rebalance holdings, alter owner keys or basis, create transactions/recommendations/orders, move physical cash, or transfer reservations.
+
+The snapshot now additively exposes:
+
+- `allocation_variance = strategy_deployed_capital - strategy_capital_allocation`;
+- `allocation_variance_status = above_allocation | within_allocation | unavailable`.
+
+Cash Management now shows Allocation, Deployed, and Unused/status. Above-allocation rows explicitly say `Above current allocation by ...` and explain that existing positions are not automatically rebalanced. Missing numeric inputs render unavailable rather than zero; ordinary unused allocation remains a neutral unused value.
+
+`MultiStrategyLifecycleAssuranceTest::test_allocation_change_is_policy_only_and_reports_above_allocation_without_rebalancing` exercises the real allocation API with existing A/B positions and a Strategy B reservation. It proves holdings, owner keys, basis, transactions, recommendation count, orders, physical cash, and reservation attribution remain unchanged while the new policy and derived variance update. The allocation/capital/lending regression set passes: **45 tests, 306 assertions**.
+
+MS-004 is `IMPLEMENTED`. MS-005 remains open for broader missing/stale/error and recovery-state assurance; AUD-005 remains `PARTIALLY_IMPLEMENTED`.

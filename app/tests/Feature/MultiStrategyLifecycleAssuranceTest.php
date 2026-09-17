@@ -10,11 +10,13 @@ use App\Models\PortfolioProfile;
 use App\Models\Stock;
 use App\Models\StockPrice;
 use App\Models\TradingRecommendation;
+use App\Models\TradingOrder;
 use App\Models\TradingStrategy;
 use App\Models\TradingStrategyVersion;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\CashManagementService;
+use App\Services\HoldingsCalculationService;
 use App\Services\Strategy\PortfolioCapitalAccountingService;
 use App\Services\Strategy\StrategyRegistrySupport;
 use App\Services\StrategyConfigurationService;
@@ -195,6 +197,78 @@ class MultiStrategyLifecycleAssuranceTest extends TestCase
         $this->assertEqualsWithDelta(0.0, app(PortfolioCapitalAccountingService::class)->snapshot($profile)['physical_cash']['pending_execution_reservations'], 0.0001);
     }
 
+    public function test_allocation_change_is_policy_only_and_reports_above_allocation_without_rebalancing(): void
+    {
+        [$user, $profile, $strategyA, $strategyB] = $this->twoStrategyPortfolio();
+        $stock = $this->stock('ALLOC');
+        app(CashManagementService::class)->deposit($profile, 60_000, 'ms-004-seed', $user);
+        app(PortfolioCapitalAccountingService::class)->updateEnabledAllocations($profile, [
+            ['strategy_id' => $strategyA->id, 'allocation_pct' => 50],
+            ['strategy_id' => $strategyB->id, 'allocation_pct' => 50],
+        ]);
+
+        $this->transaction($profile, $stock, 200, 100, Holding::ownerKeyFor((int) $strategyA->id));
+        $this->transaction($profile, $stock, 400, 100, Holding::ownerKeyFor((int) $strategyB->id));
+        app(HoldingsCalculationService::class)->recalculateForProfile($profile);
+        $reservation = $this->approve($profile, $user, $this->buyRecommendation($profile, $strategyB, $stock, 1_000));
+
+        $beforeHoldingState = Holding::query()
+            ->where('profile_id', $profile->id)
+            ->where('stock_id', $stock->id)
+            ->orderBy('owner_key')
+            ->get(['owner_key', 'quantity', 'invested_amount'])
+            ->toArray();
+        $beforeCounts = [
+            'transactions' => Transaction::query()->where('profile_id', $profile->id)->count(),
+            'holdings' => Holding::query()->where('profile_id', $profile->id)->count(),
+            'recommendations' => TradingRecommendation::query()->where('profile_id', $profile->id)->count(),
+            'orders' => TradingOrder::query()->where('profile_id', $profile->id)->count(),
+        ];
+        $cashBefore = app(CashManagementService::class)->balance($profile);
+
+        $this->actingAs($user)
+            ->withProfileHeader($user, $profile)
+            ->putJson('/api/v1/capital/allocations', [
+                'allocations' => [
+                    ['strategy_id' => $strategyA->id, 'allocation_pct' => 70],
+                    ['strategy_id' => $strategyB->id, 'allocation_pct' => 30],
+                ],
+            ])
+            ->assertOk();
+
+        $afterSnapshot = app(PortfolioCapitalAccountingService::class)->snapshot($profile);
+        $afterHoldingState = Holding::query()
+            ->where('profile_id', $profile->id)
+            ->where('stock_id', $stock->id)
+            ->orderBy('owner_key')
+            ->get(['owner_key', 'quantity', 'invested_amount'])
+            ->toArray();
+
+        $this->assertSame($beforeHoldingState, $afterHoldingState);
+        $this->assertSame($beforeCounts, [
+            'transactions' => Transaction::query()->where('profile_id', $profile->id)->count(),
+            'holdings' => Holding::query()->where('profile_id', $profile->id)->count(),
+            'recommendations' => TradingRecommendation::query()->where('profile_id', $profile->id)->count(),
+            'orders' => TradingOrder::query()->where('profile_id', $profile->id)->count(),
+        ]);
+        $this->assertEqualsWithDelta($cashBefore, app(CashManagementService::class)->balance($profile), 0.0001);
+        $this->assertSame(TradingRecommendation::RESERVATION_RESERVED, $reservation->fresh()->reservation_status);
+        $this->assertEqualsWithDelta(1_000.0, $afterSnapshot['physical_cash']['pending_execution_reservations'], 0.0001);
+
+        $a = $this->strategySnapshot($afterSnapshot, $strategyA);
+        $b = $this->strategySnapshot($afterSnapshot, $strategyB);
+        $this->assertEqualsWithDelta($afterSnapshot['investable_capital'] * 0.7, $a['strategy_capital_allocation'], 0.0001);
+        $this->assertEqualsWithDelta($afterSnapshot['investable_capital'] * 0.3, $b['strategy_capital_allocation'], 0.0001);
+        $this->assertSame('within_allocation', $a['allocation_variance_status']);
+        $this->assertEqualsWithDelta(
+            $b['strategy_deployed_capital'] - $b['strategy_capital_allocation'],
+            $b['allocation_variance'],
+            0.0001,
+        );
+        $this->assertSame('above_allocation', $b['allocation_variance_status']);
+        $this->assertEqualsWithDelta(41_000.0, $b['strategy_deployed_capital'], 0.0001);
+    }
+
     public function test_cross_profile_adoption_cannot_mutate_foreign_holding_or_strategy(): void
     {
         [$owner, $profile, $strategyA] = $this->twoStrategyPortfolio();
@@ -347,6 +421,21 @@ class MultiStrategyLifecycleAssuranceTest extends TestCase
             'avg_buy_price' => $price,
             'invested_amount' => $invested,
             'updated_at' => now(),
+        ]);
+    }
+
+    private function transaction(PortfolioProfile $profile, Stock $stock, float $quantity, float $price, ?string $ownerKey): void
+    {
+        Transaction::query()->create([
+            'profile_id' => $profile->id,
+            'stock_id' => $stock->id,
+            'type' => 'buy',
+            'quantity' => $quantity,
+            'price' => $price,
+            'fees' => 0,
+            'transaction_date' => now()->toDateString(),
+            'source' => Transaction::SOURCE_MANUAL,
+            'owner_key' => $ownerKey,
         ]);
     }
 

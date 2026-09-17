@@ -182,6 +182,12 @@ class PortfolioCapitalAccountingService
             $committedToLending = 0.0;
             $deployed = $ownedMv + $ownReserved + $lent;
             $unused = max(0.0, $allocated - $deployed);
+            $allocationVariance = is_finite($allocated) && is_finite($deployed)
+                ? round($deployed - $allocated, 4)
+                : null;
+            $allocationVarianceStatus = $allocationVariance === null
+                ? 'unavailable'
+                : ($allocationVariance > 0.0001 ? 'above_allocation' : 'within_allocation');
             $unusedSum += $unused;
 
             $recommendedMin = $this->recommendedMinimumHoldings($strategy);
@@ -214,6 +220,8 @@ class PortfolioCapitalAccountingService
                 'already_committed_to_lending' => round($committedToLending, 4),
                 'strategy_deployed_capital' => round($deployed, 4),
                 'unused_allocation' => round($unused, 4),
+                'allocation_variance' => $allocationVariance,
+                'allocation_variance_status' => $allocationVarianceStatus,
                 'recommended_minimum_holdings' => $recommendedMin,
                 'minimum_retained_capital' => $retained,
                 'minimum_retained_capital_is_physical_cash' => false,
