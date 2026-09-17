@@ -1,0 +1,316 @@
+# AUD-004 - V6 Non-Regression / Historical Capability Reconstruction
+
+## 1. Finding Recap
+
+AUD-004 asked whether the V6 E4 frontend consolidation preserved the meaningful user capabilities, information and convenience actions that existed before the redesign. Route presence alone is not sufficient evidence, so this review compares a bounded pre-remediation implementation baseline with the current `master` tree at capability level.
+
+The static comparison found no confirmed lost Investor or Admin capability. Most named page implementations are byte-for-byte unchanged across the selected boundary; the changed pages retain their prior information and actions while adding shared state/table, heading, accessibility or scroll presentation. Several navigation and shell changes are classified as preserved differently or superseded by accepted V6 decisions. Browser discoverability, responsive access and deployed reachability remain runtime checks.
+
+## 2. Historical Baseline Method
+
+There is no single commit named “V6 frontend redesign”. The change was incremental:
+
+| Reference | Date | Use in this review |
+| --- | --- | --- |
+| `233a427` | 2026-09-12 | Primary BEFORE baseline: latest integrated V6/V7 functional implementation before the AUD-001 through AUD-016 remediation sequence. It contains the named Investor/Admin surfaces and their V5/V6 capabilities. |
+| `1ee388c` | 2026-09-04 | Supplemental frontend migration boundary: introduced the incremental React/Vite migration stack. |
+| `7a9095f` | 2026-07-30 | Supplemental navigation boundary: replaced horizontal tabs with the grouped sidebar without changing routes. |
+| `9f5c6a1` | 2026-07-30 | Supplemental navigation metadata/favourites boundary. |
+| `bdd32e8` | 2026-09-18 | AFTER baseline: current `master`, including completed AUD-001/002/003/016 remediations. |
+
+This is intentionally a capability baseline rather than a screenshot baseline. Features added after `233a427` are not falsely treated as regressions; they are marked additive or out of comparison scope. Historical code was checked for mounting/reachability where practical, and dead/test-only helpers were not counted as user capabilities.
+
+## 3. V6 Non-Regression Contract
+
+V6 E4 §§2.1-2.3, 6, 7, 8 and 26 require:
+
+- existing information, metrics, actions, links, shortcuts, filters, toggles, contextual help, warnings and diagnostics to be inventoried before redesign;
+- no removal of meaningful user-visible capability without explicit product-owner review;
+- external links, copy helpers and copy-ready external LLM prompts to be treated as product functionality;
+- Dashboard metrics and useful actions to remain available even when reorganized into cards, tabs or expandable sections;
+- responsive layouts to preserve an access path rather than hide capability without an equivalent;
+- role-specific Admin utilities to remain available where legitimately present;
+- changed placement or presentation to count as preservation only when the same user outcome and information remain reachable.
+
+The comparison vocabulary below follows the audit request: `PRESERVED`, `PRESERVED_DIFFERENTLY`, `SUPERSEDED_BY_ACCEPTED_DECISION`, `MISSING_OR_REGRESSED`, `STATICALLY_UNCLEAR`, `RUNTIME_VERIFICATION_REQUIRED`, and `NOT_A_MEANINGFUL_CAPABILITY`.
+
+## 4. Dashboard Comparison
+
+The V6 E4 specification itself names the Dashboard baseline in §6.2. `DashboardPage.jsx` is unchanged between `233a427` and current `master`, so the following capabilities retain direct source continuity:
+
+| Capability | BEFORE evidence | Current evidence | Classification |
+| --- | --- | --- | --- |
+| Portfolio value, invested value, P&L and XIRR summary | `DashboardPage.jsx` baseline KPI/summary blocks | Same page and blocks on current `master` | `PRESERVED` |
+| Available/investable cash | Dashboard cash cards and API payload rendering | Same rendering; cash-management details remain separately routed | `PRESERVED` |
+| Top gainer/loser with all-time/latest-day choice | `DashboardTopMoverCard`, period state and preference key | Same component and controls | `PRESERVED` |
+| Positions count, diversification and relative-strength analytics | Dashboard cards and `PercentGradientBar`/analytics sections | Same sections and helpers | `PRESERVED` |
+| Market Health summary and collapsible diagnostics/gauges | Market health and gauge components | Same gauges, collapse preference and diagnostics | `PRESERVED` |
+| Active alerts with acknowledge/clear-all | Alert card/action handlers | Same alert actions and notification integration | `PRESERVED` |
+| Calendar/events summary | `DashboardCalendarCard` | Same card and route links | `PRESERVED` |
+| Actionable holding pattern signals | Pattern scan results and `PatternSketch` links | Same pattern result path and guide links | `PRESERVED` |
+| Relative Strength views | Dashboard relative-strength sections | Same sections | `PRESERVED` |
+| Allocation table/visualization | `DashboardAllocationCard` and allocation data | Same component/data path | `PRESERVED` |
+| Portfolio Growth chart | Recharts growth series | Same chart and detail behavior | `PRESERVED` |
+| Unrealized P/L history chart | Recharts P/L history series | Same chart and source data | `PRESERVED` |
+| Rebuild portfolio history | Rebuild action and mutation | Same action | `PRESERVED` |
+| Snapshot access | Snapshot link/action | Same `/portfolio/snapshots` path | `PRESERVED` |
+| Dashboard refresh/cache behavior | Cache read/write/clear utilities and refresh flow | Same cache utilities and refresh flow | `PRESERVED` |
+| Market Depth/Patterns deep links | Dashboard links and shortcut actions | Same route helpers/components | `PRESERVED` |
+| Top-mover and diagnostics preferences | local/session preference keys | Same preference behavior | `PRESERVED` |
+| Broker readiness/reconciliation status | `KiteReadinessCard`, `PortfolioReconciliationCard` | Same cards; later remediation adds no removal | `PRESERVED` |
+
+No Dashboard metric or action was found to be removed in the selected comparison. AUD-013 still needs its own old/current inventory and browser walkthrough; this section is evidence handed off to that audit, not an AUD-013 closure.
+
+## 5. Holdings Comparison
+
+`HoldingsPage.jsx` is unchanged between the selected BEFORE and AFTER trees. The historical/current comparison therefore supports:
+
+| Capability | Current evidence | Classification | Related audit |
+| --- | --- | --- | --- |
+| Holdings identity, quantity, price, value and gain/loss columns | Holdings table and format helpers | `PRESERVED` | — |
+| Strategy/owner and unmanaged/adoption visibility | Owner/adoption columns and actions | `PRESERVED` | AUD-005 boundary remains separate |
+| Stock price-history navigation | `StockPricesPage` route and row links | `PRESERVED` | — |
+| Analysis/compare/watchlist actions | `AnalyseStockButton`, compare and watchlist helpers | `PRESERVED` | — |
+| Filtering, sorting and table preferences | Data table controls and persisted column helpers | `PRESERVED` | — |
+| Incomplete/missing price evidence | explicit unavailable/oversell displays | `PRESERVED` | Market-data contract remains separate |
+| Portfolio totals and summary values | Holdings summary calculations/rendering | `PRESERVED` | Accounting remains source of truth |
+
+Multi-strategy ownership semantics are not re-litigated here; any remaining concerns belong to AUD-005 rather than V6 presentation non-regression.
+
+## 6. Strategy Comparison
+
+`StrategyPage.jsx`, `StrategyRegistryPage.jsx` and `StrategyRegistryDetailPage.jsx` retain the baseline implementation. Current additions to registry/artifact workflows do not remove the old strategy editing capability.
+
+| Capability | BEFORE/current evidence | Classification |
+| --- | --- | --- |
+| Strategy selection and current strategy visibility | Strategy selector and portfolio-scoped strategy state | `PRESERVED` |
+| Strategy configuration and parameters | Strategy editor tabs and form fields | `PRESERVED` |
+| Enable/disable and registry lifecycle actions | Registry/editor controls | `PRESERVED` |
+| Indicator/scoring configuration | Strategy indicator and scoring sections | `PRESERVED` |
+| Run/evaluate and related recommendation navigation | Strategy actions and route links | `PRESERVED` |
+| Strategy guide/help and field explanations | Guide tab, hints and documentation links | `PRESERVED` |
+| AI strategy prompt helper | `AIStrategyPromptBuilder`, prompt generation and clipboard path | `PRESERVED` |
+| Artifact import/export/validation | registry pages and artifact helpers | `PRESERVED_DIFFERENTLY` |
+| Legacy authoring paths | old routes redirect to Library Drafts | `SUPERSEDED_BY_ACCEPTED_DECISION` |
+
+The artifact lifecycle itself is governed by the current Trading Artifacts guide and is not treated as a loss merely because its authoring entry point moved.
+
+## 7. Discovery / Candidates Comparison
+
+The historical consolidation commit `755153e` merged Evaluations into Discovery/Candidates. The current `/evaluations` redirect is therefore a known accepted route consolidation, not evidence of a missing workflow.
+
+| Capability | BEFORE evidence | Current evidence | Classification |
+| --- | --- | --- | --- |
+| Candidate list and ranking | Discovery/candidate list and ranked rows | `CandidatesPage` list/table with rank and source | `PRESERVED` |
+| Screener/discovery run | Discovery run controls and default screener path | Run discovery/default screener controls | `PRESERVED` |
+| Evaluation run/history | Historical evaluation route and run data | Candidates flow and evaluation history/detail | `PRESERVED_DIFFERENTLY` |
+| Score, confidence and explanation | Evaluation/candidate fields | Current candidate columns and detail panels | `PRESERVED` |
+| Pattern/signal evidence | Pattern result cells/sketches | Pattern evidence and guide links | `PRESERVED` |
+| Evidence/factor drill-down | Row evidence/factors actions | Current `Evidence` and `Factors` actions | `PRESERVED` |
+| Search and source filtering | Candidate search/source controls | Same controls, now with labelled inputs | `PRESERVED` |
+| `/evaluations` entry point | Separate historical route | Redirects to `/candidates` | `SUPERSEDED_BY_ACCEPTED_DECISION` |
+| Missing/default screener recovery | Default-screener empty/recovery path | Same recovery action | `PRESERVED` |
+
+The Batch 1 table/state migration changes presentation and loading/error vocabulary but retains candidate data, filters and actions.
+
+## 8. Recommendations Comparison
+
+`RecommendationsPage.jsx` is unchanged between `233a427` and current `master`; current tests and component references cover the same decision/review surface.
+
+| Capability | Current evidence | Classification | Related audit |
+| --- | --- | --- | --- |
+| Recommendation list and detail | list/detail view and route | `PRESERVED` | — |
+| Rationale, score/fit and evidence | detail sections and evidence fields | `PRESERVED` | — |
+| Strategy attribution | strategy metadata and labels | `PRESERVED` | AUD-005 provenance |
+| Capital/funding state | `RecommendationCapitalResolution` and status blocks | `PRESERVED` | AUD-008/portfolio boundary |
+| Review/approval controls | approval/review handlers | `PRESERVED` | — |
+| Execution readiness/pending state | pending execution links/status | `PRESERVED` | AUD-015 safety boundary |
+| Dismiss/reject/reopen behavior | existing action handlers | `PRESERVED` | lifecycle docs |
+| Stock/strategy/evidence navigation | links and detail actions | `PRESERVED` | — |
+
+No recommendation capability was found to be lost by the V6 shell work. Execution and accounting correctness remain separate audits.
+
+## 9. Backtests Comparison
+
+`BacktestHistoryPage.jsx` and `BacktestDetailPage.jsx` are unchanged across the selected baseline. Later V4/V5 additions are additive to that surface.
+
+| Capability | Current evidence | Classification |
+| --- | --- | --- |
+| Backtest list/history | history page and rows | `PRESERVED` |
+| Create/run | backtest form and run action | `PRESERVED` |
+| Detail/progress/status | detail page and status sections | `PRESERVED` |
+| Metrics/charts/tables | persisted result cards, charts and trade tables | `PRESERVED` |
+| Strategy linkage and parameters | stored input/detail sections | `PRESERVED` |
+| Duplicate from history | Duplicate action and payload helper | `PRESERVED` |
+| Cancel/background lifecycle | status/cancel controls | `PRESERVED` |
+| Errors/incomplete state | detail/history state handling | `PRESERVED` |
+| Top/bottom navigation helpers | local backtest navigation/scroll controls | `PRESERVED` |
+
+Dataset pinning, replay semantics and paper simulation correctness are intentionally left to the analytics/backtesting contract and AUD-008; this is only a preservation comparison.
+
+## 10. Knowledge Comparison
+
+The V1-V5 Knowledge Board and later Wiki work span multiple commits, so the baseline compares mounted knowledge surfaces rather than treating all historical experiments as current requirements.
+
+| Capability | BEFORE evidence | Current evidence | Classification |
+| --- | --- | --- | --- |
+| Knowledge Board notes/cards | `KnowledgeBoardPage`, note grid/editor and API | Same board/editor/card flow | `PRESERVED` |
+| Tags and filtering | tags page and tag inputs | same tag routes/components | `PRESERVED` |
+| Rich/plain editor modes | `KnowledgeSimpleEditor`/editor mode controls | same editor modes | `PRESERVED` |
+| Images/lightbox/resize | image components and library paths | same image/lightbox components | `PRESERVED` |
+| Pin/archive/order behavior | note card actions and ordering | same actions/state | `PRESERVED` |
+| Export | `KnowledgeExportDialog` | same export dialog | `PRESERVED` |
+| Wiki hierarchy/navigation | Wiki tree, breadcrumbs, page routes | same tree/breadcrumb/page routes | `PRESERVED` |
+| Wiki edit/preview/revisions | editor, preview, compare and restore | same controls and API | `PRESERVED` |
+| Wiki sharing/public read | share/public page routes and capability token flow | same public/wiki sharing flow | `PRESERVED` |
+| Contextual Notes | pre-remediation pathname/profile note pane | coordinated RightUtilityRail Notes utility | `PRESERVED_DIFFERENTLY` |
+| Search across knowledge | no current baseline capability proven in selected mounted code | no Global Search knowledge category by approved MVP | `NOT_A_MEANINGFUL_CAPABILITY` |
+
+The final row is deliberately not a regression: no reachable pre-redesign knowledge search capability was established, and the approved Global Search MVP explicitly excludes knowledge/wiki.
+
+## 11. Admin Comparison
+
+Admin is compared with Admin, not with Investor surfaces. `AdminAppRoutes` and `AdminRoute` preserve the baseline operational families. V7 Fundamentals and ML Scoring are additive after the baseline and are not used to claim preservation of older functions.
+
+| Capability | BEFORE evidence | Current evidence | Classification |
+| --- | --- | --- | --- |
+| User management | `UserManagementPage`, role-protected route | same route plus session/force-logout controls | `PRESERVED` |
+| Invitations | invite/admin user flows | current admin user/invite flow | `PRESERVED` |
+| Session inspection/revocation | session panel and revoke action | same capability | `PRESERVED` |
+| Stocks/security master | stocks admin route/page | current stocks admin route/page | `PRESERVED` |
+| Data quality/gap/corporate-action operations | data quality, gap and corporate-action admin routes | same route families | `PRESERVED` |
+| Universe price sync/sync logs | sync admin pages and actions | same routes/actions | `PRESERVED` |
+| Indicator registry | indicator registry list/detail | same registry list/detail | `PRESERVED` |
+| Screener registry | admin screener registry | same registry and lifecycle | `PRESERVED` |
+| Strategy registry | admin strategy registry | same registry and lifecycle | `PRESERVED` |
+| Admin audit explorer | V6 admin audit route/page | same route/page | `PRESERVED` |
+| Alert/admin operational settings | admin alerts/settings routes | same route families | `PRESERVED` |
+| Fundamentals/ML administration | absent at BEFORE baseline | current V7 admin pages | `NOT_A_MEANINGFUL_CAPABILITY` |
+
+The additive V7 rows are not used as evidence that the V6 redesign preserved an older feature.
+
+## 12. Cross-Cutting Helpers
+
+The historical/current search covered the following helpers and convenience patterns:
+
+| Helper/capability | BEFORE evidence | Current disposition |
+| --- | --- | --- |
+| Clipboard AI analysis prompt | `AnalyseStockButton` and prompt builder | Still mounted in Holdings/Dashboard-related stock surfaces; `PRESERVED` |
+| External stock links | `ExternalStockLinksSettings` and link resolver | Still present in settings/stock workflows; `PRESERVED` |
+| Copy/report boot diagnostics | `BootErrorBanner` clipboard/prompt fallback | Still present; `PRESERVED` |
+| Refresh/sync actions | dashboard refresh, sync logs, admin sync pages | Still present; `PRESERVED` |
+| Detail/open/view links | route helpers across stock, review, backtest and registry pages | Still present; `PRESERVED` |
+| Tooltips/field explanations | `FieldHint`, fee hints, gauge tooltips and guide pages | Still present; `PRESERVED` |
+| Copy-ready strategy prompt | `AIStrategyPromptBuilder` | Still present; `PRESERVED` |
+| Admin diagnostics/status | readiness, data-quality, sync and audit surfaces | Still present; `PRESERVED` |
+| Responsive hover-only access | exact browser reachability | Source cannot prove all viewport paths | `RUNTIME_VERIFICATION_REQUIRED` |
+
+No historical `navigator.clipboard`, external-link, analysis, prompt or diagnostic capability was found to have disappeared in the current source tree.
+
+## 13. Main Capability Matrix
+
+The detailed surface sections above contain the atomic comparison rows. Summary counts:
+
+| Classification | Count |
+| --- | ---: |
+| `PRESERVED` | 84 |
+| `PRESERVED_DIFFERENTLY` | 3 |
+| `SUPERSEDED_BY_ACCEPTED_DECISION` | 2 |
+| `MISSING_OR_REGRESSED` | 0 |
+| `STATICALLY_UNCLEAR` | 0 |
+| `RUNTIME_VERIFICATION_REQUIRED` | 1 |
+| `NOT_A_MEANINGFUL_CAPABILITY` | 2 |
+| **Total atomic capabilities** | **92** |
+
+The 92 rows comprise the Dashboard, Holdings, Strategy, Discovery/Candidates, Recommendations, Backtests, Knowledge, Admin and cross-cutting inventories. `PRESERVED_DIFFERENTLY` rows are not downgraded to regression where the same outcome remains reachable. The navigation-boundary decision recorded in §16 is supporting evidence for the page-level rows rather than an additional atomic capability row.
+
+## 14. Confirmed Regressions
+
+No `MISSING_OR_REGRESSED` capability was statically confirmed.
+
+This conclusion is bounded by the selected baseline and source evidence. It does not claim that every historical pixel, hidden diagnostic state or browser-only interaction is preserved.
+
+## 15. Preserved-Differently Decisions
+
+1. **Evaluation to Candidates:** the former evaluation entry point is redirected to Candidates after the accepted discovery consolidation. Candidate evidence, ranking, confidence, explanation and evaluation detail remain reachable.
+2. **Top-level tabs to grouped sidebar:** the V6 navigation migration moved peer access from horizontal tabs into the grouped sidebar and route-aware child entries. Routes were retained, so this is a navigation presentation change, not capability loss.
+3. **Contextual Notes to the RightUtilityRail:** note CRUD and pathname/profile scoping remain, while desktop/mobile presentation now uses the shared utility system.
+4. **Artifact authoring to Library Drafts:** legacy authoring routes redirect into the immutable artifact/draft lifecycle documented in current contracts.
+5. **Candidate list table normalization:** the page now uses shared `DataTableView`/`DataState` while retaining ranking, evidence, factor actions and filters.
+
+## 16. Superseded Capabilities
+
+The following are supported by repository decisions rather than inferred removal:
+
+| Historical workflow | Superseding decision | Classification |
+| --- | --- | --- |
+| `/evaluations` as separate discovery surface | `755153e` merged Evaluations into Discovery/Candidates; current route redirects | `SUPERSEDED_BY_ACCEPTED_DECISION` |
+| Horizontal top-tab navigation | `7a9095f` grouped primary sidebar retained route structure | `SUPERSEDED_BY_ACCEPTED_DECISION` |
+| Legacy artifact authoring entry points | `0ceac28`, `f8e45c8` route new definitions to V5 drafts/library | `SUPERSEDED_BY_ACCEPTED_DECISION` |
+
+No Dashboard metric or named convenience helper was classified as intentionally removed because no corresponding product-owner removal decision was found.
+
+## 17. Static Uncertainties
+
+- A source comparison cannot prove that every control is visible and discoverable at every viewport or role combination.
+- Historical code can prove a mounted path, but not that a production deployment exposed it to every user.
+- Current `DataTableView`/`DataState` adoption is representative, not universal; this is tracked by AUD-003, not a V6 non-regression loss.
+- V7 additions after the baseline are outside the preservation comparison.
+- Exact Dashboard old/current information parity should be walked with realistic data for AUD-013 even though source continuity is strong.
+
+## 18. Runtime Verification
+
+Browser/runtime checks still required:
+
+- Dashboard metric/action discoverability with representative data;
+- Holdings, Candidates, Recommendations and Backtest detail action reachability;
+- Admin role-specific route discoverability;
+- mobile/tablet access to actions that were desktop controls before the redesign;
+- table overflow, chart legends/tooltips and expandable diagnostics;
+- keyboard order, screen-reader labels and touch targets;
+- deployed bundle reachability and route redirects;
+- no Page History, Contextual Notes or Global Search overlay obscures preserved controls.
+
+These checks are verification work, not confirmed regressions.
+
+## 19. AUD-013 Evidence Handoff
+
+AUD-013 should consume the Dashboard rows in §4 as its baseline inventory. The strongest evidence is that `DashboardPage.jsx` and its named child components are unchanged across `233a427..bdd32e8`; current tests also cover dashboard cache, portfolio compare, reconciliation and related chart/analytics helpers. AUD-013 still needs the historical before/after capability walkthrough, realistic data, preference checks and browser/runtime confirmation. This document does not modify AUD-013 status.
+
+## 20. Recommended Remediation Groups
+
+Because no static regression was confirmed, remediation is verification-led:
+
+### A - Lost information/metrics
+
+No static items. Use the Dashboard baseline rows to verify metric parity with realistic data.
+
+### B - Lost page actions/helpers
+
+No static items. Spot-check clipboard prompts, external links, refresh, export, retry, analysis, duplicate and detail actions.
+
+### C - Lost navigation/discoverability
+
+Verify sidebar child routes, accepted `/evaluations` redirect, artifact draft redirects and the Investor/Admin split in the browser.
+
+### D - Lost diagnostics/status explanation
+
+Verify Dashboard gauges, readiness/reconciliation, data-quality and error/empty states under realistic and degraded responses.
+
+### E - Runtime verification only
+
+Complete the viewport, keyboard, touch, deployed-bundle and role walkthrough listed in §18.
+
+## 21. Final AUD-004 Assessment
+
+**Static assessment: IMPLEMENTED, with runtime verification retained.**
+
+The bounded historical inventory covers 92 atomic capabilities across the named V6 surfaces and cross-cutting helpers. It identifies 84 preserved capabilities, 3 preserved differently, 2 superseded atomic workflows, 1 runtime-only matrix item and no confirmed static regressions. Remaining uncertainty is browser/deployment evidence or a separate audit boundary (especially AUD-005, AUD-008, AUD-012 and AUD-013), not an identified V6 non-regression loss.
+
+The master implementation audit should be updated to `IMPLEMENTED` only after this reconstruction is accepted as the authoritative AUD-004 evidence. No product code, tests, current documentation or AUD-013 status was changed by this pass.
+
+## 22. Open Questions
+
+1. Does product ownership want a browser walkthrough artifact attached to AUD-004, or is the static reconstruction plus AUD-013 handoff sufficient for closure?
+2. Should the historical baseline be split into per-surface SHAs for any future capability dispute, despite the bounded `233a427` baseline being sufficient for this review?
+3. Which deployed environment should supply the final role/viewport verification evidence?
