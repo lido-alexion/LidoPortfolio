@@ -263,8 +263,8 @@ The matrix verdict counts are intentionally conservative: `RUNTIME_VERIFICATION_
 | Provisional gap severity | Count |
 |---|---:|
 | Critical | 0 |
-| High | 10 |
-| Medium | 6 |
+| High | 9 |
+| Medium | 7 |
 | Low | 0 |
 
 ## 15. Highest-Priority Findings
@@ -280,6 +280,9 @@ The matrix verdict counts are intentionally conservative: `RUNTIME_VERIFICATION_
 7. `AUD-007`: Trading Artifact Framework closure needs rollout and representative-data verification.
 8. `AUD-005`: multi-strategy ownership/adoption/lending investor surfaces are not fully traceable end to end.
 9. `AUD-014`: namespace enforcement is partial and lacks a complete drift inventory.
+
+**Medium**
+
 10. `AUD-016`: accepted Global Search is absent from the active header.
 
 ## 16. Recommended Remediation Sequence
