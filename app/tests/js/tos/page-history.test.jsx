@@ -94,13 +94,29 @@ describe('page history rail', () => {
         expect(container.querySelector('.lido-page-history-rail')).toBeInTheDocument();
     });
 
-    it('opens the mobile sheet, closes on Escape, and restores focus to the trigger', async () => {
+    it('traps focus in the mobile sheet and restores focus to the trigger on close', async () => {
+        window.sessionStorage.setItem(pageHistoryStorageKey(41), JSON.stringify({
+            version: 1,
+            visits: [visit('/holdings'), visit('/backtests/4'), visit('/')],
+        }));
         renderRail(['/holdings']);
         const trigger = await screen.findByRole('button', { name: 'Open page history' });
         fireEvent.click(trigger);
-        expect(screen.getByRole('dialog', { name: 'History' })).toBeInTheDocument();
+        const dialog = screen.getByRole('dialog', { name: 'History' });
+        const close = screen.getByRole('button', { name: 'Close history' });
+        const links = screen.getAllByRole('link');
+        expect(document.activeElement).toBe(close);
+
+        links.at(-1).focus();
+        fireEvent.keyDown(links.at(-1), { key: 'Tab' });
+        expect(document.activeElement).toBe(close);
+
+        close.focus();
+        fireEvent.keyDown(close, { key: 'Tab', shiftKey: true });
+        expect(document.activeElement).toBe(links.at(-1));
+
         fireEvent.keyDown(document, { key: 'Escape' });
-        expect(screen.queryByRole('dialog', { name: 'History' })).not.toBeInTheDocument();
+        expect(dialog).not.toBeInTheDocument();
         await act(async () => {});
         expect(document.activeElement).toBe(trigger);
     });

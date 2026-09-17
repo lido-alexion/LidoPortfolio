@@ -2,13 +2,44 @@ import React, { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
+const FOCUSABLE_SELECTOR = [
+    'a[href]:not([disabled])',
+    'button:not([disabled])',
+    'textarea:not([disabled])',
+    'input:not([disabled])',
+    'select:not([disabled])',
+    '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
 export default function PageHistorySheet({ visits, activeVisitKey, onClose }) {
+    const sheetRef = useRef(null);
     const closeRef = useRef(null);
 
     useEffect(() => {
         closeRef.current?.focus();
         const handleKeyDown = (event) => {
             if (event.key === 'Escape') onClose();
+            if (event.key !== 'Tab') return;
+
+            const sheet = sheetRef.current;
+            if (!sheet) return;
+            const focusables = Array.from(sheet.querySelectorAll(FOCUSABLE_SELECTOR));
+            if (!focusables.length) {
+                event.preventDefault();
+                return;
+            }
+
+            const first = focusables[0];
+            const last = focusables[focusables.length - 1];
+            if (event.shiftKey) {
+                if (document.activeElement === first || !sheet.contains(document.activeElement)) {
+                    event.preventDefault();
+                    last.focus();
+                }
+            } else if (document.activeElement === last || !sheet.contains(document.activeElement)) {
+                event.preventDefault();
+                first.focus();
+            }
         };
         document.addEventListener('keydown', handleKeyDown);
         return () => document.removeEventListener('keydown', handleKeyDown);
@@ -19,6 +50,7 @@ export default function PageHistorySheet({ visits, activeVisitKey, onClose }) {
             if (event.target === event.currentTarget) onClose();
         }}>
             <section
+                ref={sheetRef}
                 className="lido-page-history-sheet"
                 role="dialog"
                 aria-modal="true"

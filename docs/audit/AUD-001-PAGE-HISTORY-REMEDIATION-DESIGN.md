@@ -475,7 +475,8 @@ only validated route descriptors under the user-keyed session-storage key
 
 Static tests cover normalization, approved-route descriptors, consecutive and
 non-consecutive MRU behavior, the twelve-entry limit, storage validation and
-user isolation, active `aria-current` links, client-side navigation, and the
-mobile dialog Escape/focus path. The existing Contextual Notes control remains
-mounted independently. Browser verification remains required for exact rail
-geometry, responsive/touch rendering, stacking and deployed-bundle reachability.
+user isolation, active `aria-current` links, client-side navigation, mobile
+dialog Escape/focus containment/restoration, and the 44px interaction-target
+CSS contract. The existing Contextual Notes control remains mounted
+independently. Browser verification remains required for exact rail geometry,
+responsive/touch rendering, stacking and deployed-bundle reachability.

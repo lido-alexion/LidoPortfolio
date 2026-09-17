@@ -359,7 +359,7 @@ body {
     align-items: center;
     justify-content: flex-end;
     min-width: 2rem;
-    min-height: 2rem;
+    min-height: 2.75rem;
     color: var(--lido-text);
     text-decoration: none;
 }
@@ -428,8 +428,8 @@ body {
         align-items: center;
         justify-content: center;
         gap: 0.35rem;
-        min-width: 2.35rem;
-        min-height: 2.35rem;
+        min-width: 2.75rem;
+        min-height: 2.75rem;
         padding: 0.35rem 0.65rem;
         color: var(--lido-text);
         background: var(--lido-bg-surface);

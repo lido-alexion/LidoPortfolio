@@ -8,6 +8,7 @@ const src = join(dirname(fileURLToPath(import.meta.url)), '../../resources/js/sr
 const app = readFileSync(join(src, 'App.jsx'), 'utf8');
 const header = readFileSync(join(src, 'components/AppHeader.jsx'), 'utf8');
 const sidebar = readFileSync(join(src, 'components/sidebar/Sidebar.jsx'), 'utf8');
+const pageHistoryCss = readFileSync(join(src, 'styles/lido-app.css'), 'utf8');
 
 test('authenticated shell selects a distinct route set by account role', () => {
     assert.match(app, /function AdminAppRoutes\(\)/);
@@ -37,4 +38,9 @@ test('Page Visit History is mounted only for the authenticated Investor shell', 
     assert.match(app, /import RightUtilityRail from '\.\/components\/navigation\/RightUtilityRail';/);
     assert.match(app, /!isDocumentationRoute && !user\.is_admin && <RightUtilityRail user=\{user\} \/>/);
     assert.match(app, /!isDocumentationRoute && <ContextualNotesPane user=\{user\} \/>/);
+});
+
+test('Page Visit History preserves compact visuals with minimum interaction targets', () => {
+    assert.match(pageHistoryCss, /\.lido-page-history-link[\s\S]*?min-height: 2\.75rem/);
+    assert.match(pageHistoryCss, /\.lido-history-mobile-action[\s\S]*?min-width: 2\.75rem[\s\S]*?min-height: 2\.75rem/);
 });
