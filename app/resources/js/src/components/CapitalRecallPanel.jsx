@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import api from '../api';
 import useApiGet from '../hooks/useApiGet';
 import { formatInrWhole } from '../utils/tableFormat';
+import DataState from './DataState';
 import {
     TERMINOLOGY,
     bridgeStatusBadgeClass,
@@ -37,15 +38,11 @@ export default function CapitalRecallPanel({ profileId }) {
     const [selectedRecall, setSelectedRecall] = useState(null);
     const [detailBusy, setDetailBusy] = useState(false);
 
-    const { loading, reload } = useApiGet({
+    const { loading, error, reload } = useApiGet({
         deps: [profileId],
         enabled: Boolean(profileId),
         errorFallback: 'Failed to load recalls',
-        onError: () => {
-            setRecalls([]);
-            setBridges([]);
-            setProceeds([]);
-        },
+        onError: () => {},
         request: async () => {
             const [rRes, bRes, pRes] = await Promise.all([
                 api.get('/v1/capital/recalls', { params: { limit: 50 }, skipErrorToast: true }),
@@ -91,10 +88,21 @@ export default function CapitalRecallPanel({ profileId }) {
                         Partial recalls use ₹5,000 multiples; full recalls and bridge repayments may be any amount up to outstanding.
                         Sale execution does not mean proceeds are immediately usable cash.
                     </p>
+                    {error ? (
+                        <DataState
+                            variant="error"
+                            title="Capital activity unavailable"
+                            message="Recalls, bridge loans, and sale proceeds could not be loaded. Existing rows remain unchanged."
+                            action={<button type="button" className="btn btn-outline-secondary btn-sm" onClick={reload} disabled={loading}>Retry</button>}
+                            className="mb-3"
+                        />
+                    ) : null}
 
                     <h6 className="mb-2">Recalls</h6>
                     {loading && recalls.length === 0 ? (
                         <p className="text-muted small">Loading…</p>
+                    ) : error && recalls.length === 0 ? (
+                        <p className="text-muted small">Recall data unavailable.</p>
                     ) : recalls.length === 0 ? (
                         <p className="text-muted small">No recalls.</p>
                     ) : (
@@ -144,7 +152,9 @@ export default function CapitalRecallPanel({ profileId }) {
                     )}
 
                     <h6 className="mb-2">{TERMINOLOGY.bridgeLoan}</h6>
-                    {bridges.length === 0 ? (
+                    {error && bridges.length === 0 ? (
+                        <p className="text-muted small">Bridge loan data unavailable.</p>
+                    ) : bridges.length === 0 ? (
                         <p className="text-muted small">No {TERMINOLOGY.bridgeLoan}s.</p>
                     ) : (
                         <div className="table-responsive mb-3">
@@ -182,7 +192,9 @@ export default function CapitalRecallPanel({ profileId }) {
                     )}
 
                     <h6 className="mb-2">{TERMINOLOGY.proceeds}</h6>
-                    {proceeds.length === 0 ? (
+                    {error && proceeds.length === 0 ? (
+                        <p className="text-muted small mb-0">Sale proceeds data unavailable.</p>
+                    ) : proceeds.length === 0 ? (
                         <p className="text-muted small mb-0">No pending {TERMINOLOGY.proceeds.toLowerCase()}.</p>
                     ) : (
                         <div className="table-responsive">

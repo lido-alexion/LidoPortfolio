@@ -128,12 +128,22 @@ class PortfolioCapitalAccountingService
         $totalInvested = 0.0;
         $totalNotional = 0.0;
         $unmanagedMv = 0.0;
+        $valuationUnavailable = false;
         $strategyOwnedMv = [];
+        $strategyOwnedValuationUnavailable = [];
 
         foreach ($holdings as $holding) {
-            $mv = (float) $holding->quantity * $this->quotes->latestClose((int) $holding->stock_id);
+            $close = $this->quotes->latestCloseOrNull((int) $holding->stock_id);
             $invested = (float) $holding->invested_amount;
             $totalInvested += $invested;
+            if ($close === null) {
+                $valuationUnavailable = true;
+                if (! $holding->isUnmanaged()) {
+                    $strategyOwnedValuationUnavailable[(int) $holding->strategy_id] = true;
+                }
+                continue;
+            }
+            $mv = (float) $holding->quantity * $close;
             $totalNotional += $mv;
             if ($holding->isUnmanaged()) {
                 $unmanagedMv += $mv;
@@ -144,14 +154,16 @@ class PortfolioCapitalAccountingService
         }
 
         $reservePct = $this->portfolioCashReservePct($profile);
-        $reserveBase = max($totalInvested, $totalNotional);
-        $requiredReserve = round($reserveBase * ($reservePct / 100.0), 4);
-        $reserveShortfall = round(max(0.0, $requiredReserve - $totalCash), 4);
-        $reserveShortfallExists = $totalCash + 0.0001 < $requiredReserve;
+        $reserveBase = $valuationUnavailable ? null : max($totalInvested, $totalNotional);
+        $requiredReserve = $reserveBase === null ? null : round($reserveBase * ($reservePct / 100.0), 4);
+        $reserveShortfall = $requiredReserve === null
+            ? null
+            : round(max(0.0, $requiredReserve - $totalCash), 4);
+        $reserveShortfallExists = $requiredReserve !== null && $totalCash + 0.0001 < $requiredReserve;
 
         $investableCash = $totalCash - $requiredReserve - $pendingReserved;
         $strategyOwnedMvTotal = array_sum($strategyOwnedMv);
-        $investableCapital = $investableCash + $strategyOwnedMvTotal;
+        $investableCapital = $valuationUnavailable ? null : $investableCash + $strategyOwnedMvTotal;
 
         $reservedByStrategy = $this->pendingReservedByStrategy($profile);
         [$lentByStrategy, $borrowedByStrategy] = $this->outstandingLoanCapitalByStrategy($profile);
@@ -166,7 +178,7 @@ class PortfolioCapitalAccountingService
         $allocationSum = 0.0;
         $unusedSum = 0.0;
         $strategies = [];
-        $fundablePhysical = max(0.0, $availablePhysical - $requiredReserve);
+        $fundablePhysical = $requiredReserve === null ? null : max(0.0, $availablePhysical - $requiredReserve);
         $maxLendingPct = $this->optionalNumericSetting($profile, 'max_lending_pct_of_unused');
         $maxLendingAbsolute = $this->optionalNumericSetting($profile, 'max_lending_absolute');
 
@@ -174,21 +186,25 @@ class PortfolioCapitalAccountingService
             $sid = (int) $strategy->id;
             $pct = $strategy->allocation_pct !== null ? (float) $strategy->allocation_pct : 0.0;
             $allocationSum += $pct;
-            $allocated = $investableCapital * $pct / 100.0;
-            $ownedMv = $strategyOwnedMv[$sid] ?? 0.0;
+            $allocated = $investableCapital === null ? null : $investableCapital * $pct / 100.0;
+            $ownedMv = isset($strategyOwnedValuationUnavailable[$sid])
+                ? null
+                : ($strategyOwnedMv[$sid] ?? 0.0);
             $ownReserved = $reservedByStrategy[$sid] ?? 0.0;
             $lent = $lentByStrategy[$sid] ?? 0.0;
             $borrowed = $borrowedByStrategy[$sid] ?? 0.0;
             $committedToLending = 0.0;
-            $deployed = $ownedMv + $ownReserved + $lent;
-            $unused = max(0.0, $allocated - $deployed);
-            $allocationVariance = is_finite($allocated) && is_finite($deployed)
+            $deployed = $ownedMv === null ? null : $ownedMv + $ownReserved + $lent;
+            $unused = $allocated === null || $deployed === null ? null : max(0.0, $allocated - $deployed);
+            $allocationVariance = $allocated !== null && $deployed !== null
                 ? round($deployed - $allocated, 4)
                 : null;
             $allocationVarianceStatus = $allocationVariance === null
                 ? 'unavailable'
                 : ($allocationVariance > 0.0001 ? 'above_allocation' : 'within_allocation');
-            $unusedSum += $unused;
+            if ($unused !== null) {
+                $unusedSum += $unused;
+            }
 
             $recommendedMin = $this->recommendedMinimumHoldings($strategy);
             $retained = null;
@@ -200,37 +216,41 @@ class PortfolioCapitalAccountingService
             // unused already excludes lent via deployed (§5.2). Do not subtract lent again
             // (that would double-count §8.2's already_lent). committed-to-lending: see below.
             // §5.7: optional portfolio % / absolute caps apply after surplus, before ₹5k floor.
-            $raw = max(0.0, $unused - $retainedForLending - $committedToLending);
+            $raw = $unused === null ? null : max(0.0, $unused - $retainedForLending - $committedToLending);
             if ($maxLendingPct !== null) {
-                $raw = min($raw, $unused * ($maxLendingPct / 100.0));
+                $raw = $raw === null ? null : min($raw, $unused * ($maxLendingPct / 100.0));
             }
             if ($maxLendingAbsolute !== null) {
-                $raw = min($raw, $maxLendingAbsolute);
+                $raw = $raw === null ? null : min($raw, $maxLendingAbsolute);
             }
 
             $strategies[] = [
                 'strategy_id' => $sid,
                 'name' => $strategy->name,
                 'allocation_pct' => round($pct, 4),
-                'strategy_capital_allocation' => round($allocated, 4),
-                'strategy_owned_market_value' => round($ownedMv, 4),
+                'strategy_capital_allocation' => $allocated === null ? null : round($allocated, 4),
+                'strategy_owned_market_value' => $ownedMv === null ? null : round($ownedMv, 4),
                 'pending_execution_reserved' => round($ownReserved, 4),
                 'lent_capital' => round($lent, 4),
                 'borrowed_capital' => round($borrowed, 4),
                 'already_committed_to_lending' => round($committedToLending, 4),
-                'strategy_deployed_capital' => round($deployed, 4),
-                'unused_allocation' => round($unused, 4),
+                'strategy_deployed_capital' => $deployed === null ? null : round($deployed, 4),
+                'unused_allocation' => $unused === null ? null : round($unused, 4),
                 'allocation_variance' => $allocationVariance,
                 'allocation_variance_status' => $allocationVarianceStatus,
                 'recommended_minimum_holdings' => $recommendedMin,
                 'minimum_retained_capital' => $retained,
                 'minimum_retained_capital_is_physical_cash' => false,
-                'available_for_lending' => FloorToRupee5000::floor($raw),
-                'strategy_available_capital' => round(min($unused, $fundablePhysical), 4),
+                'available_for_lending' => $raw === null ? null : FloorToRupee5000::floor($raw),
+                'strategy_available_capital' => $unused === null || $fundablePhysical === null
+                    ? null
+                    : round(min($unused, $fundablePhysical), 4),
             ];
         }
 
-        $unallocatedCash = round(max(0.0, $availablePhysical - $requiredReserve - $unusedSum), 4);
+        $unallocatedCash = $requiredReserve === null || $valuationUnavailable
+            ? null
+            : round(max(0.0, $availablePhysical - $requiredReserve - $unusedSum), 4);
 
         return [
             'physical_cash' => [
@@ -243,8 +263,8 @@ class PortfolioCapitalAccountingService
             'od19' => [
                 'portfolio_cash_reserve_pct' => $reservePct,
                 'total_invested_amount' => round($totalInvested, 4),
-                'current_notional_portfolio_value' => round($totalNotional, 4),
-                'reserve_base' => round($reserveBase, 4),
+                'current_notional_portfolio_value' => $valuationUnavailable ? null : round($totalNotional, 4),
+                'reserve_base' => $reserveBase === null ? null : round($reserveBase, 4),
                 'required_cash_reserve' => $requiredReserve,
                 'reserve_shortfall' => $reserveShortfall,
                 'reserve_shortfall_exists' => $reserveShortfallExists,
@@ -260,10 +280,11 @@ class PortfolioCapitalAccountingService
                     ? 'Portfolio cash reserve is below the required level. Replenish portfolio/broker cash.'
                     : null,
             ],
-            'investable_capital' => round($investableCapital, 4),
-            'investable_cash_component' => round($investableCash, 4),
-            'strategy_owned_market_value' => round($strategyOwnedMvTotal, 4),
-            'unmanaged_market_value' => round($unmanagedMv, 4),
+            'valuation_status' => $valuationUnavailable ? 'unavailable' : 'available',
+            'investable_capital' => $investableCapital === null ? null : round($investableCapital, 4),
+            'investable_cash_component' => $valuationUnavailable ? null : round($investableCash, 4),
+            'strategy_owned_market_value' => $valuationUnavailable ? null : round($strategyOwnedMvTotal, 4),
+            'unmanaged_market_value' => $valuationUnavailable ? null : round($unmanagedMv, 4),
             'allocation_pct_sum' => round($allocationSum, 4),
             'allocation_pct_sum_is_100' => abs($allocationSum - 100.0) <= 0.01,
             'strategies' => $strategies,

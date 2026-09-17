@@ -76,6 +76,30 @@ class HoldingsOwnershipPresentationTest extends TestCase
         $this->assertFalse($row['is_unmanaged']);
     }
 
+    public function test_missing_latest_price_is_not_presented_as_zero_value(): void
+    {
+        [$user, $profile, $strategy] = $this->strategies();
+        $stock = Stock::query()->create([
+            'symbol' => 'NOPR'.strtoupper(Str::random(3)),
+            'exchange' => 'NSE',
+            'name' => 'No Price Stock',
+            'is_active' => true,
+            'is_benchmark' => false,
+        ]);
+        $this->buy($profile, $stock, 3, 100, Holding::ownerKeyFor((int) $strategy->id));
+
+        $row = collect($this->actingAs($user)
+            ->withProfileHeader($user, $profile)
+            ->getJson('/api/holdings')
+            ->assertOk()
+            ->json('data'))->firstWhere('stock_id', $stock->id);
+
+        $this->assertNull($row['stoploss_summary']['latest_close']);
+        $this->assertNull($row['unrealized_profit']);
+        $this->assertNull($row['unrealized_gain_percent']);
+        $this->assertTrue($row['stoploss_summary']['has_price_history'] === false);
+    }
+
     /** @return array{0: User, 1: PortfolioProfile, 2: TradingStrategy, 3: TradingStrategy} */
     private function strategies(): array
     {

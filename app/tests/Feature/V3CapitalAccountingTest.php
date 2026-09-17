@@ -198,6 +198,34 @@ class V3CapitalAccountingTest extends TestCase
         $this->assertSame((int) $strategy->id, $data['strategies'][0]['strategy_id']);
     }
 
+    public function test_missing_owned_holding_price_keeps_capital_valuation_unavailable(): void
+    {
+        [$user, $profile, $strategy] = $this->cashOnlyPortfolio(100_000);
+        $stock = $this->makeStock();
+        Holding::query()->create([
+            'profile_id' => $profile->id,
+            'stock_id' => $stock->id,
+            'strategy_id' => $strategy->id,
+            'owner_key' => Holding::ownerKeyFor((int) $strategy->id),
+            'quantity' => 10,
+            'avg_buy_price' => 100,
+            'invested_amount' => 1_000,
+            'updated_at' => now(),
+        ]);
+
+        $data = $this->capitalJson($user, $profile);
+        $row = $data['strategies'][0];
+
+        $this->assertSame('unavailable', $data['valuation_status']);
+        $this->assertNull($data['strategy_owned_market_value']);
+        $this->assertNull($data['investable_capital']);
+        $this->assertNull($data['od19']['current_notional_portfolio_value']);
+        $this->assertNull($row['strategy_owned_market_value']);
+        $this->assertNull($row['strategy_capital_allocation']);
+        $this->assertNull($row['strategy_deployed_capital']);
+        $this->assertSame('unavailable', $row['allocation_variance_status']);
+    }
+
     public function test_od19_reserve_uses_max_of_invested_and_notional_not_percent_of_cash(): void
     {
         [$user, $profile, $strategy] = $this->cashOnlyPortfolio(1_000_000);

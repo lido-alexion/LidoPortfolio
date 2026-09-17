@@ -6,6 +6,7 @@ import { runApiMutation } from '../hooks/useApiMutation';
 import { showToast } from '../toast';
 import RecommendationCapitalResolution from '../components/RecommendationCapitalResolution';
 import RecommendationLenderActions from '../components/RecommendationLenderActions';
+import DataState from '../components/DataState';
 import { exitAttributionLabel } from '../utils/exitAttributionLabels';
 import {
     capitalAllocationStatusBadgeClass,
@@ -225,7 +226,7 @@ export default function RecommendationsPage() {
     const [resultMeta, setResultMeta] = useState(null);
     const [expandedLenderId, setExpandedLenderId] = useState(null);
 
-    const { loading, reload: load } = useApiGet({
+    const { loading, error, reload: load } = useApiGet({
         deps: [showAll],
         errorFallback: 'Failed to load recommendations',
         request: async () => {
@@ -365,6 +366,16 @@ export default function RecommendationsPage() {
                     strategy-specific recommendations {pipelineMeta.recommendation?.count ?? '—'}
                 </div>
             )}
+
+            {error ? (
+                <DataState
+                    variant="unavailable"
+                    title="Recommendations unavailable"
+                    message="The recommendation list could not be loaded. Existing results remain unchanged."
+                    action={<button type="button" className="btn btn-outline-secondary btn-sm" onClick={load} disabled={loading || running}>Retry</button>}
+                    className="mb-3"
+                />
+            ) : null}
 
             {!loading && (
                 <p className="small text-muted mb-3">

@@ -12,13 +12,25 @@ class StockQuoteService
      */
     public function latestClose(int $stockId, ?Carbon $asOf = null): float
     {
+        return $this->latestCloseOrNull($stockId, $asOf) ?? 0.0;
+    }
+
+    /**
+     * Latest usable close, preserving the distinction between missing data and zero.
+     */
+    public function latestCloseOrNull(int $stockId, ?Carbon $asOf = null): ?float
+    {
         $query = StockPrice::query()->where('stock_id', $stockId);
 
         if ($asOf) {
             $query->where('price_date', '<=', $asOf->copy()->endOfDay());
         }
 
-        return (float) ($query->orderByDesc('price_date')->value('close_price') ?? 0);
+        $close = $query->orderByDesc('price_date')->value('close_price');
+
+        return $close !== null && is_numeric($close) && (float) $close > 0
+            ? (float) $close
+            : null;
     }
 
     /**

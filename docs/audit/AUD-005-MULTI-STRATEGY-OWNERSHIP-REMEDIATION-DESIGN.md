@@ -439,3 +439,18 @@ Cash Management now shows Allocation, Deployed, and Unused/status. Above-allocat
 `MultiStrategyLifecycleAssuranceTest::test_allocation_change_is_policy_only_and_reports_above_allocation_without_rebalancing` exercises the real allocation API with existing A/B positions and a Strategy B reservation. It proves holdings, owner keys, basis, transactions, recommendation count, orders, physical cash, and reservation attribution remain unchanged while the new policy and derived variance update. The allocation/capital/lending regression set passes: **45 tests, 306 assertions**.
 
 MS-004 is `IMPLEMENTED`. MS-005 remains open for broader missing/stale/error and recovery-state assurance; AUD-005 remains `PARTIALLY_IMPLEMENTED`.
+
+## 29. Batch 4 Implementation Outcome — MS-005
+
+The final state-semantics pass reviewed Holdings pricing, capital snapshots, Recommendations funding/review/execution states, lender selection, capital resolution, recalls, bridge loans, sale proceeds, reservations, and allocation status. Existing domain labels already distinguish pending/committed funding, no eligible lender, recall pending/completed, bridge outstanding/repaid, sale proceeds pending/available/applied, partial execution, cancelled/expired/superseded recommendations, and above-allocation policy state. Recall initiation and settlement remain automated/internal workflow states; the Investor surface reports their current state and recovery is to wait, refresh, or inspect details rather than inventing a new action.
+
+Two concrete static defects were found and fixed:
+
+1. Capital activity request failure reset recalls, bridge loans, and sale proceeds to empty arrays, which could render valid-looking empty states. `CapitalRecallPanel` now preserves existing rows, shows an announced unavailable state, and exposes Retry; initial failures use explicit unavailable copy instead of `No ...` copy.
+2. `StockQuoteService::latestClose()` returned zero for a missing quote. A nullable `latestCloseOrNull()` path now feeds Holdings presentation and strategy capital accounting. Missing owned-holding prices produce nullable market value, investable capital, allocation, deployed capital, and variance fields with `valuation_status=unavailable`; they are never presented as authoritative zero. Holdings latest close, unrealized profit, and XIRR remain unavailable.
+
+Recommendations and lender selection retain explicit failure, funding, and no-eligible-lender states. Cash Management and Recommendations now surface failed list/snapshot loads with retryable alert semantics instead of treating failure as an empty or healthy result. Existing lifecycle tests remain authoritative for approval versus execution, reservation release/conversion, partial execution, pending sale proceeds, recall accounting, and sibling ownership.
+
+Added coverage includes missing quote Holdings/capital assertions, failed capital activity versus empty-state assertions, explicit no-lender presentation, and lifecycle-label distinctions. The reviewed state matrix is statically resolved for the current contract; remaining checks are browser-level wording/geometry, responsive recovery, deployed bundle reachability, and real provider/automation scenarios.
+
+MS-005 is `IMPLEMENTED_WITH_RUNTIME_VERIFICATION`. AUD-005 is `IMPLEMENTED` statically with runtime verification retained.

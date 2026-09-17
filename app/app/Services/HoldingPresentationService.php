@@ -124,10 +124,12 @@ class HoldingPresentationService
         // XIRR terminal must use the same latest close as the holdings table (since buy, then metrics).
         $terminalClose = ($latestClose !== null && (float) $latestClose > 0)
             ? (float) $latestClose
-            : $this->quotes->latestClose((int) $stock->id);
-        $marketValue = (float) $holding->quantity * $terminalClose;
+            : $this->quotes->latestCloseOrNull((int) $stock->id);
+        $marketValue = $terminalClose !== null
+            ? (float) $holding->quantity * $terminalClose
+            : null;
         $investedAmount = (float) $holding->invested_amount;
-        $unrealizedProfit = $terminalClose > 0
+        $unrealizedProfit = $terminalClose !== null && $terminalClose > 0
             ? round($marketValue - $investedAmount, 4)
             : null;
         $unrealizedGainPercent = ($unrealizedProfit !== null && $investedAmount > 0)
@@ -179,12 +181,9 @@ class HoldingPresentationService
             : null;
         $payload['unrealized_profit'] = $unrealizedProfit;
         $payload['unrealized_gain_percent'] = $unrealizedGainPercent;
-        $payload['xirr'] = $this->xirr->calculateStockXirr(
-            $profile,
-            (int) $stock->id,
-            null,
-            $marketValue,
-        );
+        $payload['xirr'] = $marketValue !== null
+            ? $this->xirr->calculateStockXirr($profile, (int) $stock->id, null, $marketValue)
+            : null;
         $payload['stoploss_summary'] = [
             'first_buy_date' => $firstBuyDate?->toDateString(),
             'highest_close_since_buy' => $highestCloseSinceBuy !== null ? round((float) $highestCloseSinceBuy, 4) : null,

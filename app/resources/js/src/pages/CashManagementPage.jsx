@@ -16,6 +16,7 @@ import {
 import CapitalRecallPanel from '../components/CapitalRecallPanel';
 import { downloadPortfolioCsv } from '../utils/portfolioCsvExport';
 import { strategyAllocationStatus } from '../utils/strategyAllocationStatus';
+import DataState from '../components/DataState';
 
 const OPS = [
     { id: 'deposit', label: 'Deposit', endpoint: '/cash/deposit', amountPlaceholder: 'Amount deposited' },
@@ -92,14 +93,11 @@ export default function CashManagementPage() {
         }
     }, [profileId]);
 
-    const { loading, reload: load } = useApiGet({
+    const { loading, error, reload: load } = useApiGet({
         deps: [profileId],
         enabled: Boolean(profileId),
         errorFallback: 'Failed to load cash',
-        onError: () => {
-            setSummary(null);
-            setLedger([]);
-        },
+        onError: () => {},
         request: async () => {
             const [summaryRes, ledgerRes] = await Promise.all([
                 api.get('/cash', { params: { include_reservations: true }, skipErrorToast: true }),
@@ -232,10 +230,26 @@ export default function CashManagementPage() {
                 </div>
             </div>
 
-            {loading && !summary ? (
+            {error && !summary ? (
+                <DataState
+                    variant="unavailable"
+                    title="Cash management unavailable"
+                    message="Cash, reservations, and allocation data could not be loaded."
+                    action={<button type="button" className="btn btn-outline-secondary btn-sm" onClick={load} disabled={loading}>Retry</button>}
+                />
+            ) : loading && !summary ? (
                 <p className="text-muted">Loading…</p>
             ) : (
                 <>
+                    {error ? (
+                        <DataState
+                            variant="unavailable"
+                            title="Cash data refresh failed"
+                            message="The displayed values may be stale. Retry to load the latest cash and allocation state."
+                            action={<button type="button" className="btn btn-outline-secondary btn-sm" onClick={load} disabled={loading}>Retry</button>}
+                            className="mb-3"
+                        />
+                    ) : null}
                     <div className="row g-3 mb-3">
                         <div className="col-12 col-md-4">
                             <div className="card h-100">
