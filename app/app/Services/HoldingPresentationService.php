@@ -160,6 +160,11 @@ class HoldingPresentationService
         $payload['strategy_id'] = $holding->strategy_id !== null ? (int) $holding->strategy_id : null;
         $payload['owner_key'] = $holding->owner_key ?: Holding::OWNER_UNMANAGED;
         $payload['is_unmanaged'] = $holding->isUnmanaged();
+        $ownerStrategy = $holding->strategy_id !== null
+            ? ($holding->relationLoaded('strategy') ? $holding->strategy : $holding->strategy()->first())
+            : null;
+        $payload['strategy_name'] = $ownerStrategy?->name;
+        $payload['strategy_status'] = $ownerStrategy?->status;
         $targetAmount = $holding->target_amount !== null ? round((float) $holding->target_amount, 4) : null;
         $filledAmount = $holding->filled_amount !== null
             ? round((float) $holding->filled_amount, 4)

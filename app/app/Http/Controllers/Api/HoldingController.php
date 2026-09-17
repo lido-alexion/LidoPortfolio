@@ -25,7 +25,7 @@ class HoldingController extends Controller
 
         $holdings = $profile
             ->holdings()
-            ->with('stock.metrics')
+            ->with(['stock.metrics', 'strategy'])
             ->where('quantity', '>', 0)
             ->get();
 

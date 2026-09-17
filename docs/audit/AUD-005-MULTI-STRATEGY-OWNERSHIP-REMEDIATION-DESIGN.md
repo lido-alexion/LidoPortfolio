@@ -406,3 +406,21 @@ Secondary scenarios prove:
 - a second Investor cannot adopt a foreign holding or review a foreign recommendation, while the foreign resources remain unchanged.
 
 The focused suite passes: **5 tests, 52 assertions**. No production code was required and no pending-SELL behavior was changed; `V4Spec004CashLedgerSpecialMovementsTest` and the existing capital/lending suites remain the authoritative coverage for delayed sale-proceeds availability and recall accounting. Browser discoverability and composite multi-page continuity remain runtime work. MS-002 through MS-005 remain open as previously described.
+
+## 27. Batch 2 Implementation Outcome — MS-002 / MS-003
+
+The Holdings payload now additively exposes `strategy_name` and `strategy_status` from the existing `Holding -> TradingStrategy` relation. `HoldingController@index` eager-loads that relation with the existing stock data, avoiding per-row strategy lookups; canonical `strategy_id`, `owner_key`, and `is_unmanaged` fields remain unchanged.
+
+Investor Holdings now presents:
+
+- `Unmanaged` for unmanaged episodes;
+- the resolved strategy name for strategy-owned episodes;
+- `Strategy-managed` when a valid strategy owner exists but display metadata is unavailable;
+- an `Archived` suffix when the historical owner strategy is archived;
+- a restrained ownership-episode count when the loaded Holdings result contains multiple owner episodes for the same stock.
+
+Each episode remains an independent row. Sibling strategy ownership is derived from the loaded response and is never merged. The existing `/strategy` route remains available for general strategy navigation, but no new holding-specific strategy URL or guessed provenance link was introduced.
+
+The adoption modal now distinguishes a destination strategy's existing same-stock episode from sibling strategy episodes. It explains the accepted weighted merge into the selected destination and explicitly states that other strategy ownership remains separate and unchanged. Existing adoption API/accounting semantics are untouched.
+
+Added backend coverage verifies named strategy metadata, independent same-stock rows, and archived-owner identity. Added frontend helper coverage verifies unmanaged, named, unresolved, and sibling-episode presentation semantics. MS-002 and the scoped Holdings/adoption portion of MS-003 are `IMPLEMENTED`. MS-004 allocation-change explanation and MS-005 error/recovery coverage remain open; AUD-005 remains `PARTIALLY_IMPLEMENTED`.

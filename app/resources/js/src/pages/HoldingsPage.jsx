@@ -9,6 +9,12 @@ import SegmentToggle from '../components/SegmentToggle';
 import { formatTransactionDateDisplay } from '../utils/transactionDate';
 import { buildSellPrefillFromHolding } from '../utils/sellTransactionPrefill';
 import {
+    holdingOwnershipLabel,
+    holdingOwnershipTypeLabel,
+    ownershipEpisodeCount,
+    siblingOwnershipNames,
+} from '../utils/holdingOwnership';
+import {
     protectionMenuItems,
     protectionStateLabel,
     protectionTypeLabel,
@@ -132,10 +138,19 @@ function buildHoldingsColumns(complex, handleSell, handleCorporateAction, handle
                                 name={stockName}
                             />
                         </span>
-                        {row.original.is_unmanaged ? (
-                            <div className="text-muted small">Unmanaged</div>
-                        ) : row.original.owner_key ? (
-                            <div className="text-muted small">{row.original.owner_key}</div>
+                        <div className="text-muted small" title={holdingOwnershipTypeLabel(row.original)}>
+                            {holdingOwnershipLabel(row.original)}
+                            {row.original.strategy_status === 'archived' ? ' · Archived' : ''}
+                        </div>
+                        {row.original.same_stock_episode_count > 1 ? (
+                            <div
+                                className="text-muted small"
+                                title={row.original.sibling_ownership_names?.length
+                                    ? `Also held by ${row.original.sibling_ownership_names.join(', ')}`
+                                    : 'This stock has multiple ownership episodes.'}
+                            >
+                                {row.original.same_stock_episode_count} ownership episodes
+                            </div>
                         ) : null}
                         {!row.original.is_unmanaged && protectionCtx?.protectionByHoldingId?.[row.original.id] ? (
                             <div className="text-muted small">
@@ -626,7 +641,31 @@ export default function HoldingsPage() {
     const tableData = useMemo(() => holdings.map((h) => ({
         ...h,
         summary: h.stoploss_summary || {},
+        same_stock_episode_count: ownershipEpisodeCount(h, holdings),
+        sibling_ownership_names: siblingOwnershipNames(h, holdings),
     })), [holdings]);
+
+    const adoptionDestination = useMemo(() => {
+        if (!adoptHolding || !adoptStrategyId) {
+            return null;
+        }
+
+        return holdings.find((row) => (
+            row.id !== adoptHolding.id
+            && Number(row.stock_id) === Number(adoptHolding.stock_id)
+            && Number(row.strategy_id) === Number(adoptStrategyId)
+            && !row.is_unmanaged
+        )) || null;
+    }, [adoptHolding, adoptStrategyId, holdings]);
+
+    const adoptionSiblings = useMemo(() => {
+        if (!adoptHolding) {
+            return [];
+        }
+
+        return siblingOwnershipNames(adoptHolding, holdings)
+            .filter((name) => name !== holdingOwnershipLabel(adoptionDestination));
+    }, [adoptHolding, adoptionDestination, holdings]);
 
     const protectionCtx = useMemo(() => ({
         executionMode,
@@ -739,12 +778,25 @@ export default function HoldingsPage() {
                                 />
                             </div>
                             <div className="modal-body">
-                                <p className="small text-muted">
-                                    Move this unmanaged position into one strategy. If that strategy already owns the
-                                    stock, quantities and cost are combined into one position (weighted-average cost).
-                                    The strategy’s existing target is kept. Entry history and risk windows stay
-                                    continuous.
-                                </p>
+                                {adoptionDestination ? (
+                                    <p className="small text-muted">
+                                        This stock is already owned by {holdingOwnershipLabel(adoptionDestination)}.
+                                        The unmanaged quantity will merge into that strategy&apos;s existing ownership
+                                        episode using the accepted weighted-average basis rules. Holdings owned by
+                                        other strategies are not changed.
+                                    </p>
+                                ) : (
+                                    <p className="small text-muted">
+                                        Move this unmanaged position into one strategy. Entry history and risk
+                                        windows stay continuous.
+                                    </p>
+                                )}
+                                {adoptionSiblings.length > 0 ? (
+                                    <p className="small text-muted mb-3">
+                                        Another strategy also owns this stock. That ownership episode remains
+                                        separate and is not affected by this adoption.
+                                    </p>
+                                ) : null}
                                 <label className="form-label" htmlFor="adopt-strategy">
                                     Destination strategy
                                 </label>
