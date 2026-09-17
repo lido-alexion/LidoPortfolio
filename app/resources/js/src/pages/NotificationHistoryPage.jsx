@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../api';
 import { useNotifications } from '../context/NotificationContext';
+import DataState from '../components/DataState';
 
 const VIEWS = [['all', 'All'], ['needs_attention', 'Needs attention'], ['unread', 'Unread'], ['critical', 'Critical'], ['resolved', 'Resolved']];
 
@@ -17,14 +18,18 @@ export default function NotificationHistoryPage() {
     const [payload, setPayload] = useState({ data: [], meta: {} });
     const [detail, setDetail] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
     const view = params.get('view') || 'all';
     const selectedId = params.get('notification');
 
     const load = useCallback(async () => {
         setLoading(true);
+        setError(null);
         try {
             const response = await api.get(`/notification-center?view=${encodeURIComponent(view)}&per_page=50`, { skipErrorToast: true });
             setPayload(response.data || { data: [], meta: {} });
+        } catch (requestError) {
+            setError(requestError);
         } finally {
             setLoading(false);
         }
@@ -92,8 +97,10 @@ export default function NotificationHistoryPage() {
                 </section>
             )}
 
-            {loading ? <p className="text-muted">Loading…</p> : payload.data.length === 0 ? (
-                <div className="border rounded p-4 text-muted">No notifications in this view.</div>
+            {loading ? <DataState variant="loading" message="Loading notification history." /> : error ? (
+                <DataState variant="error" message="Notification history is unavailable right now." action={<button type="button" className="btn btn-sm btn-outline-primary" onClick={load}>Retry</button>} />
+            ) : payload.data.length === 0 ? (
+                <DataState variant="empty" title="No notifications in this view." />
             ) : (
                 <div className="list-group">
                     {payload.data.map((item) => (

@@ -329,3 +329,26 @@ Page-level changes must preserve the V6 non-regression inventory and the Dashboa
 3. Which local button groups are route-backed tabs versus local segmented choices, especially in registry/editor surfaces?
 4. Which chart and table accessibility fallbacks are required by the deployed browser support matrix?
 
+## Batch 1 Implementation Outcome
+
+Batch 1 implemented `UX-001` and the representative portion of `UX-002`.
+
+- Added `components/DataState.jsx` as the single shared page-level presentation primitive for loading, empty, error, unavailable, and incomplete states. It preserves domain-owned copy and uses status/alert semantics appropriate to the variant.
+- Applied the primitive to Candidates, Notification History, and Review Reports. These were selected because they represent a local discovery table, a simpler notification list, and a paginated review-report workflow with an existing empty-state action.
+- Migrated the Candidates results table from local table markup to the existing `DataTableView`/`useDataTableController` path. Existing column content and actions remain intact; the existing responsive wrapper, sorting/controller behavior, and table state handling are reused.
+- Preserved Review Reports pagination semantics and existing Generate action. Notification and Candidates retry/error paths remain explicit; operation-result toasts remain in place.
+- Added focused `DataState` tests and retained/adjusted representative Candidates and Review Reports tests. No API, calculation, financial, or shell behavior changed.
+
+Static outcome:
+
+- `UX-001`: **IMPLEMENTED for the selected representative surfaces**, not a claim that every route has migrated.
+- `UX-002`: **PARTIALLY_IMPLEMENTED**; the shared table path is proven on Candidates and existing consumers remain covered, but the rest of the data-list families still require incremental adoption.
+- `AUD-003`: remains **PARTIALLY_IMPLEMENTED**. `UX-003` through `UX-006` were not changed.
+
+Validation completed under Node 22:
+
+- Focused Vitest: 3 files, 21 tests passed.
+- Full Vitest: 16 files, 74 tests passed.
+- Node/source tests: 157 passed.
+- Production Vite build: passed; existing large-chunk warning remains.
+- `git diff --check`: passed.

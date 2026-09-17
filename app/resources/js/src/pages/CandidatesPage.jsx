@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import api from '../api';
 import PatternSketch from '../components/PatternSketch';
+import DataState from '../components/DataState';
+import { DataTableView, useDataTableController } from '../components/DataTable';
 import useApiGet from '../hooks/useApiGet';
 import { runApiMutation } from '../hooks/useApiMutation';
 import { showToast } from '../toast';
@@ -200,7 +202,7 @@ export default function CandidatesPage() {
     const [runningScreener, setRunningScreener] = useState(false);
     const [selectedRunId, setSelectedRunId] = useState(null);
 
-    const { data, loading, reload: load } = useApiGet({
+    const { data, loading, error, reload: load } = useApiGet({
         deps: [source, search],
         errorFallback: 'Failed to load candidates',
         request: async () => {
@@ -263,6 +265,53 @@ export default function CandidatesPage() {
     }, [items]);
 
     const busy = runningDiscovery || runningEval || runningScreener;
+
+    const candidateColumns = useMemo(() => [
+        { header: 'Rank', accessorKey: 'rank', cell: ({ row }) => <span className="text-muted">{row.original.rank ?? '—'}</span> },
+        {
+            header: 'Symbol',
+            accessorKey: 'symbol',
+            cell: ({ row }) => (
+                <>
+                    <strong>{row.original.symbol}</strong>
+                    {row.original.name ? <div className="small text-muted">{row.original.name}</div> : null}
+                </>
+            ),
+        },
+        { header: 'Source', accessorKey: 'source', cell: ({ row }) => <span className="badge text-bg-light">{row.original.source}</span> },
+        { header: 'Discovery reason', accessorKey: 'reason', cell: ({ row }) => <DiscoveryReasonCell candidate={row.original} /> },
+        { header: 'Score', accessorKey: 'score', cell: ({ row }) => formatScore(row.original.score) },
+        { header: 'Confidence', accessorKey: 'confidence', cell: ({ row }) => formatPct(row.original.confidence) },
+        { header: 'Explanation', accessorKey: 'explanation', cell: ({ row }) => <span className="small text-muted">{row.original.explanation || '—'}</span> },
+        {
+            id: 'actions',
+            header: '',
+            enableSorting: false,
+            cell: ({ row }) => (
+                <div className="text-nowrap">
+                    <button type="button" className="btn btn-link btn-sm px-0 me-2" onClick={() => openDetails(row.original, 'evidence')}>
+                        Evidence
+                    </button>
+                    <button
+                        type="button"
+                        className="btn btn-link btn-sm px-0"
+                        onClick={() => openDetails(row.original, 'evaluation')}
+                        disabled={!row.original.evaluation_result_id}
+                    >
+                        Factors
+                    </button>
+                </div>
+            ),
+        },
+    ], []);
+    const candidateTable = useDataTableController({
+        columns: candidateColumns,
+        data: items,
+        storageKey: 'candidates',
+        enableColumnResizing: false,
+        enableColumnReorder: false,
+        enableColumnHiding: false,
+    });
 
     const runDefaultScreener = async () => {
         if (!defaultScreener) return;
@@ -427,56 +476,12 @@ export default function CandidatesPage() {
                 </div>
             </div>
 
-            {loading ? <p className="text-muted">Loading…</p> : items.length === 0 ? (
-                <div className="border rounded p-4 text-muted">
-                    No candidates yet. Run discovery (evaluation follows automatically), or run evaluation after an earlier discovery run.
-                </div>
+            {loading ? <DataState variant="loading" message="Loading discovery candidates." /> : error ? (
+                <DataState variant="error" title="Candidates unavailable" message="The discovery candidates could not be loaded. Try again after checking the data source." action={<button type="button" className="btn btn-sm btn-outline-primary" onClick={load}>Retry</button>} />
+            ) : items.length === 0 ? (
+                <DataState variant="empty" title="No candidates yet" message="Run discovery (evaluation follows automatically), or run evaluation after an earlier discovery run." />
             ) : (
-                <div className="table-responsive">
-                    <table className="table table-sm align-middle">
-                        <thead>
-                            <tr>
-                                <th>Rank</th>
-                                <th>Symbol</th>
-                                <th>Source</th>
-                                <th>Discovery reason</th>
-                                <th>Score</th>
-                                <th>Confidence</th>
-                                <th>Explanation</th>
-                                <th />
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {items.map((c) => (
-                                <tr key={c.id}>
-                                    <td className="text-muted">{c.rank ?? '—'}</td>
-                                    <td>
-                                        <strong>{c.symbol}</strong>
-                                        {c.name ? <div className="small text-muted">{c.name}</div> : null}
-                                    </td>
-                                    <td><span className="badge text-bg-light">{c.source}</span></td>
-                                    <td><DiscoveryReasonCell candidate={c} /></td>
-                                    <td>{formatScore(c.score)}</td>
-                                    <td>{formatPct(c.confidence)}</td>
-                                    <td className="small text-muted" style={{ maxWidth: 320 }}>{c.explanation || '—'}</td>
-                                    <td className="text-nowrap">
-                                        <button type="button" className="btn btn-link btn-sm px-0 me-2" onClick={() => openDetails(c, 'evidence')}>
-                                            Evidence
-                                        </button>
-                                        <button
-                                            type="button"
-                                            className="btn btn-link btn-sm px-0"
-                                            onClick={() => openDetails(c, 'evaluation')}
-                                            disabled={!c.evaluation_result_id}
-                                        >
-                                            Factors
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                <DataTableView controller={candidateTable} emptyMessage="No candidates match the current filters." />
             )}
 
             {selected && (

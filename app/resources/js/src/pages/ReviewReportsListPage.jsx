@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
 import TablePagination from '../components/TablePagination';
+import DataState from '../components/DataState';
 import useApiGet from '../hooks/useApiGet';
 import { runApiMutation } from '../hooks/useApiMutation';
 import { reviewReportDetailPath } from '../navigation/routes';
@@ -37,7 +38,7 @@ export default function ReviewReportsListPage() {
     const [toDate, setToDate] = useState('');
     const [generating, setGenerating] = useState(false);
 
-    const { data, loading, reload } = useApiGet({
+    const { data, loading, error, reload } = useApiGet({
         errorFallback: 'Failed to load review reports',
         deps: [page],
         request: async () => {
@@ -138,19 +139,17 @@ export default function ReviewReportsListPage() {
             </div>
 
             {loading && !data ? (
-                <p className="text-muted">Loading…</p>
+                <DataState variant="loading" message="Loading stored review reports." />
+            ) : error ? (
+                <DataState variant="error" message="Stored review reports are unavailable right now." action={<button type="button" className="btn btn-sm btn-outline-primary" onClick={reload}>Retry</button>} />
             ) : total === 0 ? (
-                <div className="border rounded p-4 text-center" data-testid="review-reports-empty">
-                    <p className="text-muted mb-3">No stored review reports yet.</p>
-                    <button
-                        type="button"
-                        className="btn btn-primary btn-sm"
-                        onClick={generate}
-                        disabled={generating}
-                    >
-                        Generate
-                    </button>
-                </div>
+                <DataState
+                    variant="empty"
+                    title="No stored review reports yet."
+                    className="text-center"
+                    testId="review-reports-empty"
+                    action={<button type="button" className="btn btn-primary btn-sm" onClick={generate} disabled={generating}>Generate</button>}
+                />
             ) : (
                 <>
                     <div className="table-responsive">

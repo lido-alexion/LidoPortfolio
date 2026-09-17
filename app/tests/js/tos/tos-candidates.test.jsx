@@ -62,9 +62,9 @@ describe('Discovery TOS smoke', () => {
         installDefaultTosHandlers({ failCandidates: true });
         renderTosApp({ route: '/candidates' });
 
-        expect(await screen.findByRole('alert')).toHaveTextContent(/Candidates unavailable|Failed to load candidates/i);
+        expect((await screen.findAllByRole('alert'))[0]).toHaveTextContent(/Candidates unavailable/i);
         expect(screen.getAllByRole('heading', { name: 'Discovery' }).length).toBeGreaterThan(0);
-        expect(screen.getByText(/No candidates yet/i)).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Candidates unavailable' })).toBeInTheDocument();
     });
 
     it('opens candidate evidence without crashing', async () => {
