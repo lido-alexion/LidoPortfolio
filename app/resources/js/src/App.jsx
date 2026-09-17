@@ -12,6 +12,7 @@ import { SidebarProvider } from './context/SidebarContext';
 import { NotificationProvider } from './context/NotificationContext';
 import CriticalNotificationBanner from './components/CriticalNotificationBanner';
 import ContextualNotesPane from './components/ContextualNotesPane';
+import RightUtilityRail from './components/navigation/RightUtilityRail';
 import DashboardPage from './pages/DashboardPage';
 import HoldingsPage from './pages/HoldingsPage';
 import StockPricesPage from './pages/StockPricesPage';
@@ -264,6 +265,7 @@ function AuthenticatedShell({ user, isDocumentationRoute }) {
                             {user.is_admin ? <AdminAppRoutes /> : <AppRoutes />}
                         </div>
                         {!isDocumentationRoute && <ContextualNotesPane user={user} />}
+                        {!isDocumentationRoute && !user.is_admin && <RightUtilityRail user={user} />}
                     </div>
                 </div>
             </SidebarProvider>

@@ -6,7 +6,7 @@
 
 ## 1. Executive Summary
 
-The repository has substantial domain, API, and test coverage, but that is not equivalent to full product-contract coverage. The clearest confirmed gap is V6 E4 Page Visit History: the accepted requirement specifies a desktop right-edge rail and mobile History action, while no matching component, state, or shell mount exists. The same shell also has no Global Search implementation. Contextual Notes are materially different: an investor-only trigger and fixed overlay pane are mounted, backed by API and persistence, but their placement and responsive behavior do not meet the complete E4 contract.
+The repository has substantial domain, API, and test coverage, but that is not equivalent to full product-contract coverage. AUD-001 has now been remediated statically: the Investor shell mounts a session-backed Page Visit History rail and mobile History sheet with focused state and router tests. The same shell still has no Global Search implementation. Contextual Notes are materially different: an investor-only trigger and fixed overlay pane are mounted, backed by API and persistence, but their placement and responsive behavior do not meet the complete E4 contract.
 
 The original highest-risk static concern was in the live broker path: admission-time validation did not repeat at `BrokerGateway::placeOrder()`. AUD-015 was subsequently remediated with a fresh, non-consuming final policy check before every regular broker placement attempt, including bounded insufficient-funds retries. Focused race tests now cover post-admission halt, entitlement, reconciliation, readiness, window, retry, and multi-order changes. A controlled broker/runtime safety drill remains required; static evidence is not evidence that an unsafe order occurred.
 
@@ -142,8 +142,8 @@ The following rows cover every applicable Phase 1 requirement. Related requireme
 | V6-REQ-004 | Responsive client support | PARTIALLY_IMPLEMENTED | Responsive CSS/components and mobile branches | Limited JS tests | E4 page-by-page mobile criteria | Yes | No broad visual regression evidence |
 | V6-REQ-005 | Frontend stack migration | IMPLEMENTED | React/Vite shell is active | JS/component tests | Production build/runtime parity | Yes | Structural, not UX completeness |
 | V6-REQ-006 | Dashboard/UX reorganization and non-regression | RUNTIME_VERIFICATION_REQUIRED | Dashboard and redesigned routes are mounted, but no old-versus-current capability inventory or product-owner removal record was found | Related page tests cover individual paths only | Preservation of every named metric, shortcut, external/copy/LLM helper, status explanation and diagnostic convenience cannot be decided statically from route presence | Yes | `AUD-013`; this is an evidence and historical-comparison gap, not proof every surface regressed |
-| V6-REQ-007 | Global shell: header, left nav, workspace, right rail/pane | PARTIALLY_IMPLEMENTED | `AuthenticatedShell` mounts `AppHeader`, `Sidebar`, `.lido-main`, and `ContextualNotesPane` in `App.jsx:253-270`; notes uses a fixed overlay | `roleSeparatedShell.test.mjs` inspects shell source only | No Global Search component/state; no Page History rail; no mounted low-priority footer; notes is a floating button rather than a demonstrated shared utility rail | Yes | `AUD-001`, `AUD-002`, `AUD-016`; constrained-width behavior requires browser inspection |
-| V6-REQ-008 | Page Visit History/right-edge rail | NOT_IMPLEMENTED | No `PageHistoryRail`, history store, rail route, or shell mount found in React search | No meaningful test found | All E4 criteria: 12 visits, collapse, active state, labels, links, mobile action sheet | Yes | `AUD-001`; strongest confirmed gap |
+| V6-REQ-007 | Global shell: header, left nav, workspace, right rail/pane | PARTIALLY_IMPLEMENTED | `AuthenticatedShell` mounts `AppHeader`, `Sidebar`, `.lido-main`, `RightUtilityRail`, and `ContextualNotesPane`; Notes remains a fixed overlay | `roleSeparatedShell.test.mjs` inspects shell source; Page History tests cover the new rail independently | No Global Search component/state; no mounted low-priority footer; Notes is a floating button rather than a demonstrated shared utility rail | Yes | `AUD-002`, `AUD-016`; constrained-width behavior requires browser inspection |
+| V6-REQ-008 | Page Visit History/right-edge rail | IMPLEMENTED | `RightUtilityRail` mounts `PageHistoryRail` for the authenticated Investor shell; `usePageVisitHistory` observes normalized React Router paths, stores user-keyed session history, and applies 12-entry MRU/consecutive-collapse semantics | `page-history.test.jsx` covers state semantics, persistence validation, active links, router navigation and mobile Escape/focus behavior | Exact desktop geometry, touch layout, stacking and visual acceptance require browser verification; source tests do not prove CSS media-query rendering | Yes | `AUD-001`; statically resolved, with browser/runtime verification retained |
 | V6-REQ-009 | Contextual Notes shell placement | PARTIALLY_IMPLEMENTED | `ContextualNotesPane.jsx` creates a fixed right/bottom trigger and fixed 360px overlay; `App.jsx:266` mounts it for investor routes; profile-scoped API is routed | `V6ContextualNotesTest` proves personal/profile-scoped CRUD, not UI behavior | No persistent vertical utility rail, slide/focus treatment, pane-specific reduced-motion rule, or mobile drawer/sheet implementation; route-derived context key loses parameter/entity distinction | Yes | `AUD-002`; the overlay does not resize `.lido-main`, which is aligned |
 | V6-REQ-010 | Standard page anatomy/components | PARTIALLY_IMPLEMENTED | PageChrome/breadcrumbs mounted; route pages exist | Some JS helpers | Tabs/segmented controls/drawers/skeletons/EmptyState/ScrollToTop/PageHistory adoption is inconsistent/unproven | Yes | `AUD-003` |
 | V6-REQ-011 | Trusted scoped API tokens | IMPLEMENTED | Token routes/services/models | Token/auth tests | Production revocation and execution gates | Yes | Security-sensitive |
@@ -158,7 +158,7 @@ Only findings requiring attention are listed here. Resolved items remain for his
 
 | Audit ID | Requirement | Area/domain | Expected behavior | Actual implementation observed | Verdict | Severity candidate | Confidence | Source specification | Relevant code paths | Relevant tests | Missing test coverage | Runtime/manual verification required | Dependencies/related findings | Suggested remediation direction |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| AUD-001 | V6-REQ-008 | Navigation / page chrome | Desktop right-edge history rail and mobile History action with 12-entry semantics | No history component, visit store, route action, or shell mount found after searching React, tests, and routes | NOT_IMPLEMENTED | High | High | `V6-E4-Investor-UX-Client-Evolution.md` §§3.5, 8 | `app/resources/js/src/App.jsx`; `components/navigation`; no PageHistory match | No meaningful test found | Entire acceptance set | Confirm deployed bundle and mobile shell | AUD-002, AUD-003, AUD-016 | Reconstruct the accepted history workflow and mount it through the shell after human approval |
+| AUD-001 | V6-REQ-008 | Navigation / page chrome | Desktop right-edge history rail and mobile History action with 12-entry semantics | Resolved statically. `RightUtilityRail` mounts `PageHistoryRail` and the mobile History sheet in the Investor shell; `usePageVisitHistory` provides normalized route observation, user-keyed session persistence, 12-entry MRU ordering and consecutive-duplicate collapse | IMPLEMENTED | High | High | `V6-E4-Investor-UX-Client-Evolution.md` §§3.5, 8 | `App.jsx`; `components/navigation/RightUtilityRail.jsx`; `PageHistoryRail.jsx`; `PageHistorySheet.jsx`; `hooks/usePageVisitHistory.js`; `utils/pageVisitHistory.js`; `styles/lido-app.css` | `page-history.test.jsx` covers state, storage, active link, navigation, mobile dialog/Escape/focus | Browser visual geometry, responsive/touch behavior, stacking and deployed-bundle reachability | Investor desktop/mobile runtime verification | AUD-002, AUD-003, AUD-016 | Remediation implemented. Verify browser geometry and deployed behavior; keep AUD-002, AUD-003 and AUD-016 separate |
 | AUD-002 | V6-REQ-007, V6-REQ-009 | Global shell / contextual notes | Shared right utility rail opens an overlay pane without resizing desktop workspace; mobile uses drawer/sheet and respects reduced motion | `ContextualNotesPane.jsx` mounts an investor-only fixed bottom-right button and a fixed 360px overlay. It does not create a persistent shared rail, slide animation, pane reduced-motion rule, or mobile sheet. `.lido-main` is not resized. | PARTIALLY_IMPLEMENTED | Medium | High | E4 §§3.1-3.5, 9 | `App.jsx:253-270`; `ContextualNotesPane.jsx`; `styles/lido-app.css:275-315` | `V6ContextualNotesTest` is API/domain-oriented | Shell interaction, focus management, visual/mobile behavior | Desktop/mobile runtime inspection | AUD-001, AUD-003 | Reconcile the mounted overlay with the accepted rail/pane contract after human review |
 | AUD-003 | V6-REQ-010 | UX consistency | Standard page anatomy and component foundations adopted consistently | PageChrome/breadcrumbs are mounted, but adoption of tabs, segmented controls, drawers, skeletons, EmptyState, ScrollToTop and preference utilities is not demonstrated globally | PARTIALLY_IMPLEMENTED | Medium | Medium | E4 component foundations and page anatomy sections | `PageChrome.jsx`; page components; `App.jsx` | Selected JS tests only | Page-by-page adoption and state coverage | Desktop/mobile route sweep | AUD-001, AUD-002, AUD-013 | Build an evidence inventory by route and compare it with E4 required anatomy |
 | AUD-004 | V6-REQ-006 | Non-regression | Dashboard, Holdings, Strategy, Discovery, Recommendations, Backtests, Knowledge and Admin retain prior capabilities | No old-vs-current inventory or executable gate was found; routes alone cannot prove retained controls | RUNTIME_VERIFICATION_REQUIRED | High | Medium | E4 non-regression gate §§2-3 | `App.jsx`; named page components | Related page tests, no comparison gate | Before/after capability evidence | Runtime walkthrough plus git-history comparison | AUD-003 | Produce a capability-by-capability comparison before any remediation |
@@ -179,7 +179,7 @@ The table above is the complete gap register. It contains only confirmed impleme
 
 ## 7. Wiring / Reachability Findings
 
-- **Not implemented in the active shell:** Page Visit History/right-edge rail and header Global Search. Neither has a React component, state, route action, API call, or meaningful test. This was checked for direct and alternate naming.
+- **Not implemented in the active shell:** header Global Search. AUD-001 Page Visit History is now mounted for the Investor shell and covered by focused state/router tests; exact responsive geometry remains a runtime question.
 - **Mounted but contract-partial:** `ContextualNotesPane` is rendered from `AuthenticatedShell` for non-documentation Investor routes. Its `ContextualNoteController` API is profile-scoped and tested, but the visible control is a floating button and fixed pane, not the E4 shared rail/mobile-sheet interaction.
 - **Mounted structural zones:** `AppHeader`, `Sidebar`, `PageChrome`, and `.lido-main` are directly mounted in `App.jsx`. The CSS contains `.lido-bottom-nav` rules but no JSX mount or `lido-footer-visible` producer was found, so the low-priority footer zone is not evidenced as active.
 - **Reachable by route but not necessarily discoverable:** review reports, artifact library, backtests, admin registries and several settings pages are explicitly routed; sidebar discoverability still requires role-specific runtime inspection.
@@ -204,14 +204,14 @@ The table above is the complete gap register. It contains only confirmed impleme
 ## 10. Cross-Domain Consistency Findings
 
 - **Final broker gate versus documented invariant:** AUD-015 now revalidates fresh authority/state at the regular `placeOrder()` boundary. Provider behavior and concurrent production safety changes still require the documented controlled runtime drill.
-- **Shell contract versus implementation:** current frontend documentation correctly retains the V6 E4 rail, Page History, Global Search and footer contract, while the mounted React shell implements only a subset (`AUD-001`, `AUD-002`, `AUD-016`). This is an implementation gap, not a reason to weaken the contract.
+- **Shell contract versus implementation:** current frontend documentation correctly retains the V6 E4 rail, Page History, Global Search and footer contract. The mounted React shell now implements Page History statically; Global Search, footer and the complete Notes rail contract remain separate alignment items (`AUD-002`, `AUD-016`).
 - **Notes context precision:** the notes API accepts `subject_type` and `subject_id` (`V6ContextualNotesTest`), but the mounted pane derives only a sanitized pathname and never supplies subject values. Entity-level contextual notes therefore require workflow verification beyond page-scoped CRUD.
 - **Accounting/execution funds boundary:** broker funds are fetched immediately before BUY sizing and pending SELL proceeds are not used as broker funds in `LiveBrokerExecutionService`; no contrary static path was found. Production broker-field semantics remain runtime verification.
 - **State versus notification boundary:** notification delivery tests prove bounded retry and condition suppression; no static path was found that turns delivery failure/read state into a recommendation, accounting, halt, or broker mutation. Browser/banner semantics remain partial.
 
 ## 11. Test Gaps
 
-No meaningful automated test covers the complete V6 E4 Page Visit History or header Global Search contracts. `V6ContextualNotesTest` proves personal/profile-scoped CRUD only; it does not prove the E4 rail, mobile transformation, motion, focus, or entity context behavior. The following accepted contracts also have insufficient end-to-end test evidence:
+No meaningful automated test covers the complete V6 E4 header Global Search contract. `page-history.test.jsx` proves Page History state, persistence validation, active links, client-side navigation and mobile dialog behavior; it does not prove desktop/mobile CSS geometry, touch layout, stacking or deployed-bundle reachability. `V6ContextualNotesTest` proves personal/profile-scoped CRUD only; it does not prove the E4 rail, mobile transformation, motion, focus, or entity context behavior. The following accepted contracts also have insufficient end-to-end test evidence:
 
 Targeted audit checks passed on 2026-09-17: `V6ContextualNotesTest`, the Admin-investor rejection case in `RoleSeparatedApplicationTest`, the emergency-halt case in `LiveExecutionFeatureTest`, the bounded notification-retry case in `NotificationDeliveryProcessorTest`, and `StoxNamespaceValidationTest`. These targeted passes validate only their stated cases and do not change any primary verdict.
 
@@ -231,7 +231,7 @@ Other acceptance areas with no complete test evidence include:
 
 1. **V6-REQ-006:** No old/current capability inventory or recorded product-owner removal evidence was found. This is a verification failure, not proof that every named page regressed.
 2. **V6-REQ-007:** Header, collapsible sidebar, main workspace and notes overlay are mounted. Global Search, Page History and a mounted footer zone are absent; a shared right utility rail is not evidenced.
-3. **V6-REQ-008:** Page Visit History is the strongest confirmed feature gap. No alternate implementation was found.
+3. **V6-REQ-008:** Page Visit History is statically resolved by AUD-001; desktop/mobile geometry and deployed-bundle reachability remain runtime checks.
 4. **V6-REQ-009:** Contextual Notes have a reachable overlay and tested data model, but differ from the rail/mobile/reduced-motion contract.
 5. **V6-REQ-010:** Breadcrumbs/PageChrome are active. Global adoption of tabs, segmented controls, drawers, skeletons, EmptyState, ScrollToTop and preference utilities is not demonstrated.
 
@@ -248,9 +248,9 @@ Applicable requirements audited: **85** (75 `CURRENT`, 5 `POSSIBLY-LOST-DURING-C
 
 | Primary verdict | Count |
 |---|---:|
-| IMPLEMENTED | 46 |
+| IMPLEMENTED | 47 |
 | PARTIALLY_IMPLEMENTED | 25 |
-| NOT_IMPLEMENTED | 1 |
+| NOT_IMPLEMENTED | 0 |
 | IMPLEMENTED_BUT_NOT_WIRED | 0 |
 | IMPLEMENTED_DIFFERENTLY | 1 |
 | DEAD_CODE | 0 |
@@ -273,12 +273,11 @@ The matrix verdict counts are intentionally conservative: `RUNTIME_VERIFICATION_
 
 1. `AUD-011`: broker reconciliation/halt recovery has no production-drill evidence.
 2. `AUD-012`: the complete Admin/Investor route and object-ownership matrix is not proven.
-3. `AUD-001`: accepted Page Visit History/right-edge rail appears absent from the active shell.
-4. `AUD-004`: V6 E4 non-regression evidence for redesigned core pages is missing.
-5. `AUD-009`: production secrets, deployed commit, scheduler and build output remain runtime questions.
-6. `AUD-007`: Trading Artifact Framework closure needs rollout and representative-data verification.
-7. `AUD-005`: multi-strategy ownership/adoption/lending investor surfaces are not fully traceable end to end.
-8. `AUD-014`: namespace enforcement is partial and lacks a complete drift inventory.
+3. `AUD-004`: V6 E4 non-regression evidence for redesigned core pages is missing.
+4. `AUD-009`: production secrets, deployed commit, scheduler and build output remain runtime questions.
+5. `AUD-007`: Trading Artifact Framework closure needs rollout and representative-data verification.
+6. `AUD-005`: multi-strategy ownership/adoption/lending investor surfaces are not fully traceable end to end.
+7. `AUD-014`: namespace enforcement is partial and lacks a complete drift inventory.
 
 **Medium**
 
@@ -286,6 +285,7 @@ The matrix verdict counts are intentionally conservative: `RUNTIME_VERIFICATION_
 
 **Resolved since the original audit**
 
+- `AUD-001`: Page Visit History/right-edge rail is implemented for the Investor shell with session persistence and focused tests; browser geometry/runtime reachability remains to be verified.
 - `AUD-015`: fresh final regular-order safety revalidation is implemented and covered by focused post-admission race tests. A controlled broker/runtime safety drill remains required. GTT/protection policy is intentionally out of scope.
 
 ## 16. Recommended Remediation Sequence

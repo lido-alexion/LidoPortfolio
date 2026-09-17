@@ -32,3 +32,9 @@ test('Admin shell exposes only administrative and shared account navigation', ()
 test('Admin header never renders the Investor portfolio switcher', () => {
     assert.match(header, /user && !user\.is_admin && <PortfolioSwitcher \/>/);
 });
+
+test('Page Visit History is mounted only for the authenticated Investor shell', () => {
+    assert.match(app, /import RightUtilityRail from '\.\/components\/navigation\/RightUtilityRail';/);
+    assert.match(app, /!isDocumentationRoute && !user\.is_admin && <RightUtilityRail user=\{user\} \/>/);
+    assert.match(app, /!isDocumentationRoute && <ContextualNotesPane user=\{user\} \/>/);
+});

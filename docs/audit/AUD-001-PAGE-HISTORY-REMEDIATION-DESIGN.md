@@ -462,3 +462,20 @@ completion merely from a component filename.
 4. Should the later AUD-002 work move Notes into the same bottom-sheet
    primitive, or retain a side drawer on larger tablets? E4 permits a
    drawer/sheet but does not settle that breakpoint-level choice.
+
+## 21. Implementation Outcome
+
+AUD-001 was implemented without changing the Notes data layer or the broader
+page-anatomy and search work. The Investor authenticated shell now mounts a
+thin `RightUtilityRail`; its `PageHistoryRail` provides the desktop edge
+controls and its mobile History action opens `PageHistorySheet`. The
+`usePageVisitHistory` hook observes React Router location changes and persists
+only validated route descriptors under the user-keyed session-storage key
+`stox-page-history:v1:investor:<user-id>`.
+
+Static tests cover normalization, approved-route descriptors, consecutive and
+non-consecutive MRU behavior, the twelve-entry limit, storage validation and
+user isolation, active `aria-current` links, client-side navigation, and the
+mobile dialog Escape/focus path. The existing Contextual Notes control remains
+mounted independently. Browser verification remains required for exact rail
+geometry, responsive/touch rendering, stacking and deployed-bundle reachability.
