@@ -5,6 +5,7 @@ namespace Tests\Feature\Execution;
 use App\Models\BrokerConnection;
 use App\Models\User;
 use App\Services\Broker\BrokerConnectionService;
+use Illuminate\Support\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -89,5 +90,58 @@ class KiteCallbackTest extends TestCase
             'request_token' => 'one-time-request-token',
             'state' => $redirectParams['state'],
         ]))->assertRedirect('https://www.lidoalexion.com/portfolio/?kite=connected');
+    }
+
+    public function test_expired_or_tampered_callback_state_cannot_attach_a_connection(): void
+    {
+        $user = User::factory()->create();
+        $loginUrl = app(BrokerConnectionService::class)->loginUrl($user);
+        parse_str((string) parse_url($loginUrl, PHP_URL_QUERY), $loginQuery);
+        parse_str($loginQuery['redirect_params'], $redirectParams);
+
+        Carbon::setTestNow(now()->addMinutes(11));
+        Http::fake();
+
+        $this->get('/api/v1/broker/kite/callback?'.http_build_query([
+            'status' => 'success',
+            'request_token' => 'expired-request-token',
+            'state' => $redirectParams['state'],
+        ]))->assertRedirect('https://www.lidoalexion.com/portfolio/settings/account?kite=failed');
+
+        Carbon::setTestNow();
+        $this->get('/api/v1/broker/kite/callback?'.http_build_query([
+            'status' => 'success',
+            'request_token' => 'tampered-request-token',
+            'state' => $redirectParams['state'].'tampered',
+        ]))->assertRedirect('https://www.lidoalexion.com/portfolio/settings/account?kite=failed');
+
+        Http::assertNothingSent();
+        $this->assertDatabaseCount('portfolio_broker_connections', 0);
+    }
+
+    public function test_callback_binds_to_the_initiating_user_even_when_another_user_has_a_browser_session(): void
+    {
+        $initiator = User::factory()->create();
+        $otherUser = User::factory()->create();
+        $loginUrl = app(BrokerConnectionService::class)->loginUrl($initiator);
+        parse_str((string) parse_url($loginUrl, PHP_URL_QUERY), $loginQuery);
+        parse_str($loginQuery['redirect_params'], $redirectParams);
+
+        Http::fake([
+            'https://api.kite.trade/session/token' => Http::response([
+                'status' => 'success',
+                'data' => ['access_token' => 'initiator-token', 'user_id' => 'AB1234'],
+            ]),
+        ]);
+
+        $this->actingAs($otherUser)
+            ->get('/api/v1/broker/kite/callback?'.http_build_query([
+                'status' => 'success',
+                'request_token' => 'initiator-request-token',
+                'state' => $redirectParams['state'],
+            ]))->assertRedirect('https://www.lidoalexion.com/portfolio/settings/account?kite=connected');
+
+        $this->assertDatabaseHas('portfolio_broker_connections', ['user_id' => $initiator->id]);
+        $this->assertDatabaseMissing('portfolio_broker_connections', ['user_id' => $otherUser->id]);
     }
 }

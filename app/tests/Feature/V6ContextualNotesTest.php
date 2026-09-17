@@ -68,10 +68,46 @@ class V6ContextualNotesTest extends TestCase
             ->assertJsonCount(0, 'data');
 
         $this->putJson('/api/contextual-notes/'.$note->id, ['body' => 'Nope'])->assertNotFound();
+        $this->deleteJson('/api/contextual-notes/'.$note->id)->assertNotFound();
         $this->postJson('/api/contextual-notes', [
             'context_key' => 'holdings',
             'profile_id' => $ownerProfile->id,
             'body' => 'Nope',
         ])->assertNotFound();
+    }
+
+    public function test_personal_token_scopes_do_not_bypass_contextual_note_ownership(): void
+    {
+        $owner = User::factory()->create();
+        $ownerProfile = $this->defaultPortfolioFor($owner);
+        $foreign = User::factory()->create();
+        $foreignProfile = $this->defaultPortfolioFor($foreign);
+        $foreignNote = ContextualNote::query()->create([
+            'user_id' => $foreign->id,
+            'profile_id' => $foreignProfile->id,
+            'context_key' => 'dashboard',
+            'body' => 'Foreign note',
+        ]);
+        $readToken = $owner->createToken('Notes reader', ['notes:read'])->plainTextToken;
+        $writeToken = $owner->createToken('Notes writer', ['notes:write'])->plainTextToken;
+
+        $this->flushHeaders()->withToken($readToken)
+            ->withHeader('X-Profile-Id', (string) $ownerProfile->id)
+            ->getJson('/api/contextual-notes?context_key=dashboard&profile_id='.$foreignProfile->id)
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+
+        $this->app['auth']->forgetGuards();
+        $this->flushHeaders()->withToken($writeToken)
+            ->withHeader('X-Profile-Id', (string) $ownerProfile->id)
+            ->deleteJson('/api/contextual-notes/'.$foreignNote->id)
+            ->assertNotFound();
+
+        $this->app['auth']->forgetGuards();
+        $this->flushHeaders()->withToken($readToken)
+            ->withHeader('X-Profile-Id', (string) $ownerProfile->id)
+            ->postJson('/api/contextual-notes', ['context_key' => 'dashboard', 'body' => 'Denied'])
+            ->assertForbidden()
+            ->assertJsonPath('message', 'This API token is missing the required scope.');
     }
 }

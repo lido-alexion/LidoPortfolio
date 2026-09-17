@@ -101,6 +101,26 @@ class RoleSeparatedApplicationTest extends TestCase
         $this->getJson('/api/profile')->assertOk();
     }
 
+    public function test_admin_shared_exception_paths_do_not_create_investor_state_and_profile_routes_remain_forbidden(): void
+    {
+        $admin = $this->makeUser(true);
+        $this->login($admin);
+
+        foreach ([
+            '/api/auth/sessions',
+            '/api/profile',
+            '/api/settings',
+            '/api/notification-center',
+            '/api/notification-settings',
+        ] as $uri) {
+            $this->getJson($uri)->assertOk();
+        }
+
+        $this->getJson('/api/calendar/events')->assertOk();
+
+        $this->assertDatabaseMissing('portfolio_profiles', ['user_id' => $admin->id]);
+    }
+
     public function test_investor_still_receives_a_default_portfolio_and_cannot_use_admin_api(): void
     {
         $investor = $this->makeUser();

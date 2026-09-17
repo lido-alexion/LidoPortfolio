@@ -86,7 +86,7 @@ class PortfolioProfile extends Model
 
     public function resolveRouteBinding($value, $field = null)
     {
-        $user = auth()->user();
+        $user = auth('sanctum')->user();
 
         if ($user === null) {
             return null;

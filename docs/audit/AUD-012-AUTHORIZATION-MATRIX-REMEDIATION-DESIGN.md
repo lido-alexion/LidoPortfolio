@@ -175,43 +175,50 @@ tampering.
 
 | Test area | What current tests prove | What they do not prove |
 | --- | --- | --- |
-| `RoleSeparatedApplicationTest` | Admin has no default portfolio; representative Investor APIs reject Admin; Investor rejects Admin APIs | Every Admin/Investor route and object ID. |
-| `PortfolioMiddlewareTest` | default profile, owned switching, foreign profile `404` | deleted profile, every header/query/body variant. |
-| `V6PersonalApiTokenTest` | token create/list/revoke and a basic read/write scope distinction | foreign objects, Admin PAT, execution/no-scope permutations. |
-| `KiteCallbackTest` | encrypted state connects initiator; invalid state is rejected | expiry/replay/user-state swap. |
-| `V6ContextualNotesTest` and Knowledge tests | profile/user CRUD ownership portions | exhaustive nested IDs/images/revisions/shares. |
+| `RoleSeparatedApplicationTest` | Admin has no default portfolio; representative Investor APIs reject Admin; shared/session/profile/settings/notification/calendar exceptions retain no-profile behavior | Every Admin/Investor route and object ID. |
+| `PortfolioMiddlewareTest` | default profile, owned switching, `X-Profile-Id`, `X-Portfolio-Id`, query selection, deleted/foreign profile `404`, foreign portfolio member rejection | Every profile-bound controller and nested body parameter. |
+| `V6PersonalApiTokenTest` | token create/list/revoke, scoped owner member access, foreign member rejection, missing scope and Admin PAT non-ownership | execution/no-scope permutations and every scoped endpoint. |
+| `KiteCallbackTest` | encrypted state connects initiator; invalid, expired and tampered state make no Kite request; another browser user cannot receive the initiator's connection | one-time replay behavior and deployment cache/session configuration. |
+| `V6ContextualNotesTest` and Knowledge tests | profile/user CRUD ownership portions, foreign delete rejection and PAT scope/ownership composition | exhaustive nested IDs/images/revisions/shares. |
 | Artifact sharing/registry tests | selected sharing/isolation lifecycle | every grant/revocation/binding route. |
 | Execution, ownership, capital tests | selected profile/user/execution checks | generated per-route attack matrix. |
 
 ## 13. Confirmed Findings
 
-### AUTH-001 - Complete route/object authorization coverage is not executable
+### AUTH-001 - High-risk route/object authorization coverage expanded; complete matrix remains open
 
 - **Requirement:** Admin/Investor ownership matrix and foreign-resource
   rejection must be established for all protected route families.
-- **Evidence:** 437 registered API operations; existing tests are
-  representative and manual rather than generated from route/resource policy.
+- **Evidence:** High-risk regression coverage now exercises active-profile
+  aliases, deleted/foreign profiles, portfolio member binding, PAT scope plus
+  ownership, Admin PAT non-ownership, and contextual-note ownership. The
+  `PortfolioProfile` binding now resolves through `auth('sanctum')`, allowing
+  a valid PAT to resolve its own member route while retaining owner scoping.
+  The 437-operation inventory is not yet represented by a declarative test
+  manifest.
 - **Exploit/failure scenario:** A new legacy or v1 member route may omit a
   controller/service scope check while appearing protected by frontend UI or
   active profile middleware.
-- **Verdict:** `SECURE_BUT_UNTESTED`.
+- **Verdict:** `PARTIALLY_ENFORCED` (assurance expansion implemented; no
+  bypass remains in the tested paths).
 - **Severity:** High (assurance gap, not confirmed exploit).
-- **Recommended remediation:** Add a declarative authorization manifest and
-  parameterized actor/profile/object tests before changing access semantics.
+- **Recommended remediation:** Extend the executable matrix to remaining
+  nested execution, accounting, artifact/grant and legacy/v1 pairs.
 
-### AUTH-002 - Admin/shared-route exception list lacks a complete regression matrix
+### AUTH-002 - Admin/shared-route exception regression coverage expanded; complete list remains open
 
 - **Requirement:** Admin must use global/shared APIs without becoming an
   Investor resource owner.
-- **Evidence:** `ResolveActivePortfolio::isAdminOrSharedRoute()` contains
-  path exceptions in addition to `admin` middleware; representative tests
-  cover sessions/profile/admin APIs.
+- **Evidence:** Regression coverage now verifies Admin access to sessions,
+  profile, settings, notification center/settings and calendar while asserting
+  no Admin portfolio is created. Wildcard/member exception paths remain to be
+  enumerated.
 - **Exploit/failure scenario:** A future path addition may be wrongly omitted
   (Admin denial) or incorrectly added (boundary regression).
-- **Verdict:** `SECURE_BUT_UNTESTED`.
+- **Verdict:** `PARTIALLY_ENFORCED`.
 - **Severity:** Medium.
-- **Recommended remediation:** Test each exception-list route for Admin and
-  assert Investor endpoints still return `403` with no profile creation.
+- **Recommended remediation:** Add explicit cases for each remaining wildcard
+  exception path and a nearby Investor-only control route.
 
 ### AUTH-003 - Debug-agent authentication hook is deployment-sensitive
 
@@ -297,6 +304,23 @@ behavior; do not normalize error semantics as part of the coverage patch.
   inheritance, `ResolveActivePortfolio`, `EnsureUserIsAdmin`, PAT scope
   middleware, React Admin/Investor routing, ownership-sensitive controllers,
   callback handling, and listed authorization tests.
-- No production code, routes, middleware, tests, current contracts, or audit
-  findings were modified.
-- `git diff --check` is recorded after creating this document.
+- The AUTH-001/AUTH-002 assurance patch added focused regression coverage and
+  changed only `PortfolioProfile::resolveRouteBinding()` to use the Sanctum
+  guard. The prior default-guard lookup made owner PAT member routes resolve
+  as `404` before scope/ownership policy could be exercised; the updated guard
+  retains the existing owner filter.
+
+## 19. Remediation Outcome
+
+- **AUTH-001:** Partially implemented. No cross-user read/write path was
+  found in the tested high-risk profile, portfolio, PAT or contextual-note
+  paths. The bearer-token member-route resolution defect was corrected with a
+  focused regression test.
+- **AUTH-002:** Partially implemented. Admin/shared exception regression
+  coverage proves the tested paths retain a null active profile and do not
+  create Investor ownership.
+- **AUTH-003:** Unchanged. Debug-agent configuration and production
+  Sanctum/callback behavior require deployment verification.
+- Kite login state is encrypted and time-bound. It is not currently a
+  server-side single-use nonce; replay prevention remains an explicit
+  follow-up decision rather than an inferred contract change.

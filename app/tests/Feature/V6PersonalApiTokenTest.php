@@ -63,4 +63,53 @@ class V6PersonalApiTokenTest extends TestCase
                 'portfolio_type' => 'live',
             ])->assertCreated();
     }
+
+    public function test_scoped_personal_token_preserves_portfolio_ownership(): void
+    {
+        $owner = User::factory()->create();
+        $ownerProfile = $this->defaultPortfolioFor($owner);
+        $foreignUser = User::factory()->create();
+        $foreignProfile = $this->defaultPortfolioFor($foreignUser);
+        $ownerToken = $owner->createToken('Portfolio reader', ['portfolio:read'])->plainTextToken;
+
+        $this->flushHeaders()->withToken($ownerToken)
+            ->withHeader('X-Profile-Id', (string) $ownerProfile->id)
+            ->getJson('/api/portfolios/'.$ownerProfile->id)
+            ->assertOk()
+            ->assertJsonPath('data.id', $ownerProfile->id);
+
+        $this->flushHeaders()->withToken($ownerToken)
+            ->withHeader('X-Profile-Id', (string) $ownerProfile->id)
+            ->getJson('/api/portfolios/'.$foreignProfile->id)
+            ->assertNotFound();
+
+    }
+
+    public function test_personal_token_missing_read_scope_is_rejected_for_owned_portfolio_member_route(): void
+    {
+        $owner = User::factory()->create();
+        $ownerProfile = $this->defaultPortfolioFor($owner);
+        $writeToken = $owner->createToken('Portfolio writer', ['portfolio:write'])->plainTextToken;
+
+        $this->flushHeaders()->withToken($writeToken)
+            ->withHeader('X-Profile-Id', (string) $ownerProfile->id)
+            ->getJson('/api/portfolios/'.$ownerProfile->id)
+            ->assertForbidden()
+            ->assertJsonPath('message', 'This API token is missing the required scope.');
+    }
+
+    public function test_admin_personal_token_does_not_grant_investor_portfolio_ownership(): void
+    {
+        $owner = User::factory()->create();
+        $ownerProfile = $this->defaultPortfolioFor($owner);
+        $admin = User::factory()->create();
+        $admin->forceFill(['is_admin' => true])->save();
+        $adminToken = $admin->createToken('Admin reader', ['portfolio:read'])->plainTextToken;
+        $this->flushHeaders()->withToken($adminToken)
+            ->withHeader('X-Profile-Id', (string) $ownerProfile->id)
+            ->getJson('/api/portfolios/'.$ownerProfile->id)
+            ->assertNotFound();
+
+        $this->assertDatabaseMissing('portfolio_profiles', ['user_id' => $admin->id]);
+    }
 }

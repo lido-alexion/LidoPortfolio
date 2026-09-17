@@ -130,6 +130,60 @@ class PortfolioMiddlewareTest extends TestCase
             ->assertNotFound();
     }
 
+    public function test_profile_selection_aliases_and_foreign_query_values_preserve_ownership_boundary(): void
+    {
+        $owner = User::factory()->create();
+        $ownedProfile = $this->defaultPortfolioFor($owner);
+        $otherOwnedProfile = $this->createPortfolioProfile($owner, 'Other owned profile', false);
+        $foreignUser = User::factory()->create();
+        $foreignProfile = $this->defaultPortfolioFor($foreignUser);
+
+        $this->actingAs($owner)
+            ->withHeader('X-Portfolio-Id', (string) $otherOwnedProfile->id)
+            ->getJson('/api/portfolios')
+            ->assertOk();
+
+        $this->actingAs($owner)
+            ->withoutHeader('X-Portfolio-Id')
+            ->getJson('/api/portfolios?portfolio_id='.$ownedProfile->id)
+            ->assertOk();
+
+        $this->actingAs($owner)
+            ->withoutHeader('X-Portfolio-Id')
+            ->getJson('/api/portfolios?portfolio_id='.$foreignProfile->id)
+            ->assertNotFound();
+    }
+
+    public function test_deleted_profile_cannot_be_selected_as_the_active_profile(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        $profile->delete();
+
+        $this->actingAs($user)
+            ->withHeader('X-Profile-Id', (string) $profile->id)
+            ->getJson('/api/portfolios')
+            ->assertNotFound();
+    }
+
+    public function test_foreign_portfolio_member_routes_are_not_resolved_from_a_valid_active_profile(): void
+    {
+        $owner = User::factory()->create();
+        $ownerProfile = $this->defaultPortfolioFor($owner);
+        $foreignUser = User::factory()->create();
+        $foreignProfile = $this->defaultPortfolioFor($foreignUser);
+
+        foreach (['GET', 'PUT', 'DELETE'] as $method) {
+            $response = $this->actingAs($owner)
+                ->withHeader('X-Profile-Id', (string) $ownerProfile->id)
+                ->json($method, '/api/portfolios/'.$foreignProfile->id, $method === 'PUT' ? ['name' => 'Forbidden'] : []);
+
+            $response->assertNotFound();
+        }
+
+        $this->assertSame('Default', $foreignProfile->fresh()->name);
+    }
+
     public function test_different_profile_headers_return_different_transaction_counts(): void
     {
         $user = User::query()->create([
