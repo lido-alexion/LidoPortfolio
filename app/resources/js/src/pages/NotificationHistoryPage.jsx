@@ -66,7 +66,7 @@ export default function NotificationHistoryPage() {
         <div className="container-fluid py-3">
             <div className="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
                 <div>
-                    <h1 className="h3 mb-1">Notification Center</h1>
+                    <h2 className="h3 mb-1">Notification Center</h2>
                     <p className="text-muted small mb-0">Account-level conditions, events, and delivery activity.</p>
                 </div>
                 <button type="button" className="btn btn-outline-secondary btn-sm" onClick={markAllRead} disabled={!payload.meta?.unread_count}>Mark all as read</button>

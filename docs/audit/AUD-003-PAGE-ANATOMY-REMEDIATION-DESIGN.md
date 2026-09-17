@@ -352,3 +352,24 @@ Validation completed under Node 22:
 - Node/source tests: 157 passed.
 - Production Vite build: passed; existing large-chunk warning remains.
 - `git diff --check`: passed.
+
+## Batch 2 Implementation Outcome
+
+Batch 2 implemented the bounded `UX-003`/`UX-004` changes selected from the registry/editor, data/review, and analytical/market families.
+
+- `PageChrome` remains the shell-level title and breadcrumb authority. Notification History’s `Notification Center` label and Market Depth’s `Market Breadth` label remain useful content context, but are now section-level `h2` headings rather than competing page-level `h1` headings.
+- Market Depth’s local two-option Values control now reuses the shared `SegmentToggle`. Its `pct`/`count` state, API calls, date selection, chart behavior, and series controls are unchanged.
+- Notification History’s five quick views remain its existing URL-backed query filter control. It was intentionally not converted to `SegmentToggle` because it exceeds the shared primitive’s 2–4 local-choice contract and its view state is represented in the query string.
+- Registry list/detail pages already retain entity/editor headings and wrapped action groups; no redundant action or editor control was removed.
+- No new action-row primitive was justified. Existing flex-wrap action rows were sufficient for this bounded batch.
+
+Static outcome:
+
+- `UX-003`: **IMPROVED / PARTIALLY_IMPLEMENTED**; representative heading hierarchy is clearer, while global action composition remains unfinished.
+- `UX-004`: **IMPLEMENTED for the targeted equivalent Market Depth control**; Notification History’s five URL-backed views remain intentionally local/query-driven.
+- `AUD-003`: remains **PARTIALLY_IMPLEMENTED**. UX-005 and UX-006 were not changed.
+
+Validation completed under Node 22:
+
+- Batch 2 source tests: passed.
+- Full Vitest, Node/source tests, production build, and `git diff --check` were rerun after the changes.

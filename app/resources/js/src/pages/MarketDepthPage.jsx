@@ -10,12 +10,13 @@ import {
 } from 'recharts';
 import api from '../api';
 import MarketDepthTable from '../components/MarketDepthTable';
+import SegmentToggle from '../components/SegmentToggle';
 import { showToast } from '../toast';
 import { formatChartAxisDate, formatTransactionDateDisplay } from '../utils/transactionDate';
 
 const VALUE_MODES = [
-    { id: 'pct', label: '%' },
-    { id: 'count', label: 'Count' },
+    { value: 'pct', label: '%' },
+    { value: 'count', label: 'Count' },
 ];
 
 const SERIES_COLORS = {
@@ -26,27 +27,6 @@ const SERIES_COLORS = {
     above_sma_100: '#34d399',
     above_sma_200: '#22c55e',
 };
-
-function SegmentToggle({ options, value, onChange, ariaLabel }) {
-    return (
-        <div className="lido-segment-toggle-track" role="group" aria-label={ariaLabel}>
-            {options.map((opt) => {
-                const active = opt.id === value;
-                return (
-                    <button
-                        key={opt.id}
-                        type="button"
-                        className={`lido-segment-toggle-btn${active ? ' is-active' : ''}`}
-                        aria-pressed={active}
-                        onClick={() => onChange(opt.id)}
-                    >
-                        {opt.label}
-                    </button>
-                );
-            })}
-        </div>
-    );
-}
 
 export default function MarketDepthPage() {
     const [valueMode, setValueMode] = useState('pct');
@@ -135,7 +115,7 @@ export default function MarketDepthPage() {
     return (
         <div className="container-fluid py-3 lido-market-depth-page">
             <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
-                <h1 className="h4 mb-0">Market Breadth</h1>
+                <h2 className="h4 mb-0">Market Breadth</h2>
             </div>
 
             <div className="d-flex flex-wrap align-items-center gap-3 mb-3">
