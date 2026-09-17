@@ -156,7 +156,17 @@ Targeted static concerns:
 2. Calendar and pattern request failures collapse to empty lists, so screen-reader users may receive “No upcoming events” or an empty table rather than an unavailable state.
 3. Chart accessibility and keyboard/readability cannot be established fully from source; runtime screen-reader and keyboard checks remain required.
 
-No confirmed missing primary Dashboard action, inaccessible icon-only Dashboard action, or color-only safety state was found. No fixes were made.
+No confirmed missing primary Dashboard action, inaccessible icon-only Dashboard action, or color-only safety state was found.
+
+## 10A. Targeted State-Semantics Remediation Outcome
+
+The bounded remediation addressed the three static concerns above without changing Dashboard calculations, APIs, layout, or historical capability counts:
+
+- primary Dashboard load failure now uses explicit `role="alert"` semantics;
+- Pattern and Calendar requests retain independent loading, successful-empty, and failed/unavailable states, so optional-section failures do not become valid empty results or fail the whole Dashboard;
+- Dashboard chart normalization preserves actual zero values, converts valid numeric strings to numbers, and retains missing or invalid values as unavailable (`null`); chart tooltips display `—` for unavailable values rather than `₹0`.
+
+Focused state/component tests and the Node/source suite pass. AUD-004 is unchanged. Remaining verification is browser/runtime-only: responsive geometry, touch behavior, chart and tooltip readability, real screen-reader behavior, utility-overlay coexistence, and deployed-bundle reachability.
 
 ## 11. Runtime Scenario Matrix
 
@@ -223,4 +233,4 @@ Run the following with a real browser and representative data:
 
 The Dashboard-specific review covered **18 atomic capabilities**: **17 historical capabilities confirmed preserved**, **1 post-V6 addition confirmed present without interference**, **0 preserved-differently rows**, and **0 confirmed regressions**. Remaining work is browser/runtime verification of hierarchy, responsive access, degraded-data semantics, chart/table readability, keyboard/screen-reader behavior and coexistence with the completed shell utilities.
 
-The master audit verdict should be narrowed to `IMPLEMENTED` only after this assessment is accepted as the Dashboard-specific evidence. AUD-004 remains unchanged, and no Dashboard code or tests were modified.
+The master audit verdict is now `IMPLEMENTED` based on this Dashboard-specific evidence, with the runtime checks above retained. AUD-004 remains unchanged.

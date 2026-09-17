@@ -89,7 +89,7 @@ export default function CalendarDayEventsDialog({
     );
 }
 
-export function DashboardCalendarCard({ events, loading, onOpenCalendar }) {
+export function DashboardCalendarCard({ events, loading, error = null, onOpenCalendar }) {
     return (
         <div className="card h-100">
             <div className="card-header d-flex justify-content-between align-items-center gap-2">
@@ -103,6 +103,8 @@ export function DashboardCalendarCard({ events, loading, onOpenCalendar }) {
             <div className="card-body p-0">
                 {loading ? (
                     <div className="text-center text-muted py-4">Loading…</div>
+                ) : error ? (
+                    <div className="text-danger p-3" role="alert">{error}</div>
                 ) : events.length === 0 ? (
                     <div className="text-muted p-3">No upcoming events in the next month.</div>
                 ) : (

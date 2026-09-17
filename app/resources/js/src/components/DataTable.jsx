@@ -570,7 +570,7 @@ export function TableLoadingRow({ colSpan, label = 'Loading…' }) {
     );
 }
 
-export function DataTableView({ controller, emptyMessage = 'No data.', loading = false }) {
+export function DataTableView({ controller, emptyMessage = 'No data.', loading = false, error = null }) {
     const {
         table,
         enableSorting,
@@ -586,6 +586,14 @@ export function DataTableView({ controller, emptyMessage = 'No data.', loading =
     const cappedTableWidth = enableColumnResizing && containerWidth > 0
         ? Math.min(totalColumnWidth, Math.max(0, containerWidth - 2))
         : totalColumnWidth;
+
+    if (error) {
+        return (
+            <div className="text-danger" role="alert">
+                {error}
+            </div>
+        );
+    }
 
     return (
         <div
@@ -697,6 +705,7 @@ export function DataTableCard({
     bodyClassName = '',
     headerExtra = null,
     loading = false,
+    error = null,
     emptyMessage,
     ...tableProps
 }) {
@@ -716,6 +725,7 @@ export function DataTableCard({
                     controller={controller}
                     emptyMessage={emptyMessage}
                     loading={loading}
+                    error={error}
                 />
             </div>
         </div>
@@ -723,7 +733,7 @@ export function DataTableCard({
 }
 
 /** @deprecated Use DataTableCard for tables inside cards. */
-export default function DataTable({ loading = false, emptyMessage, ...tableProps }) {
+export default function DataTable({ loading = false, emptyMessage, error = null, ...tableProps }) {
     const controller = useDataTableController(tableProps);
 
     return (
@@ -735,6 +745,7 @@ export default function DataTable({ loading = false, emptyMessage, ...tableProps
                 controller={controller}
                 emptyMessage={emptyMessage}
                 loading={loading}
+                error={error}
             />
         </div>
     );

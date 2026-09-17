@@ -32,6 +32,7 @@ import {
 } from '../utils/dashboardCache';
 import { showAdminOperationalAlertsToastIfAny } from '../utils/adminOperationalAlertsToast';
 import { patternGuideLink } from '../utils/patternGuideLinks';
+import { normalizeDashboardChartNumber } from '../utils/dashboardState';
 import { formatInrCompactWhole, formatInrWhole, formatTablePercent0 } from '../utils/tableFormat';
 import { formatChartAxisDate, formatTransactionDateDisplay } from '../utils/transactionDate';
 import {
@@ -293,8 +294,10 @@ export default function DashboardPage() {
     const [acknowledgingId, setAcknowledgingId] = useState(null);
     const [patternRows, setPatternRows] = useState([]);
     const [patternLoading, setPatternLoading] = useState(true);
+    const [patternError, setPatternError] = useState('');
     const [calendarEvents, setCalendarEvents] = useState([]);
     const [calendarLoading, setCalendarLoading] = useState(true);
+    const [calendarError, setCalendarError] = useState('');
     const [servedFromCache, setServedFromCache] = useState(false);
     const [cachedAt, setCachedAt] = useState(null);
     const [marketDiagnosticsExpanded, setMarketDiagnosticsExpanded] = useState(loadMarketDiagnosticsExpanded);
@@ -309,9 +312,13 @@ export default function DashboardPage() {
             return Promise.resolve();
         }
         setCalendarLoading(true);
+        setCalendarError('');
         return api.get('/calendar/upcoming')
             .then((res) => setCalendarEvents(res.data?.data ?? []))
-            .catch(() => setCalendarEvents([]))
+            .catch(() => {
+                setCalendarEvents([]);
+                setCalendarError('Upcoming events are temporarily unavailable.');
+            })
             .finally(() => setCalendarLoading(false));
     }, [profileId]);
 
@@ -326,6 +333,7 @@ export default function DashboardPage() {
                 setData(cached.dashboard);
                 setPatternRows(cached.patternRows);
                 setPatternLoading(false);
+                setPatternError('');
                 setCachedAt(cached.cachedAt);
                 setServedFromCache(true);
                 setLoadError('');
@@ -336,30 +344,40 @@ export default function DashboardPage() {
 
         setServedFromCache(false);
         setPatternLoading(true);
+        setPatternError('');
         setCalendarLoading(true);
+        setCalendarError('');
         setLoadError('');
 
-        return Promise.all([
+        return Promise.allSettled([
             api.get('/dashboard'),
             api.get('/patterns/scan', { params: { scope: 'holdings', actionable_only: true } }),
         ])
-            .then(([dashboardRes, patternRes]) => {
-                const dashboard = dashboardRes.data;
-                const flat = flattenPatternScanResults(patternRes.data);
+            .then(([dashboardResult, patternResult]) => {
+                if (dashboardResult.status === 'rejected') {
+                    setLoadError('Failed to load dashboard');
+                    setPatternRows([]);
+                    setCalendarEvents([]);
+                    setCalendarLoading(false);
+                    return;
+                }
+
+                const dashboard = dashboardResult.value.data;
                 setData(dashboard);
-                setPatternRows(flat);
                 fetchCalendarUpcoming();
-                writeDashboardCache(userId, profileId, { dashboard, patternRows: flat });
                 setCachedAt(new Date().toISOString());
                 setServedFromCache(false);
+                if (patternResult.status === 'fulfilled') {
+                    const flat = flattenPatternScanResults(patternResult.value.data);
+                    setPatternRows(flat);
+                    writeDashboardCache(userId, profileId, { dashboard, patternRows: flat });
+                } else {
+                    setPatternRows([]);
+                    setPatternError('Pattern signals are temporarily unavailable.');
+                }
                 if (isAdmin) {
                     showAdminOperationalAlertsToastIfAny();
                 }
-            })
-            .catch(() => {
-                setLoadError('Failed to load dashboard');
-                setPatternRows([]);
-                setCalendarEvents([]);
             })
             .finally(() => setPatternLoading(false));
     }, [userId, profileId, isAdmin, fetchCalendarUpcoming]);
@@ -637,7 +655,7 @@ export default function DashboardPage() {
         },
     ], []);
 
-    if (!data && loadError) return <div className="alert alert-danger">{loadError}</div>;
+    if (!data && loadError) return <div className="alert alert-danger" role="alert">{loadError}</div>;
     if (!data) return <div className="text-muted">Loading dashboard...</div>;
 
     const portfolioVsInvestedClass = compareValueClass(
@@ -714,11 +732,15 @@ export default function DashboardPage() {
         const date = typeof rawDate === 'string'
             ? rawDate.slice(0, 10)
             : rawDate;
+        const portfolioValue = normalizeDashboardChartNumber(point.portfolio_value);
+        const investedValue = normalizeDashboardChartNumber(point.invested_value);
         return {
             date,
-            portfolio_value: Number(point.portfolio_value || 0),
-            invested_value: Number(point.invested_value || 0),
-            unrealized_pl: Number(point.portfolio_value || 0) - Number(point.invested_value || 0),
+            portfolio_value: portfolioValue,
+            invested_value: investedValue,
+            unrealized_pl: portfolioValue == null || investedValue == null
+                ? null
+                : portfolioValue - investedValue,
         };
     });
     const showGrowthDots = growthData.length > 0 && growthData.length <= 5;
@@ -780,7 +802,7 @@ export default function DashboardPage() {
             </div> : null}
             {loadError ? (
                 <div className="col-12">
-                    <div className="alert alert-warning mb-0">{loadError}</div>
+                    <div className="alert alert-warning mb-0" role="alert">{loadError}</div>
                 </div>
             ) : null}
             {data.reserve_shortfall_exists && data.reserve_shortfall_warning ? (
@@ -1218,6 +1240,7 @@ export default function DashboardPage() {
                 <DashboardCalendarCard
                     events={calendarEvents}
                     loading={calendarLoading}
+                    error={calendarError}
                     onOpenCalendar={() => navigate('/calendar')}
                 />
             </div>
@@ -1236,6 +1259,7 @@ export default function DashboardPage() {
                     data={patternRows}
                     storageKey="dashboard-pattern-signals-v1"
                     loading={patternLoading}
+                    error={patternError}
                     emptyMessage="No actionable patterns on your holdings right now. Patterns need sufficient OHLCV history."
                     headerExtra={(
                         <Link to="/patterns" className="btn btn-sm btn-outline-secondary">
@@ -1326,7 +1350,7 @@ export default function DashboardPage() {
                                             labelStyle={growthChartTooltipLabelStyle}
                                             itemStyle={{ color: 'var(--lido-chart-tooltip-text)' }}
                                             formatter={(value, name) => [
-                                                formatInrWhole(value),
+                                                value == null ? '—' : formatInrWhole(value),
                                                 name === 'portfolio_value' ? 'Portfolio Value' : 'Invested Value',
                                             ]}
                                             labelFormatter={(label) => formatTransactionDateDisplay(label) || label}
@@ -1392,7 +1416,7 @@ export default function DashboardPage() {
                                             contentStyle={growthChartTooltipStyle}
                                             labelStyle={growthChartTooltipLabelStyle}
                                             itemStyle={{ color: 'var(--lido-chart-tooltip-text)' }}
-                                            formatter={(value) => [formatInrWhole(value), 'Unrealized P/L']}
+                                            formatter={(value) => [value == null ? '—' : formatInrWhole(value), 'Unrealized P/L']}
                                             labelFormatter={(label) => formatTransactionDateDisplay(label) || label}
                                         />
                                         <ReferenceLine
