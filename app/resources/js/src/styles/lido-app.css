@@ -272,21 +272,32 @@ body {
     color: #dc3545;
 }
 
-.lido-notes-rail-button {
-    position: fixed;
-    right: 0.75rem;
-    bottom: 1rem;
-    z-index: 1040;
+.lido-notes-utility-action {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 2.35rem;
-    height: 2.35rem;
-    border: 1px solid var(--lido-border);
-    border-radius: 6px;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    padding: 0.35rem 0.65rem;
     color: var(--lido-text);
     background: var(--lido-bg-surface);
+    border: 1px solid var(--lido-border);
+    border-radius: 6px;
     box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.18);
+}
+
+.lido-notes-utility-action:hover,
+.lido-notes-utility-action:focus-visible,
+.lido-notes-utility-action[aria-expanded="true"] {
+    color: #1e90ff;
+    border-color: #1e90ff;
+}
+
+.lido-notes-utility-action--desktop {
+    position: fixed;
+    top: 5.1rem;
+    right: 0.5rem;
+    z-index: 1037;
 }
 
 .lido-context-notes-pane {
@@ -302,6 +313,16 @@ body {
     border-radius: 8px;
     background: var(--lido-bg-surface);
     box-shadow: 0 1rem 2.5rem rgba(0, 0, 0, 0.24);
+}
+
+.lido-context-notes-pane--desktop {
+    animation: lido-context-notes-pane-in 0.16s ease-out;
+}
+
+.lido-context-notes-pane--mobile,
+.lido-context-notes-overlay,
+.lido-mobile-utility-actions {
+    display: none;
 }
 
 .lido-context-notes-header,
@@ -325,6 +346,11 @@ body {
     border: 0;
     border-radius: 0;
     resize: none;
+}
+
+@keyframes lido-context-notes-pane-in {
+    from { opacity: 0; transform: translateX(1rem); }
+    to { opacity: 1; transform: translateX(0); }
 }
 
 .lido-page-history-rail {
@@ -419,26 +445,30 @@ body {
         display: none;
     }
 
-    .lido-history-mobile-action {
+    .lido-notes-utility-action--desktop {
+        display: none;
+    }
+
+    .lido-mobile-utility-actions {
         position: fixed;
-        right: 4rem;
+        right: 0.75rem;
         bottom: 1rem;
         z-index: 1040;
-        display: inline-flex;
+        display: flex;
         align-items: center;
         justify-content: center;
         gap: 0.35rem;
-        min-width: 2.75rem;
-        min-height: 2.75rem;
-        padding: 0.35rem 0.65rem;
-        color: var(--lido-text);
-        background: var(--lido-bg-surface);
-        border: 1px solid var(--lido-border);
-        border-radius: 6px;
-        box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.18);
     }
 
-    .lido-page-history-overlay {
+    .lido-mobile-utility-actions > .lido-history-mobile-action,
+    .lido-mobile-utility-actions > .lido-notes-utility-action {
+        display: inline-flex;
+        min-width: 2.75rem;
+        min-height: 2.75rem;
+    }
+
+    .lido-page-history-overlay,
+    .lido-context-notes-overlay {
         position: fixed;
         inset: 0;
         z-index: 1048;
@@ -447,15 +477,31 @@ body {
         background: rgba(0, 0, 0, 0.35);
     }
 
-    .lido-page-history-sheet {
+    .lido-page-history-sheet,
+    .lido-context-notes-pane--mobile {
         width: 100%;
-        max-height: min(75vh, 34rem);
+        max-height: min(85vh, 40rem);
         overflow: auto;
         color: var(--lido-text);
         background: var(--lido-bg-surface);
         border-top: 1px solid var(--lido-border);
         border-radius: 0.75rem 0.75rem 0 0;
         box-shadow: 0 -1rem 2.5rem rgba(0, 0, 0, 0.24);
+    }
+
+    .lido-context-notes-pane--mobile {
+        position: relative;
+        top: auto;
+        right: auto;
+        bottom: auto;
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        min-height: min(60vh, 32rem);
+        border-radius: 0.75rem 0.75rem 0 0;
+        animation: lido-context-notes-sheet-in 0.16s ease-out;
+    }
+
+    .lido-page-history-sheet {
         animation: lido-page-history-sheet-in 0.16s ease-out;
     }
 
@@ -495,12 +541,18 @@ body {
         from { transform: translateY(100%); }
         to { transform: translateY(0); }
     }
+
+    @keyframes lido-context-notes-sheet-in {
+        from { transform: translateY(100%); }
+        to { transform: translateY(0); }
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
     .lido-page-history-bar,
     .lido-page-history-label,
-    .lido-page-history-sheet {
+    .lido-page-history-sheet,
+    .lido-context-notes-pane {
         transition: none !important;
         animation: none !important;
     }

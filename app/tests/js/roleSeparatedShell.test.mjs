@@ -37,10 +37,16 @@ test('Admin header never renders the Investor portfolio switcher', () => {
 test('Page Visit History is mounted only for the authenticated Investor shell', () => {
     assert.match(app, /import RightUtilityRail from '\.\/components\/navigation\/RightUtilityRail';/);
     assert.match(app, /!isDocumentationRoute && !user\.is_admin && <RightUtilityRail user=\{user\} \/>/);
-    assert.match(app, /!isDocumentationRoute && <ContextualNotesPane user=\{user\} \/>/);
+    assert.doesNotMatch(app, /<ContextualNotesPane user=\{user\} \/>/);
 });
 
 test('Page Visit History preserves compact visuals with minimum interaction targets', () => {
     assert.match(pageHistoryCss, /\.lido-page-history-link[\s\S]*?min-height: 2\.75rem/);
     assert.match(pageHistoryCss, /\.lido-history-mobile-action[\s\S]*?min-width: 2\.75rem[\s\S]*?min-height: 2\.75rem/);
+});
+
+test('Contextual Notes uses the shared utility presentation contract', () => {
+    assert.doesNotMatch(pageHistoryCss, /\.lido-notes-rail-button/);
+    assert.match(pageHistoryCss, /\.lido-context-notes-overlay/);
+    assert.match(pageHistoryCss, /prefers-reduced-motion/);
 });

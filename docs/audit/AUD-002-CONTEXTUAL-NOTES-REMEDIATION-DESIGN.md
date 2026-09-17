@@ -496,3 +496,26 @@ tablet and mobile widths:
 No API, ownership, profile, Page History, or Admin/Investor policy decision is
 unresolved for this remediation.
 
+## 21. Implementation Outcome
+
+AUD-002 was implemented with `RightUtilityRail` as the single coordinator for
+Page History and Contextual Notes. The former standalone Notes trigger mount
+was removed from `AuthenticatedShell`; Notes now uses a shared utility action,
+a non-modal desktop overlay, and a mobile modal sheet. The Notes data/content
+layer preserves the existing pathname-derived context key, active-profile
+scope, API payloads, save/delete behavior and toast error handling.
+
+The mobile sheet traps focus, supports Escape and focus restoration, and is
+mutually exclusive with the Page History sheet. Notes-specific desktop/mobile
+motion is disabled under `prefers-reduced-motion`, and utility targets are
+approximately 44px. Route/profile changes reload the current context and clear
+the previous content before applying the response; the existing risk that an
+unsaved local draft can be replaced remains intentionally unresolved and is
+not claimed as part of AUD-002.
+
+Static evidence: `V6ContextualNotesTest` passes 3 tests/20 assertions;
+frontend Notes/History integration tests pass 9 tests; the full Vitest suite
+passes 15 files/71 tests; Node/source tests pass; and the production build
+passes under Node 22. Browser verification remains required for exact pane
+geometry, touch and soft-keyboard behavior, stacking, animation feel and
+deployed-bundle reachability. AUD-003 and AUD-016 were not changed.

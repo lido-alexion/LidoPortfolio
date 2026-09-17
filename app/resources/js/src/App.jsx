@@ -11,7 +11,6 @@ import { useAuth } from './context/AuthContext';
 import { SidebarProvider } from './context/SidebarContext';
 import { NotificationProvider } from './context/NotificationContext';
 import CriticalNotificationBanner from './components/CriticalNotificationBanner';
-import ContextualNotesPane from './components/ContextualNotesPane';
 import RightUtilityRail from './components/navigation/RightUtilityRail';
 import DashboardPage from './pages/DashboardPage';
 import HoldingsPage from './pages/HoldingsPage';
@@ -264,7 +263,6 @@ function AuthenticatedShell({ user, isDocumentationRoute }) {
                             {!isDocumentationRoute && <PageChrome />}
                             {user.is_admin ? <AdminAppRoutes /> : <AppRoutes />}
                         </div>
-                        {!isDocumentationRoute && <ContextualNotesPane user={user} />}
                         {!isDocumentationRoute && !user.is_admin && <RightUtilityRail user={user} />}
                     </div>
                 </div>
