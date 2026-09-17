@@ -5,6 +5,7 @@ import useApiGet from '../hooks/useApiGet';
 import { ROUTES } from '../navigation/routes';
 import { formatInrCompactWhole, formatTableInteger } from '../utils/tableFormat';
 import { tosData } from '../utils/tosEnvelope';
+import ScrollToTop from '../components/ScrollToTop';
 import {
     METRIC_LABELS,
     NAMED_CARD_METRIC_KEYS,
@@ -78,6 +79,7 @@ export default function ReviewReportDetailPage() {
     const methodology = methodologyEntries(report);
 
     return (
+        <>
         <div className="container-fluid py-3">
             <div className="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
                 <div>
@@ -184,5 +186,7 @@ export default function ReviewReportDetailPage() {
                 </>
             )}
         </div>
+        <ScrollToTop />
+        </>
     );
 }

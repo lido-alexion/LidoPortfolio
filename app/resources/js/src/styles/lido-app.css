@@ -5849,6 +5849,37 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     line-height: 1;
 }
 
+.lido-scroll-to-top {
+    position: fixed;
+    right: 4.75rem;
+    bottom: 1.25rem;
+    z-index: 1039;
+    width: 2.75rem;
+    height: 2.75rem;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--lido-text);
+    background: var(--lido-bg-surface);
+    border: 1px solid var(--lido-border);
+    border-radius: 999px;
+    box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.18);
+}
+
+.lido-scroll-to-top:hover,
+.lido-scroll-to-top:focus-visible {
+    color: #1e90ff;
+    border-color: #1e90ff;
+}
+
+@media (max-width: 1199.98px) {
+    .lido-scroll-to-top {
+        right: 0.75rem;
+        bottom: 4.75rem;
+    }
+}
+
 @media (max-width: 575.98px) {
     .backtest-scroll-fab {
         right: 0.75rem;

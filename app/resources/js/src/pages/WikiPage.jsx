@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import api, { getApiErrorMessage } from '../api';
+import ScrollToTop from '../components/ScrollToTop';
 import { showToast } from '../toast';
 
 function flatten(nodes, depth = 0) {
@@ -107,7 +108,8 @@ export default function WikiPage() {
         setPreviewHtml(response.data?.data?.rendered_html || '');
     };
 
-    return <div className="container-fluid py-3">
+    return <>
+    <div className="container-fluid py-3">
         <div className="d-flex justify-content-between align-items-center mb-3"><div><Link to="/knowledge-board">Knowledge Board</Link> / Wiki</div><button className="btn btn-primary btn-sm" onClick={() => createPage()}>New root page</button></div>
         <div className="row g-3">
             <aside className="col-lg-3"><div className="card"><div className="card-header">Wiki hierarchy</div><div className="list-group list-group-flush"><div className="small text-muted p-2 border-bottom" onDragOver={(event) => event.preventDefault()} onDrop={() => dragged && movePage(dragged, null, 0)}>Drop here to move to root</div>{pages.map((item) => <React.Fragment key={item.uuid}><div style={{ height: 6 }} onDragOver={(event) => event.preventDefault()} onDrop={() => dragged && movePage(dragged, item.parent_uuid, item.display_order)} /><Link draggable onDragStart={() => setDragged(item.uuid)} onDragEnd={() => setDragged(null)} onDragOver={(event) => event.preventDefault()} onDrop={() => dragged && dragged !== item.uuid && movePage(dragged, item.uuid, 0)} className={`list-group-item list-group-item-action ${item.uuid === pageId ? 'active' : ''}`} style={{ paddingLeft: `${1 + item.depth * 1.1}rem` }} to={`/knowledge-board/wiki/${item.uuid}`}>{item.title}</Link></React.Fragment>)}</div></div></aside>
@@ -115,7 +117,7 @@ export default function WikiPage() {
                 <div className="small">{(page.breadcrumbs || []).map((crumb, index) => <React.Fragment key={`${crumb.uuid}-${index}`}>{index ? ' / ' : ''}{crumb.uuid ? <Link to={`/knowledge-board/wiki/${crumb.uuid}`}>{crumb.title}</Link> : <Link to="/knowledge-board">{crumb.title}</Link>}</React.Fragment>)}</div>
                 <div className="card"><div className="card-body d-grid gap-3">
                     <input className="form-control form-control-lg" value={title} onChange={(event) => setTitle(event.target.value)} aria-label="Wiki Page title" />
-                    <div className="row g-3"><div className="col-md-6"><label className="form-label">Markdown source</label><textarea className="form-control font-monospace" rows="18" value={markdown} onChange={(event) => setMarkdown(event.target.value)} /></div><div className="col-md-6"><label className="form-label">Safe preview</label><div className="border rounded p-3 h-100 lido-knowledge-markdown-preview" dangerouslySetInnerHTML={{ __html: previewHtml }} /></div></div>
+                    <div className="row g-3"><div className="col-md-6"><label className="form-label" htmlFor="wiki-markdown-source">Markdown source</label><textarea id="wiki-markdown-source" className="form-control font-monospace" rows="18" value={markdown} onChange={(event) => setMarkdown(event.target.value)} /></div><div className="col-md-6"><div className="form-label">Safe preview</div><div className="border rounded p-3 h-100 lido-knowledge-markdown-preview" dangerouslySetInnerHTML={{ __html: previewHtml }} /></div></div>
                     <div className="d-flex flex-wrap gap-2"><button className="btn btn-primary" disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save'}</button><button className="btn btn-outline-primary" onClick={preview}>Preview</button><button className="btn btn-outline-primary" onClick={() => createPage(pageId)}>New child</button>
                         <select className="form-select w-auto" defaultValue="__choose" onChange={(event) => event.target.value !== '__choose' && move(event.target.value)} aria-label="Move Wiki Page"><option value="__choose" disabled>Move…</option><option value="">Move to root</option>{pages.filter((item) => item.uuid !== pageId).map((item) => <option key={item.uuid} value={item.uuid}>{'—'.repeat(item.depth)} {item.title}</option>)}</select>
                         <select className="form-select w-auto" defaultValue="" onChange={(event) => insertLink(event.target.value)} aria-label="Insert Wiki Link"><option value="">Insert Wiki Link…</option>{pages.filter((item) => item.uuid !== pageId).map((item) => <option key={item.uuid} value={item.uuid}>{item.title}</option>)}</select>
@@ -126,5 +128,7 @@ export default function WikiPage() {
                 <div className="card"><div className="card-header">Revision history</div><div className="list-group list-group-flush">{(page.revisions || []).map((revision) => <div key={revision.id} className="list-group-item d-flex justify-content-between align-items-center"><span>#{revision.revision_number} · {revision.change_type} · {new Date(revision.created_at).toLocaleString()}</span><span><button className="btn btn-link btn-sm" onClick={() => compare(revision.id)}>Compare</button><button className="btn btn-link btn-sm" onClick={() => restore(revision.id)}>Restore</button></span></div>)}</div>{comparison ? <div className="card-body border-top"><div className="d-flex justify-content-between"><strong>Revision #{comparison.revision.revision_number} vs current</strong><button className="btn-close" aria-label="Close comparison" onClick={() => setComparison(null)} /></div><div className="row g-2 mt-1"><div className="col-md-6"><div className="small text-muted">Historical Markdown</div><pre className="border rounded p-2 text-wrap">{comparison.revision.markdown}</pre></div><div className="col-md-6"><div className="small text-muted">Current Markdown</div><pre className="border rounded p-2 text-wrap">{comparison.current.markdown}</pre></div></div></div> : null}</div>
             </div>}</main>
         </div>
-    </div>;
+    </div>
+    <ScrollToTop />
+    </>;
 }

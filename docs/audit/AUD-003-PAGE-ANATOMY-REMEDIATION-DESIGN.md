@@ -373,3 +373,47 @@ Validation completed under Node 22:
 
 - Batch 2 source tests: passed.
 - Full Vitest, Node/source tests, production build, and `git diff --check` were rerun after the changes.
+
+## Batch 3 / Closure Assessment
+
+Batch 3 completed the focused `UX-005` and `UX-006` work and performed the final static closure review. The scope remained deliberately narrow: no additional table migration, page redesign, domain/API change, or AUD-004/AUD-013/AUD-016 work was introduced.
+
+### Long-page evidence
+
+| Page | Likely long? | Existing return control | Scroll container | Batch 3 disposition |
+| --- | --- | --- | --- | --- |
+| Review Report detail | Yes; metric and methodology sections can exceed several viewports. | None found. | `.lido-shell > .lido-main`. | Added shared `ScrollToTop`. |
+| Wiki page/editor | Yes; hierarchy, editor, preview and revision history are vertically dense. | None found. | `.lido-shell > .lido-main`. | Added shared `ScrollToTop`. |
+| Backtest detail | Yes. | Existing page-local top/bottom `PageScrollFab` controls target the shell scroll container. | `.lido-shell > .lido-main`. | Retained as adequate feature-specific behavior. |
+| Strategy/Screener editor detail | Potentially long. | No shared return control confirmed. | Shell main/page-local content. | No new control without stronger evidence; retain for runtime review. |
+| Performance/Compare, Historical Holdings and registry/detail pages | Variable by data and state. | Mixed/local behavior. | Shell main or page-local content. | Runtime verification only; no broad rollout. |
+
+`ScrollToTop` is a small shared control that appears after a meaningful scroll threshold, targets `.lido-shell > .lido-main`, uses an accessible button name, and switches to immediate scrolling under reduced motion. It is mounted only on the two newly selected long-page families; the main workspace is not resized.
+
+### Targeted accessibility verification
+
+The review covered Market Depth, Notification History, Candidates, Review Reports/detail, Backtest detail, Screener editor, Settings/forms, and Wiki/Knowledge interactions. Two concrete static defects were found and fixed:
+
+- Candidates search and source filters now have programmatic accessible names.
+- Wiki Markdown source now has an associated `label`/`id` pair; the preview heading is represented as a non-form label element.
+
+No other concrete static defect was established in the selected surfaces. Browser screen-reader behavior, real focus order, touch behavior, and visual geometry remain runtime verification items rather than unproven defects.
+
+### Final finding dispositions
+
+| Finding | Final disposition | Evidence |
+| --- | --- | --- |
+| `UX-001` | **RESOLVED** for the representative surfaces; semantically correct local equivalents remain acceptable elsewhere. | `DataState` adoption and focused tests from Batch 1. |
+| `UX-002` | **ACCEPTABLE_VARIATION / RUNTIME_VERIFICATION_REQUIRED**. | Shared `DataTable` adoption is proven where behavior is comparable; remaining lists are domain-specific or require browser overflow review. |
+| `UX-003` | **ACCEPTABLE_VARIATION**. | `PageChrome` remains authoritative; meaningful entity/section headings and context-specific action placement were reviewed. |
+| `UX-004` | **RESOLVED** for equivalent local controls. | Market Depth uses `SegmentToggle`; route-backed and five-choice Notification History views intentionally retain navigation/filter semantics. |
+| `UX-005` | **RESOLVED**. | Review Report and Wiki use `ScrollToTop`; Backtest retains adequate page-local controls. |
+| `UX-006` | **RESOLVED** statically. | Two concrete label defects were fixed with focused source assertions; no known static defect remains in the targeted review. |
+
+### Closure decision
+
+`AUD-003` is **IMPLEMENTED** as a static audit finding. Shared foundations exist, representative adoption is complete for the remediation batches, and remaining page differences were reviewed as acceptable/domain-specific or runtime-only. No known static state-semantics, page-anatomy, or targeted accessibility defect remains.
+
+Remaining runtime verification covers responsive hierarchy, table overflow, chart behavior, keyboard order, touch interaction, actual screen-reader behavior, scroll thresholds, stacking, and deployed-bundle geometry. AUD-004, AUD-013, and AUD-016 were not changed.
+
+Batch 3 validation includes the focused ScrollToTop and targeted accessibility tests, the full frontend Vitest suite, Node/source tests, production Vite build, and `git diff --check`. The existing production build large-chunk warning remains a separate non-blocking warning.

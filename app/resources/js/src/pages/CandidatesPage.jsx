@@ -460,12 +460,13 @@ export default function CandidatesPage() {
                     <input
                         className="form-control form-control-sm"
                         placeholder="Search symbol or name"
+                        aria-label="Search candidates by symbol or name"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                     />
                 </div>
                 <div className="col-md-3">
-                    <select className="form-select form-select-sm" value={source} onChange={(e) => setSource(e.target.value)}>
+                    <select className="form-select form-select-sm" aria-label="Filter candidates by source" value={source} onChange={(e) => setSource(e.target.value)}>
                         <option value="">All sources</option>
                         {sources.map((s) => <option key={s} value={s}>{s}</option>)}
                         {!sources.includes('pattern') && <option value="pattern">pattern</option>}
