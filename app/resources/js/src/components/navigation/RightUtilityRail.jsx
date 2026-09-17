@@ -44,12 +44,22 @@ export default function RightUtilityRail({ user }) {
 
     const openHistory = useCallback((event) => {
         historyTriggerRef.current = event.currentTarget;
+        window.dispatchEvent(new CustomEvent('lido-mobile-utility-open', { detail: { modal: isConstrained } }));
         setActiveUtility('history');
-    }, []);
+    }, [isConstrained]);
 
     const openNotes = useCallback((event) => {
         notesOriginRef.current = event.currentTarget;
+        window.dispatchEvent(new CustomEvent('lido-mobile-utility-open', { detail: { modal: isConstrained } }));
         setActiveUtility((current) => (current === 'notes' ? null : 'notes'));
+    }, [isConstrained]);
+
+    useEffect(() => {
+        const closeForGlobalSearch = (event) => {
+            if (event.detail?.modal) setActiveUtility(null);
+        };
+        window.addEventListener('lido-global-search-open', closeForGlobalSearch);
+        return () => window.removeEventListener('lido-global-search-open', closeForGlobalSearch);
     }, []);
 
     return (

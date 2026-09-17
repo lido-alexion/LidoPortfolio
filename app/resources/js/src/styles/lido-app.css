@@ -221,6 +221,153 @@ body {
     flex-shrink: 0;
 }
 
+.lido-global-search {
+    position: relative;
+    flex: 0 0 auto;
+}
+
+.lido-global-search-trigger {
+    width: 2.75rem;
+    height: 2.75rem;
+    padding: 0;
+}
+
+.lido-global-search-surface {
+    color: var(--lido-text);
+    background: var(--lido-bg-surface);
+    border: 1px solid var(--lido-border);
+    box-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.2);
+}
+
+.lido-global-search-surface--desktop {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    left: 50%;
+    z-index: 1042;
+    width: min(32rem, calc(100vw - 2rem));
+    padding: 0.75rem;
+    border-radius: 8px;
+    transform: translateX(-50%);
+}
+
+.lido-global-search-input {
+    min-height: 2.75rem;
+}
+
+.lido-global-search-status,
+.lido-global-search-empty {
+    color: var(--lido-text-muted);
+    font-size: 0.8rem;
+}
+
+.lido-global-search-status {
+    min-height: 1.25rem;
+    padding-top: 0.35rem;
+}
+
+.lido-global-search-empty {
+    padding: 0.75rem 0.25rem 0.25rem;
+}
+
+.lido-global-search-group + .lido-global-search-group {
+    margin-top: 0.75rem;
+}
+
+.lido-global-search-group h2 {
+    margin: 0.25rem 0 0.3rem;
+    color: var(--lido-text-muted);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.lido-global-search-group ul {
+    list-style: none;
+    max-height: min(22rem, 50vh);
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+}
+
+.lido-global-search-result {
+    display: flex;
+    flex-direction: column;
+    min-height: 2.75rem;
+    justify-content: center;
+    padding: 0.45rem 0.6rem;
+    color: var(--lido-text);
+    text-decoration: none;
+    border-radius: 6px;
+}
+
+.lido-global-search-result:hover,
+.lido-global-search-result:focus-visible,
+.lido-global-search-result.is-active {
+    color: var(--lido-text);
+    background: color-mix(in srgb, #1e90ff 14%, var(--lido-bg-surface));
+}
+
+.lido-global-search-result-label {
+    font-weight: 600;
+}
+
+.lido-global-search-result-secondary {
+    color: var(--lido-text-muted);
+    font-size: 0.78rem;
+}
+
+.lido-global-search-backdrop,
+.lido-global-search-surface--mobile {
+    display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .lido-global-search-surface {
+        transition: none;
+    }
+}
+
+@media (max-width: 1199.98px) {
+    .lido-global-search-surface--desktop {
+        display: none;
+    }
+
+    .lido-global-search-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 1054;
+        display: block;
+        background: rgba(0, 0, 0, 0.35);
+    }
+
+    .lido-global-search-surface--mobile {
+        position: fixed;
+        top: 0;
+        right: 0;
+        left: 0;
+        z-index: 1055;
+        display: block;
+        max-height: min(85vh, 42rem);
+        padding: 0.75rem;
+        overflow-y: auto;
+        border-width: 0 0 1px;
+        border-radius: 0 0 8px 8px;
+    }
+
+    .lido-global-search-mobile-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 0.5rem;
+    }
+
+    .lido-global-search-mobile-header h2 {
+        margin: 0;
+        font-size: 1rem;
+    }
+}
+
 .lido-execution-safety {
     display: inline-flex;
     align-items: center;

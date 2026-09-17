@@ -5,6 +5,7 @@ import ProfileMenu from './ProfileMenu';
 import PortfolioSwitcher from './PortfolioSwitcher';
 import NotificationBell from './NotificationBell';
 import ExecutionSafetyControls from './ExecutionSafetyControls';
+import GlobalSearch from './GlobalSearch';
 import { useSidebar } from '../context/SidebarContext';
 
 function SidebarToggle() {
@@ -67,6 +68,7 @@ export default function AppHeader({ user, showSidebarToggle = false }) {
                         </h1>
                     </Link>
                 </div>
+                {user && !user.is_admin && <GlobalSearch user={user} />}
                 <div className="lido-header-actions">
                     {user && !user.is_admin && <PortfolioSwitcher />}
                     <ExecutionSafetyControls user={user} />

@@ -318,3 +318,19 @@ After implementation, verify in a real browser at wide desktop, 1200px, tablet, 
 3. Should Admin eventually receive a separate global search policy, or remain intentionally outside the Investor shell contract?
 4. At constrained desktop widths, should the expanded field transition to the mobile surface at the existing `1200px` breakpoint or at a narrower header-specific breakpoint? This requires browser geometry validation.
 
+## Implementation Outcome
+
+AUD-016 is implemented for the approved MVP scope.
+
+- `GlobalSearch.jsx` is mounted by `AppHeader` only for authenticated Investor users. Admin, unauthenticated, documentation, and public shells do not receive the Investor search control.
+- `utils/globalSearch.js` searches the existing role-filtered sidebar navigation metadata. It performs deterministic exact, prefix, word-prefix, substring, and navigation-order ranking without a second route registry.
+- Stock lookup reuses authenticated `GET /stocks/search` with the established two-character minimum, 300ms debounce, limit of 20, and server-side active-universe filtering. No global-search backend endpoint was added.
+- The verified stock result destination is the existing `/holdings/:stockId/prices` route through `holdingsPricesPath(stock.id)`. It uses the actual API `id`, `symbol`, `name`, and `exchange` fields; no symbol-to-ID mapping or invented route was introduced.
+- Desktop Search uses a compact 44px trigger and an anchored overlay that does not change header height or `.lido-main` sizing. Constrained widths use a full-width modal surface with backdrop, dialog semantics, focus containment, Escape handling, and focus restoration.
+- Pages and Stocks are the only result groups. Holdings, portfolio names, watchlists, strategies, screeners, artifacts, knowledge/wiki, reports/backtests, and Admin objects remain excluded.
+- Stock failures leave page results usable. Query generations suppress stale responses and responses arriving after close. Search state is ephemeral and creates no Page Visit History entry; selected routes follow normal navigation and record visits normally.
+- Mobile Search coordinates with the existing History/Notes modal utilities through a small shell event boundary. Page History data semantics and Contextual Notes API/domain behavior are unchanged.
+
+Focused coverage is in `tests/js/tos/global-search.test.jsx` and includes role filtering, exact page results, minimum query/debounce, stock navigation, stale-response suppression, partial failure, keyboard navigation, desktop focus restoration, and mobile dialog focus containment. Existing shell, Page History, and Contextual Notes tests remain green.
+
+Static status: **IMPLEMENTED**. Remaining runtime verification covers exact header geometry, 1200px/constrained overflow, soft keyboard and touch behavior, real screen-reader interaction, stacking with menus/toasts/utilities, and deployed bundle/performance reachability. AUD-004 and AUD-013 were not changed.
