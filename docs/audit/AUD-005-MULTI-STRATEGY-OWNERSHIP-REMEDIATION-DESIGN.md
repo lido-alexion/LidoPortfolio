@@ -381,3 +381,28 @@ Closure requires evidence that no financial correctness gap remains, strategy ow
 2. When allocation changes below already-deployed capital, is an explanatory deficit state sufficient, or should a future product decision define rebalancing/transfer behavior?
 3. Is recall initiation intentionally automation-only for Investors, with the API reserved for orchestration/admin paths, or should an Investor request/recall action be surfaced?
 4. What is the accepted browser-level canonical path for reviewing one recommendation from funding request through transaction and final holding ownership?
+
+## 26. Batch 1 Implementation Outcome — MS-001
+
+**Status:** `IMPLEMENTED` for the executable lifecycle assurance scope; AUD-005 remains `PARTIALLY_IMPLEMENTED` overall.
+
+Added `app/tests/Feature/MultiStrategyLifecycleAssuranceTest.php`, a deterministic Laravel feature suite using the existing `RecommendationLifecycleService`, `ExecutionEngine`, `PortfolioCapitalAccountingService`, `HoldingAdoption` route/service, and active-portfolio middleware.
+
+The primary scenario uses one Investor, one portfolio, two enabled strategies at 60/40, one physical cash pool, a fixed-price stock, and the following real transitions:
+
+1. initial capital snapshot with one physical cash account and zero reservations;
+2. Strategy A recommendation in `pending_review` with active strategy-version provenance;
+3. approval through `recordReview()` into `pending_execution`, creating a Strategy A reservation;
+4. explicit assertion that approval creates no transaction or holding;
+5. deterministic paper/manual execution through `ExecutionEngine::recordOrder()`;
+6. transaction and holding attribution to Strategy A;
+7. reservation conversion and final capital snapshot reconciliation.
+
+Secondary scenarios prove:
+
+- two recommendations for the same stock produce separate Strategy A and Strategy B ownership episodes and retain separate strategy-version provenance;
+- unmanaged same-stock adoption through `/api/holdings/{holding}/adopt` merges only into the selected strategy, preserves weighted cost/history evidence, and leaves the sibling strategy untouched;
+- cancelling an approved BUY releases the reservation without creating a transaction or holding;
+- a second Investor cannot adopt a foreign holding or review a foreign recommendation, while the foreign resources remain unchanged.
+
+The focused suite passes: **5 tests, 52 assertions**. No production code was required and no pending-SELL behavior was changed; `V4Spec004CashLedgerSpecialMovementsTest` and the existing capital/lending suites remain the authoritative coverage for delayed sale-proceeds availability and recall accounting. Browser discoverability and composite multi-page continuity remain runtime work. MS-002 through MS-005 remain open as previously described.
