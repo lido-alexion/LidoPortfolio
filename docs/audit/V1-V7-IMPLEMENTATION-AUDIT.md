@@ -8,7 +8,7 @@
 
 The repository has substantial domain, API, and test coverage, but that is not equivalent to full product-contract coverage. The clearest confirmed gap is V6 E4 Page Visit History: the accepted requirement specifies a desktop right-edge rail and mobile History action, while no matching component, state, or shell mount exists. The same shell also has no Global Search implementation. Contextual Notes are materially different: an investor-only trigger and fixed overlay pane are mounted, backed by API and persistence, but their placement and responsive behavior do not meet the complete E4 contract.
 
-The highest-risk static concern is in the live broker path. `ExecutionGate::assertCanSubmitBroker()` runs at admission to a semi-automatic request or automatic cycle, but `LiveBrokerExecutionService::submitOne()` can proceed to `BrokerGateway::placeOrder()` without invoking that gate again. This leaves the contract requirement to revalidate authority, halt, reconciliation, and broker readiness immediately before each broker submission unproven and creates a state-change window within a multi-order cycle. This is an implementation-alignment concern, not a claim that an unsafe order has occurred.
+The original highest-risk static concern was in the live broker path: admission-time validation did not repeat at `BrokerGateway::placeOrder()`. AUD-015 was subsequently remediated with a fresh, non-consuming final policy check before every regular broker placement attempt, including bounded insufficient-funds retries. Focused race tests now cover post-admission halt, entitlement, reconciliation, readiness, window, retry, and multi-order changes. A controlled broker/runtime safety drill remains required; static evidence is not evidence that an unsafe order occurred.
 
 The older V1/V2 feature-coverage audit is useful evidence of historical implementation claims, not proof of current reachability. It explicitly reports no V1 missing rows while also recording test failures and no React test suite; this audit therefore does not inherit its `IMPLEMENTED` conclusions without tracing current code and workflow.
 
@@ -154,7 +154,7 @@ The following rows cover every applicable Phase 1 requirement. Related requireme
 
 ## 6. Gap Register
 
-Only findings requiring attention are listed here. Severity is provisional and confidence reflects repository evidence, not business impact alone.
+Only findings requiring attention are listed here. Resolved items remain for historical traceability when a later remediation changes their static disposition. Severity is provisional and confidence reflects repository evidence, not business impact alone.
 
 | Audit ID | Requirement | Area/domain | Expected behavior | Actual implementation observed | Verdict | Severity candidate | Confidence | Source specification | Relevant code paths | Relevant tests | Missing test coverage | Runtime/manual verification required | Dependencies/related findings | Suggested remediation direction |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -172,7 +172,7 @@ Only findings requiring attention are listed here. Severity is provisional and c
 | AUD-012 | V5-REQ-018 | Authorization/security | Admin and investor applications expose only intended routes/data and preserve ownership | `AdminAppRoutes`, `AdminRoute` and role branches exist, and representative Investor API rejection tests pass, but the complete route/API/data matrix is not proven | RUNTIME_VERIFICATION_REQUIRED | High | Medium | V5 FEAT-042 | `App.jsx`; `AdminRoute`; `ResolveActivePortfolio.php`; auth middleware/controllers | `RoleSeparatedApplicationTest` covers representative Investor/Admin boundaries | Every route and object-level boundary | Test both roles against full route matrix with production-like data | AUD-005, AUD-009 | Complete an authorization matrix review and production ownership audit |
 | AUD-013 | V6-REQ-006, V5-REQ-013 | Dashboard and redesign | Redesign retains old controls, information, shortcuts and clear state handling | Current pages/routes exist, but repository has no complete old/current inventory gate | RUNTIME_VERIFICATION_REQUIRED | High | Medium | V6 E4 non-regression inventory | dashboard and named page components | Page-specific tests only | All eight named surfaces and state variants | Historical git comparison plus runtime walkthrough | AUD-003, AUD-004 | Reconstruct the before/after capability matrix from repository history |
 | AUD-014 | V7-REQ-003 | Database governance | New StoX objects use canonical namespace and automated checks prevent future drift | The only discovered validation reads `2026_09_12_100001_v7_stox_fundamentals_and_ml.php` and asserts its `Schema::create` names start `stox_`; it does not inventory all new objects or deployed schema. | PARTIALLY_IMPLEMENTED | Medium | High | V7 StoX Database Namespace Specification | `database/migrations`; `tests/Unit/V7/StoxNamespaceValidationTest.php` | Targeted migration-prefix test passes | Complete object inventory and future enforcement | Inspect deployed schema | AUD-009 | Compare migrations/models/schema against the namespace decision and record intentional exceptions |
-| AUD-015 | V4-REQ-001, V5-REQ-015, V6-REQ-001 | Live execution safety | Authority, halt, reconciliation, mode, TOTP and broker readiness are revalidated immediately before every broker submission | `ExecutionGate::assertCanSubmitBroker()` runs before a selected batch/cycle. `LiveBrokerExecutionService::submitOne()` reaches `BrokerGateway::placeOrder()` after matching/sizing without calling the gate again; it only revalidates recommendation/stock/strategy state. | PARTIALLY_IMPLEMENTED | High | High | `docs/current/execution-broker-safety.md` §4 and §15; V6 E1 | `ExecutionGate.php:36-113`; `LiveBrokerExecutionService.php:47-61, 201-272, 340-460` | `LiveExecutionFeatureTest` covers gate and bounded funds retry, but no state-transition-between-admission-and-place test was found | Race test for halt, entitlement, reconciliation or broker session change between batch admission and `placeOrder()` | Controlled concurrency/safety drill | AUD-011, AUD-012 | Revalidate the complete safety gate at the final submission boundary, with idempotent concurrency tests, after human approval |
+| AUD-015 | V4-REQ-001, V5-REQ-015, V6-REQ-001 | Live execution safety | Authority, halt, reconciliation, mode, TOTP and broker readiness are revalidated immediately before every broker submission | Resolved statically. `ExecutionGate::assertCurrentBrokerSubmissionState()` reloads User/Profile state without consuming TOTP; `submitOne()` reruns order-specific state/window checks and this pure gate after sizing/duplicate checks, before decision/order creation and `BrokerGateway::placeOrder()`. | IMPLEMENTED | High | High | `docs/current/execution-broker-safety.md` §4 and §15; V6 E1 | `ExecutionGate.php`; `LiveBrokerExecutionService.php`; `FakeBrokerGateway.php` test seam | `LiveExecutionFeatureTest` now proves post-admission halt, entitlement, reconciliation, broker-disconnect, window-close, MarginException-retry, multi-order, and stock-invalidation behavior; related unattended, reconciliation, GTT, readiness, controller, and TOTP suites pass | Controlled provider/concurrency safety drill remains repository-unprovable | Controlled broker/runtime safety drill | AUD-011, AUD-012 | Remediation implemented. Keep GTT/protection final-gate policy as a separate follow-up; do not infer it from this regular-order change. |
 | AUD-016 | V6-REQ-007 | Header / navigation | Header provides compact Global Search that expands without disruptive reflow and an appropriate constrained-width form | `AppHeader.jsx` renders brand, portfolio switcher, safety controls, notification bell, Help and profile menu; no search component, state, handler, API call, or test exists. The only current-doc anchor explicitly says none is confirmed. | NOT_IMPLEMENTED | Medium | High | V6 E4 §3.2; `docs/current/frontend-and-navigation.md:39-51, 261` | `app/resources/js/src/components/AppHeader.jsx:41-78`; React search for `GlobalSearch`/search controls | No meaningful test found | Desktop expansion, mobile surface and a11y acceptance | Browser check only to rule out an externally injected deployed control | AUD-001, AUD-002 | Reconstruct the accepted global-search workflow and header overflow behavior after human approval |
 
 The table above is the complete gap register. It contains only confirmed implementation/alignment concerns or bounded runtime-verification concerns, not every incomplete test assertion.
@@ -203,7 +203,7 @@ The table above is the complete gap register. It contains only confirmed impleme
 
 ## 10. Cross-Domain Consistency Findings
 
-- **Final broker gate versus documented invariant:** the current execution contract says broker submission revalidates authority/state. The batch-admission design makes this only partial at the `placeOrder()` boundary (`AUD-015`).
+- **Final broker gate versus documented invariant:** AUD-015 now revalidates fresh authority/state at the regular `placeOrder()` boundary. Provider behavior and concurrent production safety changes still require the documented controlled runtime drill.
 - **Shell contract versus implementation:** current frontend documentation correctly retains the V6 E4 rail, Page History, Global Search and footer contract, while the mounted React shell implements only a subset (`AUD-001`, `AUD-002`, `AUD-016`). This is an implementation gap, not a reason to weaken the contract.
 - **Notes context precision:** the notes API accepts `subject_type` and `subject_id` (`V6ContextualNotesTest`), but the mounted pane derives only a sanitized pathname and never supplies subject values. Entity-level contextual notes therefore require workflow verification beyond page-scoped CRUD.
 - **Accounting/execution funds boundary:** broker funds are fetched immediately before BUY sizing and pending SELL proceeds are not used as broker funds in `LiveBrokerExecutionService`; no contrary static path was found. Production broker-field semantics remain runtime verification.
@@ -271,27 +271,30 @@ The matrix verdict counts are intentionally conservative: `RUNTIME_VERIFICATION_
 
 **High**
 
-1. `AUD-015`: final per-order safety-gate revalidation is absent from the static `placeOrder()` path.
-2. `AUD-011`: broker reconciliation/halt recovery has no production-drill evidence.
-3. `AUD-012`: the complete Admin/Investor route and object-ownership matrix is not proven.
-4. `AUD-001`: accepted Page Visit History/right-edge rail appears absent from the active shell.
-5. `AUD-004`: V6 E4 non-regression evidence for redesigned core pages is missing.
-6. `AUD-009`: production secrets, deployed commit, scheduler and build output remain runtime questions.
-7. `AUD-007`: Trading Artifact Framework closure needs rollout and representative-data verification.
-8. `AUD-005`: multi-strategy ownership/adoption/lending investor surfaces are not fully traceable end to end.
-9. `AUD-014`: namespace enforcement is partial and lacks a complete drift inventory.
+1. `AUD-011`: broker reconciliation/halt recovery has no production-drill evidence.
+2. `AUD-012`: the complete Admin/Investor route and object-ownership matrix is not proven.
+3. `AUD-001`: accepted Page Visit History/right-edge rail appears absent from the active shell.
+4. `AUD-004`: V6 E4 non-regression evidence for redesigned core pages is missing.
+5. `AUD-009`: production secrets, deployed commit, scheduler and build output remain runtime questions.
+6. `AUD-007`: Trading Artifact Framework closure needs rollout and representative-data verification.
+7. `AUD-005`: multi-strategy ownership/adoption/lending investor surfaces are not fully traceable end to end.
+8. `AUD-014`: namespace enforcement is partial and lacks a complete drift inventory.
 
 **Medium**
 
 10. `AUD-016`: accepted Global Search is absent from the active header.
 
+**Resolved since the original audit**
+
+- `AUD-015`: fresh final regular-order safety revalidation is implemented and covered by focused post-admission race tests. A controlled broker/runtime safety drill remains required. GTT/protection policy is intentionally out of scope.
+
 ## 16. Recommended Remediation Sequence
 
-1. Resolve financial/security uncertainty first: validate `AUD-015`, run broker reconciliation/halt recovery drills, and complete the ownership matrix.
+1. Run broker reconciliation/halt recovery drills, validate AUD-015 against a controlled broker/runtime environment, and complete the ownership matrix.
 2. Establish production runtime evidence for deployment, scheduler, queue, holidays, providers, callbacks and tokens.
 3. Restore or explicitly supersede missing V6 shell capabilities, starting with Page History and Global Search; complete the non-regression inventory before redesign work.
 4. Trace multi-strategy/adoption/lending and backtest/replay/paper workflows through the Investor UI with realistic data.
 5. Complete artifact rollout, V7 ML/fundamental operating evidence, and namespace drift inventory.
 6. Close test gaps after product decisions; do not use unit or source-reading tests as substitutes for browser/runtime acceptance.
 
-No remediation was performed by this audit.
+No remediation was performed during the original audit. AUD-015 was subsequently remediated and is retained above with its original finding history and current static evidence.

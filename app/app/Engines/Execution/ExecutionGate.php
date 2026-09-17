@@ -50,6 +50,29 @@ class ExecutionGate
         #[\SensitiveParameter] ?string $totpCode = null,
         #[\SensitiveParameter] ?string $recoveryCode = null,
     ): void {
+        $this->assertCurrentBrokerSubmissionState($user, $profile, $trigger);
+
+        if ($trigger === self::TRIGGER_SEMI) {
+            $this->totp->assertRecentVerification($user, $totpCode, $recoveryCode);
+        }
+    }
+
+    /**
+     * Revalidates non-consuming broker submission policy against current state.
+     *
+     * @param  self::TRIGGER_*  $trigger
+     */
+    public function assertCurrentBrokerSubmissionState(
+        User $user,
+        PortfolioProfile $profile,
+        string $trigger,
+    ): void {
+        $user = User::query()->find($user->id);
+        $profile = PortfolioProfile::query()->find($profile->id);
+        if (! $user || ! $profile) {
+            throw new DomainException('Portfolio does not belong to this user.', 'PORTFOLIO_ACCESS_DENIED', 403);
+        }
+
         $this->assertPortfolioOwner($user, $profile);
         if ($profile->isPaper()) {
             throw new DomainException(
@@ -65,7 +88,7 @@ class ExecutionGate
                 403,
             );
         }
-        if (($user->fresh() ?? $user)->executionIsHalted()) {
+        if ($user->executionIsHalted()) {
             throw new DomainException(
                 'Emergency Halt is active for this account. Recover execution state before submitting broker orders.',
                 'EXECUTION_EMERGENCY_HALT',
@@ -104,10 +127,6 @@ class ExecutionGate
                 'TOTP_REQUIRED',
                 403,
             );
-        }
-
-        if ($trigger === self::TRIGGER_SEMI) {
-            $this->totp->assertRecentVerification($user, $totpCode, $recoveryCode);
         }
 
         $status = $this->brokerConnections->status($user);

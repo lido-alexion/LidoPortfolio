@@ -402,6 +402,54 @@ class LiveBrokerExecutionService
             }
         }
 
+        $freshUser = User::query()->find($user->id);
+        $freshProfile = PortfolioProfile::query()->find($profile->id);
+        if (! $freshUser || ! $freshProfile) {
+            return $this->decisionRow($profile, $user, $recommendation->id, $trigger, ExecutionDecision::OUTCOME_BLOCKED, 'PORTFOLIO_ACCESS_DENIED');
+        }
+        $freshRecommendation = TradingRecommendation::query()
+            ->forProfile($freshProfile)
+            ->where('id', $recommendationId)
+            ->first();
+        if (! $freshRecommendation) {
+            return $this->decisionRow($freshProfile, $freshUser, $recommendationId, $trigger, ExecutionDecision::OUTCOME_BLOCKED, 'not_found');
+        }
+        if (! $this->passesCurrentStateRevalidation($freshUser, $freshProfile, $freshRecommendation)) {
+            return $this->decisionRow(
+                $freshProfile,
+                $freshUser,
+                $recommendationId,
+                $trigger,
+                ExecutionDecision::OUTCOME_SKIPPED,
+                (string) $freshRecommendation->fresh()->cancellation_reason,
+            );
+        }
+        if (! $this->executionLifetime->isExecutionOpportunity($freshRecommendation)) {
+            return $this->decisionRow(
+                $freshProfile,
+                $freshUser,
+                $recommendationId,
+                $trigger,
+                ExecutionDecision::OUTCOME_SKIPPED,
+                'outside_execution_opportunity',
+            );
+        }
+        try {
+            $recommendation = $this->ensurePendingExecution($freshUser, $freshProfile, $freshRecommendation, $trigger);
+            $this->gate->assertCurrentBrokerSubmissionState($freshUser, $freshProfile, $trigger);
+        } catch (Throwable $e) {
+            $reason = $e instanceof DomainException ? $e->errorCode() : 'prepare_failed';
+            $this->recordDecision($freshProfile, $freshUser, $freshRecommendation, $trigger, ExecutionDecision::OUTCOME_BLOCKED, $reason);
+
+            return [
+                'recommendation_id' => $freshRecommendation->id,
+                'outcome' => ExecutionDecision::OUTCOME_BLOCKED,
+                'reason' => $reason,
+            ];
+        }
+        $user = $freshUser;
+        $profile = $freshProfile;
+
         $decision = $this->recordDecision($profile, $user, $recommendation, $trigger, ExecutionDecision::OUTCOME_SUBMITTED, null);
 
         $order = $existingByKey && $existingByKey->broker_order_id === null && $existingByKey->status === TradingOrder::STATUS_PENDING

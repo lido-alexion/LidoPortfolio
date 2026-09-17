@@ -118,6 +118,7 @@ class LiveExecutionFeatureTest extends TestCase
         $order = TradingOrder::query()->where('recommendation_id', $rec->id)->first();
         $this->assertNotNull($order->broker_order_id);
         $this->assertNotSame(TradingOrder::BROKER_FILLED, $order->broker_status);
+        $this->assertCount(6, $user->fresh()->totp_recovery_codes);
     }
 
     public function test_automatic_does_not_require_per_order_approval_or_totp_code(): void
@@ -321,12 +322,15 @@ class LiveExecutionFeatureTest extends TestCase
         $this->assertSame(10.0, (float) $firstOrder->quantity);
         $fake->seedSnapshot(new BrokerOrderSnapshot($firstOrder->broker_order_id, 'filled', 4, 0, 100, 'COMPLETE'));
         $live->reconcileOrder($profile, $firstOrder);
+        // The fake snapshot omits the newly filled holding; keep this test focused on residual sizing.
+        $profile->fresh()->forceFill(['execution_blocked_by_reconciliation' => false])->save();
 
         $this->assertSame(TradingRecommendation::STATUS_PENDING_EXECUTION, $rec->fresh()->status);
         $this->assertSame(600.0, (float) $rec->fresh()->remaining_target_amount);
         $this->assertSame(400.0, (float) $rec->fresh()->external_executed_amount);
 
         $second = $live->submitOne($user, $profile, $rec->id, ExecutionGate::TRIGGER_SEMI);
+        $this->assertArrayHasKey('order_id', $second, json_encode($second));
         $this->assertSame(6.0, (float) TradingOrder::query()->findOrFail($second['order_id'])->quantity);
     }
 
@@ -349,6 +353,166 @@ class LiveExecutionFeatureTest extends TestCase
         $this->assertSame([100.0, 95.0, 90.0], array_map(fn ($request) => $request->quantity, $fake->placed));
         $this->assertSame(2, $result['insufficient_funds_retries']);
         $this->assertSame('submitted', $result['outcome']);
+    }
+
+    public function test_final_gate_blocks_halt_activated_after_semi_automatic_admission(): void
+    {
+        [$user, $profile] = $this->actingReadyUser();
+        $this->setMode($user, $profile, PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC);
+        $rec = $this->pendingBuy($profile);
+        $fake = app(FakeBrokerGateway::class);
+        $fake->beforeAvailableEquityFunds = function () use ($user): void {
+            $user->fresh()->forceFill(['execution_state' => User::EXECUTION_STATE_EMERGENCY_HALT])->save();
+        };
+
+        $this->postJson('/api/v1/execution/submit-selected', [
+            'recommendation_ids' => [$rec->id],
+            'recovery_code' => $this->totpCode($user),
+        ])->assertOk()
+            ->assertJsonPath('data.0.outcome', 'blocked')
+            ->assertJsonPath('data.0.reason', 'EXECUTION_EMERGENCY_HALT');
+
+        $this->assertSame(0, $fake->placeCalls);
+        $this->assertSame(TradingRecommendation::STATUS_PENDING_EXECUTION, $rec->fresh()->status);
+        $this->assertDatabaseMissing('portfolio_tos_orders', ['recommendation_id' => $rec->id]);
+    }
+
+    public function test_final_gate_blocks_automatic_submission_after_entitlement_revocation(): void
+    {
+        [$user, $profile] = $this->actingReadyUser();
+        $this->setMode($user, $profile, PortfolioProfile::EXECUTION_MODE_AUTOMATIC, confirm: true);
+        $rec = $this->pendingBuy($profile);
+        $fake = app(FakeBrokerGateway::class);
+        $fake->beforeAvailableEquityFunds = function () use ($user): void {
+            $user->fresh()->forceFill(['automated_execution_entitled_at' => null])->save();
+        };
+
+        $result = app(LiveBrokerExecutionService::class)->submitAutomaticForProfile($profile->fresh(['user']));
+
+        $this->assertSame(0, $fake->placeCalls);
+        $this->assertSame(1, $result['skipped']);
+        $this->assertSame('EXECUTION_NOT_ENTITLED', $result['results'][0]['reason']);
+        $this->assertDatabaseMissing('portfolio_tos_orders', ['recommendation_id' => $rec->id]);
+    }
+
+    public function test_final_gate_blocks_submission_after_reconciliation_becomes_blocking(): void
+    {
+        [$user, $profile] = $this->actingReadyUser();
+        $this->setMode($user, $profile, PortfolioProfile::EXECUTION_MODE_AUTOMATIC, confirm: true);
+        $rec = $this->pendingBuy($profile);
+        $fake = app(FakeBrokerGateway::class);
+        $fake->beforeAvailableEquityFunds = function () use ($profile): void {
+            $profile->fresh()->forceFill(['execution_blocked_by_reconciliation' => true])->save();
+        };
+
+        $result = app(LiveBrokerExecutionService::class)->submitAutomaticForProfile($profile->fresh(['user']));
+
+        $this->assertSame(0, $fake->placeCalls);
+        $this->assertSame('RECONCILIATION_HOLDINGS_MISMATCH', $result['results'][0]['reason']);
+        $this->assertDatabaseMissing('portfolio_tos_orders', ['recommendation_id' => $rec->id]);
+    }
+
+    public function test_final_gate_blocks_submission_after_broker_connection_is_removed(): void
+    {
+        [$user, $profile] = $this->actingReadyUser();
+        $this->setMode($user, $profile, PortfolioProfile::EXECUTION_MODE_AUTOMATIC, confirm: true);
+        $rec = $this->pendingBuy($profile);
+        $fake = app(FakeBrokerGateway::class);
+        $fake->beforeAvailableEquityFunds = function () use ($user): void {
+            BrokerConnection::query()->where('user_id', $user->id)->delete();
+        };
+
+        $result = app(LiveBrokerExecutionService::class)->submitAutomaticForProfile($profile->fresh(['user']));
+
+        $this->assertSame(0, $fake->placeCalls);
+        $this->assertSame('BROKER_NOT_CONNECTED', $result['results'][0]['reason']);
+        $this->assertDatabaseMissing('portfolio_tos_orders', ['recommendation_id' => $rec->id]);
+    }
+
+    public function test_final_gate_rechecks_execution_window_after_preparation(): void
+    {
+        [$user, $profile] = $this->actingReadyUser();
+        $this->setMode($user, $profile, PortfolioProfile::EXECUTION_MODE_AUTOMATIC, confirm: true);
+        $rec = $this->pendingBuy($profile);
+        $rec->forceFill([
+            'execution_anchor_date' => '2026-09-11',
+            'first_eligible_execution_date' => '2026-09-11',
+            'second_eligible_execution_date' => '2026-09-11',
+            'execution_expires_at' => Carbon::parse('2026-09-11 15:30:00', 'Asia/Kolkata'),
+        ])->save();
+        Carbon::setTestNow(Carbon::parse('2026-09-11 09:16:00', 'Asia/Kolkata'));
+        $fake = app(FakeBrokerGateway::class);
+        $fake->beforeAvailableEquityFunds = function (): void {
+            Carbon::setTestNow(Carbon::parse('2026-09-11 15:30:00', 'Asia/Kolkata'));
+        };
+
+        $result = app(LiveBrokerExecutionService::class)->submitAutomaticForProfile($profile->fresh(['user']));
+
+        $this->assertSame(0, $fake->placeCalls);
+        $this->assertSame('outside_execution_opportunity', $result['results'][0]['reason']);
+        $this->assertSame(TradingRecommendation::STATUS_PENDING_EXECUTION, $rec->fresh()->status);
+    }
+
+    public function test_margin_retry_rechecks_final_gate_before_a_second_broker_attempt(): void
+    {
+        [$user, $profile] = $this->actingReadyUser();
+        $this->setMode($user, $profile, PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC);
+        $rec = $this->pendingBuy($profile, amount: 10_000);
+        $fake = app(FakeBrokerGateway::class);
+        $fake->insufficientFundsFailuresRemaining = 1;
+        $fake->afterPlaceOrder = function () use ($user): void {
+            $user->fresh()->forceFill(['execution_state' => User::EXECUTION_STATE_EMERGENCY_HALT])->save();
+        };
+
+        $result = app(LiveBrokerExecutionService::class)->submitOne(
+            $user,
+            $profile,
+            $rec->id,
+            ExecutionGate::TRIGGER_SEMI,
+        );
+
+        $this->assertSame(1, $fake->placeCalls);
+        $this->assertSame('blocked', $result['outcome']);
+        $this->assertSame('EXECUTION_EMERGENCY_HALT', $result['reason']);
+    }
+
+    public function test_final_gate_keeps_successful_automatic_batch_order_when_later_order_is_halted(): void
+    {
+        [$user, $profile] = $this->actingReadyUser();
+        $this->setMode($user, $profile, PortfolioProfile::EXECUTION_MODE_AUTOMATIC, confirm: true);
+        $first = $this->pendingBuy($profile, amount: 1_000);
+        $second = $this->pendingBuy($profile, amount: 2_000);
+        $fake = app(FakeBrokerGateway::class);
+        $fake->afterPlaceOrder = function () use ($user): void {
+            $user->fresh()->forceFill(['execution_state' => User::EXECUTION_STATE_EMERGENCY_HALT])->save();
+        };
+
+        $result = app(LiveBrokerExecutionService::class)->submitAutomaticForProfile($profile->fresh(['user']));
+
+        $this->assertSame(1, $fake->placeCalls);
+        $this->assertSame(1, $result['submitted']);
+        $this->assertSame(1, $result['skipped']);
+        $this->assertDatabaseHas('portfolio_tos_orders', ['recommendation_id' => $first->id]);
+        $this->assertDatabaseMissing('portfolio_tos_orders', ['recommendation_id' => $second->id]);
+    }
+
+    public function test_final_state_revalidation_blocks_stock_invalidated_during_preparation(): void
+    {
+        [$user, $profile] = $this->actingReadyUser();
+        $this->setMode($user, $profile, PortfolioProfile::EXECUTION_MODE_AUTOMATIC, confirm: true);
+        $stock = $this->stock();
+        $rec = $this->pendingBuy($profile, $stock);
+        $rec->forceFill(['execution_anchor_date' => now()->toDateString()])->save();
+        $fake = app(FakeBrokerGateway::class);
+        $fake->beforeAvailableEquityFunds = function () use ($stock): void {
+            $stock->fresh()->forceFill(['is_active' => false])->save();
+        };
+
+        $result = app(LiveBrokerExecutionService::class)->submitAutomaticForProfile($profile->fresh(['user']));
+
+        $this->assertSame(0, $fake->placeCalls);
+        $this->assertSame('stock_inactive', $result['results'][0]['reason']);
+        $this->assertSame(TradingRecommendation::STATUS_CANCELLED, $rec->fresh()->status);
     }
 
     public function test_non_margin_rejection_is_never_quantity_retried(): void

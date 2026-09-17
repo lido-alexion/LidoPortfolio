@@ -29,6 +29,12 @@ class FakeBrokerGateway implements BrokerGateway
 
     public int $insufficientFundsFailuresRemaining = 0;
 
+    /** @var (\Closure(int): void)|null */
+    public ?\Closure $beforeAvailableEquityFunds = null;
+
+    /** @var (\Closure(BrokerOrderRequest): void)|null */
+    public ?\Closure $afterPlaceOrder = null;
+
     public bool $nextPlaceThrows = false;
 
     public bool $nextFetchThrows = false;
@@ -78,6 +84,8 @@ class FakeBrokerGateway implements BrokerGateway
         $this->nextPlaceAmbiguous = false;
         $this->nextPlaceRejected = false;
         $this->insufficientFundsFailuresRemaining = 0;
+        $this->beforeAvailableEquityFunds = null;
+        $this->afterPlaceOrder = null;
         $this->nextPlaceThrows = false;
         $this->nextFetchThrows = false;
         $this->orders = [];
@@ -97,6 +105,12 @@ class FakeBrokerGateway implements BrokerGateway
 
     public function availableEquityFunds(int $userId): ?float
     {
+        if ($this->beforeAvailableEquityFunds) {
+            $callback = $this->beforeAvailableEquityFunds;
+            $this->beforeAvailableEquityFunds = null;
+            $callback($userId);
+        }
+
         return $this->availableFunds;
     }
 
@@ -146,37 +160,44 @@ class FakeBrokerGateway implements BrokerGateway
     {
         $this->placeCalls++;
         $this->placed[] = $request;
+        try {
+            if ($this->nextPlaceThrows) {
+                $this->nextPlaceThrows = false;
+                throw new \RuntimeException('Simulated broker outage.');
+            }
 
-        if ($this->nextPlaceThrows) {
-            $this->nextPlaceThrows = false;
-            throw new \RuntimeException('Simulated broker outage.');
+            if ($this->nextPlaceAmbiguous) {
+                $this->nextPlaceAmbiguous = false;
+                throw new BrokerAmbiguousException('Simulated broker timeout after place.');
+            }
+
+            if ($this->insufficientFundsFailuresRemaining > 0) {
+                $this->insufficientFundsFailuresRemaining--;
+                throw new DomainException(
+                    'Insufficient funds.',
+                    'BROKER_INSUFFICIENT_FUNDS',
+                    422,
+                );
+            }
+
+            $id = 'fake-'.$this->seq++;
+            if ($this->nextPlaceRejected) {
+                $this->nextPlaceRejected = false;
+                $this->orders[$id] = new BrokerOrderSnapshot($id, 'rejected', 0, $request->quantity, null, 'REJECTED');
+
+                return new BrokerSubmission($id, 'rejected', 'Rejected by fake broker');
+            }
+
+            $this->orders[$id] = new BrokerOrderSnapshot($id, 'open', 0, $request->quantity, null, 'OPEN');
+
+            return new BrokerSubmission($id, 'submitted');
+        } finally {
+            if ($this->afterPlaceOrder) {
+                $callback = $this->afterPlaceOrder;
+                $this->afterPlaceOrder = null;
+                $callback($request);
+            }
         }
-
-        if ($this->nextPlaceAmbiguous) {
-            $this->nextPlaceAmbiguous = false;
-            throw new BrokerAmbiguousException('Simulated broker timeout after place.');
-        }
-
-        if ($this->insufficientFundsFailuresRemaining > 0) {
-            $this->insufficientFundsFailuresRemaining--;
-            throw new DomainException(
-                'Insufficient funds.',
-                'BROKER_INSUFFICIENT_FUNDS',
-                422,
-            );
-        }
-
-        $id = 'fake-'.$this->seq++;
-        if ($this->nextPlaceRejected) {
-            $this->nextPlaceRejected = false;
-            $this->orders[$id] = new BrokerOrderSnapshot($id, 'rejected', 0, $request->quantity, null, 'REJECTED');
-
-            return new BrokerSubmission($id, 'rejected', 'Rejected by fake broker');
-        }
-
-        $this->orders[$id] = new BrokerOrderSnapshot($id, 'open', 0, $request->quantity, null, 'OPEN');
-
-        return new BrokerSubmission($id, 'submitted');
     }
 
     public function fetchOrder(int $userId, string $brokerOrderId): ?BrokerOrderSnapshot
