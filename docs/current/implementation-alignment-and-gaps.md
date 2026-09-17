@@ -1,43 +1,82 @@
 # Implementation Alignment And Gaps
 
-## Current Alignment
+## 1. Purpose
 
-The current codebase broadly aligns with the consolidated docs:
+This index tracks accepted contracts requiring implementation verification, confirmed gaps, intentional deviations, runtime-only verification, and resolved alignment items. It does not redefine domain contracts or assume code is complete.
 
-- Product identity is StoX in visible app header/title areas.
-- Laravel routes and React navigation match the feature taxonomy in [Frontend And Navigation](./frontend-and-navigation.md).
-- Portfolio/cash/accounting, market data, screeners, strategy, recommendations, execution, analytics, notifications, knowledge, and admin features all have concrete controllers, services, models, migrations, and tests.
-- `/api/v1` is additive and Sanctum-authenticated.
-- Cached market data and data-quality gates are central to downstream trading workflows.
-- Artifact/registry infrastructure exists alongside legacy screeners and strategies.
-- Knowledge Board and Wiki are implemented as related but distinct content types.
+## 2. Classification Vocabulary
 
-## Known Gaps And Residual Risks
+Phase 2 uses: `IMPLEMENTED`, `PARTIALLY_IMPLEMENTED`, `NOT_IMPLEMENTED`, `IMPLEMENTED_BUT_NOT_WIRED`, `IMPLEMENTED_DIFFERENTLY`, `TEST_ONLY`, `DEAD_CODE`, `RUNTIME_VERIFICATION_REQUIRED`, and `SPEC_CONFLICT`. Do not assign one of these merely from filenames, components, or passing related tests.
 
-1. Naming legacy remains intentional but noisy. Repository path, database table prefix, CSS prefix, and some code identifiers still use Lido/lido/portfolio naming while product UI uses StoX. This is not automatically a bug, but new user-facing surfaces should say StoX.
-2. Static in-app help under `app/public/docs` may drift from `docs/current` because it is served product content, not the source-of-truth corpus. When changing product behaviour, update both if the help page describes that behaviour.
-3. Classic `/api/*` analytics and `/api/v1/analytics/*` overlap. Keep both documented until a deliberate consolidation happens.
-4. Discovery/candidates routes and pages exist but are not sidebar-first in the current UX. Treat them as inspection/debug surfaces unless product direction changes.
-5. Historical docs mentioned JWT and versioned precedence chains. Current implementation uses Sanctum; archived JWT language must not drive new changes.
-6. V7 fundamentals and ML are implemented as analytical/admin capabilities, but deterministic strategy remains authoritative. Do not let ML silently override strategy/recommendation decisions without an explicit future spec update.
-7. Some older docs listed optional test gaps around cash adjust, calendar reminder dedupe, dashboard composition, explorer manual relative strength, and snapshot soft-fail assertions. The test suite has broad coverage now, but these areas remain good targets when bugs appear.
-8. `app/public/docs` is large and manually generated/static. Broken help links can look like source spec bugs; check the app help asset before changing `docs/current`.
+## 3. Current State Before Phase 2 Audit
 
-## Test Anchors
+Documentation reconstruction is complete. Current docs contain accepted contracts, implementation anchors, and explicit alignment notes. The V1-V7 implementation audit is still pending; there is no blanket claim that the codebase completely implements the corpus.
 
-Use these tests as starting points when debugging matching domains:
+## 4. Domain Alignment Index
 
-- Auth/admin/security: `AuthSessionTest`, `AuthCsrfLoginTest`, `UserManagementTest`, `UserInviteTest`, `PasswordResetLinkTest`, `TotpFlowTest`, `V6PersonalApiTokenTest`
-- Portfolio/accounting: `TransactionUpdateTest`, `TransactionSellRealizationTest`, `HistoricalHoldingsTest`, `PortfolioSnapshotApiTest`, `V5CashStatementTest`, `V5AccountPerformanceApiTest`, `V5AccountTaxReportApiTest`
-- Market data/data quality: `DailyMarketSyncTest`, `UniversePriceSyncApiTest`, `DataQualityApiTest`, `DataQualityPipelineGatingTest`, `DatasetVersioningTest`, `FundamentalDataIntegrationTest`, `MlScoringLifecycleTest`
-- Screeners/artifacts: `ScreenerTest`, `ScreenerRegistryApiTest`, `F060SharedScreenerAuthzTest`, `ArtifactLibraryApiTest`, `ArtifactActionApiTest`, `ArtifactBindingServiceTest`
-- Strategy/recommendations: `V3RecommendationGenerationTest`, `TradingOsPipelineTest`, `MarketGateRecommendationTest`, `F137RecommendationPreviewTest`, `RecommendationLendingLifecycleTest`
-- Execution/broker/safety: `LiveExecutionFeatureTest`, `AdvancedOrdersFeatureTest`, `ExecutionSafety`-related tests, `KiteCallbackTest`, `KiteReadinessReminderTest`
-- Analytics/backtesting/review: `ExplorerAnalyticsTest`, `DashboardGrowthTest`, `DashboardTopMoversTest`, `V5BacktestLifecycleTest`, `V5PortfolioReplayFoundationTest`
-- Notifications/calendar/alerts: `NotificationPublisherTest`, `NotificationDeliveryProcessorTest`, `NotificationSettingsApiTest`, `CalendarEventTest`, `AlertPolicyTest`, `AdminOperationalAlertTest`
-- Knowledge/wiki: `KnowledgeBoardTest`, `KnowledgeBoardImageTest`, `V5WikiFoundationTest`, `V6ContextualNotesTest`
+| Domain | Owning document | Main audit focus | Current status |
+| --- | --- | --- | --- |
+| Frontend / Navigation | [Frontend](./frontend-and-navigation.md) | Shell, rails, responsive/state adoption | `PENDING_PHASE_2_AUDIT` |
+| Portfolio / Accounting | [Portfolio](./portfolio-cash-accounting.md) | Ledger/cash/ownership/capital integrity | `PENDING_PHASE_2_AUDIT` |
+| Market Data | [Market](./market-data-and-data-quality.md) | Sync, quality, freshness, versions | `PENDING_PHASE_2_AUDIT` |
+| Discovery / Screeners | [Discovery](./discovery-screeners-registries.md) | Grammar, discovery evidence, PIT runtime | `PENDING_PHASE_2_AUDIT` |
+| Strategy / Recommendations | [Strategy](./strategy-and-recommendations.md) | Multi-strategy, lifecycle, capital | `PENDING_PHASE_2_AUDIT` |
+| Execution / Broker / Safety | [Execution](./execution-broker-safety.md) | Gates, orders, halt, reconciliation | `PENDING_PHASE_2_AUDIT` |
+| Analytics / Backtesting | [Analytics](./analytics-review-backtesting.md) | Pinning, replay, recovery | `PENDING_PHASE_2_AUDIT` |
+| Notifications / Calendar | [Notifications](./notifications-calendar-alerts.md) | Occurrence/delivery, retry, reminders | `PENDING_PHASE_2_AUDIT` |
+| Knowledge / Documentation | [Knowledge](./knowledge-and-documentation.md) | Ownership, capability shares, served help | `PENDING_PHASE_2_AUDIT` |
+| Administration / Security / API | [Security](./administration-security-api.md) | Role/profile/token/TOTP boundary | `PENDING_PHASE_2_AUDIT` |
+| Trading Artifacts | [Artifacts](./stox-trading-artifacts-ai-guide.md) | Binding, package, sharing, historical pins | `PENDING_PHASE_2_AUDIT` |
 
-## Archive Use
+## 5. Highest-Risk Audit Areas
 
-Archived docs are available under [../archive/](../archive/) for rare historical questions. When an archived doc conflicts with this corpus, prefer current docs and implementation. If the implementation appears wrong, open a bug or patch and update this file.
+- **Frontend:** five-zone shell, right utility rail, Page Visit History, contextual Notes placement, V6 non-regression, responsive/state vocabulary.
+- **Execution:** sessions/windows, internal match/residual ordering, broker funds, bounded insufficient-funds retry, reconciliation/halt, partial/finalization.
+- **Accounting:** reservations, capital status, lending/recall/bridge, ownership isolation, pending proceeds.
+- **Security:** Admin/Investor split, active profile, token scope, TOTP, entitlement, callback state.
+- **Market/Analytics:** freshness, dataset attribution, point-in-time replay isolation, artifact/data pins.
+- **Artifacts:** bindings, archive, sharing, upgrade/rollback, historical pins.
+- **Notifications:** provider retry/runtime, event reachability, critical-banner behavior.
 
+## 6. Runtime-Only Verification Areas
+
+Provider/fallback behavior; scheduler/queue deployment; Sanctum cookie/CSRF configuration; broker callback deployment; real Telegram/email/webhook delivery; responsive/accessibility behavior; concurrency/race safety; and production execution/reconciliation require runtime evidence.
+
+## 7. Test Evidence Index
+
+Use detailed test-anchor tables in each owning document. High-level starting points: frontend navigation tests; transaction/cash/ownership tests; sync/freshness/quality tests; screener/artifact binding tests; strategy/lifecycle/capital tests; execution/Kite/TOTP/reconciliation tests; backtest/replay/paper tests; notification delivery/calendar/alert tests; wiki/context note tests; and auth/role/token tests.
+
+## 8. Known Intentional Legacy / Non-Gaps
+
+- Lido repository/database/CSS naming persists alongside StoX branding.
+- Legacy `/api/*` remains alongside additive `/api/v1/*`.
+- Generated served help is distinct from current documentation source/authority.
+- Archived JWT wording is superseded by Sanctum current architecture.
+
+## 9. Confirmed Gaps
+
+No new implementation gap is classified here before Phase 2 evidence. The accepted V6 Page Visit History/right utility rail contract is `PENDING_PHASE_2_AUDIT`; it must be traced for mount/reachability and responsive behavior before classification.
+
+## 10. How Phase 2 Updates This File
+
+Phase 2 populates an auditable gap register with requirement ID, domain, contract reference, implementation evidence, verdict, severity, user impact, runtime-verification need, and recommended next action. Audit gathers evidence only; it does not fix code.
+
+## 11. Debugging And Investigation Entry Points
+
+| Domain | Start with | Code/test entry point |
+| --- | --- | --- |
+| Frontend | Frontend doc | `PageChrome`, navigation catalog, shell/navigation tests |
+| Portfolio | Portfolio doc | ledger/holding/cash services and accounting tests |
+| Market | Market doc | sync/gap/freshness services and tests |
+| Discovery | Discovery doc | screener evaluator/run/registry tests |
+| Strategy | Strategy doc | generation/lifecycle/capital tests |
+| Execution | Execution doc | safety/order/Kite/reconciliation tests |
+| Analytics | Analytics doc | performance/backtest/replay tests |
+| Notifications | Notifications doc | publisher/planner/processor/calendar tests |
+| Knowledge | Knowledge doc | contextual note/wiki services/tests |
+| Security | Security doc | middleware/auth/token/TOTP tests |
+| Artifacts | Artifact guide | validation/package/binding tests |
+
+## 12. Archive Use
+
+Archive is history/source archaeology. Unsuperseded accepted knowledge should already be promoted into current docs. Phase 2 may use archive for detail but must not treat it as automatic current override.

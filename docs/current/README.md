@@ -1,33 +1,46 @@
 # StoX Current Product Documentation
 
-This directory is the current source of truth for StoX product behaviour and technical contracts.
+## 1. Purpose Of Current Docs
 
-The old chronological/versioned specs have been retired to [../archive/](../archive/). Use archived specs only for historical context, source archaeology, or to understand why a decision changed. Do not treat archived wording as current behaviour when it conflicts with these documents or with the running code.
+`docs/current/**` is the feature-oriented current contract corpus for StoX. It records accepted product/technical behavior, implementation anchors, test anchors, debugging entry points, and implementation-alignment notes.
 
-## Current Document Map
+## 2. Authority And Conflict Rules
 
-1. [Product Overview](./product-overview.md) - product identity, users, source-of-truth rules, high-level architecture.
-2. [Frontend And Navigation](./frontend-and-navigation.md) - React SPA pages, sidebar taxonomy, routing, documentation/help UX.
-3. [Portfolio, Cash, And Accounting](./portfolio-cash-accounting.md) - portfolios, transactions, holdings, cash ledger, corporate actions, snapshots, tax.
-4. [Market Data And Data Quality](./market-data-and-data-quality.md) - stock master, OHLCV, indices, fundamentals, ML, sync jobs, quality gates.
-5. [Discovery, Screeners, And Registries](./discovery-screeners-registries.md) - screeners, registry artifacts, indicator registry, discovery candidates.
-6. [Strategy And Recommendations](./strategy-and-recommendations.md) - strategy configuration, scoring, recommendation lifecycle, capital resolution.
-7. [Execution, Broker, And Safety](./execution-broker-safety.md) - paper/live execution, Kite, TOTP, safety halt, protections, reconciliation.
-8. [Analytics, Review, And Backtesting](./analytics-review-backtesting.md) - dashboards, exploratory analytics, review reports, backtests, replay.
-9. [Notifications, Calendar, And Alerts](./notifications-calendar-alerts.md) - notification center, channels, operational/user alerts, calendar.
-10. [Knowledge And Documentation](./knowledge-and-documentation.md) - Knowledge Board notes, wiki, public sharing, in-app help.
-11. [Administration, Security, And API](./administration-security-api.md) - auth, sessions, users, personal tokens, admin surfaces, API shape.
-12. [Implementation Alignment And Gaps](./implementation-alignment-and-gaps.md) - known code/doc mismatches, residual risk, test anchors.
-13. [StoX Trading Artifacts AI Guide](./stox-trading-artifacts-ai-guide.md) - AI-facing authoring contract and examples for indicator, screener, and strategy artifacts.
+1. `docs/current/**` records the accepted current product/technical contract.
+2. Verified implementation anchors describe known current implementation.
+3. `implementation.md` and archived accepted specs are source archaeology for details not yet promoted.
+4. A contract/code disagreement is an implementation-alignment question, not permission to rewrite the contract to match code.
+5. During implementation audit, classify whether code is wrong, contract is wrong, the requirement was superseded, or runtime verification is required.
+6. Change code/docs only after that decision. Do not use an archive requirement to override current accepted contract without review.
 
-## Authority Rules
+## 3. Document Map
 
-- These documents are feature-oriented and not version-oriented.
-- Store only latest/current behaviour in the main sections.
-- Use `Historical Context` only for superseded names, decisions, and lineage.
-- If implementation and current docs disagree, fix one of them in the same change set and mention the mismatch in [Implementation Alignment And Gaps](./implementation-alignment-and-gaps.md).
-- Deployment and environment runbooks remain outside this corpus under `deploy/` unless they define product behaviour.
+1. [Product Overview](./product-overview.md) - system model, lifecycle, domains, invariants.
+2. [Frontend And Navigation](./frontend-and-navigation.md) - shell, routing, responsive/page contracts.
+3. [Portfolio, Cash, And Accounting](./portfolio-cash-accounting.md) - ledger, cash, ownership, capital.
+4. [Market Data And Data Quality](./market-data-and-data-quality.md) - prices, datasets, sync, quality, fundamentals/ML inputs.
+5. [Discovery, Screeners, And Registries](./discovery-screeners-registries.md) - screeners, candidates, registry/runtime bridge.
+6. [Strategy And Recommendations](./strategy-and-recommendations.md) - strategy policy, lifecycle, capital/review.
+7. [Execution, Broker, And Safety](./execution-broker-safety.md) - broker, modes, safety, reconciliation.
+8. [Analytics, Review, And Backtesting](./analytics-review-backtesting.md) - performance, attribution, backtest/replay/simulation.
+9. [Notifications, Calendar, And Alerts](./notifications-calendar-alerts.md) - notification lifecycle, alerts, calendar.
+10. [Knowledge And Documentation](./knowledge-and-documentation.md) - notes, wiki, sharing, served help.
+11. [Administration, Security, And API](./administration-security-api.md) - auth, Admin boundary, tokens, API governance.
+12. [Trading Artifacts And Runtime Guide](./stox-trading-artifacts-ai-guide.md) - artifact envelopes, lifecycle, validation, bindings, packages, AI boundary.
+13. [Implementation Alignment And Gaps](./implementation-alignment-and-gaps.md) - Phase 2 audit index and evidence status.
 
-## Product Identity
+## 4. How To Use This Corpus
 
-The current product name is StoX. The repository, database table prefixes, CSS class prefixes, and some historical docs still use `LidoPortfolio` / `lido` naming. Treat that as historical or technical legacy naming unless a UI surface explicitly brands itself as StoX.
+- **Implement:** start with the owning domain, follow cross-links, then use anchors/tests.
+- **Debug:** use the owning document's debugging guide and implementation/test anchors.
+- **Audit:** preserve accepted contract, gather code/runtime evidence, and update the alignment index/gap register.
+- **Answer product questions:** start with Product Overview, then the owning domain.
+- **Historical research:** use [../archive/](../archive/) only when current docs lack rationale; do not promote history automatically.
+
+## 5. Updating Documentation
+
+When accepted behavior changes: update the owning current doc, update cross-domain boundaries, update served help when user-facing, add/refresh implementation-alignment notes when runtime/code is unverified, and leave archive history intact.
+
+## 6. Current Product Identity
+
+The product is StoX. `LidoPortfolio`/`lido` repository, database, CSS, and archive names are intentional technical/history legacy unless a current UI explicitly uses them.
