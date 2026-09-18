@@ -79,6 +79,8 @@ class PortfolioReplayController extends Controller
             'starting_cash' => ['required_if:starting_mode,new_simulated', 'nullable', 'numeric', 'gt:0'],
             'price_method' => ['required', Rule::in(PortfolioProfile::SIMULATION_PRICE_METHODS)],
             'adverse_slippage_percent' => ['sometimes', 'numeric', 'between:0,100'],
+            'strategy_version_overrides' => ['sometimes', 'array'],
+            'strategy_version_overrides.*' => ['integer', 'min:1'],
         ]);
     }
 }

@@ -111,7 +111,7 @@ This Level 1 result matches the accepted FEAT-020/current-doc contract: complete
 
 ## 11. Strategy / Artifact Provenance
 
-Backtest runs retain strategy/version, reusable artifact version, binding revision, screener version references, parameter overrides, assumptions, and context. Replay pins binding revisions, artifact versions, hashes, dependencies, and strategy projection details in `pinned_world`. Paper clone copies active artifact binding revisions; later live artifact publication does not change the cloned binding automatically.
+Backtest runs retain strategy/version, reusable artifact version, binding revision, screener version references, parameter overrides, assumptions, and context. Replay pins binding revisions, artifact versions, hashes, dependencies, and strategy projection details in `pinned_world`. Historical Replay defaults to the binding revision effective at the branch boundary. It also accepts an explicit `strategy_version_overrides` map keyed by historical `binding_id` and valued by a published `artifact_version_id`; the selected version is pinned without changing historical economic state or source bindings. Each counterfactual row retains both historical and selected version identity, and `pinned_world.counterfactual` discloses the substitution. Paper clone copies active artifact binding revisions; later live artifact publication does not change the cloned binding automatically.
 
 AUD-007 separately verifies artifact v1/v2 rollout and rollback. AUD-008 verifies that simulation consumers retain their own pins rather than resolving historical output through current mutable bindings.
 
@@ -140,6 +140,7 @@ The production scheduler/worker commands are present for all three (`ProcessBack
 | Continue/cancel/duplicate/compare Backtest | History/detail controls | Backtest lifecycle routes | `UI_REACHABLE` |
 | Create Strategy draft from modified Backtest | Backtest detail | `/v1/backtests/{id}/strategy-draft` | `UI_REACHABLE` |
 | Create/list Replay | Portfolio Replay panel | `/replays`, readiness, compare | `UI_REACHABLE` |
+| Select published counterfactual Strategy versions | Historical branch version selector after readiness check | `/replays/readiness`, `/replays` with `strategy_version_overrides` | `UI_REACHABLE` |
 | Inspect/cancel/delete Replay | Replay panel | `/replays/{id}` routes | `UI_REACHABLE` |
 | Create Paper Portfolio | Portfolios page | `POST /api/portfolios` | `UI_REACHABLE` |
 | Clone Live as Paper | Portfolios page | `POST /api/portfolios/{id}/clone-as-paper` | `UI_REACHABLE` |
@@ -168,7 +169,7 @@ Portfolio route binding is user-scoped, active profile middleware scopes request
 | --- | --- | --- | --- |
 | Backtest lifecycle | `V5BacktestLifecycleTest` | Durable cancellation, terminal state, processor exclusion, tombstone | Full real completed run with before/after live ledger snapshot |
 | Backtest overrides/drafts | `V5BacktestParameterOverrideTest` | Bounded overrides, immutable source, unpublished provenance-linked draft | Browser disclosure of all assumptions |
-| Replay | `V5PortfolioReplayFoundationTest`, `HistoricalReplayTemporalStateTest`, `HistoricalSimulationDatasetResyncTest` | Pinned world, checkpoints, economic transition, source isolation, cancellation, idempotency, readiness blocking, temporal reconstruction, controlled Dataset A/B resync behavior | Deployed worker and operational resync visibility |
+| Replay | `V5PortfolioReplayFoundationTest`, `HistoricalReplayTemporalStateTest`, `HistoricalSimulationDatasetResyncTest`, `CounterfactualHistoricalReplayTest` | Pinned world, checkpoints, economic transition, source isolation, cancellation, idempotency, readiness blocking, temporal reconstruction, controlled Dataset A/B resync behavior, default historical and counterfactual version pins, invalid override rejection | Deployed worker and browser selection/disclosure |
 | Paper creation/clone | `V5PaperPortfolioFoundationTest` | Immutable type, independent cash/holdings, binding pins, no history copy, broker-mode guard | Full strategy projection clone and browser walkthrough |
 | Paper processing | `V5PaperSimulationProcessorTest` | Simulated fill, missing-price wait, partial affordability, idempotency | Production worker/catch-up timing |
 | Paper price boundary | `V5SimulationPriceServiceTest` | Effective session price behavior | Provider/runtime data boundary |
@@ -184,7 +185,7 @@ The existing focused suites form the executable assurance set rather than a new 
 3. Paper foundation and processor tests create/clone Paper, process simulated fills, assert Paper cash/holding/event changes, preserve live/source independence, and block broker authority.
 4. Clone tests assert no copied transaction history, copied opening holdings when requested, pinned binding identity, and no ongoing source holding synchronization.
 
-This is sufficient static assurance for the implemented paths, while the two bounded gaps below prevent overall closure.
+This is sufficient static assurance for the implemented paths. SIM-002 retains its documented Level 1 limitation; the remaining browser/deployment checks do not represent a known static semantic defect.
 
 ## 20. Gap Register
 
@@ -192,8 +193,9 @@ This is sufficient static assurance for the implemented paths, while the two bou
 | --- | --- | --- | --- | --- |
 | SIM-001 | Historical Replay branch reconstruction and temporal capital state | `IMPLEMENTED` | High | `HistoricalReplayStateBuilder`; immutable reservation and bridge-return ledgers; as-of loan status/amount derivation; precise fail-closed recall/legacy-state blockers; historical branch and lifecycle regression suites |
 | SIM-002 | Dataset version is attribution, not an immutable market-data snapshot; completed results are immutable but equivalent reruns after a physical correction may differ | `IMPLEMENTED_WITH_LIMITATION` | Medium | `HistoricalSimulationDatasetResyncTest`: Dataset A/B controlled correction, unchanged original checkpoint/evidence, changed equivalent rerun, and future-period boundary check; current docs explicitly permit current-data reruns to differ |
-| SIM-003 | A single three-mode end-to-end fixture is not present; assurance is split across strong mode-specific suites | `RUNTIME_VERIFICATION_REQUIRED` | Medium | Existing tests cover each mode and key isolation invariants, but not one combined workflow |
+| SIM-003 | A single three-mode end-to-end fixture is not present; assurance is split across strong mode-specific suites | `OPTIONAL_ASSURANCE` | Low | Backtest, Replay, and Paper each have focused production-service isolation suites; a composite fixture is not required by a distinct product contract |
 | SIM-004 | Full browser proof of mode labels, partial results, recovery, and constrained-width controls is absent | `RUNTIME_VERIFICATION_REQUIRED` | Medium | Routes/components and source tests exist; browser geometry and interaction remain unverified |
+| SIM-005 | Historical Replay lacks explicit published Strategy-version substitution for counterfactual runs | `IMPLEMENTED` | Medium | `PortfolioReplayService` validates `binding_id -> artifact_version_id` overrides, preserves historical/selected evidence, pins the selected version, and `CounterfactualHistoricalReplayTest` covers default, partial, invalid, inaccessible, and non-historical inputs |
 
 No evidence was found that Paper can submit to a live broker, that Replay writes the source ledger, that Backtest writes live holdings/cash, that clone state synchronizes continuously, or that artifact rollout rewrites simulation provenance.
 
@@ -213,7 +215,7 @@ Current bounded override, cancellation, provenance, and draft behavior is implem
 
 ### D — Replay semantics
 
-Historical branch reconstruction is implemented for the persisted state elements currently supported by the model. Reservation lifecycle events and bridge repayment events are appended by their normal domain services; normal-loan amount/status is derived from returns effective at or before the boundary. Recall progression and legacy bridge/reservation rows without sufficient temporal evidence fail closed with precise blockers rather than using current mutable state. Counterfactual version substitution is not currently exposed by the Replay API and remains a bounded follow-up if required by FEAT-020.
+Historical branch reconstruction is implemented for the persisted state elements currently supported by the model. Reservation lifecycle events and bridge repayment events are appended by their normal domain services; normal-loan amount/status is derived from returns effective at or before the boundary. Recall progression and legacy bridge/reservation rows without sufficient temporal evidence fail closed with precise blockers rather than using current mutable state. Counterfactual substitution is implemented as an additive historical-binding override: published same-lineage versions are library-access and dependency validated, then pinned with historical-vs-selected evidence. The reconstructed economic starting state remains unchanged.
 
 ### E — Paper/clone semantics
 
@@ -231,7 +233,7 @@ Run deployed worker/scheduler, production-like dataset, browser, and provider-in
 
 1. Preserve the existing mode-specific feature assurance suites and add a composite isolation test only if a single release gate is operationally required.
 2. Retain the controlled resync test as the regression gate for immutable results, DatasetVersion attribution, and no future-period leakage.
-3. Run browser and deployed-worker verification for all three modes, including cancellation, pause, missing-data, and partial-result states.
+3. Run browser and deployed-worker verification for all three modes, including counterfactual selector/disclosure, cancellation, pause, missing-data, and partial-result states.
 
 ## 23. Runtime Verification Boundary
 
@@ -242,18 +244,18 @@ Remaining runtime checks are:
 - deployed historical data resync behavior and operational visibility of source-data changes; exact rerun reproducibility is not promised by the current contract;
 - production-like market data and dataset availability;
 - browser mode labels, responsive controls, partial/error states, and Paper/live distinction;
+- browser counterfactual version selection and historical-vs-selected disclosure;
 - role/profile route reachability and deployed configuration.
 
 ## 24. Final AUD-008 Assessment
 
-**Disposition: `PARTIALLY_IMPLEMENTED`.**
+**Disposition: `IMPLEMENTED`.**
 
-Backtest, Replay, and Paper are materially distinct and server-side isolated. Existing executable suites plus the historical branch assurance prove the most important no-live-mutation, broker exclusion, clone independence, artifact/version provenance, checkpoint, cancellation, as-of reconstruction, temporal capital-state handling, and missing-data boundaries. SIM-001 is implemented with precise fail-closed blockers for legacy or incomplete temporal evidence. SIM-002 is implemented with a documented Level 1 limitation: completed results and evidence are immutable, while equivalent reruns after physical corrections use current data and may differ. Browser and deployed-worker checks remain, along with SIM-003's optional composite assurance.
+Backtest, Replay, and Paper are materially distinct and server-side isolated. Existing executable suites plus the historical branch assurance prove the most important no-live-mutation, broker exclusion, clone independence, artifact/version provenance, checkpoint, cancellation, as-of reconstruction, temporal capital-state handling, and missing-data boundaries. Historical Replay now supports explicit published same-lineage version substitution while preserving historical economic state and historical-vs-selected evidence. SIM-002 remains an accepted Level 1 limitation: completed results and evidence are immutable, while equivalent reruns after physical corrections use current data and may differ. SIM-003 is optional composite assurance; SIM-004 remains browser/deployment verification.
 
-This is a bounded partial verdict, not evidence of a live-state contamination defect. AUD-007, AUD-011, AUD-012, and AUD-015 remain separate.
+This is a bounded static closure, not evidence of a live-state contamination defect. Deployment, browser, and operational verification remain; AUD-007, AUD-011, AUD-012, and AUD-015 remain separate.
 
 ## 25. Open Questions
 
-- Should FEAT-020 counterfactual strategy/artifact version substitution be exposed in the current Replay API, or remain an explicit future capability?
 - If a future product contract requires Level 2 change detection or Level 3 exact reruns, which bounded market-data retention strategy should be adopted?
 - Is one composite three-mode assurance test required as a release gate, given the existing mode-specific feature suites?

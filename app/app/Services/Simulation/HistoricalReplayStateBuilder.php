@@ -149,7 +149,7 @@ final class HistoricalReplayStateBuilder
     private function bindingsAsOf(PortfolioProfile $profile, CarbonImmutable $boundary): array
     {
         $bindings = ArtifactBinding::query()->where('profile_id', $profile->id)
-            ->with('revisions.artifactVersion.dependencies.targetVersion.artifact')->get();
+            ->with('revisions.artifactVersion.artifact', 'revisions.artifactVersion.dependencies.targetVersion.artifact')->get();
         $rows = [];
         $blockers = [];
         foreach ($bindings as $binding) {
@@ -175,6 +175,7 @@ final class HistoricalReplayStateBuilder
             $rows[] = [
                 'binding_id' => $binding->id, 'binding_revision_id' => $revision->id, 'binding_settings' => $settings,
                 'artifact_id' => $binding->artifact_id, 'artifact_version_id' => $revision->artifact_version_id,
+                'artifact_name' => $version?->artifact?->name, 'artifact_version_semver' => $version?->semver,
                 'definition_hash' => $version?->definition_hash, 'strategy_definition' => is_array($content['definition'] ?? null) ? $content['definition'] : [],
                 'dependencies' => $version?->dependencies->map(fn ($dependency): array => [
                     'kind' => $dependency->kind, 'required' => (bool) $dependency->required,

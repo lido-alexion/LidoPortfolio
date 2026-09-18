@@ -6,7 +6,11 @@ use App\Models\ArtifactBinding;
 use App\Models\PortfolioProfile;
 use App\Models\PortfolioReplayCheckpoint;
 use App\Models\PortfolioReplayRun;
+use App\Models\ReusableArtifactVersion;
 use App\Models\TradingStrategy;
+use App\Services\Artifacts\ArtifactLibraryAccessService;
+use App\Services\Artifacts\ArtifactType;
+use App\Services\Artifacts\ArtifactUsabilityEvaluator;
 use App\Services\FeeCalculatorService;
 use App\Services\ProfileSettingsService;
 use App\Support\TradingCalendar;
@@ -22,6 +26,8 @@ final class PortfolioReplayService
         private FeeCalculatorService $fees,
         private ProfileSettingsService $profileSettings,
         private HistoricalReplayStateBuilder $historicalState,
+        private ArtifactLibraryAccessService $artifactAccess,
+        private ArtifactUsabilityEvaluator $artifactUsability,
     ) {}
 
     /** @param array<string, mixed> $input */
@@ -100,8 +106,10 @@ final class PortfolioReplayService
         if ($historicalBindingRows !== null) {
             // Historical branches pin the revision that was effective at the
             // branch boundary, never the mutable current binding.
-            $pinned = $historicalBindingRows;
+            $pinned = $this->applyCounterfactualOverrides($profile, $historicalBindingRows, $input['strategy_version_overrides'] ?? [], $limitations);
             $bindings = collect($historicalBindingRows);
+        } elseif (($input['strategy_version_overrides'] ?? []) !== []) {
+            $limitations[] = 'counterfactual_overrides_require_historical_branch';
         }
         if ($mode === 'new_simulated') {
             $state['strategies'] = collect($pinned)->map(fn (array $row): array => [
@@ -146,9 +154,10 @@ final class PortfolioReplayService
                 'blocked_artifact_binding',
                 'strategy_projection_missing',
                 'strategy_allocations_not_complete',
-            ]) ? 'blocked' : 'ready_with_limitations'),
+            ]) || collect($limitations)->contains(fn (string $limitation): bool => str_starts_with($limitation, 'counterfactual_')) ? 'blocked' : 'ready_with_limitations'),
             'requested_period' => ['from' => $start, 'to' => $input['period_end']],
             'starting_state' => $state,
+            'counterfactual_options' => $mode === 'historical_branch' ? $this->counterfactualOptions($profile, $pinned) : [],
             'pinned_world' => [
                 'binding_revisions' => $pinned,
                 'historical_reconstruction' => $historicalEvidence,
@@ -162,10 +171,153 @@ final class PortfolioReplayService
                     'resolution' => 'daily_eod',
                 ],
                 'portfolio_economic_settings' => $this->economicSettings($profile),
+                'counterfactual' => $this->counterfactualEvidence($pinned),
                 'captured_at' => now()->toISOString(),
             ],
             'limitations' => $limitations,
         ];
+    }
+
+    /**
+     * @param list<array<string,mixed>> $historicalRows
+     * @param array<string|int,mixed> $overrides
+     * @param list<string> $limitations
+     * @return list<array<string,mixed>>
+     */
+    private function applyCounterfactualOverrides(PortfolioProfile $profile, array $historicalRows, array $overrides, array &$limitations): array
+    {
+        $rows = [];
+        $byBinding = collect($historicalRows)->keyBy(fn (array $row): string => (string) $row['binding_id']);
+        $overrideKeys = array_map('strval', array_keys($overrides));
+
+        foreach ($historicalRows as $row) {
+            $historicalVersionId = (int) ($row['artifact_version_id'] ?? 0);
+            $row['historical_artifact_version_id'] = $historicalVersionId;
+            $row['selected_artifact_version_id'] = $historicalVersionId;
+            $row['is_counterfactual'] = false;
+            $rows[] = $row;
+        }
+
+        foreach ($overrideKeys as $bindingId) {
+            if (! $byBinding->has($bindingId)) {
+                $limitations[] = 'counterfactual_binding_not_in_historical_world';
+                continue;
+            }
+            $selectedVersionId = filter_var($overrides[$bindingId] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            if ($selectedVersionId === false) {
+                $limitations[] = 'counterfactual_version_id_invalid';
+                continue;
+            }
+            $historicalRow = $byBinding->get($bindingId);
+            $version = ReusableArtifactVersion::query()->with(['artifact', 'dependencies.targetVersion.artifact'])->find($selectedVersionId);
+            if (! $version) {
+                $limitations[] = 'counterfactual_version_not_found';
+                continue;
+            }
+            if ($version->status !== ReusableArtifactVersion::STATUS_PUBLISHED) {
+                $limitations[] = 'counterfactual_version_not_published';
+                continue;
+            }
+            if ($version->artifact?->archived_at !== null) {
+                $limitations[] = 'counterfactual_version_archived';
+                continue;
+            }
+            if (! $this->artifactAccess->canAccess($profile->user, $version)) {
+                $limitations[] = 'counterfactual_version_inaccessible';
+                continue;
+            }
+            if ((int) $version->artifact_id !== (int) $historicalRow['artifact_id']
+                || $version->artifact?->artifact_type !== ArtifactType::STRATEGY) {
+                $limitations[] = 'counterfactual_version_wrong_lineage';
+                continue;
+            }
+            [$usability] = $this->artifactUsability->evaluate($version);
+            if ($usability === ArtifactBinding::BLOCKED) {
+                $limitations[] = 'counterfactual_version_unusable';
+                continue;
+            }
+
+            $index = collect($rows)->search(fn (array $row): bool => (string) $row['binding_id'] === $bindingId);
+            if ($index === false) {
+                $limitations[] = 'counterfactual_binding_not_in_historical_world';
+                continue;
+            }
+            $rows[$index] = $this->selectedBindingRow($rows[$index], $version, $usability);
+        }
+
+        return $rows;
+    }
+
+    /** @param array<string,mixed> $row */
+    private function selectedBindingRow(array $row, ReusableArtifactVersion $version, string $usability): array
+    {
+        $content = is_array($version->content_json) ? $version->content_json : [];
+        $row['artifact_version_id'] = $version->id;
+        $row['selected_artifact_version_id'] = $version->id;
+        $row['artifact_name'] = $version->artifact?->name;
+        $row['artifact_version_semver'] = $version->semver;
+        $row['usability_state'] = $usability;
+        $row['is_counterfactual'] = (int) $row['historical_artifact_version_id'] !== (int) $version->id;
+        $row['definition_hash'] = $version->definition_hash;
+        $row['strategy_definition'] = is_array($content['definition'] ?? null) ? $content['definition'] : [];
+        $row['dependencies'] = $version->dependencies->map(function ($dependency): array {
+            $target = $dependency->targetVersion;
+            $targetContent = is_array($target?->content_json) ? $target->content_json : [];
+
+            return [
+                'kind' => $dependency->kind,
+                'required' => (bool) $dependency->required,
+                'artifact_type' => $target?->artifact?->artifact_type,
+                'artifact_version_id' => $target?->id,
+                'definition_hash' => $target?->definition_hash,
+                'definition' => is_array($targetContent['definition'] ?? null) ? $targetContent['definition'] : null,
+                'indicator_id' => $dependency->indicator_id,
+                'indicator_version' => $dependency->indicator_version,
+            ];
+        })->values()->all();
+
+        return $row;
+    }
+
+    /** @param list<array<string,mixed>> $rows @return array{is_counterfactual:bool,overrides:list<array<string,mixed>>} */
+    private function counterfactualEvidence(array $rows): array
+    {
+        $overrides = collect($rows)->filter(fn (array $row): bool => (bool) ($row['is_counterfactual'] ?? false))
+            ->map(fn (array $row): array => [
+                'binding_id' => $row['binding_id'],
+                'strategy_id' => $row['strategy_id'],
+                'strategy_name' => $row['strategy_name'],
+                'historical_binding_revision_id' => $row['binding_revision_id'],
+                'historical_artifact_version_id' => $row['historical_artifact_version_id'],
+                'historical_semver' => $row['historical_artifact_version_semver'] ?? null,
+                'selected_artifact_version_id' => $row['selected_artifact_version_id'],
+                'selected_semver' => $row['artifact_version_semver'] ?? null,
+            ])->values()->all();
+
+        return ['is_counterfactual' => $overrides !== [], 'overrides' => $overrides];
+    }
+
+    /** @param list<array<string,mixed>> $rows @return array<string,list<array<string,mixed>>> */
+    private function counterfactualOptions(PortfolioProfile $profile, array $rows): array
+    {
+        $options = [];
+        foreach ($rows as $row) {
+            $versions = ReusableArtifactVersion::query()->with('artifact')
+                ->where('artifact_id', $row['artifact_id'])
+                ->where('status', ReusableArtifactVersion::STATUS_PUBLISHED)
+                ->get()
+                ->filter(fn (ReusableArtifactVersion $version): bool => $version->artifact?->archived_at === null
+                    && $this->artifactAccess->canAccess($profile->user, $version))
+                ->map(fn (ReusableArtifactVersion $version): array => [
+                    'artifact_version_id' => $version->id,
+                    'semver' => $version->semver,
+                    'name' => $version->artifact?->name,
+                    'is_historical' => (int) $version->id === (int) ($row['historical_artifact_version_id'] ?? $row['artifact_version_id']),
+                ])->values()->all();
+            $options[(string) $row['binding_id']] = $versions;
+        }
+
+        return $options;
     }
 
     /** @return array<string, string|null> */

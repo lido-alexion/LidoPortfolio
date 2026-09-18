@@ -19,7 +19,7 @@ export default function PortfolioReplayPanel({ portfolio }) {
     prior.setUTCFullYear(prior.getUTCFullYear() - 1);
     const [form, setForm] = useState({
         starting_mode: 'new_simulated', period_start: isoDate(prior), period_end: isoDate(today),
-        starting_cash: '100000', price_method: 'next_open', adverse_slippage_percent: '0',
+        starting_cash: '100000', price_method: 'next_open', adverse_slippage_percent: '0', strategy_version_overrides: {},
     });
     const [runs, setRuns] = useState([]);
     const [readiness, setReadiness] = useState(null);
@@ -40,6 +40,7 @@ export default function PortfolioReplayPanel({ portfolio }) {
         ...form,
         ...(form.starting_mode === 'new_simulated' ? { starting_cash: Number(form.starting_cash) } : { starting_cash: null }),
         adverse_slippage_percent: Number(form.adverse_slippage_percent || 0),
+        ...(form.starting_mode === 'historical_branch' ? { strategy_version_overrides: form.strategy_version_overrides } : {}),
     });
 
     const assess = async () => {
@@ -96,6 +97,14 @@ export default function PortfolioReplayPanel({ portfolio }) {
     };
 
     const update = (key, value) => { setForm((current) => ({ ...current, [key]: value })); setReadiness(null); };
+    const updateOverride = (bindingId, versionId) => update('strategy_version_overrides', {
+        ...form.strategy_version_overrides,
+        ...(versionId ? { [bindingId]: Number(versionId) } : (() => {
+            const next = { ...form.strategy_version_overrides };
+            delete next[bindingId];
+            return next;
+        })()),
+    });
 
     return <div className="card mb-4">
         <div className="card-body">
@@ -111,6 +120,18 @@ export default function PortfolioReplayPanel({ portfolio }) {
                 <div className="col-md-1 d-flex gap-1"><button type="button" className="btn btn-outline-primary btn-sm" disabled={busy} onClick={assess}>Check</button><button type="button" className="btn btn-primary btn-sm" disabled={busy || readiness?.status === 'blocked'} onClick={start}>Start</button></div>
             </div>
             {readiness && <div className={`alert mt-3 mb-0 py-2 ${readiness.status === 'blocked' ? 'alert-danger' : readiness.status === 'ready_with_limitations' ? 'alert-warning' : 'alert-success'}`}><strong>{readiness.status.replaceAll('_', ' ')}</strong>{readiness.limitations?.length ? <ul className="small mb-0">{readiness.limitations.map((item) => <li key={item}>{item.replaceAll('_', ' ')}</li>)}</ul> : null}</div>}
+            {form.starting_mode === 'historical_branch' && readiness?.pinned_world?.binding_revisions?.length ? <div className="border rounded p-2 mt-3" data-testid="replay-counterfactual-options">
+                <strong className="small">Strategy versions</strong>
+                <div className="small text-muted mb-2">Historical Replay uses the versions active on the branch date. Optionally select a different published version for a counterfactual run.</div>
+                {readiness.pinned_world.binding_revisions.map((binding) => {
+                    const options = readiness.counterfactual_options?.[String(binding.binding_id)] || [];
+                    const selectedVersion = binding.selected_artifact_version_id || binding.artifact_version_id;
+                    return <div className="row g-2 align-items-center mb-1" key={binding.binding_id}>
+                        <div className="col-md-5 small">{binding.strategy_name || `Strategy ${binding.strategy_id}`}<br /><span className="text-muted">Historical version {options.find((option) => option.artifact_version_id === binding.historical_artifact_version_id)?.semver || binding.historical_artifact_version_id}</span></div>
+                        <div className="col-md-7"><label className="visually-hidden" htmlFor={`replay-version-${binding.binding_id}`}>Version for {binding.strategy_name || `Strategy ${binding.strategy_id}`}</label><select id={`replay-version-${binding.binding_id}`} className="form-select form-select-sm" value={form.strategy_version_overrides?.[binding.binding_id] || (binding.is_counterfactual ? selectedVersion : '')} onChange={(event) => updateOverride(binding.binding_id, event.target.value)}><option value="">Use historical version</option>{options.map((option) => <option key={option.artifact_version_id} value={option.artifact_version_id}>{option.name} {option.semver}{option.is_historical ? ' (historical)' : ''}</option>)}</select></div>
+                    </div>;
+                })}
+            </div> : null}
             <div className="d-flex justify-content-end mt-3"><button type="button" className="btn btn-outline-primary btn-sm" disabled={busy || selectedIds.length < 2} onClick={compare}>Compare selected ({selectedIds.length})</button></div>
             <div className="table-responsive mt-2"><table className="table table-sm align-middle mb-0"><thead><tr><th aria-label="Select for comparison" /><th>Created</th><th>Period</th><th>State</th><th>Status</th><th>Progress</th><th>Assumptions</th><th /></tr></thead><tbody>
                 {runs.length === 0 && <tr><td colSpan="8" className="text-muted small">No Portfolio Replay runs.</td></tr>}
@@ -126,6 +147,7 @@ export default function PortfolioReplayPanel({ portfolio }) {
                 <div className="d-flex justify-content-between"><strong>Replay evidence #{selected.id}</strong><button type="button" className="btn-close" aria-label="Close" onClick={() => setSelected(null)} /></div>
                 <div className="small mt-2"><strong>Status:</strong> {selected.status}; <strong>checkpoints:</strong> {selected.evidence_summary?.checkpoint_count || 0}; <strong>transactions:</strong> {selected.evidence_summary?.transaction_count || 0}; <strong>recommendations:</strong> {selected.evidence_summary?.recommendation_count || 0}</div>
                 <div className="small"><strong>Fill assumptions:</strong> {selected.price_method?.replaceAll('_', ' ')}, adverse slippage {Number(selected.adverse_slippage_percent)}%</div>
+                {selected.pinned_world?.counterfactual?.is_counterfactual ? <div className="alert alert-info py-2 mt-2 mb-0"><strong>Counterfactual Strategy versions</strong>{selected.pinned_world.counterfactual.overrides?.map((override) => <div className="small" key={override.binding_id}>{override.strategy_name || `Strategy ${override.strategy_id}`}: historical {override.historical_semver || override.historical_artifact_version_id} -&gt; used {override.selected_semver || override.selected_artifact_version_id}</div>)}</div> : null}
                 {selected.results?.valuation && <div className="small"><strong>Ending value:</strong> {Number(selected.results.valuation.total_value || 0).toLocaleString()}</div>}
                 {selected.results?.limitations?.length ? <div className="alert alert-warning py-2 mt-2 mb-0"><strong>Limitations</strong><ul className="small mb-0">{selected.results.limitations.map((item) => <li key={item}>{item.replaceAll('_', ' ')}</li>)}</ul></div> : null}
                 {selected.evidence_summary?.latest_market_fingerprint && <div className="small text-muted text-break mt-2"><strong>Latest market fingerprint:</strong> {selected.evidence_summary.latest_market_fingerprint}</div>}
