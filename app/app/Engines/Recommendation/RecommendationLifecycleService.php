@@ -6,6 +6,7 @@ use App\Models\PortfolioProfile;
 use App\Models\RecommendationReview;
 use App\Models\TradingOrder;
 use App\Models\TradingRecommendation;
+use App\Models\RecommendationReservationEvent;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Repositories\Tos\RecommendationQueryRepository;
@@ -177,6 +178,11 @@ class RecommendationLifecycleService
             'reservation_status' => TradingRecommendation::RESERVATION_RESERVED,
             'reserved_at' => now(),
         ])->save();
+        RecommendationReservationEvent::query()->create([
+            'profile_id' => $r->profile_id, 'recommendation_id' => $r->id,
+            'state' => RecommendationReservationEvent::STATE_RESERVED, 'amount' => $amount,
+            'occurred_at' => now(), 'created_at' => now(),
+        ]);
     }
 
     /**
@@ -184,11 +190,17 @@ class RecommendationLifecycleService
      */
     public function releaseReservation(TradingRecommendation $r): void
     {
+        $amount = (float) $r->reserved_amount;
         $r->forceFill([
             'reservation_status' => TradingRecommendation::RESERVATION_RELEASED,
             'reserved_amount' => 0,
             'reserved_at' => null,
         ])->save();
+        RecommendationReservationEvent::query()->create([
+            'profile_id' => $r->profile_id, 'recommendation_id' => $r->id,
+            'state' => RecommendationReservationEvent::STATE_RELEASED, 'amount' => $amount,
+            'occurred_at' => now(), 'created_at' => now(),
+        ]);
     }
 
     /**
@@ -196,11 +208,17 @@ class RecommendationLifecycleService
      */
     public function convertReservation(TradingRecommendation $r, float $executedAmount): void
     {
+        $amount = (float) $r->reserved_amount;
         $r->forceFill([
             'reservation_status' => TradingRecommendation::RESERVATION_CONVERTED,
             'executed_amount' => round($executedAmount, 4),
             'reserved_amount' => 0,
         ])->save();
+        RecommendationReservationEvent::query()->create([
+            'profile_id' => $r->profile_id, 'recommendation_id' => $r->id,
+            'state' => RecommendationReservationEvent::STATE_CONVERTED, 'amount' => $amount,
+            'occurred_at' => now(), 'created_at' => now(),
+        ]);
     }
 
     /**

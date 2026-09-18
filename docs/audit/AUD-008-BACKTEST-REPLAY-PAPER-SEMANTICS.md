@@ -55,7 +55,7 @@ Replay is a Portfolio-scoped historical timeline, not an aggregate Strategy Back
 
 Replay applies historical trade transitions, fees, capital/economic state, holdings, pending recommendations, and valuation into checkpoint state. It does not write source Portfolio holdings, transactions, or cash ledger rows. Replay can compare runs and retains tombstones after deletion.
 
-`new_simulated` and `historical_branch` remain separate. A historical branch reconstructs ledger-derived holdings/ownership episodes, effective-date cash, binding revisions, reservations, loans/returns, recalls, bridge loans, and unsettled sale proceeds as of the branch boundary. The resulting state and evidence are stored on `PortfolioReplayRun` and are not re-read from the source Portfolio during processing. Ambiguous ownership, unavailable cash/history, missing strategy binding evidence, and incomplete allocation evidence still block the branch; missing starting valuation is retained as an explicit limitation. The branch is processed by the same checkpoint processor without writing source holdings, transactions, or cash.
+`new_simulated` and `historical_branch` remain separate. A historical branch reconstructs ledger-derived holdings/ownership episodes, effective-date cash, binding revisions, reservation events, loans/returns, recalls, bridge loans/returns, and unsettled sale proceeds as of the branch boundary. The resulting state and evidence are stored on `PortfolioReplayRun` and are not re-read from the source Portfolio during processing. Ambiguous ownership, unavailable cash/history, missing strategy binding evidence, incomplete allocation evidence, missing legacy reservation lifecycle evidence, progressed legacy recall state, and progressed legacy bridge state block the branch; missing starting valuation is retained as an explicit limitation. The branch is processed by the same checkpoint processor without writing source holdings, transactions, or cash.
 
 ## 7. Paper Portfolio
 
@@ -168,7 +168,7 @@ This is sufficient static assurance for the implemented paths, while the two bou
 
 | ID | Finding | Classification | Severity | Evidence |
 | --- | --- | --- | --- | --- |
-| SIM-001 | Historical Replay branch reconstruction | `IMPLEMENTED` | High | `HistoricalReplayStateBuilder`, `V5PortfolioReplayFoundationTest::test_historical_branch_reconstructs_as_of_holdings_cash_and_binding_then_processes_in_isolation`, and precise fail-closed blockers |
+| SIM-001 | Historical Replay branch reconstruction and temporal capital state | `IMPLEMENTED` | High | `HistoricalReplayStateBuilder`; immutable reservation and bridge-return ledgers; as-of loan status/amount derivation; precise fail-closed recall/legacy-state blockers; historical branch and lifecycle regression suites |
 | SIM-002 | Dataset version is attribution, not an immutable market-data snapshot, so post-resync historical reproducibility is not fully proven | `RUNTIME_VERIFICATION_REQUIRED` | High | Current analytics and market-data docs explicitly retain this limitation; market fingerprints exist per Replay checkpoint |
 | SIM-003 | A single three-mode end-to-end fixture is not present; assurance is split across strong mode-specific suites | `RUNTIME_VERIFICATION_REQUIRED` | Medium | Existing tests cover each mode and key isolation invariants, but not one combined workflow |
 | SIM-004 | Full browser proof of mode labels, partial results, recovery, and constrained-width controls is absent | `RUNTIME_VERIFICATION_REQUIRED` | Medium | Routes/components and source tests exist; browser geometry and interaction remain unverified |
@@ -191,7 +191,7 @@ Current bounded override, cancellation, provenance, and draft behavior is implem
 
 ### D — Replay semantics
 
-Historical branch reconstruction is implemented for the persisted state elements currently supported by the model. Keep the builder fail-closed for ambiguous ownership, unavailable cash/history, unversioned strategy policy, and incomplete allocation evidence. Counterfactual version substitution is not currently exposed by the Replay API and remains a bounded follow-up if required by FEAT-020.
+Historical branch reconstruction is implemented for the persisted state elements currently supported by the model. Reservation lifecycle events and bridge repayment events are appended by their normal domain services; normal-loan amount/status is derived from returns effective at or before the boundary. Recall progression and legacy bridge/reservation rows without sufficient temporal evidence fail closed with precise blockers rather than using current mutable state. Counterfactual version substitution is not currently exposed by the Replay API and remains a bounded follow-up if required by FEAT-020.
 
 ### E — Paper/clone semantics
 
@@ -226,7 +226,7 @@ Remaining runtime checks are:
 
 **Disposition: `PARTIALLY_IMPLEMENTED`.**
 
-Backtest, Replay, and Paper are materially distinct and server-side isolated. Existing executable suites plus the historical branch assurance prove the most important no-live-mutation, broker exclusion, clone independence, artifact/version provenance, checkpoint, cancellation, as-of reconstruction, and missing-data boundaries. SIM-001 is implemented with precise fail-closed blockers. Full point-in-time reproducibility after physical dataset resync remains unproven, and browser and deployed-worker checks remain.
+Backtest, Replay, and Paper are materially distinct and server-side isolated. Existing executable suites plus the historical branch assurance prove the most important no-live-mutation, broker exclusion, clone independence, artifact/version provenance, checkpoint, cancellation, as-of reconstruction, temporal capital-state handling, and missing-data boundaries. SIM-001 is implemented with precise fail-closed blockers for legacy or incomplete temporal evidence. Full point-in-time reproducibility after physical dataset resync remains unproven, and browser and deployed-worker checks remain.
 
 This is a bounded partial verdict, not evidence of a live-state contamination defect. AUD-007, AUD-011, AUD-012, and AUD-015 remain separate.
 

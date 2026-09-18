@@ -270,6 +270,9 @@ class V5PortfolioReplayFoundationTest extends TestCase
             'status' => TradingStrategy::STATUS_ACTIVE, 'allocation_pct' => 100, 'reusable_artifact_id' => $artifact->id,
             'created_at' => '2026-01-01 09:00:00', 'updated_at' => '2026-01-01 09:00:00',
         ]);
+        DB::table('portfolio_tos_strategies')->where('id', $strategy->id)->update([
+            'created_at' => '2026-01-01 09:00:00', 'updated_at' => '2026-01-01 09:00:00',
+        ]);
         $binding = ArtifactBinding::query()->create([
             'binding_uuid' => (string) Str::uuid(), 'profile_id' => $profile->id, 'artifact_id' => $artifact->id,
             'status' => 'enabled', 'usability_state' => 'usable', 'created_at' => '2026-01-01 09:00:00',

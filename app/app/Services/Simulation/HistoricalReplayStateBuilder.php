@@ -8,7 +8,9 @@ use App\Models\CapitalRecall;
 use App\Models\Holding;
 use App\Models\PendingSaleProceeds;
 use App\Models\PortfolioProfile;
+use App\Models\RecommendationReservationEvent;
 use App\Models\RecallBridgeLoan;
+use App\Models\RecallBridgeLoanReturn;
 use App\Models\TradingRecommendation;
 use App\Models\TradingStrategy;
 use App\Models\Transaction;
@@ -46,8 +48,10 @@ final class HistoricalReplayStateBuilder
         [$bindings, $bindingBlockers] = $this->bindingsAsOf($profile, $boundary);
         $blockers = array_merge($blockers, $bindingBlockers);
 
-        $reservations = $this->reservationsAsOf($profile, $boundary);
-        [$loans, $recalls, $bridges] = $this->lendingAsOf($profile, $boundary);
+        [$reservations, $reservationBlockers] = $this->reservationsAsOf($profile, $boundary);
+        $blockers = array_merge($blockers, $reservationBlockers);
+        [$loans, $recalls, $bridges, $lendingBlockers] = $this->lendingAsOf($profile, $boundary);
+        $blockers = array_merge($blockers, $lendingBlockers);
         $proceeds = $this->proceedsAsOf($profile, $boundary);
 
         $state = [
@@ -154,6 +158,12 @@ final class HistoricalReplayStateBuilder
             if ($revision === null || $revision->binding_status !== ArtifactBinding::STATUS_ENABLED) continue;
             $strategy = TradingStrategy::query()->where('profile_id', $profile->id)->where('reusable_artifact_id', $binding->artifact_id)->first();
             if ($strategy === null) { $blockers[] = 'historical_strategy_binding_unavailable'; continue; }
+            if ($strategy->updated_at?->gt($boundary)) {
+                // The strategy row is mutable; without a versioned metadata
+                // record, its later name/configuration cannot describe T.
+                $blockers[] = 'historical_strategy_metadata_unavailable';
+                continue;
+            }
             $settings = is_array($revision->settings_json) ? $revision->settings_json : [];
             $allocation = $settings['allocation_pct'] ?? null;
             if ($allocation === null) {
@@ -181,33 +191,81 @@ final class HistoricalReplayStateBuilder
         return [$rows, array_values(array_unique($blockers))];
     }
 
-    /** @return list<array<string,mixed>> */
+    /** @return array{list<array<string,mixed>>,list<string>} */
     private function reservationsAsOf(PortfolioProfile $profile, CarbonImmutable $boundary): array
     {
-        return TradingRecommendation::query()->where('profile_id', $profile->id)->where('reservation_status', TradingRecommendation::RESERVATION_RESERVED)
-            ->whereNotNull('reserved_at')->where('reserved_at', '<=', $boundary)->get()->map(fn (TradingRecommendation $r): array => [
-                'recommendation_id' => $r->id, 'strategy_id' => $r->owningStrategyId(), 'amount' => (float) $r->reserved_amount,
-                'reserved_at' => $r->reserved_at?->toIso8601String(),
-            ])->all();
+        $rows = [];
+        $blockers = [];
+        $recommendations = TradingRecommendation::query()->where('profile_id', $profile->id)
+            ->where(function ($query) use ($boundary): void {
+                $query->where('reserved_at', '<=', $boundary)->orWhere('approved_at', '<=', $boundary);
+            })->get();
+        foreach ($recommendations as $recommendation) {
+            $events = RecommendationReservationEvent::query()->where('recommendation_id', $recommendation->id)
+                ->where('occurred_at', '<=', $boundary)->orderBy('occurred_at')->orderBy('id')->get();
+            if ($events->isNotEmpty()) {
+                $last = $events->last();
+                if ($last->state === RecommendationReservationEvent::STATE_RESERVED) {
+                    $rows[] = [
+                        'recommendation_id' => $recommendation->id, 'strategy_id' => $recommendation->owningStrategyId(),
+                        'amount' => (float) $last->amount, 'reserved_at' => $last->occurred_at?->toIso8601String(),
+                    ];
+                }
+                continue;
+            }
+
+            // Legacy rows retain enough evidence only while still reserved.
+            if ($recommendation->reservation_status === TradingRecommendation::RESERVATION_RESERVED
+                && $recommendation->reserved_at !== null && $recommendation->reserved_at->lte($boundary)) {
+                $rows[] = [
+                    'recommendation_id' => $recommendation->id, 'strategy_id' => $recommendation->owningStrategyId(),
+                    'amount' => (float) $recommendation->reserved_amount, 'reserved_at' => $recommendation->reserved_at->toIso8601String(),
+                ];
+            } elseif ($recommendation->approved_at?->lte($boundary) && $recommendation->requiresCashReservation()) {
+                // Release/conversion cleared the legacy timestamp; without an
+                // immutable event we cannot know whether it happened before T.
+                $blockers[] = 'historical_reservation_state_unavailable';
+            }
+        }
+        return [$rows, array_values(array_unique($blockers))];
     }
 
-    /** @return array{list<array<string,mixed>>,list<array<string,mixed>>,list<array<string,mixed>>} */
+    /** @return array{list<array<string,mixed>>,list<array<string,mixed>>,list<array<string,mixed>>,list<string>} */
     private function lendingAsOf(PortfolioProfile $profile, CarbonImmutable $boundary): array
     {
+        $blockers = [];
         $loans = CapitalLoan::query()->where('profile_id', $profile->id)->where('committed_at', '<=', $boundary)->with('returns')->get()->map(function (CapitalLoan $loan) use ($boundary): array {
             $returned = $loan->returns->filter(fn ($return): bool => $return->returned_at !== null && $return->returned_at->lte($boundary))->sum('amount');
+            $status = $returned <= 0.0001
+                ? CapitalLoan::STATUS_OUTSTANDING
+                : ((float) $returned + 0.0001 >= (float) $loan->principal ? CapitalLoan::STATUS_RETURNED : CapitalLoan::STATUS_PARTIALLY_RETURNED);
             return ['loan_id' => $loan->id, 'lender_strategy_id' => $loan->lender_strategy_id, 'borrower_strategy_id' => $loan->borrower_strategy_id,
-                'outstanding' => round(max(0.0, (float) $loan->principal - (float) $returned), 4), 'status' => $returned > 0 ? 'partially_returned' : $loan->status];
+                'outstanding' => round(max(0.0, (float) $loan->principal - (float) $returned), 4), 'status' => $status];
         })->filter(fn (array $loan): bool => $loan['outstanding'] > 0.0001)->values()->all();
-        $recalls = CapitalRecall::query()->where('profile_id', $profile->id)->where('requested_at', '<=', $boundary)->get()->filter(fn ($recall): bool => $recall->completed_at === null || $recall->completed_at->gt($boundary))->map(fn (CapitalRecall $recall): array => [
-            'recall_id' => $recall->id, 'loan_id' => $recall->loan_id, 'lender_strategy_id' => $recall->lender_strategy_id,
-            'borrower_strategy_id' => $recall->borrower_strategy_id, 'outstanding' => (float) $recall->outstanding_recall_amount, 'state' => $recall->state,
-        ])->values()->all();
-        $bridges = RecallBridgeLoan::query()->where('profile_id', $profile->id)->where('committed_at', '<=', $boundary)->where('outstanding', '>', 0)->get()->map(fn (RecallBridgeLoan $loan): array => [
-            'bridge_loan_id' => $loan->id, 'lender_strategy_id' => $loan->lender_strategy_id, 'borrower_strategy_id' => $loan->borrower_strategy_id,
-            'outstanding' => (float) $loan->outstanding, 'status' => $loan->status,
-        ])->all();
-        return [$loans, $recalls, $bridges];
+        $recalls = [];
+        foreach (CapitalRecall::query()->where('profile_id', $profile->id)->where('requested_at', '<=', $boundary)->get() as $recall) {
+            if ($recall->completed_at !== null && $recall->completed_at->lte($boundary)) continue;
+            if ($recall->state !== CapitalRecall::STATE_REQUESTED) {
+                $blockers[] = 'historical_recall_state_unavailable';
+                continue;
+            }
+            $recalls[] = ['recall_id' => $recall->id, 'loan_id' => $recall->loan_id, 'lender_strategy_id' => $recall->lender_strategy_id,
+                'borrower_strategy_id' => $recall->borrower_strategy_id, 'outstanding' => (float) $recall->recall_amount, 'state' => CapitalRecall::STATE_REQUESTED];
+        }
+        $bridges = [];
+        foreach (RecallBridgeLoan::query()->where('profile_id', $profile->id)->where('committed_at', '<=', $boundary)->get() as $loan) {
+            $returns = RecallBridgeLoanReturn::query()->where('bridge_loan_id', $loan->id)->where('returned_at', '<=', $boundary)->sum('amount');
+            $hasReturns = RecallBridgeLoanReturn::query()->where('bridge_loan_id', $loan->id)->exists();
+            if (! $hasReturns && $loan->status !== RecallBridgeLoan::STATUS_OUTSTANDING) {
+                $blockers[] = 'historical_bridge_loan_state_unavailable';
+                continue;
+            }
+            $outstanding = round(max(0.0, (float) $loan->principal - (float) $returns), 4);
+            if ($outstanding <= 0.0001) continue;
+            $bridges[] = ['bridge_loan_id' => $loan->id, 'lender_strategy_id' => $loan->lender_strategy_id, 'borrower_strategy_id' => $loan->borrower_strategy_id,
+                'outstanding' => $outstanding, 'status' => $returns <= 0.0001 ? RecallBridgeLoan::STATUS_OUTSTANDING : RecallBridgeLoan::STATUS_PARTIALLY_RETURNED];
+        }
+        return [$loans, $recalls, $bridges, array_values(array_unique($blockers))];
     }
 
     /** @return list<array<string,mixed>> */
@@ -215,7 +273,12 @@ final class HistoricalReplayStateBuilder
     {
         return PendingSaleProceeds::query()->where('profile_id', $profile->id)->where('sold_at', '<=', $boundary)
             ->where(function ($query) use ($boundary): void { $query->whereNull('cash_released_at')->orWhere('cash_released_at', '>', $boundary); })
-            ->get()->map(fn (PendingSaleProceeds $row): array => ['id' => $row->id, 'strategy_id' => $row->strategy_id, 'amount' => (float) $row->amount,
-                'available_at' => $row->available_at?->toIso8601String(), 'status' => $row->status])->all();
+            ->get()->map(function (PendingSaleProceeds $row) use ($boundary): array {
+                $status = $row->available_at !== null && $row->available_at->lte($boundary)
+                    ? PendingSaleProceeds::STATUS_AVAILABLE
+                    : PendingSaleProceeds::STATUS_PENDING;
+                return ['id' => $row->id, 'strategy_id' => $row->strategy_id, 'amount' => (float) $row->amount,
+                    'available_at' => $row->available_at?->toIso8601String(), 'status' => $status];
+            })->all();
     }
 }

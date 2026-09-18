@@ -7,6 +7,7 @@ use App\Models\CapitalRecall;
 use App\Models\Holding;
 use App\Models\PortfolioProfile;
 use App\Models\RecallBridgeLoan;
+use App\Models\RecallBridgeLoanReturn;
 use App\Models\TradingStrategy;
 use App\Services\StockQuoteService;
 use App\Services\Strategy\PortfolioCapitalAccountingService;
@@ -170,6 +171,10 @@ final class RecallBridgeLoanService
                     ? RecallBridgeLoan::STATUS_RETURNED
                     : RecallBridgeLoan::STATUS_PARTIALLY_RETURNED,
             ])->save();
+            RecallBridgeLoanReturn::query()->create([
+                'bridge_loan_id' => $locked->id, 'amount' => $amount,
+                'returned_at' => now(), 'created_at' => now(),
+            ]);
 
             $fresh = $locked->fresh();
             $profile = PortfolioProfile::query()->find($fresh->profile_id);
