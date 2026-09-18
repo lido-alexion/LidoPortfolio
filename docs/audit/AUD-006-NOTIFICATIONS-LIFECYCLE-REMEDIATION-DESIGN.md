@@ -412,3 +412,47 @@ The assurance suite verifies the following state separations: unread versus read
 No product defect was found and no production notification class was changed. Existing notification tests remain green: the new suite passes 5 tests and 55 assertions; the full notification feature directory passes 50 tests and 244 assertions.
 
 `NTF-006` is now `IMPLEMENTED` for the current-model composition assurance scope. `NTF-005` is split: static/runtime composition assurance is covered for the fake-provider path, while deployment runtime verification remains required for the queue worker, scheduler, provider credentials, real Telegram/email/webhook responses, and elapsed-time reminder operation. AUD-006 remains `PARTIALLY_IMPLEMENTED`; NTF-001 through NTF-004 and NTF-007/NTF-008 remain outside this batch's scope.
+
+## Batch 2 Implementation Outcome
+
+Batch 2 adds bounded delivery visibility and current-model retry support without changing notification publication, condition, reminder, or provider architecture.
+
+### Delivery detail contract
+
+`GET /api/notification-center/{notification}` now includes a `deliveries` array only on the detail response. Each entry contains:
+
+```text
+id
+channel
+delivery_kind
+status
+attempt_count
+last_error_code
+last_response_status
+delivered_at
+retryable
+```
+
+The API loads attempts only for the selected detail record. It does not expose encrypted destinations, email addresses, chat IDs, bot tokens, webhook URLs, signing secrets, verification tokens, raw provider response bodies, or stack traces. Delivery state remains per channel; a failed Telegram row and delivered webhook row are presented independently and do not produce a global notification failure state. Suppressed deliveries are labeled as intentionally not sent after condition resolution rather than as failures.
+
+### Retry contract
+
+The current-model endpoint is:
+
+```text
+POST /api/notification-center/{notification}/deliveries/{delivery}/retry
+```
+
+The controller first scopes the recipient notification to the authenticated user, then scopes the delivery to that recipient. A retry is accepted only when the recipient condition is still active and the delivery status is `failed`. Delivered, queued, processing, and suppressed deliveries return a bounded `422` response; foreign notification/delivery identifiers return `404` through the account-scoped lookup. The retry operation calls `NotificationDeliveryPlanner::requeueFailedDelivery`, clears only the terminal error marker, queues the same delivery row, and dispatches the existing `ProcessNotificationDelivery` job. It does not create a new delivery generation or reset attempt history. Repeated clicks cannot create duplicate sendable rows.
+
+### Notification Center presentation
+
+Notification detail now contains a compact Delivery section with channel, delivery kind, status, attempt count, safe error code/HTTP status, delivery timestamp, and a keyboard-accessible Retry button only for authoritative eligible failures. Accepted retry shows `Delivery queued for retry`; it does not claim provider success. Refreshing detail after worker processing shows the resulting delivered state while retaining the attempt count and failure evidence.
+
+### Evidence and disposition
+
+The new `NotificationCenterDeliveryApiTest` covers safe multi-channel detail serialization, secret/destination exclusion, owner authorization, foreign-resource isolation, failed-to-queued retry, repeated retry rejection, delivered ineligibility, and suppressed ineligibility. The existing `NotificationLifecycleAssuranceTest` remains green, preserving automatic retry, reminder, suppression, multi-channel, read/resolution, and idempotency assurance. `notificationCenterShell.test.mjs` covers the delivery section and current-model retry wiring.
+
+`NTF-001` is now `IMPLEMENTED`: detail exposes safe per-channel status, delivery kind, attempt count, failure evidence, suppression, and timestamps without sensitive fields. `NTF-002` is now `IMPLEMENTED`: an authenticated owner can retry an eligible failed current-model delivery through the existing planner/job path, while non-failed and resolved/suppressed states cannot create duplicate work.
+
+AUD-006 remains `PARTIALLY_IMPLEMENTED`. Remaining items are NTF-003 (bell count loading semantics), NTF-004 (settings unavailable state), NTF-005 deployment runtime verification, NTF-007 (generic primary-action presentation), and NTF-008 (explicit reminder labeling).

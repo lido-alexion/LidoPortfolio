@@ -36,6 +36,14 @@ test('Notification Center provides frozen quick views and attention-only actions
     assert.doesNotMatch(center, /Retry attempted|Trading OS Telegram deliveries/);
 });
 
+test('Notification Center exposes per-channel delivery state and current-model retry', () => {
+    assert.match(center, /External delivery status/);
+    assert.match(center, /deliveries/);
+    assert.match(center, /deliveries\/\$\{deliveryId\}\/retry/);
+    assert.match(center, /delivery\.retryable/);
+    assert.match(center, /Delivery queued for retry/);
+});
+
 test('notification settings exposes encrypted-channel lifecycle controls', () => {
     assert.match(settings, /notification-settings\/\$\{channel\}/);
     assert.match(settings, /notification-settings\/\$\{channel\}\/test/);

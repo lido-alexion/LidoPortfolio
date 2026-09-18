@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\NotificationDelivery;
 use App\Models\RecipientNotification;
 use App\Services\Notification\NotificationPublisher;
+use App\Services\Notification\NotificationDeliveryPlanner;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -67,7 +69,7 @@ class NotificationCenterController extends Controller
 
     public function show(Request $request, int $notification): JsonResponse
     {
-        $item = $this->accountQuery($request)->with(['source.occurrences'])->findOrFail($notification);
+        $item = $this->accountQuery($request)->with(['source.occurrences', 'deliveries.attempts'])->findOrFail($notification);
 
         return response()->json(['data' => [
             ...$this->summary($item),
@@ -79,6 +81,27 @@ class NotificationCenterController extends Controller
                 'occurred_at' => $occurrence->occurred_at?->toIso8601String(),
             ])->all(),
         ]]);
+    }
+
+    public function retryDelivery(
+        Request $request,
+        int $notification,
+        int $delivery,
+        NotificationDeliveryPlanner $planner,
+    ): JsonResponse {
+        $item = $this->accountQuery($request)->with('source')->findOrFail($notification);
+        $deliveryModel = $item->deliveries()->whereKey($delivery)->firstOrFail();
+
+        if ($item->condition_state !== 'active') {
+            return response()->json(['message' => 'This notification no longer requires delivery.'], 422);
+        }
+        if ($deliveryModel->status !== 'failed') {
+            return response()->json(['message' => 'Only failed deliveries can be retried.'], 422);
+        }
+
+        $planner->requeueFailedDelivery($deliveryModel);
+
+        return response()->json(['data' => $this->summary($item->fresh(['source', 'deliveries.attempts']))]);
     }
 
     public function markRead(Request $request, int $notification, NotificationPublisher $publisher): JsonResponse
@@ -121,6 +144,19 @@ class NotificationCenterController extends Controller
             'occurrence_count' => $item->source->occurrence_count,
             'first_detected_at' => $item->source->first_detected_at?->toIso8601String(),
             'latest_detected_at' => $item->source->latest_detected_at?->toIso8601String(),
+            'deliveries' => $item->relationLoaded('deliveries')
+                ? $item->deliveries->map(fn (NotificationDelivery $delivery) => [
+                    'id' => $delivery->id,
+                    'channel' => $delivery->channel,
+                    'delivery_kind' => $delivery->delivery_kind,
+                    'status' => $delivery->status,
+                    'attempt_count' => $delivery->attempts->count(),
+                    'last_error_code' => $delivery->last_error_code,
+                    'last_response_status' => $delivery->attempts->sortByDesc('attempt_number')->first()?->response_status,
+                    'delivered_at' => $delivery->delivered_at?->toIso8601String(),
+                    'retryable' => $delivery->status === 'failed' && $item->condition_state === 'active',
+                ])->values()->all()
+                : [],
         ];
     }
 }

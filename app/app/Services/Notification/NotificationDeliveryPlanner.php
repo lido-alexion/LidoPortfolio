@@ -62,6 +62,22 @@ class NotificationDeliveryPlanner
         return $deliveries->count();
     }
 
+    public function requeueFailedDelivery(NotificationDelivery $delivery): bool
+    {
+        if ($delivery->status !== 'failed') {
+            return false;
+        }
+
+        $delivery->update([
+            'status' => 'queued',
+            'available_at' => now(),
+            'last_error_code' => null,
+        ]);
+        DB::afterCommit(fn () => ProcessNotificationDelivery::dispatch($delivery->id)->onQueue('notifications'));
+
+        return true;
+    }
+
     private function planForRecipient(RecipientNotification $recipient, NotificationSource $source, string $kind, string $generation): int
     {
         $created = 0;

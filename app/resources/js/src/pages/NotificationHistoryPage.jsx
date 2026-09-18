@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import api from '../api';
 import { useNotifications } from '../context/NotificationContext';
 import DataState from '../components/DataState';
+import { showToast } from '../toast';
 
 const VIEWS = [['all', 'All'], ['needs_attention', 'Needs attention'], ['unread', 'Unread'], ['critical', 'Critical'], ['resolved', 'Resolved']];
 
@@ -19,6 +20,7 @@ export default function NotificationHistoryPage() {
     const [detail, setDetail] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [retryingDelivery, setRetryingDelivery] = useState(null);
     const view = params.get('view') || 'all';
     const selectedId = params.get('notification');
 
@@ -62,6 +64,21 @@ export default function NotificationHistoryPage() {
         await reloadAll();
     };
 
+    const retryDelivery = async (deliveryId) => {
+        if (!selectedId) return;
+        setRetryingDelivery(deliveryId);
+        try {
+            await api.post(`/notification-center/${selectedId}/deliveries/${deliveryId}/retry`, null, { skipErrorToast: true });
+            const response = await api.get(`/notification-center/${selectedId}`, { skipErrorToast: true });
+            setDetail(response.data?.data || null);
+            showToast('Delivery queued for retry.', 'success');
+        } catch (requestError) {
+            showToast(requestError.response?.data?.message || 'Could not queue delivery retry.', 'danger');
+        } finally {
+            setRetryingDelivery(null);
+        }
+    };
+
     return (
         <div className="container-fluid py-3">
             <div className="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
@@ -90,6 +107,42 @@ export default function NotificationHistoryPage() {
                             <button type="button" className="btn-close" aria-label="Close detail" onClick={() => setParams(view === 'all' ? {} : { view })} />
                         </div>
                         <div className="small text-muted mb-2">Condition: {detail.condition_state} · Occurrences: {detail.occurrence_count}</div>
+                        {detail.deliveries?.length > 0 && (
+                            <section className="border-top pt-3 mt-3" aria-label="External delivery status">
+                                <h3 className="h6">Delivery</h3>
+                                <div className="list-group list-group-flush">
+                                    {detail.deliveries.map((delivery) => {
+                                        const status = delivery.status === 'suppressed'
+                                            ? 'Suppressed because the condition was resolved.'
+                                            : delivery.status.replace('_', ' ');
+                                        return (
+                                            <div className="list-group-item px-0" key={delivery.id}>
+                                                <div className="d-flex flex-wrap justify-content-between align-items-start gap-2">
+                                                    <div>
+                                                        <strong className="text-capitalize">{delivery.channel}</strong>
+                                                        <div className="small text-muted text-capitalize">{delivery.delivery_kind} · {status}</div>
+                                                        {delivery.attempt_count > 0 && <div className="small text-muted">{delivery.attempt_count} {delivery.attempt_count === 1 ? 'attempt' : 'attempts'}</div>}
+                                                        {delivery.last_error_code && <div className="small text-danger">Provider error: {delivery.last_error_code}{delivery.last_response_status ? ` (${delivery.last_response_status})` : ''}</div>}
+                                                        {delivery.delivered_at && <div className="small text-muted">Delivered {new Date(delivery.delivered_at).toLocaleString()}</div>}
+                                                    </div>
+                                                    {delivery.retryable && (
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-outline-primary btn-sm"
+                                                            aria-label={`Retry ${delivery.channel} delivery`}
+                                                            disabled={retryingDelivery === delivery.id}
+                                                            onClick={() => retryDelivery(delivery.id)}
+                                                        >
+                                                            {retryingDelivery === delivery.id ? 'Queuing…' : 'Retry'}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </section>
+                        )}
                         <ol className="small mb-0">
                             {(detail.timeline || []).map((entry) => <li key={entry.id}>{entry.activity_type.replace('_', ' ')} · {entry.occurred_at ? new Date(entry.occurred_at).toLocaleString() : '—'}</li>)}
                         </ol>

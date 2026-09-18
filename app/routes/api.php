@@ -128,6 +128,8 @@ Route::get('/v1/broker/kite/callback', [TradingOsBrokerController::class, 'kiteC
 Route::middleware('auth:sanctum')->prefix('notification-center')->group(function () {
     Route::get('/', [NotificationCenterController::class, 'index']);
     Route::post('/mark-all-read', [NotificationCenterController::class, 'markAllRead']);
+    Route::post('/{notification}/deliveries/{delivery}/retry', [NotificationCenterController::class, 'retryDelivery'])
+        ->whereNumber('notification')->whereNumber('delivery');
     Route::get('/{notification}', [NotificationCenterController::class, 'show'])->whereNumber('notification');
     Route::post('/{notification}/read', [NotificationCenterController::class, 'markRead'])->whereNumber('notification');
 });
