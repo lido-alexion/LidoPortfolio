@@ -47,11 +47,40 @@ Admin default profile or Admin-owned Investor resource was found.
 
 ## 4. Route Inventory
 
-The deployed and current repository route inventory each report 443 registered
-routes. The previous AUD-012 static inventory recorded 437 API operations, so
-the current count is six higher. The route families remain materially covered
-by the existing matrix, but the six-operation delta is retained as a route
-inventory follow-up rather than silently treated as covered.
+The latest master route inventory reports 443 total registered routes,
+including 438 `api/*` operations and five framework/web routes. The prior
+AUD-012 artifact recorded 437 `api/*` operations. Re-running that audited
+revision (`e5c6fb2`) produces 442 total routes and 437 API operations. The
+apparent six-route delta is therefore one actual new API operation plus five
+non-API framework routes that were outside the prior API-only inventory.
+
+The exact comparison found one added API route, no removed routes, no
+method/path changes, and no action or middleware changes for existing routes:
+
+| Delta route | Method / URI | Action | Middleware | Classification |
+| --- | --- | --- | --- | --- |
+| Actual API addition | `POST /api/notification-center/{notification}/deliveries/{delivery}/retry` | `NotificationCenterController@retryDelivery` | `api`, `auth:sanctum` | Shared authenticated; current-user notification ownership; no active profile; no PAT ability middleware |
+| Prior API-scope exclusion | `GET|HEAD /sanctum/csrf-cookie` | Sanctum `CsrfCookieController@show` | `web` | Guest bootstrap; no business data or ownership |
+| Prior API-scope exclusion | `GET|HEAD /storage/{path}` | Laravel signed file-serving closure | none at route level; signed relative URL enforced by framework for private local disk | Signed/capability route; no active profile; path capability only |
+| Prior API-scope exclusion | `PUT /storage/{path}` | Laravel signed file-receiving closure | none at route level; `upload` flag plus signed relative URL required | Signed/capability route; no active profile; path capability only |
+| Prior API-scope exclusion | `GET|HEAD /up` | Laravel health closure | none | Guest health probe; no business data |
+| Prior API-scope exclusion | `GET|HEAD /{any?}` | Laravel SPA `ViewController` | `web` | Guest frontend fallback; excludes `api/*` paths |
+
+The retry route is statically covered by
+`NotificationCenterDeliveryApiTest`: the account query scopes the parent
+notification to the authenticated user, the delivery is then constrained to
+that notification, and foreign-user retry returns 404. It does not create an
+active Investor profile and does not bypass PAT scope because notification
+center is an account-scoped shared surface. The five framework routes expose
+no Investor-owned API data; storage read/write requires Laravel's signed
+relative capability, the CSRF route only establishes a cookie, `/up` is a
+health response, and the SPA fallback is not an API route.
+
+No route can be identified in this delta that crosses Investor ownership,
+creates Admin Investor ownership, bypasses Admin middleware, bypasses active
+profile ownership, exposes broker/execution state, or creates an unintended
+guest business API surface. Legacy and `/api/v1` routes had no corresponding
+method/path changes in the exact comparison.
 
 Representative current families include portfolio/accounting, holdings,
 transactions, recommendations, execution/broker, notes, Wiki, artifacts,
@@ -233,7 +262,7 @@ records were reported. No production rows were edited.
 | AUTHR-002 | Protected unauthenticated API denials return HTTP 500 because PHP cannot write Laravel logs | `IMPLEMENTED` | High | Release `6838f8277a79a3cd36996f6f50b33dd559915caa`; `storage/logs` repaired to `www-data` group with setgid 2775; `GET /api/portfolios` returns 401; runtime health is green |
 | AUTHR-003 | Production ownership audit is clean | `IMPLEMENTED` | High | `portfolio:audit-admin-investment-ownership --json` returned zero conflicts |
 | AUTHR-004 | Role separation, profile aliases, PAT scope/ownership, and representative object checks | `IMPLEMENTED_WITH_LIMITATION` | High | Static tests pass; no second production Investor/PAT fixture |
-| AUTHR-005 | Current route inventory is 443 versus prior 437-operation audit | `RUNTIME_VERIFICATION_REQUIRED` | Medium | Deployed and current `route:list --json` both report 443 |
+| AUTHR-005 | Current route inventory is 443 versus prior 437-operation audit | `IMPLEMENTED` | Medium | Fresh master inventory: 443 total / 438 API; audited revision `e5c6fb2`: 442 total / 437 API; exact diff has one protected notification retry addition and five prior API-scope exclusions, with no authorization gap |
 | AUTHR-006 | Full authenticated Admin/Investor browser and foreign-object runtime matrix | `RUNTIME_VERIFICATION_REQUIRED` | Medium | Production credentials/second Investor fixture unavailable; static coverage exists |
 
 ## 22. Cross-Audit Evidence
@@ -255,18 +284,14 @@ The production ownership audit is clean and static role/ownership enforcement
 is substantial. AUTHR-001 and AUTHR-002 are now closed: DebugAgent is
 disabled and hard-blocked in production, shared Laravel log permissions are
 correct, `GET /api/portfolios` returns 401 rather than 500, and the production
-runtime health gate passes. AUTHR-005 and AUTHR-006 remain open, so the audit
-stays partially implemented.
+runtime health gate passes. AUTHR-005 is now closed; AUTHR-006 remains open,
+so the audit stays partially implemented.
 
-`V5-REQ-018` remains `PARTIALLY_IMPLEMENTED` pending the route-inventory review
-and clean representative role/foreign-object runtime matrix tracked by
-AUTHR-005 and AUTHR-006.
+`V5-REQ-018` remains `PARTIALLY_IMPLEMENTED` pending the clean representative
+role/foreign-object runtime matrix tracked by AUTHR-006.
 
 ## 24. Open Questions
 
-- An administrator must repair the existing dated log files to
-  `nitty:www-data` with group write and then rerun the protected
-  unauthenticated endpoint probes.
 - Which approved dedicated test identities can support a two-Investor and PAT
   runtime denial matrix without touching real financial state?
 
