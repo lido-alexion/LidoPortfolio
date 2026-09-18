@@ -56,7 +56,7 @@ Static inspection cannot establish browser geometry, provider behavior, producti
 | Notifications / calendar / alerts | 1 | 2 | 0 | 0 | 0 | 0 | Medium |
 | Knowledge / documentation | 3 | 1 | 0 | 0 | 0 | 0 | Medium |
 | Administration / security / API | 5 | 1 | 0 | 0 | 1 | 0 | Critical |
-| Trading artifacts / V7 | 4 | 1 | 0 | 0 | 4 | 0 | High |
+| Trading artifacts / V7 | 5 | 1 | 0 | 0 | 3 | 0 | High |
 
 The domain figures are orientation aids, not a second requirement count: several Phase 1 requirements deliberately span domains. The authoritative disposition remains the 85-row matrix below.
 
@@ -121,7 +121,7 @@ The following rows cover every applicable Phase 1 requirement. Related requireme
 | V4-SPEC-001 | Same-stock adoption merge | PARTIALLY_IMPLEMENTED | Holding/adoption code paths | Ownership tests | Conflict resolution and attribution UI | Yes | Audit `AUD-005` |
 | V5-REQ-002 | Channel-neutral notification service | PARTIALLY_IMPLEMENTED | Notification settings, providers, history | Notification tests | Critical banner/read semantics/retry/reminder UX | Yes | `AUD-006` |
 | V5-REQ-003 | Indicator registry versioning | IMPLEMENTED | Admin registry routes/page/API | Registry tests | Version rollback UX and role access | Yes | Inspect live admin route |
-| V5-REQ-004 | Trading Artifact Framework | RUNTIME_VERIFICATION_REQUIRED | Artifact library/pages, models, bindings, deployment services | Extensive artifact tests | Full rollout gates, representative data and UI workflow | Yes | `AUD-007`; historical closure still had verification gates |
+| V5-REQ-004 | Trading Artifact Framework | IMPLEMENTED | Artifact library/pages, models, bindings, and deployment services | `TradingArtifactRolloutAssuranceTest` plus `docs/audit/AUD-007-TRADING-ARTIFACT-ROLLOUT-VERIFICATION.md` prove authoring/versioning, immutable published versions, dependency validation, portfolio binding, exact runtime resolution, deterministic screener execution, v1→v2 rollout, rollback, historical provenance, invalid/missing-dependency failure, and archive preservation | Deployed artifact storage/environment, worker/process behavior, deployed roles/configuration, production/staging rollout behavior, browser/operator workflow, and deployed cache/process behavior | Yes | `AUD-007` representative rollout assurance is complete statically; deployed rollout and operator/browser verification remain |
 | V5-REQ-005 | Admin force logout | IMPLEMENTED | Admin routes/services | Admin session tests | Production multi-session behavior | Yes | Requires admin runtime |
 | V5-REQ-006 | Cash-as-of/export/compare | IMPLEMENTED | Cash/history/compare pages and APIs | Cash/export tests | Download/browser error states | Yes | Route reachability inspect |
 | V5-REQ-007 | Tax/attribution/benchmarks | PARTIALLY_IMPLEMENTED | Performance/tax page/services | Performance tests | Full benchmark and export acceptance | Yes | Current docs are summarized |
@@ -248,14 +248,14 @@ Applicable requirements audited: **85** (75 `CURRENT`, 5 `POSSIBLY-LOST-DURING-C
 
 | Primary verdict | Count |
 |---|---:|
-| IMPLEMENTED | 48 |
+| IMPLEMENTED | 49 |
 | PARTIALLY_IMPLEMENTED | 25 |
 | NOT_IMPLEMENTED | 0 |
 | IMPLEMENTED_BUT_NOT_WIRED | 0 |
 | IMPLEMENTED_DIFFERENTLY | 1 |
 | DEAD_CODE | 0 |
 | TEST_ONLY | 1 |
-| RUNTIME_VERIFICATION_REQUIRED | 9 |
+| RUNTIME_VERIFICATION_REQUIRED | 8 |
 | SPEC_CONFLICT | 0 |
 
 The matrix verdict counts are intentionally conservative: `RUNTIME_VERIFICATION_REQUIRED` means repository evidence is insufficient to claim `IMPLEMENTED`, even where code and tests are substantial.
