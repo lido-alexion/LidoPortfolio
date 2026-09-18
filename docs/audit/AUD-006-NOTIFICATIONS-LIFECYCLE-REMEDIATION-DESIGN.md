@@ -387,3 +387,28 @@ AUD-006 is not yet statically complete because the current main history surface 
 4. Is the legacy `/api/v1/notifications/{id}/retry` endpoint still an accepted Investor workflow, or should it be retired after a current-model recovery path is chosen?
 5. What deployed queue/provider environment is authoritative for runtime sign-off of Telegram, email, webhook, and scheduled reminders?
 
+## Batch 1 Implementation Outcome
+
+Batch 1 added `Tests\Feature\Notification\NotificationLifecycleAssuranceTest` as a product-contract assurance suite. It exercises the current production path rather than constructing final states directly:
+
+```text
+NotificationPublisher
+  -> NotificationDeliveryPlanner
+  -> NotificationDeliveryProcessor
+  -> Notification Center API
+  -> NotificationReminderService
+```
+
+The suite uses an enabled and verified Telegram channel with Laravel's HTTP fake provider. It covers five deterministic scenarios:
+
+1. An active condition creates one source, occurrence, unread recipient, and independent queued delivery; a retryable provider failure persists attempt one; the same delivery succeeds on attempt two; a terminal re-process does not send again; the recipient can be read; the condition can be resolved without deleting source, occurrence, delivery, or attempts.
+2. A successful external delivery does not queue a reminder before 48 hours, queues a distinct `reminder` delivery generation after the threshold, and is idempotent when the reminder service is run again.
+3. A resolved queued condition is suppressed before provider send, while a disabled channel is excluded during planning rather than represented as a failed provider attempt.
+4. Telegram failure and webhook success remain channel-specific delivery outcomes under one source; the source remains active and is not globally marked failed.
+5. Repeated condition publication and repeated initial planning preserve one source/recipient/delivery through condition and delivery idempotency rules.
+
+The assurance suite verifies the following state separations: unread versus read, active versus resolved, queued/retryable versus delivered, delivery attempt versus reminder generation, suppressed versus failed, disabled versus failed, and one channel failure versus a sibling channel success. It also verifies the Notification Center API continues to return the source timeline after provider failure and after successful retry.
+
+No product defect was found and no production notification class was changed. Existing notification tests remain green: the new suite passes 5 tests and 55 assertions; the full notification feature directory passes 50 tests and 244 assertions.
+
+`NTF-006` is now `IMPLEMENTED` for the current-model composition assurance scope. `NTF-005` is split: static/runtime composition assurance is covered for the fake-provider path, while deployment runtime verification remains required for the queue worker, scheduler, provider credentials, real Telegram/email/webhook responses, and elapsed-time reminder operation. AUD-006 remains `PARTIALLY_IMPLEMENTED`; NTF-001 through NTF-004 and NTF-007/NTF-008 remain outside this batch's scope.
