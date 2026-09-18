@@ -10,8 +10,12 @@ return new class extends Migration
     {
         Schema::create('portfolio_recommendation_reservation_events', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('profile_id')->constrained('portfolio_profiles')->cascadeOnDelete();
-            $table->foreignId('recommendation_id')->constrained('portfolio_tos_recommendations')->cascadeOnDelete();
+            $table->foreignId('profile_id');
+            $table->foreign('profile_id', 'prre_profile_fk')
+                ->references('id')->on('portfolio_profiles')->cascadeOnDelete();
+            $table->foreignId('recommendation_id');
+            $table->foreign('recommendation_id', 'prre_recommendation_fk')
+                ->references('id')->on('portfolio_tos_recommendations')->cascadeOnDelete();
             $table->string('state', 24);
             $table->decimal('amount', 18, 4);
             $table->timestamp('occurred_at');
@@ -21,7 +25,9 @@ return new class extends Migration
 
         Schema::create('portfolio_tos_recall_bridge_loan_returns', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('bridge_loan_id')->constrained('portfolio_tos_recall_bridge_loans')->restrictOnDelete();
+            $table->foreignId('bridge_loan_id');
+            $table->foreign('bridge_loan_id', 'ptblr_bridge_loan_fk')
+                ->references('id')->on('portfolio_tos_recall_bridge_loans')->restrictOnDelete();
             $table->decimal('amount', 18, 4);
             $table->timestamp('returned_at');
             $table->timestamp('created_at')->useCurrent();
