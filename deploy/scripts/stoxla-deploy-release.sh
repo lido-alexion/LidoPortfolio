@@ -7,6 +7,14 @@ KEEP_RELEASES="${STOXLA_KEEP_RELEASES:-5}"
 PHP_BIN="${STOXLA_PHP_BIN:-/usr/bin/php}"
 HEALTH_URL="${STOXLA_HEALTH_URL:-https://stoxla.in/}"
 EXPECTED_COMMIT="${STOXLA_EXPECTED_COMMIT:-}"
+PHP_FPM_SERVICE="${STOXLA_PHP_FPM_SERVICE:-php8.4-fpm}"
+QUEUE_SERVICE="${STOXLA_QUEUE_SERVICE:-stoxla-queue}"
+SYSTEMCTL_BIN="${STOXLA_SYSTEMCTL_BIN:-/usr/bin/systemctl}"
+SUDO_BIN="${STOXLA_SUDO_BIN:-/usr/bin/sudo}"
+REQUIRED_QUEUES="${STOXLA_REQUIRED_QUEUES:-notifications,default}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RUNTIME_HEALTH_CHECK="${STOXLA_RUNTIME_HEALTH_CHECK:-$SCRIPT_DIR/stoxla-runtime-health-check.sh}"
+QUEUE_UNIT_TEMPLATE="${STOXLA_QUEUE_UNIT_TEMPLATE:-$SCRIPT_DIR/stoxla-queue.service}"
 
 ARCHIVE="${1:-}"
 
@@ -30,6 +38,16 @@ fi
 command -v tar >/dev/null || fail "tar is not installed"
 command -v curl >/dev/null || fail "curl is not installed"
 [[ -x "$PHP_BIN" ]] || fail "PHP binary not found at $PHP_BIN"
+[[ -x "$RUNTIME_HEALTH_CHECK" ]] || fail "runtime health check is not executable: $RUNTIME_HEALTH_CHECK"
+[[ -f "$QUEUE_UNIT_TEMPLATE" ]] || fail "queue service template is missing: $QUEUE_UNIT_TEMPLATE"
+
+log "checking required runtime-service privileges"
+"$SUDO_BIN" -n "$SYSTEMCTL_BIN" show "$PHP_FPM_SERVICE" --property=Id >/dev/null \
+  || fail "deployment user needs passwordless permission to inspect/reload $PHP_FPM_SERVICE"
+"$SUDO_BIN" -n "$SYSTEMCTL_BIN" show "$QUEUE_SERVICE" --property=Id >/dev/null \
+  || fail "deployment user needs passwordless permission to inspect/restart $QUEUE_SERVICE"
+"$SUDO_BIN" -n "$SYSTEMCTL_BIN" daemon-reload \
+  || fail "deployment user needs passwordless permission to reload systemd units"
 
 LOCK_DIR="$APP_ROOT/.deploy-lock"
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then
@@ -50,6 +68,15 @@ tar -xzf "$ARCHIVE" -C "$RELEASE_DIR"
 
 if [[ ! -f "$RELEASE_DIR/artisan" ]]; then
   fail "archive does not look like a Laravel app root; missing artisan"
+fi
+
+RELEASE_COMMIT="$("$PHP_BIN" -r '
+  $data = json_decode(file_get_contents($argv[1]), true);
+  echo is_array($data) ? ($data["commit_sha"] ?? "") : "";
+' "$RELEASE_DIR/bootstrap/build-info.json")"
+[[ -n "$RELEASE_COMMIT" ]] || fail "release build metadata is missing commit_sha"
+if [[ -n "$EXPECTED_COMMIT" && "$RELEASE_COMMIT" != "$EXPECTED_COMMIT" ]]; then
+  fail "release build metadata commit $RELEASE_COMMIT does not match expected $EXPECTED_COMMIT"
 fi
 
 if [[ ! -e "$SHARED_DIR/.env" ]]; then
@@ -162,67 +189,28 @@ log "warming active release and signaling queue restart"
   "$PHP_BIN" artisan queue:restart --no-interaction
 )
 
-RESET_TOKEN="$("$PHP_BIN" -r 'echo bin2hex(random_bytes(20));')"
-RESET_SCRIPT="deploy-opcache-reset-${RELEASE_ID//[^A-Za-z0-9]/}.php"
-RESET_PATH="$APP_ROOT/current/public/$RESET_SCRIPT"
-RESET_URL="https://stoxla.in/$RESET_SCRIPT?token=$RESET_TOKEN"
-cleanup_reset_script() {
-  rm -f "$RESET_PATH"
-}
-trap 'cleanup_reset_script; rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
+log "gracefully reloading PHP-FPM after the release switch"
+"$SUDO_BIN" -n "$SYSTEMCTL_BIN" reload "$PHP_FPM_SERVICE" \
+  || fail "could not reload $PHP_FPM_SERVICE after release activation"
 
-log "resetting PHP-FPM opcache through a temporary localhost-only endpoint"
-cat > "$RESET_PATH" <<PHP
-<?php
-\$expected = '$RESET_TOKEN';
-\$remote = \$_SERVER['REMOTE_ADDR'] ?? '';
-if (! hash_equals(\$expected, (string) (\$_GET['token'] ?? '')) || ! in_array(\$remote, ['127.0.0.1', '::1'], true)) {
-    http_response_code(404);
-    exit;
-}
-if (function_exists('opcache_reset')) {
-    opcache_reset();
-}
-header('Content-Type: text/plain');
-echo 'ok';
-PHP
-chmod 644 "$RESET_PATH"
-curl --noproxy '*' --fail --silent --show-error --location --max-time 20 \
-  --resolve stoxla.in:443:127.0.0.1 \
-  "$RESET_URL" >/dev/null
-cleanup_reset_script
+log "installing managed queue service definition"
+"$SUDO_BIN" -n /usr/bin/install -m 0644 "$QUEUE_UNIT_TEMPLATE" "/etc/systemd/system/$QUEUE_SERVICE.service" \
+  || fail "could not install managed queue service definition"
+"$SUDO_BIN" -n "$SYSTEMCTL_BIN" daemon-reload \
+  || fail "could not reload systemd units after queue service update"
 
-log "checking production URL"
-curl --fail --silent --show-error --location --max-time 20 "$HEALTH_URL" >/dev/null
+log "restarting the managed queue worker after the release switch"
+"$SUDO_BIN" -n "$SYSTEMCTL_BIN" restart "$QUEUE_SERVICE" \
+  || fail "could not restart $QUEUE_SERVICE after release activation"
 
-if [[ -n "$EXPECTED_COMMIT" ]]; then
-  log "checking deployed build metadata"
-  BUILD_INFO="$(mktemp)"
-  curl --fail --silent --show-error --location --max-time 20 \
-    "${HEALTH_URL%/}/api/build-info" > "$BUILD_INFO"
-  "$PHP_BIN" -r '
-    $payload = json_decode(file_get_contents($argv[1]), true);
-    $actual = $payload["data"]["commit_sha"] ?? null;
-    if ($actual !== $argv[2]) {
-        fwrite(STDERR, "Expected deployed commit {$argv[2]}, got ".($actual ?? "null").PHP_EOL);
-        exit(1);
-    }
-  ' "$BUILD_INFO" "$EXPECTED_COMMIT"
-  rm -f "$BUILD_INFO"
-fi
-
-log "checking browser module asset response"
-HTML="$(mktemp)"
-HEADERS="$(mktemp)"
-curl --fail --silent --show-error --location --max-time 20 "$HEALTH_URL" > "$HTML"
-MODULE_SRC="$(grep -oE '<script[^>]+type="module"[^>]+src="[^"]+"' "$HTML" | head -n 1 | sed -E 's/.*src="([^"]+)".*/\1/')"
-[[ -n "$MODULE_SRC" ]] || fail "could not find module script in production HTML"
-curl --fail --silent --show-error --location --max-time 20 -D "$HEADERS" -o /dev/null "${HEALTH_URL%/}$MODULE_SRC"
-if ! grep -qiE '^content-type: .*javascript' "$HEADERS"; then
-  cat "$HEADERS" >&2
-  fail "module script $MODULE_SRC did not return a JavaScript content type"
-fi
-rm -f "$HTML" "$HEADERS"
+log "running hard public release-identity and runtime health gate"
+STOXLA_APP_ROOT="$APP_ROOT" \
+STOXLA_PHP_BIN="$PHP_BIN" \
+STOXLA_HEALTH_URL="$HEALTH_URL" \
+STOXLA_EXPECTED_COMMIT="$RELEASE_COMMIT" \
+STOXLA_QUEUE_SERVICE="$QUEUE_SERVICE" \
+STOXLA_REQUIRED_QUEUES="$REQUIRED_QUEUES" \
+"$RUNTIME_HEALTH_CHECK"
 
 log "pruning old releases; keeping $KEEP_RELEASES"
 current_target="$(readlink "$APP_ROOT/current")"

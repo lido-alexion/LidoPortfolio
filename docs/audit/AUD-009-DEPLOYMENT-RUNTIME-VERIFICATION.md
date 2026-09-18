@@ -209,23 +209,101 @@ No public secret or source-file exposure was found in these probes.
 
 ## 22. Remediation Groups
 
-### A - Release activation correctness
+### Batch 1 - DEP-001 / DEP-002
+
+Batch 1 diagnosed and prepared the permanent release/queue correction without
+deploying newer application code or the pending AUD-008 migration.
+
+#### DEP-001 root cause and durable correction
+
+The active filesystem symlink and active release build-info file resolve to
+`af426a7`, while both external and localhost HTTPS PHP requests returned
+`b1327c2`. PHP-FPM's master and workers predate the release switch. Even with
+timestamp validation enabled, a long-running FPM process did not reliably
+discard the previous release's resolved application path after `current` was
+repointed. The existing one-request localhost `opcache_reset()` endpoint was
+therefore insufficient for a symlink release deployment.
+
+The committed deployment and rollback scripts now:
+
+1. validate that the staged release build metadata matches the expected CI
+   commit before activation;
+2. repoint the release symlink and rebuild the existing Laravel caches;
+3. gracefully reload `php8.4-fpm`;
+4. signal `queue:restart` and restart the managed worker;
+5. run `stoxla-runtime-health-check.sh`, which fails if public
+   `/api/build-info` differs from the active release metadata, the browser
+   module is unavailable, the queue service does not cover required queues, or
+   the scheduler heartbeat is stale.
+
+Rollback now follows the same FPM refresh and public identity gate. The GitHub
+Actions workflow uploads the health helper and executes it again as a
+post-deployment check.
+
+#### DEP-002 worker topology and durable correction
+
+The code inventory found one named queue: `notifications`, produced by
+`NotificationDeliveryPlanner`; all other current dispatches use `default`.
+The committed systemd template now uses one intentional priority worker. The
+deployment uploads and installs that template before reloading systemd:
+
+```text
+queue:work --queue=notifications,default --sleep=3 --tries=3 --timeout=120
+```
+
+This is sufficient for the current scale and avoids adding a second worker,
+Redis, or Horizon. The runtime health helper asserts that the managed worker
+command includes the required queue list, so future release activation fails
+instead of silently leaving a named queue unconsumed.
+
+#### Production execution status
+
+The deployment user `nitty` currently has no noninteractive sudo capability.
+That is why this audit did not reload PHP-FPM, edit `/etc/systemd/system`, or
+restart the worker: doing so requires root-controlled service actions. The VPS
+runbook now specifies a constrained `sudoers` rule for only these commands:
+
+- inspect/reload `php8.4-fpm`;
+- install the committed queue unit and reload systemd;
+- inspect/restart `stoxla-queue`.
+
+After an authorized administrator installs that rule and the committed queue
+unit, the exact post-change evidence required is:
+
+```text
+active release build-info SHA = public /api/build-info SHA
+php8.4-fpm reload time >= correction time
+stoxla-queue ExecStart includes --queue=notifications,default
+notifications depth 12 -> 0 or lifecycle-explained retry/suppression rows
+failed jobs remain 0 or are investigated without deletion
+```
+
+The 12 aged jobs have not been manually altered. They must be allowed to pass
+through `NotificationDeliveryProcessor`, which preserves current
+idempotency/resolution suppression semantics.
+
+DEP-001 and DEP-002 remain `PARTIALLY_IMPLEMENTED` until this privileged
+production activation is completed and verified.
+
+### Remaining operational groups
+
+#### A - Release activation correctness
 
 Update the deployment procedure so an atomic release switch also reloads or gracefully restarts PHP-FPM, then verify public `/api/build-info` equals the release's build manifest before declaring deployment complete. Determine whether the current opcache reset approach is insufficient for symlink/realpath cache invalidation.
 
-### B - Queue routing and notification recovery
+#### B - Queue routing and notification recovery
 
 Configure workers to consume all required queues, at minimum `default,notifications`, or create a dedicated notification worker with an intentional restart policy. After the safe operational change, inspect the aged jobs, confirm idempotent processing, and investigate whether their stale age requires operator handling.
 
-### C - Release and migration freshness
+#### C - Release and migration freshness
 
 Use CI deployment once the intended release is approved. It must apply the historical replay lifecycle-evidence migration together with the corresponding code, then verify filesystem and public runtime commit identity match.
 
-### D - Backup assurance
+#### D - Backup assurance
 
 Obtain the Hostinger backup schedule, retention, latest successful backup timestamp, and a documented non-production restore drill. Do not infer backup safety from the local SQL artifact.
 
-### E - Operational observability
+#### E - Operational observability
 
 Triage current non-critical log errors, retain a sanitized release/worker health check, and decide whether API CORS should remain public for unauthenticated endpoints under AUD-012 policy.
 
@@ -254,7 +332,13 @@ Additional read-only Laravel queries checked configuration presence, scheduler h
 
 The production architecture has successfully moved to the accepted VPS release/shared model, protects secrets and the public root, serves valid HTTPS, runs its scheduler, has current market-data evidence, and retains rollback releases. It is not ready for closure because PHP-FPM is serving stale release code after activation and notification jobs are accumulating on an unconsumed named queue. These are concrete runtime defects, not merely missing evidence.
 
-After release activation and queue routing are corrected and verified, the remaining bounded work is deployment freshness, backup/restore evidence, real provider behavior, authenticated browser smoke, and the cross-audit functional drills listed above.
+Batch 1 has committed the durable deployment, rollback, queue-template, and
+health-gate changes, but it cannot close the defects until a privileged VPS
+operator installs the constrained service permission, reloads PHP-FPM, installs
+the queue unit, and verifies the existing backlog's normal disposition. After
+that activation, the remaining bounded work is deployment freshness,
+backup/restore evidence, real provider behavior, authenticated browser smoke,
+and the cross-audit functional drills listed above.
 
 ## 25. Open Questions
 

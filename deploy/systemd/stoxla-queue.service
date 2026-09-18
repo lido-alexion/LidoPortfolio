@@ -1,0 +1,16 @@
+[Unit]
+Description=StoX Laravel queue worker
+After=network.target mariadb.service
+
+[Service]
+User=nitty
+Group=www-data
+Restart=always
+RestartSec=5
+WorkingDirectory=/var/www/stoxla
+ExecStart=/usr/bin/php /var/www/stoxla/artisan queue:work --queue=notifications,default --sleep=3 --tries=3 --timeout=120
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -295,15 +295,21 @@ jobs:
           SSH_OPTS="-i ~/.ssh/stoxla_deploy_key -o IdentitiesOnly=yes -o BatchMode=yes"
 
           ssh $SSH_OPTS "${STOXLA_SSH_USER}@${STOXLA_HOST}" "mkdir -p '${REMOTE_DIR}'"
-          scp $SSH_OPTS stoxla-release.tgz deploy/scripts/stoxla-deploy-release.sh deploy/scripts/stoxla-rollback-release.sh "${STOXLA_SSH_USER}@${STOXLA_HOST}:${REMOTE_DIR}/"
+          scp $SSH_OPTS stoxla-release.tgz deploy/scripts/stoxla-deploy-release.sh deploy/scripts/stoxla-rollback-release.sh deploy/scripts/stoxla-runtime-health-check.sh deploy/systemd/stoxla-queue.service "${STOXLA_SSH_USER}@${STOXLA_HOST}:${REMOTE_DIR}/"
           ssh $SSH_OPTS "${STOXLA_SSH_USER}@${STOXLA_HOST}" \
-            "chmod 700 '${REMOTE_DIR}/stoxla-deploy-release.sh' '${REMOTE_DIR}/stoxla-rollback-release.sh' && cp '${REMOTE_DIR}/stoxla-rollback-release.sh' '/home/${STOXLA_SSH_USER}/.stoxla-deploy/stoxla-rollback-release.sh' && STOXLA_RELEASE_ID='${RELEASE_ID}' STOXLA_EXPECTED_COMMIT='${RELEASE_SHA}' '${REMOTE_DIR}/stoxla-deploy-release.sh' '${REMOTE_DIR}/stoxla-release.tgz'"
+            "chmod 700 '${REMOTE_DIR}/stoxla-deploy-release.sh' '${REMOTE_DIR}/stoxla-rollback-release.sh' '${REMOTE_DIR}/stoxla-runtime-health-check.sh' && cp '${REMOTE_DIR}/stoxla-rollback-release.sh' '/home/${STOXLA_SSH_USER}/.stoxla-deploy/stoxla-rollback-release.sh' && cp '${REMOTE_DIR}/stoxla-runtime-health-check.sh' '/home/${STOXLA_SSH_USER}/.stoxla-deploy/stoxla-runtime-health-check.sh' && STOXLA_RELEASE_ID='${RELEASE_ID}' STOXLA_EXPECTED_COMMIT='${RELEASE_SHA}' '${REMOTE_DIR}/stoxla-deploy-release.sh' '${REMOTE_DIR}/stoxla-release.tgz'"
 
       - name: Post-deploy health check
         env:
+          STOXLA_HOST: ${{ secrets.STOXLA_HOST }}
+          STOXLA_SSH_USER: ${{ secrets.STOXLA_SSH_USER }}
+          STOXLA_SSH_PRIVATE_KEY: ${{ secrets.STOXLA_SSH_PRIVATE_KEY }}
           EXPECTED_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
+          SSH_OPTS="-i ~/.ssh/stoxla_deploy_key -o IdentitiesOnly=yes -o BatchMode=yes"
+          ssh $SSH_OPTS "${STOXLA_SSH_USER}@${STOXLA_HOST}" \
+            "STOXLA_EXPECTED_COMMIT='${EXPECTED_SHA}' /home/${STOXLA_SSH_USER}/.stoxla-deploy/stoxla-runtime-health-check.sh"
           curl --fail --silent --show-error --location --max-time 20 https://stoxla.in/ >/dev/null
           build_info="$(mktemp)"
           curl --fail --silent --show-error --location --max-time 20 https://stoxla.in/api/build-info > "$build_info"

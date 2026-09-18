@@ -473,7 +473,8 @@ Enable this only after the application code and production `.env` are in place.
 
 ### 8.8 Queue worker systemd service
 
-Create `/etc/systemd/system/stoxla-queue.service`:
+Install the committed [queue service template](systemd/stoxla-queue.service) as
+`/etc/systemd/system/stoxla-queue.service`:
 
 ```ini
 [Unit]
@@ -486,7 +487,7 @@ Group=www-data
 Restart=always
 RestartSec=5
 WorkingDirectory=/var/www/stoxla
-ExecStart=/usr/bin/php /var/www/stoxla/artisan queue:work --sleep=3 --tries=3 --timeout=120
+ExecStart=/usr/bin/php /var/www/stoxla/artisan queue:work --queue=notifications,default --sleep=3 --tries=3 --timeout=120
 StandardOutput=journal
 StandardError=journal
 
@@ -509,6 +510,30 @@ During future deployments, restart the worker after code changes:
 ```bash
 sudo systemctl restart stoxla-queue
 ```
+
+The worker must explicitly consume every named production queue. Current StoX
+dispatches use `notifications` and `default`; notification delivery must not be
+left behind a default-only worker.
+
+### 8.9 Deployment runtime-service privilege
+
+Atomic release symlinks do not reliably invalidate all PHP-FPM realpath/opcache
+state. The deployment and rollback helpers therefore require limited,
+passwordless service control for the deployment user, not broad passwordless
+sudo. As `root`, install and validate this dedicated sudoers rule:
+
+```sudoers
+Cmnd_Alias STOXLA_RUNTIME = /usr/bin/systemctl show php8.4-fpm --property=Id, /usr/bin/systemctl show stoxla-queue --property=Id, /usr/bin/systemctl daemon-reload, /usr/bin/systemctl reload php8.4-fpm, /usr/bin/systemctl restart stoxla-queue, /usr/bin/install -m 0644 /home/nitty/.stoxla-deploy/*/stoxla-queue.service /etc/systemd/system/stoxla-queue.service
+nitty ALL=(root) NOPASSWD: STOXLA_RUNTIME
+```
+
+```bash
+sudo visudo -cf /etc/sudoers.d/stoxla-runtime
+sudo -u nitty sudo -n /usr/bin/systemctl show php8.4-fpm --property=Id
+```
+
+Do not grant `nitty` unrestricted sudo. The CI deploy key uses this same user,
+so the constrained rule is required before CI/CD can safely activate releases.
 
 ## 9. Application deployment
 
@@ -842,13 +867,18 @@ For each deployment, the remote script:
    `config:cache`, `route:cache`, `view:cache`, and `event:cache`.
 8. Atomically switches `/var/www/stoxla/current` to the new release.
 9. Refreshes top-level symlinks.
-10. Runs `php artisan queue:restart` so the systemd-managed worker reloads
-    gracefully.
-11. Checks `https://stoxla.in/`.
+10. Signals `php artisan queue:restart`, reloads PHP-FPM, and restarts the
+    systemd-managed worker so no long-running process keeps the prior release.
+11. Runs the hard runtime health gate: active release build metadata must match
+    public `/api/build-info`; root/module asset, queue service/coverage, and
+    scheduler heartbeat must be healthy.
 12. Prunes old releases, keeping the latest five by default.
 
 The script does not modify MariaDB configuration, does not create or print
-runtime secrets, and does not change the scheduler cron.
+runtime secrets, and does not change the scheduler cron. It fails before
+activation when constrained runtime-service privileges are unavailable, and
+fails visibly when public PHP build identity differs from the release being
+activated.
 
 ### 12.5 Required one-time GitHub setup
 
@@ -910,10 +940,11 @@ ssh nitty@82.112.230.20 'systemctl status stoxla-queue --no-pager'
 
 ### 12.7 Rollback
 
-Rollback switches the `current` symlink to a previous release and restarts the
-queue worker gracefully. It does not run database down migrations. If a release
-contains irreversible database changes, prefer a forward fix unless a specific
-database rollback plan has been prepared.
+Rollback switches the `current` symlink to a previous release, reloads PHP-FPM,
+restarts the queue worker, and runs the same public release-identity/runtime
+health gate as deployment. It does not run database down migrations. If a
+release contains irreversible database changes, prefer a forward fix unless a
+specific database rollback plan has been prepared.
 
 The workflow copies the rollback helper to
 `/home/nitty/.stoxla-deploy/stoxla-rollback-release.sh`.
