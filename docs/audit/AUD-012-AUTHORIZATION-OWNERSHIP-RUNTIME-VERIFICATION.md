@@ -110,9 +110,12 @@ Static middleware and tests cover `X-Profile-Id`, `X-Portfolio-Id`, and
 foreign/deleted profile returns the accepted non-disclosing failure; an Admin
 does not acquire a default Investor profile.
 
-No authenticated cross-Investor production probe was run because production
-has one Investor account and zero PATs. The production ownership audit is
-clean, while the full foreign-object runtime matrix remains open.
+The focused production-like matrix reverified owned-profile access, all
+supported selection aliases, deleted/foreign profile rejection, and Admin
+no-profile behavior. No authenticated production session was available for a
+live role probe; production has one Investor account and zero PATs. The
+production ownership audit is clean, while the live actor portion of the
+foreign-object runtime matrix remains open.
 
 ## 7. Admin -> Investor Boundary
 
@@ -121,15 +124,19 @@ portfolios, transactions, holdings, notes, recommendations, and broker status,
 while shared session/profile/settings/notification/calendar routes remain
 available without creating a profile.
 
-Unauthenticated production probes could not be used as clean role-denial
-evidence: protected API requests returned HTTP 500 because PHP could not append
-to the current Laravel log file. No Admin credential was used in production.
+The production-like role suite reverified these representative denials. No
+approved authenticated Admin production session was available, so no live
+Admin credential was used. The production ownership audit remains clean and
+shows no Admin-owned Investor data.
 
 ## 8. Investor -> Admin Boundary
 
 Static tests prove an Investor is rejected from representative Admin APIs and
 the current route inventory retains `admin` middleware on Admin families. No
-production Investor credentials were used for mutation or privileged probes.
+the focused role suite reverified user-management, registry/configuration, and
+operational/audit rejection paths. No approved authenticated Investor
+production session was available for a live role probe; no production
+mutation or privileged probe was attempted.
 
 The current production debug hook prevents claiming a clean runtime boundary
 until disabled and rechecked.
@@ -137,22 +144,26 @@ until disabled and rechecked.
 ## 9. Cross-Investor Object Isolation
 
 No second production Investor exists for a safe live foreign-ID probe. The
-repository tests cover foreign profile/member and representative object
-ownership cases. Production evidence therefore remains limited to clean
-relational ownership data, not a live two-Investor denial drill.
+production-like tests cover foreign profile/member IDs across holdings,
+transactions, recommendations, notes, Wiki/private knowledge, artifacts and
+bindings, Backtest/Replay resources, and execution-owned objects. Production
+evidence remains limited to clean relational ownership data, not a live
+two-Investor denial drill.
 
 ## 10. Nested / Member Route Isolation
 
 Static coverage includes profile/member binding and representative contextual
 note, Wiki, artifact, and execution ownership paths. The current route count
-delta and lack of a second production Investor leave exhaustive nested/member
-runtime coverage open. No evidence of a bypass was found.
+delta is closed by AUTHR-005. The focused nested/member tests reverify parent
+and child substitutions cannot cross ownership; no evidence of a bypass was
+found. A live two-Investor nested probe remains unavailable.
 
 ## 11. PAT Scope + Ownership
 
 Production has zero personal access tokens, so no live PAT probe was possible.
-Static `V6PersonalApiTokenTest` coverage proves owner plus scope composition,
-foreign member rejection, missing-scope denial, and Admin PAT non-ownership.
+`V6PersonalApiTokenTest` and the focused authorization suite prove owner plus
+scope composition, foreign member rejection, missing-scope denial, Admin PAT
+non-ownership, and unaffected browser/session authentication.
 PAT scope does not replace active-profile, role, TOTP, entitlement, halt,
 reconciliation, or broker-readiness checks.
 
@@ -254,7 +265,29 @@ Investor, three live profiles, two soft-deleted profiles, and no PATs. No
 Admin-owned portfolios, profile rows, direct broker connections, or execution
 records were reported. No production rows were edited.
 
-## 21. Gap Register
+## 21. AUTHR-006 Verification Boundary
+
+The safe production evidence is limited to the clean ownership audit: one
+Admin account checked, zero Admin-owned Investor conflicts, and no production
+rows changed. No approved authenticated Admin or Investor session was
+available in the connected environment, production contains only one
+Investor, and there are zero PATs; therefore live Admin-to-Investor,
+Investor-to-Admin, foreign-object, and PAT probes were not fabricated.
+
+The repository-equivalent assurance is strong: the focused authorization
+matrix passed 108 tests and 829 assertions, covering role separation, active
+profile aliases, deleted/foreign profiles, nested ownership, notes/Wiki,
+artifact sharing/bindings, Backtest/Replay ownership, execution/broker
+ownership, PAT scope plus ownership, and shared Admin routes without profile
+creation. No authorization defect was found.
+
+Classification: `RUNTIME_VERIFICATION_REQUIRED` remains appropriate for
+AUTHR-006 because the accepted boundary explicitly includes authenticated
+runtime actors and browser routing, and neither a live authenticated session
+nor an approved second-user/PAT fixture was available. This is an evidence
+limitation, not a confirmed bypass.
+
+## 22. Gap Register
 
 | ID | Finding | Classification | Severity | Evidence |
 | --- | --- | --- | --- | --- |
@@ -263,9 +296,9 @@ records were reported. No production rows were edited.
 | AUTHR-003 | Production ownership audit is clean | `IMPLEMENTED` | High | `portfolio:audit-admin-investment-ownership --json` returned zero conflicts |
 | AUTHR-004 | Role separation, profile aliases, PAT scope/ownership, and representative object checks | `IMPLEMENTED_WITH_LIMITATION` | High | Static tests pass; no second production Investor/PAT fixture |
 | AUTHR-005 | Current route inventory is 443 versus prior 437-operation audit | `IMPLEMENTED` | Medium | Fresh master inventory: 443 total / 438 API; audited revision `e5c6fb2`: 442 total / 437 API; exact diff has one protected notification retry addition and five prior API-scope exclusions, with no authorization gap |
-| AUTHR-006 | Full authenticated Admin/Investor browser and foreign-object runtime matrix | `RUNTIME_VERIFICATION_REQUIRED` | Medium | Production credentials/second Investor fixture unavailable; static coverage exists |
+| AUTHR-006 | Full authenticated Admin/Investor browser and foreign-object runtime matrix | `RUNTIME_VERIFICATION_REQUIRED` | Medium | Clean production ownership audit plus 108-test/829-assertion authorization matrix; no approved authenticated production sessions, second Investor, or PAT fixture available |
 
-## 22. Cross-Audit Evidence
+## 23. Cross-Audit Evidence
 
 - AUD-009: deployed release and production runtime configuration are available,
   but the log permission defect is new authorization-boundary evidence.
@@ -276,7 +309,7 @@ records were reported. No production rows were edited.
 - AUD-007: artifact rollout is separately verified; artifact grants remain an
   authorization runtime boundary here.
 
-## 23. Final AUD-012 Assessment
+## 24. Final AUD-012 Assessment
 
 **Disposition: `PARTIALLY_IMPLEMENTED` (High severity, High confidence).**
 
@@ -290,12 +323,12 @@ so the audit stays partially implemented.
 `V5-REQ-018` remains `PARTIALLY_IMPLEMENTED` pending the clean representative
 role/foreign-object runtime matrix tracked by AUTHR-006.
 
-## 24. Open Questions
+## 25. Open Questions
 
 - Which approved dedicated test identities can support a two-Investor and PAT
   runtime denial matrix without touching real financial state?
 
-## 25. Remediation Validation
+## 26. Remediation Validation
 
 Repository protections are implemented and validated:
 
