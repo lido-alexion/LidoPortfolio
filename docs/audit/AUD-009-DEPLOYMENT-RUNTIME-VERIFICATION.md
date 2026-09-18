@@ -4,7 +4,7 @@
 
 AUD-009 verifies the actual StoX production environment rather than inferring production behavior from repository scripts. The current target is the Hostinger VPS serving `https://stoxla.in/`, not the archived GoDaddy/cPanel `/portfolio` deployment.
 
-**Disposition: `RUNTIME_VERIFICATION_REQUIRED` (Medium severity, High confidence).** The VPS layout, secret isolation, database, HTTPS, cron scheduler, release activation, and queue processing are now operationally verified. The two prior High defects are closed. Remaining runtime work is bounded to release freshness/pending approved deployment and backup/restore assurance.
+**Disposition: `RUNTIME_VERIFICATION_REQUIRED` (Medium severity, High confidence).** The VPS layout, secret isolation, database, HTTPS, cron scheduler, release activation, and queue processing are operationally verified. DEP-003 is now closed under the approved deployable-source boundary. DEP-004 remains open because backup scheduling, retention, independent storage, and restore recovery are not yet proven.
 
 No application release was changed, no migration was run, and no secret value was read during the DEP-001/DEP-002 activation.
 
@@ -40,10 +40,17 @@ This is `IMPLEMENTED_DIFFERENTLY` from the old cPanel topology and is an accepta
 The active filesystem release is:
 
 ```text
-releases/20260918084844-af426a7ead54
+releases/20260918193341-0872014f23f0
 ```
 
-Its on-disk `bootstrap/build-info.json` identifies commit `af426a7ead544a6603ee0bd9e8e267e75f946211`, CI run 65, built at `2026-09-18T08:48:24Z`. The local intended `master` at audit time is `ce2810a1fc46a94c9c6aa2f770f6fdf7c0e34029`; it has not been packaged into production.
+Its on-disk `bootstrap/build-info.json` identifies commit
+`0872014f23f0e592b0584ed036cb80a950064d02`, build 85, built at
+`2026-09-18T19:33:21Z`. Public `/api/build-info` reports the same commit and
+build ID. The current `master` is `85687be8c5d90c474fdd8e8d215b24d7260a301f`,
+whose only changes after `0872014` are audit-document bookkeeping. The
+deployment workflow's changed-file gate therefore correctly did not package or
+activate that documentation-only commit; production is at the latest approved
+deployable application revision.
 
 Before the DEP-001 activation, public `/api/build-info` incorrectly reported older commit `b1327c22b376ccc73662332be3929baa4afbb903`, CI run 61. A localhost HTTPS probe returned the same older value while direct file inspection returned `af426a7`; this established a runtime stale-code condition rather than a CDN cache discrepancy. The subsequent graceful FPM reload corrected the public response to `af426a7ead544a6603ee0bd9e8e267e75f946211`.
 
@@ -72,14 +79,12 @@ The intended India-market scheduler behavior is therefore driven explicitly by t
 
 ## 7. Database / Migration State
 
-MariaDB 10.11.14 is reachable. `php artisan migrate:status` reports all migrations bundled in the active `af426a7` release as run, through `2026_09_12_100001_v7_stox_fundamentals_and_ml`.
-
-The active production release predates the local `2026_09_18_000001_historical_replay_lifecycle_evidence` migration. Accordingly, the deployed database does not yet contain:
-
-- `portfolio_recommendation_reservation_events`
-- `portfolio_tos_recall_bridge_loan_returns`
-
-This is expected for the older active release, but the next deployment containing AUD-008 Batch 1B must apply that migration before serving code that relies on those tables. No schema drift was found relative to the deployed release itself.
+MariaDB 10.11.14 is reachable. `php artisan migrate:status` reports every
+migration bundled in the active `0872014` release as run, through batch 55,
+including `2026_09_18_000001_historical_replay_lifecycle_evidence` and
+`2026_09_19_000001_v7_namespace_historical_replay_evidence`. No pending
+migrations were reported and no schema drift was found relative to the
+deployed release.
 
 ## 8. Storage / Permissions
 
@@ -167,7 +172,31 @@ Current-day logs contain 14 frontend error entries, 2 Laravel error/exception en
 
 The release rollback helper exists at `/home/nitty/.stoxla-deploy/stoxla-rollback-release.sh`, mode `0700`. Seven retained releases are available, and rollback atomically repoints `current`, rebuilds Laravel caches, signals `queue:restart`, resets opcache through the established localhost-only endpoint, and checks the production URL. It intentionally does not perform database down migrations.
 
-The newest visible database backup is a 316 MB gzip SQL backup dated 2026-09-15. No application-user backup schedule or retention evidence was available; Hostinger-managed backup status was not accessible. Backup freshness and restore readiness therefore remain runtime verification, not proven by the single visible backup.
+The only visible application database backup is:
+
+```text
+/home/nitty/stoxla-backups/stoxla-v5-closure-pre-admin4-20260915T161142+0530.sql.gz
+size: 315,983,406 bytes
+owner/mode: nitty:nitty 0664
+timestamp: 2026-09-15 16:12 IST
+gzip integrity: valid
+```
+
+No automated application backup schedule, rotation/retention policy, separate
+backup destination, encryption policy, or failure alert was found. The VPS
+backup directory contains only this dump and a small pre-closure crontab text
+file. Hostinger-managed snapshot/backup status was not accessible through the
+available administrator account. Shared Laravel storage contains 43 files
+(approximately 1.8 MB), but no backup coverage for those non-database assets
+was evidenced. The production database user cannot create a temporary database,
+so an isolated restore could not be performed without broader administrator
+privilege; the dump was not restored over production. Secret recovery is
+documented as a server-only environment supplement, but no backup/recovery
+procedure for that configuration was evidenced.
+
+DEP-004 therefore remains open. The dump's valid compression proves artifact
+integrity only; it does not prove scheduled freshness, retention, independent
+failure survivability, or restore correctness.
 
 ## 19. Security Exposure Probes
 
@@ -196,8 +225,8 @@ No public secret or source-file exposure was found in these probes.
 | --- | --- | --- | --- | --- | --- |
 | DEP-001 | Release activation reaches PHP runtime | New release executes after atomic symlink switch | Graceful FPM reload refreshed the symlink runtime: active filesystem and public PHP build-info both resolve to `af426a7ead544a6603ee0bd9e8e267e75f946211` | `IMPLEMENTED` | High |
 | DEP-002 | Named notification queue consumption | External delivery work is consumed | Root-owned `stoxla-queue` unit is active with `notifications,default`; 12 aged jobs drained normally as 11 delivered and 1 suppressed, with 0 failed jobs | `IMPLEMENTED` | High |
-| DEP-003 | Current source release freshness | Intended release/commit is identifiable and deployed deliberately | Runtime filesystem is `af426a7`; local master is `ce2810a1`; newest migration is not deployed | `RUNTIME_VERIFICATION_REQUIRED` | Medium |
-| DEP-004 | Backup freshness / restore path | Backup schedule, retention, and recoverability are known | One 2026-09-15 local SQL backup visible; host-managed backup evidence unavailable | `RUNTIME_VERIFICATION_REQUIRED` | Medium |
+| DEP-003 | Current source release freshness | Intended release/commit is identifiable, CI-derived, deliberately activated, and checked at runtime | Filesystem and public build-info both report `0872014f23f0e592b0584ed036cb80a950064d02`; successful deployment build 85 is the latest approved deployable application revision; current `master` is documentation-only newer; all deployed migrations are run | `IMPLEMENTED` | Medium |
+| DEP-004 | Backup freshness / restore path | Automated backup schedule, retention, independent storage, persistent-state coverage, and recoverability are known | One valid 315,983,406-byte local SQL dump dated 2026-09-15; no application schedule/retention/separate destination evidence; shared-storage backup coverage unproven; isolated restore unavailable because the production DB user lacks temporary-database privilege | `RUNTIME_VERIFICATION_REQUIRED` | Medium |
 | DEP-005 | Secrets and public-root isolation | Secrets remain private and public root is limited | Shared `.env` mode 0600; probes block hidden files; public-root target correct | `IMPLEMENTED` | High |
 | DEP-006 | Scheduler runtime | Scheduler runs once at expected cadence | Minute cron and recent heartbeat; no duplicate worker found | `IMPLEMENTED` | High |
 | DEP-007 | Core process/resource health | Web, PHP, DB, storage, TLS, and disk remain viable | Core processes active, certificate valid, storage writable, disk/memory healthy | `IMPLEMENTED` | Medium |
@@ -312,13 +341,21 @@ active release. Future deployments must retain that gate.
 The root-managed worker now intentionally consumes `notifications,default` and
 the aged backlog completed through normal delivery/suppression handling.
 
-#### C - Release and migration freshness
+#### C - Release and migration freshness (resolved)
 
-Use CI deployment once the intended release is approved. It must apply the historical replay lifecycle-evidence migration together with the corresponding code, then verify filesystem and public runtime commit identity match.
+The successful build-85 deployment of `0872014` applied the historical Replay
+lifecycle-evidence and namespace migrations. Filesystem/public build identity,
+the CI-derived release metadata, the changed-file deployment gate, and the
+post-deployment runtime health gate now provide the required freshness
+evidence. The newer `85687be` master commit contains audit documents only and
+was correctly not activated as an application release.
 
-#### D - Backup assurance
+#### D - Backup assurance (open)
 
-Obtain the Hostinger backup schedule, retention, latest successful backup timestamp, and a documented non-production restore drill. Do not infer backup safety from the local SQL artifact.
+Establish an automated database and persistent-storage backup schedule, define
+retention and independent storage, document secret recovery, and complete a
+non-production restore drill. Do not infer backup safety from the single
+same-host SQL artifact.
 
 #### E - Operational observability
 
@@ -354,10 +391,13 @@ FPM reload made public PHP match the active release, while the root-managed
 queue worker drained the aged notification backlog through normal lifecycle
 processing with no failed jobs.
 
-The remaining bounded work is DEP-003 release/current-source freshness and an
-approved newer deployment, plus DEP-004 backup schedule, retention, and restore
-assurance. These are Medium runtime-verification boundaries, not open High
-runtime defects.
+DEP-003 is implemented. The production release is the latest approved
+deployable application revision, its public and filesystem identities match,
+the deployment workflow embeds and gates the exact commit, and the migration
+ledger is current. DEP-004 remains runtime verification required: a single
+same-host database dump is present and gzip-valid, but automated scheduling,
+retention, independent storage, shared-storage coverage, and an isolated
+restore drill are not established.
 
 ## 25. Open Questions
 
