@@ -8,7 +8,6 @@ use App\Models\PortfolioReplayCheckpoint;
 use App\Models\PortfolioReplayRun;
 use App\Models\TradingStrategy;
 use App\Services\FeeCalculatorService;
-use App\Services\HistoricalHoldingsService;
 use App\Services\ProfileSettingsService;
 use App\Support\TradingCalendar;
 use Carbon\Carbon;
@@ -20,9 +19,9 @@ use Illuminate\Validation\ValidationException;
 final class PortfolioReplayService
 {
     public function __construct(
-        private HistoricalHoldingsService $history,
         private FeeCalculatorService $fees,
         private ProfileSettingsService $profileSettings,
+        private HistoricalReplayStateBuilder $historicalState,
     ) {}
 
     /** @param array<string, mixed> $input */
@@ -31,19 +30,18 @@ final class PortfolioReplayService
         $mode = $input['starting_mode'];
         $start = $input['period_start'];
         $limitations = [];
+        $historicalBindingRows = null;
+        $historicalEvidence = null;
         if (! TradingCalendar::isEquitySessionDate(Carbon::parse($start))) {
             $limitations[] = 'period_start_is_not_an_equity_session';
         }
         if ($mode === 'historical_branch') {
-            $state = $this->history->asOf($profile, $start);
-            if (! $state['completeness']['total_value_complete']) {
-                $limitations[] = 'historical_starting_state_not_reconstructable';
-            }
-            // Holdings and cash alone are not a complete Replay branch. Until the
-            // point-in-time reconstruction also covers Strategy ownership,
-            // capital allocations, loans/recalls and bridge funding, proceeding
-            // would fabricate a materially different Portfolio world.
-            $limitations[] = 'historical_strategy_capital_state_not_reconstructable';
+            $built = $this->historicalState->build($profile, $start);
+            $state = $built['state'];
+            $historicalBindingRows = $built['binding_revisions'];
+            $historicalEvidence = $built['evidence'];
+            $state['reconstruction_evidence'] = $historicalEvidence;
+            $limitations = array_merge($limitations, $built['limitations'], $built['blockers']);
         } else {
             $state = [
                 'schema_version' => 1,
@@ -99,6 +97,12 @@ final class PortfolioReplayService
                 'allocation_pct' => $strategy?->allocation_pct !== null ? (float) $strategy->allocation_pct : null,
             ];
         })->values()->all();
+        if ($historicalBindingRows !== null) {
+            // Historical branches pin the revision that was effective at the
+            // branch boundary, never the mutable current binding.
+            $pinned = $historicalBindingRows;
+            $bindings = collect($historicalBindingRows);
+        }
         if ($mode === 'new_simulated') {
             $state['strategies'] = collect($pinned)->map(fn (array $row): array => [
                 'strategy_id' => $row['strategy_id'],
@@ -117,7 +121,9 @@ final class PortfolioReplayService
         if ($pinned !== [] && abs($allocationSum - 100.0) > 0.01) {
             $limitations[] = 'strategy_allocations_not_complete';
         }
-        if ($bindings->contains(fn (ArtifactBinding $binding) => $binding->usability_state === ArtifactBinding::BLOCKED)) {
+        if ($bindings->contains(fn ($binding) => ($binding instanceof ArtifactBinding
+            ? $binding->usability_state
+            : ($binding['usability_state'] ?? null)) === ArtifactBinding::BLOCKED)) {
             $limitations[] = 'blocked_artifact_binding';
         }
 
@@ -125,8 +131,13 @@ final class PortfolioReplayService
 
         return [
             'status' => $limitations === [] ? 'ready' : (array_intersect($limitations, [
-                'historical_starting_state_not_reconstructable',
-                'historical_strategy_capital_state_not_reconstructable',
+                'historical_cash_state_unavailable',
+                'historical_holdings_state_unavailable',
+                'historical_holding_ownership_ambiguous',
+                'historical_holding_quantity_unreconstructable',
+                'historical_strategy_binding_unavailable',
+                'historical_allocation_state_unavailable',
+                'historical_allocation_state_incomplete',
                 'no_enabled_strategy_artifact_bindings',
                 'blocked_artifact_binding',
                 'strategy_projection_missing',
@@ -136,6 +147,7 @@ final class PortfolioReplayService
             'starting_state' => $state,
             'pinned_world' => [
                 'binding_revisions' => $pinned,
+                'historical_reconstruction' => $historicalEvidence,
                 'charge_model' => [
                     'version' => 'settings-sha256:'.hash('sha256', json_encode($chargeComponents, JSON_THROW_ON_ERROR)),
                     'components' => $chargeComponents,

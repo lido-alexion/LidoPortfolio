@@ -230,7 +230,7 @@ class V5PortfolioReplayFoundationTest extends TestCase
             ->assertJsonPath('errors.readiness.0', 'no_enabled_strategy_artifact_bindings');
     }
 
-    public function test_historical_branch_blocks_when_strategy_capital_state_is_not_reconstructable(): void
+    public function test_historical_branch_blocks_when_required_history_or_bindings_are_unavailable(): void
     {
         $user = User::factory()->create();
         $profile = $this->defaultPortfolioFor($user);
@@ -243,10 +243,73 @@ class V5PortfolioReplayFoundationTest extends TestCase
         ]);
 
         $this->assertSame('blocked', $readiness['status']);
-        $this->assertContains(
-            'historical_strategy_capital_state_not_reconstructable',
-            $readiness['limitations'],
-        );
+        $this->assertContains('no_enabled_strategy_artifact_bindings', $readiness['limitations']);
+        $this->assertNotContains('historical_strategy_capital_state_not_reconstructable', $readiness['limitations']);
+    }
+
+    public function test_historical_branch_reconstructs_as_of_holdings_cash_and_binding_then_processes_in_isolation(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        $stock = Stock::query()->create(['symbol' => 'HIST', 'exchange' => 'NSE', 'name' => 'Historical Holding']);
+        StockPrice::query()->create([
+            'stock_id' => $stock->id, 'price_date' => '2026-01-02', 'open_price' => 110,
+            'high_price' => 115, 'low_price' => 105, 'close_price' => 112, 'data_source' => 'test',
+        ]);
+        $artifact = ReusableArtifact::query()->create([
+            'artifact_uuid' => (string) Str::uuid(), 'owner_user_id' => $user->id, 'artifact_type' => 'strategy',
+            'slug' => 'historical-strategy', 'name' => 'Historical Strategy', 'origin' => 'authored',
+        ]);
+        $version = ReusableArtifactVersion::query()->create([
+            'artifact_id' => $artifact->id, 'semver' => '1.0.0', 'status' => 'published',
+            'content_json' => ['definition' => []], 'definition_hash' => hash('sha256', 'historical'),
+            'created_by_user_id' => $user->id, 'published_at' => '2026-01-01 09:00:00',
+        ]);
+        $strategy = TradingStrategy::query()->create([
+            'profile_id' => $profile->id, 'name' => 'Historical Strategy', 'slug' => 'historical-strategy',
+            'status' => TradingStrategy::STATUS_ACTIVE, 'allocation_pct' => 100, 'reusable_artifact_id' => $artifact->id,
+            'created_at' => '2026-01-01 09:00:00', 'updated_at' => '2026-01-01 09:00:00',
+        ]);
+        $binding = ArtifactBinding::query()->create([
+            'binding_uuid' => (string) Str::uuid(), 'profile_id' => $profile->id, 'artifact_id' => $artifact->id,
+            'status' => 'enabled', 'usability_state' => 'usable', 'created_at' => '2026-01-01 09:00:00',
+            'updated_at' => '2026-01-01 09:00:00',
+        ]);
+        $revision = ArtifactBindingRevision::query()->create([
+            'binding_id' => $binding->id, 'revision_number' => 1, 'artifact_version_id' => $version->id,
+            'settings_json' => ['allocation_pct' => 100], 'binding_status' => 'enabled', 'usability_state' => 'usable',
+            'action' => 'bind', 'activated_by_user_id' => $user->id, 'activated_at' => '2026-01-01 09:00:00',
+        ]);
+        $binding->forceFill(['active_revision_id' => $revision->id])->save();
+        app(\App\Services\CashManagementService::class)->deposit($profile, 10000, 'Historical opening cash', $user, '2026-01-01');
+        Transaction::query()->create([
+            'profile_id' => $profile->id, 'stock_id' => $stock->id, 'type' => 'buy', 'quantity' => 10,
+            'price' => 100, 'fees' => 0, 'transaction_date' => '2026-01-01', 'source' => Transaction::SOURCE_MANUAL,
+            'owner_key' => 'strategy:'.$strategy->id,
+        ]);
+
+        $input = [
+            'starting_mode' => 'historical_branch', 'period_start' => '2026-01-02', 'period_end' => '2026-01-02',
+            'price_method' => 'next_open', 'adverse_slippage_percent' => 0,
+        ];
+        $readiness = app(PortfolioReplayService::class)->readiness($profile, $input);
+        $this->assertSame('ready', $readiness['status']);
+        $this->assertSame(10000.0, $readiness['starting_state']['cash_balance']);
+        $this->assertSame(10.0, $readiness['starting_state']['holdings'][0]['quantity']);
+        $this->assertSame($strategy->id, $readiness['starting_state']['holdings'][0]['strategy_id']);
+        $this->assertSame($version->id, $readiness['pinned_world']['binding_revisions'][0]['artifact_version_id']);
+
+        $run = app(PortfolioReplayService::class)->create($profile, $user->id, $input);
+        $before = $run->starting_state;
+        Transaction::query()->create([
+            'profile_id' => $profile->id, 'stock_id' => $stock->id, 'type' => 'buy', 'quantity' => 5,
+            'price' => 120, 'fees' => 0, 'transaction_date' => '2026-01-03', 'source' => Transaction::SOURCE_MANUAL,
+            'owner_key' => 'strategy:'.$strategy->id,
+        ]);
+        $result = app(PortfolioReplayProcessor::class)->process($run, 5);
+        $this->assertSame('completed', $result['status']);
+        $this->assertSame($before['holdings'], $run->fresh()->starting_state['holdings']);
+        $this->assertCount(1, $run->fresh()->starting_state['holdings']);
     }
 
     public function test_replay_trade_transition_uses_pinned_price_charges_and_is_idempotent(): void

@@ -51,11 +51,11 @@ Backtest cancellation is checkpoint-aware and terminal. Existing lifecycle tests
 
 ## 6. Portfolio Replay
 
-Replay is a Portfolio-scoped historical timeline, not an aggregate Strategy Backtest. Its `pinned_world` captures binding revisions, exact artifact versions and hashes, dependencies, strategy identity/allocation, charge model, calendar, and economic settings. Each processed session creates a separate economic checkpoint with market fingerprint and limitations.
+Replay is a Portfolio-scoped historical timeline, not an aggregate Strategy Backtest. Its `pinned_world` captures binding revisions, exact artifact versions and hashes, dependencies, strategy identity/allocation, charge model, calendar, and economic settings. Each processed session creates a separate economic checkpoint with market fingerprint and limitations. Historical branches now use `HistoricalReplayStateBuilder` to pin an as-of starting world before queueing.
 
 Replay applies historical trade transitions, fees, capital/economic state, holdings, pending recommendations, and valuation into checkpoint state. It does not write source Portfolio holdings, transactions, or cash ledger rows. Replay can compare runs and retains tombstones after deletion.
 
-The current implementation supports `new_simulated` readiness. `historical_branch` is explicitly blocked when complete strategy/capital/loan reconstruction is unavailable; it does not silently run a shortened or fabricated branch.
+`new_simulated` and `historical_branch` remain separate. A historical branch reconstructs ledger-derived holdings/ownership episodes, effective-date cash, binding revisions, reservations, loans/returns, recalls, bridge loans, and unsettled sale proceeds as of the branch boundary. The resulting state and evidence are stored on `PortfolioReplayRun` and are not re-read from the source Portfolio during processing. Ambiguous ownership, unavailable cash/history, missing strategy binding evidence, and incomplete allocation evidence still block the branch; missing starting valuation is retained as an explicit limitation. The branch is processed by the same checkpoint processor without writing source holdings, transactions, or cash.
 
 ## 7. Paper Portfolio
 
@@ -168,7 +168,7 @@ This is sufficient static assurance for the implemented paths, while the two bou
 
 | ID | Finding | Classification | Severity | Evidence |
 | --- | --- | --- | --- | --- |
-| SIM-001 | Historical Replay branch is blocked when strategy/capital/loan state cannot be reconstructed | `PARTIALLY_IMPLEMENTED` | Medium | `PortfolioReplayService::readiness()` deliberately returns `historical_strategy_capital_state_not_reconstructable`; tests assert blocking |
+| SIM-001 | Historical Replay branch reconstruction | `IMPLEMENTED` | High | `HistoricalReplayStateBuilder`, `V5PortfolioReplayFoundationTest::test_historical_branch_reconstructs_as_of_holdings_cash_and_binding_then_processes_in_isolation`, and precise fail-closed blockers |
 | SIM-002 | Dataset version is attribution, not an immutable market-data snapshot, so post-resync historical reproducibility is not fully proven | `RUNTIME_VERIFICATION_REQUIRED` | High | Current analytics and market-data docs explicitly retain this limitation; market fingerprints exist per Replay checkpoint |
 | SIM-003 | A single three-mode end-to-end fixture is not present; assurance is split across strong mode-specific suites | `RUNTIME_VERIFICATION_REQUIRED` | Medium | Existing tests cover each mode and key isolation invariants, but not one combined workflow |
 | SIM-004 | Full browser proof of mode labels, partial results, recovery, and constrained-width controls is absent | `RUNTIME_VERIFICATION_REQUIRED` | Medium | Routes/components and source tests exist; browser geometry and interaction remain unverified |
@@ -191,7 +191,7 @@ Current bounded override, cancellation, provenance, and draft behavior is implem
 
 ### D — Replay semantics
 
-Keep the explicit fail-closed historical-branch block. Do not fabricate capital/loan reconstruction. Resolve only through an accepted reconstruction implementation.
+Historical branch reconstruction is implemented for the persisted state elements currently supported by the model. Keep the builder fail-closed for ambiguous ownership, unavailable cash/history, unversioned strategy policy, and incomplete allocation evidence. Counterfactual version substitution is not currently exposed by the Replay API and remains a bounded follow-up if required by FEAT-020.
 
 ### E — Paper/clone semantics
 
@@ -208,9 +208,8 @@ Run deployed worker/scheduler, production-like dataset, browser, and provider-in
 ## 22. Recommended Order
 
 1. Preserve the existing mode-specific feature assurance suites and add a composite isolation test only if a single release gate is operationally required.
-2. Resolve or formally accept the historical Replay branch limitation; do not weaken its blocking behavior.
-3. Verify point-in-time behavior after a controlled market-data resync and confirm run fingerprints/provenance remain explainable.
-4. Run browser and deployed-worker verification for all three modes, including cancellation, pause, missing-data, and partial-result states.
+2. Verify point-in-time behavior after a controlled market-data resync and confirm run fingerprints/provenance remain explainable.
+3. Run browser and deployed-worker verification for all three modes, including cancellation, pause, missing-data, and partial-result states.
 
 ## 23. Runtime Verification Boundary
 
@@ -227,12 +226,12 @@ Remaining runtime checks are:
 
 **Disposition: `PARTIALLY_IMPLEMENTED`.**
 
-Backtest, Replay, and Paper are materially distinct and server-side isolated. Existing executable suites prove the most important no-live-mutation, broker exclusion, clone independence, artifact/version provenance, checkpoint, cancellation, and missing-data boundaries. However, the accepted historical-branch Replay capability is currently blocked when economic reconstruction is unavailable, and full point-in-time reproducibility after physical dataset resync remains unproven. Browser and deployed-worker checks also remain.
+Backtest, Replay, and Paper are materially distinct and server-side isolated. Existing executable suites plus the historical branch assurance prove the most important no-live-mutation, broker exclusion, clone independence, artifact/version provenance, checkpoint, cancellation, as-of reconstruction, and missing-data boundaries. SIM-001 is implemented with precise fail-closed blockers. Full point-in-time reproducibility after physical dataset resync remains unproven, and browser and deployed-worker checks remain.
 
 This is a bounded partial verdict, not evidence of a live-state contamination defect. AUD-007, AUD-011, AUD-012, and AUD-015 remain separate.
 
 ## 25. Open Questions
 
-- Is historical-branch Replay intended to remain blocked until strategy capital, lending, recall, and bridge state reconstruction is implemented, or should the accepted contract be narrowed explicitly?
+- Should FEAT-020 counterfactual strategy/artifact version substitution be exposed in the current Replay API, or remain an explicit future capability?
 - What deployed data/version retention or fingerprint policy will provide proof after a physical market-data resync?
 - Is one composite three-mode assurance test required as a release gate, given the existing mode-specific feature suites?
