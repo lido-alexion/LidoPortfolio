@@ -9,6 +9,7 @@ EXPECTED_COMMIT="${STOXLA_EXPECTED_COMMIT:-}"
 QUEUE_SERVICE="${STOXLA_QUEUE_SERVICE:-stoxla-queue}"
 REQUIRED_QUEUES="${STOXLA_REQUIRED_QUEUES:-notifications,default}"
 SCHEDULER_MAX_AGE_SECONDS="${STOXLA_SCHEDULER_MAX_AGE_SECONDS:-300}"
+PHP_FPM_GROUP="${STOXLA_PHP_FPM_GROUP:-www-data}"
 
 log() {
   printf '[stoxla-runtime-health] %s\n' "$*"
@@ -23,6 +24,20 @@ fail() {
 [[ -x "$PHP_BIN" ]] || fail "PHP binary not found at $PHP_BIN"
 [[ -L "$APP_ROOT/current" ]] || fail "current release symlink is missing"
 [[ -f "$APP_ROOT/current/bootstrap/build-info.json" ]] || fail "active release build metadata is missing"
+
+debug_state="$(cd "$APP_ROOT/current" && "$PHP_BIN" artisan tinker --execute='echo config("app.env")."|".(config("portfolio.debug_agent.enabled") ? "true" : "false");' --no-interaction)"
+[[ "$debug_state" == "production|false" ]] || fail "production DebugAgent is enabled or app environment is not production"
+
+grep -Eq '^LIDO_AGENT_DEBUG_ENABLED=false([[:space:]]*#.*)?$' "$APP_ROOT/shared/.env" \
+  || fail "production shared .env must explicitly disable DebugAgent"
+
+for writable_path in "$APP_ROOT/current/storage/logs" "$APP_ROOT/current/bootstrap/cache"; do
+  [[ -d "$writable_path" ]] || fail "required writable path is missing: $writable_path"
+  find "$writable_path" -type d \( ! -group "$PHP_FPM_GROUP" -o ! -perm -g+w -o ! -perm -2000 \) -print -quit | grep -q . \
+    && fail "directory ownership/permissions are unsafe under $writable_path"
+  find "$writable_path" -type f \( ! -group "$PHP_FPM_GROUP" -o ! -perm -g+w \) -print -quit | grep -q . \
+    && fail "file ownership/permissions are unsafe under $writable_path"
+done
 
 release_commit="$("$PHP_BIN" -r '
   $data = json_decode(file_get_contents($argv[1]), true);

@@ -173,11 +173,11 @@ return [
     ],
 
     /*
-    | Temporary agent/debug hooks (pre-launch only). See debugging.md.
-    | API: header X-Lido-Debug-Token or ?debug_token= on /api/* routes.
+    | Temporary agent/debug hooks (non-production only). See debugging.md.
+    | API: header X-Lido-Debug-Token on /api/* routes.
     */
     'debug_agent' => [
-        'enabled' => filter_var(env('LIDO_AGENT_DEBUG_ENABLED', true), FILTER_VALIDATE_BOOL),
-        'token' => env('LIDO_AGENT_DEBUG_TOKEN', 'Lido'),
+        'enabled' => filter_var(env('LIDO_AGENT_DEBUG_ENABLED', false), FILTER_VALIDATE_BOOL),
+        'token' => env('LIDO_AGENT_DEBUG_TOKEN'),
     ],
 ];

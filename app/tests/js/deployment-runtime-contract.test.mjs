@@ -26,6 +26,9 @@ test('release and rollback require a PHP-FPM refresh plus public build identity 
 
     assert.match(health, /public build-info commit .* does not match active release/);
     assert.match(health, /scheduler heartbeat is stale/);
+    assert.match(health, /production DebugAgent is enabled/);
+    assert.match(health, /LIDO_AGENT_DEBUG_ENABLED=false/);
+    assert.match(health, /storage\/logs/);
 });
 
 test('managed queue configuration is root-owned and deployment only verifies coverage', async () => {
@@ -54,4 +57,22 @@ test('managed queue configuration is root-owned and deployment only verifies cov
     assert.match(runbook, /root:root 644/);
     assert.doesNotMatch(runbook, /\/usr\/bin\/install -m 0644 \/home\/nitty/);
     assert.doesNotMatch(workflow, /deploy\/systemd\/stoxla-queue\.service/);
+});
+
+test('production activation fails closed for debug auth and normalizes PHP writable paths', async () => {
+    const [deploy, health, config, middleware] = await Promise.all([
+        source('deploy/scripts/stoxla-deploy-release.sh'),
+        source('deploy/scripts/stoxla-runtime-health-check.sh'),
+        source('app/config/portfolio.php'),
+        source('app/app/Http/Middleware/DebugAgentToken.php'),
+    ]);
+
+    assert.match(config, /env\('LIDO_AGENT_DEBUG_ENABLED', false\)/);
+    assert.match(config, /env\('LIDO_AGENT_DEBUG_TOKEN'\)/);
+    assert.match(middleware, /app\(\)->environment\('production'\)/);
+    assert.doesNotMatch(middleware, /query\('debug_token'\)/);
+    assert.match(deploy, /production shared \.env must explicitly set LIDO_AGENT_DEBUG_ENABLED=false/);
+    assert.match(deploy, /prepare_writable_tree/);
+    assert.match(health, /PHP_FPM_GROUP/);
+    assert.match(health, /perm -2000/);
 });

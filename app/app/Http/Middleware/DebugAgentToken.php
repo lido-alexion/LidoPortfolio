@@ -17,7 +17,10 @@ class DebugAgentToken
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if (! config('portfolio.debug_agent.enabled', false)) {
+        // This development-only hook can never authenticate in production.
+        if ((string) config('app.env') === 'production'
+            || app()->environment('production')
+            || ! config('portfolio.debug_agent.enabled', false)) {
             return $next($request);
         }
 
@@ -26,9 +29,7 @@ class DebugAgentToken
             return $next($request);
         }
 
-        $provided = (string) ($request->header('X-Lido-Debug-Token')
-            ?? $request->query('debug_token')
-            ?? '');
+        $provided = (string) $request->header('X-Lido-Debug-Token', '');
 
         if ($provided === '' || ! hash_equals($expected, $provided)) {
             return $next($request);

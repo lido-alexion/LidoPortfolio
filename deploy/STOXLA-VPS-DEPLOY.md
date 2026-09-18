@@ -209,6 +209,7 @@ APP_ENV=production
 APP_KEY=<GENERATE_ON_SERVER>
 APP_DEBUG=false
 APP_URL=https://stoxla.in
+LIDO_AGENT_DEBUG_ENABLED=false
 
 LOG_CHANNEL=daily
 LOG_LEVEL=warning
@@ -522,6 +523,17 @@ sudo systemctl restart stoxla-queue
 The worker must explicitly consume every named production queue. Current StoX
 dispatches use `notifications` and `default`; notification delivery must not be
 left behind a default-only worker.
+
+Laravel's shared writable paths use `nitty:www-data` with setgid directories
+and group-writable files. This lets PHP-FPM, the scheduler, the queue worker,
+and deployment commands share logs/cache without world-writable permissions.
+The deployment health gate verifies `storage/logs` and `bootstrap/cache`; an
+administrator must repair existing files if they drift to an unrelated group.
+
+Production DebugAgent authentication is explicitly disabled by
+`LIDO_AGENT_DEBUG_ENABLED=false`. The deployment gate rejects any effective
+production configuration where the hook is enabled, and the middleware also
+hard-blocks authentication whenever `APP_ENV=production`.
 
 ### 8.9 Deployment runtime-service privilege
 

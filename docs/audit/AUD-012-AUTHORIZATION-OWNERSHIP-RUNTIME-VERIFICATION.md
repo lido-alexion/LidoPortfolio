@@ -5,14 +5,15 @@
 AUD-012 began as `RUNTIME_VERIFICATION_REQUIRED` because static role and
 ownership tests did not establish that the deployed data and runtime
 configuration preserved those boundaries. The production ownership audit is
-clean, but deployment verification found a confirmed critical issue before
-role-authenticated probing could safely continue: the temporary DebugAgent
-authentication hook is enabled in production.
+clean. Remediation then found two deployed runtime defects: the temporary
+DebugAgent authentication hook was enabled in production, and PHP-FPM could
+not append to the current Laravel log.
 
-The hook is documented in code as pre-launch-only. It can authenticate an
-unauthenticated API request as the first Admin when a shared debug token is
-provided. The token value is intentionally omitted from this document and was
-not used. This is a confirmed production authorization bypass risk.
+Before remediation, the hook was documented as pre-launch-only but could
+authenticate an unauthenticated API request as the first Admin when a shared
+debug token was provided. The token value is intentionally omitted from this
+document and was not used. This was a confirmed production authorization
+bypass risk.
 
 ## 2. Security Contract
 
@@ -157,7 +158,7 @@ authorization boundary. No production mutation was performed.
 
 ## 16. Public Capability Boundaries
 
-Unauthenticated production probes returned:
+The initial unauthenticated production probes returned:
 
 | Surface | Result |
 | --- | --- |
@@ -170,22 +171,31 @@ The protected-API 500s are not authorization success and do not expose
 business data in the observed response, but they are a runtime error-state
 defect that must be corrected before clean denial verification.
 
+After the DebugAgent configuration cache was refreshed, the same protected
+probes still returned 500 because the dated log files remain `nitty:nitty`
+mode 664. A dummy invalid debug header also did not authenticate, but this
+does not replace the required clean denial probe after log repair.
+
 ## 17. Debug / Deployment Auth Controls
 
-Production `php artisan config:show portfolio.debug_agent` reported the
-debug-agent hook enabled. The deployed middleware is prepended to the API
-group and accepts a shared header/query token; on a match it logs in the first
-Admin for an otherwise unauthenticated request. This is incompatible with the
-production authorization contract and is classified as critical.
+The remediation changed DebugAgent configuration to default disabled with no
+repository fallback token, removed query-string authentication, and added an
+explicit production hard block in `DebugAgentToken`. Production configuration
+now contains `LIDO_AGENT_DEBUG_ENABLED=false`; after config cache refresh,
+`php artisan config:show portfolio.debug_agent` reports `enabled=false`. The
+token value was not printed or used.
 
-The production environment was also checked during this audit without
-printing the configured token. The token was not used. `APP_DEBUG` and
-`APP_ENV` were not treated as sufficient compensation for this hook.
+The deployment release gate and runtime health check both require effective
+`production|false` state and the explicit production environment flag. This
+prevents a future release from activating successfully with DebugAgent enabled.
 
-The current release's Laravel log file is owned `nitty:nitty` with mode 664,
-while PHP-FPM runs as `www-data`; this causes protected unauthenticated API
-requests that attempt to log to return HTTP 500. This is a separate deployment
-runtime defect that obscures expected 401/403 behavior.
+Before remediation, the current Laravel log files were `nitty:nitty` mode
+664 while PHP-FPM ran as `www-data`, causing protected unauthenticated API
+requests that attempted to log to return HTTP 500. The repository now defines
+the durable `nitty:www-data` setgid/group-writable model and health checks it.
+The existing shared log directory is `nitty:www-data` mode 775, but the
+current dated log files still require an administrator-owned group repair; the
+limited deployment sudo boundary intentionally cannot change them.
 
 ## 18. Frontend Role Separation
 
@@ -219,7 +229,7 @@ records were reported. No production rows were edited.
 
 | ID | Finding | Classification | Severity | Evidence |
 | --- | --- | --- | --- | --- |
-| AUTHR-001 | Debug-agent shared-token authentication is enabled in production | `PARTIALLY_IMPLEMENTED` | Critical | Deployed `portfolio.debug_agent.enabled=true`; middleware can authenticate as first Admin |
+| AUTHR-001 | Debug-agent shared-token authentication is enabled in production | `IMPLEMENTED` | Critical | Production config cache reports `enabled=false`; production is hard-blocked in middleware; deployment/health gates reject enabled state |
 | AUTHR-002 | Protected unauthenticated API denials return HTTP 500 because PHP cannot write Laravel logs | `PARTIALLY_IMPLEMENTED` | High | Production probes and `www-data`/log-file permission mismatch |
 | AUTHR-003 | Production ownership audit is clean | `IMPLEMENTED` | High | `portfolio:audit-admin-investment-ownership --json` returned zero conflicts |
 | AUTHR-004 | Role separation, profile aliases, PAT scope/ownership, and representative object checks | `IMPLEMENTED_WITH_LIMITATION` | High | Static tests pass; no second production Investor/PAT fixture |
@@ -242,20 +252,37 @@ records were reported. No production rows were edited.
 **Disposition: `PARTIALLY_IMPLEMENTED` (High severity, High confidence).**
 
 The production ownership audit is clean and static role/ownership enforcement
-is substantial. However, the enabled production debug-agent hook is a confirmed
-critical authorization bypass risk, and the log-permission defect prevents
-clean unauthenticated denial results. These are actual deployed boundary
-defects, not merely missing test coverage.
+is substantial. AUTHR-001 is closed: effective production configuration is
+disabled, the middleware cannot authenticate in production even if a token is
+misconfigured, and deployment gates prevent recurrence. AUTHR-002 remains
+open because the existing dated log files still need an administrator-level
+group/permission repair before protected unauthenticated endpoints can be
+reverified as clean 401/403 responses.
 
-`V5-REQ-018` remains `PARTIALLY_IMPLEMENTED` pending removal/disablement of the
-debug hook, correction of runtime log permissions, and a clean representative
-role/foreign-object runtime matrix.
+`V5-REQ-018` remains `PARTIALLY_IMPLEMENTED` pending the AUTHR-002 runtime
+repair and a clean representative role/foreign-object runtime matrix.
 
 ## 24. Open Questions
 
-- What administrator-controlled process will disable the pre-launch debug hook
-  and prevent its re-enablement in future production releases?
-- Which deployment step will ensure shared Laravel logs are writable by the
-  PHP-FPM user while retaining appropriate ownership and permissions?
+- An administrator must repair the existing dated log files to
+  `nitty:www-data` with group write and then rerun the protected
+  unauthenticated endpoint probes.
 - Which approved dedicated test identities can support a two-Investor and PAT
   runtime denial matrix without touching real financial state?
+
+## 25. Remediation Validation
+
+Repository protections are implemented and validated:
+
+- `DebugAgentTokenTest`: production hard block, disabled state, missing token,
+  and query-token rejection.
+- Deployment contract tests: explicit production flag, hard DebugAgent gate,
+  writable-path checks, and no privileged unit installation.
+- Production config cache: `portfolio.debug_agent.enabled=false` with
+  `APP_ENV=production` and `LIDO_AGENT_DEBUG_ENABLED=false`.
+
+The remaining administrator action is limited to the existing shared log
+files: set their group to `www-data` and group-write bit under the already
+`nitty:www-data` setgid log directory, then rerun the protected endpoint and
+runtime-health checks. No application data or security boundary should be
+changed by that operation.

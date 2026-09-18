@@ -12,6 +12,7 @@ QUEUE_SERVICE="${STOXLA_QUEUE_SERVICE:-stoxla-queue}"
 SYSTEMCTL_BIN="${STOXLA_SYSTEMCTL_BIN:-/usr/bin/systemctl}"
 SUDO_BIN="${STOXLA_SUDO_BIN:-/usr/bin/sudo}"
 REQUIRED_QUEUES="${STOXLA_REQUIRED_QUEUES:-notifications,default}"
+PHP_FPM_GROUP="${STOXLA_PHP_FPM_GROUP:-www-data}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUNTIME_HEALTH_CHECK="${STOXLA_RUNTIME_HEALTH_CHECK:-$SCRIPT_DIR/stoxla-runtime-health-check.sh}"
 
@@ -24,6 +25,22 @@ log() {
 fail() {
   printf '[stoxla-deploy] ERROR: %s\n' "$*" >&2
   exit 1
+}
+
+prepare_writable_tree() {
+  local path="$1"
+  local deploy_user
+
+  deploy_user="$(id -un)"
+
+  # Existing PHP-owned files are validated by the health check; only normalize
+  # files the deployment user can safely change.
+  find "$path" -type d -user "$deploy_user" \
+    -exec chgrp "$PHP_FPM_GROUP" {} + \
+    -exec chmod 2775 {} +
+  find "$path" -type f -user "$deploy_user" \
+    -exec chgrp "$PHP_FPM_GROUP" {} + \
+    -exec chmod 0664 {} +
 }
 
 if [[ -z "$ARCHIVE" || ! -f "$ARCHIVE" ]]; then
@@ -84,6 +101,9 @@ if [[ ! -e "$SHARED_DIR/.env" ]]; then
   fi
 fi
 
+grep -Eq '^LIDO_AGENT_DEBUG_ENABLED=false([[:space:]]*#.*)?$' "$SHARED_DIR/.env" \
+  || fail "production shared .env must explicitly set LIDO_AGENT_DEBUG_ENABLED=false"
+
 if [[ ! -e "$SHARED_DIR/storage" ]]; then
   if [[ -d "$APP_ROOT/storage" && ! -L "$APP_ROOT/storage" ]]; then
     log "copying existing Laravel storage into shared storage"
@@ -105,10 +125,9 @@ rm -rf "$RELEASE_DIR/.env" "$RELEASE_DIR/storage"
 ln -s ../../shared/.env "$RELEASE_DIR/.env"
 ln -s ../../shared/storage "$RELEASE_DIR/storage"
 mkdir -p "$RELEASE_DIR/bootstrap/cache"
-# Do not recurse into existing log files: php-fpm may own historical logs, and
-# failing to chmod those files should not block a release activation.
-find "$SHARED_DIR/storage" -path "$SHARED_DIR/storage/logs/*" -prune -o -exec chmod ug+rwX {} + 2>/dev/null || true
-chmod -R ug+rwX "$RELEASE_DIR/bootstrap/cache"
+log "normalizing shared Laravel writable paths for $PHP_FPM_GROUP"
+prepare_writable_tree "$SHARED_DIR/storage"
+prepare_writable_tree "$RELEASE_DIR/bootstrap/cache"
 
 log "running database migrations and Laravel optimization in staged release"
 (
@@ -120,6 +139,10 @@ log "running database migrations and Laravel optimization in staged release"
   "$PHP_BIN" artisan view:cache --no-interaction
   "$PHP_BIN" artisan event:cache --no-interaction
 )
+
+debug_state="$(cd "$RELEASE_DIR" && "$PHP_BIN" artisan tinker --execute='echo config("app.env")."|".(config("portfolio.debug_agent.enabled") ? "true" : "false");' --no-interaction)"
+[[ "$debug_state" == "production|false" ]] \
+  || fail "effective production DebugAgent state is unsafe: enabled or non-production environment"
 
 if [[ -e "$APP_ROOT/current" && ! -L "$APP_ROOT/current" ]]; then
   fail "$APP_ROOT/current exists but is not a symlink"

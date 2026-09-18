@@ -57,4 +57,51 @@ class DebugAgentTokenTest extends TestCase
         $response->assertJsonPath('message', 'Unauthenticated.');
         $this->assertNotEquals(200, $response->status());
     }
+
+    public function test_production_hard_disables_debug_auth_even_when_configured(): void
+    {
+        config([
+            'app.env' => 'production',
+            'portfolio.debug_agent.enabled' => true,
+            'portfolio.debug_agent.token' => 'test-debug-token',
+        ]);
+
+        User::factory()->create(['is_admin' => true]);
+
+        $this->getJson('/api/universe-price-sync/status', [
+            'X-Lido-Debug-Token' => 'test-debug-token',
+        ])->assertJsonPath('message', 'Unauthenticated.')
+            ->assertStatus(401);
+    }
+
+    public function test_query_string_debug_token_never_authenticates(): void
+    {
+        config([
+            'app.env' => 'local',
+            'portfolio.debug_agent.enabled' => true,
+            'portfolio.debug_agent.token' => 'test-debug-token',
+        ]);
+
+        User::factory()->create(['is_admin' => true]);
+
+        $this->getJson('/api/universe-price-sync/status?debug_token=test-debug-token')
+            ->assertJsonPath('message', 'Unauthenticated.')
+            ->assertStatus(401);
+    }
+
+    public function test_enabled_debug_agent_without_token_stays_unauthenticated(): void
+    {
+        config([
+            'app.env' => 'local',
+            'portfolio.debug_agent.enabled' => true,
+            'portfolio.debug_agent.token' => null,
+        ]);
+
+        User::factory()->create(['is_admin' => true]);
+
+        $this->getJson('/api/universe-price-sync/status', [
+            'X-Lido-Debug-Token' => 'test-debug-token',
+        ])->assertJsonPath('message', 'Unauthenticated.')
+            ->assertStatus(401);
+    }
 }
