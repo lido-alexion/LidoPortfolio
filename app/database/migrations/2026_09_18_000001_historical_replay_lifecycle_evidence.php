@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('portfolio_recommendation_reservation_events', function (Blueprint $table): void {
+        Schema::create('stox_recommendation_reservation_events', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('profile_id');
             $table->foreign('profile_id', 'prre_profile_fk')
@@ -23,7 +23,7 @@ return new class extends Migration
             $table->index(['recommendation_id', 'occurred_at'], 'reservation_events_rec_time_idx');
         });
 
-        Schema::create('portfolio_tos_recall_bridge_loan_returns', function (Blueprint $table): void {
+        Schema::create('stox_tos_recall_bridge_loan_returns', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('bridge_loan_id');
             $table->foreign('bridge_loan_id', 'ptblr_bridge_loan_fk')
@@ -37,6 +37,8 @@ return new class extends Migration
 
     public function down(): void
     {
+        Schema::dropIfExists('stox_tos_recall_bridge_loan_returns');
+        Schema::dropIfExists('stox_recommendation_reservation_events');
         Schema::dropIfExists('portfolio_tos_recall_bridge_loan_returns');
         Schema::dropIfExists('portfolio_recommendation_reservation_events');
     }

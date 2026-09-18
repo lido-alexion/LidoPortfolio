@@ -11,7 +11,7 @@ class RecommendationReservationEvent extends Model
     public const STATE_RELEASED = 'released';
     public const STATE_CONVERTED = 'converted';
 
-    protected $table = 'portfolio_recommendation_reservation_events';
+    protected $table = 'stox_recommendation_reservation_events';
     public $timestamps = false;
 
     protected $fillable = ['profile_id', 'recommendation_id', 'state', 'amount', 'occurred_at', 'created_at'];
