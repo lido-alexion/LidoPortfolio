@@ -8,11 +8,10 @@ schema inventory. The accepted contract governs new StoX-owned objects; it
 does not require renaming the frozen V1-V6 `portfolio_*` schema in this pass.
 
 The complete review found two real post-cutoff violations in the historical
-Replay evidence migration. A forward compatibility migration now renames
-those existing tables to their canonical `stox_` names, and the validator
-scans all governed migrations. Production read-only inspection occurred before
-that forward migration was deployed, so the deployed schema remains pending
-normal release activation.
+Replay evidence migration. A forward compatibility migration renamed those
+tables to their canonical `stox_` names, and the validator scans all governed
+migrations. Production deployment verification now confirms the rename was
+applied successfully.
 
 ## 2. Authoritative Contract and Cutoff
 
@@ -56,20 +55,24 @@ The read-only production schema query returned 137 tables:
 
 | Classification | Count | Result |
 | --- | ---: | --- |
-| `stox_*` | 8 | V7 fundamentals/ML tables are present |
-| Legacy `portfolio_*` | 123 | Accepted pre-cutoff V1-V6/application baseline, plus the two pending Replay renames |
+| `stox_*` | 10 | All governed V7 and post-cutoff Replay tables are present |
+| Legacy `portfolio_*` | 121 | Accepted pre-cutoff V1-V6/application baseline; no post-cutoff Replay names remain |
 | Laravel/framework | 6 | `cache`, `cache_locks`, `migrations`, `password_reset_tokens`, `personal_access_tokens`, `sessions` |
 | Other application-owned/unclassified | 0 | None found |
 
-The production migration ledger shows
-`2026_09_18_000001_historical_replay_lifecycle_evidence` has run. The two
-unprefixed tables currently present are:
+The production migration ledger shows the namespace rename migration has run.
+The canonical Replay evidence tables are present:
+
+- `stox_recommendation_reservation_events`
+- `stox_tos_recall_bridge_loan_returns`
+
+The old unprefixed names are absent:
 
 - `portfolio_recommendation_reservation_events`
 - `portfolio_tos_recall_bridge_loan_returns`
 
-They are the confirmed post-cutoff violations. No production rows were
-modified during this audit.
+The remaining 121 `portfolio_*` tables are intentionally retained legacy
+V1-V6 schema. No unrelated legacy table was renamed.
 
 ## 5. Models and References
 
@@ -107,30 +110,28 @@ rename was introduced.
 
 ## 8. Runtime Verification Boundary
 
-Production schema inspection is complete and read-only. The expected final
-production state is 10 `stox_*` governed tables and zero post-cutoff
-unprefixed Replay tables. The forward migration must be deployed through the
-normal workflow before that final state can be claimed. No production
-migration was run during this audit.
+Production schema inspection is complete and read-only after deployment. The
+final state is 10 `stox_*` governed tables, 121 intentionally retained legacy
+`portfolio_*` tables, and zero post-cutoff unprefixed Replay tables.
 
 ## 9. Gap Register
 
 | ID | Finding | Classification | Severity |
 | --- | --- | --- | --- |
-| NS-001 | Two post-cutoff Replay evidence tables were created with `portfolio_*` names | `PARTIALLY_IMPLEMENTED` pending deployment | Medium |
+| NS-001 | Two post-cutoff Replay evidence tables were initially created with `portfolio_*` names; the deployed forward rename now places both under canonical `stox_` names | `IMPLEMENTED` | Medium |
 | NS-002 | Future namespace validation was previously limited to one migration | `IMPLEMENTED` after cutoff-wide validator | Medium |
 
 ## 10. Final AUD-014 Assessment
 
-**Disposition: `PARTIALLY_IMPLEMENTED` (Medium severity, High confidence).**
+**Disposition: `IMPLEMENTED` (Medium severity, High confidence).**
 
-Repository enforcement and the forward compatibility remediation are complete,
-but production still contains the two old table names until the normal
-deployment applies the rename migration. After deployment, rerun the
-read-only schema inventory and migration status; if both tables are canonical,
-AUD-014 and `V7-REQ-003` can move to `IMPLEMENTED` under the accepted new-object
-contract.
+Repository enforcement, the forward compatibility remediation, and production
+verification are complete. All 10 governed post-cutoff objects use the
+canonical `stox_` namespace; the 121 legacy V1-V6 `portfolio_*` tables remain
+intentionally retained. The cutoff-wide namespace validator remains in place
+to prevent future drift.
 
 ## 11. Open Questions
 
-- When will the normal production release apply the forward namespace rename?
+None. The forward rename has been deployed and verified; the legacy V1-V6
+`portfolio_*` schema remains intentionally outside this namespace cutover.
