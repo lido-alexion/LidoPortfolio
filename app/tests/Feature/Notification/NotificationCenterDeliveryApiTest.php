@@ -50,6 +50,21 @@ class NotificationCenterDeliveryApiTest extends TestCase
         $this->assertStringNotContainsString('token', $response->getContent());
     }
 
+    public function test_detail_preserves_authoritative_primary_action_without_adding_sensitive_fields(): void
+    {
+        $investor = User::factory()->create();
+        $source = app(NotificationPublisher::class)->publishEvent([$investor], [
+            ...$this->content(),
+            'primary_action' => ['label' => 'Open recommendations', 'route' => '/recommendations'],
+        ]);
+
+        $response = $this->actingAs($investor)->getJson('/api/notification-center/'.$source->recipients->sole()->id);
+        $response->assertOk()
+            ->assertJsonPath('data.primary_action.label', 'Open recommendations')
+            ->assertJsonPath('data.primary_action.route', '/recommendations');
+        $this->assertStringNotContainsString('token', $response->getContent());
+    }
+
     public function test_owner_can_retry_failed_delivery_and_repeated_retry_is_rejected(): void
     {
         Http::fake(['api.telegram.org/*' => Http::response([], 400)]);

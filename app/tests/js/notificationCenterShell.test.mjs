@@ -53,6 +53,15 @@ test('Notification Center exposes per-channel delivery state and current-model r
     assert.match(center, /Delivery queued for retry/);
 });
 
+test('Notification History renders only safe local primary actions and labels reminder generations', () => {
+    assert.match(center, /function safePrimaryAction/);
+    assert.match(center, /route\.startsWith\('\/'\)/);
+    assert.match(center, /route\.startsWith\('\/\/'\)/);
+    assert.match(center, /function deliveryKindLabel/);
+    assert.match(center, /reminder: 'Reminder'/);
+    assert.match(center, /escalation: 'Escalation'/);
+});
+
 test('notification settings exposes encrypted-channel lifecycle controls', () => {
     assert.match(settings, /notification-settings\/\$\{channel\}/);
     assert.match(settings, /notification-settings\/\$\{channel\}\/test/);

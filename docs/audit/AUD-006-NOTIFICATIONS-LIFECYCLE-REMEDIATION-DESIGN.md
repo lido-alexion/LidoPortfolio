@@ -478,3 +478,25 @@ The notification shell source tests now cover nullable initial metadata, unavail
 `NTF-003` is now `IMPLEMENTED`: unknown counts are distinct from loaded zero, initial failure does not create a false zero, known counts/banner state survive transient refresh failure, and successful recovery replaces stale metadata. `NTF-004` is now `IMPLEMENTED`: settings failures render persistent unavailable state with Retry and cannot expose mutations against placeholder defaults.
 
 AUD-006 remains `PARTIALLY_IMPLEMENTED`. Remaining work is NTF-005 deployed runtime verification, NTF-007 generic primary-action navigation, and NTF-008 explicit reminder labeling. No master audit verdict was changed in this batch.
+
+## Batch 4 Implementation Outcome
+
+Batch 4 completes the two remaining static Notification Center presentation contracts without changing publisher, retry, reminder threshold, scheduler, or delivery semantics.
+
+### Primary action contract
+
+Current producers store `primary_action` as an object with `label` and `route`. The inspected producers use internal SPA destinations, including `/dashboard`, `/screeners`, `/recommendations`, `/calendar`, `/settings/universe-price-sync`, and `/settings/admin-alerts`. The API already serialized this authoritative field; no new field or producer behavior was added.
+
+Notification History detail now renders the producer label as a React Router `Link` only when the action is a non-empty object with a non-empty label and a single-slash local route. Protocol routes and protocol-relative routes are rejected. Missing or malformed actions render no link and do not affect notification detail, timeline, read state, resolution, or delivery state. Destination authorization remains owned by the target route/API.
+
+### Reminder semantics
+
+The existing `delivery_kind` values remain authoritative. The detail Delivery section now renders `Initial`, `Escalation`, and `Reminder` labels. Attempt count changes do not alter the delivery-kind label, so retries remain attempts on the same delivery while a reminder remains a separate delivery generation. Suppressed, queued, processing, delivered, and failed statuses continue to use the existing per-delivery semantics; a failed reminder remains eligible for the existing specific-delivery retry path and is not re-planned as a new reminder.
+
+### Evidence and final disposition
+
+`NotificationCenterDeliveryApiTest` now verifies authoritative primary-action serialization. `notificationCenterShell.test.mjs` verifies safe local action filtering and initial/escalation/reminder labeling. Existing Batch 1 lifecycle assurance, Batch 2 delivery/retry API tests, Batch 3 bell/settings tests, planner/processor/reminder tests, and the notification PHP suite remain the regression set.
+
+`NTF-007` is now `IMPLEMENTED`: valid producer actions render safely, absent/malformed actions do not render unsafe links, and action navigation does not introduce acknowledgement or resolution behavior. `NTF-008` is now `IMPLEMENTED`: reminder generations are visibly distinct from initial/escalation deliveries, and retry attempts do not become reminder generations.
+
+AUD-006 is now statically `IMPLEMENTED`. `NTF-005` remains a runtime verification boundary for the deployed queue worker, scheduler, credentials, real Telegram/email/webhook providers, provider/network failures, elapsed-time reminders, and browser runtime behavior. No further static Notification Center remediation is required by this audit.

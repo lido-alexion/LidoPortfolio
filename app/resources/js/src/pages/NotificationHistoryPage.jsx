@@ -13,6 +13,22 @@ function severityClass(severity) {
     return 'text-bg-secondary';
 }
 
+function safePrimaryAction(action) {
+    if (!action || typeof action !== 'object') return null;
+    const label = typeof action.label === 'string' ? action.label.trim() : '';
+    const route = typeof action.route === 'string' ? action.route.trim() : '';
+    if (!label || !route || !route.startsWith('/') || route.startsWith('//') || /^[a-z][a-z\d+.-]*:/i.test(route)) return null;
+    return { label, route };
+}
+
+function deliveryKindLabel(kind) {
+    return {
+        initial: 'Initial',
+        escalation: 'Escalation',
+        reminder: 'Reminder',
+    }[kind] || String(kind || 'Delivery').replaceAll('_', ' ');
+}
+
 export default function NotificationHistoryPage() {
     const [params, setParams] = useSearchParams();
     const { refresh: refreshChrome } = useNotifications();
@@ -23,6 +39,7 @@ export default function NotificationHistoryPage() {
     const [retryingDelivery, setRetryingDelivery] = useState(null);
     const view = params.get('view') || 'all';
     const selectedId = params.get('notification');
+    const primaryAction = safePrimaryAction(detail?.primary_action);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -107,6 +124,13 @@ export default function NotificationHistoryPage() {
                             <button type="button" className="btn-close" aria-label="Close detail" onClick={() => setParams(view === 'all' ? {} : { view })} />
                         </div>
                         <div className="small text-muted mb-2">Condition: {detail.condition_state} · Occurrences: {detail.occurrence_count}</div>
+                        {primaryAction && (
+                            <p className="mb-3">
+                                <Link className="btn btn-outline-primary btn-sm" to={primaryAction.route}>
+                                    {primaryAction.label}
+                                </Link>
+                            </p>
+                        )}
                         {detail.deliveries?.length > 0 && (
                             <section className="border-top pt-3 mt-3" aria-label="External delivery status">
                                 <h3 className="h6">Delivery</h3>
@@ -120,7 +144,7 @@ export default function NotificationHistoryPage() {
                                                 <div className="d-flex flex-wrap justify-content-between align-items-start gap-2">
                                                     <div>
                                                         <strong className="text-capitalize">{delivery.channel}</strong>
-                                                        <div className="small text-muted text-capitalize">{delivery.delivery_kind} · {status}</div>
+                                                        <div className="small text-muted">{deliveryKindLabel(delivery.delivery_kind)} · {status}</div>
                                                         {delivery.attempt_count > 0 && <div className="small text-muted">{delivery.attempt_count} {delivery.attempt_count === 1 ? 'attempt' : 'attempts'}</div>}
                                                         {delivery.last_error_code && <div className="small text-danger">Provider error: {delivery.last_error_code}{delivery.last_response_status ? ` (${delivery.last_response_status})` : ''}</div>}
                                                         {delivery.delivered_at && <div className="small text-muted">Delivered {new Date(delivery.delivered_at).toLocaleString()}</div>}
