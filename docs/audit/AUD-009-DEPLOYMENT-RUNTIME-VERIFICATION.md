@@ -209,10 +209,19 @@ No public secret or source-file exposure was found in these probes.
 
 ## 22. Remediation Groups
 
-### Batch 1 - DEP-001 / DEP-002
+### Batch 1A - DEP-001 / DEP-002 secure privilege correction
 
-Batch 1 diagnosed and prepared the permanent release/queue correction without
-deploying newer application code or the pending AUD-008 migration.
+The initial Batch 1 proposal incorrectly allowed the deployment identity to
+install a deployment-user-writable systemd source into `/etc/systemd/system`.
+Combined with `daemon-reload` and a service restart, that would have allowed a
+materially broader root-code-execution boundary. It was rejected before any
+sudoers rule or production unit change was installed.
+
+The corrected model keeps `stoxla-queue.service` root-owned and administrator
+installed. Routine deployment may only inspect the two named services, reload
+`php8.4-fpm`, restart `stoxla-queue`, and verify the live command covers
+`notifications,default`. It cannot install units, invoke `daemon-reload`, or
+write root-controlled service definitions.
 
 #### DEP-001 root cause and durable correction
 
@@ -244,8 +253,9 @@ post-deployment check.
 
 The code inventory found one named queue: `notifications`, produced by
 `NotificationDeliveryPlanner`; all other current dispatches use `default`.
-The committed systemd template now uses one intentional priority worker. The
-deployment uploads and installs that template before reloading systemd:
+The committed systemd template defines one intentional priority worker. An
+administrator must review and install it as `root:root`, mode `0644`; the
+deployment identity only checks its effective `ExecStart`:
 
 ```text
 queue:work --queue=notifications,default --sleep=3 --tries=3 --timeout=120
@@ -259,16 +269,22 @@ instead of silently leaving a named queue unconsumed.
 #### Production execution status
 
 The deployment user `nitty` currently has no noninteractive sudo capability.
-That is why this audit did not reload PHP-FPM, edit `/etc/systemd/system`, or
-restart the worker: doing so requires root-controlled service actions. The VPS
-runbook now specifies a constrained `sudoers` rule for only these commands:
+That is why this audit did not reload PHP-FPM or restart the worker: doing so
+requires root-controlled service actions. The VPS runbook now specifies a
+constrained `sudoers` rule for only these commands:
 
 - inspect/reload `php8.4-fpm`;
-- install the committed queue unit and reload systemd;
 - inspect/restart `stoxla-queue`.
 
-After an authorized administrator installs that rule and the committed queue
-unit, the exact post-change evidence required is:
+Read-only VPS verification confirmed that the existing unit is already
+`root:root`, mode `0644`, and not writable by `nitty`; the unsafe initial rule
+was never installed. Its current effective command still omits the
+`notifications` queue, so an administrator must replace it with the reviewed
+root-managed template before restarting it. The verified systemctl binary is
+`/usr/bin/systemctl`.
+
+After an authorized administrator installs the root-owned queue unit and this
+narrow sudo rule, the exact post-change evidence required is:
 
 ```text
 active release build-info SHA = public /api/build-info SHA

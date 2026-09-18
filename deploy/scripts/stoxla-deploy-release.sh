@@ -14,7 +14,6 @@ SUDO_BIN="${STOXLA_SUDO_BIN:-/usr/bin/sudo}"
 REQUIRED_QUEUES="${STOXLA_REQUIRED_QUEUES:-notifications,default}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUNTIME_HEALTH_CHECK="${STOXLA_RUNTIME_HEALTH_CHECK:-$SCRIPT_DIR/stoxla-runtime-health-check.sh}"
-QUEUE_UNIT_TEMPLATE="${STOXLA_QUEUE_UNIT_TEMPLATE:-$SCRIPT_DIR/stoxla-queue.service}"
 
 ARCHIVE="${1:-}"
 
@@ -39,15 +38,12 @@ command -v tar >/dev/null || fail "tar is not installed"
 command -v curl >/dev/null || fail "curl is not installed"
 [[ -x "$PHP_BIN" ]] || fail "PHP binary not found at $PHP_BIN"
 [[ -x "$RUNTIME_HEALTH_CHECK" ]] || fail "runtime health check is not executable: $RUNTIME_HEALTH_CHECK"
-[[ -f "$QUEUE_UNIT_TEMPLATE" ]] || fail "queue service template is missing: $QUEUE_UNIT_TEMPLATE"
 
 log "checking required runtime-service privileges"
 "$SUDO_BIN" -n "$SYSTEMCTL_BIN" show "$PHP_FPM_SERVICE" --property=Id >/dev/null \
   || fail "deployment user needs passwordless permission to inspect/reload $PHP_FPM_SERVICE"
 "$SUDO_BIN" -n "$SYSTEMCTL_BIN" show "$QUEUE_SERVICE" --property=Id >/dev/null \
   || fail "deployment user needs passwordless permission to inspect/restart $QUEUE_SERVICE"
-"$SUDO_BIN" -n "$SYSTEMCTL_BIN" daemon-reload \
-  || fail "deployment user needs passwordless permission to reload systemd units"
 
 LOCK_DIR="$APP_ROOT/.deploy-lock"
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then
@@ -192,12 +188,6 @@ log "warming active release and signaling queue restart"
 log "gracefully reloading PHP-FPM after the release switch"
 "$SUDO_BIN" -n "$SYSTEMCTL_BIN" reload "$PHP_FPM_SERVICE" \
   || fail "could not reload $PHP_FPM_SERVICE after release activation"
-
-log "installing managed queue service definition"
-"$SUDO_BIN" -n /usr/bin/install -m 0644 "$QUEUE_UNIT_TEMPLATE" "/etc/systemd/system/$QUEUE_SERVICE.service" \
-  || fail "could not install managed queue service definition"
-"$SUDO_BIN" -n "$SYSTEMCTL_BIN" daemon-reload \
-  || fail "could not reload systemd units after queue service update"
 
 log "restarting the managed queue worker after the release switch"
 "$SUDO_BIN" -n "$SYSTEMCTL_BIN" restart "$QUEUE_SERVICE" \

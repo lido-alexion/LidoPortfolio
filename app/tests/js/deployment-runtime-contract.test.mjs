@@ -28,9 +28,10 @@ test('release and rollback require a PHP-FPM refresh plus public build identity 
     assert.match(health, /scheduler heartbeat is stale/);
 });
 
-test('managed queue configuration explicitly consumes every current named queue', async () => {
-    const [deploy, unit, health, runbook, workflow] = await Promise.all([
+test('managed queue configuration is root-owned and deployment only verifies coverage', async () => {
+    const [deploy, rollback, unit, health, runbook, workflow] = await Promise.all([
         source('deploy/scripts/stoxla-deploy-release.sh'),
+        source('deploy/scripts/stoxla-rollback-release.sh'),
         source('deploy/systemd/stoxla-queue.service'),
         source('deploy/scripts/stoxla-runtime-health-check.sh'),
         source('deploy/STOXLA-VPS-DEPLOY.md'),
@@ -38,10 +39,19 @@ test('managed queue configuration explicitly consumes every current named queue'
     ]);
 
     assert.match(unit, /queue:work --queue=notifications,default/);
-    assert.match(deploy, /install -m 0644 "\$QUEUE_UNIT_TEMPLATE"/);
-    assert.match(deploy, /SYSTEMCTL_BIN" daemon-reload/);
+    assert.match(unit, /User=nitty/);
+    assert.match(unit, /Group=www-data/);
+    assert.match(unit, /WorkingDirectory=\/var\/www\/stoxla/);
+
+    for (const script of [deploy, rollback]) {
+        assert.doesNotMatch(script, /\binstall\b/);
+        assert.doesNotMatch(script, /daemon-reload/);
+    }
+
     assert.match(health, /STOXLA_REQUIRED_QUEUES:-notifications,default/);
     assert.match(health, /does not consume required queues/);
     assert.match(runbook, /Cmnd_Alias STOXLA_RUNTIME/);
-    assert.match(workflow, /deploy\/systemd\/stoxla-queue\.service/);
+    assert.match(runbook, /root:root 644/);
+    assert.doesNotMatch(runbook, /\/usr\/bin\/install -m 0644 \/home\/nitty/);
+    assert.doesNotMatch(workflow, /deploy\/systemd\/stoxla-queue\.service/);
 });

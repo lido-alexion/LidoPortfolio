@@ -495,15 +495,23 @@ StandardError=journal
 WantedBy=multi-user.target
 ```
 
-Enable this only after the application code, production `.env`, and database
-queue tables are ready:
+An administrator must review this committed template and install it once as a
+root-managed file. It is intentionally not installed by CI or the deployment
+user:
 
 ```bash
+sudo install -o root -g root -m 0644 deploy/systemd/stoxla-queue.service /etc/systemd/system/stoxla-queue.service
 sudo systemctl daemon-reload
 sudo systemctl enable stoxla-queue
 sudo systemctl start stoxla-queue
 sudo systemctl status stoxla-queue --no-pager
+stat -c '%U:%G %a %n' /etc/systemd/system/stoxla-queue.service
 ```
+
+Expected ownership is `root:root 644`. The `nitty` deployment user must not be
+able to modify `/etc/systemd/system/stoxla-queue.service`. A changed committed
+template is an administrator-reviewed runtime change: update the root-managed
+unit and run `daemon-reload` manually before a deployment that depends on it.
 
 During future deployments, restart the worker after code changes:
 
@@ -523,17 +531,21 @@ passwordless service control for the deployment user, not broad passwordless
 sudo. As `root`, install and validate this dedicated sudoers rule:
 
 ```sudoers
-Cmnd_Alias STOXLA_RUNTIME = /usr/bin/systemctl show php8.4-fpm --property=Id, /usr/bin/systemctl show stoxla-queue --property=Id, /usr/bin/systemctl daemon-reload, /usr/bin/systemctl reload php8.4-fpm, /usr/bin/systemctl restart stoxla-queue, /usr/bin/install -m 0644 /home/nitty/.stoxla-deploy/*/stoxla-queue.service /etc/systemd/system/stoxla-queue.service
+Cmnd_Alias STOXLA_RUNTIME = /usr/bin/systemctl show php8.4-fpm --property=Id, /usr/bin/systemctl show stoxla-queue --property=Id, /usr/bin/systemctl reload php8.4-fpm, /usr/bin/systemctl restart stoxla-queue
 nitty ALL=(root) NOPASSWD: STOXLA_RUNTIME
 ```
 
 ```bash
 sudo visudo -cf /etc/sudoers.d/stoxla-runtime
 sudo -u nitty sudo -n /usr/bin/systemctl show php8.4-fpm --property=Id
+sudo -u nitty test ! -w /etc/systemd/system/stoxla-queue.service
 ```
 
 Do not grant `nitty` unrestricted sudo. The CI deploy key uses this same user,
 so the constrained rule is required before CI/CD can safely activate releases.
+The VPS path has been verified as `/usr/bin/systemctl`; do not add
+`daemon-reload`, `install`, `cp`, shell wrappers, wildcards, or other service
+names to this allowlist. Unit changes remain a root-reviewed operational step.
 
 ## 9. Application deployment
 

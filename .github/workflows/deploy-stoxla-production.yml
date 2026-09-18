@@ -295,7 +295,7 @@ jobs:
           SSH_OPTS="-i ~/.ssh/stoxla_deploy_key -o IdentitiesOnly=yes -o BatchMode=yes"
 
           ssh $SSH_OPTS "${STOXLA_SSH_USER}@${STOXLA_HOST}" "mkdir -p '${REMOTE_DIR}'"
-          scp $SSH_OPTS stoxla-release.tgz deploy/scripts/stoxla-deploy-release.sh deploy/scripts/stoxla-rollback-release.sh deploy/scripts/stoxla-runtime-health-check.sh deploy/systemd/stoxla-queue.service "${STOXLA_SSH_USER}@${STOXLA_HOST}:${REMOTE_DIR}/"
+          scp $SSH_OPTS stoxla-release.tgz deploy/scripts/stoxla-deploy-release.sh deploy/scripts/stoxla-rollback-release.sh deploy/scripts/stoxla-runtime-health-check.sh "${STOXLA_SSH_USER}@${STOXLA_HOST}:${REMOTE_DIR}/"
           ssh $SSH_OPTS "${STOXLA_SSH_USER}@${STOXLA_HOST}" \
             "chmod 700 '${REMOTE_DIR}/stoxla-deploy-release.sh' '${REMOTE_DIR}/stoxla-rollback-release.sh' '${REMOTE_DIR}/stoxla-runtime-health-check.sh' && cp '${REMOTE_DIR}/stoxla-rollback-release.sh' '/home/${STOXLA_SSH_USER}/.stoxla-deploy/stoxla-rollback-release.sh' && cp '${REMOTE_DIR}/stoxla-runtime-health-check.sh' '/home/${STOXLA_SSH_USER}/.stoxla-deploy/stoxla-runtime-health-check.sh' && STOXLA_RELEASE_ID='${RELEASE_ID}' STOXLA_EXPECTED_COMMIT='${RELEASE_SHA}' '${REMOTE_DIR}/stoxla-deploy-release.sh' '${REMOTE_DIR}/stoxla-release.tgz'"
 
