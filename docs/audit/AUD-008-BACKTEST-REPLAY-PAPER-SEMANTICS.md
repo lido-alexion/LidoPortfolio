@@ -83,9 +83,31 @@ Backtest and Replay do not use broker gateways or live ledger services. This is 
 
 ## 10. PIT / Dataset Evidence
 
-Historical consumers use date-bounded price reads, calendar-aware sessions, as-of evaluation, and per-run/session evidence. Replay checkpoints store a market-data fingerprint. Backtest and Replay pin dataset/version context where available, and missing data blocks, waits, skips, or records limitations rather than becoming valid output.
+Historical consumers use date-bounded price reads, calendar-aware sessions, as-of evaluation, and per-run/session evidence. Replay checkpoints store a market-data fingerprint. Backtest and Replay retain dataset/version attribution where available, and missing data blocks, waits, skips, or records limitations rather than becoming valid output.
 
-The remaining limitation is explicit in current documentation: `DatasetVersion` is immutable sync attribution, not a complete immutable OHLCV snapshot. Therefore static repository evidence cannot prove that a later physical resync can never alter a future re-read of an old period. This remains a bounded PIT/runtime verification item, not an assertion that current runs use future bars.
+### SIM-002 controlled resync experiment
+
+`HistoricalSimulationDatasetResyncTest` exercised the current Replay path with an isolated deterministic bar:
+
+1. Dataset A was created through `DailyMarketSyncService::recordSuccessfulSyncAt()` with the historical bar at 100.
+2. A historical Replay processed that bar and persisted a checkpoint valuation of 100 plus its market fingerprint.
+3. The same physical bar was corrected through an isolated test upsert to 120, representing the normal sync/write effect, and Dataset B was created through the same dataset attribution path. Dataset A remained immutable and Dataset B received a new key.
+4. Reloading the completed original Replay left its stored valuation and fingerprint unchanged. Reading the old run did not recompute its checkpoint from current OHLCV.
+5. An equivalent new Replay after the correction read the current bar, produced valuation 120, and produced a different fingerprint.
+6. Correcting a bar after the Replay period did not change the earlier checkpoint, confirming the date boundary did not leak future-period data backward.
+
+This establishes the following guarantee split:
+
+| Property | Result |
+| --- | --- |
+| Original result immutability | Confirmed: stored checkpoints/results remain unchanged after resync. |
+| Original evidence integrity | Confirmed at evidence level: Dataset A attribution and checkpoint fingerprints remain retained; raw OHLCV inputs are not retained as a queryable snapshot. |
+| Exact rerun reproducibility | Not available after physical correction: an equivalent rerun reads current physical `StockPrice` rows and may differ. |
+| Silent reinterpretation | Not observed: loading the old Replay does not recompute its persisted result. |
+
+The current `DatasetVersion` is an immutable successful-sync attribution record, not a query pin or immutable OHLCV membership snapshot. The Replay checkpoint fingerprint records the values used for evidence/change investigation, but there is no current service that resolves Dataset A back to the old physical bar set or automatically compares a later physical dataset to the old fingerprint. This is **Level 1 - immutable result evidence**, not Level 2 change-detectable or Level 3 fully reproducible.
+
+This Level 1 result matches the accepted FEAT-020/current-doc contract: completed results and run evidence remain immutable and explainable, while rerunning with current data is a new run that may differ after corrections. Exact recomputation is not promised unless the original source data remains retained. No OHLCV snapshot redesign is required by the current contract.
 
 ## 11. Strategy / Artifact Provenance
 
@@ -146,7 +168,7 @@ Portfolio route binding is user-scoped, active profile middleware scopes request
 | --- | --- | --- | --- |
 | Backtest lifecycle | `V5BacktestLifecycleTest` | Durable cancellation, terminal state, processor exclusion, tombstone | Full real completed run with before/after live ledger snapshot |
 | Backtest overrides/drafts | `V5BacktestParameterOverrideTest` | Bounded overrides, immutable source, unpublished provenance-linked draft | Browser disclosure of all assumptions |
-| Replay | `V5PortfolioReplayFoundationTest` | Pinned world, checkpoints, economic transition, source isolation, cancellation, idempotency, readiness blocking | Historical branch once reconstruction is supported; deployed worker |
+| Replay | `V5PortfolioReplayFoundationTest`, `HistoricalReplayTemporalStateTest`, `HistoricalSimulationDatasetResyncTest` | Pinned world, checkpoints, economic transition, source isolation, cancellation, idempotency, readiness blocking, temporal reconstruction, controlled Dataset A/B resync behavior | Deployed worker and operational resync visibility |
 | Paper creation/clone | `V5PaperPortfolioFoundationTest` | Immutable type, independent cash/holdings, binding pins, no history copy, broker-mode guard | Full strategy projection clone and browser walkthrough |
 | Paper processing | `V5PaperSimulationProcessorTest` | Simulated fill, missing-price wait, partial affordability, idempotency | Production worker/catch-up timing |
 | Paper price boundary | `V5SimulationPriceServiceTest` | Effective session price behavior | Provider/runtime data boundary |
@@ -169,7 +191,7 @@ This is sufficient static assurance for the implemented paths, while the two bou
 | ID | Finding | Classification | Severity | Evidence |
 | --- | --- | --- | --- | --- |
 | SIM-001 | Historical Replay branch reconstruction and temporal capital state | `IMPLEMENTED` | High | `HistoricalReplayStateBuilder`; immutable reservation and bridge-return ledgers; as-of loan status/amount derivation; precise fail-closed recall/legacy-state blockers; historical branch and lifecycle regression suites |
-| SIM-002 | Dataset version is attribution, not an immutable market-data snapshot, so post-resync historical reproducibility is not fully proven | `RUNTIME_VERIFICATION_REQUIRED` | High | Current analytics and market-data docs explicitly retain this limitation; market fingerprints exist per Replay checkpoint |
+| SIM-002 | Dataset version is attribution, not an immutable market-data snapshot; completed results are immutable but equivalent reruns after a physical correction may differ | `IMPLEMENTED_WITH_LIMITATION` | Medium | `HistoricalSimulationDatasetResyncTest`: Dataset A/B controlled correction, unchanged original checkpoint/evidence, changed equivalent rerun, and future-period boundary check; current docs explicitly permit current-data reruns to differ |
 | SIM-003 | A single three-mode end-to-end fixture is not present; assurance is split across strong mode-specific suites | `RUNTIME_VERIFICATION_REQUIRED` | Medium | Existing tests cover each mode and key isolation invariants, but not one combined workflow |
 | SIM-004 | Full browser proof of mode labels, partial results, recovery, and constrained-width controls is absent | `RUNTIME_VERIFICATION_REQUIRED` | Medium | Routes/components and source tests exist; browser geometry and interaction remain unverified |
 
@@ -183,7 +205,7 @@ Static isolation is implemented. Retain the existing service-level tests and add
 
 ### B — PIT/provenance
 
-Prioritize an immutable/fingerprint-backed historical data verification or deployed resync drill. Keep artifact/version pins and run evidence unchanged.
+The repository-level resync experiment establishes the accepted Level 1 guarantee. Keep artifact/version pins and run evidence unchanged. A future Level 2/3 design would require a changed contract and a bounded immutable data-revision or run-input retention strategy; it is not part of this audit remediation.
 
 ### C — Backtest semantics
 
@@ -208,7 +230,7 @@ Run deployed worker/scheduler, production-like dataset, browser, and provider-in
 ## 22. Recommended Order
 
 1. Preserve the existing mode-specific feature assurance suites and add a composite isolation test only if a single release gate is operationally required.
-2. Verify point-in-time behavior after a controlled market-data resync and confirm run fingerprints/provenance remain explainable.
+2. Retain the controlled resync test as the regression gate for immutable results, DatasetVersion attribution, and no future-period leakage.
 3. Run browser and deployed-worker verification for all three modes, including cancellation, pause, missing-data, and partial-result states.
 
 ## 23. Runtime Verification Boundary
@@ -217,7 +239,7 @@ Remaining runtime checks are:
 
 - deployed Backtest/Replay/Paper workers and scheduler cadence;
 - large-run checkpoint/resume behavior;
-- historical data resync and post-resync reproducibility;
+- deployed historical data resync behavior and operational visibility of source-data changes; exact rerun reproducibility is not promised by the current contract;
 - production-like market data and dataset availability;
 - browser mode labels, responsive controls, partial/error states, and Paper/live distinction;
 - role/profile route reachability and deployed configuration.
@@ -226,12 +248,12 @@ Remaining runtime checks are:
 
 **Disposition: `PARTIALLY_IMPLEMENTED`.**
 
-Backtest, Replay, and Paper are materially distinct and server-side isolated. Existing executable suites plus the historical branch assurance prove the most important no-live-mutation, broker exclusion, clone independence, artifact/version provenance, checkpoint, cancellation, as-of reconstruction, temporal capital-state handling, and missing-data boundaries. SIM-001 is implemented with precise fail-closed blockers for legacy or incomplete temporal evidence. Full point-in-time reproducibility after physical dataset resync remains unproven, and browser and deployed-worker checks remain.
+Backtest, Replay, and Paper are materially distinct and server-side isolated. Existing executable suites plus the historical branch assurance prove the most important no-live-mutation, broker exclusion, clone independence, artifact/version provenance, checkpoint, cancellation, as-of reconstruction, temporal capital-state handling, and missing-data boundaries. SIM-001 is implemented with precise fail-closed blockers for legacy or incomplete temporal evidence. SIM-002 is implemented with a documented Level 1 limitation: completed results and evidence are immutable, while equivalent reruns after physical corrections use current data and may differ. Browser and deployed-worker checks remain, along with SIM-003's optional composite assurance.
 
 This is a bounded partial verdict, not evidence of a live-state contamination defect. AUD-007, AUD-011, AUD-012, and AUD-015 remain separate.
 
 ## 25. Open Questions
 
 - Should FEAT-020 counterfactual strategy/artifact version substitution be exposed in the current Replay API, or remain an explicit future capability?
-- What deployed data/version retention or fingerprint policy will provide proof after a physical market-data resync?
+- If a future product contract requires Level 2 change detection or Level 3 exact reruns, which bounded market-data retention strategy should be adopted?
 - Is one composite three-mode assurance test required as a release gate, given the existing mode-specific feature suites?
