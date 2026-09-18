@@ -456,3 +456,25 @@ The new `NotificationCenterDeliveryApiTest` covers safe multi-channel detail ser
 `NTF-001` is now `IMPLEMENTED`: detail exposes safe per-channel status, delivery kind, attempt count, failure evidence, suppression, and timestamps without sensitive fields. `NTF-002` is now `IMPLEMENTED`: an authenticated owner can retry an eligible failed current-model delivery through the existing planner/job path, while non-failed and resolved/suppressed states cannot create duplicate work.
 
 AUD-006 remains `PARTIALLY_IMPLEMENTED`. Remaining items are NTF-003 (bell count loading semantics), NTF-004 (settings unavailable state), NTF-005 deployment runtime verification, NTF-007 (generic primary-action presentation), and NTF-008 (explicit reminder labeling).
+
+## Batch 3 Implementation Outcome
+
+Batch 3 corrects notification state semantics without changing notification domain behavior or Batch 2 delivery/retry behavior.
+
+### Bell and critical banner
+
+`NotificationProvider` now starts with `meta = null`, `loading = true`, and an explicit `error` value. A successful response installs the returned metadata, including authoritative zero counts. A failed initial request leaves metadata unknown; a failed later poll preserves the last successful metadata rather than replacing it with zero. The existing 60-second polling interval is unchanged.
+
+`NotificationBell` renders no numeric badge until metadata is known, labels the initial/failure state as loading or count unavailable, and remains a usable navigation control. `CriticalNotificationBanner` renders only when `active_critical_count` is known and positive, so it does not assert a false zero during initial loading. If a known critical count exists and a later refresh fails, the last-known banner remains visible. A later successful zero response removes it normally.
+
+### Notification Settings
+
+`NotificationSettingsPage` now tracks initial settings load failure separately from loading and successful configuration. While loading, editable channel cards are not rendered. When either the channel settings or email-destination request fails, the page renders an inline accessible `DataState` error with Retry and does not expose Save, Test, Enable, Disable, or default-looking channel controls. A successful retry replaces the unavailable state with the authoritative settings response. Existing mutation error messages and channel verification behavior are unchanged.
+
+### Evidence and disposition
+
+The notification shell source tests now cover nullable initial metadata, unavailable count labeling, critical-banner unknown-state handling, retained-provider error state, and the settings unavailable/Retry branch. The focused shell suite passes 9 tests; the broader Node source suite passes 165 tests. PHP notification and API behavior remains unchanged and Batch 1/2 assurance suites remain green.
+
+`NTF-003` is now `IMPLEMENTED`: unknown counts are distinct from loaded zero, initial failure does not create a false zero, known counts/banner state survive transient refresh failure, and successful recovery replaces stale metadata. `NTF-004` is now `IMPLEMENTED`: settings failures render persistent unavailable state with Retry and cannot expose mutations against placeholder defaults.
+
+AUD-006 remains `PARTIALLY_IMPLEMENTED`. Remaining work is NTF-005 deployed runtime verification, NTF-007 generic primary-action navigation, and NTF-008 explicit reminder labeling. No master audit verdict was changed in this batch.

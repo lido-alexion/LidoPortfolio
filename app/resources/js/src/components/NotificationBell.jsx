@@ -4,7 +4,7 @@ import api from '../api';
 import { useNotifications } from '../context/NotificationContext';
 
 export default function NotificationBell() {
-    const { items, meta, refresh } = useNotifications();
+    const { items, meta, loading, error, refresh } = useNotifications();
     const [open, setOpen] = useState(false);
     const rootRef = useRef(null);
 
@@ -26,19 +26,25 @@ export default function NotificationBell() {
         setOpen(false);
     };
 
+    const unreadCount = meta?.unread_count;
+    const countLabel = unreadCount === null || unreadCount === undefined
+        ? (error ? 'Notification count unavailable' : 'Loading notification count')
+        : `${unreadCount} unread notifications`;
+
     return (
         <div className="position-relative" ref={rootRef}>
             <button
                 type="button"
                 className="btn btn-link text-reset position-relative p-2"
-                aria-label={`${meta.unread_count || 0} unread notifications`}
+                aria-label={countLabel}
+                aria-busy={loading && !meta}
                 aria-expanded={open}
                 onClick={() => setOpen((value) => !value)}
             >
                 <i className="bi bi-bell" aria-hidden="true" />
-                {meta.unread_count > 0 && (
+                {unreadCount > 0 && (
                     <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill text-bg-danger">
-                        {meta.unread_count > 99 ? '99+' : meta.unread_count}
+                        {unreadCount > 99 ? '99+' : unreadCount}
                     </span>
                 )}
             </button>

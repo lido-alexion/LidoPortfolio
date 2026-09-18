@@ -17,15 +17,24 @@ test('both authenticated role shells share global notification chrome', () => {
 });
 
 test('bell shows unread count without marking items merely by opening the panel', () => {
-    assert.match(bell, /meta\.unread_count/);
+    assert.match(bell, /meta\?\.unread_count/);
+    assert.match(bell, /Notification count unavailable/);
+    assert.match(bell, /aria-busy=\{loading && !meta\}/);
     assert.match(bell, /setOpen\(\(value\) => !value\)/);
     assert.match(bell, /notification-center\/\$\{id\}\/read/);
 });
 
 test('critical presentation depends on active condition count and has no dismiss control', () => {
-    assert.match(banner, /meta\.active_critical_count/);
+    assert.match(banner, /meta\?\.active_critical_count/);
+    assert.match(banner, /count === null \|\| count === undefined/);
     assert.match(banner, /condition_state === 'active'/);
     assert.doesNotMatch(banner, /btn-close|dismiss/i);
+});
+
+test('notification provider preserves last-known metadata on refresh failure', () => {
+    assert.match(readFileSync(new URL('../../resources/js/src/context/NotificationContext.jsx', import.meta.url), 'utf8'), /useState\(null\)/);
+    assert.match(readFileSync(new URL('../../resources/js/src/context/NotificationContext.jsx', import.meta.url), 'utf8'), /setError\(requestError\)/);
+    assert.match(readFileSync(new URL('../../resources/js/src/context/NotificationContext.jsx', import.meta.url), 'utf8'), /setMeta\(response\.data\?\.meta/);
 });
 
 test('Notification Center provides frozen quick views and attention-only actions', () => {
@@ -52,6 +61,13 @@ test('notification settings exposes encrypted-channel lifecycle controls', () =>
     assert.match(settings, /bot_token_configured/);
     assert.match(settings, /email-destinations/);
     assert.match(settings, /Verification email sent/);
+});
+
+test('notification settings blocks default-looking controls after load failure', () => {
+    assert.match(settings, /Notification settings unavailable/);
+    assert.match(settings, /Could not load notification settings/);
+    assert.match(settings, /onClick=\{load\}/);
+    assert.match(settings, /<DataState/);
 });
 
 test('Portfolio Settings delegates channel configuration to account Notification Settings', () => {

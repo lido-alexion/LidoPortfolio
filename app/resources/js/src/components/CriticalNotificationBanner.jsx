@@ -4,8 +4,8 @@ import { useNotifications } from '../context/NotificationContext';
 
 export default function CriticalNotificationBanner() {
     const { items, meta } = useNotifications();
-    const count = Number(meta.active_critical_count || 0);
-    if (count === 0) return null;
+    const count = meta?.active_critical_count;
+    if (count === null || count === undefined || count === 0) return null;
 
     const critical = items.find((item) => item.severity === 'critical' && item.condition_state === 'active');
     const destination = count === 1 && critical

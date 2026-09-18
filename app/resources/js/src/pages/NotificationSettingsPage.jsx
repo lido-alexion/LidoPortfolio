@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../api';
 import { showToast } from '../toast';
+import DataState from '../components/DataState';
 
 const defaults = {
     telegram: { bot_token: '', chat_id: '', enabled: false },
@@ -15,9 +16,11 @@ export default function NotificationSettingsPage() {
     const [busy, setBusy] = useState(null);
     const [emailDestinations, setEmailDestinations] = useState([]);
     const [additionalEmail, setAdditionalEmail] = useState('');
+    const [loadError, setLoadError] = useState(null);
 
     const load = async () => {
         setLoading(true);
+        setLoadError(null);
         try {
             const response = await api.get('/notification-settings', { skipErrorToast: true });
             const next = response.data?.data || [];
@@ -28,7 +31,8 @@ export default function NotificationSettingsPage() {
                 item.channel,
                 { ...current[item.channel], enabled: !!item.enabled, chat_id: item.chat_id || '', url: item.url || '' },
             ])));
-        } catch {
+        } catch (error) {
+            setLoadError(error);
             showToast('Could not load notification settings.', 'danger');
         } finally {
             setLoading(false);
@@ -100,6 +104,17 @@ export default function NotificationSettingsPage() {
     };
 
     if (loading) return <div className="container-fluid py-3 text-muted">Loading notification settings…</div>;
+
+    if (loadError) return (
+        <div className="container-fluid py-3">
+            <DataState
+                variant="error"
+                title="Notification settings unavailable"
+                message="Your notification channel settings could not be loaded."
+                action={<button type="button" className="btn btn-sm btn-outline-primary" onClick={load}>Retry</button>}
+            />
+        </div>
+    );
 
     return (
         <div className="container-fluid py-3">
