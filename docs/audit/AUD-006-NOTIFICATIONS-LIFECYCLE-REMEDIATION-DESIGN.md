@@ -318,7 +318,7 @@ This scenario should use a fake adapter/provider and queue assertions, not real 
 | NTF-002 | Current Notification Center has no visible manual retry action for the source/delivery model; retry support is planner/API/legacy-controller based. | `PARTIALLY_IMPLEMENTED` | Medium | High | A user-facing recovery path is not proven for a failed current delivery. The legacy retry endpoint is not wired to `NotificationHistoryPage`. |
 | NTF-003 | Bell unread and active-critical counts initialize to zero before the first successful fetch and refresh failures are swallowed. | `PARTIALLY_IMPLEMENTED` | Medium | High | A slow or failed refresh can look like a valid zero-count state. This is a static missing-versus-zero concern, though it does not delete notifications. |
 | NTF-004 | Notification settings initial-load failure becomes a toast plus default rendering rather than an explicit unavailable settings state. | `PARTIALLY_IMPLEMENTED` | Low | High | Users may see incomplete/default channel controls after settings retrieval fails. Mutation errors preserve useful server messages. |
-| NTF-005 | Reminder and provider delivery require queue/scheduler/provider runtime proof; repository tests do not prove deployed delivery, elapsed-time reminders, or real credential behavior. | `RUNTIME_VERIFICATION_REQUIRED` | Medium | High | External delivery may be unavailable operationally despite correct static implementation. |
+| NTF-005 | Deployed reminder and multi-provider behavior still needs bounded runtime proof. | `RUNTIME_VERIFICATION_REQUIRED` | Medium | High | AUD-009 now proves the `notifications` worker, 11 normal successful provider deliveries, and 1 resolved-condition suppression with no failed jobs. Production email remains the `log` driver; webhook delivery, provider-failure handling, and elapsed-time reminders remain unverified. |
 | NTF-006 | A single current UI journey from event -> failed attempt -> retry success -> read -> condition resolution is not represented by an integrated fake-provider test. | `RUNTIME_VERIFICATION_REQUIRED` | Medium | Medium | The separate service tests are strong but do not prove lifecycle composition and cross-surface continuity. |
 | NTF-007 | The main history detail does not render `primary_action` as a generic source-context link, although structured action data is returned. | `PARTIALLY_IMPLEMENTED` | Low | High | Domain context may be visible only as text/timeline, reducing direct recovery/navigation. The source route remains available to producers. |
 | NTF-008 | Reminder occurrences are persisted through the common occurrence/delivery path but are not explicitly labeled as reminders in the current history presentation. | `PARTIALLY_IMPLEMENTED` | Low | Medium | Users may not distinguish re-notification from an original occurrence; underlying generation semantics remain distinct. |
@@ -499,4 +499,17 @@ The existing `delivery_kind` values remain authoritative. The detail Delivery se
 
 `NTF-007` is now `IMPLEMENTED`: valid producer actions render safely, absent/malformed actions do not render unsafe links, and action navigation does not introduce acknowledgement or resolution behavior. `NTF-008` is now `IMPLEMENTED`: reminder generations are visibly distinct from initial/escalation deliveries, and retry attempts do not become reminder generations.
 
-AUD-006 is now statically `IMPLEMENTED`. `NTF-005` remains a runtime verification boundary for the deployed queue worker, scheduler, credentials, real Telegram/email/webhook providers, provider/network failures, elapsed-time reminders, and browser runtime behavior. No further static Notification Center remediation is required by this audit.
+AUD-006 is now statically `IMPLEMENTED`. `NTF-005` remains a runtime verification boundary for external email/webhook behavior, provider-failure handling, elapsed-time reminders, and browser runtime behavior. No further static Notification Center remediation is required by this audit.
+
+### AUD-009 production runtime evidence
+
+AUD-009 activation closed the queue-consumption portion of `NTF-005`: the
+root-managed worker now consumes `notifications,default`, and its normal
+recovery of 12 aged jobs resulted in 11 delivered notifications, 1 correctly
+suppressed stale/resolved delivery, 11 successful attempts, and 0 failed jobs.
+This is real provider-delivery evidence and confirms suppression remains
+distinct from failure. It does not establish external email delivery because
+production mail uses the `log` driver, nor does it prove webhook behavior,
+provider-failure handling, or elapsed-time reminder delivery. `NTF-005`
+therefore remains `RUNTIME_VERIFICATION_REQUIRED` with those narrowed
+boundaries; AUD-006 remains `IMPLEMENTED`.

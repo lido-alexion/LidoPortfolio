@@ -4,12 +4,9 @@
 
 AUD-009 verifies the actual StoX production environment rather than inferring production behavior from repository scripts. The current target is the Hostinger VPS serving `https://stoxla.in/`, not the archived GoDaddy/cPanel `/portfolio` deployment.
 
-**Disposition: `PARTIALLY_IMPLEMENTED`.** The VPS layout, secret isolation, database, HTTPS, cron scheduler, and release rollback mechanism are present and materially healthy. Two High runtime defects prevent closure:
+**Disposition: `RUNTIME_VERIFICATION_REQUIRED` (Medium severity, High confidence).** The VPS layout, secret isolation, database, HTTPS, cron scheduler, release activation, and queue processing are now operationally verified. The two prior High defects are closed. Remaining runtime work is bounded to release freshness/pending approved deployment and backup/restore assurance.
 
-1. PHP-FPM is serving stale code through the release symlink after deployment.
-2. The only queue worker consumes `default`, while 12 unreserved `notifications` jobs have waited since 2026-09-13.
-
-No production service was restarted, no migration was run, and no secret value was read during this audit.
+No application release was changed, no migration was run, and no secret value was read during the DEP-001/DEP-002 activation.
 
 ## 2. Current Deployment Architecture
 
@@ -48,7 +45,7 @@ releases/20260918084844-af426a7ead54
 
 Its on-disk `bootstrap/build-info.json` identifies commit `af426a7ead544a6603ee0bd9e8e267e75f946211`, CI run 65, built at `2026-09-18T08:48:24Z`. The local intended `master` at audit time is `ce2810a1fc46a94c9c6aa2f770f6fdf7c0e34029`; it has not been packaged into production.
 
-The public `/api/build-info` endpoint incorrectly reports older commit `b1327c22b376ccc73662332be3929baa4afbb903`, CI run 61. A localhost HTTPS probe returns the same older value while direct file inspection returns `af426a7`. This is runtime stale-code evidence, not a CDN cache discrepancy.
+Before the DEP-001 activation, public `/api/build-info` incorrectly reported older commit `b1327c22b376ccc73662332be3929baa4afbb903`, CI run 61. A localhost HTTPS probe returned the same older value while direct file inspection returned `af426a7`; this established a runtime stale-code condition rather than a CDN cache discrepancy. The subsequent graceful FPM reload corrected the public response to `af426a7ead544a6603ee0bd9e8e267e75f946211`.
 
 ## 4. Filesystem / Public Root
 
@@ -98,9 +95,7 @@ However, its command is:
 php artisan queue:work --sleep=3 --tries=3 --timeout=120
 ```
 
-The database connection's configured default queue is `default`. The database queue contains 12 unreserved jobs on `notifications`, with the oldest created/available timestamp `2026-09-13 01:30:38 IST`. The failed-job table is empty.
-
-The active worker therefore does not consume the named notifications queue. A running worker is not sufficient evidence of notification runtime health.
+Before the DEP-002 activation, the database connection's configured default queue was `default`, with 12 unreserved jobs on `notifications` and the oldest created/available timestamp `2026-09-13 01:30:38 IST`; the failed-job table was empty. The root-managed worker then changed to the intentional `notifications,default` command and drained the backlog to zero as 11 delivered and 1 suppressed, with no failed jobs. A running worker is accepted as runtime evidence only when its effective command covers all required named queues.
 
 ## 10. Scheduler Runtime
 
@@ -131,7 +126,7 @@ The application heartbeat was `2026-09-18T12:11:02Z`, within minutes of the audi
 
 The active release contains a Vite manifest with 20 entries, and the browser module `/build/assets/app-CIyiGfHq.js` returns `200` with `application/javascript`.
 
-The active release's on-disk build metadata and asset manifest belong to `af426a7`. The PHP runtime's stale `b1327c2` build-info response means the release switch is not fully effective for dynamic PHP requests. This is a backend/frontend provenance defect until PHP-FPM is reloaded as part of deployment activation and verified through the public endpoint.
+The active release's on-disk build metadata and asset manifest belong to `af426a7`. Before DEP-001 activation, the PHP runtime's stale `b1327c2` build-info response made the release switch ineffective for dynamic PHP requests. The verified FPM reload now makes the public PHP build-info response match the active release, closing that backend/frontend provenance defect.
 
 ## 13. Web Server / HTTPS / Proxy
 
@@ -189,7 +184,7 @@ No public secret or source-file exposure was found in these probes.
 
 ## 20. Cross-Audit Runtime Evidence
 
-- AUD-006 / NTF-005: scheduler is running, but notification delivery is blocked by named-queue worker routing; runtime provider delivery remains unverified.
+- AUD-006 / NTF-005: the root-managed worker now consumes `notifications,default`; normal recovery processed 12 aged jobs as 11 delivered and 1 suppressed, with 11 successful delivery attempts and no failed jobs. This proves live queue consumption, provider delivery, and stale/resolved-condition suppression. Email remains the `log` driver; webhook, elapsed-time reminders, and provider-failure behavior remain runtime boundaries.
 - AUD-007: shared local storage and release activation/rollback infrastructure are present; operator rollout still needs a deployed representative drill.
 - AUD-008: Backtest/Replay/Paper processor commands are scheduled every five minutes; no controlled live workload was started.
 - AUD-010: India-market scheduler timezone and calendar command registration are present; provider/timezone functional behavior remains open.
@@ -199,8 +194,8 @@ No public secret or source-file exposure was found in these probes.
 
 | ID | Check | Repository expectation | Runtime evidence | Verdict | Severity |
 | --- | --- | --- | --- | --- | --- |
-| DEP-001 | Release activation reaches PHP runtime | New release executes after atomic symlink switch | Filesystem release is `af426a7`; HTTP PHP response remains `b1327c2`; PHP-FPM predates release | `PARTIALLY_IMPLEMENTED` | High |
-| DEP-002 | Named notification queue consumption | External delivery work is consumed | 12 unreserved `notifications` jobs since 2026-09-13; worker uses default queue only | `PARTIALLY_IMPLEMENTED` | High |
+| DEP-001 | Release activation reaches PHP runtime | New release executes after atomic symlink switch | Graceful FPM reload refreshed the symlink runtime: active filesystem and public PHP build-info both resolve to `af426a7ead544a6603ee0bd9e8e267e75f946211` | `IMPLEMENTED` | High |
+| DEP-002 | Named notification queue consumption | External delivery work is consumed | Root-owned `stoxla-queue` unit is active with `notifications,default`; 12 aged jobs drained normally as 11 delivered and 1 suppressed, with 0 failed jobs | `IMPLEMENTED` | High |
 | DEP-003 | Current source release freshness | Intended release/commit is identifiable and deployed deliberately | Runtime filesystem is `af426a7`; local master is `ce2810a1`; newest migration is not deployed | `RUNTIME_VERIFICATION_REQUIRED` | Medium |
 | DEP-004 | Backup freshness / restore path | Backup schedule, retention, and recoverability are known | One 2026-09-15 local SQL backup visible; host-managed backup evidence unavailable | `RUNTIME_VERIFICATION_REQUIRED` | Medium |
 | DEP-005 | Secrets and public-root isolation | Secrets remain private and public root is limited | Shared `.env` mode 0600; probes block hidden files; public-root target correct | `IMPLEMENTED` | High |
@@ -266,50 +261,56 @@ Redis, or Horizon. The runtime health helper asserts that the managed worker
 command includes the required queue list, so future release activation fails
 instead of silently leaving a named queue unconsumed.
 
-#### Production execution status
+#### Production activation outcome
 
-The deployment user `nitty` currently has no noninteractive sudo capability.
-That is why this audit did not reload PHP-FPM or restart the worker: doing so
-requires root-controlled service actions. The VPS runbook now specifies a
-constrained `sudoers` rule for only these commands:
+An administrator reviewed and installed the root-managed queue unit at
+`/etc/systemd/system/stoxla-queue.service` as `root:root`, mode `0644`. The
+unit is not writable by `nitty` and now starts:
+
+```text
+/usr/bin/php /var/www/stoxla/artisan queue:work --queue=notifications,default --sleep=3 --tries=3 --timeout=120
+```
+
+The constrained sudo boundary was installed and validated for only these
+commands:
 
 - inspect/reload `php8.4-fpm`;
 - inspect/restart `stoxla-queue`.
 
-Read-only VPS verification confirmed that the existing unit is already
-`root:root`, mode `0644`, and not writable by `nitty`; the unsafe initial rule
-was never installed. Its current effective command still omits the
-`notifications` queue, so an administrator must replace it with the reviewed
-root-managed template before restarting it. The verified systemctl binary is
+No broad `systemctl`, `daemon-reload`, `install`, `cp`, wildcard, or writable
+wrapper privilege was granted. The verified systemctl binary is
 `/usr/bin/systemctl`.
 
-After an authorized administrator installs the root-owned queue unit and this
-narrow sudo rule, the exact post-change evidence required is:
+The administrator then reloaded `php8.4-fpm`. Public `/api/build-info` moved
+from `b1327c2` to the active filesystem release
+`af426a7ead544a6603ee0bd9e8e267e75f946211`; both services are active.
+
+After restarting the root-managed worker, the 12 aged `notifications` jobs
+passed through the normal processor without manual queue or delivery changes:
 
 ```text
-active release build-info SHA = public /api/build-info SHA
-php8.4-fpm reload time >= correction time
-stoxla-queue ExecStart includes --queue=notifications,default
-notifications depth 12 -> 0 or lifecycle-explained retry/suppression rows
-failed jobs remain 0 or are investigated without deletion
+notifications backlog: 12 -> 0
+deliveries: 11 delivered, 1 suppressed
+delivery attempts: 11 succeeded
+failed jobs: 0
 ```
 
-The 12 aged jobs have not been manually altered. They must be allowed to pass
-through `NotificationDeliveryProcessor`, which preserves current
-idempotency/resolution suppression semantics.
-
-DEP-001 and DEP-002 remain `PARTIALLY_IMPLEMENTED` until this privileged
-production activation is completed and verified.
+The suppression is correct evidence that a stale/resolved condition was not
+sent. At least one normal provider delivery succeeded; this does not claim
+email runtime verification because production mail remains configured with the
+`log` driver.
 
 ### Remaining operational groups
 
-#### A - Release activation correctness
+#### A - Release activation correctness (resolved)
 
-Update the deployment procedure so an atomic release switch also reloads or gracefully restarts PHP-FPM, then verify public `/api/build-info` equals the release's build manifest before declaring deployment complete. Determine whether the current opcache reset approach is insufficient for symlink/realpath cache invalidation.
+The durable FPM reload plus public build-info gate is now proven against the
+active release. Future deployments must retain that gate.
 
-#### B - Queue routing and notification recovery
+#### B - Queue routing and notification recovery (resolved)
 
-Configure workers to consume all required queues, at minimum `default,notifications`, or create a dedicated notification worker with an intentional restart policy. After the safe operational change, inspect the aged jobs, confirm idempotent processing, and investigate whether their stale age requires operator handling.
+The root-managed worker now intentionally consumes `notifications,default` and
+the aged backlog completed through normal delivery/suppression handling.
 
 #### C - Release and migration freshness
 
@@ -344,21 +345,21 @@ Additional read-only Laravel queries checked configuration presence, scheduler h
 
 ## 24. Final AUD-009 Assessment
 
-**Disposition: `PARTIALLY_IMPLEMENTED` (High severity, High confidence).**
+**Disposition: `RUNTIME_VERIFICATION_REQUIRED` (Medium severity, High confidence).**
 
-The production architecture has successfully moved to the accepted VPS release/shared model, protects secrets and the public root, serves valid HTTPS, runs its scheduler, has current market-data evidence, and retains rollback releases. It is not ready for closure because PHP-FPM is serving stale release code after activation and notification jobs are accumulating on an unconsumed named queue. These are concrete runtime defects, not merely missing evidence.
+The production architecture uses the accepted VPS release/shared model,
+protects secrets and the public root, serves valid HTTPS, runs its scheduler,
+and now proves both release-runtime activation and named queue consumption. The
+FPM reload made public PHP match the active release, while the root-managed
+queue worker drained the aged notification backlog through normal lifecycle
+processing with no failed jobs.
 
-Batch 1 has committed the durable deployment, rollback, queue-template, and
-health-gate changes, but it cannot close the defects until a privileged VPS
-operator installs the constrained service permission, reloads PHP-FPM, installs
-the queue unit, and verifies the existing backlog's normal disposition. After
-that activation, the remaining bounded work is deployment freshness,
-backup/restore evidence, real provider behavior, authenticated browser smoke,
-and the cross-audit functional drills listed above.
+The remaining bounded work is DEP-003 release/current-source freshness and an
+approved newer deployment, plus DEP-004 backup schedule, retention, and restore
+assurance. These are Medium runtime-verification boundaries, not open High
+runtime defects.
 
 ## 25. Open Questions
 
-- Should production queue capacity be a single worker consuming `default,notifications`, or dedicated workers per operational queue?
-- What is the approved PHP-FPM reload strategy for release-symlink deployments, and should public build-info verification become a hard deployment gate?
 - What Hostinger-managed backup cadence, retention, and restore evidence are accepted for StoX production?
 - Is broad no-credentials CORS intentional for public API endpoints under the current authorization policy?
