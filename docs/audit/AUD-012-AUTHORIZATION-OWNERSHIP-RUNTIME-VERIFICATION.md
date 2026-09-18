@@ -230,7 +230,7 @@ records were reported. No production rows were edited.
 | ID | Finding | Classification | Severity | Evidence |
 | --- | --- | --- | --- | --- |
 | AUTHR-001 | Debug-agent shared-token authentication is enabled in production | `IMPLEMENTED` | Critical | Production config cache reports `enabled=false`; production is hard-blocked in middleware; deployment/health gates reject enabled state |
-| AUTHR-002 | Protected unauthenticated API denials return HTTP 500 because PHP cannot write Laravel logs | `PARTIALLY_IMPLEMENTED` | High | Production probes and `www-data`/log-file permission mismatch |
+| AUTHR-002 | Protected unauthenticated API denials return HTTP 500 because PHP cannot write Laravel logs | `IMPLEMENTED` | High | Release `6838f8277a79a3cd36996f6f50b33dd559915caa`; `storage/logs` repaired to `www-data` group with setgid 2775; `GET /api/portfolios` returns 401; runtime health is green |
 | AUTHR-003 | Production ownership audit is clean | `IMPLEMENTED` | High | `portfolio:audit-admin-investment-ownership --json` returned zero conflicts |
 | AUTHR-004 | Role separation, profile aliases, PAT scope/ownership, and representative object checks | `IMPLEMENTED_WITH_LIMITATION` | High | Static tests pass; no second production Investor/PAT fixture |
 | AUTHR-005 | Current route inventory is 443 versus prior 437-operation audit | `RUNTIME_VERIFICATION_REQUIRED` | Medium | Deployed and current `route:list --json` both report 443 |
@@ -252,15 +252,15 @@ records were reported. No production rows were edited.
 **Disposition: `PARTIALLY_IMPLEMENTED` (High severity, High confidence).**
 
 The production ownership audit is clean and static role/ownership enforcement
-is substantial. AUTHR-001 is closed: effective production configuration is
-disabled, the middleware cannot authenticate in production even if a token is
-misconfigured, and deployment gates prevent recurrence. AUTHR-002 remains
-open because the existing dated log files still need an administrator-level
-group/permission repair before protected unauthenticated endpoints can be
-reverified as clean 401/403 responses.
+is substantial. AUTHR-001 and AUTHR-002 are now closed: DebugAgent is
+disabled and hard-blocked in production, shared Laravel log permissions are
+correct, `GET /api/portfolios` returns 401 rather than 500, and the production
+runtime health gate passes. AUTHR-005 and AUTHR-006 remain open, so the audit
+stays partially implemented.
 
-`V5-REQ-018` remains `PARTIALLY_IMPLEMENTED` pending the AUTHR-002 runtime
-repair and a clean representative role/foreign-object runtime matrix.
+`V5-REQ-018` remains `PARTIALLY_IMPLEMENTED` pending the route-inventory review
+and clean representative role/foreign-object runtime matrix tracked by
+AUTHR-005 and AUTHR-006.
 
 ## 24. Open Questions
 
@@ -281,8 +281,10 @@ Repository protections are implemented and validated:
 - Production config cache: `portfolio.debug_agent.enabled=false` with
   `APP_ENV=production` and `LIDO_AGENT_DEBUG_ENABLED=false`.
 
-The remaining administrator action is limited to the existing shared log
-files: set their group to `www-data` and group-write bit under the already
-`nitty:www-data` setgid log directory, then rerun the protected endpoint and
-runtime-health checks. No application data or security boundary should be
-changed by that operation.
+Production activation completed on release
+`6838f8277a79a3cd36996f6f50b33dd559915caa`. Laravel log files now use the
+`www-data` group with group-write permissions under a setgid `storage/logs`
+directory (`2775`), so future files inherit the shared group. The production
+runtime health check passed DebugAgent, public build identity, browser module,
+queue coverage, scheduler heartbeat, and writable-path checks. A protected
+unauthenticated `GET /api/portfolios` now returns `401 Unauthorized`.
