@@ -25,7 +25,6 @@ class YahooFundamentalNormalizer
         'totalCashflowsFromInvestingActivities' => 'investing_cash_flow',
         'totalCashFromFinancingActivities' => 'financing_cash_flow',
         'capitalExpenditures' => 'capital_expenditure',
-        'commonStock' => 'shares_outstanding',
         'dividendsPaid' => 'dividends_paid',
     ];
 
@@ -51,7 +50,6 @@ class YahooFundamentalNormalizer
         'Investing Cash Flow' => 'investing_cash_flow',
         'Financing Cash Flow' => 'financing_cash_flow',
         'Capital Expenditure' => 'capital_expenditure',
-        'Repurchase Of Capital Stock' => 'shares_outstanding',
         'Ordinary Shares Number' => 'shares_outstanding',
         'Cash Dividends Paid' => 'dividends_paid',
     ];

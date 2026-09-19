@@ -50,15 +50,19 @@ class FundamentalDataService
                     'fact_key' => (string) $row['fact_key'],
                     'period_end' => $periodEnd,
                 ];
-                $hash = $this->revisionHash($identity, $row['value'] ?? null, $availabilityDate);
 
-                $known = $this->factIdentityQuery($identity)->where('revision_hash', $hash)->exists();
-                if ($known) {
+                $current = $this->factIdentityQuery($identity)
+                    ->where('is_current', true)
+                    ->orderByDesc('revision_number')
+                    ->lockForUpdate()
+                    ->first();
+                if ($current !== null && $this->canonicalDecimal($current->value) === $this->canonicalDecimal($row['value'] ?? null)) {
                     $stats['deduped']++;
                     continue;
                 }
 
                 $revision = (int) $this->factIdentityQuery($identity)->max('revision_number');
+                $hash = $this->revisionHash($identity, $row['value'] ?? null, $availabilityDate);
                 if ($revision > 0) {
                     $this->factIdentityQuery($identity)->update(['is_current' => false]);
                     $stats['restated']++;
@@ -251,7 +255,19 @@ class FundamentalDataService
     /** @param array<string,mixed> $identity */
     private function revisionHash(array $identity, mixed $value, string $availabilityDate): string
     {
-        return hash('sha256', json_encode([$identity, $value, $availabilityDate], JSON_THROW_ON_ERROR));
+        return hash('sha256', json_encode([$identity, $this->canonicalDecimal($value), $availabilityDate], JSON_THROW_ON_ERROR));
+    }
+
+    private function canonicalDecimal(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        if (! is_numeric($value)) {
+            return (string) $value;
+        }
+
+        return number_format((float) $value, 6, '.', '');
     }
 
     /** @param array<string,mixed> $identity */
