@@ -292,7 +292,7 @@ limitation, not a confirmed bypass.
 | ID | Finding | Classification | Severity | Evidence |
 | --- | --- | --- | --- | --- |
 | AUTHR-001 | Debug-agent shared-token authentication is enabled in production | `IMPLEMENTED` | Critical | Production config cache reports `enabled=false`; production is hard-blocked in middleware; deployment/health gates reject enabled state |
-| AUTHR-002 | Protected unauthenticated API denials return HTTP 500 because PHP cannot write Laravel logs | `IMPLEMENTED` | High | Release `6838f8277a79a3cd36996f6f50b33dd559915caa`; `storage/logs` repaired to `www-data` group with setgid 2775; `GET /api/portfolios` returns 401; runtime health is green |
+| AUTHR-002 | Protected unauthenticated API denials return HTTP 500 because PHP cannot write Laravel logs | `RUNTIME_VERIFICATION_REQUIRED` | High | Existing files were repaired to the `www-data` group with setgid 2775 and `GET /api/portfolios` returned 401, but a later daily rotation created `www-data:www-data 0644`; Monolog file permissions are now explicitly set to 0664 in code and require production deployment verification |
 | AUTHR-003 | Production ownership audit is clean | `IMPLEMENTED` | High | `portfolio:audit-admin-investment-ownership --json` returned zero conflicts |
 | AUTHR-004 | Role separation, profile aliases, PAT scope/ownership, and representative object checks | `IMPLEMENTED_WITH_LIMITATION` | High | Static tests pass; no second production Investor/PAT fixture |
 | AUTHR-005 | Current route inventory is 443 versus prior 437-operation audit | `IMPLEMENTED` | Medium | Fresh master inventory: 443 total / 438 API; audited revision `e5c6fb2`: 442 total / 437 API; exact diff has one protected notification retry addition and five prior API-scope exclusions, with no authorization gap |
@@ -340,9 +340,11 @@ Repository protections are implemented and validated:
   `APP_ENV=production` and `LIDO_AGENT_DEBUG_ENABLED=false`.
 
 Production activation completed on release
-`6838f8277a79a3cd36996f6f50b33dd559915caa`. Laravel log files now use the
-`www-data` group with group-write permissions under a setgid `storage/logs`
-directory (`2775`), so future files inherit the shared group. The production
-runtime health check passed DebugAgent, public build identity, browser module,
-queue coverage, scheduler heartbeat, and writable-path checks. A protected
-unauthenticated `GET /api/portfolios` now returns `401 Unauthorized`.
+`6838f8277a79a3cd36996f6f50b33dd559915caa`. Existing Laravel log files were
+repaired to the `www-data` group with group-write permissions under a setgid
+`storage/logs` directory (`2775`), and a protected unauthenticated
+`GET /api/portfolios` returned `401 Unauthorized`. A later daily rotation
+created `www-data:www-data 0644`, proving that the one-time repair did not
+protect future files. The root cause was missing Monolog file-permission
+configuration. The code now specifies `0664` for all file-backed channels;
+AUTHR-002 remains open for production deployment and new-file verification.

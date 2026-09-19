@@ -62,6 +62,7 @@ return [
             'driver' => 'single',
             'path' => storage_path('logs/laravel.log'),
             'level' => env('LOG_LEVEL', 'debug'),
+            'permission' => 0664,
             'replace_placeholders' => true,
         ],
 
@@ -70,6 +71,7 @@ return [
             'path' => storage_path('logs/laravel.log'),
             'level' => env('LOG_LEVEL', 'debug'),
             'days' => (int) env('LOG_DAILY_DAYS', 2),
+            'permission' => 0664,
             'replace_placeholders' => true,
         ],
 
@@ -78,6 +80,7 @@ return [
             'path' => storage_path('logs/frontend.log'),
             'level' => env('LOG_LEVEL', 'debug'),
             'days' => (int) env('LOG_DAILY_DAYS', 2),
+            'permission' => 0664,
             'replace_placeholders' => true,
         ],
 
@@ -86,6 +89,7 @@ return [
             'path' => storage_path('logs/provider.log'),
             'level' => env('LOG_LEVEL', 'debug'),
             'days' => (int) env('LOG_DAILY_DAYS', 2),
+            'permission' => 0664,
             'replace_placeholders' => true,
         ],
 
@@ -94,6 +98,7 @@ return [
             'path' => storage_path('logs/scheduler.log'),
             'level' => env('LOG_LEVEL', 'debug'),
             'days' => (int) env('LOG_DAILY_DAYS', 2),
+            'permission' => 0664,
             'replace_placeholders' => true,
         ],
 
@@ -149,6 +154,7 @@ return [
 
         'emergency' => [
             'path' => storage_path('logs/laravel.log'),
+            'permission' => 0664,
         ],
 
     ],

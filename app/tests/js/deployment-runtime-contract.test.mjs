@@ -60,11 +60,12 @@ test('managed queue configuration is root-owned and deployment only verifies cov
 });
 
 test('production activation fails closed for debug auth and normalizes PHP writable paths', async () => {
-    const [deploy, health, config, middleware] = await Promise.all([
+    const [deploy, health, config, middleware, logging] = await Promise.all([
         source('deploy/scripts/stoxla-deploy-release.sh'),
         source('deploy/scripts/stoxla-runtime-health-check.sh'),
         source('app/config/portfolio.php'),
         source('app/app/Http/Middleware/DebugAgentToken.php'),
+        source('app/config/logging.php'),
     ]);
 
     assert.match(config, /env\('LIDO_AGENT_DEBUG_ENABLED', false\)/);
@@ -75,4 +76,7 @@ test('production activation fails closed for debug auth and normalizes PHP writa
     assert.match(deploy, /prepare_writable_tree/);
     assert.match(health, /PHP_FPM_GROUP/);
     assert.match(health, /perm -2000/);
+    for (const channel of ['single', 'daily', 'frontend', 'provider', 'scheduler', 'emergency']) {
+        assert.match(logging, new RegExp(`'${channel}'[\\s\\S]*?'permission'\\s*=>\\s*0664`));
+    }
 });

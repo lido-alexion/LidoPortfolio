@@ -88,7 +88,7 @@ deployed release.
 
 ## 8. Storage / Permissions
 
-Shared Laravel storage directories (`framework/cache`, `framework/sessions`, `framework/views`, `logs`, `app/private`, and `app/public`) are present and writable by `nitty:www-data` with mode `0775`. Bootstrap cache is writable. There was no permission-denied signal in current-day application logs.
+Shared Laravel storage directories (`framework/cache`, `framework/sessions`, `framework/views`, `logs`, `app/private`, and `app/public`) are present and writable by `nitty:www-data` with mode `0775`. Bootstrap cache is writable. The initial one-time repair of existing log files was insufficient: a newly rotated daily Laravel file was later created as `www-data:www-data 0644`, because the file-backed Monolog channels had no explicit permission setting. The durable code fix now sets `permission => 0664` on `single`, `daily`, `frontend`, `provider`, `scheduler`, and `emergency`; deployment verification remains pending until this code is deployed and a new/rotated file is observed with the expected group-write mode.
 
 ## 9. Queue / Worker Runtime
 
