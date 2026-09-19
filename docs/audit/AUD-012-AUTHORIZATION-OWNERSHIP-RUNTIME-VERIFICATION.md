@@ -292,7 +292,7 @@ limitation, not a confirmed bypass.
 | ID | Finding | Classification | Severity | Evidence |
 | --- | --- | --- | --- | --- |
 | AUTHR-001 | Debug-agent shared-token authentication is enabled in production | `IMPLEMENTED` | Critical | Production config cache reports `enabled=false`; production is hard-blocked in middleware; deployment/health gates reject enabled state |
-| AUTHR-002 | Protected unauthenticated API denials return HTTP 500 because PHP cannot write Laravel logs | `RUNTIME_VERIFICATION_REQUIRED` | High | Existing files were repaired to the `www-data` group with setgid 2775 and `GET /api/portfolios` returned 401, but a later daily rotation created `www-data:www-data 0644`; Monolog file permissions are now explicitly set to 0664 in code and require production deployment verification |
+| AUTHR-002 | Protected unauthenticated API denials return HTTP 500 because PHP cannot write Laravel logs | `IMPLEMENTED` | High | Release `671996b3244464c686fc4eab7e283364afd576c5` passed the hard runtime health gate after normalizing a pre-existing `frontend-2026-09-19.log` at 0644; a controlled post-deployment provider-channel write created `nitty:www-data 0664 provider-2026-09-19.log`; Monolog file-backed channels explicitly use 0664 |
 | AUTHR-003 | Production ownership audit is clean | `IMPLEMENTED` | High | `portfolio:audit-admin-investment-ownership --json` returned zero conflicts |
 | AUTHR-004 | Role separation, profile aliases, PAT scope/ownership, and representative object checks | `IMPLEMENTED_WITH_LIMITATION` | High | Static tests pass; no second production Investor/PAT fixture |
 | AUTHR-005 | Current route inventory is 443 versus prior 437-operation audit | `IMPLEMENTED` | Medium | Fresh master inventory: 443 total / 438 API; audited revision `e5c6fb2`: 442 total / 437 API; exact diff has one protected notification retry addition and five prior API-scope exclusions, with no authorization gap |
@@ -300,8 +300,9 @@ limitation, not a confirmed bypass.
 
 ## 23. Cross-Audit Evidence
 
-- AUD-009: deployed release and production runtime configuration are available,
-  but the log permission defect is new authorization-boundary evidence.
+- AUD-009: release `671996b` passed the writable-path/runtime health gate after
+  normalization of a pre-existing stale log and verified a newly created
+  group-writable Monolog file; DEP-004 backup/restore remains separate.
 - AUD-011: broker ownership command and execution ownership tests provide
   supporting evidence; no live broker mutation was attempted.
 - AUD-010: global calendar/Admin semantics are separate from Investor private
@@ -339,12 +340,12 @@ Repository protections are implemented and validated:
 - Production config cache: `portfolio.debug_agent.enabled=false` with
   `APP_ENV=production` and `LIDO_AGENT_DEBUG_ENABLED=false`.
 
-Production activation completed on release
-`6838f8277a79a3cd36996f6f50b33dd559915caa`. Existing Laravel log files were
-repaired to the `www-data` group with group-write permissions under a setgid
-`storage/logs` directory (`2775`), and a protected unauthenticated
-`GET /api/portfolios` returned `401 Unauthorized`. A later daily rotation
-created `www-data:www-data 0644`, proving that the one-time repair did not
-protect future files. The root cause was missing Monolog file-permission
-configuration. The code now specifies `0664` for all file-backed channels;
-AUTHR-002 remains open for production deployment and new-file verification.
+Production activation first reached release `671996b3244464c686fc4eab7e283364afd576c5`
+but the hard runtime-health gate correctly rejected an already-existing
+`frontend-2026-09-19.log` at `www-data:www-data 0644`. After normalizing that
+file, runtime health passed. A controlled post-deployment
+`Log::channel("provider")->warning(...)` write created
+`nitty:www-data 664 provider-2026-09-19.log`. The original one-time chmod/setgid
+repair was therefore confirmed insufficient by itself; the root cause was the
+absence of explicit Monolog file-mode configuration. The deployed code now
+specifies `0664` for every file-backed channel, and AUTHR-002 is implemented.

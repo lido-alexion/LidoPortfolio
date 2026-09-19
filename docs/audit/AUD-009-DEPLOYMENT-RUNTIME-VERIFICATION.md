@@ -88,7 +88,7 @@ deployed release.
 
 ## 8. Storage / Permissions
 
-Shared Laravel storage directories (`framework/cache`, `framework/sessions`, `framework/views`, `logs`, `app/private`, and `app/public`) are present and writable by `nitty:www-data` with mode `0775`. Bootstrap cache is writable. The initial one-time repair of existing log files was insufficient: a newly rotated daily Laravel file was later created as `www-data:www-data 0644`, because the file-backed Monolog channels had no explicit permission setting. The durable code fix now sets `permission => 0664` on `single`, `daily`, `frontend`, `provider`, `scheduler`, and `emergency`; deployment verification remains pending until this code is deployed and a new/rotated file is observed with the expected group-write mode.
+Shared Laravel storage directories (`framework/cache`, `framework/sessions`, `framework/views`, `logs`, `app/private`, and `app/public`) are present and writable by `nitty:www-data` with mode `0775`. Bootstrap cache is writable. The initial one-time repair of existing log files was insufficient: a newly rotated daily Laravel file was later created as `www-data:www-data 0644`, because the file-backed Monolog channels had no explicit permission setting. Release `671996b3244464c686fc4eab7e283364afd576c5` now sets `permission => 0664` on `single`, `daily`, `frontend`, `provider`, `scheduler`, and `emergency`. The first activation attempt correctly failed the hard health gate on a pre-existing `frontend-2026-09-19.log` at `0644`; after that file was normalized, the health gate passed and a controlled provider-channel write created `nitty:www-data 0664 provider-2026-09-19.log`.
 
 ## 9. Queue / Worker Runtime
 
@@ -229,7 +229,7 @@ No public secret or source-file exposure was found in these probes.
 | DEP-004 | Backup freshness / restore path | Automated backup schedule, retention, independent storage, persistent-state coverage, and recoverability are known | One valid 315,983,406-byte local SQL dump dated 2026-09-15; no application schedule/retention/separate destination evidence; shared-storage backup coverage unproven; isolated restore unavailable because the production DB user lacks temporary-database privilege | `RUNTIME_VERIFICATION_REQUIRED` | Medium |
 | DEP-005 | Secrets and public-root isolation | Secrets remain private and public root is limited | Shared `.env` mode 0600; probes block hidden files; public-root target correct | `IMPLEMENTED` | High |
 | DEP-006 | Scheduler runtime | Scheduler runs once at expected cadence | Minute cron and recent heartbeat; no duplicate worker found | `IMPLEMENTED` | High |
-| DEP-007 | Core process/resource health | Web, PHP, DB, storage, TLS, and disk remain viable | Core processes active, certificate valid, storage writable, disk/memory healthy | `IMPLEMENTED` | Medium |
+| DEP-007 | Core process/resource health | Web, PHP, DB, storage, TLS, and disk remain viable | Core processes active, certificate valid, storage writable, disk/memory healthy; release `671996b` passed the hard runtime health gate after stale-file normalization and verified a new Monolog file at group `www-data`/mode `0664` | `IMPLEMENTED` | Medium |
 
 ## 22. Remediation Groups
 
@@ -389,7 +389,11 @@ protects secrets and the public root, serves valid HTTPS, runs its scheduler,
 and now proves both release-runtime activation and named queue consumption. The
 FPM reload made public PHP match the active release, while the root-managed
 queue worker drained the aged notification backlog through normal lifecycle
-processing with no failed jobs.
+processing with no failed jobs. The logging writable-path regression is also
+resolved: the first `671996b` activation was rejected for a pre-existing
+`0644` frontend log, and the subsequent normalized activation passed health;
+the controlled provider-channel write produced a new `0664` file with the
+`www-data` group.
 
 DEP-003 is implemented. The production release is the latest approved
 deployable application revision, its public and filesystem identities match,
