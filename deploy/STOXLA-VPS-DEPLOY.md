@@ -838,6 +838,10 @@ Deployment:
   `/home/nitty/.stoxla-deploy/<release-id>/`.
 - Runs `deploy/scripts/stoxla-deploy-release.sh` on the VPS.
 - Runs a final health check against `https://stoxla.in/`.
+- Maintains a shared fundamentals virtualenv at
+  `/var/www/stoxla/shared/python/fundamentals`, installs only when the pinned
+  `deploy/python/fundamentals-requirements.txt` hash changes, and verifies
+  `yfinance==1.7.0` locally before activation.
 
 ### 12.3 VPS release layout
 

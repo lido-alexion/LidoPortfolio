@@ -47,7 +47,7 @@ test('managed queue configuration is root-owned and deployment only verifies cov
     assert.match(unit, /WorkingDirectory=\/var\/www\/stoxla/);
 
     for (const script of [deploy, rollback]) {
-        assert.doesNotMatch(script, /\binstall\b/);
+        assert.doesNotMatch(script, /\/etc\/systemd\/system/);
         assert.doesNotMatch(script, /daemon-reload/);
     }
 
@@ -76,6 +76,10 @@ test('production activation fails closed for debug auth and normalizes PHP writa
     assert.match(deploy, /prepare_writable_tree/);
     assert.match(health, /PHP_FPM_GROUP/);
     assert.match(health, /perm -2000/);
+    assert.match(deploy, /FUNDAMENTALS_SHARED_DIR/);
+    assert.match(deploy, /fundamentals-requirements\.txt/);
+    assert.match(health, /import yfinance/);
+    assert.match(health, /FUNDAMENTALS_YFINANCE_VERSION/);
     for (const channel of ['single', 'daily', 'frontend', 'provider', 'scheduler', 'emergency']) {
         assert.match(logging, new RegExp(`'${channel}'[\\s\\S]*?'permission'\\s*=>\\s*0664`));
     }

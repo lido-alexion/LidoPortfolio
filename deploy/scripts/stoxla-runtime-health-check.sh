@@ -10,6 +10,9 @@ QUEUE_SERVICE="${STOXLA_QUEUE_SERVICE:-stoxla-queue}"
 REQUIRED_QUEUES="${STOXLA_REQUIRED_QUEUES:-notifications,default}"
 SCHEDULER_MAX_AGE_SECONDS="${STOXLA_SCHEDULER_MAX_AGE_SECONDS:-300}"
 PHP_FPM_GROUP="${STOXLA_PHP_FPM_GROUP:-www-data}"
+FUNDAMENTALS_PYTHON="${STOXLA_FUNDAMENTALS_PYTHON:-$APP_ROOT/shared/python/fundamentals/bin/python}"
+FUNDAMENTALS_ADAPTER="${STOXLA_FUNDAMENTALS_ADAPTER:-$APP_ROOT/current/scripts/yahoo_fundamentals.py}"
+FUNDAMENTALS_YFINANCE_VERSION="${STOXLA_FUNDAMENTALS_YFINANCE_VERSION:-1.7.0}"
 
 log() {
   printf '[stoxla-runtime-health] %s\n' "$*"
@@ -24,6 +27,12 @@ fail() {
 [[ -x "$PHP_BIN" ]] || fail "PHP binary not found at $PHP_BIN"
 [[ -L "$APP_ROOT/current" ]] || fail "current release symlink is missing"
 [[ -f "$APP_ROOT/current/bootstrap/build-info.json" ]] || fail "active release build metadata is missing"
+[[ -x "$FUNDAMENTALS_PYTHON" ]] || fail "fundamentals Python runtime is not executable: $FUNDAMENTALS_PYTHON"
+[[ -f "$FUNDAMENTALS_ADAPTER" ]] || fail "fundamentals Python adapter is missing: $FUNDAMENTALS_ADAPTER"
+installed_yfinance="$("$FUNDAMENTALS_PYTHON" -c 'import yfinance; print(yfinance.__version__)' 2>/dev/null)" \
+  || fail "fundamentals Python runtime cannot import yfinance"
+[[ "$installed_yfinance" == "$FUNDAMENTALS_YFINANCE_VERSION" ]] \
+  || fail "fundamentals yfinance version $installed_yfinance does not match required $FUNDAMENTALS_YFINANCE_VERSION"
 
 debug_state="$(cd "$APP_ROOT/current" && "$PHP_BIN" artisan tinker --execute='echo config("app.env")."|".(config("portfolio.debug_agent.enabled") ? "true" : "false");' --no-interaction)"
 [[ "$debug_state" == "production|false" ]] || fail "production DebugAgent is enabled or app environment is not production"

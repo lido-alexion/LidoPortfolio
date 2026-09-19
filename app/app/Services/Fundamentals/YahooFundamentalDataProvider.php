@@ -3,120 +3,77 @@
 namespace App\Services\Fundamentals;
 
 use App\Models\Stock;
-use Carbon\CarbonImmutable;
-use GuzzleHttp\Cookie\CookieJar;
-use Illuminate\Http\Client\PendingRequest;
-use Illuminate\Http\Client\Response;
-use Illuminate\Support\Facades\Http;
+use Symfony\Component\Process\Exception\ProcessTimedOutException;
+use Symfony\Component\Process\Process;
 use RuntimeException;
 
 class YahooFundamentalDataProvider implements FundamentalDataProvider
 {
-    private const COOKIE_URL = 'https://fc.yahoo.com';
-
-    private const CRUMB_URL = 'https://query1.finance.yahoo.com/v1/test/getcrumb';
-
-    private const USER_AGENT = 'StoX-Fundamentals/1.0 (+https://stoxla.in)';
-
-    private const SESSION_TTL_MINUTES = 15;
-
-    private ?CookieJar $cookieJar = null;
-
-    private ?string $crumb = null;
-
-    private ?CarbonImmutable $sessionExpiresAt = null;
+    public function __construct(
+        private readonly ?string $pythonBinary = null,
+        private readonly ?string $adapterScript = null,
+        private readonly ?float $timeoutSeconds = null,
+        private readonly ?int $maxOutputBytes = null,
+    ) {}
 
     public function fetch(Stock $stock, string $cadence): array
     {
+        if (! in_array($cadence, [FundamentalDataService::CADENCE_QUARTERLY, FundamentalDataService::CADENCE_ANNUAL], true)) {
+            throw new RuntimeException('Yahoo fundamentals adapter received an unsupported cadence.');
+        }
+
         $symbol = $stock->yahoo_symbol ?: $stock->symbol.($stock->exchange === 'BSE' ? '.BO' : '.NS');
-        $modules = $cadence === FundamentalDataService::CADENCE_ANNUAL
-            ? 'incomeStatementHistory,balanceSheetHistory,cashflowStatementHistory'
-            : 'incomeStatementHistoryQuarterly,balanceSheetHistoryQuarterly,cashflowStatementHistoryQuarterly';
+        $python = $this->pythonBinary ?? (string) config('fundamentals.yahoo.python');
+        $script = $this->adapterScript ?? (string) config('fundamentals.yahoo.adapter_script');
+        $timeout = $this->timeoutSeconds ?? (float) config('fundamentals.yahoo.timeout_seconds', 45);
+        $maxOutput = $this->maxOutputBytes ?? (int) config('fundamentals.yahoo.max_output_bytes', 4 * 1024 * 1024);
 
-        $query = [
-            'modules' => $modules,
-            'corsDomain' => 'finance.yahoo.com',
-            'formatted' => 'false',
-        ];
-
-        for ($refreshes = 0; $refreshes <= 1; $refreshes++) {
-            $this->ensureSession($refreshes > 0);
-            $response = $this->requestQuoteSummary($symbol, $query);
-            $payload = $response->json();
-            $error = (string) ($payload['quoteSummary']['error']['description'] ?? '');
-
-            if ($this->isAuthenticationFailure($response, $error)) {
-                if ($refreshes === 0) {
-                    continue;
-                }
-
-                throw new RuntimeException('Yahoo fundamentals authentication failed after session refresh.');
-            }
-
-            if (! $response->successful()) {
-                throw new RuntimeException('Yahoo fundamentals request failed with HTTP '.$response->status());
-            }
-
-            $result = $payload['quoteSummary']['result'][0] ?? null;
-            if (! is_array($result)) {
-                throw new RuntimeException('Yahoo returned no fundamental data.');
-            }
-
-            return (new YahooFundamentalNormalizer)->normalize($result, $cadence);
+        if ($python === '' || ! is_file($python) || ! is_executable($python)) {
+            throw new RuntimeException('Yahoo fundamentals Python runtime is unavailable.');
+        }
+        if ($script === '' || ! is_file($script)) {
+            throw new RuntimeException('Yahoo fundamentals adapter script is unavailable.');
         }
 
-        throw new RuntimeException('Yahoo fundamentals request failed.');
-    }
-
-    private function ensureSession(bool $forceRefresh = false): void
-    {
-        if (! $forceRefresh
-            && $this->cookieJar !== null
-            && $this->crumb !== null
-            && $this->sessionExpiresAt?->isFuture()) {
-            return;
+        $process = new Process([$python, $script, $symbol, $cadence], base_path());
+        $process->setTimeout($timeout);
+        try {
+            $process->run();
+        } catch (ProcessTimedOutException) {
+            throw new RuntimeException('Yahoo fundamentals adapter timed out.');
         }
 
-        $jar = new CookieJar();
-        $client = $this->client($jar);
-        $bootstrap = $client->get(self::COOKIE_URL);
-        if (! in_array($bootstrap->status(), [200, 301, 302, 404], true) || $jar->count() === 0) {
-            throw new RuntimeException('Yahoo fundamentals session cookie could not be established.');
+        $stdout = $process->getOutput();
+        $stderr = trim($process->getErrorOutput());
+        if (strlen($stdout) > $maxOutput) {
+            throw new RuntimeException('Yahoo fundamentals adapter output exceeded the configured limit.');
+        }
+        if (! $process->isSuccessful()) {
+            $detail = $stderr === '' ? 'adapter exited with status '.$process->getExitCode() : $this->safeError($stderr);
+            throw new RuntimeException('Yahoo fundamentals adapter failed: '.$detail);
         }
 
-        $crumbResponse = $client->get(self::CRUMB_URL);
-        $crumb = trim($crumbResponse->body());
-        if (! $crumbResponse->successful() || $crumb === '' || str_contains(strtolower($crumb), 'invalid')) {
-            throw new RuntimeException('Yahoo fundamentals crumb could not be established.');
+        try {
+            $payload = json_decode($stdout, true, 32, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            throw new RuntimeException('Yahoo fundamentals adapter returned invalid JSON.');
         }
 
-        $this->cookieJar = $jar;
-        $this->crumb = $crumb;
-        $this->sessionExpiresAt = CarbonImmutable::now()->addMinutes(self::SESSION_TTL_MINUTES);
+        if (! is_array($payload)
+            || ($payload['schema_version'] ?? null) !== 1
+            || ($payload['symbol'] ?? null) !== $symbol
+            || ($payload['cadence'] ?? null) !== $cadence
+            || ! is_array($payload['statements'] ?? null)) {
+            throw new RuntimeException('Yahoo fundamentals adapter returned an invalid response schema.');
+        }
+
+        return (new YahooFundamentalNormalizer)->normalizeYfinance($payload, $cadence);
     }
 
-    /** @param array<string,string> $query */
-    private function requestQuoteSummary(string $symbol, array $query): Response
+    private function safeError(string $error): string
     {
-        return $this->client($this->cookieJar)
-            ->retry(1, 500)
-            ->get("https://query2.finance.yahoo.com/v10/finance/quoteSummary/{$symbol}", array_merge(
-                ['crumb' => $this->crumb],
-                $query,
-            ));
-    }
+        $line = preg_split('/\R/', $error)[0] ?? $error;
 
-    private function client(?CookieJar $jar): PendingRequest
-    {
-        return Http::timeout(20)
-            ->withHeaders(['User-Agent' => self::USER_AGENT])
-            ->withOptions(['cookies' => $jar ?? new CookieJar()]);
-    }
-
-    private function isAuthenticationFailure(Response $response, string $error): bool
-    {
-        return in_array($response->status(), [401, 403], true)
-            || str_contains(strtolower($error), 'invalid crumb')
-            || str_contains(strtolower($response->body()), 'invalid crumb');
+        return substr($line, 0, 500);
     }
 }

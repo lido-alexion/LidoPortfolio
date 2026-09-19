@@ -29,6 +29,33 @@ class YahooFundamentalNormalizer
         'dividendsPaid' => 'dividends_paid',
     ];
 
+    /** @var array<string,string> */
+    private const YFINANCE_FACT_MAP = [
+        'Total Revenue' => 'revenue',
+        'Operating Income' => 'operating_profit',
+        'EBIT' => 'ebit',
+        'EBITDA' => 'ebitda',
+        'Net Income' => 'net_income',
+        'Basic EPS' => 'eps',
+        'Diluted EPS' => 'eps_diluted',
+        'Total Assets' => 'total_assets',
+        'Total Liabilities Net Minority Interest' => 'total_liabilities',
+        'Total Liab' => 'total_liabilities',
+        'Stockholders Equity' => 'equity',
+        'Total Equity Gross Minority Interest' => 'equity',
+        'Total Debt' => 'debt',
+        'Long Term Debt' => 'long_term_debt',
+        'Cash Cash Equivalents And Short Term Investments' => 'cash_and_equivalents',
+        'Cash And Cash Equivalents' => 'cash_and_equivalents',
+        'Operating Cash Flow' => 'operating_cash_flow',
+        'Investing Cash Flow' => 'investing_cash_flow',
+        'Financing Cash Flow' => 'financing_cash_flow',
+        'Capital Expenditure' => 'capital_expenditure',
+        'Repurchase Of Capital Stock' => 'shares_outstanding',
+        'Ordinary Shares Number' => 'shares_outstanding',
+        'Cash Dividends Paid' => 'dividends_paid',
+    ];
+
     /**
      * @return list<array<string,mixed>>
      */
@@ -78,6 +105,49 @@ class YahooFundamentalNormalizer
                         'availability_date' => null,
                         'source_meta' => [
                             'provider_key' => $providerKey,
+                            'availability_source' => 'first_fetch_fallback',
+                        ],
+                    ];
+                }
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Normalize the plain JSON contract emitted by scripts/yahoo_fundamentals.py.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public function normalizeYfinance(array $payload, string $cadence): array
+    {
+        $rows = [];
+        foreach (['income_statement', 'balance_sheet', 'cash_flow'] as $statementType) {
+            foreach (($payload['statements'][$statementType] ?? []) as $statement) {
+                if (! is_array($statement) || ! is_string($statement['period_end'] ?? null)) {
+                    continue;
+                }
+                foreach (($statement['facts'] ?? []) as $sourceName => $value) {
+                    $factKey = self::YFINANCE_FACT_MAP[$sourceName] ?? null;
+                    if ($factKey === null || ! is_numeric($value)) {
+                        continue;
+                    }
+                    $rows[] = [
+                        'provider' => 'yahoo',
+                        'statement_type' => $statementType,
+                        'cadence' => $cadence,
+                        'statement_basis' => 'consolidated',
+                        'fact_key' => $factKey,
+                        'period_start' => null,
+                        'period_end' => $statement['period_end'],
+                        'reported_period' => $statement['period_end'],
+                        'value' => (float) $value,
+                        'currency' => null,
+                        'availability_date' => null,
+                        'source_meta' => [
+                            'provider_key' => (string) $sourceName,
+                            'transport' => 'yfinance',
                             'availability_source' => 'first_fetch_fallback',
                         ],
                     ];

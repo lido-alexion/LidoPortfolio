@@ -56,7 +56,7 @@ jobs:
             [[ -n "$file" ]] || continue
 
             case "$file" in
-              app/app/*|app/bootstrap/*|app/config/*|app/database/*|app/routes/*|app/tests/*.php|app/tests/**/*.php|app/composer.json|app/composer.lock|app/phpunit.xml|deploy/**|.github/workflows/*.yml|.github/workflows/*.yaml)
+              app/app/*|app/bootstrap/*|app/config/*|app/database/*|app/routes/*|app/scripts/**|app/deploy/**|app/tests/*.php|app/tests/**/*.php|app/composer.json|app/composer.lock|app/phpunit.xml|deploy/**|.github/workflows/*.yml|.github/workflows/*.yaml)
                 backend=true
                 deployable=true
                 ;;
@@ -127,6 +127,9 @@ jobs:
           cp .env.example .env
           php artisan key:generate
           php artisan config:clear
+
+      - name: Run Python adapter tests
+        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 
       - name: Validate full MySQL migration and seed chain
         env:
