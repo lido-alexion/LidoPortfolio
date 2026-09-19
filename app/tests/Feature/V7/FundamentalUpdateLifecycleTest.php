@@ -11,6 +11,7 @@ use App\Services\Fundamentals\FundamentalUpdateService;
 use App\Services\AdminOperationalAlertService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Mockery;
 use Tests\TestCase;
 
@@ -245,5 +246,72 @@ class FundamentalUpdateLifecycleTest extends TestCase
         $this->assertSame($newerRun->id, $result['id']);
         $this->assertSame('completed', $retained->fresh()->status);
         $this->assertSame(1, \App\Models\V7\FundamentalFact::query()->count());
+    }
+
+    public function test_scheduled_slice_skips_without_mutating_when_process_lock_is_held(): void
+    {
+        $stock = Stock::query()->create(['symbol' => 'LOCKED', 'exchange' => 'NSE', 'name' => 'Locked']);
+        $run = FundamentalUpdateRun::query()->create(['trigger' => 'scheduled', 'scope' => 'incremental', 'status' => 'running']);
+        $job = FundamentalUpdateJob::query()->create([
+            'run_id' => $run->id, 'stock_id' => $stock->id, 'cadence' => 'quarterly', 'status' => 'queued',
+        ]);
+        $processLock = Cache::lock(FundamentalUpdateService::PROCESS_LOCK_KEY, 900);
+        $this->assertTrue($processLock->get());
+
+        try {
+            $result = app(FundamentalUpdateService::class)->processScheduledIncremental(1);
+        } finally {
+            $processLock->release();
+        }
+
+        $this->assertSame('skipped', $result['status']);
+        $this->assertSame('another_fundamentals_slice_is_in_progress', $result['reason']);
+        $this->assertSame('queued', $job->fresh()->status);
+        $this->assertSame('running', $run->fresh()->status);
+    }
+
+    public function test_scheduled_reconciliation_and_processing_share_one_process_lock(): void
+    {
+        $stock = Stock::query()->create(['symbol' => 'BOUNDARY', 'exchange' => 'NSE', 'name' => 'Boundary']);
+        $run = FundamentalUpdateRun::query()->create(['trigger' => 'scheduled', 'scope' => 'incremental', 'status' => 'running']);
+        FundamentalUpdateJob::query()->create([
+            'run_id' => $run->id, 'stock_id' => $stock->id, 'cadence' => 'quarterly', 'status' => 'queued',
+        ]);
+        $lockWasHeldDuringProviderCall = false;
+        $provider = Mockery::mock(FundamentalDataProvider::class);
+        $provider->shouldReceive('fetch')->once()->andReturnUsing(function () use (&$lockWasHeldDuringProviderCall): array {
+            $probe = Cache::lock(FundamentalUpdateService::PROCESS_LOCK_KEY, 900);
+            $lockWasHeldDuringProviderCall = ! $probe->get();
+            if ($lockWasHeldDuringProviderCall) {
+                return [];
+            }
+
+            $probe->release();
+
+            return [];
+        });
+        $this->app->instance(FundamentalDataProvider::class, $provider);
+
+        $result = app(FundamentalUpdateService::class)->processScheduledIncremental(1);
+
+        $this->assertTrue($lockWasHeldDuringProviderCall);
+        $this->assertSame('completed', $result['status']);
+    }
+
+    public function test_manual_process_path_still_runs_under_its_own_process_lock(): void
+    {
+        $stock = Stock::query()->create(['symbol' => 'MANUAL2', 'exchange' => 'NSE', 'name' => 'Manual 2']);
+        $run = FundamentalUpdateRun::query()->create(['trigger' => 'manual', 'scope' => 'stock', 'status' => 'queued']);
+        $job = FundamentalUpdateJob::query()->create([
+            'run_id' => $run->id, 'stock_id' => $stock->id, 'cadence' => 'quarterly', 'status' => 'queued',
+        ]);
+        $provider = Mockery::mock(FundamentalDataProvider::class);
+        $provider->shouldReceive('fetch')->once()->andReturn([]);
+        $this->app->instance(FundamentalDataProvider::class, $provider);
+
+        $result = app(FundamentalUpdateService::class)->process($run, 1);
+
+        $this->assertSame('completed', $result['status']);
+        $this->assertSame('completed', $job->fresh()->status);
     }
 }

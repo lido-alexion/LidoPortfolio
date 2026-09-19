@@ -120,26 +120,42 @@ class FundamentalUpdateService
         }
 
         try {
-            $settings = $this->fundamentals->settings();
-            $this->reconcileBacklogLocked((int) $settings->max_attempts);
+            $processLock = Cache::lock(self::PROCESS_LOCK_KEY, 900);
+            if (! $processLock->get()) {
+                return [
+                    'status' => 'skipped',
+                    'reason' => 'another_fundamentals_slice_is_in_progress',
+                    'processed' => 0,
+                    'succeeded' => 0,
+                    'failed' => 0,
+                    'skipped' => 0,
+                ];
+            }
 
-            $run = FundamentalUpdateRun::query()
-                ->where('scope', 'incremental')
-                ->whereIn('status', ['queued', 'running'])
-                ->whereHas('jobs', function ($query): void {
-                    $query->whereIn('status', ['queued', 'retry', 'running']);
-                })
-                ->oldest('id')
-                ->first();
+            try {
+                $settings = $this->fundamentals->settings();
+                $this->reconcileBacklogLocked((int) $settings->max_attempts);
 
-            if ($run === null) {
-                $run = $this->createRun('scheduled', 'incremental', null, $batch);
+                $run = FundamentalUpdateRun::query()
+                    ->where('scope', 'incremental')
+                    ->whereIn('status', ['queued', 'running'])
+                    ->whereHas('jobs', function ($query): void {
+                        $query->whereIn('status', ['queued', 'retry', 'running']);
+                    })
+                    ->oldest('id')
+                    ->first();
+
+                if ($run === null) {
+                    $run = $this->createRun('scheduled', 'incremental', null, $batch);
+                }
+
+                return $this->processLocked($run, $batch);
+            } finally {
+                $processLock->release();
             }
         } finally {
             $lock->release();
         }
-
-        return $this->process($run, $batch);
     }
 
     /**
