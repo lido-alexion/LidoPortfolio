@@ -121,7 +121,7 @@ class FundamentalUpdateService
 
         try {
             $settings = $this->fundamentals->settings();
-            $this->reconcileBacklog((int) $settings->max_attempts);
+            $this->reconcileBacklogLocked((int) $settings->max_attempts);
 
             $run = FundamentalUpdateRun::query()
                 ->where('scope', 'incremental')
@@ -145,9 +145,24 @@ class FundamentalUpdateService
     /**
      * Normalize abandoned/exhausted jobs and finalize runs whose children are terminal.
      *
-     * @return array{exhausted:int,recovered:int,finalized:int}
+     * @return array{exhausted:int,recovered:int,superseded:int,finalized:int}
      */
     public function reconcileBacklog(int $maxAttempts = 3): array
+    {
+        $lock = Cache::lock(self::PROCESS_LOCK_KEY, 900);
+        if (! $lock->get()) {
+            return ['exhausted' => 0, 'recovered' => 0, 'superseded' => 0, 'finalized' => 0];
+        }
+
+        try {
+            return $this->reconcileBacklogLocked($maxAttempts);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /** @return array{exhausted:int,recovered:int,superseded:int,finalized:int} */
+    private function reconcileBacklogLocked(int $maxAttempts): array
     {
         $exhausted = FundamentalUpdateJob::query()
             ->where('status', 'retry')
@@ -168,6 +183,7 @@ class FundamentalUpdateService
                 'last_error' => DB::raw("CONCAT(COALESCE(last_error, ''), ' [stale running job recovered]')"),
             ]);
 
+        $superseded = $this->compactDuplicateIncrementalJobs($maxAttempts);
         $finalized = 0;
         FundamentalUpdateRun::query()
             ->whereIn('status', ['queued', 'running'])
@@ -183,7 +199,73 @@ class FundamentalUpdateService
                 $finalized++;
             });
 
-        return compact('exhausted', 'recovered', 'finalized');
+        return compact('exhausted', 'recovered', 'superseded', 'finalized');
+    }
+
+    /**
+     * Retain one newest viable job for each stock/cadence and preserve the rest as evidence.
+     * Only unfinished incremental work is eligible; targeted/manual runs are never touched.
+     */
+    private function compactDuplicateIncrementalJobs(int $maxAttempts): int
+    {
+        return DB::transaction(function () use ($maxAttempts): int {
+            $duplicateIdentities = FundamentalUpdateJob::query()
+                ->select(['stock_id', 'cadence'])
+                ->whereIn('status', ['queued', 'retry', 'running'])
+                ->whereHas('run', function ($query): void {
+                    $query->where('scope', 'incremental')->whereIn('status', ['queued', 'running']);
+                })
+                ->groupBy('stock_id', 'cadence')
+                ->havingRaw('COUNT(*) > 1')
+                ->get();
+
+            $superseded = 0;
+            foreach ($duplicateIdentities as $identity) {
+                $jobs = FundamentalUpdateJob::query()
+                    ->with('run:id,created_at')
+                    ->where('stock_id', $identity->stock_id)
+                    ->where('cadence', $identity->cadence)
+                    ->whereIn('status', ['queued', 'retry', 'running'])
+                    ->whereHas('run', function ($query): void {
+                        $query->where('scope', 'incremental')->whereIn('status', ['queued', 'running']);
+                    })
+                    ->lockForUpdate()
+                    ->get();
+
+                $authoritative = $jobs
+                    ->filter(fn (FundamentalUpdateJob $job): bool => $job->attempts < $maxAttempts)
+                    ->sortByDesc(fn (FundamentalUpdateJob $job): string => $this->jobRetentionKey($job))
+                    ->first()
+                    ?? $jobs->sortByDesc(fn (FundamentalUpdateJob $job): string => $this->jobRetentionKey($job))->first();
+
+                if ($authoritative === null) {
+                    continue;
+                }
+
+                foreach ($jobs as $job) {
+                    if ($job->is($authoritative)) {
+                        continue;
+                    }
+
+                    $reason = 'Superseded during duplicate incremental backlog reconciliation';
+                    $job->forceFill([
+                        'status' => 'superseded',
+                        'next_attempt_at' => null,
+                        'last_error' => trim(($job->last_error ? $job->last_error.' ' : '').'['.$reason.']'),
+                    ])->save();
+                    $superseded++;
+                }
+            }
+
+            return $superseded;
+        });
+    }
+
+    private function jobRetentionKey(FundamentalUpdateJob $job): string
+    {
+        $createdAt = $job->run?->created_at?->format('Y-m-d H:i:s.u') ?? '';
+
+        return sprintf('%s|%010d|%010d', $createdAt, $job->run_id, $job->id);
     }
 
     /**

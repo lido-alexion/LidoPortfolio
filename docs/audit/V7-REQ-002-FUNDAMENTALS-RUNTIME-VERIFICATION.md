@@ -123,12 +123,12 @@ The repository remediation is complete and production-pending:
 
 - Yahoo requests now establish and reuse a cookie/crumb session, send a centralized explicit User-Agent, and refresh the session once on HTTP 401/403 or Invalid Crumb before failing explicitly.
 - Scheduled incremental slices reconcile stale/exhausted jobs, resume the oldest unfinished work, respect `next_attempt_at` and `max_attempts`, finalize terminal parent runs, and use durable cache locks in addition to scheduler overlap protection.
-- Incremental run creation skips stock/cadence work already owned by another unfinished incremental run. Existing queued/retry work is not deleted; repeated scheduled invocations provide the recovery path and preserve run/job evidence.
+- Incremental run creation skips stock/cadence work already owned by another unfinished incremental run. Backlog reconciliation now compacts duplicate unfinished incremental jobs by `(stock_id, cadence)`: it retains the newest viable job, marks redundant jobs `superseded`, preserves prior attempt/error evidence, clears their next-attempt time, and finalizes obsolete parent runs. Completed jobs and manual targeted runs are excluded. The operation is transactional, process-locked, and idempotent.
 - Provider-wide failures now use the existing deduplicated operational-alert framework and retain the provider error on run/job evidence.
 
-The focused remediation suite passes **11 tests and 42 assertions**. The broader V7 fundamentals, ML, schedule, and unattended-operation suite passes **37 tests and 229 assertions** in the current repository state.
+The focused Yahoo/session and update-lifecycle suite passes **14 tests and 51 assertions**. The broader V7 fundamentals, ML, schedule, and unattended-operation suite passes **43 tests and 251 assertions** in the current repository state.
 
-Production still requires deployment of this remediation, a successful normal Yahoo-backed update, representative canonical facts with provenance, and confirmation that the existing queued/retry backlog drains or reaches explicit terminal states.
+Production still requires deployment of this remediation, a successful normal Yahoo-backed update, representative canonical facts with provenance, and confirmation that the existing queued/retry backlog compacts to unique outstanding stock/cadence work and then drains or reaches explicit terminal states.
 
 ## 13. Final Assessment
 
