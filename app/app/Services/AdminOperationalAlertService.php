@@ -33,6 +33,8 @@ class AdminOperationalAlertService
 
     public const KEY_AUTOMATIC_SUBMIT_FAILED = 'automatic_submit_failed';
 
+    public const KEY_FUNDAMENTALS_UPDATE_FAILED = 'fundamentals_update_failed';
+
     public const SETTING_UNATTENDED_FAILURES = 'unattended_ops_failures';
 
     /** @var list<string> */
@@ -40,6 +42,7 @@ class AdminOperationalAlertService
         self::KEY_DECISION_PIPELINE_FAILED,
         self::KEY_BROKER_RECONCILE_FAILED,
         self::KEY_AUTOMATIC_SUBMIT_FAILED,
+        self::KEY_FUNDAMENTALS_UPDATE_FAILED,
     ];
 
     public function __construct(

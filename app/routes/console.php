@@ -124,19 +124,22 @@ Artisan::command('stox:fundamentals-update
     $runId = $this->option('run');
     $batch = max(1, min((int) $this->option('batch'), 200));
 
-    $run = $runId
-        ? \App\Models\V7\FundamentalUpdateRun::query()->findOrFail((int) $runId)
-        : $service->createRun(
-            trigger: 'scheduled',
-            scope: $this->option('stock') ? 'stock' : 'incremental',
-            stockId: $this->option('stock') ? (int) $this->option('stock') : null,
-            limit: $batch,
-        );
+    if (! $runId && ! $this->option('stock')) {
+        $result = $service->processScheduledIncremental($batch);
+    } else {
+        $run = $runId
+            ? \App\Models\V7\FundamentalUpdateRun::query()->findOrFail((int) $runId)
+            : $service->createRun(
+                trigger: 'manual',
+                scope: 'stock',
+                stockId: (int) $this->option('stock'),
+                limit: $batch,
+            );
+        $result = $service->process($run, $batch);
+    }
 
-    $result = $service->process($run, $batch);
     $this->info(sprintf(
-        'V7 fundamentals run #%d: %s; processed=%d succeeded=%d failed=%d skipped=%d.',
-        (int) $result['id'],
+        'V7 fundamentals: %s; processed=%d succeeded=%d failed=%d skipped=%d.',
         (string) $result['status'],
         (int) $result['processed'],
         (int) $result['succeeded'],
@@ -144,7 +147,7 @@ Artisan::command('stox:fundamentals-update
         (int) $result['skipped'],
     ));
 
-    return in_array($result['status'], ['completed', 'completed_with_errors', 'running', 'queued'], true) ? 0 : 1;
+    return in_array($result['status'], ['completed', 'completed_with_errors', 'running', 'queued', 'skipped'], true) ? 0 : 1;
 })->purpose('Process a bounded V7 StoX fundamental-data update slice');
 
 $cronTime = env('PORTFOLIO_CRON_TIME', '18:30');

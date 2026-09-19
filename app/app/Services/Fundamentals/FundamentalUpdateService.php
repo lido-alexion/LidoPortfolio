@@ -5,14 +5,21 @@ namespace App\Services\Fundamentals;
 use App\Models\Stock;
 use App\Models\V7\FundamentalUpdateJob;
 use App\Models\V7\FundamentalUpdateRun;
+use App\Services\AdminOperationalAlertService;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
 class FundamentalUpdateService
 {
+    public const SCHEDULE_LOCK_KEY = 'stox:fundamentals:scheduled-slice';
+
+    public const PROCESS_LOCK_KEY = 'stox:fundamentals:process-slice';
+
     public function __construct(
         protected FundamentalDataService $fundamentals,
         protected FundamentalDataProvider $provider,
+        protected AdminOperationalAlertService $opsAlerts,
     ) {}
 
     /**
@@ -64,6 +71,17 @@ class FundamentalUpdateService
             $requested = 0;
             foreach ($query->get(['id']) as $stock) {
                 foreach ([FundamentalDataService::CADENCE_QUARTERLY, FundamentalDataService::CADENCE_ANNUAL] as $cadence) {
+                    if ($scope === 'incremental' && FundamentalUpdateJob::query()
+                        ->where('stock_id', $stock->id)
+                        ->where('cadence', $cadence)
+                        ->whereIn('status', ['queued', 'retry', 'running'])
+                        ->whereHas('run', function ($runQuery): void {
+                            $runQuery->where('scope', 'incremental')->whereIn('status', ['queued', 'running']);
+                        })
+                        ->exists()) {
+                        continue;
+                    }
+
                     FundamentalUpdateJob::query()->firstOrCreate([
                         'run_id' => $run->id,
                         'stock_id' => $stock->id,
@@ -83,9 +101,112 @@ class FundamentalUpdateService
     }
 
     /**
+     * Resume the durable scheduled backlog before creating new incremental work.
+     *
+     * @return array<string,mixed>
+     */
+    public function processScheduledIncremental(int $batch = 25): array
+    {
+        $lock = Cache::lock(self::SCHEDULE_LOCK_KEY, 900);
+        if (! $lock->get()) {
+            return [
+                'status' => 'skipped',
+                'reason' => 'another_scheduled_slice_is_in_progress',
+                'processed' => 0,
+                'succeeded' => 0,
+                'failed' => 0,
+                'skipped' => 0,
+            ];
+        }
+
+        try {
+            $settings = $this->fundamentals->settings();
+            $this->reconcileBacklog((int) $settings->max_attempts);
+
+            $run = FundamentalUpdateRun::query()
+                ->where('scope', 'incremental')
+                ->whereIn('status', ['queued', 'running'])
+                ->whereHas('jobs', function ($query): void {
+                    $query->whereIn('status', ['queued', 'retry', 'running']);
+                })
+                ->oldest('id')
+                ->first();
+
+            if ($run === null) {
+                $run = $this->createRun('scheduled', 'incremental', null, $batch);
+            }
+        } finally {
+            $lock->release();
+        }
+
+        return $this->process($run, $batch);
+    }
+
+    /**
+     * Normalize abandoned/exhausted jobs and finalize runs whose children are terminal.
+     *
+     * @return array{exhausted:int,recovered:int,finalized:int}
+     */
+    public function reconcileBacklog(int $maxAttempts = 3): array
+    {
+        $exhausted = FundamentalUpdateJob::query()
+            ->where('status', 'retry')
+            ->where('attempts', '>=', $maxAttempts)
+            ->update([
+                'status' => 'failed',
+                'next_attempt_at' => null,
+                'last_error' => DB::raw("CONCAT(COALESCE(last_error, ''), ' [retry budget exhausted; finalized by backlog reconciliation]')"),
+            ]);
+
+        $recovered = FundamentalUpdateJob::query()
+            ->where('status', 'running')
+            ->whereNotNull('last_attempted_at')
+            ->where('last_attempted_at', '<', now()->subMinutes(30))
+            ->update([
+                'status' => 'retry',
+                'next_attempt_at' => now(),
+                'last_error' => DB::raw("CONCAT(COALESCE(last_error, ''), ' [stale running job recovered]')"),
+            ]);
+
+        $finalized = 0;
+        FundamentalUpdateRun::query()
+            ->whereIn('status', ['queued', 'running'])
+            ->whereDoesntHave('jobs', function ($query): void {
+                $query->whereIn('status', ['queued', 'retry', 'running']);
+            })
+            ->each(function (FundamentalUpdateRun $run) use (&$finalized): void {
+                $this->refreshRunCounters($run);
+                $run->forceFill([
+                    'status' => $run->failed > 0 ? 'completed_with_errors' : 'completed',
+                    'completed_at' => $run->completed_at ?? now(),
+                ])->save();
+                $finalized++;
+            });
+
+        return compact('exhausted', 'recovered', 'finalized');
+    }
+
+    /**
      * @return array<string,mixed>
      */
     public function process(FundamentalUpdateRun $run, int $batch = 25): array
+    {
+        $lock = Cache::lock(self::PROCESS_LOCK_KEY, 900);
+        if (! $lock->get()) {
+            return array_merge($run->fresh()->toArray(), [
+                'skipped_reason' => 'another_fundamentals_slice_is_in_progress',
+            ]);
+        }
+
+        try {
+            return $this->processLocked($run, $batch);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /** @return array<string,mixed> */
+    private function processLocked(FundamentalUpdateRun $run, int $batch = 25): array
     {
         $settings = $this->fundamentals->settings();
         if ($settings->paused) {
@@ -95,6 +216,7 @@ class FundamentalUpdateService
         }
 
         $run->forceFill(['status' => 'running', 'started_at' => $run->started_at ?? now()])->save();
+        $sliceError = null;
         $jobs = FundamentalUpdateJob::query()
             ->where('run_id', $run->id)
             ->whereIn('status', ['queued', 'retry'])
@@ -117,28 +239,21 @@ class FundamentalUpdateService
                 $stock = Stock::query()->findOrFail($job->stock_id);
                 if (! $this->needsFetch($stock, $job->cadence)) {
                     $job->forceFill(['status' => 'skipped'])->save();
-                    $run->increment('skipped');
-                    $run->increment('processed');
                     continue;
                 }
 
                 $rows = $this->provider->fetch($stock, $job->cadence);
                 $stats = $this->fundamentals->storeFacts($stock, $rows);
                 $job->forceFill(['status' => 'completed', 'last_error' => null])->save();
-                $run->increment('succeeded');
-                $run->increment('processed');
                 $run->forceFill(['stats_json' => $this->mergeStats($run->stats_json ?? [], $stats)])->save();
             } catch (Throwable $error) {
+                $sliceError = $error->getMessage();
                 $willRetry = $job->attempts < $settings->max_attempts;
                 $job->forceFill([
                     'status' => $willRetry ? 'retry' : 'failed',
                     'next_attempt_at' => $willRetry ? now()->addMinutes((int) pow(2, max(0, $job->attempts - 1))) : null,
                     'last_error' => $error->getMessage(),
                 ])->save();
-                if (! $willRetry) {
-                    $run->increment('failed');
-                    $run->increment('processed');
-                }
                 $run->forceFill(['last_error' => $error->getMessage()])->save();
             }
 
@@ -147,6 +262,7 @@ class FundamentalUpdateService
             }
         }
 
+        $this->refreshRunCounters($run);
         $remaining = FundamentalUpdateJob::query()
             ->where('run_id', $run->id)
             ->whereIn('status', ['queued', 'retry', 'running'])
@@ -158,7 +274,36 @@ class FundamentalUpdateService
             ])->save();
         }
 
+        if ($sliceError !== null) {
+            $this->opsAlerts->recordUnattendedFailure(
+                AdminOperationalAlertService::KEY_FUNDAMENTALS_UPDATE_FAILED,
+                'Fundamentals update failed',
+                sprintf('V7 fundamentals run #%d encountered a provider/update failure: %s', $run->id, $sliceError),
+                ['run_id' => $run->id, 'status' => $run->status],
+            );
+            $this->opsAlerts->syncAndNotify();
+        } elseif ($run->fresh()->status === 'completed') {
+            if ($this->opsAlerts->clearUnattendedFailure(AdminOperationalAlertService::KEY_FUNDAMENTALS_UPDATE_FAILED)) {
+                $this->opsAlerts->syncAndNotify();
+            }
+        }
+
         return $run->fresh()->toArray();
+    }
+
+    private function refreshRunCounters(FundamentalUpdateRun $run): void
+    {
+        $counts = $run->jobs()
+            ->selectRaw("COUNT(*) as requested, SUM(status IN ('completed', 'failed', 'skipped', 'superseded')) as processed, SUM(status = 'completed') as succeeded, SUM(status = 'failed') as failed, SUM(status IN ('skipped', 'superseded')) as skipped")
+            ->first();
+
+        $run->forceFill([
+            'requested' => (int) ($counts->requested ?? 0),
+            'processed' => (int) ($counts->processed ?? 0),
+            'succeeded' => (int) ($counts->succeeded ?? 0),
+            'failed' => (int) ($counts->failed ?? 0),
+            'skipped' => (int) ($counts->skipped ?? 0),
+        ])->save();
     }
 
     private function needsFetch(Stock $stock, string $cadence): bool
