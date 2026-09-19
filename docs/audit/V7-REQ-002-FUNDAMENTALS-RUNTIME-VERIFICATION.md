@@ -2,7 +2,7 @@
 
 ## 1. Finding Recap
 
-`V7-REQ-002` was `RUNTIME_VERIFICATION_REQUIRED` after local implementation and feature tests established the canonical V7 fundamentals model. Production verification found that the deployed scheduler and schema exist, but the configured provider is not currently producing usable data.
+`V7-REQ-002` was initially `RUNTIME_VERIFICATION_REQUIRED` after local implementation and feature tests established the canonical V7 fundamentals model. The first production verification found a Yahoo PHP/Guzzle transport failure and an empty canonical store. That historical finding is retained below; the managed yfinance remediation has now been deployed and verified successfully.
 
 ## 2. Accepted Contract
 
@@ -23,7 +23,16 @@ The deep historical bootstrap is explicitly outside this V7 requirement. V4-FEAT
 
 ## 3. Deployed Implementation
 
-The deployed release is `671996b3244464c686fc4eab7e283364afd576c5`, and public build identity matches the active release. The fundamentals migration `2026_09_12_100001_v7_stox_fundamentals_and_ml` is applied.
+The verified active release is `3500f4c07aecddba6ee23f9d7f909664e99b4f24`, and runtime health is green. The fundamentals migration `2026_09_12_100001_v7_stox_fundamentals_and_ml` is applied. The deployed provider path is:
+
+```text
+YahooFundamentalDataProvider
+  -> Symfony Process
+  -> scripts/yahoo_fundamentals.py
+  -> managed shared yfinance venv
+```
+
+The managed runtime is Python 3.12.3 with `yfinance==1.7.0`. A same-host TCS quarterly probe succeeded. Canonical PHP normalization, availability, revision, freshness, and persistence remain authoritative.
 
 Authoritative objects and paths are:
 
@@ -39,28 +48,38 @@ Authoritative objects and paths are:
 
 ## 4. Production Inventory
 
-Read-only production queries returned:
+The initial pre-remediation production inventory returned zero facts and is retained as historical evidence: provider `yahoo`, no source rows, and no current-data coverage. After deployment and normal processing, the current inventory is:
 
 | Measure | Result |
 | --- | --- |
-| Fundamental fact rows | 0 |
-| Stocks with fundamental records | 0 |
-| Provider/source distribution | No rows |
-| Period/as-of date range | None |
-| Ingestion timestamp range | None |
-| Revision counts | None |
-| `is_current` distribution | None |
+| Fundamental fact rows | 2,530 |
+| Stocks with fundamental records | Populated; exact stock count is operational inventory data |
+| Provider/source distribution | `yahoo`; transport evidence `yfinance` |
+| Period/as-of date range | Quarterly and annual income, balance-sheet, and cash-flow facts present |
+| Ingestion timestamp range | Populated by successful post-deployment runs |
+| Revision counts | Representative facts at revision 1 and current |
+| `is_current` distribution | Representative stored facts are current |
 | Configured provider | `yahoo` |
 | Quarterly freshness | 5 months |
 | Annual freshness | 15 months |
 | Paused | false |
 | Request delay / attempts | 750 ms / 3 |
 
-With no canonical facts, the production state is missing coverage rather than fresh or stale coverage. No current-data consumer can obtain a usable fundamental value from the deployed store.
+The final production state has usable current canonical data. The provider's coverage is not universal: ordinary issuer cases such as AARNAV can remain explicit provider no-data failures, rather than being silently converted to zero or treated as successful facts.
 
 ## 5. Provider Runtime
 
-The production provider is `YahooFundamentalDataProvider`, using Yahoo quote-summary statement endpoints. Recent hourly runs demonstrate repeated provider operation attempts but no successful acquisition:
+The original production provider was `YahooFundamentalDataProvider` using the PHP/Guzzle Yahoo cookie/crumb transport. Production returned `fc.yahoo.com` 404, no cookie, and `getcrumb` 429/401 Invalid Cookie. That transport was retired. The same production VPS successfully returned TCS quarterly financials through the managed yfinance runtime, and the replacement is now active.
+
+Normal production ingestion subsequently succeeded:
+
+- one run processed 18 and succeeded 18, with 0 failed and 0 skipped;
+- a later run processed 34 and succeeded 34, with 0 failed and 0 skipped;
+- canonical facts reached 2,530;
+- representative rows contain `provider=yahoo`, `source_meta.transport=yfinance`, `source_meta.availability_source=first_fetch_fallback`, `revision_number=1`, and `is_current=true`;
+- quarterly and annual income, balance-sheet, and cash-flow facts were persisted.
+
+The original failed runs remain historical evidence:
 
 - runs `147` through `156` were left `running` with `Yahoo fundamentals request failed with HTTP 401`;
 - the latest observed run was `156`, started `2026-09-19 09:30:04` server time;
@@ -68,17 +87,17 @@ The production provider is `YahooFundamentalDataProvider`, using Yahoo quote-sum
 - the job table contained 3,120 `queued` and 3,120 `retry` jobs;
 - no successful source/as-of timestamp exists in the canonical facts table.
 
-This is a concrete provider/runtime failure, not an evidence-only limitation. No manual production sync was triggered; the existing scheduled attempts were sufficient to establish the failure without changing financial data.
+This was a concrete provider/runtime failure, not an evidence-only limitation. It is resolved in the deployed transport; no claim is made that every listed NSE/BSE issuer has Yahoo fundamental coverage.
 
 ## 6. Freshness and Missing-Data Semantics
 
-The repository implementation distinguishes `missing`, `stale`, `sanity_rejected`, and `fresh` states, applies the configured quarterly/annual thresholds, and returns null/ineligible metrics when required facts are absent. Local tests cover missing required flow facts and freshness behavior. Production currently exercises the `missing` boundary because there are no facts; there is no populated production record from which to verify fresh/stale display behavior.
+The repository implementation distinguishes `missing`, `stale`, `sanity_rejected`, and `fresh` states, applies the configured quarterly/annual thresholds, and returns null/ineligible metrics when required facts are absent. The populated production store now demonstrates current-data usability and operational freshness processing. AARNAV quarterly/annual no-data responses remained explicit eligible-issuer provider failures with the normal retry budget; they did not become zero-valued success.
 
-The API is deployed, but an unauthenticated probe to a stock fundamentals endpoint returned the application's generic HTTP 500 because the request passed through an auth redirect to an undefined `login` route. This did not expose data, but it is not usable current-data evidence and is outside the V7 provider closure.
+The API is deployed and canonical facts are available through the existing PHP service/API path. Historical unauthenticated-probe behavior remains an authorization/runtime concern outside this fundamentals closure; it is not used as evidence of provider success.
 
 ## 7. Revision and Point-in-Time Behavior
 
-Repository behavior and tests establish the intended semantics:
+Repository behavior, tests, and the production remediation establish the intended semantics:
 
 - identical payloads are deduplicated;
 - changed values create a new revision and mark the prior revision non-current;
@@ -87,11 +106,11 @@ Repository behavior and tests establish the intended semantics:
 - current metrics resolve the latest applicable period/revision;
 - metric freshness is returned separately from metric value eligibility.
 
-Production cannot independently demonstrate revision behavior because the canonical fact table is empty. No revision data was fabricated for this audit.
+Before deployment, the invalid share mappings were removed: `Repurchase Of Capital Stock` and legacy `commonStock` no longer map to `shares_outstanding`; `Ordinary Shares Number` remains the valid yfinance share-count source. Revision deduplication now compares the incoming canonical six-decimal value to the current revision before creating a revision. Verified behavior is `A -> A` dedupe with the original availability date preserved, `A -> B` revision 2, and `A -> B -> A` revision 3. When yfinance provides no availability date, the conservative first-observed date remains the availability date for that revision.
 
 ## 8. Historical Bootstrap Boundary
 
-Deep historical fundamental population is explicitly V4-FEAT-054, moved to V8. That boundary is accepted by the V7 specification. The current V7 blocker is narrower and more immediate: the ongoing provider-driven acquisition has not produced even current canonical facts, so current usability and operational freshness cannot be claimed.
+Deep historical fundamental population is explicitly V4-FEAT-054, moved to V8. That boundary is accepted by the V7 specification and remains an `ACCEPTABLE_VARIATION`, not a V7 blocker.
 
 ## 9. Scheduler and Failure Evidence
 
@@ -101,25 +120,41 @@ Production `schedule:list` shows:
 30 * * * * php artisan stox:fundamentals-update --batch=20
 ```
 
-The command is bounded and uses the update service’s retry, rate-delay, per-job status, and run evidence. However, the repeated 401 failures leave work in queued/retry states and no successful run has completed. The failure is persisted in `last_error`; it is not silently converted to zero facts. Operational visibility exists, but successful provider operation and current-data coverage do not.
+The command is bounded and uses the update service’s retry, rate-delay, per-job status, and run evidence. Benchmark eligibility is enforced: new runs exclude `is_benchmark=true`, and existing benchmark jobs are skipped before provider invocation without provider-failure alerting. Fresh run 160 had 40 non-benchmark jobs: 2 succeeded, 36 freshness-skipped, and 2 AARNAV provider no-data failures after the normal three-attempt budget, finishing `completed_with_errors`.
+
+The final production lifecycle state is:
+
+```text
+jobs_queued=0
+jobs_retry=0
+jobs_running=0
+jobs_failed=86
+jobs_superseded=6240
+jobs_completed=38
+jobs_skipped=36
+active_runs=0
+facts=2530
+```
+
+The failed and superseded rows are retained historical evidence from the broken-provider/backlog period. There is no unfinished fundamentals work, and terminal historical failures are not treated as a V7 blocker.
 
 ## 10. Local Verification
 
-`FundamentalDataIntegrationTest` and `MlScoringLifecycleTest` passed: **6 tests, 33 assertions**. These tests cover immutable revisions, point-in-time resolution, missing-input behavior, Admin defaults/authorization, and ML integration boundaries. They do not replace the failed production provider evidence.
+The focused adapter/provider and update-lifecycle suite passed **18 tests and 78 assertions**, plus **3 Python adapter tests**. The broader V7 fundamentals, ML, schedule, and unattended-operation suite passed **47 tests and 265 assertions** in the current repository state. These tests cover immutable revisions, point-in-time resolution, missing-input behavior, provider/runtime errors, benchmark eligibility, retry/compaction/locking, Admin defaults/authorization, and ML integration boundaries.
 
 ## 11. Gap Register
 
 | ID | Finding | Classification | Severity |
 | --- | --- | --- | --- |
-| FND-001 | Configured Yahoo provider repeatedly returns HTTP 401 in production; no canonical facts have been ingested | `PARTIALLY_IMPLEMENTED` | High |
-| FND-002 | Production freshness, current-data usability, and revision behavior cannot be demonstrated with an empty canonical store | `PARTIALLY_IMPLEMENTED` | Medium |
+| FND-001 | PHP/Guzzle Yahoo transport returned HTTP 401 and prevented acquisition | `IMPLEMENTED` | High (historical) |
+| FND-002 | Production freshness, current-data usability, provenance, and revision behavior were unproven while the store was empty | `IMPLEMENTED` for accepted V7 scope | Medium (historical) |
 | FND-003 | Deep historical bootstrap is not populated | `ACCEPTABLE_VARIATION` | Low |
 
-FND-003 is explicitly outside V7 under V4-FEAT-054/V8. FND-001 is the closure blocker; FND-002 follows from the absence of data and should be reassessed after provider recovery.
+FND-001 is resolved by the managed yfinance transport and successful production ingestion. FND-002 is resolved for the accepted V7 current-data/provenance/freshness scope. FND-003 remains explicitly outside V7 under V4-FEAT-054/V8.
 
 ## 12. Remediation Status
 
-The repository remediation is complete and production-pending:
+The repository remediation and production verification are complete for the accepted V7 scope:
 
 - The PHP/Guzzle Yahoo cookie/crumb transport was retired after production returned `fc.yahoo.com` 404, no cookies, and `getcrumb` 429/401 Invalid Cookie. The same VPS successfully fetched `TCS.NS` quarterly data through `yfinance` 1.7.0, so `YahooFundamentalDataProvider` now invokes the managed Python adapter and keeps normalization, availability, revisions, and persistence in PHP.
 - Scheduled incremental slices reconcile stale/exhausted jobs, resume the oldest unfinished work, respect `next_attempt_at` and `max_attempts`, finalize terminal parent runs, and use durable cache locks in addition to scheduler overlap protection.
@@ -129,10 +164,10 @@ The repository remediation is complete and production-pending:
 
 The focused adapter/provider and update-lifecycle suite passes **18 tests and 78 assertions**, plus **3 Python adapter tests**. The broader V7 fundamentals, ML, schedule, and unattended-operation suite passes **47 tests and 265 assertions** in the current repository state.
 
-Production still requires deployment of this remediation, local runtime health verification, a successful normal yfinance-backed update, representative canonical facts with provenance, and confirmation that the existing queued/retry backlog compacts to unique outstanding stock/cadence work and then drains or reaches explicit terminal states.
+Production verification recorded active release `3500f4c07aecddba6ee23f9d7f909664e99b4f24`, green runtime health, Python 3.12.3, yfinance 1.7.0, successful same-host TCS probing, successful normal ingestion, populated canonical facts, benchmark exclusion, and an empty unfinished-work set. The historical failed/superseded backlog remains auditable and terminal.
 
 ## 13. Final Assessment
 
-`V7-REQ-002 = PARTIALLY_IMPLEMENTED`.
+`V7-REQ-002 = IMPLEMENTED`.
 
-The canonical implementation, point-in-time/revision logic, freshness policy, scheduled updater, and failure persistence are present and locally verified. Production schema and scheduling are deployed, but the configured provider is failing with HTTP 401, leaving zero fundamental records and no usable current-data coverage. The requirement cannot move to `IMPLEMENTED` until a normal provider run succeeds and produces representative canonical data with provenance.
+The canonical implementation, managed provider runtime, point-in-time/revision logic, freshness policy, scheduled updater, benchmark eligibility, retry/backlog lifecycle, failure persistence, and production current-data ingestion are verified. The accepted V7 contract is satisfied with canonical provenance-bearing facts and no unfinished fundamentals work. Deep historical bootstrap remains the explicit V8 limitation, and ordinary issuer no-data cases remain visible operational failures rather than silent substitutions.
