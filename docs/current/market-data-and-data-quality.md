@@ -189,6 +189,8 @@ Scheduled/manual work includes daily market sync, universe price batches, index/
 
 Cadence, market windows, and provider quotas are runtime configuration. Do not revive obsolete provider/job timing from historical plans.
 
+Fundamentals are issuer-only: benchmark instruments are excluded when runs are created, and existing benchmark jobs are terminalized as ineligible before provider invocation without raising provider-failure alerts. Ordinary issuer no-data responses retain the normal retry/failure lifecycle.
+
 ## 25. Runtime Configuration
 
 Stable configuration categories include provider selection and credential references, market/sync timezone, scheduler/maintenance windows, trade-holiday/exchange inputs, universe enablement/scope, OHLCV history/lookback, internal-gap tolerance, gap-fill batching/retry progress, and data-source fallback where supported.

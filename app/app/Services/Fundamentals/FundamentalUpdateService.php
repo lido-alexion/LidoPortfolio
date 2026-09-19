@@ -54,7 +54,12 @@ class FundamentalUpdateService
 
     public function createRun(string $trigger = 'manual', string $scope = 'incremental', ?int $stockId = null, int $limit = 25): FundamentalUpdateRun
     {
-        $query = Stock::query()->effectivelyActive()->orderBy('id');
+        $query = Stock::query()
+            ->effectivelyActive()
+            ->where(function ($stockQuery): void {
+                $stockQuery->where('is_benchmark', false)->orWhereNull('is_benchmark');
+            })
+            ->orderBy('id');
         if ($stockId !== null) {
             $query->whereKey($stockId);
         } else {
@@ -335,6 +340,14 @@ class FundamentalUpdateService
 
             try {
                 $stock = Stock::query()->findOrFail($job->stock_id);
+                if ($stock->is_benchmark) {
+                    $job->forceFill([
+                        'status' => 'skipped',
+                        'next_attempt_at' => null,
+                        'last_error' => 'benchmark instruments are not eligible for issuer fundamentals',
+                    ])->save();
+                    continue;
+                }
                 if (! $this->needsFetch($stock, $job->cadence)) {
                     $job->forceFill(['status' => 'skipped'])->save();
                     continue;

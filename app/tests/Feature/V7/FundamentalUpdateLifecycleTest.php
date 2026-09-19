@@ -138,6 +138,75 @@ class FundamentalUpdateLifecycleTest extends TestCase
         $this->assertSame('retry', FundamentalUpdateJob::query()->first()->status);
     }
 
+    public function test_new_fundamentals_runs_exclude_benchmark_stocks(): void
+    {
+        $benchmark = Stock::query()->create([
+            'symbol' => 'NIFTY50', 'exchange' => 'NSE', 'name' => 'Nifty 50', 'is_benchmark' => true,
+        ]);
+        $issuer = Stock::query()->create([
+            'symbol' => 'AARNAV', 'exchange' => 'NSE', 'name' => 'Aarnav', 'is_benchmark' => false,
+        ]);
+
+        $run = app(FundamentalUpdateService::class)->createRun('scheduled', 'incremental', null, 10);
+
+        $this->assertSame([$issuer->id], FundamentalUpdateJob::query()->where('run_id', $run->id)->pluck('stock_id')->unique()->all());
+        $this->assertSame(2, FundamentalUpdateJob::query()->where('run_id', $run->id)->count());
+        $this->assertFalse(FundamentalUpdateJob::query()->where('run_id', $run->id)->where('stock_id', $benchmark->id)->exists());
+    }
+
+    public function test_existing_benchmark_job_is_skipped_without_provider_or_failure_alert(): void
+    {
+        $benchmark = Stock::query()->create([
+            'symbol' => 'NIFTY50', 'exchange' => 'NSE', 'name' => 'Nifty 50', 'is_benchmark' => true,
+        ]);
+        $run = FundamentalUpdateRun::query()->create(['trigger' => 'scheduled', 'scope' => 'incremental', 'status' => 'running']);
+        $job = FundamentalUpdateJob::query()->create([
+            'run_id' => $run->id,
+            'stock_id' => $benchmark->id,
+            'cadence' => 'quarterly',
+            'status' => 'retry',
+            'attempts' => 2,
+            'next_attempt_at' => now()->subMinute(),
+        ]);
+        $provider = Mockery::mock(FundamentalDataProvider::class);
+        $provider->shouldReceive('fetch')->never();
+        $this->app->instance(FundamentalDataProvider::class, $provider);
+        $alerts = Mockery::mock(AdminOperationalAlertService::class);
+        $alerts->shouldReceive('clearUnattendedFailure')->once()->with(AdminOperationalAlertService::KEY_FUNDAMENTALS_UPDATE_FAILED)->andReturn(false);
+        $this->app->instance(AdminOperationalAlertService::class, $alerts);
+
+        $result = app(FundamentalUpdateService::class)->process($run, 1);
+
+        $this->assertSame('completed', $result['status']);
+        $this->assertSame('skipped', $job->fresh()->status);
+        $this->assertSame('benchmark instruments are not eligible for issuer fundamentals', $job->fresh()->last_error);
+        $this->assertNull($job->fresh()->next_attempt_at);
+    }
+
+    public function test_ordinary_equity_no_data_error_still_retries(): void
+    {
+        $stock = Stock::query()->create(['symbol' => 'AARNAV', 'exchange' => 'NSE', 'name' => 'Aarnav', 'is_benchmark' => false]);
+        $run = FundamentalUpdateRun::query()->create(['trigger' => 'scheduled', 'scope' => 'incremental', 'status' => 'running']);
+        $job = FundamentalUpdateJob::query()->create([
+            'run_id' => $run->id,
+            'stock_id' => $stock->id,
+            'cadence' => 'quarterly',
+            'status' => 'queued',
+        ]);
+        $provider = Mockery::mock(FundamentalDataProvider::class);
+        $provider->shouldReceive('fetch')->once()->andThrow(new \RuntimeException('yfinance returned no fundamental statements'));
+        $this->app->instance(FundamentalDataProvider::class, $provider);
+        $alerts = Mockery::mock(AdminOperationalAlertService::class);
+        $alerts->shouldReceive('recordUnattendedFailure')->once();
+        $alerts->shouldReceive('syncAndNotify')->once();
+        $this->app->instance(AdminOperationalAlertService::class, $alerts);
+
+        app(FundamentalUpdateService::class)->process($run, 1);
+
+        $this->assertSame('retry', $job->fresh()->status);
+        $this->assertSame('yfinance returned no fundamental statements', $job->fresh()->last_error);
+    }
+
     public function test_duplicate_incremental_jobs_retain_newest_viable_job_and_preserve_evidence(): void
     {
         $stock = Stock::query()->create(['symbol' => 'DUP', 'exchange' => 'NSE', 'name' => 'Duplicate']);
