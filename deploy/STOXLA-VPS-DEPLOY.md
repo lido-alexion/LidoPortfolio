@@ -764,9 +764,11 @@ Completed:
 
 ## 12. GitHub Actions CI/CD
 
-Conservative CI/CD scaffolding exists, but production deployment is still
-manual-only. The workflow is intentionally triggered only by
-`workflow_dispatch`; it does not deploy on push.
+The current CI/CD workflow is operationally verified. CI runs on pull requests,
+`master` pushes, and manual dispatch; the production deployment workflow runs on
+`master` pushes and manual dispatch after its verification and packaging gates
+pass. The VPS receives an immutable artifact rather than performing a server
+checkout.
 
 Implemented files:
 
