@@ -7,9 +7,11 @@ use App\Models\User;
 use App\Models\V7\MlModelVersion;
 use App\Models\V7\MlPrediction;
 use App\Models\V7\MlTrainingRun;
+use App\Models\StockPrice;
 use App\Services\ML\MlPythonAdapter;
 use Illuminate\Support\Facades\File;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Carbon\Carbon;
 use Tests\TestCase;
 
 class MlScoringLifecycleTest extends TestCase
@@ -20,7 +22,20 @@ class MlScoringLifecycleTest extends TestCase
     {
         parent::setUp();
 
-        Stock::query()->create(['symbol' => 'NIFTY50', 'exchange' => 'NSE', 'name' => 'NIFTY 50', 'is_benchmark' => true]);
+        $benchmark = Stock::query()->create(['symbol' => 'NIFTY50', 'exchange' => 'NSE', 'name' => 'NIFTY 50', 'is_benchmark' => true]);
+        $training = Stock::query()->create(['symbol' => 'TRAINING', 'exchange' => 'NSE', 'name' => 'Training Issuer']);
+        for ($day = 0; $day < 520; $day++) {
+            $date = Carbon::parse('2025-01-01')->addDays($day)->toDateString();
+            foreach ([$benchmark, $training] as $subject) {
+                StockPrice::query()->create([
+                    'stock_id' => $subject->id,
+                    'price_date' => $date,
+                    'close_price' => 100 + $day + ($subject->id === $training->id ? $day % 7 : 0),
+                    'adjusted_close_price' => 100 + $day,
+                    'data_source' => 'test',
+                ]);
+            }
+        }
         $this->app->bind(MlPythonAdapter::class, fn (): MlPythonAdapter => new class extends MlPythonAdapter
         {
             public function run(string $operation, array $payload): array

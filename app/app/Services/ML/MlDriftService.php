@@ -8,7 +8,10 @@ use Carbon\Carbon;
 
 class MlDriftService
 {
-    public function __construct(private readonly MlPythonAdapter $adapter) {}
+    public function __construct(
+        private readonly MlPythonAdapter $adapter,
+        private readonly MlTrainingDatasetBuilder $datasets,
+    ) {}
 
     public function check(MlModelVersion $model, int $windowMonths): MlDriftCheck
     {
@@ -16,10 +19,26 @@ class MlDriftService
             throw new \InvalidArgumentException('Unsupported ML drift window.');
         }
         $from = now()->subMonths($windowMonths);
-        $predictions = $model->predictions()->where('shadow', false)->where('as_of', '>=', $from)->get(['score', 'confidence', 'as_of']);
+        $now = now();
+        $predictions = $model->predictions()->with('stock')->where('shadow', false)->where('as_of', '>=', $from)->get(['id', 'stock_id', 'horizon', 'score', 'confidence', 'as_of']);
+        $matured = [];
+        foreach ($predictions as $prediction) {
+            $outcome = $this->datasets->realizedOutcome($prediction->stock, $prediction->as_of, $prediction->horizon, $now);
+            if ($outcome !== null) {
+                $matured[] = [
+                    'score' => (float) $prediction->score,
+                    'confidence' => (float) $prediction->confidence,
+                    ...$outcome,
+                ];
+            }
+        }
+        $ageDays = $model->promoted_at?->diffInDays($now) ?? $model->training_cutoff_date?->diffInDays($now);
         $result = $this->adapter->run('drift', [
-            'predictions' => $predictions->map(fn ($prediction): array => ['score' => (float) $prediction->score, 'confidence' => (float) $prediction->confidence])->all(),
-            'minimum_predictions' => (int) config('ml.drift.minimum_predictions', 30),
+            'predictions' => $matured,
+            'minimum_predictions' => (int) config('ml.drift.minimum_matured_predictions', 30),
+            'model_age_days' => $ageDays,
+            'age_warning_days' => (int) config('ml.drift.model_age_warning_days', 365),
+            'baseline_metrics' => $model->evaluation_metrics['test'] ?? $model->evaluation_metrics ?? [],
         ]);
 
         return MlDriftCheck::query()->create([

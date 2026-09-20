@@ -2,7 +2,7 @@
 
 ## 1. Finding Recap
 
-`V7-REQ-001` is `PARTIALLY_IMPLEMENTED`. The repository now contains the missing training, artifact, scoring and drift implementation, but production deployment/runtime verification remains outstanding. The earlier audit found a lifecycle scaffold with hard-coded metrics and no model artifact; that historical finding is retained below as the reason for this implementation pass.
+`V7-REQ-001` is `PARTIALLY_IMPLEMENTED`. The repository now contains the training, artifact, scoring and drift implementation, with this correction pass addressing deterministic baseline fidelity, live-health semantics, historical-universe survivorship, corporate-action price safety and artifact concurrency. Production deployment/runtime verification remains outstanding. The earlier audit found a lifecycle scaffold with hard-coded metrics and no model artifact; that historical finding is retained below.
 
 The audit is therefore not closed. No production behavior was changed.
 
@@ -44,14 +44,16 @@ Migration `2026_09_20_100001_v7_ml_artifacts.php` adds immutable artifact path, 
 
 `app/app/Services/ML/MlScoringService.php` provides dashboard, retrain, promote, rollback, prediction and latest-prediction methods. The implementation now:
 
-- builds a reusable historical dataset through `MlTrainingDatasetBuilder`, using prices and benchmark observations bounded by the cutoff and fundamentals queried with `availability_date <= as_of`;
+- builds a reusable historical dataset through `MlTrainingDatasetBuilder`, using historical eligible NSE issuers rather than today's active flag, unadjusted close prices for PIT features, adjusted prices only for realised label outcomes, and fundamentals queried with `availability_date <= as_of`;
 - constructs benchmark-relative, drawdown-guarded labels only when the full future horizon is observable by the training cutoff;
 - records chronological train/validation/test boundaries and row counts, and calls the managed Python adapter for real logistic fitting/evaluation;
 - persists candidate/rejected model metadata and an immutable joblib artifact with SHA-256 integrity metadata; training failures finalize the run as `failed` without creating a usable candidate;
 - promotion and rollback use transactions and retain prior versions as `retained`;
 - `predict()` verifies the selected artifact hash, rebuilds the versioned feature schema at the requested as-of date, delegates inference to the artifact-backed Python adapter, and persists score, probability-derived confidence, feature snapshot and coefficient contributions;
 - the adapter fits median-plus-missingness preprocessing and categorical mappings on the training partition only, and stores that state inside the artifact;
-- `MlDriftService` persists rolling score-distribution checks with explicit `ok`, `warning` or `insufficient_data` results. Drift review is Admin-triggered; it does not auto-promote, retrain or deactivate models.
+- `MlDeterministicBaselineAdapter` reuses the existing `AsOfFactorScorer` backtest abstraction over the same chronological test rows; the Python adapter compares candidate metrics with those measured baseline outcomes rather than a momentum/trend heuristic.
+- `MlDriftService` persists rolling health checks with explicit `ok`, `warning` or `insufficient_data` results, including model age and matured non-shadow outcomes for hit rate, benchmark-relative return and drawdown. Drift review is Admin-triggered; it does not auto-promote, retrain or deactivate models.
+- Model retraining is serialized per horizon, writes to a run-specific temporary artifact, then atomically moves to a versioned immutable path only after integrity verification. Failed lifecycle writes clean up unowned artifacts.
 
 ### Routes and UI
 
@@ -88,7 +90,8 @@ The production inventory in the prior audit remains valid for the pre-implementa
 ### Verified or structurally bounded
 
 - Fundamentals used by the current prediction feature snapshot call `FundamentalDataService::metric(..., $asOf)`, whose fact queries filter `availability_date <= as_of`.
-- Historical price and benchmark rows are selected at or before each reference date and future label observations are bounded by the training cutoff.
+- Historical feature prices use unadjusted close observations at or before each reference date. Labels use the adjusted series only over the observed future outcome window; this distinction is documented because corporate-action repair can retroactively change stored adjusted values.
+- The training universe is based on non-benchmark NSE issuers with historical price observations, so an inactive-now issuer can contribute historical rows without admitting index instruments.
 - Fundamentals are read through the canonical service with `availability_date <= as_of`; revisions therefore resolve according to the existing V7 availability/revision contract.
 - Chronological partition boundaries are persisted in the training run and model audit metadata.
 - Preprocessing state is fitted from training rows and retained in the artifact; prediction checks the artifact schema and integrity before inference.
@@ -98,7 +101,7 @@ The production inventory in the prior audit remains valid for the pre-implementa
 ### Remaining verification boundary
 
 - No production training run, promoted artifact, prediction or drift check exists yet for this implementation release.
-- The deterministic StoX baseline adapter currently evaluates the configured comparable test rows; live production comparison and promotion review remain Admin/runtime activities.
+- Revenue growth is computed from comparable available fundamental periods rather than a revenue level. The configured benchmark mapping is versioned and supports explicit sector overrides with a deterministic NIFTY50 fallback; no unapproved sector mappings are invented.
 - The feature set is intentionally the V7 configured baseline set; deep historical fundamental bootstrap remains outside this work and follows the accepted V8 boundary.
 
 ## 7. Lifecycle Verification
@@ -120,6 +123,7 @@ The production inventory in the prior audit remains valid for the pre-implementa
 | MLR-001 | Historical dataset construction, real logistic fitting, evaluation and immutable artifact persistence were absent in the audited scaffold | `IMPLEMENTED` | High | No; repository remediation complete |
 | MLR-002 | Point-in-time feature/label construction, chronological partitions and training-only preprocessing were absent in the audited scaffold | `IMPLEMENTED` | High | No; repository remediation complete |
 | MLR-003 | Drift checking and Admin drift-health lifecycle were absent in the audited scaffold | `IMPLEMENTED` | Medium | No; repository remediation complete |
+| MLR-006 | Deterministic baseline, live-health, historical-universe, feature-price and artifact-concurrency corrections were required after review of the first implementation | `IMPLEMENTED` | High | No; repository correction complete |
 | MLR-004 | Production contains no training runs, model versions, predictions, or drift checks, so deployed lifecycle behavior remains unverified | `RUNTIME_VERIFICATION_REQUIRED` | High | Yes |
 | MLR-005 | Promotion/rollback/prediction route behavior is covered by tests, but no real production artifact/version exists to verify it operationally | `RUNTIME_VERIFICATION_REQUIRED` | Medium | No additional static defect beyond MLR-001 |
 

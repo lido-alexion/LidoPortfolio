@@ -10,6 +10,7 @@ use App\Models\V7\MlTrainingRun;
 use App\Services\Fundamentals\FundamentalDataService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\ValidationException;
 
 class MlScoringService
@@ -20,6 +21,7 @@ class MlScoringService
         protected FundamentalDataService $fundamentals,
         protected MlTrainingDatasetBuilder $datasets,
         protected MlPythonAdapter $adapter,
+        protected MlDeterministicBaselineAdapter $deterministicBaseline,
     ) {}
 
     /**
@@ -45,6 +47,16 @@ class MlScoringService
         $this->assertHorizon($horizon);
         $cutoff ??= now();
 
+        return Cache::lock('stox-ml-retrain-'.$horizon, 900)->block(15, function () use ($horizon, $cutoff, $user, $overrides): MlModelVersion {
+            return $this->retrainLocked($horizon, $cutoff, $user, $overrides);
+        });
+    }
+
+    private function retrainLocked(string $horizon, Carbon $cutoff, ?User $user, array $overrides): MlModelVersion
+    {
+        $tempArtifactPath = null;
+        $finalArtifactPath = null;
+
         $config = array_replace_recursive($this->trainingConfig($horizon), $overrides);
         $run = MlTrainingRun::query()->create([
                 'horizon' => $horizon,
@@ -57,8 +69,8 @@ class MlScoringService
 
         try {
             $dataset = $this->datasets->build($horizon, $cutoff);
-            $version = ((int) MlModelVersion::query()->where('horizon', $horizon)->max('version')) + 1;
-            $artifactPath = $this->artifactPath($horizon, $version);
+            $baseline = $this->deterministicBaseline->evaluate($dataset['rows']);
+            $tempArtifactPath = $this->artifactPath($horizon, 0, 'run-'.$run->id.'.tmp');
             $result = $this->adapter->run('train', [
                 'horizon' => $horizon,
                 'cutoff_date' => $cutoff->toDateString(),
@@ -68,11 +80,12 @@ class MlScoringService
                 'numeric_features' => MlTrainingDatasetBuilder::NUMERIC_FEATURES,
                 'categorical_features' => MlTrainingDatasetBuilder::CATEGORICAL_FEATURES,
                 'seed' => $config['hyperparameters']['seed'] ?? 7047,
-                'artifact_path' => $artifactPath,
+                'artifact_path' => $tempArtifactPath,
+                'deterministic_baseline' => $baseline,
             ]);
             $metrics = $result['metrics'] ?? [];
             $baselines = $result['baselines'] ?? [];
-            $artifactDigest = is_file($artifactPath) ? (string) hash_file('sha256', $artifactPath) : null;
+            $artifactDigest = is_file($tempArtifactPath) ? (string) hash_file('sha256', $tempArtifactPath) : null;
             if (! isset($result['artifact_sha256']) || $artifactDigest === null || ! hash_equals((string) $result['artifact_sha256'], $artifactDigest)) {
                 throw new \RuntimeException('ML adapter artifact integrity verification failed.');
             }
@@ -87,7 +100,14 @@ class MlScoringService
                 'completed_at' => now(),
             ])->save();
 
-            return DB::transaction(function () use ($horizon, $cutoff, $config, $run, $version, $artifactPath, $result, $metrics, $baselines, $eligible): MlModelVersion {
+            $model = DB::transaction(function () use ($horizon, $cutoff, $config, $run, $tempArtifactPath, &$finalArtifactPath, $result, $metrics, $baselines, $eligible): MlModelVersion {
+                $version = ((int) MlModelVersion::query()->where('horizon', $horizon)->lockForUpdate()->max('version')) + 1;
+                $artifactPath = $this->artifactPath($horizon, $version);
+                $finalArtifactPath = $artifactPath;
+                if (! rename($tempArtifactPath, $artifactPath)) {
+                    throw new \RuntimeException('Unable to atomically activate ML model artifact.');
+                }
+
                 return MlModelVersion::query()->create([
                 'training_run_id' => $run->id,
                 'horizon' => $horizon,
@@ -115,7 +135,14 @@ class MlScoringService
                 ],
                 ]);
             });
+            return $model;
         } catch (\Throwable $exception) {
+            if (isset($tempArtifactPath) && is_file($tempArtifactPath)) {
+                @unlink($tempArtifactPath);
+            }
+            if ($finalArtifactPath !== null && is_file($finalArtifactPath) && ! MlModelVersion::query()->where('artifact_path', $finalArtifactPath)->exists()) {
+                @unlink($finalArtifactPath);
+            }
             $run->forceFill([
                 'status' => 'failed',
                 'failure' => ['message' => substr($exception->getMessage(), 0, 1000), 'type' => get_class($exception)],
@@ -244,7 +271,7 @@ class MlScoringService
                 'horizon' => $horizon,
                 'target' => 'benchmark_relative_success_with_drawdown_guard',
             ],
-            'benchmark_mapping' => ['version' => 'v7-default-sector-aware-1', 'default' => 'NIFTY50'],
+            'benchmark_mapping' => $this->datasets->benchmarkMappingDefinition(),
             'hyperparameters' => ['class_weight' => 'balanced', 'seed' => 7047],
             'chronological_split' => ['train' => 0.7, 'validation' => 0.15, 'test' => 0.15],
             'promotion_thresholds' => $this->promotionThresholds(),
@@ -290,13 +317,15 @@ class MlScoringService
             && (float) $metrics['deterministic_baseline_delta'] >= (float) $thresholds['min_deterministic_baseline_delta'];
     }
 
-    private function artifactPath(string $horizon, int $version): string
+    private function artifactPath(string $horizon, int $version, ?string $suffix = null): string
     {
         $directory = (string) config('ml.model_directory', storage_path('app/ml-models'));
         if (! is_dir($directory) && ! mkdir($directory, 0775, true) && ! is_dir($directory)) {
             throw new \RuntimeException('ML model artifact directory is unavailable.');
         }
-        return $directory.'/model-'.$horizon.'-v'.$version.'.joblib';
+        return $suffix !== null
+            ? $directory.'/model-'.$horizon.'-'.$suffix.'.joblib'
+            : $directory.'/model-'.$horizon.'-v'.$version.'.joblib';
     }
 
     private function assertArtifact(MlModelVersion $model): void

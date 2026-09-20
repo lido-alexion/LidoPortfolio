@@ -18,6 +18,7 @@ class MlTrainingDatasetBuilderTest extends TestCase
     {
         $benchmark = Stock::query()->create(['symbol' => 'NIFTY50', 'exchange' => 'NSE', 'name' => 'NIFTY 50', 'is_benchmark' => true]);
         $stock = Stock::query()->create(['symbol' => 'TCS', 'exchange' => 'NSE', 'name' => 'TCS']);
+        $inactive = Stock::query()->create(['symbol' => 'OLDCO', 'exchange' => 'NSE', 'name' => 'Old Co', 'is_active' => false]);
 
         app(FundamentalDataService::class)->storeFacts($stock, [
             [
@@ -30,7 +31,7 @@ class MlTrainingDatasetBuilderTest extends TestCase
             ],
         ], Carbon::parse('2025-06-01'));
 
-        foreach ([$benchmark, $stock] as $subject) {
+        foreach ([$benchmark, $stock, $inactive] as $subject) {
             for ($day = 0; $day < 220; $day++) {
                 StockPrice::query()->create([
                     'stock_id' => $subject->id,
@@ -54,5 +55,6 @@ class MlTrainingDatasetBuilderTest extends TestCase
         $this->assertSame('2025-08-01', $dataset['partitions']['cutoff_date']);
         $this->assertSame('train', $rows->first()['partition']);
         $this->assertContains('test', $rows->pluck('partition')->unique()->all());
+        $this->assertTrue($rows->contains(fn (array $row): bool => $row['stock_id'] === $inactive->id));
     }
 }

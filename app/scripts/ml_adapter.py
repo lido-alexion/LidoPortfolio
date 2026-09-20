@@ -128,7 +128,10 @@ def train(request: dict[str, Any]) -> dict[str, Any]:
 
     naive_probabilities = [sum(y_train) / len(y_train)] * len(test_rows)
     naive_metrics = classification_metrics([int(row["label"]) for row in test_rows], naive_probabilities, test_rows)
-    deterministic_probabilities = [1.0 if float(row.get("deterministic_score", 0)) >= 50 else 0.0 for row in test_rows]
+    deterministic_rows = request.get("deterministic_baseline")
+    if not isinstance(deterministic_rows, list) or len(deterministic_rows) != len(test_rows):
+        raise ValueError("deterministic StoX baseline is missing or not aligned to the test partition")
+    deterministic_probabilities = [float(item["probability"]) for item in deterministic_rows]
     deterministic_metrics = classification_metrics([int(row["label"]) for row in test_rows], deterministic_probabilities, test_rows)
     test_metrics["deterministic_baseline_delta"] = test_metrics["benchmark_relative_return"] - deterministic_metrics["benchmark_relative_return"]
     metadata = {
@@ -188,10 +191,32 @@ def drift(request: dict[str, Any]) -> dict[str, Any]:
     minimum = int(request.get("minimum_predictions", 30))
     scores = [finite(row.get("score")) for row in rows]
     scores = [value for value in scores if value is not None]
+    age_days = request.get("model_age_days")
+    age_warning_days = int(request.get("age_warning_days", 365))
+    warnings: list[str] = []
+    if isinstance(age_days, (int, float)) and age_days >= age_warning_days:
+        warnings.append("model_age_exceeds_warning_threshold")
     if len(scores) < minimum:
-        return {"schema_version": 1, "status": "insufficient_data", "metrics": {"prediction_count": len(scores), "minimum_predictions": minimum}, "warnings": ["insufficient_predictions"]}
+        return {"schema_version": 1, "status": "warning" if warnings else "insufficient_data", "metrics": {"prediction_count": len(scores), "minimum_predictions": minimum, "model_age_days": age_days}, "warnings": warnings + ["insufficient_matured_predictions"]}
     mean = sum(scores) / len(scores)
-    return {"schema_version": 1, "status": "warning" if mean < 40 or mean > 60 else "ok", "metrics": {"prediction_count": len(scores), "score_mean": mean, "score_min": min(scores), "score_max": max(scores)}, "warnings": [] if 40 <= mean <= 60 else ["score_distribution_outside_expected_band"]}
+    successes = [bool(row.get("success")) for row in rows]
+    relative_returns = [finite(row.get("relative_return")) for row in rows]
+    relative_returns = [value for value in relative_returns if value is not None]
+    drawdowns = [finite(row.get("max_drawdown")) for row in rows]
+    drawdowns = [value for value in drawdowns if value is not None]
+    hit_rate = sum(successes) / len(successes) if successes else 0.0
+    baseline = request.get("baseline_metrics", {})
+    baseline_hit = finite(baseline.get("hit_rate"))
+    baseline_return = finite(baseline.get("benchmark_relative_return"))
+    metrics = {"prediction_count": len(scores), "score_mean": mean, "score_min": min(scores), "score_max": max(scores), "hit_rate": hit_rate, "benchmark_relative_return": sum(relative_returns) / len(relative_returns) if relative_returns else 0.0, "max_drawdown": min(drawdowns) if drawdowns else 0.0, "model_age_days": age_days}
+    if baseline_hit is not None and hit_rate < baseline_hit - 0.10:
+        warnings.append("live_hit_rate_deterioration")
+    if baseline_return is not None and metrics["benchmark_relative_return"] < baseline_return - 0.05:
+        warnings.append("live_benchmark_return_deterioration")
+    if mean < 40 or mean > 60:
+        warnings.append("score_distribution_outside_expected_band")
+    status = "warning" if warnings else "ok"
+    return {"schema_version": 1, "status": status, "metrics": metrics, "warnings": warnings}
 
 
 def main() -> int:

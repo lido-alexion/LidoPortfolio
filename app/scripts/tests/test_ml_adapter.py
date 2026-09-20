@@ -33,6 +33,24 @@ class MlAdapterContractTest(unittest.TestCase):
         self.assertEqual(result.stdout, "")
         self.assertIn("operation must be train, predict, or drift", result.stderr)
 
+    def test_drift_reports_warning_for_matured_degradation_and_old_model(self):
+        rows = [
+            {"score": 80, "confidence": 0.8, "success": False, "relative_return": -0.10, "max_drawdown": -0.25}
+            for _ in range(2)
+        ]
+        result = self.run_adapter("drift", {
+            "predictions": rows,
+            "minimum_predictions": 2,
+            "model_age_days": 400,
+            "age_warning_days": 365,
+            "baseline_metrics": {"hit_rate": 0.8, "benchmark_relative_return": 0.02},
+        })
+        body = json.loads(result.stdout)
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(body["status"], "warning")
+        self.assertIn("model_age_exceeds_warning_threshold", body["warnings"])
+        self.assertIn("live_hit_rate_deterioration", body["warnings"])
+
 
 if __name__ == "__main__":
     unittest.main()

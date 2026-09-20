@@ -156,6 +156,46 @@ class FundamentalDataService
     }
 
     /**
+     * Return comparable-period growth using only revisions available at $asOf.
+     * This deliberately does not reuse the current/TTM metric because a level
+     * is not a growth feature and TTM aggregation can hide the comparison.
+     *
+     * @return array{metric:string,value:?float,availability_date:?string}
+     */
+    public function growthMetric(Stock $stock, string $factKey, string $cadence, Carbon $asOf): array
+    {
+        $facts = FundamentalFact::query()
+            ->where('stock_id', $stock->id)
+            ->where('fact_key', $factKey)
+            ->where('cadence', $cadence)
+            ->whereDate('availability_date', '<=', $asOf->toDateString())
+            ->orderByDesc('period_end')
+            ->orderByDesc('revision_number')
+            ->get();
+
+        $periods = [];
+        foreach ($facts as $fact) {
+            $period = $fact->period_end?->toDateString();
+            if ($period !== null && ! array_key_exists($period, $periods)) {
+                $periods[$period] = $fact;
+            }
+        }
+        $latest = array_values($periods);
+        $current = $latest[0] ?? null;
+        $previous = $latest[1] ?? null;
+        $value = null;
+        if ($current !== null && $previous !== null && $previous->value !== null && (float) $previous->value !== 0.0) {
+            $value = (((float) $current->value - (float) $previous->value) / abs((float) $previous->value)) * 100;
+        }
+
+        return [
+            'metric' => $factKey.'_growth',
+            'value' => $value !== null ? round($value, 6) : null,
+            'availability_date' => $current?->availability_date?->toDateString(),
+        ];
+    }
+
+    /**
      * @return array<string,FundamentalFact>
      */
     public function factMap(Stock $stock, string $cadence, Carbon $asOf): array

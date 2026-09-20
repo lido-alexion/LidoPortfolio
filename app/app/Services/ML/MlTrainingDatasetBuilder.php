@@ -5,6 +5,7 @@ namespace App\Services\ML;
 use App\Models\Stock;
 use App\Models\StockPrice;
 use App\Services\Fundamentals\FundamentalDataService;
+use App\Services\Backtest\AsOfFactorScorer;
 use Carbon\Carbon;
 use RuntimeException;
 
@@ -21,7 +22,10 @@ class MlTrainingDatasetBuilder
 
     public const CATEGORICAL_FEATURES = ['sector'];
 
-    public function __construct(private readonly FundamentalDataService $fundamentals) {}
+    public function __construct(
+        private readonly FundamentalDataService $fundamentals,
+        private readonly AsOfFactorScorer $baselineScorer,
+    ) {}
 
     /** @return array{rows:list<array<string,mixed>>,partitions:array<string,mixed>,feature_definitions:array<string,mixed>} */
     public function build(string $horizon, Carbon $cutoff): array
@@ -32,13 +36,22 @@ class MlTrainingDatasetBuilder
             throw new RuntimeException('Primary benchmark NIFTY50 is unavailable.');
         }
 
-        $stocks = Stock::query()->effectivelyActive()->where('is_benchmark', false)->orderBy('id')->get();
+        // Historical training must not apply today's active flag.  A security
+        // with valid historical observations remains eligible for its observed
+        // period, while benchmark/index rows are never issuer examples.
+        $stocks = Stock::query()
+            ->where(function ($query): void {
+                $query->where('is_benchmark', false)->orWhereNull('is_benchmark');
+            })
+            ->where('exchange', 'NSE')
+            ->whereExists(fn ($query) => $query->selectRaw('1')
+                ->from('portfolio_stock_prices')
+                ->whereColumn('portfolio_stock_prices.stock_id', 'portfolio_stocks.id'))
+            ->orderBy('id')
+            ->get();
         $rows = [];
         foreach ($stocks as $stock) {
             $rows = [...$rows, ...$this->rowsForStock($stock, $benchmark, $horizonDays, $cutoff)];
-        }
-        if (app()->environment('testing') && count($rows) < 12) {
-            $rows = $this->testingRows($horizon);
         }
         if (count($rows) < 12) {
             throw new RuntimeException('Insufficient point-in-time training examples.');
@@ -71,6 +84,16 @@ class MlTrainingDatasetBuilder
                 'version' => 'v7-features-1',
                 'numeric' => array_fill_keys(self::NUMERIC_FEATURES, ['missing' => 'median_with_missingness_flags', 'as_of' => 'reference_date']),
                 'categorical' => ['sector' => ['encoding' => 'training_partition_categories', 'unknown' => '__unknown']],
+                'price_semantics' => [
+                    'features' => 'unadjusted_close_as_of_reference_date',
+                    'labels' => 'adjusted_close_as_of_observed_label_window',
+                    'reason' => 'adjusted_close is retroactively changed by later corporate-action repair; features cannot consume that series.',
+                ],
+                'universe' => [
+                    'version' => 'v7-historical-eligible-nse-1',
+                    'rule' => 'non-benchmark NSE stocks with historical price observations through the cutoff, independent of current is_active state',
+                ],
+                'benchmark_mapping' => $this->benchmarkMappingDefinition(),
             ],
         ];
     }
@@ -78,7 +101,7 @@ class MlTrainingDatasetBuilder
     /** @return array<string,mixed> */
     public function featuresFor(Stock $stock, Carbon $asOf): array
     {
-        $benchmark = Stock::query()->where('symbol', 'NIFTY50')->first();
+        $benchmark = $this->benchmarkFor($stock);
         $stockPrices = $this->prices($stock, $asOf);
         $benchmarkPrices = $benchmark ? $this->prices($benchmark, $asOf) : [];
         $close = $this->closeAtOrBefore($stockPrices, $asOf->toDateString());
@@ -89,7 +112,7 @@ class MlTrainingDatasetBuilder
         $sma = $this->sma($stockPrices, $asOf->toDateString(), 20);
         $roe = $this->fundamentals->metric($stock, 'roe', 'ttm', $asOf);
         $debtEquity = $this->fundamentals->metric($stock, 'debt_equity', 'ttm', $asOf);
-        $revenue = $this->fundamentals->metric($stock, 'revenue', 'ttm', $asOf);
+        $revenue = $this->fundamentals->growthMetric($stock, 'revenue', 'quarterly', $asOf);
 
         return [
             'relative_strength_3m' => $stock3m !== null && $benchmark3m !== null ? $stock3m - $benchmark3m : null,
@@ -110,6 +133,8 @@ class MlTrainingDatasetBuilder
     {
         $prices = $this->prices($stock, $cutoff);
         $benchmarkPrices = $this->prices($benchmark, $cutoff);
+        $labelPrices = $this->labelPrices($stock, $cutoff);
+        $benchmarkLabelPrices = $this->labelPrices($benchmark, $cutoff);
         $dates = array_keys($prices);
         $rows = [];
         foreach ($dates as $index => $date) {
@@ -121,15 +146,15 @@ class MlTrainingDatasetBuilder
                 continue;
             }
             $features = $this->featuresForPrices($stock, $date, $prices, $benchmarkPrices);
-            $entry = (float) $prices[$date];
-            $future = (float) $prices[$futureDate];
-            $benchmarkEntry = $this->closeAtOrBefore($benchmarkPrices, $date);
-            $benchmarkFuture = $this->closeAtOrBefore($benchmarkPrices, $futureDate);
+            $entry = (float) ($labelPrices[$date] ?? 0);
+            $future = (float) ($labelPrices[$futureDate] ?? 0);
+            $benchmarkEntry = $this->closeAtOrBefore($benchmarkLabelPrices, $date);
+            $benchmarkFuture = $this->closeAtOrBefore($benchmarkLabelPrices, $futureDate);
             if ($entry <= 0 || $benchmarkEntry === null || $benchmarkFuture === null) {
                 continue;
             }
             $relativeReturn = (($future - $entry) / $entry) - (($benchmarkFuture - $benchmarkEntry) / $benchmarkEntry);
-            $maxDrawdown = $this->maxDrawdown($prices, $index, $index + $horizonDays, $entry);
+            $maxDrawdown = $this->maxDrawdown($labelPrices, $index, $index + $horizonDays, $entry);
             $rows[] = [
                 'stock_id' => $stock->id,
                 'reference_date' => $date,
@@ -138,7 +163,6 @@ class MlTrainingDatasetBuilder
                 'label' => (int) ($relativeReturn > 0 && $maxDrawdown >= -0.20),
                 'relative_return' => $relativeReturn,
                 'max_drawdown' => $maxDrawdown,
-                'deterministic_score' => (float) (($features['momentum_score'] ?? 0) + ($features['trend_score'] ?? 0)),
             ];
         }
 
@@ -156,7 +180,7 @@ class MlTrainingDatasetBuilder
         $asOf = Carbon::parse($date);
         $roe = $this->fundamentals->metric($stock, 'roe', 'ttm', $asOf);
         $debtEquity = $this->fundamentals->metric($stock, 'debt_equity', 'ttm', $asOf);
-        $revenue = $this->fundamentals->metric($stock, 'revenue', 'ttm', $asOf);
+        $revenue = $this->fundamentals->growthMetric($stock, 'revenue', 'quarterly', $asOf);
 
         return [
             'relative_strength_3m' => $stock3m !== null && $benchmark3m !== null ? $stock3m - $benchmark3m : null,
@@ -172,7 +196,7 @@ class MlTrainingDatasetBuilder
     /** @return array<string,float> */
     private function prices(Stock $stock, Carbon $to): array
     {
-        return StockPrice::query()->where('stock_id', $stock->id)->whereDate('price_date', '<=', $to->toDateString())->orderBy('price_date')->get(['price_date', 'adjusted_close_price', 'close_price'])->mapWithKeys(fn (StockPrice $price): array => [$price->price_date->toDateString() => (float) ($price->adjusted_close_price ?? $price->close_price)])->all();
+        return StockPrice::query()->where('stock_id', $stock->id)->whereDate('price_date', '<=', $to->toDateString())->orderBy('price_date')->get(['price_date', 'close_price'])->mapWithKeys(fn (StockPrice $price): array => [$price->price_date->toDateString() => (float) $price->close_price])->all();
     }
 
     private function returnOver(array $prices, string $date, int $lookback): ?float
@@ -224,22 +248,61 @@ class MlTrainingDatasetBuilder
         return null;
     }
 
-    /** @return list<array<string,mixed>> */
-    private function testingRows(string $horizon): array
+    public function benchmarkMappingDefinition(): array
     {
-        $rows = [];
-        for ($i = 0; $i < 30; $i++) {
-            $rows[] = [
-                'stock_id' => $i % 3 + 1,
-                'reference_date' => Carbon::parse('2025-01-01')->addDays($i)->toDateString(),
-                'label_end' => Carbon::parse('2025-01-01')->addDays($i + 63)->toDateString(),
-                'features' => ['relative_strength_3m' => $i - 15, 'momentum_score' => $i % 7, 'trend_score' => $i % 5, 'roe' => $i % 11, 'debt_equity' => ($i % 4) / 2, 'revenue_growth_proxy' => $i % 9, 'sector' => $i % 2 ? 'IT' : 'Finance'],
-                'label' => $i % 2,
-                'relative_return' => ($i % 2 ? 0.04 : -0.02),
-                'max_drawdown' => -0.08,
-                'deterministic_score' => $i - 10,
-            ];
+        return [
+            'version' => 'v7-contextual-benchmark-1',
+            'default' => 'NIFTY50',
+            'sector_overrides' => (array) config('ml.benchmark_mapping.sector_overrides', []),
+            'fallback_reason' => 'no approved sector/index mapping is configured for this universe',
+        ];
+    }
+
+    public function benchmarkFor(Stock $stock): ?Stock
+    {
+        $symbol = (array) config('ml.benchmark_mapping.sector_overrides', []);
+        $benchmarkSymbol = $symbol[$stock->sector] ?? config('ml.benchmark_mapping.default', 'NIFTY50');
+
+        return Stock::query()->where('symbol', $benchmarkSymbol)->where('is_benchmark', true)->first()
+            ?? Stock::query()->where('symbol', 'NIFTY50')->where('is_benchmark', true)->first();
+    }
+
+    public function deterministicScore(int $stockId, string $date): ?float
+    {
+        $result = $this->baselineScorer->score($stockId, $date);
+        return $result['skipped'] ? null : (float) $result['score'];
+    }
+
+    /** @return array{relative_return:float,max_drawdown:float,success:bool}|null */
+    public function realizedOutcome(Stock $stock, Carbon $asOf, string $horizon, Carbon $evaluationDate): ?array
+    {
+        $days = ['1m' => 21, '3m' => 63, '6m' => 126][$horizon] ?? null;
+        $benchmark = $this->benchmarkFor($stock);
+        if ($days === null || $benchmark === null) {
+            return null;
         }
-        return $rows;
+        $prices = $this->labelPrices($stock, $evaluationDate);
+        $benchmarkPrices = $this->labelPrices($benchmark, $evaluationDate);
+        $dates = array_keys($prices);
+        $index = array_search($asOf->toDateString(), $dates, true);
+        if ($index === false || ! isset($dates[$index + $days])) {
+            return null;
+        }
+        $endDate = $dates[$index + $days];
+        $entry = $prices[$dates[$index]] ?? null;
+        $future = $prices[$endDate] ?? null;
+        $benchmarkEntry = $this->closeAtOrBefore($benchmarkPrices, $dates[$index]);
+        $benchmarkFuture = $this->closeAtOrBefore($benchmarkPrices, $endDate);
+        if (! $entry || ! $future || ! $benchmarkEntry || ! $benchmarkFuture) {
+            return null;
+        }
+        $relative = (($future - $entry) / $entry) - (($benchmarkFuture - $benchmarkEntry) / $benchmarkEntry);
+        $drawdown = $this->maxDrawdown($prices, $index, $index + $days, (float) $entry);
+        return ['relative_return' => $relative, 'max_drawdown' => $drawdown, 'success' => $relative > 0 && $drawdown >= -0.20];
+    }
+
+    private function labelPrices(Stock $stock, Carbon $to): array
+    {
+        return StockPrice::query()->where('stock_id', $stock->id)->whereDate('price_date', '<=', $to->toDateString())->orderBy('price_date')->get(['price_date', 'adjusted_close_price', 'close_price'])->mapWithKeys(fn (StockPrice $price): array => [$price->price_date->toDateString() => (float) ($price->adjusted_close_price ?? $price->close_price)])->all();
     }
 }
