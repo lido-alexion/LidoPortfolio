@@ -97,7 +97,7 @@ The API is deployed and canonical facts are available through the existing PHP s
 
 ## 7. Revision and Point-in-Time Behavior
 
-Repository behavior, tests, and the production remediation establish the intended semantics:
+Production verified populated canonical facts, Yahoo/yfinance provenance, conservative first-fetch availability fallback, current-data ingestion, and the deployed scheduler/retry path. It did not independently exercise a live provider restatement sequence. Automated tests establish the revision semantics:
 
 - identical payloads are deduplicated;
 - changed values create a new revision and mark the prior revision non-current;
@@ -106,7 +106,7 @@ Repository behavior, tests, and the production remediation establish the intende
 - current metrics resolve the latest applicable period/revision;
 - metric freshness is returned separately from metric value eligibility.
 
-Before deployment, the invalid share mappings were removed: `Repurchase Of Capital Stock` and legacy `commonStock` no longer map to `shares_outstanding`; `Ordinary Shares Number` remains the valid yfinance share-count source. Revision deduplication now compares the incoming canonical six-decimal value to the current revision before creating a revision. Verified behavior is `A -> A` dedupe with the original availability date preserved, `A -> B` revision 2, and `A -> B -> A` revision 3. When yfinance provides no availability date, the conservative first-observed date remains the availability date for that revision.
+Before deployment, the invalid share mappings were removed: `Repurchase Of Capital Stock` and legacy `commonStock` no longer map to `shares_outstanding`; `Ordinary Shares Number` remains the valid yfinance share-count source. Automated tests verify `A -> A` dedupes with the original availability date preserved, `A -> B` creates revision 2, and `A -> B -> A` creates revision 3 rather than incorrectly deduplicating against historical A. When yfinance provides no availability date, the conservative first-observed date remains the availability date for that revision. Representative production facts were revision 1/current, which verifies the populated provider/storage path but is not evidence of a live production restatement.
 
 ## 8. Historical Bootstrap Boundary
 
@@ -140,17 +140,17 @@ The failed and superseded rows are retained historical evidence from the broken-
 
 ## 10. Local Verification
 
-The focused adapter/provider and update-lifecycle suite passed **18 tests and 78 assertions**, plus **3 Python adapter tests**. The broader V7 fundamentals, ML, schedule, and unattended-operation suite passed **47 tests and 265 assertions** in the current repository state. These tests cover immutable revisions, point-in-time resolution, missing-input behavior, provider/runtime errors, benchmark eligibility, retry/compaction/locking, Admin defaults/authorization, and ML integration boundaries.
+Latest repository validation passed: the V7/fundamentals, scheduler, and unattended-operation suite passed **53 tests and 293 assertions**; Python adapter tests passed **4**; deployment contract tests passed **3**; PHP lint passed; and `git diff --check` passed. These tests cover immutable revisions, point-in-time resolution, missing-input behavior, provider/runtime errors, benchmark eligibility, retry/compaction/locking, Admin defaults/authorization, and ML integration boundaries. They supplement the production ingestion evidence and do not imply that a live production restatement sequence was exercised.
 
 ## 11. Gap Register
 
 | ID | Finding | Classification | Severity |
 | --- | --- | --- | --- |
 | FND-001 | PHP/Guzzle Yahoo transport returned HTTP 401 and prevented acquisition | `IMPLEMENTED` | High (historical) |
-| FND-002 | Production freshness, current-data usability, provenance, and revision behavior were unproven while the store was empty | `IMPLEMENTED` for accepted V7 scope | Medium (historical) |
+| FND-002 | Production freshness, current-data usability, provenance, and the provider/storage path were unproven while the store was empty; live production restatement behavior remains test-backed rather than production-exercised | `IMPLEMENTED` for accepted V7 scope | Medium (historical) |
 | FND-003 | Deep historical bootstrap is not populated | `ACCEPTABLE_VARIATION` | Low |
 
-FND-001 is resolved by the managed yfinance transport and successful production ingestion. FND-002 is resolved for the accepted V7 current-data/provenance/freshness scope. FND-003 remains explicitly outside V7 under V4-FEAT-054/V8.
+FND-001 is resolved by the managed yfinance transport and successful production ingestion. FND-002 is resolved for the accepted V7 current-data/provenance/freshness and automated revision-semantics scope; production did not need to manufacture a live restatement to satisfy the accepted contract. FND-003 remains explicitly outside V7 under V4-FEAT-054/V8.
 
 ## 12. Remediation Status
 
@@ -162,7 +162,7 @@ The repository remediation and production verification are complete for the acce
 - Provider-wide failures now use the existing deduplicated operational-alert framework and retain the provider error on run/job evidence. The deployment provisions a shared Python virtualenv, pins `yfinance==1.7.0`, and the runtime health gate verifies the executable, adapter, import, and version without making an external Yahoo request.
 - Fundamentals run creation excludes `is_benchmark` instruments, and existing benchmark jobs are terminalized as skipped/ineligible before provider invocation without raising the provider-failure alert. Ordinary issuer no-data responses retain the normal retry/failure lifecycle.
 
-The focused adapter/provider and update-lifecycle suite passes **18 tests and 78 assertions**, plus **3 Python adapter tests**. The broader V7 fundamentals, ML, schedule, and unattended-operation suite passes **47 tests and 265 assertions** in the current repository state.
+Latest validation passed: the V7/fundamentals, scheduler, and unattended-operation suite passed **53 tests and 293 assertions**; Python adapter tests passed **4**; deployment contract tests passed **3**; PHP lint passed; and `git diff --check` passed. No combined total is inferred across these separate test runners.
 
 Production verification recorded active release `3500f4c07aecddba6ee23f9d7f909664e99b4f24`, green runtime health, Python 3.12.3, yfinance 1.7.0, successful same-host TCS probing, successful normal ingestion, populated canonical facts, benchmark exclusion, and an empty unfinished-work set. The historical failed/superseded backlog remains auditable and terminal.
 
