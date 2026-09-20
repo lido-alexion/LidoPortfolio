@@ -7,13 +7,14 @@ use App\Http\Controllers\Controller;
 use App\Models\Stock;
 use App\Models\V7\MlModelVersion;
 use App\Services\ML\MlScoringService;
+use App\Services\ML\MlDriftService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class MlScoringController extends Controller
 {
-    public function __construct(protected MlScoringService $ml) {}
+    public function __construct(protected MlScoringService $ml, protected MlDriftService $drift) {}
 
     public function adminIndex(): JsonResponse
     {
@@ -53,6 +54,14 @@ class MlScoringController extends Controller
         return ApiEnvelope::success([
             'model' => $this->ml->rollback($validated['horizon'], (int) $validated['version'], $request->user())->toArray(),
         ]);
+    }
+
+    public function driftCheck(Request $request, MlModelVersion $model): JsonResponse
+    {
+        $validated = $request->validate(['window_months' => ['nullable', 'integer', 'in:3,6,12']]);
+        $check = $this->drift->check($model, (int) ($validated['window_months'] ?? 3));
+
+        return ApiEnvelope::success(['drift_check' => $check->toArray()]);
     }
 
     public function predict(Request $request, Stock $stock): JsonResponse

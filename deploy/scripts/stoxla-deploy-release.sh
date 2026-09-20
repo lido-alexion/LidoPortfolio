@@ -15,6 +15,7 @@ REQUIRED_QUEUES="${STOXLA_REQUIRED_QUEUES:-notifications,default}"
 PHP_FPM_GROUP="${STOXLA_PHP_FPM_GROUP:-www-data}"
 FUNDAMENTALS_SYSTEM_PYTHON="${STOXLA_FUNDAMENTALS_SYSTEM_PYTHON:-/usr/bin/python3.12}"
 FUNDAMENTALS_SHARED_DIR="${STOXLA_FUNDAMENTALS_SHARED_DIR:-$APP_ROOT/shared/python/fundamentals}"
+ML_SHARED_DIR="${STOXLA_ML_SHARED_DIR:-$APP_ROOT/shared/python/ml}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUNTIME_HEALTH_CHECK="${STOXLA_RUNTIME_HEALTH_CHECK:-$SCRIPT_DIR/stoxla-runtime-health-check.sh}"
 
@@ -67,6 +68,28 @@ prepare_fundamentals_python() {
   [[ -x "$venv_python" ]] || fail "fundamentals Python virtualenv is not executable"
 }
 
+prepare_ml_python() {
+  local requirements="$1"
+  local venv_python="$ML_SHARED_DIR/bin/python"
+  local marker="$ML_SHARED_DIR/.requirements.sha256"
+  local requirements_hash
+
+  [[ -x "$FUNDAMENTALS_SYSTEM_PYTHON" ]] \
+    || fail "required ML Python runtime is missing: $FUNDAMENTALS_SYSTEM_PYTHON"
+  mkdir -p "$(dirname "$ML_SHARED_DIR")"
+  if [[ ! -x "$venv_python" ]]; then
+    log "creating shared ML Python virtualenv"
+    "$FUNDAMENTALS_SYSTEM_PYTHON" -m venv "$ML_SHARED_DIR"
+  fi
+  requirements_hash="$(sha256sum "$requirements" | awk '{print $1}')"
+  if [[ ! -f "$marker" || "$(cat "$marker")" != "$requirements_hash" ]]; then
+    log "installing pinned ML Python dependencies"
+    "$venv_python" -m pip install --disable-pip-version-check --requirement "$requirements"
+    printf '%s\n' "$requirements_hash" > "$marker"
+  fi
+  [[ -x "$venv_python" ]] || fail "ML Python virtualenv is not executable"
+}
+
 if [[ -z "$ARCHIVE" || ! -f "$ARCHIVE" ]]; then
   fail "release archive path is required"
 fi
@@ -108,6 +131,8 @@ if [[ ! -f "$RELEASE_DIR/artisan" ]]; then
 fi
 [[ -f "$RELEASE_DIR/deploy/python/fundamentals-requirements.txt" ]] \
   || fail "pinned fundamentals Python requirements are missing from the release"
+[[ -f "$RELEASE_DIR/deploy/python/ml-requirements.txt" ]] \
+  || fail "pinned ML Python requirements are missing from the release"
 
 RELEASE_COMMIT="$("$PHP_BIN" -r '
   $data = json_decode(file_get_contents($argv[1]), true);
@@ -147,7 +172,11 @@ mkdir -p \
   "$SHARED_DIR/storage/framework/views" \
   "$SHARED_DIR/storage/logs"
 
+mkdir -p "$SHARED_DIR/ml/models"
+prepare_writable_tree "$SHARED_DIR/ml"
+
 prepare_fundamentals_python "$RELEASE_DIR/deploy/python/fundamentals-requirements.txt"
+prepare_ml_python "$RELEASE_DIR/deploy/python/ml-requirements.txt"
 
 rm -rf "$RELEASE_DIR/.env" "$RELEASE_DIR/storage"
 ln -s ../../shared/.env "$RELEASE_DIR/.env"
@@ -253,6 +282,9 @@ STOXLA_QUEUE_SERVICE="$QUEUE_SERVICE" \
 STOXLA_REQUIRED_QUEUES="$REQUIRED_QUEUES" \
 STOXLA_FUNDAMENTALS_PYTHON="$FUNDAMENTALS_SHARED_DIR/bin/python" \
 STOXLA_FUNDAMENTALS_ADAPTER="$APP_ROOT/current/scripts/yahoo_fundamentals.py" \
+STOXLA_ML_PYTHON="$ML_SHARED_DIR/bin/python" \
+STOXLA_ML_ADAPTER="$APP_ROOT/current/scripts/ml_adapter.py" \
+STOXLA_ML_MODEL_DIRECTORY="$SHARED_DIR/ml/models" \
 "$RUNTIME_HEALTH_CHECK"
 
 log "pruning old releases; keeping $KEEP_RELEASES"

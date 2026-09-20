@@ -78,8 +78,15 @@ test('production activation fails closed for debug auth and normalizes PHP writa
     assert.match(health, /perm -2000/);
     assert.match(deploy, /FUNDAMENTALS_SHARED_DIR/);
     assert.match(deploy, /fundamentals-requirements\.txt/);
+    assert.match(deploy, /ML_SHARED_DIR/);
+    assert.match(deploy, /ml-requirements\.txt/);
     assert.match(health, /import yfinance/);
     assert.match(health, /FUNDAMENTALS_YFINANCE_VERSION/);
+    assert.match(health, /import sklearn/);
+    assert.match(health, /ML_SKLEARN_VERSION/);
+    assert.match(health, /STOXLA_ML_PYTHON/);
+    assert.match(health, /ML_MODEL_DIRECTORY/);
+    assert.match(deploy, /prepare_writable_tree "\$SHARED_DIR\/ml"/);
     for (const channel of ['single', 'daily', 'frontend', 'provider', 'scheduler', 'emergency']) {
         assert.match(logging, new RegExp(`'${channel}'[\\s\\S]*?'permission'\\s*=>\\s*0664`));
     }

@@ -234,6 +234,8 @@ ML must not silently override deterministic eligibility, gates, score, or recomm
 
 **Current implementation anchors:** `MlScoringService`, `EvaluationEngine`, indicator/strategy configuration, and `docs/archive/specs/V7-ML-Scoring-Models-Specification.md`.
 
+The V7 ML lifecycle uses a managed Python adapter for interpretable logistic training and inference. Laravel remains authoritative for point-in-time dataset construction, fundamentals availability, labels, model/version lifecycle, promotion/rollback, prediction provenance and deterministic Strategy/Evaluation integration. Model artifacts are immutable, SHA-256 verified and retained outside release directories; ML drift checks are advisory and never auto-promote, deactivate or place orders. Production deployment/runtime verification of the artifact lifecycle remains a separate audit boundary.
+
 ## 24. Data Model And Relationships
 
 | Model | Relationship and responsibility |

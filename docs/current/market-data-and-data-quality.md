@@ -142,7 +142,7 @@ Fundamental data can enrich analysis under the strategy boundary but is not fina
 
 ## 19. ML Feature Inputs
 
-ML inputs/predictions require model, feature/data, source timestamp, and prediction provenance sufficient to identify the data/model used. Historical use must follow point-in-time discipline. ML remains additive/advisory unless explicitly configured through the deterministic strategy architecture; it may not silently replace deterministic screeners, gates, or recommendation authority.
+ML inputs/predictions require model, feature/data, source timestamp, and prediction provenance sufficient to identify the data/model used. Historical use must follow point-in-time discipline. The V7 lifecycle builds chronological datasets in Laravel, fits an interpretable logistic model through a managed Python adapter, stores an immutable SHA-256-verified artifact outside release directories, and performs inference through that same artifact/preprocessing state. ML remains additive/advisory unless explicitly configured through the deterministic strategy architecture; it may not silently replace deterministic screeners, gates, or recommendation authority.
 
 **Current implementation anchors:** `MlScoringService`, `V7\MlPrediction`, V7 models/migration, and [Strategy And Recommendations](./strategy-and-recommendations.md).
 

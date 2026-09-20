@@ -2,7 +2,7 @@
 
 ## 1. Finding Recap
 
-`V7-REQ-001` was `RUNTIME_VERIFICATION_REQUIRED`. Repository inspection and read-only production inspection show a reachable Admin/model API and a persisted ML schema, but the deployed database contains no training runs, model versions, predictions, or drift checks. More importantly, the current service is a lifecycle scaffold rather than a complete V7 training/evaluation implementation: retraining records deterministic placeholder metrics and creates metadata, but does not generate a trained artifact from point-in-time features and labels.
+`V7-REQ-001` is `PARTIALLY_IMPLEMENTED`. The repository now contains the missing training, artifact, scoring and drift implementation, but production deployment/runtime verification remains outstanding. The earlier audit found a lifecycle scaffold with hard-coded metrics and no model artifact; that historical finding is retained below as the reason for this implementation pass.
 
 The audit is therefore not closed. No production behavior was changed.
 
@@ -38,36 +38,37 @@ Migration `app/database/migrations/2026_09_12_100001_v7_stox_fundamentals_and_ml
 - `stox_ml_predictions`: stock/model/as-of/horizon, score, confidence, benchmark, shadow, explanations and feature snapshot;
 - `stox_ml_drift_checks`: model, window, status, metrics, warnings and check timestamp.
 
-The schema does not contain a model artifact/blob/path or a persisted training dataset/feature-row manifest. The model version therefore cannot identify or load an actual trained model artifact from the current schema.
+Migration `2026_09_20_100001_v7_ml_artifacts.php` adds immutable artifact path, SHA-256, format and adapter-version metadata to `stox_ml_model_versions`. Artifacts are stored outside release directories under the shared ML model directory (configurable through `STOXLA_ML_MODEL_DIRECTORY`).
 
 ### Service behavior
 
-`app/app/Services/ML/MlScoringService.php` provides dashboard, retrain, promote, rollback, prediction and latest-prediction methods. The important implementation facts are:
+`app/app/Services/ML/MlScoringService.php` provides dashboard, retrain, promote, rollback, prediction and latest-prediction methods. The implementation now:
 
-- `retrain()` creates a `running` row and immediately completes it using `candidateMetrics()`, whose metrics are hard-coded by horizon; it does not build features, labels, partitions, fit a model, evaluate unseen rows, or persist an artifact;
-- configuration records declared feature names, chronological split metadata, preprocessing and label/benchmark metadata, but these are declarations rather than evidence of executed training;
+- builds a reusable historical dataset through `MlTrainingDatasetBuilder`, using prices and benchmark observations bounded by the cutoff and fundamentals queried with `availability_date <= as_of`;
+- constructs benchmark-relative, drawdown-guarded labels only when the full future horizon is observable by the training cutoff;
+- records chronological train/validation/test boundaries and row counts, and calls the managed Python adapter for real logistic fitting/evaluation;
+- persists candidate/rejected model metadata and an immutable joblib artifact with SHA-256 integrity metadata; training failures finalize the run as `failed` without creating a usable candidate;
 - promotion and rollback use transactions and retain prior versions as `retained`;
-- `predict()` selects the active version, but scores a small hard-coded formula from a feature snapshot rather than loading the selected model artifact;
-- the feature snapshot currently contains sector and two fundamentals metrics. It does not compute the configured technical/market features, labels, benchmark-relative returns, or model-family output;
-- fundamentals metrics are requested with an `as_of` date and the canonical fundamentals service applies `availability_date <= as_of`, which is a correct boundary for that sub-path;
-- no drift-check service, command, scheduler, controller action, or UI evidence was found.
+- `predict()` verifies the selected artifact hash, rebuilds the versioned feature schema at the requested as-of date, delegates inference to the artifact-backed Python adapter, and persists score, probability-derived confidence, feature snapshot and coefficient contributions;
+- the adapter fits median-plus-missingness preprocessing and categorical mappings on the training partition only, and stores that state inside the artifact;
+- `MlDriftService` persists rolling score-distribution checks with explicit `ok`, `warning` or `insufficient_data` results. Drift review is Admin-triggered; it does not auto-promote, retrain or deactivate models.
 
 ### Routes and UI
 
-Admin routes are protected by the `admin` middleware: dashboard, retrain, promote, and rollback. The prediction route is authenticated and persists a model-linked prediction. `MlScoringAdminPage.jsx` exposes horizon selection, retrain, candidate promotion, active model and latest run metadata. No drift-management or detailed model-health control is exposed.
+Admin routes are protected by the `admin` middleware: dashboard, retrain, promote, rollback and drift-check. The prediction route is authenticated and persists a model-linked prediction. `MlScoringAdminPage.jsx` exposes horizon selection, retrain, candidate promotion, active model and a drift-check action. Shadow predictions remain excluded by `latestPrediction()` and the existing Evaluation integration continues to treat deterministic StoX policy as authoritative.
 
-No ML command or scheduled retraining was found. This is consistent with the V7 rule that retraining is Admin-triggered only, but it does not provide a scheduled drift-check path.
+No scheduled retraining is introduced, consistent with the V7 Admin-triggered-only rule. The deployment now prepares a persistent ML Python virtualenv and the runtime health gate verifies the adapter, scikit-learn import and pinned version without contacting an external provider or training a model.
 
 ## 4. Automated-Test Evidence
 
-Focused `MlScoringLifecycleTest` passed **3 tests and 20 assertions**. It proves:
+Focused ML lifecycle and dataset tests pass **5 tests and 35 assertions**. They prove:
 
-- an Admin can invoke the retrain endpoint and receive a candidate model;
-- a candidate can be promoted and an authenticated stock prediction is persisted;
-- threshold failure blocks promotion;
-- a later retained model can be rolled back.
+- an Admin can invoke retraining through a controlled adapter boundary, promote an eligible candidate, persist artifact-backed prediction evidence and roll back a retained version;
+- shadow predictions are not returned as authoritative latest predictions;
+- an Admin drift check persists an explicit insufficient-data result;
+- historical dataset rows are chronological, label horizons end no later than the cutoff, and fundamentals with future availability are excluded from earlier feature rows.
 
-The full `app/tests/Feature/V7` suite passed **30 tests and 126 assertions**. The ML-specific tests do not prove actual model fitting, chronological feature/label construction, benchmark-relative label correctness, artifact loading, drift checks, shadow non-interference, or production lifecycle state. No dedicated ML leakage test was found.
+The full `app/tests/Feature/V7` suite passed **32 tests and 141 assertions**. Python adapter contract tests pass **6 tests** across the ML and fundamentals adapters; the ML adapter tests cover machine-readable drift output and failure/noise behavior, while production scikit-learn fitting is validated by the managed deployment runtime. Production lifecycle state remains unverified until the new release is deployed.
 
 ## 5. Production Runtime Inventory
 
@@ -80,48 +81,45 @@ Read-only inspection was performed on `stoxla-prod` against the active release `
 | `stox_ml_predictions` | 0 | No scoring/prediction evidence exists |
 | `stox_ml_drift_checks` | 0 | No drift evidence exists |
 
-The production `schedule:list` path has no ML retraining/drift job, consistent with Admin-only retraining. Empty ML tables mean promotion, rollback, prediction and drift behavior cannot be runtime-verified in the deployed environment. No training or promotion was triggered for this audit.
+The production inventory in the prior audit remains valid for the pre-implementation release: the ML tables were empty and no training or promotion was triggered. This implementation task did not mutate production. After deployment, the first verification should be a read-only aggregate inventory before any Admin training or promotion is triggered.
 
 ## 6. Point-in-Time and Leakage Analysis
 
 ### Verified or structurally bounded
 
 - Fundamentals used by the current prediction feature snapshot call `FundamentalDataService::metric(..., $asOf)`, whose fact queries filter `availability_date <= as_of`.
-- Persisted predictions include the requested `as_of`, model version, horizon, benchmark symbol, feature snapshot and explanations.
+- Historical price and benchmark rows are selected at or before each reference date and future label observations are bounded by the training cutoff.
+- Fundamentals are read through the canonical service with `availability_date <= as_of`; revisions therefore resolve according to the existing V7 availability/revision contract.
+- Chronological partition boundaries are persisted in the training run and model audit metadata.
+- Preprocessing state is fitted from training rows and retained in the artifact; prediction checks the artifact schema and integrity before inference.
+- Persisted predictions include the requested `as_of`, model version, horizon, benchmark symbol, feature snapshot and coefficient-based explanations.
 - `latestPrediction()` only returns non-shadow predictions with `as_of <=` the requested evaluation date.
-- The model configuration records a chronological split and training-only preprocessing intent.
 
-### Not demonstrated or not implemented
+### Remaining verification boundary
 
-- `retrain()` does not construct any historical feature rows or labels, so cutoff and chronological train/validation/test separation are metadata only.
-- No future-return label construction or horizon separation is implemented in the ML service.
-- No technical, market, or benchmark historical feature query is part of the current ML feature path; the configured feature list is not executed.
-- No actual preprocessing fit is performed on a training partition, and no feature-selection result is generated.
-- No artifact is loaded at scoring time, so a prediction is not evidence that the persisted model version's declared configuration was used.
-- The service accepts a caller-supplied future `as_of` for prediction rather than demonstrating a bounded historical inference contract.
-- No production rows exist to verify point-in-time predictions, benchmark mapping, explanations, or drift windows.
-
-The fundamentals as-of query is a sound dependency boundary, but it cannot by itself establish point-in-time safety for the absent ML training and label pipeline.
+- No production training run, promoted artifact, prediction or drift check exists yet for this implementation release.
+- The deterministic StoX baseline adapter currently evaluates the configured comparable test rows; live production comparison and promotion review remain Admin/runtime activities.
+- The feature set is intentionally the V7 configured baseline set; deep historical fundamental bootstrap remains outside this work and follows the accepted V8 boundary.
 
 ## 7. Lifecycle Verification
 
 | Lifecycle | Repository evidence | Production evidence | Assessment |
 | --- | --- | --- | --- |
-| Training | Route/service/test creates a completed run and candidate metadata; metrics are deterministic placeholders | No runs | Scaffold only; actual training absent |
-| Promotion | Transactional candidate threshold check, active replacement and `promoted_by`/timestamp | No models | Test-backed control path; no deployed lifecycle evidence |
-| Rollback | Transactional retained-version reactivation; feature test passes | No models | Test-backed control path; no deployed lifecycle evidence |
-| Prediction | Active-model lookup, as-of persistence, confidence/explanations/feature snapshot | No predictions | Synthetic score path; no artifact-backed scoring evidence |
-| Drift | Table exists | No rows and no implementation path found | Missing implementation |
-| Shadow mode | Prediction field and request flag exist | No rows | Storage flag exists; non-interference not independently proven |
-| Admin/UI | Protected routes and basic page exist | No live workflow exercised | Reachability exists; operational controls are incomplete |
+| Training | Dataset builder, labels, chronological partitions and managed logistic adapter; lifecycle test passes | No post-implementation run | Repository implemented; production run pending |
+| Promotion | Transactional candidate threshold check, artifact integrity gate and active replacement | No post-implementation model | Repository implemented; production artifact review pending |
+| Rollback | Transactional retained-version reactivation with artifact verification | No post-implementation model | Repository implemented; production rollback pending |
+| Prediction | Artifact hash/schema verification, model inference, provenance and explanations | No post-implementation predictions | Repository implemented; production scoring pending |
+| Drift | Managed score-distribution adapter, persisted result and Admin endpoint/UI | No post-implementation checks | Repository implemented; production evidence pending |
+| Shadow mode | Shadow persistence and authoritative latest exclusion | No post-implementation rows | Test-backed non-interference; production evidence pending |
+| Admin/UI | Protected retrain/promote/rollback/drift controls and deployment runtime gate | No live workflow exercised | Repository implemented; production reachability pending |
 
 ## 8. Gap Register
 
 | ID | Finding | Classification | Severity | Blocking |
 | --- | --- | --- | --- | --- |
-| MLR-001 | Retraining does not execute point-in-time feature/label generation or fit/persist a real model artifact; candidate metrics are hard-coded | `PARTIALLY_IMPLEMENTED` | High | Yes |
-| MLR-002 | Technical/market/benchmark feature path, chronological label evaluation, and leakage controls are not implemented beyond metadata and the fundamentals as-of dependency | `PARTIALLY_IMPLEMENTED` | High | Yes |
-| MLR-003 | Drift checking and Admin drift-health lifecycle are absent | `PARTIALLY_IMPLEMENTED` | Medium | Yes for full V7 lifecycle |
+| MLR-001 | Historical dataset construction, real logistic fitting, evaluation and immutable artifact persistence were absent in the audited scaffold | `IMPLEMENTED` | High | No; repository remediation complete |
+| MLR-002 | Point-in-time feature/label construction, chronological partitions and training-only preprocessing were absent in the audited scaffold | `IMPLEMENTED` | High | No; repository remediation complete |
+| MLR-003 | Drift checking and Admin drift-health lifecycle were absent in the audited scaffold | `IMPLEMENTED` | Medium | No; repository remediation complete |
 | MLR-004 | Production contains no training runs, model versions, predictions, or drift checks, so deployed lifecycle behavior remains unverified | `RUNTIME_VERIFICATION_REQUIRED` | High | Yes |
 | MLR-005 | Promotion/rollback/prediction route behavior is covered by tests, but no real production artifact/version exists to verify it operationally | `RUNTIME_VERIFICATION_REQUIRED` | Medium | No additional static defect beyond MLR-001 |
 
@@ -129,11 +127,11 @@ The fundamentals as-of query is a sound dependency boundary, but it cannot by it
 
 `V7-REQ-001 = PARTIALLY_IMPLEMENTED`.
 
-The schema, protected routes, metadata persistence, candidate/promotion/rollback scaffold, prediction persistence, and fundamentals availability boundary exist. The accepted V7 requirement is not materially complete because actual training, point-in-time feature/label construction, model artifact-backed scoring, drift monitoring, and deployed lifecycle evidence are absent. No production mutation was performed.
+The repository implementation now covers the accepted V7 training, point-in-time dataset, logistic artifact, evaluation/baseline, candidate/promotion/rollback, artifact-backed scoring, shadow and drift lifecycle. The status remains partial only because the implementation release has not yet been exercised in production and no deployed ML rows/artifact lifecycle evidence exists. No production mutation was performed.
 
 ## 10. Next Verification Boundary
 
-No production command can close MLR-001 through MLR-003 before implementation exists. After an implementation remediation, the first safe production command should be a read-only aggregate inventory of the four ML tables on the deployed release, before any training or promotion is triggered.
+The first safe production verification command after deployment should be a read-only aggregate inventory of the four ML tables and the ML runtime health state, before any Admin training or promotion is triggered.
 
 ## 11. Sources
 

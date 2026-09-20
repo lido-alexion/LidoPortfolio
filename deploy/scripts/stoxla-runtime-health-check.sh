@@ -13,6 +13,10 @@ PHP_FPM_GROUP="${STOXLA_PHP_FPM_GROUP:-www-data}"
 FUNDAMENTALS_PYTHON="${STOXLA_FUNDAMENTALS_PYTHON:-$APP_ROOT/shared/python/fundamentals/bin/python}"
 FUNDAMENTALS_ADAPTER="${STOXLA_FUNDAMENTALS_ADAPTER:-$APP_ROOT/current/scripts/yahoo_fundamentals.py}"
 FUNDAMENTALS_YFINANCE_VERSION="${STOXLA_FUNDAMENTALS_YFINANCE_VERSION:-1.7.0}"
+ML_PYTHON="${STOXLA_ML_PYTHON:-$APP_ROOT/shared/python/ml/bin/python}"
+ML_ADAPTER="${STOXLA_ML_ADAPTER:-$APP_ROOT/current/scripts/ml_adapter.py}"
+ML_SKLEARN_VERSION="${STOXLA_ML_SKLEARN_VERSION:-1.5.2}"
+ML_MODEL_DIRECTORY="${STOXLA_ML_MODEL_DIRECTORY:-$APP_ROOT/shared/ml/models}"
 
 log() {
   printf '[stoxla-runtime-health] %s\n' "$*"
@@ -33,6 +37,15 @@ installed_yfinance="$("$FUNDAMENTALS_PYTHON" -c 'import yfinance; print(yfinance
   || fail "fundamentals Python runtime cannot import yfinance"
 [[ "$installed_yfinance" == "$FUNDAMENTALS_YFINANCE_VERSION" ]] \
   || fail "fundamentals yfinance version $installed_yfinance does not match required $FUNDAMENTALS_YFINANCE_VERSION"
+[[ -x "$ML_PYTHON" ]] || fail "ML Python runtime is not executable: $ML_PYTHON"
+[[ -f "$ML_ADAPTER" ]] || fail "ML Python adapter is missing: $ML_ADAPTER"
+[[ -d "$ML_MODEL_DIRECTORY" && -w "$ML_MODEL_DIRECTORY" ]] || fail "ML model artifact directory is not writable: $ML_MODEL_DIRECTORY"
+find "$ML_MODEL_DIRECTORY" -maxdepth 0 -type d \( ! -group "$PHP_FPM_GROUP" -o ! -perm -g+w -o ! -perm -2000 \) -print -quit | grep -q . \
+  && fail "ML model artifact directory ownership/permissions are unsafe: $ML_MODEL_DIRECTORY"
+installed_sklearn="$($ML_PYTHON -c 'import sklearn; print(sklearn.__version__)' 2>/dev/null)" \
+  || fail "ML Python runtime cannot import scikit-learn"
+[[ "$installed_sklearn" == "$ML_SKLEARN_VERSION" ]] \
+  || fail "ML scikit-learn version $installed_sklearn does not match required $ML_SKLEARN_VERSION"
 
 debug_state="$(cd "$APP_ROOT/current" && "$PHP_BIN" artisan tinker --execute='echo config("app.env")."|".(config("portfolio.debug_agent.enabled") ? "true" : "false");' --no-interaction)"
 [[ "$debug_state" == "production|false" ]] || fail "production DebugAgent is enabled or app environment is not production"

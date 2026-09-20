@@ -36,6 +36,17 @@ export default function MlScoringAdminPage() {
         }
     };
 
+    const checkDrift = async (modelId) => {
+        setBusy(true);
+        try {
+            await api.post(`/v1/admin/ml/models/${modelId}/drift-check`, { window_months: 3 });
+            showToast('Drift check recorded.', 'success');
+            await load();
+        } finally {
+            setBusy(false);
+        }
+    };
+
     return (
         <div className="container-fluid py-3">
             <div className="d-flex align-items-center justify-content-between mb-3">
@@ -68,6 +79,11 @@ export default function MlScoringAdminPage() {
                                 {row.latest_candidate?.id && (
                                     <button className="btn btn-outline-primary btn-sm mt-3" type="button" onClick={() => promote(row.latest_candidate.id)} disabled={busy}>
                                         Promote latest
+                                    </button>
+                                )}
+                                {row.active_model?.id && (
+                                    <button className="btn btn-outline-secondary btn-sm mt-3 ms-2" type="button" onClick={() => checkDrift(row.active_model.id)} disabled={busy}>
+                                        Check drift
                                     </button>
                                 )}
                             </div>

@@ -502,6 +502,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
         Route::get('/admin/ml', [MlScoringController::class, 'adminIndex']);
         Route::post('/admin/ml/retrain', [MlScoringController::class, 'retrain']);
         Route::post('/admin/ml/models/{model}/promote', [MlScoringController::class, 'promote'])->whereNumber('model');
+        Route::post('/admin/ml/models/{model}/drift-check', [MlScoringController::class, 'driftCheck'])->whereNumber('model');
         Route::post('/admin/ml/rollback', [MlScoringController::class, 'rollback']);
     });
 

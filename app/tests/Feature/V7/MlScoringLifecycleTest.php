@@ -5,13 +5,59 @@ namespace Tests\Feature\V7;
 use App\Models\Stock;
 use App\Models\User;
 use App\Models\V7\MlModelVersion;
+use App\Models\V7\MlPrediction;
 use App\Models\V7\MlTrainingRun;
+use App\Services\ML\MlPythonAdapter;
+use Illuminate\Support\Facades\File;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class MlScoringLifecycleTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Stock::query()->create(['symbol' => 'NIFTY50', 'exchange' => 'NSE', 'name' => 'NIFTY 50', 'is_benchmark' => true]);
+        $this->app->bind(MlPythonAdapter::class, fn (): MlPythonAdapter => new class extends MlPythonAdapter
+        {
+            public function run(string $operation, array $payload): array
+            {
+                if ($operation === 'train') {
+                    File::put($payload['artifact_path'], 'test-model-artifact');
+
+                    return [
+                        'schema_version' => 1,
+                        'artifact_sha256' => hash_file('sha256', $payload['artifact_path']),
+                        'metrics' => [
+                            'roc_auc' => 0.72,
+                            'pr_auc' => 0.68,
+                            'benchmark_relative_return' => 0.03,
+                            'deterministic_baseline_delta' => 0.01,
+                            'class_distribution' => ['positive' => 15, 'negative' => 15, 'rows' => 30],
+                        ],
+                        'baselines' => ['naive' => [], 'deterministic_stox' => []],
+                        'metadata' => ['format' => 'test'],
+                    ];
+                }
+
+                if ($operation === 'predict') {
+                    return [
+                        'schema_version' => 1,
+                        'score' => 63.5,
+                        'confidence' => 0.635,
+                        'contributions' => [
+                            ['feature' => 'momentum_score', 'value' => 1, 'coefficient' => 0.2, 'contribution' => 0.2, 'direction' => 'positive'],
+                        ],
+                    ];
+                }
+
+                return ['schema_version' => 1, 'status' => 'insufficient_data', 'metrics' => [], 'warnings' => ['insufficient_predictions']];
+            }
+        });
+    }
 
     public function test_admin_retrains_promotes_and_persists_predictions(): void
     {
@@ -39,6 +85,12 @@ class MlScoringLifecycleTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.prediction.horizon', '3m')
             ->assertJsonPath('data.prediction.shadow', false);
+
+        $this->actingAs($member)->withProfileHeader($member)
+            ->postJson("/api/v1/stocks/{$stock->id}/ml-predictions", ['horizon' => '3m', 'as_of' => '2026-09-13', 'shadow' => true])
+            ->assertOk()
+            ->assertJsonPath('data.prediction.shadow', true);
+        $this->assertFalse(app(\App\Services\ML\MlScoringService::class)->latestPrediction($stock, '3m', now())->shadow === true);
     }
 
     public function test_admin_cannot_promote_candidate_that_misses_thresholds(): void
@@ -71,6 +123,16 @@ class MlScoringLifecycleTest extends TestCase
             'evaluation_metrics' => ['roc_auc' => 0.51, 'pr_auc' => 0.49, 'benchmark_relative_return' => -0.01, 'deterministic_baseline_delta' => -0.01],
             'promotion_thresholds' => ['min_roc_auc' => 0.52, 'min_pr_auc' => 0.5, 'min_benchmark_relative_return' => 0.0, 'min_deterministic_baseline_delta' => 0.0],
         ]);
+
+        $artifactPath = storage_path('framework/testing/ml-threshold-model.joblib');
+        File::ensureDirectoryExists(dirname($artifactPath));
+        File::put($artifactPath, 'test-model-artifact');
+        $model->forceFill([
+            'artifact_path' => $artifactPath,
+            'artifact_sha256' => hash_file('sha256', $artifactPath),
+            'artifact_format' => 'joblib',
+            'artifact_version' => 'test',
+        ])->save();
 
         $this->actingAs($admin)->withProfileHeader($admin)
             ->postJson("/api/v1/admin/ml/models/{$model->id}/promote")
@@ -110,5 +172,33 @@ class MlScoringLifecycleTest extends TestCase
             ->assertJsonPath('data.model.version', 1);
 
         $this->assertSame('retained', MlModelVersion::query()->findOrFail($secondId)->status);
+    }
+
+    public function test_admin_can_persist_a_drift_check_without_affecting_predictions(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $this->defaultPortfolioFor($admin);
+        $modelId = $this->actingAs($admin)->withProfileHeader($admin)
+            ->postJson('/api/v1/admin/ml/retrain', ['horizon' => '1m', 'cutoff_date' => '2026-09-12'])
+            ->assertCreated()
+            ->json('data.model.id');
+        $model = MlModelVersion::query()->findOrFail($modelId);
+        for ($i = 0; $i < 30; $i++) {
+            MlPrediction::query()->create([
+                'stock_id' => 1,
+                'model_version_id' => $model->id,
+                'horizon' => '1m',
+                'as_of' => now()->subDays($i),
+                'score' => 50,
+                'confidence' => 0.5,
+                'benchmark_symbol' => 'NIFTY50',
+                'shadow' => false,
+            ]);
+        }
+
+        $this->actingAs($admin)->withProfileHeader($admin)
+            ->postJson("/api/v1/admin/ml/models/{$model->id}/drift-check", ['window_months' => 3])
+            ->assertOk()
+            ->assertJsonPath('data.drift_check.status', 'insufficient_data');
     }
 }

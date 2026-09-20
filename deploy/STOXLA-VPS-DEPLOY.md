@@ -842,6 +842,13 @@ Deployment:
   `/var/www/stoxla/shared/python/fundamentals`, installs only when the pinned
   `deploy/python/fundamentals-requirements.txt` hash changes, and verifies
   `yfinance==1.7.0` locally before activation.
+- Maintains a separate shared ML virtualenv at
+  `/var/www/stoxla/shared/python/ml`, installs the pinned
+  `deploy/python/ml-requirements.txt` only when its hash changes, and verifies
+  the adapter plus the supported scikit-learn version locally before
+  activation. Model artifacts live in the persistent, group-writable
+  `/var/www/stoxla/shared/ml/models` directory and are never stored in a
+  release directory.
 
 ### 12.3 VPS release layout
 
