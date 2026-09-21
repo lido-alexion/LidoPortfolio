@@ -215,13 +215,18 @@ def compact_outcomes(rows: list[dict[str, Any]]):
     )
 
 
+def positive_label_count(labels) -> int:
+    return sum(1 for label in labels if int(label) == 1)
+
+
 def classification_metrics(y_true: list[int], probabilities: list[float], relative_returns: list[float | None], drawdowns: list[float | None], decisions: list[int] | None = None) -> dict[str, Any]:
     from sklearn.metrics import average_precision_score, brier_score_loss, precision_score, recall_score, roc_auc_score
 
     predicted = decisions if decisions is not None else [1 if value >= 0.5 else 0 for value in probabilities]
     unique = set(y_true)
+    positive_count = positive_label_count(y_true)
     metrics: dict[str, Any] = {
-        "class_distribution": {"positive": int(sum(y_true)), "negative": int(len(y_true) - sum(y_true)), "rows": len(y_true)},
+        "class_distribution": {"positive": positive_count, "negative": len(y_true) - positive_count, "rows": len(y_true)},
         "precision": float(precision_score(y_true, predicted, zero_division=0)),
         "recall": float(recall_score(y_true, predicted, zero_division=0)),
         "calibration_error": float(brier_score_loss(y_true, probabilities)),
@@ -302,7 +307,7 @@ def train(request: dict[str, Any]) -> dict[str, Any]:
     validation_metrics = classification_metrics(y_validation, validation_probabilities, validation_returns, validation_drawdowns)
     test_metrics = classification_metrics(y_test, test_probabilities, test_returns, test_drawdowns)
 
-    naive_probabilities = [sum(y_train) / len(y_train)] * test_count
+    naive_probabilities = [positive_label_count(y_train) / len(y_train)] * test_count
     naive_metrics = classification_metrics(y_test, naive_probabilities, test_returns, test_drawdowns)
     baseline_path = request.get("deterministic_baseline_path")
     deterministic_probabilities: list[float] = []

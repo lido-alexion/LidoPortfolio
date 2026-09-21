@@ -55,6 +55,22 @@ class MlAdapterContractTest(unittest.TestCase):
         self.assertIn("live_hit_rate_deterioration", body["warnings"])
 
     @unittest.skipUnless(SKLEARN_AVAILABLE, "scikit-learn is provided by the managed ML runtime")
+    def test_int8_label_metrics_use_python_width_counts_for_large_partitions(self):
+        import numpy as np
+
+        spec = importlib.util.spec_from_file_location("ml_adapter_metrics", SCRIPT)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        labels = np.empty(4474, dtype=np.int8)
+        labels[:] = np.arange(4474) % 2
+        probabilities = [0.75 if int(label) else 0.25 for label in labels]
+        metrics = module.classification_metrics(labels, probabilities, [0.01] * 4474, [-0.05] * 4474)
+
+        self.assertEqual(metrics["class_distribution"]["positive"] + metrics["class_distribution"]["negative"], 4474)
+        self.assertEqual(metrics["class_distribution"]["rows"], 4474)
+        self.assertTrue(0.0 <= metrics["hit_rate"] <= 1.0)
+
+    @unittest.skipUnless(SKLEARN_AVAILABLE, "scikit-learn is provided by the managed ML runtime")
     def test_jsonl_training_stream_reports_diagnostics_and_aligns_baseline_identity(self):
         with tempfile.TemporaryDirectory() as directory:
             directory = Path(directory)
