@@ -86,7 +86,7 @@ No scheduled retraining is introduced, consistent with the V7 Admin-triggered-on
 
 ## 4. Automated-Test Evidence
 
-Focused ML lifecycle, baseline and dataset tests pass **11 tests and 81 assertions** in the production-scale remediation set. They prove:
+The directly rerun ML lifecycle and dataset regression subset passed **10 tests and 247 assertions**. It proves:
 
 - an Admin can invoke retraining through a controlled adapter boundary, promote an eligible candidate, persist artifact-backed prediction evidence and roll back a retained version;
 - shadow predictions are not returned as authoritative latest predictions;
@@ -95,7 +95,7 @@ Focused ML lifecycle, baseline and dataset tests pass **11 tests and 81 assertio
 - monthly sampling keeps exactly one reference observation per stock/month, selects the last available trading observation, inactive historical issuers remain represented, the read-only planner reports the sampling plan, and the streamed fixture build stays below the stock-level query-count ceiling with bounded per-stock buffering.
 - optimized PIT metrics are compared with the canonical FundamentalDataService at representative as-of dates, and streamed train/validation/test partition metadata records row counts and diagnostics.
 
-The full `app/tests/Feature/V7` suite passed **34 tests and 174 assertions**. Replay/Strategy and historical-baseline tests passed **19 tests and 72 assertions**. Python adapter contract tests pass **9 tests** across the ML and fundamentals adapters, including JSONL training diagnostics and baseline identity alignment. Deployment contract tests pass **3 tests**, and TypeScript checking passed. Production lifecycle state remains unverified until the new release is deployed.
+The full `app/tests/Feature/V7` suite passed **39 tests and 362 assertions**. Replay/Strategy and historical-baseline tests passed **117 tests and 935 assertions**. Python adapter contract tests pass **10 tests** across the ML and fundamentals adapters, including JSONL training diagnostics, baseline identity alignment and train-only feature exclusion. Deployment contract tests pass **3 tests**, and TypeScript checking passed. Production lifecycle state remains unverified until the new release is deployed.
 
 ## 5. Production Runtime Inventory
 
@@ -125,16 +125,17 @@ The production inventory in the prior audit remains valid for the pre-implementa
 
 ### Remaining verification boundary
 
-- No production training run, promoted artifact, prediction or drift check exists yet for this implementation release.
+- The first controlled production training run (`training_run_id=1`, horizon `1m`) failed safely before model creation because the configured numeric feature `roe` had no training-partition values. Production then had `training_runs=1` failed, `model_versions=0`, `predictions=0` and `drift_checks=0`.
+- Production fundamental facts were all available on `2026-09-19`, while the latest usable 1m historical observation was `2026-07-31`; the absence of historical `roe`, `debt_equity` and `revenue_growth_proxy` values is therefore correct PIT behavior, not a provider mapping failure. The repository correction excludes entirely unavailable train-only features without fabricating medians, while preserving the configured/effective feature-set audit trail. V8 follow-ons `V4-FEAT-054` and `V4-FEAT-057` remain the boundary for deeper historical fundamental bootstrap and expansion.
 - The terminated production build is a scalability observation only: it did not create ML state. The optimized repository path has not yet been exercised against the production-scale universe.
 - Revenue growth is computed from comparable available fundamental periods rather than a revenue level. The configured benchmark mapping is versioned and supports explicit sector overrides with a deterministic NIFTY50 fallback; no unapproved sector mappings are invented.
-- The feature set is intentionally the V7 configured baseline set; deep historical fundamental bootstrap remains outside this work and follows the accepted V8 boundary.
+- The V7 configured baseline feature set is retained as requested metadata, then filtered using only final-purged TRAIN coverage. Features with no TRAIN values are excluded from the effective model schema with auditable coverage/reason metadata; deep historical fundamental bootstrap remains outside this work and follows the accepted V8 boundary.
 
 ## 7. Lifecycle Verification
 
 | Lifecycle | Repository evidence | Production evidence | Assessment |
 | --- | --- | --- | --- |
-| Training | Dataset builder, labels, chronological partitions and managed logistic adapter; lifecycle test passes | No post-implementation run | Repository implemented; production run pending |
+| Training | Dataset builder, labels, chronological partitions, train-only feature selection and managed logistic adapter; lifecycle test passes | Run 1 failed safely before model creation on absent PIT fundamental inputs | Repository correction complete; controlled retraining pending |
 | Promotion | Transactional candidate threshold check, artifact integrity gate and active replacement | No post-implementation model | Repository implemented; production artifact review pending |
 | Rollback | Transactional retained-version reactivation with artifact verification | No post-implementation model | Repository implemented; production rollback pending |
 | Prediction | Artifact hash/schema verification, model inference, provenance and explanations | No post-implementation predictions | Repository implemented; production scoring pending |
@@ -152,7 +153,8 @@ The production inventory in the prior audit remains valid for the pre-implementa
 | MLR-006 | Deterministic baseline, live-health, historical-universe, feature-price and artifact-concurrency corrections were required after review of the first implementation | `IMPLEMENTED` | High | No; repository correction complete |
 | MLR-004 | Production contains no training runs, model versions, predictions, or drift checks, so deployed lifecycle behavior remains unverified | `RUNTIME_VERIFICATION_REQUIRED` | High | Yes |
 | MLR-005 | Promotion/rollback/prediction route behavior is covered by tests, but no real production artifact/version exists to verify it operationally | `RUNTIME_VERIFICATION_REQUIRED` | Medium | No additional static defect beyond MLR-001 |
-| MLR-007 | The pre-correction production dataset build attempted daily rows across 2,604 issuers and 14,963,373 price rows, ran nearly one hour and was terminated; the monthly/preloaded implementation is not yet deployed or production-verified | `RUNTIME_VERIFICATION_REQUIRED` | High | Yes |
+| MLR-007 | The pre-correction production dataset build attempted daily rows across 2,604 issuers and 14,963,373 price rows, ran nearly one hour and was terminated; the monthly/preloaded streamed implementation subsequently completed at production scale with bounded memory | `IMPLEMENTED` | High | No; scale remediation verified |
+| MLR-008 | First controlled 1m production training run failed because configured historical fundamental features had zero train-partition coverage; PIT semantics correctly made them unavailable | `RUNTIME_VERIFICATION_REQUIRED` | High | Yes; repository feature exclusion correction must be deployed and retried |
 
 ## 9. Final Assessment
 

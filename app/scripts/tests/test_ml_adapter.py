@@ -143,6 +143,80 @@ class MlAdapterContractTest(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("identity does not match", result.stderr)
 
+    @unittest.skipUnless(SKLEARN_AVAILABLE, "scikit-learn is provided by the managed ML runtime")
+    def test_training_excludes_features_absent_from_train_and_prediction_uses_effective_artifact_schema(self):
+        configured_numeric = ["relative_strength_3m", "momentum_score", "trend_score", "roe", "debt_equity", "revenue_growth_proxy"]
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            paths = {}
+            partitions = {"train": 16, "validation": 4, "test": 4}
+            offsets = {"train": 0, "validation": 16, "test": 20}
+            for partition, count in partitions.items():
+                path = directory / f"{partition}.jsonl"
+                paths[partition] = str(path)
+                with path.open("w", encoding="utf-8") as handle:
+                    for position in range(count):
+                        index = offsets[partition] + position
+                        label = index % 2
+                        features = {
+                            "relative_strength_3m": None if partition == "train" and position == 0 else float(index),
+                            "momentum_score": float(index + 1),
+                            "trend_score": float(index + 2),
+                            "roe": None if partition == "train" else 10.0,
+                            "debt_equity": None if partition == "train" else 0.5,
+                            "revenue_growth_proxy": None if partition == "train" else 12.0,
+                            "sector": "Technology",
+                        }
+                        handle.write(json.dumps({
+                            "stock_id": index + 1,
+                            "reference_date": f"2024-03-{index + 1:02d}",
+                            "features": features,
+                            "label": label,
+                            "relative_return": 0.02 if label else -0.01,
+                            "max_drawdown": -0.05,
+                        }) + "\n")
+            baseline_path = directory / "baseline.jsonl"
+            with baseline_path.open("w", encoding="utf-8") as handle:
+                for index in range(20, 24):
+                    handle.write(json.dumps({
+                        "stock_id": index + 1,
+                        "reference_date": f"2024-03-{index + 1:02d}",
+                        "probability": 0.75 if index % 2 else 0.25,
+                        "positive_decision": index % 2 == 1,
+                    }) + "\n")
+            artifact = directory / "model.joblib"
+            result = self.run_adapter("train", {
+                "dataset_paths": paths,
+                "deterministic_baseline_path": str(baseline_path),
+                "numeric_features": configured_numeric,
+                "categorical_features": ["sector"],
+                "artifact_path": str(artifact),
+            })
+            self.assertEqual(result.returncode, 0, result.stderr)
+            body = json.loads(result.stdout)
+            metadata = body["metadata"]
+            self.assertEqual(metadata["effective_feature_set"], ["relative_strength_3m", "momentum_score", "trend_score", "sector"])
+            self.assertEqual([item["feature"] for item in metadata["excluded_features"]], ["roe", "debt_equity", "revenue_growth_proxy"])
+            self.assertIn("relative_strength_3m__missing", metadata["feature_names"])
+            self.assertNotIn("roe", metadata["preprocessing"]["medians"])
+            self.assertEqual(metadata["feature_training_coverage"]["roe"], {"non_null": 0, "total": 16})
+
+            prediction = self.run_adapter("predict", {
+                "artifact_path": str(artifact),
+                "artifact_sha256": body["artifact_sha256"],
+                "features": {
+                    "relative_strength_3m": 25.0,
+                    "momentum_score": 26.0,
+                    "trend_score": 27.0,
+                    "roe": 11.0,
+                    "debt_equity": 0.4,
+                    "revenue_growth_proxy": 13.0,
+                    "sector": "Technology",
+                },
+            })
+            self.assertEqual(prediction.returncode, 0, prediction.stderr)
+            self.assertIn("score", json.loads(prediction.stdout))
+
 
 if __name__ == "__main__":
     unittest.main()

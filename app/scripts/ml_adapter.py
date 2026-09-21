@@ -18,6 +18,9 @@ from datetime import datetime
 from typing import Any
 
 
+MINIMUM_EFFECTIVE_FEATURES = 1
+
+
 def read_request() -> dict[str, Any]:
     payload = json.load(sys.stdin)
     if not isinstance(payload, dict):
@@ -125,6 +128,41 @@ def state_from_jsonl(path: str, numeric: list[str], categorical: list[str]) -> d
     return {"medians": medians, "categories": {name: sorted(values) for name, values in categories.items()}}
 
 
+def feature_coverage(rows, numeric: list[str], categorical: list[str], total_count: int) -> tuple[list[str], list[str], list[dict[str, Any]], dict[str, dict[str, int]]]:
+    numeric_counts = {name: 0 for name in numeric}
+    categorical_counts = {name: 0 for name in categorical}
+    for row in rows:
+        features = row.get("features", {})
+        for name in numeric:
+            if finite(features.get(name)) is not None:
+                numeric_counts[name] += 1
+        for name in categorical:
+            value = features.get(name)
+            if value is not None and str(value).strip() and str(value) != "__unknown":
+                categorical_counts[name] += 1
+    effective_numeric = [name for name in numeric if numeric_counts[name] > 0]
+    effective_categorical = [name for name in categorical if categorical_counts[name] > 0]
+    excluded = [
+        {"feature": name, "reason": "no_training_values", "training_non_null_count": numeric_counts[name], "training_row_count": total_count}
+        for name in numeric if numeric_counts[name] == 0
+    ] + [
+        {"feature": name, "reason": "no_training_values", "training_non_null_count": categorical_counts[name], "training_row_count": total_count}
+        for name in categorical if categorical_counts[name] == 0
+    ]
+    coverage = {
+        name: {"non_null": numeric_counts[name], "total": total_count}
+        for name in numeric
+    } | {
+        name: {"non_null": categorical_counts[name], "total": total_count}
+        for name in categorical
+    }
+    return effective_numeric, effective_categorical, excluded, coverage
+
+
+def feature_coverage_from_jsonl(path: str, numeric: list[str], categorical: list[str], total_count: int):
+    return feature_coverage(iter_jsonl(path), numeric, categorical, total_count)
+
+
 def encode_row(row: dict[str, Any], numeric: list[str], categorical: list[str], state: dict[str, Any]) -> list[float]:
     features = row.get("features", {})
     vector: list[float] = []
@@ -227,17 +265,21 @@ def train(request: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("training dataset is too small")
     numeric = list(request.get("numeric_features", []))
     categorical = list(request.get("categorical_features", []))
+    configured_numeric = numeric.copy()
+    configured_categorical = categorical.copy()
     partitions = request.get("partitions", {})
     if not train_count or not validation_count or not test_count:
         raise ValueError("chronological train/validation/test partitions are required")
 
     if isinstance(dataset_paths, dict):
+        numeric, categorical, excluded_features, feature_training_coverage = feature_coverage_from_jsonl(train_path, configured_numeric, configured_categorical, train_count)
         state = state_from_jsonl(train_path, numeric, categorical)
         x_train, y_train, train_returns, train_drawdowns, _ = matrix_from_jsonl(train_path, numeric, categorical, state, train_count)
         x_validation, y_validation, validation_returns, validation_drawdowns, _ = matrix_from_jsonl(validation_path, numeric, categorical, state, validation_count)
         x_test, y_test, test_returns, test_drawdowns, test_identities = matrix_from_jsonl(test_path, numeric, categorical, state, test_count, include_identities=True)
         feature_names_value = feature_names(numeric, categorical, state)
     else:
+        numeric, categorical, excluded_features, feature_training_coverage = feature_coverage(train_rows, configured_numeric, configured_categorical, train_count)
         y_train, train_returns, train_drawdowns, _ = compact_outcomes(train_rows)
         y_validation, validation_returns, validation_drawdowns, _ = compact_outcomes(validation_rows)
         y_test, test_returns, test_drawdowns, test_identities = compact_outcomes(test_rows)
@@ -247,6 +289,9 @@ def train(request: dict[str, Any]) -> dict[str, Any]:
         x_train = np.asarray(x_train_list, dtype=float)
         x_validation = np.asarray(x_validation_list, dtype=float)
         x_test = np.asarray(x_test_list, dtype=float)
+
+    if len(numeric) + len(categorical) < MINIMUM_EFFECTIVE_FEATURES:
+        raise ValueError("training dataset has no usable configured features")
 
     if len(set(y_train)) < 2:
         raise ValueError("training set contains one class")
@@ -291,8 +336,13 @@ def train(request: dict[str, Any]) -> dict[str, Any]:
     metadata = {
         "format": "stox-v7-logistic",
         "feature_names": feature_names_value,
+        "configured_numeric_features": configured_numeric,
+        "configured_categorical_features": configured_categorical,
         "numeric_features": numeric,
         "categorical_features": categorical,
+        "effective_feature_set": numeric + categorical,
+        "excluded_features": excluded_features,
+        "feature_training_coverage": feature_training_coverage,
         "preprocessing": state,
         "partitions": partitions,
         "runtime": {"python": sys.version.split()[0], "sklearn": __import__("sklearn").__version__},
@@ -305,6 +355,8 @@ def train(request: dict[str, Any]) -> dict[str, Any]:
         "feature_count": len(feature_names_value),
         "raw_transport": "jsonl" if isinstance(dataset_paths, dict) else "json",
         "python_peak_rss_mb": peak_rss_mb(),
+        "feature_training_coverage": feature_training_coverage,
+        "excluded_features": excluded_features,
     }
     metadata["diagnostics"] = diagnostics
     artifact_path = request.get("artifact_path")

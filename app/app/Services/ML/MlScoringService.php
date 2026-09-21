@@ -94,6 +94,10 @@ class MlScoringService
             ]);
             $metrics = $result['metrics'] ?? [];
             $baselines = $result['baselines'] ?? [];
+            $configuredFeatureSet = $config['feature_set'];
+            $effectiveFeatureSet = $result['metadata']['effective_feature_set'] ?? $configuredFeatureSet;
+            $excludedFeatures = $result['metadata']['excluded_features'] ?? [];
+            $featureTrainingCoverage = $result['metadata']['feature_training_coverage'] ?? [];
             $artifactDigest = is_file($tempArtifactPath) ? (string) hash_file('sha256', $tempArtifactPath) : null;
             if (! isset($result['artifact_sha256']) || $artifactDigest === null || ! hash_equals((string) $result['artifact_sha256'], $artifactDigest)) {
                 throw new \RuntimeException('ML adapter artifact integrity verification failed.');
@@ -104,12 +108,12 @@ class MlScoringService
                 'status' => 'completed',
                 'metrics' => $metrics,
                 'baselines' => $baselines,
-                'selected_features' => $config['feature_set'],
-                'configuration' => array_replace_recursive($config, ['dataset' => $dataset['partitions'], 'dataset_diagnostics' => $dataset['diagnostics'], 'feature_definitions' => $dataset['feature_definitions'], 'deterministic_baseline' => $baselineDefinition]),
+                'selected_features' => $effectiveFeatureSet,
+                'configuration' => array_replace_recursive($config, ['dataset' => $dataset['partitions'], 'dataset_diagnostics' => $dataset['diagnostics'], 'feature_definitions' => $dataset['feature_definitions'], 'deterministic_baseline' => $baselineDefinition, 'feature_selection' => ['configured' => $configuredFeatureSet, 'effective' => $effectiveFeatureSet, 'excluded' => $excludedFeatures, 'training_coverage' => $featureTrainingCoverage]]),
                 'completed_at' => now(),
             ])->save();
 
-            $model = DB::transaction(function () use ($horizon, $cutoff, $config, $run, $tempArtifactPath, &$finalArtifactPath, $baselineDefinition, $result, $metrics, $baselines, $eligible): MlModelVersion {
+            $model = DB::transaction(function () use ($horizon, $cutoff, $config, $run, $tempArtifactPath, &$finalArtifactPath, $baselineDefinition, $result, $metrics, $baselines, $eligible, $configuredFeatureSet, $effectiveFeatureSet, $excludedFeatures, $featureTrainingCoverage): MlModelVersion {
                 $version = ((int) MlModelVersion::query()->where('horizon', $horizon)->lockForUpdate()->max('version')) + 1;
                 $artifactPath = $this->artifactPath($horizon, $version);
                 $finalArtifactPath = $artifactPath;
@@ -128,7 +132,7 @@ class MlScoringService
                 'artifact_version' => (string) config('ml.artifact_version', 'v7-logistic-1'),
                 'model_family' => 'interpretable_logistic_baseline',
                 'training_cutoff_date' => $cutoff->toDateString(),
-                'feature_set' => $config['feature_set'],
+                'feature_set' => $effectiveFeatureSet,
                 'preprocessing' => $result['metadata']['preprocessing'] ?? $config['preprocessing'],
                 'label_definition' => $config['label_definition'],
                 'benchmark_mapping' => $config['benchmark_mapping'],
@@ -141,6 +145,10 @@ class MlScoringService
                     'class_distribution' => $metrics['class_distribution'] ?? [],
                     'automatic_promotion' => false,
                     'deterministic_baseline' => $baselineDefinition,
+                    'configured_feature_set' => $configuredFeatureSet,
+                    'effective_feature_set' => $effectiveFeatureSet,
+                    'excluded_features' => $excludedFeatures,
+                    'feature_training_coverage' => $featureTrainingCoverage,
                     'adapter_metadata' => $result['metadata'] ?? [],
                 ],
                 ]);

@@ -56,7 +56,12 @@ class MlScoringLifecycleTest extends TestCase
                             'class_distribution' => ['positive' => 15, 'negative' => 15, 'rows' => 30],
                         ],
                         'baselines' => ['naive' => [], 'deterministic_stox' => []],
-                        'metadata' => ['format' => 'test'],
+                        'metadata' => [
+                            'format' => 'test',
+                            'effective_feature_set' => ['momentum_score', 'sector'],
+                            'excluded_features' => [['feature' => 'roe', 'reason' => 'no_training_values', 'training_non_null_count' => 0, 'training_row_count' => 30]],
+                            'feature_training_coverage' => ['momentum_score' => ['non_null' => 30, 'total' => 30], 'sector' => ['non_null' => 30, 'total' => 30]],
+                        ],
                     ];
                 }
 
@@ -91,6 +96,11 @@ class MlScoringLifecycleTest extends TestCase
             ->json('data.model.id');
 
         $this->assertSame('candidate', MlModelVersion::query()->findOrFail($modelId)->status);
+        $model = MlModelVersion::query()->findOrFail($modelId);
+        $this->assertSame(['momentum_score', 'sector'], $model->feature_set);
+        $this->assertSame(['momentum_score', 'sector'], $model->audit_metadata['effective_feature_set']);
+        $this->assertSame('roe', $model->audit_metadata['excluded_features'][0]['feature']);
+        $this->assertSame(['momentum_score', 'sector'], MlTrainingRun::query()->findOrFail($model->training_run_id)->selected_features);
 
         $this->actingAs($admin)->withProfileHeader($admin)
             ->postJson("/api/v1/admin/ml/models/{$modelId}/promote")
