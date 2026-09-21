@@ -39,6 +39,10 @@ Production retraining now uses a two-pass partitioned JSONL transport: the first
 
 MlTrainingDatasetBuilder::plan($horizon, $cutoff) is a read-only diagnostic that reports the universe count, monthly sampling definition, estimated reference rows, date range, cutoff and expected chronological partitions without creating lifecycle records or loading the training matrix. Production deployment and a real 1m build remain pending.
 
+### Production partitioning finding
+
+The first production-scale streamed 1m build on commit `51b4e4c` completed the memory objective but exposed a partitioning defect: 2,604 stocks produced 40,851 rows in 794.03 seconds with 64.5 MB PHP peak memory, 19 peak buffered rows and 14,516,504 temporary bytes, but `train=0`, `validation=0`, `test=40,851`. Pass 1 had derived boundaries from issuer histories reaching back to 1991, while the NIFTY50 benchmark history began on 2025-01-20, so no benchmark-relative rows could exist in the early dates. The repository correction makes pass 1 and pass 2 share the same viable-observation predicate, including issuer lookback/future prices, benchmark entry/future prices and cutoff safety. It also fails immediately when any partition is empty or emitted dates fall outside reported boundaries, and reports viable-date and benchmark date diagnostics. No training, model or other ML mutation occurred during the failed production verification.
+
 ### Schema and models
 
 Migration `app/database/migrations/2026_09_12_100001_v7_stox_fundamentals_and_ml.php` creates the four expected ML tables:

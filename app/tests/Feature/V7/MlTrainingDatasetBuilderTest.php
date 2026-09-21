@@ -167,4 +167,40 @@ class MlTrainingDatasetBuilderTest extends TestCase
         $this->assertGreaterThan(0, $dataset['diagnostics']['temporary_dataset_bytes']);
         File::deleteDirectory($directory);
     }
+
+    public function test_partition_dates_ignore_issuer_history_before_benchmark_history(): void
+    {
+        $benchmark = Stock::query()->create(['symbol' => 'NIFTY50', 'exchange' => 'NSE', 'name' => 'NIFTY 50', 'is_benchmark' => true]);
+        $issuer = Stock::query()->create(['symbol' => 'LONGHISTORY', 'exchange' => 'NSE', 'name' => 'Long History']);
+
+        foreach ([[$issuer, '2020-01-01', 2400], [$benchmark, '2025-01-20', 620]] as [$subject, $start, $days]) {
+            for ($day = 0; $day < $days; $day++) {
+                StockPrice::query()->create([
+                    'stock_id' => $subject->id,
+                    'price_date' => Carbon::parse($start)->addDays($day)->toDateString(),
+                    'close_price' => 100 + $day,
+                    'adjusted_close_price' => 100 + $day,
+                    'data_source' => 'test',
+                ]);
+            }
+        }
+
+        $directory = storage_path('framework/testing/ml-benchmark-boundary-'.bin2hex(random_bytes(4)));
+        $dataset = app(MlTrainingDatasetBuilder::class)->buildStreamed('1m', Carbon::parse('2026-09-01'), $directory);
+
+        $this->assertGreaterThanOrEqual('2025-01-20', $dataset['diagnostics']['viable_reference_date_start']);
+        $this->assertGreaterThan(2, $dataset['diagnostics']['viable_reference_date_count']);
+        $this->assertSame($dataset['diagnostics']['benchmark_start_date'], '2025-01-20');
+        $this->assertGreaterThan(0, $dataset['partitions']['row_counts']['train']);
+        $this->assertGreaterThan(0, $dataset['partitions']['row_counts']['validation']);
+        $this->assertGreaterThan(0, $dataset['partitions']['row_counts']['test']);
+        foreach ($dataset['partitions']['row_counts'] as $partition => $count) {
+            $this->assertGreaterThan(0, $count);
+            $range = $dataset['diagnostics']['row_date_ranges'][$partition];
+            $this->assertGreaterThanOrEqual($dataset['partitions'][$partition.'_start'], $range['start']);
+            $this->assertLessThanOrEqual($dataset['partitions'][$partition.'_end'], $range['end']);
+        }
+
+        File::deleteDirectory($directory);
+    }
 }

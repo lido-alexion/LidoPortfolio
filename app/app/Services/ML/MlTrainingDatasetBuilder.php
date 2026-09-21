@@ -75,10 +75,11 @@ class MlTrainingDatasetBuilder
 
         $benchmarkSeries = $this->priceSeries($benchmark, $cutoff);
         $referenceDates = [];
-        $this->universeQuery()->chunkById(100, function ($stockChunk) use (&$referenceDates, $horizonDays, $cutoff): void {
+        $this->universeQuery()->chunkById(100, function ($stockChunk) use (&$referenceDates, $benchmarkSeries, $horizonDays, $cutoff): void {
             foreach ($stockChunk as $stock) {
                 $series = $this->priceSeries($stock, $cutoff);
-                foreach ($this->eligibleReferenceDates($series['dates'], $horizonDays, $cutoff) as $date) {
+                foreach ($this->viableObservations($series, $benchmarkSeries, $horizonDays, $cutoff) as $observation) {
+                    $date = $observation['reference_date'];
                     $referenceDates[$date] = true;
                 }
             }
@@ -122,11 +123,32 @@ class MlTrainingDatasetBuilder
                 fclose($handle);
             }
         }
+        foreach ($rowCounts as $partition => $count) {
+            if ($count < 1) {
+                throw new RuntimeException("ML dataset partition is empty: {$partition}.");
+            }
+        }
         if (array_sum($rowCounts) < 12) {
             throw new RuntimeException('Insufficient point-in-time training examples.');
         }
         $partitions['row_counts'] = $rowCounts;
         $bytes = array_sum(array_map(static fn (string $path): int => is_file($path) ? (int) filesize($path) : 0, $paths));
+        $rowDateRanges = [];
+        foreach ($paths as $partition => $path) {
+            $first = null;
+            $last = null;
+            $handle = fopen($path, 'rb');
+            while (($line = fgets($handle)) !== false) {
+                $date = json_decode($line, true, 64, JSON_THROW_ON_ERROR)['reference_date'] ?? null;
+                $first ??= $date;
+                $last = $date;
+            }
+            fclose($handle);
+            $rowDateRanges[$partition] = ['start' => $first, 'end' => $last];
+            if ($first === null || $last === null || $first < $partitions[$partition.'_start'] || $last > $partitions[$partition.'_end']) {
+                throw new RuntimeException("ML dataset rows fall outside reported {$partition} partition dates.");
+            }
+        }
 
         return [
             'paths' => $paths,
@@ -138,6 +160,12 @@ class MlTrainingDatasetBuilder
                 'peak_buffered_rows' => $peakBufferedRows,
                 'temporary_dataset_bytes' => $bytes,
                 'transport' => 'partitioned_jsonl',
+                'viable_reference_date_start' => $dates[0],
+                'viable_reference_date_end' => $dates[array_key_last($dates)],
+                'viable_reference_date_count' => count($dates),
+                'benchmark_start_date' => $benchmarkSeries['dates'][0] ?? null,
+                'benchmark_end_date' => $benchmarkSeries['dates'][array_key_last($benchmarkSeries['dates'])] ?? null,
+                'row_date_ranges' => $rowDateRanges,
             ],
         ];
     }
@@ -155,18 +183,32 @@ class MlTrainingDatasetBuilder
             ->orderBy('id');
     }
 
-    /** @param list<string> $dates @return list<string> */
-    private function eligibleReferenceDates(array $dates, int $horizonDays, Carbon $cutoff): array
+    /** @return list<array{reference_date:string,label_end:string}> */
+    private function viableObservations(array $series, array $benchmarkSeries, int $horizonDays, Carbon $cutoff): array
     {
-        $eligible = [];
+        $dates = $series['dates'];
+        $labelPrices = $series['labels'];
+        $benchmarkLabelPrices = $benchmarkSeries['labels'];
+        $observations = [];
         foreach ($this->monthlyReferenceDates($dates) as $date) {
-            $index = array_search($date, $dates, true);
-            if ($index === false || $index < 63 || ! isset($dates[$index + $horizonDays]) || $dates[$index + $horizonDays] > $cutoff->toDateString()) {
+            $index = $series['index'][$date] ?? null;
+            if ($index === null || $index < 63 || ! isset($dates[$index + $horizonDays])) {
                 continue;
             }
-            $eligible[] = $date;
+            $futureDate = $dates[$index + $horizonDays];
+            if ($futureDate > $cutoff->toDateString()) {
+                continue;
+            }
+            $entry = (float) ($labelPrices[$date] ?? 0);
+            $future = (float) ($labelPrices[$futureDate] ?? 0);
+            $benchmarkEntry = $this->closeAtOrBefore($benchmarkLabelPrices, $date, $benchmarkSeries['dates']);
+            $benchmarkFuture = $this->closeAtOrBefore($benchmarkLabelPrices, $futureDate, $benchmarkSeries['dates']);
+            if ($entry <= 0 || $future <= 0 || $benchmarkEntry === null || $benchmarkEntry <= 0 || $benchmarkFuture === null || $benchmarkFuture <= 0) {
+                continue;
+            }
+            $observations[] = ['reference_date' => $date, 'label_end' => $futureDate];
         }
-        return $eligible;
+        return $observations;
     }
 
     /** @param list<string> $dates @return array<string,mixed> */
@@ -306,28 +348,17 @@ class MlTrainingDatasetBuilder
         $benchmarkLabelPrices = $benchmarkSeries['labels'];
         $dates = $series['dates'];
         $dateIndex = $series['index'];
-        $sampleDates = $this->monthlyReferenceDates($dates);
+        $observations = $this->viableObservations($series, $benchmarkSeries, $horizonDays, $cutoff);
         $rows = [];
-        foreach ($sampleDates as $date) {
-            $index = $dateIndex[$date] ?? null;
-            if ($index === null) {
-                continue;
-            }
-            if ($index < 63 || ! isset($dates[$index + $horizonDays])) {
-                continue;
-            }
-            $futureDate = $dates[$index + $horizonDays];
-            if ($futureDate > $cutoff->toDateString()) {
-                continue;
-            }
+        foreach ($observations as $observation) {
+            $date = $observation['reference_date'];
+            $futureDate = $observation['label_end'];
+            $index = $dateIndex[$date];
             $features = $this->featuresForPrices($stock, $date, $prices, $benchmarkPrices, $facts, $series['index'], $benchmarkSeries['index']);
             $entry = (float) ($labelPrices[$date] ?? 0);
             $future = (float) ($labelPrices[$futureDate] ?? 0);
             $benchmarkEntry = $this->closeAtOrBefore($benchmarkLabelPrices, $date, $benchmarkSeries['dates']);
             $benchmarkFuture = $this->closeAtOrBefore($benchmarkLabelPrices, $futureDate, $benchmarkSeries['dates']);
-            if ($entry <= 0 || $benchmarkEntry === null || $benchmarkFuture === null) {
-                continue;
-            }
             $relativeReturn = (($future - $entry) / $entry) - (($benchmarkFuture - $benchmarkEntry) / $benchmarkEntry);
             $maxDrawdown = $this->maxDrawdown($labelPrices, $index, $index + $horizonDays, $entry, $dates);
             $rows[] = [
