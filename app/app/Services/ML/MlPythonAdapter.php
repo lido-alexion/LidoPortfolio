@@ -29,12 +29,17 @@ class MlPythonAdapter
         }
 
         $stdout = $process->getOutput();
-        $stderr = trim($process->getErrorOutput());
-        if (strlen($stdout) > (int) config('ml.max_output_bytes', 8 * 1024 * 1024)) {
+        $maxOutputBytes = (int) config('ml.max_output_bytes', 8 * 1024 * 1024);
+        $stderr = $process->getErrorOutput();
+        if (strlen($stderr) > $maxOutputBytes) {
+            $stderr = substr($stderr, -$maxOutputBytes);
+        }
+        $stderr = trim($stderr);
+        if (strlen($stdout) > $maxOutputBytes) {
             throw new RuntimeException('ML adapter output exceeded the configured limit.');
         }
         if (! $process->isSuccessful()) {
-            $detail = $stderr === '' ? 'adapter exited with status '.$process->getExitCode() : substr((string) preg_split('/\R/', $stderr)[0], 0, 500);
+            $detail = $stderr === '' ? 'adapter exited with status '.$process->getExitCode() : self::failureDetail($stderr);
             throw new RuntimeException('ML adapter failed: '.$detail);
         }
 
@@ -63,5 +68,23 @@ class MlPythonAdapter
         }
 
         return $result;
+    }
+
+    private static function failureDetail(string $stderr): string
+    {
+        $lines = array_values(array_filter(
+            array_map('trim', preg_split('/\R/', $stderr) ?: []),
+            static fn (string $line): bool => $line !== '',
+        ));
+        $adapterFailures = array_values(array_filter(
+            $lines,
+            static fn (string $line): bool => str_starts_with($line, 'ml adapter failed:'),
+        ));
+        $detail = $adapterFailures !== [] ? end($adapterFailures) : ($lines !== [] ? end($lines) : 'adapter failed without diagnostics');
+        if (str_starts_with($detail, 'ml adapter failed:')) {
+            $detail = trim(substr($detail, strlen('ml adapter failed:')));
+        }
+
+        return substr($detail, 0, 500);
     }
 }
