@@ -20,15 +20,16 @@ final class MlDeterministicBaselineAdapter
         return $this->strategyScores->definition();
     }
 
-    /** @return list<array{probability:float,score:float,reference_date:string,stock_id:int}> */
+    /** @return list<array{probability:float,score:float,positive_decision:bool,decision_threshold:float,reference_date:string,stock_id:int}> */
     public function evaluate(array $rows): array
     {
+        $definition = $this->definition();
         $out = [];
         foreach ($rows as $row) {
             if (($row['partition'] ?? null) !== 'test') {
                 continue;
             }
-            $result = $this->strategyScores->score((int) $row['stock_id'], (string) $row['reference_date']);
+            $result = $this->strategyScores->score((int) $row['stock_id'], (string) $row['reference_date'], $definition);
             if ($result['factor_scores'] === []) {
                 throw new \RuntimeException('Deterministic baseline could not score a test row: insufficient historical bars.');
             }
@@ -36,6 +37,8 @@ final class MlDeterministicBaselineAdapter
             $out[] = [
                 'probability' => $score / 100,
                 'score' => $score,
+                'positive_decision' => (bool) $result['positive_decision'],
+                'decision_threshold' => (float) $result['decision_threshold'],
                 'reference_date' => (string) $row['reference_date'],
                 'stock_id' => (int) $row['stock_id'],
             ];

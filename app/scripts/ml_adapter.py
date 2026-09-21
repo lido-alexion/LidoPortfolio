@@ -72,10 +72,10 @@ def prepare(rows: list[dict[str, Any]], numeric: list[str], categorical: list[st
     return vectors, names, state
 
 
-def classification_metrics(y_true: list[int], probabilities: list[float], rows: list[dict[str, Any]]) -> dict[str, Any]:
+def classification_metrics(y_true: list[int], probabilities: list[float], rows: list[dict[str, Any]], decisions: list[int] | None = None) -> dict[str, Any]:
     from sklearn.metrics import average_precision_score, brier_score_loss, precision_score, recall_score, roc_auc_score
 
-    predicted = [1 if value >= 0.5 else 0 for value in probabilities]
+    predicted = decisions if decisions is not None else [1 if value >= 0.5 else 0 for value in probabilities]
     unique = set(y_true)
     metrics: dict[str, Any] = {
         "class_distribution": {"positive": sum(y_true), "negative": len(y_true) - sum(y_true), "rows": len(y_true)},
@@ -132,7 +132,8 @@ def train(request: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(deterministic_rows, list) or len(deterministic_rows) != len(test_rows):
         raise ValueError("deterministic StoX baseline is missing or not aligned to the test partition")
     deterministic_probabilities = [float(item["probability"]) for item in deterministic_rows]
-    deterministic_metrics = classification_metrics([int(row["label"]) for row in test_rows], deterministic_probabilities, test_rows)
+    deterministic_decisions = [1 if bool(item.get("positive_decision")) else 0 for item in deterministic_rows]
+    deterministic_metrics = classification_metrics([int(row["label"]) for row in test_rows], deterministic_probabilities, test_rows, deterministic_decisions)
     test_metrics["deterministic_baseline_delta"] = test_metrics["benchmark_relative_return"] - deterministic_metrics["benchmark_relative_return"]
     metadata = {
         "format": "stox-v7-logistic",

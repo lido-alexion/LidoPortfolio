@@ -3,7 +3,11 @@
 namespace App\Services\ML;
 
 use App\Engines\Evaluation\EvaluationParameterResolver;
+use App\Engines\Strategy\MinerviniTrendTemplateScreener;
+use App\Models\StockPrice;
+use App\Services\Artifacts\DefinitionHasher;
 use App\Services\Backtest\AsOfFactorScorer;
+use App\Services\Screener\ScreenerEvaluationService;
 use App\Services\StrategyConfigurationService;
 
 /**
@@ -19,25 +23,47 @@ final class HistoricalStrategyScoreService
         private readonly AsOfFactorScorer $factors,
         private readonly EvaluationParameterResolver $parameters,
         private readonly StrategyConfigurationService $strategies,
+        private readonly ScreenerEvaluationService $screeners,
     ) {}
 
     /** @return array<string,mixed> */
     public function definition(): array
     {
         $config = $this->strategies->defaultConfig();
+        $eligibility = MinerviniTrendTemplateScreener::definition();
+        $eligibilityHash = DefinitionHasher::hash($eligibility);
+        $config['eligibility_sources'] = [[
+            'factory_key' => MinerviniTrendTemplateScreener::FACTORY_KEY,
+            'screener_factory_key' => MinerviniTrendTemplateScreener::FACTORY_KEY,
+            'screener_slug' => MinerviniTrendTemplateScreener::FACTORY_KEY,
+            'artifact_version' => 'factory:1.0',
+            'definition_hash' => $eligibilityHash,
+            'definition' => $eligibility,
+            'enabled' => true,
+            'priority' => 1,
+        ]];
         $encoded = json_encode($config, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
+        $strategyHash = hash('sha256', $encoded);
 
         return [
             'strategy_id' => null,
             'strategy_key' => 'momentum_factory',
             'artifact_version' => 'factory:1.0',
-            'definition_hash' => hash('sha256', $encoded),
+            'definition_hash' => $strategyHash,
+            'strategy_definition_hash' => $strategyHash,
             'adapter_version' => self::ADAPTER_VERSION,
+            'decision_semantics' => [
+                'type' => 'entry_decision',
+                'threshold_key' => 'open_position',
+                'threshold' => (float) ($config['thresholds']['open_position'] ?? 85.0),
+                'requires_eligibility' => true,
+            ],
+            'eligibility_sources' => $config['eligibility_sources'],
             'config' => $config,
         ];
     }
 
-    /** @return array{score:float,eligible:bool,factor_scores:array<string,mixed>,parameters:array<string,mixed>} */
+    /** @return array{score:float,eligible:bool,strategy_eligible:bool,positive_decision:bool,decision_threshold:float,factor_scores:array<string,mixed>,parameters:array<string,mixed>} */
     public function score(int $stockId, string $referenceDate, ?array $definition = null): array
     {
         $definition ??= $this->definition();
@@ -45,18 +71,55 @@ final class HistoricalStrategyScoreService
         $resolved = $this->parameters->resolve($config);
         $evaluation = $this->factors->score($stockId, $referenceDate, $resolved);
         if (($evaluation['skipped'] ?? false) === true) {
-            return ['score' => 0.0, 'eligible' => false, 'factor_scores' => [], 'parameters' => $resolved];
+            return ['score' => 0.0, 'eligible' => false, 'strategy_eligible' => false, 'positive_decision' => false, 'decision_threshold' => $this->decisionThreshold($definition), 'factor_scores' => [], 'parameters' => $resolved];
         }
 
         $scored = $this->strategies->score($evaluation['factor_scores'] ?? [], $config);
         $thresholds = $config['thresholds'] ?? [];
         $minimum = (float) ($thresholds['minimum_overall_score'] ?? 0.0);
+        $strategyEligible = $this->evaluateEligibility($stockId, $referenceDate, $definition);
+        $score = (float) $scored['overall_score'];
+        $decisionThreshold = $this->decisionThreshold($definition);
 
         return [
-            'score' => (float) $scored['overall_score'],
-            'eligible' => (float) $scored['overall_score'] >= $minimum,
+            'score' => $score,
+            'eligible' => $strategyEligible && $score >= $minimum,
+            'strategy_eligible' => $strategyEligible,
+            'positive_decision' => $this->isPositiveDecision($score, $strategyEligible, $definition),
+            'decision_threshold' => $decisionThreshold,
             'factor_scores' => $evaluation['factor_scores'] ?? [],
             'parameters' => $resolved,
         ];
+    }
+
+    private function decisionThreshold(array $definition): float
+    {
+        return (float) ($definition['decision_semantics']['threshold'] ?? 85.0);
+    }
+
+    public function isPositiveDecision(float $score, bool $strategyEligible, array $definition): bool
+    {
+        return $strategyEligible && $score >= $this->decisionThreshold($definition);
+    }
+
+    private function evaluateEligibility(int $stockId, string $referenceDate, array $definition): bool
+    {
+        $source = $definition['eligibility_sources'][0] ?? null;
+        $screenerDefinition = is_array($source) ? ($source['definition'] ?? null) : null;
+        if (! is_array($screenerDefinition)) {
+            return false;
+        }
+        $bars = StockPrice::query()->where('stock_id', $stockId)->whereDate('price_date', '<=', $referenceDate)
+            ->orderByDesc('price_date')->limit(400)->get()->reverse()->values()->map(fn ($row) => [
+                'date' => $row->price_date->toDateString(),
+                'open' => $row->open_price !== null ? (float) $row->open_price : null,
+                'high' => $row->high_price !== null ? (float) $row->high_price : null,
+                'low' => $row->low_price !== null ? (float) $row->low_price : null,
+                'close' => $row->close_price !== null ? (float) $row->close_price : null,
+                'volume' => $row->volume !== null ? (float) $row->volume : null,
+            ])->all();
+
+        $result = $this->screeners->evaluateStock($screenerDefinition, $bars);
+        return ($result['skipped'] ?? true) === false && ($result['matched'] ?? false) === true;
     }
 }
