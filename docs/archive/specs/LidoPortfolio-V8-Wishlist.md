@@ -22,7 +22,9 @@ V8 also contains the one-time Historical Fundamental Data Bootstrap, deferred fr
 |---|---|---|---|
 | V4-FEAT-052 | Standalone Telemetry Platform | Build the product-independent telemetry/analytics platform as a separate repository/application. Core architecture is already decided in `specs/V7-Telemetry-Platform.md`; the historical filename is retained for now, but this V8 register supersedes its earlier V7 roadmap placement. | CORE ARCHITECTURE DECIDED |
 | V4-FEAT-054 | Historical Fundamental Data Bootstrap | One-time population of StoX with available historical quarterly and annual fundamental data after the V7 canonical fundamental model exists. The import may use custom/offline scripts rather than the FEAT-053 live fetcher. StoX imposes no fixed historical-depth window; the canonical store and downstream analytics must support whatever depth is imported. Detailed source, extraction method, mapping and bootstrap procedure remain OPEN until the historical dataset is prepared/selected. | OPEN / DEFERRED |
-| V4-FEAT-055 | Account Access Request / Admin Approval Workflow | Add a guest-facing **Request an account** flow linked from Login. Human applicants submit the information required for admin onboarding behind CAPTCHA and abuse controls. Pending duplicates are deduplicated; admins review requests in User Management, receive operational notifications, and resolve them as **Create**, **Ignore**, or **Reject**. Reject creates a reversible email ban; Ignore closes the request without banning; Create hands off into the existing secure admin onboarding/invite flow with request details prefilled. | WISHLIST / NEEDS DESIGN |\n| V4-FEAT-056 | ML Retraining Recommendation / Model Health Alerts | Add advisory model-health monitoring that evaluates model age, drift and matured live performance and tells Admins when retraining should be considered. The feature may recommend a horizon-specific retrain and surface the reason, but **must not automatically retrain, promote, deactivate, or replace a model**. Admin remains responsible for triggering retraining and explicitly promoting any resulting candidate. | WISHLIST / NEEDS DESIGN |
+| V4-FEAT-055 | Account Access Request / Admin Approval Workflow | Add a guest-facing **Request an account** flow linked from Login. Human applicants submit the information required for admin onboarding behind CAPTCHA and abuse controls. Pending duplicates are deduplicated; admins review requests in User Management, receive operational notifications, and resolve them as **Create**, **Ignore**, or **Reject**. Reject creates a reversible email ban; Ignore closes the request without banning; Create hands off into the existing secure admin onboarding/invite flow with request details prefilled. | WISHLIST / NEEDS DESIGN |
+| V4-FEAT-056 | ML Retraining Recommendation / Model Health Alerts | Add advisory model-health monitoring that evaluates model age, drift and matured live performance and tells Admins when retraining should be considered. The feature may recommend a horizon-specific retrain and surface the reason, but **must not automatically retrain, promote, deactivate, or replace a model**. Admin remains responsible for triggering retraining and explicitly promoting any resulting candidate. | WISHLIST / NEEDS DESIGN |
+| V4-FEAT-057 | ML Fundamental Feature Expansion & Retraining | Follow on from V4-FEAT-054. After historical fundamental coverage is expanded, define a curated/versioned fundamental ML feature set, validate point-in-time safety and coverage, retrain the 1m/3m/6m models, and compare the resulting candidates with existing models and the deterministic StoX baseline before any Admin promotion. | WISHLIST / DEPENDS ON V4-FEAT-054 |
 
 ## 3. V4-FEAT-055 — Account Access Request / Admin Approval Workflow
 
@@ -398,12 +400,108 @@ The detailed V8 design should decide:
 - whether a successful retrain automatically resolves the recommendation or only a successful promotion does;
 - whether recommendation evaluation is scheduled daily/weekly or piggybacks on existing drift checks.
 
-## 5. Boundary
+## 5. V4-FEAT-057 — ML Fundamental Feature Expansion & Retraining
+
+### 5.1 Product intent
+
+This epic follows **V4-FEAT-054 — Historical Fundamental Data Bootstrap**.
+
+Once StoX has materially richer historical fundamental coverage, expand the ML inputs beyond the current small fundamental subset and retrain the horizon models using a curated, versioned feature definition.
+
+The goal is not to feed every raw fundamental field into ML. The feature set should contain useful, sufficiently covered, point-in-time-safe derived inputs.
+
+### 5.2 Scope
+
+The design SHOULD evaluate candidate features such as:
+
+- EPS / earnings growth;
+- revenue growth and acceleration;
+- ROE / ROIC;
+- operating and net margins;
+- free-cash-flow measures;
+- debt/equity and debt trends;
+- balance-sheet quality indicators;
+- valuation measures such as P/E and P/B where point-in-time reconstruction is reliable;
+- other fundamental ratios supported by the canonical fact store.
+
+Final inclusion must be evidence-driven rather than assuming every available field improves the model.
+
+### 5.3 Point-in-time and data-quality requirements
+
+Before training:
+
+- validate historical coverage by feature, year and stock universe;
+- preserve period end, availability/publication date, revision and provenance semantics;
+- prevent future revisions or later-published fundamentals from leaking into earlier observations;
+- distinguish missing from zero;
+- quantify missingness and sparsity;
+- reject or exclude features whose historical reconstruction is not trustworthy.
+
+### 5.4 Feature-set versioning
+
+A materially changed fundamental feature set SHALL have its own version/definition.
+
+Persist enough metadata with training runs and model versions to reproduce:
+
+- exact included features;
+- transformations/derived formulas;
+- missing-value policy;
+- categorical handling;
+- source/provenance expectations;
+- feature-definition version/hash.
+
+Existing historical production predictions remain associated with the model/version that originally produced them; do not rewrite them retroactively.
+
+### 5.5 Retraining and comparison
+
+After the expanded feature set is validated:
+
+1. rebuild the point-in-time ML datasets;
+2. retrain 1m, 3m and 6m candidates;
+3. evaluate statistical and investment metrics;
+4. compare each candidate with the currently active model for that horizon;
+5. compare against the deterministic StoX Strategy/Evaluation baseline over comparable test periods;
+6. expose the candidate and evidence to Admin;
+7. require explicit Admin promotion.
+
+Richer fundamentals must not imply automatic promotion. If an expanded-feature candidate performs worse, the existing active model may remain in service.
+
+### 5.6 Initial acceptance criteria
+
+1. V4-FEAT-054 historical fundamentals bootstrap is complete enough for ML use.
+2. Feature coverage and point-in-time integrity are measured before training.
+3. The expanded fundamental feature set is curated and versioned.
+4. No feature uses information unavailable as of the observation reference date.
+5. Missing values remain distinguishable from legitimate zero values.
+6. 1m/3m/6m datasets can be rebuilt with the new feature definition.
+7. All three horizons can be retrained successfully.
+8. New candidates are compared with current active models and the deterministic StoX baseline.
+9. Existing historical production predictions are not rewritten.
+10. Promotion remains explicit and Admin-controlled.
+11. Training/model metadata records the exact fundamental feature-set version and provenance assumptions.
+
+### 5.7 Open design decisions
+
+The detailed V8 design should decide:
+
+- the final fundamental features to include;
+- whether some features are horizon-specific;
+- minimum acceptable historical coverage for inclusion;
+- handling of highly correlated/redundant features;
+- winsorization/outlier policy;
+- whether valuation features can be reconstructed reliably enough for PIT use;
+- whether feature selection is fixed by product design or assisted by offline analysis.
+
+## 6. Boundary
 
 V8 owns the Telemetry product itself: ingestion, storage, analytics/query APIs, dashboards/explorer, SDKs, identity/correlation model, events/metrics/logs/traces, retention, export, deletion, administration and the other capabilities frozen in the Telemetry architecture specification.
 
 V8 also owns the one-time historical fundamental bootstrap outcome, but does not change FEAT-053's ongoing provider-driven fundamental ingestion architecture.
 
-V8 owns the account-access request workflow through Admin disposition and handoff into the existing secure user onboarding flow. It does **not** replace the existing invitation/token security model, establish open registration, or allow a guest request to grant any account privilege by itself.\n\nV8 also owns advisory ML retraining recommendations and model-health alerts. These remain operational guidance only; actual retraining and model promotion stay explicitly Admin-controlled.
+V8 owns the account-access request workflow through Admin disposition and handoff into the existing secure user onboarding flow. It does **not** replace the existing invitation/token security model, establish open registration, or allow a guest request to grant any account privilege by itself.
+
+V8 also owns advisory ML retraining recommendations and model-health alerts. These remain operational guidance only; actual retraining and model promotion stay explicitly Admin-controlled.
+
+V8 also owns the ML follow-on to the historical fundamentals bootstrap: curated fundamental feature expansion, PIT/coverage validation, horizon retraining and candidate evaluation. This does not alter the rule that model promotion remains explicit and Admin-controlled.
 
 V8 does **not** own StoX-specific Telemetry instrumentation/integration. That is planned as a separate V9 StoX epic.
