@@ -26,8 +26,8 @@ class MlScoringLifecycleTest extends TestCase
         $training = Stock::query()->create(['symbol' => 'TRAINING', 'exchange' => 'NSE', 'name' => 'Training Issuer']);
         $trainingTwo = Stock::query()->create(['symbol' => 'TRAINING2', 'exchange' => 'NSE', 'name' => 'Training Issuer 2']);
         $trainingThree = Stock::query()->create(['symbol' => 'TRAINING3', 'exchange' => 'NSE', 'name' => 'Training Issuer 3']);
-        for ($day = 0; $day < 520; $day++) {
-            $date = Carbon::parse('2025-01-01')->addDays($day)->toDateString();
+        for ($day = 0; $day < 1400; $day++) {
+            $date = Carbon::parse('2023-01-01')->addDays($day)->toDateString();
             foreach ([$benchmark, $training, $trainingTwo, $trainingThree] as $subject) {
                 StockPrice::query()->create([
                     'stock_id' => $subject->id,

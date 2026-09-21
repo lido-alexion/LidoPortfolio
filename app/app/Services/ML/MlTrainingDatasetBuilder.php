@@ -97,10 +97,11 @@ class MlTrainingDatasetBuilder
         ];
         $handles = array_map(static fn (string $path) => fopen($path, 'wb'), $paths);
         $rowCounts = ['train' => 0, 'validation' => 0, 'test' => 0];
+        $purgedRows = ['train' => 0, 'validation' => 0, 'test' => 0];
         $peakBufferedRows = 0;
         $stocksProcessed = 0;
         try {
-            $this->universeQuery()->chunkById(100, function ($stockChunk) use (&$handles, &$rowCounts, &$peakBufferedRows, &$stocksProcessed, $benchmarkSeries, $horizonDays, $cutoff, $partitions): void {
+            $this->universeQuery()->chunkById(100, function ($stockChunk) use (&$handles, &$rowCounts, &$purgedRows, &$peakBufferedRows, &$stocksProcessed, $benchmarkSeries, $horizonDays, $cutoff, $partitions): void {
                 foreach ($stockChunk as $stock) {
                     $stocksProcessed++;
                     $series = $this->priceSeries($stock, $cutoff);
@@ -112,6 +113,10 @@ class MlTrainingDatasetBuilder
                     $peakBufferedRows = max($peakBufferedRows, count($stockRows));
                     foreach ($stockRows as $row) {
                         $partition = $this->partitionForDate($row['reference_date'], $partitions);
+                        if (($partition === 'train' && $row['label_end'] >= $partitions['validation_start']) || ($partition === 'validation' && $row['label_end'] >= $partitions['test_start'])) {
+                            $purgedRows[$partition]++;
+                            continue;
+                        }
                         fwrite($handles[$partition], json_encode($row, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES)."\n");
                         $rowCounts[$partition]++;
                     }
@@ -132,16 +137,36 @@ class MlTrainingDatasetBuilder
             throw new RuntimeException('Insufficient point-in-time training examples.');
         }
         $partitions['row_counts'] = $rowCounts;
+        $partitions['label_separation'] = [
+            'rule' => 'label_end_before_next_partition_start',
+            'train_purged_rows' => $purgedRows['train'],
+            'validation_purged_rows' => $purgedRows['validation'],
+        ];
         $bytes = array_sum(array_map(static fn (string $path): int => is_file($path) ? (int) filesize($path) : 0, $paths));
         $rowDateRanges = [];
+        $maxLabelEnds = ['train' => null, 'validation' => null, 'test' => null];
+        $seenBuckets = [];
         foreach ($paths as $partition => $path) {
             $first = null;
             $last = null;
             $handle = fopen($path, 'rb');
             while (($line = fgets($handle)) !== false) {
-                $date = json_decode($line, true, 64, JSON_THROW_ON_ERROR)['reference_date'] ?? null;
+                $row = json_decode($line, true, 64, JSON_THROW_ON_ERROR);
+                $date = $row['reference_date'] ?? null;
+                $labelEnd = $row['label_end'] ?? null;
                 $first = $first === null || $date < $first ? $date : $first;
                 $last = $last === null || $date > $last ? $date : $last;
+                $bucket = substr($date, 0, 7);
+                if (isset($seenBuckets[$bucket]) && $seenBuckets[$bucket] !== $partition) {
+                    throw new RuntimeException("ML sampling bucket spans partitions: {$bucket}.");
+                }
+                $seenBuckets[$bucket] = $partition;
+                if ($labelEnd !== null && ($maxLabelEnds[$partition] === null || $labelEnd > $maxLabelEnds[$partition])) {
+                    $maxLabelEnds[$partition] = $labelEnd;
+                }
+                if (($partition === 'train' && $labelEnd >= $partitions['validation_start']) || ($partition === 'validation' && $labelEnd >= $partitions['test_start'])) {
+                    throw new RuntimeException("ML label horizon crosses {$partition} partition boundary.");
+                }
             }
             fclose($handle);
             $rowDateRanges[$partition] = ['start' => $first, 'end' => $last];
@@ -166,6 +191,12 @@ class MlTrainingDatasetBuilder
                 'benchmark_start_date' => $benchmarkSeries['dates'][0] ?? null,
                 'benchmark_end_date' => $benchmarkSeries['dates'][array_key_last($benchmarkSeries['dates'])] ?? null,
                 'row_date_ranges' => $rowDateRanges,
+                'train_max_label_end' => $maxLabelEnds['train'],
+                'validation_start' => $partitions['validation_start'],
+                'validation_max_label_end' => $maxLabelEnds['validation'],
+                'test_start' => $partitions['test_start'],
+                'train_purged_for_label_overlap' => $purgedRows['train'],
+                'validation_purged_for_label_overlap' => $purgedRows['validation'],
             ],
         ];
     }
@@ -214,25 +245,50 @@ class MlTrainingDatasetBuilder
     /** @param list<string> $dates @return array<string,mixed> */
     private function partitionMetadata(array $dates, Carbon $cutoff): array
     {
-        $trainEnd = $dates[max(0, (int) floor(count($dates) * 0.70) - 1)];
-        $validationEnd = $dates[max(0, (int) floor(count($dates) * 0.85) - 1)];
+        $bucketDates = [];
+        foreach ($dates as $date) {
+            $bucketDates[substr($date, 0, 7)][] = $date;
+        }
+        $buckets = array_keys($bucketDates);
+        sort($buckets);
+        $bucketCount = count($buckets);
+        if ($bucketCount < 3) {
+            throw new RuntimeException('Insufficient chronological sampling buckets.');
+        }
+        $trainBucketCount = max(1, min($bucketCount - 2, (int) floor($bucketCount * 0.70)));
+        $validationEndIndex = min($bucketCount - 2, max($trainBucketCount, (int) floor($bucketCount * 0.85) - 1));
+        $bucketPartitions = [];
+        foreach ($buckets as $index => $bucket) {
+            $bucketPartitions[$bucket] = $index < $trainBucketCount ? 'train' : ($index <= $validationEndIndex ? 'validation' : 'test');
+        }
+        $trainEndBucket = $buckets[$trainBucketCount - 1];
+        $validationStartBucket = $buckets[$trainBucketCount];
+        $validationEndBucket = $buckets[$validationEndIndex];
+        $testStartBucket = $buckets[$validationEndIndex + 1];
+        $firstDate = static fn (string $bucket): string => $bucketDates[$bucket][0];
+        $lastDate = static fn (string $bucket): string => $bucketDates[$bucket][array_key_last($bucketDates[$bucket])];
 
         return [
-            'train_start' => $dates[0],
-            'train_end' => $trainEnd,
-            'validation_start' => $this->firstAfter($dates, $trainEnd),
-            'validation_end' => $validationEnd,
-            'test_start' => $this->firstAfter($dates, $validationEnd),
-            'test_end' => $dates[array_key_last($dates)],
+            'train_start' => $firstDate($buckets[0]),
+            'train_end' => $lastDate($trainEndBucket),
+            'validation_start' => $firstDate($validationStartBucket),
+            'validation_end' => $lastDate($validationEndBucket),
+            'test_start' => $firstDate($testStartBucket),
+            'test_end' => $lastDate($buckets[array_key_last($buckets)]),
             'cutoff_date' => $cutoff->toDateString(),
-            'split_basis' => 'chronological_reference_dates',
+            'split_basis' => 'chronological_monthly_sampling_buckets',
+            'sampling_buckets' => $bucketPartitions,
             'sampling' => ['version' => 'v7-monthly-reference-1', 'cadence' => 'monthly', 'anchor' => 'last_available_trading_day'],
         ];
     }
 
     private function partitionForDate(string $date, array $partitions): string
     {
-        return $date <= $partitions['train_end'] ? 'train' : ($date <= $partitions['validation_end'] ? 'validation' : 'test');
+        $bucket = substr($date, 0, 7);
+        if (! isset($partitions['sampling_buckets'][$bucket])) {
+            throw new RuntimeException("ML row has no sampling bucket partition: {$bucket}.");
+        }
+        return $partitions['sampling_buckets'][$bucket];
     }
 
     /** @return array<string,mixed> */

@@ -244,4 +244,54 @@ class MlTrainingDatasetBuilderTest extends TestCase
 
         File::deleteDirectory($directory);
     }
+
+    public function test_label_horizon_separation_is_enforced_for_all_supported_horizons(): void
+    {
+        $benchmark = Stock::query()->create(['symbol' => 'NIFTY50', 'exchange' => 'NSE', 'name' => 'NIFTY 50', 'is_benchmark' => true]);
+        $issuer = Stock::query()->create(['symbol' => 'HORIZON', 'exchange' => 'NSE', 'name' => 'Horizon Issuer']);
+        foreach ([$benchmark, $issuer] as $subject) {
+            foreach (range(0, 1800) as $day) {
+                StockPrice::query()->create([
+                    'stock_id' => $subject->id,
+                    'price_date' => Carbon::parse('2020-01-01')->addDays($day)->toDateString(),
+                    'close_price' => 100 + $day,
+                    'adjusted_close_price' => 100 + $day,
+                    'data_source' => 'test',
+                ]);
+            }
+        }
+
+        foreach (['1m', '3m', '6m'] as $horizon) {
+            $directory = storage_path('framework/testing/ml-horizon-separation-'.str_replace('m', '', $horizon).'-'.bin2hex(random_bytes(4)));
+            $dataset = app(MlTrainingDatasetBuilder::class)->buildStreamed($horizon, Carbon::parse('2024-12-31'), $directory);
+            $partitionMonths = [];
+            foreach ($dataset['paths'] as $partition => $path) {
+                $this->assertGreaterThan(0, $dataset['partitions']['row_counts'][$partition]);
+                $handle = fopen($path, 'rb');
+                while (($line = fgets($handle)) !== false) {
+                    $row = json_decode($line, true, 64, JSON_THROW_ON_ERROR);
+                    if ($partition === 'train') {
+                        $this->assertLessThan($dataset['partitions']['validation_start'], $row['label_end']);
+                    }
+                    if ($partition === 'validation') {
+                        $this->assertLessThan($dataset['partitions']['test_start'], $row['label_end']);
+                    }
+                    $month = substr($row['reference_date'], 0, 7);
+                    if (isset($partitionMonths[$month])) {
+                        $this->assertSame($partition, $partitionMonths[$month]);
+                    }
+                    $partitionMonths[$month] = $partition;
+                }
+                fclose($handle);
+            }
+            $this->assertSame('chronological_monthly_sampling_buckets', $dataset['partitions']['split_basis']);
+            $this->assertLessThan($dataset['partitions']['validation_start'], $dataset['diagnostics']['train_max_label_end']);
+            $this->assertLessThan($dataset['partitions']['test_start'], $dataset['diagnostics']['validation_max_label_end']);
+            if ($horizon !== '1m') {
+                $this->assertGreaterThan(0, $dataset['diagnostics']['train_purged_for_label_overlap']);
+                $this->assertGreaterThan(0, $dataset['diagnostics']['validation_purged_for_label_overlap']);
+            }
+            File::deleteDirectory($directory);
+        }
+    }
 }
