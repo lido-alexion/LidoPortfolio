@@ -70,6 +70,7 @@ class MlScoringService
         try {
             $dataset = $this->datasets->build($horizon, $cutoff);
             $baseline = $this->deterministicBaseline->evaluate($dataset['rows']);
+            $baselineDefinition = $this->deterministicBaseline->definition();
             $tempArtifactPath = $this->artifactPath($horizon, 0, 'run-'.$run->id.'.tmp');
             $result = $this->adapter->run('train', [
                 'horizon' => $horizon,
@@ -77,6 +78,7 @@ class MlScoringService
                 'rows' => $dataset['rows'],
                 'partitions' => $dataset['partitions'],
                 'feature_definitions' => $dataset['feature_definitions'],
+                'baseline_definition' => $baselineDefinition,
                 'numeric_features' => MlTrainingDatasetBuilder::NUMERIC_FEATURES,
                 'categorical_features' => MlTrainingDatasetBuilder::CATEGORICAL_FEATURES,
                 'seed' => $config['hyperparameters']['seed'] ?? 7047,
@@ -96,11 +98,11 @@ class MlScoringService
                 'metrics' => $metrics,
                 'baselines' => $baselines,
                 'selected_features' => $config['feature_set'],
-                'configuration' => array_replace_recursive($config, ['dataset' => $dataset['partitions'], 'feature_definitions' => $dataset['feature_definitions']]),
+                'configuration' => array_replace_recursive($config, ['dataset' => $dataset['partitions'], 'feature_definitions' => $dataset['feature_definitions'], 'deterministic_baseline' => $baselineDefinition]),
                 'completed_at' => now(),
             ])->save();
 
-            $model = DB::transaction(function () use ($horizon, $cutoff, $config, $run, $tempArtifactPath, &$finalArtifactPath, $result, $metrics, $baselines, $eligible): MlModelVersion {
+            $model = DB::transaction(function () use ($horizon, $cutoff, $config, $run, $tempArtifactPath, &$finalArtifactPath, $baselineDefinition, $result, $metrics, $baselines, $eligible): MlModelVersion {
                 $version = ((int) MlModelVersion::query()->where('horizon', $horizon)->lockForUpdate()->max('version')) + 1;
                 $artifactPath = $this->artifactPath($horizon, $version);
                 $finalArtifactPath = $artifactPath;
@@ -131,6 +133,7 @@ class MlScoringService
                     'point_in_time_safe' => true,
                     'class_distribution' => $metrics['class_distribution'] ?? [],
                     'automatic_promotion' => false,
+                    'deterministic_baseline' => $baselineDefinition,
                     'adapter_metadata' => $result['metadata'] ?? [],
                 ],
                 ]);

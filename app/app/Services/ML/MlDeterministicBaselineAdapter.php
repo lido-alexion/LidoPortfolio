@@ -2,7 +2,6 @@
 
 namespace App\Services\ML;
 
-use App\Services\Backtest\AsOfFactorScorer;
 
 /**
  * Historical adapter for the deterministic StoX evaluation baseline.
@@ -13,7 +12,13 @@ use App\Services\Backtest\AsOfFactorScorer;
  */
 final class MlDeterministicBaselineAdapter
 {
-    public function __construct(private readonly AsOfFactorScorer $scorer) {}
+    public function __construct(private readonly HistoricalStrategyScoreService $strategyScores) {}
+
+    /** @return array<string,mixed> */
+    public function definition(): array
+    {
+        return $this->strategyScores->definition();
+    }
 
     /** @return list<array{probability:float,score:float,reference_date:string,stock_id:int}> */
     public function evaluate(array $rows): array
@@ -23,8 +28,8 @@ final class MlDeterministicBaselineAdapter
             if (($row['partition'] ?? null) !== 'test') {
                 continue;
             }
-            $result = $this->scorer->score((int) $row['stock_id'], (string) $row['reference_date']);
-            if ($result['skipped']) {
+            $result = $this->strategyScores->score((int) $row['stock_id'], (string) $row['reference_date']);
+            if ($result['factor_scores'] === []) {
                 throw new \RuntimeException('Deterministic baseline could not score a test row: insufficient historical bars.');
             }
             $score = max(0.0, min(100.0, (float) $result['score']));

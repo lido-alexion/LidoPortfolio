@@ -5,7 +5,6 @@ namespace App\Services\ML;
 use App\Models\Stock;
 use App\Models\StockPrice;
 use App\Services\Fundamentals\FundamentalDataService;
-use App\Services\Backtest\AsOfFactorScorer;
 use Carbon\Carbon;
 use RuntimeException;
 
@@ -22,10 +21,7 @@ class MlTrainingDatasetBuilder
 
     public const CATEGORICAL_FEATURES = ['sector'];
 
-    public function __construct(
-        private readonly FundamentalDataService $fundamentals,
-        private readonly AsOfFactorScorer $baselineScorer,
-    ) {}
+    public function __construct(private readonly FundamentalDataService $fundamentals) {}
 
     /** @return array{rows:list<array<string,mixed>>,partitions:array<string,mixed>,feature_definitions:array<string,mixed>} */
     public function build(string $horizon, Carbon $cutoff): array
@@ -265,12 +261,6 @@ class MlTrainingDatasetBuilder
 
         return Stock::query()->where('symbol', $benchmarkSymbol)->where('is_benchmark', true)->first()
             ?? Stock::query()->where('symbol', 'NIFTY50')->where('is_benchmark', true)->first();
-    }
-
-    public function deterministicScore(int $stockId, string $date): ?float
-    {
-        $result = $this->baselineScorer->score($stockId, $date);
-        return $result['skipped'] ? null : (float) $result['score'];
     }
 
     /** @return array{relative_return:float,max_drawdown:float,success:bool}|null */
