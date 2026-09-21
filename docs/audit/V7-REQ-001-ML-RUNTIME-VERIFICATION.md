@@ -45,6 +45,10 @@ The first production-scale streamed 1m build on commit `51b4e4c` completed the m
 
 The corrected production-scale run verified scale, memory and benchmark-aware partition generation, but static review then identified a final leakage issue: partitions were assigned by exact stock-specific reference dates while labels extend forward by 21, 63 or 126 trading observations. The repository correction assigns complete `YYYY-MM` sampling buckets to chronological train/validation/test partitions, then purges train rows with `label_end >= validation_start` and validation rows with `label_end >= test_start`. Final JSONL output is revalidated for non-empty partitions, single-bucket ownership and label separation; purge counts, maximum label-end dates and nominal/actual ranges are persisted as diagnostics. V7-REQ-001 remains partially implemented pending deployment and training verification.
 
+### Retraining lock correction
+
+Production verification measured the optimized 1m dataset build at 767.78 seconds (approximately 12.8 minutes), before deterministic Strategy baseline evaluation, Python training/evaluation, artifact verification and persistence. The prior 900-second retraining lease was therefore insufficient and was identified before any production ML lifecycle mutation. Same-horizon retraining now uses the configurable `ml.retrain_lock_seconds` lease, defaulting to 14,400 seconds (four hours), while retaining the 15-second lock-acquisition wait and independent per-horizon keys. No production training, promotion, prediction or drift mutation occurred before this correction.
+
 ### Schema and models
 
 Migration `app/database/migrations/2026_09_12_100001_v7_stox_fundamentals_and_ml.php` creates the four expected ML tables:

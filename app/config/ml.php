@@ -6,6 +6,8 @@ return [
     'model_directory' => env('STOXLA_ML_MODEL_DIRECTORY', base_path('../shared/ml/models')),
     'timeout_seconds' => (float) env('STOXLA_ML_TIMEOUT_SECONDS', 180),
     'max_output_bytes' => (int) env('STOXLA_ML_MAX_OUTPUT_BYTES', 8 * 1024 * 1024),
+    // Retraining includes streamed dataset construction, baseline evaluation and Python fitting.
+    'retrain_lock_seconds' => (int) env('STOXLA_ML_RETRAIN_LOCK_SECONDS', 14400),
     'artifact_format' => 'joblib',
     'artifact_version' => 'v7-logistic-1',
     'benchmark_mapping' => [

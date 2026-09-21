@@ -48,7 +48,7 @@ class MlScoringService
         $this->assertHorizon($horizon);
         $cutoff ??= now();
 
-        return Cache::lock('stox-ml-retrain-'.$horizon, 900)->block(15, function () use ($horizon, $cutoff, $user, $overrides): MlModelVersion {
+        return Cache::lock('stox-ml-retrain-'.$horizon, (int) config('ml.retrain_lock_seconds', 14400))->block(15, function () use ($horizon, $cutoff, $user, $overrides): MlModelVersion {
             return $this->retrainLocked($horizon, $cutoff, $user, $overrides);
         });
     }
