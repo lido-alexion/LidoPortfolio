@@ -24,24 +24,26 @@ final class MlDeterministicBaselineAdapter
     public function evaluate(array $rows): array
     {
         $definition = $this->definition();
+        $maxDate = collect($rows)->max('reference_date');
         $out = [];
-        foreach ($rows as $row) {
-            if (($row['partition'] ?? null) !== 'test') {
-                continue;
+        $testRowsByStock = collect($rows)->filter(fn (array $row): bool => ($row['partition'] ?? null) === 'test')->groupBy('stock_id');
+        foreach ($testRowsByStock as $stockId => $stockRows) {
+            $bars = $this->strategyScores->barsForStock((int) $stockId, (string) $maxDate);
+            foreach ($stockRows as $row) {
+                $result = $this->strategyScores->score((int) $stockId, (string) $row['reference_date'], $definition, $bars);
+                if ($result['factor_scores'] === []) {
+                    throw new \RuntimeException('Deterministic baseline could not score a test row: insufficient historical bars.');
+                }
+                $score = max(0.0, min(100.0, (float) $result['score']));
+                $out[] = [
+                    'probability' => $score / 100,
+                    'score' => $score,
+                    'positive_decision' => (bool) $result['positive_decision'],
+                    'decision_threshold' => (float) $result['decision_threshold'],
+                    'reference_date' => (string) $row['reference_date'],
+                    'stock_id' => (int) $stockId,
+                ];
             }
-            $result = $this->strategyScores->score((int) $row['stock_id'], (string) $row['reference_date'], $definition);
-            if ($result['factor_scores'] === []) {
-                throw new \RuntimeException('Deterministic baseline could not score a test row: insufficient historical bars.');
-            }
-            $score = max(0.0, min(100.0, (float) $result['score']));
-            $out[] = [
-                'probability' => $score / 100,
-                'score' => $score,
-                'positive_decision' => (bool) $result['positive_decision'],
-                'decision_threshold' => (float) $result['decision_threshold'],
-                'reference_date' => (string) $row['reference_date'],
-                'stock_id' => (int) $row['stock_id'],
-            ];
         }
 
         return $out;

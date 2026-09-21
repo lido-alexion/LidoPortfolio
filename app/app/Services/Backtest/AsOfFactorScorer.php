@@ -23,10 +23,10 @@ class AsOfFactorScorer
      * @param  array<string, mixed>  $evalConfig  sma_fast, sma_slow, rsi_period, atr_period, volume_sma_period, min_bars
      * @return array{score: float, confidence: float, indicator_scores: array<string, float>, indicators: array<string, mixed>, skipped: bool}
      */
-    public function score(int $stockId, string $asOfDate, array $evalConfig = []): array
+    public function score(int $stockId, string $asOfDate, array $evalConfig = [], ?array $barsOverride = null): array
     {
         $minBars = (int) ($evalConfig['min_bars'] ?? 60);
-        $bars = $this->loadBars($stockId, $asOfDate, 400);
+        $bars = $barsOverride ?? $this->loadBars($stockId, $asOfDate, 400);
         if (count($bars) < $minBars) {
             return [
                 'score' => 0.0,

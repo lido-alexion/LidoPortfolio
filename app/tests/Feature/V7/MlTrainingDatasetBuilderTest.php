@@ -8,6 +8,7 @@ use App\Services\Fundamentals\FundamentalDataService;
 use App\Services\ML\MlTrainingDatasetBuilder;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class MlTrainingDatasetBuilderTest extends TestCase
@@ -19,6 +20,7 @@ class MlTrainingDatasetBuilderTest extends TestCase
         $benchmark = Stock::query()->create(['symbol' => 'NIFTY50', 'exchange' => 'NSE', 'name' => 'NIFTY 50', 'is_benchmark' => true]);
         $stock = Stock::query()->create(['symbol' => 'TCS', 'exchange' => 'NSE', 'name' => 'TCS']);
         $inactive = Stock::query()->create(['symbol' => 'OLDCO', 'exchange' => 'NSE', 'name' => 'Old Co', 'is_active' => false]);
+        $inactiveTwo = Stock::query()->create(['symbol' => 'OLDCO2', 'exchange' => 'NSE', 'name' => 'Old Co 2', 'is_active' => false]);
 
         app(FundamentalDataService::class)->storeFacts($stock, [
             [
@@ -31,7 +33,7 @@ class MlTrainingDatasetBuilderTest extends TestCase
             ],
         ], Carbon::parse('2025-06-01'));
 
-        foreach ([$benchmark, $stock, $inactive] as $subject) {
+        foreach ([$benchmark, $stock, $inactive, $inactiveTwo] as $subject) {
             for ($day = 0; $day < 220; $day++) {
                 StockPrice::query()->create([
                     'stock_id' => $subject->id,
@@ -43,18 +45,60 @@ class MlTrainingDatasetBuilderTest extends TestCase
             }
         }
 
-        $dataset = app(MlTrainingDatasetBuilder::class)->build('3m', Carbon::parse('2025-08-01'));
+        $dataset = app(MlTrainingDatasetBuilder::class)->build('1m', Carbon::parse('2025-08-01'));
         $rows = collect($dataset['rows']);
 
         $this->assertNotEmpty($rows);
         $this->assertTrue($rows->every(fn (array $row): bool => $row['reference_date'] <= '2025-08-01'));
         $this->assertTrue($rows->every(fn (array $row): bool => $row['label_end'] <= '2025-08-01'));
-        $this->assertTrue($rows->filter(fn (array $row): bool => $row['reference_date'] < '2025-06-01')->every(fn (array $row): bool => $row['features']['roe'] === null));
-        $this->assertTrue($rows->filter(fn (array $row): bool => $row['reference_date'] >= '2025-06-01')->every(fn (array $row): bool => $row['features']['roe'] === 10.0));
+        $stockRows = $rows->filter(fn (array $row): bool => $row['stock_id'] === $stock->id);
+        $this->assertTrue($stockRows->filter(fn (array $row): bool => $row['reference_date'] < '2025-06-01')->every(fn (array $row): bool => $row['features']['roe'] === null));
+        $this->assertTrue($stockRows->filter(fn (array $row): bool => $row['reference_date'] >= '2025-06-01')->every(fn (array $row): bool => $row['features']['roe'] === 10.0));
         $this->assertSame($rows->sortBy('reference_date')->pluck('reference_date')->values()->all(), $rows->pluck('reference_date')->values()->all());
         $this->assertSame('2025-08-01', $dataset['partitions']['cutoff_date']);
         $this->assertSame('train', $rows->first()['partition']);
         $this->assertContains('test', $rows->pluck('partition')->unique()->all());
         $this->assertTrue($rows->contains(fn (array $row): bool => $row['stock_id'] === $inactive->id));
+        $months = $rows->pluck('reference_date')->map(fn (string $date): string => substr($date, 0, 7));
+        $this->assertSame($months->unique()->count(), $months->countBy()->count());
+        $this->assertSame('v7-monthly-reference-1', $dataset['feature_definitions']['sampling']['version']);
+
+        $plan = app(MlTrainingDatasetBuilder::class)->plan('1m', Carbon::parse('2025-08-01'));
+        $this->assertSame(3, $plan['stock_count']);
+        $this->assertSame('monthly', $plan['sampling']['cadence']);
+        $this->assertGreaterThan(0, $plan['estimated_reference_rows']);
+    }
+
+    public function test_build_uses_bounded_stock_level_queries_instead_of_per_row_fundamental_queries(): void
+    {
+        $benchmark = Stock::query()->create(['symbol' => 'NIFTY50', 'exchange' => 'NSE', 'name' => 'NIFTY 50', 'is_benchmark' => true]);
+        foreach (['AAA', 'BBB', 'CCC'] as $symbol) {
+            $stock = Stock::query()->create(['symbol' => $symbol, 'exchange' => 'NSE', 'name' => $symbol]);
+            foreach (range(0, 220) as $day) {
+                StockPrice::query()->create([
+                    'stock_id' => $stock->id,
+                    'price_date' => Carbon::parse('2025-01-01')->addDays($day)->toDateString(),
+                    'close_price' => 100 + $day,
+                    'adjusted_close_price' => 100 + $day,
+                    'data_source' => 'test',
+                ]);
+            }
+        }
+        foreach (range(0, 220) as $day) {
+            StockPrice::query()->create([
+                'stock_id' => $benchmark->id,
+                'price_date' => Carbon::parse('2025-01-01')->addDays($day)->toDateString(),
+                'close_price' => 100 + $day,
+                'adjusted_close_price' => 100 + $day,
+                'data_source' => 'test',
+            ]);
+        }
+
+        $queries = 0;
+        DB::listen(static function () use (&$queries): void { $queries++; });
+        $dataset = app(MlTrainingDatasetBuilder::class)->build('1m', Carbon::parse('2025-08-01'));
+
+        $this->assertNotEmpty($dataset['rows']);
+        $this->assertLessThan(30, $queries, 'Dataset construction regressed to per-reference SQL queries.');
     }
 }

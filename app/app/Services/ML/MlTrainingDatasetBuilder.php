@@ -4,6 +4,7 @@ namespace App\Services\ML;
 
 use App\Models\Stock;
 use App\Models\StockPrice;
+use App\Models\V7\FundamentalFact;
 use App\Services\Fundamentals\FundamentalDataService;
 use Carbon\Carbon;
 use RuntimeException;
@@ -35,7 +36,7 @@ class MlTrainingDatasetBuilder
         // Historical training must not apply today's active flag.  A security
         // with valid historical observations remains eligible for its observed
         // period, while benchmark/index rows are never issuer examples.
-        $stocks = Stock::query()
+        $stockQuery = Stock::query()
             ->where(function ($query): void {
                 $query->where('is_benchmark', false)->orWhereNull('is_benchmark');
             })
@@ -43,12 +44,21 @@ class MlTrainingDatasetBuilder
             ->whereExists(fn ($query) => $query->selectRaw('1')
                 ->from('portfolio_stock_prices')
                 ->whereColumn('portfolio_stock_prices.stock_id', 'portfolio_stocks.id'))
-            ->orderBy('id')
-            ->get();
+            ->orderBy('id');
         $rows = [];
-        foreach ($stocks as $stock) {
-            $rows = [...$rows, ...$this->rowsForStock($stock, $benchmark, $horizonDays, $cutoff)];
-        }
+        $benchmarkSeries = $this->priceSeries($benchmark, $cutoff);
+        $stockQuery->chunkById(100, function ($stockChunk) use (&$rows, $benchmarkSeries, $horizonDays, $cutoff): void {
+            foreach ($stockChunk as $stock) {
+                $series = $this->priceSeries($stock, $cutoff);
+                if ($series['dates'] === []) {
+                    continue;
+                }
+                $facts = $this->fundamentalFacts($stock, $cutoff);
+                foreach ($this->rowsForStock($stock, $series, $benchmarkSeries, $facts, $horizonDays, $cutoff) as $row) {
+                    $rows[] = $row;
+                }
+            }
+        }, 'id');
         if (count($rows) < 12) {
             throw new RuntimeException('Insufficient point-in-time training examples.');
         }
@@ -90,7 +100,46 @@ class MlTrainingDatasetBuilder
                     'rule' => 'non-benchmark NSE stocks with historical price observations through the cutoff, independent of current is_active state',
                 ],
                 'benchmark_mapping' => $this->benchmarkMappingDefinition(),
+                'sampling' => [
+                    'version' => 'v7-monthly-reference-1',
+                    'cadence' => 'monthly',
+                    'anchor' => 'last_available_trading_day',
+                ],
             ],
+        ];
+    }
+
+    /**
+     * Read-only planning path. It never creates lifecycle rows or loads the
+     * training matrix; the estimate is intentionally cheap and conservative.
+     *
+     * @return array<string,mixed>
+     */
+    public function plan(string $horizon, Carbon $cutoff): array
+    {
+        if (! isset(['1m' => 21, '3m' => 63, '6m' => 126][$horizon])) {
+            throw new RuntimeException('Unsupported ML horizon.');
+        }
+        $stockQuery = Stock::query()
+            ->where(function ($query): void { $query->where('is_benchmark', false)->orWhereNull('is_benchmark'); })
+            ->where('exchange', 'NSE')
+            ->whereExists(fn ($query) => $query->selectRaw('1')->from('portfolio_stock_prices')->whereColumn('portfolio_stock_prices.stock_id', 'portfolio_stocks.id'));
+        $stockCount = (int) $stockQuery->count();
+        $first = StockPrice::query()->whereDate('price_date', '<=', $cutoff->toDateString())->min('price_date');
+        $last = StockPrice::query()->whereDate('price_date', '<=', $cutoff->toDateString())->max('price_date');
+        $months = 0;
+        if ($first !== null && $last !== null) {
+            $months = ((int) Carbon::parse($first)->diffInMonths(Carbon::parse($last))) + 1;
+        }
+
+        return [
+            'horizon' => $horizon,
+            'cutoff_date' => $cutoff->toDateString(),
+            'stock_count' => $stockCount,
+            'sampling' => ['version' => 'v7-monthly-reference-1', 'cadence' => 'monthly', 'anchor' => 'last_available_trading_day'],
+            'estimated_reference_rows' => $stockCount * $months,
+            'date_range' => ['start' => $first, 'end' => $last],
+            'expected_partitions' => ['train' => '70%', 'validation' => '15%', 'test' => '15%'],
         ];
     }
 
@@ -124,16 +173,28 @@ class MlTrainingDatasetBuilder
         ];
     }
 
-    /** @return list<array<string,mixed>> */
-    private function rowsForStock(Stock $stock, Stock $benchmark, int $horizonDays, Carbon $cutoff): array
+    /** @return array<string,float> */
+    private function prices(Stock $stock, Carbon $to): array
     {
-        $prices = $this->prices($stock, $cutoff);
-        $benchmarkPrices = $this->prices($benchmark, $cutoff);
-        $labelPrices = $this->labelPrices($stock, $cutoff);
-        $benchmarkLabelPrices = $this->labelPrices($benchmark, $cutoff);
-        $dates = array_keys($prices);
+        return $this->priceSeries($stock, $to)['features'];
+    }
+
+    /** @return list<array<string,mixed>> */
+    private function rowsForStock(Stock $stock, array $series, array $benchmarkSeries, array $facts, int $horizonDays, Carbon $cutoff): array
+    {
+        $prices = $series['features'];
+        $benchmarkPrices = $benchmarkSeries['features'];
+        $labelPrices = $series['labels'];
+        $benchmarkLabelPrices = $benchmarkSeries['labels'];
+        $dates = $series['dates'];
+        $dateIndex = $series['index'];
+        $sampleDates = $this->monthlyReferenceDates($dates);
         $rows = [];
-        foreach ($dates as $index => $date) {
+        foreach ($sampleDates as $date) {
+            $index = $dateIndex[$date] ?? null;
+            if ($index === null) {
+                continue;
+            }
             if ($index < 63 || ! isset($dates[$index + $horizonDays])) {
                 continue;
             }
@@ -141,16 +202,16 @@ class MlTrainingDatasetBuilder
             if ($futureDate > $cutoff->toDateString()) {
                 continue;
             }
-            $features = $this->featuresForPrices($stock, $date, $prices, $benchmarkPrices);
+            $features = $this->featuresForPrices($stock, $date, $prices, $benchmarkPrices, $facts, $series['index'], $benchmarkSeries['index']);
             $entry = (float) ($labelPrices[$date] ?? 0);
             $future = (float) ($labelPrices[$futureDate] ?? 0);
-            $benchmarkEntry = $this->closeAtOrBefore($benchmarkLabelPrices, $date);
-            $benchmarkFuture = $this->closeAtOrBefore($benchmarkLabelPrices, $futureDate);
+            $benchmarkEntry = $this->closeAtOrBefore($benchmarkLabelPrices, $date, $benchmarkSeries['dates']);
+            $benchmarkFuture = $this->closeAtOrBefore($benchmarkLabelPrices, $futureDate, $benchmarkSeries['dates']);
             if ($entry <= 0 || $benchmarkEntry === null || $benchmarkFuture === null) {
                 continue;
             }
             $relativeReturn = (($future - $entry) / $entry) - (($benchmarkFuture - $benchmarkEntry) / $benchmarkEntry);
-            $maxDrawdown = $this->maxDrawdown($labelPrices, $index, $index + $horizonDays, $entry);
+            $maxDrawdown = $this->maxDrawdown($labelPrices, $index, $index + $horizonDays, $entry, $dates);
             $rows[] = [
                 'stock_id' => $stock->id,
                 'reference_date' => $date,
@@ -166,71 +227,147 @@ class MlTrainingDatasetBuilder
     }
 
     /** @return array<string,float|null> */
-    private function featuresForPrices(Stock $stock, string $date, array $prices, array $benchmarkPrices): array
+    private function featuresForPrices(Stock $stock, string $date, array $prices, array $benchmarkPrices, array $facts, array $priceIndex, array $benchmarkIndex): array
     {
-        $stock3m = $this->returnOver($prices, $date, 63);
-        $benchmark3m = $this->returnOver($benchmarkPrices, $date, 63);
-        $momentum = $this->returnOver($prices, $date, 21);
-        $close = $this->closeAtOrBefore($prices, $date);
-        $sma = $this->sma($prices, $date, 20);
+        $stock3m = $this->returnOver($prices, $date, 63, $priceIndex);
+        $benchmark3m = $this->returnOver($benchmarkPrices, $date, 63, $benchmarkIndex);
+        $momentum = $this->returnOver($prices, $date, 21, $priceIndex);
+        $close = $this->closeAtOrBefore($prices, $date, array_keys($priceIndex));
+        $sma = $this->sma($prices, $date, 20, $priceIndex);
         $asOf = Carbon::parse($date);
-        $roe = $this->fundamentals->metric($stock, 'roe', 'ttm', $asOf);
-        $debtEquity = $this->fundamentals->metric($stock, 'debt_equity', 'ttm', $asOf);
-        $revenue = $this->fundamentals->growthMetric($stock, 'revenue', 'quarterly', $asOf);
+        $metrics = $this->historicalMetrics($facts, $date);
 
         return [
             'relative_strength_3m' => $stock3m !== null && $benchmark3m !== null ? $stock3m - $benchmark3m : null,
             'momentum_score' => $momentum,
             'trend_score' => $close !== null && $sma !== null && $sma != 0 ? (($close / $sma) - 1) * 100 : null,
-            'roe' => $roe['value'],
-            'debt_equity' => $debtEquity['value'],
-            'revenue_growth_proxy' => $revenue['value'],
+            'roe' => $metrics['roe'],
+            'debt_equity' => $metrics['debt_equity'],
+            'revenue_growth_proxy' => $metrics['revenue_growth'],
             'sector' => $stock->sector ?: '__unknown',
         ];
     }
 
-    /** @return array<string,float> */
-    private function prices(Stock $stock, Carbon $to): array
+    /** @return array{features:array<string,float>,labels:array<string,float>,dates:list<string>,index:array<string,int>} */
+    private function priceSeries(Stock $stock, Carbon $to): array
     {
-        return StockPrice::query()->where('stock_id', $stock->id)->whereDate('price_date', '<=', $to->toDateString())->orderBy('price_date')->get(['price_date', 'close_price'])->mapWithKeys(fn (StockPrice $price): array => [$price->price_date->toDateString() => (float) $price->close_price])->all();
-    }
-
-    private function returnOver(array $prices, string $date, int $lookback): ?float
-    {
-        $dates = array_keys($prices);
-        $index = array_search($date, $dates, true);
-        if ($index === false || $index < $lookback || (float) $prices[$dates[$index - $lookback]] == 0.0) {
-            return null;
-        }
-
-        return (($prices[$date] - $prices[$dates[$index - $lookback]]) / $prices[$dates[$index - $lookback]]) * 100;
-    }
-
-    private function sma(array $prices, string $date, int $period): ?float
-    {
-        $dates = array_keys($prices);
-        $index = array_search($date, $dates, true);
-        if ($index === false || $index + 1 < $period) {
-            return null;
-        }
-        return array_sum(array_slice(array_values($prices), $index - $period + 1, $period)) / $period;
-    }
-
-    private function closeAtOrBefore(array $prices, string $date): ?float
-    {
-        $value = null;
-        foreach ($prices as $priceDate => $close) {
-            if ($priceDate > $date) {
-                break;
+        $features = [];
+        $labels = [];
+        $dates = [];
+        StockPrice::query()->where('stock_id', $stock->id)->whereDate('price_date', '<=', $to->toDateString())->orderBy('price_date')->get(['price_date', 'close_price', 'adjusted_close_price'])->each(function (StockPrice $price) use (&$features, &$labels, &$dates): void {
+            if ($price->close_price === null) {
+                return;
             }
-            $value = (float) $close;
-        }
-        return $value;
+            $date = $price->price_date->toDateString();
+            $dates[] = $date;
+            $features[$date] = (float) $price->close_price;
+            $labels[$date] = (float) ($price->adjusted_close_price ?? $price->close_price);
+        });
+        return ['features' => $features, 'labels' => $labels, 'dates' => $dates, 'index' => array_flip($dates)];
     }
 
-    private function maxDrawdown(array $prices, int $start, int $end, float $entry): float
+    /** @return list<array<string,mixed>> */
+    private function fundamentalFacts(Stock $stock, Carbon $cutoff): array
     {
-        $minimum = min(array_slice(array_values($prices), $start, $end - $start + 1));
+        return FundamentalFact::query()->where('stock_id', $stock->id)->where('cadence', 'quarterly')->whereDate('availability_date', '<=', $cutoff->toDateString())->orderBy('period_end')->orderBy('availability_date')->orderBy('revision_number')->get()->map(fn (FundamentalFact $fact): array => [
+            'fact_key' => $fact->fact_key,
+            'period_end' => $fact->period_end?->toDateString(),
+            'availability_date' => $fact->availability_date?->toDateString(),
+            'value' => $fact->value !== null ? (float) $fact->value : null,
+            'revision_number' => (int) $fact->revision_number,
+        ])->all();
+    }
+
+    /** @return array{roe:?float,debt_equity:?float,revenue_growth:?float} */
+    private function historicalMetrics(array $facts, string $asOf): array
+    {
+        $byKeyPeriod = [];
+        foreach ($facts as $fact) {
+            if (($fact['availability_date'] ?? '') > $asOf || $fact['period_end'] === null) {
+                continue;
+            }
+            $key = $fact['fact_key'].':'.$fact['period_end'];
+            $current = $byKeyPeriod[$key] ?? null;
+            if ($current === null || [$fact['availability_date'], $fact['revision_number']] > [$current['availability_date'], $current['revision_number']]) {
+                $byKeyPeriod[$key] = $fact;
+            }
+        }
+        $byKey = [];
+        foreach ($byKeyPeriod as $fact) {
+            $byKey[$fact['fact_key']][] = $fact;
+        }
+        foreach ($byKey as &$items) {
+            usort($items, static fn (array $a, array $b): int => strcmp((string) $b['period_end'], (string) $a['period_end']));
+        }
+        unset($items);
+        $sum = static fn (string $key): ?float => isset($byKey[$key]) && $byKey[$key] !== [] ? array_sum(array_slice(array_map(static fn (array $row): float => (float) ($row['value'] ?? 0), $byKey[$key]), 0, 4)) : null;
+        $netIncome = $sum('net_income');
+        $equity = isset($byKey['equity'][0]) ? (float) ($byKey['equity'][0]['value'] ?? 0) : null;
+        $debt = isset($byKey['debt'][0]) ? (float) ($byKey['debt'][0]['value'] ?? 0) : null;
+        $revenue = $byKey['revenue'] ?? [];
+        $growth = count($revenue) >= 2 && (float) ($revenue[1]['value'] ?? 0) !== 0.0
+            ? (((float) ($revenue[0]['value'] ?? 0) - (float) ($revenue[1]['value'] ?? 0)) / abs((float) $revenue[1]['value'])) * 100
+            : null;
+        return [
+            'roe' => $netIncome !== null && $equity ? ($netIncome / $equity) * 100 : null,
+            'debt_equity' => $debt !== null && $equity ? $debt / $equity : null,
+            'revenue_growth' => $growth,
+        ];
+    }
+
+    /** @param list<string> $dates */
+    private function monthlyReferenceDates(array $dates): array
+    {
+        $monthly = [];
+        foreach ($dates as $date) {
+            $monthly[substr($date, 0, 7)] = $date;
+        }
+        return array_values($monthly);
+    }
+
+    private function returnOver(array $prices, string $date, int $lookback, ?array $index = null): ?float
+    {
+        $dates = array_keys($prices);
+        $position = $index[$date] ?? array_search($date, $dates, true);
+        if ($position === false || $position === null || $position < $lookback || (float) $prices[$dates[$position - $lookback]] == 0.0) {
+            return null;
+        }
+
+        return (($prices[$date] - $prices[$dates[$position - $lookback]]) / $prices[$dates[$position - $lookback]]) * 100;
+    }
+
+    private function sma(array $prices, string $date, int $period, ?array $index = null): ?float
+    {
+        $dates = array_keys($prices);
+        $position = $index[$date] ?? array_search($date, $dates, true);
+        if ($position === false || $position === null || $position + 1 < $period) {
+            return null;
+        }
+        return array_sum(array_slice(array_values($prices), $position - $period + 1, $period)) / $period;
+    }
+
+    private function closeAtOrBefore(array $prices, string $date, ?array $dates = null): ?float
+    {
+        $dates ??= array_keys($prices);
+        $low = 0;
+        $high = count($dates) - 1;
+        $best = null;
+        while ($low <= $high) {
+            $middle = intdiv($low + $high, 2);
+            if ($dates[$middle] <= $date) {
+                $best = $dates[$middle];
+                $low = $middle + 1;
+            } else {
+                $high = $middle - 1;
+            }
+        }
+        return $best === null ? null : (float) ($prices[$best] ?? null);
+    }
+
+    private function maxDrawdown(array $prices, int $start, int $end, float $entry, array $dates = []): float
+    {
+        $values = $dates === [] ? array_values($prices) : array_map(fn (string $date): float => (float) ($prices[$date] ?? $entry), array_slice($dates, $start, $end - $start + 1));
+        $minimum = min($values);
         return ($minimum - $entry) / $entry;
     }
 

@@ -29,6 +29,14 @@ Outside V7: automatic retraining/promotion/deactivation, autonomous trading, neu
 
 ## 3. Implementation Map
 
+### Production scalability finding and repository correction
+
+On 2026-09-21, a read-only production call to MlTrainingDatasetBuilder::build('1m', now()) was terminated after nearly one hour. Production had 2,604 NSE stocks with prices and 14,963,373 portfolio_stock_prices rows spanning 1991-01-02 through 2026-09-18. No MlTrainingRun, MlModelVersion, artifact, prediction or other ML mutation was created.
+
+The root cause was daily reference-row construction for every eligible historical issuer, combined with repeated per-reference price, benchmark, fundamentals and deterministic-baseline work. The repository correction uses the versioned v7-monthly-reference-1 policy: one last-valid-trading-observation per stock per calendar month. It preserves historically eligible inactive issuers and excludes benchmarks, while preloading each stock's price series and point-in-time fundamental facts once per bounded stock chunk. The benchmark series is loaded once per build, and the deterministic Strategy baseline reuses one bounded historical bar cache per test stock.
+
+MlTrainingDatasetBuilder::plan($horizon, $cutoff) is a read-only diagnostic that reports the universe count, monthly sampling definition, estimated reference rows, date range, cutoff and expected chronological partitions without creating lifecycle records or loading the training matrix. Production deployment and a real 1m build remain pending.
+
 ### Schema and models
 
 Migration `app/database/migrations/2026_09_12_100001_v7_stox_fundamentals_and_ml.php` creates the four expected ML tables:
@@ -44,7 +52,7 @@ Migration `2026_09_20_100001_v7_ml_artifacts.php` adds immutable artifact path, 
 
 `app/app/Services/ML/MlScoringService.php` provides dashboard, retrain, promote, rollback, prediction and latest-prediction methods. The implementation now:
 
-- builds a reusable historical dataset through `MlTrainingDatasetBuilder`, using historical eligible NSE issuers rather than today's active flag, unadjusted close prices for PIT features, adjusted prices only for realised label outcomes, and fundamentals queried with `availability_date <= as_of`;
+- builds a reusable historical dataset through `MlTrainingDatasetBuilder`, using historical eligible NSE issuers rather than today's active flag, one monthly last-valid-trading-day reference per stock, bounded `chunkById` stock processing, unadjusted close prices for PIT features, adjusted prices only for realised label outcomes, and preloaded fundamentals resolved in memory with `availability_date <= as_of`;
 - constructs benchmark-relative, drawdown-guarded labels only when the full future horizon is observable by the training cutoff;
 - records chronological train/validation/test boundaries and row counts, and calls the managed Python adapter for real logistic fitting/evaluation;
 - persists candidate/rejected model metadata and an immutable joblib artifact with SHA-256 integrity metadata; training failures finalize the run as `failed` without creating a usable candidate;
@@ -53,7 +61,7 @@ Migration `2026_09_20_100001_v7_ml_artifacts.php` adds immutable artifact path, 
 - the adapter fits median-plus-missingness preprocessing and categorical mappings on the training partition only, and stores that state inside the artifact;
 - `MlDeterministicBaselineAdapter` reuses the existing `AsOfFactorScorer` backtest abstraction over the same chronological test rows; the Python adapter compares candidate metrics with those measured baseline outcomes rather than a momentum/trend heuristic.
 - The first correction stopped at the raw `AsOfFactorScorer` score. This pass now routes those as-of factors through `EvaluationParameterResolver` and `StrategyConfigurationService::score` using a pinned factory Strategy definition, so weights, gates and scoring configuration are part of the baseline identity.
-- The baseline decision is now explicit: the pinned factory uses the `open_position` threshold (85) and requires the canonical Minervini Trend Template eligibility definition. Python consumes that PHP-produced decision; it does not infer a positive baseline from `score / 100 >= 0.5`.
+- The baseline decision is now explicit: the pinned factory uses the `open_position` threshold (85) and requires the canonical Minervini Trend Template eligibility definition. Python consumes that PHP-produced decision; it does not infer a positive baseline from `score / 100 >= 0.5`. Test-row scoring reuses a preloaded historical bar context rather than issuing a price query for each reference date.
 - The pinned identity includes the factory Strategy key/version, Strategy definition hash, Minervini factory key/version/definition hash, eligibility definition, decision semantics, and baseline adapter version. The same definition is reused for every test row in a run.
 - `MlDriftService` persists rolling health checks with explicit `ok`, `warning` or `insufficient_data` results, including model age and matured non-shadow outcomes for hit rate, benchmark-relative return and drawdown. Drift review is Admin-triggered; it does not auto-promote, retrain or deactivate models.
 - Model retraining is serialized per horizon, writes to a run-specific temporary artifact, then atomically moves to a versioned immutable path only after integrity verification. Failed lifecycle writes clean up unowned artifacts.
@@ -66,14 +74,15 @@ No scheduled retraining is introduced, consistent with the V7 Admin-triggered-on
 
 ## 4. Automated-Test Evidence
 
-Focused ML lifecycle and dataset tests pass **5 tests and 35 assertions**. They prove:
+Focused ML lifecycle, baseline and dataset tests pass **24 tests and 114 assertions**. They prove:
 
 - an Admin can invoke retraining through a controlled adapter boundary, promote an eligible candidate, persist artifact-backed prediction evidence and roll back a retained version;
 - shadow predictions are not returned as authoritative latest predictions;
 - an Admin drift check persists an explicit insufficient-data result;
 - historical dataset rows are chronological, label horizons end no later than the cutoff, and fundamentals with future availability are excluded from earlier feature rows.
+- monthly sampling keeps at most one reference observation per stock/month, inactive historical issuers remain represented, the read-only planner reports the sampling plan, and the fixture build stays below the stock-level query-count ceiling.
 
-The full `app/tests/Feature/V7` suite passed **32 tests and 141 assertions**. Python adapter contract tests pass **6 tests** across the ML and fundamentals adapters; the ML adapter tests cover machine-readable drift output and failure/noise behavior, while production scikit-learn fitting is validated by the managed deployment runtime. Production lifecycle state remains unverified until the new release is deployed.
+The full `app/tests/Feature/V7` suite passed **33 tests and 149 assertions**. Python adapter contract tests pass **6 tests** across the ML and fundamentals adapters; the ML adapter tests cover machine-readable drift output and failure/noise behavior, while production scikit-learn fitting is validated by the managed deployment runtime. Production lifecycle state remains unverified until the new release is deployed.
 
 ## 5. Production Runtime Inventory
 
@@ -104,6 +113,7 @@ The production inventory in the prior audit remains valid for the pre-implementa
 ### Remaining verification boundary
 
 - No production training run, promoted artifact, prediction or drift check exists yet for this implementation release.
+- The terminated production build is a scalability observation only: it did not create ML state. The optimized repository path has not yet been exercised against the production-scale universe.
 - Revenue growth is computed from comparable available fundamental periods rather than a revenue level. The configured benchmark mapping is versioned and supports explicit sector overrides with a deterministic NIFTY50 fallback; no unapproved sector mappings are invented.
 - The feature set is intentionally the V7 configured baseline set; deep historical fundamental bootstrap remains outside this work and follows the accepted V8 boundary.
 
@@ -129,12 +139,13 @@ The production inventory in the prior audit remains valid for the pre-implementa
 | MLR-006 | Deterministic baseline, live-health, historical-universe, feature-price and artifact-concurrency corrections were required after review of the first implementation | `IMPLEMENTED` | High | No; repository correction complete |
 | MLR-004 | Production contains no training runs, model versions, predictions, or drift checks, so deployed lifecycle behavior remains unverified | `RUNTIME_VERIFICATION_REQUIRED` | High | Yes |
 | MLR-005 | Promotion/rollback/prediction route behavior is covered by tests, but no real production artifact/version exists to verify it operationally | `RUNTIME_VERIFICATION_REQUIRED` | Medium | No additional static defect beyond MLR-001 |
+| MLR-007 | The pre-correction production dataset build attempted daily rows across 2,604 issuers and 14,963,373 price rows, ran nearly one hour and was terminated; the monthly/preloaded implementation is not yet deployed or production-verified | `RUNTIME_VERIFICATION_REQUIRED` | High | Yes |
 
 ## 9. Final Assessment
 
 `V7-REQ-001 = PARTIALLY_IMPLEMENTED`.
 
-The repository implementation now covers the accepted V7 training, point-in-time dataset, logistic artifact, evaluation/baseline, candidate/promotion/rollback, artifact-backed scoring, shadow and drift lifecycle. The status remains partial only because the implementation release has not yet been exercised in production and no deployed ML rows/artifact lifecycle evidence exists. No production mutation was performed.
+The repository implementation now covers the accepted V7 training, point-in-time dataset, monthly sampled/preloaded dataset construction, logistic artifact, evaluation/baseline, candidate/promotion/rollback, artifact-backed scoring, shadow and drift lifecycle. The status remains partial because the optimized implementation release has not yet been exercised in production, and no deployed ML rows/artifact lifecycle evidence exists. No production mutation was performed.
 
 ## 10. Next Verification Boundary
 

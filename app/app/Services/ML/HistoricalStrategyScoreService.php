@@ -64,12 +64,13 @@ final class HistoricalStrategyScoreService
     }
 
     /** @return array{score:float,eligible:bool,strategy_eligible:bool,positive_decision:bool,decision_threshold:float,factor_scores:array<string,mixed>,parameters:array<string,mixed>} */
-    public function score(int $stockId, string $referenceDate, ?array $definition = null): array
+    public function score(int $stockId, string $referenceDate, ?array $definition = null, ?array $bars = null): array
     {
         $definition ??= $this->definition();
+        $bars = $bars === null ? null : $this->barsAsOf($bars, $referenceDate);
         $config = $definition['config'] ?? $this->strategies->defaultConfig();
         $resolved = $this->parameters->resolve($config);
-        $evaluation = $this->factors->score($stockId, $referenceDate, $resolved);
+        $evaluation = $this->factors->score($stockId, $referenceDate, $resolved, $bars);
         if (($evaluation['skipped'] ?? false) === true) {
             return ['score' => 0.0, 'eligible' => false, 'strategy_eligible' => false, 'positive_decision' => false, 'decision_threshold' => $this->decisionThreshold($definition), 'factor_scores' => [], 'parameters' => $resolved];
         }
@@ -77,7 +78,7 @@ final class HistoricalStrategyScoreService
         $scored = $this->strategies->score($evaluation['factor_scores'] ?? [], $config);
         $thresholds = $config['thresholds'] ?? [];
         $minimum = (float) ($thresholds['minimum_overall_score'] ?? 0.0);
-        $strategyEligible = $this->evaluateEligibility($stockId, $referenceDate, $definition);
+        $strategyEligible = $this->evaluateEligibility($stockId, $referenceDate, $definition, $bars);
         $score = (float) $scored['overall_score'];
         $decisionThreshold = $this->decisionThreshold($definition);
 
@@ -102,15 +103,11 @@ final class HistoricalStrategyScoreService
         return $strategyEligible && $score >= $this->decisionThreshold($definition);
     }
 
-    private function evaluateEligibility(int $stockId, string $referenceDate, array $definition): bool
+    /** @return list<array<string,mixed>> */
+    public function barsForStock(int $stockId, string $throughDate): array
     {
-        $source = $definition['eligibility_sources'][0] ?? null;
-        $screenerDefinition = is_array($source) ? ($source['definition'] ?? null) : null;
-        if (! is_array($screenerDefinition)) {
-            return false;
-        }
-        $bars = StockPrice::query()->where('stock_id', $stockId)->whereDate('price_date', '<=', $referenceDate)
-            ->orderByDesc('price_date')->limit(400)->get()->reverse()->values()->map(fn ($row) => [
+        return StockPrice::query()->where('stock_id', $stockId)->whereDate('price_date', '<=', $throughDate)
+            ->orderBy('price_date')->get()->map(fn ($row) => [
                 'date' => $row->price_date->toDateString(),
                 'open' => $row->open_price !== null ? (float) $row->open_price : null,
                 'high' => $row->high_price !== null ? (float) $row->high_price : null,
@@ -118,8 +115,28 @@ final class HistoricalStrategyScoreService
                 'close' => $row->close_price !== null ? (float) $row->close_price : null,
                 'volume' => $row->volume !== null ? (float) $row->volume : null,
             ])->all();
+    }
+
+    private function evaluateEligibility(int $stockId, string $referenceDate, array $definition, ?array $bars = null): bool
+    {
+        $source = $definition['eligibility_sources'][0] ?? null;
+        $screenerDefinition = is_array($source) ? ($source['definition'] ?? null) : null;
+        if (! is_array($screenerDefinition)) {
+            return false;
+        }
+        $bars ??= $this->barsForStock($stockId, $referenceDate);
+        if (count($bars) > 400) {
+            $bars = array_slice($bars, -400);
+        }
 
         $result = $this->screeners->evaluateStock($screenerDefinition, $bars);
         return ($result['skipped'] ?? true) === false && ($result['matched'] ?? false) === true;
+    }
+
+    /** @param list<array<string,mixed>> $bars */
+    private function barsAsOf(array $bars, string $referenceDate): array
+    {
+        $bounded = array_values(array_filter($bars, static fn (array $bar): bool => (string) ($bar['date'] ?? '') <= $referenceDate));
+        return count($bounded) > 400 ? array_slice($bounded, -400) : $bounded;
     }
 }
