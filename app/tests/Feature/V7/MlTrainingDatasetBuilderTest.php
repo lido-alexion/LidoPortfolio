@@ -188,12 +188,11 @@ class MlTrainingDatasetBuilderTest extends TestCase
         $directory = storage_path('framework/testing/ml-benchmark-boundary-'.bin2hex(random_bytes(4)));
         $dataset = app(MlTrainingDatasetBuilder::class)->buildStreamed('1m', Carbon::parse('2026-09-01'), $directory);
 
-        $this->assertGreaterThanOrEqual('2025-01-20', $dataset['diagnostics']['viable_reference_date_start']);
-        $this->assertGreaterThan(2, $dataset['diagnostics']['viable_reference_date_count']);
+        $this->assertSame('2025-01-31', $dataset['diagnostics']['viable_reference_date_start']);
+        $this->assertSame('2026-06-30', $dataset['diagnostics']['viable_reference_date_end']);
+        $this->assertSame(18, $dataset['diagnostics']['viable_reference_date_count']);
         $this->assertSame($dataset['diagnostics']['benchmark_start_date'], '2025-01-20');
-        $this->assertGreaterThan(0, $dataset['partitions']['row_counts']['train']);
-        $this->assertGreaterThan(0, $dataset['partitions']['row_counts']['validation']);
-        $this->assertGreaterThan(0, $dataset['partitions']['row_counts']['test']);
+        $this->assertSame(['train' => 12, 'validation' => 3, 'test' => 3], $dataset['partitions']['row_counts']);
         foreach ($dataset['partitions']['row_counts'] as $partition => $count) {
             $this->assertGreaterThan(0, $count);
             $range = $dataset['diagnostics']['row_date_ranges'][$partition];
