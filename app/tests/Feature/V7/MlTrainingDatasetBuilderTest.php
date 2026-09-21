@@ -202,4 +202,46 @@ class MlTrainingDatasetBuilderTest extends TestCase
 
         File::deleteDirectory($directory);
     }
+
+    public function test_partition_row_date_ranges_use_extrema_not_jsonl_write_order(): void
+    {
+        $benchmark = Stock::query()->create(['symbol' => 'NIFTY50', 'exchange' => 'NSE', 'name' => 'NIFTY 50', 'is_benchmark' => true]);
+        $laterIssuer = Stock::query()->create(['symbol' => 'LATER', 'exchange' => 'NSE', 'name' => 'Later Issuer']);
+        $earlierIssuer = Stock::query()->create(['symbol' => 'EARLIER', 'exchange' => 'NSE', 'name' => 'Earlier Issuer']);
+
+        foreach ([[$benchmark, '2025-01-20', 620], [$laterIssuer, '2025-04-01', 500], [$earlierIssuer, '2025-01-20', 620]] as [$subject, $start, $days]) {
+            for ($day = 0; $day < $days; $day++) {
+                StockPrice::query()->create([
+                    'stock_id' => $subject->id,
+                    'price_date' => Carbon::parse($start)->addDays($day)->toDateString(),
+                    'close_price' => 100 + $day,
+                    'adjusted_close_price' => 100 + $day,
+                    'data_source' => 'test',
+                ]);
+            }
+        }
+
+        $directory = storage_path('framework/testing/ml-range-extrema-'.bin2hex(random_bytes(4)));
+        $dataset = app(MlTrainingDatasetBuilder::class)->buildStreamed('1m', Carbon::parse('2026-09-01'), $directory);
+        $path = $dataset['paths']['train'];
+        $dates = [];
+        $physicalFirst = null;
+        $handle = fopen($path, 'rb');
+        while (($line = fgets($handle)) !== false) {
+            $date = json_decode($line, true, 64, JSON_THROW_ON_ERROR)['reference_date'];
+            $physicalFirst ??= $date;
+            $dates[] = $date;
+        }
+        fclose($handle);
+
+        $this->assertNotSame($physicalFirst, min($dates), 'The fixture must exercise non-chronological JSONL write order.');
+        $this->assertSame(min($dates), $dataset['diagnostics']['row_date_ranges']['train']['start']);
+        $this->assertSame(max($dates), $dataset['diagnostics']['row_date_ranges']['train']['end']);
+        $this->assertSame(['train' => 19, 'validation' => 6, 'test' => 5], $dataset['partitions']['row_counts']);
+        foreach ($dataset['partitions']['row_counts'] as $partition => $count) {
+            $this->assertGreaterThan(0, $count);
+        }
+
+        File::deleteDirectory($directory);
+    }
 }

@@ -140,8 +140,8 @@ class MlTrainingDatasetBuilder
             $handle = fopen($path, 'rb');
             while (($line = fgets($handle)) !== false) {
                 $date = json_decode($line, true, 64, JSON_THROW_ON_ERROR)['reference_date'] ?? null;
-                $first ??= $date;
-                $last = $date;
+                $first = $first === null || $date < $first ? $date : $first;
+                $last = $last === null || $date > $last ? $date : $last;
             }
             fclose($handle);
             $rowDateRanges[$partition] = ['start' => $first, 'end' => $last];
