@@ -14,7 +14,7 @@ V8 contains the **Standalone Telemetry Platform**, deferred follow-on data-boots
 
 The Telemetry Platform is separated from StoX product implementation because it is a separate, independently deployable, product-independent application. StoX is its first intended client, but building the Telemetry product and integrating StoX with it are separate roadmap concerns.
 
-V8 also contains the one-time Historical Fundamental Data Bootstrap, deferred from V7 until the historical dataset/source is prepared and selected, and a guest-to-admin **Account Access Request** workflow that preserves admin-controlled onboarding while removing the need for an applicant to obtain an invitation before expressing interest.
+V8 also contains the one-time Historical Fundamental Data Bootstrap, deferred from V7 until the historical dataset/source is prepared and selected, a guest-to-admin **Account Access Request** workflow that preserves admin-controlled onboarding while removing the need for an applicant to obtain an invitation before expressing interest, and ML operations improvements that help Admins decide when retraining is warranted without introducing automatic retraining or promotion.
 
 ## 2. Current V8 backlog
 
@@ -22,7 +22,7 @@ V8 also contains the one-time Historical Fundamental Data Bootstrap, deferred fr
 |---|---|---|---|
 | V4-FEAT-052 | Standalone Telemetry Platform | Build the product-independent telemetry/analytics platform as a separate repository/application. Core architecture is already decided in `specs/V7-Telemetry-Platform.md`; the historical filename is retained for now, but this V8 register supersedes its earlier V7 roadmap placement. | CORE ARCHITECTURE DECIDED |
 | V4-FEAT-054 | Historical Fundamental Data Bootstrap | One-time population of StoX with available historical quarterly and annual fundamental data after the V7 canonical fundamental model exists. The import may use custom/offline scripts rather than the FEAT-053 live fetcher. StoX imposes no fixed historical-depth window; the canonical store and downstream analytics must support whatever depth is imported. Detailed source, extraction method, mapping and bootstrap procedure remain OPEN until the historical dataset is prepared/selected. | OPEN / DEFERRED |
-| V4-FEAT-055 | Account Access Request / Admin Approval Workflow | Add a guest-facing **Request an account** flow linked from Login. Human applicants submit the information required for admin onboarding behind CAPTCHA and abuse controls. Pending duplicates are deduplicated; admins review requests in User Management, receive operational notifications, and resolve them as **Create**, **Ignore**, or **Reject**. Reject creates a reversible email ban; Ignore closes the request without banning; Create hands off into the existing secure admin onboarding/invite flow with request details prefilled. | WISHLIST / NEEDS DESIGN |
+| V4-FEAT-055 | Account Access Request / Admin Approval Workflow | Add a guest-facing **Request an account** flow linked from Login. Human applicants submit the information required for admin onboarding behind CAPTCHA and abuse controls. Pending duplicates are deduplicated; admins review requests in User Management, receive operational notifications, and resolve them as **Create**, **Ignore**, or **Reject**. Reject creates a reversible email ban; Ignore closes the request without banning; Create hands off into the existing secure admin onboarding/invite flow with request details prefilled. | WISHLIST / NEEDS DESIGN |\n| V4-FEAT-056 | ML Retraining Recommendation / Model Health Alerts | Add advisory model-health monitoring that evaluates model age, drift and matured live performance and tells Admins when retraining should be considered. The feature may recommend a horizon-specific retrain and surface the reason, but **must not automatically retrain, promote, deactivate, or replace a model**. Admin remains responsible for triggering retraining and explicitly promoting any resulting candidate. | WISHLIST / NEEDS DESIGN |
 
 ## 3. V4-FEAT-055 — Account Access Request / Admin Approval Workflow
 
@@ -286,12 +286,124 @@ The detailed V8 design should explicitly decide:
 - whether Admin Create hands off to the current invite flow only or a future direct-create workflow;
 - whether a successful Create notification should also be sent to the applicant, separate from the invitation itself.
 
-## 4. Boundary
+## 4. V4-FEAT-056 — ML Retraining Recommendation / Model Health Alerts
+
+### 4.1 Product intent
+
+V7 deliberately keeps ML retraining and promotion Admin-triggered. V8 should add an **advisory operational layer** that tells an Admin when a model is becoming stale or degraded enough that retraining is worth considering.
+
+The feature is recommendation-only:
+
+```text
+model age / drift / matured live performance
+    -> model-health assessment
+        -> retraining recommended / not recommended
+            -> Admin reviews reason
+                -> Admin explicitly triggers retraining
+                    -> candidate evaluation
+                        -> Admin explicitly promotes or rejects candidate
+```
+
+No automatic retraining, promotion, rollback, deactivation, or trading action is introduced.
+
+### 4.2 Initial signals
+
+The recommendation logic SHOULD consider at least:
+
+- model age since training/promotion;
+- configured age threshold by horizon;
+- score/distribution drift;
+- matured prediction hit rate;
+- benchmark-relative realised return;
+- drawdown/downside deterioration;
+- comparison with the active model's original validation/test metrics;
+- sustained degradation across rolling windows such as 3, 6 and 12 months.
+
+A single noisy observation should not create a retraining recommendation. The detailed V8 design should define minimum sample counts, persistence/hysteresis and severity thresholds.
+
+### 4.3 Horizon-aware recommendations
+
+1m, 3m and 6m models SHALL be assessed independently.
+
+The UI/notification should identify:
+
+- affected horizon;
+- active model version;
+- model age;
+- triggering metric(s);
+- relevant rolling window;
+- current value versus reference/threshold;
+- recommendation timestamp;
+- whether an unresolved recommendation already exists.
+
+The system MAY recommend retraining one horizon while leaving the others unchanged.
+
+### 4.4 Admin experience and notifications
+
+Admin ML/model-management surfaces SHOULD expose a clear state such as:
+
+- Healthy;
+- Watch;
+- Retraining recommended;
+- Insufficient live evidence.
+
+When retraining becomes recommended, StoX SHOULD notify Admins through the existing notification architecture, subject to normal deduplication/cooldown rules.
+
+The notification should deep-link to the relevant model-management page where the Admin can inspect evidence and manually start retraining.
+
+Repeated evaluations of the same unresolved condition must not create notification storms.
+
+### 4.5 Lifecycle and auditability
+
+Persist enough evidence to explain why the recommendation was produced, including the model version, horizon, metrics/window, thresholds and assessment time.
+
+Recommended lifecycle:
+
+```text
+healthy
+  -> watch
+  -> retraining_recommended
+      -> acknowledged
+      -> retraining_started
+      -> resolved / superseded
+```
+
+The final V8 design may simplify these states, but recommendation history must remain auditable.
+
+A recommendation is operational state only; it does not alter the active model by itself.
+
+### 4.6 Initial acceptance criteria
+
+1. Active 1m/3m/6m models are assessed independently.
+2. Model age can contribute to a recommendation using configurable horizon-aware thresholds.
+3. Matured live-performance deterioration and drift can contribute to a recommendation.
+4. Insufficient evidence is represented explicitly rather than treated as degradation.
+5. Admin can see the exact reason/evidence behind a recommendation.
+6. Repeated checks do not create duplicate notification storms.
+7. Admin can manually initiate retraining from the recommendation context.
+8. Recommendation never automatically retrains, promotes, deactivates, rolls back, or changes trading behavior.
+9. Retraining still produces a candidate that must pass the normal evaluation gates.
+10. Promotion remains an explicit Admin action.
+11. Recommendation history and Admin acknowledgement/action are auditable.
+
+### 4.7 Open design decisions
+
+The detailed V8 design should decide:
+
+- default age thresholds for 1m/3m/6m models;
+- exact drift/performance thresholds;
+- persistence/hysteresis before escalating from Watch to Retraining recommended;
+- notification cooldown/deduplication rules;
+- whether an Admin can snooze/acknowledge a recommendation;
+- whether a successful retrain automatically resolves the recommendation or only a successful promotion does;
+- whether recommendation evaluation is scheduled daily/weekly or piggybacks on existing drift checks.
+
+## 5. Boundary
 
 V8 owns the Telemetry product itself: ingestion, storage, analytics/query APIs, dashboards/explorer, SDKs, identity/correlation model, events/metrics/logs/traces, retention, export, deletion, administration and the other capabilities frozen in the Telemetry architecture specification.
 
 V8 also owns the one-time historical fundamental bootstrap outcome, but does not change FEAT-053's ongoing provider-driven fundamental ingestion architecture.
 
-V8 owns the account-access request workflow through Admin disposition and handoff into the existing secure user onboarding flow. It does **not** replace the existing invitation/token security model, establish open registration, or allow a guest request to grant any account privilege by itself.
+V8 owns the account-access request workflow through Admin disposition and handoff into the existing secure user onboarding flow. It does **not** replace the existing invitation/token security model, establish open registration, or allow a guest request to grant any account privilege by itself.\n\nV8 also owns advisory ML retraining recommendations and model-health alerts. These remain operational guidance only; actual retraining and model promotion stay explicitly Admin-controlled.
 
 V8 does **not** own StoX-specific Telemetry instrumentation/integration. That is planned as a separate V9 StoX epic.
