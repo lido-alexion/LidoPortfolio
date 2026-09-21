@@ -136,7 +136,22 @@ final class HistoricalStrategyScoreService
     /** @param list<array<string,mixed>> $bars */
     private function barsAsOf(array $bars, string $referenceDate): array
     {
-        $bounded = array_values(array_filter($bars, static fn (array $bar): bool => (string) ($bar['date'] ?? '') <= $referenceDate));
-        return count($bounded) > 400 ? array_slice($bounded, -400) : $bounded;
+        $low = 0;
+        $high = count($bars) - 1;
+        $lastIndex = -1;
+        while ($low <= $high) {
+            $middle = intdiv($low + $high, 2);
+            if ((string) ($bars[$middle]['date'] ?? '') <= $referenceDate) {
+                $lastIndex = $middle;
+                $low = $middle + 1;
+            } else {
+                $high = $middle - 1;
+            }
+        }
+        if ($lastIndex < 0) {
+            return [];
+        }
+        $start = max(0, $lastIndex - 399);
+        return array_slice($bars, $start, $lastIndex - $start + 1);
     }
 }

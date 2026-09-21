@@ -24,6 +24,18 @@ def read_request() -> dict[str, Any]:
     return payload
 
 
+def read_jsonl(path: str) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    with open(path, "r", encoding="utf-8") as handle:
+        for line in handle:
+            if line.strip():
+                row = json.loads(line)
+                if not isinstance(row, dict):
+                    raise ValueError(f"dataset row is not an object: {path}")
+                rows.append(row)
+    return rows
+
+
 def finite(value: Any) -> float | None:
     if value is None or isinstance(value, bool):
         return None
@@ -102,15 +114,22 @@ def classification_metrics(y_true: list[int], probabilities: list[float], rows: 
 def train(request: dict[str, Any]) -> dict[str, Any]:
     from sklearn.linear_model import LogisticRegression
 
-    rows = request.get("rows")
+    dataset_paths = request.get("dataset_paths")
+    if isinstance(dataset_paths, dict):
+        train_rows = read_jsonl(str(dataset_paths["train"]))
+        validation_rows = read_jsonl(str(dataset_paths["validation"]))
+        test_rows = read_jsonl(str(dataset_paths["test"]))
+        rows = train_rows + validation_rows + test_rows
+    else:
+        rows = request.get("rows")
+        train_rows = [row for row in rows if row.get("partition") == "train"] if isinstance(rows, list) else []
+        validation_rows = [row for row in rows if row.get("partition") == "validation"] if isinstance(rows, list) else []
+        test_rows = [row for row in rows if row.get("partition") == "test"] if isinstance(rows, list) else []
     if not isinstance(rows, list) or len(rows) < 12:
         raise ValueError("training dataset is too small")
     numeric = list(request.get("numeric_features", []))
     categorical = list(request.get("categorical_features", []))
     partitions = request.get("partitions", {})
-    train_rows = [row for row in rows if row.get("partition") == "train"]
-    validation_rows = [row for row in rows if row.get("partition") == "validation"]
-    test_rows = [row for row in rows if row.get("partition") == "test"]
     if not train_rows or not validation_rows or not test_rows:
         raise ValueError("chronological train/validation/test partitions are required")
     y_train = [int(row["label"]) for row in train_rows]
@@ -128,7 +147,8 @@ def train(request: dict[str, Any]) -> dict[str, Any]:
 
     naive_probabilities = [sum(y_train) / len(y_train)] * len(test_rows)
     naive_metrics = classification_metrics([int(row["label"]) for row in test_rows], naive_probabilities, test_rows)
-    deterministic_rows = request.get("deterministic_baseline")
+    baseline_path = request.get("deterministic_baseline_path")
+    deterministic_rows = read_jsonl(str(baseline_path)) if isinstance(baseline_path, str) else request.get("deterministic_baseline")
     if not isinstance(deterministic_rows, list) or len(deterministic_rows) != len(test_rows):
         raise ValueError("deterministic StoX baseline is missing or not aligned to the test partition")
     deterministic_probabilities = [float(item["probability"]) for item in deterministic_rows]

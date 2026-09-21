@@ -11,6 +11,7 @@ use App\Services\Fundamentals\FundamentalDataService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\File;
 use Illuminate\Validation\ValidationException;
 
 class MlScoringService
@@ -56,6 +57,7 @@ class MlScoringService
     {
         $tempArtifactPath = null;
         $finalArtifactPath = null;
+        $datasetDirectory = null;
 
         $config = array_replace_recursive($this->trainingConfig($horizon), $overrides);
         $run = MlTrainingRun::query()->create([
@@ -68,14 +70,19 @@ class MlScoringService
             ]);
 
         try {
-            $dataset = $this->datasets->build($horizon, $cutoff);
-            $baseline = $this->deterministicBaseline->evaluate($dataset['rows']);
+            $datasetDirectory = storage_path('framework/cache/ml-datasets/run-'.$run->id);
+            $dataset = $this->datasets->buildStreamed($horizon, $cutoff, $datasetDirectory);
             $baselineDefinition = $this->deterministicBaseline->definition();
+            $baselinePath = $datasetDirectory.'/deterministic-baseline.jsonl';
+            $baselineRows = $this->deterministicBaseline->evaluateFile($dataset['paths']['test'], $baselinePath);
+            if ($baselineRows !== (int) ($dataset['partitions']['row_counts']['test'] ?? 0)) {
+                throw new \RuntimeException('Deterministic baseline is not aligned to the streamed test partition.');
+            }
             $tempArtifactPath = $this->artifactPath($horizon, 0, 'run-'.$run->id.'.tmp');
             $result = $this->adapter->run('train', [
                 'horizon' => $horizon,
                 'cutoff_date' => $cutoff->toDateString(),
-                'rows' => $dataset['rows'],
+                'dataset_paths' => $dataset['paths'],
                 'partitions' => $dataset['partitions'],
                 'feature_definitions' => $dataset['feature_definitions'],
                 'baseline_definition' => $baselineDefinition,
@@ -83,7 +90,7 @@ class MlScoringService
                 'categorical_features' => MlTrainingDatasetBuilder::CATEGORICAL_FEATURES,
                 'seed' => $config['hyperparameters']['seed'] ?? 7047,
                 'artifact_path' => $tempArtifactPath,
-                'deterministic_baseline' => $baseline,
+                'deterministic_baseline_path' => $baselinePath,
             ]);
             $metrics = $result['metrics'] ?? [];
             $baselines = $result['baselines'] ?? [];
@@ -98,7 +105,7 @@ class MlScoringService
                 'metrics' => $metrics,
                 'baselines' => $baselines,
                 'selected_features' => $config['feature_set'],
-                'configuration' => array_replace_recursive($config, ['dataset' => $dataset['partitions'], 'feature_definitions' => $dataset['feature_definitions'], 'deterministic_baseline' => $baselineDefinition]),
+                'configuration' => array_replace_recursive($config, ['dataset' => $dataset['partitions'], 'dataset_diagnostics' => $dataset['diagnostics'], 'feature_definitions' => $dataset['feature_definitions'], 'deterministic_baseline' => $baselineDefinition]),
                 'completed_at' => now(),
             ])->save();
 
@@ -152,6 +159,10 @@ class MlScoringService
                 'completed_at' => now(),
             ])->save();
             throw $exception;
+        } finally {
+            if ($datasetDirectory !== null) {
+                File::deleteDirectory($datasetDirectory);
+            }
         }
     }
 

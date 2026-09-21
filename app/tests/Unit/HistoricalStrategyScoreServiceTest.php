@@ -78,4 +78,26 @@ class HistoricalStrategyScoreServiceTest extends TestCase
         $this->assertTrue($service->isPositiveDecision(85.0, true, $definition));
         $this->assertFalse($service->isPositiveDecision(100.0, false, $definition));
     }
+
+    public function test_preloaded_historical_bars_are_bounded_to_the_latest_four_hundred_as_of_reference(): void
+    {
+        $factors = Mockery::mock(AsOfFactorScorer::class);
+        $factors->shouldReceive('score')->once()->andReturn([
+            'skipped' => false,
+            'factor_scores' => array_fill_keys(['relative_strength', 'momentum_score', 'trend_score', 'breakout_score', 'volume_score', 'market_regime', 'sector_strength', 'risk_score'], 100.0),
+        ]);
+        $screeners = Mockery::mock(ScreenerEvaluationService::class);
+        $screeners->shouldReceive('evaluateStock')->once()->withArgs(function (array $definition, array $bars): bool {
+            return count($bars) === 400 && $bars[0]['date'] === '2025-02-04' && $bars[array_key_last($bars)]['date'] === '2026-03-10';
+        })->andReturn(['skipped' => false, 'matched' => true]);
+        $service = new HistoricalStrategyScoreService($factors, app(\App\Engines\Evaluation\EvaluationParameterResolver::class), app(StrategyConfigurationService::class), $screeners);
+        $bars = [];
+        foreach (range(0, 799) as $day) {
+            $bars[] = ['date' => \Carbon\Carbon::parse('2024-01-01')->addDays($day)->toDateString(), 'open' => 100, 'high' => 101, 'low' => 99, 'close' => 100, 'volume' => 1000];
+        }
+
+        $result = $service->score(7, '2026-03-10', $service->definition(), $bars);
+
+        $this->assertTrue($result['positive_decision']);
+    }
 }

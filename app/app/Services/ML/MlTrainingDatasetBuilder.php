@@ -24,19 +24,127 @@ class MlTrainingDatasetBuilder
 
     public function __construct(private readonly FundamentalDataService $fundamentals) {}
 
-    /** @return array{rows:list<array<string,mixed>>,partitions:array<string,mixed>,feature_definitions:array<string,mixed>} */
+    /** @return array{rows:list<array<string,mixed>>,partitions:array<string,mixed>,feature_definitions:array<string,mixed>,diagnostics:array<string,mixed>} */
     public function build(string $horizon, Carbon $cutoff): array
+    {
+        $directory = storage_path('framework/cache/ml-datasets/build-'.bin2hex(random_bytes(8)));
+        $stream = null;
+        $rows = [];
+        try {
+            $stream = $this->buildStreamed($horizon, $cutoff, $directory);
+            foreach (['train', 'validation', 'test'] as $partition) {
+                $handle = fopen($stream['paths'][$partition], 'rb');
+                while (($line = fgets($handle)) !== false) {
+                    $row = json_decode($line, true, 64, JSON_THROW_ON_ERROR);
+                    $row['partition'] = $partition;
+                    $rows[] = $row;
+                }
+                fclose($handle);
+            }
+        } finally {
+            $this->removeDirectory($directory);
+        }
+
+        usort($rows, fn (array $a, array $b): int => strcmp($a['reference_date'], $b['reference_date']) ?: ($a['stock_id'] <=> $b['stock_id']));
+
+        return [
+            'rows' => $rows,
+            'partitions' => $stream['partitions'],
+            'feature_definitions' => $stream['feature_definitions'],
+            'diagnostics' => $stream['diagnostics'],
+        ];
+    }
+
+    /**
+     * Build a partitioned JSONL dataset without retaining the historical
+     * matrix in PHP memory. The first pass establishes date partitions; the
+     * second pass writes rows in stock-sized buffers.
+     *
+     * @return array{paths:array{train:string,validation:string,test:string},partitions:array<string,mixed>,feature_definitions:array<string,mixed>,diagnostics:array<string,mixed>}
+     */
+    public function buildStreamed(string $horizon, Carbon $cutoff, string $directory): array
     {
         $horizonDays = ['1m' => 21, '3m' => 63, '6m' => 126][$horizon] ?? throw new RuntimeException('Unsupported ML horizon.');
         $benchmark = Stock::query()->where('symbol', 'NIFTY50')->first();
         if ($benchmark === null) {
             throw new RuntimeException('Primary benchmark NIFTY50 is unavailable.');
         }
+        if (! is_dir($directory) && ! mkdir($directory, 0775, true) && ! is_dir($directory)) {
+            throw new RuntimeException('Unable to create the temporary ML dataset directory.');
+        }
 
-        // Historical training must not apply today's active flag.  A security
-        // with valid historical observations remains eligible for its observed
-        // period, while benchmark/index rows are never issuer examples.
-        $stockQuery = Stock::query()
+        $benchmarkSeries = $this->priceSeries($benchmark, $cutoff);
+        $referenceDates = [];
+        $this->universeQuery()->chunkById(100, function ($stockChunk) use (&$referenceDates, $horizonDays, $cutoff): void {
+            foreach ($stockChunk as $stock) {
+                $series = $this->priceSeries($stock, $cutoff);
+                foreach ($this->eligibleReferenceDates($series['dates'], $horizonDays, $cutoff) as $date) {
+                    $referenceDates[$date] = true;
+                }
+            }
+        }, 'id');
+        $dates = array_keys($referenceDates);
+        sort($dates);
+        if (count($dates) < 3) {
+            throw new RuntimeException('Insufficient point-in-time training dates.');
+        }
+        $partitions = $this->partitionMetadata($dates, $cutoff);
+        $paths = [
+            'train' => $directory.'/train.jsonl',
+            'validation' => $directory.'/validation.jsonl',
+            'test' => $directory.'/test.jsonl',
+        ];
+        $handles = array_map(static fn (string $path) => fopen($path, 'wb'), $paths);
+        $rowCounts = ['train' => 0, 'validation' => 0, 'test' => 0];
+        $peakBufferedRows = 0;
+        $stocksProcessed = 0;
+        try {
+            $this->universeQuery()->chunkById(100, function ($stockChunk) use (&$handles, &$rowCounts, &$peakBufferedRows, &$stocksProcessed, $benchmarkSeries, $horizonDays, $cutoff, $partitions): void {
+                foreach ($stockChunk as $stock) {
+                    $stocksProcessed++;
+                    $series = $this->priceSeries($stock, $cutoff);
+                    if ($series['dates'] === []) {
+                        continue;
+                    }
+                    $facts = $this->fundamentalFacts($stock, $cutoff);
+                    $stockRows = $this->rowsForStock($stock, $series, $benchmarkSeries, $facts, $horizonDays, $cutoff);
+                    $peakBufferedRows = max($peakBufferedRows, count($stockRows));
+                    foreach ($stockRows as $row) {
+                        $partition = $this->partitionForDate($row['reference_date'], $partitions);
+                        fwrite($handles[$partition], json_encode($row, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES)."\n");
+                        $rowCounts[$partition]++;
+                    }
+                    unset($stockRows, $facts, $series);
+                }
+            }, 'id');
+        } finally {
+            foreach ($handles as $handle) {
+                fclose($handle);
+            }
+        }
+        if (array_sum($rowCounts) < 12) {
+            throw new RuntimeException('Insufficient point-in-time training examples.');
+        }
+        $partitions['row_counts'] = $rowCounts;
+        $bytes = array_sum(array_map(static fn (string $path): int => is_file($path) ? (int) filesize($path) : 0, $paths));
+
+        return [
+            'paths' => $paths,
+            'partitions' => $partitions,
+            'feature_definitions' => $this->featureDefinitions(),
+            'diagnostics' => [
+                'stocks_processed' => $stocksProcessed,
+                'rows_written' => array_sum($rowCounts),
+                'peak_buffered_rows' => $peakBufferedRows,
+                'temporary_dataset_bytes' => $bytes,
+                'transport' => 'partitioned_jsonl',
+            ],
+        ];
+    }
+
+    private function universeQuery()
+    {
+        return Stock::query()
             ->where(function ($query): void {
                 $query->where('is_benchmark', false)->orWhereNull('is_benchmark');
             })
@@ -45,68 +153,80 @@ class MlTrainingDatasetBuilder
                 ->from('portfolio_stock_prices')
                 ->whereColumn('portfolio_stock_prices.stock_id', 'portfolio_stocks.id'))
             ->orderBy('id');
-        $rows = [];
-        $benchmarkSeries = $this->priceSeries($benchmark, $cutoff);
-        $stockQuery->chunkById(100, function ($stockChunk) use (&$rows, $benchmarkSeries, $horizonDays, $cutoff): void {
-            foreach ($stockChunk as $stock) {
-                $series = $this->priceSeries($stock, $cutoff);
-                if ($series['dates'] === []) {
-                    continue;
-                }
-                $facts = $this->fundamentalFacts($stock, $cutoff);
-                foreach ($this->rowsForStock($stock, $series, $benchmarkSeries, $facts, $horizonDays, $cutoff) as $row) {
-                    $rows[] = $row;
-                }
-            }
-        }, 'id');
-        if (count($rows) < 12) {
-            throw new RuntimeException('Insufficient point-in-time training examples.');
-        }
+    }
 
-        usort($rows, fn (array $a, array $b): int => strcmp($a['reference_date'], $b['reference_date']) ?: ($a['stock_id'] <=> $b['stock_id']));
-        $dates = array_values(array_unique(array_column($rows, 'reference_date')));
+    /** @param list<string> $dates @return list<string> */
+    private function eligibleReferenceDates(array $dates, int $horizonDays, Carbon $cutoff): array
+    {
+        $eligible = [];
+        foreach ($this->monthlyReferenceDates($dates) as $date) {
+            $index = array_search($date, $dates, true);
+            if ($index === false || $index < 63 || ! isset($dates[$index + $horizonDays]) || $dates[$index + $horizonDays] > $cutoff->toDateString()) {
+                continue;
+            }
+            $eligible[] = $date;
+        }
+        return $eligible;
+    }
+
+    /** @param list<string> $dates @return array<string,mixed> */
+    private function partitionMetadata(array $dates, Carbon $cutoff): array
+    {
         $trainEnd = $dates[max(0, (int) floor(count($dates) * 0.70) - 1)];
         $validationEnd = $dates[max(0, (int) floor(count($dates) * 0.85) - 1)];
-        foreach ($rows as &$row) {
-            $row['partition'] = $row['reference_date'] <= $trainEnd ? 'train' : ($row['reference_date'] <= $validationEnd ? 'validation' : 'test');
-        }
-        unset($row);
 
-        $partitions = [
+        return [
             'train_start' => $dates[0],
             'train_end' => $trainEnd,
             'validation_start' => $this->firstAfter($dates, $trainEnd),
             'validation_end' => $validationEnd,
             'test_start' => $this->firstAfter($dates, $validationEnd),
             'test_end' => $dates[array_key_last($dates)],
-            'row_counts' => collect($rows)->countBy('partition')->all(),
             'cutoff_date' => $cutoff->toDateString(),
+            'split_basis' => 'chronological_reference_dates',
+            'sampling' => ['version' => 'v7-monthly-reference-1', 'cadence' => 'monthly', 'anchor' => 'last_available_trading_day'],
         ];
+    }
 
+    private function partitionForDate(string $date, array $partitions): string
+    {
+        return $date <= $partitions['train_end'] ? 'train' : ($date <= $partitions['validation_end'] ? 'validation' : 'test');
+    }
+
+    /** @return array<string,mixed> */
+    private function featureDefinitions(): array
+    {
         return [
-            'rows' => array_values($rows),
-            'partitions' => $partitions,
-            'feature_definitions' => [
-                'version' => 'v7-features-1',
-                'numeric' => array_fill_keys(self::NUMERIC_FEATURES, ['missing' => 'median_with_missingness_flags', 'as_of' => 'reference_date']),
-                'categorical' => ['sector' => ['encoding' => 'training_partition_categories', 'unknown' => '__unknown']],
-                'price_semantics' => [
-                    'features' => 'unadjusted_close_as_of_reference_date',
-                    'labels' => 'adjusted_close_as_of_observed_label_window',
-                    'reason' => 'adjusted_close is retroactively changed by later corporate-action repair; features cannot consume that series.',
-                ],
-                'universe' => [
-                    'version' => 'v7-historical-eligible-nse-1',
-                    'rule' => 'non-benchmark NSE stocks with historical price observations through the cutoff, independent of current is_active state',
-                ],
-                'benchmark_mapping' => $this->benchmarkMappingDefinition(),
-                'sampling' => [
-                    'version' => 'v7-monthly-reference-1',
-                    'cadence' => 'monthly',
-                    'anchor' => 'last_available_trading_day',
-                ],
+            'version' => 'v7-features-1',
+            'numeric' => array_fill_keys(self::NUMERIC_FEATURES, ['missing' => 'median_with_missingness_flags', 'as_of' => 'reference_date']),
+            'categorical' => ['sector' => ['encoding' => 'training_partition_categories', 'unknown' => '__unknown']],
+            'price_semantics' => [
+                'features' => 'unadjusted_close_as_of_reference_date',
+                'labels' => 'adjusted_close_as_of_observed_label_window',
+                'reason' => 'adjusted_close is retroactively changed by later corporate-action repair; features cannot consume that series.',
             ],
+            'universe' => [
+                'version' => 'v7-historical-eligible-nse-1',
+                'rule' => 'non-benchmark NSE stocks with historical price observations through the cutoff, independent of current is_active state',
+            ],
+            'benchmark_mapping' => $this->benchmarkMappingDefinition(),
+            'sampling' => ['version' => 'v7-monthly-reference-1', 'cadence' => 'monthly', 'anchor' => 'last_available_trading_day'],
         ];
+    }
+
+    private function removeDirectory(string $directory): void
+    {
+        if (! is_dir($directory)) {
+            return;
+        }
+        foreach (scandir($directory) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $path = $directory.'/'.$entry;
+            is_dir($path) ? $this->removeDirectory($path) : @unlink($path);
+        }
+        @rmdir($directory);
     }
 
     /**
@@ -120,10 +240,7 @@ class MlTrainingDatasetBuilder
         if (! isset(['1m' => 21, '3m' => 63, '6m' => 126][$horizon])) {
             throw new RuntimeException('Unsupported ML horizon.');
         }
-        $stockQuery = Stock::query()
-            ->where(function ($query): void { $query->where('is_benchmark', false)->orWhereNull('is_benchmark'); })
-            ->where('exchange', 'NSE')
-            ->whereExists(fn ($query) => $query->selectRaw('1')->from('portfolio_stock_prices')->whereColumn('portfolio_stock_prices.stock_id', 'portfolio_stocks.id'));
+        $stockQuery = $this->universeQuery();
         $stockCount = (int) $stockQuery->count();
         $first = StockPrice::query()->whereDate('price_date', '<=', $cutoff->toDateString())->min('price_date');
         $last = StockPrice::query()->whereDate('price_date', '<=', $cutoff->toDateString())->max('price_date');
@@ -138,6 +255,7 @@ class MlTrainingDatasetBuilder
             'stock_count' => $stockCount,
             'sampling' => ['version' => 'v7-monthly-reference-1', 'cadence' => 'monthly', 'anchor' => 'last_available_trading_day'],
             'estimated_reference_rows' => $stockCount * $months,
+            'estimate_basis' => 'conservative_upper_bound: eligible_stock_count multiplied by global calendar-month range; actual listing/history overlap may be lower',
             'date_range' => ['start' => $first, 'end' => $last],
             'expected_partitions' => ['train' => '70%', 'validation' => '15%', 'test' => '15%'],
         ];

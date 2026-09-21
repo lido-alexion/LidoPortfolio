@@ -35,6 +35,8 @@ On 2026-09-21, a read-only production call to MlTrainingDatasetBuilder::build('1
 
 The root cause was daily reference-row construction for every eligible historical issuer, combined with repeated per-reference price, benchmark, fundamentals and deterministic-baseline work. The repository correction uses the versioned v7-monthly-reference-1 policy: one last-valid-trading-observation per stock per calendar month. It preserves historically eligible inactive issuers and excludes benchmarks, while preloading each stock's price series and point-in-time fundamental facts once per bounded stock chunk. The benchmark series is loaded once per build, and the deterministic Strategy baseline reuses one bounded historical bar cache per test stock.
 
+Production retraining now uses a two-pass partitioned JSONL transport: the first pass derives chronological date boundaries, and the second pass writes train/validation/test rows while buffering only one stock's sampled rows. The PHP service sends dataset paths to the Python adapter, and the baseline writes a matching test-partition JSONL file. Temporary files are deleted in the success and failure paths. Historical Strategy windows use binary search to select at most the trailing 400 bars for each reference date rather than filtering a full history repeatedly.
+
 MlTrainingDatasetBuilder::plan($horizon, $cutoff) is a read-only diagnostic that reports the universe count, monthly sampling definition, estimated reference rows, date range, cutoff and expected chronological partitions without creating lifecycle records or loading the training matrix. Production deployment and a real 1m build remain pending.
 
 ### Schema and models
@@ -52,7 +54,7 @@ Migration `2026_09_20_100001_v7_ml_artifacts.php` adds immutable artifact path, 
 
 `app/app/Services/ML/MlScoringService.php` provides dashboard, retrain, promote, rollback, prediction and latest-prediction methods. The implementation now:
 
-- builds a reusable historical dataset through `MlTrainingDatasetBuilder`, using historical eligible NSE issuers rather than today's active flag, one monthly last-valid-trading-day reference per stock, bounded `chunkById` stock processing, unadjusted close prices for PIT features, adjusted prices only for realised label outcomes, and preloaded fundamentals resolved in memory with `availability_date <= as_of`;
+- builds a reusable historical dataset through `MlTrainingDatasetBuilder`, using historical eligible NSE issuers rather than today's active flag, one monthly last-valid-trading-day reference per stock, bounded `chunkById` stock processing, partitioned JSONL transport for retraining, unadjusted close prices for PIT features, adjusted prices only for realised label outcomes, and preloaded fundamentals resolved in memory with `availability_date <= as_of`;
 - constructs benchmark-relative, drawdown-guarded labels only when the full future horizon is observable by the training cutoff;
 - records chronological train/validation/test boundaries and row counts, and calls the managed Python adapter for real logistic fitting/evaluation;
 - persists candidate/rejected model metadata and an immutable joblib artifact with SHA-256 integrity metadata; training failures finalize the run as `failed` without creating a usable candidate;
@@ -61,7 +63,7 @@ Migration `2026_09_20_100001_v7_ml_artifacts.php` adds immutable artifact path, 
 - the adapter fits median-plus-missingness preprocessing and categorical mappings on the training partition only, and stores that state inside the artifact;
 - `MlDeterministicBaselineAdapter` reuses the existing `AsOfFactorScorer` backtest abstraction over the same chronological test rows; the Python adapter compares candidate metrics with those measured baseline outcomes rather than a momentum/trend heuristic.
 - The first correction stopped at the raw `AsOfFactorScorer` score. This pass now routes those as-of factors through `EvaluationParameterResolver` and `StrategyConfigurationService::score` using a pinned factory Strategy definition, so weights, gates and scoring configuration are part of the baseline identity.
-- The baseline decision is now explicit: the pinned factory uses the `open_position` threshold (85) and requires the canonical Minervini Trend Template eligibility definition. Python consumes that PHP-produced decision; it does not infer a positive baseline from `score / 100 >= 0.5`. Test-row scoring reuses a preloaded historical bar context rather than issuing a price query for each reference date.
+- The baseline decision is now explicit: the pinned factory uses the `open_position` threshold (85) and requires the canonical Minervini Trend Template eligibility definition. Python consumes that PHP-produced decision; it does not infer a positive baseline from `score / 100 >= 0.5`. Test-row scoring reuses a preloaded historical bar context rather than issuing a price query for each reference date, and the streamed baseline output is checked one-for-one against the test partition.
 - The pinned identity includes the factory Strategy key/version, Strategy definition hash, Minervini factory key/version/definition hash, eligibility definition, decision semantics, and baseline adapter version. The same definition is reused for every test row in a run.
 - `MlDriftService` persists rolling health checks with explicit `ok`, `warning` or `insufficient_data` results, including model age and matured non-shadow outcomes for hit rate, benchmark-relative return and drawdown. Drift review is Admin-triggered; it does not auto-promote, retrain or deactivate models.
 - Model retraining is serialized per horizon, writes to a run-specific temporary artifact, then atomically moves to a versioned immutable path only after integrity verification. Failed lifecycle writes clean up unowned artifacts.
@@ -74,15 +76,16 @@ No scheduled retraining is introduced, consistent with the V7 Admin-triggered-on
 
 ## 4. Automated-Test Evidence
 
-Focused ML lifecycle, baseline and dataset tests pass **24 tests and 114 assertions**. They prove:
+Focused ML lifecycle, baseline and dataset tests pass **11 tests and 81 assertions** in the production-scale remediation set. They prove:
 
 - an Admin can invoke retraining through a controlled adapter boundary, promote an eligible candidate, persist artifact-backed prediction evidence and roll back a retained version;
 - shadow predictions are not returned as authoritative latest predictions;
 - an Admin drift check persists an explicit insufficient-data result;
 - historical dataset rows are chronological, label horizons end no later than the cutoff, and fundamentals with future availability are excluded from earlier feature rows.
-- monthly sampling keeps at most one reference observation per stock/month, inactive historical issuers remain represented, the read-only planner reports the sampling plan, and the fixture build stays below the stock-level query-count ceiling.
+- monthly sampling keeps exactly one reference observation per stock/month, selects the last available trading observation, inactive historical issuers remain represented, the read-only planner reports the sampling plan, and the streamed fixture build stays below the stock-level query-count ceiling with bounded per-stock buffering.
+- optimized PIT metrics are compared with the canonical FundamentalDataService at representative as-of dates, and streamed train/validation/test partition metadata records row counts and diagnostics.
 
-The full `app/tests/Feature/V7` suite passed **33 tests and 149 assertions**. Python adapter contract tests pass **6 tests** across the ML and fundamentals adapters; the ML adapter tests cover machine-readable drift output and failure/noise behavior, while production scikit-learn fitting is validated by the managed deployment runtime. Production lifecycle state remains unverified until the new release is deployed.
+The full `app/tests/Feature/V7` suite passed **34 tests and 174 assertions**. Replay/Strategy and historical-baseline tests passed **19 tests and 72 assertions**. Python adapter contract tests pass **7 tests** across the ML and fundamentals adapters, deployment contract tests pass **3 tests**, and TypeScript checking passed. Production lifecycle state remains unverified until the new release is deployed.
 
 ## 5. Production Runtime Inventory
 
