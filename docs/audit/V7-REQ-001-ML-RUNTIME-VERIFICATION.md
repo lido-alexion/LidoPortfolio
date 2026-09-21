@@ -2,7 +2,7 @@
 
 ## 1. Finding Recap
 
-`V7-REQ-001` is `PARTIALLY_IMPLEMENTED`. The repository now contains the training, artifact, scoring and drift implementation, with this correction pass addressing deterministic baseline fidelity, live-health semantics, historical-universe survivorship, corporate-action price safety and artifact concurrency. Production deployment/runtime verification remains outstanding. The earlier audit found a lifecycle scaffold with hard-coded metrics and no model artifact; that historical finding is retained below.
+`V7-REQ-001` is `PARTIALLY_IMPLEMENTED`. The repository now contains the training, artifact, scoring and drift implementation, and production run #4 verifies the complete 1m training/evaluation/artifact/rejection path. Cross-horizon training and active-model lifecycle verification remain outstanding. The earlier audit found a lifecycle scaffold with hard-coded metrics and no model artifact; that historical finding is retained below.
 
 The audit is therefore not closed. No production behavior was changed.
 
@@ -44,6 +44,16 @@ MlTrainingDatasetBuilder::plan($horizon, $cutoff) is a read-only diagnostic that
 The first production-scale streamed 1m build on commit `51b4e4c` completed the memory objective but exposed a partitioning defect: 2,604 stocks produced 40,851 rows in 794.03 seconds with 64.5 MB PHP peak memory, 19 peak buffered rows and 14,516,504 temporary bytes, but `train=0`, `validation=0`, `test=40,851`. Pass 1 had derived boundaries from issuer histories reaching back to 1991, while the NIFTY50 benchmark history began on 2025-01-20, so no benchmark-relative rows could exist in the early dates. The repository correction makes pass 1 and pass 2 share the same viable-observation predicate, including issuer lookback/future prices, benchmark entry/future prices and cutoff safety. It also fails immediately when any partition is empty or emitted dates fall outside reported boundaries, and reports viable-date and benchmark date diagnostics. No training, model or other ML mutation occurred during the failed production verification.
 
 The corrected production-scale run verified scale, memory and benchmark-aware partition generation, but static review then identified a final leakage issue: partitions were assigned by exact stock-specific reference dates while labels extend forward by 21, 63 or 126 trading observations. The repository correction assigns complete `YYYY-MM` sampling buckets to chronological train/validation/test partitions, then purges train rows with `label_end >= validation_start` and validation rows with `label_end >= test_start`. Final JSONL output is revalidated for non-empty partitions, single-bucket ownership and label separation; purge counts, maximum label-end dates and nominal/actual ranges are persisted as diagnostics. V7-REQ-001 remains partially implemented pending deployment and training verification.
+
+### Controlled production run #4
+
+Production is green on `75ef65a60de8e10b33c1ba4acb7b53600db42e16`. Controlled 1m retraining completed end-to-end: training run `4` is `completed`, model version `id=1`, `version=1`, horizon `1m` is `rejected`, and no promotion or active model was created. Rejection was expected safeguard behavior: `roc_auc=0.5191991580728832` was below `0.52` and `pr_auc=0.472532148524479` was below `0.50`, while `benchmark_relative_return=0.01452686902941843` and `deterministic_baseline_delta=0.01452686902941843` passed their zero thresholds. This is a successful training lifecycle with an ineligible candidate, not a training failure.
+
+The production 1m dataset wrote 36,381 rows from 2,604 stocks with 25,008 train, 4,474 validation and 6,899 test rows; peak buffered rows were 19 and temporary dataset size was 12,918,047 bytes. The chronological ranges were train `2025-01-27..2025-12-31`, validation `2026-02-23..2026-03-30`, and test `2026-05-25..2026-07-31`. Label separation remained valid: train maximum label end `2026-02-09` preceded validation start `2026-02-23`, and validation maximum label end `2026-05-12` preceded test start `2026-05-25`. Purged overlap rows were 2,214 from train and 2,256 from validation.
+
+The configured features were `relative_strength_3m`, `momentum_score`, `trend_score`, `roe`, `debt_equity`, `revenue_growth_proxy`, and `sector`. The effective production model used only `relative_strength_3m`, `momentum_score`, and `trend_score`. `roe`, `debt_equity`, `revenue_growth_proxy`, and `sector` were excluded because their train-partition coverage was zero: respectively `0/25008`, `0/25008`, `0/25008`, and `0/25008`; technical coverage was `19003/25008`, `25008/25008`, and `25008/25008`. The three fundamental exclusions remain the documented PIT availability boundary. A direct stock-master query found zero populated sectors across 2,605 NSE non-benchmark stocks, so the sector exclusion is recorded separately as a stock-master/data-enrichment gap, not an ML mapping defect. The existing `sector ?: '__unknown'` mapping and all-unknown feature exclusion remain correct.
+
+Run #4 production-verifies dataset construction, bounded streaming, PIT semantics, chronological splitting, label-horizon separation, train-only preprocessing, effective-feature exclusion, deterministic baseline generation, Python fitting, evaluation, naive and deterministic Strategy/Evaluation baseline comparison, artifact creation/SHA persistence, candidate eligibility evaluation, and no automatic promotion. V7 explicitly permits controlled exclusion of weak or unavailable features when the final selected set is persisted, so a technical-only 1m model is contract-valid. Production still has no naturally eligible candidate, active model, prediction, retained prior version, rollback or active-model drift evidence.
 
 ### Retraining lock correction
 
@@ -95,16 +105,16 @@ The directly rerun ML lifecycle and dataset regression subset passed **10 tests 
 - monthly sampling keeps exactly one reference observation per stock/month, selects the last available trading observation, inactive historical issuers remain represented, the read-only planner reports the sampling plan, and the streamed fixture build stays below the stock-level query-count ceiling with bounded per-stock buffering.
 - optimized PIT metrics are compared with the canonical FundamentalDataService at representative as-of dates, and streamed train/validation/test partition metadata records row counts and diagnostics.
 
-The full `app/tests/Feature/V7` suite passed **39 tests and 362 assertions**. Replay/Strategy and historical-baseline tests passed **117 tests and 935 assertions**. Python adapter contract tests pass **11 tests** across the ML and fundamentals adapters, including JSONL training diagnostics, baseline identity alignment, train-only feature exclusion and large-`int8` label aggregation. Deployment contract tests pass **3 tests**, and TypeScript checking passed. Production lifecycle state remains unverified until the new release is deployed.
+The full `app/tests/Feature/V7` suite passed **39 tests and 362 assertions**. Replay/Strategy and historical-baseline tests passed **117 tests and 935 assertions**. Python adapter contract tests pass **11 tests** across the ML and fundamentals adapters, including JSONL training diagnostics, baseline identity alignment, train-only feature exclusion and large-`int8` label aggregation. Deployment contract tests pass **3 tests**, and TypeScript checking passed. Run #4 supplies the first successful deployed 1m training/artifact/rejection evidence; active-model lifecycle and cross-horizon runtime evidence remain open.
 
 ## 5. Production Runtime Inventory
 
-Read-only inspection was performed on `stoxla-prod` against the active release `3500f4c07aecddba6ee23f9d7f909664e99b4f24`. Counts are sanitized aggregate evidence:
+Read-only inspection was performed on `stoxla-prod` against the active release `75ef65a60de8e10b33c1ba4acb7b53600db42e16`. Counts are sanitized aggregate evidence after controlled run #4:
 
 | Table | Count | Status/horizon evidence |
 | --- | ---: | --- |
-| `stox_ml_training_runs` | 0 | No run lifecycle exists in production |
-| `stox_ml_model_versions` | 0 | No candidate, active, retained, or rejected model exists |
+| `stox_ml_training_runs` | 4 | Runs #1-#3 failed safely; run #4 completed |
+| `stox_ml_model_versions` | 1 | Version 1 / 1m is rejected; no active model |
 | `stox_ml_predictions` | 0 | No scoring/prediction evidence exists |
 | `stox_ml_drift_checks` | 0 | No drift evidence exists |
 
@@ -137,7 +147,7 @@ The production inventory in the prior audit remains valid for the pre-implementa
 
 | Lifecycle | Repository evidence | Production evidence | Assessment |
 | --- | --- | --- | --- |
-| Training | Dataset builder, labels, chronological partitions, train-only feature selection and managed logistic adapter; lifecycle test passes | Run 1 failed safely before model creation on absent PIT fundamental inputs | Repository correction complete; controlled retraining pending |
+| Training | Dataset builder, labels, chronological partitions, train-only feature selection and managed logistic adapter; lifecycle test passes | Run #4 completed 1m training, evaluation and artifact persistence; candidate rejected by ROC-AUC/PR-AUC gates | 1m training lifecycle verified; 3m/6m remain open |
 | Promotion | Transactional candidate threshold check, artifact integrity gate and active replacement | No post-implementation model | Repository implemented; production artifact review pending |
 | Rollback | Transactional retained-version reactivation with artifact verification | No post-implementation model | Repository implemented; production rollback pending |
 | Prediction | Artifact hash/schema verification, model inference, provenance and explanations | No post-implementation predictions | Repository implemented; production scoring pending |
@@ -153,11 +163,12 @@ The production inventory in the prior audit remains valid for the pre-implementa
 | MLR-002 | Point-in-time feature/label construction, chronological partitions and training-only preprocessing were absent in the audited scaffold | `IMPLEMENTED` | High | No; repository remediation complete |
 | MLR-003 | Drift checking and Admin drift-health lifecycle were absent in the audited scaffold | `IMPLEMENTED` | Medium | No; repository remediation complete |
 | MLR-006 | Deterministic baseline, live-health, historical-universe, feature-price and artifact-concurrency corrections were required after review of the first implementation | `IMPLEMENTED` | High | No; repository correction complete |
-| MLR-004 | Production contains no training runs, model versions, predictions, or drift checks, so deployed lifecycle behavior remains unverified | `RUNTIME_VERIFICATION_REQUIRED` | High | Yes |
-| MLR-005 | Promotion/rollback/prediction route behavior is covered by tests, but no real production artifact/version exists to verify it operationally | `RUNTIME_VERIFICATION_REQUIRED` | Medium | No additional static defect beyond MLR-001 |
+| MLR-004 | Production now has a completed/rejected 1m artifact lifecycle, but no naturally eligible candidate, active model, prediction, retained version, rollback or active-model drift evidence | `RUNTIME_VERIFICATION_REQUIRED` | High | Yes |
+| MLR-005 | Promotion/rollback/prediction route behavior is covered by tests, but no eligible production candidate or active model exists to verify those paths operationally | `RUNTIME_VERIFICATION_REQUIRED` | Medium | No additional static defect beyond MLR-001 |
 | MLR-007 | The pre-correction production dataset build attempted daily rows across 2,604 issuers and 14,963,373 price rows, ran nearly one hour and was terminated; the monthly/preloaded streamed implementation subsequently completed at production scale with bounded memory | `IMPLEMENTED` | High | No; scale remediation verified |
-| MLR-008 | First controlled 1m production training run failed because configured historical fundamental features had zero train-partition coverage; PIT semantics correctly made them unavailable | `RUNTIME_VERIFICATION_REQUIRED` | High | Yes; repository feature exclusion correction must be deployed and retried |
-| MLR-009 | Third controlled 1m production training run exposed NumPy 2.x `int8` label/count arithmetic failure after reaching logistic fitting | `RUNTIME_VERIFICATION_REQUIRED` | High | Yes; safe-width aggregation correction must be deployed and retried |
+| MLR-008 | First controlled 1m production training run failed because configured historical fundamental features had zero train-partition coverage; PIT semantics correctly made them unavailable | `IMPLEMENTED` | High | No; effective-feature exclusion was deployed and run #4 verified it |
+| MLR-009 | Third controlled 1m production training run exposed NumPy 2.x `int8` label/count arithmetic failure after reaching logistic fitting | `IMPLEMENTED` | High | No; safe-width aggregation was deployed and run #4 completed |
+| MLR-010 | Production stock master has no sector values for 2,605 NSE non-benchmark stocks; all-unknown sector is therefore excluded from the effective model schema | `ACCEPTABLE_VARIATION` | Low | No; separate data-enrichment gap, not an ML mapping defect |
 
 ## 9. Final Assessment
 
