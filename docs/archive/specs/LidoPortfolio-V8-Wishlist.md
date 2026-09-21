@@ -14,7 +14,7 @@ V8 contains the **Standalone Telemetry Platform**, deferred follow-on data-boots
 
 The Telemetry Platform is separated from StoX product implementation because it is a separate, independently deployable, product-independent application. StoX is its first intended client, but building the Telemetry product and integrating StoX with it are separate roadmap concerns.
 
-V8 also contains the one-time Historical Fundamental Data Bootstrap, deferred from V7 until the historical dataset/source is prepared and selected, a guest-to-admin **Account Access Request** workflow that preserves admin-controlled onboarding while removing the need for an applicant to obtain an invitation before expressing interest, and ML operations improvements that help Admins decide when retraining is warranted without introducing automatic retraining or promotion.
+V8 also contains the one-time Historical Fundamental Data Bootstrap, deferred from V7 until the historical dataset/source is prepared and selected, a guest-to-admin **Account Access Request** workflow that preserves admin-controlled onboarding while removing the need for an applicant to obtain an invitation before expressing interest, and ML operations automation for scheduled retraining, gated deployment of newer model versions, operator information messages, and failure alerting while retaining all existing manual controls.
 
 ## 2. Current V8 backlog
 
@@ -23,7 +23,7 @@ V8 also contains the one-time Historical Fundamental Data Bootstrap, deferred fr
 | V4-FEAT-052 | Standalone Telemetry Platform | Build the product-independent telemetry/analytics platform as a separate repository/application. Core architecture is already decided in `specs/V7-Telemetry-Platform.md`; the historical filename is retained for now, but this V8 register supersedes its earlier V7 roadmap placement. | CORE ARCHITECTURE DECIDED |
 | V4-FEAT-054 | Historical Fundamental Data Bootstrap | One-time population of StoX with available historical quarterly and annual fundamental data after the V7 canonical fundamental model exists. The import may use custom/offline scripts rather than the FEAT-053 live fetcher. StoX imposes no fixed historical-depth window; the canonical store and downstream analytics must support whatever depth is imported. Detailed source, extraction method, mapping and bootstrap procedure remain OPEN until the historical dataset is prepared/selected. | OPEN / DEFERRED |
 | V4-FEAT-055 | Account Access Request / Admin Approval Workflow | Add a guest-facing **Request an account** flow linked from Login. Human applicants submit the information required for admin onboarding behind CAPTCHA and abuse controls. Pending duplicates are deduplicated; admins review requests in User Management, receive operational notifications, and resolve them as **Create**, **Ignore**, or **Reject**. Reject creates a reversible email ban; Ignore closes the request without banning; Create hands off into the existing secure admin onboarding/invite flow with request details prefilled. | WISHLIST / NEEDS DESIGN |
-| V4-FEAT-056 | ML Retraining Recommendation / Model Health Alerts | Add advisory model-health monitoring that evaluates model age, drift and matured live performance and tells Admins when retraining should be considered. The feature may recommend a horizon-specific retrain and surface the reason, but **must not automatically retrain, promote, deactivate, or replace a model**. Admin remains responsible for triggering retraining and explicitly promoting any resulting candidate. | WISHLIST / NEEDS DESIGN |
+| V4-FEAT-056 | Scheduled ML Retraining, Model Deployment & Operations Messaging | Add cron/scheduler-driven retraining for the 1m/3m/6m models, retain manual retrain/promotion controls, automatically evaluate scheduled candidates and deploy a newer model only when the normal promotion gates pass. Send informational messages for upcoming scheduled training, successful training and successful model deployment; generate Admin alerts only for failures/errors that require attention. | WISHLIST / NEEDS DESIGN |
 | V4-FEAT-057 | ML Fundamental Feature Expansion & Retraining | Follow on from V4-FEAT-054. After historical fundamental coverage is expanded, define a curated/versioned fundamental ML feature set, validate point-in-time safety and coverage, retrain the 1m/3m/6m models, and compare the resulting candidates with existing models and the deterministic StoX baseline before any Admin promotion. | WISHLIST / DEPENDS ON V4-FEAT-054 |
 
 ## 3. V4-FEAT-055 — Account Access Request / Admin Approval Workflow
@@ -288,117 +288,195 @@ The detailed V8 design should explicitly decide:
 - whether Admin Create hands off to the current invite flow only or a future direct-create workflow;
 - whether a successful Create notification should also be sent to the applicant, separate from the invitation itself.
 
-## 4. V4-FEAT-056 — ML Retraining Recommendation / Model Health Alerts
+## 4. V4-FEAT-056 — Scheduled ML Retraining, Model Deployment & Operations Messaging
 
 ### 4.1 Product intent
 
-V7 deliberately keeps ML retraining and promotion Admin-triggered. V8 should add an **advisory operational layer** that tells an Admin when a model is becoming stale or degraded enough that retraining is worth considering.
+V8 should operationalize the V7 ML lifecycle so routine model maintenance no longer depends on an Admin remembering to retrain each horizon manually.
 
-The feature is recommendation-only:
+The normal scheduled flow should be:
 
 ```text
-model age / drift / matured live performance
-    -> model-health assessment
-        -> retraining recommended / not recommended
-            -> Admin reviews reason
-                -> Admin explicitly triggers retraining
-                    -> candidate evaluation
-                        -> Admin explicitly promotes or rejects candidate
+configured schedule / cron
+    -> informational message: training upcoming
+        -> retrain horizon
+            -> evaluate statistical + investment metrics
+            -> compare with deterministic StoX baseline
+            -> apply normal promotion gates
+                -> gates pass: deploy/promote newer model
+                    -> informational message: training + deployment successful
+                -> gates do not pass: retain current active model
+                    -> informational result; no failure alert
+                -> technical/runtime failure
+                    -> Admin alert
 ```
 
-No automatic retraining, promotion, rollback, deactivation, or trading action is introduced.
+Manual retraining, candidate review, promotion, rollback and drift checks SHALL remain available.
 
-### 4.2 Initial signals
+### 4.2 Scheduling
 
-The recommendation logic SHOULD consider at least:
+StoX SHALL support scheduler/cron-driven retraining for:
 
-- model age since training/promotion;
-- configured age threshold by horizon;
+- 1m;
+- 3m;
+- 6m.
+
+Each horizon SHOULD have an independently configurable schedule because the useful retraining cadence may differ by horizon.
+
+The detailed V8 design should define sensible defaults, for example more frequent retraining for 1m and less frequent retraining for 3m/6m, while allowing Admin configuration.
+
+Scheduling requirements:
+
+- use the existing StoX/Laravel scheduler/cron infrastructure;
+- preserve the per-horizon retraining lock;
+- do not overlap two retrains for the same horizon;
+- skip or defer safely when a same-horizon retrain is already running;
+- retain an auditable record of scheduled versus manually initiated runs;
+- manual retraining must continue to work regardless of the schedule.
+
+### 4.3 Scheduled candidate evaluation and deployment
+
+A scheduled retrain SHALL use the same canonical training/evaluation path as a manual retrain.
+
+After successful training:
+
+1. create the normal candidate/rejected model version;
+2. evaluate the existing promotion thresholds;
+3. compare against the deterministic StoX Strategy/Evaluation baseline;
+4. verify artifact integrity;
+5. deploy/promote the newer model only when the configured promotion gates pass;
+6. retain the existing active model when the candidate does not pass;
+7. never treat "candidate did not outperform/pass gates" as an operational error.
+
+Automatic deployment applies only to candidates produced by this scheduled lifecycle and only after all normal safety/evaluation gates pass.
+
+Manual promotion and rollback SHALL remain available to the Admin.
+
+### 4.4 Model-health signals
+
+Model age, drift and matured live performance remain useful operational inputs, but they no longer exist primarily to ask the Admin to remember to retrain.
+
+They SHOULD be used to:
+
+- enrich scheduler/model-health status;
+- allow optional early retraining outside the normal cadence when configured;
+- explain why an unscheduled/early run was initiated;
+- support Admin diagnostics.
+
+The design SHOULD consider:
+
+- model age;
 - score/distribution drift;
 - matured prediction hit rate;
 - benchmark-relative realised return;
 - drawdown/downside deterioration;
 - comparison with the active model's original validation/test metrics;
-- sustained degradation across rolling windows such as 3, 6 and 12 months.
+- sustained degradation across 3/6/12-month windows.
 
-A single noisy observation should not create a retraining recommendation. The detailed V8 design should define minimum sample counts, persistence/hysteresis and severity thresholds.
+Any drift-triggered early retraining policy must be explicit, configurable and use the same lock/evaluation/deployment gates as cron-triggered training.
 
-### 4.3 Horizon-aware recommendations
+### 4.5 Information messages vs Admin alerts
 
-1m, 3m and 6m models SHALL be assessed independently.
+Routine successful ML operations SHALL be communicated as **informational messages**, not alerts.
 
-The UI/notification should identify:
+Informational messages SHOULD cover at least:
 
-- affected horizon;
-- active model version;
-- model age;
-- triggering metric(s);
-- relevant rolling window;
-- current value versus reference/threshold;
-- recommendation timestamp;
-- whether an unresolved recommendation already exists.
+- upcoming scheduled training, with horizon and planned time;
+- training started where useful;
+- successful training completion;
+- result of candidate evaluation;
+- successful deployment/promotion of a newer model;
+- scheduled run completed but current active model retained because the candidate did not pass promotion gates;
+- manual versus scheduled origin where relevant.
 
-The system MAY recommend retraining one horizon while leaving the others unchanged.
+An **Admin alert** SHALL be generated only for an error/failure condition requiring attention, such as:
 
-### 4.4 Admin experience and notifications
+- dataset build failure;
+- training process failure;
+- artifact integrity failure;
+- deployment/promotion transaction failure;
+- lock/runtime infrastructure failure;
+- repeated scheduler failure;
+- other conditions that prevent the expected ML lifecycle from completing safely.
 
-Admin ML/model-management surfaces SHOULD expose a clear state such as:
+A model that trains successfully but does not meet promotion thresholds is **not** an error and must not generate an error alert.
 
-- Healthy;
-- Watch;
-- Retraining recommended;
-- Insufficient live evidence.
+Information and alert delivery should use the existing StoX notification architecture with normal deduplication/cooldown behavior.
 
-When retraining becomes recommended, StoX SHOULD notify Admins through the existing notification architecture, subject to normal deduplication/cooldown rules.
+### 4.6 Admin experience
 
-The notification should deep-link to the relevant model-management page where the Admin can inspect evidence and manually start retraining.
+Admin ML/model-management surfaces SHOULD expose:
 
-Repeated evaluations of the same unresolved condition must not create notification storms.
+- next scheduled retraining time by horizon;
+- last scheduled and last manual training;
+- current active model/version;
+- latest training result;
+- latest deployed model/version;
+- schedule enabled/disabled state;
+- model-health/drift context;
+- recent informational events;
+- unresolved ML failures/alerts.
 
-### 4.5 Lifecycle and auditability
+Admin controls SHALL retain:
 
-Persist enough evidence to explain why the recommendation was produced, including the model version, horizon, metrics/window, thresholds and assessment time.
+- manual retrain;
+- manual promotion where applicable;
+- rollback to retained model;
+- drift check;
+- schedule enable/disable;
+- schedule/cadence configuration subject to product policy.
 
-Recommended lifecycle:
+### 4.7 Auditability and safety
 
-```text
-healthy
-  -> watch
-  -> retraining_recommended
-      -> acknowledged
-      -> retraining_started
-      -> resolved / superseded
-```
+Persist enough evidence to reconstruct each lifecycle event:
 
-The final V8 design may simplify these states, but recommendation history must remain auditable.
+- trigger type: scheduled / manual / optional health-triggered;
+- schedule identity/version;
+- requested/start/completion timestamps;
+- training cutoff;
+- dataset and feature-definition versions;
+- metrics and deterministic baseline comparison;
+- promotion-gate result;
+- previous active model;
+- resulting active model;
+- deployment timestamp;
+- failure details where applicable;
+- Admin actor for manual actions.
 
-A recommendation is operational state only; it does not alter the active model by itself.
+Scheduled execution must not bypass any V7 integrity, point-in-time, artifact-verification, promotion-threshold or rollback safeguards.
 
-### 4.6 Initial acceptance criteria
+### 4.8 Initial acceptance criteria
 
-1. Active 1m/3m/6m models are assessed independently.
-2. Model age can contribute to a recommendation using configurable horizon-aware thresholds.
-3. Matured live-performance deterioration and drift can contribute to a recommendation.
-4. Insufficient evidence is represented explicitly rather than treated as degradation.
-5. Admin can see the exact reason/evidence behind a recommendation.
-6. Repeated checks do not create duplicate notification storms.
-7. Admin can manually initiate retraining from the recommendation context.
-8. Recommendation never automatically retrains, promotes, deactivates, rolls back, or changes trading behavior.
-9. Retraining still produces a candidate that must pass the normal evaluation gates.
-10. Promotion remains an explicit Admin action.
-11. Recommendation history and Admin acknowledgement/action are auditable.
+1. 1m/3m/6m models support independently configurable scheduled retraining.
+2. Scheduled runs use the same canonical training path as manual runs.
+3. Same-horizon scheduled/manual runs cannot execute concurrently.
+4. Manual retraining remains available.
+5. A successful scheduled candidate is evaluated against all normal promotion gates and the deterministic baseline.
+6. A newer model is automatically deployed only when all required gates pass.
+7. A candidate that does not pass remains non-active and the existing active model is retained.
+8. Manual promotion/rollback controls remain available.
+9. Admin receives an informational message before an upcoming scheduled training.
+10. Successful training generates an informational completion message.
+11. Successful deployment of a newer model generates an informational deployment message.
+12. A successful run whose candidate is not deployed is informational, not an error alert.
+13. Only operational/error conditions generate an Admin alert.
+14. Scheduler retries/deduplication do not create duplicate runs or notification storms.
+15. Every scheduled/manual training and deployment transition is auditable.
+16. Model-health/drift evidence remains visible and may support explicitly configured early retraining without bypassing normal gates.
 
-### 4.7 Open design decisions
+### 4.9 Open design decisions
 
 The detailed V8 design should decide:
 
-- default age thresholds for 1m/3m/6m models;
-- exact drift/performance thresholds;
-- persistence/hysteresis before escalating from Watch to Retraining recommended;
-- notification cooldown/deduplication rules;
-- whether an Admin can snooze/acknowledge a recommendation;
-- whether a successful retrain automatically resolves the recommendation or only a successful promotion does;
-- whether recommendation evaluation is scheduled daily/weekly or piggybacks on existing drift checks.
+- default cron cadence for 1m/3m/6m;
+- whether schedules are fixed product defaults or Admin-configurable;
+- how far in advance the "upcoming training" information message is sent;
+- whether model-health deterioration can trigger an early run or only influence the next scheduled run;
+- retry/backoff policy for failed scheduled runs;
+- maximum consecutive failures before escalation;
+- information-channel preferences versus error-alert channels;
+- whether successful training and successful deployment are separate messages or can be consolidated;
+- whether an automatically deployed model has a short post-deployment observation/watch state before being considered fully settled.
 
 ## 5. V4-FEAT-057 — ML Fundamental Feature Expansion & Retraining
 
@@ -500,7 +578,7 @@ V8 also owns the one-time historical fundamental bootstrap outcome, but does not
 
 V8 owns the account-access request workflow through Admin disposition and handoff into the existing secure user onboarding flow. It does **not** replace the existing invitation/token security model, establish open registration, or allow a guest request to grant any account privilege by itself.
 
-V8 also owns advisory ML retraining recommendations and model-health alerts. These remain operational guidance only; actual retraining and model promotion stay explicitly Admin-controlled.
+V8 also owns scheduled ML retraining and gated deployment of newer model versions, while retaining manual retrain/promotion/rollback controls. Routine upcoming/successful training and deployment events are informational; Admin alerts are reserved for operational failures/errors requiring attention.
 
 V8 also owns the ML follow-on to the historical fundamentals bootstrap: curated fundamental feature expansion, PIT/coverage validation, horizon retraining and candidate evaluation. This does not alter the rule that model promotion remains explicit and Admin-controlled.
 
