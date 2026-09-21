@@ -55,6 +55,12 @@ The configured features were `relative_strength_3m`, `momentum_score`, `trend_sc
 
 Run #4 production-verifies dataset construction, bounded streaming, PIT semantics, chronological splitting, label-horizon separation, train-only preprocessing, effective-feature exclusion, deterministic baseline generation, Python fitting, evaluation, naive and deterministic Strategy/Evaluation baseline comparison, artifact creation/SHA persistence, candidate eligibility evaluation, and no automatic promotion. V7 explicitly permits controlled exclusion of weak or unavailable features when the final selected set is persisted, so a technical-only 1m model is contract-valid. Production still has no naturally eligible candidate, active model, prediction, retained prior version, rollback or active-model drift evidence.
 
+### Cross-horizon partition finding
+
+Controlled 3m production training run #5 failed safely during dataset construction before model or artifact creation with `RuntimeException: ML dataset partition is empty: validation`. The fixed percentage monthly bucket allocation left the nominal validation window shorter than the 63-trading-observation label horizon, so every validation row crossed the test boundary and was purged. This was a cross-horizon partition-planning defect exposed after successful 1m verification; run #5 remains preserved evidence.
+
+The repository correction keeps complete monthly buckets intact but selects train/validation cut points from horizon-aware candidate allocations. Pass 1 retains the minimum actual `label_end` per viable reference date/bucket, and candidate boundaries are scored against the nominal 70/15/15 split only after requiring at least one post-purge train and validation row. The existing final purge and hard leakage guards remain authoritative. The selected bucket allocation, nominal/selected boundaries, label horizon and adjustment score are persisted. If no allocation can form three usable partitions, the builder now reports a horizon-specific insufficient-history diagnostic. A controlled 3m retry is still required; 6m remains unverified.
+
 ### Retraining lock correction
 
 Production verification measured the optimized 1m dataset build at 767.78 seconds (approximately 12.8 minutes), before deterministic Strategy baseline evaluation, Python training/evaluation, artifact verification and persistence. The prior 900-second retraining lease was therefore insufficient and was identified before any production ML lifecycle mutation. Same-horizon retraining now uses the configurable `ml.retrain_lock_seconds` lease, defaulting to 14,400 seconds (four hours), while retaining the 15-second lock-acquisition wait and independent per-horizon keys. No production training, promotion, prediction or drift mutation occurred before this correction.
@@ -96,7 +102,7 @@ No scheduled retraining is introduced, consistent with the V7 Admin-triggered-on
 
 ## 4. Automated-Test Evidence
 
-The directly rerun ML lifecycle and dataset regression subset passed **10 tests and 247 assertions**. It proves:
+The directly rerun ML lifecycle and dataset regression subset passed **10 tests and 247 assertions**. The dataset partition suite now passes **8 tests and 225 assertions**, including horizon-aware 3m boundary adjustment, 6m safety, deterministic allocation and precise insufficient-history failure. It proves:
 
 - an Admin can invoke retraining through a controlled adapter boundary, promote an eligible candidate, persist artifact-backed prediction evidence and roll back a retained version;
 - shadow predictions are not returned as authoritative latest predictions;
@@ -105,7 +111,7 @@ The directly rerun ML lifecycle and dataset regression subset passed **10 tests 
 - monthly sampling keeps exactly one reference observation per stock/month, selects the last available trading observation, inactive historical issuers remain represented, the read-only planner reports the sampling plan, and the streamed fixture build stays below the stock-level query-count ceiling with bounded per-stock buffering.
 - optimized PIT metrics are compared with the canonical FundamentalDataService at representative as-of dates, and streamed train/validation/test partition metadata records row counts and diagnostics.
 
-The full `app/tests/Feature/V7` suite passed **39 tests and 362 assertions**. Replay/Strategy and historical-baseline tests passed **117 tests and 935 assertions**. Python adapter contract tests pass **11 tests** across the ML and fundamentals adapters, including JSONL training diagnostics, baseline identity alignment, train-only feature exclusion and large-`int8` label aggregation. Deployment contract tests pass **3 tests**, and TypeScript checking passed. Run #4 supplies the first successful deployed 1m training/artifact/rejection evidence; active-model lifecycle and cross-horizon runtime evidence remain open.
+The full `app/tests/Feature/V7` suite passed **41 tests and 370 assertions**. Replay/Strategy and historical-baseline tests passed **117 tests and 935 assertions**. Python adapter contract tests pass **11 tests** across the ML and fundamentals adapters, including JSONL training diagnostics, baseline identity alignment, train-only feature exclusion and large-`int8` label aggregation. Deployment contract tests pass **3 tests**, and TypeScript checking passed. Run #4 supplies the first successful deployed 1m training/artifact/rejection evidence; active-model lifecycle and cross-horizon runtime evidence remain open.
 
 ## 5. Production Runtime Inventory
 
@@ -169,6 +175,7 @@ The production inventory in the prior audit remains valid for the pre-implementa
 | MLR-008 | First controlled 1m production training run failed because configured historical fundamental features had zero train-partition coverage; PIT semantics correctly made them unavailable | `IMPLEMENTED` | High | No; effective-feature exclusion was deployed and run #4 verified it |
 | MLR-009 | Third controlled 1m production training run exposed NumPy 2.x `int8` label/count arithmetic failure after reaching logistic fitting | `IMPLEMENTED` | High | No; safe-width aggregation was deployed and run #4 completed |
 | MLR-010 | Production stock master has no sector values for 2,605 NSE non-benchmark stocks; all-unknown sector is therefore excluded from the effective model schema | `ACCEPTABLE_VARIATION` | Low | No; separate data-enrichment gap, not an ML mapping defect |
+| MLR-011 | 3m run #5 exposed fixed percentage bucket allocation collapsing validation after 63-observation label purging | `RUNTIME_VERIFICATION_REQUIRED` | High | Yes; horizon-aware partition correction must be deployed and retried |
 
 ## 9. Final Assessment
 

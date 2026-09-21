@@ -294,4 +294,62 @@ class MlTrainingDatasetBuilderTest extends TestCase
             File::deleteDirectory($directory);
         }
     }
+
+    public function test_three_month_partitioning_adjusts_bucket_boundaries_before_purging(): void
+    {
+        $benchmark = Stock::query()->create(['symbol' => 'NIFTY50', 'exchange' => 'NSE', 'name' => 'NIFTY 50', 'is_benchmark' => true]);
+        $issuer = Stock::query()->create(['symbol' => 'THREEMONTH', 'exchange' => 'NSE', 'name' => 'Three Month Issuer']);
+        foreach ([$benchmark, $issuer] as $subject) {
+            foreach (range(0, 700) as $day) {
+                StockPrice::query()->create([
+                    'stock_id' => $subject->id,
+                    'price_date' => Carbon::parse('2025-01-20')->addDays($day)->toDateString(),
+                    'close_price' => 100 + $day,
+                    'adjusted_close_price' => 100 + $day,
+                    'data_source' => 'test',
+                ]);
+            }
+        }
+
+        $directory = storage_path('framework/testing/ml-horizon-aware-'.bin2hex(random_bytes(4)));
+        $secondDirectory = storage_path('framework/testing/ml-horizon-aware-repeat-'.bin2hex(random_bytes(4)));
+        $dataset = app(MlTrainingDatasetBuilder::class)->buildStreamed('3m', Carbon::parse('2026-09-30'), $directory);
+        $repeat = app(MlTrainingDatasetBuilder::class)->buildStreamed('3m', Carbon::parse('2026-09-30'), $secondDirectory);
+        $this->assertSame($dataset['partitions'], $repeat['partitions']);
+
+        foreach (['train', 'validation', 'test'] as $partition) {
+            $this->assertGreaterThan(0, $dataset['partitions']['row_counts'][$partition]);
+        }
+        $this->assertGreaterThan(0, $dataset['partitions']['horizon_aware']['boundary_adjustment_score']);
+        $this->assertLessThan($dataset['partitions']['validation_start'], $dataset['diagnostics']['train_max_label_end']);
+        $this->assertLessThan($dataset['partitions']['test_start'], $dataset['diagnostics']['validation_max_label_end']);
+
+        File::deleteDirectory($directory);
+        File::deleteDirectory($secondDirectory);
+    }
+
+    public function test_horizon_aware_partitioning_reports_insufficient_history_precisely(): void
+    {
+        $benchmark = Stock::query()->create(['symbol' => 'NIFTY50', 'exchange' => 'NSE', 'name' => 'NIFTY 50', 'is_benchmark' => true]);
+        $issuer = Stock::query()->create(['symbol' => 'SHORT', 'exchange' => 'NSE', 'name' => 'Short History']);
+        foreach ([$benchmark, $issuer] as $subject) {
+            foreach (range(0, 260) as $day) {
+                StockPrice::query()->create([
+                    'stock_id' => $subject->id,
+                    'price_date' => Carbon::parse('2025-01-20')->addDays($day)->toDateString(),
+                    'close_price' => 100 + $day,
+                    'adjusted_close_price' => 100 + $day,
+                    'data_source' => 'test',
+                ]);
+            }
+        }
+
+        $directory = storage_path('framework/testing/ml-horizon-insufficient-'.bin2hex(random_bytes(4)));
+        try {
+            $this->expectExceptionMessage('63-observation labels');
+            app(MlTrainingDatasetBuilder::class)->buildStreamed('3m', Carbon::parse('2025-12-31'), $directory);
+        } finally {
+            File::deleteDirectory($directory);
+        }
+    }
 }
