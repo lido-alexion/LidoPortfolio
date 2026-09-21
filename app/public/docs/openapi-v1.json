@@ -414,6 +414,79 @@
                 "x-stox-admin": true
             }
         },
+        "/api/v1/admin/ml/models/{model}/drift-check": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Run an Admin ML drift and live-health check",
+                "description": "Evaluates the selected model over the requested rolling window. Matured non-shadow predictions are required for a healthy result; insufficient evidence is reported explicitly. This operation never retrains, promotes, deactivates, or places orders.",
+                "operationId": "post_admin_ml_models_model_drift-check",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "model",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "window_months": {
+                                        "type": "integer",
+                                        "enum": [
+                                            3,
+                                            6,
+                                            12
+                                        ],
+                                        "description": "Rolling health window in months (default 3)."
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
         "/api/v1/admin/ml/models/{model}/promote": {
             "post": {
                 "tags": [

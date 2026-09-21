@@ -663,6 +663,21 @@ final class V1OperationOverlays
                 'successStatus' => '200',
                 'noBody' => true,
             ],
+            'POST /api/v1/admin/ml/models/{model}/drift-check' => [
+                'summary' => 'Run an Admin ML drift and live-health check',
+                'description' => 'Evaluates the selected model over the requested rolling window. Matured non-shadow predictions are required for a healthy result; insufficient evidence is reported explicitly. This operation never retrains, promotes, deactivates, or places orders.',
+                'requestBody' => $json([
+                    'type' => 'object',
+                    'properties' => [
+                        'window_months' => [
+                            'type' => 'integer',
+                            'enum' => [3, 6, 12],
+                            'description' => 'Rolling health window in months (default 3).',
+                        ],
+                    ],
+                ], false),
+                'successStatus' => '200',
+            ],
             'GET /api/v1/broker/status' => [
                 'summary' => 'Zerodha/Kite connection status',
                 'description' => 'Per-user Kite Connect session. Access tokens are never returned.',
