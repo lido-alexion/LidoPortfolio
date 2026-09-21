@@ -12,6 +12,7 @@ import hashlib
 import json
 import math
 import os
+import resource
 import sys
 from datetime import datetime
 from typing import Any
@@ -24,16 +25,23 @@ def read_request() -> dict[str, Any]:
     return payload
 
 
-def read_jsonl(path: str) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
+def iter_jsonl(path: str):
     with open(path, "r", encoding="utf-8") as handle:
         for line in handle:
             if line.strip():
                 row = json.loads(line)
                 if not isinstance(row, dict):
                     raise ValueError(f"dataset row is not an object: {path}")
-                rows.append(row)
-    return rows
+                yield row
+
+
+def count_jsonl(path: str) -> int:
+    return sum(1 for _ in iter_jsonl(path))
+
+
+def peak_rss_mb() -> float:
+    value = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    return round(float(value) / (1024 * 1024 if sys.platform == "darwin" else 1024), 2)
 
 
 def finite(value: Any) -> float | None:
@@ -84,80 +92,205 @@ def prepare(rows: list[dict[str, Any]], numeric: list[str], categorical: list[st
     return vectors, names, state
 
 
-def classification_metrics(y_true: list[int], probabilities: list[float], rows: list[dict[str, Any]], decisions: list[int] | None = None) -> dict[str, Any]:
+def feature_names(numeric: list[str], categorical: list[str], state: dict[str, Any]) -> list[str]:
+    names: list[str] = []
+    for name in numeric:
+        names.extend([name, f"{name}__missing"])
+    for name in categorical:
+        names.extend([f"{name}={value}" for value in state["categories"].get(name, [])])
+        names.append(f"{name}=__unknown")
+    return names
+
+
+def state_from_jsonl(path: str, numeric: list[str], categorical: list[str]) -> dict[str, Any]:
+    numeric_values = {name: [] for name in numeric}
+    categories = {name: set() for name in categorical}
+    for row in iter_jsonl(path):
+        features = row.get("features", {})
+        for name in numeric:
+            value = finite(features.get(name))
+            if value is not None:
+                numeric_values[name].append(value)
+        for name in categorical:
+            value = features.get(name)
+            if value is not None:
+                categories[name].add(str(value))
+    medians: dict[str, float] = {}
+    for name, values in numeric_values.items():
+        if not values:
+            raise ValueError(f"numeric feature has no training values: {name}")
+        values.sort()
+        middle = len(values) // 2
+        medians[name] = values[middle] if len(values) % 2 else (values[middle - 1] + values[middle]) / 2
+    return {"medians": medians, "categories": {name: sorted(values) for name, values in categories.items()}}
+
+
+def encode_row(row: dict[str, Any], numeric: list[str], categorical: list[str], state: dict[str, Any]) -> list[float]:
+    features = row.get("features", {})
+    vector: list[float] = []
+    for name in numeric:
+        value = finite(features.get(name))
+        vector.extend([state["medians"][name] if value is None else value, 1.0 if value is None else 0.0])
+    for name in categorical:
+        value = str(features.get(name)) if features.get(name) is not None else "__unknown"
+        options = state["categories"].get(name, [])
+        vector.extend([1.0 if value == option else 0.0 for option in options])
+        vector.append(1.0 if value not in options else 0.0)
+    return vector
+
+
+def matrix_from_jsonl(path: str, numeric: list[str], categorical: list[str], state: dict[str, Any], row_count: int, include_identities: bool = False):
+    import numpy as np
+
+    width = len(feature_names(numeric, categorical, state))
+    vectors = np.empty((row_count, width), dtype=float)
+    labels = np.empty(row_count, dtype=np.int8)
+    relative_returns = np.full(row_count, np.nan, dtype=float)
+    drawdowns = np.full(row_count, np.nan, dtype=float)
+    identities: list[tuple[int, str]] = []
+    index = 0
+    for row in iter_jsonl(path):
+        if index >= row_count:
+            raise ValueError(f"JSONL row count changed while reading: {path}")
+        vectors[index] = encode_row(row, numeric, categorical, state)
+        labels[index] = int(row["label"])
+        relative = finite(row.get("relative_return"))
+        drawdown = finite(row.get("max_drawdown"))
+        if relative is not None:
+            relative_returns[index] = relative
+        if drawdown is not None:
+            drawdowns[index] = drawdown
+        if include_identities:
+            identities.append((int(row.get("stock_id", 0)), str(row.get("reference_date", ""))))
+        index += 1
+    if index != row_count:
+        raise ValueError(f"JSONL row count changed while reading: {path}")
+    return vectors, labels, relative_returns, drawdowns, identities
+
+
+def compact_outcomes(rows: list[dict[str, Any]]):
+    return (
+        [int(row["label"]) for row in rows],
+        [finite(row.get("relative_return")) for row in rows],
+        [finite(row.get("max_drawdown")) for row in rows],
+        [(int(row.get("stock_id", 0)), str(row.get("reference_date", ""))) for row in rows],
+    )
+
+
+def classification_metrics(y_true: list[int], probabilities: list[float], relative_returns: list[float | None], drawdowns: list[float | None], decisions: list[int] | None = None) -> dict[str, Any]:
     from sklearn.metrics import average_precision_score, brier_score_loss, precision_score, recall_score, roc_auc_score
 
     predicted = decisions if decisions is not None else [1 if value >= 0.5 else 0 for value in probabilities]
     unique = set(y_true)
     metrics: dict[str, Any] = {
-        "class_distribution": {"positive": sum(y_true), "negative": len(y_true) - sum(y_true), "rows": len(y_true)},
+        "class_distribution": {"positive": int(sum(y_true)), "negative": int(len(y_true) - sum(y_true)), "rows": len(y_true)},
         "precision": float(precision_score(y_true, predicted, zero_division=0)),
         "recall": float(recall_score(y_true, predicted, zero_division=0)),
         "calibration_error": float(brier_score_loss(y_true, probabilities)),
-        "hit_rate": float(sum(a == b for a, b in zip(y_true, predicted)) / len(y_true)) if y_true else 0.0,
+        "hit_rate": float(sum(a == b for a, b in zip(y_true, predicted)) / len(y_true)) if len(y_true) else 0.0,
     }
     if len(unique) < 2:
         raise ValueError("evaluation set contains one class")
     metrics["roc_auc"] = float(roc_auc_score(y_true, probabilities))
     metrics["pr_auc"] = float(average_precision_score(y_true, probabilities))
-    positive_rows = [row for row, prediction in zip(rows, predicted) if prediction == 1]
-    returns = [finite(row.get("relative_return")) for row in positive_rows]
-    drawdowns = [finite(row.get("max_drawdown")) for row in positive_rows]
-    returns = [value for value in returns if value is not None]
-    drawdowns = [value for value in drawdowns if value is not None]
+    returns = [value for value, prediction in zip(relative_returns, predicted) if prediction == 1 and value is not None]
+    positive_drawdowns = [value for value, prediction in zip(drawdowns, predicted) if prediction == 1 and value is not None]
     metrics["benchmark_relative_return"] = sum(returns) / len(returns) if returns else 0.0
-    metrics["max_drawdown"] = min(drawdowns) if drawdowns else 0.0
+    metrics["max_drawdown"] = min(positive_drawdowns) if positive_drawdowns else 0.0
     metrics["deterministic_baseline_delta"] = 0.0
     return metrics
 
 
 def train(request: dict[str, Any]) -> dict[str, Any]:
     from sklearn.linear_model import LogisticRegression
+    import numpy as np
 
     dataset_paths = request.get("dataset_paths")
     if isinstance(dataset_paths, dict):
-        train_rows = read_jsonl(str(dataset_paths["train"]))
-        validation_rows = read_jsonl(str(dataset_paths["validation"]))
-        test_rows = read_jsonl(str(dataset_paths["test"]))
-        rows = train_rows + validation_rows + test_rows
+        train_path = str(dataset_paths["train"])
+        validation_path = str(dataset_paths["validation"])
+        test_path = str(dataset_paths["test"])
+        train_count = count_jsonl(train_path)
+        validation_count = count_jsonl(validation_path)
+        test_count = count_jsonl(test_path)
+        total_count = train_count + validation_count + test_count
     else:
         rows = request.get("rows")
         train_rows = [row for row in rows if row.get("partition") == "train"] if isinstance(rows, list) else []
         validation_rows = [row for row in rows if row.get("partition") == "validation"] if isinstance(rows, list) else []
         test_rows = [row for row in rows if row.get("partition") == "test"] if isinstance(rows, list) else []
-    if not isinstance(rows, list) or len(rows) < 12:
+        train_count = len(train_rows)
+        validation_count = len(validation_rows)
+        test_count = len(test_rows)
+        total_count = train_count + validation_count + test_count
+    if total_count < 12:
         raise ValueError("training dataset is too small")
     numeric = list(request.get("numeric_features", []))
     categorical = list(request.get("categorical_features", []))
     partitions = request.get("partitions", {})
-    if not train_rows or not validation_rows or not test_rows:
+    if not train_count or not validation_count or not test_count:
         raise ValueError("chronological train/validation/test partitions are required")
-    y_train = [int(row["label"]) for row in train_rows]
+
+    if isinstance(dataset_paths, dict):
+        state = state_from_jsonl(train_path, numeric, categorical)
+        x_train, y_train, train_returns, train_drawdowns, _ = matrix_from_jsonl(train_path, numeric, categorical, state, train_count)
+        x_validation, y_validation, validation_returns, validation_drawdowns, _ = matrix_from_jsonl(validation_path, numeric, categorical, state, validation_count)
+        x_test, y_test, test_returns, test_drawdowns, test_identities = matrix_from_jsonl(test_path, numeric, categorical, state, test_count, include_identities=True)
+        feature_names_value = feature_names(numeric, categorical, state)
+    else:
+        y_train, train_returns, train_drawdowns, _ = compact_outcomes(train_rows)
+        y_validation, validation_returns, validation_drawdowns, _ = compact_outcomes(validation_rows)
+        y_test, test_returns, test_drawdowns, test_identities = compact_outcomes(test_rows)
+        x_train_list, feature_names_value, state = prepare(train_rows, numeric, categorical)
+        x_validation_list, _, _ = prepare(validation_rows, numeric, categorical, state)
+        x_test_list, _, _ = prepare(test_rows, numeric, categorical, state)
+        x_train = np.asarray(x_train_list, dtype=float)
+        x_validation = np.asarray(x_validation_list, dtype=float)
+        x_test = np.asarray(x_test_list, dtype=float)
+
     if len(set(y_train)) < 2:
         raise ValueError("training set contains one class")
-    x_train, feature_names, state = prepare(train_rows, numeric, categorical)
-    x_validation, _, _ = prepare(validation_rows, numeric, categorical, state)
-    x_test, _, _ = prepare(test_rows, numeric, categorical, state)
     model = LogisticRegression(class_weight="balanced", max_iter=1000, random_state=int(request.get("seed", 7047)))
     model.fit(x_train, y_train)
     validation_probabilities = model.predict_proba(x_validation)[:, 1].tolist()
     test_probabilities = model.predict_proba(x_test)[:, 1].tolist()
-    validation_metrics = classification_metrics([int(row["label"]) for row in validation_rows], validation_probabilities, validation_rows)
-    test_metrics = classification_metrics([int(row["label"]) for row in test_rows], test_probabilities, test_rows)
+    validation_metrics = classification_metrics(y_validation, validation_probabilities, validation_returns, validation_drawdowns)
+    test_metrics = classification_metrics(y_test, test_probabilities, test_returns, test_drawdowns)
 
-    naive_probabilities = [sum(y_train) / len(y_train)] * len(test_rows)
-    naive_metrics = classification_metrics([int(row["label"]) for row in test_rows], naive_probabilities, test_rows)
+    naive_probabilities = [sum(y_train) / len(y_train)] * test_count
+    naive_metrics = classification_metrics(y_test, naive_probabilities, test_returns, test_drawdowns)
     baseline_path = request.get("deterministic_baseline_path")
-    deterministic_rows = read_jsonl(str(baseline_path)) if isinstance(baseline_path, str) else request.get("deterministic_baseline")
-    if not isinstance(deterministic_rows, list) or len(deterministic_rows) != len(test_rows):
-        raise ValueError("deterministic StoX baseline is missing or not aligned to the test partition")
-    deterministic_probabilities = [float(item["probability"]) for item in deterministic_rows]
-    deterministic_decisions = [1 if bool(item.get("positive_decision")) else 0 for item in deterministic_rows]
-    deterministic_metrics = classification_metrics([int(row["label"]) for row in test_rows], deterministic_probabilities, test_rows, deterministic_decisions)
+    deterministic_probabilities: list[float] = []
+    deterministic_decisions: list[int] = []
+    if isinstance(baseline_path, str):
+        with open(baseline_path, "r", encoding="utf-8") as handle:
+            for expected_identity in test_identities:
+                line = handle.readline()
+                if not line:
+                    raise ValueError("deterministic StoX baseline is not aligned to the test partition")
+                item = json.loads(line)
+                identity = (int(item.get("stock_id", 0)), str(item.get("reference_date", "")))
+                if identity != expected_identity:
+                    raise ValueError("deterministic StoX baseline identity does not match the test partition")
+                deterministic_probabilities.append(float(item["probability"]))
+                deterministic_decisions.append(1 if bool(item.get("positive_decision")) else 0)
+            if handle.readline():
+                raise ValueError("deterministic StoX baseline has extra rows")
+    else:
+        deterministic_rows = request.get("deterministic_baseline")
+        if not isinstance(deterministic_rows, list) or len(deterministic_rows) != test_count:
+            raise ValueError("deterministic StoX baseline is missing or not aligned to the test partition")
+        for item, expected_identity in zip(deterministic_rows, test_identities):
+            identity = (int(item.get("stock_id", 0)), str(item.get("reference_date", "")))
+            if identity != expected_identity:
+                raise ValueError("deterministic StoX baseline identity does not match the test partition")
+            deterministic_probabilities.append(float(item["probability"]))
+            deterministic_decisions.append(1 if bool(item.get("positive_decision")) else 0)
+    deterministic_metrics = classification_metrics(y_test, deterministic_probabilities, test_returns, test_drawdowns, deterministic_decisions)
     test_metrics["deterministic_baseline_delta"] = test_metrics["benchmark_relative_return"] - deterministic_metrics["benchmark_relative_return"]
     metadata = {
         "format": "stox-v7-logistic",
-        "feature_names": feature_names,
+        "feature_names": feature_names_value,
         "numeric_features": numeric,
         "categorical_features": categorical,
         "preprocessing": state,
@@ -165,6 +298,15 @@ def train(request: dict[str, Any]) -> dict[str, Any]:
         "runtime": {"python": sys.version.split()[0], "sklearn": __import__("sklearn").__version__},
         "seed": int(request.get("seed", 7047)),
     }
+    diagnostics = {
+        "train_rows": train_count,
+        "validation_rows": validation_count,
+        "test_rows": test_count,
+        "feature_count": len(feature_names_value),
+        "raw_transport": "jsonl" if isinstance(dataset_paths, dict) else "json",
+        "python_peak_rss_mb": peak_rss_mb(),
+    }
+    metadata["diagnostics"] = diagnostics
     artifact_path = request.get("artifact_path")
     if not isinstance(artifact_path, str) or not artifact_path:
         raise ValueError("artifact_path is required")
@@ -176,10 +318,10 @@ def train(request: dict[str, Any]) -> dict[str, Any]:
     metrics = dict(test_metrics)
     metrics["validation"] = validation_metrics
     metrics["test"] = test_metrics
-    metrics["train_rows"] = len(train_rows)
-    metrics["validation_rows"] = len(validation_rows)
-    metrics["test_rows"] = len(test_rows)
-    return {"schema_version": 1, "artifact_sha256": digest, "metrics": metrics, "baselines": {"naive": naive_metrics, "deterministic_stox": deterministic_metrics}, "metadata": metadata}
+    metrics["train_rows"] = train_count
+    metrics["validation_rows"] = validation_count
+    metrics["test_rows"] = test_count
+    return {"schema_version": 1, "artifact_sha256": digest, "metrics": metrics, "baselines": {"naive": naive_metrics, "deterministic_stox": deterministic_metrics}, "metadata": metadata, "diagnostics": diagnostics}
 
 
 def predict(request: dict[str, Any]) -> dict[str, Any]:
