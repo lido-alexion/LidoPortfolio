@@ -4,7 +4,7 @@
 
 AUD-009 verifies the actual StoX production environment rather than inferring production behavior from repository scripts. The current target is the Hostinger VPS serving `https://stoxla.in/`, not the archived GoDaddy/cPanel `/portfolio` deployment.
 
-**Disposition: `RUNTIME_VERIFICATION_REQUIRED` (Medium severity, High confidence).** The VPS layout, secret isolation, database, HTTPS, cron scheduler, release activation, and queue processing are operationally verified. DEP-003 is now closed under the approved deployable-source boundary. DEP-004 remains open because backup scheduling, retention, independent storage, and restore recovery are not yet proven.
+**Disposition: `IMPLEMENTED`.** The VPS layout, secret isolation, database, HTTPS, cron scheduler, release activation, queue processing, and provider-managed backup/recovery assurance are now operationally verified or explicitly accepted. DEP-003 and DEP-004 are closed under the approved deployable-source and Hostinger-managed recovery boundaries. The earlier backup gap and its chronology remain documented below; no destructive production restore drill was performed.
 
 No application release was changed, no migration was run, and no secret value was read during the DEP-001/DEP-002 activation.
 
@@ -182,21 +182,26 @@ timestamp: 2026-09-15 16:12 IST
 gzip integrity: valid
 ```
 
-No automated application backup schedule, rotation/retention policy, separate
-backup destination, encryption policy, or failure alert was found. The VPS
-backup directory contains only this dump and a small pre-closure crontab text
-file. Hostinger-managed snapshot/backup status was not accessible through the
-available administrator account. Shared Laravel storage contains 43 files
-(approximately 1.8 MB), but no backup coverage for those non-database assets
-was evidenced. The production database user cannot create a temporary database,
-so an isolated restore could not be performed without broader administrator
-privilege; the dump was not restored over production. Secret recovery is
-documented as a server-only environment supplement, but no backup/recovery
-procedure for that configuration was evidenced.
+The original inspection found no application-level backup schedule, rotation/
+retention policy, separate backup destination, or shared-storage coverage. The
+visible SQL dump and its valid compression were retained as historical evidence
+only; no production restore was attempted because the production database user
+could not create a temporary database. At that point DEP-004 remained open.
 
-DEP-004 therefore remains open. The dump's valid compression proves artifact
-integrity only; it does not prove scheduled freshness, retention, independent
-failure survivability, or restore correctness.
+Subsequent Hostinger dashboard evidence, accepted by the Product Owner, shows
+the current recovery contract: weekly Auto-backups are enabled, a successful
+11.54 GB backup was created on 2026-09-19 16:43, the displayed backup location
+is Malaysia, older backups are replaced automatically, and the provider exposes
+a supported whole-VPS Restore action with an estimated 30-minute restore time.
+Hostinger explicitly states that backups are stored separately from the main
+server. Weekly backup is the accepted cadence; daily backup is an optional paid
+upgrade and is not required. This is provider-managed VPS recovery assurance,
+not an independently configured StoX database/storage backup.
+
+No destructive production restore drill was performed or required by the
+accepted audit decision. Provider-visible schedule, successful backup,
+off-server storage, retention/replacement and restore capability are sufficient
+for DEP-004 under that decision.
 
 ## 19. Security Exposure Probes
 
@@ -226,7 +231,7 @@ No public secret or source-file exposure was found in these probes.
 | DEP-001 | Release activation reaches PHP runtime | New release executes after atomic symlink switch | Graceful FPM reload refreshed the symlink runtime: active filesystem and public PHP build-info both resolve to `af426a7ead544a6603ee0bd9e8e267e75f946211` | `IMPLEMENTED` | High |
 | DEP-002 | Named notification queue consumption | External delivery work is consumed | Root-owned `stoxla-queue` unit is active with `notifications,default`; 12 aged jobs drained normally as 11 delivered and 1 suppressed, with 0 failed jobs | `IMPLEMENTED` | High |
 | DEP-003 | Current source release freshness | Intended release/commit is identifiable, CI-derived, deliberately activated, and checked at runtime | Filesystem and public build-info both report `0872014f23f0e592b0584ed036cb80a950064d02`; successful deployment build 85 is the latest approved deployable application revision; current `master` is documentation-only newer; all deployed migrations are run | `IMPLEMENTED` | Medium |
-| DEP-004 | Backup freshness / restore path | Automated backup schedule, retention, independent storage, persistent-state coverage, and recoverability are known | One valid 315,983,406-byte local SQL dump dated 2026-09-15; no application schedule/retention/separate destination evidence; shared-storage backup coverage unproven; isolated restore unavailable because the production DB user lacks temporary-database privilege | `RUNTIME_VERIFICATION_REQUIRED` | Medium |
+| DEP-004 | Backup freshness / restore path | Automated backup schedule, retention, independent storage, persistent-state coverage, and recoverability are known | Hostinger dashboard shows active weekly Auto-backups, successful 11.54 GB backup created 2026-09-19 16:43, Malaysia location, automatic replacement of older backups, separate-from-server storage and a supported whole-VPS Restore action; PO accepts provider-managed recovery without a destructive drill | `IMPLEMENTED` | Medium |
 | DEP-005 | Secrets and public-root isolation | Secrets remain private and public root is limited | Shared `.env` mode 0600; probes block hidden files; public-root target correct | `IMPLEMENTED` | High |
 | DEP-006 | Scheduler runtime | Scheduler runs once at expected cadence | Minute cron and recent heartbeat; no duplicate worker found | `IMPLEMENTED` | High |
 | DEP-007 | Core process/resource health | Web, PHP, DB, storage, TLS, and disk remain viable | Core processes active, certificate valid, storage writable, disk/memory healthy; release `671996b` passed the hard runtime health gate after stale-file normalization and verified a new Monolog file at group `www-data`/mode `0664` | `IMPLEMENTED` | Medium |
@@ -350,12 +355,14 @@ post-deployment runtime health gate now provide the required freshness
 evidence. The newer `85687be` master commit contains audit documents only and
 was correctly not activated as an application release.
 
-#### D - Backup assurance (open)
+#### D - Backup assurance (resolved)
 
-Establish an automated database and persistent-storage backup schedule, define
-retention and independent storage, document secret recovery, and complete a
-non-production restore drill. Do not infer backup safety from the single
-same-host SQL artifact.
+Hostinger-managed weekly Auto-backups provide the accepted provider-level
+recovery assurance: a recent successful backup, separate storage, replacement
+of older backups, and a supported whole-VPS Restore action. Daily backup is an
+optional paid upgrade and is outside the accepted requirement. No destructive
+production restore drill was performed or required; do not describe this as a
+StoX-specific application-level database/storage backup or restore test.
 
 #### E - Operational observability
 
@@ -382,7 +389,7 @@ Additional read-only Laravel queries checked configuration presence, scheduler h
 
 ## 24. Final AUD-009 Assessment
 
-**Disposition: `RUNTIME_VERIFICATION_REQUIRED` (Medium severity, High confidence).**
+**Disposition: `IMPLEMENTED`.**
 
 The production architecture uses the accepted VPS release/shared model,
 protects secrets and the public root, serves valid HTTPS, runs its scheduler,
@@ -395,15 +402,15 @@ resolved: the first `671996b` activation was rejected for a pre-existing
 the controlled provider-channel write produced a new `0664` file with the
 `www-data` group.
 
-DEP-003 is implemented. The production release is the latest approved
-deployable application revision, its public and filesystem identities match,
-the deployment workflow embeds and gates the exact commit, and the migration
-ledger is current. DEP-004 remains runtime verification required: a single
-same-host database dump is present and gzip-valid, but automated scheduling,
-retention, independent storage, shared-storage coverage, and an isolated
-restore drill are not established.
+DEP-001 through DEP-007 are resolved under their accepted boundaries. DEP-003
+is implemented: the production release is the latest approved deployable
+application revision, its public and filesystem identities match, the
+deployment workflow embeds and gates the exact commit, and the migration ledger
+is current. DEP-004 is also implemented through the accepted Hostinger-managed
+weekly off-server backup/recovery facility. No destructive restore drill was
+performed, and no StoX-specific application-level backup was configured or
+claimed.
 
 ## 25. Open Questions
 
-- What Hostinger-managed backup cadence, retention, and restore evidence are accepted for StoX production?
 - Is broad no-credentials CORS intentional for public API endpoints under the current authorization policy?
