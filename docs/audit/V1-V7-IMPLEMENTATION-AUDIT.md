@@ -6,7 +6,7 @@
 
 ## 1. Executive Summary
 
-The repository has substantial domain, API, and test coverage, but that is not equivalent to full product-contract coverage. AUD-001, AUD-002, AUD-003 and AUD-016 are now remediated statically: the Investor shell mounts session-backed Page Visit History, a coordinated Contextual Notes utility, representative page-anatomy foundations, and bounded Global Search with focused state, accessibility and router tests. AUD-005 is also implemented statically: its multi-strategy ownership, adoption, allocation-policy, lifecycle-state, and accounting remediation is covered by focused backend/frontend evidence; browser/deployed/provider follow-up remains separate runtime work. The shell still has no mounted low-priority footer, and browser geometry/deployment checks remain separate runtime work.
+The repository has substantial domain, API, and test coverage, but that is not equivalent to full product-contract coverage. AUD-001, AUD-002, AUD-003 and AUD-016 are now remediated statically: the Investor shell mounts session-backed Page Visit History, a coordinated Contextual Notes utility, representative page-anatomy foundations, and bounded Global Search with focused state, accessibility and router tests. AUD-005 is also implemented statically: its multi-strategy ownership, adoption, allocation-policy, lifecycle-state, and accounting remediation is covered by focused backend/frontend evidence; browser/deployed/provider follow-up remains separate runtime work. Contextual Help/docs synchronization is now enforced by the live-route/catalog/static-output contract. The shell still has no mounted low-priority footer, and browser geometry/deployment checks remain separate runtime work.
 
 The original highest-risk static concern was in the live broker path: admission-time validation did not repeat at `BrokerGateway::placeOrder()`. AUD-015 was subsequently remediated with a fresh, non-consuming final policy check before every regular broker placement attempt, including bounded insufficient-funds retries. Focused race tests now cover post-admission halt, entitlement, reconciliation, readiness, window, retry, and multi-order changes. A controlled broker/runtime safety drill remains required; static evidence is not evidence that an unsafe order occurred.
 
@@ -54,7 +54,7 @@ Static inspection cannot establish browser geometry, provider behavior, producti
 | Execution / broker / safety | 4 | 1 | 0 | 0 | 5 | 0 | Critical |
 | Analytics / backtesting / simulation | 7 | 0 | 0 | 0 | 0 | 0 | High |
 | Notifications / calendar / alerts | 1 | 2 | 0 | 0 | 0 | 0 | Medium |
-| Knowledge / documentation | 3 | 1 | 0 | 0 | 0 | 0 | Medium |
+| Knowledge / documentation | 4 | 0 | 0 | 0 | 0 | 0 | Medium |
 | Administration / security / API | 6 | 0 | 0 | 0 | 1 | 0 | Critical |
 | Trading artifacts / V7 | 5 | 1 | 0 | 0 | 3 | 0 | High |
 
@@ -88,7 +88,7 @@ The following rows cover every applicable Phase 1 requirement. Related requireme
 | V2-REQ-007 | Historical holdings reconstruction | IMPLEMENTED | Historical page/API/services | Historical holdings tests | As-of empty/error UX | Yes | Reachable route exists |
 | V2-REQ-008 | Shared screener import | IMPLEMENTED | Registry/import APIs and pages | Registry/auth tests | Cross-user runtime authorization | Yes | Test evidence includes isolation |
 | V2-REQ-009 | Non-mutating recommendation preview | IMPLEMENTED | Preview endpoint/service | Preview tests | UI discoverability and no-side-effect browser proof | Yes | Backend contract is clear |
-| V2-REQ-010 | Contextual help/docs synchronization | PARTIALLY_IMPLEMENTED | Documentation page and generated public docs | Limited docs/API tests | Stale/orphan detection and contextual link coverage | Yes | Current doc records less than archived acceptance |
+| V2-REQ-010 | Contextual help/docs synchronization | IMPLEMENTED | Explicit `APP_DOCUMENTATION` topics cover the live Investor/Admin route families, with declared parent/fallback mappings for redirects and public token routes; generated `/docs` HTML is catalog-fingerprinted | `documentation-sync.test.mjs` verifies route resolution, nested inheritance, redirect/fallback behavior, unique topic identity and generated index coverage; `npm run docs:static:check` rejects stale catalog fingerprints, missing topics/aliases and orphan HTML | Browser new-tab behavior and visual placement remain runtime follow-up; arbitrary external links are outside F143 | Yes | Static/contextual synchronization is enforced; the generated catalog currently contains 49 topics |
 | V2-REQ-011 | Knowledge Board notes/tags/images/search/export | IMPLEMENTED | Knowledge pages/API/migrations | Wiki/knowledge tests | Complete accessibility/responsive behavior | Yes | Contextual Notes is separate V6 contract |
 | V3-REQ-001 | Many enabled strategies per portfolio | IMPLEMENTED | Strategy registry/binding models/services support concurrent enabled strategies with independent strategy/version provenance, ownership episodes, reservations and execution attribution | Strategy/artifact tests; `MultiStrategyLifecycleAssuranceTest` proves two enabled strategies operating concurrently | Browser/deployed workflow verification | Yes | AUD-005 MS-001 closes the material concurrent-strategy implementation criteria; browser demonstration remains runtime follow-up |
 | V3-REQ-002 | Fit/outcome/ranking/capital separation | IMPLEMENTED | Strategy/recommendation services | Strategy/performance tests | Representative production data | Yes | Deterministic semantics appear preserved |
@@ -248,8 +248,8 @@ Applicable requirements audited: **85** (75 `CURRENT`, 5 `POSSIBLY-LOST-DURING-C
 
 | Primary verdict | Count |
 |---|---:|
-| IMPLEMENTED | 75 |
-| PARTIALLY_IMPLEMENTED | 3 |
+| IMPLEMENTED | 76 |
+| PARTIALLY_IMPLEMENTED | 2 |
 | NOT_IMPLEMENTED | 0 |
 | IMPLEMENTED_BUT_NOT_WIRED | 0 |
 | IMPLEMENTED_DIFFERENTLY | 1 |
@@ -274,7 +274,7 @@ The matrix verdict counts are intentionally conservative: `RUNTIME_VERIFICATION_
 1. `AUD-011`: broker reconciliation/halt recovery has no production-drill evidence.
 2. `AUD-012`: the complete Admin/Investor route and object-ownership matrix is not proven.
 3. `AUD-009`: approved newer release freshness and backup/restore evidence remain runtime questions; DEP-001 release activation and DEP-002 queue recovery are verified.
-4. Retain bounded runtime verification for AUD-006 notification providers/reminders; no static notification remediation remains.
+4. Retain bounded runtime verification for AUD-006 notification providers/reminders and V2-REQ-010 browser Help behavior; no static notification or documentation-synchronization remediation remains.
 
 **Medium**
 
@@ -294,4 +294,4 @@ The matrix verdict counts are intentionally conservative: `RUNTIME_VERIFICATION_
 4. Complete artifact rollout, V7 ML/fundamental operating evidence, and namespace drift inventory; retain bounded AUD-005/AUD-006 browser/provider/runtime follow-up.
 5. Close test gaps after product decisions; do not use unit or source-reading tests as substitutes for browser/runtime acceptance.
 
-No remediation was performed during the original audit. AUD-003, AUD-004, AUD-005, AUD-013 and AUD-015 were subsequently remediated and are retained above with their original finding history and current static evidence; their remaining browser/deployment/runtime checks are not counted as static implementation defects.
+No remediation was performed during the original audit. AUD-003, AUD-004, AUD-005, AUD-013 and AUD-015 were subsequently remediated and are retained above with their original finding history and current static evidence; V2-REQ-010 was subsequently closed with an executable route/catalog/static-output synchronization guard. Their remaining browser/deployment/runtime checks are not counted as static implementation defects.

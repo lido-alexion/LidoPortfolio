@@ -69,7 +69,7 @@ In-app documentation is surfaced by Documentation pages, contextual/header help,
 
 ## 14. Documentation Generation
 
-`node app/scripts/generate-static-docs.mjs` generates static HTML into `app/public/docs/{keyword}.html`, an index, the downloadable trading-artifact guide, and an OpenAPI copy when available. The production build invokes this generator. Regenerate after changing in-app documentation source or the current artifact guide; static output drift should be detected through build/test verification rather than manually edited as an authority.
+`node app/scripts/generate-static-docs.mjs` generates static HTML into `app/public/docs/{keyword}.html`, an index, the downloadable trading-artifact guide, and an OpenAPI copy when available. The production build invokes this generator. Regenerate after changing in-app documentation source or the current artifact guide; `npm --prefix app run docs:static:check` verifies topic/alias/index coverage, rejects orphan topic HTML, and compares the generated catalog fingerprint so static output drift cannot silently pass.
 
 **Current implementation anchors:** `app/scripts/generate-static-docs.mjs`, `app/package.json`, `appDocumentation.js`, and documentation help tests.
 

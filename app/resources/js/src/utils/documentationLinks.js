@@ -1,8 +1,16 @@
-import { appUrl } from '../appBase';
+import { appUrl } from '../appBase.js';
 import {
     APP_DOCUMENTATION,
     APP_DOCUMENTATION_BY_SPECIFICITY,
-} from '../data/appDocumentation';
+} from '../data/appDocumentation.js';
+
+// These routes intentionally inherit a stable parent topic or overview. Keeping
+// them explicit prevents an accidental fallback from looking like valid coverage.
+export const DOCUMENTATION_ROUTE_FALLBACKS = Object.freeze([
+    { prefix: '/wiki/shared', keyword: 'knowledge' },
+    { prefix: '/invite', keyword: 'overview' },
+    { prefix: '/reset-password', keyword: 'overview' },
+]);
 
 /**
  * Map a React Router pathname to the documentation keyword for that screen.
@@ -13,6 +21,10 @@ export function resolveDocKeywordFromPath(pathname) {
         if (doc.match(path)) {
             return doc.keyword;
         }
+    }
+    const fallback = DOCUMENTATION_ROUTE_FALLBACKS.find(({ prefix }) => path === prefix || path.startsWith(`${prefix}/`));
+    if (fallback) {
+        return fallback.keyword;
     }
     return 'overview';
 }

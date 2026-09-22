@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { marked } from 'marked';
+import { documentationCatalogFingerprint } from './documentationCatalogFingerprint.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(__dirname, '..');
@@ -195,7 +196,7 @@ function pageShell({ title, description, canonical, body, navLinks }) {
   </div>
 </body>
 </html>
-`;
+`.replace(/[ \t]+$/gm, '');
 }
 
 function topicPage(doc, allDocs) {
@@ -482,6 +483,7 @@ async function main() {
     if (!Array.isArray(APP_DOCUMENTATION) || APP_DOCUMENTATION.length === 0) {
         throw new Error('APP_DOCUMENTATION is empty or missing');
     }
+    const catalogFingerprint = documentationCatalogFingerprint(APP_DOCUMENTATION);
 
     fs.rmSync(outDir, { recursive: true, force: true });
     fs.mkdirSync(outDir, { recursive: true });
@@ -518,6 +520,7 @@ async function main() {
             'StoX static documentation',
             `Generated: ${new Date().toISOString()}`,
             `Topics: ${APP_DOCUMENTATION.length}`,
+            `Catalog fingerprint: ${catalogFingerprint}`,
             'Open index.html or any {keyword}.html — no JavaScript required.',
             `AI download pack: ${AI_GUIDE_BASENAME}`,
             'OpenAPI /api/v1 contract: openapi-v1.json (canonical source: app/openapi/v1.json; regenerate with php artisan openapi:v1)',

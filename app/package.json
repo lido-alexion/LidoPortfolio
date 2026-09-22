@@ -4,10 +4,12 @@
     "type": "module",
     "scripts": {
         "docs:static": "node scripts/generate-static-docs.mjs",
+        "docs:static:check": "node scripts/check-static-docs.mjs",
         "build": "node scripts/generate-static-docs.mjs && vite build",
         "dev": "vite",
         "test:js": "node --test tests/js/*.test.mjs && vitest run",
         "test:js:unit": "node --test tests/js/*.test.mjs",
+        "test:js:docs": "node --test tests/js/documentation-sync.test.mjs",
         "test:js:auth": "node --test tests/js/auth-redirect.test.mjs",
         "test:js:tos": "vitest run",
         "test:e2e:tos": "playwright test --config tests/e2e/playwright.config.js",

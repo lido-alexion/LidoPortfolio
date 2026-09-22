@@ -1648,7 +1648,7 @@ const APP_DOCUMENTATION_BASE = [
         aliases: ['knowledge-board', 'notes'],
         title: 'Knowledge Board',
         routeLabel: '/knowledge-board',
-        match: (p) => pathIs(p, '/knowledge-board'),
+        match: (p) => pathStarts(p, '/knowledge-board'),
         summary: 'Research notes with tags, editors, images, and export.',
         overview:
             'Capture market research notes for the portfolio. Use Simple, Formatted (TipTap), or Markdown editors with autosave, images, color palettes, pin/archive, and bulk export.',
@@ -1728,6 +1728,66 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Active portfolio', description: 'API calls and UI data scopes follow the selected portfolio.' },
         ],
         related: ['profile', 'settings', 'cash'],
+    },
+    {
+        id: 'artifact-library',
+        keyword: 'artifact-library',
+        aliases: ['trading-artifacts', 'artifact registry'],
+        title: 'Artifact Library',
+        routeLabel: '/artifact-library',
+        match: (p) => pathStarts(p, '/artifact-library'),
+        summary: 'Browse immutable Indicator, Screener, and Strategy artifacts and their versions.',
+        overview:
+            'The Artifact Library is the durable home for reusable Trading Artifacts. Browse published versions, inspect provenance and dependencies, and open an artifact detail route without losing its stable identity.',
+        controls: [
+            { name: 'Artifact list', description: 'Search and filter reusable artifacts by type, status, and ownership.' },
+            { name: 'Artifact detail', description: 'Inspect an immutable version, dependencies, bindings, and available lifecycle actions.' },
+        ],
+        concepts: [
+            { name: 'Immutable version', description: 'Published artifact versions remain stable; later edits create a new draft/version rather than rewriting history.' },
+            { name: 'Artifact provenance', description: 'Bindings and dependent workflows retain the artifact/version identity used by the operation.' },
+        ],
+        related: ['strategy-registry', 'screener-registry', 'indicator-registry'],
+    },
+    {
+        id: 'portfolio-compare',
+        keyword: 'portfolio-compare',
+        aliases: ['compare portfolios', 'portfolio comparison'],
+        title: 'Portfolio Comparison',
+        routeLabel: '/portfolio/compare',
+        match: (p) => pathStarts(p, '/portfolio/compare'),
+        summary: 'Compare portfolio performance and holdings context across selected portfolios.',
+        overview:
+            'Portfolio Comparison provides a side-by-side view for understanding how selected portfolios differ. Treat the active portfolio context and the comparison period as explicit inputs to every displayed metric.',
+        controls: [
+            { name: 'Comparison period', description: 'Choose the period used for the comparable performance view.' },
+            { name: 'Portfolio selection', description: 'Select the portfolios included in the comparison without changing their underlying data.' },
+        ],
+        concepts: [
+            { name: 'Read-only comparison', description: 'Comparison is an analytical view and does not rebalance, merge, or mutate portfolio holdings.' },
+        ],
+        related: ['dashboard', 'portfolio-snapshots', 'historical-holdings'],
+    },
+    {
+        id: 'performance-tax',
+        keyword: 'performance-tax',
+        aliases: ['performance and tax', 'tax performance'],
+        title: 'Performance & Tax',
+        routeLabel: '/portfolio/performance-tax',
+        match: (p) => pathStarts(p, '/portfolio/performance-tax'),
+        summary: 'Review performance, attribution, benchmark comparison, and FIFO tax-lot outcomes.',
+        overview:
+            'Performance & Tax brings together portfolio performance, benchmark context, strategy attribution, and realised FIFO tax-lot results. Missing prices or benchmark inputs remain unavailable rather than being presented as authoritative zero.',
+        controls: [
+            { name: 'Performance periods', description: 'Review period returns and money- or time-weighted performance where available.' },
+            { name: 'Tax-lot view', description: 'Inspect realised and remaining FIFO lots with the evidence and assumptions used for the calculation.' },
+            { name: 'Export', description: 'Export the supported performance and tax datasets for review.' },
+        ],
+        concepts: [
+            { name: 'Benchmark excess return', description: 'Portfolio results are compared with the configured benchmark using the same selected period.' },
+            { name: 'Unavailable inputs', description: 'Missing market inputs are explicit unavailable states, not fabricated zero values.' },
+        ],
+        related: ['dashboard', 'review', 'portfolio-snapshots'],
     },
     {
         id: 'settings',
