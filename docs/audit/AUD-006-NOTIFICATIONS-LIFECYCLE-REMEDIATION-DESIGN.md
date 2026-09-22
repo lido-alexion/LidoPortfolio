@@ -2,7 +2,7 @@
 
 ## 1. Finding Recap
 
-AUD-006 is currently `PARTIALLY_IMPLEMENTED`. StoX has a substantial notification foundation, including in-app notification records, account-scoped recipients, external channel settings, persisted delivery attempts, bounded retry, channel health, banners, history, and reminder scheduling. The remaining evidence gap is whether those pieces form one coherent user-visible lifecycle across read state, acknowledgement, delivery failure, retry, reminders, and runtime queue/provider execution.
+At the initial audit boundary AUD-006 was `PARTIALLY_IMPLEMENTED`. The completed remediation now makes AUD-006 `IMPLEMENTED` statically, with bounded browser/deployed/provider runtime verification retained. StoX has a substantial notification foundation, including in-app notification records, account-scoped recipients, external channel settings, persisted delivery attempts, bounded retry, channel health, banners, history, and reminder scheduling; batches 1–4 establish the coherent lifecycle across read state, acknowledgement, delivery failure, retry and reminders.
 
 This audit separates:
 
@@ -310,18 +310,18 @@ This scenario should use a fake adapter/provider and queue assertions, not real 
 | Receive unresolved-condition reminder | scheduler + queue/provider | reminder service/command | `RUNTIME_VERIFICATION_REQUIRED` |
 | View calendar reminder occurrence | Notification Center source history | calendar reminder publisher | `UI_REACHABLE` after occurrence; scheduler delivery runtime-only |
 
-## 23. Gap Register
+## 23. Initial Gap Register (superseded by remediation batches)
 
 | ID | Finding | Classification | Severity | Confidence | User impact / evidence |
 | --- | --- | --- | --- | --- | --- |
-| NTF-001 | Notification Center history does not expose per-channel delivery status, attempt count, provider response/error, or skipped/unconfigured reason. | `PARTIALLY_IMPLEMENTED` | Medium | High | Users can see the notification but cannot diagnose whether Telegram/email/webhook delivered or failed from the main history workflow. Delivery/attempt persistence exists. |
-| NTF-002 | Current Notification Center has no visible manual retry action for the source/delivery model; retry support is planner/API/legacy-controller based. | `PARTIALLY_IMPLEMENTED` | Medium | High | A user-facing recovery path is not proven for a failed current delivery. The legacy retry endpoint is not wired to `NotificationHistoryPage`. |
-| NTF-003 | Bell unread and active-critical counts initialize to zero before the first successful fetch and refresh failures are swallowed. | `PARTIALLY_IMPLEMENTED` | Medium | High | A slow or failed refresh can look like a valid zero-count state. This is a static missing-versus-zero concern, though it does not delete notifications. |
-| NTF-004 | Notification settings initial-load failure becomes a toast plus default rendering rather than an explicit unavailable settings state. | `PARTIALLY_IMPLEMENTED` | Low | High | Users may see incomplete/default channel controls after settings retrieval fails. Mutation errors preserve useful server messages. |
+| NTF-001 | Notification Center history does not expose per-channel delivery status, attempt count, provider response/error, or skipped/unconfigured reason. | `IMPLEMENTED` | Medium | High | Resolved by Batch 2 safe delivery detail and attempt evidence. |
+| NTF-002 | Current Notification Center has no visible manual retry action for the source/delivery model; retry support is planner/API/legacy-controller based. | `IMPLEMENTED` | Medium | High | Resolved by Batch 2 current-model, owner-scoped retry. |
+| NTF-003 | Bell unread and active-critical counts initialize to zero before the first successful fetch and refresh failures are swallowed. | `IMPLEMENTED` | Medium | High | Resolved by Batch 3 unknown/loading/failure versus authoritative-zero semantics. |
+| NTF-004 | Notification settings initial-load failure becomes a toast plus default rendering rather than an explicit unavailable settings state. | `IMPLEMENTED` | Low | High | Resolved by Batch 3 explicit unavailable state and Retry. |
 | NTF-005 | Deployed reminder and multi-provider behavior still needs bounded runtime proof. | `RUNTIME_VERIFICATION_REQUIRED` | Medium | High | AUD-009 now proves the `notifications` worker, 11 normal successful provider deliveries, and 1 resolved-condition suppression with no failed jobs. Production email remains the `log` driver; webhook delivery, provider-failure handling, and elapsed-time reminders remain unverified. |
-| NTF-006 | A single current UI journey from event -> failed attempt -> retry success -> read -> condition resolution is not represented by an integrated fake-provider test. | `RUNTIME_VERIFICATION_REQUIRED` | Medium | Medium | The separate service tests are strong but do not prove lifecycle composition and cross-surface continuity. |
-| NTF-007 | The main history detail does not render `primary_action` as a generic source-context link, although structured action data is returned. | `PARTIALLY_IMPLEMENTED` | Low | High | Domain context may be visible only as text/timeline, reducing direct recovery/navigation. The source route remains available to producers. |
-| NTF-008 | Reminder occurrences are persisted through the common occurrence/delivery path but are not explicitly labeled as reminders in the current history presentation. | `PARTIALLY_IMPLEMENTED` | Low | Medium | Users may not distinguish re-notification from an original occurrence; underlying generation semantics remain distinct. |
+| NTF-006 | A single current UI journey from event -> failed attempt -> retry success -> read -> condition resolution is not represented by an integrated fake-provider test. | `IMPLEMENTED` | Medium | Medium | Resolved by Batch 1 integrated lifecycle assurance. |
+| NTF-007 | The main history detail does not render `primary_action` as a generic source-context link, although structured action data is returned. | `IMPLEMENTED` | Low | High | Resolved by Batch 4 safe local primary-action presentation. |
+| NTF-008 | Reminder occurrences are persisted through the common occurrence/delivery path but are not explicitly labeled as reminders in the current history presentation. | `IMPLEMENTED` | Low | Medium | Resolved by Batch 4 explicit Initial/Escalation/Reminder labels. |
 
 No confirmed High-severity static defect was found. In particular, the inspected code does not conflate read with acknowledgement, external failure with notification absence, retry with reminder, or domain failure with delivery failure. The highest-risk remaining concern is the medium-severity lack of delivery failure/recovery visibility in the main history workflow, followed by the bell's zero-before-load semantics.
 
@@ -377,7 +377,7 @@ No confirmed High-severity static defect was found. In particular, the inspected
 
 The core notification model, persistence separation, account scoping, read semantics, critical-condition behavior, external channels, bounded retry, channel health, settings, and reminder-versus-retry distinction are implemented in the current codebase. Notification history also has explicit loading, failure, and empty handling.
 
-AUD-006 is not yet statically complete because the current main history surface does not expose delivery/attempt failure state or a direct current-model recovery path, the bell has a zero-before-load ambiguity, and the integrated event-to-delivery-to-read/resolve assurance journey is not present. Queue workers, scheduler execution, provider credentials, and actual external delivery remain runtime verification items rather than static implementation failures.
+The static gaps identified above are resolved by batches 1–4: the main history surface has safe delivery/attempt failure state and current-model recovery, the bell distinguishes unknown/loading/failure from authoritative zero, and the integrated event-to-delivery-to-read/resolve journey is covered. Queue workers, scheduler execution, provider credentials, actual external delivery and browser behavior remain bounded runtime verification items rather than static implementation failures.
 
 ## 27. Open Questions
 
@@ -411,7 +411,7 @@ The assurance suite verifies the following state separations: unread versus read
 
 No product defect was found and no production notification class was changed. Existing notification tests remain green: the new suite passes 5 tests and 55 assertions; the full notification feature directory passes 50 tests and 244 assertions.
 
-`NTF-006` is now `IMPLEMENTED` for the current-model composition assurance scope. `NTF-005` is split: static/runtime composition assurance is covered for the fake-provider path, while deployment runtime verification remains required for the queue worker, scheduler, provider credentials, real Telegram/email/webhook responses, and elapsed-time reminder operation. AUD-006 remains `PARTIALLY_IMPLEMENTED`; NTF-001 through NTF-004 and NTF-007/NTF-008 remain outside this batch's scope.
+`NTF-006` is now `IMPLEMENTED` for the current-model composition assurance scope. `NTF-005` is split: static/runtime composition assurance is covered for the fake-provider path, while deployment runtime verification remains required for the queue worker, scheduler, provider credentials, real Telegram/email/webhook responses, and elapsed-time reminder operation. AUD-006 remains statically `IMPLEMENTED`; NTF-001 through NTF-004 and NTF-007/NTF-008 are subsequently closed by batches 2–4.
 
 ## Batch 2 Implementation Outcome
 
@@ -453,9 +453,9 @@ Notification detail now contains a compact Delivery section with channel, delive
 
 The new `NotificationCenterDeliveryApiTest` covers safe multi-channel detail serialization, secret/destination exclusion, owner authorization, foreign-resource isolation, failed-to-queued retry, repeated retry rejection, delivered ineligibility, and suppressed ineligibility. The existing `NotificationLifecycleAssuranceTest` remains green, preserving automatic retry, reminder, suppression, multi-channel, read/resolution, and idempotency assurance. `notificationCenterShell.test.mjs` covers the delivery section and current-model retry wiring.
 
-`NTF-001` is now `IMPLEMENTED`: detail exposes safe per-channel status, delivery kind, attempt count, failure evidence, suppression, and timestamps without sensitive fields. `NTF-002` is now `IMPLEMENTED`: an authenticated owner can retry an eligible failed current-model delivery through the existing planner/job path, while non-failed and resolved/suppressed states cannot create duplicate work.
+`NTF-001` is now `IMPLEMENTED`: detail exposes safe per-channel status, delivery kind, attempt count, failure evidence, suppression, and timestamps without sensitive fields. `NTF-002` is now `IMPLEMENTED`: an authenticated owner can retry an eligible failed current-model delivery through the existing planner/job path, while non-failed and resolved/suppressed states cannot create duplicate work. At this batch boundary NTF-003, NTF-004, NTF-007 and NTF-008 remained historical follow-up items; later batches below resolve them.
 
-AUD-006 remains `PARTIALLY_IMPLEMENTED`. Remaining items are NTF-003 (bell count loading semantics), NTF-004 (settings unavailable state), NTF-005 deployment runtime verification, NTF-007 (generic primary-action presentation), and NTF-008 (explicit reminder labeling).
+At this batch boundary AUD-006 remained `PARTIALLY_IMPLEMENTED`. Remaining items were NTF-003 (bell count loading semantics), NTF-004 (settings unavailable state), NTF-005 deployment runtime verification, NTF-007 (generic primary-action presentation), and NTF-008 (explicit reminder labeling); later batches below resolve all except the bounded NTF-005 runtime boundary.
 
 ## Batch 3 Implementation Outcome
 
@@ -477,7 +477,7 @@ The notification shell source tests now cover nullable initial metadata, unavail
 
 `NTF-003` is now `IMPLEMENTED`: unknown counts are distinct from loaded zero, initial failure does not create a false zero, known counts/banner state survive transient refresh failure, and successful recovery replaces stale metadata. `NTF-004` is now `IMPLEMENTED`: settings failures render persistent unavailable state with Retry and cannot expose mutations against placeholder defaults.
 
-AUD-006 remains `PARTIALLY_IMPLEMENTED`. Remaining work is NTF-005 deployed runtime verification, NTF-007 generic primary-action navigation, and NTF-008 explicit reminder labeling. No master audit verdict was changed in this batch.
+AUD-006 remains statically `IMPLEMENTED`; remaining work is bounded NTF-005 deployed provider/reminder/browser runtime verification. No master audit verdict was changed in this batch.
 
 ## Batch 4 Implementation Outcome
 
