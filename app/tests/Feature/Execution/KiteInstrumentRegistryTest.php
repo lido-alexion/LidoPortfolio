@@ -36,7 +36,7 @@ class KiteInstrumentRegistryTest extends TestCase
         $result = app(KiteInstrumentRegistryService::class)->resolve($stock, $user->id, refresh: true);
 
         $this->assertSame('SITINET-BZ', $result['trading_symbol']);
-        $this->assertDatabaseHas('portfolio_broker_instruments', [
+        $this->assertDatabaseHas('stox_broker_instruments', [
             'stock_id' => $stock->id,
             'trading_symbol' => 'SITINET-BZ',
             'instrument_token' => '7477761',
@@ -56,7 +56,7 @@ class KiteInstrumentRegistryTest extends TestCase
         $this->expectException(DomainException::class);
         $this->expectExceptionMessage('Multiple Kite instruments');
         app(KiteInstrumentRegistryService::class)->resolve($stock, $user->id, refresh: true);
-        $this->assertDatabaseCount('portfolio_broker_instruments', 0);
+        $this->assertDatabaseCount('stox_broker_instruments', 0);
     }
 
     public function test_market_order_uses_registry_symbol_regular_endpoint_and_unbounded_protection(): void

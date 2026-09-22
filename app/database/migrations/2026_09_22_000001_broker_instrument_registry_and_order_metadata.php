@@ -8,8 +8,8 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (! Schema::hasTable('portfolio_broker_instruments')) {
-            Schema::create('portfolio_broker_instruments', function (Blueprint $table): void {
+        if (! Schema::hasTable('stox_broker_instruments')) {
+            Schema::create('stox_broker_instruments', function (Blueprint $table): void {
                 $table->id();
                 $table->string('provider', 32);
                 $table->foreignId('stock_id')->constrained('portfolio_stocks')->cascadeOnDelete();
@@ -57,6 +57,6 @@ return new class extends Migration
             });
         }
 
-        Schema::dropIfExists('portfolio_broker_instruments');
+        Schema::dropIfExists('stox_broker_instruments');
     }
 };

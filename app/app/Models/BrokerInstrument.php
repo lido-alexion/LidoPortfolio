@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class BrokerInstrument extends Model
 {
-    protected $table = 'portfolio_broker_instruments';
+    protected $table = 'stox_broker_instruments';
 
     protected $fillable = [
         'provider', 'stock_id', 'exchange', 'trading_symbol', 'instrument_token',
