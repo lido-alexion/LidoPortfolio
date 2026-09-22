@@ -2,7 +2,7 @@
 
 namespace App\Services\Broker;
 
-use App\Exceptions\DomainException;
+use App\Services\SettingsService;
 use App\Support\TradingCalendar;
 use Carbon\Carbon;
 
@@ -11,21 +11,30 @@ final class BrokerOrderPolicy
     public const REGULAR = 'regular';
     public const AMO = 'amo';
 
+    public function __construct(protected SettingsService $settings) {}
+
     public function variety(?Carbon $at = null): string
     {
-        $time = ($at ?? now())->copy()->timezone('Asia/Kolkata');
-        if (! TradingCalendar::isEquitySessionDate($time)) {
-            throw new DomainException('Broker orders are blocked outside an equity session.', 'BROKER_ORDER_WINDOW_UNSUPPORTED', 422);
-        }
+        $timezone = (string) $this->settings->get('cron_timezone', SettingsService::DEFAULTS['cron_timezone']);
+        $time = ($at ?? now())->copy()->timezone($timezone);
+        $open = $this->configuredTime('market_open_time', SettingsService::DEFAULTS['market_open_time'], $time);
+        $close = $this->configuredTime('market_close_time', SettingsService::DEFAULTS['market_close_time'], $time);
 
-        $minutes = ((int) $time->format('H')) * 60 + (int) $time->format('i');
-        if ($minutes >= 555 && $minutes <= 930) { // 09:15 through 15:30 IST.
+        if (TradingCalendar::isEquitySessionDate($time) && $time->betweenIncluded($open, $close)) {
             return self::REGULAR;
         }
-        if ($minutes >= 960 || $minutes < 540) { // Kite equity AMO window.
-            return self::AMO;
-        }
 
-        throw new DomainException('Broker order window is not safely supported at this time.', 'BROKER_ORDER_WINDOW_UNSUPPORTED', 422);
+        return self::AMO;
+    }
+
+    protected function configuredTime(string $key, string $fallback, Carbon $date): Carbon
+    {
+        $value = (string) $this->settings->get($key, $fallback);
+
+        try {
+            return Carbon::createFromFormat('Y-m-d H:i', $date->toDateString().' '.$value, $date->getTimezone());
+        } catch (\Throwable) {
+            return Carbon::createFromFormat('Y-m-d H:i', $date->toDateString().' '.$fallback, $date->getTimezone());
+        }
     }
 }

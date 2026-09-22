@@ -156,7 +156,7 @@ Connection flow:
 
 Current anchors: `BrokerController`, `BrokerConnection`, `BrokerConnectionService`, `KiteBrokerGateway`, `KiteReadinessReminderService`, `KiteCallbackTest`, and `KiteReadinessReminderTest`.
 
-Kite order placement uses the dedicated `portfolio_broker_instruments` registry rather than mutating canonical Stock symbols. The daily `portfolio:sync-kite-instruments` command reconciles the NSE instrument master; a targeted refresh is allowed after a deterministic invalid-instrument rejection and can retry the same durable StoX submission once. Ambiguous or missing mappings block without guessing. Regular orders are selected during the supported IST equity session and AMO orders during the supported after-market window; unsupported windows are blocked. MARKET payloads use Kite `market_protection=-1`, and the persisted broker variety selects the matching cancellation endpoint.
+Kite order placement uses the dedicated `portfolio_broker_instruments` registry rather than mutating canonical Stock symbols. The daily `portfolio:sync-kite-instruments` command reconciles the NSE instrument master; a targeted refresh is allowed after a deterministic invalid-instrument rejection and can retry the same durable StoX submission once. Ambiguous or missing mappings block without guessing. StoX submits a regular broker order only when the current date is an equity trading session and the current time falls within the configured market open/close interval; all other times and dates are submitted as AMO. MARKET payloads use Kite `market_protection=-1`, and the persisted broker variety selects the matching cancellation endpoint.
 
 ## 11. Emergency Halt And Recovery
 
