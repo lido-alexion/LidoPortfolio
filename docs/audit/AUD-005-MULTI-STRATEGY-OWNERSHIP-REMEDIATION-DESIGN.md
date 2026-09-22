@@ -2,7 +2,7 @@
 
 ## 1. Finding Recap
 
-AUD-005 is `PARTIALLY_IMPLEMENTED` (High severity, Medium confidence). StoX has the principal multi-strategy accounting, ownership, adoption, capital-resolution, lending/recall, recommendation, and execution components. The unresolved question is whether an Investor can follow the complete lifecycle coherently through the current application, with enough state explanation to avoid confusing logical allocation, physical cash, ownership, and execution status.
+AUD-005 is `IMPLEMENTED` statically, with browser/deployed/provider runtime verification retained (High severity, Medium confidence). StoX has the principal multi-strategy accounting, ownership, adoption, capital-resolution, lending/recall, recommendation, and execution components, and remediation batches MS-001 through MS-005 now cover the material lifecycle and state-semantics criteria. The remaining checks concern browser wording/geometry, responsive recovery, deployed reachability, and real provider/automation behavior; they are runtime follow-up rather than a missing static implementation.
 
 This audit traced eleven lifecycle steps:
 
@@ -285,18 +285,18 @@ Use two enabled strategies in one Investor profile and representative unmanaged/
 ### MS-001 — Complete multi-strategy journey is not proven as one reachable workflow
 
 - **Requirement:** An Investor can follow strategy configuration, allocation, recommendation provenance, capital resolution, ownership, execution, and accounting without losing state meaning.
-- **Evidence:** The route/component/API map shows each major segment, but no current test or single UI walkthrough links one recommendation through all segments.
-- **Classification:** `RUNTIME_VERIFICATION_REQUIRED`
+- **Evidence:** `MultiStrategyLifecycleAssuranceTest` links strategy configuration, allocation, recommendation provenance, reservation, review, execution, ownership attribution and final reconciliation; the supporting UI/state suites cover the corresponding Holdings, Recommendations, Cash Management and lending/recall presentation boundaries.
+- **Classification:** `IMPLEMENTED` (static/executable workflow evidence; browser/deployed verification retained)
 - **Severity:** High
 - **Confidence:** High
 - **User impact:** Users may be unable to reconcile a capital/funding state with the resulting owner, transaction, and strategy provenance even when each subsystem works.
-- **Smallest remediation direction:** Add a representative end-to-end browser/feature journey and a compact cross-link/state contract between Recommendations, Cash, Pending Execution, Holdings, and Transactions.
+- **Smallest remediation direction:** Retain a representative browser/deployed walkthrough and verify the existing cross-page state contract; no new static lifecycle implementation is currently required.
 
 ### MS-002 — Strategy ownership is exposed as a raw owner key in Holdings
 
 - **Requirement:** Investor can identify the owning strategy and understand unmanaged/strategy-owned boundaries.
-- **Evidence:** `HoldingsPage` renders `Unmanaged` or raw `owner_key` such as `strategy:<id>`; the API returns `strategy_id` but the table does not consistently render a resolved strategy name or provenance link.
-- **Classification:** `PARTIALLY_IMPLEMENTED`
+- **Evidence:** Holdings now renders unmanaged, resolved, fallback and archived-owner states, with ownership-episode context; the API preserves canonical ownership fields and strategy provenance.
+- **Classification:** `IMPLEMENTED` (browser/deployed presentation verification retained)
 - **Severity:** Medium
 - **Confidence:** High
 - **User impact:** Ownership is technically present but difficult to interpret, especially when the same security has multiple strategy episodes.
@@ -305,8 +305,8 @@ Use two enabled strategies in one Investor profile and representative unmanaged/
 ### MS-003 — Same-stock conflict/provenance explanation is not a dedicated user-facing surface
 
 - **Requirement:** Same-security ownership must remain isolated and adoption/merge consequences must be understandable.
-- **Evidence:** Backend policy and adoption modal copy are correct; there is no ownership-episode/history view showing sibling strategy ownership, basis/provenance, and why a strategy cannot act on another episode.
-- **Classification:** `PARTIALLY_IMPLEMENTED`
+- **Evidence:** Backend policy, adoption modal copy, sibling-episode presentation and weighted destination-only merge coverage preserve ownership isolation and explain the resulting episodes.
+- **Classification:** `IMPLEMENTED` (browser/deployed presentation verification retained)
 - **Severity:** Medium
 - **Confidence:** Medium
 - **User impact:** A user can complete adoption but may not understand the resulting ownership split or conflict boundary.
@@ -315,8 +315,8 @@ Use two enabled strategies in one Investor profile and representative unmanaged/
 ### MS-004 — Allocation changes with deployed capital lack explicit deficit/excess explanation
 
 - **Requirement:** Allocation changes must not silently imply that existing positions were rebalanced or that logical allocation equals physical cash.
-- **Evidence:** Allocation save is validated and snapshot shows deployed/unused/lent/borrowed values, but no explicit UI state explains when existing deployed capital no longer fits a newly saved percentage.
-- **Classification:** `RUNTIME_VERIFICATION_REQUIRED`
+- **Evidence:** Allocation snapshots expose variance/status and Cash Management explains allocation, deployed, unused and above-allocation policy state without implying rebalancing.
+- **Classification:** `IMPLEMENTED` (browser/deployed presentation verification retained)
 - **Severity:** Medium
 - **Confidence:** Medium
 - **User impact:** A user may interpret a saved 70/30 policy as an automatic rebalance of existing 50/50 positions.
@@ -325,8 +325,8 @@ Use two enabled strategies in one Investor profile and representative unmanaged/
 ### MS-005 — Full cross-state error/recovery and unavailable-data presentation is not proven
 
 - **Requirement:** Financially meaningful missing, stale, blocked, and failed states must remain distinct from zero/empty and expose recovery paths.
-- **Evidence:** Core services preserve explicit statuses and many UI helpers use `—`, but the complete multi-strategy surfaces have no unified test for missing quote, lender failure, stale recommendation, recall pending, and partial execution.
-- **Classification:** `RUNTIME_VERIFICATION_REQUIRED`
+- **Evidence:** State-semantics coverage preserves failure versus empty, missing quote versus zero, lender/recommendation lifecycle distinctions, recall/bridge/proceeds states and retryable recovery presentation across the reviewed surfaces.
+- **Classification:** `IMPLEMENTED_WITH_RUNTIME_VERIFICATION`
 - **Severity:** Medium
 - **Confidence:** Medium
 - **User impact:** Composite pages may be technically correct while still presenting an ambiguous capital/ownership state.
@@ -360,31 +360,33 @@ Browser geometry, route discoverability, cross-page continuity, two-profile auth
 
 ## 23. Recommended Order
 
-1. Verify MS-001 with a two-strategy, two-profile representative journey before changing product behavior.
+The following order was the historical remediation sequence and is now complete at the repository/static-evidence boundary:
+
+1. Verify MS-001 with a two-strategy representative journey.
 2. Improve Holdings ownership naming and provenance links (MS-002).
 3. Add same-stock adoption/episode explanation without changing merge/accounting semantics (MS-003).
-4. Exercise allocation changes with existing positions and decide whether explanatory status is sufficient (MS-004).
+4. Exercise allocation changes with existing positions and establish explanatory policy-only status (MS-004).
 5. Add focused state/error/recovery coverage for funding, reservations, lending, recall, stale recommendations, and missing prices (MS-005).
 6. Retain AUD-012 authorization and AUD-015 execution-safety boundaries; do not duplicate their remediation.
 
 ## 24. Final AUD-005 Assessment
 
-**`PARTIALLY_IMPLEMENTED` — High severity, Medium confidence.**
+**`IMPLEMENTED` statically with runtime/browser verification retained — High severity, Medium confidence.**
 
-The ownership/accounting model, adoption/merge implementation, recommendation provenance fields, capital reservation lifecycle, lending/recall services, execution attribution, and representative UI surfaces are present. Adoption, allocation, recommendation capital resolution, and recall/proceeds status are UI-reachable; low-level recall/settlement initiation is API/automation-owned. The remaining confirmed design gaps are primarily ownership presentation and same-stock provenance explanation, while the highest-risk financial lifecycle continuity is not yet proven as one executable Investor journey.
+The ownership/accounting model, adoption/merge implementation, recommendation provenance fields, capital reservation lifecycle, lending/recall services, execution attribution, and representative UI surfaces are present. Adoption, allocation, recommendation capital resolution, and recall/proceeds status are UI-reachable; low-level recall/settlement initiation is intentionally API/automation-owned under the current contract. MS-001 through MS-005 close the material static implementation criteria, including same-stock provenance, allocation policy-only behavior, unavailable-versus-empty state semantics, and safe missing-price handling.
 
-Closure requires evidence that no financial correctness gap remains, strategy ownership is understandable in Holdings, same-stock outcomes are explained, reservations/funding remain distinct from approval/execution, and the representative two-strategy workflow survives through accounting. Runtime browser verification may remain after static remediation, but the current evidence does not support `IMPLEMENTED`.
+The remaining follow-up is browser/deployed/provider/runtime verification: wording and geometry, responsive recovery, deployed bundle reachability, and real provider/automation scenarios. These checks do not reopen the static verdict under the master matrix definition.
 
-## 25. Open Questions
+## 25. Runtime Follow-up Questions
 
-1. Should Holdings display a resolved strategy name and a direct ownership/provenance link, or is `strategy:<id>` intentionally an internal/debug label?
-2. When allocation changes below already-deployed capital, is an explanatory deficit state sufficient, or should a future product decision define rebalancing/transfer behavior?
-3. Is recall initiation intentionally automation-only for Investors, with the API reserved for orchestration/admin paths, or should an Investor request/recall action be surfaced?
-4. What is the accepted browser-level canonical path for reviewing one recommendation from funding request through transaction and final holding ownership?
+1. Verify in the browser that Holdings displays resolved strategy names, unmanaged labels, archived-owner indication, and same-stock episode provenance consistently.
+2. Verify responsive Cash Management and Recommendations recovery states in deployed bundles; allocation changes remain policy-only and do not imply rebalancing.
+3. Recall initiation and settlement are intentionally automation/internal workflow states; runtime checks should verify state visibility and recovery, not require a new Investor initiation action.
+4. Verify the deployed canonical path for reviewing one recommendation from funding request through transaction and final holding ownership.
 
 ## 26. Batch 1 Implementation Outcome — MS-001
 
-**Status:** `IMPLEMENTED` for the executable lifecycle assurance scope; AUD-005 remains `PARTIALLY_IMPLEMENTED` overall.
+**Status:** `IMPLEMENTED` for the executable lifecycle assurance scope; the overall static AUD-005 disposition is now `IMPLEMENTED`, with runtime/browser verification retained.
 
 Added `app/tests/Feature/MultiStrategyLifecycleAssuranceTest.php`, a deterministic Laravel feature suite using the existing `RecommendationLifecycleService`, `ExecutionEngine`, `PortfolioCapitalAccountingService`, `HoldingAdoption` route/service, and active-portfolio middleware.
 
@@ -405,7 +407,7 @@ Secondary scenarios prove:
 - cancelling an approved BUY releases the reservation without creating a transaction or holding;
 - a second Investor cannot adopt a foreign holding or review a foreign recommendation, while the foreign resources remain unchanged.
 
-The focused suite passes: **5 tests, 52 assertions**. No production code was required and no pending-SELL behavior was changed; `V4Spec004CashLedgerSpecialMovementsTest` and the existing capital/lending suites remain the authoritative coverage for delayed sale-proceeds availability and recall accounting. Browser discoverability and composite multi-page continuity remain runtime work. MS-002 through MS-005 remain open as previously described.
+The focused suite passes: **5 tests, 52 assertions**. No production code was required and no pending-SELL behavior was changed; `V4Spec004CashLedgerSpecialMovementsTest` and the existing capital/lending suites remain the authoritative coverage for delayed sale-proceeds availability and recall accounting. Browser discoverability and composite multi-page continuity remain runtime work; subsequent batches below close MS-002 through MS-005 at the static-evidence boundary.
 
 ## 27. Batch 2 Implementation Outcome — MS-002 / MS-003
 
@@ -423,7 +425,7 @@ Each episode remains an independent row. Sibling strategy ownership is derived f
 
 The adoption modal now distinguishes a destination strategy's existing same-stock episode from sibling strategy episodes. It explains the accepted weighted merge into the selected destination and explicitly states that other strategy ownership remains separate and unchanged. Existing adoption API/accounting semantics are untouched.
 
-Added backend coverage verifies named strategy metadata, independent same-stock rows, and archived-owner identity. Added frontend helper coverage verifies unmanaged, named, unresolved, and sibling-episode presentation semantics. MS-002 and the scoped Holdings/adoption portion of MS-003 are `IMPLEMENTED`. MS-004 allocation-change explanation and MS-005 error/recovery coverage remain open; AUD-005 remains `PARTIALLY_IMPLEMENTED`.
+Added backend coverage verifies named strategy metadata, independent same-stock rows, and archived-owner identity. Added frontend helper coverage verifies unmanaged, named, unresolved, and sibling-episode presentation semantics. MS-002 and the scoped Holdings/adoption portion of MS-003 are `IMPLEMENTED`; the later batches below complete the remaining static remediation. Browser/deployed verification remains separate runtime follow-up.
 
 ## 28. Batch 3 Implementation Outcome — MS-004
 
@@ -438,7 +440,7 @@ Cash Management now shows Allocation, Deployed, and Unused/status. Above-allocat
 
 `MultiStrategyLifecycleAssuranceTest::test_allocation_change_is_policy_only_and_reports_above_allocation_without_rebalancing` exercises the real allocation API with existing A/B positions and a Strategy B reservation. It proves holdings, owner keys, basis, transactions, recommendation count, orders, physical cash, and reservation attribution remain unchanged while the new policy and derived variance update. The allocation/capital/lending regression set passes: **45 tests, 306 assertions**.
 
-MS-004 is `IMPLEMENTED`. MS-005 remains open for broader missing/stale/error and recovery-state assurance; AUD-005 remains `PARTIALLY_IMPLEMENTED`.
+MS-004 is `IMPLEMENTED`. The later MS-005 batch below completes the remaining static missing/stale/error and recovery-state assurance; AUD-005 remains runtime-verification-follow-up only after static closure.
 
 ## 29. Batch 4 Implementation Outcome — MS-005
 
