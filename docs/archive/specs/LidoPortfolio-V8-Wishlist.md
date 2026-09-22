@@ -14,7 +14,7 @@ V8 contains the **Standalone Telemetry Platform**, deferred follow-on data-boots
 
 The Telemetry Platform is separated from StoX product implementation because it is a separate, independently deployable, product-independent application. StoX is its first intended client, but building the Telemetry product and integrating StoX with it are separate roadmap concerns.
 
-V8 also contains the one-time Historical Fundamental Data Bootstrap, deferred from V7 until the historical dataset/source is prepared and selected, a guest-to-admin **Account Access Request** workflow that preserves admin-controlled onboarding while removing the need for an applicant to obtain an invitation before expressing interest, and ML operations automation for scheduled retraining, gated deployment of newer model versions, operator information messages, and failure alerting while retaining all existing manual controls.
+V8 also contains the one-time Historical Fundamental Data Bootstrap, deferred from V7 until the historical dataset/source is prepared and selected, a guest-to-admin **Account Access Request** workflow that preserves admin-controlled onboarding while removing the need for an applicant to obtain an invitation before expressing interest, and a broader ML follow-on program covering scheduled retraining/deployment operations, fundamental feature expansion, technical/market feature engineering, empirically calibrated multi-window promotion criteria, and a richer Admin ML management/observability experience.
 
 ## 2. Current V8 backlog
 
@@ -25,6 +25,9 @@ V8 also contains the one-time Historical Fundamental Data Bootstrap, deferred fr
 | V4-FEAT-055 | Account Access Request / Admin Approval Workflow | Add a guest-facing **Request an account** flow linked from Login. Human applicants submit the information required for admin onboarding behind CAPTCHA and abuse controls. Pending duplicates are deduplicated; admins review requests in User Management, receive operational notifications, and resolve them as **Create**, **Ignore**, or **Reject**. Reject creates a reversible email ban; Ignore closes the request without banning; Create hands off into the existing secure admin onboarding/invite flow with request details prefilled. | WISHLIST / NEEDS DESIGN |
 | V4-FEAT-056 | Scheduled ML Retraining, Model Deployment & Operations Messaging | Add cron/scheduler-driven retraining for the 1m/3m/6m models, retain manual retrain/promotion controls, automatically evaluate scheduled candidates and deploy a newer model only when the normal promotion gates pass. Send informational messages for upcoming scheduled training, successful training and successful model deployment; generate Admin alerts only for failures/errors that require attention. | WISHLIST / NEEDS DESIGN |
 | V4-FEAT-057 | ML Fundamental Feature Expansion & Retraining | Follow on from V4-FEAT-054. After historical fundamental coverage is expanded, define a curated/versioned fundamental ML feature set, validate point-in-time safety and coverage, retrain the 1m/3m/6m models, and compare the resulting candidates with existing models and the deterministic StoX baseline before any Admin promotion. | WISHLIST / DEPENDS ON V4-FEAT-054 |
+| V4-FEAT-058 | ML Technical & Market Feature Engineering | Expand the point-in-time ML feature space using data StoX already owns: multi-horizon momentum/trend, volatility/risk, volume/liquidity, breakout/consolidation, deterministic candlestick/chart-pattern signals, market breadth/regime and sector-relative context. Version feature definitions, measure incremental predictive value by horizon, and retain only features that improve out-of-sample results. | WISHLIST / NEEDS DESIGN |
+| V4-FEAT-059 | ML Promotion-Threshold Calibration & Multi-Window Validation | Replace reliance on a single fixed holdout and largely heuristic global promotion cutoffs with repeated chronological evaluation, horizon-aware baseline calibration, stability analysis and evidence-backed promotion criteria. Keep promotion conservative and reproducible; do not lower thresholds merely to make a model pass. | WISHLIST / NEEDS DESIGN |
+| V4-FEAT-060 | ML Admin UI & Training Observability Refinement | Bring the Admin ML UI up to the capabilities already present in the backend and expose richer training lifecycle visibility: eligibility/rejection reasons, per-gate metrics, retained versions, rollback, cutoff/configuration controls, granular run state/progress, failures, model metadata, drift and lifecycle history. | WISHLIST / NEEDS DESIGN |
 
 ## 3. V4-FEAT-055 — Account Access Request / Admin Approval Workflow
 
@@ -570,7 +573,409 @@ The detailed V8 design should decide:
 - whether valuation features can be reconstructed reliably enough for PIT use;
 - whether feature selection is fixed by product design or assisted by offline analysis.
 
-## 6. Boundary
+
+## 6. V4-FEAT-058 — ML Technical & Market Feature Engineering
+
+### 6.1 Product intent
+
+Expand the V7 ML models beyond the current narrow technical input set by deriving richer, point-in-time-safe features from historical market data StoX already stores.
+
+This is **feature engineering**, not synthetic outcome generation. Historical prices, volume and market context remain the source of truth; derived features describe the conditions that existed at each observation date so the model can learn relationships between those conditions and later outcomes.
+
+The goal is to answer questions such as:
+
+> Given the technical, market and sector conditions observable today, what is the probability that this stock will achieve the configured risk-aware benchmark-relative outcome over the selected horizon?
+
+### 6.2 Candidate feature families
+
+The detailed design SHOULD evaluate, at minimum:
+
+- multi-horizon returns: 1w / 1m / 3m / 6m / 12m where history permits;
+- relative strength against NIFTY50 and, where available, sector/index context;
+- moving-average location, spread and slope features;
+- trend alignment such as price > SMA20/50/100/200 and SMA stack relationships;
+- distance from 52-week high/low and recent breakout levels;
+- momentum and momentum-acceleration features;
+- RSI / rate-of-change style momentum indicators;
+- volatility over multiple lookbacks;
+- ATR / normalized ATR;
+- recent maximum drawdown and downside-volatility features;
+- volatility contraction/expansion;
+- historical volume relative to rolling averages;
+- volume trend / breakout-volume ratios;
+- accumulation/distribution style measures where the data contract supports them;
+- market breadth such as percentage of eligible stocks above major moving averages;
+- advancing/declining breadth and new-high/new-low style context where reconstructable;
+- market regime features derived from benchmark trend, breadth and volatility;
+- sector-relative strength and within-sector ranking once sector history is sufficiently reliable;
+- deterministic candlestick signals;
+- deterministic chart/pattern signals such as breakouts, consolidations and other mathematically defined structures.
+
+### 6.3 Multi-timescale representation
+
+Features MAY be derived at multiple observation scales where justified, for example:
+
+- daily;
+- weekly;
+- rolling N-trading-day windows.
+
+A feature name/definition must make its timeframe explicit. Arbitrary resampling such as 10-trading-day or biweekly bars may be evaluated, but inclusion must be evidence-driven rather than assumed useful.
+
+The same underlying signal MAY have multiple horizon-specific representations if empirical validation shows that, for example, short-horizon patterns are useful for 1m while broader trend/volatility context is more useful for 6m.
+
+### 6.4 Pattern feature requirements
+
+Pattern detection used for training MUST be deterministic and reproducible.
+
+For each pattern:
+
+- define the exact mathematical rule;
+- define the input bars/timeframe;
+- version the rule;
+- avoid subjective/manual chart interpretation;
+- ensure the same historical input always produces the same feature value;
+- persist enough metadata to reproduce the pattern state later.
+
+The model must not assume that a textbook-named pattern is predictive merely because it is traditionally labelled bullish/bearish. Its value is determined by out-of-sample evidence.
+
+### 6.5 Point-in-time safety
+
+Every derived feature must be computable using only information available at the observation timestamp.
+
+At minimum:
+
+- no future bars;
+- no later corporate-action repairs leaking into feature values;
+- no future constituent/sector information unless historically reconstructed;
+- rolling statistics terminate at the reference date;
+- market-breadth calculations use only the eligible historical universe/data known for that date;
+- feature preprocessing is fitted only on training partitions where fitting is required.
+
+### 6.6 Feature research and selection
+
+Do not add all candidate features directly to the production model.
+
+The research flow SHOULD:
+
+1. generate a versioned candidate feature matrix;
+2. measure coverage and missingness;
+3. quantify redundancy/correlation;
+4. train/evaluate by 1m/3m/6m horizon;
+5. measure incremental out-of-sample value relative to the current feature set;
+6. test stability across chronological windows;
+7. retain only features or feature families that improve predictive/investment outcomes without introducing leakage or unacceptable complexity.
+
+Feature importance/explainability should remain inspectable.
+
+### 6.7 Initial acceptance criteria
+
+1. Technical/market feature definitions are deterministic, versioned and reproducible.
+2. All features are point-in-time safe.
+3. Candidate features cover trend, momentum, volatility/risk and volume/liquidity where source data permits.
+4. Market breadth/regime features are available where historical reconstruction is reliable.
+5. Pattern features use explicit mathematical definitions rather than subjective chart interpretation.
+6. Multi-timescale features can be evaluated independently by horizon.
+7. Feature coverage/missingness and redundancy are measured.
+8. 1m/3m/6m candidates can be retrained using selected expanded features.
+9. Expanded-feature models are compared against the current model and deterministic StoX baseline.
+10. Features that do not improve out-of-sample evidence can be excluded without weakening reproducibility.
+11. Production prediction explanations can identify the most material retained technical/market contributors.
+
+### 6.8 Open design decisions
+
+The detailed design should decide:
+
+- exact technical indicator library/formulas;
+- which candlestick/chart patterns are worth implementing;
+- whether complex patterns use rule-based detectors or separately versioned feature extractors;
+- supported resampling/timeframes;
+- minimum historical coverage per feature;
+- volume-data quality requirements;
+- market-breadth universe definition;
+- sector-relative feature availability/history requirements;
+- feature-count/complexity guardrails;
+- whether feature selection remains logistic-regression compatible or also targets tree/boosting candidates.
+
+## 7. V4-FEAT-059 — ML Promotion-Threshold Calibration & Multi-Window Validation
+
+### 7.1 Product intent
+
+Improve confidence in candidate promotion decisions by replacing dependence on one chronological holdout and fixed global thresholds with empirically calibrated, horizon-aware evidence.
+
+Current V7 defaults remain valid safety gates, but values such as ROC-AUC >= 0.52 and PR-AUC >= 0.50 are not treated as universal constants.
+
+The V8 design should determine promotion criteria from repeated historical evidence while remaining conservative.
+
+### 7.2 Multi-window chronological validation
+
+Evaluation SHOULD support repeated chronological windows for each horizon.
+
+For example:
+
+```text
+train -> validation -> test
+        move forward
+train --------> validation -> test
+        move forward
+train ----------------> validation -> test
+```
+
+Requirements:
+
+- preserve chronological order;
+- preserve horizon label separation/embargo;
+- prevent preprocessing leakage;
+- use comparable benchmark semantics;
+- retain per-window metrics rather than only an aggregate;
+- record exact window definitions for reproducibility.
+
+### 7.3 Threshold calibration
+
+Promotion criteria SHOULD be calibrated against:
+
+- random/no-skill discrimination behavior;
+- observed class prevalence;
+- naive statistical baselines;
+- deterministic StoX baseline performance;
+- current active model performance over comparable periods;
+- distribution of results across multiple chronological windows.
+
+In particular:
+
+- ROC-AUC thresholds should require evidence above no-skill behavior;
+- PR-AUC interpretation should account for positive-class prevalence rather than assuming 0.50 is universally meaningful;
+- investment-outcome gates should require acceptable benchmark-relative and deterministic-baseline performance;
+- stability across windows should matter, not only one favorable test period.
+
+### 7.4 Horizon-aware criteria
+
+1m, 3m and 6m may use different calibrated thresholds or stability requirements if empirical evidence supports that difference.
+
+The detailed design SHOULD evaluate:
+
+- horizon-specific minimum ROC-AUC;
+- horizon-specific PR-AUC improvement over prevalence/no-skill baseline;
+- minimum benchmark-relative outcome;
+- minimum improvement over deterministic StoX baseline;
+- maximum tolerated degradation across windows;
+- minimum number of valid evaluation windows;
+- confidence intervals/bootstrap uncertainty where practical.
+
+### 7.5 Promotion semantics
+
+Passing calibrated thresholds makes a model **eligible**, not automatically authoritative unless a separate scheduled-deployment policy explicitly applies.
+
+Do not:
+
+- lower a threshold simply because a preferred model narrowly failed;
+- tune thresholds against the final test window;
+- select criteria after observing the exact candidate intended for promotion;
+- hide poor windows behind a favorable average.
+
+Threshold definitions/version/hash must be persisted with every training run/model.
+
+### 7.6 Initial acceptance criteria
+
+1. Evaluation supports multiple leakage-safe chronological windows.
+2. Per-window and aggregate metrics are persisted.
+3. ROC-AUC promotion criteria are benchmarked against no-skill behavior.
+4. PR-AUC criteria account for positive-class prevalence or an equivalent no-skill baseline.
+5. Promotion considers deterministic StoX baseline and benchmark-relative outcomes.
+6. 1m/3m/6m may use different thresholds only when supported by documented evidence.
+7. Stability/dispersion across windows is visible to Admin.
+8. Threshold calibration is performed independently from the final candidate test result.
+9. Threshold/configuration versions are reproducible.
+10. A model cannot pass solely because one unusually favorable window dominates the aggregate.
+11. Existing conservative defaults remain usable until calibrated replacements are approved.
+
+### 7.7 Open design decisions
+
+The detailed design should decide:
+
+- rolling-window count and spacing by horizon;
+- expanding vs fixed training windows;
+- minimum observations/classes per window;
+- whether confidence intervals/bootstrap estimates are required;
+- exact stability rules;
+- how current-active-model comparison affects eligibility;
+- whether threshold calibration is offline/admin-approved or product-managed;
+- how recalibration itself is versioned and audited.
+
+## 8. V4-FEAT-060 — ML Admin UI & Training Observability Refinement
+
+### 8.1 Product intent
+
+Complete the Admin-facing ML management experience so normal lifecycle operations do not require SSH/Tinker and so the UI clearly explains what the backend has decided.
+
+The backend already supports retrain, candidate/rejected classification, explicit promotion, rollback, drift checks, cutoff/configuration input and persisted model/training metadata. V8 should expose these capabilities coherently and add granular training observability.
+
+### 8.2 Candidate eligibility and rejection presentation
+
+After training, the UI SHALL clearly distinguish:
+
+- training failed;
+- training completed but model rejected;
+- training completed and model is an eligible candidate;
+- candidate promoted/active;
+- retained historical version.
+
+For completed models, show promotion gates individually, for example:
+
+```text
+ROC-AUC                     0.519   required >= 0.520   FAIL
+PR-AUC                      0.473   required >= 0.500   FAIL
+Benchmark-relative return  +1.45%  required >= 0       PASS
+Deterministic baseline     +1.45%  required >= 0       PASS
+```
+
+A rejected model must not display a Promote action.
+
+### 8.3 Training lifecycle observability
+
+Move the Admin experience away from a single long-running opaque request.
+
+Preferred architecture:
+
+```text
+Admin starts retrain
+    -> server creates/queues training run
+    -> API returns training_run_id
+    -> background worker executes canonical training
+    -> UI polls/subscribes to run status
+    -> granular stage/progress updates are shown
+```
+
+The UI SHOULD expose stages such as:
+
+- queued;
+- preparing dataset;
+- resolving benchmark/history;
+- writing train/validation/test partitions;
+- deterministic baseline evaluation;
+- model fitting;
+- candidate evaluation;
+- artifact verification/persistence;
+- completed candidate;
+- completed rejected;
+- failed.
+
+Where precise percentage completion is not trustworthy, use stage/progress counters rather than fabricated percentages.
+
+### 8.4 Run detail
+
+A training-run detail view SHOULD expose:
+
+- horizon;
+- trigger type/manual/scheduled;
+- requested/start/completion timestamps;
+- elapsed duration;
+- cutoff date;
+- current stage/status;
+- dataset row counts;
+- train/validation/test date ranges;
+- purge/embargo diagnostics;
+- configured/effective/excluded features;
+- feature coverage;
+- model family/hyperparameters;
+- metrics and baselines;
+- promotion thresholds and pass/fail result;
+- artifact/model version produced;
+- failure type/message when applicable;
+- operator/requesting Admin.
+
+### 8.5 Model/version management
+
+Admin UI SHALL expose:
+
+- active model per horizon;
+- latest candidate;
+- rejected versions;
+- retained versions;
+- promotion history;
+- rollback action for eligible retained same-horizon versions;
+- exactly-one-active status;
+- model age;
+- selected feature set;
+- model metadata/version;
+- evaluation summary;
+- drift/live-health status.
+
+Rollback should use the existing backend contract and require a deliberate confirmation.
+
+### 8.6 Training controls
+
+Expose backend-supported controls where product policy permits:
+
+- horizon;
+- training cutoff date;
+- configurable training options/overrides;
+- promotion thresholds where Admin-editable;
+- manual retrain;
+- explicit promotion;
+- rollback;
+- drift-check window.
+
+Configuration values must be validated server-side; frontend controls are not the security boundary.
+
+### 8.7 Failure and operations UX
+
+Training failures SHOULD be visible without shell access.
+
+Provide:
+
+- clear failed state;
+- concise failure reason;
+- timestamps/stage of failure;
+- retry action where safe;
+- correlation/run identifier;
+- link to relevant operational details/log surfaces where available;
+- distinction between operational failure and a successfully trained-but-rejected model.
+
+### 8.8 Integration with scheduled operations
+
+When V4-FEAT-056 is implemented, the same UI SHOULD also surface:
+
+- next scheduled training by horizon;
+- schedule enabled/disabled;
+- last scheduled vs manual run;
+- scheduled candidate/deployment result;
+- informational lifecycle messages;
+- unresolved ML operational alerts.
+
+Manual and scheduled training should share the same run-detail/status model.
+
+### 8.9 Initial acceptance criteria
+
+1. Admin can see whether a completed model is candidate or rejected.
+2. Every promotion gate is shown with observed value, threshold and pass/fail state.
+3. Rejected models cannot be promoted from the UI.
+4. Admin can start a retrain without keeping one opaque long-running HTTP request open for the full training duration.
+5. Training status can be refreshed/polled and exposes meaningful lifecycle stages.
+6. Failed runs expose a useful failure reason/stage.
+7. Admin can inspect dataset partitions, selected/excluded features, metrics and baselines.
+8. Admin can promote an eligible candidate.
+9. Admin can view retained model versions and roll back to a valid prior same-horizon version.
+10. Admin can set/inspect supported cutoff/configuration values.
+11. Admin can run/review drift checks.
+12. Active/candidate/rejected/retained states are clearly differentiated.
+13. Exactly-one-active-per-horizon remains enforced by the backend.
+14. Scheduled and manual runs can share the same observability UI once V4-FEAT-056 is implemented.
+
+### 8.10 Open design decisions
+
+The detailed V8 design should decide:
+
+- queue/job implementation for retraining;
+- polling interval vs SSE/WebSocket updates;
+- stage model and whether any stages expose quantitative progress;
+- retention period for run logs/details;
+- amount of raw diagnostics exposed in UI;
+- threshold-editing permissions/guardrails;
+- whether advanced configuration lives inline or behind an Advanced panel;
+- confirmation UX for promotion/rollback;
+- relationship between ML run history and the general notification/telemetry surfaces.
+
+## 9. Boundary
 
 V8 owns the Telemetry product itself: ingestion, storage, analytics/query APIs, dashboards/explorer, SDKs, identity/correlation model, events/metrics/logs/traces, retention, export, deletion, administration and the other capabilities frozen in the Telemetry architecture specification.
 
@@ -581,5 +986,11 @@ V8 owns the account-access request workflow through Admin disposition and handof
 V8 also owns scheduled ML retraining and gated deployment of newer model versions, while retaining manual retrain/promotion/rollback controls. Routine upcoming/successful training and deployment events are informational; Admin alerts are reserved for operational failures/errors requiring attention.
 
 V8 also owns the ML follow-on to the historical fundamentals bootstrap: curated fundamental feature expansion, PIT/coverage validation, horizon retraining and candidate evaluation. This does not alter the rule that model promotion remains explicit and Admin-controlled.
+
+V8 also owns technical/market ML feature engineering from existing historical market data, including deterministic multi-timescale technical, volatility, volume, breadth, regime, pattern and sector-relative features, subject to point-in-time correctness and out-of-sample evidence.
+
+V8 also owns promotion-threshold calibration and repeated chronological validation so model eligibility can be based on horizon-aware, baseline-relative and stability-aware evidence rather than relying only on one fixed holdout and heuristic global cutoffs.
+
+V8 also owns refinement of the Admin ML experience so backend-supported lifecycle functions are available through the UI with clear candidate/rejection reasons, model/version management, rollback, cutoff/configuration controls, granular training state, failure visibility, metrics/baselines and drift context.
 
 V8 does **not** own StoX-specific Telemetry instrumentation/integration. That is planned as a separate V9 StoX epic.
