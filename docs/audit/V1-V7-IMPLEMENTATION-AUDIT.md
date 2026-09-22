@@ -78,7 +78,7 @@ The following rows cover every applicable Phase 1 requirement. Related requireme
 | V1-REQ-011 | Corporate actions preserve ledger correctness | IMPLEMENTED | Corporate-action API/page and apply services restate split/bonus holdings, transaction economics and strategy-owned position state with idempotent application | `CorporateActionApiTest`, `CorporateActionServiceTest`, `CorporateActionSpec003RestatementTest`, ownership/OHLCV delegation and price-adjustment/repair suites | Deployed production data and external market-data runtime remain separate; price-repair operations retain their own boundary | Yes | Current focused suite is green; the older recorded SQLite failures are superseded by current executable coverage and MySQL CI validation |
 | V1-REQ-012 | Screener backtesting hit matrix | IMPLEMENTED | Screener editor/backtest services | Screener backtest tests | Responsive long-running state UX | Yes | Resumable backend path evidenced |
 | V1-REQ-013 | Strategy backtesting | IMPLEMENTED | `/backtests` routes, historical simulation engine, resumable persistence, equity-curve/statistics reporting and pinned strategy/artifact/screener provenance | `V5BacktestLifecycleTest`, `V5BacktestParameterOverrideTest`, Backtest/Replay/Paper suites, historical resync and artifact-provenance coverage | Browser reachability, deployed worker behavior and large-run runtime verification | Yes | AUD-008 establishes the V1 paper-portfolio/backtest contract and API/detail workflow statically; runtime follow-up remains separate |
-| V1-REQ-015 | Engine/API/pipeline/deployment baseline | RUNTIME_VERIFICATION_REQUIRED | Laravel routes, console schedule, API v1 | Schedule/API tests | Deployed scheduler and cPanel/runtime parity | Yes | Repository cannot prove production operation |
+| V1-REQ-015 | Engine/API/pipeline/deployment baseline | IMPLEMENTED | Laravel engine/services, additive `/api/v1`, `DailyDecisionPipeline`/pipeline command, migrations and current scheduler/deployment architecture | Backend/API/scheduler tests plus AUD-009 production evidence: live VPS Laravel runtime, JSON API behavior, current migration ledger, registered scheduler and persisted heartbeat, current DatasetVersion/price data, release identity and runtime-health gates | Later V5 backup/restore assurance remains under V5-REQ-010/AUD-009 DEP-004 and is not a V1 criterion | Yes | The historical cPanel topology is superseded by the accepted Hostinger VPS → Nginx → PHP-FPM → Laravel → MariaDB/queue/cron architecture; functional V1 runtime equivalence is proven by AUD-009 |
 | V2-REQ-001 | Admin invite lifecycle | IMPLEMENTED | User management/invite routes and page | Invite/auth tests | Email/token delivery deployment | Yes | AuthZ tests present |
 | V2-REQ-002 | Session listing/revocation | IMPLEMENTED | Account settings/session APIs | Session tests | Multi-browser interaction | Yes | Admin force logout separate |
 | V2-REQ-003 | Data-quality detection/resolution center | IMPLEMENTED | Admin page, issue APIs/services | Data-quality tests | Full operator workflow and failure states | Yes | Need deployed role check |
@@ -248,14 +248,14 @@ Applicable requirements audited: **85** (75 `CURRENT`, 5 `POSSIBLY-LOST-DURING-C
 
 | Primary verdict | Count |
 |---|---:|
-| IMPLEMENTED | 76 |
+| IMPLEMENTED | 77 |
 | PARTIALLY_IMPLEMENTED | 0 |
 | NOT_IMPLEMENTED | 0 |
 | IMPLEMENTED_BUT_NOT_WIRED | 0 |
 | IMPLEMENTED_DIFFERENTLY | 1 |
 | DEAD_CODE | 0 |
 | TEST_ONLY | 1 |
-| RUNTIME_VERIFICATION_REQUIRED | 7 |
+| RUNTIME_VERIFICATION_REQUIRED | 6 |
 | SPEC_CONFLICT | 0 |
 
 The matrix verdict counts are intentionally conservative: `RUNTIME_VERIFICATION_REQUIRED` means repository evidence is insufficient to claim `IMPLEMENTED`, even where code and tests are substantial.
