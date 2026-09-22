@@ -51,7 +51,7 @@ Static inspection cannot establish browser geometry, provider behavior, producti
 | Market data / data quality | 6 | 0 | 0 | 0 | 1 | 0 | High |
 | Discovery / screeners / registries | 5 | 1 | 0 | 0 | 0 | 0 | Medium |
 | Strategy / recommendations | 6 | 1 | 0 | 0 | 0 | 0 | High |
-| Execution / broker / safety | 3 | 2 | 0 | 0 | 5 | 0 | Critical |
+| Execution / broker / safety | 4 | 1 | 0 | 0 | 5 | 0 | Critical |
 | Analytics / backtesting / simulation | 7 | 0 | 0 | 0 | 0 | 0 | High |
 | Notifications / calendar / alerts | 1 | 2 | 0 | 0 | 0 | 0 | Medium |
 | Knowledge / documentation | 3 | 1 | 0 | 0 | 0 | 0 | Medium |
@@ -101,7 +101,7 @@ The following rows cover every applicable Phase 1 requirement. Related requireme
 | V3-REQ-009 | Historical corpus/ranking constraints | IMPLEMENTED | Backtest/evaluation services | Backtest/evaluation tests | Production dataset provenance | Yes | No product-depth cap inferred from code |
 | V3-REQ-010 | Multi-strategy UI/product surfaces | IMPLEMENTED | Strategy, Holdings, Cash Management, Recommendations and lending/recall surfaces expose strategy provenance, ownership episodes, allocation/deployed/unused state, lifecycle distinctions and retryable unavailable states | `MultiStrategyLifecycleAssuranceTest`; 45-test/306-assertion MS-004 regression set; backend/frontend state and ownership tests | Browser wording/geometry, responsive recovery and deployed reachability | Yes | AUD-005 MS-001–MS-005 provide reachable product/state evidence; runtime follow-up is not a missing static implementation |
 | V4-REQ-001 | Broker/live execution automation | RUNTIME_VERIFICATION_REQUIRED | Broker adapter, execution modes, TOTP paths | Fake-broker/safety tests | Broker credentials, entitlement and deployed mode | Yes | Financially sensitive |
-| V4-REQ-002 | GTT/advanced orders | PARTIALLY_IMPLEMENTED | Order services/routes/migrations | Order/broker tests | Partial-fill and manual-mode runtime behavior | Yes | Must verify no unintended auto placement |
+| V4-REQ-002 | GTT/advanced orders | IMPLEMENTED | PositionProtection/GTT services, execution modes, broker reconciliation and API routes implement one Strategy-position protection, Strategy-derived target/stop prices, automatic post-BUY stop placement, material BUY/SELL/corporate-action synchronization and retry/attention lifecycle | `AdvancedOrdersFeatureTest` passes 19 tests/212 assertions covering manual no-auto-placement, semi-automatic TOTP authority, automatic post-BUY stop, partial/full fills, replacement, retry, ambiguity/idempotency, isolation and ledger boundaries | Live Kite/provider responses, deployed placement and operator usability remain broker/runtime follow-up | Yes | V4-FEAT-002 material behavior is executable against the FakeBrokerGateway contract; no claim is made about production GTT placement |
 | V4-REQ-003 | Market regime assessment | IMPLEMENTED | Market analysis services and scoring use | Analytics tests | Unavailable-input behavior in UI | Yes | Formula acceptance needs representative data |
 | V4-REQ-004 | Liquidity/tradability calculators | IMPLEMENTED | Calculator services and discovery UI | Calculator tests | Null/insufficient-input presentation | Yes | Screenability needs runtime sample |
 | V4-REQ-005 | Review report list/detail | IMPLEMENTED | Both routes are mounted in `App.jsx` | Report tests | Pagination/empty states in browser | Yes | No filter/sort must remain intentional |
@@ -248,8 +248,8 @@ Applicable requirements audited: **85** (75 `CURRENT`, 5 `POSSIBLY-LOST-DURING-C
 
 | Primary verdict | Count |
 |---|---:|
-| IMPLEMENTED | 73 |
-| PARTIALLY_IMPLEMENTED | 5 |
+| IMPLEMENTED | 74 |
+| PARTIALLY_IMPLEMENTED | 4 |
 | NOT_IMPLEMENTED | 0 |
 | IMPLEMENTED_BUT_NOT_WIRED | 0 |
 | IMPLEMENTED_DIFFERENTLY | 1 |
