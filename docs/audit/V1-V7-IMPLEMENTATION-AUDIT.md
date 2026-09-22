@@ -83,7 +83,7 @@ The following rows cover every applicable Phase 1 requirement. Related requireme
 | V2-REQ-002 | Session listing/revocation | IMPLEMENTED | Account settings/session APIs | Session tests | Multi-browser interaction | Yes | Admin force logout separate |
 | V2-REQ-003 | Data-quality detection/resolution center | IMPLEMENTED | Admin page, issue APIs/services | Data-quality tests | Full operator workflow and failure states | Yes | Need deployed role check |
 | V2-REQ-004 | Corporate-action price repair | IMPLEMENTED | Repair/history pages/services | Data-quality/corporate-action tests | Production data and audit trail | Yes | Code path exists |
-| V2-REQ-005 | Portfolio alert policies | PARTIALLY_IMPLEMENTED | Alert policy page/API and separate domain alert lifecycle services | `AlertPolicyTest`, `AlertLifecycleOrderingTest`, `AlertExpirationTest` | Complete portfolio alert digest/acknowledge/clear presentation and delivery workflow remain independently unproven; Notification Center read state is not alert acknowledgement | Yes | AUD-006 preserves this row as a separate domain-alert contract; FEAT-004 delivery architecture does not by itself close it |
+| V2-REQ-005 | Portfolio alert policies | IMPLEMENTED | Profile-scoped alert-policy CRUD/evaluation, deterministic active/resolved/expired lifecycle, domain acknowledgement/clear operations, Dashboard presentation and scheduled digest publication are implemented separately from Notification Center attention/delivery state | `AlertPolicyTest`, `AlertLifecycleOrderingTest`, `AlertExpirationTest`, `AlertNotificationServiceTest`, `AlertPolicySchemaTest`, `AlertPolicyTemplateValidatorTest`, and notification integration coverage; 57 tests/188 assertions in this verification | External-provider delivery and browser geometry remain runtime follow-up; Notification Center read state remains intentionally distinct from alert acknowledgement | Yes | Acknowledge persists the alert lifecycle reason; clear/expiry preserves alert history; active conditions deduplicate and recur as new lifecycles; digest events publish through the durable notification architecture without mutating domain-alert state |
 | V2-REQ-006 | Bulk CSV transaction import | IMPLEMENTED | Import endpoint/service/UI path | Bulk import tests | Large-file and partial-failure UI | Yes | Shared write path evidenced |
 | V2-REQ-007 | Historical holdings reconstruction | IMPLEMENTED | Historical page/API/services | Historical holdings tests | As-of empty/error UX | Yes | Reachable route exists |
 | V2-REQ-008 | Shared screener import | IMPLEMENTED | Registry/import APIs and pages | Registry/auth tests | Cross-user runtime authorization | Yes | Test evidence includes isolation |
@@ -248,8 +248,8 @@ Applicable requirements audited: **85** (75 `CURRENT`, 5 `POSSIBLY-LOST-DURING-C
 
 | Primary verdict | Count |
 |---|---:|
-| IMPLEMENTED | 74 |
-| PARTIALLY_IMPLEMENTED | 4 |
+| IMPLEMENTED | 75 |
+| PARTIALLY_IMPLEMENTED | 3 |
 | NOT_IMPLEMENTED | 0 |
 | IMPLEMENTED_BUT_NOT_WIRED | 0 |
 | IMPLEMENTED_DIFFERENTLY | 1 |
