@@ -47,7 +47,7 @@ Static inspection cannot establish browser geometry, provider behavior, producti
 | Domain | Implemented | Partial | Missing | Not wired | Runtime verify | Conflicts | Risk |
 |---|---:|---:|---:|---:|---:|---:|---|
 | Frontend / navigation | 2 | 5 | 2 | 0 | 1 | 0 | High |
-| Portfolio / accounting / capital | 9 | 3 | 0 | 0 | 0 | 0 | High |
+| Portfolio / accounting / capital | 10 | 2 | 0 | 0 | 0 | 0 | High |
 | Market data / data quality | 6 | 0 | 0 | 0 | 1 | 0 | High |
 | Discovery / screeners / registries | 5 | 1 | 0 | 0 | 0 | 0 | Medium |
 | Strategy / recommendations | 6 | 1 | 0 | 0 | 0 | 0 | High |
@@ -75,7 +75,7 @@ The following rows cover every applicable Phase 1 requirement. Related requireme
 | V1-REQ-008 | Review dashboard/reports/outcomes | IMPLEMENTED | Review routes/pages/controllers | Review/report tests | Empty/loading/error UX | Yes | Report routes are explicitly wired |
 | V1-REQ-009 | Strategy configuration and scoring weights | IMPLEMENTED | Strategy pages/registry/services | Strategy tests | Multi-strategy UX breadth | Yes | V3 row below remains separate |
 | V1-REQ-010 | Sanctum auth and password reset | IMPLEMENTED | Auth context/routes/reset pages | Auth/password tests | Browser recovery flow | Yes | No evidence of JWT substitution |
-| V1-REQ-011 | Corporate actions preserve ledger correctness | PARTIALLY_IMPLEMENTED | Corporate action page/services/migrations | Corporate action tests have recorded SQLite failures | Successful full apply path and fixture correctness | Yes | Historical audit records 3 errors and 1 API failure |
+| V1-REQ-011 | Corporate actions preserve ledger correctness | IMPLEMENTED | Corporate-action API/page and apply services restate split/bonus holdings, transaction economics and strategy-owned position state with idempotent application | `CorporateActionApiTest`, `CorporateActionServiceTest`, `CorporateActionSpec003RestatementTest`, ownership/OHLCV delegation and price-adjustment/repair suites | Deployed production data and external market-data runtime remain separate; price-repair operations retain their own boundary | Yes | Current focused suite is green; the older recorded SQLite failures are superseded by current executable coverage and MySQL CI validation |
 | V1-REQ-012 | Screener backtesting hit matrix | IMPLEMENTED | Screener editor/backtest services | Screener backtest tests | Responsive long-running state UX | Yes | Resumable backend path evidenced |
 | V1-REQ-013 | Strategy backtesting | IMPLEMENTED | `/backtests` routes, historical simulation engine, resumable persistence, equity-curve/statistics reporting and pinned strategy/artifact/screener provenance | `V5BacktestLifecycleTest`, `V5BacktestParameterOverrideTest`, Backtest/Replay/Paper suites, historical resync and artifact-provenance coverage | Browser reachability, deployed worker behavior and large-run runtime verification | Yes | AUD-008 establishes the V1 paper-portfolio/backtest contract and API/detail workflow statically; runtime follow-up remains separate |
 | V1-REQ-015 | Engine/API/pipeline/deployment baseline | RUNTIME_VERIFICATION_REQUIRED | Laravel routes, console schedule, API v1 | Schedule/API tests | Deployed scheduler and cPanel/runtime parity | Yes | Repository cannot prove production operation |
@@ -115,7 +115,7 @@ The following rows cover every applicable Phase 1 requirement. Related requireme
 | V4-REQ-013 | OpenAPI `/api/v1` | IMPLEMENTED | Live-route OpenAPI 3.0.3 builder, canonical static document and documented `/api/v1` operations | `OpenApiV1ContractTest` verifies canonical/generated equality, exact route parity, auth/admin markers, callback exception, envelopes and key V4 contracts; `php artisan openapi:v1 --check` | Runtime consumers and non-`/api/v1` API behavior remain outside this requirement | Yes | CI/deployment runs the artisan freshness/parity gate before packaging; stale artifacts block the backend gate |
 | V4-REQ-014 | UI smoke tests | TEST_ONLY | JS test helpers and selected component tests | Tests exist | Does not prove production route coverage | Yes | No runtime conclusion from tests |
 | V4-REQ-015 | Controller split/hooks | IMPLEMENTED | Laravel controller/service structure | Feature tests | No acceptance gap found | No | Architectural evidence only |
-| V4-REQ-016 | Logging/pagination consistency | PARTIALLY_IMPLEMENTED | Shared API pagination patterns | Pagination tests | All screens and error envelopes | Yes | Spot-check needed |
+| V4-REQ-016 | Logging/pagination consistency | IMPLEMENTED | Structured `PortfolioLoggerService` events provide stable event/category/engine context with request/profile/domain fields and recursive sensitive-data redaction; designated `/api/v1` resources share the documented pagination envelope while intentional non-paginated resources remain explicit | `PortfolioLoggerServiceTest`, `TradingOsPaginationConsistencyTest`, `TradingOsPaginationTest`, `OpenApiV1ContractTest` | Browser presentation and non-designated/consumer-specific runtime behavior remain outside this API/logging contract | Yes | Current tests cover stable fields, token/credential redaction, page metadata, aliases, clamping, filters, isolation, empty pages and intentional non-paginated responses |
 | V4-REQ-017 | Pluggable evaluation rules | IMPLEMENTED | Rule services/registries | Evaluation tests | Admin configuration discoverability | Yes | No direct UI acceptance proof |
 | V4-REQ-018 | Repository layer | IMPLEMENTED | Repository/service classes | Unit/feature tests | No independent completeness proof | No | Structural requirement |
 | V4-SPEC-001 | Same-stock adoption merge | IMPLEMENTED | Same-stock ownership episodes remain independent; explicit adoption merges only into the selected strategy using accepted weighted rules while preserving source history and sibling ownership | `MultiStrategyLifecycleAssuranceTest`; Holdings/adoption presentation and ownership tests | Browser/deployed attribution walkthrough | Yes | AUD-005 MS-001–MS-003 resolve the accepted same-stock merge and provenance behavior |
@@ -248,8 +248,8 @@ Applicable requirements audited: **85** (75 `CURRENT`, 5 `POSSIBLY-LOST-DURING-C
 
 | Primary verdict | Count |
 |---|---:|
-| IMPLEMENTED | 70 |
-| PARTIALLY_IMPLEMENTED | 8 |
+| IMPLEMENTED | 72 |
+| PARTIALLY_IMPLEMENTED | 6 |
 | NOT_IMPLEMENTED | 0 |
 | IMPLEMENTED_BUT_NOT_WIRED | 0 |
 | IMPLEMENTED_DIFFERENTLY | 1 |
