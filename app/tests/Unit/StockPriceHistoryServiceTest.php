@@ -219,6 +219,32 @@ $dates = [];
         $this->assertNotEmpty($result['providers_tried']);
     }
 
+    public function test_include_prelisting_prefix_remains_unsatisfied_after_fetch_checks(): void
+    {
+        $stock = $this->makeStock('BENCH', true);
+        $this->seedPrices($stock, ['2025-01-20', '2025-01-21']);
+        $fetch = Mockery::mock(PriceFetchService::class);
+        $fetch->shouldReceive('providerChainForStock')->andReturn(['nse']);
+        $fetch->shouldReceive('fetchFromProvider')->twice()->andReturn([
+            'rows' => [],
+            'errors' => ['nse: no historical prefix'],
+        ]);
+        $this->app->instance(PriceFetchService::class, $fetch);
+
+        $service = $this->makeService();
+        $result = $service->fetchMissingHistory(
+            $stock,
+            Carbon::parse('2024-01-01'),
+            Carbon::parse('2025-01-21'),
+            notifyTelegramOnFailure: false,
+            includePreListingPrefix: true,
+        );
+
+        $this->assertFalse($result['success']);
+        $this->assertGreaterThan(0, $result['gaps_remaining']);
+        $this->assertSame('2024-01-01', $result['remaining_ranges'][0]['from']);
+    }
+
     public function test_fetch_missing_history_succeeds_when_rows_close_gaps(): void
     {
         Carbon::setTestNow('2024-02-01');

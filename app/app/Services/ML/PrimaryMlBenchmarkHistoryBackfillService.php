@@ -8,6 +8,7 @@ use App\Services\IndexCatalogService;
 use App\Services\PortfolioLoggerService;
 use App\Services\StockPriceHistoryService;
 use App\Services\SyncLogService;
+use App\Support\TradingCalendar;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use RuntimeException;
@@ -38,7 +39,7 @@ class PrimaryMlBenchmarkHistoryBackfillService
     /** @return array<string,mixed> */
     public function plan(?Carbon $to = null, ?Carbon $from = null): array
     {
-        $to ??= now()->startOfDay();
+        $to ??= TradingCalendar::lastRequiredPriceSession();
         $required = $this->policy->requiredRange($to);
         $from ??= $required['from'];
 
@@ -48,7 +49,7 @@ class PrimaryMlBenchmarkHistoryBackfillService
     /** @return array<string,mixed> */
     public function run(?Carbon $to = null, ?Carbon $from = null, bool $dryRun = false): array
     {
-        $to ??= now()->startOfDay();
+        $to ??= TradingCalendar::lastRequiredPriceSession();
         $required = $this->policy->requiredRange($to);
         $from ??= $required['from'];
 
@@ -146,8 +147,8 @@ class PrimaryMlBenchmarkHistoryBackfillService
             'requested_range' => ['from' => $from->toDateString(), 'to' => $to->toDateString()],
             'policy' => $policy,
             'stored_range' => [
-                'from' => $bounds?->min_date,
-                'to' => $bounds?->max_date,
+                'from' => $bounds?->min_date ? Carbon::parse($bounds->min_date)->toDateString() : null,
+                'to' => $bounds?->max_date ? Carbon::parse($bounds->max_date)->toDateString() : null,
                 'rows' => (int) ($bounds->row_count ?? 0),
             ],
         ];

@@ -239,14 +239,14 @@ class StockPriceHistoryService
                     break;
                 }
 
-                if ($this->getMissingHistoryRanges($stock, $range['from'], $range['to']) === []) {
+                if ($this->getMissingHistoryRanges($stock, $range['from'], $range['to'], $includePreListingPrefix) === []) {
                     break;
                 }
             }
 
             $providersTried = array_values(array_unique(array_merge($providersTried, $rangeProvidersTried)));
 
-            if ($this->getMissingHistoryRanges($stock, $range['from'], $range['to']) !== []) {
+            if ($this->getMissingHistoryRanges($stock, $range['from'], $range['to'], $includePreListingPrefix) !== []) {
                 if ($rangeErrors === [] && $rangeStored > 0) {
                     $rangeErrors[] = $lastProvider.': stored '.$rangeStored.' rows but gap remains for '
                         .$range['from']->toDateString().'→'.$range['to']->toDateString();
@@ -278,7 +278,7 @@ class StockPriceHistoryService
             ];
         }
 
-        $stillMissing = $this->getMissingHistoryRanges($stock, $requiredFrom, $requiredTo);
+        $stillMissing = $this->getMissingHistoryRanges($stock, $requiredFrom, $requiredTo, $includePreListingPrefix);
         $remainingRanges = $this->serializeDateRanges($stillMissing);
 
         $this->portfolioLogger->api('info', 'Historical missing ranges fetch completed', [
