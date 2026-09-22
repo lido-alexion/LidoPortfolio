@@ -2,6 +2,8 @@
 
 namespace App\Services\Broker;
 
+use App\Models\Stock;
+
 use App\Exceptions\DomainException;
 
 /**
@@ -114,7 +116,7 @@ class FakeBrokerGateway implements BrokerGateway
         return $this->availableFunds;
     }
 
-    public function liveQuote(int $userId, string $symbol, string $exchange = 'NSE'): ?float
+    public function liveQuote(int $userId, Stock $stock): ?float
     {
         return $this->liveQuote;
     }

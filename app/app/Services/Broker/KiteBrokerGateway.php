@@ -4,6 +4,7 @@ namespace App\Services\Broker;
 
 use App\Exceptions\DomainException;
 use App\Models\BrokerConnection;
+use App\Models\Stock;
 use App\Services\PortfolioLoggerService;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
@@ -116,10 +117,15 @@ class KiteBrokerGateway implements BrokerGateway
         return is_numeric($value) ? max(0.0, (float) $value) : null;
     }
 
-    public function liveQuote(int $userId, string $symbol, string $exchange = 'NSE'): ?float
+    public function liveQuote(int $userId, Stock $stock): ?float
     {
         $token = $this->accessToken($userId);
-        $instrument = strtoupper($exchange ?: 'NSE').':'.strtoupper($symbol);
+        try {
+            $mapping = $this->instruments->resolve($stock, $userId);
+        } catch (DomainException) {
+            return null;
+        }
+        $instrument = strtoupper($stock->exchange ?: 'NSE').':'.strtoupper($mapping['trading_symbol']);
 
         try {
             $response = Http::timeout(10)

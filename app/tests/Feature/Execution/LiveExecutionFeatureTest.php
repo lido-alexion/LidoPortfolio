@@ -112,7 +112,8 @@ class LiveExecutionFeatureTest extends TestCase
             'recovery_code' => $this->totpCode($user),
         ])->assertOk();
 
-        $this->assertSame('submitted', $submit->json('data.0.outcome'));
+        $this->assertSame(1, $submit->json('data.submitted'));
+        $this->assertSame('submitted', $submit->json('data.results.0.outcome'));
         $this->assertSame(1, app(FakeBrokerGateway::class)->placeCalls);
         $this->assertSame(TradingRecommendation::STATUS_PENDING_EXECUTION, $rec->fresh()->status);
         $order = TradingOrder::query()->where('recommendation_id', $rec->id)->first();
@@ -293,7 +294,7 @@ class LiveExecutionFeatureTest extends TestCase
         $this->postJson('/api/v1/execution/submit-selected', [
             'recommendation_ids' => [$ambiguous->id],
             'recovery_code' => $this->totpCode($user),
-        ])->assertOk()->assertJsonPath('data.0.outcome', 'ambiguous');
+        ])->assertOk()->assertJsonPath('data.results.0.outcome', 'ambiguous');
         $this->postJson('/api/v1/execution/submit-selected', [
             'recommendation_ids' => [$ambiguous->id],
             'recovery_code' => $this->totpCode($user),
@@ -369,8 +370,8 @@ class LiveExecutionFeatureTest extends TestCase
             'recommendation_ids' => [$rec->id],
             'recovery_code' => $this->totpCode($user),
         ])->assertOk()
-            ->assertJsonPath('data.0.outcome', 'blocked')
-            ->assertJsonPath('data.0.reason', 'EXECUTION_EMERGENCY_HALT');
+            ->assertJsonPath('data.results.0.outcome', 'blocked')
+            ->assertJsonPath('data.results.0.reason', 'EXECUTION_EMERGENCY_HALT');
 
         $this->assertSame(0, $fake->placeCalls);
         $this->assertSame(TradingRecommendation::STATUS_PENDING_EXECUTION, $rec->fresh()->status);
@@ -730,7 +731,7 @@ class LiveExecutionFeatureTest extends TestCase
         $this->postJson('/api/v1/execution/submit-selected', [
             'recommendation_ids' => [$rec->id],
             'recovery_code' => $this->totpCode($user),
-        ])->assertOk()->assertJsonPath('data.0.outcome', 'submitted');
+        ])->assertOk()->assertJsonPath('data.results.0.outcome', 'submitted');
         $this->assertSame(1, app(FakeBrokerGateway::class)->placeCalls);
     }
 

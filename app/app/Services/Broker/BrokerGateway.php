@@ -2,6 +2,8 @@
 
 namespace App\Services\Broker;
 
+use App\Models\Stock;
+
 interface BrokerGateway
 {
     public function provider(): string;
@@ -12,7 +14,7 @@ interface BrokerGateway
     public function availableEquityFunds(int $userId): ?float;
 
     /** Current live quote usable for final broker-order sizing. */
-    public function liveQuote(int $userId, string $symbol, string $exchange = 'NSE'): ?float;
+    public function liveQuote(int $userId, Stock $stock): ?float;
 
     /** @return array<string,mixed>|null Durable holdings, informational positions, and current cash. */
     public function portfolioSnapshot(int $userId): ?array;

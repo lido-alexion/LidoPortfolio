@@ -58,6 +58,7 @@ describe('Pending Execution TOS smoke', () => {
             { recommendation_ids: [PENDING_BUY_RECOMMENDATION.id], totp: '123456' },
             { skipErrorToast: true },
         );
+        expect(showToast).toHaveBeenCalledWith('Submitted to broker', 'success');
     });
 
     it('automatic mode does not require a per-order broker submit control', async () => {
@@ -99,5 +100,30 @@ describe('Pending Execution TOS smoke', () => {
         await user.click(screen.getByRole('button', { name: 'Accept / Execute Selected' }));
         expect(showToast).toHaveBeenCalledWith(expect.stringMatching(/No orders submitted/i), 'warning');
         expect(showToast).not.toHaveBeenCalledWith('Submitted to broker', 'success');
+    });
+
+    it('reports submitted, blocked, and skipped counts for mixed results', async () => {
+        const user = userEvent.setup();
+        installDefaultTosHandlers({
+            recommendations: [PENDING_BUY_RECOMMENDATION],
+            executionMode: 'semi_automatic',
+            entitled: true,
+            totpEnabled: true,
+            modeBlockers: [],
+            canSubmitSemiAutomatic: true,
+            executionSummary: {
+                submitted: 1,
+                skipped: 2,
+                blocked: 1,
+                results: [{ outcome: 'submitted' }, { outcome: 'blocked' }, { outcome: 'skipped' }],
+            },
+        });
+        renderPanel();
+        await screen.findByRole('button', { name: 'Accept / Execute Selected' });
+        await user.click(screen.getByRole('checkbox', { name: 'Select INFY' }));
+        await user.type(screen.getByLabelText('Authenticator code'), '123456');
+        await user.click(screen.getByRole('button', { name: 'Accept / Execute Selected' }));
+
+        expect(showToast).toHaveBeenCalledWith('Submitted 1; blocked 1; skipped 2.', 'warning');
     });
 });

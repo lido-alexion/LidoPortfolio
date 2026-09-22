@@ -40,6 +40,14 @@ final class KiteInstrumentRegistryService
 
         $rows = $this->parseCsv((string) $response->body());
         $stocks = $target ? collect([$target]) : Stock::query()->where('exchange', 'NSE')->get();
+        if ($target) {
+            BrokerInstrument::query()
+                ->where('provider', BrokerConnection::PROVIDER_KITE)
+                ->where('stock_id', $target->id)
+                ->where('exchange', $target->exchange ?: 'NSE')
+                ->where('is_active', true)
+                ->update(['is_active' => false]);
+        }
         $stats = ['matched' => 0, 'ambiguous' => 0, 'unmatched' => 0];
         foreach ($stocks as $stock) {
             $match = $this->match($stock, $rows);

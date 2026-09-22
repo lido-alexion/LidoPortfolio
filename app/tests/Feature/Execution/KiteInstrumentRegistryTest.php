@@ -139,6 +139,80 @@ class KiteInstrumentRegistryTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_live_quote_uses_the_registered_broker_symbol(): void
+    {
+        $user = User::factory()->create();
+        BrokerConnection::query()->create(['user_id' => $user->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => now()->addDay()])->forceFill(['access_token' => 'token'])->save();
+        $stock = Stock::query()->create(['symbol' => 'SITINET', 'exchange' => 'NSE', 'name' => 'SITI NETWORKS']);
+        BrokerInstrument::query()->create(['provider' => 'kite', 'stock_id' => $stock->id, 'exchange' => 'NSE', 'trading_symbol' => 'SITINET-BZ', 'is_active' => true]);
+        Http::fake(fn ($request) => str_starts_with($request->url(), 'https://api.kite.trade/quote/ltp')
+            ? Http::response([
+                'status' => 'success',
+                'data' => ['NSE:SITINET-BZ' => ['last_price' => 0.29]],
+            ])
+            : Http::response([], 404));
+
+        $this->assertSame(0.29, app(KiteBrokerGateway::class)->liveQuote($user->id, $stock));
+        Http::assertSent(fn ($request): bool => str_starts_with($request->url(), 'https://api.kite.trade/quote/ltp')
+            && $request['i'] === 'NSE:SITINET-BZ');
+    }
+
+    public function test_targeted_refresh_deactivates_stale_mapping_when_master_has_no_match(): void
+    {
+        $user = User::factory()->create();
+        BrokerConnection::query()->create(['user_id' => $user->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => now()->addDay()])->forceFill(['access_token' => 'token'])->save();
+        $stock = Stock::query()->create(['symbol' => 'SITINET', 'exchange' => 'NSE', 'name' => 'SITI NETWORKS']);
+        $old = BrokerInstrument::query()->create(['provider' => 'kite', 'stock_id' => $stock->id, 'exchange' => 'NSE', 'trading_symbol' => 'SITINET-BZ', 'is_active' => true]);
+        Http::fake(['https://api.kite.trade/instruments/NSE' => Http::response($this->csv([]))]);
+
+        try {
+            app(KiteInstrumentRegistryService::class)->resolve($stock, $user->id, refresh: true);
+            $this->fail('Expected the refreshed missing mapping to block.');
+        } catch (DomainException $exception) {
+            $this->assertSame('BROKER_INSTRUMENT_MAPPING_NOT_FOUND', $exception->errorCode());
+        }
+
+        $this->assertFalse($old->fresh()->is_active);
+    }
+
+    public function test_ambiguous_targeted_refresh_blocks_without_order_submission(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-09-22 10:00:00', 'Asia/Kolkata'));
+        $user = User::factory()->create();
+        BrokerConnection::query()->create(['user_id' => $user->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => now()->addDay()])->forceFill(['access_token' => 'token'])->save();
+        $stock = Stock::query()->create(['symbol' => 'SITINET', 'exchange' => 'NSE', 'name' => 'SITI NETWORKS']);
+        BrokerInstrument::query()->create(['provider' => 'kite', 'stock_id' => $stock->id, 'exchange' => 'NSE', 'trading_symbol' => 'SITINET', 'is_active' => true]);
+        $orderCalls = 0;
+        Http::fake(function ($request) use (&$orderCalls) {
+            if (str_contains($request->url(), '/instruments/NSE')) {
+                return Http::response($this->csv([
+                    ['1', '2', 'SITINET-BZ', 'SITI NETWORKS', 'NSE'],
+                    ['3', '4', 'SITINET-BE', 'SITI NETWORKS', 'NSE'],
+                ]));
+            }
+
+            if (str_contains($request->url(), '/orders/')) {
+                $orderCalls++;
+                return Http::response(['status' => 'error', 'error_type' => 'InputException', 'message' => 'instrument SITINET expired or does not exist'], 400);
+            }
+
+            return Http::response([], 404);
+        });
+
+        // Force the gateway into its single refresh path before the ambiguous master is evaluated.
+        BrokerInstrument::query()->where('stock_id', $stock->id)->update(['trading_symbol' => 'STALE']);
+
+        try {
+            app(KiteBrokerGateway::class)->placeOrder(new BrokerOrderRequest(1, 1, 1, $stock->id, 'SITINET', 'NSE', 'buy', 1, 'ambiguous-submission'));
+            $this->fail('Expected ambiguous mapping to block.');
+        } catch (DomainException $exception) {
+            $this->assertSame('BROKER_INSTRUMENT_MAPPING_AMBIGUOUS', $exception->errorCode());
+        }
+
+        $this->assertSame(1, $orderCalls, 'Ambiguous refresh must not retry the broker order.');
+        Carbon::setTestNow();
+    }
+
     public function test_amo_cancellation_uses_the_persisted_variety_endpoint(): void
     {
         $user = User::factory()->create();

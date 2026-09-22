@@ -266,10 +266,13 @@ export function installDefaultTosHandlers({
             return axiosOk({ ok: true });
         }
         if (path === '/v1/execution/submit-selected') {
-            return axiosOk(apiEnvelope(executionSummary ?? (body?.recommendation_ids || []).map((id) => ({
-                recommendation_id: id,
-                outcome: 'submitted',
-            }))));
+            const ids = body?.recommendation_ids || [];
+            return axiosOk(apiEnvelope(executionSummary ?? {
+                submitted: ids.length,
+                skipped: 0,
+                blocked: 0,
+                results: ids.map((id) => ({ recommendation_id: id, outcome: 'submitted' })),
+            }));
         }
         throw new Error(`Unexpected POST ${path}`);
     });

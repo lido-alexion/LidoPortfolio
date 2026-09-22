@@ -47,7 +47,7 @@ class LiveBrokerExecutionService
 
     /**
      * @param  list<int>  $recommendationIds
-     * @return list<array<string, mixed>>
+     * @return array{submitted:int,skipped:int,blocked:int,results:list<array<string,mixed>>}
      */
     public function submitSelected(
         User $user,
@@ -71,7 +71,7 @@ class LiveBrokerExecutionService
             ->get();
         $summary = $this->submitInvestorCycle($user, $profiles, $profile, $ids);
 
-        return $summary['results'];
+        return $summary;
     }
 
     /**
@@ -834,7 +834,7 @@ class LiveBrokerExecutionService
     protected function quantityFor(User $user, TradingRecommendation $recommendation, Stock $stock): array
     {
         if ($recommendation->remaining_target_amount !== null && $recommendation->reference_price !== null) {
-            $live = $this->broker->liveQuote((int) $user->id, (string) $stock->symbol, $stock->exchange ?: 'NSE');
+            $live = $this->broker->liveQuote((int) $user->id, $stock);
             $source = 'live_quote';
             if ($live === null || $live <= 0) {
                 if ($user->liveQuotePolicy() === User::LIVE_QUOTE_POLICY_STRICT) {

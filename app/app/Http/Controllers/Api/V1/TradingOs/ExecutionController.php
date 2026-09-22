@@ -192,7 +192,7 @@ class ExecutionController extends Controller
             'recovery_code' => 'nullable|string|max:64',
         ]);
 
-        $results = $this->liveBroker->submitSelected(
+        $summary = $this->liveBroker->submitSelected(
             $request->user(),
             $profile,
             $validated['recommendation_ids'],
@@ -200,7 +200,7 @@ class ExecutionController extends Controller
             $validated['recovery_code'] ?? null,
         );
 
-        return ApiEnvelope::success($results);
+        return ApiEnvelope::success($summary);
     }
 
     public function ordersReconcile(int $id): JsonResponse
