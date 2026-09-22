@@ -106,7 +106,9 @@ Current dataset versions do not themselves preserve a complete immutable bar sna
 
 Supported benchmark/index securities have canonical records and synced price histories. They support relative strength, market analysis, discovery entities, comparisons, and benchmark reporting. Missing/short benchmark history must be exposed as unavailable rather than silently substituting a different index or fabricating values.
 
-**Current implementation anchors:** `Benchmark`, `BenchmarkPriceSyncService`, `IndexPriceSyncService`, `IndexConstituentService`, `IndexPriceSyncServiceTest`, and index API routes.
+**Current implementation anchors:** `Benchmark`, `BenchmarkPriceSyncService`, `IndexPriceSyncService`, `IndexCatalogService`, `PrimaryMlBenchmarkHistoryBackfillService`, `MlBenchmarkHistoryPolicy`, `IndexPriceSyncServiceTest`, and index API routes.
+
+The V7 ML path has a separate operator-controlled primary-benchmark readiness campaign: `php artisan portfolio:backfill-ml-benchmark-history --dry-run` reports the policy-derived range, and `php artisan portfolio:backfill-ml-benchmark-history` fetches only missing primary-benchmark ranges through the canonical price-history/provider chain. The policy uses 40 monthly reference buckets plus conservative lookback/label overhead (49 calendar months for the current 63/126-observation semantics). It is idempotent, locked, SyncLog-audited, resumable by rerun, and refuses a shallower requested range. This does not change the daily index sync default or fabricate data when the provider cannot return the requested history.
 
 ## 15. Trading Calendar And Holidays
 
