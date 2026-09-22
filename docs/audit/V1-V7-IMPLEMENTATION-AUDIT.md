@@ -50,9 +50,9 @@ Static inspection cannot establish browser geometry, provider behavior, producti
 | Portfolio / accounting / capital | 9 | 3 | 0 | 0 | 0 | 0 | High |
 | Market data / data quality | 6 | 0 | 0 | 0 | 1 | 0 | High |
 | Discovery / screeners / registries | 5 | 1 | 0 | 0 | 0 | 0 | Medium |
-| Strategy / recommendations | 5 | 2 | 0 | 0 | 0 | 0 | High |
+| Strategy / recommendations | 6 | 1 | 0 | 0 | 0 | 0 | High |
 | Execution / broker / safety | 3 | 2 | 0 | 0 | 5 | 0 | Critical |
-| Analytics / backtesting / simulation | 6 | 1 | 0 | 0 | 0 | 0 | High |
+| Analytics / backtesting / simulation | 7 | 0 | 0 | 0 | 0 | 0 | High |
 | Notifications / calendar / alerts | 1 | 2 | 0 | 0 | 0 | 0 | Medium |
 | Knowledge / documentation | 3 | 1 | 0 | 0 | 0 | 0 | Medium |
 | Administration / security / API | 5 | 1 | 0 | 0 | 1 | 0 | Critical |
@@ -68,7 +68,7 @@ The following rows cover every applicable Phase 1 requirement. Related requireme
 |---|---|---|---|---|---|---|---|
 | V1-REQ-001 | Market-data substrate for discovery/evaluation | IMPLEMENTED | Data sync, stock/price models and API paths exist | Data/sync feature tests | Full deployed freshness/query workflow | Yes | Domain path is present; deployment state is not proven |
 | V1-REQ-002 | Discovery runs, candidates, evidence and filters | IMPLEMENTED | Discovery routes/pages/services | Discovery/screener tests | UI empty/error behavior | Yes | Reachable at `/candidates` |
-| V1-REQ-004 | Five-stage recommendations and decision states | PARTIALLY_IMPLEMENTED | Recommendation page, services and APIs | Recommendation tests | Full approve/reject/defer and pending-execution UX not proven end to end | Yes | Pagination tests are not workflow proof |
+| V1-REQ-004 | Five-stage recommendations and decision states | IMPLEMENTED | Recommendation page, lifecycle services and APIs implement position-aware actionable/informational states, Approve/Reject/Defer, HOLD/WATCH, Pending Execution and capital-state separation | Recommendation lifecycle, decision-state and `MultiStrategyLifecycleAssuranceTest` coverage | Browser walkthrough and deployed reachability remain runtime verification | Yes | AUD-005 MS-001 proves review, reservation, pending execution, execution attribution, cancellation and no-side-effect approval; capital readiness remains separate from investment opinion |
 | V1-REQ-005 | Cash ledger, reservations and release semantics | IMPLEMENTED | Cash page, controllers, ledger migrations/services | Cash/financial integrity tests | Browser and retry/error states | Yes | Backend evidence strong |
 | V1-REQ-006 | Telegram notifications, idempotency, retry/history | IMPLEMENTED | The current channel-neutral Notification Center absorbs the legacy Telegram path while preserving durable history, idempotency, retry, delivery evidence and verified-channel behavior | `NotificationLifecycleAssuranceTest`; 50-test/244-assertion notification feature suite; delivery/retry/settings/history tests | Real external provider and browser runtime verification | Yes | FEAT-004 supersedes Telegram-specific UI while retaining the material V1 semantics; Telegram remains a supported compatibility channel |
 | V1-REQ-007 | Manual execution with traceability | IMPLEMENTED | Transactions/pending routes and services | Execution/transaction tests | Live role/runtime verification | Yes | Safety requirements audited separately |
@@ -77,7 +77,7 @@ The following rows cover every applicable Phase 1 requirement. Related requireme
 | V1-REQ-010 | Sanctum auth and password reset | IMPLEMENTED | Auth context/routes/reset pages | Auth/password tests | Browser recovery flow | Yes | No evidence of JWT substitution |
 | V1-REQ-011 | Corporate actions preserve ledger correctness | PARTIALLY_IMPLEMENTED | Corporate action page/services/migrations | Corporate action tests have recorded SQLite failures | Successful full apply path and fixture correctness | Yes | Historical audit records 3 errors and 1 API failure |
 | V1-REQ-012 | Screener backtesting hit matrix | IMPLEMENTED | Screener editor/backtest services | Screener backtest tests | Responsive long-running state UX | Yes | Resumable backend path evidenced |
-| V1-REQ-013 | Strategy backtesting | PARTIALLY_IMPLEMENTED | `/backtests` routes and simulation services | Unit coverage; no complete API feature proof | API workflow and runtime persistence | Yes | Historical audit notes no API feature tests |
+| V1-REQ-013 | Strategy backtesting | IMPLEMENTED | `/backtests` routes, historical simulation engine, resumable persistence, equity-curve/statistics reporting and pinned strategy/artifact/screener provenance | `V5BacktestLifecycleTest`, `V5BacktestParameterOverrideTest`, Backtest/Replay/Paper suites, historical resync and artifact-provenance coverage | Browser reachability, deployed worker behavior and large-run runtime verification | Yes | AUD-008 establishes the V1 paper-portfolio/backtest contract and API/detail workflow statically; runtime follow-up remains separate |
 | V1-REQ-015 | Engine/API/pipeline/deployment baseline | RUNTIME_VERIFICATION_REQUIRED | Laravel routes, console schedule, API v1 | Schedule/API tests | Deployed scheduler and cPanel/runtime parity | Yes | Repository cannot prove production operation |
 | V2-REQ-001 | Admin invite lifecycle | IMPLEMENTED | User management/invite routes and page | Invite/auth tests | Email/token delivery deployment | Yes | AuthZ tests present |
 | V2-REQ-002 | Session listing/revocation | IMPLEMENTED | Account settings/session APIs | Session tests | Multi-browser interaction | Yes | Admin force logout separate |
@@ -248,14 +248,14 @@ Applicable requirements audited: **85** (75 `CURRENT`, 5 `POSSIBLY-LOST-DURING-C
 
 | Primary verdict | Count |
 |---|---:|
-| IMPLEMENTED | 65 |
-| PARTIALLY_IMPLEMENTED | 10 |
+| IMPLEMENTED | 69 |
+| PARTIALLY_IMPLEMENTED | 9 |
 | NOT_IMPLEMENTED | 0 |
 | IMPLEMENTED_BUT_NOT_WIRED | 0 |
 | IMPLEMENTED_DIFFERENTLY | 1 |
 | DEAD_CODE | 0 |
 | TEST_ONLY | 1 |
-| RUNTIME_VERIFICATION_REQUIRED | 7 |
+| RUNTIME_VERIFICATION_REQUIRED | 5 |
 | SPEC_CONFLICT | 0 |
 
 The matrix verdict counts are intentionally conservative: `RUNTIME_VERIFICATION_REQUIRED` means repository evidence is insufficient to claim `IMPLEMENTED`, even where code and tests are substantial.
