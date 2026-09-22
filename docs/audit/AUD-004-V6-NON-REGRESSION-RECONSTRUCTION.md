@@ -75,7 +75,7 @@ The V6 E4 specification itself names the Dashboard baseline in §6.2. The histor
 | Top-mover and diagnostics preferences | local/session preference keys | Same preference behavior | `PRESERVED` |
 | Broker readiness/reconciliation status | Not part of the `e5880a7` pre-redesign Dashboard baseline; readiness/reconciliation cards were added during later V6/V7 work | Same cards; no removal after introduction | `PRESERVED` (post-V6 addition, not historical preservation evidence) |
 
-No pre-redesign Dashboard metric or action was found to be removed. The readiness/reconciliation row is a later addition and is not counted as evidence that the redesign preserved an older capability. AUD-013 still needs its own old/current inventory and browser walkthrough; this section is evidence handed off to that audit, not an AUD-013 closure.
+No pre-redesign Dashboard metric or action was found to be removed. The readiness/reconciliation row is a later addition and is not counted as evidence that the redesign preserved an older capability. AUD-013 subsequently completed its own Dashboard-specific preservation and state-semantics assessment; browser walkthrough evidence remains separate.
 
 ## 5. Holdings Comparison
 
@@ -315,7 +315,7 @@ These checks are verification work, not confirmed regressions.
 
 ## 19. AUD-013 Evidence Handoff
 
-AUD-013 should consume the Dashboard rows in §4 as its baseline inventory. The strongest historical evidence is the pre-redesign Dashboard at `e5880a7`, supplemented by the continuity check that `DashboardPage.jsx` and its named child components are unchanged across `233a427..bdd32e8`. Current tests also cover dashboard cache, portfolio compare, reconciliation and related chart/analytics helpers. AUD-013 still needs the historical before/after capability walkthrough, realistic data, preference checks and browser/runtime confirmation. This document does not modify AUD-013 status.
+AUD-013 consumed the Dashboard rows in §4 as its baseline inventory. The strongest historical evidence is the pre-redesign Dashboard at `e5880a7`, supplemented by the continuity check that `DashboardPage.jsx` and its named child components are unchanged across `233a427..bdd32e8`. Its completed assessment adds state-semantics and missing-value evidence; realistic browser/runtime confirmation remains separate.
 
 ## 20. Recommended Remediation Groups
 
@@ -345,9 +345,9 @@ Complete the viewport, keyboard, touch, deployed-bundle and role walkthrough lis
 
 **Static assessment: IMPLEMENTED, with runtime verification retained.**
 
-The bounded historical inventory covers 92 atomic capabilities across the named V6 surfaces and cross-cutting helpers. The user-facing classification remains 84 preserved, 3 preserved differently, 2 superseded atomic workflows, 1 runtime-only matrix item and 2 non-comparison rows, with no confirmed static regressions. Evidence strength is now explicit: 82 rows are confirmed against pre-redesign source, 7 are post-V6-only additions, 2 are excluded from historical comparison, and 1 requires runtime verification. Remaining uncertainty is browser/deployment evidence or a separate audit boundary (especially AUD-005, AUD-008, AUD-012 and AUD-013), not an identified V6 non-regression loss.
+The bounded historical inventory covers 92 atomic capabilities across the named V6 surfaces and cross-cutting helpers. The user-facing classification remains 84 preserved, 3 preserved differently, 2 superseded atomic workflows, 1 runtime-only matrix item and 2 non-comparison rows, with no confirmed static regressions. Evidence strength is now explicit: 82 rows are confirmed against pre-redesign source, 7 are post-V6-only additions, 2 are excluded from historical comparison, and 1 requires runtime verification. Remaining uncertainty is browser/deployment evidence or a separate audit boundary, not an identified V6 non-regression loss.
 
-The master implementation audit should be updated to `IMPLEMENTED` only after this reconstruction is accepted as the authoritative AUD-004 evidence. No product code, tests, current documentation or AUD-013 status was changed by this pass.
+The master implementation audit is now reconciled to `IMPLEMENTED` using this reconstruction as the authoritative AUD-004 evidence. No product code or production state was changed by the reconciliation.
 
 ## 22. Open Questions
 

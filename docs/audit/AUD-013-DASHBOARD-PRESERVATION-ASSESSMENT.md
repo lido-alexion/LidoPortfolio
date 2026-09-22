@@ -166,7 +166,7 @@ The bounded remediation addressed the three static concerns above without changi
 - Pattern and Calendar requests retain independent loading, successful-empty, and failed/unavailable states, so optional-section failures do not become valid empty results or fail the whole Dashboard;
 - Dashboard chart normalization preserves actual zero values, converts valid numeric strings to numbers, and retains missing or invalid values as unavailable (`null`); chart tooltips display `—` for unavailable values rather than `₹0`.
 
-Focused state/component tests and the Node/source suite pass. AUD-004 is unchanged. Remaining verification is browser/runtime-only: responsive geometry, touch behavior, chart and tooltip readability, real screen-reader behavior, utility-overlay coexistence, and deployed-bundle reachability.
+Focused state/component tests and the Node/source suite pass. AUD-004 is now reconciled separately from this Dashboard assessment. Remaining verification is browser/runtime-only: responsive geometry, touch behavior, chart and tooltip readability, real screen-reader behavior, utility-overlay coexistence, and deployed-bundle reachability.
 
 ## 11. Runtime Scenario Matrix
 
@@ -183,7 +183,7 @@ Focused state/component tests and the Node/source suite pass. AUD-004 is unchang
 
 ## 12. Cross-Audit Boundaries
 
-- AUD-004 owns broad historical non-regression and remains accepted; this document does not modify it.
+- AUD-004 owns broad historical non-regression and is now accepted as implemented; this document supplies the Dashboard-specific evidence.
 - AUD-003 owns general page anatomy, DataState and accessibility foundations; the Dashboard observations above are limited to Dashboard-specific evidence.
 - AUD-001/AUD-002/AUD-016 own Page History, Contextual Notes and Global Search. Runtime checks must ensure they do not obscure Dashboard actions, but their semantics are not reopened here.
 - AUD-005/AUD-008 own strategy/accounting and analytics semantics.
@@ -233,4 +233,4 @@ Run the following with a real browser and representative data:
 
 The Dashboard-specific review covered **18 atomic capabilities**: **17 historical capabilities confirmed preserved**, **1 post-V6 addition confirmed present without interference**, **0 preserved-differently rows**, and **0 confirmed regressions**. Remaining work is browser/runtime verification of hierarchy, responsive access, degraded-data semantics, chart/table readability, keyboard/screen-reader behavior and coexistence with the completed shell utilities.
 
-The master audit verdict is now `IMPLEMENTED` based on this Dashboard-specific evidence, with the runtime checks above retained. AUD-004 remains unchanged.
+The master audit verdict is now `IMPLEMENTED` based on this Dashboard-specific evidence, with the runtime checks above retained. AUD-004 is independently implemented on the basis of its 92-row historical reconstruction.
