@@ -46,9 +46,9 @@ The header contract includes:
 
 Contextual Help must continue to resolve documentation for the current route; replacing it with only a generic documentation-home link is not equivalent. Safety-critical state and actions must remain reachable when secondary header controls collapse.
 
-Current anchors include `AppHeader.jsx`, `HeaderHelpButton.jsx`, `NotificationBell.jsx`, `ExecutionSafetyControls.jsx`, `PortfolioSwitcher.jsx`, `ProfileMenu.jsx`, `ThemeToggle.jsx`, and `ThemeContext.jsx`. `ThemeToggle` is currently presented through the profile menu. Global Search has no confirmed shell-level implementation anchor.
+Current anchors include `AppHeader.jsx`, `HeaderHelpButton.jsx`, `NotificationBell.jsx`, `ExecutionSafetyControls.jsx`, `PortfolioSwitcher.jsx`, `ProfileMenu.jsx`, `ThemeToggle.jsx`, `ThemeContext.jsx`, and `GlobalSearch.jsx`. `ThemeToggle` is currently presented through the profile menu. Global Search is mounted for the Investor shell; exact geometry, overflow and deployed reachability remain runtime checks.
 
-Implementation alignment: Global Search and constrained-width overflow behavior require verification under the V1-V7 implementation audit.
+Implementation alignment: Global Search is implemented for the approved shell surface; constrained-width overflow, responsive geometry and deployed reachability require verification under the V1-V7 runtime audit.
 
 ### Left Navigation
 
@@ -84,7 +84,7 @@ The required rail initially contains:
 
 The rail is compact by default. Normally only one major contextual pane is open at a time. A desktop pane overlays the workspace rather than permanently reducing its width. Mobile replaces the rail with explicit actions that open a menu, drawer or sheet.
 
-`ContextualNotesPane.jsx` is currently mounted in the authenticated non-documentation shell. No confirmed `PageHistoryRail` anchor exists.
+`ContextualNotesPane.jsx` and `PageHistoryRail.jsx` are mounted through `RightUtilityRail` in the authenticated Investor shell. Their exact browser geometry, touch behavior and deployed reachability remain runtime checks.
 
 Implementation alignment: the unified rail, one-pane coordination and Page Visit History require verification under the V1-V7 implementation audit.
 
@@ -191,7 +191,7 @@ Mobile contract:
 - an explicit History action opens recent pages in a menu, sheet or drawer;
 - the same history order, duplicate-collapse and link behavior applies.
 
-Current implementation anchor: no confirmed `PageHistoryRail`, history store or shell mount exists.
+Current implementation anchors: `PageHistoryRail.jsx`, `PageHistorySheet.jsx`, `RightUtilityRail.jsx`, `usePageVisitHistory.js`, and `page-history.test.jsx`. Source tests establish state semantics; browser geometry and deployed reachability remain runtime checks.
 
 Implementation alignment: requires verification under the V1-V7 implementation audit. This note does not make the requirement optional.
 
@@ -258,7 +258,7 @@ Capability preservation matters more than geometrical similarity. Every hover-on
 
 | Need | Required contract | Current implementation anchor |
 |---|---|---|
-| Global Search | Compact desktop control expands without reflow; mobile opens a full-width surface/sheet | Alignment requires verification; no shell-level anchor confirmed |
+| Global Search | Compact desktop control expands without reflow; mobile opens a full-width surface/sheet | `GlobalSearch.jsx`, `AppHeader.jsx`, and focused shell tests; viewport geometry and deployed reachability require verification |
 | Contextual Help | Global header action resolves help for the current route | `HeaderHelpButton.jsx`, documentation-link utilities |
 | Theme | Reuse Light/System/Dark theme mechanism | `ThemeToggle.jsx`, `ThemeContext.jsx`, `themeInit` |
 | Primary navigation | Metadata-driven collapsible/overlay navigation | `Sidebar.jsx`, `SidebarContext.jsx`, navigation catalog/registry |
@@ -436,11 +436,11 @@ These tests do not by themselves prove full responsive behavior, visual reachabi
 
 Test coverage gaps — implementation audit follow-up:
 
-- Page Visit History rail, ordering, duplicate collapse, active state and mobile History surface;
+- Page Visit History rail and mobile surface geometry/reachability beyond the existing state and source tests;
 - complete five-zone shell behavior;
 - right-utility one-pane coordination;
 - Contextual Notes overlay geometry, mobile sheet, opacity and reduced motion;
-- global Search behavior;
+- Global Search viewport geometry and constrained-width behavior beyond the existing source tests;
 - Dashboard and general old-vs-new non-regression inventory;
 - route-wide standard page anatomy and loading/empty/error-state adoption;
 - mobile, tablet, desktop and ultrawide visual regression coverage;
@@ -469,7 +469,7 @@ The following accepted contracts require runtime or implementation verification.
 - Page Visit History/right-edge rail and mobile History action;
 - unified right utility rail and one-major-pane coordination;
 - complete Contextual Notes overlay/mobile/reduced-motion behavior;
-- shell-level Global Search and constrained-width overflow behavior;
+- Global Search constrained-width overflow and viewport geometry;
 - five-zone shell completeness, including footer treatment;
 - standard page-anatomy adoption across routes;
 - shared Skeleton, EmptyState and ScrollToTop adoption;

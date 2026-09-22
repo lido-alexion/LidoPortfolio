@@ -135,11 +135,11 @@ The following rows cover every applicable Phase 1 requirement. Related requireme
 | V5-REQ-015 | Holiday-aware execution | IMPLEMENTED | Scheduler/execution checks | Schedule/execution tests | Production timezone/holiday behavior | Yes | Financial safety |
 | V5-REQ-016 | Kite reconciliation | RUNTIME_VERIFICATION_REQUIRED | Reconcile command/services and schedule | Reconciliation/schedule tests | Broker data, halt/attention and live behavior | Yes | `AUD-011` |
 | V5-REQ-017 | Linked Markdown Wiki | IMPLEMENTED | Wiki pages/routes/API | Wiki tests | Public/share role and rendering runtime | Yes | Sanitization tested |
-| V5-REQ-018 | Role-separated Admin/Investor apps | PARTIALLY_IMPLEMENTED | `AdminAppRoutes`, `AdminRoute`, role branches in `App.jsx` | AuthZ/admin tests; production ownership audit is clean; DebugAgent, Laravel logging, and route-inventory delta findings are closed | Complete authenticated role/object runtime matrix remains open | Yes | `AUD-012` |
+| V5-REQ-018 | Role-separated Admin/Investor apps | RUNTIME_VERIFICATION_REQUIRED | `AdminAppRoutes`, `AdminRoute`, role branches in `App.jsx` and server-side ownership boundaries are implemented | AuthZ/admin tests; production ownership audit is clean; DebugAgent, Laravel logging, and route-inventory delta findings are closed | Independent authenticated Admin/Investor actors, PAT/token scope checks and foreign-object isolation in the deployed environment remain unverified; AUTHR-006 is open | Yes | Static/material implementation is present; no production identity should be fabricated merely to close the runtime boundary. `AUD-012` remains open separately |
 | V6-REQ-001 | Execution safety controls | RUNTIME_VERIFICATION_REQUIRED | Emergency/safety services and routes | Safety tests | Broker/live mode, halt, idempotency and operator UI | Yes | Critical financial path |
 | V6-REQ-002 | Paper experimentation | IMPLEMENTED | Independent Paper portfolio, clone-as-paper, simulated execution, broker guard, and isolation from live state | Paper foundation/processor suites and AUD-008 assurance | Browser/deployed worker verification | Yes | Related to V5-REQ-008 and `AUD-008` |
 | V6-REQ-003 | Admin audit explorer | IMPLEMENTED | Admin route/page/API | Audit explorer tests | Production authorization and pagination | Yes | Mounted under admin route |
-| V6-REQ-004 | Responsive client support | PARTIALLY_IMPLEMENTED | Responsive CSS/components and mobile branches | Targeted JS tests and representative responsive behavior tests | Broad page-by-page mobile/desktop/ultrawide runtime evidence remains unavailable | Yes | AUD-003 does not close the separate responsive-client contract |
+| V6-REQ-004 | Responsive client support | RUNTIME_VERIFICATION_REQUIRED | Responsive CSS/components, mobile branches, drawer/sheet utilities, focus/touch alternatives and wide-layout rules are materially implemented | Targeted JS tests and representative responsive behavior tests; AUD-003/AUD-004 retain responsive and reachability follow-up | Real viewport geometry and reachability across representative mobile, standard desktop and ultrawide/4K surfaces remain unverified; no specific absent static capability is currently known | Yes | The remaining acceptance boundary is browser/runtime verification, not a named repository implementation gap |
 | V6-REQ-005 | Frontend stack migration | IMPLEMENTED | React/Vite shell is active | JS/component tests | Production build/runtime parity | Yes | Structural, not UX completeness |
 | V6-REQ-006 | Dashboard/UX reorganization and non-regression | IMPLEMENTED | The 92-row AUD-004 reconstruction compares named pre-redesign baselines for Dashboard, Holdings, Strategy, Discovery, Recommendations, Backtests, Knowledge, Admin and cross-cutting helpers; no confirmed static capability loss was found | AUD-004 historical-source comparison; AUD-013 confirms 17 Dashboard capabilities preserved, one later readiness addition and zero regressions | Browser discoverability, responsive/touch behavior and deployed reachability | Yes | `PRESERVED_DIFFERENTLY` and accepted superseding redirects are retained where applicable; runtime checks remain separate |
 | V6-REQ-007 | Global shell: header, left nav, workspace, right rail/pane | IMPLEMENTED | `AuthenticatedShell` mounts `AppHeader`, `Sidebar`, `.lido-main`, Investor Global Search and the Investor `RightUtilityRail`, which coordinates Page History and Notes | `roleSeparatedShell.test.mjs` inspects role-specific shell source; Global Search, Page History and Contextual Notes tests cover utility behavior | Exact constrained-width geometry, responsive behavior and deployed reachability require browser inspection | Yes | The current frontend contract makes the low-priority footer optional/omittable in task-focused layouts; its absence is not a static blocker |
@@ -249,13 +249,13 @@ Applicable requirements audited: **85** (75 `CURRENT`, 5 `POSSIBLY-LOST-DURING-C
 | Primary verdict | Count |
 |---|---:|
 | IMPLEMENTED | 76 |
-| PARTIALLY_IMPLEMENTED | 2 |
+| PARTIALLY_IMPLEMENTED | 0 |
 | NOT_IMPLEMENTED | 0 |
 | IMPLEMENTED_BUT_NOT_WIRED | 0 |
 | IMPLEMENTED_DIFFERENTLY | 1 |
 | DEAD_CODE | 0 |
 | TEST_ONLY | 1 |
-| RUNTIME_VERIFICATION_REQUIRED | 5 |
+| RUNTIME_VERIFICATION_REQUIRED | 7 |
 | SPEC_CONFLICT | 0 |
 
 The matrix verdict counts are intentionally conservative: `RUNTIME_VERIFICATION_REQUIRED` means repository evidence is insufficient to claim `IMPLEMENTED`, even where code and tests are substantial.

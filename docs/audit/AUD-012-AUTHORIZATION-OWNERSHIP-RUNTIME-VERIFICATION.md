@@ -321,8 +321,10 @@ correct, `GET /api/portfolios` returns 401 rather than 500, and the production
 runtime health gate passes. AUTHR-005 is now closed; AUTHR-006 remains open,
 so the audit stays partially implemented.
 
-`V5-REQ-018` remains `PARTIALLY_IMPLEMENTED` pending the clean representative
-role/foreign-object runtime matrix tracked by AUTHR-006.
+`V5-REQ-018` is classified as `RUNTIME_VERIFICATION_REQUIRED` pending the
+clean representative role/foreign-object runtime matrix tracked by AUTHR-006.
+The static/material role-separated implementation is present; this
+classification does not fabricate production identities or close AUTHR-006.
 
 ## 25. Open Questions
 
