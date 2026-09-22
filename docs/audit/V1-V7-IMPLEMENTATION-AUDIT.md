@@ -47,7 +47,7 @@ Static inspection cannot establish browser geometry, provider behavior, producti
 | Domain | Implemented | Partial | Missing | Not wired | Runtime verify | Conflicts | Risk |
 |---|---:|---:|---:|---:|---:|---:|---|
 | Frontend / navigation | 2 | 5 | 2 | 0 | 1 | 0 | High |
-| Portfolio / accounting / capital | 10 | 2 | 0 | 0 | 0 | 0 | High |
+| Portfolio / accounting / capital | 11 | 1 | 0 | 0 | 0 | 0 | High |
 | Market data / data quality | 6 | 0 | 0 | 0 | 1 | 0 | High |
 | Discovery / screeners / registries | 5 | 1 | 0 | 0 | 0 | 0 | Medium |
 | Strategy / recommendations | 6 | 1 | 0 | 0 | 0 | 0 | High |
@@ -124,7 +124,7 @@ The following rows cover every applicable Phase 1 requirement. Related requireme
 | V5-REQ-004 | Trading Artifact Framework | IMPLEMENTED | Artifact library/pages, models, bindings, and deployment services | `TradingArtifactRolloutAssuranceTest` plus `docs/audit/AUD-007-TRADING-ARTIFACT-ROLLOUT-VERIFICATION.md` prove authoring/versioning, immutable published versions, dependency validation, portfolio binding, exact runtime resolution, deterministic screener execution, v1→v2 rollout, rollback, historical provenance, invalid/missing-dependency failure, and archive preservation | Deployed artifact storage/environment, worker/process behavior, deployed roles/configuration, production/staging rollout behavior, browser/operator workflow, and deployed cache/process behavior | Yes | `AUD-007` representative rollout assurance is complete statically; deployed rollout and operator/browser verification remain |
 | V5-REQ-005 | Admin force logout | IMPLEMENTED | Admin routes/services | Admin session tests | Production multi-session behavior | Yes | Requires admin runtime |
 | V5-REQ-006 | Cash-as-of/export/compare | IMPLEMENTED | Cash/history/compare pages and APIs | Cash/export tests | Download/browser error states | Yes | Route reachability inspect |
-| V5-REQ-007 | Tax/attribution/benchmarks | PARTIALLY_IMPLEMENTED | Performance/tax page/services | Performance tests | Full benchmark and export acceptance | Yes | Current docs are summarized |
+| V5-REQ-007 | Tax/attribution/benchmarks | IMPLEMENTED | Account/Portfolio/Strategy performance, benchmark/excess-return/risk, ownership-aware attribution, FIFO-derived tax reporting, evidence/completeness and CSV exports | Current FEAT-015 performance/account/tax/attribution/export suites plus FIFO, risk, dividend, evidence and replay-isolation coverage; 51 focused tests / 347 assertions in this verification | Browser rendering and production-market-data variation remain runtime follow-up; no certified tax advice is claimed | Yes | FEAT-015 material criteria are executable: XIRR/TWR, selected benchmark semantics, missing-data non-zero behavior, WAVG-vs-FIFO separation, realized-only tax, configured/What-if isolation and versioned export evidence |
 | V5-REQ-008 | Paper/Replay/Backtest | IMPLEMENTED | Backtest routes/simulation services, isolated Paper/Replay state, historical branch reconstruction, controlled resync assurance, and counterfactual Replay version substitution | Mode-specific feature suites plus `HistoricalSimulationDatasetResyncTest` and `CounterfactualHistoricalReplayTest` | Browser/deployed worker verification; exact rerun after physical data correction remains intentionally limited by the DatasetVersion contract | Yes | `AUD-008` |
 | V5-REQ-009 | CI workflow | IMPLEMENTED | Combined CI/CD workflow for backend, MySQL migration/seed, frontend, packaging, deployment, and runtime gates | `V5-REQ-009-CI-WORKFLOW-VERIFICATION.md`; successful production deployments of `6838f8277a79a3cd36996f6f50b33dd559915caa` and `0872014f23f0e592b0584ed036cb80a950064d02`; enforced MySQL identifier and writable-path failures | `ci.yml` and `deploy-stoxla-production.yml` execute the accepted gates; deployment is blocked when gates fail | Yes | `V5-REQ-009-CI-WORKFLOW-VERIFICATION.md` |
 | V5-REQ-010 | Production secrets/single-folder deploy | RUNTIME_VERIFICATION_REQUIRED | VPS release/shared deployment, root-managed queue unit, FPM release-identity gate, and deployment docs | AUD-009 now proves approved deployable release freshness, secret/public-root isolation, FPM activation, named queue recovery, scheduler health, and a current migration ledger | Automated backup schedule, retention, independent persistent-state coverage, and restore assurance | Yes | `AUD-009`; DEP-001/DEP-002/DEP-003 implemented, DEP-004 remains |
@@ -248,8 +248,8 @@ Applicable requirements audited: **85** (75 `CURRENT`, 5 `POSSIBLY-LOST-DURING-C
 
 | Primary verdict | Count |
 |---|---:|
-| IMPLEMENTED | 72 |
-| PARTIALLY_IMPLEMENTED | 6 |
+| IMPLEMENTED | 73 |
+| PARTIALLY_IMPLEMENTED | 5 |
 | NOT_IMPLEMENTED | 0 |
 | IMPLEMENTED_BUT_NOT_WIRED | 0 |
 | IMPLEMENTED_DIFFERENTLY | 1 |
