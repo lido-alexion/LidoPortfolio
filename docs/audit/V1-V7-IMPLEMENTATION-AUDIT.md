@@ -139,13 +139,13 @@ The following rows cover every applicable Phase 1 requirement. Related requireme
 | V6-REQ-001 | Execution safety controls | RUNTIME_VERIFICATION_REQUIRED | Emergency/safety services and routes | Safety tests | Broker/live mode, halt, idempotency and operator UI | Yes | Critical financial path |
 | V6-REQ-002 | Paper experimentation | IMPLEMENTED | Independent Paper portfolio, clone-as-paper, simulated execution, broker guard, and isolation from live state | Paper foundation/processor suites and AUD-008 assurance | Browser/deployed worker verification | Yes | Related to V5-REQ-008 and `AUD-008` |
 | V6-REQ-003 | Admin audit explorer | IMPLEMENTED | Admin route/page/API | Audit explorer tests | Production authorization and pagination | Yes | Mounted under admin route |
-| V6-REQ-004 | Responsive client support | PARTIALLY_IMPLEMENTED | Responsive CSS/components and mobile branches | Limited JS tests | E4 page-by-page mobile criteria | Yes | No broad visual regression evidence |
+| V6-REQ-004 | Responsive client support | PARTIALLY_IMPLEMENTED | Responsive CSS/components and mobile branches | Targeted JS tests and representative responsive behavior tests | Broad page-by-page mobile/desktop/ultrawide runtime evidence remains unavailable | Yes | AUD-003 does not close the separate responsive-client contract |
 | V6-REQ-005 | Frontend stack migration | IMPLEMENTED | React/Vite shell is active | JS/component tests | Production build/runtime parity | Yes | Structural, not UX completeness |
 | V6-REQ-006 | Dashboard/UX reorganization and non-regression | RUNTIME_VERIFICATION_REQUIRED | Dashboard and redesigned routes are mounted, but no old-versus-current capability inventory or product-owner removal record was found | Related page tests cover individual paths only | Preservation of every named metric, shortcut, external/copy/LLM helper, status explanation and diagnostic convenience cannot be decided statically from route presence | Yes | `AUD-013`; this is an evidence and historical-comparison gap, not proof every surface regressed |
-| V6-REQ-007 | Global shell: header, left nav, workspace, right rail/pane | PARTIALLY_IMPLEMENTED | `AuthenticatedShell` mounts `AppHeader`, `Sidebar`, `.lido-main`, Investor Global Search and the Investor `RightUtilityRail`, which coordinates Page History and Notes | `roleSeparatedShell.test.mjs` inspects role-specific shell source; Global Search, Page History and Contextual Notes tests cover utility behavior | No mounted low-priority footer; exact constrained-width geometry and deployed reachability require browser inspection | Yes | `AUD-003`, `AUD-016`; broader shell verification remains |
+| V6-REQ-007 | Global shell: header, left nav, workspace, right rail/pane | IMPLEMENTED | `AuthenticatedShell` mounts `AppHeader`, `Sidebar`, `.lido-main`, Investor Global Search and the Investor `RightUtilityRail`, which coordinates Page History and Notes | `roleSeparatedShell.test.mjs` inspects role-specific shell source; Global Search, Page History and Contextual Notes tests cover utility behavior | Exact constrained-width geometry, responsive behavior and deployed reachability require browser inspection | Yes | The current frontend contract makes the low-priority footer optional/omittable in task-focused layouts; its absence is not a static blocker |
 | V6-REQ-008 | Page Visit History/right-edge rail | IMPLEMENTED | `RightUtilityRail` mounts `PageHistoryRail` for the authenticated Investor shell; `usePageVisitHistory` observes normalized React Router paths, stores user-keyed session history, and applies 12-entry MRU/consecutive-collapse semantics | `page-history.test.jsx` covers state semantics, persistence validation, active links, router navigation and mobile Escape/focus behavior | Exact desktop geometry, touch layout, stacking and visual acceptance require browser verification; source tests do not prove CSS media-query rendering | Yes | `AUD-001`; statically resolved, with browser/runtime verification retained |
 | V6-REQ-009 | Contextual Notes shell placement | IMPLEMENTED | `RightUtilityRail` owns the Investor Notes utility; split Notes content/presentation components provide a non-modal desktop overlay, modal mobile sheet, focus behavior and reduced-motion rules without resizing `.lido-main` | `contextual-notes-shell.test.jsx` covers desktop/mobile semantics, focus, mutual exclusion and route-context reload; `V6ContextualNotesTest` proves personal/profile-scoped CRUD | Exact pane geometry, touch/soft-keyboard behavior, stacking, animation feel and deployed reachability; entity subject fields remain outside this shell remediation | Yes | `AUD-002`; current pathname-derived context-key policy is preserved |
-| V6-REQ-010 | Standard page anatomy/components | PARTIALLY_IMPLEMENTED | PageChrome/breadcrumbs mounted; route pages exist | Some JS helpers | Tabs/segmented controls/drawers/skeletons/EmptyState/ScrollToTop/PageHistory adoption is inconsistent/unproven | Yes | `AUD-003` |
+| V6-REQ-010 | Standard page anatomy/components | IMPLEMENTED | PageChrome/breadcrumbs, shared DataState, representative DataTableView, SegmentToggle/local equivalent controls, drawers/panes, ScrollToTop and utility foundations are implemented with semantic local variations where appropriate | AUD-003 Batch 1–3 tests; full frontend Vitest, Node/source tests, production build and targeted accessibility/ScrollToTop coverage | Browser geometry, responsive hierarchy and deployed reachability remain runtime checks | Yes | AUD-003 closes the static page-anatomy contract; mechanical use of every primitive on every route is not required |
 | V6-REQ-011 | Trusted scoped API tokens | IMPLEMENTED | Token routes/services/models | Token/auth tests | Production revocation and execution gates | Yes | Security-sensitive |
 | V6-REQ-012 | Contextual Notes content | IMPLEMENTED | Notes pane, API and migration | `V6ContextualNotesTest` | Full browser scope/account/portfolio and responsive behavior | Yes | Shell placement is separate |
 | V7-REQ-001 | Point-in-time-safe ML scoring/lifecycle | IMPLEMENTED | Managed Python logistic training/artifact adapter, PIT dataset/label builder, horizon-aware chronological evaluation, artifact-backed scoring, promotion/rollback, shadow persistence, drift service/API/UI and ML runtime deployment gate | `MlScoringLifecycleTest` + dataset tests; V7 feature suite (41 tests, 370 assertions); Python adapter contract tests (11 tests); deployment contract tests (3 tests) | Production release `bcc3b9da5b0c9bfe2491f98efef4c227cb2fbc5a` verified primary benchmark readiness, 1m/3m/6m training/evaluation, exact artifact hashes, 3m candidate promotion/replacement, retained-version rollback, active prediction and active `insufficient_data` drift execution. Matured live-outcome drift remains an ongoing observation because the current prediction has not matured, not an implementation blocker | Yes | `V7-REQ-001-ML-RUNTIME-VERIFICATION.md`; production evidence closes the accepted V7 runtime boundary |
@@ -179,16 +179,16 @@ The table above is the complete gap register. It contains only confirmed impleme
 
 ## 7. Wiring / Reachability Findings
 
-- **Statically remediated shell findings:** AUD-001 Page Visit History, AUD-002 Contextual Notes, AUD-003 page-anatomy scope, and AUD-016 Investor Global Search are mounted and covered by focused tests; exact responsive geometry remains a runtime question. The low-priority footer remains a separate shell concern.
+- **Statically remediated shell findings:** AUD-001 Page Visit History, AUD-002 Contextual Notes, AUD-003 page-anatomy scope, and AUD-016 Investor Global Search are mounted and covered by focused tests; exact responsive geometry remains a runtime question. The low-priority footer is optional in task-focused layouts under the current contract.
 - **Mounted and statically resolved:** `RightUtilityRail` now coordinates the Investor Notes utility, desktop overlay and mobile sheet. The Notes API remains profile-scoped and tested; exact browser geometry and the known unsaved-draft replacement limitation remain separate verification/follow-up items.
-- **Mounted structural zones:** `AppHeader`, `Sidebar`, `PageChrome`, and `.lido-main` are directly mounted in `App.jsx`. The CSS contains `.lido-bottom-nav` rules but no JSX mount or `lido-footer-visible` producer was found, so the low-priority footer zone is not evidenced as active.
+- **Mounted structural zones:** `AppHeader`, `Sidebar`, `PageChrome`, and `.lido-main` are directly mounted in `App.jsx`; the Investor utility rail, Page History and Notes are also mounted. The CSS contains optional footer rules but no JSX mount was found; this is permitted because the current contract allows the low-priority footer to be omitted in task-focused layouts.
 - **Reachable by route but not necessarily discoverable:** review reports, artifact library, backtests, admin registries and several settings pages are explicitly routed; sidebar discoverability still requires role-specific runtime inspection.
 - **Intentionally redirected:** `/evaluations` redirects to `/candidates`; this is consistent with the Phase 1 superseding decision, not an unwired feature.
 - **Test-only evidence:** source-reading JS tests such as `roleSeparatedShell.test.mjs` and `notificationCenterShell.test.mjs` establish selected source patterns, not mounted-browser or responsive acceptance.
 
 ## 8. Dead / Legacy Code
 
-- The `.lido-bottom-nav` / `html.lido-footer-visible` stylesheet has no corresponding JSX reference in `app/resources/js/src`. This is **candidate dead CSS**, not proof of a removed feature; it is recorded because the accepted shell includes a low-priority footer zone.
+- The `.lido-bottom-nav` / `html.lido-footer-visible` stylesheet has no corresponding JSX reference in `app/resources/js/src`. This is **candidate dead CSS**, not a requirement defect: the current shell contract permits omitting low-priority footer chrome in task-focused layouts.
 - Legacy `/api/*` paths and the `/evaluations` redirect are intentional compatibility/supersession paths, not dead code findings.
 - No other service was classified `DEAD_CODE` solely because its route or test coverage was incomplete.
 
@@ -204,7 +204,7 @@ The table above is the complete gap register. It contains only confirmed impleme
 ## 10. Cross-Domain Consistency Findings
 
 - **Final broker gate versus documented invariant:** AUD-015 now revalidates fresh authority/state at the regular `placeOrder()` boundary. Provider behavior and concurrent production safety changes still require the documented controlled runtime drill.
-- **Shell contract versus implementation:** current frontend documentation correctly retains the V6 E4 rail, Page History, Global Search and footer contract. The mounted React shell now implements Page History, the Notes rail, and the approved Investor Pages + Stocks Global Search MVP statically; footer and broader shell verification remain separate alignment items.
+- **Shell contract versus implementation:** current frontend documentation retains the V6 E4 rail, Page History, Global Search and optional footer treatment. The mounted React shell implements Page History, the Notes rail, and the approved Investor Pages + Stocks Global Search MVP statically; browser geometry and deployed reachability remain separate checks.
 - **Notes context precision:** the notes API accepts `subject_type` and `subject_id` (`V6ContextualNotesTest`), but the mounted pane derives only a sanitized pathname and never supplies subject values. Entity-level contextual notes therefore require workflow verification beyond page-scoped CRUD.
 - **Accounting/execution funds boundary:** broker funds are fetched immediately before BUY sizing and pending SELL proceeds are not used as broker funds in `LiveBrokerExecutionService`; no contrary static path was found. Production broker-field semantics remain runtime verification.
 - **State versus notification boundary:** notification delivery tests prove bounded retry and condition suppression; no static path was found that turns delivery failure/read state into a recommendation, accounting, halt, or broker mutation. Browser/banner semantics remain partial.
@@ -230,10 +230,10 @@ Other acceptance areas with no complete test evidence include:
 ## 12. V6 E4 Findings
 
 1. **V6-REQ-006:** No old/current capability inventory or recorded product-owner removal evidence was found. This is a verification failure, not proof that every named page regressed.
-2. **V6-REQ-007:** Header, collapsible sidebar, main workspace, Investor Global Search, Page Visit History and the coordinated Notes utility are mounted. A mounted footer zone remains absent; exact shared-shell geometry still needs browser verification.
+2. **V6-REQ-007:** Header, collapsible sidebar, main workspace, Investor Global Search, Page Visit History and the coordinated Notes utility are mounted. The current contract permits omitting low-priority footer chrome in task-focused layouts; exact shared-shell geometry still needs browser verification.
 3. **V6-REQ-008:** Page Visit History is statically resolved by AUD-001; desktop/mobile geometry and deployed-bundle reachability remain runtime checks.
 4. **V6-REQ-009:** Contextual Notes are statically resolved through the shared rail with desktop overlay, mobile sheet, focus and reduced-motion behavior. Browser geometry, touch/soft-keyboard behavior and the known dirty-draft limitation remain outside this remediation.
-5. **V6-REQ-010:** Breadcrumbs/PageChrome are active. Global adoption of tabs, segmented controls, drawers, skeletons, EmptyState, ScrollToTop and preference utilities is not demonstrated.
+5. **V6-REQ-010:** Breadcrumbs/PageChrome and the shared state/anatomy foundations are active. Representative adoption and reviewed semantic local equivalents satisfy the static contract; global mechanical use of every primitive is not required, while browser/layout verification remains.
 
 ## 13. Phase 1 Assumptions Disproven Or Narrowed By Code Inspection
 
@@ -248,8 +248,8 @@ Applicable requirements audited: **85** (75 `CURRENT`, 5 `POSSIBLY-LOST-DURING-C
 
 | Primary verdict | Count |
 |---|---:|
-| IMPLEMENTED | 61 |
-| PARTIALLY_IMPLEMENTED | 14 |
+| IMPLEMENTED | 63 |
+| PARTIALLY_IMPLEMENTED | 12 |
 | NOT_IMPLEMENTED | 0 |
 | IMPLEMENTED_BUT_NOT_WIRED | 0 |
 | IMPLEMENTED_DIFFERENTLY | 1 |
@@ -291,8 +291,8 @@ The matrix verdict counts are intentionally conservative: `RUNTIME_VERIFICATION_
 
 1. Run broker reconciliation/halt recovery drills, validate AUD-015 against a controlled broker/runtime environment, and complete the ownership matrix.
 2. Establish production runtime evidence for deployment, scheduler, queue, holidays, providers, callbacks and tokens.
-3. Preserve the remediated Page History, Notes and Global Search shell capabilities; complete the non-regression inventory and footer/runtime checks before further redesign work.
+3. Preserve the remediated Page History, Notes, Global Search and page-anatomy foundations; complete the non-regression inventory and browser/runtime geometry checks before further redesign work.
 4. Complete artifact rollout, V7 ML/fundamental operating evidence, and namespace drift inventory; retain bounded AUD-005/AUD-006 browser/provider/runtime follow-up.
 5. Close test gaps after product decisions; do not use unit or source-reading tests as substitutes for browser/runtime acceptance.
 
-No remediation was performed during the original audit. AUD-005 and AUD-015 were subsequently remediated and are retained above with their original finding history and current static evidence; their remaining browser/deployment/runtime checks are not counted as static implementation defects.
+No remediation was performed during the original audit. AUD-003, AUD-005 and AUD-015 were subsequently remediated and are retained above with their original finding history and current static evidence; their remaining browser/deployment/runtime checks are not counted as static implementation defects.

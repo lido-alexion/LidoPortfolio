@@ -343,7 +343,7 @@ Static outcome:
 
 - `UX-001`: **IMPLEMENTED for the selected representative surfaces**, not a claim that every route has migrated.
 - `UX-002`: **PARTIALLY_IMPLEMENTED**; the shared table path is proven on Candidates and existing consumers remain covered, but the rest of the data-list families still require incremental adoption.
-- `AUD-003`: remains **PARTIALLY_IMPLEMENTED**. `UX-003` through `UX-006` were not changed.
+- At this batch boundary `AUD-003` remained **PARTIALLY_IMPLEMENTED**; later batches below close the remaining static scope.
 
 Validation completed under Node 22:
 
@@ -367,7 +367,7 @@ Static outcome:
 
 - `UX-003`: **IMPROVED / PARTIALLY_IMPLEMENTED**; representative heading hierarchy is clearer, while global action composition remains unfinished.
 - `UX-004`: **IMPLEMENTED for the targeted equivalent Market Depth control**; Notification History’s five URL-backed views remain intentionally local/query-driven.
-- `AUD-003`: remains **PARTIALLY_IMPLEMENTED**. UX-005 and UX-006 were not changed.
+- At this batch boundary `AUD-003` remained **PARTIALLY_IMPLEMENTED**; UX-005/UX-006 were addressed by the closure batch below.
 
 Validation completed under Node 22:
 
