@@ -55,7 +55,7 @@ Static inspection cannot establish browser geometry, provider behavior, producti
 | Analytics / backtesting / simulation | 7 | 0 | 0 | 0 | 0 | 0 | High |
 | Notifications / calendar / alerts | 1 | 2 | 0 | 0 | 0 | 0 | Medium |
 | Knowledge / documentation | 3 | 1 | 0 | 0 | 0 | 0 | Medium |
-| Administration / security / API | 5 | 1 | 0 | 0 | 1 | 0 | Critical |
+| Administration / security / API | 6 | 0 | 0 | 0 | 1 | 0 | Critical |
 | Trading artifacts / V7 | 5 | 1 | 0 | 0 | 3 | 0 | High |
 
 The domain figures are orientation aids, not a second requirement count: several Phase 1 requirements deliberately span domains. The authoritative disposition remains the 85-row matrix below.
@@ -112,7 +112,7 @@ The following rows cover every applicable Phase 1 requirement. Related requireme
 | V4-REQ-010 | Hard dataset freshness gate | IMPLEMENTED | Dataset version/gate services | Dataset/pipeline tests | Deployed stale-data failure path | Yes | High operational importance |
 | V4-REQ-011 | Immutable dataset versions | IMPLEMENTED | Dataset migrations/models/services | Dataset tests | Production immutability and retention | Yes | Backend evidence strong |
 | V4-REQ-012 | `markExecuted` ownership | IMPLEMENTED | Recommendation/execution APIs | Execution ownership tests | Cross-role browser verification | Yes | Inspect authorization middleware |
-| V4-REQ-013 | OpenAPI `/api/v1` | PARTIALLY_IMPLEMENTED | Public docs/OpenAPI asset and routes | API contract tests | Generated spec freshness and complete parity | Yes | Static artifact can drift |
+| V4-REQ-013 | OpenAPI `/api/v1` | IMPLEMENTED | Live-route OpenAPI 3.0.3 builder, canonical static document and documented `/api/v1` operations | `OpenApiV1ContractTest` verifies canonical/generated equality, exact route parity, auth/admin markers, callback exception, envelopes and key V4 contracts; `php artisan openapi:v1 --check` | Runtime consumers and non-`/api/v1` API behavior remain outside this requirement | Yes | CI/deployment runs the artisan freshness/parity gate before packaging; stale artifacts block the backend gate |
 | V4-REQ-014 | UI smoke tests | TEST_ONLY | JS test helpers and selected component tests | Tests exist | Does not prove production route coverage | Yes | No runtime conclusion from tests |
 | V4-REQ-015 | Controller split/hooks | IMPLEMENTED | Laravel controller/service structure | Feature tests | No acceptance gap found | No | Architectural evidence only |
 | V4-REQ-016 | Logging/pagination consistency | PARTIALLY_IMPLEMENTED | Shared API pagination patterns | Pagination tests | All screens and error envelopes | Yes | Spot-check needed |
@@ -248,8 +248,8 @@ Applicable requirements audited: **85** (75 `CURRENT`, 5 `POSSIBLY-LOST-DURING-C
 
 | Primary verdict | Count |
 |---|---:|
-| IMPLEMENTED | 69 |
-| PARTIALLY_IMPLEMENTED | 9 |
+| IMPLEMENTED | 70 |
+| PARTIALLY_IMPLEMENTED | 8 |
 | NOT_IMPLEMENTED | 0 |
 | IMPLEMENTED_BUT_NOT_WIRED | 0 |
 | IMPLEMENTED_DIFFERENTLY | 1 |
