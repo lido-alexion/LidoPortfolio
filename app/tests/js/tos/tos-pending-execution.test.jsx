@@ -1,11 +1,16 @@
 import React from 'react';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import PendingExecutionPanel from '../../../resources/js/src/components/PendingExecutionPanel.jsx';
 import { PENDING_BUY_RECOMMENDATION } from './fixtures/tosApi.js';
 import { apiMock, installDefaultTosHandlers } from './helpers/mockApi.js';
+
+vi.mock('../../../resources/js/src/toast.js', () => ({ showToast: vi.fn() }));
+import { showToast } from '../../../resources/js/src/toast.js';
+
+beforeEach(() => showToast.mockReset());
 
 function renderPanel() {
     return render(
@@ -69,5 +74,30 @@ describe('Pending Execution TOS smoke', () => {
         expect(await screen.findByText(/without a per-order confirmation/i)).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Accept / Execute Selected' })).not.toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Execute manually' })).toBeInTheDocument();
+    });
+
+    it('does not report broker success when every selected row is blocked', async () => {
+        const user = userEvent.setup();
+        installDefaultTosHandlers({
+            recommendations: [PENDING_BUY_RECOMMENDATION],
+            executionMode: 'semi_automatic',
+            entitled: true,
+            totpEnabled: true,
+            modeBlockers: [],
+            canSubmitSemiAutomatic: true,
+            executionSummary: {
+                submitted: 0,
+                skipped: 0,
+                blocked: 1,
+                results: [{ outcome: 'blocked', reason: 'BROKER_REJECTED' }],
+            },
+        });
+        renderPanel();
+        await screen.findByRole('button', { name: 'Accept / Execute Selected' });
+        await user.click(screen.getByRole('checkbox', { name: 'Select INFY' }));
+        await user.type(screen.getByLabelText('Authenticator code'), '123456');
+        await user.click(screen.getByRole('button', { name: 'Accept / Execute Selected' }));
+        expect(showToast).toHaveBeenCalledWith(expect.stringMatching(/No orders submitted/i), 'warning');
+        expect(showToast).not.toHaveBeenCalledWith('Submitted to broker', 'success');
     });
 });

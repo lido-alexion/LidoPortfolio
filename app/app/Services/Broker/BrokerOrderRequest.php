@@ -8,6 +8,7 @@ final class BrokerOrderRequest
         public int $userId,
         public int $profileId,
         public int $recommendationId,
+        public int $stockId,
         public string $symbol,
         public string $exchange,
         public string $side,

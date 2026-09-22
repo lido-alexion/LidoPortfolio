@@ -210,7 +210,7 @@ class FakeBrokerGateway implements BrokerGateway
         return $this->orders[$brokerOrderId] ?? null;
     }
 
-    public function cancelOrder(int $userId, string $brokerOrderId): BrokerOrderSnapshot
+    public function cancelOrder(int $userId, string $brokerOrderId, string $variety = BrokerOrderPolicy::REGULAR): BrokerOrderSnapshot
     {
         $existing = $this->orders[$brokerOrderId] ?? new BrokerOrderSnapshot($brokerOrderId, 'open');
         $cancelled = new BrokerOrderSnapshot(

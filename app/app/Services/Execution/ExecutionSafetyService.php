@@ -118,7 +118,7 @@ class ExecutionSafetyService
         $failed = [];
         foreach ($orders as $order) {
             try {
-                $snapshot = $this->broker->cancelOrder($halted->id, (string) $order->broker_order_id);
+                $snapshot = $this->broker->cancelOrder($halted->id, (string) $order->broker_order_id, (string) ($order->broker_variety ?: 'regular'));
                 $profile = PortfolioProfile::query()->find($order->profile_id);
                 if ($profile) {
                     $this->liveBroker->applySnapshot($profile, $order, $snapshot);

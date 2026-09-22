@@ -73,6 +73,7 @@ export function installDefaultTosHandlers({
     modeBlockers = ['entitlement', 'totp', 'broker'],
     canSubmitSemiAutomatic = false,
     canSubmitAutomatic = false,
+    executionSummary = null,
     reviews = [],
     reviewsMeta = null,
     getReviews = null,
@@ -265,7 +266,7 @@ export function installDefaultTosHandlers({
             return axiosOk({ ok: true });
         }
         if (path === '/v1/execution/submit-selected') {
-            return axiosOk(apiEnvelope((body?.recommendation_ids || []).map((id) => ({
+            return axiosOk(apiEnvelope(executionSummary ?? (body?.recommendation_ids || []).map((id) => ({
                 recommendation_id: id,
                 outcome: 'submitted',
             }))));

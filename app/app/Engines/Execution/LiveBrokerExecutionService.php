@@ -476,6 +476,7 @@ class LiveBrokerExecutionService
             userId: $user->id,
             profileId: $profile->id,
             recommendationId: $recommendation->id,
+            stockId: $stock->id,
             symbol: (string) $stock->symbol,
             exchange: $stock->exchange ?: 'NSE',
             side: $side,
@@ -513,6 +514,8 @@ class LiveBrokerExecutionService
                 'broker_status' => TradingOrder::BROKER_REJECTED,
                 'status' => TradingOrder::STATUS_CANCELLED,
                 'cancelled_at' => now(),
+                'broker_error_message' => mb_substr($e->getMessage(), 0, 500),
+                'broker_error_type' => $e->errorCode(),
                 'last_broker_sync_at' => now(),
             ])->save();
             $decision->forceFill([
@@ -555,6 +558,9 @@ class LiveBrokerExecutionService
         $order->forceFill([
             'broker_order_id' => $placed->brokerOrderId,
             'broker_status' => $brokerStatus,
+            'broker_variety' => $placed->variety,
+            'broker_error_message' => $placed->message,
+            'broker_error_type' => $placed->errorType,
             'last_broker_sync_at' => now(),
         ])->save();
         if ($brokerStatus === TradingOrder::BROKER_REJECTED) {

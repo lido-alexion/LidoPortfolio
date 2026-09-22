@@ -19,7 +19,7 @@ interface BrokerGateway
 
     public function fetchOrder(int $userId, string $brokerOrderId): ?BrokerOrderSnapshot;
 
-    public function cancelOrder(int $userId, string $brokerOrderId): BrokerOrderSnapshot;
+    public function cancelOrder(int $userId, string $brokerOrderId, string $variety = BrokerOrderPolicy::REGULAR): BrokerOrderSnapshot;
 
     public function placeGtt(BrokerGttRequest $request): BrokerSubmission;
 

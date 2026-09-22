@@ -8,5 +8,7 @@ final class BrokerSubmission
         public string $brokerOrderId,
         public string $status = 'submitted',
         public ?string $message = null,
+        public string $variety = 'regular',
+        public ?string $errorType = null,
     ) {}
 }

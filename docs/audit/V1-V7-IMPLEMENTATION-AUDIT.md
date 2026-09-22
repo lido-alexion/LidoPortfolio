@@ -195,7 +195,7 @@ The table above is the complete gap register. It contains only confirmed impleme
 ## 9. Runtime Verification Checklist
 
 1. Inspect Investor desktop and mobile at the deployed build for shell geometry, sidebar collapse/drawer behavior, notes focus trapping/escape behavior, constrained header overflow, and all loading/empty/error surfaces.
-2. Run a controlled Kite sandbox or read-only production drill for connection expiry, reconciliation mismatch, emergency halt/recovery, partial fill, insufficient funds, and protection preservation.
+2. Run a controlled Kite sandbox or read-only production drill for connection expiry, reconciliation mismatch, emergency halt/recovery, partial fill, insufficient funds, protection preservation, and the repaired StoX instrument/variety/order/cancel path. Direct production evidence already confirmed corrected IPv6 allowlisting, SITINET-BZ instrument discovery, one successful AMO placement/cancel, and zero fill; the normal StoX path remains runtime verification pending.
 3. Verify the scheduler/queue worker, market timezone, holiday sync, data freshness, reconciliation, artifact deployment, ML/fundamental jobs, and delivery workers are actually executing the deployed commit.
 4. Test Sanctum cookie/CSRF, invite/reset/email verification, callback return handling, personal-token revocation, role/profile ownership, and scope enforcement against production-like identities.
 5. Exercise configured and unconfigured Telegram, email and webhook channels without allowing a notification failure to mutate the source domain state.

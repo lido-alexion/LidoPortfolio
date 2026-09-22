@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import api from '../api';
 import useApiGet from '../hooks/useApiGet';
 import { runApiMutation } from '../hooks/useApiMutation';
+import { showToast } from '../toast';
 import { tosData, tosList, tosMeta } from '../utils/tosEnvelope';
 
 const CANCEL_REASONS = [
@@ -108,13 +109,25 @@ export default function PendingExecutionPanel({ onExecuteStarted }) {
         }
         setExecutingSelected(true);
         try {
-            const { ok } = await runApiMutation(async () => {
-                await api.post('/v1/execution/submit-selected', {
+            const { ok, data } = await runApiMutation(async () => {
+                return api.post('/v1/execution/submit-selected', {
                     recommendation_ids: selectedIds,
                     totp,
                 }, { skipErrorToast: true });
-            }, { successMessage: 'Submitted to broker', errorFallback: 'Broker submit failed' });
+            }, { errorFallback: 'Broker submit failed' });
             if (ok) {
+                const summary = data?.data?.data || data?.data || {};
+                const submitted = Number(summary.submitted || 0);
+                const blocked = Number(summary.blocked || 0);
+                const skipped = Number(summary.skipped || 0);
+                if (submitted > 0 && (blocked > 0 || skipped > 0)) {
+                    showToast(`Submitted ${submitted}; blocked ${blocked}; skipped ${skipped}.`, 'warning');
+                } else if (submitted > 0) {
+                    showToast('Submitted to broker', 'success');
+                } else {
+                    const reason = summary.results?.find((row) => row?.reason)?.reason;
+                    showToast(reason ? `No orders submitted: ${reason}.` : 'No orders were submitted to the broker.', 'warning');
+                }
                 setSelected({});
                 setTotp('');
                 await load();

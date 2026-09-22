@@ -15,6 +15,8 @@ class KiteBrokerGateway implements BrokerGateway
 {
     public function __construct(
         protected PortfolioLoggerService $logger,
+        protected KiteInstrumentRegistryService $instruments,
+        protected BrokerOrderPolicy $orderPolicy,
     ) {}
 
     public function provider(): string
@@ -26,58 +28,70 @@ class KiteBrokerGateway implements BrokerGateway
     {
         $token = $this->accessToken($request->userId);
         $tag = substr(hash('sha256', $request->submissionKey), 0, 20);
+        $stock = \App\Models\Stock::query()->findOrFail($request->stockId);
+        $mapping = $this->instruments->resolve($stock, $request->userId);
+        $variety = $this->orderPolicy->variety();
 
-        try {
-            $response = Http::timeout(20)
-                ->withHeaders($this->headers($token))
-                ->asForm()
-                ->post(rtrim((string) config('broker.kite.api_base'), '/').'/orders/regular', [
-                    'tradingsymbol' => $request->symbol,
-                    'exchange' => $request->exchange ?: 'NSE',
-                    'transaction_type' => strtoupper($request->side) === 'SELL' ? 'SELL' : 'BUY',
-                    'quantity' => (int) round($request->quantity),
-                    'product' => $request->product ?? 'CNC',
-                    'order_type' => $request->orderType ?? 'MARKET',
-                    'validity' => 'DAY',
-                    'tag' => $tag,
+        for ($attempt = 0; $attempt < 2; $attempt++) {
+            try {
+                $response = Http::timeout(20)
+                    ->withHeaders($this->headers($token))
+                    ->asForm()
+                    ->post(rtrim((string) config('broker.kite.api_base'), '/').'/orders/'.$variety, [
+                        'tradingsymbol' => $mapping['trading_symbol'],
+                        'exchange' => $request->exchange ?: 'NSE',
+                        'transaction_type' => strtoupper($request->side) === 'SELL' ? 'SELL' : 'BUY',
+                        'quantity' => (int) round($request->quantity),
+                        'product' => $request->product ?? 'CNC',
+                        'order_type' => $request->orderType ?? 'MARKET',
+                        'market_protection' => strtoupper((string) $request->orderType) === 'MARKET' ? -1 : null,
+                        'validity' => 'DAY',
+                        'tag' => $tag,
+                    ]);
+            } catch (ConnectionException $e) {
+                throw new BrokerAmbiguousException('Kite place timed out.', 0, $e);
+            }
+
+            $json = $response->json();
+            if ($response->status() >= 500) {
+                throw new BrokerAmbiguousException('Kite place returned HTTP '.$response->status());
+            }
+            $message = is_array($json) ? trim((string) ($json['message'] ?? 'Kite rejected the order.')) : 'Kite rejected the order.';
+            $errorType = is_array($json) ? trim((string) ($json['error_type'] ?? '')) : '';
+            if ((! is_array($json) || ($json['status'] ?? '') !== 'success') && $this->isInvalidInstrument($message, $errorType) && $attempt === 0) {
+                $refreshed = $this->instruments->resolve($stock, $request->userId, refresh: true);
+                if ($refreshed['trading_symbol'] !== $mapping['trading_symbol']) {
+                    $mapping = $refreshed;
+                    continue;
+                }
+            }
+            if (! is_array($json) || ($json['status'] ?? '') !== 'success') {
+                $this->logger->event('KiteBrokerGateway', 'broker.place_rejected', 'warning', 'Kite place rejected', [
+                    'user_id' => $request->userId,
+                    'recommendation_id' => $request->recommendationId,
+                    'http_status' => $response->status(),
+                    'error_type' => $errorType ?: null,
+                    'message' => mb_substr($message, 0, 300),
+                    'trading_symbol' => $mapping['trading_symbol'],
+                    'variety' => $variety,
                 ]);
-        } catch (ConnectionException $e) {
-            throw new BrokerAmbiguousException('Kite place timed out.', 0, $e);
-        }
+                throw new DomainException(
+                    mb_substr($message, 0, 300),
+                    $errorType === 'MarginException' ? 'BROKER_INSUFFICIENT_FUNDS' : 'BROKER_REJECTED',
+                    422,
+                );
+            }
 
-        if ($response->status() >= 500) {
-            throw new BrokerAmbiguousException('Kite place returned HTTP '.$response->status());
-        }
-
-        $json = $response->json();
-        if (! is_array($json) || ($json['status'] ?? '') !== 'success') {
-            $message = is_array($json) ? (string) ($json['message'] ?? 'Kite rejected the order.') : 'Kite rejected the order.';
-            $errorType = is_array($json) ? (string) ($json['error_type'] ?? '') : '';
-            $this->logger->event('KiteBrokerGateway', 'broker.place_rejected', 'warning', 'Kite place rejected', [
-                'user_id' => $request->userId,
-                'recommendation_id' => $request->recommendationId,
-                'http_status' => $response->status(),
+            $orderId = (string) data_get($json, 'data.order_id', '');
+            if ($orderId === '') throw new BrokerAmbiguousException('Kite accepted without an order id.');
+            $this->logger->event('KiteBrokerGateway', 'broker.placed', 'info', 'Kite order placed', [
+                'user_id' => $request->userId, 'recommendation_id' => $request->recommendationId,
+                'broker_order_id' => $orderId, 'trading_symbol' => $mapping['trading_symbol'], 'variety' => $variety,
             ]);
-
-            throw new DomainException(
-                $message,
-                $errorType === 'MarginException' ? 'BROKER_INSUFFICIENT_FUNDS' : 'BROKER_REJECTED',
-                422,
-            );
+            return new BrokerSubmission($orderId, 'submitted', null, $variety);
         }
 
-        $orderId = (string) data_get($json, 'data.order_id', '');
-        if ($orderId === '') {
-            throw new BrokerAmbiguousException('Kite accepted without an order id.');
-        }
-
-        $this->logger->event('KiteBrokerGateway', 'broker.placed', 'info', 'Kite order placed', [
-            'user_id' => $request->userId,
-            'recommendation_id' => $request->recommendationId,
-            'broker_order_id' => $orderId,
-        ]);
-
-        return new BrokerSubmission($orderId, 'submitted');
+        throw new DomainException('Kite instrument mapping did not converge.', 'BROKER_INSTRUMENT_MAPPING_NOT_FOUND', 422);
     }
 
     public function availableEquityFunds(int $userId): ?float
@@ -191,12 +205,12 @@ class KiteBrokerGateway implements BrokerGateway
         return $this->mapSnapshot($brokerOrderId, $row);
     }
 
-    public function cancelOrder(int $userId, string $brokerOrderId): BrokerOrderSnapshot
+    public function cancelOrder(int $userId, string $brokerOrderId, string $variety = BrokerOrderPolicy::REGULAR): BrokerOrderSnapshot
     {
         $token = $this->accessToken($userId);
         $response = Http::timeout(20)
             ->withHeaders($this->headers($token))
-            ->delete(rtrim((string) config('broker.kite.api_base'), '/').'/orders/regular/'.$brokerOrderId);
+            ->delete(rtrim((string) config('broker.kite.api_base'), '/').'/orders/'.($variety === BrokerOrderPolicy::AMO ? 'amo' : 'regular').'/'.$brokerOrderId);
 
         $fetched = $this->fetchOrder($userId, $brokerOrderId);
         if ($fetched) {
@@ -381,6 +395,15 @@ class KiteBrokerGateway implements BrokerGateway
             'X-Kite-Version' => '3',
             'Authorization' => 'token '.$apiKey.':'.$accessToken,
         ];
+    }
+
+    protected function isInvalidInstrument(string $message, string $errorType): bool
+    {
+        $text = strtolower($message.' '.$errorType);
+
+        return str_contains($text, 'expired')
+            || str_contains($text, 'does not exist')
+            || str_contains($text, 'invalid instrument');
     }
 
     protected function accessToken(int $userId): string

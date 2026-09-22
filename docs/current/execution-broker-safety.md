@@ -156,6 +156,8 @@ Connection flow:
 
 Current anchors: `BrokerController`, `BrokerConnection`, `BrokerConnectionService`, `KiteBrokerGateway`, `KiteReadinessReminderService`, `KiteCallbackTest`, and `KiteReadinessReminderTest`.
 
+Kite order placement uses the dedicated `portfolio_broker_instruments` registry rather than mutating canonical Stock symbols. The daily `portfolio:sync-kite-instruments` command reconciles the NSE instrument master; a targeted refresh is allowed after a deterministic invalid-instrument rejection and can retry the same durable StoX submission once. Ambiguous or missing mappings block without guessing. Regular orders are selected during the supported IST equity session and AMO orders during the supported after-market window; unsupported windows are blocked. MARKET payloads use Kite `market_protection=-1`, and the persisted broker variety selects the matching cancellation endpoint.
+
 ## 11. Emergency Halt And Recovery
 
 Emergency halt blocks new StoX live broker submissions. Recovery is explicit and records actor/context through execution safety events. Halting new submissions is distinct from cancelling existing broker orders.
@@ -356,6 +358,10 @@ Test coverage gap — implementation audit follow-up:
 | Halt appears ineffective | `ExecutionSafetyEvent`, current safety state, direct versus in-flight order path, emergency action used and broker reconciliation history |
 
 ## 23. Implementation Alignment Notes
+
+### Production Kite instrument evidence (2026-09)
+
+The production VPS initially received HTTP 403 from Kite because its IPv6 egress (`2a02:4780:12:f241::1`) was not allowlisted; the corrected egress also has IPv4 `82.112.230.20`. After allowlisting, the diagnostic moved to normal HTTP 400 validation. Kite's NSE instrument master identified canonical StoX `SITINET` as `SITINET-BZ` (`instrument_token=7477761`, `exchange_token=29210`, name `SITI NETWORKS`). A direct production AMO test for one CNC BUY was accepted as order `2102434708964433920`, visible in Kite, then cancelled with final history `CANCELLED` and `filled_quantity=0`. This direct test bypassed `LiveBrokerExecutionService`; it proves connectivity and broker capability, not successful execution through the repaired normal StoX path. The latter remains a runtime verification item.
 
 The following accepted contracts require verification under the V1-V7 implementation audit. This list does not label them defects and does not weaken the current contract:
 

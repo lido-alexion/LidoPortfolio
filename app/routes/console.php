@@ -306,6 +306,12 @@ Schedule::command('portfolio:send-kite-readiness-reminders')
     ->timezone($timezone)
     ->name('kite-readiness-reminders');
 
+Schedule::command('portfolio:sync-kite-instruments')
+    ->dailyAt('08:00')
+    ->timezone('Asia/Kolkata')
+    ->withoutOverlapping(10)
+    ->name('kite-instrument-registry-refresh');
+
 Schedule::command('portfolio:queue-notification-reminders')
     ->hourly()
     ->withoutOverlapping(10)
