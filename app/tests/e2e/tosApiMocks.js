@@ -17,7 +17,10 @@ function json(route, body, status = 200) {
 /**
  * Intercept Sanctum + /api so the E2E harness never hits a live backend.
  */
-export async function installTosApiMocks(page, { recommendations = [OPEN_BUY_RECOMMENDATION] } = {}) {
+export async function installTosApiMocks(page, {
+    recommendations = [OPEN_BUY_RECOMMENDATION],
+    user = TEST_USER,
+} = {}) {
     let recs = recommendations.map((r) => ({ ...r }));
 
     await page.route(/\/(sanctum\/csrf-cookie|api\/)/, async (route) => {
@@ -33,7 +36,7 @@ export async function installTosApiMocks(page, { recommendations = [OPEN_BUY_REC
             return json(route, { token: 'e2e-csrf' });
         }
         if (path.endsWith('/api/auth/me') && method === 'GET') {
-            return json(route, { user: TEST_USER });
+            return json(route, { user });
         }
         if (path.endsWith('/api/portfolios') && method === 'GET') {
             return json(route, { data: [TEST_PORTFOLIO] });
@@ -68,6 +71,13 @@ export async function installTosApiMocks(page, { recommendations = [OPEN_BUY_REC
                 blockers: ['entitlement', 'totp', 'broker'],
                 can_submit_semi_automatic: false,
                 can_submit_automatic: false,
+            }));
+        }
+        if (path.endsWith('/api/v1/execution/state') && method === 'GET') {
+            return json(route, apiEnvelope({
+                execution_state: 'normal',
+                broker_connected: false,
+                active_orders: 0,
             }));
         }
         if (path.endsWith('/api/v1/recommendations/pending-execution') && method === 'GET') {

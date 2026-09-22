@@ -48,7 +48,7 @@ Contextual Help must continue to resolve documentation for the current route; re
 
 Current anchors include `AppHeader.jsx`, `HeaderHelpButton.jsx`, `NotificationBell.jsx`, `ExecutionSafetyControls.jsx`, `PortfolioSwitcher.jsx`, `ProfileMenu.jsx`, `ThemeToggle.jsx`, `ThemeContext.jsx`, and `GlobalSearch.jsx`. `ThemeToggle` is currently presented through the profile menu. Global Search is mounted for the Investor shell; exact geometry, overflow and deployed reachability remain runtime checks.
 
-Implementation alignment: Global Search is implemented for the approved shell surface; constrained-width overflow, responsive geometry and deployed reachability require verification under the V1-V7 runtime audit.
+Implementation alignment: Global Search is implemented for the approved shell surface; constrained-width overflow and representative responsive geometry are covered by the mocked Chromium Playwright matrix. Deployed reachability and future visual regressions remain normal runtime checks.
 
 ### Left Navigation
 
@@ -86,7 +86,7 @@ The rail is compact by default. Normally only one major contextual pane is open 
 
 `ContextualNotesPane.jsx` and `PageHistoryRail.jsx` are mounted through `RightUtilityRail` in the authenticated Investor shell. Their exact browser geometry, touch behavior and deployed reachability remain runtime checks.
 
-Implementation alignment: the unified rail, one-pane coordination and Page Visit History require verification under the V1-V7 implementation audit.
+Implementation alignment: the unified rail, one-pane coordination and Page Visit History are covered by source tests and representative Chromium browser checks; deployed reachability remains normal runtime monitoring.
 
 ### Low-priority Footer
 
@@ -216,7 +216,7 @@ Mobile contract:
 
 Current implementation anchors include `ContextualNotesPane.jsx`, its mount in `AuthenticatedShell`, and `.lido-notes-rail-button` / `.lido-context-notes-pane` styles. The component derives a stable route context from the current pathname and uses the active portfolio when requesting notes.
 
-Implementation alignment: rail integration, coordinated one-pane behavior, opacity/motion and mobile sheet behavior require verification under the V1-V7 implementation audit.
+Implementation alignment: rail integration, coordinated one-pane behavior, opacity/motion and mobile sheet behavior are covered by source tests and representative Chromium browser checks; exact visual tuning remains ordinary frontend regression work.
 
 ## 7. Responsive Contract
 

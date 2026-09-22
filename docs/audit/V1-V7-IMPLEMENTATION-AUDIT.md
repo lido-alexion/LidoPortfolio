@@ -139,7 +139,7 @@ The following rows cover every applicable Phase 1 requirement. Related requireme
 | V6-REQ-001 | Execution safety controls | RUNTIME_VERIFICATION_REQUIRED | Emergency/safety services and routes | Safety tests | Broker/live mode, halt, idempotency and operator UI | Yes | Critical financial path |
 | V6-REQ-002 | Paper experimentation | IMPLEMENTED | Independent Paper portfolio, clone-as-paper, simulated execution, broker guard, and isolation from live state | Paper foundation/processor suites and AUD-008 assurance | Browser/deployed worker verification | Yes | Related to V5-REQ-008 and `AUD-008` |
 | V6-REQ-003 | Admin audit explorer | IMPLEMENTED | Admin route/page/API | Audit explorer tests | Production authorization and pagination | Yes | Mounted under admin route |
-| V6-REQ-004 | Responsive client support | RUNTIME_VERIFICATION_REQUIRED | Responsive CSS/components, mobile branches, drawer/sheet utilities, focus/touch alternatives and wide-layout rules are materially implemented | Targeted JS tests and representative responsive behavior tests; AUD-003/AUD-004 retain responsive and reachability follow-up | Real viewport geometry and reachability across representative mobile, standard desktop and ultrawide/4K surfaces remain unverified; no specific absent static capability is currently known | Yes | The remaining acceptance boundary is browser/runtime verification, not a named repository implementation gap |
+| V6-REQ-004 | Responsive client support | IMPLEMENTED | Responsive CSS/components, mobile branches, drawer/sheet utilities, focus/touch alternatives and wide-layout rules are materially implemented; the narrow header action row now wraps so mobile navigation and utilities remain operable | `responsive-shell.spec.js` passes representative Chromium projects for 390x844 touch/mobile, 1024x768 tablet, 1440x900 desktop, 2560x1440 ultrawide and 3840x2160 4K; coverage exercises shell navigation, utility sheets, search, help, profile, safety controls, dense routes, admin shell, overflow and large-display geometry | Broader page-by-page visual regression, deployed-bundle reachability and future browser regression remain normal maintenance checks; no material V6-REQ-004 blocker remains | No | Representative browser archetypes verify the accepted viewport-capability contract; every route was not pixel-swept |
 | V6-REQ-005 | Frontend stack migration | IMPLEMENTED | React/Vite shell is active | JS/component tests | Production build/runtime parity | Yes | Structural, not UX completeness |
 | V6-REQ-006 | Dashboard/UX reorganization and non-regression | IMPLEMENTED | The 92-row AUD-004 reconstruction compares named pre-redesign baselines for Dashboard, Holdings, Strategy, Discovery, Recommendations, Backtests, Knowledge, Admin and cross-cutting helpers; no confirmed static capability loss was found | AUD-004 historical-source comparison; AUD-013 confirms 17 Dashboard capabilities preserved, one later readiness addition and zero regressions | Browser discoverability, responsive/touch behavior and deployed reachability | Yes | `PRESERVED_DIFFERENTLY` and accepted superseding redirects are retained where applicable; runtime checks remain separate |
 | V6-REQ-007 | Global shell: header, left nav, workspace, right rail/pane | IMPLEMENTED | `AuthenticatedShell` mounts `AppHeader`, `Sidebar`, `.lido-main`, Investor Global Search and the Investor `RightUtilityRail`, which coordinates Page History and Notes | `roleSeparatedShell.test.mjs` inspects role-specific shell source; Global Search, Page History and Contextual Notes tests cover utility behavior | Exact constrained-width geometry, responsive behavior and deployed reachability require browser inspection | Yes | The current frontend contract makes the low-priority footer optional/omittable in task-focused layouts; its absence is not a static blocker |
@@ -229,11 +229,12 @@ Other acceptance areas with no complete test evidence include:
 
 ## 12. V6 E4 Findings
 
-1. **V6-REQ-006:** AUD-004 now provides a 92-row old/current capability reconstruction with no confirmed static regression; browser discoverability, responsive/touch behavior and deployed reachability remain runtime checks.
+1. **V6-REQ-006:** AUD-004 now provides a 92-row old/current capability reconstruction with no confirmed static regression; representative browser responsive/touch coverage is recorded separately, while broad discoverability and deployed reachability remain normal follow-up.
 2. **V6-REQ-007:** Header, collapsible sidebar, main workspace, Investor Global Search, Page Visit History and the coordinated Notes utility are mounted. The current contract permits omitting low-priority footer chrome in task-focused layouts; exact shared-shell geometry still needs browser verification.
 3. **V6-REQ-008:** Page Visit History is statically resolved by AUD-001; desktop/mobile geometry and deployed-bundle reachability remain runtime checks.
 4. **V6-REQ-009:** Contextual Notes are statically resolved through the shared rail with desktop overlay, mobile sheet, focus and reduced-motion behavior. Browser geometry, touch/soft-keyboard behavior and the known dirty-draft limitation remain outside this remediation.
 5. **V6-REQ-010:** Breadcrumbs/PageChrome and the shared state/anatomy foundations are active. Representative adoption and reviewed semantic local equivalents satisfy the static contract; global mechanical use of every primitive is not required, while browser/layout verification remains.
+6. **V6-REQ-004:** The representative Chromium Playwright matrix now verifies the accepted responsive contract at 390x844 touch/mobile, 1024x768 tablet, 1440x900 desktop, 2560x1440 ultrawide and 3840x2160 4K. It covers shell navigation, utility sheets, search/help/profile/safety reachability, dense route containment, admin shell access and large-display geometry; this row is closed without claiming a pixel sweep of every route.
 
 ## 13. Phase 1 Assumptions Disproven Or Narrowed By Code Inspection
 
@@ -248,14 +249,14 @@ Applicable requirements audited: **85** (75 `CURRENT`, 5 `POSSIBLY-LOST-DURING-C
 
 | Primary verdict | Count |
 |---|---:|
-| IMPLEMENTED | 78 |
+| IMPLEMENTED | 79 |
 | PARTIALLY_IMPLEMENTED | 0 |
 | NOT_IMPLEMENTED | 0 |
 | IMPLEMENTED_BUT_NOT_WIRED | 0 |
 | IMPLEMENTED_DIFFERENTLY | 1 |
 | DEAD_CODE | 0 |
 | TEST_ONLY | 1 |
-| RUNTIME_VERIFICATION_REQUIRED | 5 |
+| RUNTIME_VERIFICATION_REQUIRED | 4 |
 | SPEC_CONFLICT | 0 |
 
 The matrix verdict counts are intentionally conservative: `RUNTIME_VERIFICATION_REQUIRED` means repository evidence is insufficient to claim `IMPLEMENTED`, even where code and tests are substantial.
@@ -285,12 +286,13 @@ The matrix verdict counts are intentionally conservative: `RUNTIME_VERIFICATION_
 - `AUD-001`: Page Visit History/right-edge rail is implemented for the Investor shell with session persistence and focused tests; browser geometry/runtime reachability remains to be verified.
 - `AUD-015`: fresh final regular-order safety revalidation is implemented and covered by focused post-admission race tests. A controlled broker/runtime safety drill remains required. GTT/protection policy is intentionally out of scope.
 - `AUD-013`: Dashboard historical preservation and targeted state-semantics remediation are implemented; browser geometry, chart readability, screen-reader behavior and utility-overlay coexistence remain runtime verification.
+- `V6-REQ-004`: Representative responsive browser verification is implemented through the mocked Chromium matrix; broader page-by-page visual regression and deployed reachability remain ordinary follow-up rather than an open requirement gap.
 
 ## 16. Recommended Remediation Sequence
 
 1. Run broker reconciliation/halt recovery drills, validate AUD-015 against a controlled broker/runtime environment, and complete the ownership matrix.
 2. Establish production runtime evidence for deployment, scheduler, queue, holidays, providers, callbacks and tokens.
-3. Preserve the remediated Page History, Notes, Global Search, page-anatomy and Dashboard state foundations; complete browser/runtime geometry, touch and deployed-reachability checks before further redesign work.
+3. Preserve the remediated Page History, Notes, Global Search, page-anatomy and Dashboard state foundations; keep the representative responsive Playwright matrix in normal frontend regression coverage and continue deployed-reachability checks where appropriate.
 4. Complete artifact rollout, V7 ML/fundamental operating evidence, and namespace drift inventory; retain bounded AUD-005/AUD-006 browser/provider/runtime follow-up.
 5. Close test gaps after product decisions; do not use unit or source-reading tests as substitutes for browser/runtime acceptance.
 
