@@ -266,15 +266,126 @@ The collector SHALL support:
 
 A gap must be recorded as a gap; do not invent order-book observations that were never received.
 
-## 12. Authentication/session handling
+## 12. Authentication/session handling and mobile UX
 
 Kite access tokens are session-bound and the collector must not assume one credential is permanently valid.
 
-Detailed implementation must define a safe operational flow for obtaining/refreshing the daily access token and ensuring the collector is authenticated before market open.
+The daily authentication step SHALL be deliberately optimized for **minimum friction from a mobile phone**. The operator should not need SSH, a desktop browser, shell commands, copy/paste of request tokens, or manual editing of configuration files.
 
-Secrets must remain outside source control and outside Parquet data.
+### 12.1 Dedicated authentication route
 
-If unattended login is not supported by Kite's intended security model, provide a simple operator step plus clear pre-market status so missing authentication does not silently lose a trading day.
+StoX SHALL expose a dedicated, bookmarkable URL route for Kite collector authentication. The exact final path is an implementation detail, but it should be short and memorable, for example:
+
+```text
+https://stoxla.in/kite-auth
+```
+
+or an equivalent authenticated Admin route.
+
+The page SHALL be:
+
+- fully responsive and comfortable on a phone-sized screen;
+- designed as a focused task rather than a generic settings form;
+- reachable directly from a Telegram reminder/deep link;
+- protected by the normal StoX authentication/authorization boundary;
+- usable without navigating through multiple Admin menus;
+- visually clear about whether today's Kite session is ready.
+
+### 12.2 Minimum-click login flow
+
+When today's Kite access token is missing/expired, the page SHOULD present one dominant action such as **Authenticate with Zerodha**.
+
+Preferred flow:
+
+```text
+Open Telegram reminder
+    -> tap StoX Kite-auth link
+        -> page shows NOT AUTHENTICATED
+            -> tap Authenticate with Zerodha
+                -> Zerodha login / required verification
+                    -> redirect back to StoX
+                        -> server exchanges request token
+                            -> access token stored securely
+                                -> collector starts/reconnects
+                                    -> page shows READY
+```
+
+StoX should preserve state across the external Zerodha login redirect so the operator is returned to the same mobile-friendly page rather than a generic dashboard.
+
+Where Kite's security flow requires user interaction, StoX SHALL minimize additional StoX-side clicks around that unavoidable interaction.
+
+### 12.3 Authentication status UX
+
+The page SHOULD prominently show a simple status state such as:
+
+- **Ready for market** — valid session available and collector can connect;
+- **Authentication required** — today's session is missing/expired;
+- **Connecting** — authentication succeeded and collector is establishing the stream;
+- **Collector active** — WebSocket connected with expected subscription count;
+- **Problem detected** — authentication exists but the collector is not healthy.
+
+Useful supporting details MAY include:
+
+- authenticated date/time;
+- current Kite user/account identity where safe/useful;
+- collector connection state;
+- subscribed instrument count;
+- last packet timestamp;
+- latest error in concise human-readable form.
+
+The normal view should remain intentionally uncluttered; diagnostic detail may live behind an expandable section.
+
+### 12.4 Security requirements
+
+The convenience UX must not weaken the existing security boundary.
+
+At minimum:
+
+- Kite API secret and generated access token never appear in the URL;
+- access tokens are never rendered unnecessarily into HTML/JavaScript;
+- sensitive credentials remain server-side and outside source control;
+- callback `request_token` is validated/exchanged server-side;
+- OAuth/login `state` or equivalent anti-CSRF correlation SHALL be used where supported/applicable;
+- the auth route is Admin/operator-only unless a narrower dedicated permission is introduced;
+- successful authentication is auditable;
+- failure messages shown on mobile do not expose secrets.
+
+### 12.5 Collector handoff
+
+Successful authentication SHALL automatically make the new session available to the collector without requiring SSH or a manual service restart.
+
+The implementation MAY signal/reload/reconnect the long-running collector, but from the operator perspective the flow should finish with a clear **Ready / Collector active** result.
+
+If authentication succeeds outside market hours, the collector may remain idle until its normal session start while showing that credentials are ready.
+
+### 12.6 Telegram authentication reminders
+
+StoX SHALL use the existing Telegram notification capability to remind the operator when daily Kite authentication is required.
+
+The reminder SHOULD include a direct HTTPS link to the dedicated mobile auth page so the common action is:
+
+```text
+Telegram notification
+    -> tap link
+    -> authenticate
+    -> done
+```
+
+Reminder behaviour should be state-aware rather than sending a message every day regardless of need.
+
+Recommended policy:
+
+- on NSE trading days, check for a valid current Kite session before market open;
+- if already authenticated, send no authentication reminder;
+- if authentication is missing, send a pre-market Telegram reminder;
+- if still missing closer to market open, send a stronger follow-up reminder;
+- if market opens without a valid session/collector connection, raise an operational alert because Dataset C is being lost;
+- stop authentication reminders immediately after successful authentication;
+- do not send routine reminders on known exchange holidays/weekends.
+
+Exact reminder times are configurable in detailed design. The product should avoid notification spam while making it difficult to accidentally miss an entire trading day.
+
+The user may also maintain an independent mobile alarm as an additional human reminder; that alarm is outside StoX scope and does not replace the Telegram/session-health checks.
 
 ## 13. Instrument-universe policy
 
@@ -364,6 +475,15 @@ Those concerns belong to V4-FEAT-062, V4-FEAT-058, V4-FEAT-059 and the existing 
 13. The service can run on the current StoX VPS without materially degrading the one-user production application under normal load.
 14. The collector and Parquet schema are independent of future ML model choices.
 15. ML training can consume the accumulated files later without requiring a migration from MySQL.
+16. StoX provides a dedicated, bookmarkable, mobile-friendly Kite authentication URL that does not require navigating through the Admin UI.
+17. When authentication is required, the page exposes one clear primary action to start the Zerodha login flow.
+18. Successful Zerodha callback/token exchange returns the user to the same mobile authentication experience and clearly shows that the session is ready.
+19. Successful authentication is handed to the collector without SSH, shell commands, token copy/paste or manual service restart.
+20. The page clearly distinguishes authentication state from collector/WebSocket health.
+21. Kite secrets/access tokens are never exposed in URLs or unnecessary client-side content.
+22. On trading days, Telegram sends a direct-link reminder when the daily Kite session is still missing before market open.
+23. Authentication reminders stop after successful authentication and are not routinely sent on known non-trading days.
+24. Missing authentication at/after market open escalates to an operational alert because prospective Dataset C is being lost.
 
 ## 19. Priority rationale
 
