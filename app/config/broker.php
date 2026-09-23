@@ -12,5 +12,6 @@ return [
         'redirect_url' => env('KITE_REDIRECT_URL'),
         'login_url' => 'https://kite.trade/connect/login',
         'api_base' => 'https://api.kite.trade',
+        'cancel_retry_cooldown_seconds' => max(1, (int) env('KITE_CANCEL_RETRY_COOLDOWN_SECONDS', 60)),
     ],
 ];

@@ -5,6 +5,7 @@ namespace Tests\Feature\Execution;
 use App\Engines\Execution\ExecutionGate;
 use App\Engines\Execution\LiveBrokerExecutionService;
 use App\Models\BrokerConnection;
+use App\Models\ExecutionDecision;
 use App\Models\PortfolioProfile;
 use App\Models\PortfolioReconciliationRun;
 use App\Models\Setting;
@@ -887,10 +888,76 @@ class LiveExecutionFeatureTest extends TestCase
     public function test_cancellation_retry_while_pending_fetches_without_duplicate_cancel_call(): void
     {
         [$user, $profile, $rec, $order] = $this->submittedCancellationOrder();
+        config(['broker.kite.cancel_retry_cooldown_seconds' => 3600]);
+        $baselineFetches = app(FakeBrokerGateway::class)->fetchCalls;
         app(FakeBrokerGateway::class)->nextCancelSnapshot = new BrokerOrderSnapshot($order->broker_order_id, 'open', 0, 1, null, 'CANCEL_REQUESTED');
-        $this->postJson('/api/v1/orders/'.$order->id.'/cancel')->assertStatus(202);
-        $this->postJson('/api/v1/orders/'.$order->id.'/cancel')->assertStatus(202)->assertJsonPath('data.cancellation_status', 'pending');
+        $firstCancelResponse = $this->postJson('/api/v1/orders/'.$order->id.'/cancel');
+        $firstCancelResponse->assertStatus(202)->assertJsonPath('data.cancellation_status', 'pending');
+        $order->forceFill(['broker_cancel_requested_at' => now()->addYears(1)])->save();
+        $secondCancelResponse = $this->postJson('/api/v1/orders/'.$order->id.'/cancel');
+        $secondCancelResponse->assertStatus(202)->assertJsonPath('data.cancellation_status', 'pending');
         $this->assertSame(1, app(FakeBrokerGateway::class)->cancelCalls);
+        $this->assertSame($baselineFetches + 1, app(FakeBrokerGateway::class)->fetchCalls);
+    }
+
+    public function test_explicit_retry_after_cooldown_resends_once_when_kite_still_reports_open(): void
+    {
+        [$user, $profile, $rec, $order] = $this->submittedCancellationOrder();
+        $fake = app(FakeBrokerGateway::class);
+        config(['broker.kite.cancel_retry_cooldown_seconds' => 60]);
+        $baselineFetches = $fake->fetchCalls;
+        $fake->nextCancelSnapshot = new BrokerOrderSnapshot($order->broker_order_id, 'open', 0, 1, null, 'CANCEL_UNCONFIRMED');
+        $this->postJson('/api/v1/orders/'.$order->id.'/cancel')->assertStatus(202);
+        $requestedAt = now()->subMinutes(5);
+        $order->forceFill(['broker_cancel_requested_at' => $requestedAt])->save();
+        $rec->forceFill(['reservation_status' => TradingRecommendation::RESERVATION_RESERVED, 'reserved_amount' => 100])->save();
+
+        $fake->nextCancelSnapshot = new BrokerOrderSnapshot($order->broker_order_id, 'open', 0, 1, null, 'CANCEL_UNCONFIRMED');
+
+        $this->postJson('/api/v1/orders/'.$order->id.'/cancel')->assertStatus(202)->assertJsonPath('data.cancellation_status', 'pending');
+        $this->assertSame(2, $fake->cancelCalls);
+        $this->assertSame($baselineFetches + 1, $fake->fetchCalls);
+        $this->assertNotSame($requestedAt->toIso8601String(), $order->fresh()->broker_cancel_requested_at->toIso8601String());
+        $this->assertSame(TradingRecommendation::STATUS_PENDING_EXECUTION, $rec->fresh()->status);
+        $this->assertSame('100.0000', $rec->fresh()->reserved_amount);
+    }
+
+    public function test_retry_finds_terminal_cancel_without_resending_and_scheduler_is_read_only(): void
+    {
+        [$user, $profile, $rec, $order] = $this->submittedCancellationOrder();
+        $fake = app(FakeBrokerGateway::class);
+        config(['broker.kite.cancel_retry_cooldown_seconds' => 60]);
+        $baselineFetches = $fake->fetchCalls;
+        $fake->nextCancelSnapshot = new BrokerOrderSnapshot($order->broker_order_id, 'open', 0, 1, null, 'CANCEL_REQUESTED');
+        $this->postJson('/api/v1/orders/'.$order->id.'/cancel')->assertStatus(202);
+        $order->forceFill(['broker_cancel_requested_at' => now()->subMinutes(5)])->save();
+        $fake->seedSnapshot(new BrokerOrderSnapshot($order->broker_order_id, 'cancelled', 0, 0, null, 'CANCELLED'));
+        $this->postJson('/api/v1/orders/'.$order->id.'/cancel')->assertOk()->assertJsonPath('data.cancellation_status', 'confirmed');
+        $this->assertSame(1, $fake->cancelCalls);
+        $this->assertSame($baselineFetches + 1, $fake->fetchCalls);
+
+        [$user2, $profile2, $rec2, $order2] = $this->submittedCancellationOrder();
+        $fake->seedSnapshot(new BrokerOrderSnapshot($order2->broker_order_id, 'open', 0, 1, null, 'OPEN'));
+        $order2->forceFill(['broker_cancel_requested_at' => now()->subMinutes(5)])->save();
+        app(LiveBrokerExecutionService::class)->reconcileOrder($profile2, $order2->fresh());
+        $this->assertSame(1, $fake->cancelCalls);
+    }
+
+    public function test_fill_discovered_during_retry_is_applied_once(): void
+    {
+        [$user, $profile, $rec, $order] = $this->submittedCancellationOrder();
+        $fake = app(FakeBrokerGateway::class);
+        $fake->nextCancelSnapshot = new BrokerOrderSnapshot($order->broker_order_id, 'open', 0, 1, null, 'CANCEL_REQUESTED');
+        $this->postJson('/api/v1/orders/'.$order->id.'/cancel')->assertStatus(202);
+        $rec->forceFill(['reservation_status' => TradingRecommendation::RESERVATION_RESERVED, 'reserved_amount' => 100])->save();
+        $order->forceFill(['broker_cancel_requested_at' => now()->subMinutes(5)])->save();
+        $fake->seedSnapshot(new BrokerOrderSnapshot($order->broker_order_id, 'filled', 1, 0, 100, 'COMPLETE'));
+        $this->postJson('/api/v1/orders/'.$order->id.'/cancel')->assertStatus(409)->assertJsonPath('error.code', 'BROKER_CANCEL_NOT_CONFIRMED');
+        app(LiveBrokerExecutionService::class)->reconcileOrder($profile, $order->fresh());
+        $this->assertSame(1, $fake->cancelCalls);
+        $this->assertSame(1.0, (float) \App\Models\OrderTransaction::query()->where('order_id', $order->id)->sum('quantity'));
+        $this->assertSame(1, Transaction::query()->where('recommendation_id', $rec->id)->count());
+        $this->assertSame(TradingRecommendation::STATUS_PENDING_EXECUTION, $rec->fresh()->status);
     }
 
     public function test_cancellation_retry_after_terminal_cancel_is_idempotent(): void
@@ -927,6 +994,28 @@ class LiveExecutionFeatureTest extends TestCase
         $this->assertCount(2, $orders);
         $this->assertNotSame($orders[0]->submission_key, $orders[1]->submission_key);
         $this->assertSame('100.0000', $rec->fresh()->reserved_amount);
+    }
+
+    public function test_overlapping_recommendation_retry_cannot_submit_a_second_order(): void
+    {
+        [$user, $profile] = $this->actingReadyUser();
+        $this->setMode($user, $profile, PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC);
+        $rec = $this->pendingBuy($profile, amount: 500);
+        $fake = app(FakeBrokerGateway::class);
+        $nested = null;
+        $fake->afterPlaceOrder = function () use ($user, $profile, $rec, &$nested): void {
+            $nested = app(LiveBrokerExecutionService::class)->submitOne(
+                $user->fresh(), $profile->fresh(), $rec->id, ExecutionGate::TRIGGER_SEMI,
+            );
+        };
+
+        $first = app(LiveBrokerExecutionService::class)->submitOne($user, $profile, $rec->id, ExecutionGate::TRIGGER_SEMI);
+
+        $this->assertSame(1, $fake->placeCalls);
+        $this->assertSame(ExecutionDecision::OUTCOME_SKIPPED, $nested['outcome']);
+        $this->assertSame('duplicate_prevented', $nested['reason']);
+        $this->assertSame(1, TradingOrder::query()->where('recommendation_id', $rec->id)->count());
+        $this->assertNotEmpty($first['order_id']);
     }
 
     public function test_cross_profile_order_cancellation_is_denied(): void

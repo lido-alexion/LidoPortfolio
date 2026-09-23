@@ -25,6 +25,7 @@ use App\Services\PortfolioLoggerService;
 use App\Services\Protection\PositionProtectionService;
 use App\Services\Reconciliation\PortfolioReconciliationService;
 use App\Services\StockQuoteService;
+use Illuminate\Support\Facades\DB;
 use Throwable;
 
 /**
@@ -455,15 +456,44 @@ class LiveBrokerExecutionService
         $user = $freshUser;
         $profile = $freshProfile;
 
-        $decision = $this->recordDecision($profile, $user, $recommendation, $trigger, ExecutionDecision::OUTCOME_SUBMITTED, null);
+        // Serialize the final claim per recommendation. The unique submission-key index remains
+        // the last line of defense, while this lock makes racing retry requests return cleanly.
+        $claim = DB::transaction(function () use ($profile, $recommendation, $user, $trigger, $stock, $side, $qty, $sizing): array {
+            $lockedRecommendation = TradingRecommendation::query()->whereKey($recommendation->id)->lockForUpdate()->firstOrFail();
+            $activeOrder = TradingOrder::query()
+                ->where('profile_id', $profile->id)
+                ->where('recommendation_id', $lockedRecommendation->id)
+                ->where('status', TradingOrder::STATUS_PENDING)
+                ->where(function ($query): void {
+                    $query->whereNull('broker_order_id')->orWhereIn('broker_status', [
+                        TradingOrder::BROKER_SUBMITTED,
+                        TradingOrder::BROKER_OPEN,
+                        TradingOrder::BROKER_PARTIAL,
+                        TradingOrder::BROKER_UNKNOWN,
+                    ]);
+                })
+                ->orderByDesc('id')
+                ->first();
+            if ($activeOrder) {
+                return ['duplicate_order' => $activeOrder];
+            }
 
-        $order = $existingByKey && $existingByKey->broker_order_id === null && $existingByKey->status === TradingOrder::STATUS_PENDING
-            ? $existingByKey
-            : TradingOrder::query()->create([
+            $lastOrder = TradingOrder::query()->where('profile_id', $profile->id)->where('recommendation_id', $lockedRecommendation->id)->whereNotNull('broker_order_id')->orderByDesc('id')->first();
+            $retryAttempt = $lastOrder && in_array($lastOrder->broker_status, [TradingOrder::BROKER_CANCELLED, TradingOrder::BROKER_REJECTED], true)
+                ? TradingOrder::query()->where('profile_id', $profile->id)->where('recommendation_id', $lockedRecommendation->id)->count() + 1
+                : 1;
+            $submissionKey = $this->submissionKey($profile, $lockedRecommendation, $side, $qty, $retryAttempt);
+            $existing = TradingOrder::query()->where('submission_key', $submissionKey)->first();
+            if ($existing) {
+                return ['duplicate_order' => $existing];
+            }
+
+            $decision = $this->recordDecision($profile, $user, $lockedRecommendation, $trigger, ExecutionDecision::OUTCOME_SUBMITTED, null);
+            $order = TradingOrder::query()->create([
                 'profile_id' => $profile->id,
-                'recommendation_id' => $recommendation->id,
-                'reusable_artifact_version_id' => $recommendation->reusable_artifact_version_id,
-                'artifact_binding_revision_id' => $recommendation->artifact_binding_revision_id,
+                'recommendation_id' => $lockedRecommendation->id,
+                'reusable_artifact_version_id' => $lockedRecommendation->reusable_artifact_version_id,
+                'artifact_binding_revision_id' => $lockedRecommendation->artifact_binding_revision_id,
                 'security_id' => $stock->id,
                 'side' => $side,
                 'quantity' => $qty,
@@ -476,6 +506,20 @@ class LiveBrokerExecutionService
                 'submission_key' => $submissionKey,
                 'execution_decision_id' => $decision->id,
             ]);
+
+            return compact('decision', 'order', 'submissionKey');
+        });
+        if (isset($claim['duplicate_order'])) {
+            return [
+                'recommendation_id' => $recommendation->id,
+                'outcome' => ExecutionDecision::OUTCOME_SKIPPED,
+                'reason' => 'duplicate_prevented',
+                'order_id' => $claim['duplicate_order']->id,
+            ];
+        }
+        $decision = $claim['decision'];
+        $order = $claim['order'];
+        $submissionKey = $claim['submissionKey'];
 
         $request = new BrokerOrderRequest(
             userId: $user->id,
@@ -624,43 +668,102 @@ class LiveBrokerExecutionService
 
     public function cancelOrder(PortfolioProfile $profile, TradingOrder $order): array
     {
-        if ((int) $order->profile_id !== (int) $profile->id) {
-            throw new DomainException('Order not found for this portfolio.', 'NOT_FOUND', 404);
+        $decision = DB::transaction(function () use ($profile, $order): array {
+            $locked = TradingOrder::query()->whereKey($order->id)->lockForUpdate()->first();
+            if (! $locked || (int) $locked->profile_id !== (int) $profile->id) {
+                throw new DomainException('Order not found for this portfolio.', 'NOT_FOUND', 404);
+            }
+
+            if ($locked->status === TradingOrder::STATUS_CANCELLED && $locked->broker_status === TradingOrder::BROKER_CANCELLED) {
+                return ['kind' => 'result', 'result' => ['order' => $locked->fresh(['security', 'recommendation']), 'cancellation_status' => 'confirmed']];
+            }
+            if ($locked->status === TradingOrder::STATUS_CANCELLED && $locked->broker_status === TradingOrder::BROKER_REJECTED) {
+                return ['kind' => 'result', 'result' => ['order' => $locked->fresh(['security', 'recommendation']), 'cancellation_status' => 'failed']];
+            }
+            if ($locked->status !== TradingOrder::STATUS_PENDING) {
+                throw new DomainException('Only pending orders can be cancelled.', 'ORDER_NOT_CANCELLABLE', 422);
+            }
+
+            if (! $locked->broker_order_id) {
+                return ['kind' => 'result', 'result' => ['order' => $this->execution->cancelOrder($profile, $locked), 'cancellation_status' => 'confirmed']];
+            }
+
+            $requestedAt = $locked->broker_cancel_requested_at;
+            if ($requestedAt !== null) {
+                // Every explicit retry reads Kite first. Scheduler reconciliation only calls reconcileOrder().
+                $snapshot = $this->broker->fetchOrder((int) $profile->user_id, (string) $locked->broker_order_id);
+                if (! $snapshot) {
+                    return ['kind' => 'result', 'result' => ['order' => $locked->fresh(['security', 'recommendation']), 'cancellation_status' => 'pending']];
+                }
+
+                $locked = $this->applySnapshot($profile, $locked, $snapshot);
+                if (in_array($locked->broker_status, [TradingOrder::BROKER_CANCELLED, TradingOrder::BROKER_REJECTED, TradingOrder::BROKER_FILLED], true)) {
+                    return ['kind' => 'result', 'result' => $this->cancellationResult($locked)];
+                }
+
+                $cooldown = max(1, (int) config('broker.kite.cancel_retry_cooldown_seconds', 60));
+                if ($requestedAt->copy()->addSeconds($cooldown)->isFuture()) {
+                    return ['kind' => 'result', 'result' => $this->cancellationResult($locked)];
+                }
+            }
+
+            // This timestamp is a durable resend lease. The row lock serializes concurrent investor retries;
+            // the lock is released before the network request, so the next click sees a fresh cooldown.
+            $sentAt = now();
+            $locked->forceFill(['broker_cancel_requested_at' => $sentAt])->save();
+
+            return [
+                'kind' => 'send',
+                'order_id' => $locked->id,
+                'broker_order_id' => (string) $locked->broker_order_id,
+                'broker_variety' => (string) ($locked->broker_variety ?: BrokerOrderPolicy::REGULAR),
+            ];
+        });
+
+        if ($decision['kind'] === 'result') {
+            return $decision['result'];
         }
 
-        if ($order->status === TradingOrder::STATUS_CANCELLED && $order->broker_status === TradingOrder::BROKER_CANCELLED) {
+        try {
+            $snapshot = $this->broker->cancelOrder(
+                (int) $profile->user_id,
+                $decision['broker_order_id'],
+                $decision['broker_variety'],
+            );
+        } catch (DomainException $exception) {
+            if ($exception->errorCode() === 'BROKER_CANCEL_FAILED') {
+                DB::transaction(function () use ($decision): void {
+                    $locked = TradingOrder::query()->whereKey($decision['order_id'])->lockForUpdate()->first();
+                    if ($locked && $locked->status === TradingOrder::STATUS_PENDING) {
+                        $locked->forceFill(['broker_cancel_requested_at' => null])->save();
+                    }
+                });
+            }
+
+            throw $exception;
+        }
+
+        $updated = DB::transaction(function () use ($profile, $decision, $snapshot): TradingOrder {
+            $locked = TradingOrder::query()->whereKey($decision['order_id'])->lockForUpdate()->firstOrFail();
+
+            return $this->applySnapshot($profile, $locked, $snapshot);
+        });
+
+        return $this->cancellationResult($updated);
+    }
+
+    /** @return array{order:TradingOrder,cancellation_status:string} */
+    protected function cancellationResult(TradingOrder $order): array
+    {
+        if ($order->broker_status === TradingOrder::BROKER_CANCELLED) {
             return ['order' => $order->fresh(['security', 'recommendation']), 'cancellation_status' => 'confirmed'];
         }
-        if ($order->status === TradingOrder::STATUS_CANCELLED && $order->broker_status === TradingOrder::BROKER_REJECTED) {
+        if (in_array($order->broker_status, [TradingOrder::BROKER_REJECTED, TradingOrder::BROKER_FILLED], true)
+            || $order->status === TradingOrder::STATUS_EXECUTED) {
             return ['order' => $order->fresh(['security', 'recommendation']), 'cancellation_status' => 'failed'];
         }
-        if ($order->status !== TradingOrder::STATUS_PENDING) {
-            throw new DomainException('Only pending orders can be cancelled.', 'ORDER_NOT_CANCELLABLE', 422);
-        }
 
-        if (! $order->broker_order_id) {
-            return ['order' => $this->execution->cancelOrder($profile, $order), 'cancellation_status' => 'confirmed'];
-        }
-
-        $alreadyRequested = $order->broker_cancel_requested_at !== null;
-        $snapshot = $alreadyRequested
-            ? $this->broker->fetchOrder((int) $profile->user_id, (string) $order->broker_order_id)
-            : $this->broker->cancelOrder((int) $profile->user_id, (string) $order->broker_order_id, (string) ($order->broker_variety ?: BrokerOrderPolicy::REGULAR));
-        if (! $snapshot) {
-            $order->forceFill(['broker_cancel_requested_at' => $order->broker_cancel_requested_at ?? now()])->save();
-
-            return ['order' => $order->fresh(['security', 'recommendation']), 'cancellation_status' => 'pending'];
-        }
-        $cancelled = $this->applySnapshot($profile, $order, $snapshot);
-        $confirmed = in_array($cancelled->broker_status, [TradingOrder::BROKER_CANCELLED, TradingOrder::BROKER_REJECTED, TradingOrder::BROKER_FILLED], true);
-        $accepted = in_array($snapshot->rawStatus, ['CANCEL_REQUESTED', 'CANCEL_UNCONFIRMED'], true);
-        $cancelled->forceFill(['broker_cancel_requested_at' => $confirmed ? null : ($accepted ? ($cancelled->broker_cancel_requested_at ?? now()) : $cancelled->broker_cancel_requested_at)])->save();
-
-        if (in_array($cancelled->broker_status, [TradingOrder::BROKER_FILLED, TradingOrder::BROKER_REJECTED], true)) {
-            return ['order' => $cancelled->fresh(['security', 'recommendation']), 'cancellation_status' => 'failed'];
-        }
-
-        return ['order' => $cancelled->fresh(['security', 'recommendation']), 'cancellation_status' => $confirmed ? 'confirmed' : 'pending'];
+        return ['order' => $order->fresh(['security', 'recommendation']), 'cancellation_status' => 'pending'];
     }
 
     public function reconcileOpenForProfile(PortfolioProfile $profile): int

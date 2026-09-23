@@ -43,6 +43,35 @@ class KiteInstrumentRegistryTest extends TestCase
         ]);
     }
 
+    public function test_cancel_connection_failure_fetches_open_state_without_claiming_terminal_cancellation(): void
+    {
+        $user = User::factory()->create();
+        BrokerConnection::query()->create(['user_id' => $user->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => now()->addDay()])->forceFill(['access_token' => 'test-token'])->save();
+        $deleteAttempts = 0;
+        $getAttempts = 0;
+        Http::fake(function ($request) use (&$deleteAttempts, &$getAttempts) {
+            if ($request->method() === 'DELETE') {
+                $deleteAttempts++;
+                throw new \Illuminate\Http\Client\ConnectionException('simulated disconnect before broker response');
+            }
+
+            $getAttempts++;
+            return Http::response(['status' => 'success', 'data' => [[
+                'order_id' => 'order-ambiguous', 'status' => 'OPEN', 'quantity' => 1,
+                'filled_quantity' => 0, 'pending_quantity' => 1,
+            ]]]);
+        });
+
+        $snapshot = app(KiteBrokerGateway::class)->cancelOrder($user->id, 'order-ambiguous', 'regular');
+
+        $this->assertSame('open', $snapshot->status);
+        $this->assertSame('CANCEL_UNCONFIRMED', $snapshot->rawStatus);
+        $this->assertSame(1, $deleteAttempts);
+        $this->assertSame(1, $getAttempts);
+        Http::assertSentCount(1);
+        Http::assertSent(fn ($request) => $request->method() === 'GET' && str_ends_with($request->url(), '/orders/order-ambiguous'));
+    }
+
     public function test_ambiguous_series_candidates_block_without_guessing(): void
     {
         $user = User::factory()->create();

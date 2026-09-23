@@ -24,6 +24,8 @@ class FakeBrokerGateway implements BrokerGateway
 
     public int $cancelCalls = 0;
 
+    public int $fetchCalls = 0;
+
     public array $cancelVarieties = [];
 
     public ?BrokerOrderSnapshot $nextCancelSnapshot = null;
@@ -91,6 +93,7 @@ class FakeBrokerGateway implements BrokerGateway
         $this->reconciliationSnapshotUnavailable = false;
         $this->placeCalls = 0;
         $this->cancelCalls = 0;
+        $this->fetchCalls = 0;
         $this->cancelVarieties = [];
         $this->nextCancelSnapshot = null;
         $this->nextCancelFails = false;
@@ -216,6 +219,7 @@ class FakeBrokerGateway implements BrokerGateway
 
     public function fetchOrder(int $userId, string $brokerOrderId): ?BrokerOrderSnapshot
     {
+        $this->fetchCalls++;
         if ($this->nextFetchThrows) {
             $this->nextFetchThrows = false;
             throw new \RuntimeException('Simulated broker fetch outage.');
