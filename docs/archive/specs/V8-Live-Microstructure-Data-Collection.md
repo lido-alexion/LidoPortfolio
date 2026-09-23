@@ -350,7 +350,20 @@ At minimum:
 - successful authentication is auditable;
 - failure messages shown on mobile do not expose secrets.
 
-### 12.5 Collector handoff
+### 12.5 Persistent StoX authorization vs daily Kite session
+
+StoX SHALL distinguish between:
+
+1. **Persistent operator authorization** for StoX to use Kite automatically when a valid session exists; and
+2. the **daily Zerodha/Kite access session**, which still requires the operator to complete Zerodha's interactive login flow when the prior session has expired.
+
+Normal overnight Kite session expiry MUST NOT revoke the persistent StoX authorization. Once the user completes the daily Zerodha login, the collector may start/reconnect automatically without an additional StoX-side approval step.
+
+A deliberate manual **Disconnect**, execution **Kill Switch**, or equivalent explicit safety action SHALL revoke/suspend the persistent automatic-use authorization. StoX MUST NOT silently reconnect after such an explicit user action. Re-enabling automatic Kite use requires an explicit **Reconnect & Authorize StoX** (or equivalent) action.
+
+This distinction prevents normal daily token expiry from creating unnecessary friction while preserving the semantic meaning of a manual disconnect or kill switch.
+
+### 12.6 Collector handoff
 
 Successful authentication SHALL automatically make the new session available to the collector without requiring SSH or a manual service restart.
 
@@ -358,32 +371,35 @@ The implementation MAY signal/reload/reconnect the long-running collector, but f
 
 If authentication succeeds outside market hours, the collector may remain idle until its normal session start while showing that credentials are ready.
 
-### 12.6 Telegram authentication reminders
+### 12.7 Telegram authentication reminders
 
 StoX SHALL use the existing Telegram notification capability to remind the operator when daily Kite authentication is required.
 
-The reminder SHOULD include a direct HTTPS link to the dedicated mobile auth page so the common action is:
+The reminder SHALL include a direct HTTPS link to the dedicated mobile auth page so the common action is:
 
 ```text
 Telegram notification
     -> tap link
-    -> authenticate
-    -> done
+    -> authenticate with Zerodha
+    -> redirect to StoX
+    -> collector ready
 ```
 
-Reminder behaviour should be state-aware rather than sending a message every day regardless of need.
+The notification policy is deliberately persistent because each unauthenticated trading hour loses prospective Dataset C observations.
 
-Recommended policy:
+Required behaviour:
 
-- on NSE trading days, check for a valid current Kite session before market open;
-- if already authenticated, send no authentication reminder;
-- if authentication is missing, send a pre-market Telegram reminder;
-- if still missing closer to market open, send a stronger follow-up reminder;
-- if market opens without a valid session/collector connection, raise an operational alert because Dataset C is being lost;
-- stop authentication reminders immediately after successful authentication;
-- do not send routine reminders on known exchange holidays/weekends.
+- on every NSE trading day, begin checking for a valid current Kite session before market open;
+- if already authenticated for the current day, send no authentication reminder;
+- if authentication is missing and persistent StoX authorization remains enabled, send a pre-market Telegram reminder containing the auth-page deep link;
+- while authentication remains missing, repeat the reminder **once per hour**;
+- hourly reminders continue until the daily Kite authentication succeeds, the trading session ends, or persistent authorization is explicitly disabled through Disconnect/Kill Switch;
+- successful authentication immediately cancels all remaining reminders for that trading day;
+- manual Disconnect/Kill Switch suppresses daily-login reminders until the user explicitly re-authorizes StoX;
+- if market opens without a valid session/collector connection, reminders continue hourly and the notification should clearly state that Dataset C is currently being lost;
+- do not send routine daily-login reminders on known NSE weekends/holidays.
 
-Exact reminder times are configurable in detailed design. The product should avoid notification spam while making it difficult to accidentally miss an entire trading day.
+Exact first-reminder time is configurable in detailed design; the cadence after that is fixed at one hour while the actionable condition remains true.
 
 The user may also maintain an independent mobile alarm as an additional human reminder; that alarm is outside StoX scope and does not replace the Telegram/session-health checks.
 
@@ -481,9 +497,12 @@ Those concerns belong to V4-FEAT-062, V4-FEAT-058, V4-FEAT-059 and the existing 
 19. Successful authentication is handed to the collector without SSH, shell commands, token copy/paste or manual service restart.
 20. The page clearly distinguishes authentication state from collector/WebSocket health.
 21. Kite secrets/access tokens are never exposed in URLs or unnecessary client-side content.
-22. On trading days, Telegram sends a direct-link reminder when the daily Kite session is still missing before market open.
-23. Authentication reminders stop after successful authentication and are not routinely sent on known non-trading days.
-24. Missing authentication at/after market open escalates to an operational alert because prospective Dataset C is being lost.
+22. Normal daily Kite-session expiry does not disable persistent StoX authorization to use Kite once the user logs in again.
+23. Manual Disconnect/Kill Switch prevents automatic reuse/reconnection until the user explicitly re-authorizes StoX.
+24. On trading days, Telegram sends a direct-link reminder when the daily Kite session is missing.
+25. While authentication remains missing, reminders repeat hourly until login succeeds, the market session ends, or persistent authorization is explicitly disabled.
+26. Authentication reminders stop immediately after successful authentication and are not routinely sent on known non-trading days.
+27. Missing authentication after market open is clearly identified as active Dataset C data loss.
 
 ## 19. Priority rationale
 
