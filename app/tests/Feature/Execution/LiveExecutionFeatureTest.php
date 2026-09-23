@@ -825,9 +825,144 @@ class LiveExecutionFeatureTest extends TestCase
         $this->assertSame(125.0, (float) $order->limit_price);
     }
 
-    /**
-     * @return array{0: User, 1: PortfolioProfile}
-     */
+    public function test_local_manual_cancellation_without_broker_id_is_confirmed(): void
+    {
+        [$user, $profile] = $this->actingReadyUser();
+        $rec = $this->pendingBuy($profile);
+        $order = TradingOrder::query()->create(['profile_id' => $profile->id, 'recommendation_id' => $rec->id, 'security_id' => $rec->security_id, 'side' => 'buy', 'quantity' => 1, 'status' => TradingOrder::STATUS_PENDING]);
+
+        $this->postJson('/api/v1/orders/'.$order->id.'/cancel')->assertOk()->assertJsonPath('data.cancellation_status', 'confirmed');
+        $this->assertSame(TradingOrder::STATUS_CANCELLED, $order->fresh()->status);
+        $this->assertNull($order->fresh()->broker_order_id);
+    }
+
+    public function test_regular_broker_cancellation_uses_persisted_variety_and_returns_confirmed(): void
+    {
+        [$user, $profile, $rec, $order] = $this->submittedCancellationOrder();
+        $order->forceFill(['broker_variety' => 'regular'])->save();
+        $this->postJson('/api/v1/orders/'.$order->id.'/cancel')->assertOk()->assertJsonPath('data.cancellation_status', 'confirmed');
+        $this->assertSame(['regular'], app(FakeBrokerGateway::class)->cancelVarieties);
+    }
+
+    public function test_amo_broker_cancellation_uses_persisted_variety(): void
+    {
+        [$user, $profile, $rec, $order] = $this->submittedCancellationOrder();
+        $order->forceFill(['broker_variety' => 'amo'])->save();
+        $this->postJson('/api/v1/orders/'.$order->id.'/cancel')->assertOk()->assertJsonPath('data.cancellation_status', 'confirmed');
+        $this->assertSame(['amo'], app(FakeBrokerGateway::class)->cancelVarieties);
+    }
+
+    public function test_accepted_unconfirmed_cancellation_is_202_and_durable(): void
+    {
+        [$user, $profile, $rec, $order] = $this->submittedCancellationOrder();
+        app(FakeBrokerGateway::class)->nextCancelSnapshot = new BrokerOrderSnapshot($order->broker_order_id, 'open', 0, 1, null, 'CANCEL_REQUESTED');
+        $rec->forceFill(['reservation_status' => TradingRecommendation::RESERVATION_RESERVED, 'reserved_amount' => 100])->save();
+
+        $this->postJson('/api/v1/orders/'.$order->id.'/cancel')->assertStatus(202)
+            ->assertJsonPath('data.cancellation_status', 'pending')
+            ->assertJsonPath('data.status', 'pending');
+        $this->assertNotNull($order->fresh()->broker_cancel_requested_at);
+        $this->assertSame(TradingRecommendation::STATUS_PENDING_EXECUTION, $rec->fresh()->status);
+        $this->assertSame('100.0000', $rec->fresh()->reserved_amount);
+    }
+
+    public function test_later_reconciliation_confirms_cancellation_without_releasing_reservation_or_creating_zero_fill_ledger(): void
+    {
+        [$user, $profile, $rec, $order] = $this->submittedCancellationOrder();
+        $rec->forceFill(['reservation_status' => TradingRecommendation::RESERVATION_RESERVED, 'reserved_amount' => 100])->save();
+        app(FakeBrokerGateway::class)->nextCancelSnapshot = new BrokerOrderSnapshot($order->broker_order_id, 'open', 0, 1, null, 'CANCEL_REQUESTED');
+        $this->postJson('/api/v1/orders/'.$order->id.'/cancel')->assertStatus(202);
+        app(FakeBrokerGateway::class)->seedSnapshot(new BrokerOrderSnapshot($order->broker_order_id, 'cancelled', 0, 0, null, 'CANCELLED'));
+        app(LiveBrokerExecutionService::class)->reconcileOrder($profile, $order->fresh());
+
+        $this->assertSame(TradingOrder::STATUS_CANCELLED, $order->fresh()->status);
+        $this->assertNull($order->fresh()->broker_cancel_requested_at);
+        $this->assertSame(TradingRecommendation::STATUS_PENDING_EXECUTION, $rec->fresh()->status);
+        $this->assertSame('100.0000', $rec->fresh()->reserved_amount);
+        $this->assertSame(0, Transaction::query()->where('recommendation_id', $rec->id)->count());
+        $this->assertSame(0, \App\Models\OrderTransaction::query()->where('order_id', $order->id)->count());
+        $this->assertSame(0, \App\Models\Holding::query()->where('profile_id', $profile->id)->where('stock_id', $rec->security_id)->count());
+    }
+
+    public function test_cancellation_retry_while_pending_fetches_without_duplicate_cancel_call(): void
+    {
+        [$user, $profile, $rec, $order] = $this->submittedCancellationOrder();
+        app(FakeBrokerGateway::class)->nextCancelSnapshot = new BrokerOrderSnapshot($order->broker_order_id, 'open', 0, 1, null, 'CANCEL_REQUESTED');
+        $this->postJson('/api/v1/orders/'.$order->id.'/cancel')->assertStatus(202);
+        $this->postJson('/api/v1/orders/'.$order->id.'/cancel')->assertStatus(202)->assertJsonPath('data.cancellation_status', 'pending');
+        $this->assertSame(1, app(FakeBrokerGateway::class)->cancelCalls);
+    }
+
+    public function test_cancellation_retry_after_terminal_cancel_is_idempotent(): void
+    {
+        [$user, $profile, $rec, $order] = $this->submittedCancellationOrder();
+        $this->postJson('/api/v1/orders/'.$order->id.'/cancel')->assertOk();
+        $this->postJson('/api/v1/orders/'.$order->id.'/cancel')->assertOk()->assertJsonPath('data.cancellation_status', 'confirmed');
+        $this->assertSame(1, app(FakeBrokerGateway::class)->cancelCalls);
+    }
+
+    public function test_partial_fill_cancel_books_only_unledgered_fill_once(): void
+    {
+        [$user, $profile, $rec, $order] = $this->submittedCancellationOrder();
+        app(FakeBrokerGateway::class)->nextCancelSnapshot = new BrokerOrderSnapshot($order->broker_order_id, 'cancelled', 2, 3, 100, 'CANCELLED');
+        $this->postJson('/api/v1/orders/'.$order->id.'/cancel')->assertOk()->assertJsonPath('data.cancellation_status', 'confirmed');
+        app(LiveBrokerExecutionService::class)->reconcileOrder($profile, $order->fresh());
+        $this->assertSame(TradingOrder::STATUS_CANCELLED, $order->fresh()->status);
+        $this->assertSame(2.0, (float) \App\Models\OrderTransaction::query()->where('order_id', $order->id)->sum('quantity'));
+        $this->assertSame(1, Transaction::query()->where('recommendation_id', $rec->id)->count());
+        $this->assertSame(TradingRecommendation::STATUS_PENDING_EXECUTION, $rec->fresh()->status);
+    }
+
+    public function test_recommendation_retry_creates_one_new_order_without_duplicate_reservation(): void
+    {
+        [$user, $profile, $rec, $order] = $this->submittedCancellationOrder();
+        $rec->forceFill(['reservation_status' => TradingRecommendation::RESERVATION_RESERVED, 'reserved_amount' => 100])->save();
+        $this->postJson('/api/v1/orders/'.$order->id.'/cancel')->assertOk();
+        $fake = app(FakeBrokerGateway::class);
+        $before = $fake->placeCalls;
+        Carbon::setTestNow(now()->addMinute());
+        $this->postJson('/api/v1/execution/submit-selected', ['recommendation_ids' => [$rec->id], 'recovery_code' => $this->totpCode($user)])->assertOk();
+        $this->assertSame($before + 1, $fake->placeCalls);
+        $orders = TradingOrder::query()->where('recommendation_id', $rec->id)->orderBy('id')->get();
+        $this->assertCount(2, $orders);
+        $this->assertNotSame($orders[0]->submission_key, $orders[1]->submission_key);
+        $this->assertSame('100.0000', $rec->fresh()->reserved_amount);
+    }
+
+    public function test_cross_profile_order_cancellation_is_denied(): void
+    {
+        [$owner, $profile, $rec, $order] = $this->submittedCancellationOrder();
+        $other = User::factory()->create();
+        $otherProfile = $this->defaultPortfolioFor($other);
+        $this->actingAs($other)->withProfileHeader($other, $otherProfile);
+        $this->postJson('/api/v1/orders/'.$order->id.'/cancel')->assertNotFound();
+        $this->assertSame(0, app(FakeBrokerGateway::class)->cancelCalls);
+    }
+
+    public function test_broker_cancellation_failure_returns_error_and_does_not_claim_cancelled(): void
+    {
+        [$user, $profile, $rec, $order] = $this->submittedCancellationOrder();
+        app(FakeBrokerGateway::class)->nextCancelFails = true;
+        $this->postJson('/api/v1/orders/'.$order->id.'/cancel')->assertStatus(422)->assertJsonPath('error.code', 'BROKER_CANCEL_FAILED');
+        $this->assertSame(TradingOrder::STATUS_PENDING, $order->fresh()->status);
+        $this->assertNull($order->fresh()->broker_cancel_requested_at);
+    }
+
+    /** @return array{User,PortfolioProfile,TradingRecommendation,TradingOrder} */
+    protected function submittedCancellationOrder(): array
+    {
+        [$user, $profile] = $this->actingReadyUser();
+        $this->setMode($user, $profile, PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC);
+        $rec = $this->pendingBuy($profile, amount: 500);
+        $this->postJson('/api/v1/execution/submit-selected', [
+            'recommendation_ids' => [$rec->id],
+            'recovery_code' => $this->totpCode($user),
+        ])->assertOk();
+
+        return [$user, $profile, $rec->fresh(), TradingOrder::query()->where('recommendation_id', $rec->id)->firstOrFail()];
+    }
+
+    /** @return array{0: User, 1: PortfolioProfile} */
     protected function actingReadyUser(): array
     {
         $user = User::factory()->create();

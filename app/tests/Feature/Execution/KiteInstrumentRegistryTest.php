@@ -227,6 +227,20 @@ class KiteInstrumentRegistryTest extends TestCase
         Http::assertSent(fn ($request): bool => $request->url() === 'https://api.kite.trade/orders/amo/order-amo' && $request->method() === 'DELETE');
     }
 
+    public function test_regular_cancellation_uses_the_regular_endpoint(): void
+    {
+        $user = User::factory()->create();
+        BrokerConnection::query()->create(['user_id' => $user->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => now()->addDay()])->forceFill(['access_token' => 'token'])->save();
+        Http::fake([
+            'https://api.kite.trade/orders/regular/order-regular' => Http::response(['status' => 'success']),
+            'https://api.kite.trade/orders/order-regular' => Http::response(['status' => 'success', 'data' => [['status' => 'CANCELLED', 'quantity' => 1, 'filled_quantity' => 0]]]),
+        ]);
+
+        app(KiteBrokerGateway::class)->cancelOrder($user->id, 'order-regular', 'regular');
+
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://api.kite.trade/orders/regular/order-regular' && $request->method() === 'DELETE');
+    }
+
     /** @param list<list<string>> $rows */
     private function csv(array $rows): string
     {

@@ -60,6 +60,7 @@ class TradingOrder extends Model
         'submission_key',
         'execution_decision_id',
         'last_broker_sync_at',
+        'broker_cancel_requested_at',
         'reusable_artifact_version_id',
         'artifact_binding_revision_id',
     ];
@@ -75,6 +76,7 @@ class TradingOrder extends Model
             'executed_at' => 'datetime',
             'cancelled_at' => 'datetime',
             'last_broker_sync_at' => 'datetime',
+            'broker_cancel_requested_at' => 'datetime',
             'reusable_artifact_version_id' => 'integer',
             'artifact_binding_revision_id' => 'integer',
         ];

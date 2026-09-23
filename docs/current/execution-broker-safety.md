@@ -127,6 +127,10 @@ Current anchors: `LiveBrokerExecutionService`, `KiteBrokerGateway`, `BrokerOrder
 
 `TradingOrder` is StoX's durable order record. It links profile, recommendation, security, side, quantity, price/type, submission key, execution decision, broker provider/order ID and pinned artifact evidence. Its local status includes pending/executed/cancelled; broker status includes submitted, open, partial, filled, rejected, cancelled and unknown.
 
+**Frozen cancellation lifecycle (PO):** cancelling an unfilled broker order cancels only that execution attempt. StoX keeps the recommendation `pending_execution` and its reservation unchanged so the investor can retry; cancelling the recommendation remains a separate action that releases the reservation. A broker DELETE acknowledgment is not terminal confirmation. Persist `broker_cancel_requested_at`, leave the StoX order pending, and return HTTP 202 with `cancellation_status=pending` while Kite has not reported a terminal state. The UI says “Cancellation requested; waiting for Kite confirmation.” Repeated cancellation requests fetch current broker state without resubmitting DELETE. Reconciliation maps Kite `CANCELLED`, `REJECTED`, partial fill and complete fill to the corresponding terminal/lifecycle outcome; broker fills are ledgered only for the unledgered quantity. Confirmed zero-fill cancellation creates no transaction or holding and does not release the recommendation reservation. Confirmed cancellation/rejection ends that broker attempt; an explicit recommendation retry receives a new submission key/order while reusing the existing reservation.
+
+The production audit recommendations 784, 785 and 786 remaining `pending_execution` with reserved funds after their broker execution attempts ended are consistent with this accepted retry policy; no manual reservation release is implied.
+
 Lifecycle:
 
 1. Create a local intent/order with an idempotent submission key.

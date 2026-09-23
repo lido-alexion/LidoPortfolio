@@ -380,7 +380,11 @@ class LiveBrokerExecutionService
             ];
         }
 
-        $submissionKey = $this->submissionKey($profile, $recommendation, $side, $qty);
+        $lastOrder = TradingOrder::query()->where('profile_id', $profile->id)->where('recommendation_id', $recommendation->id)->whereNotNull('broker_order_id')->orderByDesc('id')->first();
+        $retryAttempt = $lastOrder && in_array($lastOrder->broker_status, [TradingOrder::BROKER_CANCELLED, TradingOrder::BROKER_REJECTED], true)
+            ? TradingOrder::query()->where('profile_id', $profile->id)->where('recommendation_id', $recommendation->id)->count() + 1
+            : 1;
+        $submissionKey = $this->submissionKey($profile, $recommendation, $side, $qty, $retryAttempt);
         $existingByKey = TradingOrder::query()->where('submission_key', $submissionKey)->first();
         if ($existingByKey) {
             if ($existingByKey->hasInFlightBrokerOrder() || $existingByKey->broker_status === TradingOrder::BROKER_UNKNOWN) {
@@ -563,6 +567,7 @@ class LiveBrokerExecutionService
             'broker_error_message' => $placed->message,
             'broker_error_type' => $placed->errorType,
             'last_broker_sync_at' => now(),
+            'broker_cancel_requested_at' => null,
         ])->save();
         if ($brokerStatus === TradingOrder::BROKER_REJECTED) {
             $order->forceFill([
@@ -617,36 +622,45 @@ class LiveBrokerExecutionService
         return $this->applySnapshot($profile, $order, $snapshot);
     }
 
-    public function cancelOrder(PortfolioProfile $profile, TradingOrder $order): TradingOrder
+    public function cancelOrder(PortfolioProfile $profile, TradingOrder $order): array
     {
         if ((int) $order->profile_id !== (int) $profile->id) {
             throw new DomainException('Order not found for this portfolio.', 'NOT_FOUND', 404);
         }
 
+        if ($order->status === TradingOrder::STATUS_CANCELLED && $order->broker_status === TradingOrder::BROKER_CANCELLED) {
+            return ['order' => $order->fresh(['security', 'recommendation']), 'cancellation_status' => 'confirmed'];
+        }
+        if ($order->status === TradingOrder::STATUS_CANCELLED && $order->broker_status === TradingOrder::BROKER_REJECTED) {
+            return ['order' => $order->fresh(['security', 'recommendation']), 'cancellation_status' => 'failed'];
+        }
         if ($order->status !== TradingOrder::STATUS_PENDING) {
             throw new DomainException('Only pending orders can be cancelled.', 'ORDER_NOT_CANCELLABLE', 422);
         }
 
         if (! $order->broker_order_id) {
-            return $this->execution->cancelOrder($profile, $order);
+            return ['order' => $this->execution->cancelOrder($profile, $order), 'cancellation_status' => 'confirmed'];
         }
 
-        $snapshot = $this->broker->cancelOrder(
-            (int) $profile->user_id,
-            (string) $order->broker_order_id,
-            (string) ($order->broker_variety ?: BrokerOrderPolicy::REGULAR),
-        );
+        $alreadyRequested = $order->broker_cancel_requested_at !== null;
+        $snapshot = $alreadyRequested
+            ? $this->broker->fetchOrder((int) $profile->user_id, (string) $order->broker_order_id)
+            : $this->broker->cancelOrder((int) $profile->user_id, (string) $order->broker_order_id, (string) ($order->broker_variety ?: BrokerOrderPolicy::REGULAR));
+        if (! $snapshot) {
+            $order->forceFill(['broker_cancel_requested_at' => $order->broker_cancel_requested_at ?? now()])->save();
+
+            return ['order' => $order->fresh(['security', 'recommendation']), 'cancellation_status' => 'pending'];
+        }
         $cancelled = $this->applySnapshot($profile, $order, $snapshot);
+        $confirmed = in_array($cancelled->broker_status, [TradingOrder::BROKER_CANCELLED, TradingOrder::BROKER_REJECTED, TradingOrder::BROKER_FILLED], true);
+        $accepted = in_array($snapshot->rawStatus, ['CANCEL_REQUESTED', 'CANCEL_UNCONFIRMED'], true);
+        $cancelled->forceFill(['broker_cancel_requested_at' => $confirmed ? null : ($accepted ? ($cancelled->broker_cancel_requested_at ?? now()) : $cancelled->broker_cancel_requested_at)])->save();
 
-        if (in_array($cancelled->broker_status, TradingOrder::IN_FLIGHT_BROKER_STATUSES, true)) {
-            throw new DomainException(
-                'The broker has not confirmed cancellation. Reconcile the order before retrying.',
-                'BROKER_CANCEL_UNCONFIRMED',
-                422,
-            );
+        if (in_array($cancelled->broker_status, [TradingOrder::BROKER_FILLED, TradingOrder::BROKER_REJECTED], true)) {
+            return ['order' => $cancelled->fresh(['security', 'recommendation']), 'cancellation_status' => 'failed'];
         }
 
-        return $cancelled;
+        return ['order' => $cancelled->fresh(['security', 'recommendation']), 'cancellation_status' => $confirmed ? 'confirmed' : 'pending'];
     }
 
     public function reconcileOpenForProfile(PortfolioProfile $profile): int
@@ -675,6 +689,7 @@ class LiveBrokerExecutionService
             'filled_quantity' => $snapshot->filledQuantity,
             'average_fill_price' => $snapshot->averagePrice,
             'last_broker_sync_at' => now(),
+            'broker_cancel_requested_at' => in_array($mapped, [TradingOrder::BROKER_CANCELLED, TradingOrder::BROKER_REJECTED, TradingOrder::BROKER_FILLED], true) ? null : $order->broker_cancel_requested_at,
         ])->save();
 
         $target = (float) $order->quantity;
@@ -910,9 +925,14 @@ class LiveBrokerExecutionService
         ];
     }
 
-    protected function submissionKey(PortfolioProfile $profile, TradingRecommendation $recommendation, string $side, float $qty): string
+    protected function submissionKey(PortfolioProfile $profile, TradingRecommendation $recommendation, string $side, float $qty, int $attempt = 1): string
     {
-        return substr(hash('sha256', $profile->id.'|'.$recommendation->id.'|'.$side.'|'.$qty), 0, 40);
+        $material = $profile->id.'|'.$recommendation->id.'|'.$side.'|'.$qty;
+        if ($attempt > 1) {
+            $material .= '|retry:'.$attempt;
+        }
+
+        return substr(hash('sha256', $material), 0, 40);
     }
 
     protected function mapBrokerStatus(string $status): string

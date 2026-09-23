@@ -22,6 +22,14 @@ class FakeBrokerGateway implements BrokerGateway
 
     public int $placeCalls = 0;
 
+    public int $cancelCalls = 0;
+
+    public array $cancelVarieties = [];
+
+    public ?BrokerOrderSnapshot $nextCancelSnapshot = null;
+
+    public bool $nextCancelFails = false;
+
     /** @var list<BrokerOrderRequest> */
     public array $placed = [];
 
@@ -82,6 +90,10 @@ class FakeBrokerGateway implements BrokerGateway
         $this->reconciliationSnapshot = null;
         $this->reconciliationSnapshotUnavailable = false;
         $this->placeCalls = 0;
+        $this->cancelCalls = 0;
+        $this->cancelVarieties = [];
+        $this->nextCancelSnapshot = null;
+        $this->nextCancelFails = false;
         $this->placed = [];
         $this->nextPlaceAmbiguous = false;
         $this->nextPlaceRejected = false;
@@ -214,6 +226,19 @@ class FakeBrokerGateway implements BrokerGateway
 
     public function cancelOrder(int $userId, string $brokerOrderId, string $variety = BrokerOrderPolicy::REGULAR): BrokerOrderSnapshot
     {
+        $this->cancelCalls++;
+        $this->cancelVarieties[] = $variety;
+        if ($this->nextCancelFails) {
+            $this->nextCancelFails = false;
+            throw new DomainException('Simulated broker cancellation failure.', 'BROKER_CANCEL_FAILED', 422);
+        }
+        if ($this->nextCancelSnapshot) {
+            $snapshot = $this->nextCancelSnapshot;
+            $this->nextCancelSnapshot = null;
+            $this->orders[$brokerOrderId] = $snapshot;
+
+            return $snapshot;
+        }
         $existing = $this->orders[$brokerOrderId] ?? new BrokerOrderSnapshot($brokerOrderId, 'open');
         $cancelled = new BrokerOrderSnapshot(
             $brokerOrderId,

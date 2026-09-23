@@ -214,12 +214,35 @@ class KiteBrokerGateway implements BrokerGateway
     public function cancelOrder(int $userId, string $brokerOrderId, string $variety = BrokerOrderPolicy::REGULAR): BrokerOrderSnapshot
     {
         $token = $this->accessToken($userId);
-        $response = Http::timeout(20)
-            ->withHeaders($this->headers($token))
-            ->delete(rtrim((string) config('broker.kite.api_base'), '/').'/orders/'.($variety === BrokerOrderPolicy::AMO ? 'amo' : 'regular').'/'.$brokerOrderId);
+        try {
+            $response = Http::timeout(20)
+                ->withHeaders($this->headers($token))
+                ->delete(rtrim((string) config('broker.kite.api_base'), '/').'/orders/'.($variety === BrokerOrderPolicy::AMO ? 'amo' : 'regular').'/'.$brokerOrderId);
+        } catch (ConnectionException) {
+            $fetched = $this->fetchOrder($userId, $brokerOrderId);
+            if ($fetched && in_array($fetched->status, ['cancelled', 'rejected', 'filled'], true)) {
+                return $fetched;
+            }
+
+            return new BrokerOrderSnapshot(
+                $fetched?->brokerOrderId ?? $brokerOrderId,
+                $fetched?->status ?? 'unknown',
+                $fetched?->filledQuantity ?? 0,
+                $fetched?->pendingQuantity ?? 0,
+                $fetched?->averagePrice,
+                'CANCEL_UNCONFIRMED',
+            );
+        }
 
         $fetched = $this->fetchOrder($userId, $brokerOrderId);
         if ($fetched) {
+            if ($response->successful() && in_array($fetched->status, ['submitted', 'open', 'partial', 'unknown'], true)) {
+                return new BrokerOrderSnapshot($fetched->brokerOrderId, $fetched->status, $fetched->filledQuantity, $fetched->pendingQuantity, $fetched->averagePrice, 'CANCEL_REQUESTED');
+            }
+            if (! $response->successful() && ! in_array($fetched->status, ['cancelled', 'rejected', 'filled'], true)) {
+                throw new DomainException('Kite could not cancel the order.', 'BROKER_CANCEL_FAILED', 422);
+            }
+
             return $fetched;
         }
 

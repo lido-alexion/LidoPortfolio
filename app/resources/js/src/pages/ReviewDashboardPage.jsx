@@ -4,6 +4,7 @@ import { ROUTES } from '../navigation/routes';
 import api from '../api';
 import useApiGet from '../hooks/useApiGet';
 import { runApiMutation } from '../hooks/useApiMutation';
+import { showToast } from '../toast';
 import { formatInrCompactWhole } from '../utils/tableFormat';
 import { tosData, tosList } from '../utils/tosEnvelope';
 
@@ -46,10 +47,12 @@ export default function ReviewDashboardPage() {
     };
 
     const cancelPending = async (orderId) => {
-        const { ok } = await runApiMutation(async () => {
-            await api.post(`/v1/orders/${orderId}/cancel`, null, { skipErrorToast: true });
-        }, { successMessage: 'Order cancelled', errorFallback: 'Cancel failed' });
+        const { ok, data: response } = await runApiMutation(async () => (
+            await api.post(`/v1/orders/${orderId}/cancel`, null, { skipErrorToast: true })
+        ), { errorFallback: 'Cancel failed' });
         if (ok) {
+            const outcome = response?.data?.data?.cancellation_status;
+            showToast(outcome === 'pending' ? 'Cancellation requested; waiting for Kite confirmation.' : 'Order cancellation confirmed.', 'success');
             await load();
         }
     };

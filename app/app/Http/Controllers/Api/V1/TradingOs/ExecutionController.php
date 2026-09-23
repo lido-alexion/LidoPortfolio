@@ -128,12 +128,20 @@ class ExecutionController extends Controller
         }
 
         try {
-            $cancelled = $this->liveBroker->cancelOrder($profile, $order);
+            $result = $this->liveBroker->cancelOrder($profile, $order);
         } catch (ValidationException $e) {
             return TradingOsHttp::validationError($e);
         }
 
-        return ApiEnvelope::success($cancelled);
+        $status = $result['cancellation_status'] ?? 'confirmed';
+        if ($status === 'failed') {
+            return ApiEnvelope::error('BROKER_CANCEL_NOT_CONFIRMED', 'Kite reports the order was filled or rejected before cancellation could be confirmed.', 409, ['cancellation_status' => 'failed']);
+        }
+
+        $order = $result['order'];
+        $data = array_merge($order->toArray(), ['order' => $order, 'cancellation_status' => $status]);
+
+        return ApiEnvelope::success($data, [], $status === 'pending' ? 202 : 200);
     }
 
     public function transactionsIndex(Request $request): JsonResponse
