@@ -128,7 +128,7 @@ class ExecutionController extends Controller
         }
 
         try {
-            $cancelled = $this->execution->cancelOrder($profile, $order);
+            $cancelled = $this->liveBroker->cancelOrder($profile, $order);
         } catch (ValidationException $e) {
             return TradingOsHttp::validationError($e);
         }

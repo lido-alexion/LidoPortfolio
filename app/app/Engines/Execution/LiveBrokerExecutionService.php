@@ -15,6 +15,7 @@ use App\Models\TradingStrategy;
 use App\Models\User;
 use App\Services\Broker\BrokerAmbiguousException;
 use App\Services\Broker\BrokerGateway;
+use App\Services\Broker\BrokerOrderPolicy;
 use App\Services\Broker\BrokerOrderRequest;
 use App\Services\Broker\BrokerOrderSnapshot;
 use App\Services\Execution\InternalRecommendationMatcher;
@@ -614,6 +615,38 @@ class LiveBrokerExecutionService
         }
 
         return $this->applySnapshot($profile, $order, $snapshot);
+    }
+
+    public function cancelOrder(PortfolioProfile $profile, TradingOrder $order): TradingOrder
+    {
+        if ((int) $order->profile_id !== (int) $profile->id) {
+            throw new DomainException('Order not found for this portfolio.', 'NOT_FOUND', 404);
+        }
+
+        if ($order->status !== TradingOrder::STATUS_PENDING) {
+            throw new DomainException('Only pending orders can be cancelled.', 'ORDER_NOT_CANCELLABLE', 422);
+        }
+
+        if (! $order->broker_order_id) {
+            return $this->execution->cancelOrder($profile, $order);
+        }
+
+        $snapshot = $this->broker->cancelOrder(
+            (int) $profile->user_id,
+            (string) $order->broker_order_id,
+            (string) ($order->broker_variety ?: BrokerOrderPolicy::REGULAR),
+        );
+        $cancelled = $this->applySnapshot($profile, $order, $snapshot);
+
+        if (in_array($cancelled->broker_status, TradingOrder::IN_FLIGHT_BROKER_STATUSES, true)) {
+            throw new DomainException(
+                'The broker has not confirmed cancellation. Reconcile the order before retrying.',
+                'BROKER_CANCEL_UNCONFIRMED',
+                422,
+            );
+        }
+
+        return $cancelled;
     }
 
     public function reconcileOpenForProfile(PortfolioProfile $profile): int

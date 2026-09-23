@@ -227,7 +227,7 @@ class KiteBrokerGateway implements BrokerGateway
             throw new DomainException('Kite could not cancel the order.', 'BROKER_CANCEL_FAILED', 422);
         }
 
-        return new BrokerOrderSnapshot($brokerOrderId, 'cancelled', 0, 0, null, 'CANCELLED');
+        return new BrokerOrderSnapshot($brokerOrderId, 'unknown', 0, 0, null, 'CANCEL_UNCONFIRMED');
     }
 
     public function placeGtt(BrokerGttRequest $request): BrokerSubmission
@@ -444,7 +444,8 @@ class KiteBrokerGateway implements BrokerGateway
         $status = match ($raw) {
             'COMPLETE' => $filled + 0.0001 < $qty && $qty > 0 ? 'partial' : 'filled',
             'REJECTED' => 'rejected',
-            'CANCELLED', 'CANCELED' => $filled > 0.0001 ? 'partial' : 'cancelled',
+            'CANCELLED', 'CANCELED' => 'cancelled',
+            'AMO REQ RECEIVED' => $filled > 0.0001 ? 'partial' : 'submitted',
             'OPEN', 'TRIGGER PENDING', 'PUT ORDER REQ RECEIVED', 'VALIDATION PENDING', 'OPEN PENDING' => $filled > 0.0001 ? 'partial' : 'open',
             default => $filled > 0.0001 ? 'partial' : 'unknown',
         };
