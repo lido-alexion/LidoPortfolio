@@ -293,15 +293,15 @@ The page SHALL be:
 
 ### 12.2 Minimum-click login flow
 
-When today's Kite access token is missing/expired, the page SHOULD present one dominant action such as **Authenticate with Zerodha**.
+When today's Kite access token is missing/expired, the page SHOULD present one dominant action such as **Login to Zerodha**.
 
 Preferred flow:
 
 ```text
 Open Telegram reminder
     -> tap StoX Kite-auth link
-        -> page shows NOT AUTHENTICATED
-            -> tap Authenticate with Zerodha
+        -> page shows LOGIN REQUIRED
+            -> tap Login to Zerodha
                 -> Zerodha login / required verification
                     -> redirect back to StoX
                         -> server exchanges request token
@@ -309,6 +309,8 @@ Open Telegram reminder
                                 -> collector starts/reconnects
                                     -> page shows READY
 ```
+
+Completing the Zerodha login flow is itself the user's authorization for StoX to use the resulting Kite session. StoX SHALL NOT introduce an additional persistent "Authorize StoX", "Reconnect & Authorize", or equivalent approval state.
 
 StoX should preserve state across the external Zerodha login redirect so the operator is returned to the same mobile-friendly page rather than a generic dashboard.
 
@@ -319,8 +321,8 @@ Where Kite's security flow requires user interaction, StoX SHALL minimize additi
 The page SHOULD prominently show a simple status state such as:
 
 - **Ready for market** — valid session available and collector can connect;
-- **Authentication required** — today's session is missing/expired;
-- **Connecting** — authentication succeeded and collector is establishing the stream;
+- **Login required** — today's session is missing/expired;
+- **Connecting** — login succeeded and collector is establishing the stream;
 - **Collector active** — WebSocket connected with expected subscription count;
 - **Problem detected** — authentication exists but the collector is not healthy.
 
@@ -350,18 +352,15 @@ At minimum:
 - successful authentication is auditable;
 - failure messages shown on mobile do not expose secrets.
 
-### 12.5 Persistent StoX authorization vs daily Kite session
+### 12.5 Manual disconnect / kill-switch semantics
 
-StoX SHALL distinguish between:
+There is **no separate persistent authorization flag** beyond the current Kite session itself.
 
-1. **Persistent operator authorization** for StoX to use Kite automatically when a valid session exists; and
-2. the **daily Zerodha/Kite access session**, which still requires the operator to complete Zerodha's interactive login flow when the prior session has expired.
+Normal overnight/session expiry simply means the next trading day requires another Zerodha login.
 
-Normal overnight Kite session expiry MUST NOT revoke the persistent StoX authorization. Once the user completes the daily Zerodha login, the collector may start/reconnect automatically without an additional StoX-side approval step.
+A deliberate manual **Disconnect**, execution **Kill Switch**, or equivalent explicit safety action SHALL immediately invalidate/remove the currently usable Kite session and stop the collector/broker use as appropriate. StoX MUST NOT silently recreate a session after such an explicit user action.
 
-A deliberate manual **Disconnect**, execution **Kill Switch**, or equivalent explicit safety action SHALL revoke/suspend the persistent automatic-use authorization. StoX MUST NOT silently reconnect after such an explicit user action. Re-enabling automatic Kite use requires an explicit **Reconnect & Authorize StoX** (or equivalent) action.
-
-This distinction prevents normal daily token expiry from creating unnecessary friction while preserving the semantic meaning of a manual disconnect or kill switch.
+After a manual Disconnect/Kill Switch, the user restores access simply by opening the dedicated Kite-auth link and completing the Zerodha login again. That successful login is the new authorization; no extra StoX approval step is required.
 
 ### 12.6 Collector handoff
 
@@ -380,7 +379,7 @@ The reminder SHALL include a direct HTTPS link to the dedicated mobile auth page
 ```text
 Telegram notification
     -> tap link
-    -> authenticate with Zerodha
+    -> login to Zerodha
     -> redirect to StoX
     -> collector ready
 ```
@@ -391,11 +390,11 @@ Required behaviour:
 
 - on every NSE trading day, begin checking for a valid current Kite session before market open;
 - if already authenticated for the current day, send no authentication reminder;
-- if authentication is missing and persistent StoX authorization remains enabled, send a pre-market Telegram reminder containing the auth-page deep link;
+- if authentication is missing, send a pre-market Telegram reminder containing the auth-page deep link;
 - while authentication remains missing, repeat the reminder **once per hour**;
-- hourly reminders continue until the daily Kite authentication succeeds, the trading session ends, or persistent authorization is explicitly disabled through Disconnect/Kill Switch;
+- hourly reminders continue until the daily Kite authentication succeeds or the trading session ends;
 - successful authentication immediately cancels all remaining reminders for that trading day;
-- manual Disconnect/Kill Switch suppresses daily-login reminders until the user explicitly re-authorizes StoX;
+- if the user manually Disconnects or activates the Kill Switch, the current session is removed immediately; subsequent restoration still occurs only through a fresh Zerodha login from the auth link;
 - if market opens without a valid session/collector connection, reminders continue hourly and the notification should clearly state that Dataset C is currently being lost;
 - do not send routine daily-login reminders on known NSE weekends/holidays.
 
@@ -470,7 +469,8 @@ V4-FEAT-063 does **not** include:
 - ClickHouse or enterprise data-lake deployment;
 - permanent retention of every raw tick;
 - historical reconstruction of old NIFTY 500 membership;
-- proving that any microstructure field has predictive value.
+- proving that any microstructure field has predictive value;
+- any separate persistent StoX authorization mechanism in addition to the Zerodha login/session.
 
 Those concerns belong to V4-FEAT-062, V4-FEAT-058, V4-FEAT-059 and the existing ML lifecycle as appropriate.
 
@@ -478,7 +478,7 @@ Those concerns belong to V4-FEAT-062, V4-FEAT-058, V4-FEAT-059 and the existing 
 
 1. The service can connect to Kite WebSocket using configured credentials.
 2. It subscribes to the configured current NIFTY 500 instruments in `full` mode on one connection.
-3. Reconnection automatically restores subscriptions and full mode.
+3. Reconnection automatically restores subscriptions and full mode while the current Kite session remains valid.
 4. It consumes the full quote/depth fields required by the aggregation contract.
 5. It creates exactly one canonical minute record per observed instrument/minute.
 6. It calculates the agreed spread/depth/imbalance/trade summary fields without future data.
@@ -493,16 +493,16 @@ Those concerns belong to V4-FEAT-062, V4-FEAT-058, V4-FEAT-059 and the existing 
 15. ML training can consume the accumulated files later without requiring a migration from MySQL.
 16. StoX provides a dedicated, bookmarkable, mobile-friendly Kite authentication URL that does not require navigating through the Admin UI.
 17. When authentication is required, the page exposes one clear primary action to start the Zerodha login flow.
-18. Successful Zerodha callback/token exchange returns the user to the same mobile authentication experience and clearly shows that the session is ready.
-19. Successful authentication is handed to the collector without SSH, shell commands, token copy/paste or manual service restart.
-20. The page clearly distinguishes authentication state from collector/WebSocket health.
-21. Kite secrets/access tokens are never exposed in URLs or unnecessary client-side content.
-22. Normal daily Kite-session expiry does not disable persistent StoX authorization to use Kite once the user logs in again.
-23. Manual Disconnect/Kill Switch prevents automatic reuse/reconnection until the user explicitly re-authorizes StoX.
-24. On trading days, Telegram sends a direct-link reminder when the daily Kite session is missing.
-25. While authentication remains missing, reminders repeat hourly until login succeeds, the market session ends, or persistent authorization is explicitly disabled.
-26. Authentication reminders stop immediately after successful authentication and are not routinely sent on known non-trading days.
-27. Missing authentication after market open is clearly identified as active Dataset C data loss.
+18. Completing the Zerodha login is sufficient authorization; no second StoX-side authorization step exists.
+19. Successful Zerodha callback/token exchange returns the user to the same mobile authentication experience and clearly shows that the session is ready.
+20. Successful authentication is handed to the collector without SSH, shell commands, token copy/paste or manual service restart.
+21. The page clearly distinguishes authentication state from collector/WebSocket health.
+22. Kite secrets/access tokens are never exposed in URLs or unnecessary client-side content.
+23. On trading days, Telegram sends a direct-link reminder when the daily Kite session is missing before market open.
+24. While authentication remains missing, Telegram repeats the reminder hourly until login succeeds or the trading session ends.
+25. Authentication reminders stop immediately after successful login and are not routinely sent on known non-trading days.
+26. Missing authentication at/after market open is clearly identified as active Dataset C loss.
+27. Manual Disconnect/Kill Switch immediately invalidates current Kite use; restoring access requires only a fresh Zerodha login, not a separate authorization toggle.
 
 ## 19. Priority rationale
 
