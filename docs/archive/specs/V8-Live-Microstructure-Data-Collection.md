@@ -5,6 +5,7 @@
 | **Epic** | V4-FEAT-063 |
 | **Title** | Live Microstructure Data Collection |
 | **Release** | V8 |
+| **Priority** | **HIGH — prioritize early in V8** |
 | **Priority intent** | START EARLY — prospective data cannot be backfilled later from Kite |
 | **Status** | WISHLIST / ARCHITECTURE DIRECTION AGREED |
 | **Primary source** | Zerodha Kite Connect WebSocket, `full` mode |
@@ -18,6 +19,8 @@
 Start collecting the live market-microstructure information that Zerodha Kite exposes only prospectively and that cannot later be reconstructed from the historical OHLCV API.
 
 This epic is deliberately separated from V4-FEAT-062 so it can be implemented and activated immediately, while the historical 8-year NIFTY 500 backfill can happen later.
+
+**V4-FEAT-063 should be prioritized early in V8.** Every trading day before this collector is active permanently reduces the available Dataset C history, whereas the historical OHLCV corpus owned by V4-FEAT-062 can be backfilled later.
 
 The purpose of V4-FEAT-063 is only:
 
@@ -280,7 +283,7 @@ StoX SHALL expose a dedicated, bookmarkable URL route for Kite collector authent
 https://stoxla.in/kite-auth
 ```
 
-or an equivalent authenticated Admin route.
+The StoX entry URL itself is **static and must remain the same every day**. Any Zerodha login URL/state generated behind the page may be short-lived/dynamic internally, but the operator-facing StoX URL and the link sent through Telegram SHALL NOT change day to day.
 
 The page SHALL be:
 
@@ -299,7 +302,7 @@ Preferred flow:
 
 ```text
 Open Telegram reminder
-    -> tap StoX Kite-auth link
+    -> tap static StoX Kite-auth link
         -> page shows LOGIN REQUIRED
             -> tap Login to Zerodha
                 -> Zerodha login / required verification
@@ -374,11 +377,11 @@ If authentication succeeds outside market hours, the collector may remain idle u
 
 StoX SHALL use the existing Telegram notification capability to remind the operator when daily Kite authentication is required.
 
-The reminder SHALL include a direct HTTPS link to the dedicated mobile auth page so the common action is:
+The reminder SHALL include the same static HTTPS auth-page URL every day so the common action is:
 
 ```text
 Telegram notification
-    -> tap link
+    -> tap static StoX link
     -> login to Zerodha
     -> redirect to StoX
     -> collector ready
@@ -390,11 +393,11 @@ Required behaviour:
 
 - on every NSE trading day, begin checking for a valid current Kite session before market open;
 - if already authenticated for the current day, send no authentication reminder;
-- if authentication is missing, send a pre-market Telegram reminder containing the auth-page deep link;
+- if authentication is missing, send a pre-market Telegram reminder containing the static auth-page link;
 - while authentication remains missing, repeat the reminder **once per hour**;
 - hourly reminders continue until the daily Kite authentication succeeds or the trading session ends;
 - successful authentication immediately cancels all remaining reminders for that trading day;
-- if the user manually Disconnects or activates the Kill Switch, the current session is removed immediately; subsequent restoration still occurs only through a fresh Zerodha login from the auth link;
+- if the user manually Disconnects or activates the Kill Switch, the current session is removed immediately; subsequent restoration still occurs only through a fresh Zerodha login from the same static auth link;
 - if market opens without a valid session/collector connection, reminders continue hourly and the notification should clearly state that Dataset C is currently being lost;
 - do not send routine daily-login reminders on known NSE weekends/holidays.
 
@@ -469,8 +472,7 @@ V4-FEAT-063 does **not** include:
 - ClickHouse or enterprise data-lake deployment;
 - permanent retention of every raw tick;
 - historical reconstruction of old NIFTY 500 membership;
-- proving that any microstructure field has predictive value;
-- any separate persistent StoX authorization mechanism in addition to the Zerodha login/session.
+- proving that any microstructure field has predictive value.
 
 Those concerns belong to V4-FEAT-062, V4-FEAT-058, V4-FEAT-059 and the existing ML lifecycle as appropriate.
 
@@ -478,7 +480,7 @@ Those concerns belong to V4-FEAT-062, V4-FEAT-058, V4-FEAT-059 and the existing 
 
 1. The service can connect to Kite WebSocket using configured credentials.
 2. It subscribes to the configured current NIFTY 500 instruments in `full` mode on one connection.
-3. Reconnection automatically restores subscriptions and full mode while the current Kite session remains valid.
+3. Reconnection automatically restores subscriptions and full mode.
 4. It consumes the full quote/depth fields required by the aggregation contract.
 5. It creates exactly one canonical minute record per observed instrument/minute.
 6. It calculates the agreed spread/depth/imbalance/trade summary fields without future data.
@@ -491,24 +493,25 @@ Those concerns belong to V4-FEAT-062, V4-FEAT-058, V4-FEAT-059 and the existing 
 13. The service can run on the current StoX VPS without materially degrading the one-user production application under normal load.
 14. The collector and Parquet schema are independent of future ML model choices.
 15. ML training can consume the accumulated files later without requiring a migration from MySQL.
-16. StoX provides a dedicated, bookmarkable, mobile-friendly Kite authentication URL that does not require navigating through the Admin UI.
-17. When authentication is required, the page exposes one clear primary action to start the Zerodha login flow.
-18. Completing the Zerodha login is sufficient authorization; no second StoX-side authorization step exists.
+16. StoX provides a dedicated, bookmarkable, mobile-friendly Kite authentication URL that is static and identical every day.
+17. Telegram reminders always use that same static StoX authentication URL.
+18. When authentication is required, the page exposes one clear primary action to start the Zerodha login flow.
 19. Successful Zerodha callback/token exchange returns the user to the same mobile authentication experience and clearly shows that the session is ready.
 20. Successful authentication is handed to the collector without SSH, shell commands, token copy/paste or manual service restart.
 21. The page clearly distinguishes authentication state from collector/WebSocket health.
 22. Kite secrets/access tokens are never exposed in URLs or unnecessary client-side content.
-23. On trading days, Telegram sends a direct-link reminder when the daily Kite session is missing before market open.
-24. While authentication remains missing, Telegram repeats the reminder hourly until login succeeds or the trading session ends.
-25. Authentication reminders stop immediately after successful login and are not routinely sent on known non-trading days.
-26. Missing authentication at/after market open is clearly identified as active Dataset C loss.
-27. Manual Disconnect/Kill Switch immediately invalidates current Kite use; restoring access requires only a fresh Zerodha login, not a separate authorization toggle.
+23. On trading days, Telegram sends a direct-link reminder when the daily Kite session is still missing before market open.
+24. While authentication remains missing, Telegram repeats the reminder once per hour until login succeeds or the trading session ends.
+25. Missing authentication at/after market open clearly reports that prospective Dataset C is currently being lost.
+26. This epic is explicitly treated as a **high-priority / early-V8 implementation item** because delay causes irrecoverable loss of Dataset C history.
 
 ## 19. Priority rationale
 
-This epic should be prioritised ahead of historical Dataset A backfill because the two datasets have different recoverability:
+**Priority: HIGH. Implement as early as practical in V8.**
+
+This epic should be prioritized ahead of historical Dataset A backfill because the two datasets have different recoverability:
 
 - **Historical OHLCV:** can be fetched later from Kite in controlled batches.
 - **Live order-book/microstructure history:** cannot be recreated later at comparable depth from Kite.
 
-Every trading day before V4-FEAT-063 starts is therefore a permanently lost day of potential Dataset C history.
+Every trading day before V4-FEAT-063 starts is therefore a permanently lost day of potential Dataset C history. Once the collector is active, it can accumulate data in the background while the rest of V8 is designed and implemented.
