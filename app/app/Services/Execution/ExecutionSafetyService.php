@@ -37,6 +37,8 @@ class ExecutionSafetyService
             'halt_reason' => $user->execution_halt_reason,
             'recovered_at' => $user->execution_recovered_at?->toIso8601String(),
             'live_quote_policy' => $user->liveQuotePolicy(),
+            'authenticator_app_name' => $user->authenticatorAppName(),
+            'execution_code_label' => $user->executionCodeLabel(),
             'broker' => $this->connections->status($user),
         ];
     }
@@ -69,7 +71,7 @@ class ExecutionSafetyService
             throw new DomainException('Recovery requires explicit confirmation.', 'RECOVERY_CONFIRMATION_REQUIRED', 422);
         }
         if (! $user->totpIsActive()) {
-            throw new DomainException('Authenticator verification is required before recovery.', 'TOTP_REQUIRED', 403);
+            throw new DomainException($user->executionCodeLabel().' verification is required before recovery.', 'TOTP_REQUIRED', 403);
         }
         $this->totp->assertRecentVerification($user, $totpCode, $recoveryCode);
 

@@ -264,11 +264,11 @@ The additive Trading OS API is under `/api/v1`; legacy portfolio APIs remain whe
 | Mode and safety | `GET/PUT /api/v1/execution/mode`, `GET /state`, `POST /halt`, `/recover`, `PUT /quote-policy`, `POST /submit-selected`; execution/safety controllers enforce execution scopes |
 | Broker/Kite | `/api/v1/broker/status`, `/kite/login-url`, guest-safe `/kite/callback`, `/kite/session`, `/kite/disconnect`, emergency disconnect and primary-open-order cancellation routes |
 | Protections | `GET/POST /api/v1/protections`, `GET /{id}`, `POST /{id}/cancel`, `/reconcile` |
-| TOTP and entitlement | `/api/v1/totp/*`; admin `PUT /api/v1/admin/users/{user}/automated-execution-entitlement` |
+| StoX execution code and entitlement | `/api/v1/totp/*`; admin `PUT /api/v1/admin/users/{user}/automated-execution-entitlement` |
 | Reconciliation | `GET /api/reconciliation`, `GET /api/reconciliation/{run}`; reconciliation controller exposes recorded runs |
 | Paper execution | `/api/portfolios/{portfolio}/simulation` and pause/resume paths; simulation controller owns simulated workflow |
 
-Sensitive API-token routes use explicit execution read/submit scopes. Controller route presence does not bypass portfolio access, role, TOTP, entitlement, safety or execution gate checks.
+Sensitive API-token routes use explicit execution read/submit scopes. Controller route presence does not bypass portfolio access, role, StoX execution-code, entitlement, safety or execution gate checks.
 
 ## 18. Services And Orchestration
 

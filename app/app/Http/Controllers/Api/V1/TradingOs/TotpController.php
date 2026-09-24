@@ -30,9 +30,14 @@ class TotpController extends Controller
     {
         $validated = $request->validate([
             'code' => ['required', 'string', 'max:16'],
+            'authenticator_app_name' => ['nullable', 'string', 'max:80'],
         ]);
 
-        $payload = $this->totp->confirmEnrollment($request->user(), $validated['code']);
+        $payload = $this->totp->confirmEnrollment(
+            $request->user(),
+            $validated['code'],
+            $validated['authenticator_app_name'] ?? null,
+        );
 
         return ApiEnvelope::success($payload);
     }

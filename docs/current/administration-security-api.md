@@ -119,9 +119,9 @@ Token metadata exposes name, abilities, creation, expiry, and last-use time. Rev
 
 ## 14. TOTP Lifecycle
 
-TOTP is **not configured -> pending setup -> enabled -> recovered/disabled**. Enrollment provisions a pending secret, confirmation verifies a code and activates it, and activation creates hashed recovery codes. Verification is rate-limited and replay-aware. A recovery code is single-use; disable clears active/pending TOTP state through a verified TOTP or recovery-code path.
+The StoX execution code is **not configured -> pending setup -> enabled -> recovered/disabled**. Enrollment provisions a pending authenticator secret; confirmation verifies a rotating code, saves only the safe authenticator-app display name, and activates the StoX execution code. Existing users without a saved name display “Authenticator app.” Activation creates hashed StoX recovery codes. Verification is rate-limited and replay-aware. A StoX recovery code is a separate single-use backup; disable clears active/pending authenticator state through one explicitly identified proof path. Kite login OTPs are entered only on Kite/Zerodha.
 
-TOTP supplies sensitive-action proof for execution-sensitive operations. It does not itself grant execution authority: entitlement, ownership, mode, broker readiness, halt state, reconciliation, and all execution safety gates remain required.
+A StoX execution code — {Authenticator App Name} supplies sensitive-action proof for execution-sensitive operations. It does not itself grant execution authority: entitlement, ownership, mode, broker readiness, halt state, reconciliation, and all execution safety gates remain required.
 
 **Current implementation anchors:** `TotpService`, `TradingOs\TotpController`, `User` TOTP fields, `ExecutionSafetyService`, and `TotpFlowTest`.
 
@@ -242,7 +242,7 @@ The exact envelope may differ between legacy and V1 endpoints; clients must not 
 
 `User` is the identity and role/entitlement owner. `PortfolioProfile` belongs to an Investor user and scopes investment resources. `UserInvite` and `PasswordResetLink` retain hashed-token lifecycle records and actor/target context. Sanctum `PersonalAccessToken` belongs to its issuing user and carries abilities/expiry. Session storage represents user sessions rather than portfolio ownership.
 
-`BrokerConnection` is user-bound. TOTP secret, pending secret, confirmation/counter, and hashed recovery codes are user security state. `ProfileSetting`/`Setting` distinguish profile/global settings by access rules. `SystemLog`, `SyncLog`, operational-alert records, and audit explorer evidence provide observability rather than authority.
+`BrokerConnection` is user-bound. TOTP secret, pending secret, confirmation/counter, and hashed StoX recovery codes and the safe authenticator-app display name are user security state. `ProfileSetting`/`Setting` distinguish profile/global settings by access rules. `SystemLog`, `SyncLog`, operational-alert records, and audit explorer evidence provide observability rather than authority.
 
 ## 28. API Routes
 

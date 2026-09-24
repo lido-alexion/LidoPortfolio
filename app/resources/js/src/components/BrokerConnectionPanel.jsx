@@ -36,7 +36,7 @@ export default function BrokerConnectionPanel() {
         try {
             const { ok } = await runApiMutation(async () => {
                 await api.post('/v1/broker/kite/disconnect', {}, { skipErrorToast: true });
-            }, { successMessage: 'Zerodha disconnected', errorFallback: 'Could not disconnect' });
+            }, { successMessage: 'Kite disconnected', errorFallback: 'Could not disconnect Kite' });
             if (ok) {
                 await load();
             }
@@ -52,6 +52,7 @@ export default function BrokerConnectionPanel() {
                 <p className="text-muted small">
                     Connect your own Kite account to submit orders in Semi-Automatic or Automatic mode.
                     Manual mode works without a broker connection. Kite sessions typically expire around 6:00 AM IST.
+                    If Kite asks for a Kite login OTP, enter it only on the Kite/Zerodha login page; StoX never uses that OTP as an execution code.
                 </p>
                 {status?.configured === false && (
                     <p className="small text-warning mb-2">Kite API keys are not configured on this server.</p>

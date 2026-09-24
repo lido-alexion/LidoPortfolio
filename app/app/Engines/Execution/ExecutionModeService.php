@@ -42,6 +42,8 @@ class ExecutionModeService
             'execution_mode' => $mode,
             'entitled' => $user->automatedExecutionEntitled(),
             'totp_enabled' => $user->totpIsActive(),
+            'authenticator_app_name' => $user->authenticatorAppName(),
+            'execution_code_label' => $user->executionCodeLabel(),
             'blockers' => $blockers,
             'can_submit_semi_automatic' => $canLive && $mode === PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC,
             'can_submit_automatic' => $canLive && $mode === PortfolioProfile::EXECUTION_MODE_AUTOMATIC,

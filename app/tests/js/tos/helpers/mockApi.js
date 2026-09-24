@@ -160,6 +160,8 @@ export function installDefaultTosHandlers({
                 execution_mode: executionMode,
                 entitled,
                 totp_enabled: totpEnabled,
+                authenticator_app_name: 'Authenticator app',
+                execution_code_label: 'StoX execution code — Authenticator app',
                 blockers: modeBlockers,
                 can_submit_semi_automatic: canSubmitSemiAutomatic,
                 can_submit_automatic: canSubmitAutomatic,

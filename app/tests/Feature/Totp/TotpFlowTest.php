@@ -39,7 +39,7 @@ class TotpFlowTest extends TestCase
             ->assertJsonPath('error.code', 'TOTP_INVALID');
 
         $otp = app(TotpService::class)->currentOtpForTests($user->fresh());
-        $confirm = $this->postJson('/api/v1/totp/confirm', ['code' => $otp])
+        $confirm = $this->postJson('/api/v1/totp/confirm', ['code' => $otp, 'authenticator_app_name' => 'Google Authenticator'])
             ->assertOk();
         $codes = $confirm->json('data.recovery_codes');
         $this->assertIsArray($codes);
@@ -50,13 +50,90 @@ class TotpFlowTest extends TestCase
         $this->assertArrayNotHasKey('secret', $status->json('data'));
 
         $this->assertTrue($user->fresh()->totpIsActive());
+        $this->assertSame('Google Authenticator', $user->fresh()->authenticatorAppName());
+        $this->assertSame('StoX execution code — Google Authenticator', $status->json('data.execution_code_label'));
+        $this->assertSame('Google Authenticator', $status->json('data.authenticator_app_name'));
         $this->assertNull($user->fresh()->toArray()['totp_secret'] ?? null);
+        $this->assertNotSame($otp, $user->fresh()->totp_authenticator_app_name);
+        $this->assertNotSame($otp, $user->fresh()->totp_secret);
         $storedHashes = $user->fresh()->totp_recovery_codes;
         $this->assertIsArray($storedHashes);
         foreach ($codes as $plain) {
             $this->assertNotContains($plain, $storedHashes);
             $this->assertTrue(collect($storedHashes)->contains(fn ($hash) => Hash::check($plain, $hash)));
         }
+    }
+
+    public function test_existing_enrollment_without_an_app_name_uses_safe_default_label(): void
+    {
+        [$user] = $this->actingUser();
+        $this->enroll($user);
+
+        $this->assertSame('Authenticator app', $user->fresh()->authenticatorAppName());
+        $this->getJson('/api/v1/totp')
+            ->assertOk()
+            ->assertJsonPath('data.authenticator_app_name', 'Authenticator app')
+            ->assertJsonPath('data.execution_code_label', 'StoX execution code — Authenticator app');
+    }
+
+    public function test_emergency_recovery_accepts_totp_without_consuming_a_stox_recovery_code(): void
+    {
+        [$user] = $this->actingUser();
+        $this->enroll($user);
+        $user->forceFill([
+            'execution_state' => User::EXECUTION_STATE_EMERGENCY_HALT,
+            'totp_last_counter' => null,
+        ])->save();
+        $before = count($user->fresh()->totp_recovery_codes);
+        $otp = app(TotpService::class)->currentOtpForTests($user->fresh());
+
+        $this->postJson('/api/v1/execution/recover', [
+            'confirm' => true,
+            'totp' => $otp,
+        ])->assertOk()->assertJsonPath('data.execution_state', User::EXECUTION_STATE_NORMAL);
+
+        $this->assertSame($before, count($user->fresh()->totp_recovery_codes));
+        $this->assertDatabaseHas('portfolio_execution_safety_events', [
+            'user_id' => $user->id,
+            'event' => 'execution.recovered',
+            'status' => 'completed',
+        ]);
+    }
+
+    public function test_emergency_recovery_accepts_one_time_stox_recovery_code(): void
+    {
+        [$user] = $this->actingUser();
+        $codes = $this->enroll($user);
+        $user->forceFill(['execution_state' => User::EXECUTION_STATE_EMERGENCY_HALT])->save();
+        $before = count($user->fresh()->totp_recovery_codes);
+
+        $this->postJson('/api/v1/execution/recover', [
+            'confirm' => true,
+            'recovery_code' => $codes[0],
+        ])->assertOk()->assertJsonPath('data.execution_state', User::EXECUTION_STATE_NORMAL);
+
+        $this->assertSame($before - 1, count($user->fresh()->totp_recovery_codes));
+    }
+
+    public function test_emergency_recovery_rejects_ambiguous_totp_and_recovery_proof(): void
+    {
+        [$user] = $this->actingUser();
+        $codes = $this->enroll($user);
+        $user->forceFill([
+            'execution_state' => User::EXECUTION_STATE_EMERGENCY_HALT,
+            'totp_last_counter' => null,
+        ])->save();
+        $before = count($user->fresh()->totp_recovery_codes);
+        $otp = app(TotpService::class)->currentOtpForTests($user->fresh());
+
+        $this->postJson('/api/v1/execution/recover', [
+            'confirm' => true,
+            'totp' => $otp,
+            'recovery_code' => $codes[0],
+        ])->assertStatus(422)->assertJsonPath('error.code', 'TOTP_PROOF_AMBIGUOUS');
+
+        $this->assertSame(User::EXECUTION_STATE_EMERGENCY_HALT, $user->fresh()->executionState());
+        $this->assertSame($before, count($user->fresh()->totp_recovery_codes));
     }
 
     public function test_secrets_and_recovery_codes_are_not_logged(): void

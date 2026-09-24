@@ -108,6 +108,18 @@ class User extends Authenticatable
             && $this->totp_secret !== '';
     }
 
+    public function authenticatorAppName(): string
+    {
+        $name = trim((string) $this->totp_authenticator_app_name);
+
+        return $name !== '' ? $name : 'Authenticator app';
+    }
+
+    public function executionCodeLabel(): string
+    {
+        return 'StoX execution code — '.$this->authenticatorAppName();
+    }
+
     public function automatedExecutionEntitled(): bool
     {
         return $this->automated_execution_entitled_at !== null;

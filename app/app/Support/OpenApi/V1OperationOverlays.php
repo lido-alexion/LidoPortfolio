@@ -562,32 +562,33 @@ final class V1OperationOverlays
                 'noBody' => true,
             ],
             'GET /api/v1/totp' => [
-                'summary' => 'TOTP authenticator status',
-                'description' => 'Returns whether authenticator TOTP is enabled or pending. Never returns the stored secret after enrollment (V4-FEAT-001).',
+                'summary' => 'StoX execution-code status',
+                'description' => 'Returns whether the StoX execution code is enabled, its safe authenticator app display name, and setup status. Never returns the stored authenticator secret or entered code.',
                 'successStatus' => '200',
                 'noBody' => true,
             ],
             'POST /api/v1/totp/begin' => [
-                'summary' => 'Start TOTP enrollment',
-                'description' => 'Creates a pending TOTP secret and returns otpauth URL, QR SVG, and secret for authenticator setup. Enrollment is not active until confirm.',
+                'summary' => 'Start StoX execution-code setup',
+                'description' => 'Creates a pending authenticator secret and returns setup material. Enrollment is not active until confirmed with a StoX execution code.',
                 'successStatus' => '200',
                 'noBody' => true,
             ],
             'POST /api/v1/totp/confirm' => [
-                'summary' => 'Confirm TOTP enrollment',
-                'description' => 'Activates TOTP after a valid authenticator code. Returns one-time recovery codes. The stored secret is not returned.',
+                'summary' => 'Confirm StoX execution-code setup',
+                'description' => 'Activates the StoX execution code after a valid rotating code from the named authenticator app. Returns one-time StoX recovery codes. The stored secret and entered code are not returned.',
                 'requestBody' => $json([
                     'type' => 'object',
                     'required' => ['code'],
                     'properties' => [
-                        'code' => ['type' => 'string', 'description' => 'Current authenticator code. Never logged.'],
+                        'code' => ['type' => 'string', 'description' => 'Current StoX execution code — {Authenticator App Name}. Never logged or stored.'],
+                        'authenticator_app_name' => ['type' => 'string', 'maxLength' => 80, 'description' => 'Safe display name for the authenticator app. Defaults to Authenticator app.'],
                     ],
                 ]),
                 'successStatus' => '200',
             ],
             'POST /api/v1/totp/verify' => [
-                'summary' => 'Verify a TOTP or recovery code',
-                'description' => 'Rate-limited. Replay of a used TOTP inside the validity window is rejected. Recovery codes are single-use when recovery=true.',
+                'summary' => 'Verify a StoX execution code or consume a StoX recovery code',
+                'description' => 'Rate-limited. Replay of a used StoX execution code inside the validity window is rejected. A StoX recovery code is single-use when recovery=true.',
                 'requestBody' => $json([
                     'type' => 'object',
                     'required' => ['code'],
@@ -599,7 +600,7 @@ final class V1OperationOverlays
                 'successStatus' => '200',
             ],
             'POST /api/v1/totp/recover' => [
-                'summary' => 'Consume a single-use recovery code',
+                'summary' => 'Consume a single-use StoX recovery code',
                 'requestBody' => $json([
                     'type' => 'object',
                     'required' => ['code'],
@@ -610,8 +611,8 @@ final class V1OperationOverlays
                 'successStatus' => '200',
             ],
             'POST /api/v1/totp/disable' => [
-                'summary' => 'Disable TOTP',
-                'description' => 'Requires a valid authenticator or recovery code. Clears secret and remaining recovery codes.',
+                'summary' => 'Disable StoX execution code',
+                'description' => 'Requires either a valid StoX execution code — {Authenticator App Name} or a StoX recovery code. Clears the authenticator and remaining recovery codes.',
                 'requestBody' => $json([
                     'type' => 'object',
                     'required' => ['code'],
@@ -624,13 +625,13 @@ final class V1OperationOverlays
             ],
             'GET /api/v1/execution/mode' => [
                 'summary' => 'Portfolio execution mode and live-submit blockers',
-                'description' => 'Manual / semi_automatic / automatic plus entitlement, TOTP, and broker blockers. Mode is per portfolio; entitlement is per user.',
+                'description' => 'Manual / semi_automatic / automatic plus entitlement, StoX execution-code, and Kite session blockers. Mode is per portfolio; entitlement is per user.',
                 'successStatus' => '200',
                 'noBody' => true,
             ],
             'PUT /api/v1/execution/mode' => [
                 'summary' => 'Change portfolio execution mode',
-                'description' => 'Manual requires no TOTP. Semi-Automatic and Automatic require entitlement plus a valid TOTP (or recovery) code. Manual→Automatic also requires confirm_automatic. Automatic→Manual does not cancel in-flight broker orders.',
+                'description' => 'Manual requires no StoX execution code. Semi-Automatic and Automatic require entitlement plus a valid StoX execution code or StoX recovery code. Manual→Automatic also requires confirm_automatic. Automatic→Manual does not cancel in-flight broker orders.',
                 'requestBody' => $json([
                     'type' => 'object',
                     'required' => ['execution_mode'],
@@ -643,9 +644,23 @@ final class V1OperationOverlays
                 ]),
                 'successStatus' => '200',
             ],
+            'POST /api/v1/execution/recover' => [
+                'summary' => 'Recover Emergency Halt',
+                'description' => 'Requires confirmation and exactly one proof: a rotating StoX execution code — {Authenticator App Name} in totp, or a single-use StoX recovery code in recovery_code. Never send both fields.',
+                'requestBody' => $json([
+                    'type' => 'object',
+                    'required' => ['confirm'],
+                    'properties' => [
+                        'confirm' => ['type' => 'boolean'],
+                        'totp' => ['type' => 'string', 'description' => 'StoX execution code — {Authenticator App Name}. Never logged or stored.'],
+                        'recovery_code' => ['type' => 'string', 'description' => 'Single-use StoX recovery code. Never logged.'],
+                    ],
+                ]),
+                'successStatus' => '200',
+            ],
             'POST /api/v1/execution/submit-selected' => [
                 'summary' => 'Semi-Automatic broker submit',
-                'description' => 'Explicit Accept/Execute Selected. Server enforces user, portfolio, entitlement, TOTP, eligibility, capital/reservation, and broker session, then submits to Zerodha. Broker acceptance is not a ledger fill.',
+                'description' => 'Explicit Accept/Execute Selected. Server enforces user, portfolio, entitlement, StoX execution code, eligibility, capital/reservation, and Kite session, then submits to Kite. Broker acceptance is not a ledger fill.',
                 'requestBody' => $json([
                     'type' => 'object',
                     'required' => ['recommendation_ids'],
@@ -733,15 +748,15 @@ final class V1OperationOverlays
             ],
             'POST /api/v1/protections' => [
                 'summary' => 'Place or replace GTT Target or Stop-Loss',
-                'description' => 'Semi-Automatic attended placement. Requires automated-execution entitlement, TOTP, and a usable Kite session. Price is taken from Strategy target (target_amount/quantity) or stop (OD-13). Placing one type replaces the other. Does not write ledger, cash, capital, or lending. Manual mode is rejected.',
+                'description' => 'Semi-Automatic attended placement. Requires automated-execution entitlement, a StoX execution code, and a usable Kite session. Price is taken from Strategy target (target_amount/quantity) or stop (OD-13). Placing one type replaces the other. Does not write ledger, cash, capital, or lending. Manual mode is rejected.',
                 'requestBody' => $json([
                     'type' => 'object',
                     'required' => ['holding_id', 'type'],
                     'properties' => [
                         'holding_id' => ['type' => 'integer'],
                         'type' => ['type' => 'string', 'enum' => ['target', 'stop']],
-                        'totp' => ['type' => 'string', 'nullable' => true, 'description' => 'Authenticator code. Never logged.'],
-                        'recovery_code' => ['type' => 'string', 'nullable' => true, 'description' => 'Single-use recovery code. Never logged.'],
+                        'totp' => ['type' => 'string', 'nullable' => true, 'description' => 'StoX execution code. Never logged.'],
+                        'recovery_code' => ['type' => 'string', 'nullable' => true, 'description' => 'Single-use StoX recovery code. Never logged.'],
                     ],
                 ]),
                 'successStatus' => '201',

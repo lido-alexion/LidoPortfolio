@@ -37,7 +37,7 @@ class TotpService
     }
 
     /**
-     * @return array{enabled:bool,pending:bool,confirmed_at:?string}
+     * @return array{enabled:bool,pending:bool,confirmed_at:?string,authenticator_app_name:string,execution_code_label:string}
      */
     public function status(User $user): array
     {
@@ -45,6 +45,8 @@ class TotpService
             'enabled' => $user->totpIsActive(),
             'pending' => is_string($user->totp_pending_secret) && $user->totp_pending_secret !== '',
             'confirmed_at' => $user->totp_confirmed_at?->toIso8601String(),
+            'authenticator_app_name' => $user->authenticatorAppName(),
+            'execution_code_label' => $user->executionCodeLabel(),
         ];
     }
 
@@ -55,7 +57,7 @@ class TotpService
     {
         if ($user->totpIsActive()) {
             throw new DomainException(
-                'Authenticator is already enabled. Disable it before enrolling again.',
+                $user->executionCodeLabel().' is already enabled. Disable it before enrolling again.',
                 'TOTP_ALREADY_ENABLED',
                 422,
             );
@@ -86,13 +88,17 @@ class TotpService
     /**
      * @return array{recovery_codes: list<string>}
      */
-    public function confirmEnrollment(User $user, #[\SensitiveParameter] string $code): array
-    {
+    public function confirmEnrollment(
+        User $user,
+        #[\SensitiveParameter] string $code,
+        ?string $authenticatorAppName = null,
+    ): array {
         $user->refresh();
+        $authenticatorAppName = $this->normalizeAuthenticatorAppName($authenticatorAppName);
         $pending = $user->totp_pending_secret;
         if (! is_string($pending) || $pending === '') {
             throw new DomainException(
-                'Start authenticator enrollment before confirming.',
+                'Start StoX execution-code setup before confirming.',
                 'TOTP_ENROLLMENT_NOT_STARTED',
                 422,
             );
@@ -102,7 +108,7 @@ class TotpService
         $timestamp = $this->google2fa->verifyKeyNewer($pending, $this->normalizeCode($code), null, self::WINDOW);
         if ($timestamp === false) {
             $this->hitRateLimit($user);
-            throw new DomainException('Invalid authenticator code.', 'TOTP_INVALID', 422);
+            throw new DomainException('Invalid StoX execution code — '.$authenticatorAppName.' during setup.', 'TOTP_INVALID', 422);
         }
 
         $this->clearRateLimit($user);
@@ -113,6 +119,7 @@ class TotpService
             'totp_confirmed_at' => now(),
             'totp_last_counter' => is_int($timestamp) ? $timestamp : $this->google2fa->getTimestamp(),
             'totp_recovery_codes' => array_map(fn (string $plain) => Hash::make($plain), $recovery),
+            'totp_authenticator_app_name' => $authenticatorAppName,
         ])->save();
 
         $this->logger->event('TotpService', 'totp.enrollment_confirmed', 'info', 'TOTP enrollment confirmed', [
@@ -126,7 +133,7 @@ class TotpService
     {
         $user->refresh();
         if (! $user->totpIsActive()) {
-            throw new DomainException('Authenticator is not enabled.', 'TOTP_NOT_ENABLED', 422);
+            throw new DomainException($user->executionCodeLabel().' is not enabled.', 'TOTP_NOT_ENABLED', 422);
         }
 
         $this->assertNotRateLimited($user);
@@ -138,7 +145,7 @@ class TotpService
         );
         if ($timestamp === false) {
             $this->hitRateLimit($user);
-            throw new DomainException('Invalid authenticator code.', 'TOTP_INVALID', 422);
+            throw new DomainException('Invalid '.$user->executionCodeLabel().'.', 'TOTP_INVALID', 422);
         }
 
         $this->clearRateLimit($user);
@@ -157,7 +164,7 @@ class TotpService
     {
         $user->refresh();
         if (! $user->totpIsActive()) {
-            throw new DomainException('Authenticator is not enabled.', 'TOTP_NOT_ENABLED', 422);
+            throw new DomainException($user->executionCodeLabel().' is not enabled.', 'TOTP_NOT_ENABLED', 422);
         }
 
         $this->assertNotRateLimited($user);
@@ -173,7 +180,7 @@ class TotpService
 
         if ($matchedIndex === null) {
             $this->hitRateLimit($user);
-            throw new DomainException('Invalid recovery code.', 'TOTP_RECOVERY_INVALID', 422);
+            throw new DomainException('Invalid StoX recovery code.', 'TOTP_RECOVERY_INVALID', 422);
         }
 
         unset($hashes[$matchedIndex]);
@@ -193,7 +200,7 @@ class TotpService
     {
         $user->refresh();
         if (! $user->totpIsActive() && ! (is_string($user->totp_pending_secret) && $user->totp_pending_secret !== '')) {
-            throw new DomainException('Authenticator is not enabled.', 'TOTP_NOT_ENABLED', 422);
+            throw new DomainException($user->executionCodeLabel().' is not enabled.', 'TOTP_NOT_ENABLED', 422);
         }
 
         if ($isRecovery) {
@@ -208,6 +215,7 @@ class TotpService
             'totp_confirmed_at' => null,
             'totp_last_counter' => null,
             'totp_recovery_codes' => null,
+            'totp_authenticator_app_name' => null,
         ])->save();
 
         $this->logger->event('TotpService', 'totp.disabled', 'info', 'TOTP disabled', [
@@ -223,7 +231,7 @@ class TotpService
         $user->refresh();
         if (! $user->totpIsActive()) {
             throw new DomainException(
-                'Authenticator must be enrolled before automated broker submission.',
+                $user->executionCodeLabel().' must be set up before automated broker submission.',
                 'TOTP_REQUIRED',
                 403,
             );
@@ -233,9 +241,16 @@ class TotpService
         $recovery = is_string($recoveryCode) ? trim($recoveryCode) : '';
         if ($totp === '' && $recovery === '') {
             throw new DomainException(
-                'Authenticator code is required.',
+                $user->executionCodeLabel().' is required.',
                 'TOTP_REQUIRED',
                 403,
+            );
+        }
+        if ($totp !== '' && $recovery !== '') {
+            throw new DomainException(
+                'Send either a '.$user->executionCodeLabel().' or a StoX recovery code, not both.',
+                'TOTP_PROOF_AMBIGUOUS',
+                422,
             );
         }
 
@@ -264,7 +279,7 @@ class TotpService
         if (RateLimiter::tooManyAttempts($key, self::RATE_LIMIT_MAX)) {
             $seconds = RateLimiter::availableIn($key);
             throw new DomainException(
-                'Too many authenticator attempts. Try again in '.$seconds.' seconds.',
+                'Too many '.$user->executionCodeLabel().' attempts. Try again in '.$seconds.' seconds.',
                 'TOTP_RATE_LIMITED',
                 429,
             );
@@ -284,6 +299,15 @@ class TotpService
     protected function normalizeCode(string $code): string
     {
         return preg_replace('/\s+/', '', $code) ?? '';
+    }
+
+    protected function normalizeAuthenticatorAppName(?string $name): string
+    {
+        $name = trim(strip_tags((string) $name));
+        $name = preg_replace('/[\p{C}]+/u', '', $name) ?? '';
+        $name = mb_substr($name, 0, 80);
+
+        return $name !== '' ? $name : 'Authenticator app';
     }
 
     /**

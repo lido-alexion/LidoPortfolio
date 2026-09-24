@@ -49,7 +49,7 @@ describe('Pending Execution TOS smoke', () => {
         expect(submit).toBeDisabled();
 
         await user.click(screen.getByRole('checkbox', { name: 'Select INFY' }));
-        await user.type(screen.getByLabelText('Authenticator code'), '123456');
+        await user.type(screen.getByLabelText('StoX execution code — Authenticator app'), '123456');
         expect(submit).toBeEnabled();
 
         await user.click(submit);
@@ -96,7 +96,7 @@ describe('Pending Execution TOS smoke', () => {
         renderPanel();
         await screen.findByRole('button', { name: 'Accept / Execute Selected' });
         await user.click(screen.getByRole('checkbox', { name: 'Select INFY' }));
-        await user.type(screen.getByLabelText('Authenticator code'), '123456');
+        await user.type(screen.getByLabelText('StoX execution code — Authenticator app'), '123456');
         await user.click(screen.getByRole('button', { name: 'Accept / Execute Selected' }));
         expect(showToast).toHaveBeenCalledWith(expect.stringMatching(/No orders submitted/i), 'warning');
         expect(showToast).not.toHaveBeenCalledWith('Submitted to broker', 'success');
@@ -121,7 +121,7 @@ describe('Pending Execution TOS smoke', () => {
         renderPanel();
         await screen.findByRole('button', { name: 'Accept / Execute Selected' });
         await user.click(screen.getByRole('checkbox', { name: 'Select INFY' }));
-        await user.type(screen.getByLabelText('Authenticator code'), '123456');
+        await user.type(screen.getByLabelText('StoX execution code — Authenticator app'), '123456');
         await user.click(screen.getByRole('button', { name: 'Accept / Execute Selected' }));
 
         expect(showToast).toHaveBeenCalledWith('Submitted 1; blocked 1; skipped 2.', 'warning');

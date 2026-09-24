@@ -123,7 +123,7 @@ class ExecutionGate
 
         if (! $user->totpIsActive()) {
             throw new DomainException(
-                'Authenticator must be enrolled before automated broker submission.',
+                $user->executionCodeLabel().' must be set up before automated broker submission.',
                 'TOTP_REQUIRED',
                 403,
             );

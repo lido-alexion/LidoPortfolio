@@ -37,7 +37,7 @@ export default function KiteReadinessCard({ executionMode }) {
         <div className="alert alert-danger d-flex flex-wrap justify-content-between align-items-center gap-3 mb-0" role="alert">
             <div>
                 <strong>Automatic execution is not ready</strong>
-                <div className="small">{status.configured === false ? 'Kite is not configured on this server.' : 'Your daily Kite session is missing or expired.'}</div>
+                <div className="small">{status.configured === false ? 'Kite is not configured on this server.' : "Your daily Kite session is missing or expired. Enter any Kite login OTP only on Kite's login page."}</div>
             </div>
             <button type="button" className="btn btn-danger btn-sm" disabled={busy || status.configured === false} onClick={connect}>
                 {busy ? 'Opening Kite…' : 'Connect Kite'}

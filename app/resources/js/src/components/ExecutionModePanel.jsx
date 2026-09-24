@@ -63,7 +63,7 @@ export default function ExecutionModePanel() {
             <div className="card-body">
                 <p className="text-muted small">
                     This setting is per portfolio. New portfolios default to Manual (no broker submission).
-                    Semi-Automatic and Automatic require admin entitlement, authenticator enrollment, and a Kite connection.
+                    Semi-Automatic and Automatic require admin entitlement, {snap?.execution_code_label || 'StoX execution code — Authenticator app'}, and a Kite connection.
                     Switching Automatic → Manual stops future automatic submissions and does not cancel broker orders already sent.
                 </p>
                 <form className="row g-3" onSubmit={save}>
@@ -82,7 +82,7 @@ export default function ExecutionModePanel() {
                     </div>
                     {mode !== 'manual' && (
                         <div className="col-md-4">
-                            <label className="form-label" htmlFor="execution-mode-totp">Authenticator code</label>
+                            <label className="form-label" htmlFor="execution-mode-totp">{snap?.execution_code_label || 'StoX execution code — Authenticator app'}</label>
                             <input
                                 id="execution-mode-totp"
                                 className="form-control"
@@ -104,7 +104,7 @@ export default function ExecutionModePanel() {
                                     onChange={(e) => setConfirmAutomatic(e.target.checked)}
                                 />
                                 <label className="form-check-label" htmlFor="confirm-automatic">
-                                    I understand Automatic will submit eligible orders to Zerodha without per-order approval.
+                                    I understand Automatic will submit eligible orders to Kite without per-order approval.
                                 </label>
                             </div>
                         </div>

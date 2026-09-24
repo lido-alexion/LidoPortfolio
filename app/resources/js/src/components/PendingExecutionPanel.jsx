@@ -64,6 +64,7 @@ export default function PendingExecutionPanel({ onExecuteStarted }) {
     const isSemi = modeSnap?.execution_mode === 'semi_automatic';
     const isAutomatic = modeSnap?.execution_mode === 'automatic';
     const blockers = modeSnap?.blockers || [];
+    const executionCodeLabel = modeSnap?.execution_code_label || 'StoX execution code — Authenticator app';
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
@@ -189,8 +190,11 @@ export default function PendingExecutionPanel({ onExecuteStarted }) {
             )}
             {isSemi && (
                 <div className="px-3 pt-3 d-flex flex-wrap gap-2 align-items-end">
+                    <p className="small text-muted w-100 mb-0">
+                        Enter the rotating {executionCodeLabel}; StoX recovery codes are one-time backups and are not accepted here.
+                    </p>
                     <div>
-                        <label className="form-label small mb-1" htmlFor="semi-totp">Authenticator code</label>
+                        <label className="form-label small mb-1" htmlFor="semi-totp">{executionCodeLabel}</label>
                         <input
                             id="semi-totp"
                             className="form-control form-control-sm"

@@ -489,6 +489,7 @@ export default function HoldingsPage() {
     const [adoptBusy, setAdoptBusy] = useState(false);
     const [adoptError, setAdoptError] = useState('');
     const [executionMode, setExecutionMode] = useState('manual');
+    const [executionCodeLabel, setExecutionCodeLabel] = useState('StoX execution code — Authenticator app');
     const [protections, setProtections] = useState([]);
     const [protectionPrompt, setProtectionPrompt] = useState(null);
     const [protectionTotp, setProtectionTotp] = useState('');
@@ -555,9 +556,11 @@ export default function HoldingsPage() {
                     api.get('/v1/protections'),
                 ]);
                 setExecutionMode(modeRes.data?.data?.execution_mode || 'manual');
+                setExecutionCodeLabel(modeRes.data?.data?.execution_code_label || 'StoX execution code — Authenticator app');
                 setProtections(protRes.data?.data || []);
             } catch {
                 setExecutionMode('manual');
+                setExecutionCodeLabel('StoX execution code — Authenticator app');
                 setProtections([]);
             }
         } finally {
@@ -870,7 +873,7 @@ export default function HoldingsPage() {
                                         ? 'Cancels the broker GTT. This is not a fill and does not change the holding.'
                                         : 'Uses the Strategy target or stop already shown for this position. Only one of Target or Stop-Loss can be active; placing one replaces the other.'}
                                 </p>
-                                <label className="form-label" htmlFor="protection-totp">Authenticator code</label>
+                                <label className="form-label" htmlFor="protection-totp">{executionCodeLabel}</label>
                                 <input
                                     id="protection-totp"
                                     className="form-control"
