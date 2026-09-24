@@ -14,7 +14,7 @@ V8 contains the **Standalone Telemetry Platform**, deferred follow-on data-boots
 
 The Telemetry Platform is separated from StoX product implementation because it is a separate, independently deployable, product-independent application. StoX is its first intended client, but building the Telemetry product and integrating StoX with it are separate roadmap concerns.
 
-V8 also contains the one-time Historical Fundamental Data Bootstrap, deferred from V7 until the historical dataset/source is prepared and selected, a guest-to-admin **Account Access Request** workflow that preserves admin-controlled onboarding while removing the need for an applicant to obtain an invitation before expressing interest, and a broader ML follow-on program covering scheduled retraining/deployment operations, fundamental feature expansion, technical/market feature engineering, empirically calibrated multi-window promotion criteria, and a richer Admin ML management/observability experience.
+V8 also contains the one-time Historical Fundamental Data Bootstrap, a guest-to-admin **Account Access Request** workflow that preserves admin-controlled onboarding, and a consolidated ML follow-on program with two coherent product boundaries: **ML Feature Engineering, Model Training & Validation** and **ML Lifecycle Automation, Deployment & Operations**.
 
 V8 also includes a lightweight **Guided Tour / Welcome Onboarding** experience so new users can discover the StoX shell and important workflows in context without introducing a heavyweight third-party onboarding dependency.
 
@@ -25,11 +25,11 @@ V8 also includes a lightweight **Guided Tour / Welcome Onboarding** experience s
 | V4-FEAT-052 | Standalone Telemetry Platform | Build the product-independent telemetry/analytics platform as a separate repository/application. Core architecture is already decided in `specs/V7-Telemetry-Platform.md`; the historical filename is retained for now, but this V8 register supersedes its earlier V7 roadmap placement. | CORE ARCHITECTURE DECIDED |
 | V4-FEAT-054 | Historical Fundamental Data Bootstrap | Complete the V7 fundamentals foundation with canonical fact-gap filling, curated derived metrics, official NSE/BSE historical backfill with Yahoo fallback, resumable queue-backed bootstrap, investor Fundamentals UI, historical charts and Screener eligibility integration. **Canonical implementation spec:** [`V8-Historical-Fundamentals-Bootstrap-Specification.md`](V8-Historical-Fundamentals-Bootstrap-Specification.md). | FROZEN / IMPLEMENTATION-READY |
 | V4-FEAT-055 | Account Access Request / Admin Approval Workflow | Add a guest-facing **Request an account** flow linked from Login. Human applicants submit the information required for admin onboarding behind CAPTCHA and abuse controls. Pending duplicates are deduplicated; admins review requests in User Management, receive operational notifications, and resolve them as **Create**, **Ignore**, or **Reject**. Reject creates a reversible email ban; Ignore closes the request without banning; Create hands off into the existing secure admin onboarding/invite flow with request details prefilled. | WISHLIST / NEEDS DESIGN |
-| V4-FEAT-056 | Scheduled ML Retraining, Model Deployment & Operations Messaging | Add cron/scheduler-driven retraining for the 1m/3m/6m models, retain manual retrain/promotion controls, automatically evaluate scheduled candidates and deploy a newer model only when the normal promotion gates pass. Send informational messages for upcoming scheduled training, successful training and successful model deployment; generate Admin alerts only for failures/errors that require attention. | WISHLIST / NEEDS DESIGN |
-| V4-FEAT-057 | ML Fundamental Feature Expansion & Retraining | Follow on from V4-FEAT-054. After historical fundamental coverage is expanded, define a curated/versioned fundamental ML feature set, validate point-in-time safety and coverage, retrain the 1m/3m/6m models, and compare the resulting candidates with existing models and the deterministic StoX baseline before any Admin promotion. | WISHLIST / DEPENDS ON V4-FEAT-054 |
-| V4-FEAT-058 | ML Technical & Market Feature Engineering | Expand the point-in-time ML feature space using data StoX already owns: multi-horizon momentum/trend, volatility/risk, volume/liquidity, breakout/consolidation, deterministic candlestick/chart-pattern signals, market breadth/regime and sector-relative context. Version feature definitions, measure incremental predictive value by horizon, and retain only features that improve out-of-sample results. | WISHLIST / NEEDS DESIGN |
-| V4-FEAT-059 | ML Promotion-Threshold Calibration & Multi-Window Validation | Replace reliance on a single fixed holdout and largely heuristic global promotion cutoffs with repeated chronological evaluation, horizon-aware baseline calibration, stability analysis and evidence-backed promotion criteria. Keep promotion conservative and reproducible; do not lower thresholds merely to make a model pass. | WISHLIST / NEEDS DESIGN |
-| V4-FEAT-060 | ML Admin UI & Training Observability Refinement | Bring the Admin ML UI up to the capabilities already present in the backend and expose richer training lifecycle visibility: eligibility/rejection reasons, per-gate metrics, retained versions, rollback, cutoff/configuration controls, granular run state/progress, failures, model metadata, drift and lifecycle history. | WISHLIST / NEEDS DESIGN |
+| V4-FEAT-056 | ML Lifecycle Automation, Deployment & Operations | Consolidates former FEAT-056 + FEAT-060. Own the operational ML lifecycle: scheduled/manual queued training runs, run-state/progress observability, candidate evaluation, gated automatic/manual promotion, deployment, retained versions/rollback, drift/health visibility, Admin controls, lifecycle messaging and operational failure alerts. | WISHLIST / NEEDS DESIGN |
+| V4-FEAT-057 | ML Feature Engineering, Model Training & Validation | Consolidates former FEAT-057 + FEAT-058 + FEAT-059. Define and validate the combined point-in-time ML feature space across fundamentals, technicals, market/regime/breadth, sector-relative context and deterministic patterns; perform coverage/redundancy selection; retrain 1m/3m/6m candidates; and evaluate them using repeated chronological validation, calibrated promotion criteria, active-model comparison and the deterministic StoX baseline. | WISHLIST / DEPENDS ON V4-FEAT-054 |
+| V4-FEAT-058 | ML Technical & Market Feature Engineering | **Merged into V4-FEAT-057.** Historical ID retained for traceability; no separate implementation epic remains. | MERGED / RETIRED |
+| V4-FEAT-059 | ML Promotion-Threshold Calibration & Multi-Window Validation | **Merged into V4-FEAT-057.** Historical ID retained for traceability; validation/calibration is part of the consolidated training epic. | MERGED / RETIRED |
+| V4-FEAT-060 | ML Admin UI & Training Observability Refinement | **Merged into V4-FEAT-056.** Historical ID retained for traceability; Admin ML operations/observability is part of the consolidated lifecycle epic. | MERGED / RETIRED |
 | V4-FEAT-061 | Guided Tour / Welcome Onboarding | Add a lightweight in-product guided tour for first-time/new users using real StoX UI elements, a configurable step engine, spotlight/dim overlays, tooltip navigation and a welcome entry modal. Persist completion/dismiss state per user, support responsive positioning and hidden-menu coordination, and keep the implementation small and in-house rather than adding a third-party tour framework. | WISHLIST / NEEDS DESIGN |
 
 ## 3. V4-FEAT-055 — Account Access Request / Admin Approval Workflow
@@ -294,693 +294,206 @@ The detailed V8 design should explicitly decide:
 - whether Admin Create hands off to the current invite flow only or a future direct-create workflow;
 - whether a successful Create notification should also be sent to the applicant, separate from the invitation itself.
 
-## 4. V4-FEAT-056 — Scheduled ML Retraining, Model Deployment & Operations Messaging
+## 4. V4-FEAT-056 — ML Lifecycle Automation, Deployment & Operations
 
-### 4.1 Product intent
+### 4.1 Consolidation status
 
-V8 should operationalize the V7 ML lifecycle so routine model maintenance no longer depends on an Admin remembering to retrain each horizon manually.
+This epic **absorbs former V4-FEAT-060 — ML Admin UI & Training Observability Refinement**. FEAT-060 is retired as a standalone implementation epic; its historical ID remains in the backlog table for traceability.
 
-The normal scheduled flow should be:
+### 4.2 Product intent
+
+Operationalize the complete ML lifecycle so routine model maintenance is safe, observable and does not depend on shell access or an Admin remembering every step.
+
+The lifecycle is conceptually:
 
 ```text
-configured schedule / cron
-    -> informational message: training upcoming
-        -> retrain horizon
-            -> evaluate statistical + investment metrics
-            -> compare with deterministic StoX baseline
-            -> apply normal promotion gates
-                -> gates pass: deploy/promote newer model
-                    -> informational message: training + deployment successful
-                -> gates do not pass: retain current active model
-                    -> informational result; no failure alert
-                -> technical/runtime failure
-                    -> Admin alert
+scheduled / manual / optional health trigger
+    -> queued training run
+    -> granular run status and diagnostics
+    -> candidate evaluation using FEAT-057 validation contract
+    -> promotion gates
+        -> pass: automatic or explicit manual promotion per policy
+        -> fail: retain current active model
+    -> deployment / retained version history
+    -> rollback capability
+    -> informational lifecycle messaging
+    -> operational failures become Admin alerts
 ```
 
-Manual retraining, candidate review, promotion, rollback and drift checks SHALL remain available.
+### 4.3 Consolidated scope
 
-### 4.2 Scheduling
+This epic SHALL cover together:
 
-StoX SHALL support scheduler/cron-driven retraining for:
+- independently configurable scheduled retraining for 1m/3m/6m;
+- manual retraining using the same canonical path;
+- queue/background execution rather than one opaque long-running HTTP request;
+- same-horizon concurrency locks;
+- persistent training-run lifecycle and progress/stage state;
+- training dataset/version/cutoff/feature metadata visibility;
+- candidate/rejected/active/retained model states;
+- per-gate eligibility/rejection evidence;
+- active-model and deterministic-baseline comparison evidence supplied by FEAT-057;
+- gated automatic deployment for scheduled runs where product policy allows;
+- explicit manual promotion and rollback controls;
+- retained model/version history;
+- drift/model-health context and optional early retraining triggers;
+- next/last scheduled run visibility;
+- informational messages for upcoming/successful/retained-current outcomes;
+- Admin alerts only for operational failures requiring attention;
+- auditable trigger, lifecycle, promotion, deployment and rollback history.
 
-- 1m;
-- 3m;
-- 6m.
+### 4.4 Core safety rules
 
-Each horizon SHOULD have an independently configurable schedule because the useful retraining cadence may differ by horizon.
+1. Scheduled and manual runs MUST use the same canonical training/evaluation implementation.
+2. Two same-horizon retrains MUST NOT run concurrently.
+3. A successfully trained candidate that fails promotion gates is **not** an operational failure.
+4. Automatic deployment MUST NOT bypass FEAT-057 validation/promotion eligibility.
+5. Manual promotion/rollback remains available subject to existing authorization/safety rules.
+6. Training/deployment state is authoritative domain state; notification delivery state is not.
+7. Runtime failures must be visible through Admin UI without requiring SSH/Tinker.
 
-The detailed V8 design should define sensible defaults, for example more frequent retraining for 1m and less frequent retraining for 3m/6m, while allowing Admin configuration.
+### 4.5 Admin experience
 
-Scheduling requirements:
+The consolidated Admin ML surface SHOULD expose at minimum:
 
-- use the existing StoX/Laravel scheduler/cron infrastructure;
-- preserve the per-horizon retraining lock;
-- do not overlap two retrains for the same horizon;
-- skip or defer safely when a same-horizon retrain is already running;
-- retain an auditable record of scheduled versus manually initiated runs;
-- manual retraining must continue to work regardless of the schedule.
+- active model/version by horizon;
+- latest candidate/rejected version;
+- next scheduled retraining;
+- last scheduled and last manual run;
+- current/last run stage, elapsed duration and failure state;
+- dataset partition/cutoff/feature-set version metadata;
+- observed promotion metrics and thresholds with pass/fail state;
+- deterministic baseline and current-active-model comparison;
+- retained versions and promotion history;
+- rollback action;
+- drift/model-health status;
+- schedule enable/disable and supported configuration;
+- recent informational lifecycle events;
+- unresolved operational alerts.
 
-### 4.3 Scheduled candidate evaluation and deployment
+### 4.6 Initial acceptance direction
 
-A scheduled retrain SHALL use the same canonical training/evaluation path as a manual retrain.
+The detailed design must ensure that scheduled retraining, queued execution, progress visibility, candidate eligibility, promotion/deployment, retained versions, rollback, drift, notifications and failure diagnostics work as one lifecycle rather than independent subsystems.
 
-After successful training:
+### 4.7 Open design decisions
 
-1. create the normal candidate/rejected model version;
-2. evaluate the existing promotion thresholds;
-3. compare against the deterministic StoX Strategy/Evaluation baseline;
-4. verify artifact integrity;
-5. deploy/promote the newer model only when the configured promotion gates pass;
-6. retain the existing active model when the candidate does not pass;
-7. never treat "candidate did not outperform/pass gates" as an operational error.
+To be resolved during the FEAT-056 design phase:
 
-Automatic deployment applies only to candidates produced by this scheduled lifecycle and only after all normal safety/evaluation gates pass.
+- default schedule/cadence by horizon;
+- whether schedules are fixed or Admin-configurable;
+- exact queue/job and persistent run-state model;
+- polling versus SSE/WebSocket progress delivery;
+- automatic-promotion policy for scheduled candidates;
+- retry/backoff and consecutive-failure escalation;
+- optional drift-triggered early retraining policy;
+- notification timing/channel preferences;
+- retained model/version policy;
+- confirmation and authorization UX for promotion/rollback.
 
-Manual promotion and rollback SHALL remain available to the Admin.
+## 5. V4-FEAT-057 — ML Feature Engineering, Model Training & Validation
 
-### 4.4 Model-health signals
+### 5.1 Consolidation status
 
-Model age, drift and matured live performance remain useful operational inputs, but they no longer exist primarily to ask the Admin to remember to retrain.
+This epic **absorbs former V4-FEAT-058 — ML Technical & Market Feature Engineering** and **V4-FEAT-059 — ML Promotion-Threshold Calibration & Multi-Window Validation**. FEAT-058 and FEAT-059 are retired as standalone implementation epics; their IDs remain in the backlog table for traceability.
 
-They SHOULD be used to:
+### 5.2 Product intent
 
-- enrich scheduler/model-health status;
-- allow optional early retraining outside the normal cadence when configured;
-- explain why an unscheduled/early run was initiated;
-- support Admin diagnostics.
+Build one coherent research/training pipeline that answers a single question: **which point-in-time-safe information should StoX models use, and does the resulting model demonstrably improve out-of-sample performance?**
 
-The design SHOULD consider:
+The consolidated flow is:
 
-- model age;
-- score/distribution drift;
-- matured prediction hit rate;
-- benchmark-relative realised return;
-- drawdown/downside deterioration;
-- comparison with the active model's original validation/test metrics;
-- sustained degradation across 3/6/12-month windows.
+```text
+candidate feature universe
+    -> PIT/coverage/data-quality validation
+    -> redundancy and feature selection
+    -> horizon-aware feature sets
+    -> 1m / 3m / 6m training
+    -> repeated chronological validation
+    -> calibrated statistical + investment gates
+    -> compare with active model + deterministic StoX baseline
+    -> candidate eligibility evidence
+```
 
-Any drift-triggered early retraining policy must be explicit, configurable and use the same lock/evaluation/deployment gates as cron-triggered training.
+### 5.3 Feature families
 
-### 4.5 Information messages vs Admin alerts
+The detailed design SHALL evaluate a curated, versioned feature universe covering:
 
-Routine successful ML operations SHALL be communicated as **informational messages**, not alerts.
+- **fundamentals** — growth, profitability, balance-sheet quality, cash-flow quality, valuation and trustworthy sector-specific metrics;
+- **technical/trend** — returns, moving-average relationships/slopes, momentum and relative strength;
+- **volatility/risk** — ATR/normalized ATR, realised volatility, drawdown/downside features, contraction/expansion;
+- **volume/liquidity** — relative volume, volume trend and related data-quality-safe measures;
+- **market context** — benchmark trend, breadth and regime features where historically reconstructable;
+- **sector-relative context** — sector-relative strength/ranking where historical sector data is reliable;
+- **deterministic patterns** — mathematically defined candlestick/chart/breakout/consolidation signals with versioned rules.
 
-Informational messages SHOULD cover at least:
+### 5.4 Feature governance and PIT safety
 
-- upcoming scheduled training, with horizon and planned time;
-- training started where useful;
-- successful training completion;
-- result of candidate evaluation;
-- successful deployment/promotion of a newer model;
-- scheduled run completed but current active model retained because the candidate did not pass promotion gates;
-- manual versus scheduled origin where relevant.
+For every candidate feature, the implementation SHALL define or measure:
 
-An **Admin alert** SHALL be generated only for an error/failure condition requiring attention, such as:
+- exact formula/source inputs;
+- timeframe/basis;
+- point-in-time availability semantics;
+- historical coverage;
+- missingness;
+- outlier/normalization handling where applicable;
+- redundancy/correlation with other candidates;
+- horizon-specific usefulness;
+- deterministic feature-definition version/hash.
 
-- dataset build failure;
-- training process failure;
-- artifact integrity failure;
-- deployment/promotion transaction failure;
-- lock/runtime infrastructure failure;
-- repeated scheduler failure;
-- other conditions that prevent the expected ML lifecycle from completing safely.
+No feature may use future bars, later-published fundamentals, later revisions unavailable at the reference date, or historically unreconstructable universe/sector context.
 
-A model that trains successfully but does not meet promotion thresholds is **not** an error and must not generate an error alert.
+### 5.5 Training and validation
 
-Information and alert delivery should use the existing StoX notification architecture with normal deduplication/cooldown behavior.
+The epic SHALL support 1m/3m/6m candidate retraining using the selected feature definition and evaluate candidates with:
 
-### 4.6 Admin experience
+- leakage-safe chronological train/validation/test separation;
+- repeated/multi-window chronological validation rather than reliance on one favorable holdout;
+- per-window plus aggregate metrics;
+- class-prevalence-aware interpretation of PR-AUC;
+- ROC-AUC/no-skill context;
+- investment outcome metrics;
+- benchmark-relative results;
+- deterministic StoX baseline comparison;
+- current active-model comparison over comparable periods;
+- stability/dispersion across windows;
+- horizon-aware promotion thresholds where supported by evidence.
 
-Admin ML/model-management surfaces SHOULD expose:
+Thresholds MUST NOT be lowered merely to make a preferred candidate pass.
 
-- next scheduled retraining time by horizon;
-- last scheduled and last manual training;
-- current active model/version;
-- latest training result;
-- latest deployed model/version;
-- schedule enabled/disabled state;
-- model-health/drift context;
-- recent informational events;
-- unresolved ML failures/alerts.
+### 5.6 Promotion boundary
 
-Admin controls SHALL retain:
+FEAT-057 determines **candidate eligibility evidence**. It does not own recurring scheduling, deployment automation, operational messaging, run monitoring or rollback; those belong to FEAT-056.
 
-- manual retrain;
-- manual promotion where applicable;
-- rollback to retained model;
-- drift check;
-- schedule enable/disable;
-- schedule/cadence configuration subject to product policy.
+A candidate produced here may remain non-active. Promotion/deployment consumes the evidence generated by this epic.
 
-### 4.7 Auditability and safety
+### 5.7 Dependency
 
-Persist enough evidence to reconstruct each lifecycle event:
+FEAT-057 depends on FEAT-054 for materially improved historical fundamental coverage. Technical/market feature research can proceed independently, but the consolidated feature-selection/training decision should use the completed FEAT-054 dataset when fundamentals are included.
 
-- trigger type: scheduled / manual / optional health-triggered;
-- schedule identity/version;
-- requested/start/completion timestamps;
-- training cutoff;
-- dataset and feature-definition versions;
-- metrics and deterministic baseline comparison;
-- promotion-gate result;
-- previous active model;
-- resulting active model;
-- deployment timestamp;
-- failure details where applicable;
-- Admin actor for manual actions.
+### 5.8 Initial acceptance direction
 
-Scheduled execution must not bypass any V7 integrity, point-in-time, artifact-verification, promotion-threshold or rollback safeguards.
+The detailed design must produce reproducible versioned feature sets, leakage-safe 1m/3m/6m datasets, repeated chronological evidence, calibrated promotion eligibility and direct comparison with both the active model and deterministic StoX baseline.
 
-### 4.8 Initial acceptance criteria
+### 5.9 Open design decisions
 
-1. 1m/3m/6m models support independently configurable scheduled retraining.
-2. Scheduled runs use the same canonical training path as manual runs.
-3. Same-horizon scheduled/manual runs cannot execute concurrently.
-4. Manual retraining remains available.
-5. A successful scheduled candidate is evaluated against all normal promotion gates and the deterministic baseline.
-6. A newer model is automatically deployed only when all required gates pass.
-7. A candidate that does not pass remains non-active and the existing active model is retained.
-8. Manual promotion/rollback controls remain available.
-9. Admin receives an informational message before an upcoming scheduled training.
-10. Successful training generates an informational completion message.
-11. Successful deployment of a newer model generates an informational deployment message.
-12. A successful run whose candidate is not deployed is informational, not an error alert.
-13. Only operational/error conditions generate an Admin alert.
-14. Scheduler retries/deduplication do not create duplicate runs or notification storms.
-15. Every scheduled/manual training and deployment transition is auditable.
-16. Model-health/drift evidence remains visible and may support explicitly configured early retraining without bypassing normal gates.
+To be resolved during the FEAT-057 design phase:
 
-### 4.9 Open design decisions
-
-The detailed V8 design should decide:
-
-- default cron cadence for 1m/3m/6m;
-- whether schedules are fixed product defaults or Admin-configurable;
-- how far in advance the "upcoming training" information message is sent;
-- whether model-health deterioration can trigger an early run or only influence the next scheduled run;
-- retry/backoff policy for failed scheduled runs;
-- maximum consecutive failures before escalation;
-- information-channel preferences versus error-alert channels;
-- whether successful training and successful deployment are separate messages or can be consolidated;
-- whether an automatically deployed model has a short post-deployment observation/watch state before being considered fully settled.
-
-## 5. V4-FEAT-057 — ML Fundamental Feature Expansion & Retraining
-
-### 5.1 Product intent
-
-This epic follows **V4-FEAT-054 — Historical Fundamental Data Bootstrap**.
-
-Once StoX has materially richer historical fundamental coverage, expand the ML inputs beyond the current small fundamental subset and retrain the horizon models using a curated, versioned feature definition.
-
-The goal is not to feed every raw fundamental field into ML. The feature set should contain useful, sufficiently covered, point-in-time-safe derived inputs.
-
-### 5.2 Scope
-
-The design SHOULD evaluate candidate features such as:
-
-- EPS / earnings growth;
-- revenue growth and acceleration;
-- ROE / ROIC;
-- operating and net margins;
-- free-cash-flow measures;
-- debt/equity and debt trends;
-- balance-sheet quality indicators;
-- valuation measures such as P/E and P/B where point-in-time reconstruction is reliable;
-- other fundamental ratios supported by the canonical fact store.
-
-Final inclusion must be evidence-driven rather than assuming every available field improves the model.
-
-### 5.3 Point-in-time and data-quality requirements
-
-Before training:
-
-- validate historical coverage by feature, year and stock universe;
-- preserve period end, availability/publication date, revision and provenance semantics;
-- prevent future revisions or later-published fundamentals from leaking into earlier observations;
-- distinguish missing from zero;
-- quantify missingness and sparsity;
-- reject or exclude features whose historical reconstruction is not trustworthy.
-
-### 5.4 Feature-set versioning
-
-A materially changed fundamental feature set SHALL have its own version/definition.
-
-Persist enough metadata with training runs and model versions to reproduce:
-
-- exact included features;
-- transformations/derived formulas;
+- breadth of the first candidate feature universe;
+- common versus horizon-specific feature sets;
+- minimum acceptable historical coverage;
 - missing-value policy;
-- categorical handling;
-- source/provenance expectations;
-- feature-definition version/hash.
+- outlier/winsorization policy;
+- redundancy/feature-selection method;
+- exact technical/pattern feature catalogue;
+- reliable market breadth/sector-history boundaries;
+- model-family scope;
+- rolling-window count and spacing;
+- horizon-specific promotion thresholds and stability rules;
+- minimum improvement/evidence required versus active model and deterministic baseline.
 
-Existing historical production predictions remain associated with the model/version that originally produced them; do not rewrite them retroactively.
-
-### 5.5 Retraining and comparison
-
-After the expanded feature set is validated:
-
-1. rebuild the point-in-time ML datasets;
-2. retrain 1m, 3m and 6m candidates;
-3. evaluate statistical and investment metrics;
-4. compare each candidate with the currently active model for that horizon;
-5. compare against the deterministic StoX Strategy/Evaluation baseline over comparable test periods;
-6. expose the candidate and evidence to Admin;
-7. require explicit Admin promotion.
-
-Richer fundamentals must not imply automatic promotion. If an expanded-feature candidate performs worse, the existing active model may remain in service.
-
-### 5.6 Initial acceptance criteria
-
-1. V4-FEAT-054 historical fundamentals bootstrap is complete enough for ML use.
-2. Feature coverage and point-in-time integrity are measured before training.
-3. The expanded fundamental feature set is curated and versioned.
-4. No feature uses information unavailable as of the observation reference date.
-5. Missing values remain distinguishable from legitimate zero values.
-6. 1m/3m/6m datasets can be rebuilt with the new feature definition.
-7. All three horizons can be retrained successfully.
-8. New candidates are compared with current active models and the deterministic StoX baseline.
-9. Existing historical production predictions are not rewritten.
-10. Promotion remains explicit and Admin-controlled.
-11. Training/model metadata records the exact fundamental feature-set version and provenance assumptions.
-
-### 5.7 Open design decisions
-
-The detailed V8 design should decide:
-
-- the final fundamental features to include;
-- whether some features are horizon-specific;
-- minimum acceptable historical coverage for inclusion;
-- handling of highly correlated/redundant features;
-- winsorization/outlier policy;
-- whether valuation features can be reconstructed reliably enough for PIT use;
-- whether feature selection is fixed by product design or assisted by offline analysis.
-
-
-## 6. V4-FEAT-058 — ML Technical & Market Feature Engineering
+## 6. V4-FEAT-061 — Guided Tour / Welcome Onboarding
 
 ### 6.1 Product intent
-
-Expand the V7 ML models beyond the current narrow technical input set by deriving richer, point-in-time-safe features from historical market data StoX already stores.
-
-This is **feature engineering**, not synthetic outcome generation. Historical prices, volume and market context remain the source of truth; derived features describe the conditions that existed at each observation date so the model can learn relationships between those conditions and later outcomes.
-
-The goal is to answer questions such as:
-
-> Given the technical, market and sector conditions observable today, what is the probability that this stock will achieve the configured risk-aware benchmark-relative outcome over the selected horizon?
-
-### 6.2 Candidate feature families
-
-The detailed design SHOULD evaluate, at minimum:
-
-- multi-horizon returns: 1w / 1m / 3m / 6m / 12m where history permits;
-- relative strength against NIFTY50 and, where available, sector/index context;
-- moving-average location, spread and slope features;
-- trend alignment such as price > SMA20/50/100/200 and SMA stack relationships;
-- distance from 52-week high/low and recent breakout levels;
-- momentum and momentum-acceleration features;
-- RSI / rate-of-change style momentum indicators;
-- volatility over multiple lookbacks;
-- ATR / normalized ATR;
-- recent maximum drawdown and downside-volatility features;
-- volatility contraction/expansion;
-- historical volume relative to rolling averages;
-- volume trend / breakout-volume ratios;
-- accumulation/distribution style measures where the data contract supports them;
-- market breadth such as percentage of eligible stocks above major moving averages;
-- advancing/declining breadth and new-high/new-low style context where reconstructable;
-- market regime features derived from benchmark trend, breadth and volatility;
-- sector-relative strength and within-sector ranking once sector history is sufficiently reliable;
-- deterministic candlestick signals;
-- deterministic chart/pattern signals such as breakouts, consolidations and other mathematically defined structures.
-
-### 6.3 Multi-timescale representation
-
-Features MAY be derived at multiple observation scales where justified, for example:
-
-- daily;
-- weekly;
-- rolling N-trading-day windows.
-
-A feature name/definition must make its timeframe explicit. Arbitrary resampling such as 10-trading-day or biweekly bars may be evaluated, but inclusion must be evidence-driven rather than assumed useful.
-
-The same underlying signal MAY have multiple horizon-specific representations if empirical validation shows that, for example, short-horizon patterns are useful for 1m while broader trend/volatility context is more useful for 6m.
-
-### 6.4 Pattern feature requirements
-
-Pattern detection used for training MUST be deterministic and reproducible.
-
-For each pattern:
-
-- define the exact mathematical rule;
-- define the input bars/timeframe;
-- version the rule;
-- avoid subjective/manual chart interpretation;
-- ensure the same historical input always produces the same feature value;
-- persist enough metadata to reproduce the pattern state later.
-
-The model must not assume that a textbook-named pattern is predictive merely because it is traditionally labelled bullish/bearish. Its value is determined by out-of-sample evidence.
-
-### 6.5 Point-in-time safety
-
-Every derived feature must be computable using only information available at the observation timestamp.
-
-At minimum:
-
-- no future bars;
-- no later corporate-action repairs leaking into feature values;
-- no future constituent/sector information unless historically reconstructed;
-- rolling statistics terminate at the reference date;
-- market-breadth calculations use only the eligible historical universe/data known for that date;
-- feature preprocessing is fitted only on training partitions where fitting is required.
-
-### 6.6 Feature research and selection
-
-Do not add all candidate features directly to the production model.
-
-The research flow SHOULD:
-
-1. generate a versioned candidate feature matrix;
-2. measure coverage and missingness;
-3. quantify redundancy/correlation;
-4. train/evaluate by 1m/3m/6m horizon;
-5. measure incremental out-of-sample value relative to the current feature set;
-6. test stability across chronological windows;
-7. retain only features or feature families that improve predictive/investment outcomes without introducing leakage or unacceptable complexity.
-
-Feature importance/explainability should remain inspectable.
-
-### 6.7 Initial acceptance criteria
-
-1. Technical/market feature definitions are deterministic, versioned and reproducible.
-2. All features are point-in-time safe.
-3. Candidate features cover trend, momentum, volatility/risk and volume/liquidity where source data permits.
-4. Market breadth/regime features are available where historical reconstruction is reliable.
-5. Pattern features use explicit mathematical definitions rather than subjective chart interpretation.
-6. Multi-timescale features can be evaluated independently by horizon.
-7. Feature coverage/missingness and redundancy are measured.
-8. 1m/3m/6m candidates can be retrained using selected expanded features.
-9. Expanded-feature models are compared against the current model and deterministic StoX baseline.
-10. Features that do not improve out-of-sample evidence can be excluded without weakening reproducibility.
-11. Production prediction explanations can identify the most material retained technical/market contributors.
-
-### 6.8 Open design decisions
-
-The detailed design should decide:
-
-- exact technical indicator library/formulas;
-- which candlestick/chart patterns are worth implementing;
-- whether complex patterns use rule-based detectors or separately versioned feature extractors;
-- supported resampling/timeframes;
-- minimum historical coverage per feature;
-- volume-data quality requirements;
-- market-breadth universe definition;
-- sector-relative feature availability/history requirements;
-- feature-count/complexity guardrails;
-- whether feature selection remains logistic-regression compatible or also targets tree/boosting candidates.
-
-## 7. V4-FEAT-059 — ML Promotion-Threshold Calibration & Multi-Window Validation
-
-### 7.1 Product intent
-
-Improve confidence in candidate promotion decisions by replacing dependence on one chronological holdout and fixed global thresholds with empirically calibrated, horizon-aware evidence.
-
-Current V7 defaults remain valid safety gates, but values such as ROC-AUC >= 0.52 and PR-AUC >= 0.50 are not treated as universal constants.
-
-The V8 design should determine promotion criteria from repeated historical evidence while remaining conservative.
-
-### 7.2 Multi-window chronological validation
-
-Evaluation SHOULD support repeated chronological windows for each horizon.
-
-For example:
-
-```text
-train -> validation -> test
-        move forward
-train --------> validation -> test
-        move forward
-train ----------------> validation -> test
-```
-
-Requirements:
-
-- preserve chronological order;
-- preserve horizon label separation/embargo;
-- prevent preprocessing leakage;
-- use comparable benchmark semantics;
-- retain per-window metrics rather than only an aggregate;
-- record exact window definitions for reproducibility.
-
-### 7.3 Threshold calibration
-
-Promotion criteria SHOULD be calibrated against:
-
-- random/no-skill discrimination behavior;
-- observed class prevalence;
-- naive statistical baselines;
-- deterministic StoX baseline performance;
-- current active model performance over comparable periods;
-- distribution of results across multiple chronological windows.
-
-In particular:
-
-- ROC-AUC thresholds should require evidence above no-skill behavior;
-- PR-AUC interpretation should account for positive-class prevalence rather than assuming 0.50 is universally meaningful;
-- investment-outcome gates should require acceptable benchmark-relative and deterministic-baseline performance;
-- stability across windows should matter, not only one favorable test period.
-
-### 7.4 Horizon-aware criteria
-
-1m, 3m and 6m may use different calibrated thresholds or stability requirements if empirical evidence supports that difference.
-
-The detailed design SHOULD evaluate:
-
-- horizon-specific minimum ROC-AUC;
-- horizon-specific PR-AUC improvement over prevalence/no-skill baseline;
-- minimum benchmark-relative outcome;
-- minimum improvement over deterministic StoX baseline;
-- maximum tolerated degradation across windows;
-- minimum number of valid evaluation windows;
-- confidence intervals/bootstrap uncertainty where practical.
-
-### 7.5 Promotion semantics
-
-Passing calibrated thresholds makes a model **eligible**, not automatically authoritative unless a separate scheduled-deployment policy explicitly applies.
-
-Do not:
-
-- lower a threshold simply because a preferred model narrowly failed;
-- tune thresholds against the final test window;
-- select criteria after observing the exact candidate intended for promotion;
-- hide poor windows behind a favorable average.
-
-Threshold definitions/version/hash must be persisted with every training run/model.
-
-### 7.6 Initial acceptance criteria
-
-1. Evaluation supports multiple leakage-safe chronological windows.
-2. Per-window and aggregate metrics are persisted.
-3. ROC-AUC promotion criteria are benchmarked against no-skill behavior.
-4. PR-AUC criteria account for positive-class prevalence or an equivalent no-skill baseline.
-5. Promotion considers deterministic StoX baseline and benchmark-relative outcomes.
-6. 1m/3m/6m may use different thresholds only when supported by documented evidence.
-7. Stability/dispersion across windows is visible to Admin.
-8. Threshold calibration is performed independently from the final candidate test result.
-9. Threshold/configuration versions are reproducible.
-10. A model cannot pass solely because one unusually favorable window dominates the aggregate.
-11. Existing conservative defaults remain usable until calibrated replacements are approved.
-
-### 7.7 Open design decisions
-
-The detailed design should decide:
-
-- rolling-window count and spacing by horizon;
-- expanding vs fixed training windows;
-- minimum observations/classes per window;
-- whether confidence intervals/bootstrap estimates are required;
-- exact stability rules;
-- how current-active-model comparison affects eligibility;
-- whether threshold calibration is offline/admin-approved or product-managed;
-- how recalibration itself is versioned and audited.
-
-## 8. V4-FEAT-060 — ML Admin UI & Training Observability Refinement
-
-### 8.1 Product intent
-
-Complete the Admin-facing ML management experience so normal lifecycle operations do not require SSH/Tinker and so the UI clearly explains what the backend has decided.
-
-The backend already supports retrain, candidate/rejected classification, explicit promotion, rollback, drift checks, cutoff/configuration input and persisted model/training metadata. V8 should expose these capabilities coherently and add granular training observability.
-
-### 8.2 Candidate eligibility and rejection presentation
-
-After training, the UI SHALL clearly distinguish:
-
-- training failed;
-- training completed but model rejected;
-- training completed and model is an eligible candidate;
-- candidate promoted/active;
-- retained historical version.
-
-For completed models, show promotion gates individually, for example:
-
-```text
-ROC-AUC                     0.519   required >= 0.520   FAIL
-PR-AUC                      0.473   required >= 0.500   FAIL
-Benchmark-relative return  +1.45%  required >= 0       PASS
-Deterministic baseline     +1.45%  required >= 0       PASS
-```
-
-A rejected model must not display a Promote action.
-
-### 8.3 Training lifecycle observability
-
-Move the Admin experience away from a single long-running opaque request.
-
-Preferred architecture:
-
-```text
-Admin starts retrain
-    -> server creates/queues training run
-    -> API returns training_run_id
-    -> background worker executes canonical training
-    -> UI polls/subscribes to run status
-    -> granular stage/progress updates are shown
-```
-
-The UI SHOULD expose stages such as:
-
-- queued;
-- preparing dataset;
-- resolving benchmark/history;
-- writing train/validation/test partitions;
-- deterministic baseline evaluation;
-- model fitting;
-- candidate evaluation;
-- artifact verification/persistence;
-- completed candidate;
-- completed rejected;
-- failed.
-
-Where precise percentage completion is not trustworthy, use stage/progress counters rather than fabricated percentages.
-
-### 8.4 Run detail
-
-A training-run detail view SHOULD expose:
-
-- horizon;
-- trigger type/manual/scheduled;
-- requested/start/completion timestamps;
-- elapsed duration;
-- cutoff date;
-- current stage/status;
-- dataset row counts;
-- train/validation/test date ranges;
-- purge/embargo diagnostics;
-- configured/effective/excluded features;
-- feature coverage;
-- model family/hyperparameters;
-- metrics and baselines;
-- promotion thresholds and pass/fail result;
-- artifact/model version produced;
-- failure type/message when applicable;
-- operator/requesting Admin.
-
-### 8.5 Model/version management
-
-Admin UI SHALL expose:
-
-- active model per horizon;
-- latest candidate;
-- rejected versions;
-- retained versions;
-- promotion history;
-- rollback action for eligible retained same-horizon versions;
-- exactly-one-active status;
-- model age;
-- selected feature set;
-- model metadata/version;
-- evaluation summary;
-- drift/live-health status.
-
-Rollback should use the existing backend contract and require a deliberate confirmation.
-
-### 8.6 Training controls
-
-Expose backend-supported controls where product policy permits:
-
-- horizon;
-- training cutoff date;
-- configurable training options/overrides;
-- promotion thresholds where Admin-editable;
-- manual retrain;
-- explicit promotion;
-- rollback;
-- drift-check window.
-
-Configuration values must be validated server-side; frontend controls are not the security boundary.
-
-### 8.7 Failure and operations UX
-
-Training failures SHOULD be visible without shell access.
-
-Provide:
-
-- clear failed state;
-- concise failure reason;
-- timestamps/stage of failure;
-- retry action where safe;
-- correlation/run identifier;
-- link to relevant operational details/log surfaces where available;
-- distinction between operational failure and a successfully trained-but-rejected model.
-
-### 8.8 Integration with scheduled operations
-
-When V4-FEAT-056 is implemented, the same UI SHOULD also surface:
-
-- next scheduled training by horizon;
-- schedule enabled/disabled;
-- last scheduled vs manual run;
-- scheduled candidate/deployment result;
-- informational lifecycle messages;
-- unresolved ML operational alerts.
-
-Manual and scheduled training should share the same run-detail/status model.
-
-### 8.9 Initial acceptance criteria
-
-1. Admin can see whether a completed model is candidate or rejected.
-2. Every promotion gate is shown with observed value, threshold and pass/fail state.
-3. Rejected models cannot be promoted from the UI.
-4. Admin can start a retrain without keeping one opaque long-running HTTP request open for the full training duration.
-5. Training status can be refreshed/polled and exposes meaningful lifecycle stages.
-6. Failed runs expose a useful failure reason/stage.
-7. Admin can inspect dataset partitions, selected/excluded features, metrics and baselines.
-8. Admin can promote an eligible candidate.
-9. Admin can view retained model versions and roll back to a valid prior same-horizon version.
-10. Admin can set/inspect supported cutoff/configuration values.
-11. Admin can run/review drift checks.
-12. Active/candidate/rejected/retained states are clearly differentiated.
-13. Exactly-one-active-per-horizon remains enforced by the backend.
-14. Scheduled and manual runs can share the same observability UI once V4-FEAT-056 is implemented.
-
-### 8.10 Open design decisions
-
-The detailed V8 design should decide:
-
-- queue/job implementation for retraining;
-- polling interval vs SSE/WebSocket updates;
-- stage model and whether any stages expose quantitative progress;
-- retention period for run logs/details;
-- amount of raw diagnostics exposed in UI;
-- threshold-editing permissions/guardrails;
-- whether advanced configuration lives inline or behind an Advanced panel;
-- confirmation UX for promotion/rollback;
-- relationship between ML run history and the general notification/telemetry surfaces.
-
-## 9. V4-FEAT-061 — Guided Tour / Welcome Onboarding
-
-### 9.1 Product intent
 
 Add a lightweight first-run onboarding experience that explains StoX by highlighting the **real UI already on screen** rather than rendering a duplicate walkthrough UI.
 
@@ -991,7 +504,7 @@ The feature should have two related pieces:
 
 This is a guided-tour feature, not a replacement for setup wizards or long-form help content.
 
-### 9.2 Architecture direction
+### 6.2 Architecture direction
 
 Prefer a small in-house implementation over a third-party tour library.
 
@@ -1006,7 +519,7 @@ Recommended structure:
 
 The tour SHALL target real UI elements using stable IDs/data attributes or equivalent selectors. Step order, copy, target selector, tooltip placement and shell coordination keys SHOULD be centralized in configuration.
 
-### 9.3 Runtime behavior
+### 6.3 Runtime behavior
 
 Minimum behavior:
 
@@ -1021,7 +534,7 @@ Minimum behavior:
 
 A short delayed style application after step changes is acceptable to allow React-rendered menus/panels to appear before targeting.
 
-### 9.4 Welcome and persistence
+### 6.4 Welcome and persistence
 
 Persist onboarding state per StoX user, and per tenant/account as applicable.
 
@@ -1035,7 +548,7 @@ The welcome modal SHOULD stop appearing after a small configurable number of dis
 
 Tour completion SHALL be recorded only when the user explicitly finishes the final step, not when the welcome modal is skipped or the tour is closed early.
 
-### 9.5 Responsive and accessibility requirements
+### 6.5 Responsive and accessibility requirements
 
 The implementation SHOULD:
 
@@ -1049,7 +562,7 @@ The implementation SHOULD:
 
 Where practical, tooltip positioning SHOULD be derived from target geometry rather than relying only on fixed coordinates.
 
-### 9.6 Internationalization and telemetry
+### 6.6 Internationalization and telemetry
 
 Tour/welcome copy SHOULD use the normal StoX i18n mechanism.
 
@@ -1062,7 +575,7 @@ At minimum capture:
 
 Telemetry must not be required for the tour to function.
 
-### 9.7 Initial acceptance criteria
+### 6.7 Initial acceptance criteria
 
 1. Eligible first-time/new users can be offered a welcome modal with **Begin tour** and **Skip**.
 2. The tour highlights existing StoX UI elements rather than duplicate mock controls.
@@ -1077,7 +590,7 @@ Telemetry must not be required for the tour to function.
 11. Tour strings are localizable.
 12. Basic start/completion telemetry is emitted without becoming a functional dependency.
 
-### 9.8 Open design decisions
+### 6.8 Open design decisions
 
 The detailed V8 design should decide:
 
@@ -1090,7 +603,7 @@ The detailed V8 design should decide:
 - accessibility details including focus trap and Escape behavior;
 - whether tours may span routes, or remain shell/page-local.
 
-## 10. Boundary
+## 7. Boundary
 
 V8 owns the Telemetry product itself: ingestion, storage, analytics/query APIs, dashboards/explorer, SDKs, identity/correlation model, events/metrics/logs/traces, retention, export, deletion, administration and the other capabilities frozen in the Telemetry architecture specification.
 
@@ -1098,15 +611,9 @@ V8 also owns the one-time historical fundamental bootstrap outcome, but does not
 
 V8 owns the account-access request workflow through Admin disposition and handoff into the existing secure user onboarding flow. It does **not** replace the existing invitation/token security model, establish open registration, or allow a guest request to grant any account privilege by itself.
 
-V8 also owns scheduled ML retraining and gated deployment of newer model versions, while retaining manual retrain/promotion/rollback controls. Routine upcoming/successful training and deployment events are informational; Admin alerts are reserved for operational failures/errors requiring attention.
+V8 owns **FEAT-057 — ML Feature Engineering, Model Training & Validation** as the single feature-research/training boundary: fundamental, technical, market/regime, sector-relative and deterministic pattern features; PIT/coverage validation; feature selection; 1m/3m/6m retraining; repeated chronological validation; calibrated promotion eligibility; and comparison with the active model and deterministic StoX baseline. Former FEAT-058 and FEAT-059 are merged into FEAT-057.
 
-V8 also owns the ML follow-on to the historical fundamentals bootstrap: curated fundamental feature expansion, PIT/coverage validation, horizon retraining and candidate evaluation. This does not alter the rule that model promotion remains explicit and Admin-controlled.
-
-V8 also owns technical/market ML feature engineering from existing historical market data, including deterministic multi-timescale technical, volatility, volume, breadth, regime, pattern and sector-relative features, subject to point-in-time correctness and out-of-sample evidence.
-
-V8 also owns promotion-threshold calibration and repeated chronological validation so model eligibility can be based on horizon-aware, baseline-relative and stability-aware evidence rather than relying only on one fixed holdout and heuristic global cutoffs.
-
-V8 also owns refinement of the Admin ML experience so backend-supported lifecycle functions are available through the UI with clear candidate/rejection reasons, model/version management, rollback, cutoff/configuration controls, granular training state, failure visibility, metrics/baselines and drift context.
+V8 owns **FEAT-056 — ML Lifecycle Automation, Deployment & Operations** as the single operational ML boundary: scheduled/manual queued runs, lifecycle observability, Admin controls, candidate/deployment state, gated automatic/manual promotion, retained versions/rollback, drift/model-health visibility, informational lifecycle messaging and operational failure alerts. Former FEAT-060 is merged into FEAT-056.
 
 V8 also owns the Guided Tour / Welcome Onboarding experience: welcome eligibility/persistence, configuration-driven spotlight steps, shell coordination, responsive/accessibility behavior and onboarding telemetry. It does not replace setup workflows or long-form product documentation.
 
