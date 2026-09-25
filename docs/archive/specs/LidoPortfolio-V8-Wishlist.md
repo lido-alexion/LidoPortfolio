@@ -26,7 +26,7 @@ V8 also includes a lightweight **Guided Tour / Welcome Onboarding** experience s
 | V4-FEAT-054 | Historical Fundamental Data Bootstrap | Complete the V7 fundamentals foundation with canonical fact-gap filling, curated derived metrics, official NSE/BSE historical backfill with Yahoo fallback, resumable queue-backed bootstrap, investor Fundamentals UI, historical charts and Screener eligibility integration. **Canonical implementation spec:** [`V8-Historical-Fundamentals-Bootstrap-Specification.md`](V8-Historical-Fundamentals-Bootstrap-Specification.md). | FROZEN / IMPLEMENTATION-READY |
 | V4-FEAT-055 | Account Access Request / Admin Approval Workflow | Add a guest-facing **Request an account** flow linked from Login. Human applicants submit the information required for admin onboarding behind CAPTCHA and abuse controls. Pending duplicates are deduplicated; admins review requests in User Management, receive operational notifications, and resolve them as **Create**, **Ignore**, or **Reject**. Reject creates a reversible email ban; Ignore closes the request without banning; Create hands off into the existing secure admin onboarding/invite flow with request details prefilled. | WISHLIST / NEEDS DESIGN |
 | V4-FEAT-056 | ML Lifecycle Automation, Deployment & Operations | Consolidates former FEAT-056 + FEAT-060. Own the operational ML lifecycle: scheduled/manual queued training runs, run-state/progress observability, candidate evaluation, gated automatic/manual promotion, deployment, retained versions/rollback, drift/health visibility, Admin controls, lifecycle messaging and operational failure alerts. | WISHLIST / NEEDS DESIGN |
-| V4-FEAT-057 | ML Feature Engineering, Model Training & Validation | Consolidates former FEAT-057 + FEAT-058 + FEAT-059. Define and validate the combined point-in-time ML feature space across fundamentals, technicals, market/regime/breadth, sector-relative context and deterministic patterns; perform coverage/redundancy selection; retrain 1m/3m/6m candidates; and evaluate them using repeated chronological validation, calibrated promotion criteria, active-model comparison and the deterministic StoX baseline. | WISHLIST / DEPENDS ON V4-FEAT-054 |
+| V4-FEAT-057 | ML Feature Engineering, Model Training & Validation | Consolidates former FEAT-057 + FEAT-058 + FEAT-059. Define and validate the combined point-in-time ML feature space across fundamentals, technicals, market/regime/breadth, sector-relative context and deterministic patterns; perform coverage/redundancy selection; retrain 1m/3m/6m candidates; and evaluate them using repeated chronological validation, calibrated promotion criteria, active-model comparison and the deterministic StoX baseline. **Canonical implementation spec:** [`V8-ML-Feature-Engineering-Training-Validation-Specification.md`](V8-ML-Feature-Engineering-Training-Validation-Specification.md). | FROZEN / IMPLEMENTATION-READY / DEPENDS ON V4-FEAT-054 |
 | V4-FEAT-058 | ML Technical & Market Feature Engineering | **Merged into V4-FEAT-057.** Historical ID retained for traceability; no separate implementation epic remains. | MERGED / RETIRED |
 | V4-FEAT-059 | ML Promotion-Threshold Calibration & Multi-Window Validation | **Merged into V4-FEAT-057.** Historical ID retained for traceability; validation/calibration is part of the consolidated training epic. | MERGED / RETIRED |
 | V4-FEAT-060 | ML Admin UI & Training Observability Refinement | **Merged into V4-FEAT-056.** Historical ID retained for traceability; Admin ML operations/observability is part of the consolidated lifecycle epic. | MERGED / RETIRED |
@@ -392,104 +392,23 @@ To be resolved during the FEAT-056 design phase:
 
 ## 5. V4-FEAT-057 — ML Feature Engineering, Model Training & Validation
 
-### 5.1 Consolidation status
+### 5.1 Consolidation and frozen status
 
-This epic **absorbs former V4-FEAT-058 — ML Technical & Market Feature Engineering** and **V4-FEAT-059 — ML Promotion-Threshold Calibration & Multi-Window Validation**. FEAT-058 and FEAT-059 are retired as standalone implementation epics; their IDs remain in the backlog table for traceability.
+This epic **absorbs former V4-FEAT-058 — ML Technical & Market Feature Engineering** and **V4-FEAT-059 — ML Promotion-Threshold Calibration & Multi-Window Validation**. FEAT-058 and FEAT-059 remain retired as standalone implementation epics.
 
-### 5.2 Product intent
+The FEAT-057 architecture and product decisions are now frozen and implementation-ready. The authoritative contract is:
 
-Build one coherent research/training pipeline that answers a single question: **which point-in-time-safe information should StoX models use, and does the resulting model demonstrably improve out-of-sample performance?**
+[`V8-ML-Feature-Engineering-Training-Validation-Specification.md`](V8-ML-Feature-Engineering-Training-Validation-Specification.md)
 
-The consolidated flow is:
+The canonical specification defines the V8 feature registry/catalogue, horizon applicability, PIT-safe dataset construction, active-stock-only training universe, 1m/3m/6m sampling, model families, bounded tuning, classifier + secondary return regressor, probability calibration, repeated chronological validation, regime/breadth/sector context, candidate eligibility evidence, deterministic-baseline and active-model comparison, explainability, investor-facing ML outputs, Screener filter integration, Strategy boundary, reproducibility and drift-reference handoff to FEAT-056.
 
-```text
-candidate feature universe
-    -> PIT/coverage/data-quality validation
-    -> redundancy and feature selection
-    -> horizon-aware feature sets
-    -> 1m / 3m / 6m training
-    -> repeated chronological validation
-    -> calibrated statistical + investment gates
-    -> compare with active model + deterministic StoX baseline
-    -> candidate eligibility evidence
-```
+### 5.2 Dependency
 
-### 5.3 Feature families
+FEAT-057 is implementation-ready but remains dependent on **V4-FEAT-054** for the final fundamental-inclusive feature-selection/training campaign. Technical/market/pattern work can proceed earlier, but final consolidated training must use the completed FEAT-054 PIT-safe historical fundamentals.
 
-The detailed design SHALL evaluate a curated, versioned feature universe covering:
+### 5.3 Operational boundary
 
-- **fundamentals** — growth, profitability, balance-sheet quality, cash-flow quality, valuation and trustworthy sector-specific metrics;
-- **technical/trend** — returns, moving-average relationships/slopes, momentum and relative strength;
-- **volatility/risk** — ATR/normalized ATR, realised volatility, drawdown/downside features, contraction/expansion;
-- **volume/liquidity** — relative volume, volume trend and related data-quality-safe measures;
-- **market context** — benchmark trend, breadth and regime features where historically reconstructable;
-- **sector-relative context** — sector-relative strength/ranking where historical sector data is reliable;
-- **deterministic patterns** — mathematically defined candlestick/chart/breakout/consolidation signals with versioned rules.
-
-### 5.4 Feature governance and PIT safety
-
-For every candidate feature, the implementation SHALL define or measure:
-
-- exact formula/source inputs;
-- timeframe/basis;
-- point-in-time availability semantics;
-- historical coverage;
-- missingness;
-- outlier/normalization handling where applicable;
-- redundancy/correlation with other candidates;
-- horizon-specific usefulness;
-- deterministic feature-definition version/hash.
-
-No feature may use future bars, later-published fundamentals, later revisions unavailable at the reference date, or historically unreconstructable universe/sector context.
-
-### 5.5 Training and validation
-
-The epic SHALL support 1m/3m/6m candidate retraining using the selected feature definition and evaluate candidates with:
-
-- leakage-safe chronological train/validation/test separation;
-- repeated/multi-window chronological validation rather than reliance on one favorable holdout;
-- per-window plus aggregate metrics;
-- class-prevalence-aware interpretation of PR-AUC;
-- ROC-AUC/no-skill context;
-- investment outcome metrics;
-- benchmark-relative results;
-- deterministic StoX baseline comparison;
-- current active-model comparison over comparable periods;
-- stability/dispersion across windows;
-- horizon-aware promotion thresholds where supported by evidence.
-
-Thresholds MUST NOT be lowered merely to make a preferred candidate pass.
-
-### 5.6 Promotion boundary
-
-FEAT-057 determines **candidate eligibility evidence**. It does not own recurring scheduling, deployment automation, operational messaging, run monitoring or rollback; those belong to FEAT-056.
-
-A candidate produced here may remain non-active. Promotion/deployment consumes the evidence generated by this epic.
-
-### 5.7 Dependency
-
-FEAT-057 depends on FEAT-054 for materially improved historical fundamental coverage. Technical/market feature research can proceed independently, but the consolidated feature-selection/training decision should use the completed FEAT-054 dataset when fundamentals are included.
-
-### 5.8 Initial acceptance direction
-
-The detailed design must produce reproducible versioned feature sets, leakage-safe 1m/3m/6m datasets, repeated chronological evidence, calibrated promotion eligibility and direct comparison with both the active model and deterministic StoX baseline.
-
-### 5.9 Open design decisions
-
-To be resolved during the FEAT-057 design phase:
-
-- breadth of the first candidate feature universe;
-- common versus horizon-specific feature sets;
-- minimum acceptable historical coverage;
-- missing-value policy;
-- outlier/winsorization policy;
-- redundancy/feature-selection method;
-- exact technical/pattern feature catalogue;
-- reliable market breadth/sector-history boundaries;
-- model-family scope;
-- rolling-window count and spacing;
-- horizon-specific promotion thresholds and stability rules;
-- minimum improvement/evidence required versus active model and deterministic baseline.
+FEAT-057 owns feature engineering, training, calibration, validation and candidate-eligibility evidence. Scheduled/manual run orchestration, deployment/promotion execution, retained versions/rollback, lifecycle notifications and production drift monitoring remain owned by **V4-FEAT-056**.
 
 ## 6. V4-FEAT-061 — Guided Tour / Welcome Onboarding
 
