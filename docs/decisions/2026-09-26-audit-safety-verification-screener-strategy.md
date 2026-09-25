@@ -81,11 +81,79 @@ Recommended target:
 
 ## 4. Screener snapshot completeness
 
-`ScreenerVersioningService` snapshots `definition_json` and selected metadata. The live Screener row separately contains execution-affecting configuration such as scope/universe selection and watchlist/index targeting.
+`ScreenerVersioningService` currently hashes/snapshots only `definition_json` (normalized around `root`) and copies selected descriptive metadata. The live Screener model separately contains scope/universe and operational fields.
 
-Historical reconstruction must freeze every field that changes which securities are evaluated or how pass/fail is determined. Operational preferences that do not change investment semantics need not necessarily create an investment-rule version.
+Runtime inspection confirms that `ScreenerRunService::resolveStockIds()` directly reads the live `scope`, `watchlist_id`, and `index_symbol` to decide which securities are evaluated. Therefore these are investment/execution semantics, not merely UI metadata.
 
-Exact field classification should be derived from execution behavior and tests rather than becoming a PO question unless a genuine semantic ambiguity appears.
+### 4.1 Fields that MUST be immutable/versioned
+
+These fields can change the set of securities evaluated or the pass/fail result and therefore belong to the immutable Screener execution definition:
+
+- `definition_json` — condition tree and indicator parameters;
+- `scope` — e.g. holdings, watchlist, index, all equities;
+- `watchlist_id` when `scope=watchlist`;
+- `index_symbol` when `scope=index`.
+
+The version hash must cover these semantic fields. A historical run must resolve them from its pinned Screener version, not from the current mutable Screener row.
+
+### 4.2 Descriptive identity metadata
+
+The following are useful for explanation/display but do not themselves alter the investment result:
+
+- `name`;
+- `slug`;
+- `description`;
+- `intent`;
+- `summary`;
+- `tags_json`;
+- `is_factory` / `factory_key` as provenance metadata.
+
+They may be snapshotted with each version for historical readability. They should not be confused with the canonical semantic hash unless intentionally included for artifact identity rules.
+
+### 4.3 Operational fields — mutable without a new investment-rule version
+
+These control when/how the current Screener operates rather than what the rule means:
+
+- `schedule_enabled`;
+- `schedule_time`;
+- `schedule_days`;
+- `telegram_enabled`;
+- `last_run_at`.
+
+Changing these should not create a new investment-definition version.
+
+### 4.4 Lifecycle/access fields
+
+These affect availability/governance rather than condition semantics:
+
+- `is_enabled`;
+- `is_shared`;
+- `artifact_status`.
+
+They should remain mutable lifecycle/access state. Historical runs/recommendations must remain readable even if the current Screener is disabled, unshared or archived/draft-like later.
+
+### 4.5 Technical lineage/binding fields
+
+These support registry/framework integration and should remain separately attributable:
+
+- `artifact_version`;
+- `definition_hash`;
+- `reusable_artifact_id`;
+- run-level `reusable_artifact_version_id`;
+- run-level `artifact_binding_revision_id`.
+
+They supplement domain provenance; they do not replace exact domain `ScreenerVersion` identity.
+
+### 4.6 Important dynamic-universe nuance
+
+Versioning `watchlist_id` or `index_symbol` freezes the **selection rule**, not necessarily the membership of that universe forever. A watchlist or index can change membership later.
+
+For a historical run this is acceptable only because the run itself must remain the evidence of what was actually scanned/matched at that time. Therefore the audit contract is two-part:
+
+1. `ScreenerVersion` freezes the rule and universe selector.
+2. `ScreenerRun` freezes the execution identity/time and result evidence for that historical execution.
+
+Where exact scanned-universe reconstruction is required beyond matched hits, run evidence/stats should be sufficient or be extended with a universe snapshot/hash rather than pretending `watchlist_id`/`index_symbol` alone freezes membership.
 
 ## 5. Orders and Transactions
 
@@ -120,12 +188,15 @@ Artifact Framework IDs may remain additional provenance for imported/system/adva
 2. Strategy Save creates a new immutable version on audit-relevant change.
 3. Pin exact Screener version identity in each Strategy version's Screener dependency.
 4. Pin exact Screener version identity to Screener runs.
+5. Expand Screener semantic version/hash to include `definition_json`, `scope`, and the applicable universe selector (`watchlist_id` or `index_symbol`).
+6. Screener execution must use the pinned version's semantic definition rather than rereading mutable current semantic fields during a historical/version-pinned run.
 
 ### P1
 
-5. Expand Screener immutable snapshots to include all investment-semantics fields needed for reconstruction.
-6. Include exact Screener version/run provenance in Recommendation eligibility evidence where it is not otherwise recoverable.
-7. Add tests proving old Recommendations remain explainable after later Screener and Strategy edits.
+7. Include exact Screener version/run provenance in Recommendation eligibility evidence where it is not otherwise recoverable.
+8. Keep descriptive metadata snapshots for human-readable historical explanation.
+9. Verify whether exact scanned-universe reconstruction requires a run-level universe snapshot/hash in addition to existing stats/hits.
+10. Add tests proving old Recommendations remain explainable after later Screener and Strategy edits.
 
 ## 8. Mandatory provenance regression scenario
 
@@ -140,7 +211,11 @@ Artifact Framework IDs may remain additional provenance for imported/system/adva
 9. Verify the audit resolves the old Strategy version, old Screener version and old Screener run showing ROC > 15.
 10. Verify later edits did not rewrite any historical evidence.
 
-This directly encodes the stated reason for retaining versions.
+Additional universe test:
+
+11. Create a Screener scoped to a watchlist/index and run it.
+12. Later change the Screener scope/selector and change membership of the referenced watchlist/index.
+13. Verify the historical run still identifies the exact Screener version/selector used and preserves sufficient run evidence to explain the historical recommendation.
 
 ## 9. No PO question required
 
