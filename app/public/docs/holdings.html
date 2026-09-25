@@ -106,7 +106,7 @@
         <a href="holdings.html">This topic</a>
       </div>
     </header>
-    
+
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Portfolio (Holdings)</h1>
       <p class="muted"><code>holdings</code> · screen: <code>/holdings</code></p>
@@ -125,37 +125,37 @@
         <dl class="doc-list">
         <dt>Simple / Complex views</dt>
         <dd>Toggle density of columns and metrics. Complex view shows portfolio trailing % from peak raw close, portfolio stop-loss price under Avg Buy, and Target column details (filled / remaining) when a position target exists.</dd>
-    
+
         <dt>Sell</dt>
         <dd>Prefills a sell transaction from the selected holding, including that row’s owner (Strategy or unmanaged) so a multi-owner stock is not sold from the wrong lot.</dd>
-    
+
         <dt>Adopt</dt>
         <dd>On unmanaged holdings (Sell menu → Adopt): choose one destination strategy. If that strategy does not already own the stock, ownership is set and position target is initialized from invested cost so remaining BUY is 0. If it already owns the stock, quantities and total cost are combined into one Strategy position; the final average cost is rounded to 2 decimal places (half-up) and the destination target_amount is left unchanged. Entry/risk history continues (OD-15). Attribution is HOLD_POSITION (not OPEN/INCREASE), so BUY cooldown is not started.</dd>
-    
+
         <dt>Place GTT Target / Stop-Loss</dt>
-        <dd>On Strategy-owned lots in Semi-Automatic mode (Sell menu). Places one broker GTT using the Strategy target (target_amount ÷ quantity) or portfolio stop-loss price. Only one protection can be active; placing Target replaces Stop-Loss and vice versa. Requires authenticator code, Kite session, and automated-execution entitlement. Manual mode never auto-places. Automatic mode places Stop-Loss after an automated BUY fill without a per-order click; Holdings shows status only.</dd>
-    
+        <dd>On Strategy-owned lots in Semi-Automatic mode (Sell menu). Places one broker GTT using the Strategy target (target_amount ÷ quantity) or portfolio stop-loss price. Only one protection can be active; placing Target replaces Stop-Loss and vice versa. Requires your StoX execution code — {Authenticator App Name}, Kite session, and automated-execution entitlement. Manual mode never auto-places. Automatic mode places Stop-Loss after an automated BUY fill without a per-order click; Holdings shows status only.</dd>
+
         <dt>Cancel protection</dt>
         <dd>Semi-Automatic only. Cancels the broker GTT. Not a fill and does not change the holding, cash, or recommendation status.</dd>
-    
+
         <dt>Price history</dt>
         <dd>Opens OHLCV chart and table for that stock.</dd>
-    
+
         <dt>Analyse</dt>
         <dd>Copies an AI-ready prompt (with recent OHLCV) to the clipboard.</dd>
-    
+
         <dt>Target column</dt>
         <dd>Optional column (hidden by default): position target amount (OD-12), with filled and remaining in Complex view. Target is the intended capital allocation; filled is actual invested cost — not recommendation amounts.</dd>
-    
+
         <dt>Column presets and sorting</dt>
         <dd>Use sorting with complex metrics (unrealized %, latest change %, drawdown from highest close) to quickly surface risk concentration and weak performers.</dd>
-    
+
         <dt>Action shortcuts</dt>
         <dd>Sell, Analyse, and Price history actions are designed for one-click workflow transitions into execution, research, or historical validation.</dd>
-    
+
         <dt>Typical flow</dt>
         <dd>Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.</dd>
-    
+
         <dt>Validation and errors</dt>
         <dd>Form and API validations are shown as inline errors or toast messages. Fix the first reported issue, retry, and re-check dependent sections that consume the same data.</dd>
     </dl>
@@ -166,40 +166,40 @@
         <dl class="doc-list">
         <dt>Average buy / invested</dt>
         <dd>Fee-exclusive cost basis (price × qty) for open lots; fees are shown separately.</dd>
-    
+
         <dt>Owner / Unmanaged</dt>
         <dd>Each open lot is unmanaged or owned by a strategy (<code>owner_key</code>). Manual buys stay unmanaged until Adopt. Corporate-action quantity follows the parent owner (OD-10). Splits and bonuses also restate that owner’s cost, average, stop, and trailing (V4-SPEC-003) without blending owners. Sells that could hit more than one lot require an explicit owner (V4-SPEC-005).</dd>
-    
+
         <dt>Unrealized P/L</dt>
         <dd>Mark-to-market vs latest cached close; unrealized % = unrealized ÷ invested × 100 when invested &gt; 0. Portfolio trailing stop is not based on unrealized %.</dd>
-    
+
         <dt>Position target / filled (OD-12)</dt>
         <dd>Strategy-owned positions persist a monetary target_amount (conviction sizing). filled_amount is the actual invested cost of the open lot from ledger fills. remaining_target_amount = max(0, target − filled). Partial fills and capital-resolution shortfalls do not reduce the target. First BUY is ~50% of current target (strategy first_entry_pct); later BUYs use remaining after the 1 calendar-day BUY cooldown (OD-11).</dd>
-    
+
         <dt>Portfolio Stop-Loss</dt>
         <dd>Portfolio-level control (Settings → Portfolio Stop-Loss %). Stop price uses the weighted-average actual fill cost of the current ownership episode and is evaluated against raw daily close — not adjusted close or intraday low.</dd>
-    
+
         <dt>Portfolio Trailing Stop</dt>
         <dd>Portfolio-level control (Settings → Portfolio Trailing Stop %), independently configured (default/seed 15%). Peak is the maximum raw daily close since the ownership episode began; trailing stop = peak × (1 − trailing %). Not an unrealized-% proxy, not stop-loss %, and not strategy trailing_stop JSON.</dd>
-    
+
         <dt>Highest Close</dt>
         <dd>Peak raw close for the current ownership episode (owner-scoped when strategy lots are attributable).</dd>
-    
+
         <dt>Broker protection (GTT)</dt>
-        <dd>Optional Zerodha GTT Target or Stop-Loss attached to a Strategy position (not unmanaged lots). Status: pending, active, synchronizing, needs attention, cancelled, reconciled. Missing Strategy target or stop blocks placement and marks needs attention without rolling back the position. Broker acceptance is not execution; a GTT fill is booked through the existing ledger path. After a split/bonus, protection is synchronized to the restated quantity and prices.</dd>
-    
+        <dd>Optional Kite GTT Target or Stop-Loss attached to a Strategy position (not unmanaged lots). Status: pending, active, synchronizing, needs attention, cancelled, reconciled. Missing Strategy target or stop blocks placement and marks needs attention without rolling back the position. Broker acceptance is not execution; a GTT fill is booked through the existing ledger path. After a split/bonus, protection is synchronized to the restated quantity and prices.</dd>
+
         <dt>Risk-first reading</dt>
         <dd>Prioritize trailing-stop pressure, latest close behavior, and concentration before focusing on winners.</dd>
-    
+
         <dt>Active portfolio context</dt>
         <dd>Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.</dd>
-    
+
         <dt>Data freshness</dt>
         <dd>Many analytics depend on cached daily OHLCV and scheduled sync jobs. If numbers look stale, refresh this page and verify sync status in admin tools.</dd>
     </dl>
       </section>
 
-      
+
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
@@ -207,7 +207,7 @@
         </div>
       </section>
     </article>
-    
+
     <footer class="muted">
       Generated from the StoX in-app documentation source. Product screens still require sign-in.
     </footer>

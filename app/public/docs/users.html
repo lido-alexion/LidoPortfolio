@@ -106,7 +106,7 @@
         <a href="users.html">This topic</a>
       </div>
     </header>
-    
+
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">User management</h1>
       <p class="muted"><code>users</code> · screen: <code>/settings/users</code></p>
@@ -125,19 +125,19 @@
         <dl class="doc-list">
         <dt>Create invite</dt>
         <dd>Generate a link for a new user. Copy Invitation URL from the banner right away — the list does not re-show a stored URL.</dd>
-    
+
         <dt>Regenerate Invitation URL</dt>
         <dd>Issues a new URL for a pending invite after confirmation. The old URL stops working; original expiry is unchanged.</dd>
-    
+
         <dt>Password reset link</dt>
         <dd>Issue a reset URL for an existing account.</dd>
-    
+
         <dt>Allow / revoke auto execution</dt>
         <dd>Grants or removes the user’s right to use Semi-Automatic and Automatic broker submission. Server-enforced; not inferred from portfolio mode.</dd>
-    
+
         <dt>Typical flow</dt>
         <dd>Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.</dd>
-    
+
         <dt>Validation and errors</dt>
         <dd>Form and API validations are shown as inline errors or toast messages. Fix the first reported issue, retry, and re-check dependent sections that consume the same data.</dd>
     </dl>
@@ -148,25 +148,25 @@
         <dl class="doc-list">
         <dt>Invite-only</dt>
         <dd>There is no public self-registration endpoint for guests.</dd>
-    
+
         <dt>Hashed invitation tokens</dt>
         <dd>Only a hash of the invitation secret is stored. The raw URL is a bearer credential shown once at create/regenerate.</dd>
-    
+
         <dt>Admin role</dt>
         <dd>Gates global settings and ops tools.</dd>
-    
+
         <dt>Automated-execution entitlement</dt>
-        <dd>Per user, admin-controlled, disabled by default. Required together with TOTP and a Kite session before Lido will submit broker orders.</dd>
-    
+        <dd>Per user, admin-controlled, disabled by default. Required together with a StoX execution code and a Kite session before Lido will submit broker orders.</dd>
+
         <dt>Active portfolio context</dt>
         <dd>Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.</dd>
-    
+
         <dt>Data freshness</dt>
         <dd>Many analytics depend on cached daily OHLCV and scheduled sync jobs. If numbers look stale, refresh this page and verify sync status in admin tools.</dd>
     </dl>
       </section>
 
-      
+
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
@@ -174,7 +174,7 @@
         </div>
       </section>
     </article>
-    
+
     <footer class="muted">
       Generated from the StoX in-app documentation source. Product screens still require sign-in.
     </footer>
