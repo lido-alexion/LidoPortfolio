@@ -4,6 +4,8 @@
 
 `docs/current/**` is the feature-oriented current contract corpus for StoX. It records accepted product/technical behavior, implementation anchors, test anchors, debugging entry points, and implementation-alignment notes.
 
+User-facing, task-oriented workflows are documented separately in the [StoX User Journey Guide](../user-journeys/README.md). The journey guide explains how a person completes end-to-end tasks; the current corpus remains authoritative for product/technical behavior.
+
 ## 2. Authority And Conflict Rules
 
 1. `docs/current/**` records the accepted current product/technical contract.
@@ -28,6 +30,7 @@
 11. [Administration, Security, And API](./administration-security-api.md) - auth, Admin boundary, tokens, API governance.
 12. [Trading Artifacts And Runtime Guide](./stox-trading-artifacts-ai-guide.md) - artifact envelopes, lifecycle, validation, bindings, packages, AI boundary.
 13. [Implementation Alignment And Gaps](./implementation-alignment-and-gaps.md) - Phase 2 audit index and evidence status.
+14. [User Journey Guide](../user-journeys/README.md) - task-oriented screener, strategy, recommendation, review, execution and end-to-end workflows.
 
 ## 4. How To Use This Corpus
 
@@ -35,11 +38,14 @@
 - **Debug:** use the owning document's debugging guide and implementation/test anchors.
 - **Audit:** preserve accepted contract, gather code/runtime evidence, and update the alignment index/gap register.
 - **Answer product questions:** start with Product Overview, then the owning domain.
+- **Follow a user workflow:** use the [User Journey Guide](../user-journeys/README.md), then return to the owning current contract for authoritative behavior.
 - **Historical research:** use [../archive/](../archive/) only when current docs lack rationale; do not promote history automatically.
 
 ## 5. Updating Documentation
 
 When accepted behavior changes: update the owning current doc, update cross-domain boundaries, update served help when user-facing, add/refresh implementation-alignment notes when runtime/code is unverified, and leave archive history intact.
+
+When a user-visible workflow changes materially, also update the corresponding journey ID under `docs/user-journeys/` so the human workflow, later automation case, and product contract do not drift apart.
 
 ## 6. Current Product Identity
 
