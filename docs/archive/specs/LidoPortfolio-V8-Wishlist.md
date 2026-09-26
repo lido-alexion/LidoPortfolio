@@ -25,7 +25,7 @@ V8 also includes a lightweight **Guided Tour / Welcome Onboarding** experience s
 | V4-FEAT-052 | Standalone Telemetry Platform | Build the product-independent telemetry/analytics platform as a separate repository/application. Core architecture is already decided in `specs/V7-Telemetry-Platform.md`; the historical filename is retained for now, but this V8 register supersedes its earlier V7 roadmap placement. | CORE ARCHITECTURE DECIDED |
 | V4-FEAT-054 | Historical Fundamental Data Bootstrap | Complete the V7 fundamentals foundation with canonical fact-gap filling, curated derived metrics, official NSE/BSE historical backfill with Yahoo fallback, resumable queue-backed bootstrap, investor Fundamentals UI, historical charts and Screener eligibility integration. **Canonical implementation spec:** [`V8-Historical-Fundamentals-Bootstrap-Specification.md`](V8-Historical-Fundamentals-Bootstrap-Specification.md). | FROZEN / IMPLEMENTATION-READY |
 | V4-FEAT-055 | Account Access Request / Admin Approval Workflow | Add a guest-facing **Request an account** flow linked from Login. Human applicants submit the information required for admin onboarding behind CAPTCHA and abuse controls. Pending duplicates are deduplicated; admins review requests in User Management, receive operational notifications, and resolve them as **Create**, **Ignore**, or **Reject**. Reject creates a reversible email ban; Ignore closes the request without banning; Create hands off into the existing secure admin onboarding/invite flow with request details prefilled. | WISHLIST / NEEDS DESIGN |
-| V4-FEAT-056 | ML Lifecycle Automation, Deployment & Operations | Consolidates former FEAT-056 + FEAT-060. Own the operational ML lifecycle: scheduled/manual queued training runs, run-state/progress observability, candidate evaluation, gated automatic/manual promotion, deployment, retained versions/rollback, drift/health visibility, Admin controls, lifecycle messaging and operational failure alerts. | WISHLIST / NEEDS DESIGN |
+| V4-FEAT-056 | ML Lifecycle Automation, Deployment & Operations | Consolidates former FEAT-056 + FEAT-060. Own the operational ML lifecycle: scheduled/manual/drift-triggered queued training, SSE progress, retries/cancellation, candidate lifecycle, explicit Admin promotion/rollback, bounded retained versions, production drift/health monitoring and actionable notifications. **Canonical implementation spec:** [`V8-ML-Lifecycle-Automation-Deployment-Operations-Specification.md`](V8-ML-Lifecycle-Automation-Deployment-Operations-Specification.md). | FROZEN / IMPLEMENTATION-READY |
 | V4-FEAT-057 | ML Feature Engineering, Model Training & Validation | Consolidates former FEAT-057 + FEAT-058 + FEAT-059. Define and validate the combined point-in-time ML feature space across fundamentals, technicals, market/regime/breadth, sector-relative context and deterministic patterns; perform coverage/redundancy selection; retrain 1m/3m/6m candidates; and evaluate them using repeated chronological validation, calibrated promotion criteria, active-model comparison and the deterministic StoX baseline. **Canonical implementation spec:** [`V8-ML-Feature-Engineering-Training-Validation-Specification.md`](V8-ML-Feature-Engineering-Training-Validation-Specification.md). | FROZEN / IMPLEMENTATION-READY / DEPENDS ON V4-FEAT-054 |
 | V4-FEAT-058 | ML Technical & Market Feature Engineering | **Merged into V4-FEAT-057.** Historical ID retained for traceability; no separate implementation epic remains. | MERGED / RETIRED |
 | V4-FEAT-059 | ML Promotion-Threshold Calibration & Multi-Window Validation | **Merged into V4-FEAT-057.** Historical ID retained for traceability; validation/calibration is part of the consolidated training epic. | MERGED / RETIRED |
@@ -296,99 +296,23 @@ The detailed V8 design should explicitly decide:
 
 ## 4. V4-FEAT-056 — ML Lifecycle Automation, Deployment & Operations
 
-### 4.1 Consolidation status
+### 4.1 Consolidation and frozen status
 
-This epic **absorbs former V4-FEAT-060 — ML Admin UI & Training Observability Refinement**. FEAT-060 is retired as a standalone implementation epic; its historical ID remains in the backlog table for traceability.
+This epic **absorbs former V4-FEAT-060 — ML Admin UI & Training Observability Refinement**. FEAT-060 remains retired as a standalone implementation epic.
 
-### 4.2 Product intent
+The FEAT-056 architecture and product decisions are frozen and implementation-ready. The authoritative contract is:
 
-Operationalize the complete ML lifecycle so routine model maintenance is safe, observable and does not depend on shell access or an Admin remembering every step.
+[`V8-ML-Lifecycle-Automation-Deployment-Operations-Specification.md`](V8-ML-Lifecycle-Automation-Deployment-Operations-Specification.md)
 
-The lifecycle is conceptually:
+The canonical specification defines scheduled/manual/drift-triggered retraining, bounded schedule configuration, persistent queued execution, same-horizon concurrency, SSE progress, bounded retries, safe cancellation, candidate freshness/supersession, explicit Admin promotion and rollback, promotion evidence review, bounded model retention, production drift/health monitoring, actionable notifications, recovery and auditability.
 
-```text
-scheduled / manual / optional health trigger
-    -> queued training run
-    -> granular run status and diagnostics
-    -> candidate evaluation using FEAT-057 validation contract
-    -> promotion gates
-        -> pass: automatic or explicit manual promotion per policy
-        -> fail: retain current active model
-    -> deployment / retained version history
-    -> rollback capability
-    -> informational lifecycle messaging
-    -> operational failures become Admin alerts
-```
+### 4.2 Automation boundary
 
-### 4.3 Consolidated scope
+Training and FEAT-057 evaluation may run automatically, but **production activation never does in V8**. A passing candidate becomes eligible and awaits explicit Admin promotion. Rollback is likewise explicit Admin action.
 
-This epic SHALL cover together:
+### 4.3 FEAT-057 boundary
 
-- independently configurable scheduled retraining for 1m/3m/6m;
-- manual retraining using the same canonical path;
-- queue/background execution rather than one opaque long-running HTTP request;
-- same-horizon concurrency locks;
-- persistent training-run lifecycle and progress/stage state;
-- training dataset/version/cutoff/feature metadata visibility;
-- candidate/rejected/active/retained model states;
-- per-gate eligibility/rejection evidence;
-- active-model and deterministic-baseline comparison evidence supplied by FEAT-057;
-- gated automatic deployment for scheduled runs where product policy allows;
-- explicit manual promotion and rollback controls;
-- retained model/version history;
-- drift/model-health context and optional early retraining triggers;
-- next/last scheduled run visibility;
-- informational messages for upcoming/successful/retained-current outcomes;
-- Admin alerts only for operational failures requiring attention;
-- auditable trigger, lifecycle, promotion, deployment and rollback history.
-
-### 4.4 Core safety rules
-
-1. Scheduled and manual runs MUST use the same canonical training/evaluation implementation.
-2. Two same-horizon retrains MUST NOT run concurrently.
-3. A successfully trained candidate that fails promotion gates is **not** an operational failure.
-4. Automatic deployment MUST NOT bypass FEAT-057 validation/promotion eligibility.
-5. Manual promotion/rollback remains available subject to existing authorization/safety rules.
-6. Training/deployment state is authoritative domain state; notification delivery state is not.
-7. Runtime failures must be visible through Admin UI without requiring SSH/Tinker.
-
-### 4.5 Admin experience
-
-The consolidated Admin ML surface SHOULD expose at minimum:
-
-- active model/version by horizon;
-- latest candidate/rejected version;
-- next scheduled retraining;
-- last scheduled and last manual run;
-- current/last run stage, elapsed duration and failure state;
-- dataset partition/cutoff/feature-set version metadata;
-- observed promotion metrics and thresholds with pass/fail state;
-- deterministic baseline and current-active-model comparison;
-- retained versions and promotion history;
-- rollback action;
-- drift/model-health status;
-- schedule enable/disable and supported configuration;
-- recent informational lifecycle events;
-- unresolved operational alerts.
-
-### 4.6 Initial acceptance direction
-
-The detailed design must ensure that scheduled retraining, queued execution, progress visibility, candidate eligibility, promotion/deployment, retained versions, rollback, drift, notifications and failure diagnostics work as one lifecycle rather than independent subsystems.
-
-### 4.7 Open design decisions
-
-To be resolved during the FEAT-056 design phase:
-
-- default schedule/cadence by horizon;
-- whether schedules are fixed or Admin-configurable;
-- exact queue/job and persistent run-state model;
-- polling versus SSE/WebSocket progress delivery;
-- automatic-promotion policy for scheduled candidates;
-- retry/backoff and consecutive-failure escalation;
-- optional drift-triggered early retraining policy;
-- notification timing/channel preferences;
-- retained model/version policy;
-- confirmation and authorization UX for promotion/rollback.
+FEAT-056 consumes the frozen FEAT-057 training/validation and candidate-eligibility evidence. It does not redefine feature engineering, model selection, calibration or promotion gates. FEAT-057 provides training-time drift baselines; FEAT-056 owns production drift monitoring against them.
 
 ## 5. V4-FEAT-057 — ML Feature Engineering, Model Training & Validation
 
