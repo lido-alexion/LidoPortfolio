@@ -113,7 +113,7 @@ The following rows cover every applicable Phase 1 requirement. Related requireme
 | V4-REQ-011 | Immutable dataset versions | IMPLEMENTED | Dataset migrations/models/services | Dataset tests | Production immutability and retention | Yes | Backend evidence strong |
 | V4-REQ-012 | `markExecuted` ownership | IMPLEMENTED | Recommendation/execution APIs | Execution ownership tests | Cross-role browser verification | Yes | Inspect authorization middleware |
 | V4-REQ-013 | OpenAPI `/api/v1` | IMPLEMENTED | Live-route OpenAPI 3.0.3 builder, canonical static document and documented `/api/v1` operations | `OpenApiV1ContractTest` verifies canonical/generated equality, exact route parity, auth/admin markers, callback exception, envelopes and key V4 contracts; `php artisan openapi:v1 --check` | Runtime consumers and non-`/api/v1` API behavior remain outside this requirement | Yes | CI/deployment runs the artisan freshness/parity gate before packaging; stale artifacts block the backend gate |
-| V4-REQ-014 | UI smoke tests | TEST_ONLY | JS test helpers and selected component tests | Tests exist | Does not prove production route coverage | Yes | No runtime conclusion from tests |
+| V4-REQ-014 | UI smoke tests | IMPLEMENTED | Vitest/jsdom TOS smoke coverage plus the required Playwright Chromium path cover Recommendations/Discovery chrome, loading, empty, error, Review approve, and freshness-error behavior | 25 Vitest files / 99 tests passed; Playwright Chromium smoke passed | Broader visual regression and deployed-bundle reachability remain routine frontend assurance | No | V4-FEAT-026 acceptance is satisfied; browser smoke remains part of normal regression coverage |
 | V4-REQ-015 | Controller split/hooks | IMPLEMENTED | Laravel controller/service structure | Feature tests | No acceptance gap found | No | Architectural evidence only |
 | V4-REQ-016 | Logging/pagination consistency | IMPLEMENTED | Structured `PortfolioLoggerService` events provide stable event/category/engine context with request/profile/domain fields and recursive sensitive-data redaction; designated `/api/v1` resources share the documented pagination envelope while intentional non-paginated resources remain explicit | `PortfolioLoggerServiceTest`, `TradingOsPaginationConsistencyTest`, `TradingOsPaginationTest`, `OpenApiV1ContractTest` | Browser presentation and non-designated/consumer-specific runtime behavior remain outside this API/logging contract | Yes | Current tests cover stable fields, token/credential redaction, page metadata, aliases, clamping, filters, isolation, empty pages and intentional non-paginated responses |
 | V4-REQ-017 | Pluggable evaluation rules | IMPLEMENTED | Rule services/registries | Evaluation tests | Admin configuration discoverability | Yes | No direct UI acceptance proof |
@@ -249,13 +249,13 @@ Applicable requirements audited: **85** (76 `CURRENT`, 5 `POSSIBLY-LOST-DURING-C
 
 | Primary verdict | Count |
 |---|---:|
-| IMPLEMENTED | 83 |
+| IMPLEMENTED | 84 |
 | PARTIALLY_IMPLEMENTED | 0 |
 | NOT_IMPLEMENTED | 0 |
 | IMPLEMENTED_BUT_NOT_WIRED | 0 |
 | IMPLEMENTED_DIFFERENTLY | 1 |
 | DEAD_CODE | 0 |
-| TEST_ONLY | 1 |
+| TEST_ONLY | 0 |
 | RUNTIME_VERIFICATION_REQUIRED | 0 |
 | SPEC_CONFLICT | 0 |
 
