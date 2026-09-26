@@ -1,5 +1,7 @@
 # AUD-011 - Kite Reconciliation / Holdings Block / Recovery Runtime Verification
 
+> **Closure update — 2026-09-26:** Sections that describe the original 2026-09-18 evidence boundary are retained as chronology. Sections 21–22 and this notice are authoritative for the final disposition after reconciliation run 93, the controlled recommendation-786 exercise, the production Emergency Halt probe, recovery, remediation and deployment verification.
+
 ## 1. Finding Recap
 
 AUD-011 began as `RUNTIME_VERIFICATION_REQUIRED` because repository evidence
@@ -10,10 +12,13 @@ history, a real holdings/funds mismatch sequence, a later funds-only mismatch,
 and a final green recovery. No broker order or production accounting state was
 changed during this audit.
 
-The final disposition remains `RUNTIME_VERIFICATION_REQUIRED`: the historical
-mismatch and recovery path are proven, but the current Kite access token is
-expired, so a fresh live snapshot and an order-safe deployed ExecutionGate
-probe were not performed.
+The original disposition was `RUNTIME_VERIFICATION_REQUIRED`. It is now
+`IMPLEMENTED`: later production evidence added successful reconciliation run
+93, one real Semi-Automatic submission/cancellation lifecycle, an order-safe
+Emergency Halt rejection before order creation, explicit recovery, and
+deployment verification of the corrected recovery UX. Disruptive emergency
+disconnect/cleanup paths are accepted from focused automated tests rather than
+a live destructive exercise.
 
 ## 2. Frozen Contract
 
@@ -82,7 +87,7 @@ the execution block.
 
 ## 6. Immutable Run History
 
-Production contains 84 reconciliation runs. `PortfolioReconciliationRun`
+Production contained 84 reconciliation runs at the original inspection and later recorded successful run 93. `PortfolioReconciliationRun`
 rejects updates and deletes after creation, preserving trigger, timestamps,
 status axes, snapshots, tolerances, discrepancies, and unsupported-instrument
 evidence. The model-level immutability behavior is also covered by the
@@ -123,9 +128,10 @@ the prior status, timestamp, and block.
 
 The static ExecutionGate and live execution suites prove that the final broker
 submission path rejects `RECONCILIATION_HOLDINGS_MISMATCH` before the broker
-gateway is called. A fresh deployed non-ordering gate probe was not run because
-the current Kite connection is expired and no production order path was
-invoked.
+gateway is called. Later production evidence exercised the same deployed final
+safety boundary under Emergency Halt: one request returned HTTP 423
+`EXECUTION_EMERGENCY_HALT` before batch, decision, TradingOrder or broker
+placement, with all financial and holding counts unchanged.
 
 ## 10. Mismatch Evidence / Drill
 
@@ -153,8 +159,11 @@ contract: StoX edits alone do not clear the block; a fresh successful matching
 run does. The later scheduled provider failures did not undo or replace this
 successful result.
 
-The current profile state is therefore green and unblocked, but the audit does
-not claim a new live recovery run after the expired token.
+Later manual run 93 completed with holdings and funds reconciled and no
+discrepancies outside tolerance. The controlled safety probe then activated
+Emergency Halt, proved a blocked submission with zero side effects, and
+recovered through the normal authenticated TOTP path. The final account
+execution state is `normal`.
 
 ## 12. Notification Condition Lifecycle
 
@@ -234,16 +243,17 @@ evidence that reconciliation mutates state or mishandles mismatch recovery.
 
 | ID | Finding | Classification | Severity | Evidence |
 | --- | --- | --- | --- | --- |
-| REC-001 | Fresh Kite snapshot is unavailable because the deployed token is expired | `RUNTIME_VERIFICATION_REQUIRED` | High | Production connection metadata and recent `sync_failed` runs |
-| REC-002 | A new deployed, order-safe ExecutionGate rejection probe was not run | `RUNTIME_VERIFICATION_REQUIRED` | High | Static final-gate tests pass; no production order path used |
+| REC-001 | Fresh reconciliation evidence was originally unavailable because the deployed token was expired | `IMPLEMENTED` | High | Successful production run 93 reconciled holdings and funds; later daily-session expiry is operational readiness, not an audit defect |
+| REC-002 | A deployed order-safe ExecutionGate rejection probe was originally absent | `IMPLEMENTED` | High | One production request returned HTTP 423 `EXECUTION_EMERGENCY_HALT`; before/after counts prove zero order or financial side effects |
 | REC-003 | Historical mismatch -> funds-only -> fully reconciled recovery is present and condition resolved | `IMPLEMENTED` | High | Production runs 76-82 and resolved condition |
 | REC-004 | Read-only comparison, independent axes, unsupported-instrument handling, and no-accounting-mutation rules | `IMPLEMENTED` | High | Service implementation and 54 focused feature tests |
 | REC-005 | Concurrent-run lock, scheduled deduplication, immutable run records, and mode blackout | `IMPLEMENTED` | Medium | Service/command implementation and focused tests |
 | REC-006 | Fresh browser/API operator walkthrough and deployed concurrency drill | `RUNTIME_VERIFICATION_REQUIRED` | Low | Repository API/tests exist; browser/race probe not performed |
 
 No confirmed Critical or High behavioral defect was found. REC-001 and
-REC-002 are evidence boundaries created by safe production constraints, not
-claims that the implementation is unsafe.
+REC-002 are closed by the later bounded production evidence. REC-006 remains
+normal low-risk operational assurance and does not block the requirement
+verdict.
 
 ## 20. Cross-Audit Evidence
 
@@ -258,22 +268,36 @@ claims that the implementation is unsafe.
 
 ## 21. Final AUD-011 Assessment
 
-**Disposition: `RUNTIME_VERIFICATION_REQUIRED` (High severity, High confidence).**
+**Disposition: `IMPLEMENTED` (High confidence).**
 
-Production proves one eligible live portfolio, read-only reconciliation run
-history, real holdings/funds mismatch detection, independent funds-only
-semantics, persisted recovery to green, deduplicated Action-required condition
-resolution, scheduled failure retention, and no observed accounting mutation.
+Combined evidence now covers:
 
-The audit remains runtime-verification-required because the current Kite token
-is expired and therefore a fresh broker snapshot plus a deployed non-ordering
-ExecutionGate probe could not be safely completed. No broker order was placed.
+- real holdings/funds mismatch history, independent funds-only semantics,
+  immutable evidence, deduplicated condition handling and recovery to green;
+- successful production reconciliation run 93;
+- recommendation 786 submitted once through the real Semi-Automatic path,
+  producing exactly one new StoX order and one Kite order for that retry;
+- confirmed zero-fill cancellation with recommendation status and ₹0.2800
+  reservation retained under the frozen retry policy;
+- Emergency Halt activation followed by exactly one request rejected with
+  HTTP 423 `EXECUTION_EMERGENCY_HALT` before any batch, decision, order,
+  broker placement or financial side effect;
+- explicit authenticated TOTP recovery to `normal`, durable safety events,
+  corrected recovery payload semantics, clear Kite-versus-StoX credential
+  terminology, and successful deployment verification at
+  `568af86fb0bb10a180c321236b0a1d4c371e87b8`.
 
-## 22. Open Questions
+The production exercise intentionally did not invoke emergency Kite disconnect
+or cancel-and-disconnect. Those disruptive branches are accepted from focused
+automated tests, while the non-destructive production probes establish the
+shared final gate and recovery behavior. A later expired daily Kite session is
+an operational readiness condition, not grounds to reopen this audit.
 
-- After Kite credentials are renewed through the normal operational process,
-  should one read-only manual reconciliation and one non-ordering gate probe be
-  captured to close REC-001/REC-002?
-- Is a persisted, operator-visible reconciliation run log sufficient, or is a
-  separate provider-health metric desired beyond the current run history and
-  `last_reconciliation_failure`?
+## 22. Follow-up Boundaries
+
+- Renew the Kite daily session through normal login before the next broker
+  operation.
+- Keep provider-session monitoring and browser/concurrency assurance as routine
+  operations; they do not block V6-REQ-001 closure.
+- Do not run a destructive emergency disconnect/cleanup drill merely to
+  duplicate focused automated-test evidence.
