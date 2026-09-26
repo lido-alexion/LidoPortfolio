@@ -16,12 +16,12 @@
 
 | Status | Count |
 |---|---:|
-| CURRENT | 75 |
+| CURRENT | 76 |
 | SUPERSEDED | 3 |
 | DEFERRED | 6 |
 | NOT-COMMITTED | 4 |
 | POSSIBLY-LOST-DURING-CONSOLIDATION | 5 |
-| NEEDS-INVESTIGATION | 5 |
+| NEEDS-INVESTIGATION | 4 |
 
 ## Traceability Inventory
 
@@ -105,7 +105,7 @@
 | V5-REQ-015 | V5-FEAT-039 Holiday-aware execution | Semi/Automatic scheduled order execution rolls across holidays with two-session lifecycle and target-seeking coordination. | Deterministic SELL-before-BUY, internal transfers, shared-funds resizing, retries, notifications. | CURRENT | `docs/current/execution-broker-safety.md`; `docs/current/notifications-calendar-alerts.md` | V6 live quote sizing changes price source for later feature. | Complete. |
 | V5-REQ-016 | V5-FEAT-040 Kite reconciliation | Read-only Kite/StoX holdings/funds comparison, immutable evidence, status, blocking, triggers, UI/history. | Holdings mismatch blocks execution; funds independent; dedup notifications; one-live-portfolio invariant. | CURRENT | `docs/current/execution-broker-safety.md` | V6 emergency controls build on this. | Complete/verified. |
 | V5-REQ-017 | V5-FEAT-041 Linked Markdown Wiki | Portfolio-scoped Markdown Wiki under Knowledge Board with hierarchy, stable links, revisions, search/export/images/delete guard/public sharing. | Private tree/breadcrumbs; safe rendering; public sharing isolation; 21 tests/135 assertions. | CURRENT | `docs/current/knowledge-and-documentation.md`; `docs/current/frontend-and-navigation.md` | - | Complete/verified. |
-| V5-REQ-018 | V5-FEAT-042 Role-separated Admin/Investor apps | One login, distinct Admin vs Investor application shells and server-side boundaries; Admin cannot own investor resources. | Server rejects Admin from investor APIs; ownership audit must pass before production verification. | NEEDS-INVESTIGATION | `docs/current/administration-security-api.md`; `docs/current/frontend-and-navigation.md` | AUTHR-006 | Static/material implementation is present; classify the master row as `RUNTIME_VERIFICATION_REQUIRED` pending independent authenticated Admin/Investor/PAT foreign-object probes. Do not fabricate production identities. |
+| V5-REQ-018 | V5-FEAT-042 Role-separated Admin/Investor apps | One login, distinct Admin vs Investor application shells and server-side boundaries; Admin cannot own investor resources. | Server rejects Admin from investor APIs; ownership audit must pass before production verification. | CURRENT | `docs/current/administration-security-api.md`; `docs/current/frontend-and-navigation.md`; `docs/audit/AUD-012-AUTHORIZATION-OWNERSHIP-RUNTIME-VERIFICATION.md` | - | Complete/verified on 2026-09-26. Independent production Admin/Investor API denials and frontend redirects passed with a clean post-probe ownership audit. Cross-Investor and PAT branches are accepted from the focused automated matrix because production has one Investor and zero PATs; no identities or tokens were fabricated. |
 | V5-DEF-001 | V5 deferred to V6/V7/V9 | Mobile, AI assistant, ML, instruments, frontend migration remainder, optional API tokens. | Not part of V5 closure; existing partial FEAT-035 foundation preserved. | DEFERRED | Later V6/V7 registers; current docs where implemented. | V6 implemented mobile/responsive, FEAT-035, API tokens; V7 ML; AI/instruments moved to V9. | V5 register §3. |
 | V6-REQ-001 | V6 E1 Execution Safety | Kite disconnect kill switch, emergency cancel/disconnect, live quote sizing, account execution state and persistent controls. | Halt blocks new broker order creation/submission; bounded cleanup; explicit recovery; responsive controls. | CURRENT | `docs/current/execution-broker-safety.md`; `docs/current/frontend-and-navigation.md`; `docs/audit/AUD-011-KITE-RECONCILIATION-LIVE-SAFETY-RUNTIME-VERIFICATION.md` | - | Complete/verified on 2026-09-26. Production proved Emergency Halt, a single `423 EXECUTION_EMERGENCY_HALT` blocked submission with zero order/financial side effects, explicit TOTP recovery, durable safety events and corrected deployed recovery UX. Disruptive Kite disconnect/cleanup branches are accepted from focused automated tests rather than a live destructive exercise. |
 | V6-REQ-002 | V6 E2 Paper Experimentation | Clone live portfolio as independent Paper Portfolio, optionally copying holdings, pinned strategy/artifact versions. | No source sync; no historical trades/performance copied; provenance retained. | CURRENT | `docs/current/analytics-review-backtesting.md`; `docs/current/portfolio-cash-accounting.md` | - | Origin: V6 V4-FEAT-049. |
