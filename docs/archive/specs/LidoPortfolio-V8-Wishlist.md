@@ -30,7 +30,7 @@ V8 also includes a lightweight **Guided Tour / Welcome Onboarding** experience s
 | V4-FEAT-058 | ML Technical & Market Feature Engineering | **Merged into V4-FEAT-057.** Historical ID retained for traceability; no separate implementation epic remains. | MERGED / RETIRED |
 | V4-FEAT-059 | ML Promotion-Threshold Calibration & Multi-Window Validation | **Merged into V4-FEAT-057.** Historical ID retained for traceability; validation/calibration is part of the consolidated training epic. | MERGED / RETIRED |
 | V4-FEAT-060 | ML Admin UI & Training Observability Refinement | **Merged into V4-FEAT-056.** Historical ID retained for traceability; Admin ML operations/observability is part of the consolidated lifecycle epic. | MERGED / RETIRED |
-| V4-FEAT-061 | Guided Tour / Welcome Onboarding | Add a lightweight in-product guided tour for first-time/new users using real StoX UI elements, a configurable step engine, spotlight/dim overlays, tooltip navigation and a welcome entry modal. Persist completion/dismiss state per user, support responsive positioning and hidden-menu coordination, and keep the implementation small and in-house rather than adding a third-party tour framework. | WISHLIST / NEEDS DESIGN |
+| V4-FEAT-061 | Guided Tour / Welcome Onboarding | Add an Investor-only, configuration-driven multi-route guided tour with early-login welcome prompting, backend-persisted progress, resume/restart, explanatory-only spotlight steps, safe missing-target skipping and manual relaunch from Help/Profile. **Canonical implementation spec:** [`V8-Guided-Tour-Welcome-Onboarding-Specification.md`](V8-Guided-Tour-Welcome-Onboarding-Specification.md). | FROZEN / IMPLEMENTATION-READY |
 
 ## 3. V4-FEAT-055 — Account Access Request / Admin Approval Workflow
 
@@ -94,115 +94,21 @@ FEAT-057 owns feature engineering, training, calibration, validation and candida
 
 ## 6. V4-FEAT-061 — Guided Tour / Welcome Onboarding
 
-### 6.1 Product intent
+### 6.1 Frozen status
 
-Add a lightweight first-run onboarding experience that explains StoX by highlighting the **real UI already on screen** rather than rendering a duplicate walkthrough UI.
+The FEAT-061 architecture and product decisions are frozen and implementation-ready. The authoritative contract is:
 
-The feature should have two related pieces:
+[`V8-Guided-Tour-Welcome-Onboarding-Specification.md`](V8-Guided-Tour-Welcome-Onboarding-Specification.md)
 
-- an optional welcome modal that offers **Begin tour** / **Skip**;
-- an in-context guided tour that spotlights existing navigation, header/actions and other important product areas.
+The canonical specification defines Investor-only eligibility, early-login welcome prompting, manual relaunch, a fixed core multi-route journey, backend-persisted resume/restart state, explanatory-only spotlight behavior, bounded-wait target skipping, responsive/accessibility behavior, i18n and telemetry.
 
-This is a guided-tour feature, not a replacement for setup wizards or long-form help content.
+### 6.2 Audience boundary
 
-### 6.2 Architecture direction
+The feature is enabled for **Investor users only**. Admin users do not receive the welcome prompt and do not get the manual relaunch entry.
 
-Prefer a small in-house implementation over a third-party tour library.
+### 6.3 Interaction boundary
 
-Recommended structure:
-
-- ordered, configuration-driven tour steps;
-- manager/state machine holding current/previous step;
-- presentation layer for dimming overlay, tooltip, Back/Next/Finish and close;
-- stable DOM hooks on existing StoX UI targets;
-- shell-level coordination for opening/closing hidden menus, drawers or profile panels required by a step;
-- scoped persistence for welcome/tour state.
-
-The tour SHALL target real UI elements using stable IDs/data attributes or equivalent selectors. Step order, copy, target selector, tooltip placement and shell coordination keys SHOULD be centralized in configuration.
-
-### 6.3 Runtime behavior
-
-Minimum behavior:
-
-1. Opening the tour starts at the first configured step.
-2. **Next** and **Back** move through ordered steps.
-3. The active target is visually raised above a dimmed background; optional inner controls may receive a focus outline.
-4. Non-active shell regions may be muted and/or pointer-blocked while the tour is active.
-5. A step may request the shell to reveal hidden UI such as a collapsed navigation area or profile menu before highlighting it.
-6. Missing target nodes must fail softly rather than crashing the application.
-7. **Finish** on the last step marks the tour completed.
-8. Closing mid-tour clears temporary styling but does **not** mark the tour completed.
-
-A short delayed style application after step changes is acceptable to allow React-rendered menus/panels to appear before targeting.
-
-### 6.4 Welcome and persistence
-
-Persist onboarding state per StoX user, and per tenant/account as applicable.
-
-At minimum retain:
-
-- welcome modal show count;
-- "don't show again" / permanent welcome dismissal;
-- guided-tour completion.
-
-The welcome modal SHOULD stop appearing after a small configurable number of displays, permanent dismissal, or tour completion.
-
-Tour completion SHALL be recorded only when the user explicitly finishes the final step, not when the welcome modal is skipped or the tour is closed early.
-
-### 6.5 Responsive and accessibility requirements
-
-The implementation SHOULD:
-
-- support narrow and wide StoX layouts;
-- allow alternate tooltip placement at responsive breakpoints;
-- avoid hard failure when a target is temporarily off-screen or not rendered;
-- scroll targets into view where needed;
-- provide keyboard-accessible controls and appropriate focus behavior;
-- define Escape/close behavior explicitly;
-- restore all temporary z-index, border, blur and pointer-event changes on close/finish.
-
-Where practical, tooltip positioning SHOULD be derived from target geometry rather than relying only on fixed coordinates.
-
-### 6.6 Internationalization and telemetry
-
-Tour/welcome copy SHOULD use the normal StoX i18n mechanism.
-
-At minimum capture:
-
-- tour started;
-- tour completed;
-- welcome shown;
-- welcome skipped/dismissed where useful.
-
-Telemetry must not be required for the tour to function.
-
-### 6.7 Initial acceptance criteria
-
-1. Eligible first-time/new users can be offered a welcome modal with **Begin tour** and **Skip**.
-2. The tour highlights existing StoX UI elements rather than duplicate mock controls.
-3. Steps are configuration-driven and can be added/reordered without rewriting the tour engine.
-4. Back, Next, Finish and close work correctly.
-5. Hidden/collapsed shell UI can be opened for a step and cleaned up on transition/close.
-6. Missing or slow-rendering target elements do not crash StoX.
-7. Completion is persisted only after finishing the final step.
-8. Skip/close does not incorrectly mark the tour complete.
-9. Temporary styles and interaction blocking are fully cleared after close/finish.
-10. The tour works across supported responsive layouts.
-11. Tour strings are localizable.
-12. Basic start/completion telemetry is emitted without becoming a functional dependency.
-
-### 6.8 Open design decisions
-
-The detailed V8 design should decide:
-
-- which StoX areas belong in the initial tour and the final step order;
-- exact eligibility/readiness gate for showing onboarding;
-- storage key scope and welcome display cap;
-- whether the tour can be relaunched manually from Help/Profile;
-- tooltip positioning strategy;
-- whether shell coordination uses React state/context/events rather than window messaging;
-- accessibility details including focus trap and Escape behavior;
-- whether tours may span routes, or remain shell/page-local.
+The tour explains the real StoX interface but does not ask users to operate live product actions. Tour navigation drives route/menu changes; missing targets are skipped safely rather than blocking onboarding.
 
 ## 7. Boundary
 
