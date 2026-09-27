@@ -10,13 +10,11 @@
 
 ## 1. Purpose
 
-V8 contains StoX follow-on data, ML, account/onboarding and telemetry-integration work that is intentionally kept outside the V7 closure gate.
+V8 contains StoX follow-on data, ML, account/onboarding, telemetry-integration, investor-workflow and market-data work that is intentionally kept outside the V7 closure gate.
 
 For telemetry, V8 does **not** build the LidoTelemetry product. LidoTelemetry already exists as a separate independently deployed telemetry product/service. StoX V8 owns only the producer-side integration: OpenTelemetry instrumentation across browser/backend/background processing, a Collector gateway, explicit StoX business telemetry, metrics, trace propagation and export to LidoTelemetry.
 
-V8 also contains the one-time Historical Fundamental Data Bootstrap, a guest-to-admin **Account Access Request** workflow that preserves admin-controlled onboarding, and a consolidated ML follow-on program with two coherent product boundaries: **ML Feature Engineering, Model Training & Validation** and **ML Lifecycle Automation, Deployment & Operations**.
-
-V8 also includes a lightweight **Guided Tour / Welcome Onboarding** experience so new Investor users can discover the StoX shell and important workflows in context without introducing a heavyweight third-party onboarding dependency.
+V8 also contains the one-time Historical Fundamental Data Bootstrap, a guest-to-admin **Account Access Request** workflow that preserves admin-controlled onboarding, a consolidated ML follow-on program, AI-assisted fundamental insight surfacing, a lightweight Investor guided tour, prospective live microstructure collection, Screener/Strategy workflow simplification, and an intraday historical ML data platform.
 
 ## 2. Current V8 backlog
 
@@ -31,6 +29,10 @@ V8 also includes a lightweight **Guided Tour / Welcome Onboarding** experience s
 | V4-FEAT-059 | ML Promotion-Threshold Calibration & Multi-Window Validation | **Merged into V4-FEAT-057.** Historical ID retained for traceability; validation/calibration is part of the consolidated training epic. | MERGED / RETIRED |
 | V4-FEAT-060 | ML Admin UI & Training Observability Refinement | **Merged into V4-FEAT-056.** Historical ID retained for traceability; Admin ML operations/observability is part of the consolidated lifecycle epic. | MERGED / RETIRED |
 | V4-FEAT-061 | Guided Tour / Welcome Onboarding | Add an Investor-only, configuration-driven multi-route guided tour with early-login welcome prompting, backend-persisted progress, resume/restart, explanatory-only spotlight steps, safe missing-target skipping and manual relaunch from Help/Profile. **Canonical implementation spec:** [`V8-Guided-Tour-Welcome-Onboarding-Specification.md`](V8-Guided-Tour-Welcome-Onboarding-Specification.md). | FROZEN / IMPLEMENTATION-READY |
+| V4-FEAT-062 | Fundamental Signals & AI Insights Engine | Use deterministic financial calculations first and AI second to surface material positive, negative, unusual and unresolved fundamental observations without turning visible tables into generic prose. **Canonical implementation spec:** [`V8-Fundamental-Signals-AI-Insights-Specification.md`](V8-Fundamental-Signals-AI-Insights-Specification.md). | FROZEN / IMPLEMENTATION-READY / DEPENDS ON V4-FEAT-054 |
+| V4-FEAT-063 | Live Microstructure Data Collection | Prospectively collect Kite full-mode live market microstructure for the current NIFTY 500, aggregate to a full 1-minute Parquet schema, preserve explicit coverage quality, operate reliably on the StoX VPS, expose bounded Admin controls/status, and back up validated daily partitions. **Canonical implementation spec:** [`V8-Live-Microstructure-Data-Collection-Specification.md`](V8-Live-Microstructure-Data-Collection-Specification.md). | FROZEN / IMPLEMENTATION-READY / HIGH PRIORITY |
+| V4-FEAT-064 | Core Investor Workflow & UX Simplification — Screener and Strategy | Simplify normal Screener/Strategy authoring while preserving immutable historical provenance, private account-scoped instances, definition-copy sharing and multiple concurrent Strategies. **Canonical implementation spec:** [`V8-Core-Investor-Workflow-UX-Simplification.md`](V8-Core-Investor-Workflow-UX-Simplification.md). | FROZEN / IMPLEMENTATION-READY |
+| V4-FEAT-065 | Intraday ML Historical Data Platform | Build the historical 1-minute OHLCV research corpus for the current NIFTY 500 using Kite historical data, Parquet, DuckDB and Polars/Python. | WISHLIST / ARCHITECTURE DIRECTION AGREED |
 
 ## 3. V4-FEAT-052 — StoX OpenTelemetry / LidoTelemetry Integration
 
@@ -140,7 +142,25 @@ The feature is enabled for **Investor users only**. Admin users do not receive t
 
 The tour explains the real StoX interface but does not ask users to operate live product actions. Tour navigation drives route/menu changes; missing targets are skipped safely rather than blocking onboarding.
 
-## 8. Boundary
+## 8. V4-FEAT-063 — Live Microstructure Data Collection
+
+### 8.1 Frozen status
+
+FEAT-063 is frozen and implementation-ready. The authoritative contract is:
+
+[`V8-Live-Microstructure-Data-Collection-Specification.md`](V8-Live-Microstructure-Data-Collection-Specification.md)
+
+The canonical specification defines the always-on VPS collector, Kite full-mode subscription, full one-minute aggregate schema, bounded raw-tick recovery spool, explicit partial-coverage metadata, NSE calendar awareness, mobile authentication flow, automatic recovery, Admin operational alerts and controls, local Parquet storage, post-finalization backup, manual-stop semantics, universe refresh and failure recovery.
+
+### 8.2 Priority
+
+FEAT-063 is a **high-priority early-V8 item** because prospective microstructure observations cannot be reconstructed later at comparable depth. Historical OHLCV owned by FEAT-065 can be backfilled later; missed Dataset C trading days cannot.
+
+### 8.3 Boundary
+
+FEAT-063 owns prospective collection and durable minute-level microstructure data. It does not own historical OHLCV backfill, feature selection, ML training/evaluation or production model lifecycle.
+
+## 9. Boundary
 
 V8 owns the StoX-side OpenTelemetry integration with the existing LidoTelemetry service: browser/backend/background instrumentation, trace propagation, explicit business telemetry, focused metrics, Collector export, privacy controls and fail-open behavior. V8 does **not** own LidoTelemetry product implementation.
 
@@ -152,4 +172,6 @@ V8 owns **FEAT-057 — ML Feature Engineering, Model Training & Validation** as 
 
 V8 owns **FEAT-056 — ML Lifecycle Automation, Deployment & Operations** as the single operational ML boundary: scheduled/manual queued runs, lifecycle observability, Admin controls, candidate/deployment state, gated automatic/manual promotion, retained versions/rollback, drift/model-health visibility, informational lifecycle messaging and operational failure alerts. Former FEAT-060 is merged into FEAT-056.
 
-V8 also owns the Guided Tour / Welcome Onboarding experience: welcome eligibility/persistence, configuration-driven spotlight steps, shell coordination, responsive/accessibility behavior and onboarding telemetry. It does not replace setup workflows or long-form product documentation.
+V8 owns the Guided Tour / Welcome Onboarding experience: welcome eligibility/persistence, configuration-driven spotlight steps, shell coordination, responsive/accessibility behavior and onboarding telemetry. It does not replace setup workflows or long-form product documentation.
+
+V8 owns **FEAT-063 — Live Microstructure Data Collection** as the prospective market-data collection boundary: reliable Kite full-mode collection, minute aggregation, quality metadata, local Parquet persistence, operational controls/alerts, and daily backup. Historical 1-minute OHLCV backfill remains FEAT-065.
