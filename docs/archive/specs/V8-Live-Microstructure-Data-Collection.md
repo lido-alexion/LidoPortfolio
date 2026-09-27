@@ -18,9 +18,9 @@
 
 Start collecting the live market-microstructure information that Zerodha Kite exposes only prospectively and that cannot later be reconstructed from the historical OHLCV API.
 
-This epic is deliberately separated from V4-FEAT-062 so it can be implemented and activated immediately, while the historical 8-year NIFTY 500 backfill can happen later.
+This epic is deliberately separated from V4-FEAT-065 so it can be implemented and activated immediately, while the historical 8-year NIFTY 500 backfill can happen later.
 
-**V4-FEAT-063 should be prioritized early in V8.** Every trading day before this collector is active permanently reduces the available Dataset C history, whereas the historical OHLCV corpus owned by V4-FEAT-062 can be backfilled later.
+**V4-FEAT-063 should be prioritized early in V8.** Every trading day before this collector is active permanently reduces the available Dataset C history, whereas the historical OHLCV corpus owned by V4-FEAT-065 can be backfilled later.
 
 The purpose of V4-FEAT-063 is only:
 
@@ -474,7 +474,7 @@ V4-FEAT-063 does **not** include:
 - historical reconstruction of old NIFTY 500 membership;
 - proving that any microstructure field has predictive value.
 
-Those concerns belong to V4-FEAT-062, V4-FEAT-058, V4-FEAT-059 and the existing ML lifecycle as appropriate.
+Those concerns belong to V4-FEAT-065, V4-FEAT-058, V4-FEAT-059 and the existing ML lifecycle as appropriate.
 
 ## 18. Initial acceptance criteria
 
