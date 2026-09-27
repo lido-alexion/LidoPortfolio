@@ -4,7 +4,7 @@
 |---|---|
 | **Document type** | Canonical V8 planning register |
 | **Created** | 2026-09-09 |
-| **Status** | EARLY PLANNING |
+| **Status** | FROZEN / IMPLEMENTATION-READY |
 | **Canonical path** | `specs/LidoPortfolio-V8-Wishlist.md` |
 | **Predecessor** | `specs/LidoPortfolio-V7-Wishlist.md` |
 
@@ -32,7 +32,7 @@ V8 also contains the one-time Historical Fundamental Data Bootstrap, a guest-to-
 | V4-FEAT-062 | Fundamental Signals & AI Insights Engine | Use deterministic financial calculations first and AI second to surface material positive, negative, unusual and unresolved fundamental observations without turning visible tables into generic prose. **Canonical implementation spec:** [`V8-Fundamental-Signals-AI-Insights-Specification.md`](V8-Fundamental-Signals-AI-Insights-Specification.md). | FROZEN / IMPLEMENTATION-READY / DEPENDS ON V4-FEAT-054 |
 | V4-FEAT-063 | Live Microstructure Data Collection | Prospectively collect Kite full-mode live market microstructure for the current NIFTY 500, aggregate to a full 1-minute Parquet schema, preserve explicit coverage quality, operate reliably on the StoX VPS, expose bounded Admin controls/status, and back up validated daily partitions. **Canonical implementation spec:** [`V8-Live-Microstructure-Data-Collection-Specification.md`](V8-Live-Microstructure-Data-Collection-Specification.md). | FROZEN / IMPLEMENTATION-READY / HIGH PRIORITY |
 | V4-FEAT-064 | Core Investor Workflow & UX Simplification — Screener and Strategy | Simplify normal Screener/Strategy authoring while preserving immutable historical provenance, private account-scoped instances, definition-copy sharing and multiple concurrent Strategies. **Canonical implementation spec:** [`V8-Core-Investor-Workflow-UX-Simplification.md`](V8-Core-Investor-Workflow-UX-Simplification.md). | FROZEN / IMPLEMENTATION-READY |
-| V4-FEAT-065 | Intraday ML Historical Data Platform | Build the historical 1-minute OHLCV research corpus for the current NIFTY 500 using Kite historical data, Parquet, DuckDB and Polars/Python. | WISHLIST / ARCHITECTURE DIRECTION AGREED |
+| V4-FEAT-065 | Intraday ML Historical Data Platform | Build the historical 1-minute OHLCV research corpus for the current NIFTY 500 using Kite historical data, schema-versioned Parquet on the MacBook, DuckDB and Polars/Python; hand PIT-safe data to FEAT-057 for research/training. **Canonical implementation spec:** [`V8-Intraday-ML-Historical-Data-Platform-Specification.md`](V8-Intraday-ML-Historical-Data-Platform-Specification.md). | FROZEN / IMPLEMENTATION-READY |
 
 ## 3. V4-FEAT-052 — StoX OpenTelemetry / LidoTelemetry Integration
 
@@ -160,7 +160,25 @@ FEAT-063 is a **high-priority early-V8 item** because prospective microstructure
 
 FEAT-063 owns prospective collection and durable minute-level microstructure data. It does not own historical OHLCV backfill, feature selection, ML training/evaluation or production model lifecycle.
 
-## 9. Boundary
+## 9. V4-FEAT-065 — Intraday ML Historical Data Platform
+
+### 9.1 Frozen status
+
+FEAT-065 is frozen and implementation-ready. The authoritative contract is:
+
+[`V8-Intraday-ML-Historical-Data-Platform-Specification.md`](V8-Intraday-ML-Historical-Data-Platform-Specification.md)
+
+The canonical specification defines the current-NIFTY-500 fixed historical universe, up to eight years of Kite 1-minute OHLCV, selected market/sector indices, resumable/idempotent historical backfill, schema-versioned Parquet on the MacBook, DuckDB/Polars analytical access, point-in-time safety, optional non-blocking derivative enrichment and explicit handoff to FEAT-057.
+
+### 9.2 Workstation and production boundary
+
+The MacBook is the primary historical-data/research machine and may also run heavy offline FEAT-057 training/validation work. Approved/versioned model artifacts can then be deployed to the StoX VPS for production inference and FEAT-056 lifecycle management; the full historical corpus does not need to live on the VPS.
+
+### 9.3 Backup boundary
+
+FEAT-065 implements no automated backup system. The user will periodically copy the canonical Parquet corpus and essential metadata to an external disk manually. Temporary/reproducible working datasets need not be backed up.
+
+## 10. Boundary
 
 V8 owns the StoX-side OpenTelemetry integration with the existing LidoTelemetry service: browser/backend/background instrumentation, trace propagation, explicit business telemetry, focused metrics, Collector export, privacy controls and fail-open behavior. V8 does **not** own LidoTelemetry product implementation.
 
@@ -175,3 +193,5 @@ V8 owns **FEAT-056 — ML Lifecycle Automation, Deployment & Operations** as the
 V8 owns the Guided Tour / Welcome Onboarding experience: welcome eligibility/persistence, configuration-driven spotlight steps, shell coordination, responsive/accessibility behavior and onboarding telemetry. It does not replace setup workflows or long-form product documentation.
 
 V8 owns **FEAT-063 — Live Microstructure Data Collection** as the prospective market-data collection boundary: reliable Kite full-mode collection, minute aggregation, quality metadata, local Parquet persistence, operational controls/alerts, and daily backup. Historical 1-minute OHLCV backfill remains FEAT-065.
+
+V8 owns **FEAT-065 — Intraday ML Historical Data Platform** as the historical/offline intraday-data boundary: Kite historical acquisition, current-NIFTY-500 fixed-universe 1-minute OHLCV, selected indices, quality/provenance, schema-versioned Parquet storage on the MacBook, resumable backfill and DuckDB/Polars access. Feature engineering/model training/validation belong to FEAT-057; production model lifecycle belongs to FEAT-056; prospective microstructure collection belongs to FEAT-063.
