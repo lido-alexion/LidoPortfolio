@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| **Epic** | V4-FEAT-062 |
+| **Epic** | V4-FEAT-065 |
 | **Title** | Intraday ML Historical Data Platform |
 | **Release** | V8 |
 | **Status** | WISHLIST / ARCHITECTURE DIRECTION AGREED |
@@ -244,7 +244,7 @@ Hand the canonical corpus to V4-FEAT-058/V4-FEAT-059 research and validation wor
 
 ## 15. Boundary
 
-**V4-FEAT-062 owns:** historical 1-minute OHLCV acquisition, Parquet historical storage, historical index acquisition, quality/provenance, and reusable analytical access.
+**V4-FEAT-065 owns:** historical 1-minute OHLCV acquisition, Parquet historical storage, historical index acquisition, quality/provenance, and reusable analytical access.
 
 **V4-FEAT-063 owns:** prospective Kite WebSocket full-mode collection and durable minute-level microstructure storage.
 
