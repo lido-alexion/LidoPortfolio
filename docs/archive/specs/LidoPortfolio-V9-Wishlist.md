@@ -10,9 +10,9 @@
 
 ## 1. Purpose
 
-V9 currently contains later StoX product expansion that follows the V7 analytical-data work and V8 standalone Telemetry Platform.
+V9 contains later StoX product expansion that follows the V7 analytical-data work and the V8 product/platform foundations.
 
-The Telemetry separation remains deliberate: V8 builds the reusable Telemetry product; V9 changes StoX to become a properly instrumented producer/consumer of that product.
+StoX telemetry instrumentation and integration with the existing standalone LidoTelemetry product are owned by V8 `V4-FEAT-052`. V9 does not carry a separate StoX telemetry-integration epic; later telemetry-facing UX or analytics capabilities, if ever needed, must be registered explicitly as distinct future work rather than reopening FEAT-052 scope.
 
 The V9 assistance roadmap also builds on the task-oriented user-journey corpus under `docs/user-journeys/`. The human-readable journeys remain useful independently; V9 can progressively expose the same knowledge through deterministic search, conversational assistance, automation-ready UI contracts and eventually agentic actions.
 
@@ -116,7 +116,7 @@ Typeahead and chatbot may share the same maintained journey/question metadata, b
 
 ## 5. Inherited boundary
 
-The Telemetry Platform remains independently deployable and product-independent. StoX must not absorb Telemetry storage, analytics, dashboards or platform administration into its own codebase.
+V8 `V4-FEAT-052` owns StoX OpenTelemetry instrumentation and export to the independently deployable LidoTelemetry product. StoX must not absorb LidoTelemetry storage, analytics, dashboards or platform administration into its own codebase.
 
 Telemetry failure must not block StoX business workflows. StoX audit/business evidence remains distinct from telemetry.
 
