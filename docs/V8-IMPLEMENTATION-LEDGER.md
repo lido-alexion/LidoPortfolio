@@ -102,7 +102,7 @@ See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-F
 ## Verified continuation checkpoint (2026-09-28)
 
 - Actual checkout is `8d846ef`; the earlier handoff SHA `3265357` is not the current HEAD.
-- The full Feature suite under local PHP CLI `memory_limit=512M` now passes **1,318/1,319**, with one intentional bounded-training skip when `STOXLA_ML_TEST_PYTHON` is absent. The previous FEAT-064 fixture cascade was repaired by giving activation-oriented legacy fixtures the executable factory configuration; the production Setup Required gate was not weakened.
+- The full Feature suite under local PHP CLI `memory_limit=512M` now passes **1,320/1,321**, with one intentional bounded-training skip when `STOXLA_ML_TEST_PYTHON` is absent. The previous FEAT-064 fixture cascade was repaired by giving activation-oriented legacy fixtures the executable factory configuration; the production Setup Required gate was not weakened.
 - FEAT-062 added deterministic derived net-debt direction and consecutive comparable-period FCF trend signals. Its frozen signal matrix remains explicit about unsupported/data-dependent catalogue rows.
 - FEAT-056 lifecycle tests pass **23/23** locally, but the inherited lifecycle implementation remains uncommitted and deliberately separated from FEAT-057.
 - FEAT-052 telemetry focus passes **14/14**; FEAT-065 internal/admin focus passes **9/9**. Live/deployed evidence remains external where documented.
@@ -119,7 +119,7 @@ See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-F
 
 ## Failing tests
 
-The broad direct PHPUnit Feature run with `php -d memory_limit=512M vendor/bin/phpunit tests/Feature` now completes **1,319 tests: 1,318 passed, 1 skipped, 0 failures/errors**. The skip is the environment-gated bounded FEAT-057 campaign when its matching Python runtime is not configured. OpenAPI generated-spec drift and ML constructor failures are resolved; focused ML/provider, FEAT-062, telemetry and intraday suites pass.
+The broad direct PHPUnit Feature run with `php -d memory_limit=512M vendor/bin/phpunit tests/Feature` now completes **1,321 tests: 1,320 passed, 1 skipped, 0 failures/errors**. The skip is the environment-gated bounded FEAT-057 campaign when its matching Python runtime is not configured. OpenAPI generated-spec drift and ML constructor failures are resolved; focused ML/provider, FEAT-062, telemetry and intraday suites pass.
 
 ## MlScoringService ownership reconciliation
 
