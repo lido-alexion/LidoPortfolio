@@ -99,10 +99,11 @@ class MlBoundedTrainingCampaignTest extends TestCase
             $prediction = app(MlPythonAdapter::class)->run('predict', [
                 'artifact_path' => $model->artifact_path,
                 'artifact_sha256' => $model->artifact_sha256,
-                'features' => array_fill_keys((array) ($adapterMetadata['numeric_features'] ?? []), 0.0),
+                'features' => array_fill_keys((array) ($adapterMetadata['numeric_features'] ?? []), 1.0),
             ]);
             $this->assertArrayHasKey('score', $prediction);
             $this->assertArrayHasKey('contributions', $prediction);
+            $this->assertNotEmpty($prediction['contributions']);
             $this->assertSame($model->artifact_sha256, $prediction['artifact_sha256']);
         }
     }
