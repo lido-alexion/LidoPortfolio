@@ -20,6 +20,13 @@ class MlLifecycleAutomationService
         '6m' => ['monthly_first_sunday_00:00', 'monthly_first_sunday_01:00', 'monthly_first_sunday_02:00', 'monthly_first_sunday_03:00', 'monthly_first_sunday_04:00', 'monthly_first_sunday_05:00'],
     ];
 
+    /** @var array<string, string> */
+    public const DEFAULT_SCHEDULES = [
+        '1m' => 'monthly_first_sunday_02:00',
+        '3m' => 'monthly_first_sunday_03:00',
+        '6m' => 'monthly_first_sunday_04:00',
+    ];
+
     public function __construct(
         protected MlDriftTriggerEvaluator $driftTriggers,
         protected MlArtifactRetentionService $retention,
@@ -59,7 +66,10 @@ class MlLifecycleAutomationService
         $this->assertHorizon($horizon);
         $config = config('ml_lifecycle.horizons.'.$horizon, []);
         $stored = MlLifecycleSchedule::query()->find($horizon);
-        $schedule = (string) ($stored?->schedule ?? $config['schedule'] ?? self::SCHEDULE_OPTIONS[$horizon][0]);
+        $schedule = (string) ($stored?->schedule ?? $config['schedule'] ?? self::DEFAULT_SCHEDULES[$horizon]);
+        if (! in_array($schedule, self::SCHEDULE_OPTIONS[$horizon], true)) {
+            $schedule = self::DEFAULT_SCHEDULES[$horizon];
+        }
 
         return [
             'horizon' => $horizon,

@@ -172,6 +172,22 @@ class MlLifecycleAutomationTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_invalid_configured_schedule_fails_closed_to_bounded_default(): void
+    {
+        config([
+            'ml_lifecycle.horizons.6m.enabled' => true,
+            'ml_lifecycle.horizons.6m.schedule' => 'daily_23:00',
+        ]);
+
+        $settings = app(MlLifecycleAutomationService::class)->scheduleSettings('6m');
+
+        $this->assertSame('monthly_first_sunday_04:00', $settings['schedule']);
+        $this->assertFalse(app(MlLifecycleAutomationService::class)->scheduleDue(
+            '6m',
+            Carbon::parse('2026-03-01 23:00:00', 'Asia/Kolkata'),
+        ));
+    }
+
     public function test_tick_requeues_stale_running_run_after_worker_restart(): void
     {
         config(['ml_lifecycle.enabled' => true, 'ml_lifecycle.recovery.stale_after_minutes' => 30]);
