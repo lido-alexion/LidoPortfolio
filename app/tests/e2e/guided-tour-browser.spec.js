@@ -90,4 +90,23 @@ test.describe('FEAT-061 guided tour mobile browser acceptance', () => {
         await expect(step).toBeVisible({ timeout: 10_000 });
         await expect(step.getByText('3 of 8')).toBeVisible();
     });
+
+    test('traverses every configured investor-tour step', async ({ page }) => {
+        await installInvestorWorkflowApiMocks(page);
+        await page.goto('/');
+
+        await expect(page.locator('[data-tour="header-help"]')).toBeVisible();
+        await page.waitForTimeout(250);
+        await page.evaluate(() => {
+            window.dispatchEvent(new CustomEvent('lido-guided-tour-launch', { detail: { restart: true } }));
+        });
+
+        const overlay = page.getByRole('dialog');
+        await expect(page.getByText('1 of 8')).toBeVisible();
+        for (let current = 2; current <= 8; current += 1) {
+            await overlay.getByRole('button', { name: 'Next' }).click();
+            await expect(page.getByText(`${current} of 8`)).toBeVisible({ timeout: 10_000 });
+        }
+        await expect(overlay.getByRole('button', { name: 'Finish' })).toBeVisible();
+    });
 });
