@@ -2,7 +2,7 @@
 
 Status: **IN PROGRESS**
 
-This audit is evidence-based against `docs/archive/specs/V8-Fundamental-Signals-AI-Insights-Specification.md`. The deterministic signal and provider foundation exists, but the full initial catalogue, browser acceptance, and production provider validation are not yet complete.
+This audit is evidence-based against `docs/archive/specs/V8-Fundamental-Signals-AI-Insights-Specification.md`. The deterministic signal and provider foundation exists. The detailed frozen catalogue mapping is in `docs/audit/V8-FEAT-062-SIGNAL-MATRIX.md`; its remaining PARTIAL rows, browser acceptance, and production provider validation are not yet complete.
 
 ## Evidence matrix
 
@@ -37,4 +37,4 @@ This audit is evidence-based against `docs/archive/specs/V8-Fundamental-Signals-
 
 ## Next implementation slice
 
-Complete the frozen signal-to-key matrix and remaining comparison keys, then perform browser acceptance and real-provider validation before reconsidering this status. Current status remains **IN PROGRESS** because catalogue evidence is not yet reduced to external validation only.
+Complete the PARTIAL rows in `V8-FEAT-062-SIGNAL-MATRIX.md` and remaining comparison keys, then perform browser acceptance and real-provider validation before reconsidering this status. Current status remains **IN PROGRESS** because mandatory catalogue implementation remains.
