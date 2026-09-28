@@ -12,6 +12,7 @@ use App\Services\ML\MlFeatureRegistryService;
 use App\Services\ML\MlScoringService;
 use App\Services\ML\MlTrainingDatasetBuilder;
 use App\Services\ML\MlArtifactRetentionService;
+use App\Services\ML\MlLifecycleAutomationService;
 use App\Services\ML\MlTrainingRunAdminService;
 use App\Services\ML\MlTrainingRunCancellationService;
 use App\Telemetry\LidoTelemetry;
@@ -48,6 +49,23 @@ class MlScoringController extends Controller
     public function adminIndex(): JsonResponse
     {
         return ApiEnvelope::success($this->ml->dashboard());
+    }
+
+    public function updateSchedule(Request $request, string $horizon): JsonResponse
+    {
+        $validated = $request->validate([
+            'enabled' => ['required', 'boolean'],
+            'schedule' => ['required', 'string', 'max:64'],
+        ]);
+
+        return ApiEnvelope::success([
+            'schedule' => app(MlLifecycleAutomationService::class)->updateSchedule(
+                $horizon,
+                (bool) $validated['enabled'],
+                $validated['schedule'],
+                $request->user(),
+            ),
+        ]);
     }
 
     public function featureRegistry(): JsonResponse

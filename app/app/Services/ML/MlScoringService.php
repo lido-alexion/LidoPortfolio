@@ -48,6 +48,21 @@ class MlScoringService
                 'latest_training_run' => MlTrainingRun::query()->where('horizon', $horizon)->latest('id')->first()?->toArray(),
                 'latest_prediction_at' => MlPrediction::query()->where('horizon', $horizon)->max('as_of'),
                 'latest_drift_check' => $this->latestDriftCheckForHorizon($horizon)?->toArray(),
+                'retained_models' => MlModelVersion::query()
+                    ->where('horizon', $horizon)
+                    ->where('status', 'retained')
+                    ->latest('version')
+                    ->get(['id', 'version', 'status', 'promoted_at', 'artifact_path', 'artifact_sha256'])
+                    ->map(fn (MlModelVersion $model): array => [
+                        'id' => $model->id,
+                        'version' => $model->version,
+                        'status' => $model->status,
+                        'promoted_at' => $model->promoted_at?->toIso8601String(),
+                        'artifact_ready' => $model->artifact_path !== null
+                            && $model->artifact_sha256 !== null
+                            && is_file((string) $model->artifact_path)
+                            && hash_equals((string) $model->artifact_sha256, (string) hash_file('sha256', (string) $model->artifact_path)),
+                    ])->values()->all(),
             ])->values()->all(),
             'promotion_threshold_defaults' => $this->promotionThresholds(),
             'lifecycle' => app(MlLifecycleAutomationService::class)->adminStatus(),

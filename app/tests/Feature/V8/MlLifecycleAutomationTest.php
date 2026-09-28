@@ -125,6 +125,40 @@ class MlLifecycleAutomationTest extends TestCase
             ->assertJsonPath('data.lifecycle.horizons.0.schedule_enabled', true);
     }
 
+    public function test_admin_can_persist_bounded_schedule_settings_and_tick_uses_them(): void
+    {
+        config(['ml_lifecycle.enabled' => true]);
+        $admin = User::factory()->admin()->create();
+        $this->defaultPortfolioFor($admin);
+
+        $this->actingAs($admin)->withProfileHeader($admin)
+            ->putJson('/api/v1/admin/ml/schedules/1m', [
+                'enabled' => true,
+                'schedule' => 'monthly_first_sunday_05:00',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.schedule.enabled', true)
+            ->assertJsonPath('data.schedule.schedule', 'monthly_first_sunday_05:00');
+
+        $service = app(MlLifecycleAutomationService::class);
+        $this->assertTrue($service->scheduleDue('1m', Carbon::parse('2026-03-01 05:00:00', 'Asia/Kolkata')));
+        $this->assertFalse($service->scheduleDue('1m', Carbon::parse('2026-03-01 02:00:00', 'Asia/Kolkata')));
+    }
+
+    public function test_schedule_update_rejects_unbounded_option(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $this->defaultPortfolioFor($admin);
+
+        $this->actingAs($admin)->withProfileHeader($admin)
+            ->putJson('/api/v1/admin/ml/schedules/3m', [
+                'enabled' => true,
+                'schedule' => 'daily_02:00',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['schedule']);
+    }
+
     public function test_tick_requeues_stale_running_run_after_worker_restart(): void
     {
         config(['ml_lifecycle.enabled' => true, 'ml_lifecycle.recovery.stale_after_minutes' => 30]);

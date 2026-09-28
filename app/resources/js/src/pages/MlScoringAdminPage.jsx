@@ -181,6 +181,33 @@ export default function MlScoringAdminPage() {
         }
     };
 
+    const updateSchedule = async (row, enabled, schedule) => {
+        setBusy(true);
+        try {
+            await api.put(`/v1/admin/ml/schedules/${row.horizon}`, { enabled, schedule });
+            showToast(`${row.horizon} schedule updated.`, 'success');
+            await load();
+        } catch (err) {
+            showToast(err?.response?.data?.error?.message || err.message || 'Schedule update failed', 'danger');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const rollback = async (row, version) => {
+        if (!window.confirm(`Rollback ${row.horizon} to model v${version}?`)) return;
+        setBusy(true);
+        try {
+            await api.post('/v1/admin/ml/rollback', { horizon: row.horizon, version });
+            showToast(`Rolled back ${row.horizon} to v${version}.`, 'success');
+            await load();
+        } catch (err) {
+            showToast(err?.response?.data?.error?.message || err.message || 'Rollback failed', 'danger');
+        } finally {
+            setBusy(false);
+        }
+    };
+
     return (
         <div className="container-fluid py-3">
             <div className="d-flex align-items-center justify-content-between mb-3">
@@ -231,7 +258,25 @@ export default function MlScoringAdminPage() {
                                         <tr key={row.horizon}>
                                             <td>{row.horizon}</td>
                                             <td>
-                                                {row.schedule_enabled ? row.schedule : <span className="text-muted">disabled</span>}
+                                                <div className="d-flex gap-2 align-items-center">
+                                                    <select
+                                                        className="form-select form-select-sm"
+                                                        value={row.schedule}
+                                                        disabled={busy}
+                                                        aria-label={`${row.horizon} schedule`}
+                                                        onChange={(e) => updateSchedule(row, row.schedule_enabled, e.target.value)}
+                                                    >
+                                                        {(row.schedule_options || [row.schedule]).map((option) => <option key={option} value={option}>{option}</option>)}
+                                                    </select>
+                                                    <button
+                                                        type="button"
+                                                        className={`btn btn-sm ${row.schedule_enabled ? 'btn-outline-success' : 'btn-outline-secondary'}`}
+                                                        disabled={busy}
+                                                        onClick={() => updateSchedule(row, !row.schedule_enabled, row.schedule)}
+                                                    >
+                                                        {row.schedule_enabled ? 'Enabled' : 'Disabled'}
+                                                    </button>
+                                                </div>
                                             </td>
                                             <td>{row.schedule_due_now ? 'yes' : 'no'}</td>
                                             <td>{row.active_run ? `${row.active_run.status} (#${row.active_run.id})` : '—'}</td>
@@ -258,6 +303,17 @@ export default function MlScoringAdminPage() {
                                 <pre className="small">{JSON.stringify(row.latest_training_run || {}, null, 2)}</pre>
                                 <div className="small text-muted">Latest drift check</div>
                                 <pre className="small mb-0">{JSON.stringify(row.latest_drift_check || {}, null, 2)}</pre>
+                                {row.retained_models?.length ? (
+                                    <div className="mt-3">
+                                        <div className="small text-muted mb-1">Retained rollback versions</div>
+                                        {row.retained_models.map((model) => (
+                                            <div className="d-flex justify-content-between align-items-center small mb-1" key={model.id}>
+                                                <span>v{model.version} {model.artifact_ready ? '' : '(artifact unavailable)'}</span>
+                                                <button type="button" className="btn btn-outline-warning btn-sm" disabled={busy || !model.artifact_ready} onClick={() => rollback(row, model.version)}>Rollback</button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : null}
                                 {row.latest_candidate?.id && (
                                     <>
                                         <button
@@ -428,7 +484,7 @@ export default function MlScoringAdminPage() {
                                     <td>{run.progress?.percent ?? '—'}</td>
                                     <td className="small text-muted">{run.started_at || '—'}</td>
                                     <td className="text-end">
-                                        {run.status === 'completed' ? (
+                                        {['completed_eligible', 'completed_rejected'].includes(run.status) ? (
                                             <button
                                                 type="button"
                                                 className="btn btn-outline-secondary btn-sm me-1"

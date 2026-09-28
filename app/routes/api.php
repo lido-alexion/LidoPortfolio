@@ -544,6 +544,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
         Route::get('/admin/fundamentals/metric-catalog', [FundamentalDataController::class, 'metricCatalog']);
         Route::get('/admin/intraday-platform', [\App\Http\Controllers\Api\V1\IntradayPlatformAdminController::class, 'status']);
         Route::get('/admin/ml', [MlScoringController::class, 'adminIndex']);
+        Route::put('/admin/ml/schedules/{horizon}', [MlScoringController::class, 'updateSchedule'])->whereIn('horizon', ['1m', '3m', '6m']);
         Route::get('/admin/ml/retention-plan', [MlScoringController::class, 'retentionPlan']);
         Route::get('/admin/ml/runs', [MlScoringController::class, 'trainingRuns']);
         Route::get('/admin/ml/runs/{run}', [MlScoringController::class, 'trainingRun'])->whereNumber('run');

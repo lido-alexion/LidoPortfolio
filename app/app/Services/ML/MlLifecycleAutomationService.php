@@ -3,6 +3,7 @@
 namespace App\Services\ML;
 
 use App\Models\User;
+use App\Models\V7\MlLifecycleSchedule;
 use App\Models\V7\MlTrainingRun;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -12,6 +13,13 @@ use Illuminate\Support\Facades\Log;
  */
 class MlLifecycleAutomationService
 {
+    /** @var array<string, list<string>> */
+    public const SCHEDULE_OPTIONS = [
+        '1m' => ['monthly_first_sunday_00:00', 'monthly_first_sunday_01:00', 'monthly_first_sunday_02:00', 'monthly_first_sunday_03:00', 'monthly_first_sunday_04:00', 'monthly_first_sunday_05:00'],
+        '3m' => ['monthly_first_sunday_00:00', 'monthly_first_sunday_01:00', 'monthly_first_sunday_02:00', 'monthly_first_sunday_03:00', 'monthly_first_sunday_04:00', 'monthly_first_sunday_05:00'],
+        '6m' => ['monthly_first_sunday_00:00', 'monthly_first_sunday_01:00', 'monthly_first_sunday_02:00', 'monthly_first_sunday_03:00', 'monthly_first_sunday_04:00', 'monthly_first_sunday_05:00'],
+    ];
+
     public function __construct(
         protected MlDriftTriggerEvaluator $driftTriggers,
         protected MlArtifactRetentionService $retention,
@@ -32,20 +40,50 @@ class MlLifecycleAutomationService
     public function scheduleDue(string $horizon, ?Carbon $now = null): bool
     {
         $this->assertHorizon($horizon);
-        $config = config('ml_lifecycle.horizons.'.$horizon, []);
-        if (! ($config['enabled'] ?? false)) {
+        $settings = $this->scheduleSettings($horizon);
+        if (! $settings['enabled']) {
             return false;
         }
 
         $now ??= now()->timezone(config('ml_lifecycle.timezone', 'Asia/Kolkata'));
-        $schedule = (string) ($config['schedule'] ?? '');
+        if (! preg_match('/^monthly_first_sunday_(\d{2}):00$/', $settings['schedule'], $matches)) {
+            return false;
+        }
 
-        return match ($schedule) {
-            'monthly_first_sunday_02:00' => $horizon === '1m' && $this->isMonthlyFirstSundaySlot($now, 2, 0),
-            'monthly_first_sunday_03:00' => $horizon === '3m' && $this->isMonthlyFirstSundaySlot($now, 3, 0),
-            'monthly_first_sunday_04:00' => $horizon === '6m' && $this->isMonthlyFirstSundaySlot($now, 4, 0),
-            default => false,
-        };
+        return $this->isMonthlyFirstSundaySlot($now, (int) $matches[1], 0);
+    }
+
+    /** @return array{horizon:string,enabled:bool,schedule:string,options:list<string>} */
+    public function scheduleSettings(string $horizon): array
+    {
+        $this->assertHorizon($horizon);
+        $config = config('ml_lifecycle.horizons.'.$horizon, []);
+        $stored = MlLifecycleSchedule::query()->find($horizon);
+        $schedule = (string) ($stored?->schedule ?? $config['schedule'] ?? self::SCHEDULE_OPTIONS[$horizon][0]);
+
+        return [
+            'horizon' => $horizon,
+            'enabled' => (bool) ($stored?->enabled ?? $config['enabled'] ?? false),
+            'schedule' => $schedule,
+            'options' => self::SCHEDULE_OPTIONS[$horizon],
+        ];
+    }
+
+    public function updateSchedule(string $horizon, bool $enabled, string $schedule, ?User $actor = null): array
+    {
+        $this->assertHorizon($horizon);
+        if (! in_array($schedule, self::SCHEDULE_OPTIONS[$horizon], true)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'schedule' => ['The selected schedule is not available for this horizon.'],
+            ]);
+        }
+
+        MlLifecycleSchedule::query()->updateOrCreate(
+            ['horizon' => $horizon],
+            ['enabled' => $enabled, 'schedule' => $schedule, 'updated_by' => $actor?->id],
+        );
+
+        return $this->scheduleSettings($horizon);
     }
 
     /**
@@ -118,12 +156,13 @@ class MlLifecycleAutomationService
         $now ??= now()->timezone(config('ml_lifecycle.timezone', 'Asia/Kolkata'));
         $horizons = [];
         foreach (MlScoringService::HORIZONS as $horizon) {
-            $config = config('ml_lifecycle.horizons.'.$horizon, []);
+            $settings = $this->scheduleSettings($horizon);
             $active = $this->activeRunForHorizon($horizon);
             $horizons[] = [
                 'horizon' => $horizon,
-                'schedule' => $config['schedule'] ?? null,
-                'schedule_enabled' => (bool) ($config['enabled'] ?? false),
+                'schedule' => $settings['schedule'],
+                'schedule_enabled' => $settings['enabled'],
+                'schedule_options' => $settings['options'],
                 'schedule_due_now' => $this->scheduleDue($horizon, $now),
                 'active_run' => $active ? [
                     'id' => $active->id,
