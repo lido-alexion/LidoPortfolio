@@ -1,6 +1,6 @@
 # FEAT-062 Fundamental Signals & AI Insights — acceptance audit
 
-Status: **REVIEW — implementation and automated verification complete; browser/mobile and real-provider validation pending**
+Status: **REVIEW — implementation and automated verification complete; mobile/real-provider validation pending**
 
 This audit is evidence-based against `docs/archive/specs/V8-Fundamental-Signals-AI-Insights-Specification.md`. The deterministic catalogue mapping and PIT comparison implementation are complete for structured source facts; unavailable source facts remain explicitly unavailable. Browser/mobile acceptance and production provider validation remain external evidence gates.
 
@@ -23,13 +23,14 @@ This audit is evidence-based against `docs/archive/specs/V8-Fundamental-Signals-
 | Usage limits and telemetry | PASS locally | `FundamentalAiUsageLimitTest.php`; provider cost/latency evidence is persisted locally |
 | Follow-up evidence guidance | PASS locally | CWIP, receivables, inventory, cash-quality, debt, dilution and ownership signals map to investigation prompts; prompts are not conclusions |
 | Data sufficiency | PASS locally for implemented inputs | Missing evidence, sparse quarterly history, stale facts, fallback provider, and mixed-provider basis contribute explicit deterministic weighting/score; historical freshness is represented in provenance and confidence |
-| Investor insights UI | PARTIAL | `FundamentalInsightsPage.jsx` and `FundamentalInsightsSignals.jsx` exist and render deterministic/AI/follow-up states; browser accessibility/mobile acceptance remains |
+| Investor insights UI | PASS locally / external mobile pending | `FundamentalInsightsPage.jsx`, `FundamentalInsightsSignals.jsx`, and `fundamental-insights-browser.spec.js`; deterministic evidence remains visible when AI is unavailable and API/provider failure renders a warning without blanking the page |
 | Production provider/runtime proof | EXTERNAL VALIDATION PENDING | No real Gemini/Codex provider call is claimed in this environment |
 | Recommendation prohibition and credential safety | PASS locally | prompt/validator tests and server-side configuration; external provider review remains |
 
 ## Verification
 
 - Targeted FEAT-062 Laravel tests after the catalogue/input-boundary slices: **31/31, 101 assertions** across deterministic signals, sector comparisons, AI response handling, provider diagnostics and usage limits; AI provider/boundary suites remain covered by the existing focused tests.
+- Focused Chromium browser acceptance: **2/2 passed** locally with deterministic API mocks, covering deterministic evidence plus AI/provider-unavailable degradation. Mobile/accessibility and real-provider validation remain external.
 - Full Feature suite: **1,336 passed / 1,337 total / 1 extension-only skip / 0 failures** under PHP CLI `memory_limit=512M` with the documented matching ML runtime.
 - Frontend Node suite: **188/188**.
 - Vitest: **99/99**.
@@ -37,4 +38,4 @@ This audit is evidence-based against `docs/archive/specs/V8-Fundamental-Signals-
 
 ## Next implementation slice
 
-The deterministic catalogue matrix is complete for all frozen rows where structured source data is available; absent data produces no invented signal. The remaining acceptance work is browser accessibility/mobile validation and real-provider validation. The epic is therefore REVIEW, not COMPLETE.
+The deterministic catalogue matrix is complete for all frozen rows where structured source data is available; absent data produces no invented signal. Desktop browser acceptance now covers deterministic evidence and provider failure degradation. Mobile/accessibility and real-provider validation remain external, so the epic is REVIEW, not COMPLETE.

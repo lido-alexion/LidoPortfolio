@@ -27,6 +27,29 @@ const SCREENER_META = {
  */
 export async function installInvestorWorkflowApiMocks(page, options = {}) {
     let nextScreenerId = 99;
+    const fundamentalInsights = options.fundamentalInsights ?? {
+        as_of: '2026-09-25',
+        freshness: { status: 'fresh' },
+        insights: {
+            deterministic: {
+                summary: 'Revenue and operating cash flow evidence are available for review.',
+                data_sufficiency: {
+                    rating: 'sufficient',
+                    missing_information: [],
+                },
+                positive_signals: [{
+                    signal_key: 'cash_quality_aligned',
+                    title: 'Cash generation is aligned with reported earnings',
+                    evidence: { basis: 'same-period comparison' },
+                }],
+                risk_signals: [],
+                watch_items: [],
+                follow_up_checks: ['Review the latest annual report cash-flow notes.'],
+            },
+            ai: { status: 'unavailable' },
+            sector_context: null,
+        },
+    };
     const guidedTourState = {
         eligible: false,
         show_welcome_prompt: false,
@@ -59,6 +82,16 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
         }
         if (path.endsWith('/api/holdings') && method === 'GET') {
             return json(route, { data: [] });
+        }
+        if (path.endsWith('/api/stocks/search') && method === 'GET') {
+            return json(route, { data: [{ id: 42, symbol: 'TCS', exchange: 'NSE', name: 'Tata Consultancy Services' }] });
+        }
+        const fundamentalsMatch = path.match(/\/api\/v1\/stocks\/(\d+)\/fundamentals$/);
+        if (fundamentalsMatch && method === 'GET') {
+            if (options.fundamentalInsightsError) {
+                return json(route, { error: { message: options.fundamentalInsightsError } }, 503);
+            }
+            return json(route, { data: fundamentalInsights });
         }
         if (path.endsWith('/api/guided-tour') && (method === 'GET' || method === 'PUT')) {
             if (method === 'PUT') {
