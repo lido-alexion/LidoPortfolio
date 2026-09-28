@@ -10,6 +10,8 @@ use App\Services\Analytics\MarketAnalyticsService;
 use App\Services\Analytics\PortfolioAnalyticsService;
 use App\Services\Analytics\RecommendationPreviewService;
 use App\Services\Analytics\StockAnalyticsService;
+use App\Telemetry\LidoTelemetry;
+use App\Telemetry\LidoTelemetryCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -64,6 +66,13 @@ class AnalyticsArchitectureController extends Controller
             return $payload;
         }
 
+        app(LidoTelemetry::class)->recordBusinessEvent(LidoTelemetryCatalog::BUSINESS_RECOMMENDATION_VIEW, [
+            'stock_id' => $stock->id,
+            'portfolio_id' => $profile->id,
+            'strategy_id' => $strategyId,
+            'surface' => 'recommendation_preview',
+        ]);
+
         return ApiEnvelope::success($payload);
     }
 
@@ -77,6 +86,13 @@ class AnalyticsArchitectureController extends Controller
         if ($preview instanceof JsonResponse) {
             return $preview;
         }
+
+        app(LidoTelemetry::class)->recordBusinessEvent(LidoTelemetryCatalog::BUSINESS_RECOMMENDATION_VIEW, [
+            'stock_id' => $stock->id,
+            'portfolio_id' => $profile->id,
+            'strategy_id' => $strategyId,
+            'surface' => 'watchlist_research',
+        ]);
 
         return ApiEnvelope::success([
             'stock_analytics' => $this->stockAnalytics->forStock($stock),

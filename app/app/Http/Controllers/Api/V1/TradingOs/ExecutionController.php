@@ -8,6 +8,8 @@ use App\Engines\Execution\LiveBrokerExecutionService;
 use App\Engines\Support\ApiEnvelope;
 use App\Http\Controllers\Controller;
 use App\Services\StockResolverService;
+use App\Telemetry\LidoTelemetry;
+use App\Telemetry\LidoTelemetryCatalog;
 use App\Support\TradingOsPagination;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -68,6 +70,14 @@ class ExecutionController extends Controller
             return TradingOsHttp::validationError($e);
         }
 
+        app(LidoTelemetry::class)->recordBusinessEvent(LidoTelemetryCatalog::BUSINESS_ORDER_PLACEMENT_REQUESTED, [
+            'portfolio_id' => $profile->id,
+            'stock_id' => $stock->id,
+            'side' => strtolower($validated['side']),
+            'recommendation_id' => $validated['recommendation_id'] ?? null,
+            'execute_now' => $executeNow,
+        ]);
+
         return ApiEnvelope::success([
             'order' => $result['order'],
             'transaction' => $result['transaction'],
@@ -112,6 +122,12 @@ class ExecutionController extends Controller
             return TradingOsHttp::validationError($e);
         }
 
+        app(LidoTelemetry::class)->recordBusinessEvent(LidoTelemetryCatalog::BUSINESS_ORDER_PLACED, [
+            'portfolio_id' => $profile->id,
+            'order_id' => $order->id,
+            'stock_id' => $order->stock_id,
+        ]);
+
         return ApiEnvelope::success([
             'order' => $result['order'],
             'transaction' => $result['transaction'],
@@ -132,6 +148,12 @@ class ExecutionController extends Controller
         } catch (ValidationException $e) {
             return TradingOsHttp::validationError($e);
         }
+
+        app(LidoTelemetry::class)->recordBusinessEvent(LidoTelemetryCatalog::BUSINESS_ORDER_CANCEL_REQUESTED, [
+            'portfolio_id' => $profile->id,
+            'order_id' => $order->id,
+            'stock_id' => $order->stock_id,
+        ]);
 
         $status = $result['cancellation_status'] ?? 'confirmed';
         if ($status === 'failed') {

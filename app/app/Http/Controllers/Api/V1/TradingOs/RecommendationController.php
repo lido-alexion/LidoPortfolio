@@ -6,6 +6,8 @@ use App\Engines\Notification\NotificationEngine;
 use App\Engines\Recommendation\RecommendationEngine;
 use App\Engines\Support\ApiEnvelope;
 use App\Http\Controllers\Controller;
+use App\Telemetry\LidoTelemetry;
+use App\Telemetry\LidoTelemetryCatalog;
 use App\Models\TradingRecommendation;
 use App\Services\CashManagementService;
 use App\Support\TradingOsConfig;
@@ -82,6 +84,13 @@ class RecommendationController extends Controller
             return ApiEnvelope::error('NOT_FOUND', 'Recommendation not found.', 404);
         }
 
+        app(LidoTelemetry::class)->recordBusinessEvent(LidoTelemetryCatalog::BUSINESS_RECOMMENDATION_VIEW, [
+            'recommendation_id' => $rec->id,
+            'portfolio_id' => $profile->id,
+            'stock_id' => $rec->stock_id,
+            'surface' => 'trading_os_detail',
+        ]);
+
         return ApiEnvelope::success(TradingOsPresenter::recommendation($rec, true));
     }
 
@@ -108,6 +117,16 @@ class RecommendationController extends Controller
             );
         } catch (ValidationException $e) {
             return TradingOsHttp::validationError($e);
+        }
+
+        $decision = strtolower($validated['decision']);
+        if (in_array($decision, ['accepted', 'approved'], true)) {
+            app(LidoTelemetry::class)->recordBusinessEvent(LidoTelemetryCatalog::BUSINESS_RECOMMENDATION_ACCEPTED, [
+                'recommendation_id' => $updated->id,
+                'portfolio_id' => $profile->id,
+                'stock_id' => $updated->stock_id,
+                'decision' => $decision,
+            ]);
         }
 
         return ApiEnvelope::success(TradingOsPresenter::recommendation($updated, true));

@@ -8,6 +8,8 @@ use App\Services\AuthAuditService;
 use App\Services\PortfolioProfileService;
 use App\Services\SessionManagementService;
 use App\Services\UserInviteService;
+use App\Telemetry\LidoTelemetry;
+use App\Telemetry\LidoTelemetryCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -47,6 +49,9 @@ class AuthController extends Controller
             'password' => $validated['password'],
         ], $remember)) {
             $this->authAudit->logLoginFailure($request, $validated['email']);
+            app(LidoTelemetry::class)->recordBusinessEvent(LidoTelemetryCatalog::BUSINESS_AUTH_LOGIN_FAILED, [
+                'reason' => 'invalid_credentials',
+            ]);
             throw ValidationException::withMessages([
                 'email' => ['The provided credentials are incorrect.'],
             ]);
@@ -60,6 +65,9 @@ class AuthController extends Controller
         $request->session()->regenerate();
 
         $this->authAudit->logLoginSuccess($user, $request);
+        app(LidoTelemetry::class)->recordBusinessEvent(LidoTelemetryCatalog::BUSINESS_AUTH_LOGIN_SUCCEEDED, [
+            'role' => $user->is_admin ? 'admin' : 'investor',
+        ]);
 
         return response()->json([
             'user' => $this->userPayload($user),
