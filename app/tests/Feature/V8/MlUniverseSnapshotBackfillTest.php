@@ -53,4 +53,18 @@ class MlUniverseSnapshotBackfillTest extends TestCase
             $this->assertSame([], $service->stockIdsForDate('2020-12-01'));
         }
     }
+
+    public function test_empty_authoritative_snapshot_is_covered_but_has_no_members(): void
+    {
+        $service = app(MlHistoricalUniverseMembershipService::class);
+        $result = $service->backfillHistoricalSnapshots([
+            ['effective_from' => '2022-01-01', 'memberships' => []],
+        ], 'official_history');
+
+        $coverage = $service->coverageForDates(['2022-01-01', '2022-01-02']);
+        $this->assertSame('completed', $result['status']);
+        $this->assertSame(['2022-01-01'], $coverage['covered_dates']);
+        $this->assertSame(['2022-01-02'], $coverage['missing_dates']);
+        $this->assertSame([], $service->stockIdsForDate('2022-01-01'));
+    }
 }

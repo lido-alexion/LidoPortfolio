@@ -4,6 +4,7 @@ namespace App\Services\ML;
 
 use App\Models\V8\MlUniverseMembership;
 use App\Models\V8\MlUniverseSnapshotBackfillRun;
+use App\Models\V8\MlUniverseSnapshotBoundary;
 use App\Models\Stock;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -97,7 +98,19 @@ class MlHistoricalUniverseMembershipService
                     $query->whereNull('effective_to')->orWhereDate('effective_to', '>=', $expected[0]);
                 })
                 ->get(['effective_from', 'effective_to']);
+            $boundaries = MlUniverseSnapshotBoundary::query()
+                ->where('universe_key', $universeKey)
+                ->get(['effective_from'])
+                ->pluck('effective_from')
+                ->map(fn ($date): string => Carbon::parse($date)->toDateString())
+                ->intersect($expected)
+                ->values()
+                ->all();
             foreach ($expected as $date) {
+                if (in_array($date, $boundaries, true)) {
+                    $covered[] = $date;
+                    continue;
+                }
                 foreach ($intervals as $interval) {
                     if ($interval->effective_from->toDateString() <= $date
                         && ($interval->effective_to === null || $interval->effective_to->toDateString() >= $date)) {
@@ -180,6 +193,7 @@ class MlHistoricalUniverseMembershipService
                     'snapshot_key' => $snapshotKey,
                 ])->save();
             }
+            $this->recordSnapshotBoundary($date, $source, $snapshotKey, $stocks->count(), self::ACTIVE_ELIGIBLE_NSE);
 
             $this->resetMemo();
 
@@ -280,6 +294,7 @@ class MlHistoricalUniverseMembershipService
                             'snapshot_key' => $entry['snapshot_key'] ?? $source.':'.$date,
                         ])->save();
                     }
+                    $this->recordSnapshotBoundary($date, $source, $source.':'.$date, count($stockIds), $universeKey);
                 });
                 $processed[] = $date;
                 $run->forceFill(['processed_dates' => array_values(array_unique($processed)), 'failed_dates' => $failed])->save();
@@ -316,9 +331,25 @@ class MlHistoricalUniverseMembershipService
 
     private function snapshotBoundaryExists(string $date, string $universeKey): bool
     {
-        return MlUniverseMembership::query()
+        return MlUniverseSnapshotBoundary::query()
             ->where('universe_key', $universeKey)
             ->whereDate('effective_from', $date)
             ->exists();
+    }
+
+    private function recordSnapshotBoundary(string $date, string $source, string $snapshotKey, int $memberCount, string $universeKey): void
+    {
+        $boundary = MlUniverseSnapshotBoundary::query()
+            ->where('universe_key', $universeKey)
+            ->whereDate('effective_from', $date)
+            ->first() ?? new MlUniverseSnapshotBoundary([
+                'universe_key' => $universeKey,
+                'effective_from' => $date,
+            ]);
+        $boundary->forceFill([
+            'source' => $source,
+            'snapshot_key' => $snapshotKey,
+            'member_count' => $memberCount,
+        ])->save();
     }
 }
