@@ -6,6 +6,7 @@ import {
     recoverStaleActivePortfolio,
 } from './portfolio/portfolioRecovery';
 import logger, { createRequestId } from './services/logger';
+import { getTraceparent } from './telemetry/lidoTelemetry';
 import { showToast } from './toast';
 import { appUrl } from './appBase';
 
@@ -47,6 +48,10 @@ api.interceptors.request.use((config) => {
 
     const requestId = createRequestId();
     config.headers['X-Request-ID'] = requestId;
+    const traceparent = getTraceparent();
+    if (traceparent) {
+        config.headers.traceparent = traceparent;
+    }
     config.metadata = { requestId };
 
     const portfolioId = getActivePortfolioId();

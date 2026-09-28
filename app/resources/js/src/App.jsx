@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { getToastAutoDismissMs } from './toast';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { recordRouteView } from './telemetry/lidoTelemetry';
 import AppHeader from './components/AppHeader';
 import PageChrome from './components/navigation/PageChrome';
 import Sidebar from './components/sidebar/Sidebar';
@@ -22,6 +23,7 @@ import SettingsPage from './pages/SettingsPage';
 import ProfilePage from './pages/ProfilePage';
 import SyncLogsPage from './pages/SyncLogsPage';
 import UniversePriceSyncPage from './pages/UniversePriceSyncPage';
+import MicrostructureCollectorAdminPage from './pages/MicrostructureCollectorAdminPage';
 import DataQualityCenterPage from './pages/DataQualityCenterPage';
 import IndicatorRegistryPage from './pages/IndicatorRegistryPage';
 import IndicatorRegistryDetailPage from './pages/IndicatorRegistryDetailPage';
@@ -43,6 +45,7 @@ import StockExplorerPage from './pages/StockExplorerPage';
 import IndicesPage from './pages/IndicesPage';
 import MarketDepthPage from './pages/MarketDepthPage';
 import WatchlistPage from './pages/WatchlistPage';
+import FundamentalInsightsPage from './pages/FundamentalInsightsPage';
 import PatternGuidePage from './pages/PatternGuidePage';
 import KnowledgeBoardPage from './pages/KnowledgeBoardPage';
 import KnowledgeBoardTagsPage from './pages/KnowledgeBoardTagsPage';
@@ -51,6 +54,8 @@ import PublicWikiPage from './pages/PublicWikiPage';
 import CalendarPage from './pages/CalendarPage';
 import LoginPage from './pages/LoginPage';
 import AcceptInvitePage from './pages/AcceptInvitePage';
+import RequestAccountPage from './pages/RequestAccountPage';
+import VerifyAccessRequestPage from './pages/VerifyAccessRequestPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import PortfoliosPage from './pages/PortfoliosPage';
 import AlertPoliciesPage from './pages/AlertPoliciesPage';
@@ -88,6 +93,7 @@ function AppRoutes() {
             <Route path="/holdings" element={<HoldingsPage />} />
             <Route path="/holdings/:stockId/prices" element={<StockPricesPage />} />
             <Route path="/watchlist/:symbol?" element={<WatchlistPage />} />
+            <Route path="/fundamentals/insights/:symbol?" element={<FundamentalInsightsPage />} />
             <Route path="/explorer" element={<StockExplorerPage />} />
             <Route path="/indices" element={<IndicesPage />} />
             <Route path="/market-depth" element={<MarketDepthPage />} />
@@ -145,6 +151,11 @@ function AppRoutes() {
             <Route path="/settings/universe-price-sync" element={(
                 <AdminRoute>
                     <UniversePriceSyncPage />
+                </AdminRoute>
+            )} />
+            <Route path="/settings/microstructure-collector" element={(
+                <AdminRoute>
+                    <MicrostructureCollectorAdminPage />
                 </AdminRoute>
             )} />
             <Route path="/settings/data-quality" element={(
@@ -238,6 +249,7 @@ function AdminAppRoutes() {
             <Route path="/settings/admin-alerts" element={<AdminAlertsPage />} />
             <Route path="/settings/audit" element={<AdminAuditExplorerPage />} />
             <Route path="/settings/universe-price-sync" element={<UniversePriceSyncPage />} />
+            <Route path="/settings/microstructure-collector" element={<MicrostructureCollectorAdminPage />} />
             <Route path="/settings/universe-price-sync/gap-failures" element={<GapFillFailuresPage />} />
             <Route path="/settings/universe-price-sync/ignored-gaps" element={<IgnoredPriceGapsPage />} />
             <Route path="/settings/data-quality" element={<DataQualityCenterPage />} />
@@ -268,6 +280,7 @@ function AuthenticatedShell({ user, isDocumentationRoute }) {
                         {!isDocumentationRoute && !user.is_admin && <RightUtilityRail user={user} />}
                     </div>
                 </div>
+                </GuidedTourProvider>
             </SidebarProvider>
         </NotificationProvider>
     );
@@ -280,6 +293,10 @@ function App() {
     const dismissTimerRef = useRef(null);
     const isDocumentationRoute = pathname === '/documentation' || pathname.startsWith('/documentation/');
     const isPublicWikiRoute = pathname.startsWith('/wiki/shared/');
+
+    useEffect(() => {
+        recordRouteView(pathname);
+    }, [pathname]);
 
     const dismissToast = useCallback(() => {
         if (dismissTimerRef.current) {
@@ -365,6 +382,8 @@ function App() {
                 {!isAuthenticated ? (
                     <Routes>
                         <Route path="/invite/:token" element={<AcceptInvitePage />} />
+                        <Route path="/request-account" element={<RequestAccountPage />} />
+                        <Route path="/request-account/verify/:token" element={<VerifyAccessRequestPage />} />
                         <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
                         <Route
                             path="/documentation"

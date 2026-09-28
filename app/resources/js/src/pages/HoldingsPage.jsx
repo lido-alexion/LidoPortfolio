@@ -715,7 +715,7 @@ export default function HoldingsPage() {
     const emptyMessage = 'No open holdings. Add a buy transaction first.';
 
     return (
-        <div>
+        <div data-tour="holdings-main">
             <div className="mb-3">
                 <h1 className="h3 mb-1">Portfolio</h1>
                 <p className="text-muted small mb-0">

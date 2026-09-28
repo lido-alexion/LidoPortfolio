@@ -60,6 +60,7 @@ export default function NavGroup({
                         <li key={page.id}>
                             <div className="lido-sidebar-page-row">
                                 <NavMenuItem
+                                    tourId={page.id}
                                     title={page.title}
                                     icon={page.icon}
                                     route={page.route}

@@ -35,7 +35,7 @@ export default function PageChrome() {
     }, [title]);
 
     return (
-        <div className="lido-page-chrome">
+        <div className="lido-page-chrome" data-tour="page-chrome">
             <nav className="lido-breadcrumbs" aria-label="Breadcrumb">
                 <ol className="lido-breadcrumbs-list">
                     {crumbs.map((crumb, index) => {

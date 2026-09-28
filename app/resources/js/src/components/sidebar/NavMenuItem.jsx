@@ -62,6 +62,7 @@ export default function NavMenuItem({
     showActiveBar = true,
     showExternalHint = true,
     end,
+    tourId = null,
 }) {
     const className = buildClassName({
         active,
@@ -136,6 +137,7 @@ export default function NavMenuItem({
     }
 
     const isEnd = end ?? route === ROUTES.HOME;
+    const tourAttr = tourId ? { 'data-tour': `nav-${tourId}` } : {};
 
     return (
         <NavLink
@@ -145,6 +147,7 @@ export default function NavMenuItem({
             aria-label={title}
             aria-current={active ? 'page' : undefined}
             onClick={onClick}
+            {...tourAttr}
         >
             {inner}
         </NavLink>

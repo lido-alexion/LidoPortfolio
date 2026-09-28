@@ -32,7 +32,7 @@ export default function NotificationBell() {
         : `${unreadCount} unread notifications`;
 
     return (
-        <div className="position-relative" ref={rootRef}>
+        <div className="position-relative" ref={rootRef} data-tour="header-notifications">
             <button
                 type="button"
                 className="btn btn-link text-reset position-relative p-2"

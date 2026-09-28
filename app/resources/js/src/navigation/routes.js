@@ -7,6 +7,7 @@ export const ROUTES = Object.freeze({
     HOME: '/',
     HOLDINGS: '/holdings',
     WATCHLIST: '/watchlist',
+    FUNDAMENTAL_INSIGHTS: '/fundamentals/insights',
     TRANSACTIONS: '/transactions',
     TRANSACTIONS_PENDING: '/transactions/pending',
     TRANSACTIONS_CLOSED: '/transactions/closed',

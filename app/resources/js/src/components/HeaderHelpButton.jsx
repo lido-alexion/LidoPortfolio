@@ -9,6 +9,7 @@ export default function HeaderHelpButton() {
         <button
             type="button"
             className="lido-header-help"
+            data-tour="header-help"
             title="Open documentation for this page"
             aria-label="Open documentation for this page"
             onClick={() => openDocumentationForPath(pathname)}
