@@ -121,10 +121,10 @@ class FundamentalSignalsService
             }
         }
 
+        $sector = $this->sectorContext->contextFor($stock, $asOf, $price);
+        $this->evaluateSectorComparisons($sector, $positive, $risk, $watch);
         $missing = $this->missingEvidence($stock, $asOf);
         $rating = count($missing) >= 4 ? 'low' : (($positive !== [] || $risk !== [] || $watch !== []) ? 'medium' : 'high');
-
-        $sector = $this->sectorContext->contextFor($stock, $asOf, $price);
 
         return [
             'summary' => $this->buildSummary($positive, $risk, $watch),
@@ -136,6 +136,7 @@ class FundamentalSignalsService
             'data_sufficiency' => [
                 'rating' => $rating,
                 'missing_information' => $missing,
+                'quality_factors' => $this->qualityFactors($stock, $asOf),
             ],
             'ai' => [
                 'status' => 'not_requested',
@@ -400,6 +401,50 @@ class FundamentalSignalsService
             if (str_contains($key, $needle)) return $category;
         }
         return 'fundamentals';
+    }
+
+    /** @param array<string,mixed>|null $sector */
+    protected function evaluateSectorComparisons(?array $sector, array &$positive, array &$risk, array &$watch): void
+    {
+        foreach (($sector['peer_percentiles'] ?? []) as $row) {
+            if (! is_array($row) || ! is_numeric($row['value'] ?? null) || ! is_numeric($row['peer_median'] ?? null)) continue;
+            $percentile = isset($row['percentile']) && is_numeric($row['percentile']) ? (float) $row['percentile'] : null;
+            if ($percentile === null || ($percentile > 0.25 && $percentile < 0.75)) continue;
+            $key = (string) ($row['metric_key'] ?? 'metric');
+            $evidence = [
+                'subject_value' => (float) $row['value'],
+                'comparison_value' => (float) $row['peer_median'],
+                'comparison_entity' => (string) ($sector['sector'] ?? 'sector peers'),
+                'comparison_basis' => 'active_sector_peer_median',
+                'comparison_period' => 'latest_available_ttm',
+                'delta' => round((float) $row['value'] - (float) $row['peer_median'], 4),
+                'delta_unit' => str_contains($key, 'pe') || str_contains($key, 'debt') ? 'ratio' : 'percentage_points',
+                'percentile' => $percentile,
+                'basis' => 'sector_comparison',
+            ];
+            if ($key === 'roe_ttm' && $percentile >= 0.75) {
+                $positive[] = $this->signal('sector_roe_above_peers', 'ROE is above the active sector peer distribution', $evidence);
+            } elseif ($key === 'roe_ttm' && $percentile <= 0.25) {
+                $risk[] = $this->signal('sector_roe_below_peers', 'ROE is below the active sector peer distribution', $evidence);
+            } elseif ($key === 'debt_equity' && $percentile >= 0.75) {
+                $watch[] = $this->signal('sector_leverage_above_peers', 'Debt / equity is above the active sector peer distribution', $evidence);
+            } elseif ($key === 'pe_ratio' && $percentile >= 0.75) {
+                $watch[] = $this->signal('sector_pe_above_peers', 'P/E is above the active sector peer distribution', $evidence);
+            }
+        }
+    }
+
+    /** @return list<string> */
+    protected function qualityFactors(Stock $stock, Carbon $asOf): array
+    {
+        $factors = [];
+        foreach (['revenue', 'net_income', 'operating_cash_flow'] as $metric) {
+            $row = $this->fundamentals->metric($stock, $metric, 'ttm', $asOf);
+            if (($row['freshness']['status'] ?? null) === 'stale') $factors[] = 'stale_'.$metric;
+            if (($row['provenance']['source_label'] ?? null) === 'yahoo') $factors[] = 'fallback_provider_'.$metric;
+            if (($row['provenance']['source_label'] ?? null) === 'Multiple sources') $factors[] = 'mixed_provider_'.$metric;
+        }
+        return array_values(array_unique($factors));
     }
 
     /** @param list<array<string, mixed>> $watch */

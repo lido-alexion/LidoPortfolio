@@ -49,7 +49,8 @@ class FundamentalAiInsightsTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.insights.ai.status', 'ok')
             ->assertJsonPath('data.insights.ai.provider', 'gemini')
-            ->assertJsonPath('data.insights.summary', 'Material leverage and cash conversion risks dominate.');
+            ->assertJsonPath('data.insights.summary', 'Material leverage and cash conversion risks dominate.')
+            ->assertJsonStructure(['data' => ['insights' => ['deterministic', 'ai_interpretation']]]);
 
         Http::assertSent(function ($request) {
             $body = json_encode($request->data());
