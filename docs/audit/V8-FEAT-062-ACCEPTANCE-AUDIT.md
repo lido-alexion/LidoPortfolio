@@ -30,7 +30,7 @@ This audit is evidence-based against `docs/archive/specs/V8-Fundamental-Signals-
 ## Verification
 
 - Targeted FEAT-062 Laravel tests after the catalogue/input-boundary slices: **31/31, 101 assertions** across deterministic signals, sector comparisons, AI response handling, provider diagnostics and usage limits; AI provider/boundary suites remain covered by the existing focused tests.
-- Full Feature suite: **1,331/1,332 passed, 1 intentional environment-gated skip, 0 failures/errors** under PHP CLI `memory_limit=512M`.
+- Full Feature suite: **1,336/1,336 passed, 0 skipped, 0 failures/errors** under PHP CLI `memory_limit=512M` with the documented matching ML runtime.
 - Frontend Node suite: **188/188**.
 - Vitest: **99/99**.
 - Build, typecheck, static docs check and `git diff --check`: passed.
