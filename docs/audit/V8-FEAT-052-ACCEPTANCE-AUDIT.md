@@ -11,9 +11,9 @@ Status: **REVIEW — local producer implementation is verified; PHP SDK, Collect
 | Browser route-view telemetry | PASS locally | Existing route-view producer and JS tests; route duration is active-time aware and fail-open. |
 | Official browser instrumentation | PASS locally / runtime pending | `otelBrowser.js` uses the official OpenTelemetry web SDK, OTLP trace exporter and fetch instrumentation when `VITE_LIDO_TELEMETRY_ENABLED` and an explicit endpoint are configured. Telemetry/log endpoints are excluded; build/typecheck/JS suites pass. |
 | Queue/scheduler propagation | PARTIAL | Existing StoX lifecycle hooks and business events are covered locally; deployed worker/scheduler context propagation remains to be exercised. |
-| Official PHP/Laravel SDK instrumentation | PARTIAL | The producer contract and fail-open exporters are implemented, but the PHP SDK is not yet wired into Laravel automatic HTTP/DB instrumentation. |
+| Official PHP/Laravel SDK instrumentation | PASS locally / runtime pending | Composer now declares `open-telemetry/opentelemetry-auto-laravel` 1.9.1, `open-telemetry/sdk` 1.15.0 and `open-telemetry/exporter-otlp` 1.4.0. With `ext-opentelemetry` loaded and standard `OTEL_*` settings enabled, Composer autoload registers Laravel HTTP/queue/worker/DB hooks; custom StoX HTTP spans are suppressed in that mode to prevent duplicates. The target runtime still needs the extension and Collector configuration. |
 | No business-operation dependency on telemetry | PASS locally | Exporters use bounded timeouts and swallow transport/serialization failures; focused telemetry tests pass. |
-| Collector and production runtime | EXTERNAL VALIDATION PENDING | Collector receipt, CORS for browser OTLP, production endpoint configuration, queue/worker propagation and deployed probe have not been run in the target environment. |
+| Collector and production runtime | EXTERNAL VALIDATION PENDING | Collector receipt, CORS for browser OTLP, production endpoint configuration, PHP extension installation, queue/worker propagation and deployed probe have not been run in the target environment. |
 
 ## Verification executed
 

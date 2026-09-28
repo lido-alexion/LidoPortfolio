@@ -18,6 +18,13 @@ class LidoTelemetry
         return (bool) config('lido_telemetry.enabled', false);
     }
 
+    public function officialSdkInstrumentationActive(): bool
+    {
+        return $this->enabled()
+            && (bool) config('lido_telemetry.official_sdk_enabled', false)
+            && extension_loaded('opentelemetry');
+    }
+
     public function pseudonymousUserId(?User $user): ?string
     {
         if ($user === null) {
@@ -76,7 +83,12 @@ class LidoTelemetry
             ]];
         }
 
-        $this->exporter->export($spanPayload);
+        // The official Laravel instrumentation owns the technical server
+        // span when explicitly enabled. Keep the custom metric and business
+        // telemetry paths, but do not emit a competing duplicate span.
+        if (! $this->officialSdkInstrumentationActive()) {
+            $this->exporter->export($spanPayload);
+        }
         $this->metricsExporter->export('stox.http.server.duration', $durationMs, [
             'http.method' => $request->method(),
             'http.status_class' => (string) intdiv($status, 100).'xx',

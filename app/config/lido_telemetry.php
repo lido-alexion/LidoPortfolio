@@ -7,6 +7,9 @@ return [
     'service_version' => env('LIDO_TELEMETRY_SERVICE_VERSION', 'v8'),
     'otlp_traces_endpoint' => env('LIDO_TELEMETRY_OTLP_TRACES_ENDPOINT'),
     'otlp_metrics_endpoint' => env('LIDO_TELEMETRY_OTLP_METRICS_ENDPOINT'),
+    // The official PHP SDK/auto-instrumentation is opt-in and requires the
+    // opentelemetry PHP extension plus standard OTEL_* exporter settings.
+    'official_sdk_enabled' => (bool) env('LIDO_TELEMETRY_OFFICIAL_SDK_ENABLED', false),
     'export_timeout_seconds' => (float) env('LIDO_TELEMETRY_EXPORT_TIMEOUT', 0.15),
     'pseudonymous_user_salt' => env('LIDO_TELEMETRY_USER_SALT', env('APP_KEY', 'stox')),
 ];

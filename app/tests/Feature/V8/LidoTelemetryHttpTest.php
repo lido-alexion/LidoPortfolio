@@ -39,6 +39,27 @@ class LidoTelemetryHttpTest extends TestCase
         Http::assertSent(fn ($request): bool => isset($request->data()['resourceMetrics']));
     }
 
+    public function test_official_sdk_mode_does_not_emit_duplicate_custom_server_span(): void
+    {
+        if (! extension_loaded('opentelemetry')) {
+            $this->markTestSkipped('Requires the optional OpenTelemetry PHP extension.');
+        }
+
+        Http::fake();
+        config([
+            'lido_telemetry.enabled' => true,
+            'lido_telemetry.official_sdk_enabled' => true,
+            'lido_telemetry.otlp_traces_endpoint' => 'http://collector.test/v1/traces',
+            'lido_telemetry.otlp_metrics_endpoint' => 'http://collector.test/v1/metrics',
+        ]);
+
+        $response = $this->getJson('/api/build-info');
+
+        $response->assertOk();
+        Http::assertSentCount(1);
+        Http::assertSent(fn ($request): bool => isset($request->data()['resourceMetrics']));
+    }
+
     public function test_business_telemetry_omits_sensitive_attributes(): void
     {
         Http::fake();

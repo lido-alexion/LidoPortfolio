@@ -53,10 +53,14 @@ installed_sklearn="$($ML_PYTHON -c 'import sklearn; print(sklearn.__version__)' 
 PYTHONPATH="$MICROSTRUCTURE_MODULE_DIR" "$MICROSTRUCTURE_PYTHON" -c 'import kiteconnect, pyarrow, polars' \
   || fail "microstructure Python runtime cannot import kiteconnect, pyarrow, and polars"
 
-app_state="$(cd "$APP_ROOT/current" && "$PHP_BIN" artisan tinker --execute='echo config("app.env")."|".(config("portfolio.debug_agent.enabled") ? "true" : "false")."|".strlen((string) config("app.key"));' --no-interaction)"
-IFS='|' read -r app_env debug_enabled app_key_length <<< "$app_state"
+app_state="$(cd "$APP_ROOT/current" && "$PHP_BIN" artisan tinker --execute='echo config("app.env")."|".(config("portfolio.debug_agent.enabled") ? "true" : "false")."|".strlen((string) config("app.key"))."|".(config("lido_telemetry.official_sdk_enabled") ? "true" : "false")."|".(extension_loaded("opentelemetry") ? "true" : "false")."|".(filter_var(env("OTEL_SDK_DISABLED", true), FILTER_VALIDATE_BOOLEAN) ? "true" : "false");' --no-interaction)"
+IFS='|' read -r app_env debug_enabled app_key_length official_sdk_enabled opentelemetry_loaded otel_sdk_disabled <<< "$app_state"
 [[ "$app_env" == "production" && "$debug_enabled" == "false" ]] || fail "production DebugAgent is enabled or app environment is not production"
 [[ "$app_key_length" =~ ^[1-9][0-9]*$ ]] || fail "production app key is missing from cached config"
+if [[ "$official_sdk_enabled" == "true" ]]; then
+  [[ "$opentelemetry_loaded" == "true" ]] || fail "official OpenTelemetry SDK is enabled but the PHP opentelemetry extension is not loaded"
+  [[ "$otel_sdk_disabled" == "false" ]] || fail "official OpenTelemetry SDK is enabled but OTEL_SDK_DISABLED is true"
+fi
 
 grep -Eq '^LIDO_AGENT_DEBUG_ENABLED=false([[:space:]]*#.*)?$' "$APP_ROOT/shared/.env" \
   || fail "production shared .env must explicitly disable DebugAgent"

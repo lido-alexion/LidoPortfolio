@@ -118,6 +118,26 @@ cPanel helpers:
 ├── bootstrap/
 ├── config/
 ├── public/                   Nginx document root
+
+### 4.1 OpenTelemetry PHP runtime
+
+The repository declares the official OpenTelemetry Laravel auto-instrumentation
+and OTLP SDK packages. They are opt-in and require the PHP `opentelemetry`
+extension on the target FPM/CLI runtime. Before enabling them on the VPS:
+
+```bash
+pecl install opentelemetry
+# Enable the extension for both the PHP-FPM and CLI SAPIs, then restart PHP-FPM.
+php -m | grep -i '^opentelemetry$'
+```
+
+Set `LIDO_TELEMETRY_OFFICIAL_SDK_ENABLED=true`,
+`OTEL_SDK_DISABLED=false`, `OTEL_EXPORTER_OTLP_ENDPOINT` and the standard
+service/resource variables only after the Collector endpoint and network path
+are ready. The runtime health check fails closed if the application flag is on
+but the extension or SDK is disabled. The existing StoX exporter remains the
+fail-open business-metric/event path; duplicate technical HTTP spans are
+suppressed when official instrumentation is active.
 ├── resources/
 ├── routes/
 ├── storage/
