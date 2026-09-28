@@ -417,7 +417,7 @@ class V3CapitalAccountingTest extends TestCase
             'strategy_id' => $strategy->id,
             'version' => 1,
             'version_label' => '1.0',
-            'config_json' => ['indicators' => []],
+            'config_json' => $this->executableStrategyConfig($profile),
             'status' => TradingStrategyVersion::STATUS_DRAFT,
         ]);
         $strategy->forceFill(['active_version_id' => $version->id])->save();

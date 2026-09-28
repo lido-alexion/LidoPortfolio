@@ -581,10 +581,9 @@ class RecallPhase2FulfilmentTest extends TestCase
             'strategy_id' => $strategy->id,
             'version' => 1,
             'version_label' => '1.0',
-            'config_json' => [
-                'indicators' => [],
+            'config_json' => array_merge($this->executableStrategyConfig($profile), [
                 'weakest_position_window_days' => 90,
-            ],
+            ]),
             'status' => TradingStrategyVersion::STATUS_DRAFT,
         ]);
         $strategy->forceFill(['active_version_id' => $version->id])->save();

@@ -58,7 +58,7 @@ class HoldingsOwnershipPresentationTest extends TestCase
             'strategy_id' => $archived->id,
             'version' => 1,
             'version_label' => '1.0',
-            'config_json' => ['indicators' => []],
+            'config_json' => $this->executableStrategyConfig($profile),
             'status' => TradingStrategyVersion::STATUS_SUPERSEDED,
         ]);
         $archived->forceFill(['active_version_id' => $version->id])->save();
@@ -118,7 +118,7 @@ class HoldingsOwnershipPresentationTest extends TestCase
             'strategy_id' => $b->id,
             'version' => 1,
             'version_label' => '1.0',
-            'config_json' => $a->activeVersion?->config_json ?? ['indicators' => []],
+            'config_json' => $a->activeVersion?->config_json ?? $this->executableStrategyConfig($profile),
             'status' => TradingStrategyVersion::STATUS_DRAFT,
         ]);
         $b->forceFill(['active_version_id' => $version->id])->save();

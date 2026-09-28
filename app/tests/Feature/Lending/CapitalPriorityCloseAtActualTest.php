@@ -329,7 +329,9 @@ class CapitalPriorityCloseAtActualTest extends TestCase
         $version = TradingStrategyVersion::query()->create([
             'strategy_id' => $strategy->id,
             'version' => 1,
-            'config_json' => ['recommended_minimum_holdings' => 1],
+            'config_json' => array_merge($this->executableStrategyConfig($profile), [
+                'recommended_minimum_holdings' => 1,
+            ]),
             'is_active' => true,
         ]);
         $strategy->forceFill(['active_version_id' => $version->id])->save();

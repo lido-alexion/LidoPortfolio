@@ -308,7 +308,7 @@ class V3CapitalLendingFoundationTest extends TestCase
             'strategy_id' => $strategy->id,
             'version' => 1,
             'version_label' => '1.0',
-            'config_json' => ['indicators' => []],
+            'config_json' => $this->executableStrategyConfig($profile),
             'status' => TradingStrategyVersion::STATUS_ACTIVE,
         ]);
         $strategy->forceFill(['active_version_id' => $version->id])->save();
