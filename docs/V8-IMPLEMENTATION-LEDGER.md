@@ -6,7 +6,7 @@ Authoritative specs: `docs/archive/specs/LidoPortfolio-V8-Wishlist.md` and linke
 
 ```text
 FEAT-052  [REVIEW] OpenTelemetry / LidoTelemetry (config, OTLP HTTP exporter, API middleware, browser traceparent + route hooks; queue/scheduler/browser spans and full acceptance still open)
-FEAT-054  [IN PROGRESS] Historical fundamental bootstrap (queue/run tables + bootstrap service + CLI; official adapters, UI completeness, and runtime acceptance still open)
+FEAT-054  [REVIEW] Historical fundamental bootstrap (summary/derived metrics, provenance, user-scoped Advanced preference, history UI, Screener boundary, and bootstrap evidence complete locally; browser/provider/deployed runtime acceptance remains)
 FEAT-055  [REVIEW] Account access request / Admin approval (formal audit complete; production Turnstile/mail and deployed multi-worker validation remain external)
 FEAT-056  [IN PROGRESS] ML lifecycle automation (queued runs, SSE, drift, cancel, notifications, transient retries; retention/recovery/acceptance still open)
 FEAT-057  [IN PROGRESS] ML feature engineering / training (feature registry + dataset plan/admin APIs; full PIT-safe feature/training/validation corpus still open)
@@ -101,8 +101,8 @@ See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-F
 ## Next task
 
 1. FEAT-063 external validation: install/validate the collector on the StoX VPS, then exercise the live Kite path and deployed backup destination when credentials/market conditions permit.
-2. FEAT-054: complete watchlist fundamentals UI, inline YoY cells, and per-user advanced preference API.
-3. FEAT-052: queue/scheduler instrumentation, full OTEL SDK alignment, and browser view-duration spans.
+2. FEAT-054 external acceptance: browser/mobile fundamentals journey and representative provider/deployed bootstrap runtime.
+3. FEAT-062 or FEAT-057: select the lower-rework dependent fundamentals consumer after the FEAT-054 review gate.
 
 ## Failing tests
 

@@ -5,14 +5,32 @@ import FundamentalInsightsSignals from './FundamentalInsightsSignals';
 import FundamentalMetricMiniChart from './FundamentalMetricMiniChart';
 import FundamentalStatementTables from './FundamentalStatementTables';
 import { formatCoveragePeriods, formatFundamentalMetric } from '../utils/fundamentalDisplay';
+import { fundamentalDefinition } from '../utils/fundamentalDefinitions';
+import { advancedFundamentalsPreferenceKey } from '../utils/fundamentalPreference';
+import { useAuth } from '../context/AuthContext';
 
 function MetricGrid({ rows }) {
     return (
         <div className="row g-2">
-            {rows.map(([label, value]) => (
-                <div className="col-6" key={label}>
-                    <div className="text-muted small">{label}</div>
-                    <div className="fw-semibold">{value ?? '—'}</div>
+            {rows.map((row) => (
+                <div className="col-6" key={row.id || row.label}>
+                    <div className="text-muted small">
+                        {row.label}
+                        <span
+                            className="ms-1 text-secondary"
+                            title={row.definition}
+                            aria-label={`${row.label}: ${row.definition}`}
+                            role="img"
+                        >
+                            ⓘ
+                        </span>
+                    </div>
+                    <div className="fw-semibold">{row.value ?? '—'}</div>
+                    {row.provenance ? (
+                        <div className="text-muted small" title={row.provenance.detail}>
+                            {row.provenance.label}
+                        </div>
+                    ) : null}
                 </div>
             ))}
         </div>
@@ -31,6 +49,7 @@ function fmt(v, suffix = '') {
  * Recommendation Preview uses the dedicated F137 contract (strategy_id required).
  */
 export default function WatchlistResearchPanel({ stockId }) {
+    const { user } = useAuth();
     const [tab, setTab] = useState('stock');
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState(null);
@@ -265,10 +284,16 @@ export default function WatchlistResearchPanel({ stockId }) {
                                     </span>
                                 ) : null}
                             </div>
-                            <MetricGrid rows={(fundamentals.summary || []).map((row) => [
-                                row.label,
-                                formatFundamentalMetric(row.value, row.id),
-                            ])}
+                            <MetricGrid rows={(fundamentals.summary || []).map((row) => ({
+                                id: row.id,
+                                label: row.label,
+                                value: formatFundamentalMetric(row.value, row.id),
+                                definition: fundamentalDefinition(row.id, row.basis),
+                                provenance: row.provenance ? {
+                                    label: row.provenance.source_label || 'Source unavailable',
+                                    detail: `${row.provenance.derived ? 'Derived' : 'Reported'} · ${row.provenance.basis || row.basis || 'current'}${row.provenance.latest_period_end ? ` · period ${row.provenance.latest_period_end}` : ''}`,
+                                } : null,
+                            }))}
                             />
                             {fundamentalsInsights ? (
                                 <FundamentalInsightsSignals insights={fundamentalsInsights} />
@@ -309,6 +334,7 @@ export default function WatchlistResearchPanel({ stockId }) {
                                 history={fundamentalsHistory}
                                 cadence={fundamentalsCadence}
                                 onCadenceChange={setFundamentalsCadence}
+                                preferenceKey={advancedFundamentalsPreferenceKey(user?.id)}
                             />
                         </div>
                     ) : (

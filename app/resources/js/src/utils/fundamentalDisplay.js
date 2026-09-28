@@ -5,6 +5,12 @@ const PERCENT_METRICS = new Set([
     'net_npa_ratio',
     'capital_adequacy_ratio',
     'net_interest_margin',
+    'operating_margin',
+    'net_margin',
+    'fcf_margin',
+    'fcf_yield',
+    'dividend_yield',
+    'payout_ratio',
 ]);
 
 const MULTIPLE_METRICS = new Set(['pe', 'pb', 'debt_equity']);
