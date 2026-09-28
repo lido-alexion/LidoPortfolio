@@ -64,10 +64,13 @@ class MlRetrainQueueTest extends TestCase
         $admin = User::factory()->admin()->create();
         $this->defaultPortfolioFor($admin);
 
-        $this->expectException(\Illuminate\Validation\ValidationException::class);
-
-        app(\App\Services\ML\MlScoringService::class)
-            ->queueRetrainRun('3m', $admin, 'operator-bypass');
+        try {
+            app(\App\Services\ML\MlScoringService::class)
+                ->queueRetrainRun('3m', $admin, 'operator-bypass');
+            $this->fail('An unsupported trigger must be rejected.');
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $this->assertSame('Unsupported ML training trigger.', $exception->errors()['trigger'][0]);
+        }
 
         Bus::assertNothingDispatched();
     }
