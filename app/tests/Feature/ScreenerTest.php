@@ -265,14 +265,17 @@ class ScreenerTest extends TestCase
         $import = $this->withHeader('X-Profile-Id', (string) $otherProfile->id)
             ->postJson("/api/screeners/shared/{$sharedId}/import");
         $import->assertCreated();
-        $import->assertJsonPath('data.status', 'draft');
-        $import->assertJsonPath('data.metadata.origin', 'fork');
-        $import->assertJsonPath('data.name', 'Shared RSI (copy)');
+        $import->assertJsonPath('data.name', 'Shared RSI');
+        $import->assertJsonPath('data.compatibility_read_only', false);
+        $import->assertJsonPath('data.is_shared', false);
+        $import->assertJsonMissingPath('data.library_path');
+        $copiedId = (int) $import->json('data.id');
 
         $this->withHeader('X-Profile-Id', (string) $otherProfile->id)
             ->getJson('/api/screeners')
             ->assertOk()
-            ->assertJsonPath('count', 0);
+            ->assertJsonPath('count', 1)
+            ->assertJsonPath('data.0.id', $copiedId);
 
         $this->withHeader('X-Profile-Id', (string) $ownerProfile->id)
             ->getJson('/api/screeners/shared')
@@ -1254,7 +1257,9 @@ class ScreenerTest extends TestCase
         ])->assertOk();
         $this->assertSame($dayTotal, ScreenerBacktestDay::query()->where('screener_id', $id)->count());
 
-        // Changing conditions invalidates saved backtest results.
+        // Changing conditions creates a new semantic version. The old cache
+        // remains available for historical audit, while the current-version
+        // matrix starts empty and cannot reuse incompatible evidence.
         $this->putJson("/api/screeners/{$id}", [
             'name' => 'Backtest cache screen renamed',
             'scope' => 'holdings',
@@ -1267,16 +1272,18 @@ class ScreenerTest extends TestCase
                 ],
             ],
         ])->assertOk();
-        $this->assertSame(0, ScreenerBacktestDay::query()->where('screener_id', $id)->count());
-        $this->assertSame(0, ScreenerBacktestHit::query()->where('screener_id', $id)->count());
+        $this->assertSame($dayTotal, ScreenerBacktestDay::query()->where('screener_id', $id)->count());
+        $this->assertSame($dayTotal, ScreenerBacktestDay::query()->where('screener_id', $id)->where('screener_version_id', 1)->count());
+        $this->assertSame(0, ScreenerBacktestDay::query()->where('screener_id', $id)->where('screener_version_id', 2)->count());
+        $this->assertSame(0, $this->getJson("/api/screeners/{$id}/backtest/matrix")->assertOk()->json('data.run_count'));
 
         // Rebuild results, then Clear history wipes them too.
         $third = $runBacktest($token.'-3');
         $this->assertSame(0, (int) $third['stats']['days_reused']);
-        $this->assertSame($dayTotal, ScreenerBacktestDay::query()->where('screener_id', $id)->count());
+        $this->assertSame($dayTotal * 2, ScreenerBacktestDay::query()->where('screener_id', $id)->count());
         $this->deleteJson("/api/screeners/{$id}/runs")
             ->assertOk()
-            ->assertJsonPath('backtest_days_cleared', $dayTotal);
+            ->assertJsonPath('backtest_days_cleared', $dayTotal * 2);
         $this->assertSame(0, ScreenerBacktestDay::query()->where('screener_id', $id)->count());
         $empty = $this->getJson("/api/screeners/{$id}/backtest/matrix")->assertOk()->json('data');
         $this->assertSame(0, $empty['run_count']);

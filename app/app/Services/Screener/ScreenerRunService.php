@@ -51,8 +51,10 @@ class ScreenerRunService
                 'ARTIFACT_BINDING_UNAVAILABLE',
             );
         }
+        $screenerVersion = app(ScreenerVersioningService::class)->ensureCurrentVersion($screener);
         $run = ScreenerRun::query()->create([
             'screener_id' => $screener->id,
+            'screener_version_id' => $screenerVersion->id,
             'reusable_artifact_version_id' => $runtimeSelection?->artifactVersion->id,
             'artifact_binding_revision_id' => $runtimeSelection?->bindingRevision->id,
             'triggered_by' => in_array($triggeredBy, ['manual', 'schedule'], true) ? $triggeredBy : 'manual',
@@ -165,7 +167,7 @@ class ScreenerRunService
 
                 try {
                     $bars = $this->loadBars((int) $stockId, $fetchLimit);
-                    $result = $this->evaluation->evaluateStock($definition, $bars, $entityBars);
+                    $result = $this->evaluation->evaluateStock($definition, $bars, $entityBars, $stock);
                     $stats['scanned'] = ((int) ($stats['scanned'] ?? 0)) + 1;
 
                     if ($result['skipped']) {
@@ -339,6 +341,7 @@ class ScreenerRunService
 
         ScreenerBacktestHit::query()
             ->where('screener_id', $screener->id)
+            ->where('screener_version_id', $run->screener_version_id)
             ->where('as_of_date', $asOf)
             ->delete();
 
@@ -348,6 +351,7 @@ class ScreenerRunService
             ->get(['stock_id', 'symbol', 'exchange', 'name'])
             ->map(fn (ScreenerRunHit $hit) => [
                 'screener_id' => $screener->id,
+                'screener_version_id' => $run->screener_version_id,
                 'as_of_date' => $asOf,
                 'stock_id' => $hit->stock_id,
                 'symbol' => $hit->symbol,
@@ -362,7 +366,11 @@ class ScreenerRunService
         }
 
         ScreenerBacktestDay::query()->updateOrCreate(
-            ['screener_id' => $screener->id, 'as_of_date' => $asOf],
+            [
+                'screener_id' => $screener->id,
+                'screener_version_id' => $run->screener_version_id,
+                'as_of_date' => $asOf,
+            ],
             [
                 'scanned' => (int) ($stats['scanned'] ?? 0),
                 'matched' => (int) ($stats['matched'] ?? 0),
@@ -605,6 +613,7 @@ class ScreenerRunService
         $data = [
             'id' => $run->id,
             'screener_id' => $run->screener_id,
+            'screener_version_id' => $run->screener_version_id,
             'reusable_artifact_version_id' => $run->reusable_artifact_version_id,
             'artifact_binding_revision_id' => $run->artifact_binding_revision_id,
             'triggered_by' => $run->triggered_by,
