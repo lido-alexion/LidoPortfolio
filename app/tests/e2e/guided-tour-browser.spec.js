@@ -71,6 +71,28 @@ test.describe('FEAT-061 guided tour mobile browser acceptance', () => {
         await expect(trigger).toBeFocused();
     });
 
+    test('scrim captures background clicks without activating the highlighted navigation', async ({ page }) => {
+        await installInvestorWorkflowApiMocks(page);
+        await page.goto('/');
+        await page.waitForTimeout(250);
+        await page.evaluate(() => {
+            window.dispatchEvent(new CustomEvent('lido-guided-tour-launch', { detail: { restart: true } }));
+        });
+
+        const firstStep = page.getByRole('dialog').filter({
+            has: page.getByRole('heading', { name: 'Navigation' }),
+        });
+        await expect(firstStep).toBeVisible();
+        const holdingsLink = page.getByRole('link', { name: 'Holdings', exact: true });
+        await expect(holdingsLink).toBeVisible();
+        const linkBox = await holdingsLink.boundingBox();
+        expect(linkBox).not.toBeNull();
+        await page.mouse.click(linkBox.x + linkBox.width / 2, linkBox.y + linkBox.height / 2);
+
+        await expect(firstStep).toBeVisible();
+        await expect(page).toHaveURL(/\/$/);
+    });
+
     test('resumes a persisted step and navigates to its configured route', async ({ page }) => {
         await installInvestorWorkflowApiMocks(page, {
             guidedTourState: {
