@@ -15,6 +15,7 @@ class FundamentalSetting extends Model
         'max_attempts',
         'provider',
         'paused',
+        'ai_insights_primary_provider',
     ];
 
     protected function casts(): array

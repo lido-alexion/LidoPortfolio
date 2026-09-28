@@ -4,7 +4,14 @@ import { showToast } from '../toast';
 
 export default function FundamentalDataAdminPage() {
     const [status, setStatus] = useState(null);
-    const [form, setForm] = useState({ quarterly_freshness_months: 5, annual_freshness_months: 15, request_delay_ms: 750, max_attempts: 3, paused: false });
+    const [form, setForm] = useState({
+        quarterly_freshness_months: 5,
+        annual_freshness_months: 15,
+        request_delay_ms: 750,
+        max_attempts: 3,
+        paused: false,
+        ai_insights_primary_provider: '',
+    });
     const [busy, setBusy] = useState(false);
 
     const load = useCallback(async () => {
@@ -17,6 +24,7 @@ export default function FundamentalDataAdminPage() {
                 request_delay_ms: data.data.settings.request_delay_ms,
                 max_attempts: data.data.settings.max_attempts,
                 paused: Boolean(data.data.settings.paused),
+                ai_insights_primary_provider: data.data.settings.ai_insights_primary_provider || '',
             });
         }
     }, []);
@@ -26,8 +34,26 @@ export default function FundamentalDataAdminPage() {
     const save = async () => {
         setBusy(true);
         try {
-            await api.put('/v1/admin/fundamentals/settings', form);
+            await api.put('/v1/admin/fundamentals/settings', {
+                ...form,
+                ai_insights_primary_provider: form.ai_insights_primary_provider || null,
+            });
             showToast('Fundamental freshness policy saved.', 'success');
+            await load();
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const testAi = async (provider) => {
+        setBusy(true);
+        try {
+            const { data } = await api.post('/v1/admin/fundamentals/ai-insights/test', { provider });
+            if (data?.data?.ok) {
+                showToast(`AI provider test succeeded (${data.data.provider || provider || 'chain'}).`, 'success');
+            } else {
+                showToast(data?.data?.error_message || 'AI provider test failed.', 'warning');
+            }
             await load();
         } finally {
             setBusy(false);
@@ -77,6 +103,81 @@ export default function FundamentalDataAdminPage() {
                     </div>
                 </div>
                 <div className="col-lg-8">
+                    <div className="card mb-3">
+                        <div className="card-header">AI insights providers (FEAT-062)</div>
+                        <div className="card-body">
+                            <p className="text-muted small">
+                                Requires <code>FUNDAMENTALS_AI_INSIGHTS_ENABLED</code> and provider API keys in server env.
+                                Primary order is persisted here; secrets stay server-side.
+                            </p>
+                            <div className="mb-3">
+                                <span className="badge text-bg-secondary me-2">
+                                    Enabled: {status?.ai_insights?.enabled ? 'yes' : 'no'}
+                                </span>
+                                <span className="badge text-bg-light border">
+                                    Effective primary: {status?.ai_insights?.primary_provider || '—'}
+                                    {' '}
+                                    ({status?.ai_insights?.primary_provider_source || 'env'})
+                                </span>
+                            </div>
+                            <label className="form-label">Primary provider override</label>
+                            <select
+                                className="form-select mb-3"
+                                value={form.ai_insights_primary_provider}
+                                onChange={(e) => setForm({ ...form, ai_insights_primary_provider: e.target.value })}
+                            >
+                                <option value="">Use env default ({status?.ai_insights?.primary_provider_source === 'env' ? (status?.ai_insights?.primary_provider || 'gemini') : 'gemini'})</option>
+                                <option value="gemini">Gemini (primary)</option>
+                                <option value="codex">Codex / OpenAI-compatible (primary)</option>
+                            </select>
+                            <table className="table table-sm mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Provider</th>
+                                        <th>Role</th>
+                                        <th>Configured</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {(status?.ai_insights?.providers || []).map((row) => (
+                                        <tr key={row.id}>
+                                            <td className="text-capitalize">{row.id}</td>
+                                            <td>{row.role}</td>
+                                            <td>{row.configured ? 'Yes' : 'No'}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                            <div className="d-flex flex-wrap gap-2 mt-3">
+                                <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy} onClick={() => testAi('gemini')}>
+                                    Test Gemini
+                                </button>
+                                <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy} onClick={() => testAi('codex')}>
+                                    Test Codex
+                                </button>
+                                <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy} onClick={() => testAi(null)}>
+                                    Test failover chain
+                                </button>
+                            </div>
+                            {status?.ai_insights?.usage ? (
+                                <p className="text-muted small mt-2 mb-0">
+                                    Today: {status.ai_insights.usage.today?.global_invocations ?? 0} invocations
+                                    ({status.ai_insights.usage.today?.ok_invocations ?? 0} ok).
+                                    Tokens in/out: {status.ai_insights.usage.today?.input_tokens ?? 0}
+                                    / {status.ai_insights.usage.today?.output_tokens ?? 0}.
+                                    Est. spend (USD):{' '}
+                                    {typeof status.ai_insights.usage.today?.estimated_cost_usd === 'number'
+                                        ? status.ai_insights.usage.today.estimated_cost_usd.toFixed(4)
+                                        : '—'}.
+                                    Limits: global {status.ai_insights.usage.limits?.daily_global_max || '∞'}
+                                    / user {status.ai_insights.usage.limits?.daily_per_user_max || '∞'} per day.
+                                </p>
+                            ) : null}
+                            <p className="text-muted small mt-2 mb-0">
+                                Save freshness policy below to persist provider preference (same settings API).
+                            </p>
+                        </div>
+                    </div>
                     <div className="card mb-3">
                         <div className="card-header">Latest Run</div>
                         <div className="card-body">
