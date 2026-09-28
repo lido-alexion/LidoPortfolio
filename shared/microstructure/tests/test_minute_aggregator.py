@@ -41,6 +41,20 @@ class MinuteAggregatorTest(unittest.TestCase):
         self.assertEqual(100.0, rows[0]["open"])
         self.assertEqual(101.0, rows[0]["close"])
         self.assertEqual(2, rows[0]["tick_count"])
+        self.assertEqual("partial", rows[0]["coverage_class"])
+
+    def test_disconnect_marks_observed_and_unobserved_minutes_differently(self) -> None:
+        agg = MinuteAggregator()
+        observed = {"instrument_id": 1, "source_instrument_token": 99, "exchange": "NSE", "tradingsymbol": "OBS"}
+        quiet = {"instrument_id": 2, "source_instrument_token": 100, "exchange": "NSE", "tradingsymbol": "QUIET"}
+        at = datetime(2026, 9, 27, 10, 15, 30, tzinfo=timezone.utc)
+        agg.ingest(observed, {"last_price": 100.0}, at=at)
+        agg.ensure_instrument(quiet, at=at)
+        agg.mark_collection_gap("collector_disconnected")
+        rows = agg.flush_before(datetime(2026, 9, 27, 10, 16, 0, tzinfo=timezone.utc))
+        quality = {row["tradingsymbol"]: row for row in rows}
+        self.assertEqual("reconnect_affected", quality["OBS"]["coverage_class"])
+        self.assertEqual("outage", quality["QUIET"]["coverage_class"])
 
     def test_microprice_and_oi_fields(self) -> None:
         agg = MinuteAggregator()

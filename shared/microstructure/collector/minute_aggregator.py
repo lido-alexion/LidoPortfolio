@@ -68,8 +68,8 @@ class MinuteBucket:
     oi_delta: float = 0.0
     oi_day_high: float | None = None
     oi_day_low: float | None = None
-    coverage_class: str = "partial"
-    partial_reason: str | None = "awaiting_ticks"
+    coverage_class: str = "no_trade"
+    partial_reason: str | None = "no_update"
     _last_cumulative_volume: float | None = field(default=None, repr=False)
     _last_oi: float | None = field(default=None, repr=False)
     _microprice_sum: float = field(default=0.0, repr=False)
@@ -206,8 +206,17 @@ class MinuteBucket:
             except ValueError:
                 pass
 
-        self.coverage_class = "full" if self.tick_count >= 1 else "partial"
-        self.partial_reason = None if self.coverage_class == "full" else "sparse_ticks"
+        if self.coverage_class not in {"outage", "reconnect_affected"}:
+            self.coverage_class = "partial"
+            self.partial_reason = "observed_partial_minute"
+
+    def mark_collection_gap(self, reason: str) -> None:
+        if self.tick_count == 0:
+            self.coverage_class = "outage"
+            self.partial_reason = reason
+        else:
+            self.coverage_class = "reconnect_affected"
+            self.partial_reason = reason
 
     def to_row(self) -> dict[str, Any]:
         return {
@@ -302,6 +311,10 @@ class MinuteAggregator:
             )
             self._buckets[key] = bucket
         return bucket
+
+    def mark_collection_gap(self, reason: str) -> None:
+        for bucket in self._buckets.values():
+            bucket.mark_collection_gap(reason)
 
     def flush_before(self, cutoff_minute: datetime) -> list[dict[str, Any]]:
         cutoff = floor_minute(cutoff_minute)

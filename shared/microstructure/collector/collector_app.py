@@ -42,18 +42,36 @@ class CollectorApp:
         self._last_universe_key: str | None = None
         self._pending_resubscribe = False
         self._backup_status = "not_run"
+        self._market_timezone = ZoneInfo(os.environ.get("MICROSTRUCTURE_MARKET_TIMEZONE", "Asia/Kolkata"))
+        self._coverage_day = self._market_day()
+        self._coverage_counts: dict[str, int] = {}
+        self._connection_was_lost = False
         self._raw_spool = RawTickSpool.from_env(self.data_root)
         self._finalization = FinalizationState(
             Path(os.environ.get("MICROSTRUCTURE_FINALIZATION_STATE_FILE", str(self.data_root / "finalization-state.json"))),
             max_retries=int(os.environ.get("MICROSTRUCTURE_FINALIZATION_MAX_RETRIES", "3")),
         )
-        self._market_timezone = ZoneInfo(os.environ.get("MICROSTRUCTURE_MARKET_TIMEZONE", "Asia/Kolkata"))
 
     def _market_day(self) -> date:
         return datetime.now(self._market_timezone).date()
 
     def _set_websocket_connected(self, connected: bool) -> None:
+        if not connected and self.websocket_connected:
+            self.aggregator.mark_collection_gap("collector_disconnected")
+            self._connection_was_lost = True
+        elif connected and self._connection_was_lost:
+            self.aggregator.mark_collection_gap("reconnect_window")
+            self._connection_was_lost = False
         self.websocket_connected = connected
+
+    def _record_coverage(self, rows: list[dict[str, Any]]) -> None:
+        day = self._market_day()
+        if day != self._coverage_day:
+            self._coverage_day = day
+            self._coverage_counts = {}
+        for row in rows:
+            quality = str(row.get("coverage_class") or "unknown")
+            self._coverage_counts[quality] = self._coverage_counts.get(quality, 0) + 1
 
     def _handle_live_tick(self, meta: dict[str, Any], tick: dict[str, Any]) -> None:
         now = datetime.now(timezone.utc)
@@ -76,13 +94,27 @@ class CollectorApp:
     def write_heartbeat(self) -> None:
         self.heartbeat_file.parent.mkdir(parents=True, exist_ok=True)
         trading_day = self._market_day().isoformat()
+        session_start = os.environ.get("MICROSTRUCTURE_MARKET_SESSION_START", "09:15")
+        session_end = os.environ.get("MICROSTRUCTURE_MARKET_SESSION_END", "15:30")
+        start_h, start_m = (int(part) for part in session_start.split(":", 1))
+        end_h, end_m = (int(part) for part in session_end.split(":", 1))
+        expected_minutes = max(0, (end_h * 60 + end_m) - (start_h * 60 + start_m))
+        total_rows = sum(self._coverage_counts.values())
+        expected_rows = expected_minutes * max(1, self.subscribed_count)
         payload = {
             "collector_state": self.collector_state,
             "websocket_connected": self.websocket_connected,
             "subscribed_instrument_count": self.subscribed_count,
             "last_packet_at": self.last_packet_at,
             "reconnect_count": self.reconnect_count,
-            "coverage_summary": {"trading_day": trading_day},
+            "coverage_summary": {
+                "trading_day": trading_day,
+                "expected_minute_count": expected_minutes,
+                "observed_row_count": total_rows,
+                "quality_counts": self._coverage_counts,
+                "expected_instrument_minutes": expected_rows,
+                "coverage_percent": round((total_rows / expected_rows) * 100, 2) if expected_rows else None,
+            },
             "latest_finalized_partition": trading_day if is_partition_finalized(self.data_root, self._market_day()) else None,
             "backup_status": self._backup_status,
             "finalization": self._finalization.load(),
@@ -126,6 +158,7 @@ class CollectorApp:
         now = datetime.now(timezone.utc)
         flushed = self.aggregator.flush_before(now)
         if flushed:
+            self._record_coverage(flushed)
             append_rows(self.data_root, self._market_day(), flushed, part_name=f"part-{int(time.time())}.parquet")
 
     def _session_phase(self) -> str:
@@ -157,6 +190,7 @@ class CollectorApp:
             # use the next minute as the exclusive cutoff.
             flushed = self.aggregator.flush_before(datetime.now(timezone.utc) + timedelta(minutes=1))
             if flushed:
+                self._record_coverage(flushed)
                 append_rows(self.data_root, trading_day, flushed, part_name=f"part-final-{int(time.time())}.parquet")
             row_count = partition_row_count(self.data_root, trading_day)
             write_finalization_manifest(
