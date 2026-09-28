@@ -379,4 +379,22 @@ class FundamentalSignalsTest extends TestCase
         $this->assertContains('other_income_exceptional_dependence', $keys);
         $this->assertContains('capex_intensity_increasing', $keys);
     }
+
+    public function test_ownership_financial_context_requires_aligned_debt_and_ownership_periods(): void
+    {
+        $stock = Stock::query()->create(['symbol' => 'OWNF', 'exchange' => 'NSE', 'name' => 'Ownership Finance Co']);
+        $service = app(FundamentalDataService::class);
+        foreach ([
+            ['2024-03-31', 45, 100],
+            ['2025-03-31', 40, 130],
+        ] as [$period, $promoterHolding, $debt]) {
+            $service->storeFacts($stock, [
+                ['statement_type' => 'ownership', 'cadence' => 'quarterly', 'fact_key' => 'promoter_holding', 'period_end' => $period, 'value' => $promoterHolding, 'availability_date' => '2025-06-01'],
+                ['statement_type' => 'balance_sheet', 'cadence' => 'quarterly', 'fact_key' => 'debt', 'period_end' => $period, 'value' => $debt, 'availability_date' => '2025-06-01'],
+            ]);
+        }
+
+        $insights = app(FundamentalSignalsService::class)->deterministicInsights($stock, Carbon::parse('2025-06-20'));
+        $this->assertContains('ownership_financial_context', collect($insights['watch_items'])->pluck('signal_key')->all());
+    }
 }

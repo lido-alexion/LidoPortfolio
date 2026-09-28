@@ -99,6 +99,7 @@ class FundamentalSignalsService
         $this->evaluateLeverageSignals($stock, $asOf, $positive, $risk, $watch);
         $this->evaluateDilutionSignals($stock, $asOf, $risk, $watch);
         $this->evaluateOwnershipSignals($stock, $asOf, $watch);
+        $this->evaluateOwnershipFinancialContext($stock, $asOf, $watch);
         $this->evaluateWorkingCapitalBalanceSheetSignals($stock, $asOf, $positive, $risk, $watch);
         $this->evaluateGrowthRelationships($stock, $asOf, $positive, $risk, $watch);
         $this->evaluateCashAndNetDebtTrends($stock, $asOf, $positive, $risk, $watch);
@@ -586,6 +587,50 @@ class FundamentalSignalsService
                 'basis' => 'same_period_yoy',
             ]);
         }
+    }
+
+    /** Ownership movement is contextualized only when a comparable financial movement exists. */
+    protected function evaluateOwnershipFinancialContext(Stock $stock, Carbon $asOf, array &$watch): void
+    {
+        $promoter = $this->comparablePair($stock, 'promoter_holding', $asOf);
+        $pledge = $this->comparablePair($stock, 'promoter_pledge', $asOf);
+        $debt = $this->comparablePair($stock, 'debt', $asOf);
+        if ($debt === null || ($promoter === null && $pledge === null)) {
+            return;
+        }
+
+        $debtBase = abs($debt['prior']);
+        $debtGrowth = $debtBase > 0.0 ? (($debt['current'] - $debt['prior']) / $debtBase) * 100 : null;
+        if ($debtGrowth === null || $debtGrowth < 15.0) {
+            return;
+        }
+
+        $ownershipEvidence = [];
+        $contextFound = false;
+        if ($promoter !== null
+            && $promoter['current_period'] === $debt['current_period']
+            && $promoter['prior_period'] === $debt['prior_period']
+            && ($promoter['current'] - $promoter['prior']) <= -2.0) {
+            $ownershipEvidence['promoter_holding_delta_pp'] = round($promoter['current'] - $promoter['prior'], 2);
+            $contextFound = true;
+        }
+        if ($pledge !== null
+            && $pledge['current_period'] === $debt['current_period']
+            && $pledge['prior_period'] === $debt['prior_period']
+            && ($pledge['current'] - $pledge['prior']) >= 2.0) {
+            $ownershipEvidence['promoter_pledge_delta_pp'] = round($pledge['current'] - $pledge['prior'], 2);
+            $contextFound = true;
+        }
+        if (! $contextFound) {
+            return;
+        }
+
+        $watch[] = $this->signal('ownership_financial_context', 'Ownership movement coincided with a material increase in debt', array_merge($ownershipEvidence, [
+            'debt_yoy_pct' => round($debtGrowth, 2),
+            'period' => $debt['current_period'],
+            'comparison_period' => $debt['prior_period'],
+            'basis' => 'same_period_yoy_ownership_and_debt',
+        ]));
     }
 
     protected function evaluateGrowthRelationships(Stock $stock, Carbon $asOf, array &$positive, array &$risk, array &$watch): void

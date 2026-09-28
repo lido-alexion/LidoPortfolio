@@ -31,7 +31,7 @@ it is not inferred from a related signal.
 | Material share-count dilution | `share_count_dilution`, `dilution_follow_up` | Quarterly YoY shares | comparable periods | growth and basis | PASS |
 | CWIP growth/share/persistence | `cwip_expansion_ambiguous` | Annual CWIP growth and share of PPE | availability date <= as-of | growth/share and follow-up | PASS |
 | Promoter/pledge/FII/DII/public changes | `ownership_*_movement` | Same-period ownership pairs | availability date <= as-of | current/prior/delta | PASS |
-| Ownership changes combined with financial signals | — | Ownership plus related financial context | both sources PIT-safe | — | PARTIAL |
+| Ownership changes combined with financial signals | `ownership_financial_context` | Promoter holding/pledge movement aligned with material debt movement | both sources same-period PIT-safe | ownership delta, debt growth and aligned periods | PASS where aligned facts exist |
 | Historical valuation-range deviation | — | Historical valuation distribution | price/fundamental as-of | — | PARTIAL |
 | Reliable sector/peer percentile | `sector_roe_*`, `sector_leverage_above_peers`, `sector_pe_above_peers` | Dated sector snapshot and peer values | dated membership/snapshot required | subject/peer/delta/basis | PASS |
 | Valuation divergence from earnings/cash | — | Valuation plus earnings/cash trend | both sources PIT-safe | — | PARTIAL |
