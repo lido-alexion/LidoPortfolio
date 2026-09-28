@@ -356,4 +356,27 @@ class FundamentalSignalsTest extends TestCase
         $this->assertNotContains('liquidity_coverage_improving', collect($insights['watch_items'])->pluck('signal_key')->all());
         $this->assertNotContains('liquidity_coverage_deteriorating', collect($insights['risk_signals'])->pluck('signal_key')->all());
     }
+
+    public function test_other_income_dependence_and_capex_intensity_are_explicit_watch_evidence(): void
+    {
+        $stock = Stock::query()->create(['symbol' => 'CAPX', 'exchange' => 'NSE', 'name' => 'Capital Co']);
+        $service = app(FundamentalDataService::class);
+        foreach ([
+            ['2024-03-31', 100, 10, 2, 10],
+            ['2025-03-31', 100, 10, 5, 30],
+        ] as [$period, $revenue, $netIncome, $otherIncome, $capex]) {
+            $service->storeFacts($stock, [
+                ['statement_type' => 'income_statement', 'cadence' => 'quarterly', 'fact_key' => 'revenue', 'period_end' => $period, 'value' => $revenue, 'availability_date' => '2025-06-01'],
+                ['statement_type' => 'income_statement', 'cadence' => 'quarterly', 'fact_key' => 'net_income', 'period_end' => $period, 'value' => $netIncome, 'availability_date' => '2025-06-01'],
+                ['statement_type' => 'income_statement', 'cadence' => 'quarterly', 'fact_key' => 'other_income', 'period_end' => $period, 'value' => $otherIncome, 'availability_date' => '2025-06-01'],
+                ['statement_type' => 'cash_flow', 'cadence' => 'quarterly', 'fact_key' => 'capital_expenditure', 'period_end' => $period, 'value' => $capex, 'availability_date' => '2025-06-01'],
+            ]);
+        }
+
+        $insights = app(FundamentalSignalsService::class)->deterministicInsights($stock, Carbon::parse('2025-06-20'));
+        $keys = collect($insights['watch_items'])->pluck('signal_key')->all();
+
+        $this->assertContains('other_income_exceptional_dependence', $keys);
+        $this->assertContains('capex_intensity_increasing', $keys);
+    }
 }

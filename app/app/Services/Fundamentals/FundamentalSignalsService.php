@@ -92,6 +92,7 @@ class FundamentalSignalsService
         $this->evaluateCwipSignals($stock, $asOf, $watch);
         $this->evaluateMarginSignals($stock, $asOf, $positive, $risk, $watch);
         $this->evaluateOperatingProfitDivergence($stock, $asOf, $watch);
+        $this->evaluateOtherIncomeAndCapexSignals($stock, $asOf, $watch);
         $this->evaluateReturnOnEquityMovement($stock, $asOf, $positive, $risk, $watch);
         $this->evaluateReturnOnCapitalMovements($stock, $asOf, $positive, $risk, $watch);
         $this->evaluateEarningsCashSignals($stock, $asOf, $risk, $watch);
@@ -176,6 +177,61 @@ class FundamentalSignalsService
                 'basis' => 'quarterly_yoy',
             ],
         );
+    }
+
+    protected function evaluateOtherIncomeAndCapexSignals(Stock $stock, Carbon $asOf, array &$watch): void
+    {
+        $income = $this->comparablePair($stock, 'net_income', $asOf);
+        foreach (['other_income' => 'Other income', 'exceptional_items' => 'Exceptional items'] as $factKey => $label) {
+            $other = $this->comparablePair($stock, $factKey, $asOf);
+            if ($income === null || $other === null
+                || $income['current_period'] !== $other['current_period']
+                || $income['prior_period'] !== $other['prior_period']
+                || $income['current'] <= 0.0 || $income['prior'] <= 0.0) {
+                continue;
+            }
+
+            $currentShare = abs($other['current'] / $income['current']) * 100;
+            $priorShare = abs($other['prior'] / $income['prior']) * 100;
+            if ($currentShare >= 25.0 && $currentShare >= $priorShare + 10.0) {
+                $watch[] = $this->signal('other_income_exceptional_dependence', $label.' contributes materially to reported net income', [
+                    'fact_key' => $factKey,
+                    'current_share_of_net_income_pct' => round($currentShare, 2),
+                    'prior_share_of_net_income_pct' => round($priorShare, 2),
+                    'delta_pp' => round($currentShare - $priorShare, 2),
+                    'period' => $income['current_period'],
+                    'comparison_period' => $income['prior_period'],
+                    'basis' => 'same_period_yoy_share_of_net_income',
+                ]);
+            }
+        }
+
+        $capex = $this->comparablePair($stock, 'capital_expenditure', $asOf);
+        $revenue = $this->comparablePair($stock, 'revenue', $asOf);
+        if ($capex === null || $revenue === null
+            || $capex['current_period'] !== $revenue['current_period']
+            || $capex['prior_period'] !== $revenue['prior_period']
+            || $revenue['current'] <= 0.0 || $revenue['prior'] <= 0.0) {
+            return;
+        }
+
+        $currentIntensity = abs($capex['current'] / $revenue['current']) * 100;
+        $priorIntensity = abs($capex['prior'] / $revenue['prior']) * 100;
+        $delta = $currentIntensity - $priorIntensity;
+        if (abs($delta) >= 5.0) {
+            $watch[] = $this->signal(
+                $delta > 0 ? 'capex_intensity_increasing' : 'capex_intensity_decreasing',
+                'Capital-expenditure intensity changed materially year over year',
+                [
+                    'current_capex_intensity_pct' => round($currentIntensity, 2),
+                    'prior_capex_intensity_pct' => round($priorIntensity, 2),
+                    'delta_pp' => round($delta, 2),
+                    'period' => $capex['current_period'],
+                    'comparison_period' => $capex['prior_period'],
+                    'basis' => 'same_period_yoy_capex_to_revenue',
+                ],
+            );
+        }
     }
 
     /** ROA and ROCE are emitted only when their canonical denominators exist and are positive. */

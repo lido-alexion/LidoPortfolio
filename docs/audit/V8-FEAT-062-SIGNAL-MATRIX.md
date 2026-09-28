@@ -13,12 +13,12 @@ it is not inferred from a related signal.
 | Operating-profit versus bottom-line divergence | `operating_profit_bottom_line_divergence` | Operating profit and net income comparable growth | comparable periods | both growth values and delta | PASS |
 | Abrupt margin expansion/compression | `operating_margin_movement_*`, `ebit_margin_movement_*`, `net_margin_movement_*` | Same-period YoY margins | comparable periods | current/prior margin and pp delta | PASS |
 | ROE/ROA/ROCE movement against company history | `roe_strong`, `roe_weak`, `roe_movement_expanding`, `roe_movement_contracting`, `roe_movement_stable`, `roa_movement_*`, `roce_movement_*` | Return metrics from comparable numerator/denominator pairs with positive denominators | availability date <= as-of; incompatible/missing periods unavailable | current/prior return and pp delta | PASS where canonical denominator facts exist; unavailable otherwise |
-| Other-income / exceptional-item dependence | — | Structured other-income/exceptional facts | availability date <= as-of | — | PARTIAL |
+| Other-income / exceptional-item dependence | `other_income_exceptional_dependence` | Other income or exceptional items as a rising share of net income | availability date <= as-of; same periods | current/prior share and delta | PASS where structured facts exist |
 | OCF versus net income | `strong_ocf_vs_net_income`, `weak_ocf_vs_net_income` | TTM OCF and net income | availability date <= as-of | both values | PASS |
 | Multi-period OCF/net-income deterioration or improvement | `earnings_cash_divergence`, `cash_quality_follow_up` | Quarterly YoY OCF/income divergence | comparable periods | both growth values | PARTIAL |
 | Positive earnings with weak/negative OCF | `negative_fcf_with_profit`, `weak_ocf_vs_net_income` | TTM profit and cash measures | availability date <= as-of | both values | PASS |
 | FCF direction and persistence | `fcf_improving`, `fcf_deteriorating` | Consecutive comparable FCF periods | comparable periods | latest/prior comparable YoY growth and trend delta | PASS |
-| Capex intensity changes | — | Capex/revenue or capex/asset history | comparable periods | — | PARTIAL |
+| Capex intensity changes | `capex_intensity_increasing`, `capex_intensity_decreasing` | Capital expenditure as a percentage of revenue | comparable periods; positive revenue required | current/prior intensity and pp delta | PASS |
 | Receivables faster than revenue | `receivables_growth_vs_revenue` | Quarterly YoY growth spread | comparable periods | both growth values and spread | PASS |
 | Inventory faster than sales/revenue | `inventory_growth_vs_revenue` | Quarterly YoY growth spread | comparable periods | both growth values and spread | PASS |
 | Working-capital absorption/release | `working_capital_absorption`, `working_capital_release` | Receivables + inventory − current liabilities | comparable periods | current/prior absorption and delta | PASS |
