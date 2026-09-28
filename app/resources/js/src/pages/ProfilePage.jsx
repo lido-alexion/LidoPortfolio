@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { showToast } from '../toast';
 import { userDisplayName, userInitial } from '../utils/userDisplay';
 import { profilePhotoUrl } from '../utils/profilePhotoUrl';
+import { useGuidedTour } from '../guidedTour/GuidedTourProvider';
+import { t } from '../i18n';
 
 const PROFILE_PHOTO_SIZE_PX = 360;
 
@@ -20,6 +22,7 @@ function validationMessage(error) {
 
 export default function ProfilePage() {
     const { user, refreshUser } = useAuth();
+    const guidedTour = useGuidedTour();
     const fileInputRef = useRef(null);
 
     const [name, setName] = useState('');
@@ -195,6 +198,30 @@ export default function ProfilePage() {
                     </p>
                 </div>
             </div>
+
+            {guidedTour?.canManualRelaunch && (
+                <div className="card" data-tour="profile-tour-launch">
+                    <div className="card-header">
+                        <h2 className="h6 mb-0">{t('guidedTour.profile.title')}</h2>
+                    </div>
+                    <div className="card-body d-flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            className="btn btn-outline-primary btn-sm"
+                            onClick={() => guidedTour.launchTour(false)}
+                        >
+                            {t('guidedTour.profile.launch')}
+                        </button>
+                        <button
+                            type="button"
+                            className="btn btn-link btn-sm"
+                            onClick={() => guidedTour.launchTour(true)}
+                        >
+                            {t('guidedTour.profile.restart')}
+                        </button>
+                    </div>
+                </div>
+            )}
 
             <form className="card" onSubmit={saveName}>
                 <div className="card-header">

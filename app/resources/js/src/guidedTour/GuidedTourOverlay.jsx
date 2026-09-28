@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef } from 'react';
+import { t } from '../i18n';
 
 function tooltipStyle(targetRect, placement) {
     if (!targetRect) {
@@ -121,16 +122,16 @@ export default function GuidedTourOverlay({
             >
                 <div className="card-body">
                     <p className="text-muted small mb-1">
-                        Step {stepIndex + 1} of {stepCount}
+                        {t('guidedTour.step.progress', { current: stepIndex + 1, total: stepCount })}
                     </p>
-                    <h3 className="h6" id="lido-guided-tour-title">{step.title}</h3>
-                    <p className="small mb-3">{step.body}</p>
+                    <h3 className="h6" id="lido-guided-tour-title">{t(step.titleKey)}</h3>
+                    <p className="small mb-3">{t(step.bodyKey)}</p>
                     {!targetRect && (
-                        <p className="small text-warning mb-3">This step&apos;s target is not visible right now — use Next to continue.</p>
+                        <p className="small text-warning mb-3">{t('guidedTour.step.hiddenTarget')}</p>
                     )}
                     <div className="d-flex flex-wrap gap-2 justify-content-between">
                         <button type="button" className="btn btn-link btn-sm px-0" onClick={onClose}>
-                            Close
+                            {t('guidedTour.action.close')}
                         </button>
                         <div className="d-flex gap-2">
                             <button
@@ -139,15 +140,15 @@ export default function GuidedTourOverlay({
                                 onClick={onBack}
                                 disabled={stepIndex <= 0}
                             >
-                                Back
+                                {t('guidedTour.action.back')}
                             </button>
                             {isLast ? (
                                 <button type="button" className="btn btn-primary btn-sm" onClick={onFinish}>
-                                    Finish
+                                    {t('guidedTour.action.finish')}
                                 </button>
                             ) : (
                                 <button type="button" className="btn btn-primary btn-sm" onClick={onNext}>
-                                    Next
+                                    {t('guidedTour.action.next')}
                                 </button>
                             )}
                         </div>

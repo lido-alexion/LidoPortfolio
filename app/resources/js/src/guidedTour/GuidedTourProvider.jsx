@@ -19,6 +19,7 @@ import {
     stepIndex,
 } from './investorTourSteps';
 import { logGuidedTourEvent } from './guidedTourTelemetry';
+import { t } from '../i18n';
 
 const GuidedTourContext = createContext(null);
 
@@ -280,10 +281,10 @@ export function GuidedTourProvider({ children, user }) {
                             <div className="modal-dialog modal-dialog-centered">
                                 <div className="modal-content">
                                     <div className="modal-header">
-                                        <h2 className="modal-title h5" id="guided-tour-resume-title">Resume tour?</h2>
+                                        <h2 className="modal-title h5" id="guided-tour-resume-title">{t('guidedTour.resume.title')}</h2>
                                     </div>
                                     <div className="modal-body">
-                                        <p className="mb-0">You have a tour in progress. Resume where you left off or start from the beginning.</p>
+                                        <p className="mb-0">{t('guidedTour.resume.body')}</p>
                                     </div>
                                     <div className="modal-footer d-flex flex-wrap gap-2">
                                         <button
@@ -294,7 +295,7 @@ export function GuidedTourProvider({ children, user }) {
                                                 startTour({ restart: true });
                                             }}
                                         >
-                                            Restart from beginning
+                                            {t('guidedTour.action.restart')}
                                         </button>
                                         <button
                                             type="button"
@@ -304,7 +305,7 @@ export function GuidedTourProvider({ children, user }) {
                                                 startTour({ restart: false });
                                             }}
                                         >
-                                            Resume
+                                            {t('guidedTour.action.resume')}
                                         </button>
                                     </div>
                                 </div>
