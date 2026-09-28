@@ -149,6 +149,7 @@ class MlScoringService
                     'effective_feature_set' => $effectiveFeatureSet,
                     'excluded_features' => $excludedFeatures,
                     'feature_training_coverage' => $featureTrainingCoverage,
+                    'feature_profile' => $config['feature_profile'] ?? null,
                     'adapter_metadata' => $result['metadata'] ?? [],
                 ],
                 ]);
