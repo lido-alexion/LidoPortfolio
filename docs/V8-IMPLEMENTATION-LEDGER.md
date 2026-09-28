@@ -109,7 +109,7 @@ See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-F
 - FEAT-056 scoring reconciliation is now committed as `2900e50`, with explicit `completed_rejected` quality outcomes and regression coverage in `73307cb`; FEAT-056 remains IN PROGRESS only for remaining deployment/acceptance evidence and any frozen lifecycle gaps.
 - FEAT-056 eligible runs now use the frozen `completed_eligible` terminal state, with `completed_rejected` and `failed` kept distinct (`bd4148b`).
 - FEAT-052 telemetry focus passes **14/14**; FEAT-065 internal/admin focus passes **9/9**. The browser path now has an optional official OpenTelemetry SDK/fetch instrumentation module, disabled unless an OTLP endpoint is explicitly configured; live/deployed evidence remains external where documented.
-- FEAT-056 lifecycle support is now committed as `18dc08b`; the mixed `MlScoringService` integration remains intentionally uncommitted pending ownership separation.
+- FEAT-056 lifecycle support and scoring reconciliation are committed in focused slices; the current checkout contains no separate uncommitted `MlScoringService` lifecycle diff pending ownership separation.
 - FEAT-065 current-universe backfill orchestration is now committed as `c039937`; it consumes an explicit operator-supplied symbol/token manifest and does not add automated backup.
 - FEAT-052 telemetry producer core is now committed as `fc8e422`; shared bootstrap/route wiring and collector/deployment acceptance remain separate follow-up work.
 - FEAT-062 deterministic catalogue completion is committed across `c1caacf`, `d90a429`, `f2744df`, `e307229`, `b67a777`; the epic is REVIEW pending browser/mobile and real-provider validation.
@@ -137,4 +137,4 @@ The broad direct PHPUnit Feature run with `php -d memory_limit=512M vendor/bin/p
 
 ## MlScoringService ownership reconciliation
 
-The uncommitted `MlScoringService` diff was inspected and intentionally not committed as part of FEAT-057. Queueing, cancellation, retries, lifecycle notifications, challenger registration, promotion review, drift dashboard, and investor insight orchestration are FEAT-056-owned work and remain preserved as inherited WIP. The FEAT-057 profile pinning used by training/artifacts is already committed and tested; no additional scoring slice was found that could be safely committed without pulling the FEAT-056 dependency set into this commit.
+The inherited `MlScoringService` lifecycle work was inspected and separated from FEAT-057 ownership. Queueing, cancellation, retries, lifecycle notifications, challenger registration, promotion review, drift dashboard, and investor insight orchestration are FEAT-056-owned and are now represented by focused committed slices (`2900e50`, `73307cb`, `bd4148b`); no separate uncommitted `MlScoringService` diff remains in the current checkout. FEAT-057 profile pinning used by training/artifacts is independently committed and tested.
