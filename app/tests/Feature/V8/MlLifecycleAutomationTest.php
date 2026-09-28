@@ -159,6 +159,19 @@ class MlLifecycleAutomationTest extends TestCase
             ->assertJsonValidationErrors(['schedule']);
     }
 
+    public function test_investor_cannot_change_ml_lifecycle_schedule(): void
+    {
+        $investor = User::factory()->create(['is_admin' => false]);
+        $this->defaultPortfolioFor($investor);
+
+        $this->actingAs($investor)->withProfileHeader($investor)
+            ->putJson('/api/v1/admin/ml/schedules/1m', [
+                'enabled' => true,
+                'schedule' => 'monthly_first_sunday_02:00',
+            ])
+            ->assertForbidden();
+    }
+
     public function test_tick_requeues_stale_running_run_after_worker_restart(): void
     {
         config(['ml_lifecycle.enabled' => true, 'ml_lifecycle.recovery.stale_after_minutes' => 30]);
