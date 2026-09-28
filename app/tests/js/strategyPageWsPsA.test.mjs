@@ -33,7 +33,8 @@ test('Strategy Registry is discoverable in sidebar and editor', () => {
     assert.match(page, /to="\/strategy\/registry"/);
     assert.doesNotMatch(registry, /Select it to make it active/);
     assert.doesNotMatch(registry, /use Select to activate/);
-    assert.match(registry, /New definitions and imports become Artifact Library Drafts/);
+    assert.match(registry, /Create Strategy/);
+    assert.match(registry, /Import creates an .*Artifact Library Draft/);
     assert.match(registry, /publish an immutable version, then bind it to this Portfolio/);
 });
 

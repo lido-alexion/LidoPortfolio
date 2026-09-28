@@ -47,7 +47,7 @@ test('Create Strategy action exists on Registry, editor, and create panel', () =
     assert.match(createPanel, /id="create-strategy-name"/);
     assert.match(createPanel, /id="create-strategy-submit"/);
     assert.match(createPanel, /Create Strategy/);
-    assert.match(createPanel, /\/v1\/strategy-registry/);
+    assert.match(createPanel, /\/v1\/strategies/);
     assert.doesNotMatch(createPanel, /JSON\.parse/);
 });
 
@@ -75,7 +75,7 @@ test('Recommendations toolbar does not promote Discovery as a workflow tab', () 
 
 test('Help documents Create Strategy and Discovery not in sidebar', () => {
     assert.match(docs, /name: 'Create Strategy'/);
-    assert.match(docs, /POST `\/v1\/strategy-registry`/);
+    assert.match(docs, /POST `\/v1\/strategies`/);
     assert.match(docs, /not listed in the left Market navigation/i);
     assert.match(docs, /last remaining enabled strategy cannot be archived/i);
 });

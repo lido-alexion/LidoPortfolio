@@ -43,6 +43,27 @@ function pathStarts(pathname, prefix) {
 /** @type {AppDocEntry[]} */
 const APP_DOCUMENTATION_BASE = [
     {
+        id: 'request-account',
+        keyword: 'request-account',
+        aliases: ['account-request', 'request access', 'signup request'],
+        title: 'Request an account',
+        routeLabel: '/request-account',
+        match: (p) => pathIs(p, '/request-account') || pathStarts(p, '/request-account/verify'),
+        summary: 'Request access to StoX through CAPTCHA-protected email ownership verification and Admin review.',
+        overview:
+            'Request an account is a guest-only access request. Submit only your name and email, complete the CAPTCHA, and verify ownership through the one-time email link. Verification creates a pending request for Admin review; it does not create an account or grant access. Public status lookup and internal review notes are intentionally unavailable.',
+        controls: [
+            { name: 'Request form', description: 'Enter your full name and email address, complete the human-verification widget, and submit once.' },
+            { name: 'Email verification', description: 'Open the single-use verification link before its bounded expiry. Reusing or using an expired link is rejected safely.' },
+            { name: 'Admin outcome', description: 'After verification, Admin may Create through the existing invitation flow, Ignore with a cooldown, or Reject with a reversible ban. Applicant-facing messages do not reveal internal disposition details.' },
+        ],
+        concepts: [
+            { name: 'Not open registration', description: 'A verified request is only a pending access request. Account creation remains Admin-controlled through the existing secure invite and acceptance flow.' },
+            { name: 'Privacy-preserving status', description: 'The public flow does not provide request-status lookup or expose whether an email is already a user, invited, banned, pending, ignored, or rejected.' },
+        ],
+        related: ['overview', 'profile', 'users'],
+    },
+    {
         id: 'overview',
         keyword: 'overview',
         aliases: ['help', 'docs', 'documentation', 'home-help'],
@@ -459,13 +480,23 @@ const APP_DOCUMENTATION_BASE = [
         title: 'Watchlist',
         routeLabel: '/watchlist',
         match: (p) => pathStarts(p, '/watchlist'),
-        summary: 'Named research lists with prices, pattern scans, Recommendation Preview, and links into Explorer.',
+        summary: 'Named research lists with prices, pattern scans, fundamentals snapshot, Recommendation Preview, and links into Explorer.',
         overview:
-            'Maintain multiple watchlists per portfolio. Select a symbol for its price panel (`/watchlist/{SYMBOL}`), scan for patterns, and compare relative strength in Explorer. The research panel includes Stock Analytics, Evaluation Profile, and Recommendation Preview (F137) for the portfolio’s selected strategy.',
+            'Maintain multiple watchlists per portfolio. Select a symbol for its price panel (`/watchlist/{SYMBOL}`), scan for patterns, and compare relative strength in Explorer. The research panel includes Stock Analytics, Fundamentals (TTM summary, freshness, quarterly basic history table), ML scores (latest 1m/3m/6m benchmark-relative success scores), Evaluation Profile, and Recommendation Preview (F137) for the portfolio’s selected strategy.',
         controls: [
             { name: 'List switcher / add stock', description: 'Manage lists and quick-add symbols with notes.' },
             { name: 'Scan my watchlist', description: 'Runs pattern detection and can persist icons until prices refresh or expiry.' },
             { name: 'Compare strength', description: 'Deep-links into Explorer relative-strength views.' },
+            {
+                name: 'Fundamentals tab',
+                description:
+                    'Lazy-loads `GET /v1/stocks/{id}/fundamentals?include_insights=1` for TTM summary, deterministic positive/risk/watch insight bullets, sector peer context with a multi-metric percentile table (ROE, operating margin, debt/equity, P/E vs peer median), freshness, and coverage; `GET /v1/stocks/{id}/fundamentals/history?cadence=quarterly` for a basic table; `.../metrics/revenue/history` (quarterly PIT TTM); P/E and P/B charts use **Valuation chart frequency** (monthly default, daily, or quarterly PIT TTM) via `frequency=` on the metric history API. Available for any selected symbol, not only watchlist members.',
+            },
+            {
+                name: 'ML scores tab',
+                description:
+                    'Lazy-loads `GET /v1/stocks/{id}/ml-insights` for the latest non-shadow 1m/3m/6m success scores, expected benchmark-relative return % (when the active artifact includes the Ridge return regressor), active model version, and explanation snippets. **Refresh scores** calls `POST /v1/stocks/{id}/ml-insights/refresh` to re-run production models when artifacts are available. Advisory only—not a trade signal.',
+            },
             {
                 name: 'Recommendation Preview tab',
                 description:
@@ -481,7 +512,79 @@ const APP_DOCUMENTATION_BASE = [
                     'Preview is read-only: it does not create or cancel recommendations. It uses a current persisted recommendation only when it matches the latest completed evaluation cycle; otherwise it recalculates via the shared decision engine. Watchlist membership is not required for the API.',
             },
         ],
-        related: ['explorer', 'patterns', 'holdings', 'recommendations', 'strategy'],
+        related: ['explorer', 'patterns', 'holdings', 'recommendations', 'strategy', 'fundamental-insights'],
+    },
+    {
+        id: 'fundamental-insights',
+        keyword: 'fundamental-insights',
+        aliases: ['fundamentals-insights', 'fundamental-signals', 'ai-insights'],
+        title: 'Fundamental insights',
+        routeLabel: '/fundamentals/insights',
+        match: (p) => pathStarts(p, '/fundamentals/insights'),
+        summary: 'Dedicated FEAT-062 surface for material fundamental signals with optional AI interpretation.',
+        overview:
+            'Pick any symbol to review deterministic positive, risk, and watch signals plus sector peer percentiles. When `FUNDAMENTALS_AI_*` is enabled server-side, the page requests `include_ai_insights=1` so Gemini/Codex can refine the summary without replacing StoX-owned calculations. Use **Full fundamentals on Watchlist** for TTM tables, valuation mini-charts, and statement history.',
+        controls: [
+            {
+                name: 'Symbol search',
+                description: 'Resolves NSE/BSE listings and navigates to `/fundamentals/insights/{SYMBOL}`.',
+            },
+            {
+                name: 'Refresh AI insights',
+                description: 'Re-fetches `GET /v1/stocks/{id}/fundamentals?include_insights=1&include_ai_insights=1` to run the provider orchestrator again.',
+            },
+            {
+                name: 'Watchlist link',
+                description: 'Opens the same symbol on Watchlist with the full Fundamentals research tab.',
+            },
+        ],
+        concepts: [
+            { name: 'Deterministic first', description: 'Signals and peer math are computed in PHP; AI only interprets the supplied evidence payload.' },
+            { name: 'Not advice', description: 'No buy/sell/hold or price targets—observational research only.' },
+        ],
+        related: ['watchlist', 'settings-fundamentals'],
+    },
+    {
+        id: 'settings-fundamentals',
+        keyword: 'settings-fundamentals',
+        aliases: ['fundamental-data-admin', 'fundamentals-admin'],
+        title: 'Fundamental Data (admin)',
+        routeLabel: '/settings/fundamentals',
+        match: (p) => pathStarts(p, '/settings/fundamentals'),
+        summary: 'Operator control for fundamental freshness policy, incremental updates, coverage, and AI insights provider preference.',
+        overview:
+            'Admin-only screen for Yahoo/bootstrap ingest policy, manual update slices, and FEAT-062 AI provider diagnostics. Primary Gemini vs Codex order can be overridden in the database via **Primary provider override** (falls back to `FUNDAMENTALS_AI_PRIMARY_PROVIDER` when unset).',
+        controls: [
+            { name: 'Save', description: 'Persists freshness months, request delay, pause flag, and optional `ai_insights_primary_provider` via `PUT /api/v1/admin/fundamentals/settings`.' },
+            { name: 'Run slice', description: 'Queues and optionally processes an incremental fundamental update batch.' },
+            { name: 'Test AI providers', description: 'Calls `POST /api/v1/admin/fundamentals/ai-insights/test` for Gemini, Codex, or full failover chain (logged, exempt from per-user caps).' },
+        ],
+        concepts: [
+            { name: 'Env vs DB primary', description: 'API keys remain env-only; only the primary/secondary failover order is admin-tunable without deploy.' },
+            { name: 'AI usage & spend', description: 'Status shows today’s invocation counts, token in/out totals, and estimated USD spend (config-based rates, not provider billing).' },
+        ],
+        related: ['fundamental-insights', 'watchlist'],
+    },
+    {
+        id: 'settings-ml-scoring',
+        keyword: 'settings-ml-scoring',
+        aliases: ['ml-scoring-admin', 'ml-admin'],
+        title: 'ML Scoring (admin)',
+        routeLabel: '/settings/ml-scoring',
+        match: (p) => pathStarts(p, '/settings/ml-scoring'),
+        summary: 'Operator console for ML training runs, promotion evidence, lifecycle automation gates, and artifact retention.',
+        overview:
+            'Admin-only FEAT-056/057 surface. Horizon cards show active models, drift checks, and candidate promotion review (including HistGradientBoosting challenger sibling and calibration Brier). **Lifecycle automation** reflects `STOXLA_ML_LIFECYCLE_*` schedule/drift/retention env gates (tick via `portfolio:ml-lifecycle-tick`). Retention pruning requires `STOXLA_ML_RETENTION_ENABLED`.',
+        controls: [
+            { name: 'Queue retrain', description: 'POST `/api/v1/admin/ml/retrain-queue` and stream SSE progress for the horizon.' },
+            { name: 'Promotion review', description: 'GET `/api/v1/admin/ml/models/{id}/promotion-review` — threshold checks, calibration, challenger promote when eligible.' },
+            { name: 'Apply retention prune', description: 'When retention is enabled, GET `/api/v1/admin/ml/retention-plan?apply=1` deletes bounded non-active artifacts.' },
+        ],
+        concepts: [
+            { name: 'No auto-promote', description: 'Lifecycle may queue retrains on schedule or drift; humans promote candidates explicitly.' },
+            { name: 'Chrono grid evidence', description: 'Completed runs store monthly validation windows and benchmark-volatility regime slices on the training run configuration.' },
+        ],
+        related: ['watchlist', 'settings-fundamentals'],
     },
     {
         id: 'explorer',
@@ -561,10 +664,10 @@ const APP_DOCUMENTATION_BASE = [
         overview:
             'Screeners are the sole eligibility engine. Build nested AND/OR conditions on technical indicators, run manually or on a schedule, review history, and optionally Telegram results. Strategy only references Screeners — it does not rewrite their rules.',
         controls: [
-            { name: 'Create / open screener', description: 'Opens the condition editor. Saving a new definition creates an Artifact Library Draft; it is not runnable until published and bound.' },
+            { name: 'Create / open screener', description: 'Opens the condition editor. Saving a new definition creates an account-owned Screener on My screens (runnable after save).' },
             { name: 'Run / schedule', description: 'Execute now or attach a cron schedule + optional Telegram delivery.' },
             { name: 'Share across your portfolios', description: 'Mark a screener shared so your other portfolios (same account only) can list and import a private copy. Other users cannot see it.' },
-            { name: 'Screener Registry', description: 'Open the compatibility registry to inspect/export runtime Screeners or validate/import Screener JSON as an Artifact Library Draft.' },
+            { name: 'Screener Registry', description: 'Open the compatibility registry to inspect/export runtime Screeners or validate/import Screener JSON into My screens.' },
             { name: 'Guide tab (editor)', description: 'Plain-language indicator definitions and Investopedia links.' },
         ],
         concepts: [
@@ -587,20 +690,25 @@ const APP_DOCUMENTATION_BASE = [
             if (pathStarts(path, '/screeners/registry')) return false;
             return /^\/screeners\/[^/]+/.test(path);
         },
-        summary: 'Build new Library Drafts and inspect/run legacy or mapped Portfolio Screeners.',
+        summary: 'Create and edit account-owned Screeners; inspect/run mapped compatibility projections.',
         overview:
-            'Review condition trees, run history, stacked compare matrices, and backtests. A mapped Screener is a read-only runtime projection: author its Draft and publish/upgrade it in the Artifact Library; Run consumes its exact pinned binding version.',
+            'Review condition trees, run history, stacked compare matrices, and backtests. New Screeners save to My screens with automatic semantic versioning. A library-bound (mapped) Screener is a read-only runtime projection — open the linked Artifact Library entry to publish an upgrade, then bind it explicitly.',
         controls: [
             { name: 'Condition builder', description: 'Add indicators, operators, weights, and AND/OR groups.' },
             { name: 'Run history', description: 'Past runs with hit lists for comparison.' },
             { name: 'Stacked results', description: 'Compare multiple runs side by side.' },
             { name: 'Backtest', description: 'Evaluate the rule set across dates with per-date persistence.' },
-            { name: 'Save', description: 'For a new Screener, creates an Artifact Library Draft and opens it there. Existing unmapped legacy Screeners remain editable for migration compatibility; mapped Screeners require Library Draft → publish → explicit binding upgrade.' },
+            { name: 'Save', description: 'Creates or updates the account-owned Screener (semantic version bump when rules change). Mapped Screeners are read-only here; upgrade via Artifact Library publish + binding.' },
         ],
         concepts: [
             { name: 'LHS entity', description: 'Compute the left side on the stock or an index (e.g. stock range % vs Nifty 50).' },
             { name: 'Weight factor', description: 'Compare left vs weight × right for scaled thresholds.' },
             { name: 'Stock-major series', description: 'Backtests reuse series efficiently across runs.' },
+            {
+                name: 'Fundamental & ML operands',
+                description:
+                    'Fundamentals group (`fund_*`) uses point-in-time TTM/quarterly metrics. ML scores group (`ml_success_score_*`) uses the latest non-shadow prediction for 1m/3m/6m horizons as of each session date; stocks without a score fail the condition (not skipped).',
+            },
         ],
         related: ['trading-os-flow', 'screener', 'screener-registry', 'strategy', 'discovery'],
     },
@@ -614,7 +722,7 @@ const APP_DOCUMENTATION_BASE = [
         summary: 'Import/export Screener JSON artifacts — mandatory fields, slug rules, condition tree shape, and version history.',
         overview:
             'The Screener Registry is a compatibility view of Portfolio runtime Screeners. Existing rows still use the same condition tree the run engine executes; mapped rows link to the authoritative Artifact Library.\n\n'
-            + 'Export downloads a Trading Artifact JSON envelope. **Validate** checks the envelope. **Import** stays disabled until validation succeeds, then creates an account-owned Artifact Library Draft without creating a runnable Portfolio row. Publish and bind the Draft explicitly. Copying a shared legacy Screener from another Portfolio also creates a Library Fork Draft.\n\n'
+            + 'Export downloads a Trading Artifact JSON envelope. **Validate** checks the envelope. **Import** stays disabled until validation succeeds, then creates an account-owned Screener on My screens (opens the editor). Copying a shared Screener from another of your portfolios creates an independent private copy the same way.\n\n'
             + '## Importing JSON — start here\n\n'
             + 'If Validate or Import reports many field errors, you almost always missed a **mandatory** envelope field or built an empty/invalid `definition.root` tree. Use the minimum schema below, then expand.\n\n'
             + '### Minimum valid envelope (copy/paste starting point)\n\n'
@@ -889,6 +997,11 @@ const APP_DOCUMENTATION_BASE = [
             },
             { name: 'Evidence snapshot', description: 'Eligibility, scoring, exit, market opinion, ranking source (return-quality or OD-23 fill order), and capital allocation status travel with the idea.' },
             {
+                name: 'Provenance (detail API)',
+                description:
+                    'Detailed `GET /api/v1/recommendations/{id}` includes `provenance.strategy_version_id` and `provenance.pinned_screeners[]` (exact `screener_version_id`, semantic version, immutable `definition_json`, scope/watchlist/index snapshot) so historical ideas still resolve the rules that generated them after later edits.',
+            },
+            {
                 name: 'Capital allocation status',
                 description:
                     'API field capital_allocation_status on list and detail. UNFUNDED shows as “Capital required”; AWAITING_LENDER_SELECTION / PARTIALLY_FUNDED / FUNDED / CAPITAL_COMMITTED have matching badges. capital_request_id is exposed when a lending request exists.',
@@ -970,7 +1083,7 @@ const APP_DOCUMENTATION_BASE = [
             {
                 name: 'Create Strategy',
                 description:
-                    'On Strategy and Strategy Registry. Enter a name and optional description; the app creates an account-owned Artifact Library Draft from the default factory configuration (POST `/v1/strategy-registry`) and opens it in the Library. Publish and bind it explicitly before it can generate recommendations.',
+                    'On Strategy and Strategy Registry. Enter a name and optional description; the app creates a draft Strategy from the default template (`POST /v1/strategies` or `POST /v1/strategy-registry`) and opens the Strategy editor. Enable when readiness requirements pass.',
             },
             {
                 name: 'Enable / Archive (editor)',
@@ -993,6 +1106,7 @@ const APP_DOCUMENTATION_BASE = [
                 name: 'Eligibility Sources tab',
                 description:
                     'Assign Screeners that admit stocks into scoring.\n'
+                    + 'Create new Screener — opens the Screener editor and keeps your unsaved Strategy fields in the browser session; after you save the new Screener you return here with it added to eligibility. Cancel on the Screener page restores Strategy fields without creating a row.\n'
                     + 'On — include this Screener in the union.\n'
                     + 'Priority — ordering / explainability only; a stock is eligible if it passes ANY enabled Screener (not all).\n'
                     + 'Compared against: latest completed Screener run hits (typically within ~72 hours). Stocks not in those hits are not eligible for new Open/Increase (holdings are still reviewed for exits).\n'
@@ -1280,8 +1394,8 @@ const APP_DOCUMENTATION_BASE = [
         summary: 'Legacy Strategy compatibility registry; mapped lifecycle and deployment actions live in the Artifact Library.',
         overview:
             'The Strategy Registry is the V3 compatibility surface for strategy rows in the current portfolio. A portfolio may have **multiple enabled Strategies** at once. After V5 mapping, rows are read-only here and link to the authoritative Artifact Library lifecycle. '
-            + 'New definitions and imports create account-owned Library Drafts without a runnable Portfolio row. Immutable publication, binding enablement, explicit upgrades and archive belong to the Artifact Library; the legacy registry remains available for migration-era runtime rows and portable inspection.\n\n'
-            + 'Export downloads the portable Trading Artifact JSON envelope. **Validate** checks the envelope. **Import** stays disabled until validation succeeds, then creates and opens an **Artifact Library Draft**. Publish and bind it explicitly. '
+            + 'Name-only **Create Strategy** and validated JSON **Import** add draft runtime Strategies (enable from here or the Strategy editor). Library-bound rows stay read-only projections — upgrade via Artifact Library publish + binding.\n\n'
+            + 'Export downloads the portable Trading Artifact JSON envelope. **Validate** checks the envelope. **Import** stays disabled until validation succeeds, then creates a draft Strategy and opens the Strategy editor. '
             + 'Enabled rows show **Allocation %**. An **Allocation** editor (same PUT `/v1/capital/allocations` as Cash) lets you set percentages that must sum to 100.\n\n'
             + 'Existing Minervini (`momentum_factory`) migrates automatically to slug `momentum_strategy` with eligibility linked to `minervini_trend_template`.\n\n'
             + '## Importing JSON — start here\n\n'
@@ -1462,9 +1576,9 @@ const APP_DOCUMENTATION_BASE = [
             + '\n'
             + STRATEGY_REGISTRY_GUIDE_EXTRAS,
         controls: [
-            { name: 'Create Strategy', description: 'Name + optional description. Creates a draft from the default factory configuration (POST `/v1/strategy-registry`) and opens the editor. JSON import remains available for authored packs.' },
+            { name: 'Create Strategy', description: 'Name + optional description. Creates an account-owned draft Strategy from the default momentum template (POST `/v1/strategies`) and opens the Strategy editor. Artifact Library import (`/v1/strategy-registry/import`) remains for portable JSON packs.' },
             { name: 'Search / filters', description: 'Filter by status (active/draft/archived) and origin (factory/user).' },
-            { name: 'Enable', description: 'Turn this strategy on for the portfolio. Other enabled strategies stay enabled. Success shows a toast. Recommendation generation runs independently for every enabled strategy.' },
+            { name: 'Enable', description: 'Turn this strategy on for the portfolio when readiness is satisfied (`setup_required` is false). Incomplete strategies show a Setup required list (missing eligibility, indicator weights, etc.). Other enabled strategies stay enabled.' },
             { name: 'Allocation % (list)', description: 'Enabled rows show the stored strategy allocation_pct (read-only in the table).' },
             { name: 'Allocation editor', description: 'Edit enabled-strategy allocation % with a live sum; Save calls PUT /v1/capital/allocations (same as Cash). Client requires sum ≈ 100 before save; server errors are shown.' },
             { name: 'Archive', description: 'Sets the strategy to archived without changing other enabled strategies. The last remaining enabled strategy cannot be archived until another is enabled. Past holdings/recommendations keep attribution.' },
@@ -1688,10 +1802,11 @@ const APP_DOCUMENTATION_BASE = [
         title: 'Profile',
         routeLabel: '/profile',
         match: (p) => pathIs(p, '/profile'),
-        summary: 'Display name, password, and profile photo for your user account.',
+        summary: 'Display name, password, profile photo, and guided tour relaunch for Investor accounts.',
         overview:
-            'Update how you appear in the header, change your password, and upload or remove a profile photo. Username (email) is read-only. Changing your password keeps this device signed in and automatically signs out other devices.',
+            'Update how you appear in the header, change your password, and upload or remove a profile photo. Username (email) is read-only. Changing your password keeps this device signed in and automatically signs out other devices. Investor users can relaunch the welcome guided tour from the Guided tour card (Admin accounts do not see this).',
         controls: [
+            { name: 'Guided tour', description: 'Launch or restart the multi-step Investor onboarding tour (not shown for Admin users).' },
             { name: 'Profile photo', description: 'Upload, change, or remove the avatar image.' },
             { name: 'Display name', description: 'Shown next to the avatar in the header menu.' },
             {
@@ -2331,17 +2446,18 @@ const APP_DOCUMENTATION_BASE = [
         title: 'User management',
         routeLabel: '/settings/users',
         match: (p) => pathStarts(p, '/settings/users'),
-        summary: 'Admin invite links, password-reset links, account administration, and automated-execution entitlement.',
+        summary: 'Admin invite links, verified guest access requests, password-reset links, and automated-execution entitlement.',
         overview:
-            'Registration is invite-only. Admins create invite links and password-reset links for existing accounts without requiring the current password. Invitation URLs are shown only when created or regenerated — copy them immediately. Regenerating invalidates the previous URL and does not extend the original 72-hour expiry. Pending invitees must use the administrator-provided link (login will not reveal the invitation URL). Automated broker execution is a separate per-user entitlement (off by default); turning on Semi-Automatic or Automatic on a portfolio does not grant it.',
+            'Registration is invite-only. Guests may use **Request an account** on the login page: name and email only, human verification (CAPTCHA), then a one-time email verification link. Verified requests appear in **Account access requests** on this page for Admin Create (issues the normal secure invitation email), Ignore (cooldown, no ban), or Reject (reversible request ban). Admins can still create invite links directly. Invitation URLs from manual create/regenerate are shown only once in the banner — copy immediately. Pending invitees must use the administrator-provided link (login will not reveal the invitation URL). Automated broker execution is a separate per-user entitlement (off by default).',
         controls: [
+            { name: 'Account access requests', description: 'Review verified guest requests, prior history per email, and active request bans. Create invite sends the standard invitation email automatically.' },
             { name: 'Create invite', description: 'Generate a link for a new user. Copy Invitation URL from the banner right away — the list does not re-show a stored URL.' },
             { name: 'Regenerate Invitation URL', description: 'Issues a new URL for a pending invite after confirmation. The old URL stops working; original expiry is unchanged.' },
             { name: 'Password reset link', description: 'Issue a reset URL for an existing account.' },
             { name: 'Allow / revoke auto execution', description: 'Grants or removes the user’s right to use Semi-Automatic and Automatic broker submission. Server-enforced; not inferred from portfolio mode.' },
         ],
         concepts: [
-            { name: 'Invite-only', description: 'There is no public self-registration endpoint for guests.' },
+            { name: 'Invite-only', description: 'Guests may request access, but accounts are created only through Admin-issued invitations after email verification.' },
             { name: 'Hashed invitation tokens', description: 'Only a hash of the invitation secret is stored. The raw URL is a bearer credential shown once at create/regenerate.' },
             { name: 'Admin role', description: 'Gates global settings and ops tools.' },
             { name: 'Automated-execution entitlement', description: 'Per user, admin-controlled, disabled by default. Required together with a StoX execution code and a Kite session before Lido will submit broker orders.' },

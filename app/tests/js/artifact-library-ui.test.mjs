@@ -45,11 +45,12 @@ test('Draft, share, Fork, archive, and enablement controls retain explicit lifec
     assert.match(detail, /artifact-bindings\/\$\{binding\.binding_uuid\}\/enabled/);
 });
 
-test('legacy authoring surfaces redirect new definitions to Library Drafts', () => {
+test('ordinary V8 authoring stays on domain pages while Library remains for explicit artifact flows', () => {
     assert.match(strategyCreate, /createdArtifactPath/);
     assert.match(strategyRegistry, /navigate\(path\)/);
-    assert.match(screenerEditor, /created\?\.library_path/);
-    assert.match(screenerRegistry, /Copied shared Screener as Artifact Library Draft/);
+    assert.match(screenerEditor, /navigate\(created\?\.id \? `\/screeners\/\$\{created\.id\}`/);
+    assert.match(screenerRegistry, /Copied shared Screener to My screens/);
+    assert.doesNotMatch(screenerRegistry, /Copied shared Screener as Artifact Library Draft/);
     assert.match(detail, /suggested_binding_settings/);
     assert.match(detail, /settings: suggestedSettings/);
 });
