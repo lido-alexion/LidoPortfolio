@@ -9,9 +9,9 @@ FEAT-052  [REVIEW] OpenTelemetry / LidoTelemetry (config, OTLP HTTP exporter, AP
 FEAT-054  [REVIEW] Historical fundamental bootstrap (summary/derived metrics, provenance, user-scoped Advanced preference, history UI, Screener boundary, and bootstrap evidence complete locally; browser/provider/deployed runtime acceptance remains)
 FEAT-055  [REVIEW] Account access request / Admin approval (formal audit complete; production Turnstile/mail and deployed multi-worker validation remain external)
 FEAT-056  [IN PROGRESS] ML lifecycle automation (queued runs, SSE, drift, cancel, notifications, transient retries; retention/recovery/acceptance still open)
-FEAT-057  [IN PROGRESS] ML feature engineering / training (feature registry + dataset plan/admin APIs; full PIT-safe feature/training/validation corpus still open)
+FEAT-057  [IN PROGRESS] ML feature engineering / training (versioned registry, active-universe gate, horizon-aware sampling, and dataset plan/admin APIs verified locally; PIT context and full training/validation corpus still open)
 FEAT-061  [REVIEW] Guided tour / onboarding (formal audit complete; missing-target regression covered; browser accessibility/mobile journey and localization mechanism remain open)
-FEAT-062  [IN PROGRESS] Fundamental signals & AI insights (deterministic + Gemini/Codex orchestrator, bounded investor-safe response validation, and follow-up evidence guidance; catalogue/UI/acceptance still open)
+FEAT-062  [IN PROGRESS] Fundamental signals & AI insights (deterministic catalogue, comparison evidence, growth relationships, provider-neutral orchestration, bounded investor-safe validation, and follow-up guidance; broader catalogue/sufficiency/UI acceptance still open)
 FEAT-063  [REVIEW] Live microstructure collection (local implementation and deterministic resilience verification complete; VPS installation, live Kite path, and deployed backup destination remain external)
 FEAT-064  [REVIEW] Screener / Strategy UX (semantic versions, run/backtest pins, immutable save, readiness, provenance audit, and WP-09 return flow present; regression cleanup and full gate remain)
 FEAT-065  [IN PROGRESS] Intraday ML historical data platform (checkpoints + admin status + Mac backfill worker; current-universe orchestration, coverage, and handoff acceptance remain)
@@ -103,7 +103,7 @@ See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-F
 
 1. FEAT-063 external validation: install/validate the collector on the StoX VPS, then exercise the live Kite path and deployed backup destination when credentials/market conditions permit.
 2. FEAT-054 external acceptance: browser/mobile fundamentals journey and representative provider/deployed bootstrap runtime.
-3. FEAT-062: continue the deterministic signal catalogue and investor-facing acceptance audit; FEAT-054 is now the lower-rework dependency gate.
+3. FEAT-057: make market-breadth and sector-relative features point-in-time safe using historical membership evidence, then reconcile horizon-specific feature applicability.
 
 ## Failing tests
 

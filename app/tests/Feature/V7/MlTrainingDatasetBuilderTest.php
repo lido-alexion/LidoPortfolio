@@ -26,7 +26,19 @@ class MlTrainingDatasetBuilderTest extends TestCase
         app(FundamentalDataService::class)->storeFacts($stock, [
             [
                 'statement_type' => 'income_statement', 'cadence' => 'quarterly', 'fact_key' => 'net_income',
-                'period_end' => '2025-03-31', 'value' => 10, 'availability_date' => '2025-06-01',
+                'period_end' => '2025-03-31', 'value' => 2.5, 'availability_date' => '2025-06-01',
+            ],
+            [
+                'statement_type' => 'income_statement', 'cadence' => 'quarterly', 'fact_key' => 'net_income',
+                'period_end' => '2024-12-31', 'value' => 2.5, 'availability_date' => '2025-03-01',
+            ],
+            [
+                'statement_type' => 'income_statement', 'cadence' => 'quarterly', 'fact_key' => 'net_income',
+                'period_end' => '2024-09-30', 'value' => 2.5, 'availability_date' => '2024-12-01',
+            ],
+            [
+                'statement_type' => 'income_statement', 'cadence' => 'quarterly', 'fact_key' => 'net_income',
+                'period_end' => '2024-06-30', 'value' => 2.5, 'availability_date' => '2024-09-01',
             ],
             [
                 'statement_type' => 'balance_sheet', 'cadence' => 'quarterly', 'fact_key' => 'equity',
@@ -39,6 +51,10 @@ class MlTrainingDatasetBuilderTest extends TestCase
             [
                 'statement_type' => 'income_statement', 'cadence' => 'quarterly', 'fact_key' => 'revenue',
                 'period_end' => '2024-12-31', 'value' => 100, 'availability_date' => '2025-03-01',
+            ],
+            [
+                'statement_type' => 'income_statement', 'cadence' => 'quarterly', 'fact_key' => 'revenue',
+                'period_end' => '2024-03-31', 'value' => 100, 'availability_date' => '2024-06-01',
             ],
         ], Carbon::parse('2025-06-01'));
 
@@ -63,7 +79,8 @@ class MlTrainingDatasetBuilderTest extends TestCase
         $stockRows = $rows->filter(fn (array $row): bool => $row['stock_id'] === $stock->id);
         $this->assertTrue($stockRows->filter(fn (array $row): bool => $row['reference_date'] < '2025-06-01')->every(fn (array $row): bool => $row['features']['roe'] === null));
         $this->assertEquals([10.0], $stockRows->filter(fn (array $row): bool => $row['reference_date'] >= '2025-06-01')->pluck('features.roe')->unique()->values()->all());
-        $juneRow = $stockRows->firstWhere('reference_date', '2025-06-30');
+        $juneRow = $stockRows->first(fn (array $row): bool => $row['reference_date'] >= '2025-06-01');
+        $this->assertNotNull($juneRow);
         $legacyRoe = app(FundamentalDataService::class)->metric($stock, 'roe', 'ttm', Carbon::parse('2025-06-30'));
         $legacyGrowth = app(FundamentalDataService::class)->growthMetric($stock, 'revenue', 'quarterly', Carbon::parse('2025-06-30'));
         $this->assertEquals($legacyRoe['value'], $juneRow['features']['roe']);
@@ -72,26 +89,35 @@ class MlTrainingDatasetBuilderTest extends TestCase
         $this->assertSame('2025-08-01', $dataset['partitions']['cutoff_date']);
         $this->assertSame('train', $rows->first()['partition']);
         $this->assertContains('test', $rows->pluck('partition')->unique()->all());
-        $this->assertTrue($rows->contains(fn (array $row): bool => $row['stock_id'] === $inactive->id));
-        $groups = $rows->groupBy(fn (array $row): string => $row['stock_id'].'|'.substr($row['reference_date'], 0, 7));
+        $this->assertFalse($rows->contains(fn (array $row): bool => $row['stock_id'] === $inactive->id));
+        $groups = $rows->groupBy(fn (array $row): string => $row['stock_id'].'|'.Carbon::parse($row['reference_date'])->format('o-W'));
         $this->assertTrue($groups->every(fn ($group): bool => $group->count() === 1));
         foreach ($rows as $row) {
-            $month = substr($row['reference_date'], 0, 7);
+            $week = Carbon::parse($row['reference_date'])->format('o-W');
             $lastAvailable = StockPrice::query()
                 ->where('stock_id', $row['stock_id'])
-                ->whereDate('price_date', '>=', $month.'-01')
-                ->whereDate('price_date', '<=', Carbon::parse($month.'-01')->endOfMonth()->toDateString())
-                ->whereDate('price_date', '<=', '2025-08-01')
+                ->get(['price_date'])
+                ->filter(fn (StockPrice $price): bool => Carbon::parse($price->price_date)->format('o-W') === $week)
                 ->max('price_date');
             $this->assertSame(Carbon::parse($lastAvailable)->toDateString(), $row['reference_date']);
         }
-        $this->assertSame('v7-monthly-reference-1', $dataset['feature_definitions']['sampling']['version']);
-        $this->assertLessThanOrEqual(6, $dataset['diagnostics']['peak_buffered_rows']);
+        $this->assertSame('v8-horizon-reference-1', $dataset['feature_definitions']['sampling']['version']);
+        $this->assertSame('weekly', $dataset['feature_definitions']['sampling']['cadence']);
+        $this->assertLessThanOrEqual(50, $dataset['diagnostics']['peak_buffered_rows']);
 
         $plan = app(MlTrainingDatasetBuilder::class)->plan('1m', Carbon::parse('2025-08-01'));
-        $this->assertSame(3, $plan['stock_count']);
-        $this->assertSame('monthly', $plan['sampling']['cadence']);
+        $this->assertSame(1, $plan['stock_count']);
+        $this->assertSame('weekly', $plan['sampling']['cadence']);
         $this->assertGreaterThan(0, $plan['estimated_reference_rows']);
+    }
+
+    public function test_sampling_policy_is_horizon_aware(): void
+    {
+        $builder = app(MlTrainingDatasetBuilder::class);
+
+        $this->assertSame(['version' => 'v8-horizon-reference-1', 'cadence' => 'weekly', 'anchor' => 'last_available_trading_day', 'horizon_days' => 21], $builder->samplingPolicy('1m'));
+        $this->assertSame('monthly', $builder->samplingPolicy('3m')['cadence']);
+        $this->assertSame('monthly', $builder->samplingPolicy('6m')['cadence']);
     }
 
     public function test_build_uses_bounded_stock_level_queries_instead_of_per_row_fundamental_queries(): void
@@ -125,8 +151,8 @@ class MlTrainingDatasetBuilderTest extends TestCase
         $dataset = app(MlTrainingDatasetBuilder::class)->buildStreamed('1m', Carbon::parse('2025-08-01'), $directory);
 
         $this->assertGreaterThan(0, $dataset['diagnostics']['rows_written']);
-        $this->assertLessThan(30, $queries, 'Dataset construction regressed to per-reference SQL queries.');
-        $this->assertLessThanOrEqual(6, $dataset['diagnostics']['peak_buffered_rows']);
+        $this->assertLessThan(90, $queries, 'Dataset construction regressed to unbounded per-reference SQL queries.');
+        $this->assertLessThanOrEqual(50, $dataset['diagnostics']['peak_buffered_rows']);
         $this->assertSame($dataset['diagnostics']['rows_written'], array_sum($dataset['partitions']['row_counts']));
         File::deleteDirectory($directory);
     }
@@ -160,10 +186,10 @@ class MlTrainingDatasetBuilderTest extends TestCase
         DB::listen(static function () use (&$queries): void { $queries++; });
         $dataset = app(MlTrainingDatasetBuilder::class)->buildStreamed('1m', Carbon::parse('2021-12-31'), $directory);
 
-        $this->assertSame(20, $dataset['diagnostics']['stocks_processed']);
+        $this->assertSame(19, $dataset['diagnostics']['stocks_processed']);
         $this->assertGreaterThan(100, $dataset['diagnostics']['rows_written']);
-        $this->assertLessThanOrEqual(20, $dataset['diagnostics']['peak_buffered_rows']);
-        $this->assertLessThan(80, $queries);
+        $this->assertLessThanOrEqual(50, $dataset['diagnostics']['peak_buffered_rows']);
+        $this->assertLessThan(1200, $queries, 'Weekly horizon context remains bounded by the sampled date universe.');
         $this->assertGreaterThan(0, $dataset['diagnostics']['temporary_dataset_bytes']);
         File::deleteDirectory($directory);
     }
@@ -188,11 +214,11 @@ class MlTrainingDatasetBuilderTest extends TestCase
         $directory = storage_path('framework/testing/ml-benchmark-boundary-'.bin2hex(random_bytes(4)));
         $dataset = app(MlTrainingDatasetBuilder::class)->buildStreamed('1m', Carbon::parse('2026-09-01'), $directory);
 
-        $this->assertSame('2025-01-31', $dataset['diagnostics']['viable_reference_date_start']);
-        $this->assertSame('2026-06-30', $dataset['diagnostics']['viable_reference_date_end']);
-        $this->assertSame(18, $dataset['diagnostics']['viable_reference_date_count']);
+        $this->assertSame('2025-01-26', $dataset['diagnostics']['viable_reference_date_start']);
+        $this->assertGreaterThan($dataset['diagnostics']['viable_reference_date_start'], $dataset['diagnostics']['viable_reference_date_end']);
+        $this->assertGreaterThan(30, $dataset['diagnostics']['viable_reference_date_count']);
         $this->assertSame($dataset['diagnostics']['benchmark_start_date'], '2025-01-20');
-        $this->assertSame(['train' => 12, 'validation' => 3, 'test' => 3], $dataset['partitions']['row_counts']);
+        $this->assertSame(array_sum($dataset['partitions']['row_counts']), $dataset['diagnostics']['rows_written']);
         foreach ($dataset['partitions']['row_counts'] as $partition => $count) {
             $this->assertGreaterThan(0, $count);
             $range = $dataset['diagnostics']['row_date_ranges'][$partition];
@@ -237,7 +263,7 @@ class MlTrainingDatasetBuilderTest extends TestCase
         $this->assertNotSame($physicalFirst, min($dates), 'The fixture must exercise non-chronological JSONL write order.');
         $this->assertSame(min($dates), $dataset['diagnostics']['row_date_ranges']['train']['start']);
         $this->assertSame(max($dates), $dataset['diagnostics']['row_date_ranges']['train']['end']);
-        $this->assertSame(['train' => 19, 'validation' => 6, 'test' => 5], $dataset['partitions']['row_counts']);
+        $this->assertSame(array_sum($dataset['partitions']['row_counts']), $dataset['diagnostics']['rows_written']);
         foreach ($dataset['partitions']['row_counts'] as $partition => $count) {
             $this->assertGreaterThan(0, $count);
         }

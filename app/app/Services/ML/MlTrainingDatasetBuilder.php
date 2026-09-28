@@ -232,7 +232,7 @@ class MlTrainingDatasetBuilder
         return [
             'paths' => $paths,
             'partitions' => $partitions,
-            'feature_definitions' => $this->featureDefinitions(),
+            'feature_definitions' => $this->featureDefinitions($horizon),
             'diagnostics' => [
                 'stocks_processed' => $stocksProcessed,
                 'rows_written' => array_sum($rowCounts),
@@ -276,7 +276,7 @@ class MlTrainingDatasetBuilder
         $labelPrices = $series['labels'];
         $benchmarkLabelPrices = $benchmarkSeries['labels'];
         $observations = [];
-        foreach ($this->monthlyReferenceDates($dates) as $date) {
+        foreach ($this->referenceDatesForHorizon($dates, $horizonDays) as $date) {
             $index = $series['index'][$date] ?? null;
             if ($index === null || $index < 63 || ! isset($dates[$index + $horizonDays])) {
                 continue;
@@ -374,7 +374,7 @@ class MlTrainingDatasetBuilder
             'cutoff_date' => $cutoff->toDateString(),
             'split_basis' => 'chronological_monthly_sampling_buckets',
             'sampling_buckets' => $bucketPartitions,
-            'sampling' => ['version' => 'v7-monthly-reference-1', 'cadence' => 'monthly', 'anchor' => 'last_available_trading_day'],
+            'sampling' => $this->samplingPolicyForHorizon($horizonDays),
             'horizon_aware' => [
                 'label_observations' => $horizonDays,
                 'nominal_train_end_bucket' => $buckets[$nominalTrainEndIndex],
@@ -403,10 +403,12 @@ class MlTrainingDatasetBuilder
     }
 
     /** @return array<string,mixed> */
-    private function featureDefinitions(): array
+    private function featureDefinitions(string $horizon): array
     {
+        $horizonDays = ['1m' => 21, '3m' => 63, '6m' => 126][$horizon] ?? throw new RuntimeException('Unsupported ML horizon.');
+
         return [
-            'version' => 'v7-features-1',
+            'version' => 'v8-features-1',
             'numeric' => array_fill_keys(self::NUMERIC_FEATURES, ['missing' => 'median_with_missingness_flags', 'as_of' => 'reference_date']),
             'categorical' => ['sector' => ['encoding' => 'training_partition_categories', 'unknown' => '__unknown']],
             'price_semantics' => [
@@ -415,11 +417,11 @@ class MlTrainingDatasetBuilder
                 'reason' => 'adjusted_close is retroactively changed by later corporate-action repair; features cannot consume that series.',
             ],
             'universe' => [
-                'version' => 'v7-historical-eligible-nse-1',
-                'rule' => 'non-benchmark NSE stocks with historical price observations through the cutoff, independent of current is_active state',
+                'version' => 'v8-active-eligible-nse-1',
+                'rule' => 'currently active, non-benchmark NSE stocks with price observations through the cutoff',
             ],
             'benchmark_mapping' => $this->benchmarkMappingDefinition(),
-            'sampling' => ['version' => 'v7-monthly-reference-1', 'cadence' => 'monthly', 'anchor' => 'last_available_trading_day'],
+            'sampling' => $this->samplingPolicyForHorizon($horizonDays),
         ];
     }
 
@@ -462,7 +464,7 @@ class MlTrainingDatasetBuilder
             'horizon' => $horizon,
             'cutoff_date' => $cutoff->toDateString(),
             'stock_count' => $stockCount,
-            'sampling' => ['version' => 'v7-monthly-reference-1', 'cadence' => 'monthly', 'anchor' => 'last_available_trading_day'],
+            'sampling' => $this->samplingPolicyForHorizon(['1m' => 21, '3m' => 63, '6m' => 126][$horizon]),
             'estimated_reference_rows' => $stockCount * $months,
             'estimate_basis' => 'conservative_upper_bound: eligible_stock_count multiplied by global calendar-month range; actual listing/history overlap may be lower',
             'date_range' => ['start' => $first, 'end' => $last],
@@ -1180,14 +1182,37 @@ class MlTrainingDatasetBuilder
         return (((float) ($series[0]['value'] ?? 0) - (float) ($series[1]['value'] ?? 0)) / abs((float) $series[1]['value'])) * 100;
     }
 
-    /** @param list<string> $dates */
-    private function monthlyReferenceDates(array $dates): array
+    /** @return array{version:string,cadence:string,anchor:string,horizon_days:int} */
+    public function samplingPolicy(string $horizon): array
     {
-        $monthly = [];
+        $horizonDays = ['1m' => 21, '3m' => 63, '6m' => 126][$horizon] ?? throw new RuntimeException('Unsupported ML horizon.');
+
+        return $this->samplingPolicyForHorizon($horizonDays);
+    }
+
+    /** @return array{version:string,cadence:string,anchor:string,horizon_days:int} */
+    private function samplingPolicyForHorizon(int $horizonDays): array
+    {
+        return [
+            'version' => 'v8-horizon-reference-1',
+            'cadence' => $horizonDays === 21 ? 'weekly' : 'monthly',
+            'anchor' => 'last_available_trading_day',
+            'horizon_days' => $horizonDays,
+        ];
+    }
+
+    /** @param list<string> $dates @return list<string> */
+    private function referenceDatesForHorizon(array $dates, int $horizonDays): array
+    {
+        $buckets = [];
         foreach ($dates as $date) {
-            $monthly[substr($date, 0, 7)] = $date;
+            $key = $horizonDays === 21
+                ? Carbon::parse($date)->format('o-\\WW')
+                : substr($date, 0, 7);
+            $buckets[$key] = $date;
         }
-        return array_values($monthly);
+        ksort($buckets);
+        return array_values($buckets);
     }
 
     private function returnOver(array $prices, string $date, int $lookback, ?array $index = null): ?float
