@@ -57,6 +57,9 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
         if (path.endsWith('/api/portfolios') && method === 'GET') {
             return json(route, { data: [TEST_PORTFOLIO] });
         }
+        if (path.endsWith('/api/holdings') && method === 'GET') {
+            return json(route, { data: [] });
+        }
         if (path.endsWith('/api/guided-tour') && (method === 'GET' || method === 'PUT')) {
             if (method === 'PUT') {
                 const action = request.postDataJSON()?.action;
@@ -64,6 +67,9 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
                     guidedTourState.tour_in_progress = true;
                     guidedTourState.completed_at = null;
                     guidedTourState.current_step_id = request.postDataJSON()?.step_id ?? 'navigation';
+                } else if (action === 'update_step') {
+                    guidedTourState.tour_in_progress = true;
+                    guidedTourState.current_step_id = request.postDataJSON()?.step_id ?? guidedTourState.current_step_id;
                 } else if (action === 'record_welcome_shown') {
                     guidedTourState.welcome_shown_at = '2026-01-02T00:00:00Z';
                 } else if (action === 'complete') {

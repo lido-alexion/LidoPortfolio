@@ -20,7 +20,7 @@ Authoritative contract: `docs/archive/specs/V8-Guided-Tour-Welcome-Onboarding-Sp
 | Keyboard/accessibility/focus return | PARTIAL | Desktop/mobile dialog semantics, Escape, focus-on-panel, Tab containment, background scroll lock, and manual-launch focus return are browser-tested; screen-reader audit and full keyboard traversal remain. |
 | Normal i18n mechanism | PASS locally | `resources/js/src/i18n/index.js` and `messages.js` provide keyed translation lookup with locale fallback; all tour step, modal, overlay and Profile copy references translation keys rather than embedded literals. English is the current shipped dictionary; additional locales remain additive. |
 | Telemetry non-blocking and existing path | PASS | `guidedTourTelemetry.js` posts to existing frontend log endpoint and swallows failures. |
-| Refresh/interruption recovery | PASS | Backend state is authoritative and provider resumes persisted step; desktop browser journey now proves welcome-to-tour transition. |
+| Refresh/interruption recovery | PASS locally | Backend state is authoritative; browser journey now proves a persisted `holdings` step opens the resume choice, navigates to `/holdings`, and restores the configured step. A real refresh/resume session remains external. |
 
 ## Verification executed
 
@@ -30,4 +30,4 @@ Authoritative contract: `docs/archive/specs/V8-Guided-Tour-Welcome-Onboarding-Sp
 - Guided-tour copy/key coverage: **3/3** focused Node tests passed.
 - Playwright journeys pass for the investor welcome modal → Begin → first guided-tour step on desktop Chromium and a 390×844 mobile viewport. The journeys also exposed and fixed a real modal-backdrop stacking defect. Accessibility tooling, focus-return, refresh/resume, and full route traversal remain pending.
 
-FEAT-061 remains **REVIEW**. Keyed i18n plus desktop/mobile journeys and manual-launch focus return are verified locally. Remaining evidence is screen-reader/full keyboard audit, refresh/resume, full route traversal, and broader live browser acceptance.
+FEAT-061 remains **REVIEW**. Keyed i18n plus desktop/mobile journeys, persisted-step resume, manual-launch focus return and Tab containment are verified locally. Remaining evidence is screen-reader review, real refresh/resume, full route traversal, and broader live browser acceptance.

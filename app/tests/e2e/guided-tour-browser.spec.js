@@ -63,4 +63,31 @@ test.describe('FEAT-061 guided tour mobile browser acceptance', () => {
         await firstStep.getByRole('button', { name: 'Close' }).click();
         await expect(trigger).toBeFocused();
     });
+
+    test('resumes a persisted step and navigates to its configured route', async ({ page }) => {
+        await installInvestorWorkflowApiMocks(page, {
+            guidedTourState: {
+                eligible: true,
+                show_welcome_prompt: true,
+                can_manual_relaunch: true,
+                welcome_shown_at: '2026-01-01T00:00:00Z',
+                completed_at: null,
+                current_step_id: 'holdings',
+                tour_in_progress: true,
+            },
+        });
+        await page.goto('/');
+
+        await expect(page.getByRole('dialog', { name: 'Welcome to StoX' })).toBeVisible();
+        await page.getByRole('button', { name: 'Begin tour' }).click();
+        await expect(page.getByRole('dialog', { name: 'Resume tour?' })).toBeVisible();
+        await page.getByRole('button', { name: 'Resume' }).click();
+
+        await expect(page).toHaveURL(/\/holdings$/);
+        const step = page.getByRole('dialog').filter({
+            has: page.getByRole('heading', { name: 'Holdings' }),
+        });
+        await expect(step).toBeVisible({ timeout: 10_000 });
+        await expect(step.getByText('3 of 8')).toBeVisible();
+    });
 });
