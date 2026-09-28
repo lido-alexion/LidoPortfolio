@@ -91,6 +91,7 @@ class FundamentalSignalsService
         $this->evaluateWorkingCapitalSignals($stock, $asOf, $risk, $watch);
         $this->evaluateCwipSignals($stock, $asOf, $watch);
         $this->evaluateMarginSignals($stock, $asOf, $positive, $risk, $watch);
+        $this->evaluateReturnOnEquityMovement($stock, $asOf, $positive, $risk, $watch);
         $this->evaluateEarningsCashSignals($stock, $asOf, $risk, $watch);
         $this->evaluateLeverageSignals($stock, $asOf, $positive, $risk, $watch);
         $this->evaluateDilutionSignals($stock, $asOf, $risk, $watch);
@@ -277,6 +278,38 @@ class FundamentalSignalsService
             } elseif (abs($delta) < 1) {
                 $watch[] = $this->signal($key.'_stable', $label.' was broadly stable year over year', $evidence);
             }
+        }
+    }
+
+    protected function evaluateReturnOnEquityMovement(Stock $stock, Carbon $asOf, array &$positive, array &$risk, array &$watch): void
+    {
+        $income = $this->comparablePair($stock, 'net_income', $asOf);
+        $equity = $this->comparablePair($stock, 'equity', $asOf);
+        if ($income === null || $equity === null
+            || $income['current_period'] !== $equity['current_period']
+            || $income['prior_period'] !== $equity['prior_period']
+            || $equity['current'] <= 0.0 || $equity['prior'] <= 0.0) {
+            return;
+        }
+
+        $current = ($income['current'] / $equity['current']) * 100;
+        $prior = ($income['prior'] / $equity['prior']) * 100;
+        $delta = $current - $prior;
+        $evidence = [
+            'current_roe_pct' => round($current, 2),
+            'prior_roe_pct' => round($prior, 2),
+            'delta_pp' => round($delta, 2),
+            'period' => $income['current_period'],
+            'comparison_period' => $income['prior_period'],
+            'basis' => 'same_period_yoy',
+        ];
+
+        if ($delta >= 5.0) {
+            $positive[] = $this->signal('roe_movement_expanding', 'ROE expanded by at least 5 percentage points year over year', $evidence);
+        } elseif ($delta <= -5.0) {
+            $risk[] = $this->signal('roe_movement_contracting', 'ROE contracted by at least 5 percentage points year over year', $evidence);
+        } elseif (abs($delta) < 1.0) {
+            $watch[] = $this->signal('roe_movement_stable', 'ROE was broadly stable year over year', $evidence);
         }
     }
 

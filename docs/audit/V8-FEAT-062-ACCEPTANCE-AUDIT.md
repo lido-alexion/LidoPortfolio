@@ -9,7 +9,7 @@ This audit is evidence-based against `docs/archive/specs/V8-Fundamental-Signals-
 | Requirement | Status | Evidence / remaining work |
 |---|---|---|
 | Deterministic-first signal layer | PASS | `app/app/Services/Fundamentals/FundamentalSignalsService.php`; `FundamentalSignalsTest.php` |
-| Initial growth/profitability and cash-flow signals | PARTIAL | ROE, revenue growth, same-period operating/EBIT/net margin movement, FCF, OCF/net-income, earnings/OCF divergence and working-capital comparisons are covered; the frozen catalogue still needs a formal requirement-to-key matrix and any remaining mandated metrics |
+| Initial growth/profitability and cash-flow signals | PARTIAL | ROE level and same-period historical movement, revenue growth, operating/EBIT/net margin movement, FCF, OCF/net-income, earnings/OCF divergence and working-capital comparisons are covered; ROA/ROCE, other-income dependence and several data-dependent catalogue rows remain |
 | Ambiguous CWIP/watch semantics | PASS | CWIP is a watch item, not a conclusion; deterministic follow-up checks identify disclosures to review |
 | Evidence attached to surfaced signals | PASS | Stable signal key/category/direction/title/summary/evidence/basis/period/severity/confidence/provenance fields are returned while legacy headline/metric_values remain compatible |
 | Leverage/debt and capital structure | PASS locally | Debt and derived net-debt YoY movement, elevated debt/EBITDA, thin interest coverage, and share-count dilution are covered with invalid-denominator omission; broader corporate-action context remains data-dependent |

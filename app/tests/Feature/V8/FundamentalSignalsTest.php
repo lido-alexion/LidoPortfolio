@@ -272,4 +272,24 @@ class FundamentalSignalsTest extends TestCase
         $this->assertContains('net_debt_increasing', $keys);
         $this->assertContains('fcf_deteriorating', $keys);
     }
+
+    public function test_roe_movement_uses_same_period_comparable_equity(): void
+    {
+        $stock = Stock::query()->create(['symbol' => 'ROET', 'exchange' => 'NSE', 'name' => 'ROE Trend Co']);
+        $service = app(FundamentalDataService::class);
+        foreach ([
+            ['2024-03-31', 10, 100],
+            ['2025-03-31', 20, 100],
+        ] as [$period, $income, $equity]) {
+            $service->storeFacts($stock, [
+                ['statement_type' => 'income_statement', 'cadence' => 'quarterly', 'fact_key' => 'net_income', 'period_end' => $period, 'value' => $income, 'availability_date' => '2025-06-01'],
+                ['statement_type' => 'balance_sheet', 'cadence' => 'quarterly', 'fact_key' => 'equity', 'period_end' => $period, 'value' => $equity, 'availability_date' => '2025-06-01'],
+            ]);
+        }
+
+        $insights = app(FundamentalSignalsService::class)->deterministicInsights($stock, Carbon::parse('2025-06-20'));
+        $keys = collect($insights['positive_signals'])->pluck('signal_key')->all();
+
+        $this->assertContains('roe_movement_expanding', $keys);
+    }
 }

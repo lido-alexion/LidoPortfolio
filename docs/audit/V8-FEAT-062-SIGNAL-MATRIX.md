@@ -12,7 +12,7 @@ it is not inferred from a related signal.
 | Net-income/EPS divergence from revenue growth | `earnings_revenue_divergence` | Quarterly YoY growth pair | comparable periods | both growth values and delta | PASS |
 | Operating-profit versus bottom-line divergence | — | Operating profit and net income comparable growth | comparable periods | — | PARTIAL |
 | Abrupt margin expansion/compression | `operating_margin_movement_*`, `ebit_margin_movement_*`, `net_margin_movement_*` | Same-period YoY margins | comparable periods | current/prior margin and pp delta | PASS |
-| ROE/ROA/ROCE movement against company history | `roe_strong`, `roe_weak` | ROE level; historical movement pending | availability date <= as-of | ROE TTM | PARTIAL |
+| ROE/ROA/ROCE movement against company history | `roe_strong`, `roe_weak`, `roe_movement_expanding`, `roe_movement_contracting`, `roe_movement_stable` | ROE same-period YoY movement with positive-equity denominator | availability date <= as-of; incompatible/missing periods unavailable | current/prior ROE and pp delta | PARTIAL — ROA/ROCE remain data-dependent |
 | Other-income / exceptional-item dependence | — | Structured other-income/exceptional facts | availability date <= as-of | — | PARTIAL |
 | OCF versus net income | `strong_ocf_vs_net_income`, `weak_ocf_vs_net_income` | TTM OCF and net income | availability date <= as-of | both values | PASS |
 | Multi-period OCF/net-income deterioration or improvement | `earnings_cash_divergence`, `cash_quality_follow_up` | Quarterly YoY OCF/income divergence | comparable periods | both growth values | PARTIAL |
