@@ -8,13 +8,13 @@ Authoritative specs: `docs/archive/specs/LidoPortfolio-V8-Wishlist.md` and linke
 FEAT-052  [REVIEW] OpenTelemetry / LidoTelemetry (config, OTLP HTTP exporter, API middleware, browser traceparent + route hooks; queue/scheduler/browser spans and full acceptance still open)
 FEAT-054  [REVIEW] Historical fundamental bootstrap (summary/derived metrics, provenance, user-scoped Advanced preference, history UI, Screener boundary, and bootstrap evidence complete locally; browser/provider/deployed runtime acceptance remains)
 FEAT-055  [REVIEW] Account access request / Admin approval (formal audit complete; production Turnstile/mail and deployed multi-worker validation remain external)
-FEAT-056  [IN PROGRESS] ML lifecycle automation (queued runs, SSE, drift, cancel, notifications, transient retries; retention/recovery/acceptance still open)
+FEAT-056  [IN PROGRESS] ML lifecycle automation (queued runs, SSE, drift, cancel, notifications, transient retries and retention support committed; scoring integration, durable recovery and full acceptance still open)
 FEAT-057  [IN PROGRESS] ML feature engineering / training (versioned horizon-resolved registry, dataset/model feature-set pinning, PIT context refusal of current-universe fallback, authoritative dated provider adapter with resumable backfill, horizon-derived purge/embargo evidence, training-only preprocessing, paired active/baseline evidence contract, and pinned model explainability verified locally; bounded real training evidence, production archive population, full frozen catalogue matrix, and investor-facing explainability acceptance remain open)
 FEAT-061  [REVIEW] Guided tour / onboarding (formal audit complete; missing-target regression covered; browser accessibility/mobile journey and localization mechanism remain open)
 FEAT-062  [IN PROGRESS] Fundamental signals & AI insights (deterministic catalogue, comparison evidence, growth relationships, provider-neutral orchestration, bounded investor-safe validation, and follow-up guidance; broader catalogue/sufficiency/UI acceptance still open)
 FEAT-063  [REVIEW] Live microstructure collection (local implementation and deterministic resilience verification complete; VPS installation, live Kite path, and deployed backup destination remain external)
 FEAT-064  [REVIEW] Screener / Strategy UX (semantic versions, run/backtest pins, immutable save, readiness, provenance audit, WP-09 return flow and legacy fixture reconciliation present; browser acceptance remains)
-FEAT-065  [IN PROGRESS] Intraday ML historical data platform (checkpoints + admin status + Mac backfill worker; current-universe orchestration, coverage, and handoff acceptance remain)
+FEAT-065  [IN PROGRESS] Intraday ML historical data platform (schema/checkpoints/admin status + Mac backfill worker with explicit current-universe orchestration; full corpus coverage and handoff acceptance remain)
 ```
 
 ## Dependency order (implementation)
@@ -106,6 +106,8 @@ See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-F
 - FEAT-062 added deterministic derived net-debt direction and consecutive comparable-period FCF trend signals. Its frozen signal matrix remains explicit about unsupported/data-dependent catalogue rows.
 - FEAT-056 lifecycle tests pass **23/23** locally, but the inherited lifecycle implementation remains uncommitted and deliberately separated from FEAT-057.
 - FEAT-052 telemetry focus passes **14/14**; FEAT-065 internal/admin focus passes **9/9**. Live/deployed evidence remains external where documented.
+- FEAT-056 lifecycle support is now committed as `18dc08b`; the mixed `MlScoringService` integration remains intentionally uncommitted pending ownership separation.
+- FEAT-065 current-universe backfill orchestration is now committed as `c039937`; it consumes an explicit operator-supplied symbol/token manifest and does not add automated backup.
 
 ## Next task
 
