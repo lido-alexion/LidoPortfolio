@@ -101,13 +101,14 @@ See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-F
 
 ## Verified continuation checkpoint (2026-09-28)
 
-- Actual checkout is `8d846ef`; the earlier handoff SHA `3265357` is not the current HEAD.
+- Actual checkout is `fc8e422`; the earlier handoff SHA `3265357` is not the current HEAD.
 - The full Feature suite under local PHP CLI `memory_limit=512M` now passes **1,320/1,321**, with one intentional bounded-training skip when `STOXLA_ML_TEST_PYTHON` is absent. The previous FEAT-064 fixture cascade was repaired by giving activation-oriented legacy fixtures the executable factory configuration; the production Setup Required gate was not weakened.
 - FEAT-062 added deterministic derived net-debt direction and consecutive comparable-period FCF trend signals. Its frozen signal matrix remains explicit about unsupported/data-dependent catalogue rows.
 - FEAT-056 lifecycle tests pass **23/23** locally, but the inherited lifecycle implementation remains uncommitted and deliberately separated from FEAT-057.
 - FEAT-052 telemetry focus passes **14/14**; FEAT-065 internal/admin focus passes **9/9**. Live/deployed evidence remains external where documented.
 - FEAT-056 lifecycle support is now committed as `18dc08b`; the mixed `MlScoringService` integration remains intentionally uncommitted pending ownership separation.
 - FEAT-065 current-universe backfill orchestration is now committed as `c039937`; it consumes an explicit operator-supplied symbol/token manifest and does not add automated backup.
+- FEAT-052 telemetry producer core is now committed as `fc8e422`; shared bootstrap/route wiring and collector/deployment acceptance remain separate follow-up work.
 
 ## Next task
 
