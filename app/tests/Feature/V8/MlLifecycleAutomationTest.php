@@ -144,4 +144,24 @@ class MlLifecycleAutomationTest extends TestCase
         $this->assertSame('requeued_stale_run', $actions[0]['action'] ?? null);
         Bus::assertDispatched(MlRetrainJob::class, fn (MlRetrainJob $job): bool => $job->trainingRunId === $run->id && $job->horizon === '3m');
     }
+
+    public function test_tick_finalizes_stale_cancellation_without_requeueing_it(): void
+    {
+        config(['ml_lifecycle.enabled' => true, 'ml_lifecycle.recovery.stale_after_minutes' => 30]);
+        $run = MlTrainingRun::query()->create([
+            'horizon' => '6m',
+            'status' => 'cancelling',
+            'cutoff_date' => '2026-02-01',
+            'configuration' => ['trigger' => 'manual'],
+            'started_at' => Carbon::parse('2026-03-01 00:00:00', 'Asia/Kolkata'),
+        ]);
+        $run->forceFill(['updated_at' => Carbon::parse('2026-03-01 00:05:00', 'Asia/Kolkata')])->save();
+
+        Bus::fake();
+        $actions = app(MlLifecycleAutomationService::class)->tick(null, Carbon::parse('2026-03-01 01:00:00', 'Asia/Kolkata'));
+
+        $this->assertSame('cancelled', $run->fresh()->status);
+        $this->assertSame('cancelled_stale_run', $actions[0]['action'] ?? null);
+        Bus::assertNothingDispatched();
+    }
 }

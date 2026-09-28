@@ -26,6 +26,7 @@ class MlTrainingRunRecoveryService
             ->get()
             ->each(function (MlTrainingRun $run) use ($now, &$actions): void {
                 $configuration = is_array($run->configuration) ? $run->configuration : [];
+                $wasCancelling = $run->status === 'cancelling';
                 $configuration['recovery'] = [
                     'reason' => 'worker_or_process_restart',
                     'recovered_at' => $now->toIso8601String(),
@@ -36,14 +37,22 @@ class MlTrainingRunRecoveryService
                 ]);
 
                 $run->forceFill([
-                    'status' => 'queued',
+                    'status' => $wasCancelling ? 'cancelled' : 'queued',
                     'configuration' => $configuration,
-                    'failure' => [
+                    'failure' => $wasCancelling ? [
+                        'message' => 'Training cancellation was finalized after the worker became stale.',
+                        'type' => 'worker_restart_after_cancellation',
+                    ] : [
                         'message' => 'Training worker became stale; run requeued for recovery.',
                         'type' => 'worker_restart',
                     ],
-                    'completed_at' => null,
+                    'completed_at' => $wasCancelling ? $now : null,
                 ])->save();
+
+                if ($wasCancelling) {
+                    $actions[] = ['run_id' => $run->id, 'horizon' => $run->horizon, 'action' => 'cancelled_stale_run'];
+                    return;
+                }
 
                 MlRetrainJob::dispatch(
                     $run->horizon,
