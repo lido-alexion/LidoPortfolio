@@ -4,6 +4,7 @@ namespace Tests\Feature\V8;
 
 use App\Models\Stock;
 use App\Models\User;
+use App\Services\Fundamentals\AI\FundamentalInsightsResponseValidator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -118,5 +119,14 @@ class FundamentalAiInsightsTest extends TestCase
             ->getJson("/api/v1/stocks/{$stock->id}/fundamentals?include_ai_insights=1")
             ->assertOk()
             ->assertJsonPath('data.insights.ai.status', 'unavailable');
+    }
+
+    public function test_recommendation_language_is_rejected_without_blocking_factual_holding_language(): void
+    {
+        $validator = app(FundamentalInsightsResponseValidator::class);
+        foreach (['Buy', 'Strong Buy', 'Hold', 'Target ₹500', 'Expect 20% upside', 'Reduce exposure'] as $summary) {
+            $this->assertNull($validator->normalize(['summary' => $summary]));
+        }
+        $this->assertNotNull($validator->normalize(['summary' => 'Existing holding has stable margins.']));
     }
 }

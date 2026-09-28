@@ -3,6 +3,7 @@
 namespace App\Services\Fundamentals;
 
 use App\Models\Stock;
+use App\Models\V7\FundamentalFact;
 use Carbon\Carbon;
 
 /**
@@ -89,6 +90,10 @@ class FundamentalSignalsService
 
         $this->evaluateWorkingCapitalSignals($stock, $asOf, $risk, $watch);
         $this->evaluateCwipSignals($stock, $asOf, $watch);
+        $this->evaluateMarginSignals($stock, $asOf, $positive, $risk, $watch);
+        $this->evaluateEarningsCashSignals($stock, $asOf, $risk, $watch);
+        $this->evaluateLeverageSignals($stock, $asOf, $positive, $risk, $watch);
+        $this->evaluateDilutionSignals($stock, $asOf, $risk, $watch);
 
         $ocf = $this->fundamentals->metric($stock, 'operating_cash_flow', 'ttm', $asOf, $price);
         if ($ocf['value'] !== null && $ni['value'] !== null && (float) $ni['value'] > 0) {
@@ -115,9 +120,8 @@ class FundamentalSignalsService
             }
         }
 
-        $rating = $positive !== [] || $risk !== [] ? 'medium' : (
-            $watch !== [] ? 'low' : 'high'
-        );
+        $missing = $this->missingEvidence($stock, $asOf);
+        $rating = count($missing) >= 4 ? 'low' : (($positive !== [] || $risk !== [] || $watch !== []) ? 'medium' : 'high');
 
         $sector = $this->sectorContext->contextFor($stock, $asOf, $price);
 
@@ -130,7 +134,7 @@ class FundamentalSignalsService
             'follow_up_checks' => $this->followUpChecks(array_merge($risk, $watch)),
             'data_sufficiency' => [
                 'rating' => $rating,
-                'missing_information' => [],
+                'missing_information' => $missing,
             ],
             'ai' => [
                 'status' => 'not_requested',
@@ -234,14 +238,142 @@ class FundamentalSignalsService
         }
     }
 
+    /** Compare same-period margins only; no incompatible quarter mixing. */
+    protected function evaluateMarginSignals(Stock $stock, Carbon $asOf, array &$positive, array &$risk, array &$watch): void
+    {
+        foreach ([
+            ['operating_margin_movement', 'operating_profit', 'Operating margin'],
+            ['ebit_margin_movement', 'ebit', 'EBIT margin'],
+            ['net_margin_movement', 'net_income', 'Net margin'],
+        ] as [$key, $numerator, $label]) {
+            $pair = $this->comparablePair($stock, $numerator, $asOf);
+            $revenuePair = $this->comparablePair($stock, 'revenue', $asOf);
+            if ($pair === null || $revenuePair === null || $pair['current_period'] !== $revenuePair['current_period']
+                || $pair['prior_period'] !== $revenuePair['prior_period']) {
+                continue;
+            }
+            if ((float) $revenuePair['current'] === 0.0 || (float) $revenuePair['prior'] === 0.0) continue;
+            $current = ((float) $pair['current'] / (float) $revenuePair['current']) * 100;
+            $prior = ((float) $pair['prior'] / (float) $revenuePair['prior']) * 100;
+            $delta = $current - $prior;
+            $evidence = [
+                'current_margin_pct' => round($current, 2),
+                'prior_margin_pct' => round($prior, 2),
+                'delta_pp' => round($delta, 2),
+                'period' => $pair['current_period'],
+                'comparison_period' => $pair['prior_period'],
+                'basis' => 'same_period_yoy',
+            ];
+            if ($delta >= 5) {
+                $positive[] = $this->signal($key.'_expanding', $label.' expanded by at least 5 percentage points year over year', $evidence);
+            } elseif ($delta <= -5) {
+                $risk[] = $this->signal($key.'_contracting', $label.' contracted by at least 5 percentage points year over year', $evidence);
+            } elseif (abs($delta) < 1) {
+                $watch[] = $this->signal($key.'_stable', $label.' was broadly stable year over year', $evidence);
+            }
+        }
+    }
+
+    protected function evaluateEarningsCashSignals(Stock $stock, Carbon $asOf, array &$risk, array &$watch): void
+    {
+        $income = $this->fundamentals->growthMetric($stock, 'net_income', FundamentalDataService::CADENCE_QUARTERLY, $asOf);
+        $ocf = $this->fundamentals->growthMetric($stock, 'operating_cash_flow', FundamentalDataService::CADENCE_QUARTERLY, $asOf);
+        if ($income['value'] !== null && $ocf['value'] !== null && (float) $income['value'] >= 10 && (float) $ocf['value'] <= -10) {
+            $risk[] = $this->signal('earnings_cash_divergence', 'Net income growth is positive while operating cash flow growth is negative', [
+                'net_income_yoy_pct' => (float) $income['value'],
+                'operating_cash_flow_yoy_pct' => (float) $ocf['value'],
+                'basis' => 'quarterly_yoy',
+            ]);
+            $watch[] = $this->signal('cash_quality_follow_up', 'Earnings and operating cash flow moved in opposite directions', [
+                'net_income_yoy_pct' => (float) $income['value'],
+                'operating_cash_flow_yoy_pct' => (float) $ocf['value'],
+                'basis' => 'quarterly_yoy',
+            ]);
+        }
+    }
+
+    protected function evaluateLeverageSignals(Stock $stock, Carbon $asOf, array &$positive, array &$risk, array &$watch): void
+    {
+        $debt = $this->fundamentals->growthMetric($stock, 'debt', FundamentalDataService::CADENCE_QUARTERLY, $asOf);
+        if ($debt['value'] === null) return;
+        $evidence = ['debt_yoy_pct' => (float) $debt['value'], 'basis' => 'quarterly_yoy'];
+        if ((float) $debt['value'] >= 15) {
+            $risk[] = $this->signal('debt_increasing', 'Debt increased materially year over year', $evidence);
+        } elseif ((float) $debt['value'] <= -15) {
+            $positive[] = $this->signal('debt_decreasing', 'Debt decreased materially year over year', $evidence);
+        }
+    }
+
+    protected function evaluateDilutionSignals(Stock $stock, Carbon $asOf, array &$risk, array &$watch): void
+    {
+        $shares = $this->fundamentals->growthMetric($stock, 'shares_outstanding', FundamentalDataService::CADENCE_QUARTERLY, $asOf);
+        if ($shares['value'] !== null && (float) $shares['value'] >= 5) {
+            $risk[] = $this->signal('share_count_dilution', 'Shares outstanding increased materially year over year', [
+                'shares_yoy_pct' => (float) $shares['value'],
+                'basis' => 'quarterly_yoy',
+            ]);
+            $watch[] = $this->signal('dilution_follow_up', 'Share count increased materially', [
+                'shares_yoy_pct' => (float) $shares['value'],
+                'basis' => 'quarterly_yoy',
+            ]);
+        }
+    }
+
+    /** @return array{current:float,prior:float,current_period:string,prior_period:string}|null */
+    protected function comparablePair(Stock $stock, string $factKey, Carbon $asOf): ?array
+    {
+        $rows = FundamentalFact::query()
+            ->where('stock_id', $stock->id)
+            ->where('fact_key', $factKey)
+            ->where('cadence', FundamentalDataService::CADENCE_QUARTERLY)
+            ->whereDate('availability_date', '<=', $asOf->toDateString())
+            ->orderByDesc('period_end')->orderByDesc('revision_number')->get()
+            ->unique('period_end')->values();
+        $current = $rows->first();
+        if ($current === null || $current->value === null) return null;
+        $priorDate = $current->period_end?->copy()->subYear()->toDateString();
+        $prior = $rows->first(fn (FundamentalFact $row) => $row->period_end?->toDateString() === $priorDate);
+        if ($prior === null || $prior->value === null) return null;
+        return ['current' => (float) $current->value, 'prior' => (float) $prior->value, 'current_period' => $current->period_end->toDateString(), 'prior_period' => $prior->period_end->toDateString()];
+    }
+
+    /** @return list<string> */
+    protected function missingEvidence(Stock $stock, Carbon $asOf): array
+    {
+        $facts = $this->fundamentals->factMap($stock, FundamentalDataService::CADENCE_QUARTERLY, $asOf);
+        $missing = [];
+        foreach (['revenue' => 'revenue history', 'net_income' => 'earnings history', 'operating_cash_flow' => 'cash-flow history', 'debt' => 'debt history', 'shares_outstanding' => 'share-count history'] as $key => $label) {
+            if (! isset($facts[$key])) $missing[] = $label;
+        }
+        return $missing;
+    }
+
     protected function signal(string $key, string $headline, array $metricValues): array
     {
         return [
             'signal_key' => $key,
+            'category' => $this->categoryFor($key),
+            'direction' => str_contains($key, 'decreasing') || str_contains($key, 'strong') || str_contains($key, 'expanding') ? 'positive' : (str_contains($key, 'stable') || str_contains($key, 'follow_up') ? 'watch' : 'risk'),
+            'title' => $headline,
             'headline' => $headline,
+            'summary' => $headline,
             'metric_values' => $metricValues,
+            'evidence' => $metricValues,
+            'basis' => $metricValues['basis'] ?? 'deterministic',
+            'period' => $metricValues['period'] ?? null,
+            'severity' => str_contains($key, 'stable') ? 'informational' : (str_contains($key, 'follow_up') || str_contains($key, 'cwip') ? 'watch' : 'material'),
+            'confidence' => 'deterministic',
             'source' => 'deterministic',
+            'provenance' => ['source' => 'StoX deterministic calculation'],
         ];
+    }
+
+    protected function categoryFor(string $key): string
+    {
+        foreach (['margin' => 'profitability', 'cash' => 'cash_flow', 'ocf' => 'cash_flow', 'fcf' => 'cash_flow', 'debt' => 'leverage', 'leverage' => 'leverage', 'dilution' => 'capital_structure', 'share_count' => 'capital_structure', 'receivable' => 'working_capital', 'inventory' => 'working_capital', 'cwip' => 'capital_projects'] as $needle => $category) {
+            if (str_contains($key, $needle)) return $category;
+        }
+        return 'fundamentals';
     }
 
     /** @param list<array<string, mixed>> $watch */
@@ -256,6 +388,12 @@ class FundamentalSignalsService
                 $checks[] = 'Review receivables ageing, customer concentration, bad-debt provisions and related-party notes.';
             } elseif ($key === 'inventory_growth_vs_revenue') {
                 $checks[] = 'Review inventory composition, obsolescence provisions and management commentary on channel inventory.';
+            } elseif ($key === 'cash_quality_follow_up' || $key === 'earnings_cash_divergence') {
+                $checks[] = 'Review annual-report cash-flow notes, working-capital commentary, investor presentations and earnings-call disclosures.';
+            } elseif ($key === 'debt_increasing') {
+                $checks[] = 'Review the debt maturity schedule, capex plan, refinancing commentary and finance-cost notes.';
+            } elseif ($key === 'dilution_follow_up' || $key === 'share_count_dilution') {
+                $checks[] = 'Review preferential, QIP, rights issue, ESOP, acquisition-funding and corporate-action disclosures.';
             }
         }
         return array_values(array_unique($checks));

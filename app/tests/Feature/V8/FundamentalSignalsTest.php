@@ -144,4 +144,58 @@ class FundamentalSignalsTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.insights.ai.status', 'unavailable');
     }
+
+    public function test_catalogue_surfaces_margin_cash_leverage_and_dilution_evidence(): void
+    {
+        $user = User::factory()->create(['is_admin' => false]);
+        $stock = Stock::query()->create(['symbol' => 'CAT', 'exchange' => 'NSE', 'name' => 'Catalogue Co']);
+        $this->defaultPortfolioFor($user);
+        $service = app(FundamentalDataService::class);
+        foreach ([
+            ['2024-03-31', 100, 20, 10, 20, 100, 100],
+            ['2025-03-31', 200, 60, 30, -5, 130, 110],
+        ] as [$period, $revenue, $operatingProfit, $netIncome, $ocf, $debt, $shares]) {
+            $service->storeFacts($stock, [
+                ['statement_type' => 'income_statement', 'cadence' => 'quarterly', 'fact_key' => 'revenue', 'period_end' => $period, 'value' => $revenue, 'availability_date' => '2025-06-01'],
+                ['statement_type' => 'income_statement', 'cadence' => 'quarterly', 'fact_key' => 'operating_profit', 'period_end' => $period, 'value' => $operatingProfit, 'availability_date' => '2025-06-01'],
+                ['statement_type' => 'income_statement', 'cadence' => 'quarterly', 'fact_key' => 'net_income', 'period_end' => $period, 'value' => $netIncome, 'availability_date' => '2025-06-01'],
+                ['statement_type' => 'cash_flow', 'cadence' => 'quarterly', 'fact_key' => 'operating_cash_flow', 'period_end' => $period, 'value' => $ocf, 'availability_date' => '2025-06-01'],
+                ['statement_type' => 'balance_sheet', 'cadence' => 'quarterly', 'fact_key' => 'debt', 'period_end' => $period, 'value' => $debt, 'availability_date' => '2025-06-01'],
+                ['statement_type' => 'balance_sheet', 'cadence' => 'quarterly', 'fact_key' => 'shares_outstanding', 'period_end' => $period, 'value' => $shares, 'availability_date' => '2025-06-01'],
+            ]);
+        }
+
+        $response = $this->actingAs($user)->withProfileHeader($user)
+            ->getJson("/api/v1/stocks/{$stock->id}/fundamentals?include_insights=1&as_of=2025-06-20")
+            ->assertOk();
+
+        $response->assertJsonFragment(['signal_key' => 'operating_margin_movement_expanding']);
+        $response->assertJsonFragment(['category' => 'profitability']);
+        $response->assertJsonFragment(['signal_key' => 'earnings_cash_divergence']);
+        $response->assertJsonFragment(['signal_key' => 'debt_increasing']);
+        $response->assertJsonFragment(['signal_key' => 'share_count_dilution']);
+        $response->assertJsonFragment(['basis' => 'quarterly_yoy']);
+        $response->assertJsonFragment(['delta_pp' => 10]);
+    }
+
+    public function test_margin_signal_requires_exact_comparable_period(): void
+    {
+        $user = User::factory()->create(['is_admin' => false]);
+        $stock = Stock::query()->create(['symbol' => 'GAP', 'exchange' => 'NSE', 'name' => 'Gap Co']);
+        $this->defaultPortfolioFor($user);
+        $service = app(FundamentalDataService::class);
+        foreach ([
+            ['2024-02-29', 100, 20],
+            ['2025-03-31', 200, 60],
+        ] as [$period, $revenue, $profit]) {
+            $service->storeFacts($stock, [
+                ['statement_type' => 'income_statement', 'cadence' => 'quarterly', 'fact_key' => 'revenue', 'period_end' => $period, 'value' => $revenue, 'availability_date' => '2025-06-01'],
+                ['statement_type' => 'income_statement', 'cadence' => 'quarterly', 'fact_key' => 'operating_profit', 'period_end' => $period, 'value' => $profit, 'availability_date' => '2025-06-01'],
+            ]);
+        }
+        $this->actingAs($user)->withProfileHeader($user)
+            ->getJson("/api/v1/stocks/{$stock->id}/fundamentals?include_insights=1&as_of=2025-06-20")
+            ->assertOk()
+            ->assertJsonMissing(['signal_key' => 'operating_margin_movement_expanding']);
+    }
 }

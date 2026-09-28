@@ -10,7 +10,7 @@ class FundamentalInsightsResponseValidator
     {
         if (! isset($parsed['summary']) || ! is_string($parsed['summary'])) return null;
         $encoded = json_encode($parsed, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        if ($encoded === false || preg_match('/\b(buy|sell|hold)\b|target[_ -]?price|future[_ -]?price/i', $encoded)) return null;
+        if ($encoded === false || preg_match('/\b(?:strong\s+)?(?:buy|sell|hold|accumulate)\b|\breduce\s+exposure\b|\btarget\s*(?:price|₹|rs\.?|\$|\d)|(?:future)[_ -]?price|\b(?:expect|expected)\s+\d+(?:\.\d+)?%\s+(?:upside|return)\b|\bstop[- ]loss\b/i', $encoded)) return null;
         $summary = trim($parsed['summary']);
         if ($summary === '' || mb_strlen($summary) > 600) return null;
         $rating = data_get($parsed, 'data_sufficiency.rating', 'medium');
