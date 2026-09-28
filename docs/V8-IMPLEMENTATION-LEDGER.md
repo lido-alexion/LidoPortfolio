@@ -101,7 +101,7 @@ See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-F
 
 ## Verified continuation checkpoint (2026-09-28)
 
-- Actual checkout is `fc42436`; the earlier handoff SHA `3265357` is not the current HEAD.
+- Actual checkout is `8d846ef`; the earlier handoff SHA `3265357` is not the current HEAD.
 - The full Feature suite under local PHP CLI `memory_limit=512M` now passes **1,318/1,319**, with one intentional bounded-training skip when `STOXLA_ML_TEST_PYTHON` is absent. The previous FEAT-064 fixture cascade was repaired by giving activation-oriented legacy fixtures the executable factory configuration; the production Setup Required gate was not weakened.
 - FEAT-062 added deterministic derived net-debt direction and consecutive comparable-period FCF trend signals. Its frozen signal matrix remains explicit about unsupported/data-dependent catalogue rows.
 - FEAT-056 lifecycle tests pass **23/23** locally, but the inherited lifecycle implementation remains uncommitted and deliberately separated from FEAT-057.
