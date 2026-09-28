@@ -21,6 +21,23 @@ class StrategyController extends Controller
         return ApiEnvelope::success($this->strategies->getActiveStrategy($profile, $this->editorStrategyId($request)));
     }
 
+    public function store(Request $request): JsonResponse
+    {
+        $profile = \activePortfolio();
+        $validated = $request->validate([
+            'name' => 'required|string|max:120',
+            'description' => 'nullable|string|max:2000',
+        ]);
+
+        $payload = $this->strategies->createInvestorStrategy(
+            $profile,
+            $validated['name'],
+            $validated['description'] ?? null,
+        );
+
+        return ApiEnvelope::success($payload, [], 201);
+    }
+
     public function summary(): JsonResponse
     {
         $profile = \activePortfolio();

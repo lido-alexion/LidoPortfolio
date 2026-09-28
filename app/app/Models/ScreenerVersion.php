@@ -13,6 +13,9 @@ class ScreenerVersion extends Model
         'screener_id',
         'version',
         'definition_json',
+        'scope',
+        'watchlist_id',
+        'index_symbol',
         'metadata_json',
         'definition_hash',
         'change_notes',
@@ -23,6 +26,7 @@ class ScreenerVersion extends Model
         return [
             'screener_id' => 'integer',
             'version' => 'integer',
+            'watchlist_id' => 'integer',
             'definition_json' => 'array',
             'metadata_json' => 'array',
         ];

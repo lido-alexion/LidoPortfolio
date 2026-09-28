@@ -210,6 +210,8 @@ final class StrategyRegistrySupport
                 throw new InvalidArgumentException('Strategy has no version to activate.');
             }
 
+            app(StrategyReadinessService::class)->assertReadyForEnable($strategy, $version);
+
             $config = is_array($version->config_json) ? $version->config_json : [];
             $sources = is_array($config['eligibility_sources'] ?? null) ? $config['eligibility_sources'] : [];
             // Re-resolve portable refs if any lack local ids

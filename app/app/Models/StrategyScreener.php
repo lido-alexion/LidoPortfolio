@@ -12,6 +12,7 @@ class StrategyScreener extends Model
     protected $fillable = [
         'strategy_version_id',
         'screener_id',
+        'screener_version_id',
         'enabled',
         'priority',
         'display_order',
@@ -22,6 +23,7 @@ class StrategyScreener extends Model
         return [
             'strategy_version_id' => 'integer',
             'screener_id' => 'integer',
+            'screener_version_id' => 'integer',
             'enabled' => 'boolean',
             'priority' => 'integer',
             'display_order' => 'integer',

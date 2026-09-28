@@ -16,10 +16,29 @@ final class ScreenerVersioningService
     /**
      * After create: ensure registry columns + v1 snapshot.
      */
+    public function ensureCurrentVersion(Screener $screener): ScreenerVersion
+    {
+        $versionNumber = max(1, (int) ($screener->artifact_version ?? 1));
+        $existing = ScreenerVersion::query()
+            ->where('screener_id', $screener->id)
+            ->where('version', $versionNumber)
+            ->first();
+        if ($existing) {
+            return $existing;
+        }
+
+        $this->afterUpdate($screener->fresh() ?? $screener, null, 'Backfilled semantic version snapshot');
+
+        return ScreenerVersion::query()
+            ->where('screener_id', $screener->id)
+            ->where('version', max(1, (int) ($screener->fresh()?->artifact_version ?? $versionNumber)))
+            ->firstOrFail();
+    }
+
     public function afterCreate(Screener $screener, ?string $changeNotes = null): Screener
     {
-        $definition = $this->normalizedDefinition($screener);
-        $hash = DefinitionHasher::hash($definition);
+        $payload = $this->semanticPayload($screener);
+        $hash = DefinitionHasher::hash($payload);
 
         if ($screener->slug === null || $screener->slug === '') {
             $screener->slug = $this->uniqueSlug($screener);
@@ -30,7 +49,7 @@ final class ScreenerVersioningService
         $screener->save();
 
         if (! ScreenerVersion::query()->where('screener_id', $screener->id)->where('version', 1)->exists()) {
-            $this->writeVersionRow($screener, 1, $definition, $hash, $changeNotes ?? 'Initial registry version');
+            $this->writeVersionRow($screener, 1, $payload, $hash, $changeNotes ?? 'Initial registry version');
         }
 
         return $screener->fresh();
@@ -41,8 +60,8 @@ final class ScreenerVersioningService
      */
     public function afterUpdate(Screener $screener, ?string $previousHash, ?string $changeNotes = null): Screener
     {
-        $definition = $this->normalizedDefinition($screener);
-        $hash = DefinitionHasher::hash($definition);
+        $payload = $this->semanticPayload($screener);
+        $hash = DefinitionHasher::hash($payload);
 
         if ($screener->slug === null || $screener->slug === '') {
             $screener->slug = $this->uniqueSlug($screener);
@@ -56,7 +75,7 @@ final class ScreenerVersioningService
             $screener->definition_hash = $hash;
             $screener->artifact_status = $screener->artifact_status ?: ($screener->is_enabled ? 'active' : 'draft');
             $screener->save();
-            $this->writeVersionRow($screener, 1, $definition, $hash, $changeNotes ?? 'Initial registry version');
+            $this->writeVersionRow($screener, 1, $payload, $hash, $changeNotes ?? 'Initial registry version');
 
             return $screener->fresh();
         }
@@ -70,9 +89,9 @@ final class ScreenerVersioningService
             $this->writeVersionRow(
                 $screener,
                 $next,
-                $definition,
+                $payload,
                 $hash,
-                $changeNotes ?? 'Definition updated'
+                $changeNotes ?? 'Semantic screener updated'
             );
         } else {
             $screener->definition_hash = $hash;
@@ -140,6 +159,19 @@ final class ScreenerVersioningService
     /**
      * @return array<string, mixed>
      */
+    private function semanticPayload(Screener $screener): array
+    {
+        return [
+            'definition' => $this->normalizedDefinition($screener),
+            'scope' => (string) ($screener->scope ?? 'holdings'),
+            'watchlist_id' => $screener->watchlist_id,
+            'index_symbol' => $screener->index_symbol,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
     private function normalizedDefinition(Screener $screener): array
     {
         $definition = is_array($screener->definition_json) ? $screener->definition_json : [];
@@ -151,14 +183,18 @@ final class ScreenerVersioningService
     }
 
     /**
-     * @param  array<string, mixed>  $definition
+     * @param  array<string, mixed>  $payload
      */
-    private function writeVersionRow(Screener $screener, int $version, array $definition, string $hash, string $notes): void
+    private function writeVersionRow(Screener $screener, int $version, array $payload, string $hash, string $notes): void
     {
+        $definition = $payload['definition'] ?? $payload;
         ScreenerVersion::query()->create([
             'screener_id' => $screener->id,
             'version' => $version,
             'definition_json' => $definition,
+            'scope' => $payload['scope'] ?? $screener->scope,
+            'watchlist_id' => $payload['watchlist_id'] ?? $screener->watchlist_id,
+            'index_symbol' => $payload['index_symbol'] ?? $screener->index_symbol,
             'metadata_json' => [
                 'name' => $screener->name,
                 'slug' => $screener->slug,

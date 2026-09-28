@@ -9,6 +9,7 @@ use App\Models\ScreenerRun;
 use App\Models\ScreenerRunHit;
 use App\Models\StrategyScreener;
 use App\Models\TradingStrategyVersion;
+use App\Services\Screener\ScreenerVersioningService;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -83,9 +84,15 @@ class StrategyEligibilityService
             if ($screenerId < 1) {
                 continue;
             }
+            $screener = Screener::query()->find($screenerId);
+            $screenerVersionId = null;
+            if ($screener) {
+                $screenerVersionId = app(ScreenerVersioningService::class)->ensureCurrentVersion($screener)->id;
+            }
             StrategyScreener::query()->create([
                 'strategy_version_id' => $version->id,
                 'screener_id' => $screenerId,
+                'screener_version_id' => $screenerVersionId,
                 'enabled' => (bool) ($row['enabled'] ?? true),
                 'priority' => (int) ($row['priority'] ?? ($order + 1)),
                 'display_order' => (int) ($row['display_order'] ?? $order),

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Engines\Strategy\ExitStrategyEvaluator;
+use App\Services\Artifacts\DefinitionHasher;
 use App\Engines\Strategy\FactoryMomentumStrategy;
 use App\Engines\Strategy\MinerviniTrendTemplateScreener;
 use App\Engines\Strategy\SupportedIndicators;
@@ -11,6 +12,8 @@ use App\Models\Screener;
 use App\Models\TradingStrategy;
 use App\Models\TradingStrategyVersion;
 use App\Services\Indicators\IndicatorRegistry;
+use App\Services\Strategy\StrategyReadinessService;
+use App\Services\Strategy\StrategyRegistrySupport;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
@@ -26,6 +29,8 @@ class StrategyConfigurationService
     public function __construct(
         protected StrategyEligibilityService $eligibility,
         protected IndicatorRegistry $indicatorRegistry,
+        protected StrategyRegistrySupport $strategySupport,
+        protected StrategyReadinessService $readiness,
     ) {}
 
     /**
@@ -168,6 +173,123 @@ class StrategyConfigurationService
     }
 
     /**
+     * V8 FEAT-064: create an account-owned Strategy row (not Artifact Library) from the factory template.
+     *
+     * @return array<string, mixed>
+     */
+    public function createInvestorStrategy(PortfolioProfile $profile, string $name, ?string $description = null): array
+    {
+        $name = trim($name);
+        if ($name === '') {
+            throw ValidationException::withMessages([
+                'name' => ['Strategy name is required.'],
+            ]);
+        }
+
+        $this->ensureActive($profile);
+
+        $description = trim((string) ($description ?? ''));
+        $slug = $this->strategySupport->uniqueSlug($profile, $this->strategySupport->slugify($name, null));
+        $config = $this->normalizeConfig($this->defaultConfig());
+        $config['eligibility_sources'] = [];
+
+        return DB::transaction(function () use ($profile, $name, $description, $slug, $config) {
+            $strategy = TradingStrategy::query()->create([
+                'profile_id' => $profile->id,
+                'name' => $name,
+                'slug' => $slug,
+                'description' => $description,
+                'status' => TradingStrategy::STATUS_DRAFT,
+                'allocation_pct' => 0,
+                'is_factory' => false,
+                'factory_key' => null,
+                'duplicated_from_id' => null,
+                'reusable_artifact_id' => null,
+            ]);
+
+            $version = TradingStrategyVersion::query()->create([
+                'strategy_id' => $strategy->id,
+                'version' => 1,
+                'version_label' => '1.0',
+                'config_json' => $config,
+                'status' => TradingStrategyVersion::STATUS_DRAFT,
+                'change_notes' => 'Created from Strategy page',
+            ]);
+
+            $strategy->forceFill(['active_version_id' => $version->id])->save();
+
+            return $this->serializeStrategy($strategy->fresh(['reusableArtifact']), $version);
+        });
+    }
+
+    /**
+     * V8 FEAT-064: persist validated registry envelope as account-owned Strategy + draft version.
+     *
+     * @param  array<string, mixed>  $envelope
+     * @param  array<string, mixed>  $config  Normalized strategy config (post eligibility resolution).
+     * @return array<string, mixed>
+     */
+    public function createInvestorStrategyFromEnvelope(PortfolioProfile $profile, array $envelope, array $config): array
+    {
+        $meta = is_array($envelope['metadata'] ?? null) ? $envelope['metadata'] : [];
+        $name = trim((string) ($envelope['name'] ?? ''));
+        if ($name === '') {
+            throw ValidationException::withMessages([
+                'name' => ['Strategy name is required.'],
+            ]);
+        }
+
+        $this->ensureActive($profile);
+        $this->validateConfig($config);
+
+        $slugRaw = trim((string) ($envelope['slug'] ?? ''));
+        $slug = $slugRaw !== ''
+            ? $this->strategySupport->uniqueSlug($profile, $slugRaw)
+            : $this->strategySupport->uniqueSlug($profile, $this->strategySupport->slugify($name, null));
+
+        $description = trim((string) ($meta['description'] ?? ''));
+        $intent = trim((string) ($meta['intent'] ?? ''));
+        $summary = trim((string) ($meta['summary'] ?? ''));
+        $tags = is_array($meta['tags'] ?? null) ? array_values($meta['tags']) : [];
+        $hash = $this->strategySupport->hashDefinition($config);
+
+        return DB::transaction(function () use ($profile, $name, $slug, $description, $intent, $summary, $tags, $config, $hash) {
+            $strategy = TradingStrategy::query()->create([
+                'profile_id' => $profile->id,
+                'name' => $name,
+                'slug' => $slug,
+                'description' => $description !== '' ? $description : null,
+                'intent' => $intent !== '' ? $intent : null,
+                'summary' => $summary !== '' ? $summary : null,
+                'tags_json' => $tags,
+                'definition_hash' => $hash,
+                'status' => TradingStrategy::STATUS_DRAFT,
+                'allocation_pct' => 0,
+                'is_factory' => false,
+                'factory_key' => null,
+                'duplicated_from_id' => null,
+                'reusable_artifact_id' => null,
+            ]);
+
+            $version = TradingStrategyVersion::query()->create([
+                'strategy_id' => $strategy->id,
+                'version' => 1,
+                'version_label' => '1.0',
+                'config_json' => $config,
+                'definition_hash' => $hash,
+                'status' => TradingStrategyVersion::STATUS_DRAFT,
+                'change_notes' => 'Imported trading artifact envelope',
+            ]);
+
+            $this->eligibility->syncStrategyScreeners($version, $config['eligibility_sources'] ?? []);
+
+            $strategy->forceFill(['active_version_id' => $version->id])->save();
+
+            return $this->serializeStrategy($strategy->fresh(['reusableArtifact']), $version);
+        });
+    }
+
+    /**
      * Editor strategy: optional strategy_id (UI selection), else first enabled, else factory seed.
      * This is not an exclusive-active domain rule.
      */
@@ -215,26 +337,64 @@ class StrategyConfigurationService
         }
 
         return DB::transaction(function () use ($strategy, $version, $normalized, $name, $description, $changeNotes) {
-            $version->forceFill([
-                'config_json' => $normalized,
-                'change_notes' => $changeNotes,
-                'status' => TradingStrategyVersion::STATUS_ACTIVE,
-                'activated_at' => $version->activated_at ?? now(),
-            ])->save();
+            $lockedStrategy = TradingStrategy::query()->whereKey($strategy->id)->lockForUpdate()->firstOrFail();
+            $lockedVersion = TradingStrategyVersion::query()->whereKey($version->id)->lockForUpdate()->firstOrFail();
 
-            $strategy->forceFill([
-                'name' => $name !== null && trim($name) !== '' ? trim($name) : $strategy->name,
-                'description' => $description !== null ? $description : $strategy->description,
+            $configChanged = $this->configHash($lockedVersion->config_json ?? []) !== $this->configHash($normalized);
+            $trimmedName = $name !== null ? trim($name) : null;
+            $nameChanged = $trimmedName !== null && $trimmedName !== '' && $trimmedName !== $lockedStrategy->name;
+            $descriptionChanged = $description !== null && $description !== $lockedStrategy->description;
+
+            if (! $configChanged && ! $nameChanged && ! $descriptionChanged) {
+                return $this->serializeStrategy($lockedStrategy, $lockedVersion);
+            }
+
+            if (! $configChanged) {
+                $lockedStrategy->forceFill([
+                    'name' => $nameChanged ? $trimmedName : $lockedStrategy->name,
+                    'description' => $descriptionChanged ? $description : $lockedStrategy->description,
+                ])->save();
+
+                return $this->serializeStrategy($lockedStrategy->fresh(), $lockedVersion);
+            }
+
+            if ($lockedVersion->status !== TradingStrategyVersion::STATUS_SUPERSEDED) {
+                $lockedVersion->forceFill(['status' => TradingStrategyVersion::STATUS_SUPERSEDED])->save();
+            }
+
+            $nextVersionNumber = ((int) $lockedStrategy->versions()->max('version')) + 1;
+            $newVersion = TradingStrategyVersion::query()->create([
+                'strategy_id' => $lockedStrategy->id,
+                'version' => $nextVersionNumber,
+                'version_label' => $nextVersionNumber.'.0',
+                'config_json' => $normalized,
+                'definition_hash' => $this->configHash($normalized),
+                'status' => TradingStrategyVersion::STATUS_ACTIVE,
+                'change_notes' => $changeNotes ?? 'Strategy saved',
+                'activated_at' => now(),
+            ]);
+
+            $lockedStrategy->forceFill([
+                'name' => $nameChanged ? $trimmedName : $lockedStrategy->name,
+                'description' => $descriptionChanged ? $description : $lockedStrategy->description,
                 'status' => TradingStrategy::STATUS_ACTIVE,
-                'active_version_id' => $version->id,
-                // Once the user saves, it is their working strategy (still seedable via factory_key).
+                'active_version_id' => $newVersion->id,
+                'definition_hash' => $newVersion->definition_hash,
                 'is_factory' => false,
             ])->save();
 
-            $this->eligibility->syncStrategyScreeners($version, $normalized['eligibility_sources'] ?? []);
+            $this->eligibility->syncStrategyScreeners($newVersion, $normalized['eligibility_sources'] ?? []);
 
-            return $this->serializeStrategy($strategy->fresh(), $version->fresh());
+            return $this->serializeStrategy($lockedStrategy->fresh(['reusableArtifact']), $newVersion);
         });
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     */
+    protected function configHash(array $config): string
+    {
+        return DefinitionHasher::hash($this->normalizeConfig($config));
     }
 
     /**
@@ -702,6 +862,8 @@ class StrategyConfigurationService
         }
         $config['eligibility_sources'] = $eligibility;
 
+        $readiness = $this->readiness->assess($strategy, $version);
+
         return [
             'id' => $strategy->id,
             'name' => $strategy->name,
@@ -712,6 +874,8 @@ class StrategyConfigurationService
             'summary' => $strategy->summary,
             'tags' => is_array($strategy->tags_json) ? $strategy->tags_json : [],
             'status' => $strategy->status,
+            'readiness' => $readiness,
+            'setup_required' => ! $readiness['ready'],
             'allocation_pct' => $strategy->allocation_pct !== null ? (float) $strategy->allocation_pct : 100.0,
             'recommended_minimum_holdings' => $this->recommendedMinimumHoldingsFromConfig($config),
             'is_factory' => (bool) $strategy->is_factory,
