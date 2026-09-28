@@ -154,8 +154,16 @@ class MlTrainingDatasetBuilder
         $purgedRows = ['train' => 0, 'validation' => 0, 'test' => 0];
         $peakBufferedRows = 0;
         $stocksProcessed = 0;
+        $contextCoverage = [
+            'candidate_rows' => 0,
+            'written_rows' => 0,
+            'market_breadth_present' => 0,
+            'market_breadth_missing' => 0,
+            'sector_relative_present' => 0,
+            'sector_relative_missing' => 0,
+        ];
         try {
-            $this->universeQuery()->chunkById(100, function ($stockChunk) use (&$handles, &$rowCounts, &$purgedRows, &$peakBufferedRows, &$stocksProcessed, $benchmarkSeries, $horizonDays, $cutoff, $partitions): void {
+            $this->universeQuery()->chunkById(100, function ($stockChunk) use (&$handles, &$rowCounts, &$purgedRows, &$peakBufferedRows, &$stocksProcessed, &$contextCoverage, $benchmarkSeries, $horizonDays, $cutoff, $partitions): void {
                 foreach ($stockChunk as $stock) {
                     $stocksProcessed++;
                     $series = $this->priceSeries($stock, $cutoff);
@@ -166,6 +174,14 @@ class MlTrainingDatasetBuilder
                     $stockRows = $this->rowsForStock($stock, $series, $benchmarkSeries, $facts, $horizonDays, $cutoff);
                     $peakBufferedRows = max($peakBufferedRows, count($stockRows));
                     foreach ($stockRows as $row) {
+                        $contextCoverage['candidate_rows']++;
+                        foreach (['market_breadth_nifty' => 'market_breadth', 'sector_relative_strength_3m' => 'sector_relative'] as $feature => $counter) {
+                            if (($row['features'][$feature] ?? null) === null) {
+                                $contextCoverage[$counter.'_missing']++;
+                            } else {
+                                $contextCoverage[$counter.'_present']++;
+                            }
+                        }
                         $partition = $this->partitionForDate($row['reference_date'], $partitions);
                         if (($partition === 'train' && $row['label_end'] >= $partitions['validation_start']) || ($partition === 'validation' && $row['label_end'] >= $partitions['test_start'])) {
                             $purgedRows[$partition]++;
@@ -173,6 +189,7 @@ class MlTrainingDatasetBuilder
                         }
                         fwrite($handles[$partition], json_encode($row, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES)."\n");
                         $rowCounts[$partition]++;
+                        $contextCoverage['written_rows']++;
                     }
                     unset($stockRows, $facts, $series);
                 }
@@ -251,6 +268,7 @@ class MlTrainingDatasetBuilder
                 'test_start' => $partitions['test_start'],
                 'train_purged_for_label_overlap' => $purgedRows['train'],
                 'validation_purged_for_label_overlap' => $purgedRows['validation'],
+                'context_coverage' => $contextCoverage,
             ],
         ];
     }

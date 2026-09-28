@@ -103,6 +103,9 @@ class MlTrainingDatasetBuilderTest extends TestCase
         }
         $this->assertSame('v8-horizon-reference-1', $dataset['feature_definitions']['sampling']['version']);
         $this->assertSame('weekly', $dataset['feature_definitions']['sampling']['cadence']);
+        $this->assertSame($dataset['diagnostics']['rows_written'], $dataset['diagnostics']['context_coverage']['written_rows']);
+        $this->assertGreaterThan(0, $dataset['diagnostics']['context_coverage']['market_breadth_missing']);
+        $this->assertGreaterThan(0, $dataset['diagnostics']['context_coverage']['sector_relative_missing']);
         $this->assertLessThanOrEqual(50, $dataset['diagnostics']['peak_buffered_rows']);
 
         $plan = app(MlTrainingDatasetBuilder::class)->plan('1m', Carbon::parse('2025-08-01'));
