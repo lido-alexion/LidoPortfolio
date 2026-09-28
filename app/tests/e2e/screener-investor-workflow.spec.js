@@ -53,7 +53,7 @@ test.describe('FEAT-061 investor guided tour (browser smoke)', () => {
         await page.getByRole('button', { name: 'Begin tour' }).click();
 
         await expect(page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: 'Navigation' }) })).toBeVisible();
-        await expect(page.getByText('1 of 8')).toBeVisible();
+        await expect(page.getByRole('dialog').getByText('Step 1 of 8', { exact: true })).toBeVisible();
         await expect(page.getByRole('heading', { name: 'Navigation' })).toBeVisible();
         await expect(page.getByRole('button', { name: 'Next' })).toBeVisible();
     });

@@ -128,6 +128,7 @@ See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-F
 ## Post-hardening continuation (2026-09-28)
 
 - FEAT-056 Admin lifecycle controls are now persisted and bounded: schedule enablement/cadence is stored per horizon, exposed through an Admin-only update route, surfaced in the dashboard, and consumed by the scheduler. Retained artifact-valid versions are visible with explicit rollback controls, and completed run evidence is available for both `completed_eligible` and `completed_rejected` terminal states. Focused lifecycle/API coverage: **18/18 passed**; frontend Admin static test and typecheck passed. Commit: `7493eeb`.
+- FEAT-061 focused Chromium acceptance now passes **9/9** across fundamental guided-tour journeys, narrow mobile, tablet, persisted resume, full route traversal, focus return and the legacy investor welcome smoke; the remaining status is still REVIEW for screen-reader and broader device acceptance.
 
 ## Next task
 
