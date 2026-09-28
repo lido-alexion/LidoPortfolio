@@ -45,4 +45,17 @@ The manifest is an explicit operator-supplied current-universe snapshot and
 must be refreshed/audited before a new corpus run. It is not used by FEAT-057
 production features and does not add an automated backup subsystem.
 
+Selected broad-market and sector indices use a separate `--index-map` manifest
+with the same `SYMBOL -> Kite token` format. They are stored with
+`exchange=NSE_INDEX` and receive independent checkpoints:
+
+```bash
+python shared/intraday/backfill_worker.py \
+  --index-map shared/intraday/data/selected_indices_tokens.json \
+  --window-start 2024-01-01 --window-end 2024-01-31 --apply
+```
+
+The index manifest is operator-supplied and auditable; the worker never infers
+index membership or substitutes current equity constituents.
+
 Parquet lands under `schema_v1/year=YYYY/month=MM/`. Coverage inventory: `python shared/intraday/coverage_report.py --corpus-root shared/intraday/corpus`. DuckDB/Polars helpers: `shared/intraday/dataset_builder.py`.

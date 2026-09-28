@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from backfill_worker import WorkerConfig, post_checkpoint, run_once, run_universe  # noqa: E402
+from backfill_worker import WorkerConfig, post_checkpoint, run_index_map, run_once, run_universe  # noqa: E402
 
 try:
     import pyarrow  # noqa: F401
@@ -31,6 +31,19 @@ class BackfillWorkerTest(unittest.TestCase):
         with patch("backfill_worker.run_once", side_effect=lambda symbol, *_args, **_kwargs: {"symbol": symbol}):
             result = run_universe(["zeta", "ALPHA", "zeta"], "2024-01-01", "2024-01-31", cfg)
         self.assertEqual(result, [{"symbol": "ALPHA"}, {"symbol": "ZETA"}])
+
+    def test_run_index_map_preserves_index_exchange_and_tokens(self):
+        cfg = WorkerConfig(api_base="http://example.test/api", token="", corpus_root="/tmp", dry_run=True)
+        with patch("backfill_worker.run_once", side_effect=lambda symbol, *_args, **kwargs: {
+            "symbol": symbol,
+            "exchange": kwargs["exchange"],
+            "token": kwargs["kite"].instrument_token,
+        }):
+            result = run_index_map({"NIFTY 50": 256265, "NIFTY IT": 264969}, "2024-01-01", "2024-01-31", cfg)
+        self.assertEqual(result, [
+            {"symbol": "NIFTY 50", "exchange": "NSE_INDEX", "token": 256265},
+            {"symbol": "NIFTY IT", "exchange": "NSE_INDEX", "token": 264969},
+        ])
 
     @unittest.skipIf(pyarrow is None, "pyarrow not installed")
     def test_run_once_apply_writes_bars_and_marks_complete(self):

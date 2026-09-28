@@ -50,6 +50,16 @@ class ParquetStoreTest(unittest.TestCase):
             self.assertEqual(table.num_rows, 2)
 
     @unittest.skipIf(pq is None, "pyarrow not installed")
+    def test_index_exchange_is_kept_separate_from_equity_partition(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bars = [{"ts": "2024-01-02T09:15:00", "open": 100, "high": 101, "low": 99, "close": 100, "volume": 10}]
+            write_bars(tmp, "NIFTY 50", "NSE_INDEX", bars)
+            parquet_files = list(Path(tmp).rglob("*.parquet"))
+            self.assertEqual(len(parquet_files), 1)
+            self.assertIn("NSE_INDEX-NIFTY 50-2024-01-02", parquet_files[0].name)
+            self.assertEqual(pq.read_table(parquet_files[0]).column("exchange")[0].as_py(), "NSE_INDEX")
+
+    @unittest.skipIf(pq is None, "pyarrow not installed")
     def test_repeated_write_is_idempotent_and_later_window_does_not_overwrite_prior_rows(self):
         with tempfile.TemporaryDirectory() as tmp:
             first = [{"ts": "2024-01-02T09:15:00+05:30", "open": 100, "high": 101, "low": 99, "close": 100, "volume": 10}]

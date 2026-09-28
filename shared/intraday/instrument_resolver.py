@@ -1,4 +1,4 @@
-"""Resolve NSE symbols to Kite instrument tokens for FEAT-065 backfill."""
+"""Resolve configured equity and index symbols to Kite instrument tokens."""
 
 from __future__ import annotations
 
@@ -26,3 +26,8 @@ def resolve_instrument_token(symbol: str, path: str | Path | None = None) -> int
 def load_universe_symbols(path: str | Path | None = None) -> list[str]:
     """Return explicitly configured current-universe symbols in stable order."""
     return sorted(load_token_map(path).keys())
+
+
+def load_index_map(path: str | Path) -> dict[str, int]:
+    """Load the operator-supplied broad/sector index symbol-token manifest."""
+    return load_token_map(path)

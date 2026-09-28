@@ -70,7 +70,7 @@ def write_bars(corpus_root: str | Path, symbol: str, exchange: str, bars: list[d
     for trading_day, rows in sorted(grouped.items()):
         target_dir = partition_dir(Path(corpus_root), trading_day)
         target_dir.mkdir(parents=True, exist_ok=True)
-        part_name = f"part-{symbol.upper()}-{trading_day.isoformat()}.parquet"
+        part_name = f"part-{exchange.upper()}-{symbol.upper()}-{trading_day.isoformat()}.parquet"
         staging_path = target_dir / f".{part_name}.staging"
         final_path = target_dir / part_name
         merged = rows

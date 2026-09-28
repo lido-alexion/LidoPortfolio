@@ -14,7 +14,7 @@ FEAT-061  [REVIEW] Guided tour / onboarding (formal audit complete; missing-targ
 FEAT-062  [REVIEW] Fundamental signals & AI insights (complete deterministic catalogue matrix with PIT comparison evidence, provider-neutral orchestration, bounded investor-safe validation, follow-up guidance, and local desktop/mobile browser degradation coverage; accessibility and real-provider acceptance remain)
 FEAT-063  [REVIEW] Live microstructure collection (local implementation, deterministic resilience verification, and systemd/provisioning contract validation complete; VPS installation, live Kite path, and deployed backup destination remain external)
 FEAT-064  [REVIEW] Screener / Strategy UX (semantic versions, run/backtest pins, immutable save, readiness, provenance audit, WP-09 return flow and legacy fixture reconciliation present; Playwright now covers screener CRUD and incomplete-Strategy Setup Required behavior; live membership-drift/runtime acceptance remains)
-FEAT-065  [REVIEW] Intraday ML historical data platform (schema/checkpoints/admin status, Mac backfill worker, explicit current-universe orchestration, idempotent Parquet corpus, bounded retry/failed-window reporting, DuckDB/Polars access and coverage reporting; live Kite POC/full corpus and handoff acceptance remain external)
+FEAT-065  [REVIEW] Intraday ML historical data platform (schema/checkpoints/admin status, Mac backfill worker, explicit current-universe and selected-index orchestration, idempotent Parquet corpus, bounded retry/failed-window reporting, DuckDB/Polars access and coverage reporting; live Kite POC/full corpus and handoff acceptance remain external)
 ```
 
 ## Dependency order (implementation)

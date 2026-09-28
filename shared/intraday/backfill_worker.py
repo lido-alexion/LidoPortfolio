@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from instrument_resolver import load_universe_symbols, resolve_instrument_token
+from instrument_resolver import load_index_map, load_universe_symbols, resolve_instrument_token
 from kite_historical_client import KiteHistoricalConfig, fetch_minute_bars_chunked
 from parquet_store import write_bars
 
@@ -122,6 +122,7 @@ def run_once(
     cfg: WorkerConfig,
     bars: list[dict[str, Any]] | None = None,
     kite: KiteWorkerCredentials | None = None,
+    exchange: str = "NSE",
 ) -> dict[str, Any]:
     bars_written = 0
     failure: dict[str, str] | None = None
@@ -130,13 +131,13 @@ def run_once(
             kite = kite or load_kite_credentials()
             bars = resolve_bars_for_window(window_start, window_end, cfg, kite, bars)
             if bars:
-                bars_written = write_bars(cfg.corpus_root, symbol, "NSE", bars)
+                bars_written = write_bars(cfg.corpus_root, symbol, exchange, bars)
     except Exception as exc:  # noqa: BLE001
         failure = {"type": type(exc).__name__, "message": str(exc)}
 
     payload = {
         "symbol": symbol.upper(),
-        "exchange": "NSE",
+        "exchange": exchange.upper(),
         "window_start": window_start,
         "window_end": window_end,
         "status": "failed" if failure is not None else ("complete" if (not cfg.dry_run and bars_written > 0) else "pending"),
@@ -166,12 +167,36 @@ def run_universe(
     return results
 
 
+def run_index_map(
+    index_map: dict[str, int],
+    window_start: str,
+    window_end: str,
+    cfg: WorkerConfig,
+) -> list[dict[str, Any]]:
+    """Process configured broad/sector indices separately from equities."""
+    results = []
+    for symbol, token in sorted(index_map.items()):
+        results.append(run_once(
+            symbol,
+            window_start,
+            window_end,
+            cfg,
+            kite=load_kite_credentials(instrument_token_cli=token, symbol=symbol),
+            exchange="NSE_INDEX",
+        ))
+    return results
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="StoX intraday historical backfill worker")
     parser.add_argument("--symbol", help="One NSE symbol to backfill")
     parser.add_argument(
         "--universe-map",
         help="JSON SYMBOL -> Kite token map for the pinned current NIFTY 500 universe",
+    )
+    parser.add_argument(
+        "--index-map",
+        help="JSON INDEX_SYMBOL -> Kite token map for configured broad/sector indices",
     )
     parser.add_argument("--window-start", required=True)
     parser.add_argument("--window-end", required=True)
@@ -191,12 +216,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.apply:
         cfg.dry_run = False
 
-    if not args.symbol and not args.universe_map:
-        parser.error("one of --symbol or --universe-map is required")
-    if args.symbol and args.universe_map:
-        parser.error("--symbol and --universe-map cannot be combined")
-    if args.instrument_token and args.universe_map:
-        parser.error("--instrument-token cannot be combined with --universe-map")
+    if not args.symbol and not args.universe_map and not args.index_map:
+        parser.error("one of --symbol, --universe-map or --index-map is required")
+    if args.symbol and (args.universe_map or args.index_map):
+        parser.error("--symbol cannot be combined with a manifest")
+    if args.instrument_token and (args.universe_map or args.index_map):
+        parser.error("--instrument-token cannot be combined with a manifest")
 
     bars = load_bars_from_json(args.bars_json) if args.bars_json else None
 
@@ -205,13 +230,25 @@ def main(argv: list[str] | None = None) -> int:
             symbols = load_universe_symbols(args.universe_map)
             if not symbols:
                 raise ValueError("The current-universe map contains no symbols.")
-            if bars is not None:
-                raise ValueError("--bars-json is only supported with --symbol.")
+            if bars is not None or args.index_map:
+                raise ValueError("--bars-json cannot be combined with a manifest.")
             result = {
                 "universe": "nifty500",
                 "universe_source": "explicit_instrument_map",
                 "symbol_count": len(symbols),
                 "results": run_universe(symbols, args.window_start, args.window_end, cfg),
+            }
+        elif args.index_map:
+            if bars is not None:
+                raise ValueError("--bars-json is only supported with --symbol.")
+            index_map = load_index_map(args.index_map)
+            if not index_map:
+                raise ValueError("The index map contains no symbols.")
+            result = {
+                "universe": "configured_indices",
+                "universe_source": "explicit_index_manifest",
+                "index_count": len(index_map),
+                "results": run_index_map(index_map, args.window_start, args.window_end, cfg),
             }
         else:
             result = run_once(

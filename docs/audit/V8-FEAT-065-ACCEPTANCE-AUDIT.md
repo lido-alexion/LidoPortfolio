@@ -7,6 +7,7 @@ Evidence is mapped to `docs/archive/specs/V8-Intraday-ML-Historical-Data-Platfor
 | Requirement | Status | Evidence / remaining work |
 |---|---|---|
 | Current NIFTY 500 fixed research universe | PASS locally | `shared/intraday/backfill_worker.py` accepts an explicit audited symbol/token manifest, deduplicates and processes it deterministically; no current-universe reconstruction is performed in the worker |
+| Selected broad-market and sector indices | PASS locally | The worker accepts a separate `--index-map`, emits `NSE_INDEX` checkpoints, and keeps index Parquet partitions distinct from equity partitions; isolated tests cover token/exchange preservation |
 | Kite historical 1-minute OHLCV acquisition | PASS locally | `kite_historical_client.py` normalizes Kite candles and chunks bounded requests; credential/network runtime remains external |
 | Schema-versioned Parquet with ZSTD | PASS locally | `parquet_store.py`, `schema_v1`, atomic staging replacement, isolated Parquet tests |
 | Idempotent windowed writes | PASS locally | Same-symbol/day writes upsert by timestamp and preserve prior windows; repeated-write regression passes |
@@ -21,7 +22,7 @@ Evidence is mapped to `docs/archive/specs/V8-Intraday-ML-Historical-Data-Platfor
 
 ## Verification
 
-- Isolated project-compatible intraday suite: **20/20 passed**, including DuckDB, Polars, real Parquet paths, bounded retry/backoff and failed-window reporting.
+- Isolated project-compatible intraday suite: **22/22 passed**, including DuckDB, Polars, real Parquet paths, index/equity partition separation, bounded retry/backoff and failed-window reporting.
 - No live Kite credentials or full NIFTY 500 corpus population was available for runtime validation.
 
 The epic is **REVIEW**. The implementation and isolated project-compatible verification are complete locally; a bounded real Kite POC, populated-corpus performance/coverage run, and live corpus handoff acceptance remain external because no Kite credentials or target corpus runtime are available here.
