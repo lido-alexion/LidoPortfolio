@@ -32,3 +32,29 @@ test.describe('FEAT-064 screener investor workflow (browser smoke)', () => {
         await expect(page.getByText('Add at least one eligibility Screener.')).toBeVisible();
     });
 });
+
+test.describe('FEAT-061 investor guided tour (browser smoke)', () => {
+    test('welcome modal begins the tour and renders the first step', async ({ page }) => {
+        await installInvestorWorkflowApiMocks(page, {
+            guidedTourState: {
+                eligible: true,
+                show_welcome_prompt: true,
+                can_manual_relaunch: true,
+                welcome_shown_at: null,
+                completed_at: null,
+                tour_in_progress: false,
+            },
+        });
+        await page.goto('/');
+
+        await expect(page.getByRole('dialog', { name: 'Welcome to StoX' })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Begin tour' })).toBeVisible();
+
+        await page.getByRole('button', { name: 'Begin tour' }).click();
+
+        await expect(page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: 'Navigation' }) })).toBeVisible();
+        await expect(page.getByText('1 of 8')).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Navigation' })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Next' })).toBeVisible();
+    });
+});

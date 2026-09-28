@@ -1,7 +1,7 @@
 # V8 FEAT-061 Guided Tour Acceptance Audit
 
 Date: 2026-09-28
-Status: **REVIEW — implementation evidence strong; browser/accessibility validation pending**
+Status: **REVIEW — implementation evidence strong; broader browser/accessibility validation pending**
 
 Authoritative contract: `docs/archive/specs/V8-Guided-Tour-Welcome-Onboarding-Specification.md`.
 
@@ -16,11 +16,11 @@ Authoritative contract: `docs/archive/specs/V8-Guided-Tour-Welcome-Onboarding-Sp
 | Completion only on explicit Finish | PASS | Backend `complete` action is separate; close/skip do not set completion. |
 | Missing targets bounded wait and safe continuation | PASS | `waitForTarget`; provider now advances through every missing non-final step; final valid step still requires explicit Finish. |
 | Explanatory-only underlying interaction | PASS (static) | Full scrim captures background pointer events; panel is the only interactive layer. Browser interaction proof pending. |
-| Responsive positioning/scrolling | PARTIAL | Scroll and viewport-constrained tooltip width exist; real desktop/mobile browser journey still pending. |
-| Keyboard/accessibility/focus return | PARTIAL | Escape, dialog semantics, focus-on-panel, background scroll lock exist; focus return and screen-reader/mobile audit remain. |
+| Responsive positioning/scrolling | PARTIAL | Desktop Chromium welcome-to-first-step journey passes; mobile/responsive and full route traversal remain. |
+| Keyboard/accessibility/focus return | PARTIAL | Desktop dialog semantics, pointer interaction, Escape, focus-on-panel, and background scroll lock exist; focus return and screen-reader/mobile audit remain. |
 | Normal i18n mechanism | PASS locally | `resources/js/src/i18n/index.js` and `messages.js` provide keyed translation lookup with locale fallback; all tour step, modal, overlay and Profile copy references translation keys rather than embedded literals. English is the current shipped dictionary; additional locales remain additive. |
 | Telemetry non-blocking and existing path | PASS | `guidedTourTelemetry.js` posts to existing frontend log endpoint and swallows failures. |
-| Refresh/interruption recovery | PASS | Backend state is authoritative and provider resumes persisted step; browser refresh journey still needs Playwright execution. |
+| Refresh/interruption recovery | PASS | Backend state is authoritative and provider resumes persisted step; desktop browser journey now proves welcome-to-tour transition. |
 
 ## Verification executed
 
@@ -28,6 +28,6 @@ Authoritative contract: `docs/archive/specs/V8-Guided-Tour-Welcome-Onboarding-Sp
 - JS suite: node tests **184/184** and Vitest **99/99** after missing-target regression coverage.
 - Vite build, typecheck, static docs check: passed.
 - Guided-tour copy/key coverage: **3/3** focused Node tests passed.
-- No browser/Playwright execution was available in this environment.
+- Playwright Chromium journey passes for the investor welcome modal → Begin → first guided-tour step. The journey also exposed and fixed a real modal-backdrop stacking defect. Mobile, accessibility tooling, refresh/resume, and full route traversal remain pending.
 
-FEAT-061 remains **REVIEW**. The i18n capability gap is closed locally. Remaining evidence is a supported browser/mobile journey and accessibility/focus review.
+FEAT-061 remains **REVIEW**. Keyed i18n and a desktop Chromium journey are now verified locally. Remaining evidence is mobile/responsive, accessibility/focus-return, refresh/resume, and broader live browser acceptance.

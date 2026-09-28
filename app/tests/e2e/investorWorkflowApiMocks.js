@@ -25,8 +25,19 @@ const SCREENER_META = {
 /**
  * Auth + Screeners list/editor mocks for FEAT-064 investor workflow smoke.
  */
-export async function installInvestorWorkflowApiMocks(page) {
+export async function installInvestorWorkflowApiMocks(page, options = {}) {
     let nextScreenerId = 99;
+    const guidedTourState = {
+        eligible: false,
+        show_welcome_prompt: false,
+        can_manual_relaunch: false,
+        welcome_shown_at: '2026-01-01T00:00:00Z',
+        completed_at: '2026-01-01T00:00:00Z',
+        dismissed_at: null,
+        current_step_id: null,
+        tour_in_progress: false,
+        ...(options.guidedTourState ?? {}),
+    };
 
     await page.route(/\/(sanctum\/csrf-cookie|api\/)/, async (route) => {
         const request = route.request();
@@ -47,12 +58,22 @@ export async function installInvestorWorkflowApiMocks(page) {
             return json(route, { data: [TEST_PORTFOLIO] });
         }
         if (path.endsWith('/api/guided-tour') && (method === 'GET' || method === 'PUT')) {
-            return json(route, apiEnvelope({
-                welcome_shown_at: '2026-01-01T00:00:00Z',
-                completed_at: '2026-01-01T00:00:00Z',
-                dismissed_at: null,
-                current_step_id: null,
-            }));
+            if (method === 'PUT') {
+                const action = request.postDataJSON()?.action;
+                if (action === 'begin') {
+                    guidedTourState.tour_in_progress = true;
+                    guidedTourState.completed_at = null;
+                    guidedTourState.current_step_id = request.postDataJSON()?.step_id ?? 'navigation';
+                } else if (action === 'record_welcome_shown') {
+                    guidedTourState.welcome_shown_at = '2026-01-02T00:00:00Z';
+                } else if (action === 'complete') {
+                    guidedTourState.tour_in_progress = false;
+                    guidedTourState.completed_at = '2026-01-02T00:00:00Z';
+                } else if (action === 'skip_prompt') {
+                    guidedTourState.show_welcome_prompt = false;
+                }
+            }
+            return json(route, apiEnvelope(guidedTourState));
         }
         if (path.endsWith('/api/logs/frontend')) {
             return json(route, { ok: true });

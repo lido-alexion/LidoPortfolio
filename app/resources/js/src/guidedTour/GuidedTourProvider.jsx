@@ -277,7 +277,9 @@ export function GuidedTourProvider({ children, user }) {
                         onDismissForever={onWelcomeDismissForever}
                     />
                     {resumeChoiceOpen && (
-                        <div className="modal show d-block" role="dialog" aria-modal="true" aria-labelledby="guided-tour-resume-title">
+                        <>
+                            <div className="modal-backdrop show" />
+                            <div className="modal show d-block lido-guided-tour-modal" role="dialog" aria-modal="true" aria-labelledby="guided-tour-resume-title">
                             <div className="modal-dialog modal-dialog-centered">
                                 <div className="modal-content">
                                     <div className="modal-header">
@@ -310,8 +312,8 @@ export function GuidedTourProvider({ children, user }) {
                                     </div>
                                 </div>
                             </div>
-                            <div className="modal-backdrop show" />
-                        </div>
+                            </div>
+                        </>
                     )}
                     <GuidedTourOverlay
                         active={tourActive}

@@ -12,7 +12,9 @@ export default function GuidedTourWelcomeModal({
     }
 
     return (
-        <div className="modal show d-block" role="dialog" aria-modal="true" aria-labelledby="guided-tour-welcome-title">
+        <>
+            <div className="modal-backdrop show" />
+            <div className="modal show d-block lido-guided-tour-modal" role="dialog" aria-modal="true" aria-labelledby="guided-tour-welcome-title">
             <div className="modal-dialog modal-dialog-centered">
                 <div className="modal-content">
                     <div className="modal-header">
@@ -41,7 +43,7 @@ export default function GuidedTourWelcomeModal({
                     </div>
                 </div>
             </div>
-            <div className="modal-backdrop show" />
-        </div>
+            </div>
+        </>
     );
 }

@@ -6065,3 +6065,36 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
         scroll-behavior: auto;
     }
 }
+
+.lido-guided-tour {
+    position: fixed;
+    inset: 0;
+    z-index: 2200;
+    pointer-events: none;
+}
+
+.lido-guided-tour-modal {
+    z-index: 2201;
+}
+
+.lido-guided-tour-scrim {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    pointer-events: auto;
+}
+
+.lido-guided-tour-spotlight {
+    position: fixed;
+    border-radius: 0.5rem;
+    box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.55);
+    pointer-events: none;
+    z-index: 1;
+}
+
+.lido-guided-tour-panel {
+    position: fixed;
+    z-index: 2;
+    pointer-events: auto;
+    min-width: min(320px, calc(100vw - 2rem));
+}
