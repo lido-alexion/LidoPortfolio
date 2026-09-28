@@ -13,6 +13,16 @@ class FundamentalDataService
     public const CADENCE_QUARTERLY = 'quarterly';
     public const CADENCE_ANNUAL = 'annual';
 
+    public function resolvedAiInsightsPrimaryProvider(): string
+    {
+        $override = $this->settings()->ai_insights_primary_provider;
+        if (in_array($override, ['gemini', 'codex'], true)) {
+            return $override;
+        }
+
+        return (string) config('fundamentals_ai.primary_provider', 'gemini');
+    }
+
     public function settings(): FundamentalSetting
     {
         return FundamentalSetting::query()->firstOrCreate([], [
@@ -112,29 +122,53 @@ class FundamentalDataService
         $asOf ??= now();
         $cadence = $basis === self::CADENCE_ANNUAL ? self::CADENCE_ANNUAL : self::CADENCE_QUARTERLY;
         $facts = $this->factMap($stock, $cadence, $asOf);
-        $series = $basis === 'ttm' && $cadence === self::CADENCE_QUARTERLY
-            ? $this->factSeries($stock, $cadence, $asOf)
-            : [];
-        $flow = fn (string $key): ?float => ! isset($series[$key]) || $series[$key] === []
-            ? null
-            : array_sum(array_map(fn (FundamentalFact $fact): float => (float) $fact->value, $series[$key]));
-        $netIncome = $basis === 'ttm' ? $flow('net_income') : $this->factValue($facts, 'net_income');
-        $revenue = $basis === 'ttm' ? $flow('revenue') : $this->factValue($facts, 'revenue');
-        $operatingCashFlow = $basis === 'ttm' ? $flow('operating_cash_flow') : $this->factValue($facts, 'operating_cash_flow');
-        $capitalExpenditure = $basis === 'ttm' ? $flow('capital_expenditure') : $this->factValue($facts, 'capital_expenditure');
-        $eps = $basis === 'ttm' ? $flow('eps') : $this->factValue($facts, 'eps');
+        $ttm = fn (string $key): ?float => $basis === 'ttm'
+            ? $this->ttmFlowSum($stock, $key, $asOf)
+            : null;
+        $netIncome = $basis === 'ttm' ? $ttm('net_income') : $this->factValue($facts, 'net_income');
+        $revenue = $basis === 'ttm' ? $ttm('revenue') : $this->factValue($facts, 'revenue');
+        $operatingCashFlow = $basis === 'ttm' ? $ttm('operating_cash_flow') : $this->factValue($facts, 'operating_cash_flow');
+        $capitalExpenditure = $basis === 'ttm'
+            ? $ttm('capital_expenditure')
+            : $this->factValue($facts, 'capital_expenditure');
+        $eps = $basis === 'ttm' ? $ttm('eps') : $this->factValue($facts, 'eps');
+        $equity = $this->factValue($facts, 'equity');
+        $debt = $this->factValue($facts, 'debt');
+        $cash = $this->factValue($facts, 'cash_and_equivalents');
+        $shares = $this->factValue($facts, 'shares_outstanding');
+        $dividendsPaid = $basis === 'ttm' ? $ttm('dividends_paid') : $this->factValue($facts, 'dividends_paid');
+        $freeCashFlow = $operatingCashFlow !== null && $capitalExpenditure !== null
+            ? $operatingCashFlow - abs($capitalExpenditure)
+            : null;
+        $marketCap = $price !== null && $shares !== null && $shares > 0 ? $price * $shares : null;
+        $enterpriseValue = $marketCap !== null && $debt !== null && $cash !== null
+            ? $marketCap + $debt - $cash
+            : null;
         $value = match ($metric) {
             'revenue' => $revenue,
             'net_income' => $netIncome,
-            'debt_equity' => $this->ratio($this->factValue($facts, 'debt'), $this->factValue($facts, 'equity')),
-            'roe' => $this->ratio($netIncome, $this->factValue($facts, 'equity')) !== null
-                ? $this->ratio($netIncome, $this->factValue($facts, 'equity')) * 100
+            'eps' => $eps,
+            'debt_equity' => $this->ratioWithPositiveDenominator($this->factValue($facts, 'debt'), $equity),
+            'roe' => $this->ratioWithPositiveDenominator($netIncome, $equity) !== null
+                ? $this->ratioWithPositiveDenominator($netIncome, $equity) * 100
                 : null,
-            'net_debt' => $this->minus($this->factValue($facts, 'debt'), $this->factValue($facts, 'cash_and_equivalents')),
-            'free_cash_flow' => $this->minus($operatingCashFlow, abs((float) ($capitalExpenditure ?? 0))),
-            'pe' => $price !== null ? $this->ratio($price, $eps) : null,
-            'pb' => $price !== null ? $this->ratio($price, $this->bookValuePerShare($facts)) : null,
-            default => $this->factValue($facts, $metric),
+            'net_debt' => $this->minus($debt, $cash),
+            'free_cash_flow' => $freeCashFlow,
+            'market_cap' => $marketCap,
+            'enterprise_value' => $enterpriseValue,
+            'operating_margin' => $this->percent($this->ratioWithPositiveDenominator($basis === 'ttm' ? $ttm('operating_profit') : $this->factValue($facts, 'operating_profit'), $revenue)),
+            'net_margin' => $this->percent($this->ratioWithPositiveDenominator($netIncome, $revenue)),
+            'fcf_margin' => $this->percent($this->ratioWithPositiveDenominator($freeCashFlow, $revenue)),
+            'fcf_yield' => $this->percent($this->ratioWithPositiveDenominator($freeCashFlow, $marketCap)),
+            'dividend_yield' => $this->percent($dividendsPaid !== null && $shares !== null && $shares > 0 && $price !== null && $price > 0
+                ? abs($dividendsPaid) / ($shares * $price)
+                : null),
+            'payout_ratio' => $this->percent($this->ratioWithPositiveDenominator($dividendsPaid !== null ? abs($dividendsPaid) : null, $netIncome)),
+            'pe' => $price !== null ? $this->priceEarningsRatio($price, $eps) : null,
+            'pb' => $price !== null ? $this->priceBookRatio($price, $facts) : null,
+            default => in_array($metric, FundamentalBankMetricsService::METRIC_KEYS, true)
+                ? app(FundamentalBankMetricsService::class)->metricsForStock($stock, $asOf)[$metric]
+                : $this->factValue($facts, $metric),
         };
 
         $freshness = $this->freshness($facts, $cadence, $asOf);
@@ -149,9 +183,29 @@ class FundamentalDataService
             'facts' => array_map(fn (FundamentalFact $fact) => [
                 'fact_key' => $fact->fact_key,
                 'period_end' => $fact->period_end?->toDateString(),
+                'reported_period' => $fact->reported_period,
                 'availability_date' => $fact->availability_date?->toDateString(),
+                'provider' => $fact->provider,
+                'currency' => $fact->currency,
                 'revision_number' => $fact->revision_number,
             ], $facts),
+            'provenance' => $this->metricProvenance($facts, $basis),
+        ];
+    }
+
+    /** @param array<string,FundamentalFact> $facts */
+    private function metricProvenance(array $facts, string $basis): array
+    {
+        $providers = collect($facts)->pluck('provider')->filter()->unique()->values()->all();
+        $latest = collect($facts)->sortByDesc(fn (FundamentalFact $fact) => $fact->period_end?->toDateString() ?? '')->first();
+
+        return [
+            'basis' => $basis,
+            'providers' => $providers,
+            'source_label' => count($providers) === 1 ? (string) $providers[0] : (count($providers) > 1 ? 'Multiple sources' : null),
+            'latest_period_end' => $latest?->period_end?->toDateString(),
+            'latest_availability_date' => $latest?->availability_date?->toDateString(),
+            'derived' => $basis === 'ttm' || count($facts) > 1,
         ];
     }
 
@@ -164,25 +218,14 @@ class FundamentalDataService
      */
     public function growthMetric(Stock $stock, string $factKey, string $cadence, Carbon $asOf): array
     {
-        $facts = FundamentalFact::query()
-            ->where('stock_id', $stock->id)
-            ->where('fact_key', $factKey)
-            ->where('cadence', $cadence)
-            ->whereDate('availability_date', '<=', $asOf->toDateString())
-            ->orderByDesc('period_end')
-            ->orderByDesc('revision_number')
-            ->get();
-
-        $periods = [];
-        foreach ($facts as $fact) {
-            $period = $fact->period_end?->toDateString();
-            if ($period !== null && ! array_key_exists($period, $periods)) {
-                $periods[$period] = $fact;
-            }
+        $periodFacts = $this->distinctPeriodFacts($stock, $factKey, $cadence, $asOf);
+        $current = $periodFacts[0] ?? null;
+        $previous = null;
+        if ($current !== null && $current->period_end !== null) {
+            $previous = $cadence === self::CADENCE_QUARTERLY
+                ? $this->findComparableYearAgoFact($periodFacts, $current->period_end)
+                : $this->findPriorAnnualFact($periodFacts, $current->period_end);
         }
-        $latest = array_values($periods);
-        $current = $latest[0] ?? null;
-        $previous = $latest[1] ?? null;
         $value = null;
         if ($current !== null && $previous !== null && $previous->value !== null && (float) $previous->value !== 0.0) {
             $value = (((float) $current->value - (float) $previous->value) / abs((float) $previous->value)) * 100;
@@ -219,34 +262,109 @@ class FundamentalDataService
         return $out;
     }
 
-    /**
-     * @return array<string,list<FundamentalFact>>
-     */
-    private function factSeries(Stock $stock, string $cadence, Carbon $asOf): array
+    public function ttmFlowSum(Stock $stock, string $factKey, Carbon $asOf): ?float
     {
-        $rows = FundamentalFact::query()
+        $periodFacts = $this->distinctPeriodFacts($stock, $factKey, self::CADENCE_QUARTERLY, $asOf);
+        if ($periodFacts === []) {
+            return null;
+        }
+
+        $chain = [$periodFacts[0]];
+        $cursor = $periodFacts[0]->period_end;
+        if ($cursor === null) {
+            return null;
+        }
+
+        for ($i = 1; $i < 4; $i++) {
+            $prior = $this->findPriorQuarterFact($periodFacts, $cursor);
+            if ($prior === null || $prior->period_end === null) {
+                return null;
+            }
+            $chain[] = $prior;
+            $cursor = $prior->period_end;
+        }
+
+        $sum = 0.0;
+        foreach ($chain as $fact) {
+            if (! is_numeric($fact->value)) {
+                return null;
+            }
+            $sum += (float) $fact->value;
+        }
+
+        return $sum;
+    }
+
+    /**
+     * @return list<FundamentalFact>
+     */
+    public function distinctPeriodFacts(Stock $stock, string $factKey, string $cadence, Carbon $asOf): array
+    {
+        $facts = FundamentalFact::query()
             ->where('stock_id', $stock->id)
+            ->where('fact_key', $factKey)
             ->where('cadence', $cadence)
             ->whereDate('availability_date', '<=', $asOf->toDateString())
-            ->whereIn('fact_key', ['revenue', 'net_income', 'operating_cash_flow', 'capital_expenditure', 'eps'])
             ->orderByDesc('period_end')
-            ->orderByDesc('availability_date')
             ->orderByDesc('revision_number')
             ->get();
 
-        $out = [];
-        foreach ($rows as $row) {
-            $periodKey = $row->fact_key.':'.$row->period_end?->toDateString();
-            if ($row->period_end === null || isset($out[$row->fact_key][$periodKey])) {
-                continue;
+        $periods = [];
+        foreach ($facts as $fact) {
+            $period = $fact->period_end?->toDateString();
+            if ($period !== null && ! array_key_exists($period, $periods)) {
+                $periods[$period] = $fact;
             }
-            $out[$row->fact_key][$periodKey] = $row;
         }
 
-        return array_map(
-            fn (array $items): array => array_slice(array_values($items), 0, 4),
-            $out,
-        );
+        return array_values($periods);
+    }
+
+    /**
+     * @param  list<FundamentalFact>  $periodFacts
+     */
+    private function findPriorQuarterFact(array $periodFacts, Carbon $fromPeriodEnd): ?FundamentalFact
+    {
+        $target = $fromPeriodEnd->copy()->subMonths(3);
+
+        return $this->findPeriodNear($periodFacts, $target);
+    }
+
+    /**
+     * @param  list<FundamentalFact>  $periodFacts
+     */
+    private function findComparableYearAgoFact(array $periodFacts, Carbon $fromPeriodEnd): ?FundamentalFact
+    {
+        $target = $fromPeriodEnd->copy()->subYear();
+
+        return $this->findPeriodNear($periodFacts, $target);
+    }
+
+    /**
+     * @param  list<FundamentalFact>  $periodFacts
+     */
+    private function findPriorAnnualFact(array $periodFacts, Carbon $fromPeriodEnd): ?FundamentalFact
+    {
+        $target = $fromPeriodEnd->copy()->subYear();
+
+        return $this->findPeriodNear($periodFacts, $target, 45);
+    }
+
+    /**
+     * @param  list<FundamentalFact>  $periodFacts
+     */
+    private function findPeriodNear(array $periodFacts, Carbon $target, int $toleranceDays = 20): ?FundamentalFact
+    {
+        foreach ($periodFacts as $fact) {
+            if ($fact->period_end === null) {
+                continue;
+            }
+            if (abs($fact->period_end->diffInDays($target)) <= $toleranceDays) {
+                return $fact;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -337,9 +455,43 @@ class FundamentalDataService
             : null;
     }
 
+    private function ratioWithPositiveDenominator(?float $numerator, ?float $denominator): ?float
+    {
+        if ($denominator === null || $denominator <= 0 || $numerator === null) {
+            return null;
+        }
+
+        return $numerator / $denominator;
+    }
+
+    private function priceEarningsRatio(float $price, ?float $eps): ?float
+    {
+        if ($eps === null || $eps <= 0) {
+            return null;
+        }
+
+        return $price / $eps;
+    }
+
+    /** @param array<string,FundamentalFact> $facts */
+    private function priceBookRatio(float $price, array $facts): ?float
+    {
+        $book = $this->bookValuePerShare($facts);
+        if ($book === null || $book <= 0) {
+            return null;
+        }
+
+        return $price / $book;
+    }
+
     private function minus(?float $left, ?float $right): ?float
     {
         return $left !== null && $right !== null ? $left - $right : null;
+    }
+
+    private function percent(?float $ratio): ?float
+    {
+        return $ratio === null ? null : $ratio * 100;
     }
 
     /** @param array<string,FundamentalFact> $facts */
