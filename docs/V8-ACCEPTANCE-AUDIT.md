@@ -23,7 +23,7 @@ Status key: **COMPLETE** | **REVIEW** | **IN PROGRESS** | **NOT STARTED** | **N/
 cd app && php artisan test tests/Feature/V8/
 ```
 
-Latest recorded: **1,343 passed / 1,344 total** Feature tests under `tests/Feature/` (1 extension-only skip, 0 failures under PHP CLI 512 MB with the matching x86_64 ML runtime); the focused configured V8 suite is 191 total with 189 passed and 2 environment skips. The focused FEAT-061/062 Chromium journeys pass 9/9 under Node 20.19.1. `npm run test:js`, Vitest, build, typecheck and docs checks are green; isolated Python ML, intraday and microstructure suites are green.
+Latest recorded: **1,344 passed / 1,345 total** Feature tests under `tests/Feature/` (1 extension-only skip, 0 failures under PHP CLI 512 MB with the matching x86_64 ML runtime); the focused configured V8 suite is 191 total with 189 passed and 2 environment skips. The focused FEAT-061/062 Chromium journeys pass 9/9 under Node 20.19.1. `npm run test:js`, Vitest, build, typecheck and docs checks are green; isolated Python ML, intraday and microstructure suites are green.
 
 ## FEAT-055 checklist (frozen decisions 055-01 … 055-10)
 
