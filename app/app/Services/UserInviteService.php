@@ -2,9 +2,11 @@
 
 namespace App\Services;
 
+use App\Mail\UserInvitationMail;
 use App\Models\User;
 use App\Models\UserInvite;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -234,6 +236,13 @@ class UserInviteService
     public function inviteUrl(string $rawToken): string
     {
         return rtrim((string) config('app.url'), '/').'/invite/'.$rawToken;
+    }
+
+    public function sendInvitationEmail(UserInvite $invite, string $rawToken): void
+    {
+        Mail::to($invite->email)->send(new UserInvitationMail(
+            $this->composeInviteMessage($invite, $rawToken)
+        ));
     }
 
     public function composeInviteMessage(UserInvite $invite, string $rawToken): string
