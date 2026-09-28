@@ -108,6 +108,12 @@ class MlAdapterContractTest(unittest.TestCase):
                 "deterministic_baseline_path": str(baseline_path),
                 "numeric_features": ["momentum_score"],
                 "categorical_features": ["sector"],
+                "feature_profile": {
+                    "horizon": "1m",
+                    "feature_set_id": "profile-1m",
+                    "numeric": ["momentum_score"],
+                    "categorical": ["sector"],
+                },
                 "partitions": {"train": {"start": "2024-01-01", "end": "2024-01-16"}},
                 "artifact_path": str(artifact),
             })
@@ -117,9 +123,40 @@ class MlAdapterContractTest(unittest.TestCase):
             self.assertEqual(body["diagnostics"]["train_rows"], 16)
             self.assertEqual(body["diagnostics"]["validation_rows"], 4)
             self.assertEqual(body["diagnostics"]["test_rows"], 4)
+            self.assertEqual(body["metadata"]["feature_profile"]["feature_set_id"], "profile-1m")
             self.assertGreaterEqual(body["diagnostics"]["feature_count"], 2)
             self.assertIsInstance(body["diagnostics"]["python_peak_rss_mb"], (int, float))
+            self.assertIn(body["metadata"]["challenger"]["status"], {"trained", "error", "skipped"})
+            self.assertEqual(body["metadata"]["challenger"]["model_family"], "hist_gradient_boosting_challenger")
+            self.assertIn(body["metadata"]["return_regressor"]["status"], {"trained", "skipped"})
+            self.assertEqual(body["metadata"]["return_regressor"]["model_family"], "ridge_benchmark_relative_return")
+            self.assertIn(body["metadata"]["calibration"]["method"], {"platt_sigmoid", "isotonic"})
+            self.assertIn("calibrated_brier", body["metadata"]["calibration"])
+            self.assertIn("calibration", body["metrics"]["test"])
+            predict = self.run_adapter("predict", {
+                "artifact_path": str(artifact),
+                "features": {"momentum_score": 5.0, "sector": "A"},
+            })
+            self.assertEqual(predict.returncode, 0, predict.stderr)
+            prediction = json.loads(predict.stdout)
+            self.assertIn("expected_benchmark_relative_return_pct", prediction)
             self.assertTrue(artifact.is_file())
+
+    @unittest.skipUnless(SKLEARN_AVAILABLE, "scikit-learn is provided by the managed ML runtime")
+    def test_training_rejects_feature_profile_mismatch(self):
+        result = self.run_adapter("train", {
+            "rows": [],
+            "numeric_features": ["momentum_score"],
+            "categorical_features": [],
+            "feature_profile": {
+                "horizon": "1m",
+                "feature_set_id": "profile-1m",
+                "numeric": ["trend_score"],
+                "categorical": [],
+            },
+        })
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("feature profile does not match", result.stderr)
 
     @unittest.skipUnless(SKLEARN_AVAILABLE, "scikit-learn is provided by the managed ML runtime")
     def test_jsonl_training_rejects_baseline_identity_mismatch(self):

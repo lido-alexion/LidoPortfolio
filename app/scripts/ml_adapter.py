@@ -21,6 +21,32 @@ from typing import Any
 MINIMUM_EFFECTIVE_FEATURES = 1
 
 
+class ValidationCalibratedClassifier:
+    """A persisted wrapper calibrated only from the chronological validation set."""
+
+    def __init__(self, estimator, calibrator):
+        self.estimator = estimator
+        self.calibrator = calibrator
+
+    def predict_proba(self, vectors):
+        import numpy as np
+
+        raw = self.estimator.predict_proba(vectors)[:, 1]
+        calibrated = self.calibrator.predict_proba(raw.reshape(-1, 1))[:, 1]
+        return np.column_stack([1.0 - calibrated, calibrated])
+
+
+class IsotonicProbabilityAdapter:
+    def __init__(self, fitted):
+        self.fitted = fitted
+
+    def predict_proba(self, values):
+        import numpy as np
+
+        positive = self.fitted.predict(values[:, 0])
+        return np.column_stack([1.0 - positive, positive])
+
+
 def read_request() -> dict[str, Any]:
     payload = json.load(sys.stdin)
     if not isinstance(payload, dict):
@@ -219,6 +245,41 @@ def positive_label_count(labels) -> int:
     return sum(1 for label in labels if int(label) == 1)
 
 
+def train_return_regressor(x_train, train_returns, x_validation, validation_returns, x_test, test_returns):
+    import numpy as np
+    from sklearn.linear_model import Ridge
+
+    returns = np.asarray(train_returns, dtype=float)
+    mask = ~np.isnan(returns)
+    if int(mask.sum()) < 8:
+        return None, {"status": "skipped", "reason": "insufficient_return_labels"}
+
+    regressor = Ridge(alpha=1.0)
+    regressor.fit(x_train[mask], returns[mask])
+
+    def mean_abs_error(actual, predicted) -> float | None:
+        errors: list[float] = []
+        for truth, estimate in zip(actual, predicted):
+            if truth is None or estimate is None:
+                continue
+            truth_value = finite(truth)
+            estimate_value = finite(float(estimate))
+            if truth_value is None or estimate_value is None:
+                continue
+            errors.append(abs(truth_value - estimate_value))
+        return round(sum(errors) / len(errors), 6) if errors else None
+
+    validation_pred = regressor.predict(x_validation)
+    test_pred = regressor.predict(x_test)
+    evidence = {
+        "status": "trained",
+        "model_family": "ridge_benchmark_relative_return",
+        "validation_mae": mean_abs_error(validation_returns, validation_pred),
+        "test_mae": mean_abs_error(test_returns, test_pred),
+    }
+    return regressor, evidence
+
+
 def classification_metrics(y_true: list[int], probabilities: list[float], relative_returns: list[float | None], drawdowns: list[float | None], decisions: list[int] | None = None) -> dict[str, Any]:
     from sklearn.metrics import average_precision_score, brier_score_loss, precision_score, recall_score, roc_auc_score
 
@@ -244,6 +305,78 @@ def classification_metrics(y_true: list[int], probabilities: list[float], relati
     return metrics
 
 
+def reliability_buckets(y_true: list[int], probabilities: list[float], bins: int = 10) -> list[dict[str, Any]]:
+    if len(y_true) == 0:
+        return []
+    bucket_count = max(1, min(bins, len(y_true)))
+    ordered = sorted(zip(probabilities, y_true), key=lambda item: item[0])
+    size = max(1, len(ordered) // bucket_count)
+    buckets: list[dict[str, Any]] = []
+    index = 0
+    while index < len(ordered):
+        slice_rows = ordered[index : index + size]
+        if not slice_rows:
+            break
+        predicted_mean = sum(probability for probability, _ in slice_rows) / len(slice_rows)
+        actual_rate = sum(label for _, label in slice_rows) / len(slice_rows)
+        buckets.append(
+            {
+                "rows": len(slice_rows),
+                "mean_predicted": round(predicted_mean, 6),
+                "mean_actual": round(actual_rate, 6),
+            }
+        )
+        index += size
+    return buckets
+
+
+def choose_calibration_method(validation_rows: int) -> str:
+    return "isotonic" if validation_rows >= 200 else "sigmoid"
+
+
+def fit_calibrated_classifier(model, x_validation, y_validation, validation_rows: int):
+    from sklearn.linear_model import LogisticRegression
+
+    sklearn_method = choose_calibration_method(validation_rows)
+    raw_probabilities = model.predict_proba(x_validation)[:, 1]
+    if sklearn_method == "isotonic":
+        from sklearn.isotonic import IsotonicRegression
+
+        calibrator = IsotonicRegression(out_of_bounds="clip")
+        calibrator.fit(raw_probabilities, y_validation)
+        calibrated = ValidationCalibratedClassifier(model, IsotonicProbabilityAdapter(calibrator))
+    else:
+        calibrator = LogisticRegression(max_iter=1000, random_state=7047)
+        calibrator.fit(raw_probabilities.reshape(-1, 1), y_validation)
+        calibrated = ValidationCalibratedClassifier(model, calibrator)
+    product_method = "isotonic" if sklearn_method == "isotonic" else "platt_sigmoid"
+    return calibrated, {"method": product_method, "sklearn_method": sklearn_method, "version": 2}
+
+
+def calibration_evidence(
+    y_true: list[int],
+    uncalibrated: list[float],
+    calibrated: list[float],
+    method_meta: dict[str, Any],
+) -> dict[str, Any]:
+    from sklearn.metrics import brier_score_loss
+
+    return {
+        **method_meta,
+        "uncalibrated_brier": float(brier_score_loss(y_true, uncalibrated)),
+        "calibrated_brier": float(brier_score_loss(y_true, calibrated)),
+        "reliability_buckets": reliability_buckets(y_true, calibrated),
+    }
+
+
+def contribution_source_model(model):
+    if hasattr(model, "calibrated_classifiers_") and model.calibrated_classifiers_:
+        return model.calibrated_classifiers_[0].estimator
+    if hasattr(model, "estimator"):
+        return model.estimator
+    return model
+
+
 def train(request: dict[str, Any]) -> dict[str, Any]:
     from sklearn.linear_model import LogisticRegression
     import numpy as np
@@ -266,10 +399,18 @@ def train(request: dict[str, Any]) -> dict[str, Any]:
         validation_count = len(validation_rows)
         test_count = len(test_rows)
         total_count = train_count + validation_count + test_count
-    if total_count < 12:
-        raise ValueError("training dataset is too small")
     numeric = list(request.get("numeric_features", []))
     categorical = list(request.get("categorical_features", []))
+    feature_profile = request.get("feature_profile")
+    if isinstance(feature_profile, dict):
+        profile_numeric = list(feature_profile.get("numeric", []))
+        profile_categorical = list(feature_profile.get("categorical", []))
+        if profile_numeric != numeric or profile_categorical != categorical:
+            raise ValueError("feature profile does not match configured adapter feature lists")
+        if feature_profile.get("horizon") is None or feature_profile.get("feature_set_id") is None:
+            raise ValueError("feature profile must pin horizon and feature_set_id")
+    if total_count < 12:
+        raise ValueError("training dataset is too small")
     configured_numeric = numeric.copy()
     configured_categorical = categorical.copy()
     partitions = request.get("partitions", {})
@@ -302,10 +443,27 @@ def train(request: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("training set contains one class")
     model = LogisticRegression(class_weight="balanced", max_iter=1000, random_state=int(request.get("seed", 7047)))
     model.fit(x_train, y_train)
-    validation_probabilities = model.predict_proba(x_validation)[:, 1].tolist()
-    test_probabilities = model.predict_proba(x_test)[:, 1].tolist()
+    validation_probabilities_uncalibrated = model.predict_proba(x_validation)[:, 1].tolist()
+    test_probabilities_uncalibrated = model.predict_proba(x_test)[:, 1].tolist()
+    calibrated_model, calibration_method = fit_calibrated_classifier(model, x_validation, y_validation, validation_count)
+    validation_probabilities = calibrated_model.predict_proba(x_validation)[:, 1].tolist()
+    test_probabilities = calibrated_model.predict_proba(x_test)[:, 1].tolist()
+    calibration = calibration_evidence(
+        y_validation,
+        validation_probabilities_uncalibrated,
+        validation_probabilities,
+        calibration_method,
+    )
+    calibration["test_evidence"] = calibration_evidence(
+        y_test,
+        test_probabilities_uncalibrated,
+        test_probabilities,
+        calibration_method,
+    )
     validation_metrics = classification_metrics(y_validation, validation_probabilities, validation_returns, validation_drawdowns)
     test_metrics = classification_metrics(y_test, test_probabilities, test_returns, test_drawdowns)
+    validation_metrics["calibration"] = calibration
+    test_metrics["calibration"] = calibration["test_evidence"]
 
     naive_probabilities = [positive_label_count(y_train) / len(y_train)] * test_count
     naive_metrics = classification_metrics(y_test, naive_probabilities, test_returns, test_drawdowns)
@@ -338,11 +496,81 @@ def train(request: dict[str, Any]) -> dict[str, Any]:
             deterministic_decisions.append(1 if bool(item.get("positive_decision")) else 0)
     deterministic_metrics = classification_metrics(y_test, deterministic_probabilities, test_returns, test_drawdowns, deterministic_decisions)
     test_metrics["deterministic_baseline_delta"] = test_metrics["benchmark_relative_return"] - deterministic_metrics["benchmark_relative_return"]
+    challenger_evidence = {"model_family": "hist_gradient_boosting_challenger", "status": "skipped"}
+    challenger = None
+    if request.get("train_challenger", True):
+        try:
+            from sklearn.ensemble import HistGradientBoostingClassifier
+
+            challenger = HistGradientBoostingClassifier(
+                max_iter=int(request.get("challenger_max_iter", 120)),
+                max_depth=int(request.get("challenger_max_depth", 4)),
+                random_state=int(request.get("seed", 7047)),
+            )
+            challenger.fit(x_train, y_train)
+            challenger_uncal_val = challenger.predict_proba(x_validation)[:, 1].tolist()
+            challenger_uncal_test = challenger.predict_proba(x_test)[:, 1].tolist()
+            calibrated_challenger, challenger_calibration_method = fit_calibrated_classifier(
+                challenger,
+                x_validation,
+                y_validation,
+                validation_count,
+            )
+            challenger_validation_probs = calibrated_challenger.predict_proba(x_validation)[:, 1].tolist()
+            challenger_test_probs = calibrated_challenger.predict_proba(x_test)[:, 1].tolist()
+            challenger_calibration = calibration_evidence(
+                y_validation,
+                challenger_uncal_val,
+                challenger_validation_probs,
+                challenger_calibration_method,
+            )
+            challenger_calibration["test_evidence"] = calibration_evidence(
+                y_test,
+                challenger_uncal_test,
+                challenger_test_probs,
+                challenger_calibration_method,
+            )
+            challenger_validation_metrics = classification_metrics(
+                y_validation,
+                challenger_validation_probs,
+                validation_returns,
+                validation_drawdowns,
+            )
+            challenger_validation_metrics["calibration"] = challenger_calibration
+            challenger_test_metrics = classification_metrics(y_test, challenger_test_probs, test_returns, test_drawdowns)
+            challenger_test_metrics["calibration"] = challenger_calibration["test_evidence"]
+            challenger = calibrated_challenger
+            challenger_evidence = {
+                "model_family": "hist_gradient_boosting_challenger",
+                "status": "trained",
+                "validation_metrics": challenger_validation_metrics,
+                "test_metrics": challenger_test_metrics,
+                "calibration": challenger_calibration,
+                "roc_auc_delta_vs_logistic": round(
+                    float(challenger_test_metrics.get("roc_auc", 0.0)) - float(test_metrics.get("roc_auc", 0.0)),
+                    6,
+                ),
+            }
+        except Exception as exc:  # noqa: BLE001
+            challenger_evidence = {
+                "model_family": "hist_gradient_boosting_challenger",
+                "status": "error",
+                "message": str(exc),
+            }
+    return_regressor_model, return_regressor_evidence = train_return_regressor(
+        x_train,
+        train_returns,
+        x_validation,
+        validation_returns,
+        x_test,
+        test_returns,
+    )
     metadata = {
         "format": "stox-v7-logistic",
         "feature_names": feature_names_value,
         "configured_numeric_features": configured_numeric,
         "configured_categorical_features": configured_categorical,
+        "feature_profile": feature_profile,
         "numeric_features": numeric,
         "categorical_features": categorical,
         "effective_feature_set": numeric + categorical,
@@ -352,6 +580,9 @@ def train(request: dict[str, Any]) -> dict[str, Any]:
         "partitions": partitions,
         "runtime": {"python": sys.version.split()[0], "sklearn": __import__("sklearn").__version__},
         "seed": int(request.get("seed", 7047)),
+        "challenger": challenger_evidence,
+        "return_regressor": return_regressor_evidence,
+        "calibration": calibration,
     }
     diagnostics = {
         "train_rows": train_count,
@@ -370,15 +601,43 @@ def train(request: dict[str, Any]) -> dict[str, Any]:
     os.makedirs(os.path.dirname(artifact_path), exist_ok=True)
     import joblib
 
-    joblib.dump({"model": model, **metadata}, artifact_path, compress=3)
+    joblib.dump({**metadata, "model": calibrated_model, "return_regressor": return_regressor_model}, artifact_path, compress=3)
     digest = hashlib.sha256(open(artifact_path, "rb").read()).hexdigest()
+    challenger_digest = None
+    challenger_path = request.get("challenger_artifact_path")
+    if (
+        challenger is not None
+        and challenger_evidence.get("status") == "trained"
+        and isinstance(challenger_path, str)
+        and challenger_path
+    ):
+        challenger_metadata = {
+            **metadata,
+            "format": "stox-v8-hist-gradient-challenger",
+            "inference_model_family": "hist_gradient_boosting_challenger",
+        }
+        os.makedirs(os.path.dirname(challenger_path), exist_ok=True)
+        joblib.dump(
+            {**challenger_metadata, "model": challenger, "return_regressor": return_regressor_model},
+            challenger_path,
+            compress=3,
+        )
+        challenger_digest = hashlib.sha256(open(challenger_path, "rb").read()).hexdigest()
     metrics = dict(test_metrics)
     metrics["validation"] = validation_metrics
     metrics["test"] = test_metrics
     metrics["train_rows"] = train_count
     metrics["validation_rows"] = validation_count
     metrics["test_rows"] = test_count
-    return {"schema_version": 1, "artifact_sha256": digest, "metrics": metrics, "baselines": {"naive": naive_metrics, "deterministic_stox": deterministic_metrics}, "metadata": metadata, "diagnostics": diagnostics}
+    return {
+        "schema_version": 1,
+        "artifact_sha256": digest,
+        "challenger_artifact_sha256": challenger_digest,
+        "metrics": metrics,
+        "baselines": {"naive": naive_metrics, "deterministic_stox": deterministic_metrics},
+        "metadata": metadata,
+        "diagnostics": diagnostics,
+    }
 
 
 def predict(request: dict[str, Any]) -> dict[str, Any]:
@@ -396,14 +655,30 @@ def predict(request: dict[str, Any]) -> dict[str, Any]:
     vectors, names, _ = prepare(rows, artifact["numeric_features"], artifact["categorical_features"], artifact["preprocessing"])
     if names != artifact["feature_names"]:
         raise ValueError("model feature schema does not match prediction input")
-    probability = float(artifact["model"].predict_proba(vectors)[0, 1])
+    inference_model = artifact["model"]
+    probability = float(inference_model.predict_proba(vectors)[0, 1])
     contributions = []
-    for name, value, coefficient in zip(names, vectors[0], artifact["model"].coef_[0].tolist()):
-        contribution = float(value * coefficient)
-        if contribution != 0:
-            contributions.append({"feature": name, "value": value, "coefficient": coefficient, "contribution": contribution, "direction": "positive" if contribution > 0 else "negative"})
-    contributions.sort(key=lambda item: abs(item["contribution"]), reverse=True)
-    return {"schema_version": 1, "score": round(probability * 100, 4), "confidence": round(max(probability, 1 - probability), 4), "contributions": contributions[:20], "artifact_sha256": digest}
+    model = contribution_source_model(inference_model)
+    if hasattr(model, "coef_"):
+        for name, value, coefficient in zip(names, vectors[0], model.coef_[0].tolist()):
+            contribution = float(value * coefficient)
+            if contribution != 0:
+                contributions.append({"feature": name, "value": value, "coefficient": coefficient, "contribution": contribution, "direction": "positive" if contribution > 0 else "negative"})
+        contributions.sort(key=lambda item: abs(item["contribution"]), reverse=True)
+    expected_return_pct = None
+    regressor = artifact.get("return_regressor")
+    if regressor is not None:
+        estimate = finite(float(regressor.predict(vectors)[0]))
+        if estimate is not None:
+            expected_return_pct = round(estimate * 100, 4)
+    return {
+        "schema_version": 1,
+        "score": round(probability * 100, 4),
+        "confidence": round(max(probability, 1 - probability), 4),
+        "expected_benchmark_relative_return_pct": expected_return_pct,
+        "contributions": contributions[:20],
+        "artifact_sha256": digest,
+    }
 
 
 def drift(request: dict[str, Any]) -> dict[str, Any]:
