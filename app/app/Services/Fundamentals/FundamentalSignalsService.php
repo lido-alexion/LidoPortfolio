@@ -94,6 +94,7 @@ class FundamentalSignalsService
         $this->evaluateEarningsCashSignals($stock, $asOf, $risk, $watch);
         $this->evaluateLeverageSignals($stock, $asOf, $positive, $risk, $watch);
         $this->evaluateDilutionSignals($stock, $asOf, $risk, $watch);
+        $this->evaluateOwnershipSignals($stock, $asOf, $watch);
 
         $ocf = $this->fundamentals->metric($stock, 'operating_cash_flow', 'ttm', $asOf, $price);
         if ($ocf['value'] !== null && $ni['value'] !== null && (float) $ni['value'] > 0) {
@@ -319,6 +320,31 @@ class FundamentalSignalsService
         }
     }
 
+    /** Ownership movement is factual context, not an automatic bullish/bearish verdict. */
+    protected function evaluateOwnershipSignals(Stock $stock, Carbon $asOf, array &$watch): void
+    {
+        foreach ([
+            'promoter_holding' => 'Promoter holding',
+            'fii_holding' => 'FII/FPI holding',
+            'dii_holding' => 'DII holding',
+            'public_holding' => 'Public holding',
+            'promoter_pledge' => 'Promoter pledge',
+        ] as $factKey => $label) {
+            $pair = $this->comparablePair($stock, $factKey, $asOf);
+            if ($pair === null) continue;
+            $delta = $pair['current'] - $pair['prior'];
+            if (abs($delta) < 1.0) continue;
+            $watch[] = $this->signal('ownership_'.$factKey.'_movement', $label.' changed versus the comparable period', [
+                'current_pct' => round($pair['current'], 2),
+                'prior_pct' => round($pair['prior'], 2),
+                'delta_pp' => round($delta, 2),
+                'period' => $pair['current_period'],
+                'comparison_period' => $pair['prior_period'],
+                'basis' => 'same_period_yoy',
+            ]);
+        }
+    }
+
     /** @return array{current:float,prior:float,current_period:string,prior_period:string}|null */
     protected function comparablePair(Stock $stock, string $factKey, Carbon $asOf): ?array
     {
@@ -353,7 +379,7 @@ class FundamentalSignalsService
         return [
             'signal_key' => $key,
             'category' => $this->categoryFor($key),
-            'direction' => str_contains($key, 'decreasing') || str_contains($key, 'strong') || str_contains($key, 'expanding') ? 'positive' : (str_contains($key, 'stable') || str_contains($key, 'follow_up') ? 'watch' : 'risk'),
+            'direction' => str_contains($key, 'decreasing') || str_contains($key, 'strong') || str_contains($key, 'expanding') ? 'positive' : (str_contains($key, 'stable') || str_contains($key, 'follow_up') || str_contains($key, 'ownership_') ? 'watch' : 'risk'),
             'title' => $headline,
             'headline' => $headline,
             'summary' => $headline,
@@ -361,7 +387,7 @@ class FundamentalSignalsService
             'evidence' => $metricValues,
             'basis' => $metricValues['basis'] ?? 'deterministic',
             'period' => $metricValues['period'] ?? null,
-            'severity' => str_contains($key, 'stable') ? 'informational' : (str_contains($key, 'follow_up') || str_contains($key, 'cwip') ? 'watch' : 'material'),
+            'severity' => str_contains($key, 'stable') ? 'informational' : (str_contains($key, 'follow_up') || str_contains($key, 'cwip') || str_contains($key, 'ownership_') ? 'watch' : 'material'),
             'confidence' => 'deterministic',
             'source' => 'deterministic',
             'provenance' => ['source' => 'StoX deterministic calculation'],
@@ -370,7 +396,7 @@ class FundamentalSignalsService
 
     protected function categoryFor(string $key): string
     {
-        foreach (['margin' => 'profitability', 'cash' => 'cash_flow', 'ocf' => 'cash_flow', 'fcf' => 'cash_flow', 'debt' => 'leverage', 'leverage' => 'leverage', 'dilution' => 'capital_structure', 'share_count' => 'capital_structure', 'receivable' => 'working_capital', 'inventory' => 'working_capital', 'cwip' => 'capital_projects'] as $needle => $category) {
+        foreach (['margin' => 'profitability', 'cash' => 'cash_flow', 'ocf' => 'cash_flow', 'fcf' => 'cash_flow', 'debt' => 'leverage', 'leverage' => 'leverage', 'dilution' => 'capital_structure', 'share_count' => 'capital_structure', 'ownership' => 'ownership', 'receivable' => 'working_capital', 'inventory' => 'working_capital', 'cwip' => 'capital_projects'] as $needle => $category) {
             if (str_contains($key, $needle)) return $category;
         }
         return 'fundamentals';
@@ -394,6 +420,8 @@ class FundamentalSignalsService
                 $checks[] = 'Review the debt maturity schedule, capex plan, refinancing commentary and finance-cost notes.';
             } elseif ($key === 'dilution_follow_up' || $key === 'share_count_dilution') {
                 $checks[] = 'Review preferential, QIP, rights issue, ESOP, acquisition-funding and corporate-action disclosures.';
+            } elseif (str_starts_with((string) $key, 'ownership_')) {
+                $checks[] = 'Review the relevant shareholding, promoter transaction and pledge disclosure for the comparable period.';
             }
         }
         return array_values(array_unique($checks));

@@ -41,6 +41,11 @@ return [
         'capital_expenditure' => ['label' => 'Capital expenditure', 'group' => 'cash_flow', 'statement_type' => 'cash_flow'],
         'dividends_paid' => ['label' => 'Dividends paid', 'group' => 'cash_flow', 'statement_type' => 'cash_flow'],
         'shares_outstanding' => ['label' => 'Shares outstanding', 'group' => 'balance', 'statement_type' => 'balance_sheet'],
+        'promoter_holding' => ['label' => 'Promoter holding', 'group' => 'ownership', 'statement_type' => 'ownership'],
+        'fii_holding' => ['label' => 'FII/FPI holding', 'group' => 'ownership', 'statement_type' => 'ownership'],
+        'dii_holding' => ['label' => 'DII holding', 'group' => 'ownership', 'statement_type' => 'ownership'],
+        'public_holding' => ['label' => 'Public holding', 'group' => 'ownership', 'statement_type' => 'ownership'],
+        'promoter_pledge' => ['label' => 'Promoter pledge', 'group' => 'ownership', 'statement_type' => 'ownership'],
     ],
     'derived_metrics' => [
         'revenue' => ['label' => 'Revenue (TTM)', 'default_basis' => 'ttm', 'requires_price' => false, 'kind' => 'flow_ttm'],

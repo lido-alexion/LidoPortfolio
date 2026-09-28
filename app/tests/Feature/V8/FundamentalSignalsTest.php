@@ -164,6 +164,10 @@ class FundamentalSignalsTest extends TestCase
                 ['statement_type' => 'balance_sheet', 'cadence' => 'quarterly', 'fact_key' => 'shares_outstanding', 'period_end' => $period, 'value' => $shares, 'availability_date' => '2025-06-01'],
             ]);
         }
+        $service->storeFacts($stock, [
+            ['statement_type' => 'ownership', 'cadence' => 'quarterly', 'fact_key' => 'promoter_holding', 'period_end' => '2024-03-31', 'value' => 40, 'availability_date' => '2025-06-01'],
+            ['statement_type' => 'ownership', 'cadence' => 'quarterly', 'fact_key' => 'promoter_holding', 'period_end' => '2025-03-31', 'value' => 45, 'availability_date' => '2025-06-01'],
+        ]);
 
         $response = $this->actingAs($user)->withProfileHeader($user)
             ->getJson("/api/v1/stocks/{$stock->id}/fundamentals?include_insights=1&as_of=2025-06-20")
@@ -174,6 +178,7 @@ class FundamentalSignalsTest extends TestCase
         $response->assertJsonFragment(['signal_key' => 'earnings_cash_divergence']);
         $response->assertJsonFragment(['signal_key' => 'debt_increasing']);
         $response->assertJsonFragment(['signal_key' => 'share_count_dilution']);
+        $response->assertJsonFragment(['signal_key' => 'ownership_promoter_holding_movement']);
         $response->assertJsonFragment(['basis' => 'quarterly_yoy']);
         $response->assertJsonFragment(['delta_pp' => 10]);
     }
