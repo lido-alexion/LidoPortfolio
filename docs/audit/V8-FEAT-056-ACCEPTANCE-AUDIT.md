@@ -18,7 +18,7 @@ Evidence is mapped to `docs/archive/specs/V8-ML-Lifecycle-Automation-Deployment-
 | No automatic promotion/rollback | PASS by tests | lifecycle automation only queues training and evaluates drift; promotion remains explicit Admin action |
 | Retention and stale/superseded candidates | PASS locally | retention service and promotion review tests; production archive/runtime proof remains |
 | Notifications and actionable failures | PASS locally | lifecycle notification tests and existing StoX notification boundary; deployed channel validation remains |
-| Admin authorization/auditability | PASS locally | Admin route group and focused authorization/lifecycle tests, including Investor denial for persisted schedule mutation |
+| Admin authorization/auditability | PASS locally | Admin route group and focused authorization/lifecycle tests, including Investor denial for persisted schedule mutation; the lifecycle table exposes normalized latest outcome and active operational state per horizon |
 | Durable stale-run recovery | PASS locally | `MlTrainingRunRecoveryService` requeues stale running runs after worker restart, finalizes stale cancellation requests without requeueing, and is invoked at lifecycle ticks; `MlLifecycleAutomationTest` covers both paths |
 | Production queue/scheduler deployment | EXTERNAL VALIDATION PENDING | VPS worker, scheduler, queue restart and notification-provider runtime have not been claimed |
 
