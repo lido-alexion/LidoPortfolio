@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\TradingOs;
 use App\Models\StockPrice;
 use App\Models\TradingRecommendation;
 use App\Services\Lending\CapitalResolutionStatusService;
+use App\Services\Strategy\StrategyProvenanceResolutionService;
 
 /**
  * HTTP wire mapping for Trading OS list/detail JSON.
@@ -262,6 +263,14 @@ final class TradingOsPresenter
                 ];
             } else {
                 $payload['execution'] = null;
+            }
+
+            if ($r->strategy_version_id) {
+                $payload['provenance'] = [
+                    'strategy_version_id' => (int) $r->strategy_version_id,
+                    'pinned_screeners' => app(StrategyProvenanceResolutionService::class)
+                        ->pinnedScreenersForStrategyVersion((int) $r->strategy_version_id),
+                ];
             }
 
             try {
