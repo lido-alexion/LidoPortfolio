@@ -101,6 +101,7 @@ class FundamentalSignalsService
         $this->evaluateOwnershipSignals($stock, $asOf, $watch);
         $this->evaluateOwnershipFinancialContext($stock, $asOf, $watch);
         $this->evaluateValuationDivergence($stock, $asOf, $watch);
+        $this->evaluateHistoricalValuationRange($stock, $asOf, $watch);
         $this->evaluateWorkingCapitalBalanceSheetSignals($stock, $asOf, $positive, $risk, $watch);
         $this->evaluateGrowthRelationships($stock, $asOf, $positive, $risk, $watch);
         $this->evaluateCashAndNetDebtTrends($stock, $asOf, $positive, $risk, $watch);
@@ -520,6 +521,22 @@ class FundamentalSignalsService
                 'basis' => 'quarterly_yoy',
             ]);
         }
+
+        $incomeTrend = $this->growthTrend($stock, 'net_income', $asOf);
+        $ocfTrend = $this->growthTrend($stock, 'operating_cash_flow', $asOf);
+        if ($incomeTrend !== null && $ocfTrend !== null
+            && $incomeTrend['latest_yoy_pct'] >= 10.0 && $incomeTrend['prior_comparable_yoy_pct'] >= 10.0
+            && $ocfTrend['latest_yoy_pct'] <= -10.0 && $ocfTrend['prior_comparable_yoy_pct'] <= -10.0) {
+            $risk[] = $this->signal('earnings_cash_divergence_persistent', 'Positive earnings growth has coincided with repeated operating-cash-flow deterioration', [
+                'latest_net_income_yoy_pct' => $incomeTrend['latest_yoy_pct'],
+                'prior_net_income_yoy_pct' => $incomeTrend['prior_comparable_yoy_pct'],
+                'latest_operating_cash_flow_yoy_pct' => $ocfTrend['latest_yoy_pct'],
+                'prior_operating_cash_flow_yoy_pct' => $ocfTrend['prior_comparable_yoy_pct'],
+                'period' => $incomeTrend['period'],
+                'comparison_period' => $incomeTrend['comparison_period'],
+                'basis' => 'two_consecutive_quarterly_yoy_comparisons',
+            ]);
+        }
     }
 
     protected function evaluateLeverageSignals(Stock $stock, Carbon $asOf, array &$positive, array &$risk, array &$watch): void
@@ -656,6 +673,43 @@ class FundamentalSignalsService
             'operating_cash_flow_yoy_pct' => $cash['value'] !== null ? (float) $cash['value'] : null,
             'basis' => 'latest_valuation_with_quarterly_yoy_fundamental_trends',
         ]);
+    }
+
+    /** Use only a sufficiently populated PIT valuation history; no synthetic range is emitted. */
+    protected function evaluateHistoricalValuationRange(Stock $stock, Carbon $asOf, array &$watch): void
+    {
+        $history = $this->snapshots->metricHistory($stock, 'pe', $asOf, '5y', 'monthly');
+        $values = collect($history['points'] ?? [])
+            ->pluck('value')
+            ->filter(fn ($value): bool => is_numeric($value) && (float) $value > 0.0)
+            ->map(fn ($value): float => (float) $value)
+            ->values();
+        if ($values->count() < 4) {
+            return;
+        }
+
+        $latest = (float) $values->last();
+        $sorted = $values->sort()->values();
+        $lower = (float) $sorted[(int) floor(($sorted->count() - 1) * 0.25)];
+        $upper = (float) $sorted[(int) floor(($sorted->count() - 1) * 0.75)];
+        $buffer = 1.20;
+        if ($latest > $upper * $buffer) {
+            $watch[] = $this->signal('historical_pe_above_range', 'P/E is materially above the available historical valuation range', [
+                'latest_pe' => round($latest, 2),
+                'historical_p25_pe' => round($lower, 2),
+                'historical_p75_pe' => round($upper, 2),
+                'observations' => $values->count(),
+                'basis' => 'five_year_pit_monthly_pe_range_with_20pct_buffer',
+            ]);
+        } elseif ($latest < $lower / $buffer) {
+            $watch[] = $this->signal('historical_pe_below_range', 'P/E is materially below the available historical valuation range', [
+                'latest_pe' => round($latest, 2),
+                'historical_p25_pe' => round($lower, 2),
+                'historical_p75_pe' => round($upper, 2),
+                'observations' => $values->count(),
+                'basis' => 'five_year_pit_monthly_pe_range_with_20pct_buffer',
+            ]);
+        }
     }
 
     protected function evaluateGrowthRelationships(Stock $stock, Carbon $asOf, array &$positive, array &$risk, array &$watch): void

@@ -15,7 +15,7 @@ it is not inferred from a related signal.
 | ROE/ROA/ROCE movement against company history | `roe_strong`, `roe_weak`, `roe_movement_expanding`, `roe_movement_contracting`, `roe_movement_stable`, `roa_movement_*`, `roce_movement_*` | Return metrics from comparable numerator/denominator pairs with positive denominators | availability date <= as-of; incompatible/missing periods unavailable | current/prior return and pp delta | PASS where canonical denominator facts exist; unavailable otherwise |
 | Other-income / exceptional-item dependence | `other_income_exceptional_dependence` | Other income or exceptional items as a rising share of net income | availability date <= as-of; same periods | current/prior share and delta | PASS where structured facts exist |
 | OCF versus net income | `strong_ocf_vs_net_income`, `weak_ocf_vs_net_income` | TTM OCF and net income | availability date <= as-of | both values | PASS |
-| Multi-period OCF/net-income deterioration or improvement | `earnings_cash_divergence`, `cash_quality_follow_up` | Quarterly YoY OCF/income divergence | comparable periods | both growth values | PARTIAL |
+| Multi-period OCF/net-income deterioration or improvement | `earnings_cash_divergence`, `earnings_cash_divergence_persistent`, `cash_quality_follow_up` | Quarterly YoY OCF/income divergence across one or two consecutive comparisons | comparable periods | both growth values and persistence basis | PASS |
 | Positive earnings with weak/negative OCF | `negative_fcf_with_profit`, `weak_ocf_vs_net_income` | TTM profit and cash measures | availability date <= as-of | both values | PASS |
 | FCF direction and persistence | `fcf_improving`, `fcf_deteriorating` | Consecutive comparable FCF periods | comparable periods | latest/prior comparable YoY growth and trend delta | PASS |
 | Capex intensity changes | `capex_intensity_increasing`, `capex_intensity_decreasing` | Capital expenditure as a percentage of revenue | comparable periods; positive revenue required | current/prior intensity and pp delta | PASS |
@@ -32,7 +32,7 @@ it is not inferred from a related signal.
 | CWIP growth/share/persistence | `cwip_expansion_ambiguous` | Annual CWIP growth and share of PPE | availability date <= as-of | growth/share and follow-up | PASS |
 | Promoter/pledge/FII/DII/public changes | `ownership_*_movement` | Same-period ownership pairs | availability date <= as-of | current/prior/delta | PASS |
 | Ownership changes combined with financial signals | `ownership_financial_context` | Promoter holding/pledge movement aligned with material debt movement | both sources same-period PIT-safe | ownership delta, debt growth and aligned periods | PASS where aligned facts exist |
-| Historical valuation-range deviation | — | Historical valuation distribution | price/fundamental as-of | — | PARTIAL |
+| Historical valuation-range deviation | `historical_pe_above_range`, `historical_pe_below_range` | Five-year PIT monthly positive P/E distribution with minimum observation count | price/fundamental as-of | latest P/E, p25/p75, observation count and range basis | PASS where four or more valid observations exist |
 | Reliable sector/peer percentile | `sector_roe_*`, `sector_leverage_above_peers`, `sector_pe_above_peers` | Dated sector snapshot and peer values | dated membership/snapshot required | subject/peer/delta/basis | PASS |
 | Valuation divergence from earnings/cash | `valuation_earnings_cash_divergence` | Positive P/E with weakening comparable earnings or operating cash flow | valuation and fundamentals as-of aligned | P/E and earnings/cash growth evidence | PASS |
 | 52-week price context alone | intentionally none | Explicitly not a fundamental signal | n/a | n/a | NOT APPLICABLE — prohibited by frozen spec |
@@ -40,6 +40,6 @@ it is not inferred from a related signal.
 Every emitted signal is normalized by
 `app/app/Services/Fundamentals/FundamentalSignalsService.php` with a stable
 key, category, direction, summary, evidence, basis, period, severity,
-confidence and provenance. The remaining `PARTIAL` rows are the next
-implementation scope; they are not promoted to `PASS` by the existence of a
-neighboring signal.
+confidence and provenance. Data-dependent rows remain unavailable when their
+canonical facts or comparable PIT observations are missing; they are not
+silently inferred from neighboring signals.

@@ -425,4 +425,47 @@ class FundamentalSignalsTest extends TestCase
         $insights = app(FundamentalSignalsService::class)->deterministicInsights($stock, Carbon::parse('2025-06-20'));
         $this->assertContains('valuation_earnings_cash_divergence', collect($insights['watch_items'])->pluck('signal_key')->all());
     }
+
+    public function test_historical_valuation_range_requires_four_positive_pit_observations(): void
+    {
+        $stock = Stock::query()->create(['symbol' => 'PEHI', 'exchange' => 'NSE', 'name' => 'Historical PE Co']);
+        $service = app(FundamentalDataService::class);
+        $periods = ['2023-06-30', '2023-09-30', '2023-12-31', '2024-03-31', '2024-06-30', '2024-09-30', '2024-12-31', '2025-03-31'];
+        foreach ($periods as $period) {
+            $service->storeFacts($stock, [[
+                'statement_type' => 'income_statement', 'cadence' => 'quarterly', 'fact_key' => 'eps',
+                'period_end' => $period, 'value' => 2.5, 'availability_date' => '2023-01-01',
+            ]]);
+        }
+        foreach ([
+            ['2024-10-31', 40], ['2024-11-29', 45], ['2024-12-31', 50], ['2025-01-31', 45], ['2025-02-28', 50], ['2025-03-31', 100],
+        ] as [$date, $price]) {
+            StockPrice::query()->create([
+                'stock_id' => $stock->id, 'price_date' => $date, 'close_price' => $price, 'adjusted_close_price' => $price,
+                'provider_source' => 'fixture', 'data_source' => 'fixture',
+            ]);
+        }
+
+        $insights = app(FundamentalSignalsService::class)->deterministicInsights($stock, Carbon::parse('2025-03-31'));
+        $this->assertContains('historical_pe_above_range', collect($insights['watch_items'])->pluck('signal_key')->all());
+    }
+
+    public function test_repeated_earnings_cash_divergence_is_distinguished_from_one_period_noise(): void
+    {
+        $stock = Stock::query()->create(['symbol' => 'PERS', 'exchange' => 'NSE', 'name' => 'Persistent Cash Co']);
+        $service = app(FundamentalDataService::class);
+        foreach ([
+            ['2023-03-31', 100, 10], ['2023-06-30', 100, 10], ['2023-09-30', 100, 10],
+            ['2024-03-31', 120, 8], ['2024-06-30', 120, 8], ['2024-09-30', 120, 8],
+            ['2025-03-31', 150, 5], ['2025-06-30', 150, 5], ['2025-09-30', 150, 5],
+        ] as [$period, $income, $ocf]) {
+            $service->storeFacts($stock, [
+                ['statement_type' => 'income_statement', 'cadence' => 'quarterly', 'fact_key' => 'net_income', 'period_end' => $period, 'value' => $income, 'availability_date' => '2025-10-01'],
+                ['statement_type' => 'cash_flow', 'cadence' => 'quarterly', 'fact_key' => 'operating_cash_flow', 'period_end' => $period, 'value' => $ocf, 'availability_date' => '2025-10-01'],
+            ]);
+        }
+
+        $insights = app(FundamentalSignalsService::class)->deterministicInsights($stock, Carbon::parse('2025-10-10'));
+        $this->assertContains('earnings_cash_divergence_persistent', collect($insights['risk_signals'])->pluck('signal_key')->all());
+    }
 }
