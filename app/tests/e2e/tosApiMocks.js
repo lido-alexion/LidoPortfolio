@@ -41,6 +41,24 @@ export async function installTosApiMocks(page, {
         if (path.endsWith('/api/portfolios') && method === 'GET') {
             return json(route, { data: [TEST_PORTFOLIO] });
         }
+        if (path.endsWith('/api/guided-tour') && method === 'GET') {
+            return json(route, apiEnvelope({
+                eligible: false,
+                show_welcome_prompt: false,
+                can_manual_relaunch: false,
+                current_step_id: null,
+                tour_in_progress: false,
+            }));
+        }
+        if (path.endsWith('/api/dashboard') && method === 'GET') {
+            return json(route, apiEnvelope({}));
+        }
+        if (path.endsWith('/api/patterns/scan') && method === 'GET') {
+            return json(route, apiEnvelope([]));
+        }
+        if (path.endsWith('/api/v1/protections') && method === 'GET') {
+            return json(route, apiEnvelope({ protections: [] }));
+        }
         if (path.endsWith('/api/v1/recommendations') && method === 'GET') {
             return json(route, apiEnvelope(recs));
         }
