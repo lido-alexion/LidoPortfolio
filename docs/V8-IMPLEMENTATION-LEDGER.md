@@ -102,7 +102,7 @@ See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-F
 ## Verified continuation checkpoint (2026-09-28)
 
 - Actual checkout is `bd4148b`; the earlier handoff SHA `3265357` is not the current HEAD.
-- The full Feature suite under local PHP CLI `memory_limit=512M` now passes **1,332/1,333**, with one intentional bounded-training skip when `STOXLA_ML_TEST_PYTHON` is absent. The previous FEAT-064 fixture cascade was repaired by giving activation-oriented legacy fixtures the executable factory configuration; the production Setup Required gate was not weakened.
+- The full Feature suite under local PHP CLI `memory_limit=512M` now passes **1,335/1,336**, with one intentional bounded-training skip when `STOXLA_ML_TEST_PYTHON` is absent. The previous FEAT-064 fixture cascade was repaired by giving activation-oriented legacy fixtures the executable factory configuration; the production Setup Required gate was not weakened.
 - FEAT-062 now covers the frozen deterministic catalogue with PIT-safe operating-profit/bottom-line, ROA/ROCE, working-capital/liquidity, capex, ownership/financial, persistent cash-quality and historical valuation-context signals; absent source data remains unavailable rather than inferred. It is REVIEW pending browser/mobile and real-provider acceptance.
 - FEAT-056 lifecycle focus passes locally, including stale running-run recovery and stale cancellation finalization; mixed `MlScoringService` integration remains deliberately separated from FEAT-057.
 - FEAT-056 scoring reconciliation is now committed as `2900e50`, with explicit `completed_rejected` quality outcomes and regression coverage in `73307cb`; FEAT-056 remains IN PROGRESS only for remaining deployment/acceptance evidence and any frozen lifecycle gaps.
@@ -114,7 +114,7 @@ See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-F
 - FEAT-062 deterministic catalogue completion is committed across `c1caacf`, `d90a429`, `f2744df`, `e307229`, `b67a777`; the epic is REVIEW pending browser/mobile and real-provider validation.
 - FEAT-065 corpus storage, Kite historical client, coverage reporting and DuckDB/Polars handoff helpers are committed as `1fe3d6d`; bounded retry/backoff and failed-window checkpoint semantics are committed as `9e4985e`/`8b5cc0c`; the 20-test isolated corpus suite is green with DuckDB installed.
 - FEAT-057 candidate evidence is now durably archived by model version with an evidence checksum and idempotent re-persistence (`99ef02e`, `5802707`); the same-architecture bounded campaign passes **1/1, 51 assertions**.
-- The post-scoring-reconciliation full Feature suite is green at **1,332 passed / 1 skipped / 0 failures**; the skip is the expected environment-gated bounded campaign when no ML runtime is configured.
+- The post-archive-integrity full Feature suite is green at **1,335 passed / 1 skipped / 0 failures**; the skip is the expected environment-gated bounded campaign when no ML runtime is configured.
 - Shared V8 API routes, middleware aliases, console commands, scheduler entries and environment documentation are wired in `c22c0bf`; dependent feature files remain intentionally preserved in the inherited workspace.
 
 ## Next task
