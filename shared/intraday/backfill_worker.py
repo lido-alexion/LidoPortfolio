@@ -230,6 +230,11 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     print(json.dumps(result, indent=2))
+    if result.get("status") == "failed" or any(
+        isinstance(item, dict) and item.get("status") == "failed"
+        for item in result.get("results", [])
+    ):
+        return 2
     return 0
 
 
