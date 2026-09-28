@@ -58,5 +58,7 @@ Focused FEAT-063 commits after takeover:
 - `b0ef1f3` — durable finalization state, bounded retry, market-session gating, atomic manifests/backups, and finalized-day spool pruning.
 - `23fddb0` — Admin status exposure and operational alerts for finalization/backup failure.
 - `660a82f` — reconnect resubscription of the complete active universe in Kite full mode.
+- `18b0e12` — explicit no-trade rows for active-universe minute coverage.
+- `83a0c2a` — persistent VPS paths, dedicated collector venv provisioning, dependency import checks, and corrected systemd release paths.
 
 The collector remains **IN PROGRESS**. Remaining exit-gate work includes explicit coverage/outage quality reporting, full trading-calendar/session tests, universe identity audit/refresh behavior, backup retry evidence, alert cooldown verification, and VPS runtime/live Kite validation. FEAT-055 and FEAT-061 remain **REVIEW** pending their formal acceptance audits.

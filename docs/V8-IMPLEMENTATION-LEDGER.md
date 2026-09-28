@@ -12,7 +12,7 @@ FEAT-056  [IN PROGRESS] ML lifecycle automation (queued runs, SSE, drift, cancel
 FEAT-057  [IN PROGRESS] ML feature engineering / training (feature registry + dataset plan/admin APIs; full PIT-safe feature/training/validation corpus still open)
 FEAT-061  [REVIEW] Guided tour / onboarding (backend/frontend foundation and tests present; full acceptance/accessibility/i18n/runtime audit still open)
 FEAT-062  [IN PROGRESS] Fundamental signals & AI insights (deterministic + Gemini/Codex orchestrator; admin diagnostics and full acceptance still open)
-FEAT-063  [IN PROGRESS] Live microstructure collection (control plane + Python worker; expanded schema, bounded spool, durable finalization/retry, atomic backup, reconnect recovery, and actionable finalization/backup alerts; calendar/quality/universe/VPS validation gaps remain)
+FEAT-063  [IN PROGRESS] Live microstructure collection (control plane + Python worker; expanded schema, explicit no-trade rows, bounded spool, durable finalization/retry, atomic backup, reconnect recovery, actionable alerts, and VPS provisioning; calendar/quality/universe/live validation gaps remain)
 FEAT-064  [REVIEW] Screener / Strategy UX (semantic versions, run/backtest pins, immutable save, readiness, provenance audit, and WP-09 return flow present; regression cleanup and full gate remain)
 FEAT-065  [IN PROGRESS] Intraday ML historical data platform (checkpoints + admin status + Mac backfill worker; current-universe orchestration, coverage, and handoff acceptance remain)
 ```
@@ -48,7 +48,9 @@ FEAT-065  [IN PROGRESS] Intraday ML historical data platform (checkpoints + admi
 | Live KiteTicker WebSocket | wired (`kite_ticker_bridge.py`) | manual VPS + kiteconnect |
 | Finalization + partition backup | partial (durable bounded retry, atomic manifest/staged backup, spool pruning) | `test_finalization_state.py`, `MicrostructureCollectorHealthAlertTest.php` |
 | Reconnect + full-mode resubscription | partial (bridge recovery path) | `test_kite_ticker_bridge.py` |
+| No-trade coverage rows | done | `test_minute_aggregator.py` |
 | Operational alerts | partial (stale heartbeat / error / disk / finalization / backup) | `MicrostructureCollectorHealthAlertTest.php` |
+| VPS venv/systemd/runtime gate | partial (provisioning + import checks + persistent paths) | `deploy/systemd/stoxla-microstructure-collector.service`, shell syntax/runtime-contract checks |
 | Telegram auth reminders | done | `MicrostructureCollectorKiteAuthReminderTest.php` |
 
 ## FEAT-061 matrix (partial)
