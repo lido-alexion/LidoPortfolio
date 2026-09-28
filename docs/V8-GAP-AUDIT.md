@@ -2,7 +2,7 @@
 
 **Purpose:** Honest end-state check against frozen V8 specs. Complements [V8-ACCEPTANCE-AUDIT.md](V8-ACCEPTANCE-AUDIT.md) (test gates + checklists).
 
-**Last verified:** 2026-09-28 — `STOXLA_ML_TEST_PYTHON=/tmp/stox-v8-ml-x86-venv.anZaFw/bin/python arch -x86_64 php -d memory_limit=512M vendor/bin/phpunit tests/Feature` (**1,336 passed / 1,337 total, 1 extension-only skip, 0 failures**); Node 20.19.1 JS/Vitest/build/typecheck/docs checks green; Python ML/microstructure/intraday focused suites green.
+**Last verified:** 2026-09-28 — `STOXLA_ML_TEST_PYTHON=/tmp/stox-v8-ml-x86-venv.anZaFw/bin/python arch -x86_64 php -d memory_limit=512M vendor/bin/phpunit tests/Feature` (**1,341 passed / 1,342 total, 1 extension-only skip, 0 failures, 10,982 assertions**); Node 20.19.1 JS/Vitest/build/typecheck/docs checks green; Python ML/microstructure/intraday focused suites green.
 
 | Epic | Verdict | Remaining work (authoritative gaps) |
 |------|---------|-------------------------------------|
