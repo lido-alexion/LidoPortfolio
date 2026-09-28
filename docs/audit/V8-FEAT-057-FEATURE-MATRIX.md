@@ -8,10 +8,10 @@ document records the frozen category coverage and the evidence boundary.
 | Frozen category | Registry evidence | Horizon applicability | PIT / source rule | Automated evidence | Runtime evidence | Status |
 |---|---|---|---|---|---|---|
 | Technical | 50-feature registry, technical/price group | Explicit `1m`, `3m`, `6m` profile resolution | as-of daily prices only | `MlFeatureRegistryAdminTest`, dataset builder tests | bounded campaign profile resolution | PASS locally |
-| Fundamental | Fundamental metrics, margins and ratios | Explicit per-feature profile resolution | availability date <= sample timestamp | registry, PIT builder and preprocessing tests | campaign path exercised; provider population pending | PASS locally / runtime partial |
-| Market/regime | Benchmark trend, volatility and regime context | Explicit per-feature profile resolution | PIT market context and dated inputs | `MlMarketContextPitTest` and builder tests | bounded campaign path | PASS locally / runtime partial |
-| Breadth | Dated breadth/context features | Explicit per-feature profile resolution | dated membership/context only | registry and snapshot coverage tests | campaign coverage evidence pending | PASS locally / runtime partial |
-| Sector-relative | Sector-relative strength/context | Explicit per-feature profile resolution | dated sector/universe snapshots; no current fallback | sector PIT tests and registry tests | bounded campaign coverage pending | PASS locally / runtime partial |
+| Fundamental | Fundamental metrics, margins and ratios | Explicit per-feature profile resolution | availability date <= sample timestamp | registry, PIT builder and preprocessing tests | bounded 1m/3m/6m campaign persisted per-feature partition coverage; authoritative provider population pending | PASS locally / production population pending |
+| Market/regime | Benchmark trend, volatility and regime context | Explicit per-feature profile resolution | PIT market context and dated inputs | `MlMarketContextPitTest` and builder tests | bounded campaign persisted per-feature partition coverage | PASS locally |
+| Breadth | Dated breadth/context features | Explicit per-feature profile resolution | dated membership/context only | registry and snapshot coverage tests | bounded campaign persisted per-feature partition coverage; authoritative snapshot population pending | PASS locally / production population pending |
+| Sector-relative | Sector-relative strength/context | Explicit per-feature profile resolution | dated sector/universe snapshots; no current fallback | sector PIT tests and registry tests | bounded campaign persisted per-feature partition coverage; authoritative snapshot population pending | PASS locally / production population pending |
 | Deterministic pattern | `consolidation_width_20d_pct`, `range_position_20d`, `candle_body_to_range_1d` | Explicit per-feature profile resolution | daily price-only, as-of | `MlFeatureRegistryAdminTest` pattern coverage test | campaign profile resolution | PASS locally |
 
 ## Per-feature proof contract
@@ -31,7 +31,8 @@ following fields from the registry/profile and dataset diagnostics:
 | coverage | eligible, available, missing and dropped counts per horizon |
 
 The current registry and focused tests prove the first seven fields locally.
-The bounded training campaign proves profile resolution and preprocessing
-execution, but does not yet provide authoritative-provider population or a
-complete 50-feature × 3-horizon runtime coverage report. Therefore FEAT-057
-remains `IN PROGRESS`.
+The bounded training campaign now provides the complete 50-feature ×
+1m/3m/6m per-partition coverage report, profile resolution and preprocessing
+execution. Authoritative production-provider population, deployed active-model
+pairing where applicable and investor-facing browser acceptance remain
+external evidence; the implementation status is therefore `REVIEW`.
