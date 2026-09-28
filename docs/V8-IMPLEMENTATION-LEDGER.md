@@ -13,7 +13,7 @@ FEAT-057  [REVIEW] ML feature engineering / training (versioned horizon-resolved
 FEAT-061  [REVIEW] Guided tour / onboarding (formal audit complete; missing-target regression covered; browser accessibility/mobile journey and localization mechanism remain open)
 FEAT-062  [REVIEW] Fundamental signals & AI insights (complete deterministic catalogue matrix with PIT comparison evidence, provider-neutral orchestration, bounded investor-safe validation, and follow-up guidance; browser/mobile and real-provider acceptance remain)
 FEAT-063  [REVIEW] Live microstructure collection (local implementation and deterministic resilience verification complete; VPS installation, live Kite path, and deployed backup destination remain external)
-FEAT-064  [REVIEW] Screener / Strategy UX (semantic versions, run/backtest pins, immutable save, readiness, provenance audit, WP-09 return flow and legacy fixture reconciliation present; browser acceptance remains)
+FEAT-064  [REVIEW] Screener / Strategy UX (semantic versions, run/backtest pins, immutable save, readiness, provenance audit, WP-09 return flow and legacy fixture reconciliation present; Playwright now covers screener CRUD and incomplete-Strategy Setup Required behavior; live membership-drift/runtime acceptance remains)
 FEAT-065  [IN PROGRESS] Intraday ML historical data platform (schema/checkpoints/admin status, Mac backfill worker, explicit current-universe orchestration, idempotent Parquet corpus, bounded retry/failed-window reporting, DuckDB/Polars access and coverage reporting; full corpus coverage and handoff acceptance remain)
 ```
 
@@ -103,6 +103,7 @@ See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-F
 
 - The current checkout is the authoritative source for the exact HEAD; the earlier handoff SHA `3265357` is not the current baseline.
 - The full Feature suite under local PHP CLI `memory_limit=512M` now passes **1,335/1,336**, with one intentional bounded-training skip when `STOXLA_ML_TEST_PYTHON` is absent. The previous FEAT-064 fixture cascade was repaired by giving activation-oriented legacy fixtures the executable factory configuration; the production Setup Required gate was not weakened.
+- FEAT-064 browser smoke now passes **2/2**: screener create/save/runtime detail and incomplete Strategy Setup Required with Enable disabled; the browser test runs against deterministic API mocks and does not claim live membership-drift validation.
 - FEAT-062 now covers the frozen deterministic catalogue with PIT-safe operating-profit/bottom-line, ROA/ROCE, working-capital/liquidity, capex, ownership/financial, persistent cash-quality and historical valuation-context signals; absent source data remains unavailable rather than inferred. It is REVIEW pending browser/mobile and real-provider acceptance.
 - FEAT-056 lifecycle focus passes locally, including stale running-run recovery and stale cancellation finalization; mixed `MlScoringService` integration remains deliberately separated from FEAT-057.
 - FEAT-056 scoring reconciliation is now committed as `2900e50`, with explicit `completed_rejected` quality outcomes and regression coverage in `73307cb`; FEAT-056 remains IN PROGRESS only for remaining deployment/acceptance evidence and any frozen lifecycle gaps.
