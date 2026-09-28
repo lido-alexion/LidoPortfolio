@@ -17,6 +17,8 @@ ML_PYTHON="${STOXLA_ML_PYTHON:-$APP_ROOT/shared/python/ml/bin/python}"
 ML_ADAPTER="${STOXLA_ML_ADAPTER:-$APP_ROOT/current/scripts/ml_adapter.py}"
 ML_SKLEARN_VERSION="${STOXLA_ML_SKLEARN_VERSION:-1.5.2}"
 ML_MODEL_DIRECTORY="${STOXLA_ML_MODEL_DIRECTORY:-$APP_ROOT/shared/ml/models}"
+MICROSTRUCTURE_PYTHON="${STOXLA_MICROSTRUCTURE_PYTHON:-$APP_ROOT/shared/python/microstructure/bin/python}"
+MICROSTRUCTURE_MODULE_DIR="${STOXLA_MICROSTRUCTURE_MODULE_DIR:-$APP_ROOT/current/shared/microstructure}"
 
 log() {
   printf '[stoxla-runtime-health] %s\n' "$*"
@@ -46,9 +48,15 @@ installed_sklearn="$($ML_PYTHON -c 'import sklearn; print(sklearn.__version__)' 
   || fail "ML Python runtime cannot import scikit-learn"
 [[ "$installed_sklearn" == "$ML_SKLEARN_VERSION" ]] \
   || fail "ML scikit-learn version $installed_sklearn does not match required $ML_SKLEARN_VERSION"
+[[ -x "$MICROSTRUCTURE_PYTHON" ]] || fail "microstructure Python runtime is not executable: $MICROSTRUCTURE_PYTHON"
+[[ -f "$MICROSTRUCTURE_MODULE_DIR/requirements.txt" ]] || fail "microstructure requirements are missing: $MICROSTRUCTURE_MODULE_DIR/requirements.txt"
+PYTHONPATH="$MICROSTRUCTURE_MODULE_DIR" "$MICROSTRUCTURE_PYTHON" -c 'import kiteconnect, pyarrow, polars' \
+  || fail "microstructure Python runtime cannot import kiteconnect, pyarrow, and polars"
 
-debug_state="$(cd "$APP_ROOT/current" && "$PHP_BIN" artisan tinker --execute='echo config("app.env")."|".(config("portfolio.debug_agent.enabled") ? "true" : "false");' --no-interaction)"
-[[ "$debug_state" == "production|false" ]] || fail "production DebugAgent is enabled or app environment is not production"
+app_state="$(cd "$APP_ROOT/current" && "$PHP_BIN" artisan tinker --execute='echo config("app.env")."|".(config("portfolio.debug_agent.enabled") ? "true" : "false")."|".strlen((string) config("app.key"));' --no-interaction)"
+IFS='|' read -r app_env debug_enabled app_key_length <<< "$app_state"
+[[ "$app_env" == "production" && "$debug_enabled" == "false" ]] || fail "production DebugAgent is enabled or app environment is not production"
+[[ "$app_key_length" =~ ^[1-9][0-9]*$ ]] || fail "production app key is missing from cached config"
 
 grep -Eq '^LIDO_AGENT_DEBUG_ENABLED=false([[:space:]]*#.*)?$' "$APP_ROOT/shared/.env" \
   || fail "production shared .env must explicitly disable DebugAgent"

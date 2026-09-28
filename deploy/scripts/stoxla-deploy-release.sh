@@ -16,6 +16,7 @@ PHP_FPM_GROUP="${STOXLA_PHP_FPM_GROUP:-www-data}"
 FUNDAMENTALS_SYSTEM_PYTHON="${STOXLA_FUNDAMENTALS_SYSTEM_PYTHON:-/usr/bin/python3.12}"
 FUNDAMENTALS_SHARED_DIR="${STOXLA_FUNDAMENTALS_SHARED_DIR:-$APP_ROOT/shared/python/fundamentals}"
 ML_SHARED_DIR="${STOXLA_ML_SHARED_DIR:-$APP_ROOT/shared/python/ml}"
+MICROSTRUCTURE_SHARED_DIR="${STOXLA_MICROSTRUCTURE_SHARED_DIR:-$APP_ROOT/shared/python/microstructure}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUNTIME_HEALTH_CHECK="${STOXLA_RUNTIME_HEALTH_CHECK:-$SCRIPT_DIR/stoxla-runtime-health-check.sh}"
 
@@ -90,6 +91,43 @@ prepare_ml_python() {
   [[ -x "$venv_python" ]] || fail "ML Python virtualenv is not executable"
 }
 
+prepare_microstructure_python() {
+  local requirements="$1"
+  local venv_python="$MICROSTRUCTURE_SHARED_DIR/bin/python"
+  local marker="$MICROSTRUCTURE_SHARED_DIR/.requirements.sha256"
+  local requirements_hash
+
+  [[ -x "$FUNDAMENTALS_SYSTEM_PYTHON" ]] || fail "required microstructure Python runtime is missing: $FUNDAMENTALS_SYSTEM_PYTHON"
+  mkdir -p "$(dirname "$MICROSTRUCTURE_SHARED_DIR")"
+  if [[ ! -x "$venv_python" ]]; then
+    log "creating shared microstructure Python virtualenv"
+    "$FUNDAMENTALS_SYSTEM_PYTHON" -m venv "$MICROSTRUCTURE_SHARED_DIR"
+  fi
+  requirements_hash="$(sha256sum "$requirements" | awk '{print $1}')"
+  if [[ ! -f "$marker" || "$(cat "$marker")" != "$requirements_hash" ]]; then
+    log "installing pinned microstructure Python dependencies"
+    "$venv_python" -m pip install --disable-pip-version-check --requirement "$requirements"
+    printf '%s\n' "$requirements_hash" > "$marker"
+  fi
+  [[ -x "$venv_python" ]] || fail "microstructure Python virtualenv is not executable"
+}
+
+validate_cached_app_config() {
+  local release_dir="$1"
+  local app_state
+  local app_env
+  local debug_enabled
+  local app_key_length
+
+  app_state="$(cd "$release_dir" && "$PHP_BIN" artisan tinker --execute='echo config("app.env")."|".(config("portfolio.debug_agent.enabled") ? "true" : "false")."|".strlen((string) config("app.key"));' --no-interaction)"
+  IFS='|' read -r app_env debug_enabled app_key_length <<< "$app_state"
+
+  [[ "$app_env" == "production" && "$debug_enabled" == "false" ]] \
+    || fail "effective production DebugAgent state is unsafe: enabled or non-production environment"
+  [[ "$app_key_length" =~ ^[1-9][0-9]*$ ]] \
+    || fail "effective production app key is missing from cached config"
+}
+
 if [[ -z "$ARCHIVE" || ! -f "$ARCHIVE" ]]; then
   fail "release archive path is required"
 fi
@@ -133,6 +171,8 @@ fi
   || fail "pinned fundamentals Python requirements are missing from the release"
 [[ -f "$RELEASE_DIR/deploy/python/ml-requirements.txt" ]] \
   || fail "pinned ML Python requirements are missing from the release"
+[[ -f "$RELEASE_DIR/shared/microstructure/requirements.txt" ]] \
+  || fail "microstructure Python requirements are missing from the release"
 
 RELEASE_COMMIT="$("$PHP_BIN" -r '
   $data = json_decode(file_get_contents($argv[1]), true);
@@ -177,6 +217,7 @@ prepare_writable_tree "$SHARED_DIR/ml"
 
 prepare_fundamentals_python "$RELEASE_DIR/deploy/python/fundamentals-requirements.txt"
 prepare_ml_python "$RELEASE_DIR/deploy/python/ml-requirements.txt"
+prepare_microstructure_python "$RELEASE_DIR/shared/microstructure/requirements.txt"
 
 rm -rf "$RELEASE_DIR/.env" "$RELEASE_DIR/storage"
 ln -s ../../shared/.env "$RELEASE_DIR/.env"
@@ -197,9 +238,7 @@ log "running database migrations and Laravel optimization in staged release"
   "$PHP_BIN" artisan event:cache --no-interaction
 )
 
-debug_state="$(cd "$RELEASE_DIR" && "$PHP_BIN" artisan tinker --execute='echo config("app.env")."|".(config("portfolio.debug_agent.enabled") ? "true" : "false");' --no-interaction)"
-[[ "$debug_state" == "production|false" ]] \
-  || fail "effective production DebugAgent state is unsafe: enabled or non-production environment"
+validate_cached_app_config "$RELEASE_DIR"
 
 if [[ -e "$APP_ROOT/current" && ! -L "$APP_ROOT/current" ]]; then
   fail "$APP_ROOT/current exists but is not a symlink"
@@ -285,6 +324,8 @@ STOXLA_FUNDAMENTALS_ADAPTER="$APP_ROOT/current/scripts/yahoo_fundamentals.py" \
 STOXLA_ML_PYTHON="$ML_SHARED_DIR/bin/python" \
 STOXLA_ML_ADAPTER="$APP_ROOT/current/scripts/ml_adapter.py" \
 STOXLA_ML_MODEL_DIRECTORY="$SHARED_DIR/ml/models" \
+STOXLA_MICROSTRUCTURE_PYTHON="$MICROSTRUCTURE_SHARED_DIR/bin/python" \
+STOXLA_MICROSTRUCTURE_MODULE_DIR="$APP_ROOT/current/shared/microstructure" \
 "$RUNTIME_HEALTH_CHECK"
 
 log "pruning old releases; keeping $KEEP_RELEASES"
