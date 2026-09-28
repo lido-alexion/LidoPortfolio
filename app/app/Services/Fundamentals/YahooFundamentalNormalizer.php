@@ -26,6 +26,14 @@ class YahooFundamentalNormalizer
         'totalCashFromFinancingActivities' => 'financing_cash_flow',
         'capitalExpenditures' => 'capital_expenditure',
         'dividendsPaid' => 'dividends_paid',
+        'netReceivables' => 'trade_receivables',
+        'inventory' => 'inventory',
+        'totalCurrentAssets' => 'current_assets',
+        'totalCurrentLiab' => 'current_liabilities',
+        'propertyPlantEquipment' => 'property_plant_equipment',
+        'interestIncome' => 'interest_income',
+        'interestExpense' => 'interest_expense',
+        'netInterestIncome' => 'net_interest_income',
     ];
 
     /** @var array<string,string> */
@@ -52,6 +60,17 @@ class YahooFundamentalNormalizer
         'Capital Expenditure' => 'capital_expenditure',
         'Ordinary Shares Number' => 'shares_outstanding',
         'Cash Dividends Paid' => 'dividends_paid',
+        'Net Receivables' => 'trade_receivables',
+        'Receivables' => 'trade_receivables',
+        'Inventory' => 'inventory',
+        'Current Assets' => 'current_assets',
+        'Current Liabilities' => 'current_liabilities',
+        'Net PPE' => 'property_plant_equipment',
+        'Gross PPE' => 'property_plant_equipment',
+        'Capital Work In Progress' => 'capital_work_in_progress',
+        'Interest Income' => 'interest_income',
+        'Interest Expense' => 'interest_expense',
+        'Net Interest Income' => 'net_interest_income',
     ];
 
     /**
