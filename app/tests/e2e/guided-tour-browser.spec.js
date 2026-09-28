@@ -104,6 +104,48 @@ test.describe('FEAT-061 guided tour mobile browser acceptance', () => {
         await expect(step.getByText('3 of 8')).toBeVisible();
     });
 
+    test('recovers an in-progress tour after a browser refresh', async ({ page }) => {
+        await installInvestorWorkflowApiMocks(page, {
+            guidedTourState: {
+                eligible: true,
+                show_welcome_prompt: true,
+                can_manual_relaunch: true,
+                welcome_shown_at: null,
+                completed_at: null,
+                current_step_id: null,
+                tour_in_progress: false,
+            },
+        });
+        await page.goto('/');
+
+        await page.getByRole('dialog', { name: 'Welcome to StoX' })
+            .getByRole('button', { name: 'Begin tour' })
+            .click();
+        const firstStep = page.getByRole('dialog').filter({
+            has: page.getByRole('heading', { name: 'Navigation' }),
+        });
+        await expect(firstStep).toBeVisible();
+
+        await firstStep.getByRole('button', { name: 'Next' }).click();
+        await expect(page.getByText('Step 2 of 8', { exact: true })).toBeVisible();
+
+        await page.reload();
+
+        await expect(page.getByRole('dialog', { name: 'Welcome to StoX' })).toBeVisible();
+        await page.getByRole('dialog', { name: 'Welcome to StoX' })
+            .getByRole('button', { name: 'Begin tour' })
+            .click();
+        const resume = page.getByRole('dialog', { name: 'Resume tour?' });
+        await expect(resume).toBeVisible();
+        await resume.getByRole('button', { name: 'Resume' }).click();
+
+        const resumedStep = page.getByRole('dialog').filter({
+            has: page.getByRole('heading', { name: 'Dashboard' }),
+        });
+        await expect(resumedStep).toBeVisible({ timeout: 10_000 });
+        await expect(resumedStep.getByText('2 of 8')).toBeVisible();
+    });
+
     test('traverses every configured investor-tour step', async ({ page }) => {
         await installInvestorWorkflowApiMocks(page);
         await page.goto('/');

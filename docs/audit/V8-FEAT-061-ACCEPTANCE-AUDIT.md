@@ -20,7 +20,7 @@ Authoritative contract: `docs/archive/specs/V8-Guided-Tour-Welcome-Onboarding-Sp
 | Keyboard/accessibility/focus return | PARTIAL | Welcome, resume and step dialogs now provide labelled descriptions, explicit live step announcements, initial focus, Escape handling, Tab containment, background scroll lock and manual-launch focus return; the 9/9 desktop/mobile/tablet Chromium journey covers these behaviors. Screen-reader audit and broader device traversal remain. |
 | Normal i18n mechanism | PASS locally | `resources/js/src/i18n/index.js` and `messages.js` provide keyed translation lookup with locale fallback; all tour step, modal, overlay and Profile copy references translation keys rather than embedded literals. English is the current shipped dictionary; additional locales remain additive. |
 | Telemetry non-blocking and existing path | PASS | `guidedTourTelemetry.js` posts to existing frontend log endpoint and swallows failures. |
-| Refresh/interruption recovery | PASS locally | Backend state is authoritative; browser journey now proves a persisted `holdings` step opens the resume choice, navigates to `/holdings`, and restores the configured step. A real refresh/resume session remains external. |
+| Refresh/interruption recovery | PASS locally | Backend state is authoritative; browser journeys prove both persisted-step resume/navigation and recovery after `page.reload()` while the tour is in progress. A real production session interruption remains external. |
 
 ## Verification executed
 
@@ -28,6 +28,6 @@ Authoritative contract: `docs/archive/specs/V8-Guided-Tour-Welcome-Onboarding-Sp
 - JS suite: node tests **184/184** and Vitest **99/99** after missing-target regression coverage.
 - Vite build, typecheck, static docs check: passed.
 - Guided-tour copy/key coverage: **3/3** focused Node tests passed.
-- Playwright journeys pass for the investor welcome modal → Begin → first guided-tour step, persisted-step resume, and all 8 configured route steps on desktop Chromium/1024×768 tablet/390×844 mobile. Welcome/resume/step focus containment, labelled descriptions and Escape behavior are covered, and the journeys exposed and fixed a real modal-backdrop stacking defect. Screen-reader tooling, live refresh/resume, and broader device acceptance remain pending.
+- Playwright journeys pass for the investor welcome modal → Begin → first guided-tour step, persisted-step resume, in-progress `page.reload()` recovery, and all 8 configured route steps on desktop Chromium/1024×768 tablet/390×844 mobile. Welcome/resume/step focus containment, labelled descriptions and Escape behavior are covered, and the journeys exposed and fixed a real modal-backdrop stacking defect. Screen-reader tooling, production session interruption, and broader device acceptance remain pending.
 
-FEAT-061 remains **REVIEW**. Keyed i18n plus desktop/mobile journeys, persisted-step resume, full configured-route traversal, manual-launch focus return and Tab containment are verified locally. Remaining evidence is screen-reader review, live refresh/resume, and broader live browser acceptance.
+FEAT-061 remains **REVIEW**. Keyed i18n plus desktop/mobile journeys, persisted-step resume, in-progress refresh recovery, full configured-route traversal, manual-launch focus return and Tab containment are verified locally. Remaining evidence is screen-reader review, production session interruption, and broader live browser acceptance.
