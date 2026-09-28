@@ -39,6 +39,7 @@ test.describe('FEAT-061 guided tour mobile browser acceptance', () => {
         });
         await expect(firstStep).toBeVisible();
         await expect(firstStep).toHaveAttribute('aria-describedby', 'lido-guided-tour-description');
+        await expect(page.getByRole('status')).toContainText('1');
         await expect(firstStep.getByRole('button', { name: 'Next' })).toBeVisible();
         const stepBox = await firstStep.boundingBox();
         expect(stepBox).not.toBeNull();
@@ -114,10 +115,10 @@ test.describe('FEAT-061 guided tour mobile browser acceptance', () => {
         });
 
         const overlay = page.getByRole('dialog');
-        await expect(page.getByText('1 of 8')).toBeVisible();
+        await expect(page.getByText('Step 1 of 8', { exact: true })).toBeVisible();
         for (let current = 2; current <= 8; current += 1) {
             await overlay.getByRole('button', { name: 'Next' }).click();
-            await expect(page.getByText(`${current} of 8`)).toBeVisible({ timeout: 10_000 });
+            await expect(page.getByText(`Step ${current} of 8`, { exact: true })).toBeVisible({ timeout: 10_000 });
         }
         await expect(overlay.getByRole('button', { name: 'Finish' })).toBeVisible();
     });
