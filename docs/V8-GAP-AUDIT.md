@@ -2,7 +2,7 @@
 
 **Purpose:** Honest end-state check against frozen V8 specs. Complements [V8-ACCEPTANCE-AUDIT.md](V8-ACCEPTANCE-AUDIT.md) (test gates + checklists).
 
-**Last verified:** 2026-09-29 — `STOXLA_ML_TEST_PYTHON=/tmp/stox-v8-ml-x86-venv.anZaFw/bin/python arch -x86_64 php -d memory_limit=512M vendor/bin/phpunit tests/Feature` (**1,346 passed / 1,347 total, 1 extension-only skip, 0 failures, 11,008 assertions**); Node 20.19.1 JS/Vitest/build/typecheck/docs checks green; the full configured Playwright run passed **23/23 executed tests** with 21 intentional viewport/configuration skips, including guided-tour 11/11, FEAT-062 insights, FEAT-064 Screener, and responsive-shell journeys; Python microstructure/intraday focused suites pass in the project-compatible environment.
+**Last verified:** 2026-09-29 — `STOXLA_ML_TEST_PYTHON=/tmp/stox-v8-ml-x86-venv.anZaFw/bin/python arch -x86_64 php -d memory_limit=512M vendor/bin/phpunit tests/Feature` (**1,346 passed / 1,347 total, 1 extension-only skip, 0 failures, 11,014 assertions**); Node 20.19.1 JS/Vitest/build/typecheck/docs checks green; the full configured Playwright run passed **23/23 executed tests** with 21 intentional viewport/configuration skips, including guided-tour 11/11, FEAT-062 insights, FEAT-064 Screener, and responsive-shell journeys; Python microstructure/intraday focused suites pass in the project-compatible environment.
 
 | Epic | Verdict | Remaining work (authoritative gaps) |
 |------|---------|-------------------------------------|
