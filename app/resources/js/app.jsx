@@ -13,8 +13,11 @@ import { PortfolioProvider } from './src/context/PortfolioContext';
 import { ThemeProvider } from './src/context/ThemeContext';
 import { getAppBase } from './src/appBase';
 import { appQueryClient } from './src/queryClient';
+import { registerBrowserOpenTelemetry } from './src/telemetry/otelBrowser';
 
 const routerBasename = getAppBase() || undefined;
+
+registerBrowserOpenTelemetry();
 
 function showBootFailure(message, error) {
     const lines = [
