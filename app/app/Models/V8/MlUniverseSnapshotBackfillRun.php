@@ -11,6 +11,7 @@ class MlUniverseSnapshotBackfillRun extends Model
     protected $fillable = [
         'universe_key', 'source', 'requested_dates', 'processed_dates',
         'failed_dates', 'status', 'last_error', 'started_at', 'completed_at',
+        'retry_counts',
     ];
 
     protected function casts(): array
@@ -19,6 +20,7 @@ class MlUniverseSnapshotBackfillRun extends Model
             'requested_dates' => 'array',
             'processed_dates' => 'array',
             'failed_dates' => 'array',
+            'retry_counts' => 'array',
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
         ];

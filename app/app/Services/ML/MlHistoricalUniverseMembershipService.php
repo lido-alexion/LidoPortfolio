@@ -5,6 +5,8 @@ namespace App\Services\ML;
 use App\Models\V8\MlUniverseMembership;
 use App\Models\V8\MlUniverseSnapshotBackfillRun;
 use App\Models\V8\MlUniverseSnapshotBoundary;
+use App\Contracts\MlHistoricalUniverseProvider;
+use App\Exceptions\MlHistoricalUniverseProviderException;
 use App\Models\Stock;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -292,9 +294,12 @@ class MlHistoricalUniverseMembershipService
                             'sector_snapshot' => $entry['sector_snapshot'] ?? null,
                             'source' => $source,
                             'snapshot_key' => $entry['snapshot_key'] ?? $source.':'.$date,
+                            'provider_symbol' => $entry['provider_symbol'] ?? null,
+                            'provider_token' => $entry['provider_token'] ?? null,
+                            'exchange' => $entry['exchange'] ?? 'NSE',
                         ])->save();
                     }
-                    $this->recordSnapshotBoundary($date, $source, $source.':'.$date, count($stockIds), $universeKey);
+                    $this->recordSnapshotBoundary($date, $source, (string) ($snapshot['snapshot_key'] ?? $source.':'.$date), count($stockIds), $universeKey, isset($snapshot['response_version']) ? (string) $snapshot['response_version'] : null);
                 });
                 $processed[] = $date;
                 $run->forceFill(['processed_dates' => array_values(array_unique($processed)), 'failed_dates' => $failed])->save();
@@ -329,6 +334,64 @@ class MlHistoricalUniverseMembershipService
         ];
     }
 
+    /**
+     * Fetch and materialize a bounded date list from the configured
+     * authoritative provider. Missing dates and provider failures remain
+     * durable failures; no current-universe fallback is attempted.
+     *
+     * @param list<string> $dates
+     * @return array<string,mixed>
+     */
+    public function backfillFromProvider(array $dates, MlHistoricalUniverseProvider $provider, string $source, int $maxAttempts = 3, string $universeKey = self::ACTIVE_ELIGIBLE_NSE): array
+    {
+        $requested = array_values(array_unique(array_map(fn (string $date): string => Carbon::parse($date)->toDateString(), $dates)));
+        sort($requested);
+        $run = MlUniverseSnapshotBackfillRun::query()->create([
+            'universe_key' => $universeKey,
+            'source' => $source,
+            'requested_dates' => $requested,
+            'processed_dates' => [],
+            'failed_dates' => [],
+            'retry_counts' => [],
+            'status' => 'running',
+            'started_at' => now(),
+        ]);
+        $failed = [];
+        $retryCounts = [];
+        foreach ($requested as $date) {
+            $attempt = 0;
+            while (true) {
+                $attempt++;
+                $retryCounts[$date] = $attempt;
+                try {
+                    $snapshot = $provider->snapshotForDate($date);
+                    $this->backfillHistoricalSnapshots([$snapshot], $source, (int) $run->id, $universeKey);
+                    break;
+                } catch (MlHistoricalUniverseProviderException $exception) {
+                    if (! $exception->retryable || $attempt >= max(1, $maxAttempts)) {
+                        $failed[$date] = $exception->getMessage();
+                        $run->forceFill([
+                            'failed_dates' => array_keys($failed),
+                            'retry_counts' => $retryCounts,
+                            'last_error' => substr($exception->getMessage(), 0, 1000),
+                        ])->save();
+                        break;
+                    }
+                }
+            }
+        }
+        $processed = array_values(array_diff($requested, array_keys($failed)));
+        $run->forceFill([
+            'status' => $failed === [] ? 'completed' : 'failed',
+            'processed_dates' => $processed,
+            'failed_dates' => array_keys($failed),
+            'retry_counts' => $retryCounts,
+            'completed_at' => $failed === [] ? now() : null,
+        ])->save();
+
+        return $run->fresh()->toArray();
+    }
+
     private function snapshotBoundaryExists(string $date, string $universeKey): bool
     {
         return MlUniverseSnapshotBoundary::query()
@@ -337,7 +400,7 @@ class MlHistoricalUniverseMembershipService
             ->exists();
     }
 
-    private function recordSnapshotBoundary(string $date, string $source, string $snapshotKey, int $memberCount, string $universeKey): void
+    private function recordSnapshotBoundary(string $date, string $source, string $snapshotKey, int $memberCount, string $universeKey, ?string $responseVersion = null): void
     {
         $boundary = MlUniverseSnapshotBoundary::query()
             ->where('universe_key', $universeKey)
@@ -349,6 +412,7 @@ class MlHistoricalUniverseMembershipService
         $boundary->forceFill([
             'source' => $source,
             'snapshot_key' => $snapshotKey,
+            'provider_response_version' => $responseVersion,
             'member_count' => $memberCount,
         ])->save();
     }

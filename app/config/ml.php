@@ -1,6 +1,10 @@
 <?php
 
 return [
+    'historical_universe' => [
+        'archive_path' => env('STOXLA_ML_HISTORICAL_UNIVERSE_ARCHIVE', ''),
+        'source' => env('STOXLA_ML_HISTORICAL_UNIVERSE_SOURCE', 'configured_authoritative_archive'),
+    ],
     'python' => env('STOXLA_ML_PYTHON', '/var/www/stoxla/shared/python/ml/bin/python'),
     'adapter_script' => env('STOXLA_ML_ADAPTER', base_path('scripts/ml_adapter.py')),
     'model_directory' => env('STOXLA_ML_MODEL_DIRECTORY', base_path('../shared/ml/models')),
@@ -19,5 +23,9 @@ return [
         'minimum_predictions' => 30,
         'model_age_warning_days' => 365,
         'minimum_matured_predictions' => 30,
+    ],
+    'challenger_promotion' => [
+        'enabled' => (bool) env('STOXLA_ML_CHALLENGER_CANDIDATES_ENABLED', true),
+        'min_roc_auc_delta_vs_logistic' => (float) env('STOXLA_ML_CHALLENGER_MIN_ROC_AUC_DELTA', 0.01),
     ],
 ];

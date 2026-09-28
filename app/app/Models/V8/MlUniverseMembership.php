@@ -18,6 +18,9 @@ class MlUniverseMembership extends Model
         'sector_snapshot',
         'source',
         'snapshot_key',
+        'provider_symbol',
+        'provider_token',
+        'exchange',
     ];
 
     protected function casts(): array
