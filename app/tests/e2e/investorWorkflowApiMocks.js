@@ -83,6 +83,21 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
         if (path.endsWith('/api/holdings') && method === 'GET') {
             return json(route, { data: [] });
         }
+        if (path.endsWith('/api/guided-tour') && method === 'GET') {
+            return json(route, apiEnvelope(guidedTourState));
+        }
+        if (path.endsWith('/api/dashboard') && method === 'GET') {
+            return json(route, apiEnvelope({}));
+        }
+        if (path.endsWith('/api/patterns/scan') && method === 'GET') {
+            return json(route, apiEnvelope([]));
+        }
+        if (path.endsWith('/api/v1/protections') && method === 'GET') {
+            return json(route, apiEnvelope([]));
+        }
+        if (path.endsWith('/api/calendar/upcoming') && method === 'GET') {
+            return json(route, apiEnvelope([]));
+        }
         if (path.endsWith('/api/stocks/search') && method === 'GET') {
             return json(route, { data: [{ id: 42, symbol: 'TCS', exchange: 'NSE', name: 'Tata Consultancy Services' }] });
         }
