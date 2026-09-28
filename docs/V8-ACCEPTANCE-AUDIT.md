@@ -2,20 +2,20 @@
 
 Authoritative specs: `docs/archive/specs/LidoPortfolio-V8-Wishlist.md`. Implementation ledger: `docs/V8-IMPLEMENTATION-LEDGER.md`. Requirement-level gaps: [V8-GAP-AUDIT.md](V8-GAP-AUDIT.md).
 
-Status key: **done** | **partial** | **not started** | **n/a**
+Status key: **COMPLETE** | **REVIEW** | **IN PROGRESS** | **NOT STARTED** | **N/A**
 
 | Epic | Status | Evidence |
 |------|--------|----------|
-| FEAT-052 OpenTelemetry / LidoTelemetry | partial | Fail-open HTTP OTLP traces/events + focused HTTP duration metrics; traceparent; route-view duration; queue/scheduler spans; business catalogue; optional official browser SDK/fetch instrumentation behind explicit endpoint configuration; `cpanel-lido-telemetry-probe.php` for Collector smoke test; gaps: PHP SDK instrumentation and production Collector validation |
-| FEAT-054 Historical fundamentals | partial | Bootstrap + investor UI + valuation metric history (daily/monthly P/E, P/B); NSE/BSE JSON adapters; gaps: live exchange feeds at scale |
+| FEAT-052 OpenTelemetry / LidoTelemetry | REVIEW | Fail-open HTTP OTLP traces/events + focused HTTP duration metrics; traceparent; route-view duration; queue/scheduler spans; business catalogue; optional official browser/PHP SDK instrumentation; Collector receipt and deployed runtime remain external |
+| FEAT-054 Historical fundamentals | REVIEW | Bootstrap + investor UI + valuation metric history (daily/monthly P/E, P/B); NSE/BSE JSON adapters; browser, live exchange feeds at scale and deployed bootstrap runtime remain external |
 | FEAT-055 Access requests | REVIEW | Local §FEAT-055 checklist (055-01–055-10) + `AccessRequestWorkflowTest`; real Turnstile/mail/deployed multi-worker validation remains external |
-| FEAT-056 ML lifecycle | partial | Drift trigger (+ disabled gate `MlDriftTriggerLifecycleTest::test_tick_skips_drift_retrain_when_trigger_disabled`), promotion review, SSE, cancel, retries, notifications, retention API + lifecycle tick gate (`MlLifecycleRetentionGateTest`, per-horizon `STOXLA_ML_SCHEDULE_*_ENABLED`); retention opt-in via `STOXLA_ML_RETENTION_ENABLED` |
-| FEAT-057 ML feature engineering / training | partial | Registry `v8-registry-10`, 50/50 implemented features; validation-set probability calibration (Platt/isotonic); Ridge return regressor; chrono grid; HistGradientBoosting challenger; durable candidate archive; bounded same-architecture 1m/3m/6m training, partition coverage and artifact reload/contribution evidence; production/browser acceptance remains external |
+| FEAT-056 ML lifecycle | REVIEW | Drift trigger, promotion review, SSE, cancel, retries, notifications, retention API + lifecycle tick gate, and stale-run recovery; deployed lifecycle worker/runtime remains external |
+| FEAT-057 ML feature engineering / training | REVIEW | Registry `v8-registry-10`, 50/50 implemented features; calibration, chronological validation, durable candidate archive, bounded same-architecture 1m/3m/6m training, partition coverage and artifact reload/contribution evidence; production/browser acceptance remains external |
 | FEAT-061 Guided tour | REVIEW | §FEAT-061 checklist, `GuidedTourTest.php`, desktop/mobile browser journeys; screen-reader, refresh/resume and full traversal acceptance remain |
-| FEAT-062 Fundamental signals & AI | partial | WC/CWIP + peer table; orchestrator; insights page; admin prefs; invocation audit + daily limits; provider test |
-| FEAT-063 Live microstructure | partial | Collector, spool, OI/microprice, spread min/max; gaps: VPS hardening, production Parquet validation |
-| FEAT-064 Screener/Strategy UX | partial | Runtime create/import/shared copy; WP-09/10; `Feat064MandatoryAuditAcceptanceTest`; provenance `definition_json`; Playwright screener and incomplete-Strategy `Setup Required` journey; remaining live membership drift/runtime acceptance |
-| FEAT-065 Intraday ML historical platform | partial | Kite client, Parquet store, DuckDB/Polars builders, instrument map; gaps: full NIFTY 500 corpus backfill |
+| FEAT-062 Fundamental signals & AI | REVIEW | Deterministic signal catalogue, PIT comparisons, provider-neutral orchestrator, insights page, admin preferences, invocation audit, daily limits and provider test; browser/mobile and real-provider validation remain |
+| FEAT-063 Live microstructure | REVIEW | Collector, spool, OI/microprice, spread min/max, quality lifecycle, finalization/backup resilience and alerts; VPS/live Kite/deployed backup remain external |
+| FEAT-064 Screener/Strategy UX | REVIEW | Runtime create/import/shared copy; WP-09/10; `Feat064MandatoryAuditAcceptanceTest`; provenance `definition_json`; Playwright screener and incomplete-Strategy `Setup Required` journey; live membership drift/runtime acceptance remains external |
+| FEAT-065 Intraday ML historical platform | REVIEW | Kite client, Parquet store, DuckDB/Polars builders, instrument map, checkpoints and retryable backfill; live POC/full NIFTY 500 corpus remains external |
 
 ## Test gate
 
@@ -103,4 +103,4 @@ Latest recorded: **1,336 passed / 1,337 total** Feature tests under `tests/Featu
 
 1. Close remaining partial epics per [V8-GAP-AUDIT.md](V8-GAP-AUDIT.md) with spec-level evidence only.
 2. Re-run full PHPUnit + frontend build before production deploy.
-3. Do not mark V8 release-complete until every epic row is **done** or explicitly **n/a**.
+3. Do not mark V8 release-complete until every epic is **COMPLETE** or explicitly **N/A**; REVIEW means implementation is locally complete but bounded external evidence remains.
