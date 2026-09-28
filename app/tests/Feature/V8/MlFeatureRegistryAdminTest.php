@@ -48,6 +48,23 @@ class MlFeatureRegistryAdminTest extends TestCase
         $this->assertSame('v8-preprocessing-1', $oneMonth['preprocessing']['version']);
     }
 
+    public function test_frozen_catalogue_includes_deterministic_pattern_features_for_all_horizons(): void
+    {
+        $catalogue = app(MlFeatureRegistryService::class)->catalog();
+        $patterns = collect($catalogue['features'])->where('group', 'pattern')->values();
+
+        $this->assertGreaterThanOrEqual(3, $patterns->count());
+        $this->assertSame(
+            ['consolidation_width_20d_pct', 'range_position_20d', 'candle_body_to_range_1d'],
+            $patterns->pluck('key')->all(),
+        );
+        foreach ($patterns as $feature) {
+            $this->assertSame(['1m', '3m', '6m'], $feature['horizons']);
+            $this->assertTrue($feature['pit_safety'] === 'point_in_time_safe');
+            $this->assertTrue($feature['implemented']);
+        }
+    }
+
     public function test_feature_profile_rejects_unknown_duplicate_and_ineligible_keys(): void
     {
         $service = app(MlFeatureRegistryService::class);
