@@ -27,3 +27,20 @@ test.describe('FEAT-062 fundamental insights browser acceptance', () => {
         await expect(page.getByText('Loading insights…')).not.toBeVisible();
     });
 });
+
+test.describe('FEAT-062 fundamental insights mobile acceptance', () => {
+    test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+    test('keeps deterministic evidence readable on a narrow viewport', async ({ page }) => {
+        await installInvestorWorkflowApiMocks(page);
+        await page.goto('/fundamentals/insights/TCS');
+
+        const card = page.locator('.card').filter({ hasText: 'StoX deterministic evidence' });
+        await expect(card).toBeVisible();
+        const box = await card.boundingBox();
+        expect(box).not.toBeNull();
+        expect(box.width).toBeLessThanOrEqual(390);
+        await expect(card.getByText('Cash generation is aligned with reported earnings')).toBeVisible();
+        await expect(card.getByText('Review the latest annual report cash-flow notes.')).toBeVisible();
+    });
+});
