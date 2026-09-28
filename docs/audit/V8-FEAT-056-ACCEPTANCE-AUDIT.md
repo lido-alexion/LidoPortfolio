@@ -7,7 +7,7 @@ Evidence is mapped to `docs/archive/specs/V8-ML-Lifecycle-Automation-Deployment-
 | Requirement | Status | Evidence / remaining work |
 |---|---|---|
 | Per-horizon bounded schedules | PASS locally | `MlLifecycleAutomationService`, `config/ml_lifecycle.php`, scheduled Artisan command and schedule tests |
-| Manual and drift-triggered canonical queue path | PASS locally | `MlScoringService` inherited integration plus `MlRetrainJob`, queue and drift tests; integration remains preserved as mixed WIP pending final ownership commit |
+| Manual and drift-triggered canonical queue path | PASS locally | `MlScoringService` integration, `MlRetrainJob`, queue and drift tests are committed; manual, scheduled and drift triggers share the canonical durable run path |
 | Same-horizon concurrency | PASS locally | Active-run checks and queue tests reject duplicate queued/running/cancelling runs |
 | Durable run/progress state and SSE | PASS locally | `MlTrainingRunAdminService`, progress persistence, SSE controller and lifecycle tests; deployed worker/SSE runtime remains pending |
 | Restart recovery | PASS locally | `MlTrainingRunRecoveryService` requeues stale running/cancelling runs with durable recovery evidence and test coverage |
@@ -22,4 +22,4 @@ Evidence is mapped to `docs/archive/specs/V8-ML-Lifecycle-Automation-Deployment-
 | Durable stale-run recovery | PASS locally | `MlTrainingRunRecoveryService` requeues stale running runs after worker restart, finalizes stale cancellation requests without requeueing, and is invoked at lifecycle ticks; `MlLifecycleAutomationTest` covers both paths |
 | Production queue/scheduler deployment | EXTERNAL VALIDATION PENDING | VPS worker, scheduler, queue restart and notification-provider runtime have not been claimed |
 
-The epic remains **IN PROGRESS** until deployed worker/runtime evidence and the remaining lifecycle acceptance criteria are recorded. The preserved mixed scoring integration is now committed in `2900e50`; local lifecycle recovery, quality-rejection semantics and the broad Feature suite are green. No deployed worker/runtime success is claimed.
+The epic remains **IN PROGRESS** until deployed worker/runtime evidence and the remaining lifecycle acceptance criteria are recorded. The mixed scoring integration is committed in `2900e50`, with explicit quality-rejection semantics in `73307cb`/`bd4148b`; local lifecycle recovery, retention gating and the broad Feature suite are green. No deployed worker/runtime success is claimed.
