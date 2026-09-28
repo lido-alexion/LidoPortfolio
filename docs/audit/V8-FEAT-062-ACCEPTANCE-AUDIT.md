@@ -14,7 +14,7 @@ This audit is evidence-based against `docs/archive/specs/V8-Fundamental-Signals-
 | Evidence attached to surfaced signals | PASS | Stable signal key/category/direction/title/summary/evidence/basis/period/severity/confidence/provenance fields are returned while legacy headline/metric_values remain compatible |
 | Leverage/debt and capital structure | PASS locally | Debt YoY movement, elevated debt/EBITDA, thin interest coverage, and share-count dilution are covered with invalid-denominator omission; broader corporate-action context remains data-dependent |
 | Ownership/shareholding evidence | PASS when facts exist | Optional promoter/FII/DII/public/pledge catalogue keys produce neutral factual watch signals; absent ownership data remains unavailable |
-| Comparison-aware evidence | PARTIAL | Same-period YoY, growth acceleration, earnings/revenue and debt/cash relationships, and active-sector peer percentile evidence exist with explicit subject/comparison/delta/basis fields. Historical/PIT peer membership and the remaining frozen comparison-key matrix still require closure; no current peer value is presented as historical truth |
+| Comparison-aware evidence | PARTIAL | Same-period YoY, growth acceleration, earnings/revenue and debt/cash relationships, and dated ML-universe sector peer percentile evidence exist with explicit subject/comparison/delta/basis fields. The remaining frozen comparison-key matrix still requires closure; missing dated snapshots now return an explicit coverage state rather than current-peer fallback |
 | Provider-neutral Gemini/Codex boundary | PASS | `FundamentalInsightsAiProvider`, Gemini/Codex adapters and orchestrator |
 | Primary/secondary failover | PASS locally | `FundamentalAiInsightsTest.php`; live provider validation remains external |
 | Response schema and safety validation | PASS locally | `FundamentalInsightsResponseValidator`; bounded lists/fields, malformed/partial normalization, prohibited recommendation variants, and factual “holding” language coverage |
@@ -37,4 +37,4 @@ This audit is evidence-based against `docs/archive/specs/V8-Fundamental-Signals-
 
 ## Next implementation slice
 
-Complete the frozen signal-to-key matrix and historical/PIT comparison families, then perform browser acceptance and real-provider validation before reconsidering this status. Current status remains **IN PROGRESS** because those implementation gaps are not yet reduced to external validation only.
+Complete the frozen signal-to-key matrix and remaining comparison keys, then perform browser acceptance and real-provider validation before reconsidering this status. Current status remains **IN PROGRESS** because catalogue evidence is not yet reduced to external validation only.
