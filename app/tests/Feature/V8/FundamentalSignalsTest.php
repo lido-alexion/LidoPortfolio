@@ -203,4 +203,27 @@ class FundamentalSignalsTest extends TestCase
             ->assertOk()
             ->assertJsonMissing(['signal_key' => 'operating_margin_movement_expanding']);
     }
+
+    public function test_revenue_growth_acceleration_requires_two_valid_yoy_comparisons(): void
+    {
+        $user = User::factory()->create(['is_admin' => false]);
+        $stock = Stock::query()->create(['symbol' => 'ACC', 'exchange' => 'NSE', 'name' => 'Acceleration Co']);
+        $this->defaultPortfolioFor($user);
+        $service = app(FundamentalDataService::class);
+        foreach ([
+            ['2023-03-31', 100], ['2024-03-31', 120],
+            ['2023-06-30', 100], ['2024-06-30', 120],
+            ['2025-03-31', 144], ['2025-06-30', 180],
+        ] as [$period, $value]) {
+            $service->storeFacts($stock, [[
+                'statement_type' => 'income_statement', 'cadence' => 'quarterly', 'fact_key' => 'revenue',
+                'period_end' => $period, 'value' => $value, 'availability_date' => '2025-07-01',
+            ]]);
+        }
+        $this->actingAs($user)->withProfileHeader($user)
+            ->getJson("/api/v1/stocks/{$stock->id}/fundamentals?include_insights=1&as_of=2025-07-10")
+            ->assertOk()
+            ->assertJsonFragment(['signal_key' => 'revenue_growth_accelerating'])
+            ->assertJsonFragment(['basis' => 'quarterly_yoy_trend']);
+    }
 }

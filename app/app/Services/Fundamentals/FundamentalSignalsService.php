@@ -95,6 +95,7 @@ class FundamentalSignalsService
         $this->evaluateLeverageSignals($stock, $asOf, $positive, $risk, $watch);
         $this->evaluateDilutionSignals($stock, $asOf, $risk, $watch);
         $this->evaluateOwnershipSignals($stock, $asOf, $watch);
+        $this->evaluateGrowthRelationships($stock, $asOf, $positive, $risk, $watch);
 
         $ocf = $this->fundamentals->metric($stock, 'operating_cash_flow', 'ttm', $asOf, $price);
         if ($ocf['value'] !== null && $ni['value'] !== null && (float) $ni['value'] > 0) {
@@ -344,6 +345,65 @@ class FundamentalSignalsService
                 'basis' => 'same_period_yoy',
             ]);
         }
+    }
+
+    protected function evaluateGrowthRelationships(Stock $stock, Carbon $asOf, array &$positive, array &$risk, array &$watch): void
+    {
+        $revenueTrend = $this->growthTrend($stock, 'revenue', $asOf);
+        if ($revenueTrend !== null && abs($revenueTrend['delta_pp']) >= 10) {
+            $key = $revenueTrend['delta_pp'] > 0 ? 'revenue_growth_accelerating' : 'revenue_growth_decelerating';
+            $signal = $this->signal($key, 'Revenue growth changed materially versus the prior comparable quarter', $revenueTrend);
+            if ($revenueTrend['delta_pp'] > 0) $positive[] = $signal;
+            else $risk[] = $signal;
+        }
+
+        $revenue = $this->fundamentals->growthMetric($stock, 'revenue', FundamentalDataService::CADENCE_QUARTERLY, $asOf);
+        $income = $this->fundamentals->growthMetric($stock, 'net_income', FundamentalDataService::CADENCE_QUARTERLY, $asOf);
+        if ($revenue['value'] !== null && $income['value'] !== null && abs((float) $income['value'] - (float) $revenue['value']) >= 15) {
+            $watch[] = $this->signal('earnings_revenue_divergence', 'Net income growth diverged materially from revenue growth', [
+                'net_income_yoy_pct' => (float) $income['value'],
+                'revenue_yoy_pct' => (float) $revenue['value'],
+                'delta_pp' => round((float) $income['value'] - (float) $revenue['value'], 2),
+                'basis' => 'quarterly_yoy',
+            ]);
+        }
+
+        $debt = $this->fundamentals->growthMetric($stock, 'debt', FundamentalDataService::CADENCE_QUARTERLY, $asOf);
+        $ocf = $this->fundamentals->growthMetric($stock, 'operating_cash_flow', FundamentalDataService::CADENCE_QUARTERLY, $asOf);
+        if ($debt['value'] !== null && $ocf['value'] !== null && (float) $debt['value'] >= 15 && (float) $ocf['value'] <= 0) {
+            $risk[] = $this->signal('debt_cash_divergence', 'Debt increased while operating cash flow did not improve', [
+                'debt_yoy_pct' => (float) $debt['value'],
+                'operating_cash_flow_yoy_pct' => (float) $ocf['value'],
+                'basis' => 'quarterly_yoy',
+            ]);
+        }
+    }
+
+    /** @return array<string,mixed>|null */
+    protected function growthTrend(Stock $stock, string $factKey, Carbon $asOf): ?array
+    {
+        $rows = FundamentalFact::query()->where('stock_id', $stock->id)->where('fact_key', $factKey)
+            ->where('cadence', FundamentalDataService::CADENCE_QUARTERLY)
+            ->whereDate('availability_date', '<=', $asOf->toDateString())
+            ->orderByDesc('period_end')->orderByDesc('revision_number')->get()->unique('period_end')->values();
+        if ($rows->count() < 5) return null;
+        $growth = function ($current) use ($rows): ?float {
+            $priorDate = $current->period_end?->copy()->subYear()->toDateString();
+            $prior = $rows->first(fn (FundamentalFact $row) => $row->period_end?->toDateString() === $priorDate);
+            if ($prior === null || $prior->value === null || (float) $prior->value === 0.0 || $current->value === null) return null;
+            return (((float) $current->value - (float) $prior->value) / abs((float) $prior->value)) * 100;
+        };
+        $latest = $growth($rows[0]);
+        $previous = $growth($rows[1]);
+        if ($latest === null || $previous === null) return null;
+        return [
+            'latest_yoy_pct' => round($latest, 2),
+            'prior_comparable_yoy_pct' => round($previous, 2),
+            'delta_pp' => round($latest - $previous, 2),
+            'period' => $rows[0]->period_end->toDateString(),
+            'comparison_period' => $rows[1]->period_end->toDateString(),
+            'basis' => 'quarterly_yoy_trend',
+        ];
     }
 
     /** @return array{current:float,prior:float,current_period:string,prior_period:string}|null */
