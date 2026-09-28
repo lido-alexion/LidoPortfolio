@@ -30,7 +30,7 @@ This audit is evidence-based against `docs/archive/specs/V8-Fundamental-Signals-
 ## Verification
 
 - Targeted FEAT-062 Laravel tests after the catalogue/input-boundary slices: **16/16, 39 assertions** for deterministic/metric correctness; AI provider/boundary suites remain covered by the existing focused tests.
-- Full V8 Laravel directory suite: **147/147, 547 assertions**.
+- Full V8 Laravel directory suite: **161/161, 611 assertions**.
 - Frontend Node suite: **188/188**.
 - Vitest: **99/99**.
 - Build, typecheck, static docs check and `git diff --check`: passed.
