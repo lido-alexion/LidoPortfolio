@@ -10,6 +10,7 @@ use App\Models\V7\MlDriftCheck;
 use App\Models\V7\MlModelVersion;
 use App\Models\V7\MlPrediction;
 use App\Models\V7\MlTrainingRun;
+use App\Models\V7\MlTrainingHorizonLock;
 use App\Jobs\MlRetrainJob;
 use App\Services\Fundamentals\FundamentalDataService;
 use Carbon\Carbon;
@@ -61,24 +62,38 @@ class MlScoringService
     public function queueRetrainRun(string $horizon, ?User $user, string $trigger, ?int $driftCheckId = null): MlTrainingRun
     {
         $this->assertHorizon($horizon);
-        if (app(MlLifecycleAutomationService::class)->activeRunForHorizon($horizon)) {
-            throw ValidationException::withMessages([
-                'horizon' => ['A training run is already in progress for this horizon.'],
-            ]);
-        }
+        $this->assertTrigger($trigger);
 
         $configuration = ['trigger' => $trigger];
         if ($driftCheckId !== null) {
             $configuration['drift_check_id'] = $driftCheckId;
         }
 
-        $run = MlTrainingRun::query()->create([
-            'horizon' => $horizon,
-            'status' => 'queued',
-            'cutoff_date' => now()->toDateString(),
-            'configuration' => $configuration,
-            'requested_by' => $user?->id,
-        ]);
+        // Locking a persistent row serializes manual, scheduled and drift
+        // requests across workers; the frontend check is only a convenience.
+        $run = DB::transaction(function () use ($horizon, $configuration, $user): MlTrainingRun {
+            MlTrainingHorizonLock::query()
+                ->whereKey($horizon)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (MlTrainingRun::query()
+                ->where('horizon', $horizon)
+                ->whereIn('status', ['queued', 'running', 'cancelling'])
+                ->exists()) {
+                throw ValidationException::withMessages([
+                    'horizon' => ['A training run is already in progress for this horizon.'],
+                ]);
+            }
+
+            return MlTrainingRun::query()->create([
+                'horizon' => $horizon,
+                'status' => 'queued',
+                'cutoff_date' => now()->toDateString(),
+                'configuration' => $configuration,
+                'requested_by' => $user?->id,
+            ]);
+        });
         $this->progressService()->record($run, 'queued', 0);
 
         MlRetrainJob::dispatch($horizon, $user?->id, $trigger, $driftCheckId, $run->id);
@@ -621,6 +636,15 @@ class MlScoringService
     {
         if (! in_array($horizon, self::HORIZONS, true)) {
             throw ValidationException::withMessages(['horizon' => ['Supported horizons are 1m, 3m and 6m.']]);
+        }
+    }
+
+    private function assertTrigger(string $trigger): void
+    {
+        if (! in_array($trigger, ['scheduled', 'manual', 'drift'], true)) {
+            throw ValidationException::withMessages([
+                'trigger' => ['Unsupported ML training trigger.'],
+            ]);
         }
     }
 

@@ -56,4 +56,27 @@ class MlRetrainQueueTest extends TestCase
 
         Bus::assertNothingDispatched();
     }
+
+    public function test_queue_retrain_rejects_unknown_trigger_before_dispatch(): void
+    {
+        Bus::fake();
+
+        $admin = User::factory()->admin()->create();
+        $this->defaultPortfolioFor($admin);
+
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+
+        app(\App\Services\ML\MlScoringService::class)
+            ->queueRetrainRun('3m', $admin, 'operator-bypass');
+
+        Bus::assertNothingDispatched();
+    }
+
+    public function test_horizon_lock_row_is_seeded_for_every_supported_horizon(): void
+    {
+        $this->assertSame(
+            ['1m', '3m', '6m'],
+            \App\Models\V7\MlTrainingHorizonLock::query()->orderBy('horizon')->pluck('horizon')->all(),
+        );
+    }
 }
