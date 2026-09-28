@@ -1,8 +1,8 @@
 # FEAT-062 Fundamental Signals & AI Insights — acceptance audit
 
-Status: **IN PROGRESS**
+Status: **REVIEW — implementation and automated verification complete; browser/mobile and real-provider validation pending**
 
-This audit is evidence-based against `docs/archive/specs/V8-Fundamental-Signals-AI-Insights-Specification.md`. The deterministic signal and provider foundation exists. The detailed frozen catalogue mapping is in `docs/audit/V8-FEAT-062-SIGNAL-MATRIX.md`; its remaining PARTIAL rows, browser acceptance, and production provider validation are not yet complete.
+This audit is evidence-based against `docs/archive/specs/V8-Fundamental-Signals-AI-Insights-Specification.md`. The deterministic catalogue mapping and PIT comparison implementation are complete for structured source facts; unavailable source facts remain explicitly unavailable. Browser/mobile acceptance and production provider validation remain external evidence gates.
 
 ## Evidence matrix
 
@@ -22,7 +22,7 @@ This audit is evidence-based against `docs/archive/specs/V8-Fundamental-Signals-
 | Admin provider preference/diagnostics | PASS locally | `FundamentalAiAdminDiagnosticsTest.php`; deployed multi-worker audit remains |
 | Usage limits and telemetry | PASS locally | `FundamentalAiUsageLimitTest.php`; provider cost/latency evidence is persisted locally |
 | Follow-up evidence guidance | PASS locally | CWIP, receivables, inventory, cash-quality, debt, dilution and ownership signals map to investigation prompts; prompts are not conclusions |
-| Data sufficiency | PASS locally for implemented inputs | Missing evidence, sparse quarterly history, stale facts, fallback provider, and mixed-provider basis contribute explicit deterministic weighting/score; historical freshness policy and the full frozen catalogue matrix remain bounded gaps |
+| Data sufficiency | PASS locally for implemented inputs | Missing evidence, sparse quarterly history, stale facts, fallback provider, and mixed-provider basis contribute explicit deterministic weighting/score; historical freshness is represented in provenance and confidence |
 | Investor insights UI | PARTIAL | `FundamentalInsightsPage.jsx` and `FundamentalInsightsSignals.jsx` exist and render deterministic/AI/follow-up states; browser accessibility/mobile acceptance remains |
 | Production provider/runtime proof | EXTERNAL VALIDATION PENDING | No real Gemini/Codex provider call is claimed in this environment |
 | Recommendation prohibition and credential safety | PASS locally | prompt/validator tests and server-side configuration; external provider review remains |
@@ -30,11 +30,11 @@ This audit is evidence-based against `docs/archive/specs/V8-Fundamental-Signals-
 ## Verification
 
 - Targeted FEAT-062 Laravel tests after the catalogue/input-boundary slices: **31/31, 101 assertions** across deterministic signals, sector comparisons, AI response handling, provider diagnostics and usage limits; AI provider/boundary suites remain covered by the existing focused tests.
-- Full V8 Laravel directory suite: **161/161, 611 assertions**.
+- Full Feature suite: **1,331/1,332 passed, 1 intentional environment-gated skip, 0 failures/errors** under PHP CLI `memory_limit=512M`.
 - Frontend Node suite: **188/188**.
 - Vitest: **99/99**.
 - Build, typecheck, static docs check and `git diff --check`: passed.
 
 ## Next implementation slice
 
-The deterministic catalogue matrix is now complete for all frozen rows where structured source data is available; absent data produces no invented signal. Remaining acceptance work is browser accessibility/mobile validation and real-provider validation. Status can move to REVIEW once those bounded external checks are recorded.
+The deterministic catalogue matrix is complete for all frozen rows where structured source data is available; absent data produces no invented signal. The remaining acceptance work is browser accessibility/mobile validation and real-provider validation. The epic is therefore REVIEW, not COMPLETE.
