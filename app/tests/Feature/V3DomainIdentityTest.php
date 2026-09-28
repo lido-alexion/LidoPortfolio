@@ -262,6 +262,10 @@ class V3DomainIdentityTest extends TestCase
 
     protected function makeStrategy(\App\Models\PortfolioProfile $profile, string $name): TradingStrategy
     {
+        $readyConfig = app(StrategyConfigurationService::class)
+            ->seedFactoryStrategy($profile)
+            ->activeVersion
+            ->config_json;
         $strategy = TradingStrategy::query()->create([
             'profile_id' => $profile->id,
             'name' => $name,
@@ -274,7 +278,10 @@ class V3DomainIdentityTest extends TestCase
             'strategy_id' => $strategy->id,
             'version' => 1,
             'version_label' => '1.0',
-            'config_json' => ['indicators' => []],
+            // This helper is used by tests that activate the strategy. Start
+            // from the frozen executable factory contract so FEAT-064's
+            // Setup Required gate is not bypassed by the fixture.
+            'config_json' => $readyConfig,
             'status' => TradingStrategyVersion::STATUS_DRAFT,
         ]);
         $strategy->forceFill(['active_version_id' => $version->id])->save();
