@@ -5,7 +5,7 @@ Authoritative specs: `docs/archive/specs/LidoPortfolio-V8-Wishlist.md` and linke
 ## Epic status
 
 ```text
-FEAT-052  [REVIEW] OpenTelemetry / LidoTelemetry (config, OTLP HTTP exporter, API middleware, browser traceparent + route hooks; queue/scheduler/browser spans and full acceptance still open)
+FEAT-052  [REVIEW] OpenTelemetry / LidoTelemetry (producer core, shared middleware/route wiring and documented OTLP configuration; queue/scheduler/browser spans and full acceptance still open)
 FEAT-054  [REVIEW] Historical fundamental bootstrap (summary/derived metrics, provenance, user-scoped Advanced preference, history UI, Screener boundary, and bootstrap evidence complete locally; browser/provider/deployed runtime acceptance remains)
 FEAT-055  [REVIEW] Account access request / Admin approval (formal audit complete; production Turnstile/mail and deployed multi-worker validation remain external)
 FEAT-056  [IN PROGRESS] ML lifecycle automation (queued runs, SSE, drift, cancel, notifications, transient retries and retention support committed; scoring integration, durable recovery and full acceptance still open)
@@ -14,7 +14,7 @@ FEAT-061  [REVIEW] Guided tour / onboarding (formal audit complete; missing-targ
 FEAT-062  [REVIEW] Fundamental signals & AI insights (complete deterministic catalogue matrix with PIT comparison evidence, provider-neutral orchestration, bounded investor-safe validation, and follow-up guidance; browser/mobile and real-provider acceptance remain)
 FEAT-063  [REVIEW] Live microstructure collection (local implementation and deterministic resilience verification complete; VPS installation, live Kite path, and deployed backup destination remain external)
 FEAT-064  [REVIEW] Screener / Strategy UX (semantic versions, run/backtest pins, immutable save, readiness, provenance audit, WP-09 return flow and legacy fixture reconciliation present; browser acceptance remains)
-FEAT-065  [IN PROGRESS] Intraday ML historical data platform (schema/checkpoints/admin status + Mac backfill worker with explicit current-universe orchestration; full corpus coverage and handoff acceptance remain)
+FEAT-065  [IN PROGRESS] Intraday ML historical data platform (schema/checkpoints/admin status, Mac backfill worker, explicit current-universe orchestration, idempotent Parquet corpus, DuckDB/Polars access and coverage reporting; full corpus coverage and handoff acceptance remain)
 ```
 
 ## Dependency order (implementation)
@@ -101,7 +101,7 @@ See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-F
 
 ## Verified continuation checkpoint (2026-09-28)
 
-- Actual checkout is `ea263a7`; the earlier handoff SHA `3265357` is not the current HEAD.
+- Actual checkout is `c22c0bf`; the earlier handoff SHA `3265357` is not the current HEAD.
 - The full Feature suite under local PHP CLI `memory_limit=512M` now passes **1,328/1,329**, with one intentional bounded-training skip when `STOXLA_ML_TEST_PYTHON` is absent. The previous FEAT-064 fixture cascade was repaired by giving activation-oriented legacy fixtures the executable factory configuration; the production Setup Required gate was not weakened.
 - FEAT-062 now covers the frozen deterministic catalogue with PIT-safe operating-profit/bottom-line, ROA/ROCE, working-capital/liquidity, capex, ownership/financial, persistent cash-quality and historical valuation-context signals; absent source data remains unavailable rather than inferred. It is REVIEW pending browser/mobile and real-provider acceptance.
 - FEAT-056 lifecycle tests pass **23/23** locally, but the inherited lifecycle implementation remains uncommitted and deliberately separated from FEAT-057.
@@ -109,6 +109,9 @@ See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-F
 - FEAT-056 lifecycle support is now committed as `18dc08b`; the mixed `MlScoringService` integration remains intentionally uncommitted pending ownership separation.
 - FEAT-065 current-universe backfill orchestration is now committed as `c039937`; it consumes an explicit operator-supplied symbol/token manifest and does not add automated backup.
 - FEAT-052 telemetry producer core is now committed as `fc8e422`; shared bootstrap/route wiring and collector/deployment acceptance remain separate follow-up work.
+- FEAT-062 deterministic catalogue completion is committed across `c1caacf`, `d90a429`, `f2744df`, `e307229`, `b67a777`; the epic is REVIEW pending browser/mobile and real-provider validation.
+- FEAT-065 corpus storage, Kite historical client, coverage reporting and DuckDB/Polars handoff helpers are committed as `1fe3d6d`; the 17-test isolated corpus suite is green with DuckDB installed.
+- Shared V8 API routes, middleware aliases, console commands, scheduler entries and environment documentation are wired in `c22c0bf`; dependent feature files remain intentionally preserved in the inherited workspace.
 
 ## Next task
 
