@@ -20,6 +20,7 @@ import {
 } from './investorTourSteps';
 import { logGuidedTourEvent } from './guidedTourTelemetry';
 import { t } from '../i18n';
+import useGuidedTourDialog from './useGuidedTourDialog';
 
 const GuidedTourContext = createContext(null);
 
@@ -58,6 +59,7 @@ export function GuidedTourProvider({ children, user }) {
     const welcomeRecordedRef = useRef(false);
     const pendingLaunchRef = useRef(null);
     const focusReturnRef = useRef(null);
+    const resumeDialogRef = useRef(null);
 
     const targetWaitMs = serverState?.target_wait_ms ?? 4000;
 
@@ -301,6 +303,10 @@ export function GuidedTourProvider({ children, user }) {
 
     const currentStep = resolveTourStep(currentStepId);
     const currentIdx = stepIndex(currentStepId);
+    useGuidedTourDialog(resumeChoiceOpen, resumeDialogRef, () => {
+        setResumeChoiceOpen(false);
+        restoreFocus();
+    });
 
     return (
         <GuidedTourContext.Provider value={value}>
@@ -316,7 +322,7 @@ export function GuidedTourProvider({ children, user }) {
                     {resumeChoiceOpen && (
                         <>
                             <div className="modal-backdrop show" />
-                            <div className="modal show d-block lido-guided-tour-modal" role="dialog" aria-modal="true" aria-labelledby="guided-tour-resume-title">
+                            <div ref={resumeDialogRef} className="modal show d-block lido-guided-tour-modal" role="dialog" aria-modal="true" aria-labelledby="guided-tour-resume-title" tabIndex={-1}>
                             <div className="modal-dialog modal-dialog-centered">
                                 <div className="modal-content">
                                     <div className="modal-header">

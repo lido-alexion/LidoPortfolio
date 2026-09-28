@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { t } from '../i18n';
+import useGuidedTourDialog from './useGuidedTourDialog';
 
 export default function GuidedTourWelcomeModal({
     open,
@@ -7,6 +8,9 @@ export default function GuidedTourWelcomeModal({
     onSkip,
     onDismissForever,
 }) {
+    const dialogRef = useRef(null);
+    useGuidedTourDialog(open, dialogRef, onSkip);
+
     if (!open) {
         return null;
     }
@@ -14,7 +18,7 @@ export default function GuidedTourWelcomeModal({
     return (
         <>
             <div className="modal-backdrop show" />
-            <div className="modal show d-block lido-guided-tour-modal" role="dialog" aria-modal="true" aria-labelledby="guided-tour-welcome-title">
+            <div ref={dialogRef} className="modal show d-block lido-guided-tour-modal" role="dialog" aria-modal="true" aria-labelledby="guided-tour-welcome-title" tabIndex={-1}>
             <div className="modal-dialog modal-dialog-centered">
                 <div className="modal-content">
                     <div className="modal-header">

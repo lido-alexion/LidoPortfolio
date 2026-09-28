@@ -27,6 +27,10 @@ test.describe('FEAT-061 guided tour mobile browser acceptance', () => {
         expect(welcomeBox).not.toBeNull();
         expect(welcomeBox.width).toBeLessThanOrEqual(390);
 
+        for (let index = 0; index < 5; index += 1) {
+            await page.keyboard.press('Tab');
+            await expect(welcome.locator(':focus')).toBeVisible();
+        }
         await page.getByRole('button', { name: 'Begin tour' }).click();
 
         const firstStep = page.getByRole('dialog').filter({
@@ -80,7 +84,12 @@ test.describe('FEAT-061 guided tour mobile browser acceptance', () => {
 
         await expect(page.getByRole('dialog', { name: 'Welcome to StoX' })).toBeVisible();
         await page.getByRole('button', { name: 'Begin tour' }).click();
-        await expect(page.getByRole('dialog', { name: 'Resume tour?' })).toBeVisible();
+        const resume = page.getByRole('dialog', { name: 'Resume tour?' });
+        await expect(resume).toBeVisible();
+        for (let index = 0; index < 3; index += 1) {
+            await page.keyboard.press('Tab');
+            await expect(resume.locator(':focus')).toBeVisible();
+        }
         await page.getByRole('button', { name: 'Resume' }).click();
 
         await expect(page).toHaveURL(/\/holdings$/);
