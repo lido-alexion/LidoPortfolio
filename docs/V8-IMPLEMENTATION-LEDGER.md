@@ -10,7 +10,7 @@ FEAT-054  [IN PROGRESS] Historical fundamental bootstrap (queue/run tables + boo
 FEAT-055  [REVIEW] Account access request / Admin approval (formal audit complete; production Turnstile/mail and deployed multi-worker validation remain external)
 FEAT-056  [IN PROGRESS] ML lifecycle automation (queued runs, SSE, drift, cancel, notifications, transient retries; retention/recovery/acceptance still open)
 FEAT-057  [IN PROGRESS] ML feature engineering / training (feature registry + dataset plan/admin APIs; full PIT-safe feature/training/validation corpus still open)
-FEAT-061  [REVIEW] Guided tour / onboarding (formal audit complete; browser accessibility/mobile journey and localization mechanism remain open)
+FEAT-061  [REVIEW] Guided tour / onboarding (formal audit complete; missing-target regression covered; browser accessibility/mobile journey and localization mechanism remain open)
 FEAT-062  [IN PROGRESS] Fundamental signals & AI insights (deterministic + Gemini/Codex orchestrator; admin diagnostics and full acceptance still open)
 FEAT-063  [REVIEW] Live microstructure collection (local implementation and deterministic resilience verification complete; VPS installation, live Kite path, and deployed backup destination remain external)
 FEAT-064  [REVIEW] Screener / Strategy UX (semantic versions, run/backtest pins, immutable save, readiness, provenance audit, and WP-09 return flow present; regression cleanup and full gate remain)

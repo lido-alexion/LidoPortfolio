@@ -25,7 +25,7 @@ Authoritative contract: `docs/archive/specs/V8-Guided-Tour-Welcome-Onboarding-Sp
 ## Verification executed
 
 - Laravel Guided Tour tests passed in the prior V8 suite.
-- JS unit suite: **182/182 passed** after missing-target fix.
+- JS suite: node tests **184/184** and Vitest **99/99** after missing-target regression coverage.
 - Vite build, typecheck, static docs check: passed.
 - No browser/Playwright execution was available in this environment.
 
