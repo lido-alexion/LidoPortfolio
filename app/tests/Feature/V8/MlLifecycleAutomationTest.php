@@ -188,6 +188,37 @@ class MlLifecycleAutomationTest extends TestCase
         ));
     }
 
+    public function test_admin_status_exposes_next_run_and_durable_active_run_state(): void
+    {
+        config([
+            'ml_lifecycle.enabled' => true,
+            'ml_lifecycle.horizons.1m.enabled' => true,
+            'ml_lifecycle.horizons.1m.schedule' => 'monthly_first_sunday_02:00',
+        ]);
+        $run = MlTrainingRun::query()->create([
+            'horizon' => '1m',
+            'status' => 'running',
+            'cutoff_date' => '2026-02-01',
+            'configuration' => [
+                'trigger' => 'scheduled',
+                'retry' => ['attempt' => 2],
+                'cancellation' => ['requested' => true],
+                'progress' => ['stage' => 'training', 'percent' => 55],
+            ],
+            'failure' => ['message' => 'temporary worker issue'],
+            'started_at' => now(),
+        ]);
+
+        $status = app(MlLifecycleAutomationService::class)->adminStatus(Carbon::parse('2026-03-01 01:00:00', 'Asia/Kolkata'));
+        $row = collect($status['horizons'])->firstWhere('horizon', '1m');
+
+        $this->assertSame('2026-03-01T02:00:00+05:30', $row['next_scheduled_at']);
+        $this->assertSame($run->id, $row['active_run']['id']);
+        $this->assertSame(2, $row['active_run']['retry']['attempt']);
+        $this->assertTrue($row['active_run']['cancellation']['requested']);
+        $this->assertSame('temporary worker issue', $row['active_run']['failure']['message']);
+    }
+
     public function test_tick_requeues_stale_running_run_after_worker_restart(): void
     {
         config(['ml_lifecycle.enabled' => true, 'ml_lifecycle.recovery.stale_after_minutes' => 30]);

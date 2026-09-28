@@ -249,6 +249,7 @@ export default function MlScoringAdminPage() {
                                     <tr>
                                         <th>Horizon</th>
                                         <th>Schedule</th>
+                                        <th>Next run</th>
                                         <th>Due now</th>
                                         <th>Active run</th>
                                     </tr>
@@ -278,8 +279,18 @@ export default function MlScoringAdminPage() {
                                                     </button>
                                                 </div>
                                             </td>
+                                            <td className="small">{row.next_scheduled_at || '—'}</td>
                                             <td>{row.schedule_due_now ? 'yes' : 'no'}</td>
-                                            <td>{row.active_run ? `${row.active_run.status} (#${row.active_run.id})` : '—'}</td>
+                                            <td>
+                                                {row.active_run ? (
+                                                    <span>
+                                                        {row.active_run.status} (#{row.active_run.id})
+                                                        {row.active_run.retry?.attempt ? ` · retry ${row.active_run.retry.attempt}` : ''}
+                                                        {row.active_run.cancellation?.requested ? ' · cancellation requested' : ''}
+                                                        {row.active_run.failure?.message ? ` · ${row.active_run.failure.message}` : ''}
+                                                    </span>
+                                                ) : '—'}
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>

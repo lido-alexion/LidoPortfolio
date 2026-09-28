@@ -17,4 +17,6 @@ test('ML admin page queues retrain and uses EventSource progress stream', () => 
     assert.match(page, /completed_rejected/);
     assert.match(page, /admin\/ml\/schedules/);
     assert.match(page, /admin\/ml\/rollback/);
+    assert.match(page, /next_scheduled_at/);
+    assert.match(page, /cancellation requested/);
 });

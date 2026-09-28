@@ -79,6 +79,31 @@ class MlLifecycleAutomationService
         ];
     }
 
+    public function nextScheduledAt(string $horizon, ?Carbon $now = null): ?string
+    {
+        $this->assertHorizon($horizon);
+        $settings = $this->scheduleSettings($horizon);
+        if (! $settings['enabled'] || ! preg_match('/^monthly_first_sunday_(\d{2}):00$/', $settings['schedule'], $matches)) {
+            return null;
+        }
+
+        $now ??= now()->timezone(config('ml_lifecycle.timezone', 'Asia/Kolkata'));
+        $candidate = $now->copy()->startOfMonth()->startOfDay();
+        while ((int) $candidate->dayOfWeek !== Carbon::SUNDAY) {
+            $candidate->addDay();
+        }
+        $candidate->setTime((int) $matches[1], 0);
+        if ($candidate->lessThanOrEqualTo($now)) {
+            $candidate = $candidate->addMonthNoOverflow()->startOfMonth()->startOfDay();
+            while ((int) $candidate->dayOfWeek !== Carbon::SUNDAY) {
+                $candidate->addDay();
+            }
+            $candidate->setTime((int) $matches[1], 0);
+        }
+
+        return $candidate->toIso8601String();
+    }
+
     public function updateSchedule(string $horizon, bool $enabled, string $schedule, ?User $actor = null): array
     {
         $this->assertHorizon($horizon);
@@ -174,10 +199,15 @@ class MlLifecycleAutomationService
                 'schedule_enabled' => $settings['enabled'],
                 'schedule_options' => $settings['options'],
                 'schedule_due_now' => $this->scheduleDue($horizon, $now),
+                'next_scheduled_at' => $this->nextScheduledAt($horizon, $now),
                 'active_run' => $active ? [
                     'id' => $active->id,
                     'status' => $active->status,
                     'trigger' => is_array($active->configuration) ? ($active->configuration['trigger'] ?? null) : null,
+                    'progress' => is_array($active->configuration) ? ($active->configuration['progress'] ?? null) : null,
+                    'retry' => is_array($active->configuration) ? ($active->configuration['retry'] ?? null) : null,
+                    'cancellation' => is_array($active->configuration) ? ($active->configuration['cancellation'] ?? null) : null,
+                    'failure' => $active->failure,
                 ] : null,
             ];
         }
