@@ -51,4 +51,36 @@ class MlUniverseMembershipSnapshotTest extends TestCase
         $this->assertSame('Industrials', $service->sectorForDate($stock->id, '2025-07-01'));
         $this->assertSame('2025-06-30', MlUniverseMembership::query()->where('snapshot_key', 'feed-a')->firstOrFail()->effective_to->toDateString());
     }
+
+    public function test_coverage_reports_missing_historical_snapshot_dates_without_current_fallback(): void
+    {
+        $stock = Stock::query()->create([
+            'symbol' => 'GAP', 'exchange' => 'NSE', 'name' => 'Gap Co', 'sector' => 'Technology', 'is_active' => true,
+        ]);
+        $service = app(MlHistoricalUniverseMembershipService::class);
+        $service->captureCurrentEligibleSnapshot(Carbon::parse('2025-01-01'), 'test_feed', 'feed-a');
+        $service->captureCurrentEligibleSnapshot(Carbon::parse('2025-01-04'), 'test_feed', 'feed-b');
+
+        $coverage = $service->coverageForDates(['2025-01-01', '2025-01-02', '2025-01-03', '2025-01-04']);
+
+        $this->assertSame(['2025-01-01', '2025-01-02', '2025-01-03', '2025-01-04'], $coverage['covered_dates']);
+        $this->assertSame([], $coverage['missing_dates']);
+        $this->assertSame(100.0, $coverage['coverage_percentage']);
+        $this->assertSame([$stock->id], $service->stockIdsForDate('2025-01-03'));
+    }
+
+    public function test_coverage_identifies_a_gap_before_the_first_snapshot(): void
+    {
+        Stock::query()->create([
+            'symbol' => 'LATE', 'exchange' => 'NSE', 'name' => 'Late Co', 'sector' => 'Technology', 'is_active' => true,
+        ]);
+        $service = app(MlHistoricalUniverseMembershipService::class);
+        $service->captureCurrentEligibleSnapshot(Carbon::parse('2025-01-04'), 'test_feed', 'feed-b');
+
+        $coverage = $service->coverageForDates(['2025-01-01', '2025-01-02', '2025-01-03', '2025-01-04']);
+
+        $this->assertSame(['2025-01-01', '2025-01-02', '2025-01-03'], $coverage['missing_dates']);
+        $this->assertSame([['start' => '2025-01-01', 'end' => '2025-01-03', 'days' => 3]], $coverage['gaps']);
+        $this->assertSame(25.0, $coverage['coverage_percentage']);
+    }
 }

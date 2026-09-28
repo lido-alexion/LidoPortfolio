@@ -144,6 +144,7 @@ class MlTrainingDatasetBuilder
             throw new RuntimeException('Insufficient point-in-time training dates.');
         }
         $partitions = $this->partitionMetadata($referenceDates, $cutoff, $horizonDays);
+        $membershipCoverage = app(MlHistoricalUniverseMembershipService::class)->coverageForDates($dates);
         $paths = [
             'train' => $directory.'/train.jsonl',
             'validation' => $directory.'/validation.jsonl',
@@ -269,6 +270,7 @@ class MlTrainingDatasetBuilder
                 'train_purged_for_label_overlap' => $purgedRows['train'],
                 'validation_purged_for_label_overlap' => $purgedRows['validation'],
                 'context_coverage' => $contextCoverage,
+                'membership_coverage' => $membershipCoverage,
             ],
         ];
     }

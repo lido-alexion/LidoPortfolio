@@ -14,7 +14,7 @@ This is a code-reconciliation checkpoint against `docs/archive/specs/V8-ML-Featu
 | Current active/eligible training universe | PASS locally | Dataset universe now requires active NSE stocks, excludes benchmarks and requires price history |
 | PIT fundamentals | VERIFIED locally | Fundamental facts are filtered by availability date and latest known revision per period/as-of row |
 | PIT prices and labels | VERIFIED locally | Features use as-of unadjusted prices; labels use adjusted prices only in the forward label window |
-| PIT market breadth / sector context | PARTIAL | `MlUniverseMembership`, dated snapshot capture command, and `MlHistoricalUniverseMembershipService` now provide auditable effective-dated membership/sector snapshots; context services refuse current-universe fallback. Streamed dataset diagnostics now count candidate/written context coverage. Historical source backfill and production snapshot population remain |
+| PIT market breadth / sector context | PARTIAL | `MlUniverseMembership`, dated snapshot capture command, and `MlHistoricalUniverseMembershipService` now provide auditable effective-dated membership/sector snapshots; context services refuse current-universe fallback. Streamed dataset diagnostics now count candidate/written context coverage and explicit membership date coverage/gaps. Historical source backfill and production snapshot population remain |
 | Intraday/minute boundary | PASS by search | No minute/order-book/microstructure features are wired into FEAT-057 builder; FEAT-065 remains separate |
 | Missing-value policy | IMPLEMENTED/UNVERIFIED | Resolved profile pins `v8-preprocessing-1` and median-plus-flag/unknown-category policy; actual fitting/preprocessing remains delegated to the Python adapter and needs runtime evidence |
 | Outlier handling / redundancy pruning | PARTIAL | Effective feature-set/excluded-feature metadata exists; training-time clipping, redundancy and stability selection need direct evidence |
@@ -33,6 +33,6 @@ This is a code-reconciliation checkpoint against `docs/archive/specs/V8-ML-Featu
 
 ## Verified implementation slice
 
-Horizon-aware sampling, dated membership snapshots, explicit horizon profiles, and dataset/model feature-set identity are now implemented and tested. The current implementation remains **IN PROGRESS** until historical PIT snapshot coverage/backfill, preprocessing runtime evidence, redundancy handling, and full acceptance evidence are closed.
+Horizon-aware sampling, dated membership snapshots, explicit horizon profiles, dataset/model feature-set identity, and explicit historical snapshot coverage diagnostics are now implemented and tested. The current implementation remains **IN PROGRESS** until historical PIT snapshot backfill, preprocessing runtime evidence, redundancy handling, and full acceptance evidence are closed.
 
 Latest evidence: `MlTrainingDatasetBuilderTest` **9/9** covers weekly/monthly sampling, active-universe exclusion, label purging, context coverage, and persisted resolved profiles; `MlFeatureRegistryAdminTest` covers deterministic profiles and invalid requests; `MlScoringLifecycleTest` verifies model audit pinning. The V8 Feature suite is **155/155** (595 assertions).

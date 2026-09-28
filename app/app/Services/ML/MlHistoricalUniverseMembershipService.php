@@ -71,6 +71,64 @@ class MlHistoricalUniverseMembershipService
     }
 
     /**
+     * Report whether the effective-dated universe has evidence for each
+     * requested historical date. An empty universe and an absent snapshot are
+     * intentionally different: the latter is a coverage gap and must not be
+     * replaced with today's composition.
+     *
+     * @param list<string> $dates
+     * @return array{expected_dates:list<string>,covered_dates:list<string>,missing_dates:list<string>,coverage_percentage:float,gaps:list<array{start:string,end:string,days:int}>}
+     */
+    public function coverageForDates(array $dates, string $universeKey = self::ACTIVE_ELIGIBLE_NSE): array
+    {
+        $expected = array_values(array_unique(array_map(
+            static fn (string $date): string => Carbon::parse($date)->toDateString(),
+            $dates,
+        )));
+        sort($expected);
+
+        $covered = [];
+        if ($expected !== []) {
+            $intervals = MlUniverseMembership::query()
+                ->where('universe_key', $universeKey)
+                ->whereDate('effective_from', '<=', $expected[array_key_last($expected)])
+                ->where(function ($query) use ($expected): void {
+                    $query->whereNull('effective_to')->orWhereDate('effective_to', '>=', $expected[0]);
+                })
+                ->get(['effective_from', 'effective_to']);
+            foreach ($expected as $date) {
+                foreach ($intervals as $interval) {
+                    if ($interval->effective_from->toDateString() <= $date
+                        && ($interval->effective_to === null || $interval->effective_to->toDateString() >= $date)) {
+                        $covered[] = $date;
+                        break;
+                    }
+                }
+            }
+        }
+
+        $missing = array_values(array_diff($expected, $covered));
+        $gaps = [];
+        foreach ($missing as $date) {
+            $last = array_key_last($gaps);
+            if ($last !== null && Carbon::parse($gaps[$last]['end'])->addDay()->toDateString() === $date) {
+                $gaps[$last]['end'] = $date;
+                $gaps[$last]['days']++;
+                continue;
+            }
+            $gaps[] = ['start' => $date, 'end' => $date, 'days' => 1];
+        }
+
+        return [
+            'expected_dates' => $expected,
+            'covered_dates' => $covered,
+            'missing_dates' => $missing,
+            'coverage_percentage' => $expected === [] ? 0.0 : round(count($covered) / count($expected) * 100, 4),
+            'gaps' => $gaps,
+        ];
+    }
+
+    /**
      * Materialize a point-in-time eligible-universe snapshot from StoX's
      * current master. This is the controlled ingestion boundary; historical
      * backfills must provide their own dated source rather than pretending the
