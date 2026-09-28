@@ -124,4 +124,24 @@ class MlLifecycleAutomationTest extends TestCase
             ->assertJsonPath('data.lifecycle.enabled', false)
             ->assertJsonPath('data.lifecycle.horizons.0.schedule_enabled', true);
     }
+
+    public function test_tick_requeues_stale_running_run_after_worker_restart(): void
+    {
+        config(['ml_lifecycle.enabled' => true, 'ml_lifecycle.recovery.stale_after_minutes' => 30]);
+        $run = MlTrainingRun::query()->create([
+            'horizon' => '3m',
+            'status' => 'running',
+            'cutoff_date' => '2026-02-01',
+            'configuration' => ['trigger' => 'scheduled'],
+            'started_at' => Carbon::parse('2026-03-01 00:00:00', 'Asia/Kolkata'),
+        ]);
+        $run->forceFill(['updated_at' => Carbon::parse('2026-03-01 00:05:00', 'Asia/Kolkata')])->save();
+
+        Bus::fake();
+        $actions = app(MlLifecycleAutomationService::class)->tick(null, Carbon::parse('2026-03-01 01:00:00', 'Asia/Kolkata'));
+
+        $this->assertSame('queued', $run->fresh()->status);
+        $this->assertSame('requeued_stale_run', $actions[0]['action'] ?? null);
+        Bus::assertDispatched(MlRetrainJob::class, fn (MlRetrainJob $job): bool => $job->trainingRunId === $run->id && $job->horizon === '3m');
+    }
 }

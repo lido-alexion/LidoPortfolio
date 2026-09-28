@@ -32,6 +32,9 @@ return [
         'max_attempts' => max(1, (int) env('STOXLA_ML_RETRY_MAX_ATTEMPTS', 3)),
         'backoff_seconds' => [60, 300, 900],
     ],
+    'recovery' => [
+        'stale_after_minutes' => max(1, (int) env('STOXLA_ML_RECOVERY_STALE_MINUTES', 30)),
+    ],
     'drift_trigger' => [
         'enabled' => (bool) env('STOXLA_ML_DRIFT_TRIGGER_ENABLED', false),
         'window_months' => (int) env('STOXLA_ML_DRIFT_TRIGGER_WINDOW_MONTHS', 3),

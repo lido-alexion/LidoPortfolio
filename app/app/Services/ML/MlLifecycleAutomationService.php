@@ -15,6 +15,7 @@ class MlLifecycleAutomationService
     public function __construct(
         protected MlDriftTriggerEvaluator $driftTriggers,
         protected MlArtifactRetentionService $retention,
+        protected MlTrainingRunRecoveryService $recovery,
     ) {}
 
     public function activeRunForHorizon(string $horizon): ?MlTrainingRun
@@ -57,6 +58,9 @@ class MlLifecycleAutomationService
         }
 
         $out = [];
+        foreach ($this->recovery->recover($now) as $action) {
+            $out[] = $action + ['reason' => 'worker_or_process_restart'];
+        }
         foreach (MlScoringService::HORIZONS as $horizon) {
             if ($this->activeRunForHorizon($horizon)) {
                 $out[] = ['horizon' => $horizon, 'action' => 'skipped', 'reason' => 'active_run'];
