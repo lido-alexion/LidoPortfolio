@@ -35,7 +35,7 @@ This audit maps the frozen FEAT-063 contract to the current repository evidence.
 - Installed and imported `kiteconnect`, `pyarrow`, and `polars`.
 - Microstructure suite: **16 passed, 0 skipped**.
 - Actual Parquet write/read, manifest, backup, and spool-pruning smoke test: passed.
-- Laravel V8 suite at prior checkpoint: **136 passed**.
+- Laravel V8 suite after subsequent FEAT-055/063 changes: **140 passed, 531 assertions**.
 - Frontend at prior checkpoint: JS **182/182**, build/typecheck/docs checks passed.
 
 ## Remaining exit-gate work

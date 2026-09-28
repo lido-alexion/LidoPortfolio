@@ -32,7 +32,7 @@ Authoritative contract: `docs/archive/specs/V8-Account-Access-Request-Admin-Appr
 ## Verification executed
 
 - `AccessRequestWorkflowTest` plus `AccessRequestSecurityAuditTest`: **12 passed, 74 assertions**.
-- Full Laravel V8 checkpoint: **136 passed** before this audit slice; rerun required after final commit.
+- Full Laravel V8 suite after the audit changes: **140 passed, 531 assertions**.
 - Full JS checkpoint: **182/182 passed**, build/typecheck/docs checks passed.
 - PHP syntax and `git diff --check` run on focused slices.
 
