@@ -56,6 +56,27 @@ class UniverseAudit:
         self._save(payload)
         return record
 
+    def record_failure(self, attempted_count: int, source: str, warning: str) -> dict[str, Any]:
+        """Record an unusable refresh without replacing the last known-good universe."""
+        state = self.load()
+        current = list(state.get("current", []))
+        record = {
+            "at": datetime.now(timezone.utc).isoformat(),
+            "source": source,
+            "accepted": False,
+            "old_count": len(current),
+            "new_count": attempted_count,
+            "additions": [],
+            "removals": [],
+            "mapping_changes": [],
+            "conflicts": [],
+            "warnings": [warning],
+        }
+        history = list(state.get("history", []))
+        history.append(record)
+        self._save({"current": current, "history": history[-self.max_records:], "latest": record})
+        return record
+
     def _save(self, payload: dict[str, Any]) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         staging = self.path.with_name(f".{self.path.name}.staging")

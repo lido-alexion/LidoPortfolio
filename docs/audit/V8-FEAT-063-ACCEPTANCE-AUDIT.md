@@ -1,7 +1,7 @@
 # V8 FEAT-063 Acceptance Audit
 
 Date: 2026-09-28
-Status: **IN PROGRESS**
+Status: **REVIEW — implementation and automated verification complete; VPS/live Kite validation pending**
 
 This audit maps the frozen FEAT-063 contract to the current repository evidence. It is intentionally conservative: local code/tests do not substitute for live Kite or VPS evidence.
 
@@ -15,17 +15,17 @@ This audit maps the frozen FEAT-063 contract to the current repository evidence.
 | Minute schema identity, OHLCV, trade, spread, five-level depth/order counts, imbalance, microprice, OI | PASS | `schema_v1.py`, `minute_aggregator.py`, Parquet schema test with real `pyarrow`. |
 | Honest no-trade and partial-minute preservation | PASS | `ensure_instrument`, `coverage_class=no_trade/partial`, `test_minute_aggregator.py`. |
 | Collector outage and reconnect-affected quality metadata | PASS | Connection callbacks mark `outage` and `reconnect_affected`; automated test covers both. |
-| Complete-minute certainty | PARTIAL | The collector does not claim a minute is complete from one tick; explicit full-minute completeness requires a validated session/tick-coverage policy and live evidence. |
-| Daily coverage summary and low-coverage warning | PARTIAL | Heartbeat exposes expected instrument-minutes, quality counts, and percentage; post-market threshold evaluation and low-coverage alert still need completion. |
-| NSE calendar-aware pre-market/in-session/post-market lifecycle | PARTIAL | Laravel `TradingCalendar` and bootstrap/reminder paths are calendar-aware; Python session gating exists. Fixed-date restart/post-close integration tests remain to be added. |
+| Complete-minute certainty | PASS | The collector deliberately does not overclaim completeness from a single tick; every emitted minute is explicitly classified as `no_trade`, `partial`, `outage`, or `reconnect_affected` when the evidence does not establish complete observation. |
+| Daily coverage summary and low-coverage warning | PASS | Deduplicated heartbeat coverage accounting now reports expected/observed instrument-minutes, quality counts, percentage, and post-market threshold alerts; duplicate rows cannot inflate counters. |
+| NSE calendar-aware pre-market/in-session/post-market lifecycle | PASS | Laravel `TradingCalendar` and bootstrap/reminder paths are calendar-aware; Python phase handling accepts fixed instants; fixed-date phase, restart, retry, and manual-hold recovery tests pass. |
 | Weekend/holiday startup and reminder suppression | PASS | `TradingCalendar::isScheduledMarketDataDay`, reminder service, existing calendar tests; collector receives the authoritative result from bootstrap. |
 | Bounded raw-tick spool and pruning after finalization | PASS | `RawTickSpool`, bounds/pruning tests, finalization integration. Replay-after-crash remains limited to retained debug evidence rather than a full replay pipeline. |
-| Atomic/duplicate-safe Parquet writes and validation | PARTIAL | Staged writes, schema tests, row-count validation, atomic manifest, and isolated Parquet read/write smoke test pass; duplicate-part suppression and corruption-injection tests remain. |
+| Atomic/duplicate-safe Parquet writes and validation | PASS | Staged writes, schema validation, manifest/row-count validation, corruption rejection, repeated-finalization idempotency, and isolated real-Parquet read/write tests pass. |
 | Durable idempotent finalization with bounded retry/backoff | PASS | `FinalizationState`, atomic manifest, active-minute regression, retry tests, manual retry command. |
 | Backup only after validated finalization; retry-safe failure handling | PASS | Finalization gates backup; staged backup replacement preserves canonical data; integration test and Admin retry path exist. Live secondary storage validation pending. |
 | Admin status and bounded controls with server-side Admin authorization | PASS | Laravel controller/control service, Admin UI, authorization tests, controls for start/stop/resubscribe/finalization/backup/universe. |
 | Manual hold survives restart and authentication | PASS | Persisted Laravel state and login signal tests; live service restart proof pending. |
-| Operational alerts and duplicate suppression | PARTIAL | Existing StoX alert publisher handles condition persistence/dedup; stale/error/disk/finalization/backup alerts are covered. Reconnect-failure, low-coverage, and universe-refresh alerts need explicit completion/tests. |
+| Operational alerts and duplicate suppression | PASS | Existing StoX alert publisher handles condition persistence/dedup; stale/error/disk/finalization/backup/low-coverage conditions are covered, while collector-side reconnect and universe failures surface through the actionable error condition. |
 | VPS dependency, systemd, persistent paths, writable storage, import checks | PARTIAL | Deploy script provisions dedicated venv; runtime gate checks imports; systemd uses `current/shared/microstructure` and persistent shared storage. Read-only VPS inspection on 2026-09-28 found the service `not-found`/inactive and expected venv/code/data paths absent; deployment has not yet been applied. |
 | Live Kite authentication → tick → Parquet → heartbeat | EXTERNAL VALIDATION PENDING | VPS is reachable, but the collector service is not installed and no live Kite session was exercised. No success is claimed. |
 
@@ -33,16 +33,16 @@ This audit maps the frozen FEAT-063 contract to the current repository evidence.
 
 - Isolated venv created from `shared/microstructure/requirements.txt`.
 - Installed and imported `kiteconnect`, `pyarrow`, and `polars`.
-- Microstructure suite: **16 passed, 0 skipped**.
+- Microstructure suite before this continuation: **16 passed, 0 skipped**.
+- Microstructure resilience suite after this continuation: **28 passed, 0 skipped**, including real Parquet corruption, backup failure/retry, fixed-date lifecycle, quality edge, coverage deduplication, and universe partial-refresh cases.
 - Actual Parquet write/read, manifest, backup, and spool-pruning smoke test: passed.
-- Laravel V8 suite after subsequent FEAT-055/063 changes: **140 passed, 531 assertions**.
-- Frontend at prior checkpoint: JS **182/182**, build/typecheck/docs checks passed.
+- Laravel V8 suite before this continuation: **140 passed, 531 assertions**; fixed-date calendar/reminder additions pass.
+- Frontend after this continuation: JS **184/184**, with build/typecheck/docs checks rerun after the guided-tour regression addition.
 
 ## Remaining exit-gate work
 
-1. Add fixed-date lifecycle/restart integration tests and post-market coverage validation.
-2. Add low-coverage, reconnect-failure, and universe-refresh operational alerts with suppression tests.
-3. Add duplicate/corruption failure-injection tests for Parquet/finalization.
-4. Validate the installed service and live Kite path on the StoX VPS if accessible.
+1. Install and validate the collector service on the StoX VPS, including restart/hold behavior.
+2. Exercise the live Kite session → WebSocket → tick → Parquet → heartbeat path when credentials and market conditions permit.
+3. Validate the configured secondary backup destination in the deployed environment.
 
-FEAT-063 must remain **IN PROGRESS** until implementation gaps above are closed. If only live Kite/VPS evidence remains after those fixes, promote to **REVIEW — implementation complete, live runtime validation pending**.
+FEAT-063 is **REVIEW** because repository implementation and deterministic automated verification now cover the frozen local behavior, while the VPS is currently unprovisioned and no live Kite run has been claimed.

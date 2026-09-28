@@ -14,7 +14,7 @@ except ImportError:  # pragma: no cover - optional until venv installed
     pa = None
     pq = None
 
-from collector.schema_v1 import SCHEMA_VERSION
+from collector.schema_v1 import ALL_FIELDS, SCHEMA_VERSION
 
 
 def partition_dir(data_root: Path, trading_day: date) -> Path:
@@ -67,3 +67,35 @@ def partition_row_count(data_root: Path, trading_day: date) -> int:
     for path in sorted(target_dir.glob("*.parquet")):
         total += pq.ParquetFile(path).metadata.num_rows
     return total
+
+
+def validate_finalized_partition(data_root: Path, trading_day: date) -> dict[str, Any]:
+    """Validate the manifest, schema, and row count before treating a day as final."""
+    return validate_finalized_directory(partition_dir(data_root, trading_day))
+
+
+def validate_finalized_directory(target_dir: Path) -> dict[str, Any]:
+    """Validate a partition directory, including a backup staging directory."""
+    manifest_path = target_dir / "_FINALIZED.json"
+    if not manifest_path.is_file():
+        raise ValueError("finalization manifest is missing")
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"finalization manifest is unreadable: {exc}") from exc
+    if not isinstance(manifest, dict) or not isinstance(manifest.get("row_count"), int):
+        raise ValueError("finalization manifest has no integer row_count")
+    if pq is None:
+        raise RuntimeError("pyarrow is required to validate Parquet partitions")
+    files = sorted(target_dir.glob("*.parquet"))
+    total = 0
+    for path in files:
+        parquet = pq.ParquetFile(path)
+        names = set(parquet.schema_arrow.names)
+        missing = [field for field in ALL_FIELDS if field not in names]
+        if missing:
+            raise ValueError(f"{path.name} is missing schema fields: {', '.join(missing)}")
+        total += parquet.metadata.num_rows
+    if total != manifest["row_count"]:
+        raise ValueError(f"manifest row_count={manifest['row_count']} but partition has {total} rows")
+    return {"manifest": manifest, "row_count": total, "files": [path.name for path in files]}

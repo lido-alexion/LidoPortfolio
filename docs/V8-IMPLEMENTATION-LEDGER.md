@@ -12,7 +12,7 @@ FEAT-056  [IN PROGRESS] ML lifecycle automation (queued runs, SSE, drift, cancel
 FEAT-057  [IN PROGRESS] ML feature engineering / training (feature registry + dataset plan/admin APIs; full PIT-safe feature/training/validation corpus still open)
 FEAT-061  [REVIEW] Guided tour / onboarding (formal audit complete; browser accessibility/mobile journey and localization mechanism remain open)
 FEAT-062  [IN PROGRESS] Fundamental signals & AI insights (deterministic + Gemini/Codex orchestrator; admin diagnostics and full acceptance still open)
-FEAT-063  [IN PROGRESS] Live microstructure collection (expanded schema, explicit quality classes/coverage counters, bounded spool, durable finalization/retry, atomic backup, reconnect recovery, universe audit, alerts, and VPS provisioning; calendar/validation gaps remain)
+FEAT-063  [REVIEW] Live microstructure collection (local implementation and deterministic resilience verification complete; VPS installation, live Kite path, and deployed backup destination remain external)
 FEAT-064  [REVIEW] Screener / Strategy UX (semantic versions, run/backtest pins, immutable save, readiness, provenance audit, and WP-09 return flow present; regression cleanup and full gate remain)
 FEAT-065  [IN PROGRESS] Intraday ML historical data platform (checkpoints + admin status + Mac backfill worker; current-universe orchestration, coverage, and handoff acceptance remain)
 ```
@@ -100,7 +100,7 @@ See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-F
 
 ## Next task
 
-1. FEAT-063: complete quality/coverage semantics, session/calendar evidence, universe identity refresh, operational alert suppression, and VPS runtime readiness; then run the full exit gate.
+1. FEAT-063: install and validate the collector on the StoX VPS, then exercise the live Kite path and deployed backup destination.
 3. FEAT-055 + FEAT-061 formal acceptance/security audits.
 4. FEAT-052: queue/scheduler instrumentation, full OTEL SDK alignment, browser view-duration spans.
 5. FEAT-054: official history, inline YoY cells, and per-user advanced preference API.

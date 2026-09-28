@@ -9,6 +9,35 @@ from collector.minute_aggregator import MinuteAggregator  # noqa: E402
 
 
 class MinuteAggregatorTest(unittest.TestCase):
+    def test_connected_no_tick_is_not_an_outage(self) -> None:
+        agg = MinuteAggregator()
+        meta = {"instrument_id": 8, "source_instrument_token": 108, "exchange": "NSE", "tradingsymbol": "QUIET"}
+        at = datetime(2026, 9, 27, 10, 15, 30, tzinfo=timezone.utc)
+        agg.ensure_instrument(meta, at=at)
+        row = agg.flush_before(datetime(2026, 9, 27, 10, 16, tzinfo=timezone.utc))[0]
+        self.assertEqual("no_trade", row["coverage_class"])
+
+    def test_reconnect_mid_minute_remains_distinct_after_ticks_resume(self) -> None:
+        agg = MinuteAggregator()
+        meta = {"instrument_id": 9, "source_instrument_token": 109, "exchange": "NSE", "tradingsymbol": "RECON"}
+        at = datetime(2026, 9, 27, 10, 15, 5, tzinfo=timezone.utc)
+        agg.ingest(meta, {"last_price": 100.0}, at=at)
+        agg.mark_collection_gap("reconnect_window")
+        agg.ingest(meta, {"last_price": 101.0}, at=at)
+        row = agg.flush_before(datetime(2026, 9, 27, 10, 16, tzinfo=timezone.utc))[0]
+        self.assertEqual("reconnect_affected", row["coverage_class"])
+        self.assertEqual("reconnect_window", row["partial_reason"])
+
+    def test_multiple_reconnects_do_not_overclaim_full_coverage(self) -> None:
+        agg = MinuteAggregator()
+        meta = {"instrument_id": 10, "source_instrument_token": 110, "exchange": "NSE", "tradingsymbol": "MULTI"}
+        at = datetime(2026, 9, 27, 10, 15, 5, tzinfo=timezone.utc)
+        agg.ingest(meta, {"last_price": 100.0}, at=at)
+        agg.mark_collection_gap("reconnect_window")
+        agg.mark_collection_gap("reconnect_window")
+        row = agg.flush_before(datetime(2026, 9, 27, 10, 16, tzinfo=timezone.utc))[0]
+        self.assertNotEqual("complete", row["coverage_class"])
+        self.assertEqual("reconnect_affected", row["coverage_class"])
     def test_active_instrument_without_tick_is_retained_as_no_trade(self) -> None:
         agg = MinuteAggregator()
         meta = {

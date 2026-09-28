@@ -36,6 +36,19 @@ class UniverseAuditTest(unittest.TestCase):
             audit.record(universe, "bootstrap")
             self.assertEqual(1, len(audit.load()["history"]))
 
+    def test_failed_partial_refresh_preserves_last_known_good_universe(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            audit = UniverseAudit(Path(tmp) / "universe.json")
+            known_good = [{"instrument_id": 1, "source_instrument_token": 10, "tradingsymbol": "A"}]
+            audit.record(known_good, "bootstrap")
+            latest = audit.record_failure(0, "manual_refresh", "provider returned incomplete universe")
+            state = audit.load()
+            self.assertFalse(latest["accepted"])
+            self.assertEqual(1, len(state["current"]))
+            self.assertEqual(1, state["current"][0]["instrument_id"])
+            self.assertEqual(10, state["current"][0]["source_instrument_token"])
+            self.assertIn("incomplete", latest["warnings"][0])
+
 
 if __name__ == "__main__":
     unittest.main()

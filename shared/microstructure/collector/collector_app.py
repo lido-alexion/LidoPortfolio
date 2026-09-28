@@ -15,7 +15,8 @@ from collector.kite_ticker_bridge import KiteTickerBridge
 from collector.laravel_client import bootstrap_from_env
 from collector.minute_aggregator import MinuteAggregator
 from collector.finalization_state import FinalizationState
-from collector.parquet_store import append_rows, is_partition_finalized, partition_dir, partition_row_count, write_finalization_manifest
+from collector.coverage import CoverageAccumulator
+from collector.parquet_store import append_rows, is_partition_finalized, partition_dir, partition_row_count, validate_finalized_directory, validate_finalized_partition, write_finalization_manifest
 from collector.raw_tick_spool import RawTickSpool
 from collector.universe_audit import UniverseAudit
 
@@ -45,7 +46,7 @@ class CollectorApp:
         self._backup_status = "not_run"
         self._market_timezone = ZoneInfo(os.environ.get("MICROSTRUCTURE_MARKET_TIMEZONE", "Asia/Kolkata"))
         self._coverage_day = self._market_day()
-        self._coverage_counts: dict[str, int] = {}
+        self._coverage = CoverageAccumulator()
         self._connection_was_lost = False
         self._raw_spool = RawTickSpool.from_env(self.data_root)
         self._universe_audit = UniverseAudit(Path(os.environ.get("MICROSTRUCTURE_UNIVERSE_AUDIT_FILE", str(self.data_root / "universe-audit.json"))))
@@ -70,10 +71,8 @@ class CollectorApp:
         day = self._market_day()
         if day != self._coverage_day:
             self._coverage_day = day
-            self._coverage_counts = {}
-        for row in rows:
-            quality = str(row.get("coverage_class") or "unknown")
-            self._coverage_counts[quality] = self._coverage_counts.get(quality, 0) + 1
+            self._coverage.reset()
+        self._coverage.record(rows)
 
     def _handle_live_tick(self, meta: dict[str, Any], tick: dict[str, Any]) -> None:
         now = datetime.now(timezone.utc)
@@ -101,8 +100,7 @@ class CollectorApp:
         start_h, start_m = (int(part) for part in session_start.split(":", 1))
         end_h, end_m = (int(part) for part in session_end.split(":", 1))
         expected_minutes = max(0, (end_h * 60 + end_m) - (start_h * 60 + start_m))
-        total_rows = sum(self._coverage_counts.values())
-        expected_rows = expected_minutes * max(1, self.subscribed_count)
+        coverage = self._coverage.summary(expected_minutes, self.subscribed_count)
         payload = {
             "collector_state": self.collector_state,
             "websocket_connected": self.websocket_connected,
@@ -111,11 +109,7 @@ class CollectorApp:
             "reconnect_count": self.reconnect_count,
             "coverage_summary": {
                 "trading_day": trading_day,
-                "expected_minute_count": expected_minutes,
-                "observed_row_count": total_rows,
-                "quality_counts": self._coverage_counts,
-                "expected_instrument_minutes": expected_rows,
-                "coverage_percent": round((total_rows / expected_rows) * 100, 2) if expected_rows else None,
+                **coverage,
             },
             "session_phase": self._session_phase(),
             "latest_finalized_partition": trading_day if is_partition_finalized(self.data_root, self._market_day()) else None,
@@ -165,8 +159,8 @@ class CollectorApp:
             self._record_coverage(flushed)
             append_rows(self.data_root, self._market_day(), flushed, part_name=f"part-{int(time.time())}.parquet")
 
-    def _session_phase(self) -> str:
-        current = datetime.now(self._market_timezone)
+    def _session_phase(self, at: datetime | None = None) -> str:
+        current = (at or datetime.now(self._market_timezone)).astimezone(self._market_timezone)
         start_hour, start_minute = (int(part) for part in os.environ.get("MICROSTRUCTURE_MARKET_SESSION_START", "09:15").split(":", 1))
         end_hour, end_minute = (int(part) for part in os.environ.get("MICROSTRUCTURE_MARKET_SESSION_END", "15:30").split(":", 1))
         if current.time() < current.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0).time():
@@ -178,6 +172,13 @@ class CollectorApp:
     def finalize_today(self, force: bool = False) -> None:
         trading_day = self._market_day()
         if is_partition_finalized(self.data_root, trading_day):
+            try:
+                validate_finalized_partition(self.data_root, trading_day)
+            except (OSError, ValueError, RuntimeError) as exc:
+                self._finalization.mark_finalization_failed(str(exc))
+                self.collector_state = "finalization_failed"
+                self.latest_error = f"finalization validation: {exc}"
+                return
             self.collector_state = "finalized"
             self._backup_today()
             return
@@ -202,6 +203,7 @@ class CollectorApp:
                 trading_day,
                 {"finalized_at": datetime.now(timezone.utc).isoformat(), "row_count": row_count},
             )
+            validate_finalized_partition(self.data_root, trading_day)
             self._finalization.mark_finalized(trading_day.isoformat(), row_count)
             self._raw_spool.prune_day(trading_day)
             self.collector_state = "finalized"
@@ -224,6 +226,7 @@ class CollectorApp:
             if staging.exists():
                 shutil.rmtree(staging)
             shutil.copytree(source, staging)
+            validate_finalized_directory(staging)
             if target.exists():
                 shutil.rmtree(target)
             staging.replace(target)
@@ -317,9 +320,22 @@ class CollectorApp:
         kite = bootstrap.get("kite")
         universe = bootstrap.get("universe") or []
         self.subscribed_count = len(universe)
-        audit = self._universe_audit.record(universe, "manual_refresh" if refresh else "bootstrap")
+        universe_source = "manual_refresh" if refresh else "bootstrap"
+        known_universe = self._universe_audit.load().get("current", [])
+        minimum_universe = max(0, int(os.environ.get("MICROSTRUCTURE_UNIVERSE_MIN_SIZE", "400")))
+        if known_universe and len(universe) < minimum_universe:
+            self._universe_audit.record_failure(len(universe), universe_source, f"provider returned {len(universe)} instruments below minimum {minimum_universe}")
+            self.latest_error = "universe refresh rejected: incomplete provider result"
+            self.collector_state = "universe_refresh_failed"
+            self.write_heartbeat()
+            return
+        audit = self._universe_audit.record(universe, universe_source)
         if audit.get("conflicts"):
             self.latest_error = "universe mapping conflicts detected"
+            self._stop_live()
+            self.collector_state = "universe_refresh_failed"
+            self.write_heartbeat()
+            return
         if not kite:
             self._stop_live()
             self.collector_state = "awaiting_kite_session"

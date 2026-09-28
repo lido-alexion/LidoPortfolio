@@ -68,8 +68,10 @@ class FinalizationState:
         return payload
 
     def mark_backup(self, status: str, error: str | None = None) -> dict[str, Any]:
+        current = self.load()
         payload = {
-            **self.load(),
+            **current,
+            "status": "backup_failed" if status == "backup_failed" else ("finalized" if status.startswith("ok:") else current.get("status", "finalized")),
             "backup_status": status,
             "backup_at": _now(),
             "backup_error": error,
