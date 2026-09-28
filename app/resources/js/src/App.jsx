@@ -74,6 +74,7 @@ import BacktestDetailPage from './pages/BacktestDetailPage';
 import DocumentationPage from './pages/DocumentationPage';
 import ArtifactLibraryPage from './pages/ArtifactLibraryPage';
 import ArtifactLibraryDetailPage from './pages/ArtifactLibraryDetailPage';
+import { GuidedTourProvider } from './guidedTour/GuidedTourProvider';
 
 function AppRoutes() {
     return (
@@ -254,6 +255,7 @@ function AuthenticatedShell({ user, isDocumentationRoute }) {
     return (
         <NotificationProvider>
             <SidebarProvider>
+                <GuidedTourProvider user={user}>
                 <div className={`lido-app-frame${isDocumentationRoute ? ' lido-app-frame--docs' : ''}`}>
                     <AppHeader user={user} showSidebarToggle={!isDocumentationRoute} />
                     <CriticalNotificationBanner />
