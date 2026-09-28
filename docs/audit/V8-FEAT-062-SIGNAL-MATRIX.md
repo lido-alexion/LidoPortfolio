@@ -17,14 +17,14 @@ it is not inferred from a related signal.
 | OCF versus net income | `strong_ocf_vs_net_income`, `weak_ocf_vs_net_income` | TTM OCF and net income | availability date <= as-of | both values | PASS |
 | Multi-period OCF/net-income deterioration or improvement | `earnings_cash_divergence`, `cash_quality_follow_up` | Quarterly YoY OCF/income divergence | comparable periods | both growth values | PARTIAL |
 | Positive earnings with weak/negative OCF | `negative_fcf_with_profit`, `weak_ocf_vs_net_income` | TTM profit and cash measures | availability date <= as-of | both values | PASS |
-| FCF direction and persistence | — | Consecutive comparable FCF periods | comparable periods | — | PARTIAL |
+| FCF direction and persistence | `fcf_improving`, `fcf_deteriorating` | Consecutive comparable FCF periods | comparable periods | latest/prior comparable YoY growth and trend delta | PASS |
 | Capex intensity changes | — | Capex/revenue or capex/asset history | comparable periods | — | PARTIAL |
 | Receivables faster than revenue | `receivables_growth_vs_revenue` | Quarterly YoY growth spread | comparable periods | both growth values and spread | PASS |
 | Inventory faster than sales/revenue | `inventory_growth_vs_revenue` | Quarterly YoY growth spread | comparable periods | both growth values and spread | PASS |
 | Working-capital absorption/release | — | Receivables/inventory/current-liability relationship | comparable periods | — | PARTIAL |
 | Current-assets/current-liabilities changes | — | Balance-sheet history | comparable periods | — | PARTIAL |
 | Debt versus equity/cash growth | `debt_cash_divergence` | Debt and OCF growth relationship | comparable periods | both growth values | PASS |
-| Net-debt direction | — | Canonical net-debt history | comparable periods | — | PARTIAL |
+| Net-debt direction | `net_debt_increasing`, `net_debt_decreasing` | Derived debt less cash, same-period YoY | comparable periods; invalid prior net debt is unavailable | net-debt YoY percentage and basis | PASS |
 | Debt/equity and net-debt/EBITDA | `leverage_elevated`, `debt_to_ebitda_elevated` | TTM ratios with safe denominators | availability date <= as-of | ratio and basis | PASS |
 | Interest-coverage deterioration | `interest_coverage_thin` | TTM interest coverage | availability date <= as-of | ratio and basis | PASS |
 | Liquidity/coverage changes | — | Liquidity/coverage history | comparable periods | — | PARTIAL |

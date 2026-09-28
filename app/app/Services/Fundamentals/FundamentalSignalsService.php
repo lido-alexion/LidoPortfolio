@@ -96,6 +96,7 @@ class FundamentalSignalsService
         $this->evaluateDilutionSignals($stock, $asOf, $risk, $watch);
         $this->evaluateOwnershipSignals($stock, $asOf, $watch);
         $this->evaluateGrowthRelationships($stock, $asOf, $positive, $risk, $watch);
+        $this->evaluateCashAndNetDebtTrends($stock, $asOf, $positive, $risk, $watch);
 
         $ocf = $this->fundamentals->metric($stock, 'operating_cash_flow', 'ttm', $asOf, $price);
         if ($ocf['value'] !== null && $ni['value'] !== null && (float) $ni['value'] > 0) {
@@ -394,6 +395,45 @@ class FundamentalSignalsService
                 'operating_cash_flow_yoy_pct' => (float) $ocf['value'],
                 'basis' => 'quarterly_yoy',
             ]);
+        }
+    }
+
+    protected function evaluateCashAndNetDebtTrends(Stock $stock, Carbon $asOf, array &$positive, array &$risk, array &$watch): void
+    {
+        $debtPair = $this->comparablePair($stock, 'debt', $asOf);
+        $cashPair = $this->comparablePair($stock, 'cash_and_equivalents', $asOf);
+        if ($debtPair !== null && $cashPair !== null
+            && $debtPair['current_period'] === $cashPair['current_period']
+            && $debtPair['prior_period'] === $cashPair['prior_period']) {
+            $currentNetDebt = $debtPair['current'] - $cashPair['current'];
+            $priorNetDebt = $debtPair['prior'] - $cashPair['prior'];
+            $netDebt = $priorNetDebt !== 0.0
+                ? (($currentNetDebt - $priorNetDebt) / abs($priorNetDebt)) * 100
+                : null;
+        } else {
+            $netDebt = null;
+        }
+        if ($netDebt !== null) {
+            $evidence = [
+                'net_debt_yoy_pct' => (float) $netDebt,
+                'basis' => 'quarterly_yoy',
+            ];
+            if ((float) $netDebt >= 15) {
+                $risk[] = $this->signal('net_debt_increasing', 'Net debt increased materially year over year', $evidence);
+            } elseif ((float) $netDebt <= -15) {
+                $positive[] = $this->signal('net_debt_decreasing', 'Net debt decreased materially year over year', $evidence);
+            }
+        }
+
+        $fcfTrend = $this->growthTrend($stock, 'free_cash_flow', $asOf);
+        if ($fcfTrend === null) {
+            return;
+        }
+
+        if ($fcfTrend['latest_yoy_pct'] <= -10 && $fcfTrend['prior_comparable_yoy_pct'] <= -10) {
+            $risk[] = $this->signal('fcf_deteriorating', 'Free cash flow has deteriorated across consecutive comparable periods', $fcfTrend);
+        } elseif ($fcfTrend['latest_yoy_pct'] >= 10 && $fcfTrend['prior_comparable_yoy_pct'] >= 10) {
+            $positive[] = $this->signal('fcf_improving', 'Free cash flow has improved across consecutive comparable periods', $fcfTrend);
         }
     }
 

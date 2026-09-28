@@ -248,4 +248,28 @@ class FundamentalSignalsTest extends TestCase
         $this->assertLessThan(1.0, $insights['data_sufficiency']['score']);
         $this->assertContains('missing:debt history', array_keys($insights['data_sufficiency']['weighting']));
     }
+
+    public function test_net_debt_direction_and_persistent_fcf_trend_are_deterministic(): void
+    {
+        $stock = Stock::query()->create(['symbol' => 'TREND', 'exchange' => 'NSE', 'name' => 'Trend Co']);
+        $service = app(FundamentalDataService::class);
+        foreach ([
+            ['2023-03-31', 100, 20], ['2024-03-31', 120, 10],
+            ['2024-06-30', 120, 10], ['2025-03-31', 140, -20],
+            ['2025-06-30', 140, -20],
+        ] as [$period, $debt, $fcf]) {
+            $service->storeFacts($stock, [
+                ['statement_type' => 'balance_sheet', 'cadence' => 'quarterly', 'fact_key' => 'debt', 'period_end' => $period, 'value' => $debt, 'availability_date' => '2025-07-01'],
+                ['statement_type' => 'balance_sheet', 'cadence' => 'quarterly', 'fact_key' => 'cash_and_equivalents', 'period_end' => $period, 'value' => 100, 'availability_date' => '2025-07-01'],
+                ['statement_type' => 'cash_flow', 'cadence' => 'quarterly', 'fact_key' => 'free_cash_flow', 'period_end' => $period, 'value' => $fcf, 'availability_date' => '2025-07-01'],
+            ]);
+        }
+
+        $insights = app(FundamentalSignalsService::class)->deterministicInsights($stock, Carbon::parse('2025-07-10'));
+        $keys = collect(array_merge($insights['positive_signals'], $insights['risk_signals']))
+            ->pluck('signal_key')->all();
+
+        $this->assertContains('net_debt_increasing', $keys);
+        $this->assertContains('fcf_deteriorating', $keys);
+    }
 }
