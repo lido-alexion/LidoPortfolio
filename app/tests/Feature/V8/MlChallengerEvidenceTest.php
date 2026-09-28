@@ -99,6 +99,7 @@ class MlChallengerEvidenceTest extends TestCase
         $model = MlModelVersion::query()->findOrFail($modelId);
         $run = MlTrainingRun::query()->findOrFail($model->training_run_id);
 
+        $this->assertSame('completed_eligible', $run->status);
         $this->assertSame('trained', $run->configuration['challenger_evidence']['status'] ?? null);
         $this->assertSame('hist_gradient_boosting_challenger', $model->audit_metadata['challenger_evidence']['model_family'] ?? null);
 

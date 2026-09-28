@@ -12,7 +12,7 @@ Evidence is mapped to `docs/archive/specs/V8-ML-Lifecycle-Automation-Deployment-
 | Durable run/progress state and SSE | PASS locally | `MlTrainingRunAdminService`, progress persistence, SSE controller and lifecycle tests; deployed worker/SSE runtime remains pending |
 | Restart recovery | PASS locally | `MlTrainingRunRecoveryService` requeues stale running/cancelling runs with durable recovery evidence and test coverage |
 | Bounded transient retry | PASS locally | `MlTrainingRunRetryService` persists bounded attempt/backoff and dispatches delayed retry |
-| Quality rejection vs operational failure | PASS locally | `MlScoringService` now persists `completed_rejected` for a completed run whose candidate misses frozen thresholds, while operational exceptions remain `failed`; `MlChallengerEvidenceTest` covers the distinction |
+| Terminal run-state vocabulary | PASS locally | Eligible runs persist `completed_eligible`, threshold failures persist `completed_rejected`, cancellation persists `cancelled`, and operational exceptions remain `failed`; lifecycle tests cover the eligible/rejected distinction |
 | Cooperative cancellation | PASS locally | queued/running cancellation service and checkpoint assertions are covered; live worker cancellation remains pending |
 | Explicit promotion / atomic rollback | PASS locally | existing promotion/rollback services and tests; full route/UI/runtime acceptance remains |
 | No automatic promotion/rollback | PASS by tests | lifecycle automation only queues training and evaluates drift; promotion remains explicit Admin action |
