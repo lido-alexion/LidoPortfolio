@@ -194,7 +194,7 @@ class MlScoringService
             $this->progressService()->record($run, 'evaluating', 85, ['eligible' => $eligible]);
 
             $run->forceFill([
-                'status' => 'completed',
+                'status' => $eligible ? 'completed' : 'completed_rejected',
                 'metrics' => $metrics,
                 'baselines' => $baselines,
                 'selected_features' => $effectiveFeatureSet,

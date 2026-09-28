@@ -116,4 +116,52 @@ class MlChallengerEvidenceTest extends TestCase
             ->assertJsonPath('data.challenger_sibling.id', $challenger->id)
             ->assertJsonPath('data.challenger_sibling.eligible', true);
     }
+
+    public function test_quality_rejection_is_distinct_from_operational_failure(): void
+    {
+        $this->app->bind(MlPythonAdapter::class, fn (): MlPythonAdapter => new class extends MlPythonAdapter
+        {
+            public function run(string $operation, array $payload): array
+            {
+                if ($operation !== 'train') {
+                    return parent::run($operation, $payload);
+                }
+
+                File::put($payload['artifact_path'], 'rejected-model-artifact');
+
+                return [
+                    'schema_version' => 1,
+                    'artifact_sha256' => hash_file('sha256', $payload['artifact_path']),
+                    'metrics' => [
+                        'roc_auc' => 0.49,
+                        'pr_auc' => 0.45,
+                        'benchmark_relative_return' => -0.01,
+                        'deterministic_baseline_delta' => -0.02,
+                        'class_distribution' => ['positive' => 12, 'negative' => 12, 'rows' => 24],
+                    ],
+                    'baselines' => ['deterministic_stox' => []],
+                    'metadata' => [
+                        'effective_feature_set' => $payload['numeric_features'],
+                        'excluded_features' => [],
+                        'feature_training_coverage' => [],
+                    ],
+                ];
+            }
+        });
+
+        $admin = User::factory()->admin()->create();
+        $this->defaultPortfolioFor($admin);
+
+        $modelId = $this->actingAs($admin)->withProfileHeader($admin)
+            ->postJson('/api/v1/admin/ml/retrain', ['horizon' => '3m', 'cutoff_date' => '2026-09-12'])
+            ->assertCreated()
+            ->json('data.model.id');
+
+        $model = MlModelVersion::query()->findOrFail($modelId);
+        $run = MlTrainingRun::query()->findOrFail($model->training_run_id);
+
+        $this->assertSame('rejected', $model->status);
+        $this->assertSame('completed_rejected', $run->status);
+        $this->assertNull($run->failure);
+    }
 }
