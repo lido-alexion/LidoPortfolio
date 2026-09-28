@@ -9,7 +9,7 @@ FEAT-052  [REVIEW] OpenTelemetry / LidoTelemetry (producer core, shared middlewa
 FEAT-054  [REVIEW] Historical fundamental bootstrap (summary/derived metrics, provenance, user-scoped Advanced preference, history UI, Screener boundary, and bootstrap evidence complete locally; browser/provider/deployed runtime acceptance remains)
 FEAT-055  [REVIEW] Account access request / Admin approval (formal audit complete; production Turnstile/mail and deployed multi-worker validation remain external)
 FEAT-056  [IN PROGRESS] ML lifecycle automation (queued runs, SSE, drift, cancel, notifications, transient retries, retention, stale-run recovery and mixed scoring integration committed; deployed lifecycle acceptance remains open)
-FEAT-057  [IN PROGRESS] ML feature engineering / training (versioned horizon-resolved registry, PIT context refusal of current-universe fallback, authoritative dated provider adapter with resumable backfill, horizon-derived purge/embargo, training-only preprocessing, paired active/baseline evidence, pinned explainability and bounded same-architecture 1m/3m/6m training evidence verified locally; durable archive/runtime coverage and investor-facing acceptance remain open)
+FEAT-057  [REVIEW] ML feature engineering / training (versioned horizon-resolved registry, PIT context refusal of current-universe fallback, authoritative dated provider adapter with resumable backfill, horizon-derived purge/embargo, training-only preprocessing, paired active/baseline evidence, pinned explainability, durable archive integrity, per-partition feature coverage and bounded same-architecture 1m/3m/6m training evidence verified locally; production provider population, deployed active-model pairing where applicable and investor-facing acceptance remain open)
 FEAT-061  [REVIEW] Guided tour / onboarding (formal audit complete; missing-target regression covered; browser accessibility/mobile journey and localization mechanism remain open)
 FEAT-062  [REVIEW] Fundamental signals & AI insights (complete deterministic catalogue matrix with PIT comparison evidence, provider-neutral orchestration, bounded investor-safe validation, and follow-up guidance; browser/mobile and real-provider acceptance remain)
 FEAT-063  [REVIEW] Live microstructure collection (local implementation and deterministic resilience verification complete; VPS installation, live Kite path, and deployed backup destination remain external)
@@ -97,11 +97,11 @@ FEAT-065  [IN PROGRESS] Intraday ML historical data platform (schema/checkpoints
 
 ## Takeover reconciliation
 
-See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-FEAT-063-ACCEPTANCE-AUDIT.md`, `docs/audit/V8-FEAT-055-ACCEPTANCE-AUDIT.md`, and `docs/audit/V8-FEAT-061-ACCEPTANCE-AUDIT.md` for evidence and remaining external validation. This ledger is verified against the current workspace as of 2026-09-28 at HEAD `07dbd50`; it is not a claim that any epic is production complete.
+See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-FEAT-063-ACCEPTANCE-AUDIT.md`, `docs/audit/V8-FEAT-055-ACCEPTANCE-AUDIT.md`, and `docs/audit/V8-FEAT-061-ACCEPTANCE-AUDIT.md` for evidence and remaining external validation. This ledger is verified against the current workspace as of 2026-09-28 at HEAD `ec9ea5f`; it is not a claim that any epic is production complete.
 
 ## Verified continuation checkpoint (2026-09-28)
 
-- Actual checkout is `07dbd50`; the earlier handoff SHA `3265357` is not the current HEAD.
+- Actual checkout is `ec9ea5f`; the earlier handoff SHA `3265357` is not the current HEAD.
 - The full Feature suite under local PHP CLI `memory_limit=512M` now passes **1,335/1,336**, with one intentional bounded-training skip when `STOXLA_ML_TEST_PYTHON` is absent. The previous FEAT-064 fixture cascade was repaired by giving activation-oriented legacy fixtures the executable factory configuration; the production Setup Required gate was not weakened.
 - FEAT-062 now covers the frozen deterministic catalogue with PIT-safe operating-profit/bottom-line, ROA/ROCE, working-capital/liquidity, capex, ownership/financial, persistent cash-quality and historical valuation-context signals; absent source data remains unavailable rather than inferred. It is REVIEW pending browser/mobile and real-provider acceptance.
 - FEAT-056 lifecycle focus passes locally, including stale running-run recovery and stale cancellation finalization; mixed `MlScoringService` integration remains deliberately separated from FEAT-057.
@@ -116,6 +116,8 @@ See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-F
 - FEAT-057 candidate evidence is now durably archived by model version with an evidence checksum and idempotent re-persistence (`99ef02e`, `5802707`); the same-architecture bounded campaign passes **1/1, 1,425 assertions**, including persisted per-feature partition coverage.
 - The post-archive-integrity full Feature suite is green at **1,335 passed / 1 skipped / 0 failures**; the skip is the expected environment-gated bounded campaign when no ML runtime is configured.
 - The matching x86_64 bounded ML campaign now persists per-feature train/validation/test coverage for all three horizons when `STOXLA_ML_TEST_PYTHON` points to the isolated runtime.
+- The same bounded campaign also reloads each persisted logistic artifact through the PHP adapter and verifies non-empty native contribution output; investor-facing browser acceptance remains external.
+- FEAT-057 is now REVIEW: implementation and bounded same-architecture 1m/3m/6m evidence are complete locally; production dated-provider population, deployed active-model pairing where applicable and investor-facing browser acceptance remain external.
 - Shared V8 API routes, middleware aliases, console commands, scheduler entries and environment documentation are wired in `c22c0bf`; dependent feature files remain intentionally preserved in the inherited workspace.
 
 ## Next task
