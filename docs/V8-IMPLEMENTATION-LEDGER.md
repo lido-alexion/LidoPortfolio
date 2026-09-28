@@ -7,12 +7,12 @@ Authoritative specs: `docs/archive/specs/LidoPortfolio-V8-Wishlist.md` and linke
 ```text
 FEAT-052  [REVIEW] OpenTelemetry / LidoTelemetry (config, OTLP HTTP exporter, API middleware, browser traceparent + route hooks; queue/scheduler/browser spans and full acceptance still open)
 FEAT-054  [IN PROGRESS] Historical fundamental bootstrap (queue/run tables + bootstrap service + CLI; official adapters, UI completeness, and runtime acceptance still open)
-FEAT-055  [REVIEW] Account access request / Admin approval (inherited workflow and V8 tests pass; full acceptance/security audit and production verification still open)
+FEAT-055  [REVIEW] Account access request / Admin approval (formal audit complete; production Turnstile/mail and deployed multi-worker validation remain external)
 FEAT-056  [IN PROGRESS] ML lifecycle automation (queued runs, SSE, drift, cancel, notifications, transient retries; retention/recovery/acceptance still open)
 FEAT-057  [IN PROGRESS] ML feature engineering / training (feature registry + dataset plan/admin APIs; full PIT-safe feature/training/validation corpus still open)
-FEAT-061  [REVIEW] Guided tour / onboarding (backend/frontend foundation and tests present; full acceptance/accessibility/i18n/runtime audit still open)
+FEAT-061  [REVIEW] Guided tour / onboarding (formal audit complete; browser accessibility/mobile journey and localization mechanism remain open)
 FEAT-062  [IN PROGRESS] Fundamental signals & AI insights (deterministic + Gemini/Codex orchestrator; admin diagnostics and full acceptance still open)
-FEAT-063  [IN PROGRESS] Live microstructure collection (control plane + Python worker; expanded schema, explicit no-trade rows, bounded spool, durable finalization/retry, atomic backup, reconnect recovery, actionable alerts, and VPS provisioning; calendar/quality/universe/live validation gaps remain)
+FEAT-063  [IN PROGRESS] Live microstructure collection (expanded schema, explicit quality classes/coverage counters, bounded spool, durable finalization/retry, atomic backup, reconnect recovery, universe audit, alerts, and VPS provisioning; calendar/validation gaps remain)
 FEAT-064  [REVIEW] Screener / Strategy UX (semantic versions, run/backtest pins, immutable save, readiness, provenance audit, and WP-09 return flow present; regression cleanup and full gate remain)
 FEAT-065  [IN PROGRESS] Intraday ML historical data platform (checkpoints + admin status + Mac backfill worker; current-universe orchestration, coverage, and handoff acceptance remain)
 ```
@@ -46,10 +46,11 @@ FEAT-065  [IN PROGRESS] Intraday ML historical data platform (checkpoints + admi
 | Kite login auto-start signal | done | same |
 | Minute aggregation + Parquet (dry-run) | partial | `shared/microstructure/tests/test_minute_aggregator.py`, `test_parquet_store.py` |
 | Live KiteTicker WebSocket | wired (`kite_ticker_bridge.py`) | manual VPS + kiteconnect |
-| Finalization + partition backup | partial (durable bounded retry, atomic manifest/staged backup, spool pruning) | `test_finalization_state.py`, `MicrostructureCollectorHealthAlertTest.php` |
+| Finalization + partition backup | partial (durable bounded retry, active-minute drain, atomic manifest/staged backup, spool pruning) | `test_finalization_state.py`, `test_collector_finalization.py`, `MicrostructureCollectorHealthAlertTest.php` |
 | Reconnect + full-mode resubscription | partial (bridge recovery path) | `test_kite_ticker_bridge.py` |
-| No-trade coverage rows | done | `test_minute_aggregator.py` |
+| No-trade/outage/reconnect quality rows | done | `test_minute_aggregator.py` |
 | Operational alerts | partial (stale heartbeat / error / disk / finalization / backup) | `MicrostructureCollectorHealthAlertTest.php` |
+| Universe refresh audit | partial (bounded additions/removals/mapping/conflict history) | `universe_audit.py`, `test_universe_audit.py` |
 | VPS venv/systemd/runtime gate | partial (provisioning + import checks + persistent paths) | `deploy/systemd/stoxla-microstructure-collector.service`, shell syntax/runtime-contract checks |
 | Telegram auth reminders | done | `MicrostructureCollectorKiteAuthReminderTest.php` |
 
@@ -95,7 +96,7 @@ FEAT-065  [IN PROGRESS] Intraday ML historical data platform (checkpoints + admi
 
 ## Takeover reconciliation
 
-See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md` for the exact inherited working-tree inventory, baseline results, undocumented work, and risk classification. This ledger is verified against the current workspace as of 2026-09-28; it is not a claim that any epic is production complete.
+See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-FEAT-063-ACCEPTANCE-AUDIT.md`, `docs/audit/V8-FEAT-055-ACCEPTANCE-AUDIT.md`, and `docs/audit/V8-FEAT-061-ACCEPTANCE-AUDIT.md` for evidence and remaining external validation. This ledger is verified against the current workspace as of 2026-09-28; it is not a claim that any epic is production complete.
 
 ## Next task
 
