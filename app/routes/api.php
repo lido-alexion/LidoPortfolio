@@ -8,6 +8,10 @@ use App\Http\Controllers\Api\AlertPolicyController;
 use App\Http\Controllers\Api\AnalysisEvidenceController;
 use App\Http\Controllers\Api\AnalysisPreferenceController;
 use App\Http\Controllers\Api\AnalyticsController;
+use App\Http\Controllers\Api\AccessRequestAdminController;
+use App\Http\Controllers\Api\MicrostructureCollectorAdminController;
+use App\Http\Controllers\Api\MicrostructureCollectorInternalController;
+use App\Http\Controllers\Api\AccessRequestPublicController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BuildInfoController;
 use App\Http\Controllers\Api\BulkTransactionImportController;
@@ -19,6 +23,7 @@ use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DataQualityController;
 use App\Http\Controllers\Api\ExplorerAnalyticsController;
 use App\Http\Controllers\Api\FrontendLogController;
+use App\Http\Controllers\Api\GuidedTourController;
 use App\Http\Controllers\Api\HistoricalHoldingsController;
 use App\Http\Controllers\Api\HoldingController;
 use App\Http\Controllers\Api\IndexController;
@@ -78,6 +83,7 @@ use App\Http\Controllers\Api\V1\RecallBridgeLoanController;
 use App\Http\Controllers\Api\V1\RecallPeriodController;
 use App\Http\Controllers\Api\V1\ScreenerRegistryController;
 use App\Http\Controllers\Api\V1\StrategyController;
+use App\Http\Controllers\Api\V1\StrategyProvenanceController;
 use App\Http\Controllers\Api\V1\StrategyRegistryController;
 use App\Http\Controllers\Api\V1\TradingOs\AdminExecutionEntitlementController as TradingOsAdminEntitlementController;
 use App\Http\Controllers\Api\V1\TradingOs\BrokerController as TradingOsBrokerController;
@@ -101,6 +107,11 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login');
+    Route::post('/access-requests', [AccessRequestPublicController::class, 'store'])
+        ->middleware('throttle:access-request');
+    Route::post('/access-requests/verify/{token}', [AccessRequestPublicController::class, 'verify'])
+        ->where('token', '[A-Za-z0-9]{64}')
+        ->middleware('throttle:access-request-verify');
 });
 
 Route::get('/invites/{token}', [InviteAcceptController::class, 'show'])
@@ -117,6 +128,20 @@ Route::post('/reset-password/accept', [PasswordResetAcceptController::class, 'ac
 Route::get('/auth/me', [AuthController::class, 'me']);
 Route::get('/auth/csrf-token', [AuthController::class, 'csrfToken']);
 Route::get('/build-info', [BuildInfoController::class, 'show']);
+
+Route::prefix('internal/microstructure-collector')
+    ->middleware('microstructure.collector.internal')
+    ->group(function () {
+        Route::get('/bootstrap', [MicrostructureCollectorInternalController::class, 'bootstrap']);
+    });
+
+Route::prefix('internal/intraday-backfill')
+    ->middleware('intraday.backfill.internal')
+    ->group(function () {
+        Route::get('/plan', [\App\Http\Controllers\Api\IntradayBackfillInternalController::class, 'plan']);
+        Route::get('/checkpoints', [\App\Http\Controllers\Api\IntradayBackfillInternalController::class, 'listCheckpoints']);
+        Route::post('/checkpoints', [\App\Http\Controllers\Api\IntradayBackfillInternalController::class, 'upsertCheckpoint']);
+    });
 Route::get('/wiki/shared/{token}', [WikiShareController::class, 'show'])->where('token', '[A-Za-z0-9]{64}');
 Route::get('/wiki/shared/{token}/images/{image}', [WikiShareController::class, 'image'])
     ->where('token', '[A-Za-z0-9]{64}')->whereUuid('image');
@@ -151,6 +176,7 @@ Route::get('/notification-settings/email-destinations/{destination}/verify', [No
 
 Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::post('/logs/frontend', [FrontendLogController::class, 'store']);
+    Route::post('/telemetry/route-view', [\App\Http\Controllers\Api\LidoTelemetryController::class, 'routeView']);
 
     Route::get('/portfolios', [PortfolioController::class, 'index'])->middleware('token.scope:portfolio:read');
     Route::get('/personal-api-tokens', [PersonalApiTokenController::class, 'index']);
@@ -191,6 +217,9 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::get('/profile/photo', [ProfileController::class, 'photo']);
     Route::post('/profile/photo', [ProfileController::class, 'uploadPhoto']);
     Route::delete('/profile/photo', [ProfileController::class, 'deletePhoto']);
+
+    Route::get('/guided-tour', [GuidedTourController::class, 'show']);
+    Route::put('/guided-tour', [GuidedTourController::class, 'update']);
 
     Route::get('/stocks/search', [StockController::class, 'search'])
         ->middleware('throttle:stock-search');
@@ -411,6 +440,17 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
         Route::post('/invites/{invite}/regenerate', [UserInviteController::class, 'regenerate']);
         Route::delete('/invites/{invite}', [UserInviteController::class, 'destroy']);
 
+        Route::get('/access-requests', [AccessRequestAdminController::class, 'index']);
+        Route::get('/access-requests/{accessRequest}', [AccessRequestAdminController::class, 'show']);
+        Route::post('/access-requests/{accessRequest}/create-invite', [AccessRequestAdminController::class, 'createInvite']);
+        Route::post('/access-requests/{accessRequest}/ignore', [AccessRequestAdminController::class, 'ignore']);
+        Route::post('/access-requests/{accessRequest}/reject', [AccessRequestAdminController::class, 'reject']);
+        Route::get('/access-request-bans', [AccessRequestAdminController::class, 'bans']);
+        Route::post('/access-request-bans/{ban}/clear', [AccessRequestAdminController::class, 'clearBan']);
+
+        Route::get('/microstructure-collector/status', [MicrostructureCollectorAdminController::class, 'status']);
+        Route::post('/microstructure-collector/command', [MicrostructureCollectorAdminController::class, 'command']);
+
         Route::get('/password-reset-links', [PasswordResetLinkController::class, 'index']);
         Route::post('/password-reset-links', [PasswordResetLinkController::class, 'store']);
         Route::post('/password-reset-links/{passwordResetLink}/regenerate', [PasswordResetLinkController::class, 'regenerate']);
@@ -499,11 +539,25 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
         Route::put('/admin/fundamentals/settings', [FundamentalDataController::class, 'updateSettings']);
         Route::post('/admin/fundamentals/runs', [FundamentalDataController::class, 'startRun']);
         Route::post('/admin/fundamentals/runs/{run}/process', [FundamentalDataController::class, 'processRun'])->whereNumber('run');
+        Route::get('/admin/fundamentals/bootstrap', [FundamentalDataController::class, 'bootstrapStatus']);
+        Route::post('/admin/fundamentals/ai-insights/test', [FundamentalDataController::class, 'testAiInsights']);
+        Route::get('/admin/fundamentals/metric-catalog', [FundamentalDataController::class, 'metricCatalog']);
+        Route::get('/admin/intraday-platform', [\App\Http\Controllers\Api\V1\IntradayPlatformAdminController::class, 'status']);
         Route::get('/admin/ml', [MlScoringController::class, 'adminIndex']);
+        Route::get('/admin/ml/retention-plan', [MlScoringController::class, 'retentionPlan']);
+        Route::get('/admin/ml/runs', [MlScoringController::class, 'trainingRuns']);
+        Route::get('/admin/ml/runs/{run}', [MlScoringController::class, 'trainingRun'])->whereNumber('run');
+        Route::get('/admin/ml/runs/{run}/stream', [MlScoringController::class, 'trainingRunStream'])->whereNumber('run');
+        Route::post('/admin/ml/runs/{run}/cancel', [MlScoringController::class, 'cancelTrainingRun'])->whereNumber('run');
+        Route::get('/admin/ml/features', [MlScoringController::class, 'featureRegistry']);
+        Route::get('/admin/ml/dataset-plan', [MlScoringController::class, 'datasetPlan']);
         Route::post('/admin/ml/retrain', [MlScoringController::class, 'retrain']);
+        Route::post('/admin/ml/retrain-queue', [MlScoringController::class, 'queueRetrain']);
+        Route::get('/admin/ml/models/{model}/promotion-review', [MlScoringController::class, 'promotionReview'])->whereNumber('model');
         Route::post('/admin/ml/models/{model}/promote', [MlScoringController::class, 'promote'])->whereNumber('model');
         Route::post('/admin/ml/models/{model}/drift-check', [MlScoringController::class, 'driftCheck'])->whereNumber('model');
         Route::post('/admin/ml/rollback', [MlScoringController::class, 'rollback']);
+        Route::get('/admin/strategy-provenance/migration-report', [StrategyProvenanceController::class, 'migrationReport']);
     });
 
     Route::post('/reviews/generate', [TradingOsReviewController::class, 'reviewsGenerate']);
@@ -521,7 +575,14 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
     Route::get('/analytics/stocks/{stock}/evaluation-profile', [AnalyticsArchitectureController::class, 'evaluationProfile']);
     Route::get('/analytics/stocks/{stock}/recommendation-preview', [AnalyticsArchitectureController::class, 'recommendationPreview']);
     Route::get('/analytics/stocks/{stock}/research', [AnalyticsArchitectureController::class, 'watchlistResearch']);
+    Route::get('/fundamentals/metric-catalog', [FundamentalDataController::class, 'metricCatalog']);
     Route::get('/stocks/{stock}/fundamentals', [FundamentalDataController::class, 'show'])->whereNumber('stock');
+    Route::get('/stocks/{stock}/fundamentals/metrics/{metric}/history', [FundamentalDataController::class, 'metricHistory'])
+        ->whereNumber('stock')
+        ->where('metric', '[a-z0-9_]+');
+    Route::get('/stocks/{stock}/fundamentals/history', [FundamentalDataController::class, 'history'])->whereNumber('stock');
+    Route::get('/stocks/{stock}/ml-insights', [MlScoringController::class, 'stockMlInsights'])->whereNumber('stock');
+    Route::post('/stocks/{stock}/ml-insights/refresh', [MlScoringController::class, 'refreshStockMlInsights'])->whereNumber('stock');
     Route::post('/stocks/{stock}/ml-predictions', [MlScoringController::class, 'predict'])->whereNumber('stock');
 
     Route::get('/market-analysis', [MarketAnalysisController::class, 'latest']);
@@ -531,6 +592,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
     Route::get('/market-analysis/timeline', [MarketAnalysisController::class, 'timeline']);
     Route::get('/market-analysis/explainability', [MarketAnalysisController::class, 'explainability']);
 
+    Route::post('/strategies', [StrategyController::class, 'store']);
     Route::get('/strategy', [StrategyController::class, 'active']);
     Route::get('/strategy/summary', [StrategyController::class, 'summary']);
     Route::get('/strategy/catalogue', [StrategyController::class, 'catalogue']);

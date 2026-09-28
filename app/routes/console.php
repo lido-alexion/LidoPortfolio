@@ -5,8 +5,11 @@ use App\Services\AlertExpirationService;
 use App\Services\AlertNotificationService;
 use App\Services\BenchmarkPriceSyncService;
 use App\Services\Broker\KiteReadinessReminderService;
+use App\Services\Fundamentals\FundamentalBootstrapService;
 use App\Services\Fundamentals\FundamentalUpdateService;
 use App\Services\HistoryDepthBackfillService;
+use App\Services\Microstructure\MicrostructureCollectorKiteAuthReminderService;
+use App\Services\ML\MlLifecycleAutomationService;
 use App\Services\Notification\NotificationReminderService;
 use App\Services\NotificationScheduleService;
 use App\Services\NseHolidaySyncService;
@@ -108,6 +111,31 @@ Artisan::command('portfolio:send-kite-readiness-reminders', function () {
     return 0;
 })->purpose('Remind Automatic portfolios to reconnect an unusable Kite session');
 
+Artisan::command('portfolio:ml-lifecycle-tick', function () {
+    $actions = app(MlLifecycleAutomationService::class)->tick();
+    if ($actions === []) {
+        $this->info('ML lifecycle tick: no scheduled retrains queued.');
+
+        return 0;
+    }
+    foreach ($actions as $row) {
+        $this->line(sprintf('%s: %s%s', $row['horizon'], $row['action'], isset($row['reason']) ? ' ('.$row['reason'].')' : ''));
+    }
+
+    return 0;
+})->purpose('FEAT-056: evaluate ML retrain schedules and queue background retrains');
+
+Artisan::command('portfolio:send-microstructure-kite-auth-reminders', function () {
+    $result = app(MicrostructureCollectorKiteAuthReminderService::class)->sendDue();
+    if ($result['sent']) {
+        $this->info('Microstructure Kite auth reminder sent.');
+    } else {
+        $this->info('Microstructure Kite auth reminder skipped: '.($result['reason'] ?? 'unknown'));
+    }
+
+    return 0;
+})->purpose('Telegram reminders when the microstructure collector Kite session is missing');
+
 Artisan::command('portfolio:queue-notification-reminders', function () {
     $result = app(NotificationReminderService::class)->queueDue();
     $this->info("Notification reminders: {$result['queued']} queued; {$result['checked']} due notifications checked.");
@@ -149,6 +177,87 @@ Artisan::command('stox:fundamentals-update
 
     return in_array($result['status'], ['completed', 'completed_with_errors', 'running', 'queued', 'skipped'], true) ? 0 : 1;
 })->purpose('Process a bounded V7 StoX fundamental-data update slice');
+
+Artisan::command('stox:fundamentals-bootstrap
+    {--dry-run : Preview universe without creating a run}
+    {--all : Bootstrap all active equities}
+    {--stock= : Single stock symbol (e.g. TCS)}
+    {--stocks= : Comma-separated stock symbols}
+    {--status= : Rerun stocks from latest run with status failed or complete_partial}
+    {--run= : Existing bootstrap run id to process}
+    {--batch=10 : Stock jobs to process in this slice}', function () {
+    @set_time_limit(0);
+    $service = app(FundamentalBootstrapService::class);
+    $batch = max(1, min((int) $this->option('batch'), 100));
+
+    if ($this->option('run')) {
+        $run = \App\Models\V7\FundamentalBootstrapRun::query()->findOrFail((int) $this->option('run'));
+        $result = $service->process($run, $batch);
+        $this->info(sprintf(
+            'Bootstrap run #%d: %s; queued=%d running=%d completed=%d failed=%d.',
+            $run->id,
+            (string) ($result['status'] ?? 'unknown'),
+            (int) ($result['queued'] ?? 0),
+            (int) ($result['running'] ?? 0),
+            (int) ($result['completed'] ?? 0),
+            (int) ($result['failed'] ?? 0),
+        ));
+
+        return 0;
+    }
+
+    $scope = 'all';
+    $stockIds = null;
+
+    if ($status = $this->option('status')) {
+        $scope = match ((string) $status) {
+            'failed' => 'rerun_failed',
+            'complete_partial' => 'rerun_partial',
+            default => throw new \InvalidArgumentException('Unsupported --status value; use failed or complete_partial.'),
+        };
+    } elseif ($this->option('stock')) {
+        $scope = 'stock';
+        $stockIds = $service->stockIdsFromSymbols([(string) $this->option('stock')]);
+    } elseif ($this->option('stocks')) {
+        $scope = 'stocks';
+        $stockIds = $service->stockIdsFromSymbols(explode(',', (string) $this->option('stocks')));
+    } elseif (! $this->option('all') && ! $this->option('dry-run')) {
+        $this->error('Specify --all, --stock, --stocks, --status, --dry-run, or --run.');
+
+        return 1;
+    }
+
+    $preview = $service->createRun(
+        scope: $scope,
+        stockIds: $stockIds,
+        dryRun: (bool) $this->option('dry-run'),
+    );
+
+    if (is_array($preview)) {
+        $this->info(sprintf(
+            'Dry run: scope=%s stocks=%d sample=%s',
+            (string) $preview['scope'],
+            (int) $preview['stock_count'],
+            implode(',', (array) $preview['symbols']),
+        ));
+
+        return 0;
+    }
+
+    $run = $preview;
+    $result = $service->process($run, $batch);
+    $this->info(sprintf(
+        'Bootstrap run #%d created (scope=%s). Status=%s queued=%d completed=%d failed=%d.',
+        $run->id,
+        $scope,
+        (string) ($result['status'] ?? 'unknown'),
+        (int) ($result['queued'] ?? 0),
+        (int) ($result['completed'] ?? 0),
+        (int) ($result['failed'] ?? 0),
+    ));
+
+    return 0;
+})->purpose('V8 historical fundamentals bootstrap (manual operator action only)');
 
 $cronTime = env('PORTFOLIO_CRON_TIME', '18:30');
 $timezone = env('PORTFOLIO_CRON_TIMEZONE', 'Asia/Kolkata');
@@ -301,10 +410,25 @@ Schedule::command('portfolio:expire-alerts')
     ->timezone($timezone)
     ->name('alert-max-age-cleanup');
 
+Schedule::command('portfolio:purge-access-request-verifications')
+    ->daily()
+    ->timezone($timezone)
+    ->name('purge-access-request-verifications');
+
 Schedule::command('portfolio:send-kite-readiness-reminders')
     ->everyMinute()
     ->timezone($timezone)
     ->name('kite-readiness-reminders');
+
+Schedule::command('portfolio:send-microstructure-kite-auth-reminders')
+    ->everyMinute()
+    ->timezone('Asia/Kolkata')
+    ->name('microstructure-kite-auth-reminders');
+
+Schedule::command('portfolio:ml-lifecycle-tick')
+    ->everyMinute()
+    ->timezone(config('ml_lifecycle.timezone', 'Asia/Kolkata'))
+    ->name('ml-lifecycle-scheduled-retrain');
 
 Schedule::command('portfolio:sync-kite-instruments')
     ->dailyAt('08:00')

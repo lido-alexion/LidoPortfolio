@@ -5,8 +5,11 @@ require_once dirname(__DIR__).'/app/Support/helpers.php';
 use App\Engines\Support\ApiEnvelope;
 use App\Exceptions\DomainException;
 use App\Http\Middleware\AssignRequestId;
+use App\Http\Middleware\LidoTelemetryHttpMiddleware;
 use App\Http\Middleware\DebugAgentToken;
 use App\Http\Middleware\EnsurePersonalApiTokenScope;
+use App\Http\Middleware\EnsureIntradayBackfillInternalToken;
+use App\Http\Middleware\EnsureMicrostructureCollectorInternalToken;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\ResolveActivePortfolio;
 use App\Services\PortfolioLoggerService;
@@ -34,9 +37,13 @@ $application = Application::configure(basePath: dirname(__DIR__))
         $middleware->statefulApi();
         $middleware->prependToGroup('api', DebugAgentToken::class);
         $middleware->appendToGroup('api', AssignRequestId::class);
+        $middleware->appendToGroup('api', LidoTelemetryHttpMiddleware::class);
         $middleware->appendToGroup('web', AssignRequestId::class);
+        $middleware->appendToGroup('web', LidoTelemetryHttpMiddleware::class);
         $middleware->alias([
             'admin' => EnsureUserIsAdmin::class,
+            'microstructure.collector.internal' => EnsureMicrostructureCollectorInternalToken::class,
+            'intraday.backfill.internal' => EnsureIntradayBackfillInternalToken::class,
             'active.portfolio' => ResolveActivePortfolio::class,
             'token.scope' => EnsurePersonalApiTokenScope::class,
         ]);
