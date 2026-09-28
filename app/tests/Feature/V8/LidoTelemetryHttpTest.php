@@ -3,8 +3,18 @@
 namespace Tests\Feature\V8;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
+
+class LidoTelemetryPropagationProbeJob implements ShouldQueue
+{
+    use Queueable;
+
+    public function handle(): void {}
+}
 
 class LidoTelemetryHttpTest extends TestCase
 {
@@ -99,6 +109,33 @@ class LidoTelemetryHttpTest extends TestCase
             $payload = $httpRequest->data();
 
             return data_get($payload, 'resourceSpans.0.scopeSpans.0.spans.0.traceId') === '4bf92f3577b34da6a3ce929d0e0e4736';
+        });
+    }
+
+    public function test_sync_queue_payload_and_processing_preserve_causal_trace_context(): void
+    {
+        Http::fake();
+        config([
+            'lido_telemetry.enabled' => true,
+            'lido_telemetry.otlp_traces_endpoint' => 'http://collector.test/v1/traces',
+        ]);
+
+        $incoming = \App\Telemetry\TraceContext::fromRequest(
+            '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01'
+        );
+        \App\Telemetry\TraceContext::activate($incoming);
+
+        Queue::connection('sync')->push(new LidoTelemetryPropagationProbeJob);
+
+        $this->assertNull(\App\Telemetry\TraceContext::active());
+        Http::assertSent(function ($request): bool {
+            $payload = $request->data();
+            $spans = data_get($payload, 'resourceSpans.0.scopeSpans.0.spans', []);
+
+            return collect($spans)->contains(fn (array $span): bool =>
+                ($span['traceId'] ?? null) === '4bf92f3577b34da6a3ce929d0e0e4736'
+                && data_get($span, 'attributes.0.value.stringValue') !== null
+            );
         });
     }
 }

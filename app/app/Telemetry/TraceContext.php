@@ -6,6 +6,8 @@ use Illuminate\Support\Str;
 
 final class TraceContext
 {
+    private static ?self $active = null;
+
     public function __construct(
         public readonly string $traceId,
         public readonly string $spanId,
@@ -24,6 +26,21 @@ final class TraceContext
     public static function freshRoot(): self
     {
         return new self(self::randomHex(32), self::randomHex(16), true);
+    }
+
+    public static function activate(self $context): void
+    {
+        self::$active = $context;
+    }
+
+    public static function clear(): void
+    {
+        self::$active = null;
+    }
+
+    public static function active(): ?self
+    {
+        return self::$active;
     }
 
     public function childSpan(): self

@@ -18,11 +18,15 @@ use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use App\Telemetry\LidoTelemetry;
 use App\Telemetry\LidoTelemetryCatalog;
+use App\Telemetry\TraceContext;
+use Illuminate\Console\Events\ScheduledTaskFailed;
+use Illuminate\Console\Events\ScheduledTaskFinished;
 use Illuminate\Console\Events\ScheduledTaskStarting;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\URL;
@@ -136,7 +140,18 @@ class AppServiceProvider extends ServiceProvider
 
     protected function registerTelemetryListeners(): void
     {
+        Queue::createPayloadUsing(function (): array {
+            $context = TraceContext::active();
+
+            return $context === null
+                ? []
+                : ['stox_traceparent' => $context->childSpan()->traceparent()];
+        });
+
         Event::listen(JobProcessing::class, function (JobProcessing $event): void {
+            $payload = $event->job->payload();
+            $parent = is_array($payload) ? ($payload['stox_traceparent'] ?? null) : null;
+            TraceContext::activate(is_string($parent) ? TraceContext::fromRequest($parent) : TraceContext::freshRoot());
             app(LidoTelemetry::class)->recordBusinessEvent(LidoTelemetryCatalog::BUSINESS_QUEUE_JOB, [
                 'job' => class_basename($event->job->resolveName()),
                 'phase' => 'processing',
@@ -148,6 +163,7 @@ class AppServiceProvider extends ServiceProvider
                 'job' => class_basename($event->job->resolveName()),
                 'phase' => 'processed',
             ]);
+            TraceContext::clear();
         });
 
         Event::listen(JobFailed::class, function (JobFailed $event): void {
@@ -155,12 +171,22 @@ class AppServiceProvider extends ServiceProvider
                 'job' => class_basename($event->job->resolveName()),
                 'phase' => 'failed',
             ]);
+            TraceContext::clear();
         });
 
         Event::listen(ScheduledTaskStarting::class, function (ScheduledTaskStarting $event): void {
+            TraceContext::activate(TraceContext::freshRoot());
             app(LidoTelemetry::class)->recordBusinessEvent(LidoTelemetryCatalog::BUSINESS_SCHEDULER_TASK, [
                 'task' => $event->task->description ?? $event->task->command ?? 'scheduled',
             ]);
+        });
+
+        Event::listen(ScheduledTaskFinished::class, function (): void {
+            TraceContext::clear();
+        });
+
+        Event::listen(ScheduledTaskFailed::class, function (): void {
+            TraceContext::clear();
         });
     }
 }

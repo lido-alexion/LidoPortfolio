@@ -22,6 +22,7 @@ class LidoTelemetryHttpMiddleware
         }
 
         $incoming = TraceContext::fromRequest($request->headers->get('traceparent'));
+        TraceContext::activate($incoming);
         $request->attributes->set('lido_trace_context', $incoming);
         $started = microtime(true);
         $exception = null;
@@ -36,6 +37,7 @@ class LidoTelemetryHttpMiddleware
             $durationMs = (microtime(true) - $started) * 1000;
             $status = $response instanceof Response ? $response->getStatusCode() : 500;
             $this->telemetry->recordHttpRequest($request, $status, $durationMs, $exception);
+            TraceContext::clear();
         }
 
         if ($response instanceof Response) {

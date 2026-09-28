@@ -104,9 +104,10 @@ class LidoTelemetry
             return;
         }
 
-        $context = app()->bound('request')
-            ? TraceContext::fromRequest(request()->headers->get('traceparent'))
-            : TraceContext::freshRoot();
+        $context = TraceContext::active()
+            ?? (app()->bound('request')
+                ? TraceContext::fromRequest(request()->headers->get('traceparent'))
+                : TraceContext::freshRoot());
         $now = (int) (microtime(true) * 1_000_000_000);
         $otlpAttributes = [];
         foreach ($attributes as $key => $value) {
