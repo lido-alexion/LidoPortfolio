@@ -1,5 +1,6 @@
 import sys
 import unittest
+import urllib.error
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -51,6 +52,42 @@ class KiteHistoricalClientTest(unittest.TestCase):
         )
         self.assertGreaterEqual(len(calls), 2)
         self.assertGreaterEqual(len(bars), 2)
+
+    def test_transient_http_failure_retries_with_bounded_backoff(self):
+        cfg = KiteHistoricalConfig(api_key="key", access_token="token", instrument_token=1)
+        calls = []
+        sleeps = []
+
+        def fake_http(_url: str, _headers: dict[str, str]) -> dict:
+            calls.append(True)
+            if len(calls) < 3:
+                raise urllib.error.HTTPError(_url, 503, "busy", {}, None)
+            return {"status": "success", "data": {"candles": [["2024-01-02 09:15:00", 1, 2, 1, 1.5, 10, 0]]}}
+
+        bars = fetch_minute_bars(
+            cfg,
+            "2024-01-02",
+            "2024-01-02",
+            http_get=fake_http,
+            max_attempts=3,
+            backoff_seconds=0.25,
+            sleep=sleeps.append,
+        )
+        self.assertEqual(len(bars), 1)
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(sleeps, [0.25, 0.5])
+
+    def test_non_retryable_http_failure_is_not_retried(self):
+        cfg = KiteHistoricalConfig(api_key="key", access_token="token", instrument_token=1)
+        calls = []
+
+        def fake_http(url: str, _headers: dict[str, str]) -> dict:
+            calls.append(True)
+            raise urllib.error.HTTPError(url, 400, "bad request", {}, None)
+
+        with self.assertRaises(urllib.error.HTTPError):
+            fetch_minute_bars(cfg, "2024-01-02", "2024-01-02", http_get=fake_http, sleep=lambda _: None)
+        self.assertEqual(len(calls), 1)
 
 
 if __name__ == "__main__":

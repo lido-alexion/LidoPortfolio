@@ -29,6 +29,8 @@ class WorkerConfig:
     token: str
     corpus_root: str
     dry_run: bool
+    max_attempts: int = 3
+    backoff_seconds: float = 1.0
 
 
 @dataclass
@@ -44,6 +46,8 @@ def load_config() -> WorkerConfig:
         token=os.environ.get("STOXLA_INTRADAY_BACKFILL_INTERNAL_TOKEN", ""),
         corpus_root=os.environ.get("STOXLA_INTRADAY_CORPUS_ROOT", "shared/intraday/corpus"),
         dry_run=os.environ.get("STOXLA_INTRADAY_DRY_RUN", "1") not in ("0", "false", "False"),
+        max_attempts=max(1, int(os.environ.get("STOXLA_INTRADAY_MAX_ATTEMPTS", "3"))),
+        backoff_seconds=max(0.0, float(os.environ.get("STOXLA_INTRADAY_BACKOFF_SECONDS", "1"))),
     )
 
 
@@ -98,6 +102,8 @@ def resolve_bars_for_window(
             KiteHistoricalConfig(kite.api_key, kite.access_token, kite.instrument_token),
             window_start,
             window_end,
+            max_attempts=cfg.max_attempts,
+            backoff_seconds=cfg.backoff_seconds,
         )
     return []
 
@@ -118,20 +124,26 @@ def run_once(
     kite: KiteWorkerCredentials | None = None,
 ) -> dict[str, Any]:
     bars_written = 0
-    if not cfg.dry_run:
-        kite = kite or load_kite_credentials()
-        bars = resolve_bars_for_window(window_start, window_end, cfg, kite, bars)
-        if bars:
-            bars_written = write_bars(cfg.corpus_root, symbol, "NSE", bars)
+    failure: dict[str, str] | None = None
+    try:
+        if not cfg.dry_run:
+            kite = kite or load_kite_credentials()
+            bars = resolve_bars_for_window(window_start, window_end, cfg, kite, bars)
+            if bars:
+                bars_written = write_bars(cfg.corpus_root, symbol, "NSE", bars)
+    except Exception as exc:  # noqa: BLE001
+        failure = {"type": type(exc).__name__, "message": str(exc)}
 
     payload = {
         "symbol": symbol.upper(),
         "exchange": "NSE",
         "window_start": window_start,
         "window_end": window_end,
-        "status": "complete" if (not cfg.dry_run and bars_written > 0) else "pending",
+        "status": "failed" if failure is not None else ("complete" if (not cfg.dry_run and bars_written > 0) else "pending"),
         "bars_written": bars_written,
     }
+    if failure is not None:
+        payload["last_error"] = failure
     return post_checkpoint(cfg, payload)
 
 

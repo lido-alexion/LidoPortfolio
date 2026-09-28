@@ -6,6 +6,7 @@ import json
 import urllib.error
 import urllib.parse
 import urllib.request
+import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any, Callable
@@ -21,6 +22,13 @@ class KiteHistoricalConfig:
 
 
 HttpGet = Callable[[str, dict[str, str]], dict[str, Any]]
+Sleep = Callable[[float], None]
+
+
+def _retryable_fetch_error(error: BaseException) -> bool:
+    if isinstance(error, urllib.error.HTTPError):
+        return error.code == 429 or 500 <= error.code <= 599
+    return isinstance(error, (urllib.error.URLError, TimeoutError, ConnectionError))
 
 
 def default_http_get(url: str, headers: dict[str, str]) -> dict[str, Any]:
@@ -57,6 +65,9 @@ def fetch_minute_bars(
     window_end: str,
     *,
     http_get: HttpGet | None = None,
+    max_attempts: int = 3,
+    backoff_seconds: float = 1.0,
+    sleep: Sleep = time.sleep,
 ) -> list[dict[str, Any]]:
     """Fetch one Kite historical window (caller should chunk large ranges)."""
     http_get = http_get or default_http_get
@@ -75,7 +86,17 @@ def fetch_minute_bars(
     )
     url = f"{KITE_API_BASE}/instruments/historical/{cfg.instrument_token}/minute?{query}"
     headers = {"Authorization": f"token {cfg.api_key}:{cfg.access_token}"}
-    payload = http_get(url, headers)
+    attempts = max(1, int(max_attempts))
+    for attempt in range(1, attempts + 1):
+        try:
+            payload = http_get(url, headers)
+            break
+        except Exception as error:  # noqa: BLE001
+            if attempt >= attempts or not _retryable_fetch_error(error):
+                raise
+            sleep(max(0.0, float(backoff_seconds)) * (2 ** (attempt - 1)))
+    else:  # pragma: no cover - loop either breaks or raises
+        raise RuntimeError("Kite historical fetch did not produce a response.")
     candles = payload.get("data", {}).get("candles") or []
     return [normalize_kite_candle(row) for row in candles]
 
@@ -87,6 +108,9 @@ def fetch_minute_bars_chunked(
     *,
     chunk_days: int = 30,
     http_get: HttpGet | None = None,
+    max_attempts: int = 3,
+    backoff_seconds: float = 1.0,
+    sleep: Sleep = time.sleep,
 ) -> list[dict[str, Any]]:
     """Respect Kite minute-history window limits by chunking the date range."""
     start = _parse_window_datetime(window_start, end_of_day=False).date()
@@ -103,6 +127,9 @@ def fetch_minute_bars_chunked(
             cursor.isoformat(),
             chunk_end.isoformat(),
             http_get=http_get,
+            max_attempts=max_attempts,
+            backoff_seconds=backoff_seconds,
+            sleep=sleep,
         )
         bars.extend(chunk_bars)
         cursor = chunk_end + timedelta(days=1)
