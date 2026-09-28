@@ -6,7 +6,7 @@
 
 | Epic | Verdict | Remaining work (authoritative gaps) |
 |------|---------|-------------------------------------|
-| FEAT-052 | **partial** | Fail-open OTLP traces/events plus focused HTTP duration metrics are wired; official OpenTelemetry PHP/JS SDK instrumentation and production Collector probe remain external/implementation follow-up |
+| FEAT-052 | **partial** | Fail-open OTLP traces/events plus focused HTTP duration metrics are wired; optional official browser SDK/fetch instrumentation is now available behind explicit endpoint configuration; PHP SDK instrumentation and production Collector probe remain open |
 | FEAT-054 | **partial** | Bank/NBFC + metric catalog; valuation history API + Watchlist P/E/P/B frequency toggle; gaps: live NSE/BSE exchange APIs at scale |
 | FEAT-055 | **done** | — |
 | FEAT-056 | **partial** | Retention opt-in + admin UI; lifecycle schedule/drift gates (`STOXLA_ML_LIFECYCLE_*`, `STOXLA_ML_DRIFT_TRIGGER_ENABLED`); no auto-promote/rollback |

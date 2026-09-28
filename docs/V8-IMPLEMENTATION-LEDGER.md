@@ -5,7 +5,7 @@ Authoritative specs: `docs/archive/specs/LidoPortfolio-V8-Wishlist.md` and linke
 ## Epic status
 
 ```text
-FEAT-052  [REVIEW] OpenTelemetry / LidoTelemetry (producer core, shared middleware/route wiring, fail-open OTLP traces/events, focused OTLP metrics and documented configuration; queue/scheduler/browser and Collector acceptance remain open)
+FEAT-052  [REVIEW] OpenTelemetry / LidoTelemetry (producer core, shared middleware/route wiring, fail-open OTLP traces/events/metrics, optional official browser fetch instrumentation and documented configuration; queue/scheduler/PHP SDK and Collector acceptance remain open)
 FEAT-054  [REVIEW] Historical fundamental bootstrap (summary/derived metrics, provenance, user-scoped Advanced preference, history UI, Screener boundary, and bootstrap evidence complete locally; browser/provider/deployed runtime acceptance remains)
 FEAT-055  [REVIEW] Account access request / Admin approval (formal audit complete; production Turnstile/mail and deployed multi-worker validation remain external)
 FEAT-056  [IN PROGRESS] ML lifecycle automation (queued runs, SSE, drift, cancel, notifications, transient retries, retention, stale-run recovery and mixed scoring integration committed; deployed lifecycle acceptance remains open)
@@ -108,7 +108,7 @@ See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-F
 - FEAT-056 lifecycle focus passes locally, including stale running-run recovery and stale cancellation finalization; mixed `MlScoringService` integration remains deliberately separated from FEAT-057.
 - FEAT-056 scoring reconciliation is now committed as `2900e50`, with explicit `completed_rejected` quality outcomes and regression coverage in `73307cb`; FEAT-056 remains IN PROGRESS only for remaining deployment/acceptance evidence and any frozen lifecycle gaps.
 - FEAT-056 eligible runs now use the frozen `completed_eligible` terminal state, with `completed_rejected` and `failed` kept distinct (`bd4148b`).
-- FEAT-052 telemetry focus passes **14/14**; FEAT-065 internal/admin focus passes **9/9**. Live/deployed evidence remains external where documented.
+- FEAT-052 telemetry focus passes **14/14**; FEAT-065 internal/admin focus passes **9/9**. The browser path now has an optional official OpenTelemetry SDK/fetch instrumentation module, disabled unless an OTLP endpoint is explicitly configured; live/deployed evidence remains external where documented.
 - FEAT-056 lifecycle support is now committed as `18dc08b`; the mixed `MlScoringService` integration remains intentionally uncommitted pending ownership separation.
 - FEAT-065 current-universe backfill orchestration is now committed as `c039937`; it consumes an explicit operator-supplied symbol/token manifest and does not add automated backup.
 - FEAT-052 telemetry producer core is now committed as `fc8e422`; shared bootstrap/route wiring and collector/deployment acceptance remain separate follow-up work.

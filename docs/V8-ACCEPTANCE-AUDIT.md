@@ -6,7 +6,7 @@ Status key: **done** | **partial** | **not started** | **n/a**
 
 | Epic | Status | Evidence |
 |------|--------|----------|
-| FEAT-052 OpenTelemetry / LidoTelemetry | partial | Fail-open HTTP OTLP traces/events + focused HTTP duration metrics; traceparent; route-view duration; queue/scheduler spans; business catalogue; `cpanel-lido-telemetry-probe.php` for Collector smoke test; gaps: official OTEL PHP/JS SDK instrumentation and production Collector validation |
+| FEAT-052 OpenTelemetry / LidoTelemetry | partial | Fail-open HTTP OTLP traces/events + focused HTTP duration metrics; traceparent; route-view duration; queue/scheduler spans; business catalogue; optional official browser SDK/fetch instrumentation behind explicit endpoint configuration; `cpanel-lido-telemetry-probe.php` for Collector smoke test; gaps: PHP SDK instrumentation and production Collector validation |
 | FEAT-054 Historical fundamentals | partial | Bootstrap + investor UI + valuation metric history (daily/monthly P/E, P/B); NSE/BSE JSON adapters; gaps: live exchange feeds at scale |
 | FEAT-055 Access requests | done | §FEAT-055 checklist (055-01–055-10) + `AccessRequestWorkflowTest` |
 | FEAT-056 ML lifecycle | partial | Drift trigger (+ disabled gate `MlDriftTriggerLifecycleTest::test_tick_skips_drift_retrain_when_trigger_disabled`), promotion review, SSE, cancel, retries, notifications, retention API + lifecycle tick gate (`MlLifecycleRetentionGateTest`, per-horizon `STOXLA_ML_SCHEDULE_*_ENABLED`); retention opt-in via `STOXLA_ML_RETENTION_ENABLED` |
