@@ -82,4 +82,22 @@ class MlRetrainQueueTest extends TestCase
             \App\Models\V7\MlTrainingHorizonLock::query()->orderBy('horizon')->pluck('horizon')->all(),
         );
     }
+
+    public function test_drift_trigger_requires_its_drift_check_context(): void
+    {
+        Bus::fake();
+
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        app(\App\Services\ML\MlScoringService::class)->queueRetrainRun('1m', null, 'drift');
+        Bus::assertNothingDispatched();
+    }
+
+    public function test_non_drift_trigger_cannot_carry_drift_context(): void
+    {
+        Bus::fake();
+
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        app(\App\Services\ML\MlScoringService::class)->queueRetrainRun('1m', null, 'manual', 42);
+        Bus::assertNothingDispatched();
+    }
 }

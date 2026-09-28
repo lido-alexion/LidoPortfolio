@@ -63,6 +63,7 @@ class MlScoringService
     {
         $this->assertHorizon($horizon);
         $this->assertTrigger($trigger);
+        $this->assertTriggerContext($trigger, $driftCheckId);
 
         $configuration = ['trigger' => $trigger];
         if ($driftCheckId !== null) {
@@ -644,6 +645,20 @@ class MlScoringService
         if (! in_array($trigger, ['scheduled', 'manual', 'drift'], true)) {
             throw ValidationException::withMessages([
                 'trigger' => ['Unsupported ML training trigger.'],
+            ]);
+        }
+    }
+
+    private function assertTriggerContext(string $trigger, ?int $driftCheckId): void
+    {
+        if ($trigger === 'drift' && $driftCheckId === null) {
+            throw ValidationException::withMessages([
+                'drift_check_id' => ['A drift-triggered run must reference its drift check.'],
+            ]);
+        }
+        if ($trigger !== 'drift' && $driftCheckId !== null) {
+            throw ValidationException::withMessages([
+                'drift_check_id' => ['Only drift-triggered runs may reference a drift check.'],
             ]);
         }
     }
