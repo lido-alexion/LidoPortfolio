@@ -7,12 +7,22 @@ use App\Services\Artifacts\ArtifactValidationService;
 use App\Services\Artifacts\IndicatorArtifactRegistry;
 use App\Services\Artifacts\ScreenerArtifactRegistry;
 use App\Services\Artifacts\StrategyArtifactRegistry;
+use App\Services\AccessRequest\HumanVerificationService;
+use App\Services\AccessRequest\TestingHumanVerificationService;
+use App\Services\AccessRequest\TurnstileHumanVerificationService;
 use App\Services\Fundamentals\FundamentalDataProvider;
 use App\Services\Fundamentals\YahooFundamentalDataProvider;
 use App\Services\Indicators\IndicatorRegistry;
 use App\Services\Indicators\IndicatorRegistryFactory;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use App\Telemetry\LidoTelemetry;
+use App\Telemetry\LidoTelemetryCatalog;
+use Illuminate\Console\Events\ScheduledTaskStarting;
+use Illuminate\Queue\Events\JobFailed;
+use Illuminate\Queue\Events\JobProcessed;
+use Illuminate\Queue\Events\JobProcessing;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\URL;
@@ -26,6 +36,21 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->bind(HumanVerificationService::class, function () {
+            $driver = (string) config('access_requests.captcha.driver', 'turnstile');
+
+            // A deployment mistake must never turn production into an
+            // accept-any-token CAPTCHA environment.
+            if (config('app.env') === 'production' && $driver === 'testing') {
+                $driver = 'turnstile';
+            }
+
+            return match ($driver) {
+                'testing' => new TestingHumanVerificationService,
+                default => new TurnstileHumanVerificationService,
+            };
+        });
+
         $this->app->singleton(IndicatorRegistry::class, function () {
             return (new IndicatorRegistryFactory)->make();
         });
@@ -89,8 +114,53 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(10)->by($request->ip());
         });
 
+        RateLimiter::for('access-request', function (Request $request) {
+            $email = strtolower(trim((string) $request->input('email', '')));
+
+            return [
+                Limit::perMinute(6)->by($request->ip()),
+                Limit::perHour(12)->by($email !== '' ? 'email:'.$email : $request->ip()),
+            ];
+        });
+
+        RateLimiter::for('access-request-verify', function (Request $request) {
+            return Limit::perMinute(20)->by($request->ip());
+        });
+
         RateLimiter::for('universe-price-sync', function (Request $request) {
             return Limit::perMinute(12)->by($request->user()?->id ?: $request->ip());
+        });
+
+        $this->registerTelemetryListeners();
+    }
+
+    protected function registerTelemetryListeners(): void
+    {
+        Event::listen(JobProcessing::class, function (JobProcessing $event): void {
+            app(LidoTelemetry::class)->recordBusinessEvent(LidoTelemetryCatalog::BUSINESS_QUEUE_JOB, [
+                'job' => class_basename($event->job->resolveName()),
+                'phase' => 'processing',
+            ]);
+        });
+
+        Event::listen(JobProcessed::class, function (JobProcessed $event): void {
+            app(LidoTelemetry::class)->recordBusinessEvent(LidoTelemetryCatalog::BUSINESS_QUEUE_JOB, [
+                'job' => class_basename($event->job->resolveName()),
+                'phase' => 'processed',
+            ]);
+        });
+
+        Event::listen(JobFailed::class, function (JobFailed $event): void {
+            app(LidoTelemetry::class)->recordBusinessEvent(LidoTelemetryCatalog::BUSINESS_QUEUE_JOB, [
+                'job' => class_basename($event->job->resolveName()),
+                'phase' => 'failed',
+            ]);
+        });
+
+        Event::listen(ScheduledTaskStarting::class, function (ScheduledTaskStarting $event): void {
+            app(LidoTelemetry::class)->recordBusinessEvent(LidoTelemetryCatalog::BUSINESS_SCHEDULER_TASK, [
+                'task' => $event->task->description ?? $event->task->command ?? 'scheduled',
+            ]);
         });
     }
 }
