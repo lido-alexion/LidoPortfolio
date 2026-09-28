@@ -44,3 +44,28 @@ test.describe('FEAT-062 fundamental insights mobile acceptance', () => {
         await expect(card.getByText('Review the latest annual report cash-flow notes.')).toBeVisible();
     });
 });
+
+test.describe('FEAT-054 historical fundamentals browser acceptance', () => {
+    test('renders provenance, history and user-scoped Basic/Advanced preference', async ({ page }) => {
+        await installInvestorWorkflowApiMocks(page);
+        await page.goto('/watchlist/TCS');
+
+        await expect(page.getByText('TCS — Tata Consultancy Services', { exact: true })).toBeVisible();
+        await page.getByRole('button', { name: 'Fundamentals' }).click();
+        await expect(page.getByRole('heading', { name: 'P/E (TTM) trend' })).toBeVisible();
+        await expect(page.getByText('Official NSE', { exact: true }).first()).toBeVisible();
+        await expect(page.getByText('Basic financial data')).toBeVisible();
+
+        const advancedToggle = page.getByRole('button', { name: /Show advanced financial data/ });
+        await expect(advancedToggle).toHaveAttribute('aria-expanded', 'false');
+        await advancedToggle.click();
+        await expect(page.getByRole('heading', { name: 'Advanced financial data' })).toBeVisible();
+        await expect(page.getByRole('img', { name: /P\/E \(TTM\)/ })).toBeVisible();
+        await expect(page.evaluate(() => window.localStorage.getItem('lido.fundamentals.advancedExpanded.user.1'))).resolves.toBe('1');
+
+        await page.reload();
+        await page.getByRole('button', { name: 'Fundamentals' }).click();
+        await expect(page.getByRole('heading', { name: 'Advanced financial data' })).toBeVisible();
+        await expect(page.getByRole('button', { name: /Hide advanced financial data/ })).toHaveAttribute('aria-expanded', 'true');
+    });
+});

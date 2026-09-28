@@ -50,6 +50,36 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
             sector_context: null,
         },
     };
+    const fundamentalsSnapshot = options.fundamentalsSnapshot ?? {
+        as_of: '2026-09-25',
+        market_price: 3500,
+        freshness: { status: 'fresh' },
+        summary: [
+            {
+                id: 'pe_ttm',
+                label: 'P/E (TTM)',
+                value: 27.5,
+                basis: 'TTM',
+                provenance: { source_label: 'Official NSE', derived: true, basis: 'TTM', latest_period_end: '2026-06-30' },
+            },
+            {
+                id: 'revenue_ttm',
+                label: 'Revenue (TTM)',
+                value: 100000,
+                basis: 'TTM',
+                provenance: { source_label: 'Official NSE', derived: true, basis: 'TTM', latest_period_end: '2026-06-30' },
+            },
+        ],
+        insights: null,
+        coverage: { quarterly: { available: 4, expected: 4 }, annual: { available: 2, expected: 3 } },
+    };
+    const fundamentalsHistory = options.fundamentalsHistory ?? {
+        periods: ['2026-06-30', '2026-03-31'],
+        sections: {
+            basic: [{ fact_key: 'revenue', label: 'Revenue', cells: [{ period_end: '2026-06-30', value: 100 }, { period_end: '2026-03-31', value: 95 }] }],
+            advanced: [{ fact_key: 'capex', label: 'Capital expenditure', cells: [{ period_end: '2026-06-30', value: 12 }, { period_end: '2026-03-31', value: 10 }] }],
+        },
+    };
     const guidedTourState = {
         eligible: false,
         show_welcome_prompt: false,
@@ -106,7 +136,37 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
             if (options.fundamentalInsightsError) {
                 return json(route, { error: { message: options.fundamentalInsightsError } }, 503);
             }
+            if (page.url().includes('/watchlist/')) {
+                return json(route, { data: fundamentalsSnapshot });
+            }
             return json(route, { data: fundamentalInsights });
+        }
+        if (path.endsWith('/api/v1/analytics/stocks/42') && method === 'GET') {
+            return json(route, { data: { symbol: 'TCS', beta: 0.8 } });
+        }
+        if (path.endsWith('/api/v1/analytics/stocks/42/evaluation-profile') && method === 'GET') {
+            return json(route, { data: { factors: [] } });
+        }
+        if (path.endsWith('/api/v1/analytics/stocks/42/recommendation-preview') && method === 'GET') {
+            return json(route, { data: { available: false, reason: 'fixture' } });
+        }
+        if (path.endsWith('/api/v1/stocks/42/fundamentals') && method === 'GET') {
+            return json(route, { data: fundamentalsSnapshot });
+        }
+        if (path.endsWith('/api/v1/stocks/42/fundamentals/history') && method === 'GET') {
+            return json(route, { data: fundamentalsHistory });
+        }
+        if (path.endsWith('/api/v1/stocks/42/fundamentals/metrics/revenue/history') && method === 'GET') {
+            return json(route, { data: { label: 'Revenue (TTM)', points: [{ period: '2026-06-30', value: 100000 }] } });
+        }
+        if (path.endsWith('/api/v1/stocks/42/fundamentals/metrics/pe/history') && method === 'GET') {
+            return json(route, { data: { label: 'P/E (TTM)', points: [{ period: '2026-06-30', value: 27.5 }] } });
+        }
+        if (path.endsWith('/api/v1/stocks/42/fundamentals/metrics/pb/history') && method === 'GET') {
+            return json(route, { data: { label: 'P/B (TTM)', points: [{ period: '2026-06-30', value: 5.1 }] } });
+        }
+        if (path.endsWith('/api/stocks/42/market-prices') && method === 'GET') {
+            return json(route, { data: [], meta: { has_price_history: false } });
         }
         if (path.endsWith('/api/guided-tour') && (method === 'GET' || method === 'PUT')) {
             if (method === 'PUT') {
@@ -186,6 +246,9 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
         }
         if (path.endsWith('/api/watchlists') && method === 'GET') {
             return json(route, { data: [] });
+        }
+        if (path.endsWith('/api/watchlist/membership') && method === 'GET') {
+            return json(route, { data: { watchlist_ids: [] } });
         }
         if (path.endsWith('/api/screeners') && method === 'GET') {
             return json(route, { data: [], count: 0 });

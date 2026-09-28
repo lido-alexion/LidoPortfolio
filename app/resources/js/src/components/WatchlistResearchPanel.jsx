@@ -12,8 +12,12 @@ import { useAuth } from '../context/AuthContext';
 function MetricGrid({ rows }) {
     return (
         <div className="row g-2">
-            {rows.map((row) => (
-                <div className="col-6" key={row.id || row.label}>
+            {rows.map((inputRow, index) => {
+                const row = Array.isArray(inputRow)
+                    ? { id: inputRow[0], label: inputRow[0], value: inputRow[1] }
+                    : inputRow;
+                return (
+                <div className="col-6" key={row.id || row.label || index}>
                     <div className="text-muted small">
                         {row.label}
                         <span
@@ -32,7 +36,8 @@ function MetricGrid({ rows }) {
                         </div>
                     ) : null}
                 </div>
-            ))}
+                );
+            })}
         </div>
     );
 }
