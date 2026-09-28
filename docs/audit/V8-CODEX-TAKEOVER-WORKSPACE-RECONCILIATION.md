@@ -5,7 +5,7 @@ Date: 2026-09-28
 ## Authoritative starting point
 
 - Branch: `master`
-- HEAD: `8b4f8f021ff329ef833737b19563d2c8b1cbc6d2`
+- Takeover HEAD: `8b4f8f021ff329ef833737b19563d2c8b1cbc6d2`
 - Remote status: `master...origin/master`
 - Staged changes: none
 - Tracked files modified: 131
@@ -19,7 +19,7 @@ The working tree, frozen V8 specifications under `docs/archive/specs/`, and runt
 |---|---|
 | SAFE / COMPLETE | FEAT-055 account-request flow has the inherited model, migrations, policy/verification/admin services, public/admin APIs, mail, purge command, UI, and 135 passing V8 tests overall. FEAT-061 guided-tour backend/frontend foundation is covered by passing tests. FEAT-065 has a tested intraday worker foundation. |
 | SAFE / PARTIAL | FEAT-052 telemetry producer instrumentation; FEAT-054 historical bootstrap/fundamentals UI; FEAT-056 ML lifecycle; FEAT-057 feature registry/training support; FEAT-062 deterministic/AI insights; FEAT-063 collector control plane and Python foundation; FEAT-064 provenance and WP-09 return flow. |
-| BROKEN / MUST FIX | Two non-V8 Screener backtest regression tests fail after version-aware cache changes. The failure is behavioral, not a PHP syntax or migration parse error. |
+| BROKEN / MUST FIX | At takeover, two non-V8 Screener backtest regression tests failed after version-aware cache changes. Both are repaired and now pass. |
 | TRANSIENT / DEBUG | Python `__pycache__` directories and compiled `.pyc` files are untracked generated artifacts. They were not used as implementation evidence. Existing documented deployment debug hooks are pre-existing and were not silently removed. |
 | MISSING COUNTERPART | FEAT-063 still lacks the complete operational lifecycle: full schema/quality semantics, calendar/session lifecycle, bounded recovery/finalization/backup policy, alerts/thresholds, universe identity handling, and VPS dependency/runtime readiness. FEAT-065 has no complete current-NIFTY-500 orchestration/coverage workflow. |
 | REGRESSION RISK | Generated static docs were rewritten by the build command; the changes are tracked and must be separated from source changes when committing. Legacy artifact-library JS assertions conflict with the frozen FEAT-064 ordinary CRUD/copy semantics. |
@@ -35,7 +35,7 @@ The working tree, frozen V8 specifications under `docs/archive/specs/`, and runt
 - Python intraday: 9 passed, 5 skipped.
 - Frontend build: blocked by environment (`Node.js 18.20.0`; installed Vite requires Node 20.19+ or 22.12+).
 - JavaScript unit tests: 177 passed, 5 failed.
-- Regression subset: 35 passed, 2 failed in `ScreenerTest` backtest cache expectations.
+- Regression subset at takeover: 35 passed, 2 failed in `ScreenerTest` backtest cache expectations; after repair: 15/15 targeted Screener/backtest tests pass.
 
 ## Undocumented inherited work
 
@@ -44,3 +44,7 @@ The prior ledger did not enumerate the substantial FEAT-054/056/057/062/065 addi
 ## Reconciliation decision
 
 Preserve the inherited implementation and provenance changes. Repair the two backtest regressions, keep the V8 ledger at `REVIEW`/`IN PROGRESS` until frozen acceptance criteria are met, and do not mark FEAT-055, FEAT-061, or any other epic complete solely from file presence. Continue next with backtest compatibility repair, then FEAT-063 operational completeness and the FEAT-055 acceptance audit.
+
+## Codex takeover changes
+
+Commit `2965d39` (`reconcile V8 inherited backtest and microstructure gaps`) contains only the focused reconciliation artifacts, version-aware backtest cache repair, and the FEAT-063 schema/aggregator/test expansion. The remaining inherited work is still uncommitted in the working tree and was not reset, cleaned, stashed, or folded into that commit.
