@@ -36,4 +36,4 @@ Authoritative contract: `docs/archive/specs/V8-Historical-Fundamentals-Bootstrap
 
 ## Status decision
 
-FEAT-054 is **REVIEW** rather than COMPLETE because the repository evidence is complete for the deterministic implementation, but browser/mobile visual acceptance and real provider/deployed bootstrap runtime validation have not been performed in this environment.
+FEAT-054 is **REVIEW** rather than COMPLETE because the repository evidence and focused desktop Chromium journey are complete for the deterministic implementation, but mobile visual acceptance and real provider/deployed bootstrap runtime validation remain external.
