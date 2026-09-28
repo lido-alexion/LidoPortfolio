@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
+import AccessRequestsAdminSection from '../components/AccessRequestsAdminSection';
 import { showToast } from '../toast';
 
 function formatDate(value) {
@@ -425,6 +426,9 @@ export default function UserManagementPage() {
 
     return (
         <div className="row g-3">
+            <div className="col-12">
+                <AccessRequestsAdminSection />
+            </div>
             <div className="col-12">
                 <div className="card">
                     <div className="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { saveRedirectPath } from '../auth/redirect';
 import { appUrl } from '../appBase';
@@ -106,7 +106,8 @@ export default function LoginPage() {
                     </button>
                 </form>
                 <p className="text-muted small mt-3 mb-0 text-center">
-                    New accounts are invite-only. Contact your administrator if you need access.
+                    New accounts are invite-only.
+                    <Link to="/request-account" className="ms-1">Request an account</Link>
                 </p>
                 <p className="text-center mt-2 mb-0">
                     <a href={appUrl('/docs/index.html')} className="small">
