@@ -14,7 +14,7 @@ This is a code-reconciliation checkpoint against `docs/archive/specs/V8-ML-Featu
 | Current active/eligible training universe | PASS locally | Dataset universe now requires active NSE stocks, excludes benchmarks and requires price history |
 | PIT fundamentals | VERIFIED locally | Fundamental facts are filtered by availability date and latest known revision per period/as-of row |
 | PIT prices and labels | VERIFIED locally | Features use as-of unadjusted prices; labels use adjusted prices only in the forward label window |
-| PIT market breadth / sector context | PARTIAL | Context services use active universe membership at calculation time; historical membership provenance is not yet available and requires explicit leakage evidence/limitation |
+| PIT market breadth / sector context | PARTIAL | `MlUniverseMembership` and `MlHistoricalUniverseMembershipService` now provide effective-dated membership/sector snapshots; context services refuse to fall back to current active membership. Snapshot ingestion/backfill and production coverage are still missing |
 | Intraday/minute boundary | PASS by search | No minute/order-book/microstructure features are wired into FEAT-057 builder; FEAT-065 remains separate |
 | Missing-value policy | IMPLEMENTED/UNVERIFIED | Registry declares median-plus-flag/unknown-category policy; actual fitting/preprocessing is delegated to the Python adapter and needs runtime evidence |
 | Outlier handling / redundancy pruning | PARTIAL | Effective feature-set/excluded-feature metadata exists; training-time clipping, redundancy and stability selection need direct evidence |
@@ -32,4 +32,4 @@ This is a code-reconciliation checkpoint against `docs/archive/specs/V8-ML-Featu
 
 ## Verified implementation slice
 
-Horizon-aware reference sampling is now implemented and tested. The next mandatory slice is to make historical market breadth and sector-relative features point-in-time safe using historical universe/membership evidence rather than current active membership. The current implementation remains **IN PROGRESS** until the remaining frozen catalogue, PIT context, preprocessing/runtime, and acceptance evidence are closed.
+Horizon-aware reference sampling is now implemented and tested. The next mandatory slice is to add an auditable membership snapshot ingestion/backfill path and wire its coverage into dataset diagnostics. The current implementation remains **IN PROGRESS** until the remaining frozen catalogue, PIT context coverage, preprocessing/runtime, and acceptance evidence are closed.
