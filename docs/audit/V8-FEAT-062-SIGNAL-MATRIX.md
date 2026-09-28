@@ -10,9 +10,9 @@ it is not inferred from a related signal.
 |---|---|---|---|---|---|
 | Revenue growth acceleration/deceleration | `revenue_growth_accelerating`, `revenue_growth_decelerating` | Comparable quarterly YoY trend | availability date <= as-of | current/prior YoY and delta | PASS |
 | Net-income/EPS divergence from revenue growth | `earnings_revenue_divergence` | Quarterly YoY growth pair | comparable periods | both growth values and delta | PASS |
-| Operating-profit versus bottom-line divergence | — | Operating profit and net income comparable growth | comparable periods | — | PARTIAL |
+| Operating-profit versus bottom-line divergence | `operating_profit_bottom_line_divergence` | Operating profit and net income comparable growth | comparable periods | both growth values and delta | PASS |
 | Abrupt margin expansion/compression | `operating_margin_movement_*`, `ebit_margin_movement_*`, `net_margin_movement_*` | Same-period YoY margins | comparable periods | current/prior margin and pp delta | PASS |
-| ROE/ROA/ROCE movement against company history | `roe_strong`, `roe_weak`, `roe_movement_expanding`, `roe_movement_contracting`, `roe_movement_stable` | ROE same-period YoY movement with positive-equity denominator | availability date <= as-of; incompatible/missing periods unavailable | current/prior ROE and pp delta | PARTIAL — ROA/ROCE remain data-dependent |
+| ROE/ROA/ROCE movement against company history | `roe_strong`, `roe_weak`, `roe_movement_expanding`, `roe_movement_contracting`, `roe_movement_stable`, `roa_movement_*`, `roce_movement_*` | Return metrics from comparable numerator/denominator pairs with positive denominators | availability date <= as-of; incompatible/missing periods unavailable | current/prior return and pp delta | PASS where canonical denominator facts exist; unavailable otherwise |
 | Other-income / exceptional-item dependence | — | Structured other-income/exceptional facts | availability date <= as-of | — | PARTIAL |
 | OCF versus net income | `strong_ocf_vs_net_income`, `weak_ocf_vs_net_income` | TTM OCF and net income | availability date <= as-of | both values | PASS |
 | Multi-period OCF/net-income deterioration or improvement | `earnings_cash_divergence`, `cash_quality_follow_up` | Quarterly YoY OCF/income divergence | comparable periods | both growth values | PARTIAL |
@@ -21,13 +21,13 @@ it is not inferred from a related signal.
 | Capex intensity changes | — | Capex/revenue or capex/asset history | comparable periods | — | PARTIAL |
 | Receivables faster than revenue | `receivables_growth_vs_revenue` | Quarterly YoY growth spread | comparable periods | both growth values and spread | PASS |
 | Inventory faster than sales/revenue | `inventory_growth_vs_revenue` | Quarterly YoY growth spread | comparable periods | both growth values and spread | PASS |
-| Working-capital absorption/release | — | Receivables/inventory/current-liability relationship | comparable periods | — | PARTIAL |
-| Current-assets/current-liabilities changes | — | Balance-sheet history | comparable periods | — | PARTIAL |
+| Working-capital absorption/release | `working_capital_absorption`, `working_capital_release` | Receivables + inventory − current liabilities | comparable periods | current/prior absorption and delta | PASS |
+| Current-assets/current-liabilities changes | `liquidity_coverage_improving`, `liquidity_coverage_deteriorating` | Current ratio from current assets/current liabilities | comparable periods; positive liabilities required | current/prior ratio and delta | PASS |
 | Debt versus equity/cash growth | `debt_cash_divergence` | Debt and OCF growth relationship | comparable periods | both growth values | PASS |
 | Net-debt direction | `net_debt_increasing`, `net_debt_decreasing` | Derived debt less cash, same-period YoY | comparable periods; invalid prior net debt is unavailable | net-debt YoY percentage and basis | PASS |
 | Debt/equity and net-debt/EBITDA | `leverage_elevated`, `debt_to_ebitda_elevated` | TTM ratios with safe denominators | availability date <= as-of | ratio and basis | PASS |
 | Interest-coverage deterioration | `interest_coverage_thin` | TTM interest coverage | availability date <= as-of | ratio and basis | PASS |
-| Liquidity/coverage changes | — | Liquidity/coverage history | comparable periods | — | PARTIAL |
+| Liquidity/coverage changes | `liquidity_coverage_improving`, `liquidity_coverage_deteriorating` | Current-ratio movement with positive denominator | comparable periods | ratio values and delta | PASS where source facts exist |
 | Material share-count dilution | `share_count_dilution`, `dilution_follow_up` | Quarterly YoY shares | comparable periods | growth and basis | PASS |
 | CWIP growth/share/persistence | `cwip_expansion_ambiguous` | Annual CWIP growth and share of PPE | availability date <= as-of | growth/share and follow-up | PASS |
 | Promoter/pledge/FII/DII/public changes | `ownership_*_movement` | Same-period ownership pairs | availability date <= as-of | current/prior/delta | PASS |

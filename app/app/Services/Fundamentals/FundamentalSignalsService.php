@@ -91,11 +91,14 @@ class FundamentalSignalsService
         $this->evaluateWorkingCapitalSignals($stock, $asOf, $risk, $watch);
         $this->evaluateCwipSignals($stock, $asOf, $watch);
         $this->evaluateMarginSignals($stock, $asOf, $positive, $risk, $watch);
+        $this->evaluateOperatingProfitDivergence($stock, $asOf, $watch);
         $this->evaluateReturnOnEquityMovement($stock, $asOf, $positive, $risk, $watch);
+        $this->evaluateReturnOnCapitalMovements($stock, $asOf, $positive, $risk, $watch);
         $this->evaluateEarningsCashSignals($stock, $asOf, $risk, $watch);
         $this->evaluateLeverageSignals($stock, $asOf, $positive, $risk, $watch);
         $this->evaluateDilutionSignals($stock, $asOf, $risk, $watch);
         $this->evaluateOwnershipSignals($stock, $asOf, $watch);
+        $this->evaluateWorkingCapitalBalanceSheetSignals($stock, $asOf, $positive, $risk, $watch);
         $this->evaluateGrowthRelationships($stock, $asOf, $positive, $risk, $watch);
         $this->evaluateCashAndNetDebtTrends($stock, $asOf, $positive, $risk, $watch);
 
@@ -147,6 +150,136 @@ class FundamentalSignalsService
                 'status' => 'not_requested',
             ],
         ];
+    }
+
+    /** Compare operating-profit and bottom-line growth on the same comparable periods. */
+    protected function evaluateOperatingProfitDivergence(Stock $stock, Carbon $asOf, array &$watch): void
+    {
+        $operating = $this->fundamentals->growthMetric($stock, 'operating_profit', FundamentalDataService::CADENCE_QUARTERLY, $asOf);
+        $netIncome = $this->fundamentals->growthMetric($stock, 'net_income', FundamentalDataService::CADENCE_QUARTERLY, $asOf);
+        if ($operating['value'] === null || $netIncome['value'] === null) {
+            return;
+        }
+
+        $delta = (float) $operating['value'] - (float) $netIncome['value'];
+        if (abs($delta) < 15.0) {
+            return;
+        }
+
+        $watch[] = $this->signal(
+            'operating_profit_bottom_line_divergence',
+            'Operating-profit growth diverged materially from bottom-line growth',
+            [
+                'operating_profit_yoy_pct' => (float) $operating['value'],
+                'net_income_yoy_pct' => (float) $netIncome['value'],
+                'delta_pp' => round($delta, 2),
+                'basis' => 'quarterly_yoy',
+            ],
+        );
+    }
+
+    /** ROA and ROCE are emitted only when their canonical denominators exist and are positive. */
+    protected function evaluateReturnOnCapitalMovements(Stock $stock, Carbon $asOf, array &$positive, array &$risk, array &$watch): void
+    {
+        foreach ([
+            ['roa', 'net_income', 'total_assets', 'Return on assets'],
+            ['roce', 'operating_profit', 'capital_employed', 'Return on capital employed'],
+        ] as [$key, $numeratorKey, $denominatorKey, $label]) {
+            $numerator = $this->comparablePair($stock, $numeratorKey, $asOf);
+            $denominator = $this->comparablePair($stock, $denominatorKey, $asOf);
+            if ($numerator === null || $denominator === null
+                || $numerator['current_period'] !== $denominator['current_period']
+                || $numerator['prior_period'] !== $denominator['prior_period']
+                || $denominator['current'] <= 0.0 || $denominator['prior'] <= 0.0) {
+                continue;
+            }
+
+            $current = ($numerator['current'] / $denominator['current']) * 100;
+            $prior = ($numerator['prior'] / $denominator['prior']) * 100;
+            $delta = $current - $prior;
+            $evidence = [
+                'current_'.$key.'_pct' => round($current, 2),
+                'prior_'.$key.'_pct' => round($prior, 2),
+                'delta_pp' => round($delta, 2),
+                'period' => $numerator['current_period'],
+                'comparison_period' => $numerator['prior_period'],
+                'basis' => 'same_period_yoy',
+            ];
+
+            if ($delta >= 5.0) {
+                $positive[] = $this->signal($key.'_movement_expanding', $label.' expanded by at least 5 percentage points year over year', $evidence);
+            } elseif ($delta <= -5.0) {
+                $risk[] = $this->signal($key.'_movement_contracting', $label.' contracted by at least 5 percentage points year over year', $evidence);
+            } elseif (abs($delta) < 1.0) {
+                $watch[] = $this->signal($key.'_movement_stable', $label.' was broadly stable year over year', $evidence);
+            }
+        }
+    }
+
+    protected function evaluateWorkingCapitalBalanceSheetSignals(Stock $stock, Carbon $asOf, array &$positive, array &$risk, array &$watch): void
+    {
+        $currentAssets = $this->comparablePair($stock, 'current_assets', $asOf);
+        $currentLiabilities = $this->comparablePair($stock, 'current_liabilities', $asOf);
+        if ($currentAssets !== null && $currentLiabilities !== null
+            && $currentAssets['current_period'] === $currentLiabilities['current_period']
+            && $currentAssets['prior_period'] === $currentLiabilities['prior_period']
+            && $currentLiabilities['current'] > 0.0 && $currentLiabilities['prior'] > 0.0) {
+            $currentRatio = $currentAssets['current'] / $currentLiabilities['current'];
+            $priorRatio = $currentAssets['prior'] / $currentLiabilities['prior'];
+            $delta = $currentRatio - $priorRatio;
+            if (abs($delta) >= 0.25) {
+                $key = $delta < 0 ? 'liquidity_coverage_deteriorating' : 'liquidity_coverage_improving';
+                $signal = $this->signal($key, 'Current ratio changed materially year over year', [
+                    'current_ratio' => round($currentRatio, 2),
+                    'prior_ratio' => round($priorRatio, 2),
+                    'delta' => round($delta, 2),
+                    'period' => $currentAssets['current_period'],
+                    'comparison_period' => $currentAssets['prior_period'],
+                    'basis' => 'same_period_yoy',
+                ]);
+                if ($delta < 0) {
+                    $risk[] = $signal;
+                } else {
+                    $positive[] = $signal;
+                }
+            }
+        }
+
+        $receivables = $this->comparablePair($stock, 'trade_receivables', $asOf);
+        $inventory = $this->comparablePair($stock, 'inventory', $asOf);
+        if ($receivables === null || $inventory === null || $currentLiabilities === null
+            || $receivables['current_period'] !== $inventory['current_period']
+            || $receivables['prior_period'] !== $inventory['prior_period']
+            || $receivables['current_period'] !== $currentLiabilities['current_period']
+            || $receivables['prior_period'] !== $currentLiabilities['prior_period']) {
+            return;
+        }
+
+        $currentAbsorption = ($receivables['current'] + $inventory['current']) - $currentLiabilities['current'];
+        $priorAbsorption = ($receivables['prior'] + $inventory['prior']) - $currentLiabilities['prior'];
+        if ($priorAbsorption === 0.0) {
+            return;
+        }
+        $deltaPct = (($currentAbsorption - $priorAbsorption) / abs($priorAbsorption)) * 100;
+        if ($deltaPct >= 25.0) {
+            $risk[] = $this->signal('working_capital_absorption', 'Working-capital absorption increased materially year over year', [
+                'current_absorption' => round($currentAbsorption, 2),
+                'prior_absorption' => round($priorAbsorption, 2),
+                'delta_pct' => round($deltaPct, 2),
+                'basis' => 'receivables_plus_inventory_less_current_liabilities',
+                'period' => $receivables['current_period'],
+                'comparison_period' => $receivables['prior_period'],
+            ]);
+        } elseif ($deltaPct <= -25.0) {
+            $watch[] = $this->signal('working_capital_release', 'Working-capital absorption reduced materially year over year', [
+                'current_absorption' => round($currentAbsorption, 2),
+                'prior_absorption' => round($priorAbsorption, 2),
+                'delta_pct' => round($deltaPct, 2),
+                'basis' => 'receivables_plus_inventory_less_current_liabilities',
+                'period' => $receivables['current_period'],
+                'comparison_period' => $receivables['prior_period'],
+            ]);
+        }
     }
 
     /**
@@ -531,7 +664,7 @@ class FundamentalSignalsService
         return [
             'signal_key' => $key,
             'category' => $this->categoryFor($key),
-            'direction' => str_contains($key, 'decreasing') || str_contains($key, 'strong') || str_contains($key, 'expanding') ? 'positive' : (str_contains($key, 'stable') || str_contains($key, 'follow_up') || str_contains($key, 'ownership_') ? 'watch' : 'risk'),
+            'direction' => str_contains($key, 'decreasing') || str_contains($key, 'strong') || str_contains($key, 'expanding') || str_contains($key, 'improving') ? 'positive' : (str_contains($key, 'stable') || str_contains($key, 'follow_up') || str_contains($key, 'ownership_') || str_contains($key, 'release') ? 'watch' : 'risk'),
             'title' => $headline,
             'headline' => $headline,
             'summary' => $headline,

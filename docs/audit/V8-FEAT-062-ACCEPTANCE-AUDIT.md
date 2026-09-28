@@ -9,12 +9,12 @@ This audit is evidence-based against `docs/archive/specs/V8-Fundamental-Signals-
 | Requirement | Status | Evidence / remaining work |
 |---|---|---|
 | Deterministic-first signal layer | PASS | `app/app/Services/Fundamentals/FundamentalSignalsService.php`; `FundamentalSignalsTest.php` |
-| Initial growth/profitability and cash-flow signals | PARTIAL | ROE level and same-period historical movement, revenue growth, operating/EBIT/net margin movement, FCF, OCF/net-income, earnings/OCF divergence and working-capital comparisons are covered; ROA/ROCE, other-income dependence and several data-dependent catalogue rows remain |
+| Initial growth/profitability and cash-flow signals | PARTIAL | ROE/ROA/ROCE movement now uses same-period comparable numerator/denominator pairs where positive canonical denominator facts exist; operating-profit/bottom-line divergence and working-capital balance-sheet/liquidity signals are covered. Other-income dependence and several data-dependent catalogue rows remain |
 | Ambiguous CWIP/watch semantics | PASS | CWIP is a watch item, not a conclusion; deterministic follow-up checks identify disclosures to review |
 | Evidence attached to surfaced signals | PASS | Stable signal key/category/direction/title/summary/evidence/basis/period/severity/confidence/provenance fields are returned while legacy headline/metric_values remain compatible |
 | Leverage/debt and capital structure | PASS locally | Debt and derived net-debt YoY movement, elevated debt/EBITDA, thin interest coverage, and share-count dilution are covered with invalid-denominator omission; broader corporate-action context remains data-dependent |
 | Ownership/shareholding evidence | PASS when facts exist | Optional promoter/FII/DII/public/pledge catalogue keys produce neutral factual watch signals; absent ownership data remains unavailable |
-| Comparison-aware evidence | PARTIAL | Same-period YoY, growth acceleration, FCF/net-debt trends, earnings/revenue and debt/cash relationships, and dated ML-universe sector peer percentile evidence exist with explicit subject/comparison/delta/basis fields. The remaining frozen comparison-key matrix still requires closure; missing dated snapshots now return an explicit coverage state rather than current-peer fallback |
+| Comparison-aware evidence | PARTIAL | Same-period YoY, growth acceleration, operating-profit/bottom-line, working-capital/liquidity, FCF/net-debt trends, earnings/revenue and debt/cash relationships, and dated ML-universe sector peer percentile evidence exist with explicit subject/comparison/delta/basis fields. Historical valuation-range and valuation/earnings-cash comparison keys remain |
 | Provider-neutral Gemini/Codex boundary | PASS | `FundamentalInsightsAiProvider`, Gemini/Codex adapters and orchestrator |
 | Primary/secondary failover | PASS locally | `FundamentalAiInsightsTest.php`; live provider validation remains external |
 | Response schema and safety validation | PASS locally | `FundamentalInsightsResponseValidator`; bounded lists/fields, malformed/partial normalization, prohibited recommendation variants, and factual “holding” language coverage |
@@ -29,7 +29,7 @@ This audit is evidence-based against `docs/archive/specs/V8-Fundamental-Signals-
 
 ## Verification
 
-- Targeted FEAT-062 Laravel tests after the catalogue/input-boundary slices: **20/20, 83 assertions** across deterministic signals, sector comparisons, AI response handling, provider diagnostics and usage limits; AI provider/boundary suites remain covered by the existing focused tests.
+- Targeted FEAT-062 Laravel tests after the catalogue/input-boundary slices: **26/26, 95 assertions** across deterministic signals, sector comparisons, AI response handling, provider diagnostics and usage limits; AI provider/boundary suites remain covered by the existing focused tests.
 - Full V8 Laravel directory suite: **161/161, 611 assertions**.
 - Frontend Node suite: **188/188**.
 - Vitest: **99/99**.
@@ -37,4 +37,4 @@ This audit is evidence-based against `docs/archive/specs/V8-Fundamental-Signals-
 
 ## Next implementation slice
 
-Complete the PARTIAL rows in `V8-FEAT-062-SIGNAL-MATRIX.md` and remaining comparison keys, then perform browser acceptance and real-provider validation before reconsidering this status. Current status remains **IN PROGRESS** because mandatory catalogue implementation remains.
+Complete the remaining PARTIAL rows in `V8-FEAT-062-SIGNAL-MATRIX.md` (other-income/exceptional items, capex intensity, historical valuation and valuation divergence), then perform browser acceptance and real-provider validation before reconsidering this status. Current status remains **IN PROGRESS** because mandatory catalogue implementation remains.

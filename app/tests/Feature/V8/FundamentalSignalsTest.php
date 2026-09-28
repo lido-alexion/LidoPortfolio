@@ -292,4 +292,68 @@ class FundamentalSignalsTest extends TestCase
 
         $this->assertContains('roe_movement_expanding', $keys);
     }
+
+    public function test_operating_profit_bottom_line_and_working_capital_signals_use_comparable_periods(): void
+    {
+        $stock = Stock::query()->create(['symbol' => 'WCV', 'exchange' => 'NSE', 'name' => 'Working Capital Co']);
+        $service = app(FundamentalDataService::class);
+        foreach ([
+            ['2024-03-31', 100, 10, 10, 20, 30, 40],
+            ['2025-03-31', 110, 40, 5, 45, 50, 40],
+        ] as [$period, $revenue, $operatingProfit, $netIncome, $receivables, $inventory, $currentLiabilities]) {
+            $service->storeFacts($stock, [
+                ['statement_type' => 'income_statement', 'cadence' => 'quarterly', 'fact_key' => 'revenue', 'period_end' => $period, 'value' => $revenue, 'availability_date' => '2025-06-01'],
+                ['statement_type' => 'income_statement', 'cadence' => 'quarterly', 'fact_key' => 'operating_profit', 'period_end' => $period, 'value' => $operatingProfit, 'availability_date' => '2025-06-01'],
+                ['statement_type' => 'income_statement', 'cadence' => 'quarterly', 'fact_key' => 'net_income', 'period_end' => $period, 'value' => $netIncome, 'availability_date' => '2025-06-01'],
+                ['statement_type' => 'balance_sheet', 'cadence' => 'quarterly', 'fact_key' => 'trade_receivables', 'period_end' => $period, 'value' => $receivables, 'availability_date' => '2025-06-01'],
+                ['statement_type' => 'balance_sheet', 'cadence' => 'quarterly', 'fact_key' => 'inventory', 'period_end' => $period, 'value' => $inventory, 'availability_date' => '2025-06-01'],
+                ['statement_type' => 'balance_sheet', 'cadence' => 'quarterly', 'fact_key' => 'current_liabilities', 'period_end' => $period, 'value' => $currentLiabilities, 'availability_date' => '2025-06-01'],
+            ]);
+        }
+
+        $insights = app(FundamentalSignalsService::class)->deterministicInsights($stock, Carbon::parse('2025-06-20'));
+        $keys = collect(array_merge($insights['risk_signals'], $insights['watch_items']))->pluck('signal_key')->all();
+
+        $this->assertContains('operating_profit_bottom_line_divergence', $keys);
+        $this->assertContains('working_capital_absorption', $keys);
+    }
+
+    public function test_roa_and_roce_movement_require_positive_comparable_denominators(): void
+    {
+        $stock = Stock::query()->create(['symbol' => 'ROA', 'exchange' => 'NSE', 'name' => 'Returns Co']);
+        $service = app(FundamentalDataService::class);
+        foreach ([
+            ['2024-03-31', 10, 100, 20, 100],
+            ['2025-03-31', 20, 100, 50, 100],
+        ] as [$period, $income, $assets, $operatingProfit, $capitalEmployed]) {
+            $service->storeFacts($stock, [
+                ['statement_type' => 'income_statement', 'cadence' => 'quarterly', 'fact_key' => 'net_income', 'period_end' => $period, 'value' => $income, 'availability_date' => '2025-06-01'],
+                ['statement_type' => 'balance_sheet', 'cadence' => 'quarterly', 'fact_key' => 'total_assets', 'period_end' => $period, 'value' => $assets, 'availability_date' => '2025-06-01'],
+                ['statement_type' => 'income_statement', 'cadence' => 'quarterly', 'fact_key' => 'operating_profit', 'period_end' => $period, 'value' => $operatingProfit, 'availability_date' => '2025-06-01'],
+                ['statement_type' => 'balance_sheet', 'cadence' => 'quarterly', 'fact_key' => 'capital_employed', 'period_end' => $period, 'value' => $capitalEmployed, 'availability_date' => '2025-06-01'],
+            ]);
+        }
+
+        $insights = app(FundamentalSignalsService::class)->deterministicInsights($stock, Carbon::parse('2025-06-20'));
+        $keys = collect($insights['positive_signals'])->pluck('signal_key')->all();
+
+        $this->assertContains('roa_movement_expanding', $keys);
+        $this->assertContains('roce_movement_expanding', $keys);
+    }
+
+    public function test_current_ratio_change_is_unavailable_when_periods_do_not_match(): void
+    {
+        $stock = Stock::query()->create(['symbol' => 'LIQ', 'exchange' => 'NSE', 'name' => 'Liquidity Co']);
+        $service = app(FundamentalDataService::class);
+        $service->storeFacts($stock, [
+            ['statement_type' => 'balance_sheet', 'cadence' => 'quarterly', 'fact_key' => 'current_assets', 'period_end' => '2024-03-31', 'value' => 100, 'availability_date' => '2025-06-01'],
+            ['statement_type' => 'balance_sheet', 'cadence' => 'quarterly', 'fact_key' => 'current_assets', 'period_end' => '2025-03-31', 'value' => 150, 'availability_date' => '2025-06-01'],
+            ['statement_type' => 'balance_sheet', 'cadence' => 'quarterly', 'fact_key' => 'current_liabilities', 'period_end' => '2024-02-29', 'value' => 100, 'availability_date' => '2025-06-01'],
+            ['statement_type' => 'balance_sheet', 'cadence' => 'quarterly', 'fact_key' => 'current_liabilities', 'period_end' => '2025-03-31', 'value' => 50, 'availability_date' => '2025-06-01'],
+        ]);
+
+        $insights = app(FundamentalSignalsService::class)->deterministicInsights($stock, Carbon::parse('2025-06-20'));
+        $this->assertNotContains('liquidity_coverage_improving', collect($insights['watch_items'])->pluck('signal_key')->all());
+        $this->assertNotContains('liquidity_coverage_deteriorating', collect($insights['risk_signals'])->pluck('signal_key')->all());
+    }
 }
