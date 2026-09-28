@@ -100,6 +100,7 @@ class FundamentalSignalsService
         $this->evaluateDilutionSignals($stock, $asOf, $risk, $watch);
         $this->evaluateOwnershipSignals($stock, $asOf, $watch);
         $this->evaluateOwnershipFinancialContext($stock, $asOf, $watch);
+        $this->evaluateValuationDivergence($stock, $asOf, $watch);
         $this->evaluateWorkingCapitalBalanceSheetSignals($stock, $asOf, $positive, $risk, $watch);
         $this->evaluateGrowthRelationships($stock, $asOf, $positive, $risk, $watch);
         $this->evaluateCashAndNetDebtTrends($stock, $asOf, $positive, $risk, $watch);
@@ -631,6 +632,30 @@ class FundamentalSignalsService
             'comparison_period' => $debt['prior_period'],
             'basis' => 'same_period_yoy_ownership_and_debt',
         ]));
+    }
+
+    protected function evaluateValuationDivergence(Stock $stock, Carbon $asOf, array &$watch): void
+    {
+        $price = $this->snapshots->latestMarketPrice($stock, $asOf);
+        $pe = $this->fundamentals->metric($stock, 'pe', 'ttm', $asOf, $price)['value'];
+        if ($pe === null || (float) $pe <= 0.0) {
+            return;
+        }
+
+        $earnings = $this->fundamentals->growthMetric($stock, 'net_income', FundamentalDataService::CADENCE_QUARTERLY, $asOf);
+        $cash = $this->fundamentals->growthMetric($stock, 'operating_cash_flow', FundamentalDataService::CADENCE_QUARTERLY, $asOf);
+        $weakEarnings = $earnings['value'] !== null && (float) $earnings['value'] <= -10.0;
+        $weakCash = $cash['value'] !== null && (float) $cash['value'] <= -10.0;
+        if (! $weakEarnings && ! $weakCash) {
+            return;
+        }
+
+        $watch[] = $this->signal('valuation_earnings_cash_divergence', 'Positive P/E coexists with weakening earnings or operating cash flow', [
+            'pe_ttm' => (float) $pe,
+            'net_income_yoy_pct' => $earnings['value'] !== null ? (float) $earnings['value'] : null,
+            'operating_cash_flow_yoy_pct' => $cash['value'] !== null ? (float) $cash['value'] : null,
+            'basis' => 'latest_valuation_with_quarterly_yoy_fundamental_trends',
+        ]);
     }
 
     protected function evaluateGrowthRelationships(Stock $stock, Carbon $asOf, array &$positive, array &$risk, array &$watch): void

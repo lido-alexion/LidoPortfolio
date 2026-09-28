@@ -3,6 +3,7 @@
 namespace Tests\Feature\V8;
 
 use App\Models\Stock;
+use App\Models\StockPrice;
 use App\Models\User;
 use App\Services\Fundamentals\FundamentalDataService;
 use App\Services\Fundamentals\FundamentalSignalsService;
@@ -396,5 +397,32 @@ class FundamentalSignalsTest extends TestCase
 
         $insights = app(FundamentalSignalsService::class)->deterministicInsights($stock, Carbon::parse('2025-06-20'));
         $this->assertContains('ownership_financial_context', collect($insights['watch_items'])->pluck('signal_key')->all());
+    }
+
+    public function test_positive_valuation_with_weak_fundamentals_is_explicit_watch_evidence(): void
+    {
+        $stock = Stock::query()->create(['symbol' => 'VALD', 'exchange' => 'NSE', 'name' => 'Valuation Divergence Co']);
+        StockPrice::query()->create([
+            'stock_id' => $stock->id,
+            'price_date' => '2025-03-31',
+            'close_price' => 100,
+            'adjusted_close_price' => 100,
+            'provider_source' => 'fixture',
+            'data_source' => 'fixture',
+        ]);
+        $service = app(FundamentalDataService::class);
+        foreach ([
+            ['2023-06-30', 2.5, 10, 10], ['2023-09-30', 2.5, 10, 10], ['2023-12-31', 2.5, 10, 10], ['2024-03-31', 2.5, 10, 10],
+            ['2024-06-30', 2.5, 10, 10], ['2024-09-30', 2.5, 10, 10], ['2024-12-31', 2.5, 10, 10], ['2025-03-31', 2.5, 5, 10],
+        ] as [$period, $eps, $income, $ocf]) {
+            $service->storeFacts($stock, [
+                ['statement_type' => 'income_statement', 'cadence' => 'quarterly', 'fact_key' => 'eps', 'period_end' => $period, 'value' => $eps, 'availability_date' => '2025-06-01'],
+                ['statement_type' => 'income_statement', 'cadence' => 'quarterly', 'fact_key' => 'net_income', 'period_end' => $period, 'value' => $income, 'availability_date' => '2025-06-01'],
+                ['statement_type' => 'cash_flow', 'cadence' => 'quarterly', 'fact_key' => 'operating_cash_flow', 'period_end' => $period, 'value' => $ocf, 'availability_date' => '2025-06-01'],
+            ]);
+        }
+
+        $insights = app(FundamentalSignalsService::class)->deterministicInsights($stock, Carbon::parse('2025-06-20'));
+        $this->assertContains('valuation_earnings_cash_divergence', collect($insights['watch_items'])->pluck('signal_key')->all());
     }
 }

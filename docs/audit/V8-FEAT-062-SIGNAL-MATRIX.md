@@ -34,7 +34,7 @@ it is not inferred from a related signal.
 | Ownership changes combined with financial signals | `ownership_financial_context` | Promoter holding/pledge movement aligned with material debt movement | both sources same-period PIT-safe | ownership delta, debt growth and aligned periods | PASS where aligned facts exist |
 | Historical valuation-range deviation | — | Historical valuation distribution | price/fundamental as-of | — | PARTIAL |
 | Reliable sector/peer percentile | `sector_roe_*`, `sector_leverage_above_peers`, `sector_pe_above_peers` | Dated sector snapshot and peer values | dated membership/snapshot required | subject/peer/delta/basis | PASS |
-| Valuation divergence from earnings/cash | — | Valuation plus earnings/cash trend | both sources PIT-safe | — | PARTIAL |
+| Valuation divergence from earnings/cash | `valuation_earnings_cash_divergence` | Positive P/E with weakening comparable earnings or operating cash flow | valuation and fundamentals as-of aligned | P/E and earnings/cash growth evidence | PASS |
 | 52-week price context alone | intentionally none | Explicitly not a fundamental signal | n/a | n/a | NOT APPLICABLE — prohibited by frozen spec |
 
 Every emitted signal is normalized by
