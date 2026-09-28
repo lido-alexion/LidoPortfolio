@@ -125,6 +125,10 @@ See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-F
 - FEAT-057 is now REVIEW: implementation and bounded same-architecture 1m/3m/6m evidence are complete locally; production dated-provider population, deployed active-model pairing where applicable and investor-facing browser acceptance remain external.
 - Shared V8 API routes, middleware aliases, console commands, scheduler entries and environment documentation are wired in `c22c0bf`; unrelated inherited feature files remain intentionally preserved in the working tree.
 
+## Post-hardening continuation (2026-09-28)
+
+- FEAT-056 Admin lifecycle controls are now persisted and bounded: schedule enablement/cadence is stored per horizon, exposed through an Admin-only update route, surfaced in the dashboard, and consumed by the scheduler. Retained artifact-valid versions are visible with explicit rollback controls, and completed run evidence is available for both `completed_eligible` and `completed_rejected` terminal states. Focused lifecycle/API coverage: **18/18 passed**; frontend Admin static test and typecheck passed. Commit: `7493eeb`.
+
 ## Next task
 
 1. FEAT-056: perform deployed worker/runtime validation for the committed lifecycle implementation; no separate lifecycle WIP is currently pending ownership reconciliation.

@@ -6,7 +6,7 @@ Evidence is mapped to `docs/archive/specs/V8-ML-Lifecycle-Automation-Deployment-
 
 | Requirement | Status | Evidence / remaining work |
 |---|---|---|
-| Per-horizon bounded schedules | PASS locally | `MlLifecycleAutomationService`, `config/ml_lifecycle.php`, scheduled Artisan command and schedule tests |
+| Per-horizon bounded schedules | PASS locally | `MlLifecycleAutomationService`, persisted `stox_ml_lifecycle_schedules`, bounded Admin schedule API/UI, `config/ml_lifecycle.php`, scheduled Artisan command and schedule tests |
 | Manual and drift-triggered canonical queue path | PASS locally | `MlScoringService` integration, `MlRetrainJob`, queue and drift tests are committed; manual, scheduled and drift triggers share the canonical durable run path, and only drift runs may carry a drift-check reference |
 | Same-horizon concurrency | PASS locally | A seeded `stox_ml_training_horizon_locks` row is locked transactionally before the active-run check and insert, so manual, scheduled and drift requests serialize across workers; queue tests cover duplicate rejection and trigger validation |
 | Durable run/progress state and SSE | PASS locally | `MlTrainingRunAdminService`, progress persistence, SSE controller and lifecycle tests; deployed worker/SSE runtime remains pending |
@@ -14,7 +14,7 @@ Evidence is mapped to `docs/archive/specs/V8-ML-Lifecycle-Automation-Deployment-
 | Bounded transient retry | PASS locally | `MlTrainingRunRetryService` persists bounded attempt/backoff and dispatches delayed retry |
 | Terminal run-state vocabulary | PASS locally | Eligible runs persist `completed_eligible`, threshold failures persist `completed_rejected`, cancellation persists `cancelled`, and operational exceptions remain `failed`; lifecycle tests cover the eligible/rejected distinction |
 | Cooperative cancellation | PASS locally | queued/running cancellation service and checkpoint assertions are covered; live worker cancellation remains pending |
-| Explicit promotion / atomic rollback | PASS locally | existing promotion/rollback services and tests; full route/UI/runtime acceptance remains |
+| Explicit promotion / atomic rollback | PASS locally | existing promotion/rollback services and tests; Admin dashboard now lists retained, artifact-valid versions with explicit rollback controls; full route/UI/runtime acceptance remains |
 | No automatic promotion/rollback | PASS by tests | lifecycle automation only queues training and evaluates drift; promotion remains explicit Admin action |
 | Retention and stale/superseded candidates | PASS locally | retention service and promotion review tests; production archive/runtime proof remains |
 | Notifications and actionable failures | PASS locally | lifecycle notification tests and existing StoX notification boundary; deployed channel validation remains |
